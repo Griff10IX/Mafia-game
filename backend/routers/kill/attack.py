@@ -1304,7 +1304,7 @@ async def delete_attacks(request: AttackDeleteRequest, current_user: dict = Depe
     res = await db.attacks.delete_many({"attacker_id": current_user["id"], "id": {"$in": ids}})
     return {"message": f"Deleted {res.deleted_count} search(es)", "deleted": res.deleted_count}
 
-async def travel_to_target(request: AttackIdRequest, current_user: dict = Depends(get_current_user_verified)):
+async def travel_to_target(body: AttackIdRequest, req: Request, current_user: dict = Depends(get_current_user_verified)):
     from routers.casinos.blackjack import user_has_blocking_singleplayer_blackjack
     from routers.casinos.mp_blackjack import user_in_active_mp_blackjack_game
 
@@ -1320,7 +1320,7 @@ async def travel_to_target(request: AttackIdRequest, current_user: dict = Depend
             detail="Finish or leave your multiplayer blackjack game before traveling.",
         )
     attack = await db.attacks.find_one(
-        {"attacker_id": current_user["id"], "status": "found", "id": request.attack_id},
+        {"attacker_id": current_user["id"], "status": "found", "id": body.attack_id},
         {"_id": 0}
     )
     if not attack:
@@ -1332,6 +1332,33 @@ async def travel_to_target(request: AttackIdRequest, current_user: dict = Depend
     location_state = _resolved_target_location(attack, tu_travel)
     if not location_state:
         raise HTTPException(status_code=400, detail="Target location unknown")
+    from_state = (current_user.get("current_state") or "").strip() or None
+    target_un = (attack.get("target_username") or "").strip() or "?"
+    tid = attack.get("target_id")
+    if from_state:
+        travel_msg = f"Traveled from {from_state} to {location_state} pursuing {target_un}."
+    else:
+        travel_msg = f"Traveled to {location_state} pursuing {target_un}."
+    try:
+        meta = _request_meta(req)
+        await db.attack_attempts.insert_one(
+            {
+                "id": str(uuid.uuid4()),
+                "attacker_id": uid,
+                "attacker_username": current_user.get("username") or "?",
+                "target_id": tid,
+                "target_username": target_un,
+                "attack_id": body.attack_id,
+                "location_state": location_state,
+                "outcome": "travel",
+                "player_message": travel_msg,
+                "bullets_used": 0,
+                "created_at": datetime.now(timezone.utc),
+                **meta,
+            }
+        )
+    except Exception:
+        pass
     await db.users.update_one(
         {"id": current_user["id"]},
         {"$set": {"current_state": location_state}}
@@ -1833,6 +1860,9 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                         _npc_bg_owner_id = _vas[0]["user_id"]
                         _ou = await db.users.find_one({"id": _npc_bg_owner_id}, {"_id": 0, "username": 1})
                         _npc_bg_owner_username = (_ou or {}).get("username")
+                if _is_npc_bodyguard and (_npc_bg_owner_username or "").strip():
+                    own_n = str(_npc_bg_owner_username).strip()
+                    success_message = success_message.rstrip() + f" They were a bodyguard for {own_n}."
                 damage_done = float(target_health)
                 try:
                     meta = _request_meta(req)
@@ -1844,6 +1874,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     await db.attack_attempts.insert_one({
                         **attempt_base,
                         "outcome": "killed",
+                        "player_message": success_message,
                         "death_message": death_message or None,
                         "make_public": False,
                         "rewards": rewards,
@@ -2296,6 +2327,8 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             success_message += ", " + ", ".join(extras) + "."
         else:
             success_message += " and their assets."
+        if target.get("is_bodyguard") and (bodyguard_owner_username or "").strip():
+            success_message += f" They were a bodyguard for {str(bodyguard_owner_username).strip()}."
         if death_message:
             success_message += f' Death message: "{death_message}"'
         if make_public:

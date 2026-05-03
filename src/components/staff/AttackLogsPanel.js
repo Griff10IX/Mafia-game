@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import {
   formatAttackLogTime,
   formatAttackLogBotCell,
+  formatAttackLogBotRationale,
   formatAttackLogIntegrityCell,
   parseAttackLogUA,
 } from '../../utils/attackLogDisplay';
@@ -198,6 +199,9 @@ export default function AttackLogsPanel({
                     Flags
                   </th>
                   <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bodyguard?</th>
+                  <th className="py-1 pr-1 font-bold text-mutedForeground uppercase" title="Victim was this player’s bodyguard (kill rows)">
+                    BG for
+                  </th>
                   <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bullets</th>
                   <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Location</th>
                   <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Time</th>
@@ -218,10 +222,14 @@ export default function AttackLogsPanel({
                         {row.outcome === 'failed' && <span className="text-amber-400">Failed</span>}
                         {row.outcome === 'bodyguard' && <span className="text-amber-500">Bodyguard</span>}
                         {row.outcome === 'error' && <span className="text-orange-400">Error</span>}
-                        {!['killed', 'failed', 'bodyguard', 'error'].includes(row.outcome) &&
+                        {row.outcome === 'travel' && <span className="text-sky-400">Traveled</span>}
+                        {!['killed', 'failed', 'bodyguard', 'error', 'travel'].includes(row.outcome) &&
                           (row.outcome ? <span className="text-mutedForeground">{row.outcome}</span> : '—')}
                       </td>
-                      <td className="py-1 pr-1 max-w-[200px] truncate text-mutedForeground" title={row.player_message ?? ''}>
+                      <td
+                        className="py-1 pr-1 min-w-[240px] max-w-md text-mutedForeground break-words line-clamp-3 leading-snug"
+                        title={row.player_message ?? ''}
+                      >
                         {row.player_message ?? '—'}
                       </td>
                       <td className="py-1 pr-1 text-mutedForeground font-mono text-[9px]">{row.client_ip ?? '—'}</td>
@@ -252,6 +260,9 @@ export default function AttackLogsPanel({
                       </td>
                       <td className="py-1 pr-1">
                         {row.is_bodyguard_kill ? 'Yes' : row.outcome === 'bodyguard' ? 'Blocked' : '—'}
+                      </td>
+                      <td className="py-1 pr-1 text-mutedForeground max-w-[120px] break-words" title={row.bodyguard_owner_username || ''}>
+                        {row.bodyguard_owner_username || '—'}
                       </td>
                       <td className="py-1 pr-1">{row.bullets_used != null ? Number(row.bullets_used).toLocaleString() : '—'}</td>
                       <td className="py-1 pr-1 text-mutedForeground">{row.location_state ?? row.state ?? '—'}</td>
@@ -300,7 +311,10 @@ export default function AttackLogsPanel({
                   <span className="text-mutedForeground">Target:</span> {attackLogViewRow.target_username ?? '—'}
                 </div>
                 <div>
-                  <span className="text-mutedForeground">Outcome:</span> {attackLogViewRow.outcome ?? '—'}
+                  <span className="text-mutedForeground">Outcome:</span>{' '}
+                  {attackLogViewRow.outcome === 'travel'
+                    ? 'Traveled'
+                    : attackLogViewRow.outcome ?? '—'}
                 </div>
                 <div>
                   <span className="text-mutedForeground">Location:</span>{' '}
@@ -319,6 +333,10 @@ export default function AttackLogsPanel({
                   {attackLogViewRow.is_bodyguard_kill ? 'Yes' : attackLogViewRow.outcome === 'bodyguard' ? 'Blocked' : '—'}
                 </div>
                 <div>
+                  <span className="text-mutedForeground">Bodyguard for (owner):</span>{' '}
+                  <span className="text-foreground">{attackLogViewRow.bodyguard_owner_username || '—'}</span>
+                </div>
+                <div>
                   <span className="text-mutedForeground">Bot?</span>{' '}
                   {(() => {
                     const c = formatAttackLogBotCell(attackLogViewRow);
@@ -331,6 +349,12 @@ export default function AttackLogsPanel({
                     );
                   })()}
                 </div>
+                {formatAttackLogBotRationale(attackLogViewRow) ? (
+                  <div className="col-span-2">
+                    <span className="text-mutedForeground font-bold uppercase tracking-wider text-[9px]">Bot / client rationale</span>
+                    <p className="text-foreground/90 text-[9px] mt-1 leading-relaxed">{formatAttackLogBotRationale(attackLogViewRow)}</p>
+                  </div>
+                ) : null}
                 {attackLogViewRow.attacker_client_signal && (
                   <div>
                     <span className="text-mutedForeground">Client signal:</span>{' '}

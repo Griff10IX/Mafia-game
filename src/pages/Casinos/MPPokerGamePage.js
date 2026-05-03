@@ -119,14 +119,14 @@ function pokerCardAccessibleTitle(card) {
 }
 
 /* ─── Playing Card ─── */
-function Card({ card, hidden, index = 0, total = 1, small = false, medium = false }) {
+function Card({ card, hidden, index = 0, total = 1, small = false, medium = false, straight = false }) {
   const w = small
     ? 'w-[36px] h-[52px] sm:w-[38px] sm:h-[54px]'
     : medium
     ? 'w-[44px] h-[62px] sm:w-[48px] sm:h-[68px]'
     : 'w-[54px] h-[76px] sm:w-[60px] sm:h-[84px]';
-  const fan = total > 1 ? (index - (total - 1) / 2) * 4 : 0;
-  const offsetX = total > 1 ? (index - (total - 1) / 2) * 3 : 0;
+  const fan = straight || total <= 1 ? 0 : (index - (total - 1) / 2) * 3;
+  const offsetX = straight || total <= 1 ? 0 : (index - (total - 1) / 2) * 2;
   const style = {
     transform: `rotate(${fan}deg) translateX(${offsetX}px)`,
     animationDelay: `${index * 0.08}s`,
@@ -391,9 +391,9 @@ function MpPokerHandOutcomePanel({
         {board.length > 0 && (
           <div className="pt-2 border-t border-white/5">
             <p className="text-[8px] font-heading uppercase tracking-wider text-white/35 mb-1.5">Board</p>
-            <div className="flex flex-wrap justify-center gap-1">
+            <div className="flex flex-wrap justify-center gap-1.5 sm:gap-2">
               {board.map((c, i) => (
-                <Card key={i} card={c} hidden={false} index={i} total={board.length} small />
+                <Card key={i} card={c} hidden={false} index={i} total={board.length} small straight />
               ))}
             </div>
           </div>
@@ -570,9 +570,9 @@ function MpPokerTournamentHandToast({ snapshot, myUserId, visible, compact }) {
         )
       )}
       {brd.length > 0 && (
-        <div className="flex justify-center gap-0.5 mt-0.5 flex-wrap">
+        <div className="flex justify-center gap-1 sm:gap-1.5 mt-0.5 flex-wrap">
           {brd.map((c, i) => (
-            <Card key={`b-${i}`} card={c} hidden={false} index={i} total={brd.length} small />
+            <Card key={`b-${i}`} card={c} hidden={false} index={i} total={brd.length} small straight />
           ))}
         </div>
       )}
@@ -700,7 +700,7 @@ function StartCountdown({ seconds }) {
 }
 
 /* ─── Player Seat (oval layout) ─── */
-function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeats, compact = false }) {
+function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeats, compact = false, omitHoleOnFelt = false }) {
   const hole = p.hole_cards || [];
   const folded = p.status === 'folded';
   const allIn = p.status === 'all_in';
@@ -728,12 +728,19 @@ function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeat
     <div className={`flex flex-col items-center ${compact ? 'gap-0.5' : 'gap-1'}`} style={{ opacity: folded ? 0.45 : 1, transition: 'opacity 0.3s' }}>
       {/* Cards above/beside seat */}
       <div className="flex items-center gap-0.5 mb-0.5" style={{ minHeight: compact ? 52 : 68 }}>
-        {hole.length === 0
-          ? <div className={`rounded-[6px] border border-white/10 ${compact ? 'w-[36px] h-[52px] sm:w-[38px] sm:h-[54px]' : 'w-[44px] h-[62px] sm:w-[48px] sm:h-[68px]'}`} style={{ background: 'rgba(0,0,0,0.28)' }} />
-          : hole.map((c, i) => (
-              <Card key={i} card={c} hidden={!showHole} index={i} total={hole.length} small={compact || !cardMedium} medium={cardMedium} />
-            ))
-        }
+        {omitHoleOnFelt && hole.length > 0 ? (
+          <div
+            className="shrink-0 opacity-0 pointer-events-none"
+            style={{ width: compact ? 78 : 102, height: compact ? 52 : 68 }}
+            aria-hidden
+          />
+        ) : hole.length === 0 ? (
+          <div className={`rounded-[6px] border border-white/10 ${compact ? 'w-[36px] h-[52px] sm:w-[38px] sm:h-[54px]' : 'w-[44px] h-[62px] sm:w-[48px] sm:h-[68px]'}`} style={{ background: 'rgba(0,0,0,0.28)' }} />
+        ) : (
+          hole.map((c, i) => (
+            <Card key={i} card={c} hidden={!showHole} index={i} total={hole.length} small={compact || !cardMedium} medium={cardMedium} />
+          ))
+        )}
       </div>
 
       {/* Seat chip */}
@@ -794,21 +801,21 @@ function getTablePositions(totalSeats, compact = false) {
   // Arranged around an oval: x 10-90%, y 5-85%
   if (compact && totalSeats === 4) {
     return [
-      { x: 50, y: 86 },
-      { x: 14, y: 48 },
-      { x: 50, y: 12 },
-      { x: 86, y: 48 },
+      { x: 50, y: 88 },
+      { x: 12, y: 48 },
+      { x: 50, y: 11 },
+      { x: 88, y: 48 },
     ];
   }
   const positions = {
-    2: [{ x: 50, y: 82 }, { x: 50, y: 8 }],
-    3: [{ x: 50, y: 82 }, { x: 10, y: 30 }, { x: 90, y: 30 }],
-    4: [{ x: 50, y: 82 }, { x: 8, y: 45 }, { x: 50, y: 8 }, { x: 92, y: 45 }],
-    5: [{ x: 50, y: 82 }, { x: 8, y: 60 }, { x: 18, y: 12 }, { x: 82, y: 12 }, { x: 92, y: 60 }],
-    6: [{ x: 50, y: 84 }, { x: 8, y: 65 }, { x: 8, y: 20 }, { x: 50, y: 6 }, { x: 92, y: 20 }, { x: 92, y: 65 }],
-    7: [{ x: 50, y: 84 }, { x: 10, y: 70 }, { x: 5, y: 35 }, { x: 25, y: 6 }, { x: 75, y: 6 }, { x: 95, y: 35 }, { x: 90, y: 70 }],
-    8: [{ x: 50, y: 84 }, { x: 12, y: 72 }, { x: 2, y: 48 }, { x: 12, y: 14 }, { x: 50, y: 5 }, { x: 88, y: 14 }, { x: 98, y: 48 }, { x: 88, y: 72 }],
-    9: [{ x: 50, y: 84 }, { x: 14, y: 78 }, { x: 2, y: 52 }, { x: 6, y: 22 }, { x: 30, y: 5 }, { x: 70, y: 5 }, { x: 94, y: 22 }, { x: 98, y: 52 }, { x: 86, y: 78 }],
+    2: [{ x: 50, y: 88 }, { x: 50, y: 7 }],
+    3: [{ x: 50, y: 88 }, { x: 9, y: 30 }, { x: 91, y: 30 }],
+    4: [{ x: 50, y: 88 }, { x: 6, y: 44 }, { x: 50, y: 7 }, { x: 94, y: 44 }],
+    5: [{ x: 50, y: 88 }, { x: 6, y: 60 }, { x: 17, y: 11 }, { x: 83, y: 11 }, { x: 94, y: 60 }],
+    6: [{ x: 50, y: 88 }, { x: 6, y: 66 }, { x: 6, y: 19 }, { x: 50, y: 5 }, { x: 94, y: 19 }, { x: 94, y: 66 }],
+    7: [{ x: 50, y: 88 }, { x: 9, y: 72 }, { x: 4, y: 34 }, { x: 24, y: 5 }, { x: 76, y: 5 }, { x: 96, y: 34 }, { x: 91, y: 72 }],
+    8: [{ x: 50, y: 88 }, { x: 11, y: 74 }, { x: 2, y: 48 }, { x: 11, y: 13 }, { x: 50, y: 4 }, { x: 89, y: 13 }, { x: 98, y: 48 }, { x: 89, y: 74 }],
+    9: [{ x: 50, y: 88 }, { x: 13, y: 79 }, { x: 2, y: 52 }, { x: 6, y: 21 }, { x: 29, y: 4 }, { x: 71, y: 4 }, { x: 94, y: 21 }, { x: 98, y: 52 }, { x: 87, y: 79 }],
   };
   return positions[totalSeats] || positions[6];
 }
@@ -1204,6 +1211,12 @@ export default function MPPokerGamePage() {
   const minRaise = bigBlind;
   const myStack = myPlayer?.stack ?? 0;
   const showAllCards = street === 'showdown' || status === 'completed';
+  /** Your hole cards are already in the page header — skip duplicating them on the felt so they do not stack over the board / turn timer. */
+  const heroHoleUsesHeader =
+    myIndex >= 0 &&
+    status === 'playing' &&
+    (phase === 'playing' || isVsDealer) &&
+    (street === 'preflop' || street === 'flop' || street === 'turn' || street === 'river');
   const amIPlayer = myIndex >= 0;
   const isSpectating = !isVsDealer && !amIPlayer;
   const amIReady = myPlayer?.ready || false;
@@ -1344,7 +1357,7 @@ export default function MPPokerGamePage() {
     <div className={`pkr-mp-root space-y-2 sm:space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="mp-poker-game-page">
       <style>{`
         @keyframes pkr-deal {
-          0%   { transform: translateY(-20px) scale(0.85); opacity: 0; }
+          0%   { opacity: 0; }
           100% { opacity: 1; }
         }
         @keyframes pkr-particle {
@@ -1368,7 +1381,7 @@ export default function MPPokerGamePage() {
           0%,100% { transform: translateY(0); }
           50%     { transform: translateY(-3px); }
         }
-        .animate-pkr-deal    { animation: pkr-deal 0.28s cubic-bezier(0.2,0.8,0.3,1) backwards; }
+        .animate-pkr-deal    { animation: pkr-deal 0.24s cubic-bezier(0.2,0.8,0.3,1) backwards; }
         .animate-pkr-fade    { animation: pkr-fade-in 0.35s ease-out both; }
         .animate-pkr-pulse   { animation: pkr-pulse 1.4s ease-in-out infinite; }
         .animate-pkr-ready   { animation: pkr-ready-pulse 2s ease-in-out infinite; }
@@ -1682,11 +1695,14 @@ export default function MPPokerGamePage() {
               }}
             />
 
-            {/* Pot display in center */}
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ zIndex: 5 }}>
-              <div className={`flex flex-col items-center ${compactUi ? 'gap-1' : 'gap-1.5'} max-w-[min(100%,280px)] sm:max-w-none px-1`}>
+            {/* Pot display in center — z above seat hole cards so the board is never covered by rail seats */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ zIndex: 16 }}>
+              <div
+                className={`flex flex-col items-center ${compactUi ? 'gap-1' : 'gap-1.5'} max-w-[min(100%,280px)] sm:max-w-none px-1`}
+                style={isMyTurn ? { transform: 'translateY(-10px)' } : undefined}
+              >
                 {board.length > 0 && (
-                  <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap justify-center scale-[0.96] sm:scale-100 origin-center">
+                  <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-center scale-[0.96] sm:scale-100 origin-center">
                     {board.map((c, i) => (
                       <Card
                         key={i}
@@ -1696,6 +1712,7 @@ export default function MPPokerGamePage() {
                         total={board.length}
                         small={compactUi || players.length <= 4}
                         medium={!compactUi && players.length > 4}
+                        straight
                       />
                     ))}
                   </div>
@@ -1727,7 +1744,6 @@ export default function MPPokerGamePage() {
                   <div
                     className={`relative flex flex-col items-center gap-0.5 mt-0.5 sm:mt-1 rounded-xl ${compactUi ? 'px-2 py-1' : 'px-3 py-2'}`}
                     style={{
-                      zIndex: 15,
                       background: 'rgba(0,0,0,0.42)',
                       backdropFilter: 'blur(10px)',
                       WebkitBackdropFilter: 'blur(10px)',
@@ -1766,7 +1782,7 @@ export default function MPPokerGamePage() {
                   style={{
                     left: `${pos.x}%`, top: `${pos.y}%`,
                     transform: 'translate(-50%,-50%)',
-                    zIndex: isCurrent ? 10 : 6,
+                    zIndex: isCurrent ? 8 : 5,
                   }}>
                   <PlayerSeat
                     p={p}
@@ -1777,6 +1793,7 @@ export default function MPPokerGamePage() {
                     seatPos={pos}
                     totalSeats={players.length}
                     compact={compactUi}
+                    omitHoleOnFelt={Boolean(isMyOwnSeat && heroHoleUsesHeader)}
                   />
                 </div>
               );
@@ -1956,9 +1973,9 @@ export default function MPPokerGamePage() {
             {board.length > 0 && (
               <div>
                 <p className="text-[8px] font-heading uppercase tracking-wider text-white/35 mb-1">Community cards</p>
-                <div className="flex justify-center gap-0.5 flex-wrap">
+                <div className="flex justify-center gap-1.5 flex-wrap">
                   {board.map((c, i) => (
-                    <Card key={`allin-board-${i}`} card={c} hidden={false} index={i} total={board.length} small />
+                    <Card key={`allin-board-${i}`} card={c} hidden={false} index={i} total={board.length} small straight />
                   ))}
                 </div>
               </div>

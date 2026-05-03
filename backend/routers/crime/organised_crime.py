@@ -351,10 +351,11 @@ async def run_heist(
     
     if success:
         # Success - award money and rank points
+        money_reward = int(job.get("reward") or 0)
         rp_before = int(current_user.get("rank_points") or 0)
         rp_added = int(job.get("rank_points") or 0)
         oc_inc = {
-            "money": job["reward"],
+            "money": money_reward,
             "rank_points": rp_added,
             "total_heists": 1,
             "successful_heists": 1

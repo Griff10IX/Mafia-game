@@ -35,36 +35,65 @@ export function parseAttackLogUA(ua) {
   return { device, bot };
 }
 
+/** Long tooltip for staff: why automation/script/suspicious/browser was classified (and soft risk). */
+export function formatAttackLogBotRationale(row) {
+  if (!row || typeof row !== 'object') return '';
+  const parts = [];
+  const sig = row.attacker_client_signal;
+  if (sig) parts.push(`Client signal: ${sig}`);
+  const det = String(row.attacker_client_signal_detail || '').replace(/_/g, ' ').trim();
+  if (det) parts.push(`Signal detail: ${det}`);
+  if (row.attacker_bot_label) parts.push(`Bot label: ${row.attacker_bot_label}`);
+  if (Array.isArray(row.client_anomaly_flags) && row.client_anomaly_flags.length > 0) {
+    parts.push(`Anomaly flags: ${row.client_anomaly_flags.join(', ')}`);
+  }
+  if (row.client_risk_score != null && row.client_risk_score !== '') {
+    const n = Number(row.client_risk_score);
+    if (!Number.isNaN(n)) parts.push(`Client risk (soft): ${n}`);
+  }
+  const { bot: uaBot } = parseAttackLogUA(row.user_agent || '');
+  if (uaBot && sig !== 'automation' && sig !== 'script') {
+    parts.push(`UA substring hint (not tiered signal): ${uaBot}`);
+  }
+  if (row.attacker_is_bot === true && sig !== 'automation' && sig !== 'script') {
+    parts.push('Legacy field: attacker_is_bot true');
+  }
+  return parts.join(' · ');
+}
+
 /** Staff attack logs: tiered client signal from API + legacy rows (UA hints only). */
 export function formatAttackLogBotCell(row) {
   if (!row || typeof row !== 'object') {
     return { text: '—', className: 'text-mutedForeground', title: '' };
   }
+  const rationale = formatAttackLogBotRationale(row);
+  const pickTitle = (short) => (rationale && rationale.length > 0 ? rationale : short || '');
   const { bot: uaBot } = parseAttackLogUA(row.user_agent || '');
   const sig = row.attacker_client_signal;
   if (sig === 'automation' || sig === 'script') {
     const label = row.attacker_bot_label ? `Yes · ${row.attacker_bot_label}` : 'Yes';
-    return { text: label, className: 'text-amber-400 font-medium', title: label };
+    return { text: label, className: 'text-amber-400 font-medium', title: pickTitle(label) };
   }
   if (sig === 'suspicious') {
     const detail = (row.attacker_client_signal_detail || '').replace(/_/g, ' ');
-    const title = detail ? `Suspicious — ${detail}` : 'Weak browser fingerprint (not a confirmed bot)';
-    return { text: 'Suspicious', className: 'text-amber-500 font-medium', title };
+    const short = detail ? `Suspicious — ${detail}` : 'Weak browser fingerprint (not a confirmed bot)';
+    return { text: 'Suspicious', className: 'text-amber-500 font-medium', title: pickTitle(short) };
   }
   if (sig === 'browser') {
-    return { text: 'No', className: 'text-mutedForeground', title: '' };
+    return { text: 'No', className: 'text-mutedForeground', title: pickTitle('Classified as normal browser request') };
   }
   if (row.attacker_is_bot === true) {
     const label = row.attacker_bot_label ? `Yes · ${row.attacker_bot_label}` : 'Yes';
-    return { text: label, className: 'text-amber-400 font-medium', title: label };
+    return { text: label, className: 'text-amber-400 font-medium', title: pickTitle(label) };
   }
   if (row.attacker_is_bot === false) {
-    return { text: 'No', className: 'text-mutedForeground', title: '' };
+    return { text: 'No', className: 'text-mutedForeground', title: pickTitle('Classified as human (legacy flag)') };
   }
   if (uaBot) {
-    return { text: uaBot, className: 'text-amber-400 font-medium', title: `UA hint only: ${uaBot}` };
+    const short = `UA hint only: ${uaBot}`;
+    return { text: uaBot, className: 'text-amber-400 font-medium', title: pickTitle(short) };
   }
-  return { text: '—', className: 'text-mutedForeground', title: '' };
+  return { text: '—', className: 'text-mutedForeground', title: pickTitle('') };
 }
 
 /** Staff: anti-bot / integrity flags stored on attack_attempts (e.g. execute_token mismatch). */
