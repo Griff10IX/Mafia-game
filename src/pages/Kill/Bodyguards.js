@@ -377,9 +377,9 @@ export default function Bodyguards() {
     return row && !row.bodyguard_username && hiringSlots.has(sn);
   }).length;
   const activeCount = Math.min(4, filledBodyguardSlots + pendingEmptySlots);
-  // All active bodyguards sorted by slot number (mixed robots and humans together)
-  const activeBodyguards = bodyguards
-    .filter((b) => b.bodyguard_username)
+  // Hired slots + slots with an in-flight hire (so spamming shows all rows immediately)
+  const visibleBodyguardSlots = bodyguards
+    .filter((b) => b.bodyguard_username || hiringSlots.has(b.slot_number))
     .sort((a, b) => (a.slot_number ?? 0) - (b.slot_number ?? 0));
 
   const sendInvite = async () => {
@@ -467,12 +467,16 @@ export default function Bodyguards() {
   };
 
   const renderBodyguardCard = (bg) => {
+    const hirePending = hiringSlots.has(bg.slot_number) && !bg.bodyguard_username;
+    const showAsRobot = hirePending || bg.is_robot;
     const isExpanded = expandedSlot === bg.slot_number;
     return (
       <div
         key={bg.slot_number}
         data-testid={`bodyguard-slot-${bg.slot_number}`}
-        className="bg-row rounded-lg transition-all bg-zinc-800/30 border border-transparent hover:border-primary/20"
+        className={`bg-row rounded-lg transition-all bg-zinc-800/30 border ${
+          hirePending ? 'border-amber-500/25 animate-pulse' : 'border-transparent hover:border-primary/20'
+        }`}
       >
         <div
           className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer"
@@ -486,21 +490,27 @@ export default function Bodyguards() {
               <div className="text-sm font-heading font-bold text-foreground truncate flex items-center gap-2">
                 Slot {bg.slot_number}
                 <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-                  bg.is_robot ? 'bg-blue-500/20 text-blue-400' : 'bg-emerald-500/20 text-emerald-400'
+                  showAsRobot ? 'bg-blue-500/20 text-blue-400' : 'bg-emerald-500/20 text-emerald-400'
                 }`}>
-                  {bg.is_robot ? 'Robot' : 'Human'}
+                  {showAsRobot ? 'Robot' : 'Human'}
                 </span>
               </div>
               <div className="text-[10px] text-mutedForeground truncate hidden sm:block">
-                <Link
-                  to={`/profile/${encodeURIComponent(bg.bodyguard_username ?? '')}`}
-                  className="hover:text-primary"
-                  data-testid={`bodyguard-profile-${bg.slot_number}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {bg.bodyguard_username ?? '—'}
-                </Link>
-                {bg.bodyguard_rank_name && <span> • {bg.bodyguard_rank_name}</span>}
+                {hirePending ? (
+                  <span className="text-amber-400/90 font-heading font-bold tracking-wide">Hiring…</span>
+                ) : (
+                  <>
+                    <Link
+                      to={`/profile/${encodeURIComponent(bg.bodyguard_username ?? '')}`}
+                      className="hover:text-primary"
+                      data-testid={`bodyguard-profile-${bg.slot_number}`}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {bg.bodyguard_username ?? '—'}
+                    </Link>
+                    {bg.bodyguard_rank_name && <span> • {bg.bodyguard_rank_name}</span>}
+                  </>
+                )}
               </div>
               <div className="text-[10px] text-mutedForeground sm:hidden">
                 Tap to {isExpanded ? 'collapse' : 'view details'}
@@ -509,18 +519,18 @@ export default function Bodyguards() {
           </div>
           <div className="shrink-0 w-12 text-center">
             <span className="text-xs font-bold text-primary">
-              {bg.is_robot ? `${bg.armour_level ?? 0}/5` : (bg.armour_level ? `${bg.armour_level}/5` : 'None')}
+              {showAsRobot ? `${bg.armour_level ?? 0}/5` : (bg.armour_level ? `${bg.armour_level}/5` : 'None')}
             </span>
           </div>
           <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-            {bg.is_robot ? (
+            {showAsRobot ? (
               <button
                 onClick={() => upgradeArmour(bg.slot_number)}
-                disabled={(bg.armour_level || 0) >= 5}
+                disabled={hirePending || (bg.armour_level || 0) >= 5}
                 className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation disabled:opacity-40 disabled:cursor-not-allowed font-heading"
                 data-testid={`upgrade-armour-${bg.slot_number}`}
               >
-                {upgradingSlot === bg.slot_number ? '…' : (bg.armour_level || 0) >= 5 ? '🛡️ Max' : `🛡️ Upgrade (${getUpgradeCost(bg.armour_level)} pts)`}
+                {hirePending ? '…' : upgradingSlot === bg.slot_number ? '…' : (bg.armour_level || 0) >= 5 ? '🛡️ Max' : `🛡️ Upgrade (${getUpgradeCost(bg.armour_level)} pts)`}
               </button>
             ) : (
               <span className="text-[10px] text-mutedForeground italic">Your armour</span>
@@ -532,21 +542,25 @@ export default function Bodyguards() {
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="bg-zinc-900/50 rounded p-2">
                 <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Guard</div>
-                <Link
-                  to={`/profile/${encodeURIComponent(bg.bodyguard_username ?? '')}`}
-                  className="text-foreground font-bold hover:text-primary"
-                  data-testid={`bodyguard-profile-expanded-${bg.slot_number}`}
-                >
-                  {bg.bodyguard_username ?? '—'}
-                </Link>
+                {hirePending ? (
+                  <span className="text-amber-400/90 font-bold font-heading">Hiring…</span>
+                ) : (
+                  <Link
+                    to={`/profile/${encodeURIComponent(bg.bodyguard_username ?? '')}`}
+                    className="text-foreground font-bold hover:text-primary"
+                    data-testid={`bodyguard-profile-expanded-${bg.slot_number}`}
+                  >
+                    {bg.bodyguard_username ?? '—'}
+                  </Link>
+                )}
               </div>
               <div className="bg-zinc-900/50 rounded p-2">
                 <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Type</div>
-                <div className={`font-bold ${bg.is_robot ? 'text-blue-400' : 'text-emerald-400'}`}>
-                  {bg.is_robot ? '🤖 Robot' : '👤 Human'}
+                <div className={`font-bold ${showAsRobot ? 'text-blue-400' : 'text-emerald-400'}`}>
+                  {showAsRobot ? '🤖 Robot' : '👤 Human'}
                 </div>
               </div>
-              {bg.bodyguard_rank_name && (
+              {!hirePending && bg.bodyguard_rank_name && (
                 <div className="bg-zinc-900/50 rounded p-2">
                   <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Rank</div>
                   <div className="text-foreground font-bold">{bg.bodyguard_rank_name}</div>
@@ -555,22 +569,22 @@ export default function Bodyguards() {
               <div className="bg-zinc-900/50 rounded p-2">
                 <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Armour</div>
                 <div className="text-primary font-bold">
-                  {bg.is_robot ? `${bg.armour_level ?? 0}/5` : (bg.armour_level ? `${bg.armour_level}/5 (their armour)` : 'None (their armour)')}
+                  {showAsRobot ? `${bg.armour_level ?? 0}/5` : (bg.armour_level ? `${bg.armour_level}/5 (their armour)` : 'None (their armour)')}
                 </div>
               </div>
               <div className="bg-zinc-900/50 rounded p-2 col-span-2">
                 <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Hired</div>
                 <div className="text-foreground font-bold">
-                  {bg.hired_at && new Date(bg.hired_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                  {hirePending ? '—' : bg.hired_at && new Date(bg.hired_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                 </div>
               </div>
-              {(bg.hire_cost ?? 0) > 0 && (
+              {!hirePending && (bg.hire_cost ?? 0) > 0 && (
                 <div className="bg-zinc-900/50 rounded p-2 col-span-2">
                   <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Upfront cost</div>
                   <div className="text-foreground font-bold">{(bg.hire_cost ?? 0).toLocaleString()} pts</div>
                 </div>
               )}
-              {!bg.is_robot && ((bg.payment_points ?? 0) > 0 || (bg.payment_money ?? 0) > 0) && (
+              {!hirePending && !bg.is_robot && ((bg.payment_points ?? 0) > 0 || (bg.payment_money ?? 0) > 0) && (
                 <div className="bg-zinc-900/50 rounded p-2 col-span-2">
                   <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Pay (per week, auto on day)</div>
                   <div className="text-foreground font-bold">
@@ -789,7 +803,7 @@ export default function Bodyguards() {
               </button>
             </div>
             <div className="space-y-1">
-              {activeBodyguards.map((bg) => renderBodyguardCard(bg))}
+              {visibleBodyguardSlots.map((bg) => renderBodyguardCard(bg))}
               {activeCount < 4 && nextEmptySlot && !bodyguardFor?.owner_username && (
                 <div className="bg-row rounded-lg bg-zinc-800/30 border border-transparent hover:border-primary/20 px-3 py-3 space-y-2">
                   <div className="text-[10px] text-mutedForeground mb-1">
