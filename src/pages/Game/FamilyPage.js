@@ -1568,14 +1568,29 @@ const WarDetailsModal = ({ warId, onClose }) => {
                           <div key={i} className="px-3 py-2 rounded-lg bg-zinc-800/20 border border-zinc-700/20">
                             <div className="text-[10px] font-heading">
                               <span className="text-emerald-400 font-bold">{ev.killer_username}</span>
-                              {ev.event_type === 'player_kill'
-                                ? <><span className="text-zinc-600"> killed </span><span className="text-red-400 font-bold">{ev.victim_username}</span></>
-                                : <><span className="text-zinc-600"> eliminated BG of </span><span className="text-red-400 font-bold">{ev.victim_username ?? ev.bg_username}</span></>
-                              }
+                              {ev.kill_type === 'bodyguard' ? (
+                                <>
+                                  <span className="text-zinc-600"> eliminated bodyguard </span>
+                                  <span className="text-red-400 font-bold">{ev.bg_username || '?'}</span>
+                                  {(ev.bg_owner_username || ev.victim_username) && (
+                                    <>
+                                      <span className="text-zinc-600"> protecting </span>
+                                      <span className="text-red-400 font-bold">{ev.bg_owner_username ?? ev.victim_username}</span>
+                                    </>
+                                  )}
+                                </>
+                              ) : (
+                                <>
+                                  <span className="text-zinc-600"> killed </span>
+                                  <span className="text-red-400 font-bold">{ev.victim_username ?? '?'}</span>
+                                </>
+                              )}
                             </div>
                             <div className="flex flex-wrap gap-2 mt-0.5 text-[9px] text-zinc-600 font-heading">
                               {(ev.bullets_used || 0) > 0 && <span>🔫 {Number(ev.bullets_used).toLocaleString()}</span>}
-                              {(ev.cash_loot || 0) > 0 && <span>💰 ${Number(ev.cash_loot).toLocaleString()}</span>}
+                              {(ev.cash_loot || ev.cash_taken || 0) > 0 && (
+                                <span>💰 ${Number(ev.cash_loot ?? ev.cash_taken ?? 0).toLocaleString()}</span>
+                              )}
                             </div>
                           </div>
                         ))}

@@ -160,15 +160,68 @@ function KillRewardsBlock({ pendingRewards, saving, onClaim }) {
     <div className={`${styles.panel} r-card border border-primary/25 rounded-md overflow-hidden mobile-panel`}>
       <CardHead icon={Star} title="Seized operation — choose" />
       <div className="p-3 space-y-3">
-        <p className="text-[10px] text-mutedForeground font-heading leading-snug">
-          If their till rate beats yours, you can take the whole racket (Capo+), rename it, and it keeps +5% /hr on that operation.
-          If yours is already stronger, you absorb their cut: +5% /hr on your racket plus the same liquidation cash — or cash out only.
-        </p>
+        <div className="text-[10px] text-mutedForeground font-heading leading-relaxed space-y-2 border-b border-primary/10 pb-3">
+          <p className="font-bold text-foreground/90 uppercase tracking-wide text-[9px]">How it works</p>
+          <ul className="list-none space-y-2 pl-0">
+            <li className="flex gap-2">
+              <span className="text-primary shrink-0 font-bold">1.</span>
+              <span>
+                <strong className="text-foreground/90">Their hourly payout was higher than yours</strong> — you may{' '}
+                <strong className="text-emerald-400/90">take over</strong> the whole racket (Capo+), rename it, and keep +5%/hr on{' '}
+                <em>that</em> business — or take cash only.
+              </span>
+            </li>
+            <li className="flex gap-2">
+              <span className="text-primary shrink-0 font-bold">2.</span>
+              <span>
+                <strong className="text-foreground/90">Your hourly payout is already higher</strong> — either{' '}
+                <strong className="text-violet-300/90">absorb</strong> (+5%/hr on <em>your</em> racket <span className="text-zinc-500">and</span> you get the cash shown), or{' '}
+                <strong className="text-primary/90">cash out</strong> for money only (no +5% boost).
+              </span>
+            </li>
+          </ul>
+        </div>
         {pendingRewards.map((p) => (
           <KillRewardRow key={p.victim_id} p={p} saving={saving} onClaim={onClaim} />
         ))}
       </div>
     </div>
+  );
+}
+
+function KillRewardScenarioBlurb({ p }) {
+  const hasSnap = Boolean(p.has_snapshot);
+  const canTakeover = Boolean(p.takeover_available);
+  const canAbsorb = Boolean(p.absorb_available);
+  if (hasSnap && canTakeover) {
+    return (
+      <div className="space-y-1 text-[10px]">
+        <p className="text-foreground font-heading font-semibold leading-snug">Their operation paid more per hour than yours.</p>
+        <p className="text-mutedForeground leading-snug">
+          <strong className="text-emerald-400/95">Take over</strong> — run their whole racket under a new name (+5%/hr on that site).{' '}
+          <strong className="text-primary/90">Cash out</strong> — take the money below; you don&apos;t keep their business.
+        </p>
+      </div>
+    );
+  }
+  if (hasSnap && canAbsorb) {
+    return (
+      <div className="space-y-1 text-[10px]">
+        <p className="text-foreground font-heading font-semibold leading-snug">Your operation already pays more per hour than theirs.</p>
+        <p className="text-mutedForeground leading-snug">
+          <strong className="text-violet-300/95">Absorb</strong> — add +5%/hr to <em>your</em> racket and take the cash shown below.{' '}
+          <strong className="text-primary/90">Cash out only</strong> — same payout, no +5% on yours.
+        </p>
+      </div>
+    );
+  }
+  if (hasSnap) {
+    return (
+      <p className="text-[10px] text-mutedForeground leading-snug">Pick one option below to settle this seizure.</p>
+    );
+  }
+  return (
+    <p className="text-[10px] text-mutedForeground leading-snug">Cash payout from their investment (older reward).</p>
   );
 }
 
@@ -178,19 +231,22 @@ function KillRewardRow({ p, saving, onClaim }) {
   const hasSnap = Boolean(p.has_snapshot);
   const canTakeover = Boolean(p.takeover_available);
   const canAbsorb = Boolean(p.absorb_available);
-  let sub = 'Legacy reward — liquidate for invested cash.';
-  if (hasSnap && canTakeover) sub = 'Their till rate beats yours — full takeover or liquidate.';
-  else if (hasSnap && canAbsorb) sub = 'Yours pays better — absorb (+5% /hr on yours) & cash, or liquidate only.';
-  else if (hasSnap) sub = 'Choose how to close this seizure.';
   return (
     <div className="kill-reward-card flex flex-col gap-2 p-3 rounded">
       <div className="min-w-0">
         <div className="text-xs font-heading font-bold text-foreground">{p.victim_username}</div>
-        <div className="text-[10px] text-mutedForeground">
-          {sub}
+        <div className="mt-1.5">
+          <KillRewardScenarioBlurb p={p} />
         </div>
-        <div className="text-[10px] text-zinc-500 font-heading mt-0.5 tabular-nums">
-          Liquidate ≈ {formatMoney(preview)}
+        <div className="text-[10px] font-heading mt-2 pt-2 border-t border-zinc-700/35 tabular-nums flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+          <span className="text-zinc-500">Estimated cash value</span>
+          <span className="text-foreground font-semibold">{formatMoney(preview)}</span>
+          {canAbsorb && (
+            <span className="text-zinc-600 text-[9px] w-full sm:w-auto">— same amount for absorb or cash-out</span>
+          )}
+          {canTakeover && !canAbsorb && (
+            <span className="text-zinc-600 text-[9px] w-full sm:w-auto">— payout if you skip take over</span>
+          )}
         </div>
       </div>
       {canTakeover && (
@@ -213,7 +269,7 @@ function KillRewardRow({ p, saving, onClaim }) {
             disabled={saving}
             className="px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/28 rounded text-[10px] font-heading font-bold uppercase tracking-wider hover:bg-emerald-500/18 disabled:opacity-40 transition-all"
           >
-            Take over (+5% / hr)
+            Take over racket (+5%/hr there)
           </button>
         )}
         {canAbsorb && (
@@ -223,7 +279,7 @@ function KillRewardRow({ p, saving, onClaim }) {
             disabled={saving}
             className="px-3 py-1.5 bg-violet-500/10 text-violet-300 border border-violet-500/28 rounded text-[10px] font-heading font-bold uppercase tracking-wider hover:bg-violet-500/18 disabled:opacity-40 transition-all"
           >
-            Absorb (+5% yours + {formatMoney(preview)})
+            Absorb — +5%/hr on yours + {formatMoney(preview)}
           </button>
         )}
         <button
@@ -232,7 +288,7 @@ function KillRewardRow({ p, saving, onClaim }) {
           disabled={saving}
           className="px-3 py-1.5 bg-primary/15 text-primary border border-primary/35 rounded text-[10px] font-heading font-bold uppercase tracking-wider hover:bg-primary/25 disabled:opacity-40 transition-all"
         >
-          Liquidate {formatMoney(preview)}
+          Cash out only · {formatMoney(preview)}
         </button>
       </div>
     </div>

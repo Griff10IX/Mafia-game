@@ -1,4 +1,5 @@
 # Witness statements: P2P cash market (list / cancel / buy). Balance minted when players receive kill witness notifications.
+import re
 import uuid
 from datetime import datetime, timezone
 from typing import Optional
@@ -15,6 +16,7 @@ WITNESS_MAX_ACTIVE_LISTINGS = 5
 # Inbox + witness log match (case/spacing tolerant; must match send_notification title from kills).
 _WITNESS_INBOX_TITLE = {"title": {"$regex": r"^\s*Witness\s+statement\s*$", "$options": "i"}}
 _NOT_LISTED = {"$or": [{"listed_listing_id": {"$exists": False}}, {"listed_listing_id": None}]}
+_WITNESS_TITLE_PYTHON_RE = re.compile(r"^\s*Witness\s+statement\s*$", re.IGNORECASE)
 
 
 def redact_witness_killer_for_market(message: str) -> str:
@@ -26,6 +28,33 @@ def redact_witness_killer_for_market(message: str) -> str:
     if idx <= 0:
         return s
     return "[Redacted]" + s[idx:]
+
+
+# Shown when a listing still references notification id(s) but the inbox row is gone or has no message.
+# Anonymous listing only hides the seller; this case is missing data, not name redaction.
+MARKET_PREVIEW_MISSING_NOTIFICATION = (
+    "Witness text unavailable: linked notification not found (deleted or stale ID). "
+    "Listing anonymously only hides the seller, not the preview—this row has no saved text."
+)
+
+
+def active_witness_listing_is_broken(row: dict, notif_by_id: dict) -> bool:
+    """True if any referenced inbox row is missing, not a witness statement, wrong owner, or has no message."""
+    seller_id = row.get("seller_id")
+    nids = row.get("notification_ids") or []
+    if not seller_id or not nids:
+        return True
+    for nid in nids:
+        r = notif_by_id.get(nid)
+        if not r:
+            return True
+        if r.get("user_id") != seller_id:
+            return True
+        if not _WITNESS_TITLE_PYTHON_RE.match((r.get("title") or "").strip()):
+            return True
+        if not (r.get("message") or "").strip():
+            return True
+    return False
 
 
 class WitnessListRequest(BaseModel):
@@ -61,6 +90,12 @@ class WitnessStatementReconcileRequest(BaseModel):
     dry_run: bool = True
 
 
+class WitnessBrokenListingsCleanupRequest(BaseModel):
+    """Staff: cancel market listings whose escrow notifications are missing or invalid (returns statements to seller)."""
+
+    dry_run: bool = True
+
+
 def register(router):
     _PLAYER_MATCH = {"is_npc": {"$ne": True}, "is_bodyguard": {"$ne": True}}
 
@@ -76,7 +111,10 @@ def register(router):
     def _ordered_previews(ids: list[str], msg_by_id: dict, *, redact: bool) -> list:
         out = []
         for nid in ids:
-            m = msg_by_id.get(nid, "")
+            m = (msg_by_id.get(nid, "") or "").strip()
+            if not m:
+                out.append(MARKET_PREVIEW_MISSING_NOTIFICATION)
+                continue
             out.append(redact_witness_killer_for_market(m) if redact else m)
         return out
 
@@ -288,6 +326,97 @@ def register(router):
             "witness_notifications_in_escrow": in_escrow,
             "expected_balance": expected,
             "message": f"{msg} Updated by staff ({staff_name}).",
+        }
+
+    @router.post("/admin/witness-statements-remove-broken-listings")
+    async def admin_remove_broken_witness_listings(
+        req: WitnessBrokenListingsCleanupRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Find active witness market listings where `notification_ids` do not all resolve to valid
+        witness inbox rows for the seller (deleted row, empty message, wrong title, etc.).
+        Removes those listings like cancel: clears `listed_listing_id` where possible and returns
+        escrowed witness statement balance to the seller.
+        """
+        from server import _is_admin, _is_moderator
+
+        if not (_is_admin(current_user) or _is_moderator(current_user)):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+
+        listings = await db.witness_statement_listings.find({"status": "active"}, {"_id": 0}).to_list(5000)
+        all_nids: list[str] = []
+        for row in listings:
+            for x in row.get("notification_ids") or []:
+                s = str(x).strip()
+                if s:
+                    all_nids.append(s)
+        all_nids = list(dict.fromkeys(all_nids))
+
+        notif_rows = []
+        if all_nids:
+            notif_rows = await db.notifications.find(
+                {"id": {"$in": all_nids}},
+                {"_id": 0, "id": 1, "user_id": 1, "title": 1, "message": 1},
+            ).to_list(len(all_nids))
+        notif_by_id = {r["id"]: r for r in notif_rows}
+
+        broken_rows = [row for row in listings if active_witness_listing_is_broken(row, notif_by_id)]
+        preview = [
+            {
+                "listing_id": r.get("id"),
+                "seller_id": r.get("seller_id"),
+                "seller_username": r.get("seller_username") or "?",
+                "quantity": len(r.get("notification_ids") or []) or int(r.get("quantity") or 0),
+            }
+            for r in broken_rows
+        ]
+
+        if req.dry_run:
+            return {
+                "dry_run": True,
+                "checked": len(listings),
+                "broken_count": len(broken_rows),
+                "broken": preview,
+                "message": f"Would remove {len(broken_rows)} broken listing(s). Send dry_run=false to apply.",
+            }
+
+        removed: list[dict] = []
+        sellers_touched: set[str] = set()
+        for row in broken_rows:
+            lid = row.get("id")
+            uid = row.get("seller_id")
+            if not lid or not uid:
+                continue
+            nids = row.get("notification_ids") or []
+            qty = len(nids) if nids else int(row.get("quantity") or 0)
+            dr = await db.witness_statement_listings.delete_one({"id": lid, "status": "active"})
+            if dr.deleted_count == 0:
+                continue
+            if nids:
+                await db.notifications.update_many(
+                    {"listed_listing_id": lid, "user_id": uid},
+                    {"$unset": {"listed_listing_id": ""}},
+                )
+            await db.users.update_one({"id": uid}, {"$inc": {"witness_statements": qty}})
+            sellers_touched.add(uid)
+            removed.append({"listing_id": lid, "seller_id": uid, "quantity": qty})
+
+        for uid in sellers_touched:
+            try:
+                from routers.game.notifications import _invalidate_list_cache
+
+                _invalidate_list_cache(uid)
+            except Exception:
+                pass
+
+        return {
+            "dry_run": False,
+            "checked": len(listings),
+            "broken_count": len(broken_rows),
+            "removed_count": len(removed),
+            "removed": removed,
+            "message": f"Removed {len(removed)} broken listing(s); witness balances returned to sellers.",
         }
 
     @router.get("/witness-statements/listings")

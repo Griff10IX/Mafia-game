@@ -1197,7 +1197,7 @@ export default function CircuitRaceView({
   const [results,    setResults]    = useState(null);
   const [spMult,     setSpMult]     = useState(1);
   const spMultRef = useRef(1);
-  /** True while safety car / caution — show x30–x100 sim speed (orbit is capped slow under SC). */
+  /** True while safety car / caution — extra row x30 / x50 / x100 (orbit stays slow under SC). Normal racing: x1–x4 and x50. */
   const [showScSpeedRow, setShowScSpeedRow] = useState(false);
   const [paused,    setPaused]    = useState(false);
   const pausedRef = useRef(false);
@@ -1209,8 +1209,14 @@ export default function CircuitRaceView({
 
   useEffect(() => { const f = ()=>setNarrow(window.innerWidth<640); window.addEventListener("resize",f); return ()=>window.removeEventListener("resize",f); }, []);
   useEffect(() => { spMultRef.current = spMult; },  [spMult]);
+  /** After SC: clamp SC-only tiers (x30/x100) down; normal play allows up to x50 for long races. */
   useEffect(() => {
-    if (!showScSpeedRow) setSpMult((m) => (m > 4 ? 4 : m));
+    if (!showScSpeedRow)
+      setSpMult((m) => {
+        if (m > 50) return 50;
+        if (m === 30) return 50;
+        return m;
+      });
   }, [showScSpeedRow]);
   useEffect(() => { pausedRef.current = paused; },  [paused]);
   useEffect(() => { manPitRef.current = manPit; },  [manPit]);
@@ -3700,7 +3706,7 @@ export default function CircuitRaceView({
             <div style={{ display:"flex",gap:2 }}>
               <button type="button" onClick={()=>setPaused(p=>!p)}
                 style={{ fontFamily:"'Cinzel',serif",fontSize:9,fontWeight:700,padding:"2px 8px",background:paused?"rgba(201,164,96,.35)":"rgba(0,0,0,.6)",border:`1px solid ${paused?"var(--noir-primary)":"rgba(201,164,96,.2)"}`,color:paused?"var(--noir-primary)":"var(--noir-muted)",cursor:"pointer",touchAction:"manipulation" }}>{paused?"▶":"⏸"}</button>
-              {[1,2,4].map(x=>(
+              {[1, 2, 4, 50].map((x) => (
                 <button key={x} type="button" onClick={()=>setSpMult(x)}
                   style={{ fontFamily:"'Cinzel',serif",fontSize:9,fontWeight:700,padding:"2px 6px",background:spMult===x?"rgba(201,164,96,.35)":"rgba(0,0,0,.6)",border:`1px solid ${spMult===x?"var(--noir-primary)":"rgba(201,164,96,.2)"}`,color:spMult===x?"var(--noir-primary)":"var(--noir-muted)",cursor:"pointer",touchAction:"manipulation" }}>x{x}</button>
               ))}
