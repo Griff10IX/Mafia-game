@@ -13,6 +13,7 @@ from server import (
     STATES,
     log_gambling,
     get_head_family_id_for_state,
+    state_head_casino_treasury_share,
 )
 
 _rng = secrets.SystemRandom()
@@ -23,8 +24,9 @@ KENO_MAX_BET = 5_000_000
 KENO_BOARD_MIN = 1
 KENO_BOARD_MAX = 80
 KENO_DRAW_COUNT = 20
-# Same skim as slots: player receives int(nominal * (1 - edge)); head treasury gets int(nominal * edge) on wins.
-KENO_HOUSE_EDGE = 0.0005
+# Total haircut on nominal wins (player gets int(nominal * (1 - KENO_TOTAL_HOUSE_EDGE))).
+# State head treasury credit uses state_head_casino_treasury_share() (same as other casinos).
+KENO_TOTAL_HOUSE_EDGE = 0.0005  # 0.05% — public / player-facing; do not advertise treasury split
 
 # Nominal multipliers (× bet) before house edge. Missing hit counts pay 0.
 # Top jackpot capped at 1000× (10/10); other pick counts scaled with similar step-ups toward their row max.
@@ -62,7 +64,7 @@ def _payout_after_edge(bet: int, n_spots: int, hits: int) -> tuple[int, int]:
     nominal = bet * mult
     if nominal <= 0:
         return 0, 0
-    return max(0, int(nominal * (1.0 - KENO_HOUSE_EDGE))), nominal
+    return max(0, int(nominal * (1.0 - KENO_TOTAL_HOUSE_EDGE))), nominal
 
 
 def _paytable_for_config() -> dict[str, Any]:
@@ -93,7 +95,7 @@ def register(router):
             "board_min": KENO_BOARD_MIN,
             "board_max": KENO_BOARD_MAX,
             "draw_count": KENO_DRAW_COUNT,
-            "house_edge": KENO_HOUSE_EDGE,
+            "house_edge": KENO_TOTAL_HOUSE_EDGE,
             "paytable": _paytable_for_config(),
             "state_owned": True,
         }
@@ -155,7 +157,8 @@ def register(router):
         head_family_id = await get_head_family_id_for_state(state) if state else None
 
         if win:
-            house_cut = int(nominal_gross * KENO_HOUSE_EDGE) if head_family_id else 0
+            whole_skim = int(nominal_gross * KENO_TOTAL_HOUSE_EDGE)
+            house_cut = state_head_casino_treasury_share(whole_skim) if head_family_id else 0
             if house_cut > 0:
                 await db.families.update_one(
                     {"id": head_family_id},
@@ -164,7 +167,8 @@ def register(router):
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout_full}})
         else:
             if head_family_id:
-                edge_lose = int(bet * KENO_HOUSE_EDGE)
+                whole_lose = int(bet * KENO_TOTAL_HOUSE_EDGE)
+                edge_lose = state_head_casino_treasury_share(whole_lose)
                 if edge_lose > 0:
                     await db.families.update_one(
                         {"id": head_family_id},
@@ -186,6 +190,10 @@ def register(router):
                 "payout": payout_full,
                 "nominal_gross": nominal_gross,
                 "state_owned": True,
+                "house_edge_total": KENO_TOTAL_HOUSE_EDGE,
+                "state_head_cut": state_head_casino_treasury_share(int(nominal_gross * KENO_TOTAL_HOUSE_EDGE))
+                if win
+                else state_head_casino_treasury_share(int(bet * KENO_TOTAL_HOUSE_EDGE)),
             },
         )
 

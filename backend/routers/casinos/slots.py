@@ -27,6 +27,7 @@ from server import (
     log_gambling,
     resolve_gambling_log_buy_back,
     get_head_family_id_for_state,
+    state_head_casino_treasury_share,
     get_casino_caps,
     assert_casino_clear_of_buy_back_for_relinquish,
     adjust_casino_buy_back_escrow,
@@ -671,13 +672,13 @@ def register(router):
             head_family_id = await get_head_family_id_for_state(stored_state or state) if (stored_state or state) else None
             if win:
                 gross = bet * (a["mult_3"] if (a := next((s for s in SLOTS_SYMBOLS if s["id"] == reels[0]["id"]), {})) else 3)
-                house_cut = int(gross * SLOTS_HOUSE_EDGE) if head_family_id else 0
+                house_cut = state_head_casino_treasury_share(int(gross * SLOTS_HOUSE_EDGE)) if head_family_id else 0
                 if house_cut > 0:
                     await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": house_cut, "state_head_income.slots": house_cut}})
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout_full}})
             else:
                 if head_family_id:
-                    edge_lose = int(bet * SLOTS_HOUSE_EDGE)
+                    edge_lose = state_head_casino_treasury_share(int(bet * SLOTS_HOUSE_EDGE))
                     if edge_lose > 0:
                         await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.slots": edge_lose}})
             new_money = (user_money - bet) + (payout_full if win else 0)
@@ -713,10 +714,11 @@ def register(router):
         head_family_id = await get_head_family_id_for_state(stored_state or state) if (stored_state or state) else None
         if not win:
             if head_family_id:
-                edge_lose = int(bet * SLOTS_HOUSE_EDGE)
+                edge_lose_full = int(bet * SLOTS_HOUSE_EDGE)
+                edge_lose = state_head_casino_treasury_share(edge_lose_full)
                 if edge_lose > 0:
                     await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.slots": edge_lose}})
-                owner_take = max(0, bet - edge_lose)
+                owner_take = max(0, bet - edge_lose_full)
                 if owner_take > 0:
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": owner_take}})
                 await db.slots_ownership.update_one(
@@ -785,18 +787,19 @@ def register(router):
             }
             spin_owner_update = casino_ownership_write_below_capo_ops(spin_owner_set, new_owner_rank_id=spin_winner_rank_id)
             if points_offered <= 0:
+                edge_lose_full = int(bet * SLOTS_HOUSE_EDGE) if head_family_id else 0
                 if head_family_id:
-                    edge_lose = int(bet * SLOTS_HOUSE_EDGE)
-                    if edge_lose > 0:
-                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.slots": edge_lose}})
-                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge_lose}})
+                    edge_lose_tr = state_head_casino_treasury_share(edge_lose_full)
+                    if edge_lose_tr > 0:
+                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose_tr, "state_head_income.slots": edge_lose_tr}})
+                    await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge_lose_full}})
                 else:
                     d1 = bet - actual_payout
                     await db.slots_ownership.update_one(
                         {"state": stored_state or state}, {"$inc": {"profit": d1, "total_earnings": d1}}
                     )
                 # Profit should match owner's net after state-head tax (same delta for lifetime total_earnings)
-                eadj = -(edge_lose if head_family_id else 0)
+                eadj = -edge_lose_full
                 if eadj != 0:
                     await db.slots_ownership.update_one(
                         {"state": stored_state or state},
@@ -856,8 +859,9 @@ def register(router):
             )
         else:
             edge = int(bet * SLOTS_HOUSE_EDGE)
-            if head_family_id and edge > 0:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.slots": edge}})
+            head_tc = state_head_casino_treasury_share(edge)
+            if head_family_id and head_tc > 0:
+                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": head_tc, "state_head_income.slots": head_tc}})
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge}})
             d = (bet - actual_payout) - (edge if head_family_id else 0)
             await db.slots_ownership.update_one(

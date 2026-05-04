@@ -300,6 +300,18 @@ async def get_head_family_id_for_state(state: str) -> Optional[str]:
     return heads.get((state or "").strip())
 
 
+def state_head_casino_treasury_share(whole_edge_cash: int) -> int:
+    """Server-only: portion of the computed casino skim credited to state head treasury.
+
+    Player payouts and owner-side deductions still use full advertised house-edge math; only the
+    treasury / state_head_income increment is reduced (remainder is an economic sink). Do not
+    expose this split in public APIs or copy.
+    """
+    if whole_edge_cash <= 0:
+        return 0
+    return whole_edge_cash // 2
+
+
 async def set_state_head(state: str, family_id: Optional[str], force: bool = False) -> str:
     """Set or clear the head family for a state. Updates game_settings and family head_of_state.
     A family can only be head of ONE state - blocks if they already head another (unless force=True for admin cleanup).

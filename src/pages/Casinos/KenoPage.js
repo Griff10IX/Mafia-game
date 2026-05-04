@@ -332,7 +332,7 @@ export default function KenoPage() {
 
   return (
     <div
-      className={`space-y-3 sm:space-y-4 ${styles.pageContent} mobile-page-root min-w-0 w-full pb-[calc(11.5rem+env(safe-area-inset-bottom))] md:pb-0`}
+      className={`space-y-3 sm:space-y-4 ${styles.pageContent} mobile-page-root min-w-0 w-full pb-[calc(10rem+env(safe-area-inset-bottom))] md:pb-0`}
       data-testid="keno-page"
     >
       <style>{KENO_STYLES}</style>
@@ -509,7 +509,7 @@ export default function KenoPage() {
               </p>
             </div>
 
-            <div className="relative rounded-xl p-1 sm:p-3">
+            <div className="relative rounded-xl p-1 max-md:pb-5 sm:p-3">
               <div
                 className="absolute inset-0 rounded-xl pointer-events-none"
                 style={{
@@ -706,9 +706,9 @@ export default function KenoPage() {
           </div>
         </div>
 
-        {/* Mobile: thumb-reach primary action + safe area */}
+        {/* Mobile: sit above Layout bottom nav (z-50); bottom-0 would cover rows 61–80 */}
         <div
-          className="keno-touch fixed bottom-0 left-0 right-0 z-30 md:hidden border-t border-primary/30 bg-zinc-950/95 backdrop-blur-md px-2 pt-2 shadow-[0_-12px_40px_rgba(0,0,0,0.55)]"
+          className="keno-touch fixed left-0 right-0 z-[48] md:hidden max-md:bottom-[7rem] bottom-0 border-t border-primary/30 bg-zinc-950/95 backdrop-blur-md px-2 pt-2 shadow-[0_-12px_40px_rgba(0,0,0,0.55)]"
           style={{ paddingBottom: 'max(0.65rem, env(safe-area-inset-bottom, 12px))' }}
         >
           <div className="max-w-lg mx-auto flex flex-col gap-1.5">

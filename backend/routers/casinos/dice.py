@@ -35,6 +35,7 @@ from server import (
     raise_if_dead_casino_transfer_target,
     _username_pattern,
     get_head_family_id_for_state,
+    state_head_casino_treasury_share,
     get_casino_caps,
     adjust_casino_buy_back_escrow,
     refund_casino_buy_back_escrow_points,
@@ -294,11 +295,12 @@ def register(router):
         win = roll == chosen
         head_family_id = await get_head_family_id_for_state(db_city)
         if not win:
-            edge_lose = int(stake * DICE_HOUSE_EDGE)
-            if head_family_id and edge_lose > 0:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.dice": edge_lose}})
+            edge_lose_full = int(stake * DICE_HOUSE_EDGE)
+            edge_lose_tr = state_head_casino_treasury_share(edge_lose_full)
+            if head_family_id and edge_lose_tr > 0:
+                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose_tr, "state_head_income.dice": edge_lose_tr}})
             if owner_id:
-                owner_take = max(0, stake - (edge_lose if head_family_id else 0))
+                owner_take = max(0, stake - (edge_lose_full if head_family_id else 0))
                 if owner_take > 0:
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": owner_take}})
                 await db.dice_ownership.update_one(
@@ -324,7 +326,7 @@ def register(router):
         buy_back_offer = None
         points_offered = int((doc or {}).get("buy_back_reward") or 0)
         edge = int(stake * sides * DICE_HOUSE_EDGE)
-        edge_lose = int(stake * DICE_HOUSE_EDGE) if head_family_id else 0
+        edge_lose_full = int(stake * DICE_HOUSE_EDGE) if head_family_id else 0
         if shortfall > 0:
             ownership_transferred = True
             dice_owner_set = {
@@ -356,8 +358,10 @@ def register(router):
             )
             if points_offered <= 0:
                 if head_family_id:
-                    if edge_lose > 0:
-                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.dice": edge_lose}})
+                    if edge_lose_full > 0:
+                        el_tr = state_head_casino_treasury_share(edge_lose_full)
+                        if el_tr > 0:
+                            await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": el_tr, "state_head_income.dice": el_tr}})
                 else:
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})
                     d = stake - actual_payout
@@ -381,7 +385,7 @@ def register(router):
                 }
                 await db.dice_buy_back_offers.insert_one(buy_back_doc)
                 buy_back_offer = {"offer_id": offer_id, "points_offered": points_offered, "amount_shortfall": shortfall, "owner_paid": actual_payout, "expires_at": expires_at}
-            d = (stake - actual_payout) - (edge_lose if head_family_id else 0)
+            d = (stake - actual_payout) - (edge_lose_full if head_family_id else 0)
             await db.dice_ownership.update_one(
                 {"city": db_city},
                 {"$inc": {"profit": d, "total_earnings": d}},
@@ -389,7 +393,9 @@ def register(router):
             _invalidate_ownership_cache(owner_id)
         else:
             if head_family_id:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.dice": edge}})
+                edge_tc = state_head_casino_treasury_share(edge)
+                if edge_tc > 0:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_tc, "state_head_income.dice": edge_tc}})
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake - edge}})
             else:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": stake}})

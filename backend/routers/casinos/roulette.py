@@ -32,6 +32,7 @@ from server import (
     raise_if_dead_casino_transfer_target,
     _username_pattern,
     get_head_family_id_for_state,
+    state_head_casino_treasury_share,
     get_casino_caps,
     adjust_casino_buy_back_escrow,
     refund_casino_buy_back_escrow_points,
@@ -661,7 +662,9 @@ def register(router):
         edge = int(total_stake * ROULETTE_HOUSE_EDGE)
         if not win:
             if head_family_id and edge > 0:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.roulette": edge}})
+                edge_tc = state_head_casino_treasury_share(edge)
+                if edge_tc > 0:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_tc, "state_head_income.roulette": edge_tc}})
             if owner_id:
                 owner_take = max(0, total_stake - (edge if head_family_id else 0))
                 if owner_take > 0:
@@ -682,7 +685,9 @@ def register(router):
             net_cost = total_payout - total_stake
             if head_family_id and edge > 0:
                 net_cost += edge
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.roulette": edge}})
+                edge_tc = state_head_casino_treasury_share(edge)
+                if edge_tc > 0:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_tc, "state_head_income.roulette": edge_tc}})
                 # State-head tax comes out of owner's net (floor at 0)
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge}})
             actual_payout = min(total_payout, owner_money + total_stake)
@@ -749,7 +754,9 @@ def register(router):
                     })
                     buy_back_offer = {"offer_id": offer_id, "points_offered": buy_back_reward, "amount_shortfall": shortfall, "owner_paid": actual_payout, "expires_at": expires_at}
                 elif head_family_id and edge > 0:
-                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.roulette": edge}})
+                    edge_tc = state_head_casino_treasury_share(edge)
+                    if edge_tc > 0:
+                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_tc, "state_head_income.roulette": edge_tc}})
         r_details = {
             "city": stored_city or city,
             "total_stake": total_stake,

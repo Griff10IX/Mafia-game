@@ -32,6 +32,7 @@ from server import (
     log_gambling,
     resolve_gambling_log_buy_back,
     get_head_family_id_for_state,
+    state_head_casino_treasury_share,
     get_casino_caps,
     adjust_casino_buy_back_escrow,
     refund_casino_buy_back_escrow_points,
@@ -282,7 +283,9 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
         head_family_id = await get_head_family_id_for_state(bj_city) if bj_city else None
         edge_lose = int(bet * BLACKJACK_HOUSE_EDGE) if head_family_id else 0
         if head_family_id and edge_lose > 0:
-            await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.blackjack": edge_lose}})
+            el_tr = state_head_casino_treasury_share(edge_lose)
+            if el_tr > 0:
+                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": el_tr, "state_head_income.blackjack": el_tr}})
         if owner_id:
             owner_take = max(0, bet - edge_lose)
             if owner_take > 0:
@@ -381,7 +384,9 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
                 if head_family_id:
                     edge = int(bet * BLACKJACK_HOUSE_EDGE)
                     if edge > 0:
-                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.blackjack": edge}})
+                        edge_tc = state_head_casino_treasury_share(edge)
+                        if edge_tc > 0:
+                            await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_tc, "state_head_income.blackjack": edge_tc}})
                     payout = bet * 2 - edge
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout}})
     await _blackjack_settle_and_save_history(
@@ -951,7 +956,9 @@ def register(router):
                 if head_family_id:
                     edge = int(owner_pay * BLACKJACK_HOUSE_EDGE)
                     if edge > 0:
-                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.blackjack": edge}})
+                        edge_tc = state_head_casino_treasury_share(edge)
+                        if edge_tc > 0:
+                            await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_tc, "state_head_income.blackjack": edge_tc}})
                     actual_payout = bet + owner_pay - edge
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})
             bj_nat_extra = None
@@ -995,7 +1002,9 @@ def register(router):
             head_family_id = await get_head_family_id_for_state(stored_city or city)
             edge_lose = int(bet * BLACKJACK_HOUSE_EDGE) if head_family_id else 0
             if head_family_id and edge_lose > 0:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.blackjack": edge_lose}})
+                el_tr = state_head_casino_treasury_share(edge_lose)
+                if el_tr > 0:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": el_tr, "state_head_income.blackjack": el_tr}})
             if owner_id:
                 owner_take = max(0, bet - edge_lose)
                 if owner_take > 0:
@@ -1070,7 +1079,9 @@ def register(router):
             head_family_id = await get_head_family_id_for_state(bj_city) if bj_city else None
             edge_lose = int(bet * BLACKJACK_HOUSE_EDGE) if head_family_id else 0
             if head_family_id and edge_lose > 0:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.blackjack": edge_lose}})
+                el_tr = state_head_casino_treasury_share(edge_lose)
+                if el_tr > 0:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": el_tr, "state_head_income.blackjack": el_tr}})
             if owner_id:
                 owner_take = max(0, bet - edge_lose)
                 if owner_take > 0:
@@ -1147,7 +1158,9 @@ def register(router):
             head_family_id = await get_head_family_id_for_state(bj_city) if bj_city else None
             edge_lose = int(bet * BLACKJACK_HOUSE_EDGE) if head_family_id else 0
             if head_family_id and edge_lose > 0:
-                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.blackjack": edge_lose}})
+                el_tr = state_head_casino_treasury_share(edge_lose)
+                if el_tr > 0:
+                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": el_tr, "state_head_income.blackjack": el_tr}})
             if owner_id:
                 owner_take = max(0, bet - edge_lose)
                 if owner_take > 0:
@@ -1244,7 +1257,9 @@ def register(router):
                     if head_family_id:
                         edge = int(bet * BLACKJACK_HOUSE_EDGE)
                         if edge > 0:
-                            await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.blackjack": edge}})
+                            edge_tc = state_head_casino_treasury_share(edge)
+                            if edge_tc > 0:
+                                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_tc, "state_head_income.blackjack": edge_tc}})
                         payout = bet * 2 - edge
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout}})
         user = await db.users.find_one({"id": current_user.get("id") or ""})

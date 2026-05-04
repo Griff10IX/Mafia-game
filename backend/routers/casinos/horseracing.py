@@ -31,6 +31,7 @@ from server import (
     raise_if_dead_casino_transfer_target,
     _username_pattern,
     get_head_family_id_for_state,
+    state_head_casino_treasury_share,
     get_casino_caps,
     adjust_casino_buy_back_escrow,
     refund_casino_buy_back_escrow_points,
@@ -608,12 +609,16 @@ def register(router):
                 if head_family_id:
                     edge = int(bet * (1 + horse["odds"]) * HORSERACING_HOUSE_EDGE)
                     if edge > 0:
-                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.horseracing": edge}})
+                        edge_tc = state_head_casino_treasury_share(edge)
+                        if edge_tc > 0:
+                            await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_tc, "state_head_income.horseracing": edge_tc}})
             else:
                 if head_family_id:
                     edge_lose = int(bet * HORSERACING_HOUSE_EDGE)
                     if edge_lose > 0:
-                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.horseracing": edge_lose}})
+                        el_tr = state_head_casino_treasury_share(edge_lose)
+                        if el_tr > 0:
+                            await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": el_tr, "state_head_income.horseracing": el_tr}})
             if won:
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout}})
         else:
@@ -644,7 +649,9 @@ def register(router):
                 await bump_user_biggest_casino_payout(owner_id, actual_payout)
                 edge = int(bet * (1 + horse["odds"]) * HORSERACING_HOUSE_EDGE) if head_family_id else 0
                 if head_family_id and edge > 0:
-                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.horseracing": edge}})
+                    edge_tc = state_head_casino_treasury_share(edge)
+                    if edge_tc > 0:
+                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_tc, "state_head_income.horseracing": edge_tc}})
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge}})
                 hr_net = (bet - actual_payout) - (edge if head_family_id else 0)
                 await db.horseracing_ownership.update_one(
@@ -688,7 +695,9 @@ def register(router):
                         if head_family_id:
                             edge_lose = int(bet * HORSERACING_HOUSE_EDGE)
                             if edge_lose > 0:
-                                await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.horseracing": edge_lose}})
+                                el_tr = state_head_casino_treasury_share(edge_lose)
+                                if el_tr > 0:
+                                    await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": el_tr, "state_head_income.horseracing": el_tr}})
                     else:
                         # Create buyback offer
                         expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
@@ -711,13 +720,17 @@ def register(router):
                 elif head_family_id:
                     edge = int(bet * (1 + horse["odds"]) * HORSERACING_HOUSE_EDGE)
                     if edge > 0:
-                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.horseracing": edge}})
+                        edge_tc = state_head_casino_treasury_share(edge)
+                        if edge_tc > 0:
+                            await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_tc, "state_head_income.horseracing": edge_tc}})
                         await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge}})
             else:
                 if head_family_id:
                     edge_lose = int(bet * HORSERACING_HOUSE_EDGE)
                     if edge_lose > 0:
-                        await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge_lose, "state_head_income.horseracing": edge_lose}})
+                        el_tr = state_head_casino_treasury_share(edge_lose)
+                        if el_tr > 0:
+                            await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": el_tr, "state_head_income.horseracing": el_tr}})
                 else:
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
                     await db.horseracing_ownership.update_one(
