@@ -126,17 +126,8 @@ export default function KenoPage() {
   const [bet, setBet] = useState('1000');
   const [loading, setLoading] = useState(false);
   const [lastRound, setLastRound] = useState(null);
-  const [paytableOpen, setPaytableOpen] = useState(
-    () => typeof window !== 'undefined' && window.matchMedia('(min-width: 640px)').matches
-  );
+  const [paytableOpen, setPaytableOpen] = useState(true);
   const roundKeyRef = useRef(0);
-
-  useEffect(() => {
-    const mq = window.matchMedia('(min-width: 640px)');
-    const sync = () => setPaytableOpen(mq.matches);
-    mq.addEventListener('change', sync);
-    return () => mq.removeEventListener('change', sync);
-  }, []);
 
   const fetchConfig = useCallback(() => {
     api
@@ -221,8 +212,9 @@ export default function KenoPage() {
       requestAnimationFrame(() => {
         refreshUser();
       });
-      if (d.won) toast.success(`Hit ${d.hits}! Paid ${formatMoney(d.payout)}`);
-      else toast.message(`Draw complete · ${d.hits} hits · no payout`);
+      const spotsPlayed = (d.picks || picksArr).length;
+      if (d.won) toast.success(`${spotsPlayed} spots · ${d.hits} hits · paid ${formatMoney(d.payout)}`);
+      else toast.message(`Draw complete · ${spotsPlayed} spots · ${d.hits} hits · no payout`);
     } catch (e) {
       toast.error(getApiErrorMessage(e) || 'Play failed');
     } finally {
@@ -240,7 +232,7 @@ export default function KenoPage() {
 
   return (
     <div
-      className={`space-y-3 sm:space-y-4 ${styles.pageContent} mobile-page-root min-w-0 overflow-x-hidden pb-24 md:pb-0`}
+      className={`space-y-3 sm:space-y-4 ${styles.pageContent} mobile-page-root min-w-0 overflow-x-hidden pb-40 md:pb-0`}
       data-testid="keno-page"
     >
       <style>{KENO_STYLES}</style>
@@ -457,6 +449,13 @@ export default function KenoPage() {
                 <div className="p-3 space-y-3">
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-heading">
                     <span className="text-zinc-400">
+                      Spots{' '}
+                      <span className="font-black tabular-nums text-base text-primary">
+                        {(lastRound.picks || []).length}
+                      </span>
+                    </span>
+                    <span className="text-zinc-500">|</span>
+                    <span className="text-zinc-400">
                       Hits{' '}
                       <span
                         className={`font-black tabular-nums text-base ${lastRound.won ? 'text-emerald-400' : 'text-zinc-200'}`}
@@ -478,6 +477,11 @@ export default function KenoPage() {
                       </span>
                     </span>
                   </div>
+                  <p className="text-[9px] font-heading text-zinc-600 leading-snug">
+                    Payout follows the highlighted{' '}
+                    <span className="text-zinc-400 font-semibold">{(lastRound.picks || []).length}-spot</span> row only — each
+                    row is a different ticket size, so the same hit count can pay differently.
+                  </p>
                   <div>
                     <p className="text-[9px] font-heading text-zinc-600 uppercase tracking-widest mb-2">
                       {config.draw_count ?? 20} balls
@@ -518,25 +522,34 @@ export default function KenoPage() {
             </h2>
             <span className="flex items-center gap-2 shrink-0">
               <span className="text-[9px] text-zinc-500 font-heading hidden sm:inline">× bet (before skim)</span>
-              <span className="text-[10px] font-heading text-primary/80 sm:hidden">{paytableOpen ? 'Hide' : 'Show'}</span>
+              <span className="text-[10px] font-heading text-primary/80 sm:hidden">{paytableOpen ? 'Tap to hide' : 'Tap to show'}</span>
             </span>
           </button>
           <div
             className={`p-0 overflow-y-auto transition-[max-height] duration-200 ease-out sm:max-h-52 ${
-              paytableOpen ? 'max-h-[min(55vh,28rem)] border-t border-primary/5' : 'max-h-0 sm:max-h-52'
+              paytableOpen ? 'max-h-[min(70vh,32rem)] border-t border-primary/5' : 'max-h-0 sm:max-h-52'
             }`}
           >
             {Object.keys(config.paytable || {})
               .map(Number)
               .sort((a, b) => a - b)
-              .map((n, idx) => (
+              .map((n, idx) => {
+                const isLastRoundRow = lastRound && (lastRound.picks || []).length === n;
+                return (
                 <div
                   key={n}
                   className={`flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-3 px-3 py-2.5 sm:py-2 border-b border-zinc-800/60 font-heading text-[10px] sm:text-[11px] transition-colors hover:bg-primary/[0.04] ${
                     idx % 2 === 0 ? 'bg-black/10' : ''
-                  }`}
+                  } ${isLastRoundRow ? 'ring-1 ring-inset ring-primary/35 bg-primary/[0.08]' : ''}`}
                 >
-                  <span className="text-primary font-bold shrink-0 w-20 uppercase tracking-wide">{n} spots</span>
+                  <span className="text-primary font-bold shrink-0 w-20 uppercase tracking-wide flex items-center gap-1.5">
+                    {n} spots
+                    {isLastRoundRow ? (
+                      <span className="text-[8px] font-heading font-black uppercase tracking-wider text-primary/90 px-1.5 py-0.5 rounded border border-primary/30 bg-black/40">
+                        last draw
+                      </span>
+                    ) : null}
+                  </span>
                   <span className="text-zinc-400 leading-relaxed">
                     {Object.entries(config.paytable[String(n)] || {})
                       .map(([hits, mult]) => (
@@ -547,7 +560,8 @@ export default function KenoPage() {
                       ))}
                   </span>
                 </div>
-              ))}
+                );
+              })}
           </div>
         </div>
 
