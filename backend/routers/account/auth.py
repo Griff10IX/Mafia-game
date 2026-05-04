@@ -1256,7 +1256,7 @@ def register(router):
         if not password_ok:
             locked_until = None
             doc = await db.login_lockouts.find_one({"email": email_clean}, {"_id": 0, "failed_count": 1})
-            count = (doc.get("failed_count") or 0) + 1
+            count = ((doc or {}).get("failed_count") or 0) + 1
             if count >= LOGIN_MAX_ATTEMPTS:
                 locked_until = now + timedelta(minutes=LOGIN_LOCKOUT_MINUTES)
             await db.login_lockouts.update_one(
