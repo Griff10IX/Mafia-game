@@ -213,6 +213,7 @@ function App() {
     import("./pages/Kill/Bodyguards");
     import("./pages/Crime/GTA");
     import("./pages/Social/Forum");
+    import("./pages/Casinos/KenoPage");
     prefetchDashboardData({ force: true });
     prefetchProfilePageData({ force: true });
     prefetchForumSpecialTabsData({ force: true });

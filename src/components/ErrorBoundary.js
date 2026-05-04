@@ -3,23 +3,45 @@ import api from '../utils/api';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
 
+/** Same key/cooldown as src/index.js — avoid infinite reload when a lazy chunk (e.g. Keno) fails repeatedly. */
+const CHUNK_ERROR_RELOAD_KEY = 'chunk_error_reload_at';
+const CHUNK_ERROR_RELOAD_COOLDOWN_MS = 15000;
+
+function scheduleChunkErrorReloadOnce() {
+  try {
+    const last = sessionStorage.getItem(CHUNK_ERROR_RELOAD_KEY);
+    const now = Date.now();
+    if (last && now - parseInt(last, 10) < CHUNK_ERROR_RELOAD_COOLDOWN_MS) {
+      return false;
+    }
+    sessionStorage.setItem(CHUNK_ERROR_RELOAD_KEY, String(now));
+    window.location.reload();
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 export default class ErrorBoundary extends Component {
-  state = { hasError: false, error: null, reported: false, reportLoading: false };
+  state = { hasError: false, error: null, reported: false, reportLoading: false, chunkReloadSkipped: false };
 
   static getDerivedStateFromError(error) {
-    return { hasError: true, error };
+    return { hasError: true, error, chunkReloadSkipped: false };
   }
 
   componentDidCatch(error, info) {
     console.error('ErrorBoundary caught:', error, info);
     const msg = error?.message || String(error);
     if (this.isChunkLoadError(msg)) {
-      window.location.reload();
+      const scheduled = scheduleChunkErrorReloadOnce();
+      if (!scheduled) {
+        this.setState({ chunkReloadSkipped: true });
+      }
     }
   }
 
   retry = () => {
-    this.setState({ hasError: false, error: null });
+    this.setState({ hasError: false, error: null, chunkReloadSkipped: false });
   };
 
   reportToHelpDesk = () => {
@@ -53,6 +75,39 @@ export default class ErrorBoundary extends Component {
       const msg = err?.message || String(err);
       const isChunkError = this.isChunkLoadError(msg);
       if (isChunkError) {
+        if (this.state.chunkReloadSkipped) {
+          return (
+            <div className={`${styles.pageContent} min-h-[40vh] flex items-center justify-center p-8`}>
+              <div className={`${styles.panel} rounded-md p-6 max-w-md text-center space-y-4`}>
+                <h2 className="text-lg font-heading font-bold text-primary">Could not load this page</h2>
+                <p className="text-sm text-mutedForeground font-heading">
+                  The game code bundle failed to load (often right after a deploy). An automatic reload was skipped so your tab would not loop forever.
+                </p>
+                <div className="flex flex-wrap gap-3 justify-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        sessionStorage.removeItem(CHUNK_ERROR_RELOAD_KEY);
+                      } catch (_) {}
+                      window.location.reload();
+                    }}
+                    className="px-4 py-2 rounded-sm font-heading font-bold uppercase tracking-wider bg-primary/20 text-primary border border-primary/50 hover:bg-primary/30 transition-smooth"
+                  >
+                    Reload now
+                  </button>
+                  <button
+                    type="button"
+                    onClick={this.retry}
+                    className="px-4 py-2 rounded-sm font-heading font-bold uppercase tracking-wider border border-primary/30 text-mutedForeground hover:text-foreground transition-smooth"
+                  >
+                    Try again
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        }
         return (
           <div className={`${styles.pageContent} min-h-[40vh] flex items-center justify-center p-8`}>
             <div className={`${styles.panel} rounded-md p-6 max-w-md text-center`}>
