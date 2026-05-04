@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { toast } from 'sonner';
-import { MapPin, Sparkles, Ticket } from 'lucide-react';
+import { MapPin, Repeat2, Sparkles, Square, Ticket } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
@@ -76,14 +76,15 @@ const KENO_STYLES = `
   }
   @media (max-width: 639px) {
     .keno-board-grid {
-      gap: 3px;
+      gap: 2px;
       grid-auto-rows: auto;
     }
     .keno-cell-btn {
       aspect-ratio: 1;
-      min-height: 40px;
+      min-height: 0;
+      min-width: 0;
       font-size: 10px;
-      border-radius: 6px;
+      border-radius: 5px;
     }
   }
 `;
@@ -95,6 +96,7 @@ function formatMoney(n) {
 }
 
 const BOARD = Array.from({ length: 80 }, (_, i) => i + 1);
+const KENO_AUTO_ROLL_MAX = 50;
 
 function PickDots({ count, max }) {
   return (
@@ -127,7 +129,12 @@ export default function KenoPage() {
   const [loading, setLoading] = useState(false);
   const [lastRound, setLastRound] = useState(null);
   const [paytableOpen, setPaytableOpen] = useState(true);
+  const [autoRollInput, setAutoRollInput] = useState('10');
+  const [autoRolling, setAutoRolling] = useState(false);
+  const [autoRollProgress, setAutoRollProgress] = useState(null);
   const roundKeyRef = useRef(0);
+  const autoRollCancelRef = useRef(false);
+  const autoRollLockRef = useRef(false);
 
   const fetchConfig = useCallback(() => {
     api
@@ -182,45 +189,138 @@ export default function KenoPage() {
 
   const betNum = parseInt(String(bet || '').replace(/\D/g, ''), 10) || 0;
   const picksArr = useMemo(() => Array.from(selected).sort((a, b) => a - b), [selected]);
+
+  const runKenoDraw = useCallback(
+    async (opts = {}) => {
+      const { quiet = false, picks: picksOverride, bet: betOverride } = opts;
+      const usePicks = picksOverride ?? picksArr;
+      const useBet = betOverride ?? betNum;
+      if (usePicks.length < minPick || usePicks.length > maxPick || useBet < 1 || useBet > maxBet) {
+        if (!quiet) {
+          if (usePicks.length < minPick) toast.error(`Pick at least ${minPick} numbers`);
+          else if (useBet < 1) toast.error('Enter a bet');
+          else if (useBet > maxBet) toast.error(`Max bet is ${formatMoney(maxBet)}`);
+          else toast.message(`Pick at most ${maxPick} numbers`);
+        }
+        return { ok: false, reason: 'invalid' };
+      }
+      setLoading(true);
+      try {
+        const res = await api.post('/casino/keno/play', { bet: useBet, picks: usePicks });
+        const d = res.data || {};
+        roundKeyRef.current += 1;
+        setLastRound({
+          drawn: d.drawn || [],
+          hits: d.hits ?? 0,
+          payout: d.payout ?? 0,
+          won: !!d.won,
+          picks: d.picks || usePicks,
+          bet: d.bet ?? useBet,
+        });
+        requestAnimationFrame(() => {
+          refreshUser();
+        });
+        if (!quiet) {
+          const spotsPlayed = (d.picks || usePicks).length;
+          if (d.won) toast.success(`${spotsPlayed} spots · ${d.hits} hits · paid ${formatMoney(d.payout)}`);
+          else toast.message(`Draw complete · ${spotsPlayed} spots · ${d.hits} hits · no payout`);
+        }
+        return { ok: true, data: d };
+      } catch (e) {
+        if (!quiet) toast.error(getApiErrorMessage(e) || 'Play failed');
+        return { ok: false, error: e };
+      } finally {
+        setLoading(false);
+      }
+    },
+    [picksArr, betNum, minPick, maxPick, maxBet]
+  );
+
   const canPlay =
     picksArr.length >= minPick &&
     picksArr.length <= maxPick &&
     betNum >= 1 &&
     betNum <= maxBet &&
-    !loading;
+    !loading &&
+    !autoRolling;
 
   const play = async () => {
-    if (!canPlay) {
+    if (autoRolling) return;
+    if (!canPlay && !loading) {
       if (picksArr.length < minPick) toast.error(`Pick at least ${minPick} numbers`);
       else if (betNum < 1) toast.error('Enter a bet');
       else if (betNum > maxBet) toast.error(`Max bet is ${formatMoney(maxBet)}`);
       return;
     }
-    setLoading(true);
-    try {
-      const res = await api.post('/casino/keno/play', { bet: betNum, picks: picksArr });
-      const d = res.data || {};
-      roundKeyRef.current += 1;
-      setLastRound({
-        drawn: d.drawn || [],
-        hits: d.hits ?? 0,
-        payout: d.payout ?? 0,
-        won: !!d.won,
-        picks: d.picks || picksArr,
-        bet: d.bet ?? betNum,
-      });
-      requestAnimationFrame(() => {
-        refreshUser();
-      });
-      const spotsPlayed = (d.picks || picksArr).length;
-      if (d.won) toast.success(`${spotsPlayed} spots · ${d.hits} hits · paid ${formatMoney(d.payout)}`);
-      else toast.message(`Draw complete · ${spotsPlayed} spots · ${d.hits} hits · no payout`);
-    } catch (e) {
-      toast.error(getApiErrorMessage(e) || 'Play failed');
-    } finally {
-      setLoading(false);
-    }
+    if (!canPlay) return;
+    await runKenoDraw({ quiet: false });
   };
+
+  const stopAutoRoll = useCallback(() => {
+    autoRollCancelRef.current = true;
+  }, []);
+
+  const startAutoRoll = useCallback(async () => {
+    if (autoRollLockRef.current) return;
+    const n = parseInt(String(autoRollInput).replace(/\D/g, ''), 10);
+    if (!Number.isFinite(n) || n < 1) {
+      toast.error('Enter how many auto rolls (1+)');
+      return;
+    }
+    if (n > KENO_AUTO_ROLL_MAX) {
+      toast.error(`Max ${KENO_AUTO_ROLL_MAX} rolls at once`);
+      return;
+    }
+    const frozenPicks = [...picksArr];
+    const frozenBet = betNum;
+    if (frozenPicks.length < minPick || frozenPicks.length > maxPick || frozenBet < 1 || frozenBet > maxBet) {
+      toast.error('Set a valid bet and spots before auto roll');
+      return;
+    }
+    autoRollLockRef.current = true;
+    autoRollCancelRef.current = false;
+    setAutoRolling(true);
+    setAutoRollProgress({ done: 0, total: n });
+    let wins = 0;
+    let totalPayout = 0;
+    let completed = 0;
+    try {
+      for (let i = 0; i < n; i += 1) {
+        if (autoRollCancelRef.current) break;
+        setAutoRollProgress({ done: i, total: n });
+        const r = await runKenoDraw({ picks: frozenPicks, bet: frozenBet, quiet: true });
+        if (!r.ok) {
+          if (!autoRollCancelRef.current) {
+            const msg = r.error ? getApiErrorMessage(r.error) : r.reason === 'invalid' ? '' : 'Play failed';
+            if (msg) toast.error(msg);
+          }
+          break;
+        }
+        completed += 1;
+        const d = r.data || {};
+        if (d.won) wins += 1;
+        totalPayout += d.payout ?? 0;
+        setAutoRollProgress({ done: completed, total: n });
+      }
+      if (autoRollCancelRef.current) {
+        toast.message(`Auto stopped · ${completed}/${n} done · return ${formatMoney(totalPayout)}`);
+      } else if (completed > 0) {
+        toast.message(`Auto done · ${completed} draws · ${wins} wins · total return ${formatMoney(totalPayout)}`);
+      }
+    } finally {
+      autoRollLockRef.current = false;
+      setAutoRolling(false);
+      setAutoRollProgress(null);
+    }
+  }, [autoRollInput, betNum, minPick, maxPick, maxBet, picksArr, runKenoDraw]);
+
+  const canStartAuto =
+    !autoRolling &&
+    !loading &&
+    picksArr.length >= minPick &&
+    picksArr.length <= maxPick &&
+    betNum >= 1 &&
+    betNum <= maxBet;
 
   const drawnSet = lastRound?.drawn?.length ? new Set(lastRound.drawn) : null;
   const hitSet =
@@ -232,11 +332,11 @@ export default function KenoPage() {
 
   return (
     <div
-      className={`space-y-3 sm:space-y-4 ${styles.pageContent} mobile-page-root min-w-0 overflow-x-hidden pb-40 md:pb-0`}
+      className={`space-y-3 sm:space-y-4 ${styles.pageContent} mobile-page-root min-w-0 overflow-x-hidden pb-[calc(8.5rem+env(safe-area-inset-bottom))] md:pb-0`}
       data-testid="keno-page"
     >
       <style>{KENO_STYLES}</style>
-      <div className="relative keno-fade-in space-y-3 sm:space-y-4 px-0.5 sm:px-0">
+      <div className="relative keno-fade-in space-y-3 sm:space-y-4 px-0 sm:px-0">
         {/* Top accent */}
         <div
           className="h-px w-full max-w-md rounded-full opacity-80"
@@ -297,7 +397,7 @@ export default function KenoPage() {
           }}
         >
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
-          <div className="p-2.5 sm:p-4 space-y-3 sm:space-y-4 relative">
+          <div className="p-2 sm:p-4 space-y-3 sm:space-y-4 relative">
             <div
               className="pointer-events-none absolute inset-0 opacity-[0.07]"
               style={{
@@ -315,14 +415,15 @@ export default function KenoPage() {
                     value={bet}
                     onChange={setBet}
                     placeholder="1000"
-                    className="w-full sm:w-36 min-h-[44px] sm:min-h-0 sm:min-w-[9rem] bg-zinc-950/80 border border-primary/20 rounded-md px-3 py-2.5 sm:py-2 text-base sm:text-sm font-heading text-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30"
+                    disabled={loading || autoRolling}
+                    className="w-full sm:w-36 min-h-[44px] sm:min-h-0 sm:min-w-[9rem] bg-zinc-950/80 border border-primary/20 rounded-md px-3 py-2.5 sm:py-2 text-base sm:text-sm font-heading text-foreground focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-45"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-row sm:flex-wrap sm:gap-2 sm:ml-auto sm:justify-end">
                   <button
                     type="button"
                     onClick={quickPick}
-                    disabled={loading}
+                    disabled={loading || autoRolling}
                     className="keno-touch text-[10px] font-heading font-bold uppercase min-h-[44px] sm:min-h-0 px-3 py-2.5 sm:py-2 rounded-md border border-primary/35 bg-primary/10 text-primary hover:bg-primary/20 hover:border-primary/50 transition-colors disabled:opacity-45"
                   >
                     Quick pick
@@ -330,7 +431,7 @@ export default function KenoPage() {
                   <button
                     type="button"
                     onClick={clearBoard}
-                    disabled={loading}
+                    disabled={loading || autoRolling}
                     className="keno-touch text-[10px] font-heading font-bold uppercase min-h-[44px] sm:min-h-0 px-3 py-2.5 sm:py-2 rounded-md border border-zinc-600/80 text-zinc-400 hover:bg-zinc-800/60 hover:text-zinc-200 transition-colors disabled:opacity-45"
                   >
                     Clear
@@ -339,7 +440,7 @@ export default function KenoPage() {
                     type="button"
                     onClick={play}
                     disabled={!canPlay}
-                    className="keno-touch hidden md:flex text-[11px] font-heading font-black uppercase px-5 py-2.5 rounded-md items-center justify-center gap-2 min-w-[7.5rem] border transition-all disabled:opacity-35 disabled:grayscale"
+                    className="keno-touch hidden md:inline-flex text-[11px] font-heading font-black uppercase px-5 py-2.5 rounded-md items-center justify-center gap-2 min-w-[7.5rem] border transition-all disabled:opacity-35 disabled:grayscale"
                     style={{
                       borderColor: 'rgba(212,175,55,0.55)',
                       background: 'linear-gradient(180deg, rgba(212,175,55,0.28) 0%, rgba(120,90,20,0.35) 100%)',
@@ -348,8 +449,48 @@ export default function KenoPage() {
                     }}
                   >
                     <Sparkles size={16} strokeWidth={2} />
-                    {loading ? 'Drawing…' : 'Draw'}
+                    {loading && !autoRolling ? 'Drawing…' : 'Draw'}
                   </button>
+                  <div className="hidden md:flex flex-wrap items-end gap-2 w-full justify-end border-t border-primary/10 pt-2 mt-1">
+                    <label className="flex flex-col gap-0.5 shrink-0">
+                      <span className="text-[9px] text-zinc-500 font-heading uppercase tracking-widest">Auto rolls</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        maxLength={2}
+                        value={autoRollInput}
+                        onChange={(e) => setAutoRollInput(e.target.value.replace(/\D/g, '').slice(0, 2) || '')}
+                        disabled={autoRolling}
+                        className="w-14 min-h-[38px] rounded-md border border-primary/25 bg-zinc-950/90 px-2 text-center text-sm font-heading text-zinc-100 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-45"
+                      />
+                    </label>
+                    {autoRolling ? (
+                      <button
+                        type="button"
+                        onClick={stopAutoRoll}
+                        className="keno-touch inline-flex items-center justify-center gap-1.5 min-h-[38px] px-3 rounded-md border border-red-500/50 bg-red-950/40 text-red-200 text-[10px] font-heading font-bold uppercase"
+                      >
+                        <Square size={14} strokeWidth={2} fill="currentColor" />
+                        Stop
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => void startAutoRoll()}
+                        disabled={!canStartAuto}
+                        className="keno-touch inline-flex items-center justify-center gap-1.5 min-h-[38px] px-3 rounded-md border border-primary/40 bg-primary/12 text-primary text-[10px] font-heading font-bold uppercase disabled:opacity-35"
+                      >
+                        <Repeat2 size={16} strokeWidth={2} />
+                        Auto
+                      </button>
+                    )}
+                    {autoRollProgress ? (
+                      <span className="text-[10px] font-heading text-zinc-500 tabular-nums self-center pb-1">
+                        {autoRollProgress.done}/{autoRollProgress.total}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
               </div>
             </div>
@@ -368,7 +509,7 @@ export default function KenoPage() {
               </p>
             </div>
 
-            <div className="relative rounded-xl p-1.5 sm:p-3">
+            <div className="relative rounded-xl p-1 sm:p-3">
               <div
                 className="absolute inset-0 rounded-xl pointer-events-none"
                 style={{
@@ -384,7 +525,7 @@ export default function KenoPage() {
                   </p>
                 </div>
               )}
-              <div className="mx-auto w-full max-w-sm sm:max-w-md md:max-w-lg lg:max-w-xl">
+              <div className="w-full max-w-none sm:max-w-md md:max-w-lg lg:max-w-xl sm:mx-auto">
                 <div className="relative keno-board-grid">
                 {BOARD.map((n) => {
                   const isOn = selected.has(n);
@@ -396,7 +537,7 @@ export default function KenoPage() {
                       key={n}
                       type="button"
                       onClick={() => toggle(n)}
-                      disabled={loading}
+                      disabled={loading || autoRolling}
                       className={[
                         'keno-cell-btn keno-touch relative h-full w-full max-sm:aspect-square rounded-md font-heading font-bold tabular-nums transition-[color,background-color,border-color,opacity] duration-150 border active:scale-[0.96] disabled:cursor-not-allowed',
                         isHit
@@ -567,36 +708,77 @@ export default function KenoPage() {
 
         {/* Mobile: thumb-reach primary action + safe area */}
         <div
-          className="keno-touch fixed bottom-0 left-0 right-0 z-30 md:hidden border-t border-primary/30 bg-zinc-950/95 backdrop-blur-md px-3 pt-2 shadow-[0_-12px_40px_rgba(0,0,0,0.55)]"
+          className="keno-touch fixed bottom-0 left-0 right-0 z-30 md:hidden border-t border-primary/30 bg-zinc-950/95 backdrop-blur-md px-2 pt-2 shadow-[0_-12px_40px_rgba(0,0,0,0.55)]"
           style={{ paddingBottom: 'max(0.65rem, env(safe-area-inset-bottom, 12px))' }}
         >
-          <div className="flex items-center gap-3 max-w-lg mx-auto">
-            <div className="flex-1 min-w-0">
-              <p className="text-[9px] font-heading text-zinc-500 uppercase tracking-wider">Ready</p>
-              <p className="text-[11px] font-heading text-zinc-200 truncate tabular-nums">
-                <span className="text-primary font-bold">{picksArr.length}</span>
-                <span className="text-zinc-600">/{maxPick}</span>
-                <span className="text-zinc-600 mx-1">·</span>
-                {formatMoney(betNum)}
-              </p>
+          <div className="max-w-lg mx-auto flex flex-col gap-1.5">
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="flex-1 min-w-[6.5rem]">
+                <p className="text-[9px] font-heading text-zinc-500 uppercase tracking-wider">Ready</p>
+                <p className="text-[11px] font-heading text-zinc-200 truncate tabular-nums">
+                  <span className="text-primary font-bold">{picksArr.length}</span>
+                  <span className="text-zinc-600">/{maxPick}</span>
+                  <span className="text-zinc-600 mx-1">·</span>
+                  {formatMoney(betNum)}
+                </p>
+              </div>
+              <label className="flex flex-col items-center gap-0.5 shrink-0">
+                <span className="text-[8px] font-heading text-zinc-500 uppercase tracking-wider">Rolls</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="off"
+                  maxLength={2}
+                  value={autoRollInput}
+                  onChange={(e) => setAutoRollInput(e.target.value.replace(/\D/g, '').slice(0, 2) || '')}
+                  disabled={autoRolling}
+                  className="w-11 min-h-[40px] rounded-md border border-primary/25 bg-zinc-950/90 px-1 text-center text-sm font-heading text-zinc-100 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-45"
+                />
+              </label>
+              {autoRolling ? (
+                <button
+                  type="button"
+                  onClick={stopAutoRoll}
+                  className="keno-touch shrink-0 min-h-[40px] px-3 rounded-lg border border-red-500/50 bg-red-950/50 text-red-100 text-[10px] font-heading font-bold uppercase"
+                >
+                  Stop
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => void startAutoRoll()}
+                  disabled={!canStartAuto}
+                  className="keno-touch shrink-0 min-h-[40px] px-2.5 rounded-lg border border-primary/40 bg-primary/12 text-primary text-[10px] font-heading font-bold uppercase disabled:opacity-35"
+                >
+                  <span className="inline-flex items-center gap-1">
+                    <Repeat2 size={15} strokeWidth={2} />
+                    Auto
+                  </span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={play}
+                disabled={!canPlay}
+                className="keno-touch shrink-0 min-h-[44px] min-w-[7rem] flex-1 sm:flex-none px-4 rounded-lg font-heading font-black uppercase text-xs tracking-wide border transition-all disabled:opacity-35 disabled:grayscale active:scale-[0.98]"
+                style={{
+                  borderColor: 'rgba(212,175,55,0.55)',
+                  background: 'linear-gradient(180deg, rgba(212,175,55,0.32) 0%, rgba(120,90,20,0.4) 100%)',
+                  boxShadow: '0 2px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.12)',
+                  color: 'var(--noir-primary-bright)',
+                }}
+              >
+                <span className="inline-flex items-center justify-center gap-1.5">
+                  <Sparkles size={17} strokeWidth={2} />
+                  {loading && !autoRolling ? '…' : 'Draw'}
+                </span>
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={play}
-              disabled={!canPlay}
-              className="keno-touch shrink-0 min-h-[48px] min-w-[8.5rem] px-5 rounded-lg font-heading font-black uppercase text-xs tracking-wide border transition-all disabled:opacity-35 disabled:grayscale active:scale-[0.98]"
-              style={{
-                borderColor: 'rgba(212,175,55,0.55)',
-                background: 'linear-gradient(180deg, rgba(212,175,55,0.32) 0%, rgba(120,90,20,0.4) 100%)',
-                boxShadow: '0 2px 16px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.12)',
-                color: 'var(--noir-primary-bright)',
-              }}
-            >
-              <span className="inline-flex items-center justify-center gap-2">
-                <Sparkles size={18} strokeWidth={2} />
-                {loading ? '…' : 'Draw'}
-              </span>
-            </button>
+            {autoRollProgress ? (
+              <p className="text-center text-[9px] font-heading text-primary/90 tabular-nums pb-0.5">
+                Auto {autoRollProgress.done}/{autoRollProgress.total}
+              </p>
+            ) : null}
           </div>
         </div>
       </div>
