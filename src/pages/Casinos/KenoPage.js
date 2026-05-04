@@ -332,7 +332,7 @@ export default function KenoPage() {
 
   return (
     <div
-      className={`space-y-3 sm:space-y-4 ${styles.pageContent} mobile-page-root min-w-0 overflow-x-hidden pb-[calc(8.5rem+env(safe-area-inset-bottom))] md:pb-0`}
+      className={`space-y-3 sm:space-y-4 ${styles.pageContent} mobile-page-root min-w-0 w-full pb-[calc(11.5rem+env(safe-area-inset-bottom))] md:pb-0`}
       data-testid="keno-page"
     >
       <style>{KENO_STYLES}</style>
@@ -397,7 +397,7 @@ export default function KenoPage() {
           }}
         >
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
-          <div className="p-2 sm:p-4 space-y-3 sm:space-y-4 relative">
+          <div className="px-2 pt-3 pb-2 sm:p-4 space-y-3 sm:space-y-4 relative">
             <div
               className="pointer-events-none absolute inset-0 opacity-[0.07]"
               style={{
@@ -407,8 +407,8 @@ export default function KenoPage() {
 
             <div className="relative flex flex-col gap-3">
               <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-end">
-                <div className="flex flex-wrap items-end gap-2 flex-1 min-w-0">
-                  <label className="text-[10px] text-zinc-500 font-heading uppercase tracking-widest w-full sm:w-auto sm:inline sm:mr-1">
+                <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap sm:items-end gap-2 flex-1 min-w-0">
+                  <label className="text-[10px] text-zinc-500 font-heading uppercase tracking-widest leading-normal pt-0.5 w-full sm:w-auto sm:inline sm:mr-1">
                     Wager
                   </label>
                   <FormattedNumberInput
@@ -495,7 +495,7 @@ export default function KenoPage() {
               </div>
             </div>
 
-            <div className="relative flex flex-col min-[380px]:flex-row min-[380px]:items-center min-[380px]:justify-between gap-2 border-t border-primary/10 pt-2 sm:pt-3">
+            <div className="relative flex flex-col gap-1.5 min-[400px]:flex-row min-[400px]:items-center min-[400px]:justify-between border-t border-primary/10 pt-2 sm:pt-3">
               <p className="text-[10px] text-zinc-500 font-heading flex flex-wrap items-center gap-x-2 gap-y-1 min-w-0">
                 <span className="text-zinc-400 shrink-0">
                   Spots{' '}
@@ -504,8 +504,8 @@ export default function KenoPage() {
                 </span>
                 <PickDots count={picksArr.length} max={maxPick} />
               </p>
-              <p className="text-[9px] text-zinc-600 font-heading uppercase tracking-wider shrink-0">
-                Play: {minPick}–{maxPick}
+              <p className="text-[9px] text-zinc-600 font-heading uppercase tracking-wider min-w-0 break-words min-[400px]:text-right">
+                Play {minPick}–{maxPick}
               </p>
             </div>
 
@@ -654,7 +654,7 @@ export default function KenoPage() {
         >
           <button
             type="button"
-            className="keno-touch w-full sm:cursor-default px-3 py-2.5 sm:py-2 bg-gradient-to-r from-primary/12 via-primary/6 to-transparent border-b border-primary/15 flex items-center justify-between gap-2 text-left sm:pointer-events-none"
+            className="keno-touch w-full sm:cursor-default px-2.5 sm:px-3 py-2.5 sm:py-2 bg-gradient-to-r from-primary/12 via-primary/6 to-transparent border-b border-primary/15 flex items-center justify-between gap-2 text-left sm:pointer-events-none"
             onClick={() => setPaytableOpen((o) => !o)}
             aria-expanded={paytableOpen}
           >
@@ -667,7 +667,7 @@ export default function KenoPage() {
             </span>
           </button>
           <div
-            className={`p-0 overflow-y-auto transition-[max-height] duration-200 ease-out sm:max-h-52 ${
+            className={`p-0 overflow-y-auto overflow-x-hidden transition-[max-height] duration-200 ease-out sm:max-h-52 ${
               paytableOpen ? 'max-h-[min(70vh,32rem)] border-t border-primary/5' : 'max-h-0 sm:max-h-52'
             }`}
           >
@@ -679,19 +679,19 @@ export default function KenoPage() {
                 return (
                 <div
                   key={n}
-                  className={`flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-3 px-3 py-2.5 sm:py-2 border-b border-zinc-800/60 font-heading text-[10px] sm:text-[11px] transition-colors hover:bg-primary/[0.04] ${
+                  className={`flex flex-col gap-1.5 sm:flex-row sm:items-baseline sm:gap-3 px-2.5 sm:px-3 py-2.5 sm:py-2 border-b border-zinc-800/60 font-heading text-[10px] sm:text-[11px] transition-colors hover:bg-primary/[0.04] ${
                     idx % 2 === 0 ? 'bg-black/10' : ''
-                  } ${isLastRoundRow ? 'ring-1 ring-inset ring-primary/35 bg-primary/[0.08]' : ''}`}
+                  } ${isLastRoundRow ? 'sm:ring-1 sm:ring-inset sm:ring-primary/35 bg-primary/[0.08]' : ''}`}
                 >
-                  <span className="text-primary font-bold shrink-0 w-20 uppercase tracking-wide flex items-center gap-1.5">
-                    {n} spots
+                  <span className="text-primary font-bold shrink-0 uppercase tracking-wide flex flex-wrap items-center gap-x-1.5 gap-y-0.5 sm:w-24 sm:flex-nowrap">
+                    <span>{n} spots</span>
                     {isLastRoundRow ? (
-                      <span className="text-[8px] font-heading font-black uppercase tracking-wider text-primary/90 px-1.5 py-0.5 rounded border border-primary/30 bg-black/40">
+                      <span className="text-[8px] font-heading font-black uppercase tracking-wider text-primary/90 px-1.5 py-0.5 rounded border border-primary/30 bg-black/40 whitespace-nowrap">
                         last draw
                       </span>
                     ) : null}
                   </span>
-                  <span className="text-zinc-400 leading-relaxed">
+                  <span className="text-zinc-400 leading-relaxed min-w-0 pl-0.5 sm:pl-0 break-words">
                     {Object.entries(config.paytable[String(n)] || {})
                       .map(([hits, mult]) => (
                         <span key={hits} className="inline mr-2 last:mr-0">
