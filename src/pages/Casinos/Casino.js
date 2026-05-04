@@ -1,4 +1,4 @@
-import { Dice1, Spade, Hash, TrendingUp, Target, ChevronRight, Coins, Users } from 'lucide-react';
+import { Dice1, Spade, Hash, TrendingUp, Target, ChevronRight, Coins, Users, LayoutGrid } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import styles from '../../styles/noir.module.css';
 
@@ -16,6 +16,7 @@ const GAMES = [
   { to: '/casino/dice', label: 'Dice', desc: 'Roll for riches', Icon: Hash, testId: 'play-dice' },
   { to: '/casino/horseracing', label: 'Horse Racing', desc: 'Bet on the fastest', Icon: TrendingUp, testId: 'play-horse-racing' },
   { to: '/casino/slots', label: 'Slots', desc: 'Enter draw · own 3h · max bet & buy-back', Icon: Coins, testId: 'play-slots' },
+  { to: '/casino/keno', label: 'Keno', desc: 'State table · pick numbers · 20 from 80', Icon: LayoutGrid, testId: 'play-keno' },
   { to: '/casino/videopoker', label: 'Video Poker', desc: 'Jacks or Better', Icon: Spade, testId: 'play-video-poker' },
   { to: '/casino/mdg', label: 'MDG', desc: 'Pot game · fee, one winner takes all', Icon: Users, testId: 'play-mdg' },
   { to: '/casino/mp-blackjack', label: 'Multiplayer Blackjack', desc: 'Pot game · 2–8 players, best hand wins', Icon: Spade, testId: 'play-mp-blackjack' },
@@ -31,7 +32,7 @@ export default function Casino() {
       <div className="relative cas-fade-in">
         <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">The House</p>
         <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">Casino</h1>
-        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Roulette, Blackjack, Dice, Horse Racing, Slots, MDG, MP Blackjack, Poker, Sports.</p>
+        <p className="text-[10px] text-zinc-500 font-heading italic mt-1">Roulette, Blackjack, Dice, Horse Racing, Slots, Keno, MDG, MP Blackjack, Poker, Sports.</p>
       </div>
 
       <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 cas-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }}>
