@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Shield, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
+import api, { refreshUser } from '../../utils/api';
 import { readBodyguardsPageWarm, writeBodyguardsPageWarm } from '../../utils/bodyguardsPageWarm';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -79,9 +79,6 @@ export default function Bodyguards() {
   const [hireBanner, setHireBanner] = useState(null);
   const claimedSlotsRef = useRef(new Set());
   const pendingHiresRef = useRef(0);
-  const hireBannerTimeoutRef = useRef(null);
-  const hireSuccessBatchRef = useRef(0);
-  const lastHireSuccessMessageRef = useRef('');
 
   const WEEKDAY_OPTIONS = [
     { value: 0, label: 'Monday' },
@@ -136,32 +133,32 @@ export default function Bodyguards() {
   const fetchData = async () => {
     try {
       const [bodyguardsRes, userRes, eventsRes, inflationRes, statsRes, invitesRes] = await Promise.all([
-        apiRequestWith429Retry(() => api.get('/bodyguards', noCacheGetConfig())),
+        api.get('/bodyguards', noCacheGetConfig()),
         api.get('/auth/me'),
-        apiRequestWith429Retry(() => api.get('/events/active')).catch((e) => {
+        api.get('/events/active').catch((e) => {
           if (process.env.NODE_ENV === 'development') {
             console.warn('[Bodyguards] events/active failed', e?.response?.status, e?.response?.data);
           }
           return { data: { event: null, events_enabled: false } };
         }),
-        apiRequestWith429Retry(() => api.get('/bodyguards/inflation', noCacheGetConfig())).catch((e) => {
+        api.get('/bodyguards/inflation', noCacheGetConfig()).catch((e) => {
           if (process.env.NODE_ENV === 'development') {
             console.warn('[Bodyguards] inflation failed', e?.response?.status, e?.response?.data);
           }
           return { data: { next_hire_inflation_pct: 0 } };
         }),
-        apiRequestWith429Retry(() => api.get('/bodyguards/stats')).catch((e) => {
+        api.get('/bodyguards/stats').catch((e) => {
           if (process.env.NODE_ENV === 'development') {
             console.warn('[Bodyguards] stats failed', e?.response?.status, e?.response?.data);
           }
           return { data: null };
         }),
-        apiRequestWith429Retry(() => api.get('/bodyguards/invites')).catch((e) => {
+        api.get('/bodyguards/invites').catch((e) => {
           if (process.env.NODE_ENV === 'development') {
             console.warn('[Bodyguards] invites failed', e?.response?.status, e?.response?.data);
           }
           return { data: { sent: [], received: [] } };
-        }),
+        })
       ]);
       if (bodyguardsRes.status >= 400) {
         const msg = bodyguardsRes.data?.detail ?? bodyguardsRes.statusText ?? 'Bodyguards request failed';
@@ -239,15 +236,8 @@ export default function Bodyguards() {
   };
 
   const showHireBanner = (type, message) => {
-    if (hireBannerTimeoutRef.current) {
-      clearTimeout(hireBannerTimeoutRef.current);
-      hireBannerTimeoutRef.current = null;
-    }
     setHireBanner({ type, message });
-    hireBannerTimeoutRef.current = setTimeout(() => {
-      setHireBanner((prev) => (prev?.message === message ? null : prev));
-      hireBannerTimeoutRef.current = null;
-    }, 5000);
+    setTimeout(() => setHireBanner((prev) => (prev?.message === message ? null : prev)), 6000);
   };
 
   const claimNextSlot = () => {
@@ -263,39 +253,12 @@ export default function Bodyguards() {
     const slot = claimNextSlot();
     if (slot == null) return;
     pendingHiresRef.current += 1;
-    let serverSlot = null;
     try {
       const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
-      const d = response?.data;
-      serverSlot = d?.slot ?? null;
-      const hiredName = d?.bodyguard_username ?? d?.bodyguard_name;
-      if (d?.slot != null && hiredName != null) {
-        setBodyguards((prev) =>
-          prev.map((b) =>
-            b.slot_number === d.slot
-              ? {
-                  ...b,
-                  bodyguard_username: hiredName,
-                  bodyguard_rank_name: d.bodyguard_rank_name ?? null,
-                  armour_level: typeof d.armour_level === 'number' ? d.armour_level : 0,
-                  hired_at: d.hired_at ?? null,
-                  hire_cost: typeof d.hire_cost === 'number' ? d.hire_cost : 0,
-                  is_robot: d.is_robot !== false,
-                  payment_points: 0,
-                  payment_money: 0,
-                  payout_weekday: null,
-                }
-              : b
-          )
-        );
-        hireSuccessBatchRef.current += 1;
-        lastHireSuccessMessageRef.current = d?.message ?? 'Bodyguard hired';
-      }
-      if (typeof d?.next_hire_inflation_pct === 'number') {
-        setNextHireInflationPct(d.next_hire_inflation_pct);
-        setInflationWindowEndsAt(d.inflation_window_ends_at ?? null);
-      }
+      showHireBanner('success', response?.data?.message ?? 'Bodyguard hired');
     } catch (error) {
+      claimedSlotsRef.current.delete(slot);
+      setHiringSlots(new Set(claimedSlotsRef.current));
       const raw = error.response?.data?.detail;
       const detail =
         typeof raw === 'string'
@@ -312,17 +275,15 @@ export default function Bodyguards() {
       }
     } finally {
       pendingHiresRef.current -= 1;
-      claimedSlotsRef.current.delete(slot);
-      if (serverSlot != null) claimedSlotsRef.current.delete(serverSlot);
-      setHiringSlots(new Set(claimedSlotsRef.current));
       if (pendingHiresRef.current === 0) {
-        const batch = hireSuccessBatchRef.current;
-        hireSuccessBatchRef.current = 0;
-        if (batch === 1 && lastHireSuccessMessageRef.current) {
-          showHireBanner('success', lastHireSuccessMessageRef.current);
-        } else if (batch > 1) {
-          showHireBanner('success', `Hired ${batch} robot bodyguards.`);
-        }
+        claimedSlotsRef.current.clear();
+        refreshUser().catch(() => {});
+        await fetchData();
+        try {
+          const inflRes = await api.get('/bodyguards/inflation', noCacheGetConfig());
+          setNextHireInflationPct(inflRes.data?.next_hire_inflation_pct ?? 0);
+          setInflationWindowEndsAt(inflRes.data?.inflation_window_ends_at ?? null);
+        } catch { /* fetchData already set inflation */ }
       }
     }
   };
@@ -368,15 +329,9 @@ export default function Bodyguards() {
   };
 
   const nextEmptySlot = bodyguards.find((b) => !b.bodyguard_username && !hiringSlots.has(b.slot_number) && !claimedSlotsRef.current.has(b.slot_number))?.slot_number;
-  const filledBodyguardSlots = bodyguards.filter((bg) => bg.bodyguard_username).length;
-  const pendingEmptySlots = [1, 2, 3, 4].filter((sn) => {
-    const row = bodyguards.find((b) => b.slot_number === sn);
-    return row && !row.bodyguard_username && hiringSlots.has(sn);
-  }).length;
-  const activeCount = Math.min(4, filledBodyguardSlots + pendingEmptySlots);
-  // Hired slots + slots with an in-flight hire (so spamming shows all rows immediately)
-  const visibleBodyguardSlots = bodyguards
-    .filter((b) => b.bodyguard_username || hiringSlots.has(b.slot_number))
+  // All active bodyguards sorted by slot number (mixed robots and humans together)
+  const activeBodyguards = bodyguards
+    .filter((b) => b.bodyguard_username)
     .sort((a, b) => (a.slot_number ?? 0) - (b.slot_number ?? 0));
 
   const sendInvite = async () => {
@@ -464,16 +419,12 @@ export default function Bodyguards() {
   };
 
   const renderBodyguardCard = (bg) => {
-    const hirePending = hiringSlots.has(bg.slot_number) && !bg.bodyguard_username;
-    const showAsRobot = hirePending || bg.is_robot;
     const isExpanded = expandedSlot === bg.slot_number;
     return (
       <div
         key={bg.slot_number}
         data-testid={`bodyguard-slot-${bg.slot_number}`}
-        className={`bg-row rounded-lg transition-all bg-zinc-800/30 border ${
-          hirePending ? 'border-amber-500/20' : 'border-transparent hover:border-primary/20'
-        }`}
+        className="bg-row rounded-lg transition-all bg-zinc-800/30 border border-transparent hover:border-primary/20"
       >
         <div
           className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer"
@@ -487,27 +438,21 @@ export default function Bodyguards() {
               <div className="text-sm font-heading font-bold text-foreground truncate flex items-center gap-2">
                 Slot {bg.slot_number}
                 <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-                  showAsRobot ? 'bg-blue-500/20 text-blue-400' : 'bg-emerald-500/20 text-emerald-400'
+                  bg.is_robot ? 'bg-blue-500/20 text-blue-400' : 'bg-emerald-500/20 text-emerald-400'
                 }`}>
-                  {showAsRobot ? 'Robot' : 'Human'}
+                  {bg.is_robot ? 'Robot' : 'Human'}
                 </span>
               </div>
               <div className="text-[10px] text-mutedForeground truncate hidden sm:block">
-                {hirePending ? (
-                  <span className="text-amber-400/90 font-heading font-bold tracking-wide">Hiring…</span>
-                ) : (
-                  <>
-                    <Link
-                      to={`/profile/${encodeURIComponent(bg.bodyguard_username ?? '')}`}
-                      className="hover:text-primary"
-                      data-testid={`bodyguard-profile-${bg.slot_number}`}
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {bg.bodyguard_username ?? '—'}
-                    </Link>
-                    {bg.bodyguard_rank_name && <span> • {bg.bodyguard_rank_name}</span>}
-                  </>
-                )}
+                <Link
+                  to={`/profile/${encodeURIComponent(bg.bodyguard_username ?? '')}`}
+                  className="hover:text-primary"
+                  data-testid={`bodyguard-profile-${bg.slot_number}`}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {bg.bodyguard_username ?? '—'}
+                </Link>
+                {bg.bodyguard_rank_name && <span> • {bg.bodyguard_rank_name}</span>}
               </div>
               <div className="text-[10px] text-mutedForeground sm:hidden">
                 Tap to {isExpanded ? 'collapse' : 'view details'}
@@ -516,18 +461,18 @@ export default function Bodyguards() {
           </div>
           <div className="shrink-0 w-12 text-center">
             <span className="text-xs font-bold text-primary">
-              {showAsRobot ? `${bg.armour_level ?? 0}/5` : (bg.armour_level ? `${bg.armour_level}/5` : 'None')}
+              {bg.is_robot ? `${bg.armour_level ?? 0}/5` : (bg.armour_level ? `${bg.armour_level}/5` : 'None')}
             </span>
           </div>
           <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-            {showAsRobot ? (
+            {bg.is_robot ? (
               <button
                 onClick={() => upgradeArmour(bg.slot_number)}
-                disabled={hirePending || (bg.armour_level || 0) >= 5}
+                disabled={(bg.armour_level || 0) >= 5}
                 className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation disabled:opacity-40 disabled:cursor-not-allowed font-heading"
                 data-testid={`upgrade-armour-${bg.slot_number}`}
               >
-                {hirePending ? '…' : upgradingSlot === bg.slot_number ? '…' : (bg.armour_level || 0) >= 5 ? '🛡️ Max' : `🛡️ Upgrade (${getUpgradeCost(bg.armour_level)} pts)`}
+                {upgradingSlot === bg.slot_number ? '…' : (bg.armour_level || 0) >= 5 ? '🛡️ Max' : `🛡️ Upgrade (${getUpgradeCost(bg.armour_level)} pts)`}
               </button>
             ) : (
               <span className="text-[10px] text-mutedForeground italic">Your armour</span>
@@ -539,25 +484,21 @@ export default function Bodyguards() {
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="bg-zinc-900/50 rounded p-2">
                 <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Guard</div>
-                {hirePending ? (
-                  <span className="text-amber-400/90 font-bold font-heading">Hiring…</span>
-                ) : (
-                  <Link
-                    to={`/profile/${encodeURIComponent(bg.bodyguard_username ?? '')}`}
-                    className="text-foreground font-bold hover:text-primary"
-                    data-testid={`bodyguard-profile-expanded-${bg.slot_number}`}
-                  >
-                    {bg.bodyguard_username ?? '—'}
-                  </Link>
-                )}
+                <Link
+                  to={`/profile/${encodeURIComponent(bg.bodyguard_username ?? '')}`}
+                  className="text-foreground font-bold hover:text-primary"
+                  data-testid={`bodyguard-profile-expanded-${bg.slot_number}`}
+                >
+                  {bg.bodyguard_username ?? '—'}
+                </Link>
               </div>
               <div className="bg-zinc-900/50 rounded p-2">
                 <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Type</div>
-                <div className={`font-bold ${showAsRobot ? 'text-blue-400' : 'text-emerald-400'}`}>
-                  {showAsRobot ? '🤖 Robot' : '👤 Human'}
+                <div className={`font-bold ${bg.is_robot ? 'text-blue-400' : 'text-emerald-400'}`}>
+                  {bg.is_robot ? '🤖 Robot' : '👤 Human'}
                 </div>
               </div>
-              {!hirePending && bg.bodyguard_rank_name && (
+              {bg.bodyguard_rank_name && (
                 <div className="bg-zinc-900/50 rounded p-2">
                   <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Rank</div>
                   <div className="text-foreground font-bold">{bg.bodyguard_rank_name}</div>
@@ -566,22 +507,22 @@ export default function Bodyguards() {
               <div className="bg-zinc-900/50 rounded p-2">
                 <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Armour</div>
                 <div className="text-primary font-bold">
-                  {showAsRobot ? `${bg.armour_level ?? 0}/5` : (bg.armour_level ? `${bg.armour_level}/5 (their armour)` : 'None (their armour)')}
+                  {bg.is_robot ? `${bg.armour_level ?? 0}/5` : (bg.armour_level ? `${bg.armour_level}/5 (their armour)` : 'None (their armour)')}
                 </div>
               </div>
               <div className="bg-zinc-900/50 rounded p-2 col-span-2">
                 <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Hired</div>
                 <div className="text-foreground font-bold">
-                  {hirePending ? '—' : bg.hired_at && new Date(bg.hired_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                  {bg.hired_at && new Date(bg.hired_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
                 </div>
               </div>
-              {!hirePending && (bg.hire_cost ?? 0) > 0 && (
+              {(bg.hire_cost ?? 0) > 0 && (
                 <div className="bg-zinc-900/50 rounded p-2 col-span-2">
                   <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Upfront cost</div>
                   <div className="text-foreground font-bold">{(bg.hire_cost ?? 0).toLocaleString()} pts</div>
                 </div>
               )}
-              {!hirePending && !bg.is_robot && ((bg.payment_points ?? 0) > 0 || (bg.payment_money ?? 0) > 0) && (
+              {!bg.is_robot && ((bg.payment_points ?? 0) > 0 || (bg.payment_money ?? 0) > 0) && (
                 <div className="bg-zinc-900/50 rounded p-2 col-span-2">
                   <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Pay (per week, auto on day)</div>
                   <div className="text-foreground font-bold">
@@ -604,6 +545,8 @@ export default function Bodyguards() {
       </div>
     );
   }
+
+  const activeCount = bodyguards.filter(bg => bg.bodyguard_username).length + hiringSlots.size;
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="bodyguards-page">
@@ -800,7 +743,7 @@ export default function Bodyguards() {
               </button>
             </div>
             <div className="space-y-1">
-              {visibleBodyguardSlots.map((bg) => renderBodyguardCard(bg))}
+              {activeBodyguards.map((bg) => renderBodyguardCard(bg))}
               {activeCount < 4 && nextEmptySlot && !bodyguardFor?.owner_username && (
                 <div className="bg-row rounded-lg bg-zinc-800/30 border border-transparent hover:border-primary/20 px-3 py-3 space-y-2">
                   <div className="text-[10px] text-mutedForeground mb-1">

@@ -10,7 +10,6 @@ from pydantic import BaseModel
 
 from fastapi import Depends, HTTPException, Query
 from pymongo import UpdateOne
-from utils.game_timezone import game_local_now
 from utils.point_provenance import log_points_event
 
 logger = logging.getLogger(__name__)
@@ -36,7 +35,6 @@ from server import (
     db,
     get_current_user,
     get_effective_event,
-    get_effective_event_for_bodyguard_hire,
     log_activity,
     send_notification,
     get_rank_info,
@@ -49,27 +47,6 @@ from server import (
     _is_admin,
     _username_pattern,
 )
-from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_BODYGUARDS
-
-
-async def _delete_attacks_referencing_deleted_npc_user_ids(user_ids: list[str]) -> None:
-    """Clear attack rows tied to NPC user ids being removed (e.g. robot bodyguards). Removes searches/found/traveling and any other attack docs referencing the id."""
-    ids = [(x or "").strip() for x in user_ids if (x or "").strip()]
-    if not ids:
-        return
-    chunk = 300
-    for i in range(0, len(ids), chunk):
-        part = ids[i : i + chunk]
-        await db.attacks.delete_many(
-            {"$or": [{"target_id": {"$in": part}}, {"attacker_id": {"$in": part}}]},
-        )
-
-
-async def _bodyguards_sustained_rl_user(current_user: dict = Depends(get_current_user)):
-    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_BODYGUARDS)
-
-
-_bodyguards_rl_u = [Depends(_bodyguards_sustained_rl_user)]
 
 # Constants (moved from server)
 BODYGUARD_SLOT_COSTS = [75, 150, 300, 450]
@@ -79,7 +56,7 @@ BODYGUARD_ARMOUR_UPGRADE_COSTS = {0: 50, 1: 100, 2: 200, 3: 400, 4: 800}
 
 # Human bodyguard one-time hire cost is 25% cheaper than robot (deducted from inviter when invite is accepted)
 BODYGUARD_HUMAN_HIRE_DISCOUNT = 0.75  # 75% of robot price
-# After a robot bodyguard is killed, owner cannot hire another robot until this elapses
+# After someone else kills your robot NPC bodyguard, you cannot hire another for this many seconds (self-kill does not apply; see attack.py).
 BODYGUARD_ROBOT_KILLED_HIRE_COOLDOWN_SECONDS = 60
 
 # Bodyguard inflation: each purchase starts/resets a 3h timer; buying again before it expires adds % (2, 5, 7, 12, 17, 22, ...)
@@ -148,7 +125,7 @@ class BodyguardInviteRequest(BaseModel):
     target_username: str
     payment_points: int = 0  # points per week to bodyguard
     payment_money: int = 0   # money per week to bodyguard (in-game $)
-    payout_weekday: int = 0  # 0=Monday, 6=Sunday; pay runs on this day each week (Europe/London)
+    payout_weekday: int = 0  # 0=Monday, 6=Sunday; pay runs on this day each week (UTC)
     duration_hours: int = 168  # contract length (default 1 week); 0 = indefinite
 
 
@@ -179,9 +156,8 @@ def _camelize(name: str) -> str:
     return "".join(t[:1].upper() + t[1:] for t in tokens)
 
 
-async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str, int]:
-    """Create a unique robot user record. Returns (user_id, username, rank_points).
-    Username uses a short uuid suffix so we avoid slow repeated collision scans under load."""
+async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str]:
+    """Create a unique robot user record. Returns (user_id, username). 1920s–30s American mafia style."""
     robot_names = [
         "Al Capone", "Lucky Luciano", "Frank Nitti", "Johnny Torrio", "Bugsy Siegel",
         "Meyer Lansky", "Vito Genovese", "Joe Masseria", "Salvatore Maranzano", "Dutch Schultz",
@@ -199,9 +175,16 @@ async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str, int]
     ranks_made_man_plus = [r for r in RANKS if r["id"] >= ROBOT_BODYGUARD_MIN_RANK_ID]
     rank = random.choice(ranks_made_man_plus) if ranks_made_man_plus else RANKS[-1]
     rank_points = random.randint(int(rank["required_points"]), int(rank["required_points"]) + 500)
-    # uuid suffix keeps usernames unique without slow collision scans (trim base for reasonable length)
-    prefix = base[:22] if len(base) > 22 else base
-    username = f"{prefix}{uuid.uuid4().hex[:10]}"
+    username = None
+    for _ in range(80):
+        suffix = random.randint(100000, 9999999)
+        candidate = f"{base}{suffix}"
+        exists = await db.users.find_one({"username": candidate}, {"_id": 0, "id": 1})
+        if not exists:
+            username = candidate
+            break
+    if not username:
+        raise HTTPException(status_code=500, detail="Failed to generate unique robot name")
     robot_user_id = str(uuid.uuid4())
     now_iso = datetime.now(timezone.utc).isoformat()
     robot_doc = {
@@ -254,7 +237,7 @@ async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str, int]
         "bodyguard_owner_id": owner_user["id"],
     }
     await db.users.insert_one(robot_doc)
-    return robot_user_id, username, int(rank_points)
+    return robot_user_id, username
 
 
 # ----- Routes -----
@@ -517,54 +500,48 @@ async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Dep
 
 
 async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
-    uid = current_user["id"]
-    as_guard_coro = db.bodyguards.find_one(
-        {"bodyguard_user_id": uid, "is_robot": False},
-        {"_id": 1},
-    )
-    fresh_coro = db.users.find_one(
-        {"id": uid},
-        {
-            "_id": 0,
-            "bodyguard_slots": 1,
-            "bodyguard_robot_loss_hire_allowed_after": 1,
-            "bodyguard_inflation_until": 1,
-            "bodyguard_inflation_level": 1,
-        },
-    )
-    slots_list_coro = db.bodyguards.find(
-        {"user_id": uid},
-        {"_id": 0, "slot_number": 1},
-    ).to_list(10)
-    ev_coro = get_effective_event_for_bodyguard_hire()
-    as_guard, fresh, existing_bgs, ev = await asyncio.gather(as_guard_coro, fresh_coro, slots_list_coro, ev_coro)
-
-    if as_guard:
+    if await db.bodyguards.find_one({"bodyguard_user_id": current_user["id"], "is_robot": False}, {"_id": 1}):
         raise HTTPException(
             status_code=400,
             detail="You cannot hire bodyguards while you're employed as someone else's bodyguard.",
         )
     if not is_robot:
         raise HTTPException(status_code=400, detail="Human bodyguards are temporarily disabled. Use robot bodyguards.")
+    fresh = await db.users.find_one(
+        {"id": current_user["id"]},
+        {
+            "_id": 0,
+            "bodyguard_slots": 1,
+            "bodyguard_robot_loss_hire_allowed_after": 1,
+        },
+    )
     slots = int((fresh or {}).get("bodyguard_slots") or 0)
-    if is_robot:
-        until_iso = (fresh or {}).get("bodyguard_robot_loss_hire_allowed_after")
-        until = _parse_iso_datetime(until_iso) if until_iso else None
-        if until and datetime.now(timezone.utc) < until:
-            secs_left = max(1, int((until - datetime.now(timezone.utc)).total_seconds()) + 1)
-            raise HTTPException(
-                status_code=400,
-                detail=f"Your robot bodyguard was just taken out. Wait {secs_left} seconds before hiring another.",
-            )
+    until_iso = (fresh or {}).get("bodyguard_robot_loss_hire_allowed_after")
+    until = _parse_iso_datetime(until_iso) if until_iso else None
+    if until and datetime.now(timezone.utc) < until:
+        secs_left = max(1, int((until - datetime.now(timezone.utc)).total_seconds()) + 1)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Your robot bodyguard was just taken out. Wait {secs_left} seconds before hiring another.",
+        )
+    existing_bgs = await db.bodyguards.find(
+        {"user_id": current_user["id"]},
+        {"_id": 0, "slot_number": 1}
+    ).to_list(10)
     occupied = {b["slot_number"] for b in existing_bgs}
     slot = next((s for s in range(1, 5) if s not in occupied), None)
     if slot is None:
         raise HTTPException(status_code=400, detail="All bodyguard slots are full")
     unlock_next_slot = slot > slots
+    ev = await get_effective_event()
     event_cost_mult = ev.get("bodyguard_cost", 1.0)
     base_cost = BODYGUARD_SLOT_COSTS[slot - 1]
     # Bodyguard inflation: each hire within 3h adds % (0%, 2%, 5%, 7%, 12%, 17%, ...)
-    user_for_inflation = fresh or {}
+    user_inflation = await db.users.find_one(
+        {"id": current_user["id"]},
+        {"_id": 0, "bodyguard_inflation_until": 1, "bodyguard_inflation_level": 1}
+    )
+    user_for_inflation = user_inflation or {}
     inflation_level = _bodyguard_inflation_level_now(user_for_inflation)
     inflation_mult = 1.0 + _bodyguard_inflation_percent_for_level(inflation_level)
     total_cost = int(base_cost * event_cost_mult * inflation_mult)
@@ -600,19 +577,14 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
         "event_bodyguard_cost_mult": event_cost_mult,
         "base_slot_cost": base_cost,
     }
-    log_coro = log_points_event(
-        db, user_id=uid, points=-total_cost, event_type="bodyguard_hire",
+    await log_points_event(
+        db, user_id=current_user["id"], points=-total_cost, event_type="bodyguard_hire",
         event_ref=f"slot:{slot}", meta=hire_meta,
     )
     robot_name = None
     robot_user_id = None
-    robot_rank_points = 0
     if is_robot:
-        _, robot_tuple = await asyncio.gather(log_coro, _create_robot_bodyguard_user(current_user))
-        robot_user_id, robot_name, robot_rank_points = robot_tuple
-    else:
-        await log_coro
-    hired_at_iso = datetime.now(timezone.utc).isoformat()
+        robot_user_id, robot_name = await _create_robot_bodyguard_user(current_user)
     bodyguard_doc = {
         "id": str(uuid.uuid4()),
         "user_id": current_user["id"],
@@ -623,38 +595,25 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
         "bodyguard_user_id": robot_user_id if is_robot else None,
         "health": 100,
         "armour_level": 0,
-        "hired_at": hired_at_iso,
+        "hired_at": datetime.now(timezone.utc).isoformat(),
         "hire_cost": total_cost,
     }
-    await asyncio.gather(
-        db.bodyguards.insert_one(bodyguard_doc),
-        db.users.update_one({"id": uid}, {"$unset": {"bodyguard_robot_loss_hire_allowed_after": ""}}),
-    )
-
-    async def _hire_audit_log():
-        try:
-            await db.hitlist_bodyguard_events.insert_one({
-                "at": datetime.now(timezone.utc),
-                "type": "bodyguard_hired",
-                "owner_id": current_user["id"],
-                "owner_username": current_user.get("username") or "",
-                "slot": slot,
-                "is_robot": is_robot,
-                "hire_cost": total_cost,
-                "bodyguard_username": robot_name if is_robot else None,
-                "inflation_level_before": inflation_level,
-                "inflation_mult": inflation_mult,
-                "event_bodyguard_cost_mult": event_cost_mult,
-                "base_slot_cost": base_cost,
-            })
-            await log_activity(current_user["id"], current_user.get("username", "?"), "bodyguard_hire", {
-                "slot": slot, "is_robot": is_robot, "cost": total_cost, "name": robot_name,
-            })
-        except Exception:
-            logger.exception("bodyguard hire audit log")
-
-    asyncio.create_task(_hire_audit_log())
-
+    await db.bodyguards.insert_one(bodyguard_doc)
+    await db.users.update_one({"id": current_user["id"]}, {"$unset": {"bodyguard_robot_loss_hire_allowed_after": ""}})
+    await db.hitlist_bodyguard_events.insert_one({
+        "at": datetime.now(timezone.utc),
+        "type": "bodyguard_hired",
+        "owner_id": current_user["id"],
+        "owner_username": current_user.get("username") or "",
+        "slot": slot,
+        "is_robot": is_robot,
+        "hire_cost": total_cost,
+        "bodyguard_username": robot_name if is_robot else None,
+        "inflation_level_before": inflation_level,
+        "inflation_mult": inflation_mult,
+        "event_bodyguard_cost_mult": event_cost_mult,
+        "base_slot_cost": base_cost,
+    })
     name_part = robot_name if is_robot else "a human bodyguard"
     msg = f"You hired {name_part} for {total_cost} points (slot {slot}/4). Past hires show here — max 4 at once."
     asyncio.create_task(send_notification(
@@ -664,33 +623,10 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
         "bodyguard"
     ))
     _invalidate_bodyguards_cache(current_user["id"])
-
-    next_level = inflation_level + 1
-    next_hire_inflation_pct = round(_bodyguard_inflation_percent_for_level(next_level) * 100)
-    inflation_window_ends_at = window_end.isoformat()
-
-    if is_robot and robot_user_id:
-        _, bg_rank_name = get_rank_info(int(robot_rank_points), user_prestige_rank_mult(None))
-        return {
-            "message": f"Robot bodyguard {robot_name} hired for {total_cost} points",
-            "bodyguard_name": robot_name,
-            "slot": slot,
-            "bodyguard_username": robot_name,
-            "bodyguard_rank_name": bg_rank_name,
-            "armour_level": 0,
-            "hire_cost": total_cost,
-            "hired_at": hired_at_iso,
-            "is_robot": True,
-            "next_hire_inflation_pct": next_hire_inflation_pct,
-            "inflation_window_ends_at": inflation_window_ends_at,
-        }
-    return {
-        "message": f"Human bodyguard slot hired for {total_cost} points",
-        "bodyguard_name": robot_name,
-        "slot": slot,
-        "next_hire_inflation_pct": next_hire_inflation_pct,
-        "inflation_window_ends_at": inflation_window_ends_at,
-    }
+    await log_activity(current_user["id"], current_user.get("username", "?"), "bodyguard_hire", {
+        "slot": slot, "is_robot": is_robot, "cost": total_cost, "name": robot_name,
+    })
+    return {"message": f"{'Robot bodyguard ' + robot_name if is_robot else 'Human bodyguard slot'} hired for {total_cost} points", "bodyguard_name": robot_name}
 
 
 def _weekday_name(weekday: int) -> str:
@@ -1054,14 +990,6 @@ async def admin_clear_bodyguards(target_username: str, current_user: dict = Depe
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     res_bg = await db.bodyguards.delete_many({"user_id": target["id"]})
-    robot_ids = [
-        d["id"]
-        async for d in db.users.find(
-            {"is_bodyguard": True, "is_npc": True, "bodyguard_owner_id": target["id"]},
-            {"_id": 0, "id": 1},
-        )
-    ]
-    await _delete_attacks_referencing_deleted_npc_user_ids(robot_ids)
     # Only delete robot bodyguard users; human bodyguards are real player accounts
     res_robots = await db.users.delete_many({"is_bodyguard": True, "is_npc": True, "bodyguard_owner_id": target["id"]})
     # Release human bodyguards (clear flags, do not delete)
@@ -1098,11 +1026,6 @@ async def admin_drop_all_bodyguards(current_user: dict = Depends(get_current_use
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     res = await db.bodyguards.delete_many({})
-    robot_ids = [
-        d["id"]
-        async for d in db.users.find({"is_bodyguard": True, "is_npc": True}, {"_id": 0, "id": 1})
-    ]
-    await _delete_attacks_referencing_deleted_npc_user_ids(robot_ids)
     # Only delete robot bodyguard users (is_npc=True); human bodyguards are real player accounts
     res_robots = await db.users.delete_many({"is_bodyguard": True, "is_npc": True})
     # Clear bodyguard flags from human bodyguards so they can log in normally again
@@ -1167,7 +1090,6 @@ async def admin_replace_robot_bodyguards_hacked(
 
     await db.bodyguards.delete_many({"user_id": owner_id, "is_robot": True})
     if old_robot_user_ids:
-        await _delete_attacks_referencing_deleted_npc_user_ids(old_robot_user_ids)
         await db.users.delete_many({"id": {"$in": old_robot_user_ids}, "is_npc": True, "is_bodyguard": True})
 
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -1178,7 +1100,7 @@ async def admin_replace_robot_bodyguards_hacked(
             continue
         armour = min(5, max(0, int(prev.get("armour_level") or 0)))
         hire_cost = int(prev.get("hire_cost") or 0)
-        robot_user_id, robot_username, _ = await _create_robot_bodyguard_user(target)
+        robot_user_id, robot_username = await _create_robot_bodyguard_user(target)
         await db.users.update_one(
             {"id": robot_user_id},
             {"$set": {"current_state": owner_state, "armour_level": armour}},
@@ -1252,14 +1174,6 @@ async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, cur
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     if request.replace_existing:
-        robot_ids = [
-            d["id"]
-            async for d in db.users.find(
-                {"is_bodyguard": True, "is_npc": True, "bodyguard_owner_id": target["id"]},
-                {"_id": 0, "id": 1},
-            )
-        ]
-        await _delete_attacks_referencing_deleted_npc_user_ids(robot_ids)
         await db.bodyguards.delete_many({"user_id": target["id"]})
         await db.users.delete_many({"is_bodyguard": True, "is_npc": True, "bodyguard_owner_id": target["id"]})
         await db.users.update_many(
@@ -1277,7 +1191,7 @@ async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, cur
         exists = await db.bodyguards.find_one({"user_id": target["id"], "slot_number": slot}, {"_id": 0, "id": 1})
         if exists:
             continue
-        robot_user_id, robot_username, _ = await _create_robot_bodyguard_user(target)
+        robot_user_id, robot_username = await _create_robot_bodyguard_user(target)
         await db.bodyguards.insert_one({
             "id": str(uuid.uuid4()),
             "user_id": target["id"],
@@ -1438,14 +1352,6 @@ async def admin_seed_human_bodyguards(current_user: dict = Depends(get_current_u
     
     # Clear all existing bodyguards (robots and humans) for admin
     await db.bodyguards.delete_many({"user_id": admin_id})
-    robot_ids = [
-        d["id"]
-        async for d in db.users.find(
-            {"is_bodyguard": True, "is_npc": True, "bodyguard_owner_id": admin_id},
-            {"_id": 0, "id": 1},
-        )
-    ]
-    await _delete_attacks_referencing_deleted_npc_user_ids(robot_ids)
     await db.users.delete_many({"is_bodyguard": True, "is_npc": True, "bodyguard_owner_id": admin_id})
     await db.users.update_many(
         {"is_bodyguard": True, "bodyguard_owner_id": admin_id},
@@ -1527,14 +1433,6 @@ async def admin_seed_random_bodyguards(current_user: dict = Depends(get_current_
     
     # Clear all existing bodyguards (robots and humans) for admin
     await db.bodyguards.delete_many({"user_id": admin_id})
-    robot_ids = [
-        d["id"]
-        async for d in db.users.find(
-            {"is_bodyguard": True, "is_npc": True, "bodyguard_owner_id": admin_id},
-            {"_id": 0, "id": 1},
-        )
-    ]
-    await _delete_attacks_referencing_deleted_npc_user_ids(robot_ids)
     # Remove robot users only; release human bodyguards (clear flags)
     await db.users.delete_many({"is_bodyguard": True, "is_npc": True, "bodyguard_owner_id": admin_id})
     await db.users.update_many(
@@ -1674,9 +1572,8 @@ async def run_bodyguard_weekly_payout(database, test_run: bool = False):
     import logging
     log = logging.getLogger(__name__)
     now = datetime.now(timezone.utc)
-    loc = game_local_now(now)
-    today_str = loc.date().isoformat()
-    weekday = loc.weekday()  # 0=Monday, 6=Sunday (London calendar)
+    today_str = now.date().isoformat()
+    weekday = now.weekday()  # 0=Monday, 6=Sunday
     query = {
         "is_robot": False,
         "bodyguard_user_id": {"$exists": True, "$ne": None},
@@ -1791,14 +1688,14 @@ async def admin_test_bodyguard_payout(current_user: dict = Depends(get_current_u
 
 
 def register(router):
-    router.add_api_route("/bodyguards/inflation", get_bodyguards_hire_inflation, methods=["GET"], dependencies=_bodyguards_rl_u)
-    router.add_api_route("/bodyguards/stats", get_bodyguards_stats, methods=["GET"], dependencies=_bodyguards_rl_u)
-    router.add_api_route("/bodyguards", get_bodyguards, methods=["GET"], dependencies=_bodyguards_rl_u)
+    router.add_api_route("/bodyguards/inflation", get_bodyguards_hire_inflation, methods=["GET"])
+    router.add_api_route("/bodyguards/stats", get_bodyguards_stats, methods=["GET"])
+    router.add_api_route("/bodyguards", get_bodyguards, methods=["GET"])
     router.add_api_route("/bodyguards/armour/upgrade", upgrade_bodyguard_armour, methods=["POST"])
     router.add_api_route("/bodyguards/slot/buy", buy_bodyguard_slot, methods=["POST"])
     router.add_api_route("/bodyguards/hire", hire_bodyguard, methods=["POST"])
     router.add_api_route("/bodyguards/invite", invite_bodyguard, methods=["POST"])
-    router.add_api_route("/bodyguards/invites", get_bodyguard_invites, methods=["GET"], dependencies=_bodyguards_rl_u)
+    router.add_api_route("/bodyguards/invites", get_bodyguard_invites, methods=["GET"])
     router.add_api_route("/bodyguards/invites/{invite_id}/accept", accept_bodyguard_invite, methods=["POST"])
     router.add_api_route("/bodyguards/invites/{invite_id}/decline", decline_bodyguard_invite, methods=["POST"])
     router.add_api_route("/bodyguards/invites/{invite_id}/cancel", cancel_bodyguard_invite, methods=["POST"])
