@@ -26,17 +26,18 @@ KENO_DRAW_COUNT = 20
 # Same skim as slots: player receives int(nominal * (1 - edge)); head treasury gets int(nominal * edge) on wins.
 KENO_HOUSE_EDGE = 0.0005
 
-# Nominal multipliers (× bet) before house edge. Missing hit counts pay 0. Tuned conservative vs typical strip keno.
+# Nominal multipliers (× bet) before house edge. Missing hit counts pay 0.
+# Top jackpot capped at 1000× (10/10); other pick counts scaled with similar step-ups toward their row max.
 KENO_PAYTABLE: dict[int, dict[int, int]] = {
-    2: {2: 10},
-    3: {2: 2, 3: 22},
-    4: {2: 1, 3: 4, 4: 45},
-    5: {3: 2, 4: 9, 5: 350},
-    6: {3: 1, 4: 5, 5: 28, 6: 700},
-    7: {4: 3, 5: 10, 6: 40, 7: 1200},
-    8: {5: 6, 6: 18, 7: 70, 8: 4000},
-    9: {5: 4, 6: 12, 7: 45, 8: 200, 9: 10000},
-    10: {5: 2, 6: 8, 7: 30, 8: 90, 9: 500, 10: 20000},
+    2: {2: 8},
+    3: {2: 2, 3: 18},
+    4: {2: 1, 3: 4, 4: 35},
+    5: {3: 2, 4: 7, 5: 90},
+    6: {3: 1, 4: 4, 5: 18, 6: 180},
+    7: {4: 2, 5: 8, 6: 28, 7: 320},
+    8: {5: 4, 6: 12, 7: 38, 8: 220},
+    9: {5: 3, 6: 9, 7: 30, 8: 85, 9: 450},
+    10: {5: 2, 6: 5, 7: 14, 8: 35, 9: 110, 10: 1000},
 }
 
 

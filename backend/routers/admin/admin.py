@@ -7291,6 +7291,154 @@ def register(router):
         entries = await cursor.to_list(limit)
         return {"entries": entries, "count": len(entries)}
 
+    @router.get("/admin/casinos/keno-economy")
+    async def admin_casinos_keno_economy(
+        days: int = Query(30, ge=1, le=366),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Aggregate state-owned Keno plays from gambling_log: stakes, payouts, house net, by state."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        match: Dict[str, Any] = {"game_type": "keno", "created_at": {"$gte": cutoff}}
+        bet_expr: Dict[str, Any] = {"$convert": {"input": "$details.bet", "to": "double", "onError": 0.0, "onNull": 0.0}}
+        payout_expr: Dict[str, Any] = {"$convert": {"input": "$details.payout", "to": "double", "onError": 0.0, "onNull": 0.0}}
+        pipeline: List[Dict[str, Any]] = [
+            {"$match": match},
+            {
+                "$facet": {
+                    "totals": [
+                        {
+                            "$group": {
+                                "_id": None,
+                                "rounds": {"$sum": 1},
+                                "total_stake": {"$sum": bet_expr},
+                                "total_payout": {"$sum": payout_expr},
+                                "win_rounds": {"$sum": {"$cond": [{"$gt": [payout_expr, 0.0]}, 1, 0]}},
+                                "max_payout": {"$max": payout_expr},
+                                "users": {"$addToSet": "$user_id"},
+                            }
+                        },
+                        {
+                            "$project": {
+                                "_id": 0,
+                                "rounds": 1,
+                                "total_stake": 1,
+                                "total_payout": 1,
+                                "win_rounds": 1,
+                                "max_payout": 1,
+                                "unique_users": {"$size": "$users"},
+                            }
+                        },
+                    ],
+                    "by_state": [
+                        {
+                            "$group": {
+                                "_id": {"$ifNull": ["$details.state", ""]},
+                                "rounds": {"$sum": 1},
+                                "total_stake": {"$sum": bet_expr},
+                                "total_payout": {"$sum": payout_expr},
+                            }
+                        },
+                        {"$sort": {"total_stake": -1}},
+                    ],
+                    "recent": [
+                        {"$sort": {"created_at": -1}},
+                        {"$limit": 30},
+                        {
+                            "$project": {
+                                "_id": 0,
+                                "id": 1,
+                                "username": 1,
+                                "user_id": 1,
+                                "created_at": 1,
+                                "details.bet": 1,
+                                "details.payout": 1,
+                                "details.hits": 1,
+                                "details.picks": 1,
+                                "details.state": 1,
+                            }
+                        },
+                    ],
+                }
+            },
+        ]
+        agg = await db.gambling_log.aggregate(pipeline).to_list(1)
+        facet = (agg[0] if agg else {}) or {}
+        totals_list = facet.get("totals") or []
+        totals_row = totals_list[0] if totals_list else {}
+        rounds = int(totals_row.get("rounds") or 0)
+        total_stake = float(totals_row.get("total_stake") or 0)
+        total_payout = float(totals_row.get("total_payout") or 0)
+        win_rounds = int(totals_row.get("win_rounds") or 0)
+        max_payout = float(totals_row.get("max_payout") or 0)
+        unique_users = int(totals_row.get("unique_users") or 0)
+        house_net = total_stake - total_payout
+        avg_bet = (total_stake / rounds) if rounds else 0.0
+        rtp_pct = (100.0 * total_payout / total_stake) if total_stake > 0 else None
+
+        by_state_raw = facet.get("by_state") or []
+        by_state: List[Dict[str, Any]] = []
+        for row in by_state_raw:
+            st = str(row.get("_id") or "").strip() or "(unknown)"
+            rs = int(row.get("rounds") or 0)
+            ts = float(row.get("total_stake") or 0)
+            tp = float(row.get("total_payout") or 0)
+            by_state.append(
+                {
+                    "state": st,
+                    "rounds": rs,
+                    "total_stake": ts,
+                    "total_payout": tp,
+                    "house_net": ts - tp,
+                }
+            )
+
+        def _iso(dt: Any) -> Optional[str]:
+            if dt is None:
+                return None
+            if isinstance(dt, datetime):
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt.isoformat().replace("+00:00", "Z")
+            return str(dt)
+
+        recent_out: List[Dict[str, Any]] = []
+        for r in facet.get("recent") or []:
+            det = r.get("details") or {}
+            recent_out.append(
+                {
+                    "id": r.get("id"),
+                    "username": r.get("username"),
+                    "user_id": r.get("user_id"),
+                    "created_at": _iso(r.get("created_at")),
+                    "bet": float(det.get("bet") or 0),
+                    "payout": float(det.get("payout") or 0),
+                    "hits": int(det.get("hits") or 0),
+                    "pick_count": len(det.get("picks") or []) if isinstance(det.get("picks"), list) else None,
+                    "state": det.get("state"),
+                }
+            )
+
+        return {
+            "days": days,
+            "cutoff_iso": cutoff.isoformat().replace("+00:00", "Z"),
+            "summary": {
+                "rounds": rounds,
+                "unique_players": unique_users,
+                "total_stake": total_stake,
+                "total_payout": total_payout,
+                "house_net": house_net,
+                "win_rounds": win_rounds,
+                "lose_rounds": max(0, rounds - win_rounds),
+                "max_single_payout": max_payout,
+                "avg_bet": avg_bet,
+                "rtp_percent": round(rtp_pct, 4) if rtp_pct is not None else None,
+            },
+            "by_state": by_state,
+            "recent": recent_out,
+        }
+
     @router.get("/admin/mdg/games-log")
     async def admin_mdg_games_log(
         limit: int = Query(50, ge=1, le=300),

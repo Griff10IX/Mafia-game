@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { SAME_ROUTE_NAV_CLICK } from '../constants/navigationEvents';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Grid3x3, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb } from 'lucide-react';
 import api, { getApiErrorMessage, onCooldownChange, invalidateApiCache, apiRequestWith429Retry, apiGetWithResumeRetries } from '../utils/api';
 import { getThemeUiPlatform } from '../utils/themePlatform';
 import { readSessionJson } from '../utils/sessionPageCache';
@@ -108,6 +108,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
         { path: '/casino/blackjack', label: 'Blackjack' },
         { path: '/casino/horseracing', label: 'Horse Racing' },
         { path: '/casino/slots', label: 'Slots' },
+        { path: '/casino/keno', label: 'Keno' },
         { path: '/casino/videopoker', label: 'Video Poker' },
         { path: '/casino/mdg', label: 'MDG' },
         { path: '/casino/mp-blackjack', label: 'MP Blackjack' },
@@ -1479,6 +1480,7 @@ export default function Layout({ children }) {
             { to: '/casino/blackjack', label: 'Blackjack', testId: 'nav-blackjack', Icon: Spade },
             { to: '/casino/horseracing', label: 'Horse Racing', testId: 'nav-horseracing', Icon: Flag },
             { to: '/casino/slots', label: 'Slots', testId: 'nav-slots', Icon: SquareStack },
+            { to: '/casino/keno', label: 'Keno', testId: 'nav-keno', Icon: Grid3x3 },
             { to: '/casino/videopoker', label: 'Video Poker', testId: 'nav-videopoker', Icon: Video },
             { to: '/casino/mdg', label: 'MDG', testId: 'nav-mdg', Icon: Sparkles },
             { to: '/casino/mp-blackjack', label: 'MP Blackjack', testId: 'nav-mp-blackjack', matchPrefix: true, Icon: Users },

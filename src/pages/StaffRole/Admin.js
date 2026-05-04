@@ -1,6 +1,6 @@
 import { Fragment, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate, useParams } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw, MessagesSquare, Swords } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Grid3x3, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw, MessagesSquare, Swords } from 'lucide-react';
 import api, { imageHostPublicUrl, refreshUser } from '../../utils/api';
 import { formatAdminDateTime, formatAdminDateOnly, formatAdminTimeOnly } from '../../utils/adminDateTime';
 import {
@@ -243,6 +243,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Game Events', categoryId: 'admin-gameworld', collapseKey: 'events', keywords: ['events', 'toggle', 'enable', 'disable', 'random', 'bundle', 'daily', 'modifiers', 'roll'], adminOnly: true },
   { label: 'Booze Run rotation & global discount', categoryId: 'admin-gameworld', collapseKey: 'boozeRun', keywords: ['booze', 'run', 'rotation', 'prices', 'discount', 'listed', 'nudge', 'global', 'jail', 'bust', 'prohibition'], adminOnly: true },
   { label: 'Booze Run analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'boozeRunAnalytics', keywords: ['booze', 'analytics', 'economy', 'events', 'profit', 'revenue', 'jail', 'leaderboard'] },
+  { label: 'Keno economy', categoryId: 'admin-analytics-monitoring', collapseKey: 'kenoEconomy', keywords: ['keno', 'casino', 'economy', 'payout', 'gambling', 'state'] },
   { label: 'Presence simulator', categoryId: 'admin-gameworld', collapseKey: 'presenceSimulator', keywords: ['presence', 'simulator', 'online', 'active', 'fake', 'last_seen'], adminOnly: true },
   { label: 'Slots Draw', categoryId: 'admin-gameworld', collapseKey: 'slotsDraw', keywords: ['slots', 'draw', 'lottery'] },
   { label: 'Lottery money trail', categoryId: 'admin-gameworld', collapseKey: 'lotteryMoneyTrail', keywords: ['lottery', 'money', 'payout', 'winner', 'pot', 'audit', 'trail', 'twice', 'wed', 'sun'], adminOnly: true },
@@ -373,8 +374,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, kenoEconomy: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, kenoEconomy: true }; }
 }
 
 function saveCollapsed(state) {
@@ -957,6 +958,9 @@ export default function Admin() {
   const [boozeRunUserQuery, setBoozeRunUserQuery] = useState('');
   const [boozeRunUserProfile, setBoozeRunUserProfile] = useState(null);
   const [boozeRunUserLoading, setBoozeRunUserLoading] = useState(false);
+  const [kenoEconomyDays, setKenoEconomyDays] = useState(30);
+  const [kenoEconomyData, setKenoEconomyData] = useState(null);
+  const [kenoEconomyLoading, setKenoEconomyLoading] = useState(false);
   const [referralsReport, setReferralsReport] = useState(null);
   const [referralsReportLoading, setReferralsReportLoading] = useState(false);
   const [referralsFilterUsername, setReferralsFilterUsername] = useState('');
@@ -5816,6 +5820,19 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to load booze-run leaders');
     } finally {
       setBoozeRunLeadersLoading(false);
+    }
+  };
+
+  const handleFetchKenoEconomy = async () => {
+    setKenoEconomyLoading(true);
+    try {
+      const res = await api.get('/admin/casinos/keno-economy', { params: { days: kenoEconomyDays } });
+      setKenoEconomyData(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load Keno economy');
+      setKenoEconomyData(null);
+    } finally {
+      setKenoEconomyLoading(false);
     }
   };
 
@@ -17074,6 +17091,175 @@ export default function Admin() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* Keno economy (gambling_log — state-owned table) */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-emerald-500/30 to-transparent" />
+          <SectionHeader
+            icon={Grid3x3}
+            title="Keno economy"
+            badge={
+              kenoEconomyData?.summary ? (
+                <span className="text-[10px] font-heading text-mutedForeground">
+                  {kenoEconomyData.days}d · {kenoEconomyData.summary.rounds?.toLocaleString?.() ?? 0} rounds
+                </span>
+              ) : null
+            }
+            toolAnchor="kenoEconomy"
+            isCollapsed={collapsed.kenoEconomy}
+            onToggle={() => toggleSection('kenoEconomy')}
+            color="text-emerald-400/90"
+          />
+          {!collapsed.kenoEconomy && (
+            <div className="p-3 space-y-4">
+              <div className="rounded-lg border border-emerald-500/15 bg-gradient-to-br from-emerald-950/20 via-zinc-900/40 to-zinc-950/80 p-3 space-y-2">
+                <p className="text-[10px] text-zinc-300 font-heading leading-relaxed">
+                  <span className="text-emerald-300/90 font-semibold">State Keno</span>
+                  {' — '}
+                  Aggregates <code className="text-[9px] bg-zinc-900/80 px-1 rounded border border-zinc-700/60">gambling_log</code> rows with{' '}
+                  <code className="text-[9px] bg-zinc-900/80 px-1 rounded border border-zinc-700/60">game_type = keno</code> in the window.
+                  <strong className="text-foreground/90"> Total wagered</strong> is every stake; <strong className="text-foreground/90">paid back</strong> is credited wins;
+                  <strong className="text-emerald-300/90"> Net to house</strong> is wagered − paid (positive ⇒ players lost that much in aggregate).
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[9px] text-mutedForeground font-heading uppercase">Window</span>
+                {[7, 30, 90].map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setKenoEconomyDays(d)}
+                    className={`px-2 py-1 rounded border text-[10px] font-heading touch-manipulation ${
+                      kenoEconomyDays === d ? 'bg-emerald-500/25 border-emerald-500/50 text-emerald-200' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
+                    }`}
+                  >
+                    {d}d
+                  </button>
+                ))}
+                <BtnPrimary onClick={handleFetchKenoEconomy} disabled={kenoEconomyLoading}>
+                  {kenoEconomyLoading ? 'Loading…' : 'Load stats'}
+                </BtnPrimary>
+                {kenoEconomyData?.cutoff_iso && (
+                  <span className="text-[9px] text-mutedForeground font-heading">Since {formatAdminDateTime(kenoEconomyData.cutoff_iso)}</span>
+                )}
+              </div>
+              {kenoEconomyData?.summary && (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                    <div className="rounded-lg p-2.5 border border-zinc-700/50 bg-zinc-900/50 shadow-inner">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase tracking-wide">Total wagered</div>
+                      <div className="text-lg font-heading font-bold text-foreground tabular-nums">{formatAdminMoneyInt(kenoEconomyData.summary.total_stake)}</div>
+                      <div className="text-[8px] text-zinc-500 font-heading">All stakes in window</div>
+                    </div>
+                    <div className="rounded-lg p-2.5 border border-zinc-700/50 bg-zinc-900/50 shadow-inner">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase tracking-wide">Paid to players</div>
+                      <div className="text-lg font-heading font-bold text-sky-300 tabular-nums">{formatAdminMoneyInt(kenoEconomyData.summary.total_payout)}</div>
+                      <div className="text-[8px] text-zinc-500 font-heading">Credits from wins</div>
+                    </div>
+                    <div className="rounded-lg p-2.5 border border-emerald-500/25 bg-emerald-950/25 shadow-inner">
+                      <div className="text-[9px] text-emerald-200/80 font-heading uppercase tracking-wide">Net to house</div>
+                      <div className="text-lg font-heading font-bold text-emerald-300 tabular-nums">{formatAdminMoneyInt(kenoEconomyData.summary.house_net)}</div>
+                      <div className="text-[8px] text-emerald-200/50 font-heading">Wagered − paid (player loss)</div>
+                    </div>
+                    <div className="rounded-lg p-2.5 border border-zinc-700/50 bg-zinc-900/50 shadow-inner">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase tracking-wide">Rounds</div>
+                      <div className="text-lg font-heading font-bold tabular-nums">{(kenoEconomyData.summary.rounds ?? 0).toLocaleString()}</div>
+                      <div className="text-[8px] text-zinc-500 font-heading">
+                        {(kenoEconomyData.summary.win_rounds ?? 0).toLocaleString()} wins · {(kenoEconomyData.summary.lose_rounds ?? 0).toLocaleString()} no payout
+                      </div>
+                    </div>
+                    <div className="rounded-lg p-2.5 border border-zinc-700/50 bg-zinc-900/50 shadow-inner">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase tracking-wide">Unique players</div>
+                      <div className="text-lg font-heading font-bold tabular-nums">{(kenoEconomyData.summary.unique_players ?? 0).toLocaleString()}</div>
+                    </div>
+                    <div className="rounded-lg p-2.5 border border-zinc-700/50 bg-zinc-900/50 shadow-inner">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase tracking-wide">Avg bet</div>
+                      <div className="text-lg font-heading font-bold tabular-nums">{formatAdminMoneyInt(Math.round(kenoEconomyData.summary.avg_bet || 0))}</div>
+                    </div>
+                    <div className="rounded-lg p-2.5 border border-zinc-700/50 bg-zinc-900/50 shadow-inner">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase tracking-wide">Largest single win</div>
+                      <div className="text-lg font-heading font-bold text-amber-300/90 tabular-nums">{formatAdminMoneyInt(kenoEconomyData.summary.max_single_payout)}</div>
+                    </div>
+                    <div className="rounded-lg p-2.5 border border-zinc-700/50 bg-zinc-900/50 shadow-inner">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase tracking-wide">RTP (window)</div>
+                      <div className="text-lg font-heading font-bold tabular-nums">
+                        {kenoEconomyData.summary.rtp_percent != null ? `${kenoEconomyData.summary.rtp_percent}%` : '—'}
+                      </div>
+                      <div className="text-[8px] text-zinc-500 font-heading">Paid ÷ wagered × 100</div>
+                    </div>
+                  </div>
+                  {Array.isArray(kenoEconomyData.by_state) && kenoEconomyData.by_state.length > 0 && (
+                    <div className="space-y-1.5">
+                      <div className="text-[9px] font-heading text-primary/90 uppercase tracking-wider">By state / table</div>
+                      <div className="overflow-x-auto rounded-lg border border-zinc-700/40">
+                        <table className="w-full text-[10px] font-heading">
+                          <thead>
+                            <tr className="bg-zinc-900/90 border-b border-zinc-700/50">
+                              <th className="text-left p-2 text-mutedForeground">State</th>
+                              <th className="text-right p-2 text-mutedForeground">Rounds</th>
+                              <th className="text-right p-2 text-mutedForeground">Wagered</th>
+                              <th className="text-right p-2 text-mutedForeground">Paid</th>
+                              <th className="text-right p-2 text-mutedForeground">Net house</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {kenoEconomyData.by_state.map((row) => (
+                              <tr key={row.state || '?'} className="border-b border-zinc-800/60 hover:bg-zinc-800/30">
+                                <td className="p-2 font-medium text-foreground">{row.state}</td>
+                                <td className="p-2 text-right tabular-nums">{(row.rounds ?? 0).toLocaleString()}</td>
+                                <td className="p-2 text-right tabular-nums">{formatAdminMoneyInt(row.total_stake)}</td>
+                                <td className="p-2 text-right tabular-nums text-sky-300/90">{formatAdminMoneyInt(row.total_payout)}</td>
+                                <td className="p-2 text-right tabular-nums text-emerald-300/90">{formatAdminMoneyInt(row.house_net)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                  <div className="space-y-1.5">
+                    <div className="text-[9px] font-heading text-primary/90 uppercase tracking-wider">Recent rounds</div>
+                    {(!kenoEconomyData.recent || kenoEconomyData.recent.length === 0) ? (
+                      <p className="text-[10px] text-mutedForeground font-heading">No Keno plays in this window.</p>
+                    ) : (
+                      <div className="overflow-x-auto max-h-72 rounded-lg border border-zinc-700/40">
+                        <table className="w-full text-[10px] font-heading">
+                          <thead className="sticky top-0 bg-zinc-950 border-b border-zinc-700/50">
+                            <tr>
+                              <th className="text-left p-1.5 text-mutedForeground">When</th>
+                              <th className="text-left p-1.5 text-mutedForeground">User</th>
+                              <th className="text-left p-1.5 text-mutedForeground">State</th>
+                              <th className="text-right p-1.5 text-mutedForeground">Bet</th>
+                              <th className="text-right p-1.5 text-mutedForeground">Hits</th>
+                              <th className="text-right p-1.5 text-mutedForeground">Payout</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {kenoEconomyData.recent.map((r) => (
+                              <tr key={r.id || `${r.user_id}-${r.created_at}`} className="border-b border-zinc-800/50">
+                                <td className="p-1.5 whitespace-nowrap text-mutedForeground">{r.created_at ? formatAdminDateTime(r.created_at) : '—'}</td>
+                                <td className="p-1.5 max-w-[120px] truncate">{r.username || '—'}</td>
+                                <td className="p-1.5 text-mutedForeground">{r.state || '—'}</td>
+                                <td className="p-1.5 text-right tabular-nums">{formatAdminMoneyInt(r.bet)}</td>
+                                <td className="p-1.5 text-right tabular-nums">
+                                  {r.hits ?? 0}
+                                  {r.pick_count != null ? <span className="text-zinc-500"> /{r.pick_count}</span> : null}
+                                </td>
+                                <td className={`p-1.5 text-right tabular-nums font-medium ${(r.payout ?? 0) > 0 ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                                  {formatAdminMoneyInt(r.payout)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

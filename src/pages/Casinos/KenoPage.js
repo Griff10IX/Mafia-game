@@ -20,36 +20,67 @@ const KENO_STYLES = `
     color: transparent;
     animation: keno-line-shimmer 8s ease-in-out infinite alternate;
   }
-  @keyframes keno-board-pulse {
-    0%, 100% { box-shadow: 0 0 0 1px rgba(212,175,55,0.15), inset 0 0 60px rgba(0,0,0,0.45); }
-    50% { box-shadow: 0 0 24px rgba(212,175,55,0.12), inset 0 0 80px rgba(0,0,0,0.55); }
+  /* Avoid animating box-shadow on the whole board (was very janky during draw). */
+  .keno-board-loading-overlay {
+    pointer-events: auto;
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    border-radius: 0.75rem;
+    background: rgba(0,0,0,0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
-  .keno-board-loading { animation: keno-board-pulse 1.4s ease-in-out infinite; }
   @keyframes keno-ball-in {
-    from { opacity: 0; transform: scale(0.6) translateY(6px); }
-    to { opacity: 1; transform: scale(1) translateY(0); }
+    from { opacity: 0; }
+    to { opacity: 1; }
   }
-  .keno-ball { animation: keno-ball-in 0.35s ease-out both; }
-  @keyframes keno-hit-glow {
-    0%, 100% { box-shadow: 0 0 0 1px rgba(52,211,153,0.5), 0 0 12px rgba(52,211,153,0.25); }
-    50% { box-shadow: 0 0 0 1px rgba(52,211,153,0.8), 0 0 20px rgba(52,211,153,0.45); }
+  .keno-ball { animation: keno-ball-in 0.2s ease-out both; }
+  /* Static glow only — infinite per-cell box-shadow animation was costly. */
+  .keno-cell-hit {
+    box-shadow: 0 0 0 1px rgba(52,211,153,0.55), 0 0 12px rgba(52,211,153,0.28);
   }
-  .keno-cell-hit { animation: keno-hit-glow 2s ease-in-out infinite; }
   .keno-touch { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   .keno-board-grid {
     display: grid;
     grid-template-columns: repeat(10, minmax(0, 1fr));
-    gap: 6px;
+    gap: 4px;
   }
   .keno-cell-btn {
-    min-height: 34px;
     min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+  }
+  /* Desktop: fixed row height — avoid aspect-square (height tracked column width and cells became huge on wide screens). */
+  @media (min-width: 640px) {
+    .keno-board-grid {
+      gap: 4px;
+      grid-auto-rows: 1.8125rem;
+    }
+    .keno-cell-btn {
+      font-size: 10px;
+      border-radius: 4px;
+    }
+  }
+  @media (min-width: 1024px) {
+    .keno-board-grid {
+      grid-auto-rows: 1.6875rem;
+      gap: 3px;
+    }
+    .keno-cell-btn {
+      font-size: 9px;
+    }
   }
   @media (max-width: 639px) {
     .keno-board-grid {
       gap: 3px;
+      grid-auto-rows: auto;
     }
     .keno-cell-btn {
+      aspect-ratio: 1;
       min-height: 40px;
       font-size: 10px;
       border-radius: 6px;
@@ -187,7 +218,9 @@ export default function KenoPage() {
         picks: d.picks || picksArr,
         bet: d.bet ?? betNum,
       });
-      refreshUser();
+      requestAnimationFrame(() => {
+        refreshUser();
+      });
       if (d.won) toast.success(`Hit ${d.hits}! Paid ${formatMoney(d.payout)}`);
       else toast.message(`Draw complete · ${d.hits} hits · no payout`);
     } catch (e) {
@@ -322,7 +355,7 @@ export default function KenoPage() {
                       color: 'var(--noir-primary-bright)',
                     }}
                   >
-                    <Sparkles size={16} className={loading ? 'animate-pulse' : ''} strokeWidth={2} />
+                    <Sparkles size={16} strokeWidth={2} />
                     {loading ? 'Drawing…' : 'Draw'}
                   </button>
                 </div>
@@ -343,7 +376,7 @@ export default function KenoPage() {
               </p>
             </div>
 
-            <div className={`relative rounded-xl p-1.5 sm:p-3 ${loading ? 'keno-board-loading' : ''}`}>
+            <div className="relative rounded-xl p-1.5 sm:p-3">
               <div
                 className="absolute inset-0 rounded-xl pointer-events-none"
                 style={{
@@ -353,13 +386,14 @@ export default function KenoPage() {
                 }}
               />
               {loading && (
-                <div className="absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-black/35 backdrop-blur-[1px]">
-                  <p className="text-xs font-heading font-bold uppercase tracking-[0.35em] text-primary animate-pulse">
+                <div className="keno-board-loading-overlay" aria-busy="true" aria-live="polite">
+                  <p className="text-xs font-heading font-bold uppercase tracking-[0.35em] text-primary">
                     Drawing
                   </p>
                 </div>
               )}
-              <div className="relative keno-board-grid">
+              <div className="mx-auto w-full max-w-sm sm:max-w-md md:max-w-lg lg:max-w-xl">
+                <div className="relative keno-board-grid">
                 {BOARD.map((n) => {
                   const isOn = selected.has(n);
                   const isDrawn = drawnSet?.has(n);
@@ -372,7 +406,7 @@ export default function KenoPage() {
                       onClick={() => toggle(n)}
                       disabled={loading}
                       className={[
-                        'keno-cell-btn keno-touch relative aspect-square rounded-md text-[10px] sm:text-[11px] font-heading font-bold tabular-nums transition-all duration-200 border active:scale-[0.96] disabled:cursor-not-allowed',
+                        'keno-cell-btn keno-touch relative h-full w-full max-sm:aspect-square rounded-md font-heading font-bold tabular-nums transition-[color,background-color,border-color,opacity] duration-150 border active:scale-[0.96] disabled:cursor-not-allowed',
                         isHit
                           ? 'keno-cell-hit z-[1] bg-gradient-to-br from-emerald-600 to-emerald-800 text-white border-emerald-300/90 scale-[1.02]'
                           : isDrawn && !isOn
@@ -395,6 +429,7 @@ export default function KenoPage() {
                     </button>
                   );
                 })}
+                </div>
               </div>
             </div>
 
@@ -448,7 +483,7 @@ export default function KenoPage() {
                       {config.draw_count ?? 20} balls
                     </p>
                     <div className="flex flex-wrap gap-1 sm:gap-1.5 justify-start">
-                      {(lastRound.drawn || []).map((x, i) => (
+                      {(lastRound.drawn || []).map((x) => (
                         <span
                           key={`${roundAnimKey}-${x}`}
                           className={`keno-ball inline-flex min-w-[1.75rem] sm:min-w-[2rem] h-7 sm:h-8 items-center justify-center rounded-full text-[10px] sm:text-[11px] font-heading font-black tabular-nums border-2 ${
@@ -456,7 +491,6 @@ export default function KenoPage() {
                               ? 'border-emerald-400 bg-gradient-to-b from-emerald-500 to-emerald-800 text-white shadow-[0_2px_8px_rgba(16,185,129,0.35)]'
                               : 'border-zinc-500 bg-gradient-to-b from-zinc-500 to-zinc-900 text-zinc-100 shadow-[inset_0_2px_4px_rgba(255,255,255,0.12)]'
                           }`}
-                          style={{ animationDelay: `${Math.min(i, 19) * 0.025}s` }}
                         >
                           {x}
                         </span>
@@ -545,7 +579,7 @@ export default function KenoPage() {
               }}
             >
               <span className="inline-flex items-center justify-center gap-2">
-                <Sparkles size={18} className={loading ? 'animate-pulse' : ''} strokeWidth={2} />
+                <Sparkles size={18} strokeWidth={2} />
                 {loading ? '…' : 'Draw'}
               </span>
             </button>
