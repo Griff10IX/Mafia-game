@@ -643,6 +643,291 @@ def _wallet_mdg_enrich_merged_entries(merged: List[Dict[str, Any]], viewer_id: s
             e["counterparty"] = cp
 
 
+# --- Economy spike audit (GET /admin/audit/economy-spikes) ---
+
+ACTIVITY_ACTIONS_FOR_SPIKE_AUDIT: Set[str] = {
+    "lottery_win",
+    "attack_kill",
+    "bank_transfer",
+    "bank_interest_claim",
+    "bank_deposit",
+    "swiss_deposit",
+    "swiss_withdraw",
+    "property_collect",
+    "booze_sell",
+    "family_withdraw",
+    "family_deposit",
+    "speakeasy_collect",
+    "racket_extort",
+    "lottery_buy",
+    "armoury_buy_bullets",
+    "armoury_buy_armour",
+    "gta_repair",
+    "gta_attempt",
+    "illegal_biz_raid",
+    "oc_execute",
+    "jail_bust",
+    "bodyguard_hire",
+    "property_buy",
+    "stock_sell",
+    "stock_buy",
+    "admin_adjust_money",
+    "admin_swiss_bank_wipe",
+    "store_purchase",
+}
+
+
+def _spike_parse_created_at(val: Any) -> Optional[datetime]:
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        return val if val.tzinfo else val.replace(tzinfo=timezone.utc)
+    if isinstance(val, str):
+        try:
+            s = val.strip().replace("Z", "+00:00")
+            dt = datetime.fromisoformat(s)
+            return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+        except (ValueError, TypeError):
+            return None
+    return None
+
+
+def _activity_log_extract_spike_amounts(action: str, details: Any) -> Tuple[Optional[float], Optional[float]]:
+    """Return (max_abs_cash_field, max_abs_points_field) for thresholding; None if not applicable."""
+    if not isinstance(details, dict):
+        return None, None
+    a = (action or "").strip().lower()
+    d = details
+
+    def num(x: Any) -> Optional[float]:
+        if x is None:
+            return None
+        try:
+            return float(x)
+        except (TypeError, ValueError):
+            return None
+
+    cash_vals: List[float] = []
+    pt_vals: List[float] = []
+
+    def take_cash(*keys: str) -> None:
+        for k in keys:
+            v = num(d.get(k))
+            if v is not None and v != 0:
+                cash_vals.append(abs(v))
+
+    def take_pts(*keys: str) -> None:
+        for k in keys:
+            v = num(d.get(k))
+            if v is not None and v != 0:
+                pt_vals.append(abs(v))
+
+    if a == "lottery_win":
+        take_cash("payout")
+    elif a == "attack_kill":
+        take_cash("cash_loot")
+    elif a == "bank_transfer":
+        take_cash("amount")
+    elif a == "bank_interest_claim":
+        take_cash("total", "interest", "principal")
+    elif a in ("bank_deposit", "swiss_deposit", "swiss_withdraw"):
+        take_cash("amount")
+    elif a == "property_collect":
+        take_cash("income")
+    elif a == "booze_sell":
+        take_cash("profit", "revenue")
+    elif a in ("family_withdraw", "family_deposit"):
+        take_cash("cash")
+    elif a == "speakeasy_collect":
+        take_cash("cash")
+    elif a == "racket_extort":
+        take_cash("cash", "amount")
+    elif a == "lottery_buy":
+        take_cash("spent")
+    elif a == "armoury_buy_bullets":
+        take_cash("cost")
+    elif a == "armoury_buy_armour":
+        take_cash("cost", "price")
+    elif a == "gta_repair":
+        take_cash("cost")
+    elif a == "gta_attempt":
+        take_cash("reward_cash", "cash", "payout")
+    elif a == "illegal_biz_raid":
+        take_cash("cash", "loot_cash", "loot_money")
+    elif a == "oc_execute":
+        take_cash("cash", "payout", "reward_cash")
+    elif a == "jail_bust":
+        take_cash("cash", "reward", "amount")
+    elif a == "bodyguard_hire":
+        take_cash("cash", "cost")
+        take_pts("points")
+    elif a == "property_buy":
+        take_cash("cost")
+    elif a == "stock_sell":
+        take_pts("profit_points", "value_points")
+    elif a == "stock_buy":
+        take_pts("points")
+    elif a == "admin_adjust_money":
+        take_cash("amount")
+    elif a == "admin_swiss_bank_wipe":
+        take_cash("old_balance")
+    elif a == "store_purchase":
+        take_cash("cost")
+        take_pts("points_spent")
+    elif a.startswith("minigame_"):
+        take_cash("cash")
+        take_pts("respect")
+
+    cmax = max(cash_vals) if cash_vals else None
+    pmax = max(pt_vals) if pt_vals else None
+    return cmax, pmax
+
+
+def _activity_wallet_signed_cash_delta(action: str, details: Any) -> Optional[float]:
+    """Signed change to on-hand wallet (users.money) when inferrable from activity_log details; else None."""
+    if not isinstance(details, dict):
+        return None
+    a = (action or "").strip().lower()
+    d = details
+
+    def n(x: Any) -> Optional[float]:
+        if x is None:
+            return None
+        try:
+            return float(x)
+        except (TypeError, ValueError):
+            return None
+
+    if a == "lottery_win":
+        return n(d.get("payout"))
+    if a == "attack_kill":
+        return n(d.get("cash_loot"))
+    if a == "bank_transfer":
+        v = n(d.get("amount"))
+        return -v if v is not None else None
+    if a == "bank_interest_claim":
+        t = n(d.get("total"))
+        if t is not None:
+            return t
+        ip = n(d.get("interest"))
+        pr = n(d.get("principal"))
+        if ip is not None or pr is not None:
+            return (ip or 0) + (pr or 0)
+        return None
+    if a == "bank_deposit":
+        v = n(d.get("amount"))
+        return -v if v is not None else None
+    if a == "swiss_deposit":
+        v = n(d.get("amount"))
+        return -v if v is not None else None
+    if a == "swiss_withdraw":
+        return n(d.get("amount"))
+    if a == "property_collect":
+        return n(d.get("income"))
+    if a == "booze_sell":
+        pr = n(d.get("profit"))
+        if pr is not None:
+            return pr
+        return n(d.get("revenue"))
+    if a == "family_withdraw":
+        return n(d.get("cash"))
+    if a == "family_deposit":
+        v = n(d.get("cash"))
+        return -v if v is not None else None
+    if a == "speakeasy_collect":
+        return n(d.get("cash"))
+    if a == "racket_extort":
+        for k in ("cash", "amount"):
+            v = n(d.get(k))
+            if v is not None:
+                return v
+        return None
+    if a == "lottery_buy":
+        v = n(d.get("spent"))
+        return -v if v is not None else None
+    if a == "armoury_buy_bullets":
+        v = n(d.get("cost"))
+        return -v if v is not None else None
+    if a == "armoury_buy_armour":
+        for k in ("cost", "price"):
+            v = n(d.get(k))
+            if v is not None:
+                return -v
+        return None
+    if a == "gta_repair":
+        v = n(d.get("cost"))
+        return -v if v is not None else None
+    if a == "gta_attempt":
+        for k in ("reward_cash", "payout", "cash"):
+            v = n(d.get(k))
+            if v is not None:
+                return v
+        return None
+    if a == "illegal_biz_raid":
+        best: Optional[float] = None
+        for k in ("loot_cash", "loot_money", "cash"):
+            v = n(d.get(k))
+            if v is not None and v > 0:
+                best = v if best is None else max(best, v)
+        return best
+    if a == "oc_execute":
+        for k in ("cash", "payout", "reward_cash"):
+            v = n(d.get(k))
+            if v is not None:
+                return v
+        return None
+    if a == "jail_bust":
+        for k in ("cash", "reward", "amount"):
+            v = n(d.get(k))
+            if v is not None:
+                return v
+        return None
+    if a == "bodyguard_hire":
+        for k in ("cash", "cost"):
+            v = n(d.get(k))
+            if v is not None:
+                return -v
+        return None
+    if a == "property_buy":
+        v = n(d.get("cost"))
+        return -v if v is not None else None
+    if a == "admin_adjust_money":
+        return n(d.get("amount"))
+    if a == "admin_swiss_bank_wipe":
+        return None
+    if a == "store_purchase":
+        v = n(d.get("cost"))
+        return -v if v is not None else None
+    if a.startswith("minigame_"):
+        return n(d.get("cash"))
+    return None
+
+
+def _activity_log_row_matches_spike_whitelist(action: str) -> bool:
+    a = (action or "").strip().lower()
+    if a in ACTIVITY_ACTIONS_FOR_SPIKE_AUDIT:
+        return True
+    return a.startswith("minigame_")
+
+
+def _economy_event_extract_spike(doc: Dict[str, Any]) -> Tuple[Optional[float], Optional[float]]:
+    """Rough (type, payout/spent) extraction for economy_events."""
+    t = str(doc.get("type") or "").lower()
+    if t == "lottery_draw":
+        v = doc.get("payout")
+        try:
+            return (float(v), None) if v is not None else (None, None)
+        except (TypeError, ValueError):
+            return None, None
+    if t == "lottery_buy":
+        v = doc.get("spent")
+        try:
+            return (float(v), None) if v is not None else (None, None)
+        except (TypeError, ValueError):
+            return None, None
+    return None, None
+
+
 def register(router):
     """Register admin routes. Dependencies from server to avoid circular imports."""
     import server as srv
@@ -1939,9 +2224,15 @@ def register(router):
         display = abs(amount)
         new_balance = current_money + amount
         try:
-            await log_activity(
-                db, target["id"], target.get("username") or "?",
-                f"Admin {verb.lower()} ${display:,} (by {current_user.get('username', '?')}). New balance: ${new_balance:,}",
+            await srv.log_activity(
+                target["id"],
+                target.get("username") or "?",
+                "admin_adjust_money",
+                {
+                    "amount": amount,
+                    "admin_username": current_user.get("username", "?"),
+                    "new_balance": new_balance,
+                },
             )
         except Exception:
             pass
@@ -2148,9 +2439,14 @@ def register(router):
             return {"message": f"{target['username']} already has $0 in Swiss Bank."}
         await db.users.update_one({"id": target["id"]}, {"$set": {"swiss_balance": 0}})
         try:
-            await log_activity(
-                db, target["id"], target.get("username") or "?",
-                f"Admin wiped Swiss Bank ${old_balance:,} (by {current_user.get('username', '?')})",
+            await srv.log_activity(
+                target["id"],
+                target.get("username") or "?",
+                "admin_swiss_bank_wipe",
+                {
+                    "old_balance": old_balance,
+                    "admin_username": current_user.get("username", "?"),
+                },
             )
         except Exception:
             pass
@@ -7372,6 +7668,26 @@ def register(router):
                             }
                         },
                     ],
+                    "top_wins": [
+                        {"$match": match},
+                        {"$addFields": {"_payout": payout_expr, "_bet": bet_expr}},
+                        {"$match": {"_payout": {"$gt": 0}}},
+                        {"$sort": {"_payout": -1}},
+                        {"$limit": 10},
+                        {
+                            "$project": {
+                                "_id": 0,
+                                "username": 1,
+                                "user_id": 1,
+                                "payout": "$_payout",
+                                "bet": "$_bet",
+                                "created_at": 1,
+                                "state": "$details.state",
+                                "hits": "$details.hits",
+                                "pick_count": {"$size": {"$ifNull": ["$details.picks", []]}},
+                            }
+                        },
+                    ],
                 }
             },
         ]
@@ -7432,6 +7748,21 @@ def register(router):
                 }
             )
 
+        top_wins_out: List[Dict[str, Any]] = []
+        for r in facet.get("top_wins") or []:
+            top_wins_out.append(
+                {
+                    "username": r.get("username"),
+                    "user_id": r.get("user_id"),
+                    "created_at": _iso(r.get("created_at")),
+                    "bet": float(r.get("bet") or 0),
+                    "payout": float(r.get("payout") or 0),
+                    "hits": int(r.get("hits") or 0),
+                    "pick_count": int(r.get("pick_count") or 0),
+                    "state": r.get("state"),
+                }
+            )
+
         return {
             "days": days,
             "cutoff_iso": cutoff.isoformat().replace("+00:00", "Z"),
@@ -7449,6 +7780,144 @@ def register(router):
             },
             "by_state": by_state,
             "recent": recent_out,
+            "top_wins": top_wins_out,
+        }
+
+    @router.get("/admin/casinos/keno-economy/user")
+    async def admin_casinos_keno_economy_user(
+        username: str = Query(..., min_length=1, max_length=80, description="Exact username (case-insensitive)"),
+        days: int = Query(30, ge=1, le=366),
+        limit: int = Query(200, ge=1, le=500),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Per-user Keno rounds and totals from gambling_log in the window (exact username match)."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        uname = (username or "").strip()
+        if not uname:
+            raise HTTPException(status_code=400, detail="username required")
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        uname_pattern = re.compile("^" + re.escape(uname) + "$", re.IGNORECASE)
+        user_match: Dict[str, Any] = {
+            "game_type": "keno",
+            "created_at": {"$gte": cutoff},
+            "username": uname_pattern,
+        }
+        bet_expr: Dict[str, Any] = {"$convert": {"input": "$details.bet", "to": "double", "onError": 0.0, "onNull": 0.0}}
+        payout_expr: Dict[str, Any] = {"$convert": {"input": "$details.payout", "to": "double", "onError": 0.0, "onNull": 0.0}}
+        pipeline: List[Dict[str, Any]] = [
+            {"$match": user_match},
+            {
+                "$facet": {
+                    "summary": [
+                        {
+                            "$group": {
+                                "_id": None,
+                                "rounds": {"$sum": 1},
+                                "total_stake": {"$sum": bet_expr},
+                                "total_payout": {"$sum": payout_expr},
+                                "win_rounds": {"$sum": {"$cond": [{"$gt": [payout_expr, 0.0]}, 1, 0]}},
+                                "max_payout": {"$max": payout_expr},
+                            }
+                        },
+                        {
+                            "$project": {
+                                "_id": 0,
+                                "rounds": 1,
+                                "total_stake": 1,
+                                "total_payout": 1,
+                                "win_rounds": 1,
+                                "lose_rounds": {"$subtract": ["$rounds", "$win_rounds"]},
+                                "max_payout": 1,
+                                "avg_bet": {
+                                    "$cond": [
+                                        {"$gt": ["$rounds", 0]},
+                                        {"$divide": ["$total_stake", "$rounds"]},
+                                        0.0,
+                                    ]
+                                },
+                            }
+                        },
+                    ],
+                    "rounds": [
+                        {"$sort": {"created_at": -1}},
+                        {"$limit": limit},
+                        {
+                            "$project": {
+                                "_id": 0,
+                                "id": 1,
+                                "username": 1,
+                                "user_id": 1,
+                                "created_at": 1,
+                                "details.bet": 1,
+                                "details.payout": 1,
+                                "details.hits": 1,
+                                "details.picks": 1,
+                                "details.state": 1,
+                            }
+                        },
+                    ],
+                }
+            },
+        ]
+        agg = await db.gambling_log.aggregate(pipeline).to_list(1)
+        facet = (agg[0] if agg else {}) or {}
+        totals_list = facet.get("summary") or []
+        totals_row = totals_list[0] if totals_list else {}
+        rounds_n = int(totals_row.get("rounds") or 0)
+        total_stake = float(totals_row.get("total_stake") or 0)
+        total_payout = float(totals_row.get("total_payout") or 0)
+        win_rounds = int(totals_row.get("win_rounds") or 0)
+        lose_rounds = int(totals_row.get("lose_rounds") or max(0, rounds_n - win_rounds))
+        max_payout = float(totals_row.get("max_payout") or 0)
+        avg_bet = float(totals_row.get("avg_bet") or 0)
+        player_net = total_payout - total_stake
+        rtp_pct = (100.0 * total_payout / total_stake) if total_stake > 0 else None
+
+        def _iso(dt: Any) -> Optional[str]:
+            if dt is None:
+                return None
+            if isinstance(dt, datetime):
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt.isoformat().replace("+00:00", "Z")
+            return str(dt)
+
+        rounds_out: List[Dict[str, Any]] = []
+        for r in facet.get("rounds") or []:
+            det = r.get("details") or {}
+            rounds_out.append(
+                {
+                    "id": r.get("id"),
+                    "username": r.get("username"),
+                    "user_id": r.get("user_id"),
+                    "created_at": _iso(r.get("created_at")),
+                    "bet": float(det.get("bet") or 0),
+                    "payout": float(det.get("payout") or 0),
+                    "hits": int(det.get("hits") or 0),
+                    "pick_count": len(det.get("picks") or []) if isinstance(det.get("picks"), list) else None,
+                    "state": det.get("state"),
+                    "win": float(det.get("payout") or 0) > 0,
+                }
+            )
+
+        return {
+            "username": uname,
+            "days": days,
+            "limit": limit,
+            "cutoff_iso": cutoff.isoformat().replace("+00:00", "Z"),
+            "summary": {
+                "rounds": rounds_n,
+                "total_stake": total_stake,
+                "total_payout": total_payout,
+                "win_rounds": win_rounds,
+                "lose_rounds": lose_rounds,
+                "max_payout": max_payout,
+                "avg_bet": avg_bet,
+                "player_net": player_net,
+                "rtp_percent": round(rtp_pct, 4) if rtp_pct is not None else None,
+            },
+            "rounds": rounds_out,
         }
 
     @router.get("/admin/casinos/keno-settings")
@@ -13509,6 +13978,309 @@ def register(router):
                 }
                 for u in (top_liquid or [])
             ],
+        }
+
+    @router.get("/admin/audit/economy-spikes")
+    async def admin_audit_economy_spikes(
+        days: int = Query(7, ge=1, le=30),
+        min_cash: float = Query(50_000_000, ge=0, description="Minimum abs cash signal (wallet / payout / etc.)"),
+        min_points: int = Query(100_000, ge=0),
+        wallet_gains_only: bool = Query(
+            False,
+            description="When true, activity/economy rows use signed on-hand wallet (users.money) deltas: "
+            "only increases ≥ min_cash (hides shop spends, bank send, deposits, lottery buys). "
+            "Gambling/analytics already reflect payouts. Not all wallet $inc paths are logged.",
+        ),
+        username: Optional[str] = Query(None, max_length=80, description="Substring match on username when present"),
+        limit_per_source: int = Query(100, ge=1, le=500),
+        sources: Optional[str] = Query(
+            None,
+            description="Comma-separated: points,gambling,activity,economy,analytics (default: all)",
+        ),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Best-effort audit: large point_ledger_events, gambling_log payouts, whitelisted activity_log rows,
+        select economy_events, and high-payout analytics_events. Does not cover every wallet $inc.
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        now = datetime.now(timezone.utc)
+        start_dt = now - timedelta(days=days)
+        start_iso = start_dt.isoformat().replace("+00:00", "Z")
+        want = {s.strip().lower() for s in (sources or "").split(",") if s.strip()}
+        if not want:
+            want = {"points", "gambling", "activity", "economy", "analytics"}
+
+        q_user = (username or "").strip()
+        uid_filter: Optional[List[str]] = None
+        if q_user:
+            pat = re.compile(re.escape(q_user), re.IGNORECASE)
+            uhits = await db.users.find({"username": pat}, {"_id": 0, "id": 1}).limit(500).to_list(500)
+            uid_filter = [u["id"] for u in uhits if u.get("id")]
+            if not uid_filter:
+                return {
+                    "window": {"start": start_iso, "end": now.isoformat().replace("+00:00", "Z"), "days": days},
+                    "thresholds": {"min_cash": min_cash, "min_points": min_points, "wallet_gains_only": wallet_gains_only},
+                    "sources_used": sorted(want),
+                    "limit_per_source": limit_per_source,
+                    "note": "No users matched the username filter.",
+                    "rows": [],
+                    "row_count": 0,
+                }
+
+        rows_out: List[Dict[str, Any]] = []
+
+        async def _fetch_points() -> None:
+            if "points" not in want:
+                return
+            match: Dict[str, Any] = {
+                "created_at": {"$gte": start_iso},
+                "$expr": {"$gte": [{"$abs": {"$toDouble": {"$ifNull": ["$points", 0]}}}, float(min_points)]},
+            }
+            if uid_filter is not None:
+                match["user_id"] = {"$in": uid_filter}
+            cur = (
+                db.point_ledger_events.find(
+                    match,
+                    {"_id": 0, "id": 1, "user_id": 1, "event_type": 1, "points": 1, "created_at": 1, "meta": 1, "origin_ref": 1},
+                )
+                .sort("created_at", -1)
+                .limit(limit_per_source)
+            )
+            async for doc in cur:
+                at = _spike_parse_created_at(doc.get("created_at")) or now
+                rows_out.append(
+                    {
+                        "at": at.isoformat(),
+                        "source": "point_ledger",
+                        "user_id": doc.get("user_id"),
+                        "username": None,
+                        "kind": doc.get("event_type"),
+                        "cash_delta": None,
+                        "points_delta": int(doc.get("points") or 0),
+                        "raw_ref": {
+                            "id": doc.get("id"),
+                            "origin_ref": doc.get("origin_ref"),
+                            "meta": doc.get("meta"),
+                        },
+                    }
+                )
+
+        async def _fetch_gambling() -> None:
+            if "gambling" not in want:
+                return
+            m0: Dict[str, Any] = {"created_at": {"$gte": start_dt}}
+            if uid_filter is not None:
+                m0["user_id"] = {"$in": uid_filter}
+            pipeline = [
+                {"$match": m0},
+                {
+                    "$addFields": {
+                        "payout_n": {
+                            "$convert": {
+                                "input": "$details.payout",
+                                "to": "double",
+                                "onError": 0.0,
+                                "onNull": 0.0,
+                            }
+                        },
+                        "winnings_n": {
+                            "$convert": {
+                                "input": "$details.winnings",
+                                "to": "double",
+                                "onError": 0.0,
+                                "onNull": 0.0,
+                            }
+                        },
+                    }
+                },
+                {"$addFields": {"mx": {"$max": ["$payout_n", "$winnings_n"]}}},
+                {"$match": {"mx": {"$gte": float(min_cash)}}},
+                {"$sort": {"created_at": -1}},
+                {"$limit": limit_per_source},
+            ]
+            async for doc in db.gambling_log.aggregate(pipeline):
+                at = _spike_parse_created_at(doc.get("created_at")) or now
+                det = doc.get("details") if isinstance(doc.get("details"), dict) else {}
+                rows_out.append(
+                    {
+                        "at": at.isoformat(),
+                        "source": "gambling_log",
+                        "user_id": doc.get("user_id"),
+                        "username": doc.get("username"),
+                        "kind": doc.get("game_type"),
+                        "cash_delta": float(doc.get("mx") or 0),
+                        "points_delta": None,
+                        "raw_ref": {"id": doc.get("id"), "details": det},
+                    }
+                )
+
+        async def _fetch_activity() -> None:
+            if "activity" not in want:
+                return
+            and_parts: List[Dict[str, Any]] = [
+                {"created_at": {"$gte": start_dt}},
+                {
+                    "$or": [
+                        {"action": {"$in": list(ACTIVITY_ACTIONS_FOR_SPIKE_AUDIT)}},
+                        {"action": {"$regex": r"^minigame_", "$options": "i"}},
+                    ]
+                },
+            ]
+            if uid_filter is not None:
+                and_parts.append({"user_id": {"$in": uid_filter}})
+            match_a = {"$and": and_parts}
+            cur = (
+                db.activity_log.find(match_a, {"_id": 0, "id": 1, "user_id": 1, "username": 1, "action": 1, "details": 1, "created_at": 1})
+                .sort("created_at", -1)
+                .limit(min(3000, limit_per_source * 30))
+            )
+            n = 0
+            async for doc in cur:
+                if n >= limit_per_source:
+                    break
+                act = str(doc.get("action") or "")
+                if not _activity_log_row_matches_spike_whitelist(act):
+                    continue
+                det = doc.get("details")
+                cmax, pmax = _activity_log_extract_spike_amounts(act, det)
+                if cmax is None and pmax is None:
+                    continue
+                if wallet_gains_only:
+                    wsigned = _activity_wallet_signed_cash_delta(act, det)
+                    cash_ok = wsigned is not None and wsigned >= float(min_cash)
+                    pts_ok = (pmax or 0) >= float(min_points)
+                    if not cash_ok and not pts_ok:
+                        continue
+                    cash_out = float(wsigned) if cash_ok else None
+                    pts_out = int(pmax) if pts_ok and pmax is not None else None
+                else:
+                    if (cmax or 0) < float(min_cash) and (pmax or 0) < float(min_points):
+                        continue
+                    cash_out = cmax
+                    pts_out = int(pmax) if pmax is not None else None
+                at = _spike_parse_created_at(doc.get("created_at")) or now
+                rows_out.append(
+                    {
+                        "at": at.isoformat(),
+                        "source": "activity_log",
+                        "user_id": doc.get("user_id"),
+                        "username": doc.get("username"),
+                        "kind": act,
+                        "cash_delta": cash_out,
+                        "points_delta": pts_out,
+                        "raw_ref": {"id": doc.get("id"), "details": det},
+                    }
+                )
+                n += 1
+
+        async def _fetch_economy() -> None:
+            if "economy" not in want:
+                return
+            econ_types = ["lottery_draw"] if wallet_gains_only else ["lottery_draw", "lottery_buy"]
+            match_e: Dict[str, Any] = {"at": {"$gte": start_iso}, "type": {"$in": econ_types}}
+            if uid_filter is not None:
+                match_e["user_id"] = {"$in": uid_filter}
+            cur = (
+                db.economy_events.find(match_e, {"_id": 0})
+                .sort("at", -1)
+                .limit(min(2000, limit_per_source * 20))
+            )
+            n = 0
+            async for doc in cur:
+                if n >= limit_per_source:
+                    break
+                cash_e, _pts_e = _economy_event_extract_spike(doc)
+                if cash_e is None or cash_e < float(min_cash):
+                    continue
+                at = _spike_parse_created_at(doc.get("at")) or now
+                rows_out.append(
+                    {
+                        "at": at.isoformat(),
+                        "source": "economy_events",
+                        "user_id": doc.get("user_id"),
+                        "username": doc.get("username"),
+                        "kind": doc.get("type"),
+                        "cash_delta": cash_e,
+                        "points_delta": None,
+                        "raw_ref": {k: v for k, v in doc.items() if k not in ("_id",)},
+                    }
+                )
+                n += 1
+
+        async def _fetch_analytics() -> None:
+            if "analytics" not in want:
+                return
+            am0: Dict[str, Any] = {"created_at": {"$gte": start_dt}, "domain": {"$in": ["casino", "minigames"]}}
+            if uid_filter is not None:
+                am0["user_id"] = {"$in": uid_filter}
+            pipeline = [
+                {"$match": am0},
+                {
+                    "$addFields": {
+                        "payout_tag": {
+                            "$convert": {
+                                "input": "$tags.payout",
+                                "to": "double",
+                                "onError": 0.0,
+                                "onNull": 0.0,
+                            }
+                        },
+                    }
+                },
+                {"$match": {"payout_tag": {"$gte": float(min_cash)}}},
+                {"$sort": {"created_at": -1}},
+                {"$limit": limit_per_source},
+            ]
+            async for doc in db.analytics_events.aggregate(pipeline):
+                at = _spike_parse_created_at(doc.get("created_at")) or now
+                rows_out.append(
+                    {
+                        "at": at.isoformat(),
+                        "source": "analytics_events",
+                        "user_id": doc.get("user_id"),
+                        "username": doc.get("username"),
+                        "kind": f'{doc.get("domain")}:{doc.get("metric")}',
+                        "cash_delta": float(doc.get("payout_tag") or 0),
+                        "points_delta": None,
+                        "raw_ref": {
+                            "idempotency_key": doc.get("idempotency_key"),
+                            "value": doc.get("value"),
+                            "tags": doc.get("tags"),
+                        },
+                    }
+                )
+
+        await asyncio.gather(_fetch_points(), _fetch_gambling(), _fetch_activity(), _fetch_economy(), _fetch_analytics())
+
+        # Resolve usernames for point_ledger rows
+        missing_ids = {r["user_id"] for r in rows_out if r.get("source") == "point_ledger" and r.get("user_id") and not r.get("username")}
+        if missing_ids:
+            udocs = await db.users.find({"id": {"$in": list(missing_ids)}}, {"_id": 0, "id": 1, "username": 1}).to_list(len(missing_ids))
+            umap = {u["id"]: u.get("username") for u in udocs}
+            for r in rows_out:
+                if r.get("source") == "point_ledger" and r.get("user_id") in umap:
+                    r["username"] = umap.get(r["user_id"])
+
+        rows_out.sort(key=lambda r: r.get("at") or "", reverse=True)
+        note_parts = [
+            "Best-effort from existing logs; not every wallet $inc is logged.",
+            "Economy overview 'Cash in circulation' is wallets only; stats Total cash includes Quick Trade escrow.",
+        ]
+        if wallet_gains_only:
+            note_parts.insert(
+                1,
+                "Wallet-gains mode: activity rows use signed on-hand cash (hides spends, transfers out, shop buys).",
+            )
+        return {
+            "window": {"start": start_iso, "end": now.isoformat().replace("+00:00", "Z"), "days": days},
+            "thresholds": {"min_cash": min_cash, "min_points": min_points, "wallet_gains_only": wallet_gains_only},
+            "sources_used": sorted(want),
+            "limit_per_source": limit_per_source,
+            "note": " ".join(note_parts),
+            "rows": rows_out[: min(2000, len(rows_out))],
+            "row_count": len(rows_out),
         }
 
     @router.get("/admin/players/activity-summary")
