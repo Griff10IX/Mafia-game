@@ -224,7 +224,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Kill Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['kill', 'death', 'player'] },
   { label: 'Revive Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['revive', 'resurrect', 'alive'] },
   { label: 'User Details', categoryId: 'admin-players', collapseKey: 'userDetails', keywords: ['user', 'details', 'info', 'profile', 'jail', 'bust', 'reward'] },
-  { label: 'User give / take & leaderboards', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['leaderboard', 'adjust', 'strip', 'username', 'crimes', 'scores', 'gta', 'busts', 'kills', 'minigame', 'money', 'points', 'respect', 'bullets', 'weekly', 'alltime', 'preview', 'partial'] },
+  { label: 'User give / take & leaderboards', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['leaderboard', 'adjust', 'strip', 'username', 'crimes', 'scores', 'gta', 'busts', 'kills', 'minigame', 'money', 'points', 'respect', 'bullets', 'weekly', 'alltime', 'preview', 'partial', 'bootleg', 'racing lifetime', 'lifetime earnings'] },
   { label: 'Missions & tribute (user)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-missions-ladder', keywords: ['mission', 'tribute', 'ladder', 'progress', 'daily tribute', 'm_first', 'story'] },
   { label: 'Referrals & prereg heal', categoryId: 'admin-players', collapseKey: 'referralsReport', keywords: ['referral', 'referrer', 'referee', 'invite', 'earnings', 'ref', 'heal', 'prereg', 'backfill', 'manual', 'assign', 'link', 'remove', 'unlink', 'clear'] },
   { label: 'Respect points log', categoryId: 'admin-players', collapseKey: 'respectPointsLog', keywords: ['respect', 'points', 'log', 'earned', 'audit', 'player'] },
@@ -3285,12 +3285,14 @@ export default function Admin() {
     }
   };
 
-  const fetchRacingUserLifetimeEarnings = async () => {
-    const u = racingLifetimeUsername.trim();
+  const fetchRacingUserLifetimeEarnings = async (usernameOverride) => {
+    const fromOverride = usernameOverride != null && String(usernameOverride).trim() !== '';
+    const u = fromOverride ? String(usernameOverride).trim() : racingLifetimeUsername.trim();
     if (!u) {
       toast.error('Enter username');
       return;
     }
+    if (fromOverride) setRacingLifetimeUsername(u);
     setRacingLifetimeLoading(true);
     setRacingLifetimeData(null);
     try {
@@ -8446,6 +8448,25 @@ export default function Admin() {
                   placeholder="Target username"
                   className="flex-1 min-w-[160px] max-w-sm px-2 py-1 rounded border border-input bg-transparent text-[11px]"
                 />
+                <BtnSecondary
+                  type="button"
+                  title="GET /admin/racing/user-lifetime-earnings?username=…"
+                  disabled={racingLifetimeLoading}
+                  onClick={() => {
+                    const u = (formData.targetUsername || '').trim();
+                    if (!u) {
+                      toast.error('Enter username');
+                      return;
+                    }
+                    setCollapsed((prev) => ({ ...prev, racingEconomy: false }));
+                    requestAnimationFrame(() => {
+                      document.querySelector('[data-admin-tool="racingEconomy"]')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    });
+                    fetchRacingUserLifetimeEarnings(u);
+                  }}
+                >
+                  {racingLifetimeLoading ? '…' : 'Racing lifetime (GET)'}
+                </BtnSecondary>
               </div>
 
               <div className="rounded-md border border-primary/25 bg-primary/5 p-3 space-y-2">
@@ -12175,10 +12196,16 @@ export default function Admin() {
                     type="text"
                     value={racingLifetimeUsername}
                     onChange={(e) => setRacingLifetimeUsername(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        fetchRacingUserLifetimeEarnings();
+                      }
+                    }}
                     placeholder="Exact username"
                   />
                 </label>
-                <BtnSecondary type="button" onClick={fetchRacingUserLifetimeEarnings} disabled={racingLifetimeLoading}>
+                <BtnSecondary type="button" onClick={() => fetchRacingUserLifetimeEarnings()} disabled={racingLifetimeLoading}>
                   {racingLifetimeLoading ? 'Loading…' : 'Lookup'}
                 </BtnSecondary>
               </div>
