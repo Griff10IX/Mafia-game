@@ -15779,7 +15779,7 @@ export default function Admin() {
                     <div className="text-mutedForeground uppercase">Cash in circulation</div>
                     <div className="font-bold text-foreground">${formatWholeCash(economyOverview.total_money)}</div>
                     <div className="text-[8px] text-mutedForeground mt-1 leading-snug">
-                      Wallets only (<span className="font-mono">users.money</span>). Public Stats “Total cash” also counts Quick Trade buy-offer escrow — see Capital breakdown.
+                      Wallets only (<span className="font-mono">users.money</span>), same alive segment as Stats (excl. NPCs & staff). Public Stats “Total cash” adds Quick Trade buy-offer escrow — see Capital breakdown.
                     </div>
                   </div>
                   <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">

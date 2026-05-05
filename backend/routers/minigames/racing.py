@@ -266,6 +266,9 @@ REWARD_POOL_PCT = 0.9
 REWARD_BY_POSITION = [0.40, 0.25, 0.15, 0.10, 0.05, 0.03, 0.02, 0.00]
 # When entry_fee is 0, use this base pool so crew bank still grows; scaled so ~2–3 races can afford cheapest upgrades (e.g. 20k–30k)
 RACING_BASE_CASH_POOL = 50_000
+# New racing economy value per player per UTC calendar day: crew_bank race prizes + championship/weekly wallet mints.
+# H2H stakes and parimutuel bets are excluded (player-to-player). Set 0 to disable the cap.
+RACING_DAILY_ECONOMY_CREDIT_CAP = 100_000_000
 # Crew bank debt limit: players can go this far negative when paying for essentials (repair, tyres)
 CREW_BANK_DEBT_LIMIT = -50_000
 # If crew bank cannot cover repair/tyres (e.g. debt cap), player may pay this many respect points instead — only when wallet cash is $0.
@@ -442,6 +445,8 @@ DEFAULT_PROFILE = {
     "tyre_stock_inter": 0,
     "tyre_stock_full_wet": 0,
     "crew_bank": 0,
+    "racing_economy_day_utc": None,
+    "racing_economy_credits_today": 0,
     "hired_driver_id": None,
     "rnd_researched": [],
     "rnd_active": None,
@@ -806,7 +811,17 @@ async def _check_racing_week_and_season() -> None:
             return
         await db.racing_profiles.update_many(
             {},
-            {"$unset": {"team_name": "", "team_color": ""}, "$set": {"mechanic_level": 0, "pit_level": 0, "crew_bank": 0, **{f"{s}_level": 0 for s, _, _ in CREW_EXTRA_TYPES}}},
+            {
+                "$unset": {"team_name": "", "team_color": ""},
+                "$set": {
+                    "mechanic_level": 0,
+                    "pit_level": 0,
+                    "crew_bank": 0,
+                    "racing_economy_day_utc": None,
+                    "racing_economy_credits_today": 0,
+                    **{f"{s}_level": 0 for s, _, _ in CREW_EXTRA_TYPES},
+                },
+            },
         )
         await db.user_racing_cars.update_many(
             {},
@@ -828,12 +843,34 @@ async def _check_racing_week_and_season() -> None:
         top_profs = await db.racing_profiles.find({}, {"_id": 0, "user_id": 1, "wins": 1}).sort("wins", -1).limit(5).to_list(5)
         for i, tp in enumerate(top_profs):
             reward = WEEK_REWARDS[i] if i < len(WEEK_REWARDS) else 0
-            if reward > 0 and tp.get("user_id"):
-                await db.users.update_one({"id": tp["user_id"]}, {"$inc": {"money": reward}})
-                await send_notification(tp["user_id"], f"🏆 Weekly racing leaderboard #{i+1}! Earned ${reward:,}", "racing_weekly_reward")
+            uid_w = tp.get("user_id")
+            if reward > 0 and uid_w:
+                allowed_w, _trim_w = await _mint_racing_economy_credits_daily_cap(uid_w, reward)
+                if allowed_w > 0:
+                    await db.users.update_one({"id": uid_w}, {"$inc": {"money": allowed_w}})
+                cap_note = (
+                    f" ${reward - allowed_w:,} was withheld by the daily racing economy cap (resets UTC midnight)."
+                    if allowed_w < reward
+                    else ""
+                )
+                await send_notification(
+                    uid_w,
+                    f"🏆 Weekly racing leaderboard #{i + 1}!",
+                    f"You earned ${allowed_w:,} cash.{cap_note}",
+                    "racing_weekly_reward",
+                )
         await db.racing_profiles.update_many(
             {},
-            {"$set": {"mechanic_level": 0, "pit_level": 0, "crew_bank": 0, **{f"{s}_level": 0 for s, _, _ in CREW_EXTRA_TYPES}}},
+            {
+                "$set": {
+                    "mechanic_level": 0,
+                    "pit_level": 0,
+                    "crew_bank": 0,
+                    "racing_economy_day_utc": None,
+                    "racing_economy_credits_today": 0,
+                    **{f"{s}_level": 0 for s, _, _ in CREW_EXTRA_TYPES},
+                }
+            },
         )
         await db.user_racing_cars.update_many(
             {},
@@ -850,6 +887,37 @@ async def _ensure_racing_profile(user_id: str) -> dict:
     await db.racing_profiles.insert_one(doc)
     # Return a copy without _id (Motor may add _id to doc in place; ObjectId is not JSON-serializable)
     return {k: v for k, v in doc.items() if k != "_id"}
+
+
+async def _mint_racing_economy_credits_daily_cap(user_id: str, gross_credit: int) -> tuple[int, int]:
+    """Enforce RACING_DAILY_ECONOMY_CREDIT_CAP on minted racing value (crew prizes + racing wallet rewards).
+
+    Updates ``racing_profiles`` counters ``racing_economy_day_utc`` / ``racing_economy_credits_today``.
+    Returns ``(allowed, trimmed)`` where ``allowed`` is how much the caller may apply to crew_bank or users.money.
+    """
+    gross_credit = max(0, int(gross_credit))
+    if gross_credit == 0:
+        return 0, 0
+    cap = int(RACING_DAILY_ECONOMY_CREDIT_CAP or 0)
+    if cap <= 0:
+        return gross_credit, 0
+    today_str = datetime.now(timezone.utc).date().isoformat()
+    await _ensure_racing_profile(user_id)
+    prof = await db.racing_profiles.find_one({"user_id": user_id}, {"racing_economy_day_utc": 1, "racing_economy_credits_today": 1})
+    day = (prof or {}).get("racing_economy_day_utc")
+    earned = int((prof or {}).get("racing_economy_credits_today") or 0) if day == today_str else 0
+    room = max(0, cap - earned)
+    allowed = min(gross_credit, room)
+    trimmed = gross_credit - allowed
+    if allowed > 0:
+        if day == today_str:
+            await db.racing_profiles.update_one({"user_id": user_id}, {"$inc": {"racing_economy_credits_today": allowed}})
+        else:
+            await db.racing_profiles.update_one(
+                {"user_id": user_id},
+                {"$set": {"racing_economy_day_utc": today_str, "racing_economy_credits_today": allowed}},
+            )
+    return allowed, trimmed
 
 
 async def _deduct_crew_bank(user_id: str, cost: int, allow_debt: bool = False) -> None:
@@ -1584,13 +1652,17 @@ async def _check_championship_end(championship_id: str):
         if not reward:
             continue
         cash = reward.get("cash", 0)
+        allowed_c = 0
         if cash > 0:
-            await db.users.update_one({"id": uid}, {"$inc": {"money": cash}})
+            allowed_c, _trim_c = await _mint_racing_economy_credits_daily_cap(uid, cash)
+            if allowed_c > 0:
+                await db.users.update_one({"id": uid}, {"$inc": {"money": allowed_c}})
         try:
             driver_name = stats.get("driver_name", "?")
+            pay_note = f" (daily cap withheld ${cash - allowed_c:,})" if cash > allowed_c else ""
             await send_notification(
                 uid,
-                f"🏆 Championship P{position}! Earned ${cash:,}",
+                f"🏆 Championship P{position}! Earned ${allowed_c:,}{pay_note}",
                 f"Congratulations {driver_name}! You finished P{position} in {champ.get('season_name', 'the championship')}.",
                 "system",
                 category="racing",
@@ -1870,6 +1942,16 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
             datetime.now(timezone.utc) - timedelta(hours=RACING_NPC_RACE_WINDOW_HOURS),
         ),
         "npc_races_vs_limit_24h": RACING_NPC_RACE_MAX_PER_24H,
+    }
+    today_eco = datetime.now(timezone.utc).date().isoformat()
+    eco_day = prof.get("racing_economy_day_utc")
+    eco_cred = int(prof.get("racing_economy_credits_today") or 0) if eco_day == today_eco else 0
+    cap_eco = int(RACING_DAILY_ECONOMY_CREDIT_CAP or 0)
+    result["racing_daily_economy"] = {
+        "cap": cap_eco,
+        "credits_today_utc": eco_cred,
+        "remaining_today_utc": max(0, cap_eco - eco_cred) if cap_eco > 0 else None,
+        "day_utc": today_eco,
     }
     try:
         champ = await db.racing_championships.find_one({"status": "active"})
@@ -3062,6 +3144,9 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
         sponsor_income = 0
         driver_salary = 0
         net_crew_bank = 0
+        allowed_crew = 0
+        prize_trimmed = 0
+        crew_credit = 0
         if entrant and not entrant.get("is_npc"):
             uid = entrant.get("user_id")
             prof_for_sponsor = profile_by_user.get(uid) or {}
@@ -3076,9 +3161,10 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
             if not is_dnf:
                 if rp:
                     await db.users.update_one({"id": uid}, apply_season_rp_mirror_to_update({"$inc": {"rank_points": rp}}))
+                allowed_crew, prize_trimmed = await _mint_racing_economy_credits_daily_cap(uid, crew_credit)
                 await db.racing_profiles.update_one(
                     {"user_id": uid},
-                    {"$inc": {"racing_rep": rep, "races_completed": 1, "wins": 1 if position == 1 else 0, "crew_bank": crew_credit}},
+                    {"$inc": {"racing_rep": rep, "races_completed": 1, "wins": 1 if position == 1 else 0, "crew_bank": allowed_crew}},
                     upsert=True,
                 )
                 if rp:
@@ -3089,7 +3175,7 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
                     except Exception:
                         pass
                 from_crew = await _pay_driver_salary_from_user_then_crew(uid, driver_salary)
-                net_crew_bank = crew_credit - from_crew
+                net_crew_bank = allowed_crew - from_crew
             else:
                 await db.racing_profiles.update_one(
                     {"user_id": uid},
@@ -3129,6 +3215,9 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
             "sponsor_income": sponsor_income,
             "driver_salary": driver_salary,
             "net_crew_bank": net_crew_bank,
+            "crew_bank_gross": crew_credit,
+            "crew_bank_credited": allowed_crew,
+            "daily_cap_trimmed": prize_trimmed,
         })
     now = _now_iso()
     await db.racing_races.update_one(

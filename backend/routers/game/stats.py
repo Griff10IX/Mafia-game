@@ -225,7 +225,7 @@ def register(router):
         staff_ids = await _get_staff_user_ids()
         # Real users only: exclude NPCs and staff (admins + mods)
         real_user_match = {"is_npc": {"$ne": True}, **staff_filter}
-        alive_real_match = {"is_npc": {"$ne": True}, "is_dead": {"$ne": True}, **staff_filter}
+        alive_real_match = srv.alive_real_player_wallet_match()
 
         total_users = await db.users.count_documents(real_user_match)
         alive_users = await db.users.count_documents(alive_real_match)

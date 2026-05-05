@@ -272,6 +272,7 @@ export default function Racing() {
       racing_rep: d.profile?.racing_rep ?? 0,
       npc_races_vs_used_24h: d.npc_races_vs_used_24h ?? 0,
       npc_races_vs_limit_24h: d.npc_races_vs_limit_24h ?? 15,
+      racing_daily_economy: d.racing_daily_economy || null,
     };
     setProfile(p);
     setCars(d.owned_cars || []);
@@ -1188,6 +1189,12 @@ export default function Racing() {
             </div>
           </div>
         </div>
+        {profile?.racing_daily_economy?.cap > 0 && (
+          <div className="mt-1 text-[8px] text-amber-500/90 font-heading leading-snug px-0.5">
+            Daily racing economy cap (UTC): {formatMoney(profile.racing_daily_economy.credits_today_utc ?? 0)} /{' '}
+            {formatMoney(profile.racing_daily_economy.cap)} minted today — crew race prizes, championship, and weekly pays share this limit.
+          </div>
+        )}
         <div className="flex items-center gap-3 mt-1 text-[9px] text-[var(--noir-muted)] flex-wrap">
           {leaderboard.slice(0, 3).map((row, i) => (
             <span key={row.user_id}>

@@ -2383,6 +2383,11 @@ def _staff_exclude_user_filter() -> dict:
     return q
 
 
+def alive_real_player_wallet_match() -> dict:
+    """Alive, non-NPC users excluding staff — same segment as ``/stats/overview`` wallet portion of ``game_capital.total_cash``."""
+    return {"is_npc": {"$ne": True}, "is_dead": {"$ne": True}, **_staff_exclude_user_filter()}
+
+
 def user_has_admin_list_email(user: dict) -> bool:
     """True if user's email matches ADMIN_EMAILS (env list is lowercased; compare case-insensitive)."""
     em = str(user.get("email") or "").strip().lower()

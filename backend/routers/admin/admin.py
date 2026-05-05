@@ -13582,7 +13582,7 @@ def register(router):
         """Economy snapshot: total money, points, average wealth, top 5 richest."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        base_match = {"is_dead": {"$ne": True}, **_staff_exclude_user_filter()}
+        base_match = srv.alive_real_player_wallet_match()
         pipeline = [
             {"$match": base_match},
             {"$group": {
@@ -13650,7 +13650,7 @@ def register(router):
             raise HTTPException(status_code=403, detail="Admin access required")
         if sort not in ("money_desc", "money_asc", "username_asc"):
             raise HTTPException(status_code=400, detail="sort must be money_desc, money_asc, or username_asc")
-        base_match: dict = {"is_dead": {"$ne": True}, **_staff_exclude_user_filter()}
+        base_match: dict = srv.alive_real_player_wallet_match()
         q = (search or "").strip()
         if q:
             base_match["username"] = {"$regex": re.escape(q), "$options": "i"}
@@ -13680,7 +13680,7 @@ def register(router):
         total_cash = int((agg_sum[0].get("t", 0) if agg_sum else 0) or 0)
         return {
             "match_note": (
-                "Alive players, excludes moderators and ADMIN_EMAILS accounts (same as Economy overview → Cash in circulation)."
+                "Alive real players (excl. NPCs, moderators, ADMIN_EMAILS) — same segment as Economy overview → Cash in circulation and Stats Total cash wallets portion."
                 + (" Filtered by username search." if q else "")
             ),
             "total_cash_on_hand": total_cash,
