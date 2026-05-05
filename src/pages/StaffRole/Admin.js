@@ -247,7 +247,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Presence simulator', categoryId: 'admin-gameworld', collapseKey: 'presenceSimulator', keywords: ['presence', 'simulator', 'online', 'active', 'fake', 'last_seen'], adminOnly: true },
   { label: 'Slots Draw', categoryId: 'admin-gameworld', collapseKey: 'slotsDraw', keywords: ['slots', 'draw', 'lottery'] },
   { label: 'Lottery money trail', categoryId: 'admin-gameworld', collapseKey: 'lotteryMoneyTrail', keywords: ['lottery', 'money', 'payout', 'winner', 'pot', 'audit', 'trail', 'twice', 'wed', 'sun'], adminOnly: true },
-  { label: 'Bootleg Runs economy', categoryId: 'admin-gameworld', collapseKey: 'racingEconomy', keywords: ['racing', 'bootleg', 'crew', 'bank', 'adjust crew', 'crew bank', 'payout', 'wallet', 'runs', 'audit'], adminOnly: true },
+  { label: 'Bootleg Runs economy', categoryId: 'admin-gameworld', collapseKey: 'racingEconomy', keywords: ['racing', 'bootleg', 'crew', 'bank', 'adjust crew', 'crew bank', 'lifetime', 'earnings', 'payout', 'wallet', 'runs', 'audit'], adminOnly: true },
   { label: 'Crack the Safe jackpot', categoryId: 'admin-gameworld', collapseKey: 'crackSafeJackpot', keywords: ['crack', 'safe', 'jackpot', 'pot', 'lower'] },
   { label: 'State Heads', categoryId: 'admin-gameworld', collapseKey: 'stateHeads', keywords: ['state', 'heads', 'family', 'territory'] },
   { label: 'Release soft-launch', categoryId: 'admin-gameworld', collapseKey: 'releaseSoftLaunch', keywords: ['release', 'soft', 'launch', 'pvp', 'kill', 'game pass'], adminOnly: true },
@@ -614,6 +614,9 @@ export default function Admin() {
   const [racingCrewAdjustUsername, setRacingCrewAdjustUsername] = useState('');
   const [racingCrewAdjustAmount, setRacingCrewAdjustAmount] = useState('');
   const [racingCrewAdjustLoading, setRacingCrewAdjustLoading] = useState(false);
+  const [racingLifetimeUsername, setRacingLifetimeUsername] = useState('');
+  const [racingLifetimeData, setRacingLifetimeData] = useState(null);
+  const [racingLifetimeLoading, setRacingLifetimeLoading] = useState(false);
   const [ranks, setRanks] = useState([]);
   const [cars, setCars] = useState([]);
   const [bgTestCount, setBgTestCount] = useState(2);
@@ -3279,6 +3282,24 @@ export default function Admin() {
       setRacingEconomyRaces(null);
     } finally {
       setRacingEconomyRacesLoading(false);
+    }
+  };
+
+  const fetchRacingUserLifetimeEarnings = async () => {
+    const u = racingLifetimeUsername.trim();
+    if (!u) {
+      toast.error('Enter username');
+      return;
+    }
+    setRacingLifetimeLoading(true);
+    setRacingLifetimeData(null);
+    try {
+      const res = await api.get('/admin/racing/user-lifetime-earnings', { params: { username: u } });
+      setRacingLifetimeData(res.data ?? null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load racing lifetime earnings');
+    } finally {
+      setRacingLifetimeLoading(false);
     }
   };
 
@@ -12140,6 +12161,43 @@ export default function Admin() {
                   {racingCrewAdjustLoading ? 'Applying…' : 'Apply'}
                 </BtnPrimary>
               </div>
+            </div>
+
+            <div className="rounded border border-zinc-600/40 bg-zinc-900/30 p-2 space-y-2">
+              <div className="text-[9px] font-heading uppercase text-mutedForeground">Racing lifetime (stored races)</div>
+              <p className="text-[9px] text-mutedForeground leading-snug">
+                Sums <span className="font-mono text-[8px]">racing_races.rewards</span> for this user plus H2H win payouts. See server notes for exclusions.
+              </p>
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex flex-col gap-0.5 min-w-[8rem]">
+                  <span className="text-[9px] text-mutedForeground">Username</span>
+                  <AdminInput
+                    type="text"
+                    value={racingLifetimeUsername}
+                    onChange={(e) => setRacingLifetimeUsername(e.target.value)}
+                    placeholder="Exact username"
+                  />
+                </label>
+                <BtnSecondary type="button" onClick={fetchRacingUserLifetimeEarnings} disabled={racingLifetimeLoading}>
+                  {racingLifetimeLoading ? 'Loading…' : 'Lookup'}
+                </BtnSecondary>
+              </div>
+              {racingLifetimeData && (
+                <div className="text-[9px] font-mono space-y-1 border-t border-zinc-700/40 pt-2">
+                  <div><span className="text-mutedForeground">User:</span> {racingLifetimeData.username} ({racingLifetimeData.user_id})</div>
+                  <div><span className="text-mutedForeground">Crew bank now:</span> {formatAdminMoneyInt(racingLifetimeData.profile?.crew_bank_now ?? 0)}</div>
+                  <div><span className="text-mutedForeground">Profile races / wins:</span> {racingLifetimeData.profile?.races_completed ?? 0} / {racingLifetimeData.profile?.wins ?? 0}</div>
+                  <div><span className="text-mutedForeground">Reward rows (completed races):</span> {racingLifetimeData.from_completed_bootleg_races?.completed_races_with_reward_row ?? 0}</div>
+                  <div><span className="text-mutedForeground">Sum crew credited (races):</span> {formatAdminMoneyInt(racingLifetimeData.from_completed_bootleg_races?.sum_crew_bank_credited ?? 0)}</div>
+                  <div><span className="text-mutedForeground">Gross crew prize (pre-cap):</span> {formatAdminMoneyInt(racingLifetimeData.from_completed_bootleg_races?.sum_crew_prize_gross_pre_cap ?? 0)}</div>
+                  <div><span className="text-mutedForeground">Lost to daily cap:</span> {formatAdminMoneyInt(racingLifetimeData.from_completed_bootleg_races?.sum_daily_cap_trimmed ?? 0)}</div>
+                  <div><span className="text-mutedForeground">H2H wins / wallet on wins:</span> {racingLifetimeData.head_to_head_wallet?.wins ?? 0} · {formatAdminMoneyInt(racingLifetimeData.head_to_head_wallet?.sum_wallet_credited_on_win ?? 0)}</div>
+                  <div className="text-primary font-heading pt-1">Combined (crew credited + H2H wallet): {formatAdminMoneyInt(racingLifetimeData.combined_racing_credits_tracked ?? 0)}</div>
+                  {racingLifetimeData.notes && (
+                    <p className="text-[8px] text-amber-400/90 font-sans leading-snug pt-1">{racingLifetimeData.notes}</p>
+                  )}
+                </div>
+              )}
             </div>
 
             <div>

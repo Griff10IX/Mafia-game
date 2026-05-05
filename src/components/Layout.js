@@ -1237,6 +1237,8 @@ export default function Layout({ children }) {
     { path: '/staffrole/admin/witness-statements', icon: FileText, label: 'Witness statements' },
     { path: '/staffrole/admin/attack-logs', icon: Crosshair, label: 'Attack logs' },
   ] : [];
+  const staffTopBarEntry = isAdmin ? adminNavItems[0] : (isModerator ? moderatorNavItems[0] : null);
+  const StaffTopBarIcon = staffTopBarEntry?.icon;
 
   const sidebarBgStyle = { backgroundColor: 'var(--noir-content)' };
   const sidebarActiveStyle = { background: 'var(--noir-raised)', backgroundImage: 'none', borderLeft: '3px solid var(--noir-primary)', color: 'var(--noir-primary)' };
@@ -2177,6 +2179,18 @@ export default function Layout({ children }) {
               </>
             );
           })()}
+          {user && staffTopBarEntry && StaffTopBarIcon && !String(location.pathname || '').startsWith('/staffrole') && (
+            <SameRouteAwareLink
+              to={staffTopBarEntry.path}
+              data-testid="topbar-admin"
+              title={staffTopBarEntry.label}
+              onClick={() => { if (mobileNavStyle !== 'bottom') setSidebarOpen(false); }}
+              className="shrink-0 flex items-center justify-center gap-1 min-h-[34px] px-1.5 md:min-h-0 md:px-2 md:py-1 rounded-md border border-red-500/30 bg-red-600/10 hover:bg-red-600/20 text-red-400 transition-colors touch-manipulation"
+            >
+              <StaffTopBarIcon size={isMobileViewport ? 17 : 15} strokeWidth={2} className="shrink-0" aria-hidden />
+              <span className="hidden sm:inline font-heading text-[10px] uppercase tracking-wider max-w-[4.5rem] truncate">{isAdmin ? 'Admin' : 'Mod'}</span>
+            </SameRouteAwareLink>
+          )}
         </div>
       </div>
 

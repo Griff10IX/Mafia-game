@@ -3999,6 +3999,132 @@ def register(router):
             "has_team_only": has_team_only,
         }
 
+    @router.get("/admin/racing/user-lifetime-earnings")
+    async def admin_racing_user_lifetime_earnings(
+        username: str = Query(..., min_length=1, max_length=80, description="Exact username (case-insensitive)"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Admin: sum stored Bootleg racing economy for a user from completed races (crew prizes + H2H wallet)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern((username or "").strip())
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = target["id"]
+        uid_str = str(uid)
+        prof = await db.racing_profiles.find_one({"user_id": uid}, {"_id": 0})
+        prof_out = {
+            "crew_bank_now": int((prof or {}).get("crew_bank") or 0),
+            "races_completed": int((prof or {}).get("races_completed") or 0),
+            "wins": int((prof or {}).get("wins") or 0),
+            "racing_rep": int((prof or {}).get("racing_rep") or 0),
+            "team_name": (prof or {}).get("team_name") or None,
+        }
+        # Sum per-entrant reward rows (crew credits; legacy rows lack crew_bank_* — fall back to cash + sponsor)
+        reward_pipe = [
+            {"$match": {"state": "completed", "rewards": {"$exists": True, "$ne": []}}},
+            {"$unwind": "$rewards"},
+            {
+                "$match": {
+                    "$expr": {
+                        "$eq": [{"$toString": {"$ifNull": ["$rewards.entrant_id", ""]}}, uid_str],
+                    }
+                }
+            },
+            {
+                "$group": {
+                    "_id": None,
+                    "completed_races_counted": {"$sum": 1},
+                    "sum_crew_bank_credited": {
+                        "$sum": {
+                            "$ifNull": [
+                                "$rewards.crew_bank_credited",
+                                {"$add": [{"$ifNull": ["$rewards.cash", 0]}, {"$ifNull": ["$rewards.sponsor_income", 0]}]},
+                            ]
+                        }
+                    },
+                    "sum_crew_prize_gross": {
+                        "$sum": {
+                            "$ifNull": [
+                                "$rewards.crew_bank_gross",
+                                {"$add": [{"$ifNull": ["$rewards.cash", 0]}, {"$ifNull": ["$rewards.sponsor_income", 0]}]},
+                            ]
+                        }
+                    },
+                    "sum_daily_cap_trimmed": {"$sum": {"$ifNull": ["$rewards.daily_cap_trimmed", 0]}},
+                    "sum_rank_points": {"$sum": {"$ifNull": ["$rewards.rank_points", 0]}},
+                }
+            },
+        ]
+        reward_rows = await db.racing_races.aggregate(reward_pipe).to_list(1)
+        rdoc = reward_rows[0] if reward_rows else {}
+        h2h_pipe = [
+            {"$match": {"state": "completed", "h2h_stake": {"$gt": 0}}},
+            {"$addFields": {"winner": {"$arrayElemAt": ["$result_order", 0]}}},
+            {
+                "$match": {
+                    "$expr": {
+                        "$and": [
+                            {"$eq": [{"$toString": {"$ifNull": ["$winner", ""]}}, uid_str]},
+                            {
+                                "$not": {
+                                    "$in": [
+                                        uid_str,
+                                        {
+                                            "$map": {
+                                                "input": {"$ifNull": ["$dnf_ids", []]},
+                                                "as": "d",
+                                                "in": {"$toString": "$$d"},
+                                            }
+                                        },
+                                    ]
+                                }
+                            },
+                        ]
+                    }
+                }
+            },
+            {
+                "$group": {
+                    "_id": None,
+                    "h2h_wins": {"$sum": 1},
+                    "h2h_wallet_credited_total": {"$sum": {"$multiply": [2, "$h2h_stake"]}},
+                }
+            },
+        ]
+        h2h_rows = await db.racing_races.aggregate(h2h_pipe).to_list(1)
+        hdoc = h2h_rows[0] if h2h_rows else {}
+        crew_credited = int(rdoc.get("sum_crew_bank_credited") or 0)
+        crew_gross = int(rdoc.get("sum_crew_prize_gross") or 0)
+        cap_trim = int(rdoc.get("sum_daily_cap_trimmed") or 0)
+        h2h_wins = int(hdoc.get("h2h_wins") or 0)
+        h2h_wallet = int(hdoc.get("h2h_wallet_credited_total") or 0)
+        races_rows = int(rdoc.get("completed_races_counted") or 0)
+        return {
+            "user_id": uid,
+            "username": target.get("username") or "?",
+            "profile": prof_out,
+            "from_completed_bootleg_races": {
+                "completed_races_with_reward_row": races_rows,
+                "sum_crew_bank_credited": crew_credited,
+                "sum_crew_prize_gross_pre_cap": crew_gross,
+                "sum_daily_cap_trimmed": cap_trim,
+                "sum_rank_points_awarded": int(rdoc.get("sum_rank_points") or 0),
+            },
+            "head_to_head_wallet": {
+                "wins": h2h_wins,
+                "sum_wallet_credited_on_win": h2h_wallet,
+                "note": "Winner receives both stakes (2× stake); mostly a transfer from the opponent, not minted crew cash.",
+            },
+            "combined_racing_credits_tracked": crew_credited + h2h_wallet,
+            "notes": (
+                "Crew numbers are summed from stored racing_races.rewards after each finish (credited amount; legacy races fall back to cash+sponsor). "
+                "Championship end cash, weekly leaderboard cash, and parimutuel racing bets are not included. "
+                "Crew bank withdrawals to wallet are not summed here."
+            ),
+        }
+
     @router.post("/admin/racing/crew-bank/adjust")
     async def admin_racing_crew_bank_adjust(
         body: AdminRacingCrewBankAdjustBody,
