@@ -118,6 +118,13 @@ class AdminQuicktradeCasinoDedupeBody(BaseModel):
     dry_run: bool = False
 
 
+class AdminRacingCrewBankAdjustBody(BaseModel):
+    """Positive amount adds to the player's Bootleg crew bank; negative removes."""
+
+    target_username: str = Field(..., min_length=1, max_length=80)
+    amount: int = Field(..., ge=-2_000_000_000_000, le=2_000_000_000_000, description="Signed delta on racing_profiles.crew_bank")
+
+
 class NewReleaseConfirmation(BaseModel):
     confirmation_text: str  # Must be exactly "NEW RELEASE"
 
@@ -673,6 +680,7 @@ ACTIVITY_ACTIONS_FOR_SPIKE_AUDIT: Set[str] = {
     "stock_buy",
     "admin_adjust_money",
     "admin_swiss_bank_wipe",
+    "admin_racing_crew_bank_adjust",
     "store_purchase",
 }
 
@@ -768,6 +776,8 @@ def _activity_log_extract_spike_amounts(action: str, details: Any) -> Tuple[Opti
     elif a == "stock_buy":
         take_pts("points")
     elif a == "admin_adjust_money":
+        take_cash("amount")
+    elif a == "admin_racing_crew_bank_adjust":
         take_cash("amount")
     elif a == "admin_swiss_bank_wipe":
         take_cash("old_balance")
@@ -3987,6 +3997,51 @@ def register(router):
             "total_count": total_count,
             "total_crew_bank_sum": total_crew_bank_sum,
             "has_team_only": has_team_only,
+        }
+
+    @router.post("/admin/racing/crew-bank/adjust")
+    async def admin_racing_crew_bank_adjust(
+        body: AdminRacingCrewBankAdjustBody,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Admin: add or remove cash from a player's racing crew bank (Bootleg crew_bank). Does not touch users.money."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        amt = int(body.amount)
+        if amt == 0:
+            raise HTTPException(status_code=400, detail="amount cannot be zero")
+        username_pattern = _username_pattern((body.target_username or "").strip())
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = target["id"]
+        uname = target.get("username") or "?"
+        from routers.minigames import racing as racing_mod
+
+        await racing_mod._ensure_racing_profile(uid)
+        await db.racing_profiles.update_one({"user_id": uid}, {"$inc": {"crew_bank": amt}})
+        prof = await db.racing_profiles.find_one({"user_id": uid}, {"_id": 0, "crew_bank": 1})
+        new_bal = int((prof or {}).get("crew_bank") or 0)
+        try:
+            await srv.log_activity(
+                uid,
+                uname,
+                "admin_racing_crew_bank_adjust",
+                {
+                    "amount": amt,
+                    "crew_bank_after": new_bal,
+                    "admin_username": current_user.get("username", "?"),
+                },
+            )
+        except Exception:
+            pass
+        verb = "Added" if amt > 0 else "Removed"
+        return {
+            "message": f"{verb} ${abs(amt):,} {'to' if amt > 0 else 'from'} {uname}'s racing crew bank. New crew bank: ${new_bal:,}",
+            "user_id": uid,
+            "username": uname,
+            "amount": amt,
+            "crew_bank": new_bal,
         }
 
     @router.get("/admin/racing/completed-races")

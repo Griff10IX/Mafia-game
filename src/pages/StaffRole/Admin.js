@@ -247,7 +247,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Presence simulator', categoryId: 'admin-gameworld', collapseKey: 'presenceSimulator', keywords: ['presence', 'simulator', 'online', 'active', 'fake', 'last_seen'], adminOnly: true },
   { label: 'Slots Draw', categoryId: 'admin-gameworld', collapseKey: 'slotsDraw', keywords: ['slots', 'draw', 'lottery'] },
   { label: 'Lottery money trail', categoryId: 'admin-gameworld', collapseKey: 'lotteryMoneyTrail', keywords: ['lottery', 'money', 'payout', 'winner', 'pot', 'audit', 'trail', 'twice', 'wed', 'sun'], adminOnly: true },
-  { label: 'Bootleg Runs economy', categoryId: 'admin-gameworld', collapseKey: 'racingEconomy', keywords: ['racing', 'bootleg', 'crew', 'bank', 'payout', 'wallet', 'runs', 'audit'], adminOnly: true },
+  { label: 'Bootleg Runs economy', categoryId: 'admin-gameworld', collapseKey: 'racingEconomy', keywords: ['racing', 'bootleg', 'crew', 'bank', 'adjust crew', 'crew bank', 'payout', 'wallet', 'runs', 'audit'], adminOnly: true },
   { label: 'Crack the Safe jackpot', categoryId: 'admin-gameworld', collapseKey: 'crackSafeJackpot', keywords: ['crack', 'safe', 'jackpot', 'pot', 'lower'] },
   { label: 'State Heads', categoryId: 'admin-gameworld', collapseKey: 'stateHeads', keywords: ['state', 'heads', 'family', 'territory'] },
   { label: 'Release soft-launch', categoryId: 'admin-gameworld', collapseKey: 'releaseSoftLaunch', keywords: ['release', 'soft', 'launch', 'pvp', 'kill', 'game pass'], adminOnly: true },
@@ -611,6 +611,9 @@ export default function Admin() {
   const [racingEconomyCrewLoading, setRacingEconomyCrewLoading] = useState(false);
   const [racingEconomyRaces, setRacingEconomyRaces] = useState(null);
   const [racingEconomyRacesLoading, setRacingEconomyRacesLoading] = useState(false);
+  const [racingCrewAdjustUsername, setRacingCrewAdjustUsername] = useState('');
+  const [racingCrewAdjustAmount, setRacingCrewAdjustAmount] = useState('');
+  const [racingCrewAdjustLoading, setRacingCrewAdjustLoading] = useState(false);
   const [ranks, setRanks] = useState([]);
   const [cars, setCars] = useState([]);
   const [bgTestCount, setBgTestCount] = useState(2);
@@ -3276,6 +3279,30 @@ export default function Admin() {
       setRacingEconomyRaces(null);
     } finally {
       setRacingEconomyRacesLoading(false);
+    }
+  };
+
+  const handleRacingCrewBankAdjust = async () => {
+    const u = racingCrewAdjustUsername.trim();
+    const amt = parseInt(String(racingCrewAdjustAmount).replace(/,/g, ''), 10);
+    if (!u) {
+      toast.error('Enter target username');
+      return;
+    }
+    if (!Number.isFinite(amt) || amt === 0) {
+      toast.error('Enter a non-zero whole dollar amount (negative to remove)');
+      return;
+    }
+    setRacingCrewAdjustLoading(true);
+    try {
+      const res = await api.post('/admin/racing/crew-bank/adjust', { target_username: u, amount: amt });
+      toast.success(res.data?.message || 'Crew bank updated');
+      setRacingCrewAdjustAmount('');
+      await fetchRacingEconomyCrewBanks();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to adjust racing crew bank');
+    } finally {
+      setRacingCrewAdjustLoading(false);
     }
   };
 
@@ -12083,6 +12110,37 @@ export default function Admin() {
               <code className="text-[9px] bg-zinc-800/80 px-0.5 rounded">racing_races.rewards</code> after each completed Bootleg Run (prize share + sponsor to crew; net after driver salary; rank points credited to the player).
               Head-to-head stakes and championship payouts are separate and not listed here.
             </p>
+
+            <div className="rounded border border-amber-500/25 bg-zinc-900/40 p-2 space-y-2">
+              <div className="text-[9px] font-heading uppercase text-amber-400/90">Adjust racing crew bank</div>
+              <p className="text-[9px] text-mutedForeground leading-snug">
+                Changes <span className="font-mono text-[8px]">racing_profiles.crew_bank</span> only (not wallet cash). Use a positive amount to add, negative to remove.
+              </p>
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex flex-col gap-0.5 min-w-[8rem]">
+                  <span className="text-[9px] text-mutedForeground">Username</span>
+                  <AdminInput
+                    type="text"
+                    value={racingCrewAdjustUsername}
+                    onChange={(e) => setRacingCrewAdjustUsername(e.target.value)}
+                    placeholder="Exact username"
+                  />
+                </label>
+                <label className="flex flex-col gap-0.5 min-w-[7rem]">
+                  <span className="text-[9px] text-mutedForeground">Amount ($)</span>
+                  <AdminInput
+                    type="text"
+                    inputMode="numeric"
+                    value={racingCrewAdjustAmount}
+                    onChange={(e) => setRacingCrewAdjustAmount(e.target.value)}
+                    placeholder="+ add / − remove"
+                  />
+                </label>
+                <BtnPrimary type="button" onClick={handleRacingCrewBankAdjust} disabled={racingCrewAdjustLoading}>
+                  {racingCrewAdjustLoading ? 'Applying…' : 'Apply'}
+                </BtnPrimary>
+              </div>
+            </div>
 
             <div>
               <div className="flex flex-wrap items-center gap-2 mb-2">
