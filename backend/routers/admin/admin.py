@@ -58,6 +58,12 @@ from utils.claim_costs import (
     load_claim_costs,
     merge_claim_costs,
 )
+from utils.keno_settings import (
+    DEFAULT_KENO_MAX_BET,
+    KENO_MAX_BET_SETTINGS_KEY,
+    invalidate_keno_max_bet_cache,
+    load_keno_max_bet,
+)
 from utils.bank_economy_settings import (
     get_bank_economy_config,
     compute_bank_interest_previews,
@@ -235,6 +241,12 @@ class AdminMissionProgressSetRequest(BaseModel):
 
     next_mission_display: int
     grant_skipped_rewards: bool = True  # When advancing, grant normal completion rewards for each newly completed mission
+
+
+class AdminKenoSettingsPatch(BaseModel):
+    """Live cap for state Keno max bet per round (stored in game_settings)."""
+
+    max_bet: int
 
 
 class AdminClaimCostsPatch(BaseModel):
@@ -7438,6 +7450,33 @@ def register(router):
             "by_state": by_state,
             "recent": recent_out,
         }
+
+    @router.get("/admin/casinos/keno-settings")
+    async def admin_casinos_keno_settings_get(current_user: dict = Depends(get_current_user)):
+        """Current Keno max bet (live); falls back to code default if unset."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        max_bet = await load_keno_max_bet(db, ttl_sec=0.0)
+        return {"max_bet": max_bet, "default_max_bet": DEFAULT_KENO_MAX_BET}
+
+    @router.patch("/admin/casinos/keno-settings")
+    async def admin_casinos_keno_settings_patch(
+        body: AdminKenoSettingsPatch,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Set live Keno max bet (game_settings). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        n = int(body.max_bet)
+        if n < 1 or n > 10**15:
+            raise HTTPException(status_code=400, detail="max_bet must be between 1 and 1e15 inclusive")
+        await db.game_settings.update_one(
+            {"key": KENO_MAX_BET_SETTINGS_KEY},
+            {"$set": {"key": KENO_MAX_BET_SETTINGS_KEY, "value": n}},
+            upsert=True,
+        )
+        invalidate_keno_max_bet_cache()
+        return {"max_bet": await load_keno_max_bet(db, ttl_sec=0.0), "default_max_bet": DEFAULT_KENO_MAX_BET}
 
     @router.get("/admin/mdg/games-log")
     async def admin_mdg_games_log(

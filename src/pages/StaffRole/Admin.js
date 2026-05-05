@@ -243,7 +243,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Game Events', categoryId: 'admin-gameworld', collapseKey: 'events', keywords: ['events', 'toggle', 'enable', 'disable', 'random', 'bundle', 'daily', 'modifiers', 'roll'], adminOnly: true },
   { label: 'Booze Run rotation & global discount', categoryId: 'admin-gameworld', collapseKey: 'boozeRun', keywords: ['booze', 'run', 'rotation', 'prices', 'discount', 'listed', 'nudge', 'global', 'jail', 'bust', 'prohibition'], adminOnly: true },
   { label: 'Booze Run analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'boozeRunAnalytics', keywords: ['booze', 'analytics', 'economy', 'events', 'profit', 'revenue', 'jail', 'leaderboard'] },
-  { label: 'Keno economy', categoryId: 'admin-analytics-monitoring', collapseKey: 'kenoEconomy', keywords: ['keno', 'casino', 'economy', 'payout', 'gambling', 'state'] },
+  { label: 'Keno economy', categoryId: 'admin-analytics-monitoring', collapseKey: 'kenoEconomy', keywords: ['keno', 'casino', 'economy', 'payout', 'gambling', 'state', 'max bet', 'keno settings'] },
   { label: 'Presence simulator', categoryId: 'admin-gameworld', collapseKey: 'presenceSimulator', keywords: ['presence', 'simulator', 'online', 'active', 'fake', 'last_seen'], adminOnly: true },
   { label: 'Slots Draw', categoryId: 'admin-gameworld', collapseKey: 'slotsDraw', keywords: ['slots', 'draw', 'lottery'] },
   { label: 'Lottery money trail', categoryId: 'admin-gameworld', collapseKey: 'lotteryMoneyTrail', keywords: ['lottery', 'money', 'payout', 'winner', 'pot', 'audit', 'trail', 'twice', 'wed', 'sun'], adminOnly: true },
@@ -961,6 +961,10 @@ export default function Admin() {
   const [kenoEconomyDays, setKenoEconomyDays] = useState(30);
   const [kenoEconomyData, setKenoEconomyData] = useState(null);
   const [kenoEconomyLoading, setKenoEconomyLoading] = useState(false);
+  const [kenoAdminMaxBet, setKenoAdminMaxBet] = useState('');
+  const [kenoAdminMaxBetDefault, setKenoAdminMaxBetDefault] = useState(null);
+  const [kenoAdminMaxBetLoading, setKenoAdminMaxBetLoading] = useState(false);
+  const [kenoAdminMaxBetSaving, setKenoAdminMaxBetSaving] = useState(false);
   const [referralsReport, setReferralsReport] = useState(null);
   const [referralsReportLoading, setReferralsReportLoading] = useState(false);
   const [referralsFilterUsername, setReferralsFilterUsername] = useState('');
@@ -5835,6 +5839,46 @@ export default function Admin() {
       setKenoEconomyLoading(false);
     }
   };
+
+  const fetchKenoAdminMaxBetSettings = useCallback(async () => {
+    setKenoAdminMaxBetLoading(true);
+    try {
+      const res = await api.get('/admin/casinos/keno-settings');
+      const d = res.data || {};
+      setKenoAdminMaxBet(String(d.max_bet ?? ''));
+      setKenoAdminMaxBetDefault(d.default_max_bet ?? null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load Keno max bet');
+    } finally {
+      setKenoAdminMaxBetLoading(false);
+    }
+  }, []);
+
+  const handleSaveKenoAdminMaxBet = async () => {
+    const n = Math.max(0, parseInt(String(kenoAdminMaxBet).replace(/\D/g, ''), 10) || 0);
+    if (n < 1) {
+      toast.error('Max bet must be at least $1');
+      return;
+    }
+    setKenoAdminMaxBetSaving(true);
+    try {
+      const res = await api.patch('/admin/casinos/keno-settings', { max_bet: n });
+      const d = res.data || {};
+      setKenoAdminMaxBet(String(d.max_bet ?? n));
+      setKenoAdminMaxBetDefault(d.default_max_bet ?? null);
+      toast.success('Keno max bet updated');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to save Keno max bet');
+    } finally {
+      setKenoAdminMaxBetSaving(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!collapsed.kenoEconomy) {
+      void fetchKenoAdminMaxBetSettings();
+    }
+  }, [collapsed.kenoEconomy, fetchKenoAdminMaxBetSettings]);
 
   const handleFetchBoozeRunUser = async () => {
     const q = (boozeRunUserQuery || '').trim();
@@ -17124,6 +17168,48 @@ export default function Admin() {
                   <strong className="text-foreground/90"> Total wagered</strong> is every stake; <strong className="text-foreground/90">paid back</strong> is credited wins;
                   <strong className="text-emerald-300/90"> Net to house</strong> is wagered − paid (positive ⇒ players lost that much in aggregate).
                 </p>
+              </div>
+              <div className="rounded-lg border border-zinc-600/50 bg-zinc-900/40 p-3 space-y-2">
+                <div className="text-[10px] font-heading font-bold uppercase tracking-wide text-zinc-200">Live max bet (per round)</div>
+                <p className="text-[9px] text-mutedForeground font-heading leading-relaxed">
+                  Stored in <code className="text-[8px] bg-zinc-900/80 px-1 rounded border border-zinc-700/60">game_settings</code>
+                  {kenoAdminMaxBetDefault != null ? (
+                    <>
+                      {' '}
+                      · code default <span className="text-foreground tabular-nums">${Number(kenoAdminMaxBetDefault).toLocaleString()}</span> if unset
+                    </>
+                  ) : null}
+                  . Players see the new cap on <code className="text-[8px] bg-zinc-900/80 px-1 rounded border border-zinc-700/60">/casino/keno/config</code> after cache refresh (≤30s).
+                </p>
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="flex flex-col gap-0.5 min-w-[10rem]">
+                    <span className="text-[8px] text-mutedForeground font-heading uppercase">Max bet ($)</span>
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      value={kenoAdminMaxBet}
+                      onChange={(e) => setKenoAdminMaxBet(e.target.value)}
+                      disabled={kenoAdminMaxBetLoading || kenoAdminMaxBetSaving}
+                      className="w-full max-w-[14rem] rounded border border-zinc-600 bg-zinc-950/80 px-2 py-1.5 text-xs font-heading tabular-nums text-foreground disabled:opacity-50"
+                      placeholder="5000000"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void fetchKenoAdminMaxBetSettings()}
+                    disabled={kenoAdminMaxBetLoading || kenoAdminMaxBetSaving}
+                    className="px-2.5 py-1.5 rounded border border-zinc-600 bg-zinc-800/80 text-[10px] font-heading uppercase text-zinc-200 hover:bg-zinc-700/80 disabled:opacity-45"
+                  >
+                    {kenoAdminMaxBetLoading ? 'Loading…' : 'Reload'}
+                  </button>
+                  {isAdmin ? (
+                    <BtnPrimary onClick={() => void handleSaveKenoAdminMaxBet()} disabled={kenoAdminMaxBetSaving || kenoAdminMaxBetLoading}>
+                      {kenoAdminMaxBetSaving ? 'Saving…' : 'Save max bet'}
+                    </BtnPrimary>
+                  ) : (
+                    <span className="text-[9px] text-mutedForeground font-heading pb-1">Admin only: save</span>
+                  )}
+                </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[9px] text-mutedForeground font-heading uppercase">Window</span>

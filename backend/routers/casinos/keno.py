@@ -15,12 +15,14 @@ from server import (
     get_head_family_id_for_state,
     state_head_casino_treasury_share,
 )
+from utils.keno_settings import DEFAULT_KENO_MAX_BET, load_keno_max_bet
 
 _rng = secrets.SystemRandom()
 
 KENO_MIN_PICK = 2
 KENO_MAX_PICK = 10
-KENO_MAX_BET = 5_000_000
+# Default when no `game_settings` row; live cap from `load_keno_max_bet`.
+KENO_MAX_BET = DEFAULT_KENO_MAX_BET
 KENO_BOARD_MIN = 1
 KENO_BOARD_MAX = 80
 KENO_DRAW_COUNT = 20
@@ -86,12 +88,13 @@ def register(router):
     async def casino_keno_config(current_user: dict = Depends(get_current_user_verified)):
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         current_state = _normalize_state(raw) if raw else (STATES[0] if STATES else "")
+        max_bet = await load_keno_max_bet(db)
         return {
             "states": list(STATES or []),
             "current_state": current_state,
             "min_pick": KENO_MIN_PICK,
             "max_pick": KENO_MAX_PICK,
-            "max_bet": KENO_MAX_BET,
+            "max_bet": max_bet,
             "board_min": KENO_BOARD_MIN,
             "board_max": KENO_BOARD_MAX,
             "draw_count": KENO_DRAW_COUNT,
@@ -111,8 +114,9 @@ def register(router):
         bet = int(request.bet or 0)
         if bet < 1:
             raise HTTPException(status_code=400, detail="Bet must be at least 1")
-        if bet > KENO_MAX_BET:
-            raise HTTPException(status_code=400, detail=f"Max bet is ${KENO_MAX_BET:,}")
+        max_bet = await load_keno_max_bet(db)
+        if bet > max_bet:
+            raise HTTPException(status_code=400, detail=f"Max bet is ${max_bet:,}")
 
         picks_raw = request.picks or []
         if len(picks_raw) < KENO_MIN_PICK or len(picks_raw) > KENO_MAX_PICK:

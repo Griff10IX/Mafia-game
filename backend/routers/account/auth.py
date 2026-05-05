@@ -2208,17 +2208,24 @@ def register(router):
         """Return current IP, accounts from this IP, IPs/sessions with device and last-used (for IP & Devices page)."""
         current_ip = _client_ip(request) or ""
         accounts_from_current_ip = []
+        current_email = (current_user.get("email") or "").strip().lower()
+        current_is_dupe_exempt = bool(current_email and current_email in (DUPE_DETECTION_EXEMPT_EMAILS or []))
         if current_ip:
-            cursor = db.users.find(
-                {"$or": [{"registration_ip": current_ip}, {"login_ips": current_ip}]},
-                {"_id": 0, "username": 1},
-            )
-            seen = set()
-            async for u in cursor:
-                un = (u.get("username") or "").strip()
-                if un and un not in seen:
-                    seen.add(un)
-                    accounts_from_current_ip.append(un)
+            if not current_is_dupe_exempt:
+                ip_query: Dict[str, Any] = {"$or": [{"registration_ip": current_ip}, {"login_ips": current_ip}]}
+                exempt_emails = [e.strip().lower() for e in (DUPE_DETECTION_EXEMPT_EMAILS or []) if str(e or "").strip()]
+                if exempt_emails:
+                    ip_query["$nor"] = [{"email": re.compile("^" + re.escape(e) + "$", re.IGNORECASE)} for e in exempt_emails]
+                cursor = db.users.find(
+                    ip_query,
+                    {"_id": 0, "username": 1},
+                )
+                seen = set()
+                async for u in cursor:
+                    un = (u.get("username") or "").strip()
+                    if un and un not in seen:
+                        seen.add(un)
+                        accounts_from_current_ip.append(un)
         your_ips = []
         reg_ip = (current_user.get("registration_ip") or "").strip()
         if reg_ip:
