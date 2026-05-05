@@ -241,17 +241,79 @@ async def _log_qt_buy_offer_accept_transfers(
 async def cancel_offers_on_death(user_id: str):
     """
     When a user dies: cancel all their active sell, buy, and token offers.
-    No refunds — points (sell), money (buy), and tokens (token offers) are removed from the game economy.
+    Sell listings: refund points (same amounts as manual cancel — original_points, including fee).
+    Buy listings: refund escrowed cash (the ``offer`` field).
+    Token listings: return tokens to the user's inventory.
     """
     now = datetime.now(timezone.utc)
-    await db.trade_sell_offers.update_many(
-        {"user_id": user_id, "status": "active"},
-        {"$set": {"status": "cancelled", "cancelled_at": now}},
-    )
-    await db.trade_buy_offers.update_many(
-        {"user_id": user_id, "status": "active"},
-        {"$set": {"status": "cancelled", "cancelled_at": now}},
-    )
+    # One offer at a time: cancel in DB before refund so a retry after a crash cannot double-refund.
+    while True:
+        offer = await db.trade_sell_offers.find_one_and_update(
+            {"user_id": user_id, "status": "active"},
+            {"$set": {"status": "cancelled", "cancelled_at": now}},
+        )
+        if not offer:
+            break
+        pts = int(offer.get("original_points") or offer.get("points") or 0)
+        if pts != 0:
+            await db.users.update_one({"id": user_id}, {"$inc": {"points": pts}})
+            try:
+                await log_points_event(
+                    db,
+                    user_id=user_id,
+                    points=pts,
+                    event_type="quicktrade_cancel",
+                    meta={
+                        "direction": "sell_cancel_on_death",
+                        "offer_id": str(offer.get("_id", "")),
+                        "fee_refunded": int(offer.get("fee") or 0),
+                    },
+                )
+            except Exception:
+                pass
+        try:
+            await db.trade_events.insert_one(
+                {
+                    "id": str(offer.get("_id", "")),
+                    "type": "sell_offer_cancelled",
+                    "user_id": user_id,
+                    "username": offer.get("username") or "?",
+                    "points": pts,
+                    "fee": offer.get("fee", 0),
+                    "direction": "sell",
+                    "reason": "death",
+                    "at": now,
+                }
+            )
+        except Exception:
+            pass
+
+    while True:
+        offer = await db.trade_buy_offers.find_one_and_update(
+            {"user_id": user_id, "status": "active"},
+            {"$set": {"status": "cancelled", "cancelled_at": now}},
+        )
+        if not offer:
+            break
+        cash = int(offer.get("offer") or 0)
+        if cash != 0:
+            await db.users.update_one({"id": user_id}, {"$inc": {"money": cash}})
+        try:
+            await db.trade_events.insert_one(
+                {
+                    "id": str(offer.get("_id", "")),
+                    "type": "buy_offer_cancelled",
+                    "user_id": user_id,
+                    "username": offer.get("username") or "?",
+                    "points": offer.get("points", 0),
+                    "fee": offer.get("fee", 0),
+                    "direction": "buy",
+                    "reason": "death",
+                    "at": now,
+                }
+            )
+        except Exception:
+            pass
     token_offers = await db.trade_token_offers.find({"user_id": user_id, "status": "active"}).to_list(100)
     for offer in token_offers:
         field = TOKEN_CONFIG.get(offer["token_type"], {}).get("count_field")

@@ -96,7 +96,7 @@ function formatMoney(n) {
 }
 
 const BOARD = Array.from({ length: 80 }, (_, i) => i + 1);
-const KENO_AUTO_ROLL_MAX = 50;
+const KENO_AUTO_ROLL_MAX = 200;
 
 function PickDots({ count, max }) {
   return (
@@ -458,11 +458,11 @@ export default function KenoPage() {
                         type="text"
                         inputMode="numeric"
                         autoComplete="off"
-                        maxLength={2}
+                        maxLength={3}
                         value={autoRollInput}
-                        onChange={(e) => setAutoRollInput(e.target.value.replace(/\D/g, '').slice(0, 2) || '')}
+                        onChange={(e) => setAutoRollInput(e.target.value.replace(/\D/g, '').slice(0, 3) || '')}
                         disabled={autoRolling}
-                        className="w-14 min-h-[38px] rounded-md border border-primary/25 bg-zinc-950/90 px-2 text-center text-sm font-heading text-zinc-100 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-45"
+                        className="w-16 min-h-[38px] rounded-md border border-primary/25 bg-zinc-950/90 px-2 text-center text-sm font-heading text-zinc-100 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-45"
                       />
                     </label>
                     {autoRolling ? (
@@ -728,11 +728,11 @@ export default function KenoPage() {
                   type="text"
                   inputMode="numeric"
                   autoComplete="off"
-                  maxLength={2}
+                  maxLength={3}
                   value={autoRollInput}
-                  onChange={(e) => setAutoRollInput(e.target.value.replace(/\D/g, '').slice(0, 2) || '')}
+                  onChange={(e) => setAutoRollInput(e.target.value.replace(/\D/g, '').slice(0, 3) || '')}
                   disabled={autoRolling}
-                  className="w-11 min-h-[40px] rounded-md border border-primary/25 bg-zinc-950/90 px-1 text-center text-sm font-heading text-zinc-100 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-45"
+                  className="w-12 min-h-[40px] rounded-md border border-primary/25 bg-zinc-950/90 px-1 text-center text-sm font-heading text-zinc-100 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-45"
                 />
               </label>
               {autoRolling ? (
