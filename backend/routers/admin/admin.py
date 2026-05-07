@@ -1542,6 +1542,38 @@ def register(router):
             ],
         }
 
+    @router.get("/admin/points/store-bought-total")
+    async def admin_points_store_bought_total(current_user: dict = Depends(get_current_user)):
+        """
+        Lifetime total points bought via store payments (completed checkout rows),
+        regardless of whether points are still in circulation.
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        agg = await db.payment_transactions.aggregate(
+            [
+                {"$match": {"payment_status": "completed"}},
+                {
+                    "$group": {
+                        "_id": None,
+                        "total_points_bought": {"$sum": {"$ifNull": ["$points", 0]}},
+                        "purchase_count": {"$sum": 1},
+                        "first_purchase_at": {"$min": "$created_at"},
+                        "last_purchase_at": {"$max": "$created_at"},
+                    }
+                },
+            ]
+        ).to_list(1)
+        row = agg[0] if agg else {}
+        return {
+            "total_points_bought": int(row.get("total_points_bought") or 0),
+            "purchase_count": int(row.get("purchase_count") or 0),
+            "first_purchase_at": row.get("first_purchase_at"),
+            "last_purchase_at": row.get("last_purchase_at"),
+            "scope": "completed payment_transactions only (historical store purchases, not current circulation)",
+        }
+
     @router.get("/admin/points/chargeback/preview/{payment_session_id}")
     async def admin_points_chargeback_preview(payment_session_id: str, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
@@ -10246,6 +10278,377 @@ def register(router):
             "war_bodyguard_kills": war_bodyguard_kills,
             "merged_timeline": merged,
             "note": "Hire inflation fields (inflation_level_before, inflation_mult, event_bodyguard_cost_mult, base_slot_cost) are stored for new hires only. bodyguard_killed events and attack_attempts.bodyguard_owner_id apply to new kills only.",
+        }
+
+    def _robot_hires_parse_dt(val: Any) -> Optional[datetime]:
+        if val is None:
+            return None
+        if isinstance(val, datetime):
+            return val.replace(tzinfo=timezone.utc) if val.tzinfo is None else val
+        if isinstance(val, str):
+            try:
+                s = val.replace("Z", "+00:00")
+                dt = datetime.fromisoformat(s)
+                return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+            except Exception:
+                return None
+        return None
+
+    @router.get("/admin/bodyguards/robot-hires")
+    async def admin_bodyguards_robot_hires(
+        username: str = Query(..., min_length=1),
+        limit: int = Query(100, ge=1, le=200),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Admin or moderator. Last N robot bodyguard hires for a player (hitlist_bodyguard_events),
+        enriched with point_ledger correlation, kill/replace lifecycle, and active-slot check.
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        key = (username or "").strip()
+        user = await db.users.find_one(
+            {"id": key},
+            {
+                "_id": 0,
+                "id": 1,
+                "username": 1,
+                "bodyguard_slots": 1,
+                "bodyguard_inflation_level": 1,
+                "bodyguard_inflation_until": 1,
+                "is_bodyguard": 1,
+                "bodyguard_owner_id": 1,
+            },
+        )
+        if not user:
+            user = await db.users.find_one(
+                {"username": key},
+                {
+                    "_id": 0,
+                    "id": 1,
+                    "username": 1,
+                    "bodyguard_slots": 1,
+                    "bodyguard_inflation_level": 1,
+                    "bodyguard_inflation_until": 1,
+                    "is_bodyguard": 1,
+                    "bodyguard_owner_id": 1,
+                },
+            )
+        if not user:
+            pattern = re.compile("^" + re.escape(key) + "$", re.IGNORECASE)
+            user = await db.users.find_one(
+                {"username": pattern},
+                {
+                    "_id": 0,
+                    "id": 1,
+                    "username": 1,
+                    "bodyguard_slots": 1,
+                    "bodyguard_inflation_level": 1,
+                    "bodyguard_inflation_until": 1,
+                    "is_bodyguard": 1,
+                    "bodyguard_owner_id": 1,
+                },
+            )
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = user["id"]
+
+        hire_rows_raw = (
+            await db.hitlist_bodyguard_events.find(
+                {"owner_id": uid, "type": "bodyguard_hired", "is_robot": True},
+                {"_id": 0},
+            )
+            .sort("at", -1)
+            .limit(limit)
+            .to_list(limit)
+        )
+
+        ledger_rows = (
+            await db.point_ledger_events.find(
+                {"user_id": uid, "event_type": "bodyguard_hire"},
+                {"_id": 0},
+            )
+            .sort("created_at", -1)
+            .limit(2500)
+            .to_list(2500)
+        )
+
+        kill_rows = (
+            await db.hitlist_bodyguard_events.find(
+                {"owner_id": uid, "type": "bodyguard_killed"},
+                {"_id": 0},
+            )
+            .sort("at", 1)
+            .limit(2500)
+            .to_list(2500)
+        )
+
+        replace_rows = (
+            await db.hitlist_bodyguard_events.find(
+                {"owner_id": uid, "type": "admin_robot_bodyguards_replaced"},
+                {"_id": 0},
+            )
+            .sort("at", 1)
+            .limit(500)
+            .to_list(500)
+        )
+
+        owned = await db.bodyguards.find({"user_id": uid}, {"_id": 0, "slot_number": 1, "bodyguard_user_id": 1, "robot_name": 1}).to_list(10)
+        ledger_parsed: List[Tuple[Optional[datetime], Dict[str, Any]]] = []
+        for lr in ledger_rows:
+            ledger_parsed.append((_robot_hires_parse_dt(lr.get("created_at")), lr))
+
+        window = timedelta(minutes=2)
+        hires_out: List[Dict[str, Any]] = []
+
+        def _uname_match(a: Optional[str], b: Optional[str]) -> bool:
+            if not a or not b:
+                return False
+            return str(a).strip().lower() == str(b).strip().lower()
+
+        for raw_hire in hire_rows_raw:
+            hire_clean = _sanitize_audit_doc(dict(raw_hire)) or {}
+            hire_at = _robot_hires_parse_dt(raw_hire.get("at"))
+            slot_val = raw_hire.get("slot")
+            try:
+                slot_int = int(slot_val) if slot_val is not None else None
+            except Exception:
+                slot_int = None
+            guard_uid = raw_hire.get("guard_user_id")
+            guard_uid_str = str(guard_uid).strip() if guard_uid else None
+            bg_username = raw_hire.get("bodyguard_username")
+
+            ledger_match: Optional[Dict[str, Any]] = None
+            if hire_at:
+                best_delta: Optional[timedelta] = None
+                for created_dt, ledger_doc in ledger_parsed:
+                    if created_dt is None:
+                        continue
+                    meta = ledger_doc.get("meta") if isinstance(ledger_doc.get("meta"), dict) else {}
+                    ledger_slot = meta.get("slot")
+                    try:
+                        ls = int(ledger_slot) if ledger_slot is not None else None
+                    except Exception:
+                        ls = None
+                    if slot_int is not None and ls is not None and ls != slot_int:
+                        continue
+                    if meta.get("is_robot") is False:
+                        continue
+                    delta = abs(created_dt - hire_at)
+                    if delta <= window:
+                        if best_delta is None or delta < best_delta:
+                            best_delta = delta
+                            ledger_match = ledger_doc
+
+            ledger_sanitized = _sanitize_audit_doc(dict(ledger_match)) if ledger_match else None
+
+            still_active = False
+            if guard_uid_str:
+                for ob in owned:
+                    if str(ob.get("bodyguard_user_id") or "").strip() == guard_uid_str:
+                        still_active = True
+                        break
+            if not still_active and bg_username and slot_int is not None:
+                for ob in owned:
+                    if int(ob.get("slot_number") or 0) == slot_int and _uname_match(ob.get("robot_name"), bg_username):
+                        still_active = True
+                        break
+
+            kill_hit: Optional[Dict[str, Any]] = None
+            replace_hit: Optional[Dict[str, Any]] = None
+            replace_reason: Optional[str] = None
+
+            kill_candidates: List[Tuple[datetime, Dict[str, Any]]] = []
+            for kr in kill_rows:
+                kat = _robot_hires_parse_dt(kr.get("at"))
+                if hire_at and kat and kat < hire_at:
+                    continue
+                gid_raw = kr.get("guard_user_id")
+                gid_ok = bool(guard_uid_str) and gid_raw is not None and str(gid_raw).strip() == guard_uid_str
+                uname_ok = bool(bg_username) and _uname_match(bg_username, kr.get("guard_username"))
+                if guard_uid_str:
+                    if gid_ok:
+                        kill_candidates.append((kat or datetime.min.replace(tzinfo=timezone.utc), kr))
+                elif uname_ok:
+                    kill_candidates.append((kat or datetime.min.replace(tzinfo=timezone.utc), kr))
+            kill_candidates.sort(key=lambda x: x[0])
+            if kill_candidates:
+                kill_hit = kill_candidates[0][1]
+
+            for rr in replace_rows:
+                rat = _robot_hires_parse_dt(rr.get("at"))
+                if hire_at and rat and rat < hire_at:
+                    continue
+                prev_list = rr.get("previous") if isinstance(rr.get("previous"), list) else []
+                matched = False
+                for pv in prev_list:
+                    if not isinstance(pv, dict):
+                        continue
+                    old_uid = pv.get("old_robot_user_id")
+                    old_name = pv.get("old_robot_name")
+                    ps = pv.get("slot")
+                    try:
+                        ps_int = int(ps) if ps is not None else None
+                    except Exception:
+                        ps_int = None
+                    if guard_uid_str and old_uid and str(old_uid).strip() == guard_uid_str:
+                        matched = True
+                        replace_reason = f"slot {ps_int or '?'}"
+                        break
+                    if bg_username and _uname_match(old_name, bg_username) and (slot_int is None or ps_int is None or ps_int == slot_int):
+                        matched = True
+                        replace_reason = f"slot {ps_int or '?'}"
+                        break
+                if matched:
+                    replace_hit = rr
+                    break
+
+            outcome_label = "Unknown"
+            outcome_detail: Dict[str, Any] = {}
+            outcome_at_iso = ""
+            if still_active:
+                outcome_label = "Active"
+            elif kill_hit:
+                outcome_label = "Killed"
+                outcome_detail = {
+                    "guard_username": kill_hit.get("guard_username"),
+                    "guard_user_id": kill_hit.get("guard_user_id"),
+                    "killer_username": kill_hit.get("killer_username"),
+                    "killer_id": kill_hit.get("killer_id"),
+                    "bullets_used": kill_hit.get("bullets_used"),
+                    "location_state": kill_hit.get("location_state"),
+                    "hire_cost_snapshot": kill_hit.get("hire_cost"),
+                }
+                outcome_at_iso = _audit_iso(kill_hit.get("at"))
+            elif replace_hit:
+                outcome_label = "Replaced"
+                outcome_detail = {
+                    "reason": replace_reason or "admin_robot_bodyguards_replaced",
+                    "admin_username": replace_hit.get("admin_username"),
+                    "admin_id": replace_hit.get("admin_id"),
+                    "count": replace_hit.get("count"),
+                    "new_usernames": replace_hit.get("new_usernames"),
+                }
+                outcome_at_iso = _audit_iso(replace_hit.get("at"))
+
+            hires_out.append(
+                {
+                    "hire": hire_clean,
+                    "point_ledger": ledger_sanitized,
+                    "outcome_label": outcome_label,
+                    "outcome_at": outcome_at_iso,
+                    "outcome_detail": _sanitize_audit_doc(outcome_detail) if outcome_detail else {},
+                    "still_active": still_active,
+                }
+            )
+
+        note = (
+            "guard_user_id and bodyguard_slot_row_id appear on hires after deploy. "
+            "Legacy hires match kills by bodyguard_username. "
+            "Point ledger tied when meta.slot matches and created_at within 2 minutes of hire at."
+        )
+        return {
+            "user": _sanitize_audit_doc(user),
+            "hires": hires_out,
+            "note": note,
+        }
+
+    @router.get("/admin/bodyguards/searching")
+    async def admin_bodyguards_searching(
+        username: str = Query(..., min_length=1),
+        limit: int = Query(200, ge=1, le=2000),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Admin or moderator. Bodyguard hunts currently in `searching` for this attacker,
+        with elapsed and remaining find-time.
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        key = (username or "").strip()
+        user = await db.users.find_one({"id": key}, {"_id": 0, "id": 1, "username": 1})
+        if not user:
+            user = await db.users.find_one({"username": key}, {"_id": 0, "id": 1, "username": 1})
+        if not user:
+            pattern = re.compile("^" + re.escape(key) + "$", re.IGNORECASE)
+            user = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = user["id"]
+
+        attacks = (
+            await db.attacks.find(
+                {"attacker_id": uid, "status": "searching"},
+                {"_id": 0},
+            )
+            .sort("search_started", -1)
+            .limit(limit)
+            .to_list(limit)
+        )
+        if not attacks:
+            return {
+                "user": _sanitize_audit_doc(user),
+                "rows": [],
+                "note": "No active searching rows for this user.",
+            }
+
+        target_ids = [a.get("target_id") for a in attacks if a.get("target_id")]
+        target_ids = list(dict.fromkeys(target_ids))
+        targets_by_id: Dict[str, Dict[str, Any]] = {}
+        if target_ids:
+            async for tu in db.users.find(
+                {"id": {"$in": target_ids}},
+                {"_id": 0, "id": 1, "username": 1, "is_bodyguard": 1, "is_npc": 1, "bodyguard_owner_id": 1},
+            ):
+                targets_by_id[str(tu["id"])] = tu
+
+        owner_ids = list(
+            {
+                str(t.get("bodyguard_owner_id"))
+                for t in targets_by_id.values()
+                if t.get("is_bodyguard") and t.get("bodyguard_owner_id")
+            }
+        )
+        owners_by_id: Dict[str, str] = {}
+        if owner_ids:
+            async for ou in db.users.find({"id": {"$in": owner_ids}}, {"_id": 0, "id": 1, "username": 1}):
+                owners_by_id[str(ou["id"])] = str(ou.get("username") or "?")
+
+        now = datetime.now(timezone.utc)
+        out_rows: List[Dict[str, Any]] = []
+        for a in attacks:
+            tid = str(a.get("target_id") or "")
+            t = targets_by_id.get(tid) or {}
+            if not t.get("is_bodyguard"):
+                continue
+            started_dt = _robot_hires_parse_dt(a.get("search_started"))
+            found_dt = _robot_hires_parse_dt(a.get("found_at"))
+            elapsed_seconds = int(max(0.0, (now - started_dt).total_seconds())) if started_dt else None
+            remaining_seconds = int(max(0.0, (found_dt - now).total_seconds())) if found_dt else None
+            total_seconds = int(max(0.0, (found_dt - started_dt).total_seconds())) if started_dt and found_dt else None
+
+            owner_id = str(t.get("bodyguard_owner_id") or "")
+            out_rows.append(
+                {
+                    "attack_id": a.get("id"),
+                    "target_id": tid or None,
+                    "target_username": a.get("target_username") or t.get("username") or "?",
+                    "search_started": _audit_iso(a.get("search_started")),
+                    "found_at": _audit_iso(a.get("found_at")),
+                    "elapsed_seconds": elapsed_seconds,
+                    "remaining_seconds": remaining_seconds,
+                    "search_total_seconds": total_seconds,
+                    "bodyguard_owner_id": owner_id or None,
+                    "bodyguard_owner_username": owners_by_id.get(owner_id) if owner_id else None,
+                    "target_is_npc": bool(t.get("is_npc")),
+                }
+            )
+
+        return {
+            "user": _sanitize_audit_doc(user),
+            "rows": out_rows,
+            "generated_at": now.isoformat(),
+            "note": "Rows are limited to status=searching where the target is a bodyguard account. Remaining time derives from attacks.found_at minus server now.",
         }
 
     @router.get("/admin/crimes/logs")

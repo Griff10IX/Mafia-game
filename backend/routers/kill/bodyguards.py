@@ -156,8 +156,8 @@ def _camelize(name: str) -> str:
     return "".join(t[:1].upper() + t[1:] for t in tokens)
 
 
-async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str]:
-    """Create a unique robot user record. Returns (user_id, username). 1920s–30s American mafia style."""
+async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str, str]:
+    """Create a unique robot user record. Returns (user_id, username, initial_current_state). 1920s–30s American mafia style."""
     robot_names = [
         "Al Capone", "Lucky Luciano", "Frank Nitti", "Johnny Torrio", "Bugsy Siegel",
         "Meyer Lansky", "Vito Genovese", "Joe Masseria", "Salvatore Maranzano", "Dutch Schultz",
@@ -237,7 +237,7 @@ async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str]:
         "bodyguard_owner_id": owner_user["id"],
     }
     await db.users.insert_one(robot_doc)
-    return robot_user_id, username
+    return robot_user_id, username, str(robot_doc.get("current_state") or "")
 
 
 # ----- Routes -----
@@ -583,8 +583,9 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
     )
     robot_name = None
     robot_user_id = None
+    robot_initial_state: Optional[str] = None
     if is_robot:
-        robot_user_id, robot_name = await _create_robot_bodyguard_user(current_user)
+        robot_user_id, robot_name, robot_initial_state = await _create_robot_bodyguard_user(current_user)
     bodyguard_doc = {
         "id": str(uuid.uuid4()),
         "user_id": current_user["id"],
@@ -600,7 +601,7 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
     }
     await db.bodyguards.insert_one(bodyguard_doc)
     await db.users.update_one({"id": current_user["id"]}, {"$unset": {"bodyguard_robot_loss_hire_allowed_after": ""}})
-    await db.hitlist_bodyguard_events.insert_one({
+    hire_event: dict = {
         "at": datetime.now(timezone.utc),
         "type": "bodyguard_hired",
         "owner_id": current_user["id"],
@@ -609,11 +610,17 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
         "is_robot": is_robot,
         "hire_cost": total_cost,
         "bodyguard_username": robot_name if is_robot else None,
+        "bodyguard_slot_row_id": bodyguard_doc["id"],
         "inflation_level_before": inflation_level,
         "inflation_mult": inflation_mult,
         "event_bodyguard_cost_mult": event_cost_mult,
         "base_slot_cost": base_cost,
-    })
+    }
+    if is_robot and robot_user_id:
+        hire_event["guard_user_id"] = robot_user_id
+        if robot_initial_state:
+            hire_event["robot_initial_state"] = robot_initial_state
+    await db.hitlist_bodyguard_events.insert_one(hire_event)
     name_part = robot_name if is_robot else "a human bodyguard"
     msg = f"You hired {name_part} for {total_cost} points (slot {slot}/4). Past hires show here — max 4 at once."
     asyncio.create_task(send_notification(
@@ -1100,7 +1107,7 @@ async def admin_replace_robot_bodyguards_hacked(
             continue
         armour = min(5, max(0, int(prev.get("armour_level") or 0)))
         hire_cost = int(prev.get("hire_cost") or 0)
-        robot_user_id, robot_username = await _create_robot_bodyguard_user(target)
+        robot_user_id, robot_username, _ = await _create_robot_bodyguard_user(target)
         await db.users.update_one(
             {"id": robot_user_id},
             {"$set": {"current_state": owner_state, "armour_level": armour}},
@@ -1191,7 +1198,7 @@ async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, cur
         exists = await db.bodyguards.find_one({"user_id": target["id"], "slot_number": slot}, {"_id": 0, "id": 1})
         if exists:
             continue
-        robot_user_id, robot_username = await _create_robot_bodyguard_user(target)
+        robot_user_id, robot_username, _ = await _create_robot_bodyguard_user(target)
         await db.bodyguards.insert_one({
             "id": str(uuid.uuid4()),
             "user_id": target["id"],

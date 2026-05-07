@@ -528,6 +528,25 @@ async def _log_attack_error(
         pass
 
 
+async def _insert_attack_attempt_with_fallback(
+    primary_doc: Dict[str, Any],
+    fallback_doc: Dict[str, Any],
+    *,
+    context: str,
+) -> None:
+    """Insert attack attempt row; if rich payload fails, log and insert minimal fallback."""
+    try:
+        await db.attack_attempts.insert_one(primary_doc)
+        return
+    except Exception:
+        logger.exception("attack_attempts primary insert failed (%s)", context)
+
+    try:
+        await db.attack_attempts.insert_one(fallback_doc)
+    except Exception:
+        logger.exception("attack_attempts fallback insert failed (%s)", context)
+
+
 async def _notify_target_if_bot_attack(
     target_id: str,
     attacker_username: str,
@@ -1886,7 +1905,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                         _npc_attempt_extra["bodyguard_owner_id"] = _npc_bg_owner_id
                     if _is_npc_bodyguard and _npc_bg_owner_username:
                         _npc_attempt_extra["bodyguard_owner_username"] = _npc_bg_owner_username
-                    await db.attack_attempts.insert_one({
+                    full_attempt_doc = {
                         **attempt_base,
                         "outcome": "killed",
                         "player_message": success_message,
@@ -1901,9 +1920,25 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                         "target_is_npc": True,
                         **_npc_attempt_extra,
                         **meta,
-                    })
+                    }
+                    fallback_attempt_doc = {
+                        **attempt_base,
+                        "outcome": "killed",
+                        "player_message": success_message,
+                        "target_health_before": target_health,
+                        "target_health_after": 0.0,
+                        "damage_done": float(target_health),
+                        "is_npc_kill": True,
+                        "is_bodyguard_kill": _is_npc_bodyguard,
+                        "target_is_npc": True,
+                    }
+                    await _insert_attack_attempt_with_fallback(
+                        full_attempt_doc,
+                        fallback_attempt_doc,
+                        context="npc_kill",
+                    )
                 except Exception:
-                    pass
+                    logger.exception("npc kill attempt logging failed")
                 await send_notification(killer_id, "Hitlist NPC kill", success_message, "attack", category="attacks")
                 # If this NPC was a bodyguard (e.g. robot), do bodyguard cleanup and record vendetta war stats
                 if target.get("is_bodyguard"):
@@ -2474,7 +2509,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         try:
             damage_done = float(target_health)
             meta = _request_meta(req)
-            await db.attack_attempts.insert_one({
+            full_attempt_doc = {
                 **attempt_base,
                 "outcome": "killed",
                 "player_message": success_message,
@@ -2485,7 +2520,20 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 "target_health_after": 0.0,
                 "damage_done": damage_done,
                 **meta,
-            })
+            }
+            fallback_attempt_doc = {
+                **attempt_base,
+                "outcome": "killed",
+                "player_message": success_message,
+                "target_health_before": target_health,
+                "target_health_after": 0.0,
+                "damage_done": damage_done,
+            }
+            await _insert_attack_attempt_with_fallback(
+                full_attempt_doc,
+                fallback_attempt_doc,
+                context="player_kill",
+            )
             await _notify_target_if_bot_attack(
                 attempt_base["target_id"], current_user.get("username") or "?", "killed",
                 attempt_base.get("location_state"), success_message, meta.get("attacker_is_bot", False),
@@ -2494,7 +2542,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 meta=meta,
             )
         except Exception:
-            pass
+            logger.exception("player kill attempt logging failed")
         await log_activity(killer_id, current_user.get("username", "?"), "attack_kill", {
             "victim": target_name, "cash_loot": cash_loot, "rp": rank_points,
             "bullets_used": bullets_used, "cars_taken": victim_cars_count, "props_taken": victim_props_count,

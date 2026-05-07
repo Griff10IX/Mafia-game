@@ -301,7 +301,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Minigame Payouts', categoryId: 'admin-logs', collapseKey: 'minigamePayouts', keywords: ['minigame', 'payout', 'reward', 'cash', 'mini', 'game'] },
   { label: 'Weekly Leaderboard Payouts', categoryId: 'admin-logs', collapseKey: 'weeklyLeaderboardPayouts', keywords: ['leaderboard', 'weekly', 'payout', 'respect', 'points', 'top 10', 'fix', 'deduction', 'negative points'] },
   { label: 'Attack Logs', categoryId: 'admin-logs', collapseKey: 'attackLogs', keywords: ['attack', 'log', 'kill'] },
-  { label: 'Bodyguard audit', categoryId: 'admin-logs', collapseKey: 'bodyguardAudit', keywords: ['bodyguard', 'guard', 'hire', 'drop', 'inflation'] },
+  { label: 'Bodyguard audit', categoryId: 'admin-logs', collapseKey: 'bodyguardAudit', keywords: ['bodyguard', 'guard', 'hire', 'drop', 'inflation', 'robot hire history', 'last 100 robot', 'searching time', 'find time'] },
   { label: 'Mod Action Logs', categoryId: 'admin-logs', collapseKey: 'modLogs', keywords: ['mod', 'action', 'log'] },
   { label: 'Crime logs', categoryId: 'admin-logs', collapseKey: 'crimeLogs', keywords: ['crime', 'log', 'heist'] },
   { label: 'GTA logs', categoryId: 'admin-logs', collapseKey: 'gtaLogs', keywords: ['gta', 'log', 'theft', 'car'] },
@@ -931,6 +931,8 @@ export default function Admin() {
   const [interestBankIncludeStaff, setInterestBankIncludeStaff] = useState(false);
   const [pointsStoreSpends, setPointsStoreSpends] = useState(null);
   const [pointsStoreSpendsLoading, setPointsStoreSpendsLoading] = useState(false);
+  const [pointsStoreBoughtTotal, setPointsStoreBoughtTotal] = useState(null);
+  const [pointsStoreBoughtTotalLoading, setPointsStoreBoughtTotalLoading] = useState(false);
   const [pointsStoreRetractingKey, setPointsStoreRetractingKey] = useState(null);
   const [pointsStoreSpendsUsernameQuery, setPointsStoreSpendsUsernameQuery] = useState('');
   const [tradesAnalyticsDays, setTradesAnalyticsDays] = useState(7);
@@ -1001,6 +1003,11 @@ export default function Admin() {
   const [bodyguardAuditData, setBodyguardAuditData] = useState(null);
   const [bodyguardAuditLoading, setBodyguardAuditLoading] = useState(false);
   const [bodyguardAuditExpandKey, setBodyguardAuditExpandKey] = useState(null);
+  const [bodyguardSearchingData, setBodyguardSearchingData] = useState(null);
+  const [bodyguardSearchingLoading, setBodyguardSearchingLoading] = useState(false);
+  const [robotHiresLoading, setRobotHiresLoading] = useState(false);
+  const [robotHiresData, setRobotHiresData] = useState(null);
+  const [robotHiresExpandKey, setRobotHiresExpandKey] = useState(null);
   const [crimeLogsUsername, setCrimeLogsUsername] = useState('');
   const [crimeLogsLimit, setCrimeLogsLimit] = useState(500);
   const [crimeLogsData, setCrimeLogsData] = useState(null);
@@ -5731,6 +5738,19 @@ export default function Admin() {
     }
   };
 
+  const handleFetchPointsStoreBoughtTotal = async () => {
+    setPointsStoreBoughtTotalLoading(true);
+    try {
+      const res = await api.get('/admin/points/store-bought-total');
+      setPointsStoreBoughtTotal(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load store bought total');
+      setPointsStoreBoughtTotal(null);
+    } finally {
+      setPointsStoreBoughtTotalLoading(false);
+    }
+  };
+
   const handleRetractStoreSpend = async (userId, storeEventRef) => {
     const key = `${userId}:${storeEventRef}`;
     if (pointsStoreRetractingKey === key) return;
@@ -6156,6 +6176,51 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to load bodyguard audit');
     } finally {
       setBodyguardAuditLoading(false);
+    }
+  };
+
+  const handleFetchRobotHires = async () => {
+    const un = (bodyguardAuditUsername || '').trim();
+    if (!un) {
+      toast.error('Enter a username');
+      return;
+    }
+    setRobotHiresLoading(true);
+    setRobotHiresData(null);
+    setRobotHiresExpandKey(null);
+    try {
+      const res = await api.get('/admin/bodyguards/robot-hires', {
+        params: { username: un, limit: 100 },
+      });
+      setRobotHiresData(res.data || null);
+      const n = res.data?.hires?.length ?? 0;
+      toast.success(`Loaded ${n} robot hire row(s)`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load robot hire history');
+    } finally {
+      setRobotHiresLoading(false);
+    }
+  };
+
+  const handleFetchBodyguardSearching = async () => {
+    const un = (bodyguardAuditUsername || '').trim();
+    if (!un) {
+      toast.error('Enter a username');
+      return;
+    }
+    setBodyguardSearchingLoading(true);
+    setBodyguardSearchingData(null);
+    try {
+      const res = await api.get('/admin/bodyguards/searching', {
+        params: { username: un, limit: 500 },
+      });
+      setBodyguardSearchingData(res.data || null);
+      const n = res.data?.rows?.length ?? 0;
+      toast.success(`Loaded ${n} bodyguard searching row(s)`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load bodyguard searching rows');
+    } finally {
+      setBodyguardSearchingLoading(false);
     }
   };
 
@@ -17998,6 +18063,26 @@ export default function Admin() {
           />
           {!collapsed.pointsStoreSpends && (
             <div className="p-3 space-y-2">
+              <div className="rounded border border-zinc-700/40 bg-zinc-900/35 p-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="space-y-0.5">
+                    <p className="text-[10px] uppercase tracking-wide text-mutedForeground font-heading">Lifetime points bought from store</p>
+                    <p className="text-sm font-heading text-foreground">
+                      {pointsStoreBoughtTotal ? Number(pointsStoreBoughtTotal.total_points_bought || 0).toLocaleString() : '—'}
+                    </p>
+                    {pointsStoreBoughtTotal && (
+                      <p className="text-[10px] text-mutedForeground font-heading">
+                        Purchases: {Number(pointsStoreBoughtTotal.purchase_count || 0).toLocaleString()}
+                        {pointsStoreBoughtTotal.last_purchase_at ? ` · Last: ${formatAdminDateTime(pointsStoreBoughtTotal.last_purchase_at)}` : ''}
+                      </p>
+                    )}
+                  </div>
+                  <BtnPrimary onClick={handleFetchPointsStoreBoughtTotal} disabled={pointsStoreBoughtTotalLoading}>
+                    {pointsStoreBoughtTotalLoading ? 'Loading…' : 'Load lifetime total'}
+                  </BtnPrimary>
+                </div>
+              </div>
+
               <div className="flex flex-wrap items-center gap-2">
                 <input
                   type="text"
@@ -19159,7 +19244,158 @@ export default function Admin() {
                 <BtnPrimary onClick={handleFetchBodyguardAudit} disabled={bodyguardAuditLoading}>
                   {bodyguardAuditLoading ? 'Loading…' : 'Load audit'}
                 </BtnPrimary>
+                <BtnSecondary type="button" onClick={handleFetchRobotHires} disabled={robotHiresLoading}>
+                  {robotHiresLoading ? 'Loading…' : 'Last 100 robot hires'}
+                </BtnSecondary>
+                <BtnSecondary type="button" onClick={handleFetchBodyguardSearching} disabled={bodyguardSearchingLoading}>
+                  {bodyguardSearchingLoading ? 'Loading…' : 'Bodyguards searching time'}
+                </BtnSecondary>
               </div>
+              {bodyguardSearchingData && (
+                <div className="space-y-2 border border-primary/25 rounded-lg p-2 bg-black/20">
+                  <p className="text-[10px] font-bold text-primary uppercase tracking-wide">Bodyguard hunts currently searching</p>
+                  {bodyguardSearchingData.note && (
+                    <p className="text-[9px] text-mutedForeground font-heading border border-zinc-700/40 rounded px-2 py-1">{bodyguardSearchingData.note}</p>
+                  )}
+                  {(!bodyguardSearchingData.rows || bodyguardSearchingData.rows.length === 0) ? (
+                    <p className="text-[10px] text-mutedForeground">No bodyguard searches are currently in searching state for this user.</p>
+                  ) : (
+                    <div className="max-h-[320px] overflow-auto rounded border border-zinc-700/50">
+                      <table className="w-full text-left border-collapse text-[9px] font-heading min-w-[820px]">
+                        <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                          <tr className="border-b border-zinc-700/50">
+                            <th className="py-1 px-1 font-bold text-mutedForeground uppercase">Bodyguard</th>
+                            <th className="py-1 px-1 font-bold text-mutedForeground uppercase">Owner</th>
+                            <th className="py-1 px-1 font-bold text-mutedForeground uppercase">Search started</th>
+                            <th className="py-1 px-1 font-bold text-mutedForeground uppercase">Found at</th>
+                            <th className="py-1 px-1 font-bold text-mutedForeground uppercase">Elapsed</th>
+                            <th className="py-1 px-1 font-bold text-mutedForeground uppercase">Remaining</th>
+                            <th className="py-1 px-1 font-bold text-mutedForeground uppercase">Total find time</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {bodyguardSearchingData.rows.map((r, idx) => {
+                            const fmtSecs = (n) => {
+                              if (n == null) return '—';
+                              const sec = Math.max(0, Number(n) || 0);
+                              const h = Math.floor(sec / 3600);
+                              const m = Math.floor((sec % 3600) / 60);
+                              const s = sec % 60;
+                              if (h > 0) return `${h}h ${m}m ${s}s`;
+                              if (m > 0) return `${m}m ${s}s`;
+                              return `${s}s`;
+                            };
+                            return (
+                              <tr key={`${r.attack_id || 'a'}-${idx}`} className="border-b border-zinc-700/30 align-top">
+                                <td className="py-1 px-1">{r.target_username || '—'}</td>
+                                <td className="py-1 px-1">
+                                  {r.bodyguard_owner_username || '—'}
+                                  {r.bodyguard_owner_id ? <div className="text-[8px] font-mono text-mutedForeground break-all">{r.bodyguard_owner_id}</div> : null}
+                                </td>
+                                <td className="py-1 px-1 text-mutedForeground whitespace-nowrap">{r.search_started ? formatAdminDateTime(r.search_started) : '—'}</td>
+                                <td className="py-1 px-1 text-mutedForeground whitespace-nowrap">{r.found_at ? formatAdminDateTime(r.found_at) : '—'}</td>
+                                <td className="py-1 px-1 font-mono">{fmtSecs(r.elapsed_seconds)}</td>
+                                <td className="py-1 px-1 font-mono text-amber-300">{fmtSecs(r.remaining_seconds)}</td>
+                                <td className="py-1 px-1 font-mono">{fmtSecs(r.search_total_seconds)}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+              {robotHiresData && (
+                <div className="space-y-2 border border-primary/25 rounded-lg p-2 bg-black/20">
+                  <p className="text-[10px] font-bold text-primary uppercase tracking-wide">Robot hire history (detailed)</p>
+                  {robotHiresData.note && (
+                    <p className="text-[9px] text-mutedForeground font-heading border border-zinc-700/40 rounded px-2 py-1">{robotHiresData.note}</p>
+                  )}
+                  {(!robotHiresData.hires || robotHiresData.hires.length === 0) ? (
+                    <p className="text-[10px] text-mutedForeground">No robot hires in range.</p>
+                  ) : (
+                    <div className="max-h-[420px] overflow-auto rounded border border-zinc-700/50">
+                      <table className="w-full text-left border-collapse text-[9px] font-heading min-w-[900px]">
+                        <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                          <tr className="border-b border-zinc-700/50">
+                            <th className="py-1 px-1 font-bold text-mutedForeground uppercase whitespace-nowrap">Hire at</th>
+                            <th className="py-1 px-1 font-bold text-mutedForeground uppercase">Slot</th>
+                            <th className="py-1 px-1 font-bold text-mutedForeground uppercase">Robot</th>
+                            <th className="py-1 px-1 font-bold text-mutedForeground uppercase">Guard user id</th>
+                            <th className="py-1 px-1 font-bold text-mutedForeground uppercase">Cost / base / infl</th>
+                            <th className="py-1 px-1 font-bold text-mutedForeground uppercase">Ledger Δpts</th>
+                            <th className="py-1 px-1 font-bold text-mutedForeground uppercase">Outcome</th>
+                            <th className="py-1 px-1 font-bold text-mutedForeground uppercase">Detail</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {robotHiresData.hires.map((row, idx) => {
+                            const h = row.hire || {};
+                            const ledger = row.point_ledger || null;
+                            const key = `rh-${idx}-${h.at || idx}`;
+                            const open = robotHiresExpandKey === key;
+                            const od = row.outcome_detail || {};
+                            const outcomeCls =
+                              row.outcome_label === 'Active' ? 'text-emerald-400' :
+                              row.outcome_label === 'Killed' ? 'text-red-400' :
+                              row.outcome_label === 'Replaced' ? 'text-amber-400' :
+                              'text-mutedForeground';
+                            const infl = [h.inflation_level_before, h.inflation_mult != null ? `${Number(h.inflation_mult).toFixed(4)}×` : null, h.event_bodyguard_cost_mult != null ? `ev×${h.event_bodyguard_cost_mult}` : null].filter(Boolean).join(' · ');
+                            const ledgerPts = ledger ? `${ledger.points ?? '—'}` : '—';
+                            const walletLn = ledger && (ledger.wallet_points_before != null || ledger.wallet_points_after != null)
+                              ? `${ledger.wallet_points_before ?? '?' }→${ledger.wallet_points_after ?? '?'}`
+                              : '';
+                            let outcomeExtra = '';
+                            if (row.outcome_label === 'Killed') {
+                              outcomeExtra = [od.killer_username, od.bullets_used != null ? `${od.bullets_used} b` : null, od.location_state].filter(Boolean).join(' · ');
+                            } else if (row.outcome_label === 'Replaced') {
+                              outcomeExtra = [od.admin_username, od.reason].filter(Boolean).join(' · ');
+                            }
+                            return (
+                              <tr key={key} className="border-b border-zinc-700/30 align-top">
+                                <td className="py-1 px-1 text-mutedForeground font-mono whitespace-nowrap">{h.at ? formatAdminDateTime(h.at) : '—'}</td>
+                                <td className="py-1 px-1 font-mono">{h.slot ?? '—'}</td>
+                                <td className="py-1 px-1 max-w-[120px] truncate" title={h.bodyguard_username || ''}>{h.bodyguard_username || '—'}</td>
+                                <td className="py-1 px-1 font-mono text-[8px] break-all max-w-[140px]">{h.guard_user_id || '—'}</td>
+                                <td className="py-1 px-1 font-mono whitespace-nowrap">
+                                  {h.hire_cost ?? '—'} <span className="text-mutedForeground">/ {h.base_slot_cost ?? '—'}</span>
+                                  {infl ? <div className="text-[8px] text-mutedForeground">{infl}</div> : null}
+                                </td>
+                                <td className="py-1 px-1 font-mono text-[8px]">
+                                  {ledgerPts}
+                                  {ledger?.id ? <div className="text-mutedForeground truncate max-w-[100px]" title={ledger.id}>{ledger.id.slice(0, 8)}…</div> : null}
+                                  {walletLn ? <div className="text-mutedForeground">{walletLn}</div> : null}
+                                </td>
+                                <td className={`py-1 px-1 font-semibold whitespace-nowrap ${outcomeCls}`}>
+                                  {row.outcome_label || '—'}
+                                  {row.still_active ? <span className="block text-[8px] text-emerald-500/80 font-normal">slot active</span> : null}
+                                </td>
+                                <td className="py-1 px-1 text-[8px] text-mutedForeground max-w-[200px]">
+                                  {row.outcome_at ? <div>{formatAdminDateTime(row.outcome_at)}</div> : null}
+                                  {outcomeExtra ? <div className="truncate" title={outcomeExtra}>{outcomeExtra}</div> : null}
+                                  <button
+                                    type="button"
+                                    onClick={() => setRobotHiresExpandKey(open ? null : key)}
+                                    className="mt-0.5 px-1 py-0.5 rounded border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                                  >
+                                    {open ? 'Hide JSON' : 'Raw JSON'}
+                                  </button>
+                                  {open && (
+                                    <pre className="mt-1 text-[8px] font-mono bg-zinc-950/90 p-2 rounded border border-zinc-700/40 max-h-52 overflow-auto whitespace-pre-wrap">
+                                      {JSON.stringify(row, null, 2)}
+                                    </pre>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
               {bodyguardAuditData && (
                 <div className="space-y-3 overflow-x-auto">
                   <p className="text-[10px] font-heading text-primary">
