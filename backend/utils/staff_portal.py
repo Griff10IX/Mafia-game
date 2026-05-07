@@ -72,11 +72,12 @@ def staff_portal_password_matches(given: str) -> bool:
         return False
 
 
-# Paths under /api/.../admin/... that do not require the portal token (SPA bootstrap).
+# Paths that must work without X-Staff-Portal-Token (bootstrap + SPA staff flags).
 _STAFF_PORTAL_EXEMPT_PATHS = frozenset(
     {
         "/api/admin/check",
         "/api/admin/whoami",
+        "/api/auth/staff-portal-unlock",
     }
 )
 
