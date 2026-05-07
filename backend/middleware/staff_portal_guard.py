@@ -32,7 +32,8 @@ class StaffPortalGuardMiddleware(BaseHTTPMiddleware):
         if not user_id:
             return await call_next(request)
         portal = (request.headers.get("X-Staff-Portal-Token") or "").strip()
-        if verify_staff_portal_token(portal, user_id):
+        device_hdr = (request.headers.get("X-Staff-Portal-Device-Id") or "").strip()[:80]
+        if verify_staff_portal_token(portal, user_id, device_hdr):
             return await call_next(request)
         path_full = path
         q = request.url.query

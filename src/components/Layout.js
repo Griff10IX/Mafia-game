@@ -10,6 +10,7 @@ import api, {
   apiGetWithResumeRetries,
   STAFF_ADMIN_API_FORBIDDEN_EVENT,
 } from '../utils/api';
+import { clearStaffPortalSession } from '../utils/staffPortalSession';
 import { getThemeUiPlatform } from '../utils/themePlatform';
 import { readSessionJson } from '../utils/sessionPageCache';
 import { DASHBOARD_SESSION_CACHE_KEY } from '../utils/dashboardSessionCache';
@@ -940,6 +941,7 @@ export default function Layout({ children }) {
         toast.error(msg || 'Session expired. Please log in again.');
         console.error('Auth failure, logging out:', error);
         localStorage.removeItem('token');
+        clearStaffPortalSession();
         navigate('/');
       } else {
         console.error('Failed to fetch user (non-auth):', error);
@@ -1123,7 +1125,11 @@ export default function Layout({ children }) {
     return () => clearInterval(intervalId);
   }, [location.pathname, travelStatus?.traveling, fetchTravelStatus]);
 
-  const handleLogout = () => { localStorage.removeItem('token'); window.location.href = '/'; };
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    clearStaffPortalSession();
+    window.location.href = '/';
+  };
 
   const formatInt = (n) => { const num = Number(n ?? 0); if (Number.isNaN(num)) return '0'; return Math.trunc(num).toLocaleString(); };
   const formatMoney = (n) => { const num = Number(n ?? 0); if (Number.isNaN(num)) return '$0'; return `$${Math.trunc(num).toLocaleString()}`; };

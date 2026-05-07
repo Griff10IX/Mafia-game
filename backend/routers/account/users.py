@@ -80,14 +80,14 @@ def register(router):
     async def get_online_users(current_user: dict = Depends(get_current_user)):
         """Returns online and idle users with status field."""
         now = datetime.now(timezone.utc)
-        five_min_ago = now - timedelta(minutes=5)
-        ten_min_ago = now - timedelta(minutes=10)
+        online_cutoff = now - timedelta(minutes=ONLINE_LAST_SEEN_MINUTES)
+        idle_cutoff = now - timedelta(minutes=IDLE_LAST_SEEN_MAX_MINUTES)
         users = await db.users.find(
             {
                 "is_dead": {"$ne": True},
                 "is_bodyguard": {"$ne": True},
                 "$or": [
-                    {"last_seen": {"$gte": ten_min_ago.isoformat()}},  # Include idle users (5-10 min)
+                    {"last_seen": {"$gte": idle_cutoff.isoformat()}},  # Include idle users (online window .. idle max)
                     {"forced_online_until": {"$gt": now.isoformat()}},
                     {"$and": [{"auto_rank_enabled": True}, {"auto_rank_idle": {"$ne": True}}]},  # auto-rank not idle
                 ],

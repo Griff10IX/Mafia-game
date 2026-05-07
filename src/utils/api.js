@@ -1,5 +1,11 @@
 import axios from 'axios';
-import { clearStaffPortalToken, getStaffPortalToken, isStaffPortalTokenValid } from './staffPortalSession';
+import {
+  clearStaffPortalSession,
+  clearStaffPortalToken,
+  getOrCreateStaffPortalDeviceId,
+  getStaffPortalToken,
+  isStaffPortalTokenValid,
+} from './staffPortalSession';
 
 // Empty or unset = same origin (e.g. Linode: Nginx serves app and proxies /api)
 const raw = (process.env.REACT_APP_BACKEND_URL && process.env.REACT_APP_BACKEND_URL.trim())
@@ -175,6 +181,10 @@ api.interceptors.request.use((config) => {
   const pt = getStaffPortalToken();
   if (pt && isStaffPortalTokenValid(pt)) {
     config.headers['X-Staff-Portal-Token'] = pt;
+    const did = getOrCreateStaffPortalDeviceId();
+    if (did) {
+      config.headers['X-Staff-Portal-Device-Id'] = did;
+    }
   }
   if (typeof window !== 'undefined') {
     const p = (window.location?.pathname || '/').replace(/\/+/g, '/');
@@ -470,6 +480,7 @@ api.interceptors.response.use(
           sessionStorage.setItem(AUTH_ERROR_KEY, msg);
         } catch (_) {}
         localStorage.removeItem('token');
+        clearStaffPortalSession();
         window.location.replace('/');
       }
     }
@@ -582,12 +593,20 @@ export function sendToastEvent(payload) {
     const endpoint = `${API}/admin/toast-events/ingest`;
     const body = JSON.stringify(payload || {});
 
+    const headers = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    };
+    const pt = getStaffPortalToken();
+    if (pt && isStaffPortalTokenValid(pt)) {
+      headers['X-Staff-Portal-Token'] = pt;
+      const did = getOrCreateStaffPortalDeviceId();
+      if (did) headers['X-Staff-Portal-Device-Id'] = did;
+    }
+
     fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-      },
+      headers,
       body,
       credentials: 'same-origin',
       keepalive: true,

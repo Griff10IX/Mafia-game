@@ -14,6 +14,8 @@ _LOG_EXEMPT_EXACT = frozenset(
         "/api/admin/whoami",
         "/api/admin/presence",
         "/api/admin/presence/heartbeat",
+        "/api/admin/toast-events/ingest",
+        "/api/forum/entertainer/admin/config",
         "/api/admin/tool-access-audit",
         "/api/admin/tool-access/shell-open",
     }

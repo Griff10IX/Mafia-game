@@ -33,18 +33,18 @@ def _secret_alg():
     return srv.SECRET_KEY, srv.ALGORITHM
 
 
-def create_staff_portal_token(user_id: str) -> str:
+def create_staff_portal_token(user_id: str, client_device_id: Optional[str] = None) -> str:
     sk, alg = _secret_alg()
     minutes = staff_portal_session_minutes()
     exp = datetime.now(timezone.utc) + timedelta(minutes=minutes)
-    return jwt.encode(
-        {"sub": str(user_id), "typ": _STAFF_PORTAL_TYP, "exp": exp},
-        sk,
-        algorithm=alg,
-    )
+    claims: dict = {"sub": str(user_id), "typ": _STAFF_PORTAL_TYP, "exp": exp}
+    did = (client_device_id or "").strip()[:80]
+    if len(did) >= 8:
+        claims["did"] = did
+    return jwt.encode(claims, sk, algorithm=alg)
 
 
-def verify_staff_portal_token(portal_jwt: str, user_id: str) -> bool:
+def verify_staff_portal_token(portal_jwt: str, user_id: str, client_device_id: Optional[str] = None) -> bool:
     if not portal_jwt or not user_id:
         return False
     try:
@@ -54,7 +54,18 @@ def verify_staff_portal_token(portal_jwt: str, user_id: str) -> bool:
         return False
     if payload.get("typ") != _STAFF_PORTAL_TYP:
         return False
-    return str(payload.get("sub") or "") == str(user_id)
+    if str(payload.get("sub") or "") != str(user_id):
+        return False
+    bound = str(payload.get("did") or "").strip()
+    if len(bound) >= 8:
+        hdr = (client_device_id or "").strip()[:80]
+        if len(hdr) != len(bound):
+            return False
+        try:
+            return hmac.compare_digest(hdr.encode("utf-8"), bound.encode("utf-8"))
+        except Exception:
+            return False
+    return True
 
 
 def staff_portal_password_matches(given: str) -> bool:

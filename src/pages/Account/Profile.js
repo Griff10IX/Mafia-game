@@ -3,6 +3,11 @@ import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink, X } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
+import {
+  getOrCreateStaffPortalDeviceId,
+  isStaffPortalTokenValid,
+  setStaffPortalToken,
+} from '../../utils/staffPortalSession';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
 import PrestigeBadge from '../../components/PrestigeBadge';
@@ -102,6 +107,8 @@ function honourLeaderboardTo(h) {
   return `/game/leaderboard?period=alltime&board=${encodeURIComponent(board)}&rank=${encodeURIComponent(rank)}`;
 }
 
+const STAFF_ADMIN_HOME = '/staffrole/admin/overview';
+
 const StaffProfileActions = ({ username, isDead, isAdmin, isModerator, onDone }) => {
   const [loading, setLoading] = useState(null);
   const handleLock = async () => {
@@ -185,10 +192,10 @@ const StaffProfileActions = ({ username, isDead, isAdmin, isModerator, onDone })
         )}
         <Tooltip><TooltipTrigger asChild><button type="button" onClick={handleUnmute} disabled={!!loading} className={btn} title="Unmute forum"><Volume2 size={12} className="md:w-3.5 md:h-3.5" /></button></TooltipTrigger><TooltipContent>Unmute from forum</TooltipContent></Tooltip>
         <Tooltip><TooltipTrigger asChild><button type="button" onClick={handleForceOnline} disabled={!!loading} className={btn} title="Force online 1hr"><Radio size={12} className="md:w-3.5 md:h-3.5" /></button></TooltipTrigger><TooltipContent>Force online (1 hour)</TooltipContent></Tooltip>
-        <Tooltip><TooltipTrigger asChild><Link to={{ pathname: '/admin', state: { activityLogUsername: username, gamblingLogUsername: username } }} className={btn} title="Activity log"><FileText size={12} className="md:w-3.5 md:h-3.5" /></Link></TooltipTrigger><TooltipContent>Activity log</TooltipContent></Tooltip>
-        <Tooltip><TooltipTrigger asChild><Link to={{ pathname: '/admin', state: { gamblingLogUsername: username } }} className={btn} title="Gambling log"><Dices size={12} className="md:w-3.5 md:h-3.5" /></Link></TooltipTrigger><TooltipContent>Gambling log</TooltipContent></Tooltip>
+        <Tooltip><TooltipTrigger asChild><Link to={{ pathname: STAFF_ADMIN_HOME, state: { activityLogUsername: username, gamblingLogUsername: username } }} className={btn} title="Activity log"><FileText size={12} className="md:w-3.5 md:h-3.5" /></Link></TooltipTrigger><TooltipContent>Activity log</TooltipContent></Tooltip>
+        <Tooltip><TooltipTrigger asChild><Link to={{ pathname: STAFF_ADMIN_HOME, state: { gamblingLogUsername: username } }} className={btn} title="Gambling log"><Dices size={12} className="md:w-3.5 md:h-3.5" /></Link></TooltipTrigger><TooltipContent>Gambling log</TooltipContent></Tooltip>
       </TooltipProvider>
-      <Link to={{ pathname: '/admin', state: { targetUsername: username } }} className="text-[9px] font-heading text-primary/80 hover:text-primary ml-auto">Mute / more in Admin →</Link>
+      <Link to={{ pathname: STAFF_ADMIN_HOME, state: { targetUsername: username } }} className="text-[9px] font-heading text-primary/80 hover:text-primary ml-auto">Mute / more in Admin →</Link>
     </div>
   );
 };
@@ -245,6 +252,10 @@ const ProfileInfoCard = ({
   showCarsOnProfile = true,
   isAdmin = false,
   isModerator = false,
+  hasAdminEmail = false,
+  staffLoginSession = false,
+  staffPortalEnabled = false,
+  staffPortalSessionMin = 30,
   onStaffActionDone,
   staffDetailsOpen = false,
   setStaffDetailsOpen,
@@ -264,7 +275,55 @@ const ProfileInfoCard = ({
   const [killDebugOpen, setKillDebugOpen] = useState(false);
   const [killDebugLoading, setKillDebugLoading] = useState(false);
   const [killDebugError, setKillDebugError] = useState(null);
+  const [staffPortalUnlockBusy, setStaffPortalUnlockBusy] = useState(false);
+  const [staffPortalUnlockPwd, setStaffPortalUnlockPwd] = useState('');
+  const [staffPortalUnlockErr, setStaffPortalUnlockErr] = useState('');
+  const [staffPortalClientTick, setStaffPortalClientTick] = useState(0);
+
+  const staffViewerCaps = isAdmin || isModerator || hasAdminEmail;
+  const staffShellGateOk = staffViewerCaps && staffLoginSession;
+  const portalUnlocked = useMemo(() => {
+    void staffPortalClientTick;
+    return !staffPortalEnabled || isStaffPortalTokenValid();
+  }, [staffPortalEnabled, staffPortalClientTick]);
+  const staffCanUseAdminApi = staffShellGateOk && portalUnlocked;
+
+  const submitProfileStaffPortalUnlock = async (e) => {
+    e.preventDefault();
+    setStaffPortalUnlockErr('');
+    const pwd = (staffPortalUnlockPwd || '').trim();
+    if (!pwd) {
+      setStaffPortalUnlockErr('Enter the staff portal password.');
+      return;
+    }
+    setStaffPortalUnlockBusy(true);
+    try {
+      const res = await api.post('/auth/staff-portal-unlock', {
+        password: staffPortalUnlockPwd,
+        client_device_id: getOrCreateStaffPortalDeviceId(),
+      });
+      const tok = res.data?.staff_portal_token;
+      if (!tok) {
+        setStaffPortalUnlockErr('Unexpected response.');
+        return;
+      }
+      setStaffPortalToken(tok);
+      setStaffPortalUnlockPwd('');
+      setStaffPortalClientTick((n) => n + 1);
+      toast.success('Staff portal unlocked — profile tools are active.');
+    } catch (err) {
+      const d = err?.response?.data?.detail;
+      setStaffPortalUnlockErr(typeof d === 'string' ? d : 'Unlock failed.');
+    } finally {
+      setStaffPortalUnlockBusy(false);
+    }
+  };
+
   const fetchKillDebug = async () => {
+    if (!staffCanUseAdminApi) {
+      toast.error('Use staff login and staff portal password before admin debug tools.');
+      return;
+    }
     if (killDebugLoading) return;
     setKillDebugLoading(true);
     setKillDebugError(null);
@@ -348,9 +407,9 @@ const ProfileInfoCard = ({
         component: (
           <span className="flex items-center gap-1.5 justify-end">
             <span className="text-red-400 font-heading font-bold text-[10px] md:text-sm">{String(profile.kills ?? 0)}</span>
-            <button type="button" onClick={fetchKillDebug} disabled={killDebugLoading}
+            <button type="button" onClick={fetchKillDebug} disabled={killDebugLoading || !staffCanUseAdminApi}
               className="text-[8px] px-1.5 py-0.5 rounded border border-zinc-600/50 bg-zinc-800/50 text-zinc-400 hover:text-primary hover:border-primary/40 transition-colors disabled:opacity-50"
-              title="Debug kill count">
+              title={staffCanUseAdminApi ? 'Debug kill count' : 'Requires staff login + staff portal unlock'}>
               {killDebugLoading ? '...' : 'debug'}
             </button>
           </span>
@@ -485,8 +544,58 @@ const ProfileInfoCard = ({
       </div>
 
       {/* Staff actions: Lock, Unlock, Kill, Revive, Mute, Unmute, Activity log, Gambling log */}
-      {!isMe && (isAdmin || isModerator) && profile?.username && (
+      {!isMe && staffViewerCaps && profile?.username && (
         <>
+          {!staffShellGateOk ? (
+            <div className="px-2.5 py-2 md:px-3 bg-amber-950/35 border-b border-amber-600/30 text-[9px] font-heading text-amber-100/95 leading-relaxed">
+              <span className="font-bold uppercase tracking-wider text-amber-300">Staff login required</span>
+              {' '}
+              Profile tools use the same session as Admin.
+              {' '}
+              <Link to="/staff-entrance" className="text-primary font-bold underline underline-offset-2 hover:text-primary/90">
+                Staff entrance
+              </Link>
+              {' '}
+              — sign in with your staff password, then return here.
+            </div>
+          ) : staffPortalEnabled && !portalUnlocked ? (
+            <form
+              onSubmit={submitProfileStaffPortalUnlock}
+              className="px-2.5 py-2 md:px-3 bg-zinc-950/85 border-b border-primary/30 flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-2"
+            >
+              <div className="min-w-0 flex-1">
+                <span className="text-[8px] font-heading font-bold text-primary uppercase tracking-wider block mb-1">
+                  Staff portal password
+                </span>
+                <input
+                  type="password"
+                  value={staffPortalUnlockPwd}
+                  onChange={(ev) => setStaffPortalUnlockPwd(ev.target.value)}
+                  placeholder="Second factor (same as Admin)"
+                  autoComplete="current-password"
+                  className="w-full max-w-xs rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-foreground"
+                  disabled={staffPortalUnlockBusy}
+                />
+                {staffPortalUnlockErr ? (
+                  <p className="text-[10px] text-red-400 mt-1 font-heading" role="alert">
+                    {staffPortalUnlockErr}
+                  </p>
+                ) : (
+                  <p className="text-[9px] text-mutedForeground mt-1">
+                    Required for admin API calls from profiles. Session about {staffPortalSessionMin} minutes after unlock.
+                  </p>
+                )}
+              </div>
+              <button
+                type="submit"
+                disabled={staffPortalUnlockBusy}
+                className="px-3 py-1.5 rounded border border-primary/50 bg-primary/20 text-primary text-[9px] font-heading font-bold uppercase tracking-wider hover:bg-primary/30 disabled:opacity-50 shrink-0 touch-manipulation"
+              >
+                {staffPortalUnlockBusy ? '…' : 'Unlock profile tools'}
+              </button>
+            </form>
+          ) : (
+            <>
           <StaffProfileActions
             username={profile.username}
             isDead={!!profile.is_dead}
@@ -514,6 +623,8 @@ const ProfileInfoCard = ({
               refetchProfile();
             }}
           />
+            </>
+          )}
         </>
       )}
 
@@ -1204,6 +1315,9 @@ export default function Profile() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
+  const [staffLoginSession, setStaffLoginSession] = useState(false);
+  const [staffPortalEnabled, setStaffPortalEnabled] = useState(false);
+  const [staffPortalSessionMin, setStaffPortalSessionMin] = useState(30);
   const [prefs, setPrefs] = useState({ ent_games: true, oc_invites: true, attacks: true, system: true, quicktrade: true, messages: true, forum_topic_reply: true, forum_comment_reply: true, forum_mention: true, designer_comp: true });
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
@@ -1364,6 +1478,9 @@ export default function Profile() {
         setIsAdmin(!!adminRes.data?.is_admin);
         setIsModerator(!!adminRes.data?.is_moderator);
         setHasAdminEmail(!!adminRes.data?.has_admin_email);
+        setStaffLoginSession(!!adminRes.data?.staff_login_session);
+        setStaffPortalEnabled(!!adminRes.data?.staff_portal_enabled);
+        setStaffPortalSessionMin(Number(adminRes.data?.staff_portal_session_minutes) || 30);
       } catch (e) {
         toast.error('Failed to load your account');
       } finally {
@@ -1775,6 +1892,16 @@ export default function Profile() {
   };
 
   const toggleGhostMode = async () => {
+    const caps = isAdmin || isModerator || hasAdminEmail;
+    if (caps && !staffLoginSession) {
+      toast.error('Use staff login (Staff entrance) for admin actions.');
+      navigate('/staff-entrance');
+      return;
+    }
+    if (caps && staffPortalEnabled && !isStaffPortalTokenValid()) {
+      toast.error('Enter the staff portal password first (unlock on a profile or open Admin).');
+      return;
+    }
     try {
       const res = await api.post('/admin/ghost-mode');
       const enabled = res.data?.admin_ghost_mode ?? false;
@@ -1794,11 +1921,24 @@ export default function Profile() {
       setIsAdmin(!!r.data?.is_admin);
       setIsModerator(!!r.data?.is_moderator);
       setHasAdminEmail(!!r.data?.has_admin_email);
+      setStaffLoginSession(!!r.data?.staff_login_session);
+      setStaffPortalEnabled(!!r.data?.staff_portal_enabled);
+      setStaffPortalSessionMin(Number(r.data?.staff_portal_session_minutes) || 30);
       window.dispatchEvent(new CustomEvent('app:admin-changed'));
     } catch (_) {}
   };
 
   const toggleActAsNormal = async () => {
+    const caps = isAdmin || isModerator || hasAdminEmail;
+    if (caps && !staffLoginSession) {
+      toast.error('Use staff login (Staff entrance) for admin actions.');
+      navigate('/staff-entrance');
+      return;
+    }
+    if (caps && staffPortalEnabled && !isStaffPortalTokenValid()) {
+      toast.error('Enter the staff portal password first (unlock on a profile or open Admin).');
+      return;
+    }
     try {
       const acting = !me?.admin_acting_as_normal;
       await api.post('/admin/act-as-normal', null, { params: { acting } });
@@ -2544,6 +2684,10 @@ export default function Profile() {
               showCarsOnProfile={profile.show_cars_on_profile}
               isAdmin={isAdmin}
               isModerator={isModerator}
+              hasAdminEmail={hasAdminEmail}
+              staffLoginSession={staffLoginSession}
+              staffPortalEnabled={staffPortalEnabled}
+              staffPortalSessionMin={staffPortalSessionMin}
               onStaffActionDone={async () => {
                 await refetchProfile({ silent: true, usernameOverride: username || profile?.username });
               }}

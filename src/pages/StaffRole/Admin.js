@@ -868,6 +868,8 @@ export default function Admin() {
   const [toolAccessAudit, setToolAccessAudit] = useState(null);
   const [toolAccessAuditLoading, setToolAccessAuditLoading] = useState(false);
   const [toolAccessAuditHours, setToolAccessAuditHours] = useState('72');
+  /** null = live ~90s heartbeat window; 24 = past day for "who had admin open" table */
+  const [toolAccessPresenceWithinHours, setToolAccessPresenceWithinHours] = useState(null);
   const [revokeOldSessionsLoading, setRevokeOldSessionsLoading] = useState(false);
   const [revokeOldUserSessionsLoading, setRevokeOldUserSessionsLoading] = useState(false);
   const [viewRegistrationLoading, setViewRegistrationLoading] = useState(false);
@@ -4349,13 +4351,16 @@ export default function Admin() {
     }
   };
 
-  const handleLoadToolAccessAudit = async () => {
+  const handleLoadToolAccessAudit = async (presenceOverride = undefined) => {
     setToolAccessAuditLoading(true);
     try {
       const h = Math.max(1, Math.min(720, parseInt(toolAccessAuditHours, 10) || 72));
-      const res = await api.get('/admin/tool-access-audit', {
-        params: { hours: h, event_limit: 500, denial_limit: 150 },
-      });
+      const presenceWin = presenceOverride !== undefined ? presenceOverride : toolAccessPresenceWithinHours;
+      const params = { hours: h, event_limit: 500, denial_limit: 150 };
+      if (presenceWin != null && Number(presenceWin) > 0) {
+        params.presence_within_hours = Number(presenceWin);
+      }
+      const res = await api.get('/admin/tool-access-audit', { params });
       setToolAccessAudit(res.data ?? null);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load staff tool access audit');
@@ -14493,9 +14498,92 @@ export default function Admin() {
             </div>
             {toolAccessAudit != null ? (
               <div>
-                <h3 className="text-[9px] font-heading font-bold uppercase tracking-widest text-mutedForeground mb-1">
-                  On admin now ({toolAccessAudit.stale_after_seconds ?? 90}s window)
-                </h3>
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-1">
+                  <h3 className="text-[9px] font-heading font-bold uppercase tracking-widest text-mutedForeground">
+                    {toolAccessAudit.presence_within_hours === 168
+                      ? 'Admin tabs (last heartbeat within 7 days)'
+                      : toolAccessAudit.presence_within_hours != null && toolAccessAudit.presence_within_hours > 0
+                        ? `Admin tabs (last heartbeat within ${toolAccessAudit.presence_within_hours}h)`
+                        : `On admin now (~${toolAccessAudit.stale_after_seconds ?? 90}s window)`}
+                  </h3>
+                  <div className="flex flex-wrap gap-1.5">
+                    <BtnSecondary
+                      type="button"
+                      disabled={toolAccessAuditLoading}
+                      onClick={() => {
+                        setToolAccessPresenceWithinHours(null);
+                        void handleLoadToolAccessAudit(null);
+                      }}
+                      className={toolAccessPresenceWithinHours == null ? 'ring-1 ring-primary/50' : ''}
+                    >
+                      Live (~90s)
+                    </BtnSecondary>
+                    <BtnSecondary
+                      type="button"
+                      disabled={toolAccessAuditLoading}
+                      onClick={() => {
+                        setToolAccessPresenceWithinHours(24);
+                        void handleLoadToolAccessAudit(24);
+                      }}
+                      className={toolAccessPresenceWithinHours === 24 ? 'ring-1 ring-primary/50' : ''}
+                    >
+                      Past 24h
+                    </BtnSecondary>
+                    <BtnSecondary
+                      type="button"
+                      disabled={toolAccessAuditLoading}
+                      onClick={() => {
+                        setToolAccessPresenceWithinHours(168);
+                        void handleLoadToolAccessAudit(168);
+                      }}
+                      className={toolAccessPresenceWithinHours === 168 ? 'ring-1 ring-primary/50' : ''}
+                    >
+                      Past 7d
+                    </BtnSecondary>
+                  </div>
+                </div>
+                {Array.isArray(toolAccessAudit.unique_accounts) && toolAccessAudit.unique_accounts.length > 0 ? (
+                  <div className="mb-2">
+                    <div className="text-[8px] font-heading uppercase tracking-wider text-zinc-500 mb-1">
+                      By account ({toolAccessAudit.unique_accounts.length})
+                    </div>
+                    <div className="max-h-[160px] overflow-auto rounded border border-zinc-700/40">
+                      <table className="w-full text-[9px] font-mono">
+                        <thead className="sticky top-0 bg-zinc-900/95 text-mutedForeground text-left">
+                          <tr>
+                            <th className="p-1.5 font-heading">User</th>
+                            <th className="p-1.5 font-heading">Tabs</th>
+                            <th className="p-1.5 font-heading">Last seen</th>
+                            <th className="p-1.5 font-heading">IP(s)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {toolAccessAudit.unique_accounts.map((acc) => {
+                            const ips = Array.isArray(acc.ips) ? acc.ips : [];
+                            const ipCell = ips.length === 0 ? '—' : ips.length === 1 ? ips[0] : `${ips[0]} +${ips.length - 1}`;
+                            return (
+                              <tr key={acc.user_id} className="border-t border-zinc-800/80 align-top">
+                                <td className="p-1.5">
+                                  <span className={acc.is_self ? 'text-emerald-400' : 'text-foreground'}>
+                                    {acc.username || '?'}
+                                    {acc.is_self ? ' (you)' : ''}
+                                  </span>
+                                </td>
+                                <td className="p-1.5 text-zinc-300">{acc.tab_count ?? 1}</td>
+                                <td className="p-1.5 whitespace-nowrap text-zinc-400">
+                                  {formatAdminDateTime(acc.last_seen_at) || acc.last_seen_at || '—'}
+                                </td>
+                                <td className="p-1.5 text-zinc-400 break-all" title={ips.join(', ')}>
+                                  {ipCell}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : null}
                 {Array.isArray(toolAccessAudit.active_viewers) && toolAccessAudit.active_viewers.length > 0 ? (
                   <div className="max-h-[200px] overflow-auto rounded border border-zinc-700/40">
                     <table className="w-full text-[9px] font-mono">
@@ -14524,7 +14612,13 @@ export default function Admin() {
                     </table>
                   </div>
                 ) : (
-                  <p className="text-[10px] text-mutedForeground">No active admin tabs right now.</p>
+                  <p className="text-[10px] text-mutedForeground">
+                    {toolAccessAudit.presence_within_hours === 168
+                      ? 'No admin tabs with a heartbeat in the last 7 days.'
+                      : toolAccessAudit.presence_within_hours != null && toolAccessAudit.presence_within_hours > 0
+                        ? `No admin tabs with a heartbeat in the last ${toolAccessAudit.presence_within_hours} hour(s).`
+                        : 'No active admin tabs right now.'}
+                  </p>
                 )}
               </div>
             ) : null}

@@ -1023,7 +1023,7 @@ def _snitch_success_roll() -> bool:
 async def _get_random_online_user(exclude_user_id: str):
     """Return one random user who is online, not in jail, not dead, not self, and not in snitch immunity (snitched on in last 5 mins)."""
     now = datetime.now(timezone.utc)
-    five_min_ago = now - timedelta(minutes=5)
+    online_recent = now - timedelta(minutes=ONLINE_LAST_SEEN_MINUTES)
     cursor = db.users.find(
         {
             "id": {"$ne": exclude_user_id},

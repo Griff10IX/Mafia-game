@@ -12,7 +12,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import Depends, HTTPException, Request
-from pydantic import BaseModel, EmailStr, field_validator, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from utils.ban_user_wipe import user_has_active_account_ban
 from utils.disposable_email import is_disposable_email
@@ -83,6 +83,11 @@ class PasswordResetConfirm(BaseModel):
 
 class StaffPortalUnlockBody(BaseModel):
     password: str = ""
+    client_device_id: Optional[str] = Field(
+        default=None,
+        max_length=80,
+        description="Per-browser opaque id; embedded in portal JWT so the token only works on this client.",
+    )
 
 
 class VerifyEmailBody(BaseModel):
@@ -1151,7 +1156,7 @@ def register(router):
         if not uid:
             raise HTTPException(status_code=401, detail="Invalid session")
         return {
-            "staff_portal_token": create_staff_portal_token(uid),
+            "staff_portal_token": create_staff_portal_token(uid, body.client_device_id),
             "expires_in_seconds": staff_portal_session_minutes() * 60,
         }
 

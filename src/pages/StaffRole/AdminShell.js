@@ -3,7 +3,12 @@ import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-route
 import { Search, User, ChevronDown, Users, Lock } from 'lucide-react';
 import api, { STAFF_ADMIN_API_FORBIDDEN_EVENT } from '../../utils/api';
 import { getAdminPresenceTabId } from '../../utils/adminPresence';
-import { isStaffPortalTokenValid, setStaffPortalToken } from '../../utils/staffPortalSession';
+import {
+  clearStaffPortalToken,
+  getOrCreateStaffPortalDeviceId,
+  isStaffPortalTokenValid,
+  setStaffPortalToken,
+} from '../../utils/staffPortalSession';
 import Admin from './Admin';
 import AdminUsersOnline from './AdminUsersOnline';
 import AdminAttackLogs from './AdminAttackLogs';
@@ -112,7 +117,10 @@ export default function AdminShell() {
   }, [staffPortalEnabled, staffAllowed]);
   const [presenceOpen, setPresenceOpen] = useState(false);
   const [presenceRows, setPresenceRows] = useState([]);
+  const [presenceUniqueAccounts, setPresenceUniqueAccounts] = useState([]);
   const [presenceStaleSec, setPresenceStaleSec] = useState(90);
+  /** null = ~90s live; 24 / 168 = heartbeat lookback for overview */
+  const [presenceWithinHours, setPresenceWithinHours] = useState(null);
   const [presenceLoading, setPresenceLoading] = useState(false);
   /** Bumps periodically so "Xs ago" stays fresh while the panel is open. */
   const [presenceSeenTick, setPresenceSeenTick] = useState(0);
@@ -122,15 +130,21 @@ export default function AdminShell() {
   const fetchPresence = useCallback(async () => {
     setPresenceLoading(true);
     try {
-      const res = await api.get('/admin/presence');
+      const params = {};
+      if (presenceWithinHours != null && presenceWithinHours > 0) {
+        params.within_hours = presenceWithinHours;
+      }
+      const res = await api.get('/admin/presence', { params });
       setPresenceRows(Array.isArray(res.data?.viewers) ? res.data.viewers : []);
+      setPresenceUniqueAccounts(Array.isArray(res.data?.unique_accounts) ? res.data.unique_accounts : []);
       setPresenceStaleSec(Number(res.data?.stale_after_seconds) || 90);
     } catch {
       setPresenceRows([]);
+      setPresenceUniqueAccounts([]);
     } finally {
       setPresenceLoading(false);
     }
-  }, []);
+  }, [presenceWithinHours]);
 
   useEffect(() => {
     let cancelled = false;
@@ -250,11 +264,12 @@ export default function AdminShell() {
   useEffect(() => {
     if (!presenceOpen) return undefined;
     void fetchPresence();
+    const pollMs = presenceWithinHours ? 45000 : 12000;
     const id = setInterval(() => {
       void fetchPresence();
-    }, 12000);
+    }, pollMs);
     return () => clearInterval(id);
-  }, [presenceOpen, fetchPresence]);
+  }, [presenceOpen, fetchPresence, presenceWithinHours]);
 
   useEffect(() => {
     if (!presenceOpen) return undefined;
@@ -349,7 +364,10 @@ export default function AdminShell() {
     }
     setPortalBusy(true);
     try {
-      const res = await api.post('/auth/staff-portal-unlock', { password: portalPassword });
+      const res = await api.post('/auth/staff-portal-unlock', {
+        password: portalPassword,
+        client_device_id: getOrCreateStaffPortalDeviceId(),
+      });
       const tok = res.data?.staff_portal_token;
       if (!tok) {
         setPortalError('Unexpected response. Try again.');
@@ -363,6 +381,22 @@ export default function AdminShell() {
       setPortalError(typeof d === 'string' ? d : 'Unlock failed.');
     } finally {
       setPortalBusy(false);
+    }
+  };
+
+  const handleLockStaffPortal = () => {
+    if (typeof window !== 'undefined') {
+      const ok = window.confirm(
+        'Lock staff tools? Admin API calls will stop until you enter the staff portal password again (your game login stays active).',
+      );
+      if (!ok) return;
+    }
+    clearStaffPortalToken();
+    setPortalRefreshTick((t) => t + 1);
+    try {
+      window.dispatchEvent(new CustomEvent('staff-portal-expired'));
+    } catch {
+      /* ignore */
     }
   };
 
@@ -426,6 +460,22 @@ export default function AdminShell() {
               <p className="text-[10px] sm:text-xs text-mutedForeground">
                 Route-based tooling with consolidated sections and legacy-compatible anchors. Timestamps use UK time (GMT / BST).
               </p>
+              {staffPortalEnabled && staffPortalOk ? (
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleLockStaffPortal}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-950/40 px-2 py-1 text-[9px] font-heading font-bold uppercase tracking-wider text-amber-200/95 hover:bg-amber-900/50 touch-manipulation"
+                    title="Clear staff portal unlock now so the password is required again (does not log you out of the game)"
+                  >
+                    <Lock size={12} className="shrink-0 opacity-90" aria-hidden />
+                    Lock staff tools
+                  </button>
+                  <span className="text-[9px] text-mutedForeground leading-snug max-w-[14rem] md:max-w-none">
+                    Ends the staff password session early (~{staffPortalSessionMin} min unlock otherwise).
+                  </span>
+                </div>
+              ) : null}
             </div>
             <div ref={presencePanelRef} className="flex flex-col items-end gap-1 shrink-0 relative">
               <div className="flex items-center gap-2">
@@ -441,7 +491,7 @@ export default function AdminShell() {
                   aria-expanded={presenceOpen}
                   aria-haspopup="dialog"
                   className="inline-flex items-center gap-1.5 rounded-md border border-primary/35 bg-zinc-950/80 px-2 py-1 text-[9px] font-heading font-bold uppercase tracking-wider text-primary hover:bg-primary/15"
-                  title="Who has staff admin pages open in this browser session"
+                  title="Staff on admin: live (~90s), last 24h, or last 7 days (by heartbeat)"
                 >
                   <Users size={14} className="shrink-0 opacity-90" aria-hidden />
                   Staff on admin
@@ -451,10 +501,49 @@ export default function AdminShell() {
                 </div>
               </div>
               {presenceOpen && (
-                <div className="absolute right-0 top-full mt-1 z-50 w-[min(100vw-1.5rem,22rem)] rounded-lg border border-primary/25 bg-zinc-950/95 backdrop-blur shadow-xl p-2 text-left">
-                  <div className="flex items-center justify-between gap-2 mb-1.5 px-0.5">
+                <div className="absolute right-0 top-full mt-1 z-50 w-[min(100vw-1.5rem,24rem)] rounded-lg border border-primary/25 bg-zinc-950/95 backdrop-blur shadow-xl p-2 text-left">
+                  <div className="flex flex-wrap gap-1 mb-1.5 px-0.5" role="tablist" aria-label="Presence time range">
+                    <button
+                      type="button"
+                      onClick={() => setPresenceWithinHours(null)}
+                      className={`rounded px-1.5 py-0.5 text-[8px] font-heading font-bold uppercase tracking-wider border ${
+                        presenceWithinHours == null
+                          ? 'border-primary/50 bg-primary/15 text-primary'
+                          : 'border-zinc-700/80 text-mutedForeground hover:border-primary/30'
+                      }`}
+                    >
+                      Live
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPresenceWithinHours(24)}
+                      className={`rounded px-1.5 py-0.5 text-[8px] font-heading font-bold uppercase tracking-wider border ${
+                        presenceWithinHours === 24
+                          ? 'border-primary/50 bg-primary/15 text-primary'
+                          : 'border-zinc-700/80 text-mutedForeground hover:border-primary/30'
+                      }`}
+                    >
+                      24h
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPresenceWithinHours(168)}
+                      className={`rounded px-1.5 py-0.5 text-[8px] font-heading font-bold uppercase tracking-wider border ${
+                        presenceWithinHours === 168
+                          ? 'border-primary/50 bg-primary/15 text-primary'
+                          : 'border-zinc-700/80 text-mutedForeground hover:border-primary/30'
+                      }`}
+                    >
+                      7d
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 mb-1 px-0.5">
                     <span className="text-[9px] font-heading font-bold uppercase tracking-wider text-mutedForeground">
-                      Active ({presenceStaleSec}s window)
+                      {presenceWithinHours === 168
+                        ? 'Last 7 days (heartbeat)'
+                        : presenceWithinHours === 24
+                          ? 'Last 24 hours (heartbeat)'
+                          : `Active (~${presenceStaleSec}s)`}
                     </span>
                     <button
                       type="button"
@@ -465,12 +554,58 @@ export default function AdminShell() {
                       {presenceLoading ? '…' : 'Refresh'}
                     </button>
                   </div>
+                  {presenceUniqueAccounts.length > 0 ? (
+                    <div className="mb-2">
+                      <div className="text-[8px] font-heading uppercase tracking-wider text-zinc-500 px-0.5 mb-1">
+                        By account ({presenceUniqueAccounts.length})
+                      </div>
+                      <ul className="max-h-36 overflow-y-auto space-y-1 rounded border border-zinc-800/80 bg-zinc-900/40 p-1">
+                        {presenceUniqueAccounts.map((acc) => {
+                          const ips = Array.isArray(acc.ips) ? acc.ips : [];
+                          const ipLine =
+                            ips.length === 0 ? '—' : ips.length === 1 ? ips[0] : `${ips[0]} +${ips.length - 1}`;
+                          return (
+                            <li
+                              key={acc.user_id}
+                              className={`rounded px-1.5 py-1 text-[9px] font-heading leading-snug ${
+                                acc.is_self ? 'bg-emerald-500/10 text-emerald-100/95' : 'text-foreground'
+                              }`}
+                            >
+                              <div className="flex justify-between gap-1">
+                                <span className="font-bold truncate">
+                                  {acc.username || '?'}
+                                  {acc.is_self ? ' (you)' : ''}
+                                </span>
+                                <span className="shrink-0 text-mutedForeground tabular-nums">
+                                  {acc.tab_count > 1 ? `${acc.tab_count} tabs` : '1 tab'}
+                                </span>
+                              </div>
+                              <div className="text-[8px] text-zinc-500 mt-0.5">
+                                Last{' '}
+                                <span className="text-mutedForeground">{formatSeenAgo(acc.last_seen_at, presenceSeenTick)}</span>
+                              </div>
+                              <div className="text-[8px] text-zinc-500 font-mono truncate mt-0.5" title={ips.join(', ')}>
+                                {ipLine}
+                              </div>
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  ) : null}
+                  <div className="text-[8px] font-heading uppercase tracking-wider text-zinc-500 px-0.5 mb-1">
+                    Browser tabs ({presenceRows.length})
+                  </div>
                   {presenceRows.length === 0 ? (
                     <p className="text-[10px] text-mutedForeground font-heading px-0.5 py-2">
-                      {presenceLoading ? 'Loading…' : 'No other heartbeats in window (only this tab may be open).'}
+                      {presenceLoading
+                        ? 'Loading…'
+                        : presenceWithinHours
+                          ? 'No admin heartbeats in this range (staff must have had admin open with a live tab).'
+                          : 'No heartbeats in window (only this tab may be open).'}
                     </p>
                   ) : (
-                    <ul className="max-h-64 overflow-y-auto space-y-1.5">
+                    <ul className="max-h-52 overflow-y-auto space-y-1.5">
                       {presenceRows.map((row) => (
                         <li
                           key={`${row.user_id || ''}-${row.tab_id || ''}`}

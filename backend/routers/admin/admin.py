@@ -6207,13 +6207,21 @@ def register(router):
 
     PRESENCE_STALE_SEC = 90
 
-    async def _admin_presence_active_viewers(me_id: str):
-        cutoff = datetime.now(timezone.utc) - timedelta(seconds=PRESENCE_STALE_SEC)
+    async def _admin_presence_active_viewers(me_id: str, presence_within_hours: Optional[int] = None):
+        """List admin_tool_presence rows with last_seen in the lookback window (default ~90s live; optional hours for audit)."""
+        if presence_within_hours is not None and presence_within_hours > 0:
+            h = min(168, max(1, int(presence_within_hours)))
+            lookback_sec = h * 3600
+            max_rows = 500
+        else:
+            lookback_sec = PRESENCE_STALE_SEC
+            max_rows = 200
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=lookback_sec)
         cursor = db.admin_tool_presence.find(
             {"last_seen_at": {"$gte": cutoff}},
             {"_id": 0, "user_id": 1, "username": 1, "tab_id": 1, "section": 1, "route_path": 1, "last_seen_at": 1, "ip": 1, "device_type": 1},
         ).sort("last_seen_at", -1)
-        rows = await cursor.to_list(200)
+        rows = await cursor.to_list(max_rows)
         viewers = []
         for r in rows:
             uid = str(r.get("user_id") or "")
@@ -6232,6 +6240,45 @@ def register(router):
                 }
             )
         return viewers
+
+    def _summarize_presence_accounts(viewers: list) -> list:
+        """One row per user_id: latest heartbeat, tab count, distinct IPs, last route (for overview popover)."""
+        by_uid: Dict[str, Dict[str, Any]] = {}
+        for v in viewers or []:
+            uid = str(v.get("user_id") or "").strip()
+            if not uid:
+                continue
+            ts_str = str(v.get("last_seen_at") or "")
+            ip = (v.get("ip") or "").strip()
+            if uid not in by_uid:
+                by_uid[uid] = {
+                    "user_id": uid,
+                    "username": v.get("username") or "?",
+                    "last_seen_at": ts_str,
+                    "tab_count": 0,
+                    "ips": set(),
+                    "last_section": v.get("section"),
+                    "last_route_path": v.get("route_path"),
+                    "is_self": bool(v.get("is_self")),
+                }
+            ent = by_uid[uid]
+            ent["tab_count"] = int(ent.get("tab_count") or 0) + 1
+            if ip:
+                ent["ips"].add(ip)
+            old_ts = str(ent.get("last_seen_at") or "")
+            if ts_str and (not old_ts or ts_str > old_ts):
+                ent["last_seen_at"] = ts_str
+                ent["username"] = v.get("username") or ent.get("username") or "?"
+                ent["last_section"] = v.get("section")
+                ent["last_route_path"] = v.get("route_path")
+                ent["is_self"] = bool(v.get("is_self"))
+        out: list = []
+        for ent in by_uid.values():
+            ips_set = ent.pop("ips", set())
+            ent["ips"] = sorted(ips_set) if isinstance(ips_set, set) else []
+            out.append(ent)
+        out.sort(key=lambda x: str(x.get("last_seen_at") or ""), reverse=True)
+        return out
 
     @router.post("/admin/presence/heartbeat")
     async def admin_presence_heartbeat(
@@ -6264,13 +6311,32 @@ def register(router):
         return {"ok": True}
 
     @router.get("/admin/presence")
-    async def admin_presence_list(current_user: dict = Depends(get_current_user)):
-        """Who currently has staff admin routes open (recent heartbeats)."""
+    async def admin_presence_list(
+        current_user: dict = Depends(get_current_user),
+        within_hours: Optional[int] = Query(
+            default=None,
+            ge=1,
+            le=168,
+            description="If set, include tabs whose last admin heartbeat was within this many hours (default ~90s).",
+        ),
+    ):
+        """Who has staff admin open: default live window (~90s); optional within_hours for day/week overview."""
         if not _staff_shell_access(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         me_id = str(current_user.get("id") or "")
-        viewers = await _admin_presence_active_viewers(me_id)
-        return {"viewers": viewers, "stale_after_seconds": PRESENCE_STALE_SEC}
+        if within_hours is not None and within_hours > 0:
+            presence_window_seconds = min(168, max(1, int(within_hours))) * 3600
+        else:
+            presence_window_seconds = PRESENCE_STALE_SEC
+        viewers = await _admin_presence_active_viewers(me_id, presence_within_hours=within_hours)
+        unique_accounts = _summarize_presence_accounts(viewers)
+        return {
+            "viewers": viewers,
+            "stale_after_seconds": PRESENCE_STALE_SEC,
+            "presence_within_hours": within_hours,
+            "presence_window_seconds": presence_window_seconds,
+            "unique_accounts": unique_accounts,
+        }
 
     @router.post("/admin/tool-access/shell-open")
     async def admin_tool_access_shell_open(
@@ -6301,6 +6367,12 @@ def register(router):
         hours: int = Query(72, ge=1, le=720),
         event_limit: int = Query(500, ge=1, le=2000),
         denial_limit: int = Query(150, ge=0, le=500),
+        presence_within_hours: Optional[int] = Query(
+            default=None,
+            ge=1,
+            le=168,
+            description="If set, list admin tabs whose last heartbeat was within this many hours (default is ~90s live only).",
+        ),
         current_user: dict = Depends(require_admin_or_mod),
     ):
         """Recent successful staff API usage, SPA shell opens, live admin tabs, and staff-route denials."""
@@ -6310,7 +6382,12 @@ def register(router):
         now = datetime.now(timezone.utc)
         cutoff_iso = (now - timedelta(hours=hours)).isoformat()
         me_id = str(current_user.get("id") or "")
-        viewers = await _admin_presence_active_viewers(me_id)
+        if presence_within_hours is not None and presence_within_hours > 0:
+            presence_window_seconds = min(168, max(1, int(presence_within_hours))) * 3600
+        else:
+            presence_window_seconds = PRESENCE_STALE_SEC
+        viewers = await _admin_presence_active_viewers(me_id, presence_within_hours=presence_within_hours)
+        unique_accounts = _summarize_presence_accounts(viewers)
 
         ev_cursor = db[_TOOL_ACCESS_COL].find({"created_at": {"$gte": cutoff_iso}}, {"_id": 0}).sort("created_at", -1).limit(
             event_limit
@@ -6327,7 +6404,10 @@ def register(router):
         return {
             "hours": hours,
             "stale_after_seconds": PRESENCE_STALE_SEC,
+            "presence_window_seconds": presence_window_seconds,
+            "presence_within_hours": presence_within_hours,
             "active_viewers": viewers,
+            "unique_accounts": unique_accounts,
             "events": events,
             "denials": denials,
         }
