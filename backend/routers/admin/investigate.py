@@ -22,12 +22,7 @@ def register(router):
     import server as srv
 
     db = srv.db
-    get_current_user = srv.get_current_user
-    _is_admin = srv._is_admin
-    _is_moderator = srv._is_moderator
-
-    def _admin_or_mod(user: dict) -> bool:
-        return _is_admin(user) or _is_moderator(user)
+    require_admin_or_mod = srv.require_admin_or_mod
 
     def _parse_ts(s: Any) -> Optional[datetime]:
         if s is None:
@@ -53,15 +48,13 @@ def register(router):
         user_id: Optional[str] = Query(None, description="Exact user id"),
         username: Optional[str] = Query(None, description="Exact username (case-insensitive)"),
         activity_hours: int = Query(24, ge=1, le=168, description="Window for hourly activity buckets"),
-        current_user: dict = Depends(get_current_user),
+        current_user: dict = Depends(require_admin_or_mod),
     ):
         """
         Single payload for bot/script review: user snapshot, security flags, activity density,
         minigame play timing stats, suspicious login touches, auto-rank telegram link flag.
         Admin or moderator.
         """
-        if not _admin_or_mod(current_user):
-            raise HTTPException(status_code=403, detail="Admin or moderator access required")
         uid = (user_id or "").strip()
         uname = (username or "").strip()
         if not uid and not uname:
@@ -222,11 +215,9 @@ def register(router):
     async def admin_investigate_bot_blocks(
         user_id: Optional[str] = Query(None),
         limit: int = Query(80, ge=1, le=200),
-        current_user: dict = Depends(get_current_user),
+        current_user: dict = Depends(require_admin_or_mod),
     ):
         """Recent script/bot client block events (TTL collection). Admin or moderator."""
-        if not _admin_or_mod(current_user):
-            raise HTTPException(status_code=403, detail="Admin or moderator access required")
         q: Dict[str, Any] = {}
         uid = (user_id or "").strip()
         if uid:
@@ -241,14 +232,12 @@ def register(router):
     async def admin_investigate_user_ip_check(
         user_id: Optional[str] = Query(None, description="Exact user id"),
         username: Optional[str] = Query(None, description="Exact username (case-insensitive)"),
-        current_user: dict = Depends(get_current_user),
+        current_user: dict = Depends(require_admin_or_mod),
     ):
         """
         Admin/mod: unique sign-in IPs, per-IP ISP/mobile/hosting (ip-api.com, cached 7d), chronological login_history,
         session IPs, and heuristics (e.g. shift between mobile carriers).
         """
-        if not _admin_or_mod(current_user):
-            raise HTTPException(status_code=403, detail="Admin or moderator access required")
         uid = (user_id or "").strip()
         uname = (username or "").strip()
         if not uid and not uname:
@@ -428,15 +417,13 @@ def register(router):
     @router.get("/admin/investigate/attack-client-spoof-report")
     async def admin_attack_client_spoof_report(
         hours: int = Query(24, ge=1, le=168),
-        current_user: dict = Depends(get_current_user),
+        current_user: dict = Depends(require_admin_or_mod),
     ):
         """
         Summarize execute_token integrity failures plus client signal / IP / user correlation.
         Optional: counts rows in attack_client_audit (search starts) in the same window.
         Admin or moderator.
         """
-        if not _admin_or_mod(current_user):
-            raise HTTPException(status_code=403, detail="Admin or moderator access required")
         now = datetime.now(timezone.utc)
         since = now - timedelta(hours=hours)
         since_iso = since.isoformat()

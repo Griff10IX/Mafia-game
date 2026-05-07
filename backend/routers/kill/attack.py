@@ -31,10 +31,10 @@ from server import (
     MIN_BULLETS_TO_KILL,
     DEFAULT_HEALTH,
     KILL_CASH_PERCENT,
-    ADMIN_EMAILS,
     _is_admin,
     _is_hdo,
     _is_moderator,
+    user_has_admin_list_email,
     CAPO_RANK_ID,
     GODFATHER_RANK_ID,
     get_rank_info,
@@ -1145,9 +1145,7 @@ async def search_target(payload: AttackSearchRequest, req: Request, current_user
     target = await db.users.find_one(user_filter, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="Target user not found")
-    if target.get("email") in ADMIN_EMAILS:
-        raise HTTPException(status_code=404, detail="Target user not found")
-    if _is_moderator(target):
+    if user_has_admin_list_email(target) or _is_moderator(target):
         raise HTTPException(status_code=404, detail="Target user not found")
     if target.get("is_dead"):
         raise HTTPException(status_code=400, detail="That account is dead and cannot be attacked")
@@ -1571,7 +1569,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         )
     if not target.get("is_npc"):
         await apply_passive_health_regen(target["id"], target)
-    if target.get("email") in ADMIN_EMAILS or _is_moderator(target):
+    if user_has_admin_list_email(target) or _is_moderator(target):
         await _log_attack_error(current_user["id"], current_user.get("username"), "Target cannot be attacked", req)
         raise HTTPException(status_code=403, detail="Target cannot be attacked")
     target_armour = target.get("armour_level", 0)
@@ -2619,7 +2617,7 @@ async def get_attack_timeline(
         _is_admin(current_user)
         or _is_moderator(current_user)
         or _is_hdo(current_user)
-        or (current_user.get("email") in ADMIN_EMAILS)
+        or user_has_admin_list_email(current_user)
     )
     timeline_user = current_user
     if target_username and str(target_username).strip():

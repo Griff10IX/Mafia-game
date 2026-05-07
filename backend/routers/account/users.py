@@ -15,6 +15,7 @@ def register(router):
     get_current_user = srv.get_current_user
     get_rank_info = srv.get_rank_info
     _is_moderator = srv._is_moderator
+    user_has_admin_list_email = srv.user_has_admin_list_email
     ADMIN_EMAILS = srv.ADMIN_EMAILS
     PRESTIGE_CONFIGS = srv.PRESTIGE_CONFIGS
     OnlineUsersResponse = srv.OnlineUsersResponse
@@ -100,13 +101,13 @@ def register(router):
         for user in users:
             if not (user.get("username") or "").strip():
                 continue
-            if (user.get("email") in ADMIN_EMAILS or user.get("is_moderator")) and user.get("admin_ghost_mode"):
+            if (user_has_admin_list_email(user) or _is_moderator(user)) and user.get("admin_ghost_mode"):
                 continue
             uid = user.get("id")
             _rp = int(user.get("rank_points") or 0)
             _prestige_mult = float(user.get("prestige_rank_multiplier") or 1.0)
             rank_id, rank_name = get_rank_info(_rp, _prestige_mult)
-            is_admin = user.get("email") in ADMIN_EMAILS
+            is_admin = user_has_admin_list_email(user)
             is_mod = bool(user.get("is_moderator"))
             is_hdo = bool(user.get("is_help_desk_operator"))
             is_ent = bool(user.get("is_entertainer"))
@@ -333,7 +334,7 @@ def register(router):
                 "username": username,
                 "is_dead": bool(u.get("is_dead")),
                 "in_jail": bool(u.get("in_jail")),
-                "is_admin": bool(u.get("email") in ADMIN_EMAILS),
+                "is_admin": bool(user_has_admin_list_email(u)),
                 "is_moderator": bool(_is_moderator(u)),
             })
         return {"users": result}

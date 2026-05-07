@@ -1764,6 +1764,7 @@ def register(router):
     get_current_user = srv.get_current_user
     _is_admin = srv._is_admin
     _is_moderator = srv._is_moderator
+    require_admin_or_mod = srv.require_admin_or_mod
     cron_secret = (os.environ.get("CRON_SECRET") or "").strip()
     telegram_webhook_secret = (os.environ.get("TELEGRAM_WEBHOOK_SECRET") or "").strip()
     game_bot_token = (getattr(security_module, "TELEGRAM_BOT_TOKEN", None) or "").strip()
@@ -2373,11 +2374,9 @@ def register(router):
     async def admin_auto_rank_user_inspect(
         user_id: Optional[str] = Query(None, description="Exact user id"),
         username: Optional[str] = Query(None, description="Exact username (case-insensitive)"),
-        current_user: dict = Depends(get_current_user),
+        current_user: dict = Depends(require_admin_or_mod),
     ):
         """Admin/mod: full Auto Rank preferences, booze/travel snapshot, selection labels, and live stats for one user."""
-        if not (_is_admin(current_user) or _is_moderator(current_user)):
-            raise HTTPException(status_code=403, detail="Admin or moderator access required")
         import re
 
         uid = (user_id or "").strip()

@@ -16,6 +16,7 @@ from server import (
     ADMIN_EMAILS,
     _is_admin,
     _is_moderator,
+    user_has_admin_list_email,
 )
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_NOTIFICATIONS
 
@@ -239,7 +240,7 @@ def register(router):
             raise HTTPException(status_code=404, detail="User not found")
         
         # Check if target is an admin or moderator - normal users cannot message them directly
-        target_is_staff = (target.get("email") or "") in (ADMIN_EMAILS or []) or target.get("is_moderator")
+        target_is_staff = user_has_admin_list_email(target) or _is_moderator(target)
         sender_is_staff = _is_admin(current_user) or _is_moderator(current_user)
         
         if target_is_staff and not sender_is_staff:

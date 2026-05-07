@@ -979,10 +979,9 @@ def register(router):
     user_has_admin_list_email = getattr(srv, "user_has_admin_list_email", lambda _u: False)
     _staff_exclude_user_filter = srv._staff_exclude_user_filter
     effective_player_kill_count = srv.effective_player_kill_count
-
-    def _admin_or_mod(user: dict) -> bool:
-        """True if user is admin or moderator (mods have limited tools: logs, account info, lock user; no wealth/rank)."""
-        return _is_admin(user) or _is_moderator(user)
+    _admin_or_mod = srv._admin_or_mod
+    require_admin = srv.require_admin
+    require_admin_or_mod = srv.require_admin_or_mod
 
     def _can_forum_mute(user: dict) -> bool:
         """Admin, mod, or HDO can mute/unmute forum users."""
@@ -5544,10 +5543,8 @@ def register(router):
         return cur
 
     @router.post("/admin/lock-player")
-    async def admin_lock_player(target_username: str, lock_minutes: int = 0, current_user: dict = Depends(get_current_user)):
+    async def admin_lock_player(target_username: str, lock_minutes: int = 0, current_user: dict = Depends(require_admin_or_mod)):
         """Lock account for investigation: user can only access /locked page and submit one comment until unlocked. lock_minutes ignored (kept for API compat). Admin or moderator."""
-        if not _admin_or_mod(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
         username_pattern = _username_pattern(target_username)
         target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
         if not target:
@@ -5569,10 +5566,8 @@ def register(router):
         return {"message": f"Locked {target_username} for investigation. They can only access the locked page and submit one comment."}
 
     @router.post("/admin/unlock-account")
-    async def admin_unlock_account(target_username: str, current_user: dict = Depends(get_current_user)):
+    async def admin_unlock_account(target_username: str, current_user: dict = Depends(require_admin_or_mod)):
         """Unlock an account that was locked for investigation. Admin or moderator. Also clears login lockout (failed attempts) so they can log in again."""
-        if not _admin_or_mod(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
         username_pattern = _username_pattern(target_username)
         target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1, "email": 1})
         if not target:
@@ -5590,10 +5585,8 @@ def register(router):
         return {"message": f"Unlocked {target_username}. They can access the app again."}
 
     @router.get("/admin/locked-accounts")
-    async def admin_locked_accounts(current_user: dict = Depends(get_current_user)):
+    async def admin_locked_accounts(current_user: dict = Depends(require_admin_or_mod)):
         """List users currently locked for investigation (username, comment, dates). Admin or moderator."""
-        if not _admin_or_mod(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
         cursor = db.users.find(
             {"account_locked": True},
             {"_id": 0, "username": 1, "account_locked_at": 1, "account_locked_until": 1, "account_locked_comment": 1, "account_locked_comment_at": 1, "account_locked_admin_message": 1, "account_locked_admin_message_at": 1, "account_locked_user_reply": 1, "account_locked_user_reply_at": 1},
@@ -5602,10 +5595,8 @@ def register(router):
         return {"locked": users}
 
     @router.get("/admin/users-online-live")
-    async def admin_users_online_live(current_user: dict = Depends(get_current_user)):
+    async def admin_users_online_live(current_user: dict = Depends(require_admin_or_mod)):
         """List everyone actually online (last 5 min), with last click, last page, IP, and same-IP count. Admin or moderator."""
-        if not _admin_or_mod(current_user):
-            raise HTTPException(status_code=403, detail="Admin or moderator access required")
         now = datetime.now(timezone.utc)
         five_min_ago = now - timedelta(minutes=5)
         cursor = db.users.find(
@@ -5623,7 +5614,7 @@ def register(router):
         raw = await cursor.to_list(200)
         users = []
         for u in raw:
-            if (u.get("email") in ADMIN_EMAILS or u.get("is_moderator")) and u.get("admin_ghost_mode"):
+            if (user_has_admin_list_email(u) or _is_moderator(u)) and u.get("admin_ghost_mode"):
                 continue
             ip = _normalize_ip(u.get("last_request_ip") or u.get("last_login_ip") or "")
             users.append({
@@ -5651,10 +5642,10 @@ def register(router):
             u["same_ip_online_count"] = max(0, same)
         users.sort(key=lambda x: (x.get("last_seen") or ""), reverse=True)
         return {"users": users}
-    async def admin_test_lock_self(current_user: dict = Depends(get_current_user)):
+
+    @router.post("/admin/test-lock-self")
+    async def admin_test_lock_self(current_user: dict = Depends(require_admin)):
         """Lock the current admin for 60 seconds (test the locked page flow). Admin only."""
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
         now = datetime.now(timezone.utc)
         until = now + timedelta(seconds=60)
         now_iso = now.isoformat()
@@ -5677,10 +5668,8 @@ def register(router):
         message: str
 
     @router.post("/admin/locked-account-message")
-    async def admin_locked_account_message(body: LockedAccountMessageBody, current_user: dict = Depends(get_current_user)):
+    async def admin_locked_account_message(body: LockedAccountMessageBody, current_user: dict = Depends(require_admin_or_mod)):
         """Leave a message for a locked user; they see it on the locked page and can reply once. Admin or moderator."""
-        if not _admin_or_mod(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
         username_pattern = _username_pattern(body.target_username)
         target = await db.users.find_one({"username": username_pattern, "account_locked": True}, {"_id": 0, "id": 1, "username": 1})
         if not target:
@@ -5694,9 +5683,7 @@ def register(router):
         return {"message": f"Message sent to {target.get('username', body.target_username)}.", "account_locked_admin_message_at": now_iso}
 
     @router.post("/admin/kill-player")
-    async def admin_kill_player(target_username: str, current_user: dict = Depends(get_current_user)):
-        if not _admin_or_mod(current_user):
-            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+    async def admin_kill_player(target_username: str, current_user: dict = Depends(require_admin_or_mod)):
         username_pattern = _username_pattern(target_username)
         target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
         if not target:
@@ -5736,10 +5723,8 @@ def register(router):
         return {"message": f"Killed {target_username}. Account is dead (cannot login); use Dead to Alive to revive."}
 
     @router.post("/admin/give-auto-rank")
-    async def admin_give_auto_rank(target_username: str, current_user: dict = Depends(get_current_user)):
+    async def admin_give_auto_rank(target_username: str, current_user: dict = Depends(require_admin)):
         """Give a user auto rank: set auto_rank_purchased and auto_rank_enabled with default sub-options."""
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
         username_pattern = _username_pattern(target_username)
         target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
         if not target:
@@ -5758,10 +5743,8 @@ def register(router):
         return {"message": f"Auto rank given to {target.get('username', target_username)}", "username": target.get("username")}
 
     @router.post("/admin/remove-auto-rank")
-    async def admin_remove_auto_rank(target_username: str, current_user: dict = Depends(get_current_user)):
+    async def admin_remove_auto_rank(target_username: str, current_user: dict = Depends(require_admin)):
         """Remove auto rank from a user: clear purchased, enabled, and related fields/stats."""
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
         username_pattern = _username_pattern(target_username)
         target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
         if not target:
@@ -5794,9 +5777,7 @@ def register(router):
         return {"message": f"Auto rank removed from {target.get('username', target_username)}", "username": target.get("username")}
 
     @router.post("/admin/revive-player")
-    async def admin_revive_player(target_username: str, current_user: dict = Depends(get_current_user)):
-        if not _admin_or_mod(current_user):
-            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+    async def admin_revive_player(target_username: str, current_user: dict = Depends(require_admin_or_mod)):
         username_pattern = _username_pattern(target_username)
         target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
         if not target:

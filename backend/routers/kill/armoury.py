@@ -13,7 +13,7 @@ from fastapi import Depends, HTTPException, Request, Body
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from bson.objectid import ObjectId
 
-from server import db, get_current_user, get_effective_event, STATES, get_rank_info, user_prestige_rank_mult, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS, _get_staff_user_ids, send_notification, log_activity, log_minigame_payout
+from server import db, get_current_user, get_effective_event, STATES, get_rank_info, user_prestige_rank_mult, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, require_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS, _get_staff_user_ids, send_notification, log_activity, log_minigame_payout
 from utils.point_provenance import log_points_event
 from utils.speakeasy_rewards import (
     SPEAKEASY_DAILY_BULLETS,
@@ -1399,10 +1399,8 @@ async def store_buy_bullets(bullets: int, current_user: dict = Depends(get_curre
     return {"message": f"Bought {bullets:,} bullets for {cost_used} points", "bullets": bullets, "cost": cost_used}
 
 
-async def admin_add_bullets(target_username: str, bullets: int, current_user: dict = Depends(get_current_user)):
+async def admin_add_bullets(target_username: str, bullets: int, current_user: dict = Depends(require_admin)):
     """Admin: add bullets to a user."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin access required")
     if bullets <= 0:
         raise HTTPException(status_code=400, detail="Bullets must be greater than 0")
     username_pattern = _username_pattern(target_username)

@@ -26,6 +26,7 @@ from server import (
     STATES,
     _is_admin,
     log_activity,
+    require_admin,
     _staff_exclude_user_filter,
 )
 from utils.minigame_captcha_gate import require_turnstile_for_game_action
@@ -836,15 +837,11 @@ async def buy_booze_capacity(current_user: dict = Depends(get_current_user)):
     return {"message": f"+{add_bonus} booze capacity for {BOOZE_CAPACITY_UPGRADE_COST} points", "new_capacity": new_capacity, "capacity_bonus": current_bonus + add_bonus, "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX}
 
 
-async def admin_get_booze_rotation(current_user: dict = Depends(get_current_user)):
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
+async def admin_get_booze_rotation(current_user: dict = Depends(require_admin)):
     return {"rotation_seconds": _booze_rotation_override_seconds, "normal_hours": BOOZE_ROTATION_HOURS}
 
 
-async def admin_set_booze_rotation(request: AdminBoozeRotationRequest, current_user: dict = Depends(get_current_user)):
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
+async def admin_set_booze_rotation(request: AdminBoozeRotationRequest, current_user: dict = Depends(require_admin)):
     global _booze_rotation_override_seconds
     sec = request.seconds
     if sec is None or sec <= 0:
@@ -882,9 +879,7 @@ async def admin_set_booze_rotation(request: AdminBoozeRotationRequest, current_u
     return {"message": f"Booze rotation set to {sec} seconds", "rotation_seconds": sec}
 
 
-async def admin_get_booze_jail_chances(current_user: dict = Depends(get_current_user)):
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
+async def admin_get_booze_jail_chances(current_user: dict = Depends(require_admin)):
     lo, hi = _effective_jail_chance_bounds()
     return {
         "default_jail_chance_min": BOOZE_RUN_JAIL_CHANCE_MIN,
@@ -899,9 +894,7 @@ async def admin_get_booze_jail_chances(current_user: dict = Depends(get_current_
     }
 
 
-async def admin_get_booze_listed_price(current_user: dict = Depends(get_current_user)):
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
+async def admin_get_booze_listed_price(current_user: dict = Depends(require_admin)):
     m = get_booze_listed_price_mult()
     return {
         "listed_price_mult": m,
@@ -912,9 +905,7 @@ async def admin_get_booze_listed_price(current_user: dict = Depends(get_current_
     }
 
 
-async def admin_set_booze_listed_price(request: AdminBoozeListedPriceRequest, current_user: dict = Depends(get_current_user)):
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
+async def admin_set_booze_listed_price(request: AdminBoozeListedPriceRequest, current_user: dict = Depends(require_admin)):
     global _booze_listed_price_mult
     if request.reset:
         mult = 1.0
@@ -978,9 +969,7 @@ async def admin_set_booze_listed_price(request: AdminBoozeListedPriceRequest, cu
     }
 
 
-async def admin_set_booze_jail_chances(request: AdminBoozeJailChanceRequest, current_user: dict = Depends(get_current_user)):
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
+async def admin_set_booze_jail_chances(request: AdminBoozeJailChanceRequest, current_user: dict = Depends(require_admin)):
     global _booze_jail_min_override, _booze_jail_max_override
     now_iso = datetime.now(timezone.utc).isoformat()
     if request.reset:

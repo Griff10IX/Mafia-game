@@ -15,7 +15,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, field_validator
 
-from server import db, get_current_user, log_activity, send_notification, ADMIN_EMAILS
+from server import db, get_current_user, log_activity, send_notification, _is_moderator, user_has_admin_list_email
 
 logger = logging.getLogger(__name__)
 
@@ -418,8 +418,7 @@ async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
                 uid = _normalize_lottery_user_id(u.get("id"))
                 if not uid:
                     continue
-                email = (u.get("email") or "").strip().lower()
-                if bool(u.get("is_moderator")) or email in ADMIN_EMAILS:
+                if _is_moderator(u) or user_has_admin_list_email(u):
                     blocked_winner_ids.add(uid)
 
         amounts_by_user: dict[str, int] = defaultdict(int)

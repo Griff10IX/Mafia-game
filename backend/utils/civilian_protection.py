@@ -53,11 +53,11 @@ def is_civilian_protected(user: Optional[dict]) -> bool:
     if not user or user.get("is_npc"):
         return False
     try:
-        from server import ADMIN_EMAILS, _is_moderator
+        from server import _is_moderator, user_has_admin_list_email
 
         if _is_moderator(user):
             return False
-        if (user.get("email") or "") in ADMIN_EMAILS:
+        if user_has_admin_list_email(user):
             return False
     except Exception:
         pass

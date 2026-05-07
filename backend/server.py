@@ -2159,6 +2159,11 @@ async def maybe_process_rank_up(user_id: str, rank_points_before, rank_points_ad
 _raw = (os.environ.get("ADMIN_EMAILS") or "").strip()
 ADMIN_EMAILS = [e.strip().lower() for e in _raw.split(",") if e.strip()] if _raw else []
 
+# Moderator emails (same shape as ADMIN_EMAILS): grants moderator API/UI powers by email without DB is_moderator.
+# MODERATOR_EMAILS is an accepted alias for MOD_EMAILS.
+_raw_mod = (os.environ.get("MOD_EMAILS") or os.environ.get("MODERATOR_EMAILS") or "").strip()
+MOD_EMAILS = [e.strip().lower() for e in _raw_mod.split(",") if e.strip()] if _raw_mod else []
+
 # Emails excluded from admin cheat-detection batch queries and shown synthetic IP-check data (comma-separated, lowercased).
 _dupe_exempt_raw = (os.environ.get("DUPE_DETECTION_EXEMPT_EMAILS") or "").strip()
 DUPE_DETECTION_EXEMPT_EMAILS = (
@@ -2355,9 +2360,17 @@ def _is_admin(user: dict) -> bool:
     return bool(em and em in ADMIN_EMAILS) and not user.get("admin_acting_as_normal", False)
 
 
+def user_has_mod_list_email(user: Optional[dict]) -> bool:
+    """True if user's email is listed in MOD_EMAILS / MODERATOR_EMAILS (env; compare case-insensitive)."""
+    if not user:
+        return False
+    em = str(user.get("email") or "").strip().lower()
+    return bool(em and em in (MOD_EMAILS or []))
+
+
 def _is_moderator(user: dict) -> bool:
-    """True if user has been promoted to moderator (by an admin). Moderators have limited tools: logs, account info, lock user; no wealth/rank changes."""
-    return bool(user.get("is_moderator"))
+    """True if user is promoted in DB or their email is listed in MOD_EMAILS (env), same pattern as admin email list."""
+    return bool(user.get("is_moderator")) or user_has_mod_list_email(user)
 
 
 def _is_hdo(user: dict) -> bool:
@@ -2370,6 +2383,39 @@ def _is_entertainer(user: dict) -> bool:
     return bool(user.get("is_entertainer"))
 
 
+def _admin_or_mod(user: dict) -> bool:
+    """True if full admin (listed email, not act-as-normal) or moderator (DB flag or MOD_EMAILS)."""
+    return _is_admin(user) or _is_moderator(user)
+
+
+async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
+    """FastAPI dependency: 403 unless _is_admin (not available to act-as-normal or non-listed users)."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+
+async def require_admin_or_mod(current_user: dict = Depends(get_current_user)) -> dict:
+    """FastAPI dependency: 403 unless admin or moderator."""
+    if not _admin_or_mod(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+
+async def require_admin_verified(current_user: dict = Depends(get_current_user_verified)) -> dict:
+    """403 unless _is_admin; chains email-verified user (same rules as get_current_user_verified)."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+
+async def require_admin_or_mod_verified(current_user: dict = Depends(get_current_user_verified)) -> dict:
+    """403 unless admin or moderator; chains email-verified user."""
+    if not _admin_or_mod(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+
 def _staff_exclude_user_filter() -> dict:
     """Mongo match dict to exclude admin/mod accounts from queries on the users collection.
 
@@ -2377,9 +2423,15 @@ def _staff_exclude_user_filter() -> dict:
     (same as _is_admin / lottery); raw $nin missed mixed-case emails in the DB.
     """
     q: dict = {"is_moderator": {"$ne": True}}
-    admin_emails = [e.strip().lower() for e in (ADMIN_EMAILS or []) if e and str(e).strip()]
-    if admin_emails:
-        q["$nor"] = [{"email": re.compile("^" + re.escape(e) + "$", re.IGNORECASE)} for e in admin_emails]
+    staff_emails = sorted(
+        {
+            e.strip().lower()
+            for e in list(ADMIN_EMAILS or []) + list(MOD_EMAILS or [])
+            if e and str(e).strip()
+        }
+    )
+    if staff_emails:
+        q["$nor"] = [{"email": re.compile("^" + re.escape(e) + "$", re.IGNORECASE)} for e in staff_emails]
     return q
 
 
@@ -2396,9 +2448,7 @@ def user_has_admin_list_email(user: dict) -> bool:
 
 def _user_excluded_from_stat_leaderboards(user: dict) -> bool:
     """True if this account is excluded from /leaderboards/top and stat honours (mods + ADMIN_EMAILS)."""
-    if user.get("is_moderator"):
-        return True
-    return user_has_admin_list_email(user)
+    return _is_moderator(user) or user_has_admin_list_email(user)
 
 
 def expand_user_ids_for_mongo_nin(raw_ids) -> list:
@@ -2427,14 +2477,26 @@ def expand_user_ids_for_mongo_nin(raw_ids) -> list:
     return out
 
 
+async def _get_mod_env_user_ids(database=None) -> list:
+    """User IDs for accounts whose email is in MOD_EMAILS (env), excluding DB flag handling."""
+    dd = db if database is None else database
+    mod_emails = [e.strip().lower() for e in (MOD_EMAILS or []) if e and str(e).strip()]
+    if not mod_emails:
+        return []
+    or_clauses = [{"email": re.compile("^" + re.escape(e) + "$", re.IGNORECASE)} for e in mod_emails]
+    cursor = dd.users.find({"$or": or_clauses}, {"_id": 0, "id": 1})
+    return [u["id"] for u in await cursor.to_list(200)]
+
+
 async def _get_staff_user_ids(database=None) -> list:
     """Return user IDs of all admin and moderator accounts (for excluding from non-users collections)."""
     d = db if database is None else database
     mod_ids = [u["id"] for u in await d.users.find({"is_moderator": True}, {"_id": 0, "id": 1}).to_list(500)]
     admin_ids = await _get_admin_user_ids(d)
+    mod_env_ids = await _get_mod_env_user_ids(d)
     out: list = []
     seen = set()
-    for uid in mod_ids + admin_ids:
+    for uid in mod_ids + admin_ids + mod_env_ids:
         if uid and uid not in seen:
             seen.add(uid)
             out.append(uid)
@@ -2442,7 +2504,7 @@ async def _get_staff_user_ids(database=None) -> list:
 
 
 async def honours_stat_excluded_user_ids(database=None) -> list:
-    """User ids excluded from profile honour rank counts and public stat boards (mods + ADMIN_EMAILS).
+    """User ids excluded from profile honour rank counts and public stat boards (mods + MOD_EMAILS + ADMIN_EMAILS).
 
     Includes BSON type variants so ``$nin`` cannot miss staff rows when ``users.id`` is int vs str.
     """

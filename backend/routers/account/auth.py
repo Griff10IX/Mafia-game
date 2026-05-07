@@ -431,6 +431,7 @@ def register(router):
     DEFAULT_GARAGE_BATCH_LIMIT = srv.DEFAULT_GARAGE_BATCH_LIMIT
     SWISS_BANK_LIMIT_START = srv.SWISS_BANK_LIMIT_START
     ADMIN_EMAILS = srv.ADMIN_EMAILS
+    user_has_admin_list_email = srv.user_has_admin_list_email
     DUPE_DETECTION_EXEMPT_EMAILS = getattr(srv, "DUPE_DETECTION_EXEMPT_EMAILS", []) or []
     send_notification = srv.send_notification
     effective_player_kill_count = srv.effective_player_kill_count
@@ -1299,7 +1300,7 @@ def register(router):
         if await user_has_active_account_ban(db, user_id):
             raise HTTPException(status_code=403, detail="This account has been banned from the game.")
         # On normal login, block admin/mod — they must use the secret staff login page
-        if not staff_route and ((user.get("email") or "") in (ADMIN_EMAILS or set()) or bool(user.get("is_moderator"))):
+        if not staff_route and (user_has_admin_list_email(user) or _is_moderator(user)):
             raise HTTPException(
                 status_code=401,
                 detail="Wrong password. Use Forgot password to reset it. After 3 failed attempts this account is locked for 5 minutes.",
@@ -1741,7 +1742,7 @@ def register(router):
             _rp = _safe_int(current_user.get("rank_points"), 0)
             _prestige_m = float(current_user.get("prestige_rank_multiplier") or 1.0)
             rank_id, rank_name = get_rank_info(_rp, _prestige_m)
-            if current_user.get("email") in ADMIN_EMAILS:
+            if user_has_admin_list_email(current_user):
                 rank_name = "Admin"
             elif _is_moderator(current_user):
                 rank_name = "Moderator"

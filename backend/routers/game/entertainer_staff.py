@@ -26,12 +26,8 @@ def register(router):
     send_notification = srv.send_notification
     log_activity = srv.log_activity
     _is_entertainer = srv._is_entertainer
-    _is_admin = srv._is_admin
-    _is_moderator = srv._is_moderator
+    require_admin_or_mod = srv.require_admin_or_mod
     _username_pattern = srv._username_pattern
-
-    def _admin_or_mod(user: dict) -> bool:
-        return _is_admin(user) or _is_moderator(user)
 
     @router.post("/entertainer/reward-perk")
     async def entertainer_reward_perk(body: EntertainerRewardPerkBody, current_user: dict = Depends(get_current_user)):
@@ -113,10 +109,8 @@ def register(router):
     @router.get("/admin/entertainer-dashboard")
     async def entertainer_dashboard_admin(
         target_username: str = Query(..., description="Entertainer username to inspect"),
-        current_user: dict = Depends(get_current_user),
+        current_user: dict = Depends(require_admin_or_mod),
     ):
-        if not _admin_or_mod(current_user):
-            raise HTTPException(status_code=403, detail="Admin or moderator access required")
         uname = (target_username or "").strip()
         if not uname:
             raise HTTPException(status_code=400, detail="target_username required")

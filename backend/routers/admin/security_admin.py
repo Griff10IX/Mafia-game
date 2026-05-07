@@ -66,36 +66,25 @@ def register(router):
     from middleware.security import get_security_summary
 
     db = srv.db
-    get_current_user = srv.get_current_user
-    ADMIN_EMAILS = srv.ADMIN_EMAILS
+    require_admin = srv.require_admin
 
-    async def get_security_dashboard(current_user: dict = Depends(get_current_user)):
-        if current_user.get("email") not in ADMIN_EMAILS:
-            raise HTTPException(status_code=403, detail="Admin access required")
+    async def get_security_dashboard(current_user: dict = Depends(require_admin)):
         return await get_security_summary(db)
 
-    async def get_security_logs(current_user: dict = Depends(get_current_user)):
-        if current_user.get("email") not in ADMIN_EMAILS:
-            raise HTTPException(status_code=403, detail="Admin access required")
+    async def get_security_logs(current_user: dict = Depends(require_admin)):
         logs = await db.security_logs.find({}, {"_id": 0}).sort("created_at", -1).limit(100).to_list(100)
         return {"logs": logs}
 
-    async def get_active_bans(current_user: dict = Depends(get_current_user)):
-        if current_user.get("email") not in ADMIN_EMAILS:
-            raise HTTPException(status_code=403, detail="Admin access required")
+    async def get_active_bans(current_user: dict = Depends(require_admin)):
         bans = await db.bans.find({"active": True}, {"_id": 0}).sort("created_at", -1).to_list(100)
         return {"bans": bans}
 
-    async def ban_user_admin(request: BanUserRequest, current_user: dict = Depends(get_current_user)):
-        if current_user.get("email") not in ADMIN_EMAILS:
-            raise HTTPException(status_code=403, detail="Admin access required")
+    async def ban_user_admin(request: BanUserRequest, current_user: dict = Depends(require_admin)):
         await _ban_user_impl(db, request.user_id, request.username, request.reason, request.duration_hours, current_user.get("username", "Admin"))
         duration_str = f"{request.duration_hours}h" if request.duration_hours else "permanent"
         return {"message": f"Banned {request.username} ({duration_str})"}
 
-    async def unban_user_admin(request: UnbanUserRequest, current_user: dict = Depends(get_current_user)):
-        if current_user.get("email") not in ADMIN_EMAILS:
-            raise HTTPException(status_code=403, detail="Admin access required")
+    async def unban_user_admin(request: UnbanUserRequest, current_user: dict = Depends(require_admin)):
         result = await db.bans.update_many(
             {"user_id": request.user_id, "active": True},
             {"$set": {"active": False, "unbanned_at": datetime.now(timezone.utc).isoformat()}}
@@ -104,15 +93,11 @@ def register(router):
             return {"message": f"Unbanned user (removed {result.modified_count} ban(s))"}
         raise HTTPException(status_code=404, detail="No active ban found for this user")
 
-    async def get_ip_bans(current_user: dict = Depends(get_current_user)):
-        if current_user.get("email") not in ADMIN_EMAILS:
-            raise HTTPException(status_code=403, detail="Admin access required")
+    async def get_ip_bans(current_user: dict = Depends(require_admin)):
         bans = await db.ip_bans.find({"active": True}, {"_id": 0}).sort("created_at", -1).to_list(100)
         return {"ip_bans": bans}
 
-    async def ban_ip_admin(request: BanIPRequest, current_user: dict = Depends(get_current_user)):
-        if current_user.get("email") not in ADMIN_EMAILS:
-            raise HTTPException(status_code=403, detail="Admin access required")
+    async def ban_ip_admin(request: BanIPRequest, current_user: dict = Depends(require_admin)):
         from utils.cheat_detection_utils import user_ip_union
 
         uname = (request.username or "").strip()
@@ -212,9 +197,7 @@ def register(router):
         await db.ip_bans.insert_one(_ban_doc(ip))
         return {"message": f"IP {ip} banned ({duration_str})", "banned_ips": [ip], "inserted": 1}
 
-    async def unban_ip_admin(request: UnbanIPRequest, current_user: dict = Depends(get_current_user)):
-        if current_user.get("email") not in ADMIN_EMAILS:
-            raise HTTPException(status_code=403, detail="Admin access required")
+    async def unban_ip_admin(request: UnbanIPRequest, current_user: dict = Depends(require_admin)):
         now_iso = datetime.now(timezone.utc).isoformat()
         set_ban = {"$set": {"active": False, "unbanned_at": now_iso}}
 
@@ -286,10 +269,8 @@ def register(router):
             return normalize_ip_string(req.client.host or "") or ""
         return ""
 
-    async def test_ip_ban(request: Request, current_user: dict = Depends(get_current_user)):
+    async def test_ip_ban(request: Request, current_user: dict = Depends(require_admin)):
         """Ban the current request's IP for 30 seconds (for testing). Auto-unbans after 30s."""
-        if current_user.get("email") not in ADMIN_EMAILS:
-            raise HTTPException(status_code=403, detail="Admin access required")
         client_ip = _client_ip(request)
         if not client_ip:
             raise HTTPException(status_code=400, detail="Could not determine your IP")
@@ -306,9 +287,7 @@ def register(router):
         await db.ip_bans.insert_one(doc)
         return {"message": "Your IP is banned for 30 seconds. You will get 403 until then; refresh or wait 30s to be unbanned.", "ip": client_ip}
 
-    async def clear_security_logs(current_user: dict = Depends(get_current_user)):
-        if current_user.get("email") not in ADMIN_EMAILS:
-            raise HTTPException(status_code=403, detail="Admin access required")
+    async def clear_security_logs(current_user: dict = Depends(require_admin)):
         result = await db.security_logs.delete_many({})
         return {"message": f"Cleared {result.deleted_count} security log(s)"}
 

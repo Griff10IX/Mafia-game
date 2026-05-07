@@ -7,7 +7,7 @@ from typing import Optional
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
-from server import db, get_current_user, _username_pattern
+from server import db, get_current_user, require_admin_or_mod, _username_pattern
 
 
 WITNESS_MAX_QTY_PER_LISTING = 10_000
@@ -119,12 +119,8 @@ def register(router):
         return out
 
     @router.get("/admin/witness-statements-overview")
-    async def admin_witness_statements_overview(current_user: dict = Depends(get_current_user)):
+    async def admin_witness_statements_overview(current_user: dict = Depends(require_admin_or_mod)):
         """Staff: balances, marketplace, and recent witness inbox deliveries."""
-        from server import _is_admin, _is_moderator
-
-        if not (_is_admin(current_user) or _is_moderator(current_user)):
-            raise HTTPException(status_code=403, detail="Admin or moderator access required")
         now = datetime.now(timezone.utc).isoformat()
         agg = await db.users.aggregate(
             [
@@ -201,18 +197,13 @@ def register(router):
     @router.post("/admin/witness-statements-reconcile")
     async def admin_witness_statements_reconcile(
         req: WitnessStatementReconcileRequest,
-        current_user: dict = Depends(get_current_user),
+        current_user: dict = Depends(require_admin_or_mod),
     ):
         """
         Set a player's witness_statements to the count of witness inbox rows not held in
         active Quick Trade escrow (matches list/cancel/buy invariants). Fixes ghost balance
         from muted attack notifications (historical) or deleted witness inbox rows.
         """
-        from server import _is_admin, _is_moderator
-
-        if not (_is_admin(current_user) or _is_moderator(current_user)):
-            raise HTTPException(status_code=403, detail="Admin or moderator access required")
-
         uid_in = (req.user_id or "").strip()
         uname_in = (req.username or "").strip()
         if not uid_in and not uname_in:
@@ -331,7 +322,7 @@ def register(router):
     @router.post("/admin/witness-statements-remove-broken-listings")
     async def admin_remove_broken_witness_listings(
         req: WitnessBrokenListingsCleanupRequest,
-        current_user: dict = Depends(get_current_user),
+        current_user: dict = Depends(require_admin_or_mod),
     ):
         """
         Find active witness market listings where `notification_ids` do not all resolve to valid
@@ -339,11 +330,6 @@ def register(router):
         Removes those listings like cancel: clears `listed_listing_id` where possible and returns
         escrowed witness statement balance to the seller.
         """
-        from server import _is_admin, _is_moderator
-
-        if not (_is_admin(current_user) or _is_moderator(current_user)):
-            raise HTTPException(status_code=403, detail="Admin or moderator access required")
-
         listings = await db.witness_statement_listings.find({"status": "active"}, {"_id": 0}).to_list(5000)
         all_nids: list[str] = []
         for row in listings:

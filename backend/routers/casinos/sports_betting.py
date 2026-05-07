@@ -30,9 +30,9 @@ from server import (
     get_current_user,
     get_current_user_verified,
     log_gambling,
+    require_admin_or_mod_verified,
+    require_admin_verified,
     send_notification,
-    _is_admin,
-    _is_moderator,
     _get_staff_user_ids,
 )
 
@@ -2685,15 +2685,11 @@ async def sports_request_event(body: SportsRequestEventBody, current_user: dict 
 
 
 # ----- Admin routes -----
-async def admin_sports_templates(current_user: dict = Depends(get_current_user_verified)):
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
+async def admin_sports_templates(current_user: dict = Depends(require_admin_verified)):
     return await _admin_sports_templates_payload()
 
 
-async def admin_sports_refresh(current_user: dict = Depends(get_current_user_verified)):
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
+async def admin_sports_refresh(current_user: dict = Depends(require_admin_verified)):
     await _refresh_sports_live_cache(force=True)
     n = len(_get_all_sports_templates())
     payload = await _admin_sports_templates_payload(templates_persisted=n)
@@ -2706,24 +2702,18 @@ async def admin_sports_refresh(current_user: dict = Depends(get_current_user_ver
     return payload
 
 
-async def admin_sports_auto_settle_run(current_user: dict = Depends(get_current_user_verified)):
+async def admin_sports_auto_settle_run(current_user: dict = Depends(require_admin_verified)):
     """Admin: run the same Odds API score poll as cron; returns settled / skipped counts."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
     return await _auto_settle_from_scores()
 
 
-async def admin_sports_templates_load_db(current_user: dict = Depends(get_current_user_verified)):
+async def admin_sports_templates_load_db(current_user: dict = Depends(require_admin_verified)):
     """Admin: list templates from MongoDB only (no Odds API / no in-memory cache). Uses no API quota."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
     db_list = await _load_sports_templates_from_db()
     return _admin_templates_json_from_list(db_list, template_source="database")
 
 
-async def admin_sports_add_event(request: AdminAddSportsEventRequest, current_user: dict = Depends(get_current_user_verified)):
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
+async def admin_sports_add_event(request: AdminAddSportsEventRequest, current_user: dict = Depends(require_admin_verified)):
     template_id = (request.template_id or "").strip()
     merged = await _merged_sports_templates_for_admin()
     template = next((t for t in merged if t.get("id") == template_id), None)
@@ -2733,9 +2723,7 @@ async def admin_sports_add_event(request: AdminAddSportsEventRequest, current_us
     return {"message": f"Added event: {template['name']}", "event_id": ev["id"]}
 
 
-async def admin_sports_add_custom_event(request: AdminAddCustomSportsEventRequest, current_user: dict = Depends(get_current_user_verified)):
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
+async def admin_sports_add_custom_event(request: AdminAddCustomSportsEventRequest, current_user: dict = Depends(require_admin_verified)):
     name = (request.name or "").strip()
     category = (request.category or "").strip()
     if not name:
@@ -2804,10 +2792,8 @@ async def admin_sports_add_custom_event(request: AdminAddCustomSportsEventReques
 
 async def admin_sports_patch_event_betting_window(
     request: AdminPatchSportsEventBettingWindow,
-    current_user: dict = Depends(get_current_user_verified),
+    current_user: dict = Depends(require_admin_verified),
 ):
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
     event_id = (request.event_id or "").strip()
     if not event_id:
         raise HTTPException(status_code=400, detail="event_id required")
@@ -2929,9 +2915,7 @@ async def _settle_event_internal(event_id: str, winning_option_id: str) -> bool:
     return True
 
 
-async def admin_sports_settle(request: SportsSettleEventRequest, current_user: dict = Depends(get_current_user_verified)):
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
+async def admin_sports_settle(request: SportsSettleEventRequest, current_user: dict = Depends(require_admin_verified)):
     event_id = (request.event_id or "").strip()
     winning_option_id = (request.winning_option_id or "").strip()
     if not event_id or not winning_option_id:
@@ -2942,9 +2926,7 @@ async def admin_sports_settle(request: SportsSettleEventRequest, current_user: d
     return {"message": f"Event {event_id} settled. Winning option: {winning_option_id}. Winners paid out."}
 
 
-async def admin_sports_cancel_event(request: AdminCancelEventRequest, current_user: dict = Depends(get_current_user_verified)):
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
+async def admin_sports_cancel_event(request: AdminCancelEventRequest, current_user: dict = Depends(require_admin_verified)):
     event_id = (request.event_id or "").strip()
     now = datetime.now(timezone.utc).isoformat()
     refunded_count, total_refunded = await _cancel_open_bets_for_event(
@@ -3021,10 +3003,8 @@ async def _cancel_open_bets_for_event(
 async def admin_sports_cancel_stale_open_bets(
     hours: int = Query(72, ge=1, le=24 * 30),
     limit_events: int = Query(500, ge=1, le=2000),
-    current_user: dict = Depends(get_current_user_verified),
+    current_user: dict = Depends(require_admin_verified),
 ):
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
     now_dt = datetime.now(timezone.utc)
     now_iso = now_dt.isoformat()
     cutoff_iso = (now_dt - timedelta(hours=int(hours))).isoformat()
@@ -3093,11 +3073,9 @@ async def admin_sports_bets_list(
     username: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
     event_id: Optional[str] = Query(None),
-    current_user: dict = Depends(get_current_user_verified),
+    current_user: dict = Depends(require_admin_or_mod_verified),
 ):
     """Admin or moderator: ledger of sports bets (who bet what, from sports_bets)."""
-    if not _is_admin(current_user) and not _is_moderator(current_user):
-        raise HTTPException(status_code=403, detail="Admin or moderator access required")
     limit = min(max(1, int(limit)), 500)
     query: dict = {}
     if status and status.strip():
@@ -3148,11 +3126,9 @@ async def admin_sports_bets_list(
 async def admin_sports_unsettled_events(
     limit: int = Query(200, ge=1, le=1000),
     include_no_open_bets: bool = Query(False),
-    current_user: dict = Depends(get_current_user_verified),
+    current_user: dict = Depends(require_admin_or_mod_verified),
 ):
     """Admin/moderator: old open events that look overdue for settlement."""
-    if not _is_admin(current_user) and not _is_moderator(current_user):
-        raise HTTPException(status_code=403, detail="Admin or moderator access required")
     limit = min(max(1, int(limit)), 1000)
     now_iso = datetime.now(timezone.utc).isoformat()
     query: dict = {"status": "open", "start_time": {"$lt": now_iso}}
@@ -3205,11 +3181,8 @@ async def admin_sports_unsettled_events(
     return {"events": out, "count": len(out)}
 
 
-async def admin_sports_auto_settle_health(current_user: dict = Depends(get_current_user_verified)):
+async def admin_sports_auto_settle_health(current_user: dict = Depends(require_admin_or_mod_verified)):
     """Admin/moderator: quick diagnostics for why auto-settle may appear stuck."""
-    if not _is_admin(current_user) and not _is_moderator(current_user):
-        raise HTTPException(status_code=403, detail="Admin or moderator access required")
-
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
     delay_minutes = _sports_auto_settle_minutes_after_start()
@@ -3282,9 +3255,7 @@ async def admin_sports_auto_settle_health(current_user: dict = Depends(get_curre
     }
 
 
-async def admin_sports_event_requests_list(current_user: dict = Depends(get_current_user_verified)):
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
+async def admin_sports_event_requests_list(current_user: dict = Depends(require_admin_verified)):
     cur = db.sports_event_requests.find({"status": "pending"}, {"_id": 0}).sort("created_at", 1).limit(200)
     rows = await cur.to_list(200)
     return {"requests": rows, "count": len(rows)}
@@ -3292,10 +3263,8 @@ async def admin_sports_event_requests_list(current_user: dict = Depends(get_curr
 
 async def admin_sports_event_request_approve(
     body: AdminSportsEventRequestApprove,
-    current_user: dict = Depends(get_current_user_verified),
+    current_user: dict = Depends(require_admin_verified),
 ):
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
     rid = (body.request_id or "").strip()
     if not rid:
         raise HTTPException(status_code=400, detail="request_id required")
@@ -3345,10 +3314,8 @@ async def admin_sports_event_request_approve(
 
 async def admin_sports_event_request_deny(
     body: AdminSportsEventRequestDeny,
-    current_user: dict = Depends(get_current_user_verified),
+    current_user: dict = Depends(require_admin_verified),
 ):
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
     rid = (body.request_id or "").strip()
     if not rid:
         raise HTTPException(status_code=400, detail="request_id required")
