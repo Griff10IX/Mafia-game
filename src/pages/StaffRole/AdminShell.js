@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Search, User, ChevronDown } from 'lucide-react';
+import api from '../../utils/api';
 import Admin from './Admin';
 import AdminUsersOnline from './AdminUsersOnline';
 import AdminAttackLogs from './AdminAttackLogs';
@@ -40,6 +41,24 @@ export default function AdminShell() {
   const navigate = useNavigate();
   const [targetPlayer, setTargetPlayer] = useState('');
   const [targetContextOpen, setTargetContextOpen] = useState(false);
+  /** null = verifying with API; only admins/moderators may see staff UI (shell + tools). */
+  const [staffAllowed, setStaffAllowed] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get('/admin/check');
+        if (cancelled) return;
+        // Match server: /admin/check — admins "acting as normal" have is_admin false but has_admin_email true (ADMIN_EMAILS only).
+        const ok = !!res.data?.is_admin || !!res.data?.is_moderator || !!res.data?.has_admin_email;
+        setStaffAllowed(ok);
+      } catch {
+        if (!cancelled) setStaffAllowed(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const hubSection = (section || 'overview').toLowerCase();
 
@@ -89,6 +108,19 @@ export default function AdminShell() {
   };
 
   if (!section) return <Navigate to="/staffrole/admin/overview" replace />;
+
+  if (staffAllowed === null) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[45vh] gap-3 px-4">
+        <div className="w-7 h-7 border-2 border-primary border-t-transparent rounded-full animate-spin" aria-hidden />
+        <span className="text-[10px] font-heading uppercase tracking-[0.2em] text-mutedForeground">Verifying staff access…</span>
+      </div>
+    );
+  }
+
+  if (staffAllowed === false) {
+    return <Navigate to="/account/dashboard" replace />;
+  }
 
   return (
     <div className="space-y-3 md:space-y-4">

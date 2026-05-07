@@ -571,7 +571,9 @@ export default function Admin() {
   const params = useParams();
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
-  const staffCanAccessWorldSystems = isAdmin || isModerator;
+  /** True when email is on ADMIN_EMAILS (includes admins using "act as normal"; is_admin from API is then false). */
+  const [hasAdminEmail, setHasAdminEmail] = useState(false);
+  const staffCanAccessWorldSystems = isAdmin || isModerator || hasAdminEmail;
   const [loading, setLoading] = useState(true);
   const [forceOnlineInfo, setForceOnlineInfo] = useState(null);
   const [boozeRotationSeconds, setBoozeRotationSeconds] = useState(null);
@@ -690,9 +692,20 @@ export default function Admin() {
 
   const [activeCategoryId, setActiveCategoryId] = useState('admin-operations');
   const [modVisibleCategoryIds, setModVisibleCategoryIds] = useState(() => [...MOD_ONLY_CATEGORY_IDS]);
-  const visibleCategories = isAdmin ? ADMIN_CATEGORIES : ADMIN_CATEGORIES.filter((c) => modVisibleCategoryIds.includes(c.id));
+  const hasFullAdminCategories = isAdmin || hasAdminEmail;
+  /** Full admin tool search / dangerous tools — same as is_admin API or listed admin email (act-as-normal). */
+  const isFullAdminUi = hasFullAdminCategories;
+  const visibleCategories = hasFullAdminCategories
+    ? ADMIN_CATEGORIES
+    : isModerator
+      ? ADMIN_CATEGORIES.filter((c) => modVisibleCategoryIds.includes(c.id))
+      : [];
   useEffect(() => {
-    const visible = isAdmin ? ADMIN_CATEGORIES : ADMIN_CATEGORIES.filter((c) => modVisibleCategoryIds.includes(c.id));
+    const visible = hasFullAdminCategories
+      ? ADMIN_CATEGORIES
+      : isModerator
+        ? ADMIN_CATEGORIES.filter((c) => modVisibleCategoryIds.includes(c.id))
+        : [];
     const sec = (params.section || 'overview').toLowerCase();
     const routeGroup = ADMIN_ROUTE_GROUP_MAP[sec] || ADMIN_ROUTE_GROUP_MAP.overview;
     const fromRouteCategory = routeGroup?.categoryId;
@@ -714,7 +727,7 @@ export default function Admin() {
     }
 
     setActiveCategoryId((prev) => (prev === next ? prev : next));
-  }, [location.hash, location.pathname, params.section, isAdmin, modVisibleCategoryIds]);
+  }, [location.hash, location.pathname, params.section, isAdmin, hasAdminEmail, isModerator, modVisibleCategoryIds]);
 
   useEffect(() => {
     try {
@@ -728,7 +741,7 @@ export default function Admin() {
     if (!toolSearch.trim()) return [];
     const raw = toolSearch.toLowerCase().trim();
     const words = raw.split(/\s+/).filter(Boolean);
-    const visibleIds = isAdmin ? null : new Set(modVisibleCategoryIds);
+    const visibleIds = isFullAdminUi ? null : new Set(modVisibleCategoryIds);
     const matchesTool = (tool) => {
       const label = tool.label.toLowerCase();
       const kws = tool.keywords.map((k) => k.toLowerCase());
@@ -740,12 +753,12 @@ export default function Admin() {
     return SEARCHABLE_TOOLS.filter((tool) => {
       const normalizedCategoryId = normalizeCategoryId(tool.categoryId);
       if (visibleIds && !visibleIds.has(normalizedCategoryId)) return false;
-      if (!isAdmin && isModerator && tool.adminOnly) return false;
+      if (!isFullAdminUi && isModerator && tool.adminOnly) return false;
       return matchesTool(tool);
     })
       .map((tool) => ({ ...tool, categoryId: normalizeCategoryId(tool.categoryId) }))
       .slice(0, 28);
-  }, [toolSearch, isAdmin, isModerator, modVisibleCategoryIds]);
+  }, [toolSearch, isFullAdminUi, isModerator, modVisibleCategoryIds]);
 
   const handleToolSelect = (tool) => {
     const normalizedCategoryId = normalizeCategoryId(tool.categoryId);
@@ -1459,12 +1472,14 @@ export default function Admin() {
       const response = await api.get('/admin/check');
       const admin = !!response.data.is_admin;
       const mod = !!response.data.is_moderator;
+      const listedEmail = !!response.data.has_admin_email;
       setIsAdmin(admin);
       setIsModerator(mod);
+      setHasAdminEmail(listedEmail);
       if (mod && Array.isArray(response.data.mod_visible_category_ids) && response.data.mod_visible_category_ids.length > 0) {
         setModVisibleCategoryIds(response.data.mod_visible_category_ids);
       }
-      if (admin) {
+      if (admin || listedEmail) {
         fetchMeta();
         fetchEventsStatus();
         fetchBoozeRotation();
@@ -1479,7 +1494,7 @@ export default function Admin() {
         fetchStateHeads();  // Auto-load state heads to show duplicate warnings
         fetchHdoPointRequests('pending');
       }
-      if (admin || mod) {
+      if (admin || mod || listedEmail) {
         fetchHdos();
         fetchEntertainers();
       }
@@ -1489,6 +1504,7 @@ export default function Admin() {
     } catch {
       setIsAdmin(false);
       setIsModerator(false);
+      setHasAdminEmail(false);
     }
     finally { setLoading(false); }
   };
@@ -7633,7 +7649,7 @@ export default function Admin() {
     );
   }
 
-  if (!isAdmin && !isModerator) {
+  if (!isAdmin && !isModerator && !hasAdminEmail) {
     return <Navigate to="/account/dashboard" replace />;
   }
 
@@ -7645,7 +7661,7 @@ export default function Admin() {
       <style>{ADMIN_STYLES}</style>
       <div className="relative admin-fade-in flex items-center justify-between gap-2 flex-wrap">
         <p className="text-[10px] text-zinc-500 font-heading italic">Use with caution</p>
-        {isModerator && !isAdmin && (
+        {isModerator && !isFullAdminUi && (
           <span className="text-[9px] font-heading font-bold uppercase tracking-wider text-amber-400 border border-amber-500/40 rounded px-2 py-0.5 bg-amber-500/10">
             Moderator view (limited tools)
           </span>
@@ -8253,7 +8269,7 @@ export default function Admin() {
       </div>
       )}
 
-      {(isAdmin || isModerator) && (
+      {(isFullAdminUi || isModerator) && (
       <div id="admin-respect-points-log" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel scroll-mt-24`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
@@ -10554,7 +10570,7 @@ export default function Admin() {
           </>
           )}
 
-      {activeCategoryId === 'admin-operations' && (isAdmin || isModerator) && (
+      {activeCategoryId === 'admin-operations' && (isFullAdminUi || isModerator) && (
       <section id="admin-moderation" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Lock size={12} />
@@ -21317,7 +21333,7 @@ export default function Admin() {
       )}
 
 
-      {activeCategoryId === 'admin-operations' && (isAdmin || isModerator) && (
+      {activeCategoryId === 'admin-operations' && (isFullAdminUi || isModerator) && (
       <section id="admin-staff" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Shield size={12} />
