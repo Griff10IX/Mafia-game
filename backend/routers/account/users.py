@@ -22,6 +22,9 @@ def register(router):
     ActivityCountryShare = srv.ActivityCountryShare
     MOD_ONLINE_COLOR_DEFAULT = "#1e3a5f"
     HDO_ONLINE_COLOR = "#166534"  # dark green for Help Desk Operators
+    # Match server.py /auth/me last_seen bump cadence and jail list "idle" window
+    ONLINE_LAST_SEEN_MINUTES = 5
+    IDLE_LAST_SEEN_MAX_MINUTES = 10
 
     async def _get_mod_default_online_color():
         doc = await db.game_settings.find_one({"key": "mod_default_online_color"}, {"_id": 0, "value": 1})
@@ -150,9 +153,9 @@ def register(router):
                     ls_dt = datetime.fromisoformat(last_seen_str)
                     if ls_dt.tzinfo is None:
                         ls_dt = ls_dt.replace(tzinfo=timezone.utc)
-                    if ls_dt >= five_min_ago:
+                    if ls_dt >= online_cutoff:
                         user_status = "online"
-                    elif ls_dt >= ten_min_ago:
+                    elif ls_dt >= idle_cutoff:
                         user_status = "idle"
                 except Exception:
                     pass

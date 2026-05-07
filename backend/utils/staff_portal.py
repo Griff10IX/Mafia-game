@@ -88,6 +88,7 @@ _STAFF_PORTAL_EXEMPT_PATHS = frozenset(
     {
         "/api/admin/check",
         "/api/admin/whoami",
+        "/api/admin/tool-access/report-spa-unauthorized",
         "/api/auth/staff-portal-unlock",
     }
 )

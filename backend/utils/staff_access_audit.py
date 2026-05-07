@@ -33,6 +33,7 @@ _STAFF_JWT_ISSUED_EXEMPT_PATHS = frozenset(
     {
         "/api/admin/check",
         "/api/admin/whoami",
+        "/api/admin/tool-access/report-spa-unauthorized",
         "/api/auth/staff-portal-unlock",
     }
 )
@@ -165,6 +166,64 @@ async def _persist_denial_and_notify_staff(
         await db[COLLECTION].update_one({"id": doc["id"]}, {"$set": {"admin_notified": True}})
     except Exception:
         pass
+
+
+async def record_staff_spa_unauthorized_visit(
+    db,
+    *,
+    spa_path: Optional[str],
+    user_id: Optional[str],
+    username: Optional[str],
+    email: Optional[str],
+    client_ip: Optional[str],
+    send_notification: Callable[..., Coroutine[Any, Any, Any]],
+    get_notify_user_ids: Callable[..., Coroutine[Any, Any, list]],
+) -> bool:
+    """Persist + inbox staff when a signed-in non-staff account loads /staffrole/admin in the SPA (GET /admin/check is 200, so 403 middleware does not run). Throttled like other denials."""
+    uid = (user_id or "").strip() or None
+    if not uid:
+        return False
+    now = datetime.now(timezone.utc)
+    tkey = f"spa_staff_admin_url:{uid}"
+    dedupe_sec = max(60, SPA_UNAUTHORIZED_REPORT_DEDUPE_SEC)
+    try:
+        recent = await db[COLLECTION].find_one(
+            {
+                "user_id": uid,
+                "notify_throttle_key": tkey,
+                "created_at": {"$gte": (now - timedelta(seconds=dedupe_sec)).isoformat()},
+            },
+            {"_id": 1},
+        )
+    except Exception:
+        recent = None
+    if recent:
+        return False
+    path_for_log = ((spa_path or "").strip() or "/staffrole/admin")[:2048]
+    title = "Non-staff user opened Admin Tools URL"
+    body = (
+        "A signed-in account without mod/admin access loaded the in-game Admin Tools route in the browser.\n\n"
+        f"SPA path: {path_for_log}\n"
+        f"User: {(username or '').strip() or '?'} (id {uid})\n"
+        f"Email: {(email or '').strip() or '—'}\n"
+        f"IP: {(client_ip or '').strip() or '—'}\n\n"
+        "They were redirected away; this is often a bookmark, pasted link, or curiosity."
+    )
+    await _persist_denial_and_notify_staff(
+        db,
+        method="POST",
+        path_for_log=path_for_log,
+        user_id=uid,
+        username=username,
+        email=email,
+        client_ip=client_ip,
+        throttle_path_key=tkey,
+        title=title,
+        body=body,
+        send_notification=send_notification,
+        get_notify_user_ids=get_notify_user_ids,
+    )
+    return True
 
 
 async def record_staff_route_forbidden(

@@ -19,6 +19,7 @@ import {
   ADMIN_ROUTE_GROUPS,
   ADMIN_ROUTE_GROUP_MOBILE_SHORT,
 } from './adminToolMap';
+import { StaffAccessVerifyContext } from './staffAccessVerifyContext';
 
 function routeFor(groupId) {
   return `/staffrole/admin/${groupId}`;
@@ -87,6 +88,49 @@ export default function AdminShell() {
     if (!staffPortalEnabled) return true;
     return isStaffPortalTokenValid();
   }, [staffPortalEnabled, portalRefreshTick]);
+
+  /** Re-check /admin/check + portal before nav or shell actions (caps/session can change while tab stays open). */
+  const verifyStaffAccess = useCallback(async () => {
+    try {
+      const res = await api.get('/admin/check');
+      const caps = staffCapsFromAdminCheck(res.data);
+      const shellOk = staffShellAllowedFromCheck(res.data);
+      const portalEnabled = !!res.data?.staff_portal_enabled;
+      setStaffPortalEnabled(portalEnabled);
+      setStaffPortalSessionMin(Number(res.data?.staff_portal_session_minutes) || 30);
+      if (!caps) {
+        setStaffAllowed(false);
+        if (typeof window !== 'undefined') {
+          const p = `${window.location.pathname}${window.location.search || ''}${window.location.hash || ''}`;
+          api.post('/admin/tool-access/report-spa-unauthorized', { path: p }).catch(() => {});
+        }
+        return false;
+      }
+      if (!shellOk) {
+        setStaffAllowed(false);
+        if (typeof window !== 'undefined') {
+          const p = window.location.pathname || '';
+          if (p.startsWith('/staffrole/admin')) navigate('/staff-entrance', { replace: true });
+        }
+        return false;
+      }
+      setStaffAllowed(true);
+      if (portalEnabled && !isStaffPortalTokenValid()) {
+        setPortalRefreshTick((t) => t + 1);
+        return false;
+      }
+      return true;
+    } catch {
+      setStaffAllowed(false);
+      setStaffPortalEnabled(false);
+      setStaffPortalSessionMin(30);
+      if (typeof window !== 'undefined') {
+        const p = window.location.pathname || '';
+        if (p.startsWith('/staffrole/admin')) navigate('/account/dashboard', { replace: true });
+      }
+      return false;
+    }
+  }, [navigate]);
 
   useEffect(() => {
     const onExpired = () => setPortalRefreshTick((t) => t + 1);
@@ -158,6 +202,10 @@ export default function AdminShell() {
         setStaffPortalSessionMin(Number(res.data?.staff_portal_session_minutes) || 30);
         if (!caps) {
           setStaffAllowed(false);
+          if (typeof window !== 'undefined') {
+            const p = `${window.location.pathname}${window.location.search || ''}${window.location.hash || ''}`;
+            api.post('/admin/tool-access/report-spa-unauthorized', { path: p }).catch(() => {});
+          }
         } else if (!shellOk) {
           setStaffAllowed(false);
           navigate('/staff-entrance', { replace: true });
@@ -323,7 +371,7 @@ export default function AdminShell() {
     }
   }, [routeGroup, location.pathname, location.search, hubSection]);
 
-  const quickJumpToTarget = () => {
+  const scrollToTargetUsernameField = () => {
     if (typeof window === 'undefined') return;
     window.location.hash = 'admin-operations';
     window.setTimeout(() => {
@@ -331,11 +379,17 @@ export default function AdminShell() {
     }, 120);
   };
 
-  const applyPlayerContext = () => {
+  const quickJumpToTarget = async () => {
+    if (!(await verifyStaffAccess())) return;
+    scrollToTargetUsernameField();
+  };
+
+  const applyPlayerContext = async () => {
+    if (!(await verifyStaffAccess())) return;
     const next = (targetPlayer || '').trim();
     if (!next) return;
     navigate(`${routeFor('players')}?target=${encodeURIComponent(next)}`);
-    quickJumpToTarget();
+    scrollToTargetUsernameField();
     setTargetContextOpen(false);
   };
 
@@ -384,7 +438,8 @@ export default function AdminShell() {
     }
   };
 
-  const handleLockStaffPortal = () => {
+  const handleLockStaffPortal = async () => {
+    if (!(await verifyStaffAccess())) return;
     if (typeof window !== 'undefined') {
       const ok = window.confirm(
         'Lock staff tools? Admin API calls will stop until you enter the staff portal password again (your game login stays active).',
@@ -464,7 +519,7 @@ export default function AdminShell() {
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={handleLockStaffPortal}
+                    onClick={() => void handleLockStaffPortal()}
                     className="inline-flex items-center gap-1.5 rounded-md border border-amber-500/40 bg-amber-950/40 px-2 py-1 text-[9px] font-heading font-bold uppercase tracking-wider text-amber-200/95 hover:bg-amber-900/50 touch-manipulation"
                     title="Clear staff portal unlock now so the password is required again (does not log you out of the game)"
                   >
@@ -481,13 +536,15 @@ export default function AdminShell() {
               <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => {
-                    setPresenceOpen((o) => {
-                      const next = !o;
-                      if (!o) void fetchPresence();
-                      return next;
-                    });
-                  }}
+                  onClick={() => void (async () => {
+                    if (presenceOpen) {
+                      setPresenceOpen(false);
+                      return;
+                    }
+                    if (!(await verifyStaffAccess())) return;
+                    setPresenceOpen(true);
+                    void fetchPresence();
+                  })()}
                   aria-expanded={presenceOpen}
                   aria-haspopup="dialog"
                   className="inline-flex items-center gap-1.5 rounded-md border border-primary/35 bg-zinc-950/80 px-2 py-1 text-[9px] font-heading font-bold uppercase tracking-wider text-primary hover:bg-primary/15"
@@ -505,7 +562,10 @@ export default function AdminShell() {
                   <div className="flex flex-wrap gap-1 mb-1.5 px-0.5" role="tablist" aria-label="Presence time range">
                     <button
                       type="button"
-                      onClick={() => setPresenceWithinHours(null)}
+                      onClick={() => void (async () => {
+                        if (!(await verifyStaffAccess())) return;
+                        setPresenceWithinHours(null);
+                      })()}
                       className={`rounded px-1.5 py-0.5 text-[8px] font-heading font-bold uppercase tracking-wider border ${
                         presenceWithinHours == null
                           ? 'border-primary/50 bg-primary/15 text-primary'
@@ -516,7 +576,10 @@ export default function AdminShell() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setPresenceWithinHours(24)}
+                      onClick={() => void (async () => {
+                        if (!(await verifyStaffAccess())) return;
+                        setPresenceWithinHours(24);
+                      })()}
                       className={`rounded px-1.5 py-0.5 text-[8px] font-heading font-bold uppercase tracking-wider border ${
                         presenceWithinHours === 24
                           ? 'border-primary/50 bg-primary/15 text-primary'
@@ -527,7 +590,10 @@ export default function AdminShell() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setPresenceWithinHours(168)}
+                      onClick={() => void (async () => {
+                        if (!(await verifyStaffAccess())) return;
+                        setPresenceWithinHours(168);
+                      })()}
                       className={`rounded px-1.5 py-0.5 text-[8px] font-heading font-bold uppercase tracking-wider border ${
                         presenceWithinHours === 168
                           ? 'border-primary/50 bg-primary/15 text-primary'
@@ -547,7 +613,10 @@ export default function AdminShell() {
                     </span>
                     <button
                       type="button"
-                      onClick={() => void fetchPresence()}
+                      onClick={() => void (async () => {
+                        if (!(await verifyStaffAccess())) return;
+                        void fetchPresence();
+                      })()}
                       className="text-[9px] font-heading uppercase text-primary hover:underline disabled:opacity-50"
                       disabled={presenceLoading}
                     >
@@ -646,7 +715,14 @@ export default function AdminShell() {
             <button
               type="button"
               className="md:hidden w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left min-h-[44px] border-b border-primary/15"
-              onClick={() => setTargetContextOpen((o) => !o)}
+              onClick={() => void (async () => {
+                if (targetContextOpen) {
+                  setTargetContextOpen(false);
+                  return;
+                }
+                if (!(await verifyStaffAccess())) return;
+                setTargetContextOpen(true);
+              })()}
               aria-expanded={targetContextOpen}
             >
               <span className="flex items-center gap-2 min-w-0">
@@ -713,6 +789,14 @@ export default function AdminShell() {
                   <Link
                     key={group.id}
                     to={routeFor(group.id)}
+                    onClick={(e) => {
+                      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                      e.preventDefault();
+                      void (async () => {
+                        if (!(await verifyStaffAccess())) return;
+                        navigate(routeFor(group.id));
+                      })();
+                    }}
                     className={`snap-start shrink-0 flex flex-col items-center justify-center gap-0.5 min-w-[4.5rem] max-w-[5.5rem] min-h-[48px] px-1.5 py-1 rounded-lg border text-center transition ${
                       active
                         ? 'border-primary/70 bg-primary/25 text-primary shadow-[0_0_12px_rgba(var(--noir-primary-rgb),0.12)]'
@@ -736,6 +820,14 @@ export default function AdminShell() {
                   <Link
                     key={group.id}
                     to={routeFor(group.id)}
+                    onClick={(e) => {
+                      if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button !== 0) return;
+                      e.preventDefault();
+                      void (async () => {
+                        if (!(await verifyStaffAccess())) return;
+                        navigate(routeFor(group.id));
+                      })();
+                    }}
                     className={`rounded-md border px-2 py-1.5 text-[11px] font-heading transition flex items-center gap-1.5 min-w-0 ${
                       active
                         ? 'border-primary/60 bg-primary/20 text-primary'
@@ -759,5 +851,6 @@ export default function AdminShell() {
       {hubSection === 'locked' && <AdminLocked />}
       {!STANDALONE_ADMIN_SECTIONS.has(hubSection) && <Admin />}
     </div>
+    </StaffAccessVerifyContext.Provider>
   );
 }

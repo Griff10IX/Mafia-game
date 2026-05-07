@@ -18,6 +18,7 @@ _LOG_EXEMPT_EXACT = frozenset(
         "/api/forum/entertainer/admin/config",
         "/api/admin/tool-access-audit",
         "/api/admin/tool-access/shell-open",
+        "/api/admin/tool-access/report-spa-unauthorized",
     }
 )
 

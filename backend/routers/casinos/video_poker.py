@@ -1,5 +1,6 @@
 # Casino Video Poker (Jacks or Better): config, ownership, claim, relinquish, set-max-bet, set-buy-back, send-to-user, sell-on-trade, deal, draw, game, history, buy-back
 from datetime import datetime, timezone, timedelta
+import logging
 import re
 import secrets
 _rng = secrets.SystemRandom()
@@ -55,6 +56,8 @@ from utils.quicktrade_casino_cleanup import (
     ensure_no_duplicate_casino_quicktrade_listing,
 )
 
+logger = logging.getLogger(__name__)
+
 # ----- Constants -----
 VIDEO_POKER_MAX_BET = 50_000_000
 VIDEO_POKER_DEFAULT_MAX_BET = 50_000_000
@@ -67,7 +70,13 @@ SUITS = ["H", "D", "C", "S"]
 VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
 VALUE_RANK = {"2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10, "J": 11, "Q": 12, "K": 13, "A": 14}
 
-# Payout multipliers: total return = round(bet * multiplier). Owner picks preset in control panel.
+# Payout multipliers: cash credited to the player on draw = round(bet * multiplier) (stake was already taken on deal).
+# So "even money" on a pair of Jacks requires multiplier 2 (full stake back + equal win), not 1.5.
+# Preset "enhanced" was the reference for the low tier; "normal" / "increased" match that pattern at the bottom.
+#
+# House lean: replacement draws (non-held cards) sometimes pull from a rank-weighted pool so premium hands are
+# slightly rarer. Winning hands still pay the full table — no haircut on cash vs the pay table.
+VIDEO_POKER_DRAW_OWNER_BIAS_P = 0.25  # ~1 in 4 per replacement card; 0 disables
 VIDEO_POKER_DEFAULT_ODDS_PRESET = "normal"
 VIDEO_POKER_ODDS_PRESET_LABELS = {
     "normal": "Normal",
@@ -83,9 +92,9 @@ VIDEO_POKER_PAY_PRESETS: dict[str, dict[str, float]] = {
         "full_house": 10,
         "flush": 7,
         "straight": 5,
-        "three_of_a_kind": 3,
-        "two_pair": 2,
-        "jacks_or_better": 1.5,
+        "three_of_a_kind": 4,
+        "two_pair": 3,
+        "jacks_or_better": 2,
     },
     "increased": {
         "royal_flush": 125,
@@ -94,9 +103,9 @@ VIDEO_POKER_PAY_PRESETS: dict[str, dict[str, float]] = {
         "full_house": 12.5,
         "flush": 9,
         "straight": 6,
-        "three_of_a_kind": 3.5,
-        "two_pair": 2.5,
-        "jacks_or_better": 1.75,
+        "three_of_a_kind": 4.5,
+        "two_pair": 3.5,
+        "jacks_or_better": 2.25,
     },
     "enhanced": {
         "royal_flush": 150,
@@ -112,6 +121,22 @@ VIDEO_POKER_PAY_PRESETS: dict[str, dict[str, float]] = {
 }
 # Back-compat alias for imports / admin tooling
 PAY_TABLE = VIDEO_POKER_PAY_PRESETS[VIDEO_POKER_DEFAULT_ODDS_PRESET]
+
+
+def _vp_pop_replacement_card(deck: list) -> dict:
+    """Pop one card from the remaining deck. Usually next card (fair); sometimes weighted toward low ranks (owner)."""
+    if not deck:
+        raise ValueError("video poker: empty deck on draw")
+    if len(deck) == 1 or VIDEO_POKER_DRAW_OWNER_BIAS_P <= 0 or _rng.random() >= VIDEO_POKER_DRAW_OWNER_BIAS_P:
+        return deck.pop()
+    weights = []
+    for c in deck:
+        r = float(VALUE_RANK.get(str(c.get("value")), 7))
+        w = (15.5 - r) ** 1.35
+        weights.append(max(0.04, w))
+    j = _rng.choices(range(len(deck)), weights=weights, k=1)[0]
+    return deck.pop(j)
+
 
 HAND_NAMES = {
     "royal_flush": "Royal Flush",
@@ -136,9 +161,10 @@ def _normalize_odds_preset(raw: Any) -> str:
 
 
 def _pay_table_for_preset(preset: str) -> dict[str, float]:
-    return VIDEO_POKER_PAY_PRESETS.get(
+    raw = VIDEO_POKER_PAY_PRESETS.get(
         _normalize_odds_preset(preset), VIDEO_POKER_PAY_PRESETS[VIDEO_POKER_DEFAULT_ODDS_PRESET]
     )
+    return dict(raw)
 
 
 def _effective_odds_preset(doc: Optional[dict]) -> str:
@@ -323,6 +349,7 @@ def register(router):
             "max_bet": max_bet,
             "claim_cost": cc["video_poker"],
             "house_edge": VIDEO_POKER_HOUSE_EDGE,
+            "draw_owner_bias_p": VIDEO_POKER_DRAW_OWNER_BIAS_P,
             "odds_preset": preset,
             "odds_preset_label": VIDEO_POKER_ODDS_PRESET_LABELS.get(preset, preset.title()),
             "odds_preset_options": [{"id": k, "label": v} for k, v in VIDEO_POKER_ODDS_PRESET_LABELS.items()],
@@ -831,20 +858,26 @@ def register(router):
         hand = list(game.get("hand") or [])
         bet = game.get("bet", 0)
         owner_id = game.get("owner_id")
-        city = game.get("city", "")
+        city = str(game.get("city") or "").strip()
+        # Match claim/reset/dice: ownership rows use the canonical city string from DB; never $inc on a filter that misses.
+        stored_own_city, _ = await _get_ownership_doc(city)
+        ownership_city = (stored_own_city or city).strip() or city
         odds_preset = game.get("odds_preset") or VIDEO_POKER_DEFAULT_ODDS_PRESET
         odds_preset = _normalize_odds_preset(odds_preset)
         pay_table = _pay_table_for_preset(odds_preset)
 
         holds = set()
         for h in (request.holds or []):
-            idx = int(h)
+            try:
+                idx = int(h)
+            except (TypeError, ValueError):
+                continue
             if 0 <= idx <= 4:
                 holds.add(idx)
 
         for i in range(5):
             if i not in holds and deck:
-                hand[i] = deck.pop()
+                hand[i] = _vp_pop_replacement_card(deck)
 
         hand_key, hand_name, multiplier = _evaluate_hand(hand, pay_table)
         payout = _payout_for_multiplier(bet, multiplier)
@@ -868,14 +901,28 @@ def register(router):
                             await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": el_tr, "state_head_income.videopoker": el_tr}})
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge_lose}})
                     net = max(0, bet - edge_lose)
-                    await db.videopoker_ownership.update_one(
-                        {"city": city}, {"$inc": {"total_earnings": net, "profit": net}}
+                    _vp_own_res = await db.videopoker_ownership.update_one(
+                        {"city": ownership_city}, {"$inc": {"total_earnings": net, "profit": net}}
                     )
+                    if owner_id and _vp_own_res.matched_count == 0:
+                        logger.warning(
+                            "videopoker draw: ownership P/L update missed (loss+edge) city=%r ownership_city=%r owner_id=%s",
+                            city,
+                            ownership_city,
+                            owner_id,
+                        )
                     _invalidate_ownership_cache(owner_id)
                 else:
-                    await db.videopoker_ownership.update_one(
-                        {"city": city}, {"$inc": {"total_earnings": bet, "profit": bet}}
+                    _vp_own_res = await db.videopoker_ownership.update_one(
+                        {"city": ownership_city}, {"$inc": {"total_earnings": bet, "profit": bet}}
                     )
+                    if owner_id and _vp_own_res.matched_count == 0:
+                        logger.warning(
+                            "videopoker draw: ownership P/L update missed (loss no edge) city=%r ownership_city=%r owner_id=%s",
+                            city,
+                            ownership_city,
+                            owner_id,
+                        )
                     _invalidate_ownership_cache(owner_id)
             elif head_family_id:
                 edge_lose = int(bet * VIDEO_POKER_HOUSE_EDGE)
@@ -903,9 +950,17 @@ def register(router):
                 # Track biggest payout for owner
                 await bump_user_biggest_casino_payout(owner_id, actual_payout)
                 vp_net = bet - actual_payout
-                await db.videopoker_ownership.update_one(
-                    {"city": city}, {"$inc": {"profit": vp_net, "total_earnings": vp_net}}
+                _vp_own_res = await db.videopoker_ownership.update_one(
+                    {"city": ownership_city}, {"$inc": {"profit": vp_net, "total_earnings": vp_net}}
                 )
+                if _vp_own_res.matched_count == 0:
+                    logger.warning(
+                        "videopoker draw: ownership P/L update missed (payout) city=%r ownership_city=%r owner_id=%s vp_net=%s",
+                        city,
+                        ownership_city,
+                        owner_id,
+                        vp_net,
+                    )
                 _invalidate_ownership_cache(owner_id)
                 payout = actual_payout
                 if shortfall > 0:
@@ -918,7 +973,7 @@ def register(router):
                     }
                     seiz_rank = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))[0]
                     await db.videopoker_ownership.update_one(
-                        {"city": city},
+                        {"city": ownership_city},
                         casino_ownership_write_below_capo_ops(vp_owner_set, new_owner_rank_id=seiz_rank),
                     )
                     vp_norm = _normalize_city(str(city or "").strip()) if city else ""

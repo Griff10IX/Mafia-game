@@ -22,6 +22,7 @@ import {
   LEGACY_CATEGORY_SECTION_ID,
   MOD_ONLY_CATEGORY_IDS,
 } from './adminToolMap';
+import { useStaffAccessVerify } from './staffAccessVerifyContext';
 
 /** Match backend INACTIVITY_REMINDER_MIN_DAYS default (UI hint / disable). */
 const INACTIVITY_REMINDER_MIN_DAYS = 3;
@@ -689,6 +690,19 @@ export default function Admin() {
     : isModerator
       ? ADMIN_CATEGORIES.filter((c) => modVisibleCategoryIds.includes(c.id))
       : [];
+
+  const verifyStaffAccess = useStaffAccessVerify();
+  const activateCategory = useCallback(
+    async (id, after) => {
+      if (!(await verifyStaffAccess())) return false;
+      setActiveCategoryId(id);
+      if (typeof window !== 'undefined') window.location.hash = id;
+      if (typeof after === 'function') after();
+      return true;
+    },
+    [verifyStaffAccess],
+  );
+
   useEffect(() => {
     const visible = hasFullAdminCategories
       ? ADMIN_CATEGORIES
@@ -749,8 +763,9 @@ export default function Admin() {
       .slice(0, 28);
   }, [toolSearch, isFullAdminUi, isModerator, modVisibleCategoryIds]);
 
-  const handleToolSelect = (tool) => {
+  const handleToolSelect = async (tool) => {
     const normalizedCategoryId = normalizeCategoryId(tool.categoryId);
+    if (!(await verifyStaffAccess())) return;
     setActiveCategoryId(normalizedCategoryId);
     if (tool.collapseKey) {
       setCollapsed((prev) => ({ ...prev, [tool.collapseKey]: false }));
@@ -4773,7 +4788,8 @@ export default function Admin() {
     finally { setIpBansLoading(false); }
   };
 
-  const handleViewUserFromCheat = (username) => {
+  const handleViewUserFromCheat = async (username) => {
+    if (!(await verifyStaffAccess())) return;
     setFormData((prev) => ({ ...prev, targetUsername: (username || '').trim() }));
     setActiveCategoryId('admin-operations');
     setCollapsed((prev) => ({ ...prev, searchUsers: false }));
@@ -5822,7 +5838,8 @@ export default function Admin() {
     }
   };
 
-  const handleJumpToInterestBankPlayers = () => {
+  const handleJumpToInterestBankPlayers = async () => {
+    if (!(await verifyStaffAccess())) return;
     setActiveCategoryId('admin-analytics-monitoring');
     if (typeof window !== 'undefined') window.location.hash = 'admin-analytics-monitoring';
     setCollapsed((prev) => ({ ...prev, interestBankPlayers: false }));
@@ -7116,9 +7133,10 @@ export default function Admin() {
     }
   };
 
-  const jumpToRespectPointsLog = (userId) => {
+  const jumpToRespectPointsLog = async (userId) => {
     const id = String(userId || '').trim();
     if (!id) return;
+    if (!(await verifyStaffAccess())) return;
     setUserDetailData(null);
     setRespectLogUserId(id);
     setActiveCategoryId('admin-operations');
@@ -7600,7 +7618,10 @@ export default function Admin() {
               </p>
             ))}
             <button
-              onClick={() => { setActiveCategoryId('admin-world-systems'); setCollapsed((prev) => ({ ...prev, stateHeads: false })); if (typeof window !== 'undefined') window.location.hash = 'admin-world-systems'; }}
+              onClick={() =>
+                void activateCategory('admin-world-systems', () =>
+                  setCollapsed((prev) => ({ ...prev, stateHeads: false })),
+                )}
               className="mt-2 text-[10px] font-heading font-bold text-red-400 underline hover:text-red-300"
             >
               → Go to State Heads section to fix
@@ -7674,7 +7695,7 @@ export default function Admin() {
               <button
                 key={id}
                 type="button"
-                onClick={() => { setActiveCategoryId(id); if (typeof window !== 'undefined') window.location.hash = id; }}
+                onClick={() => void activateCategory(id)}
                 className={`flex items-center gap-2 px-2.5 py-2 rounded-md text-[11px] font-heading font-bold uppercase tracking-wide border transition-colors text-left ${
                   activeCategoryId === id
                     ? 'border-primary bg-primary/20 text-primary'
@@ -10605,17 +10626,16 @@ export default function Admin() {
               </p>
               <BtnSecondary
                 type="button"
-                onClick={() => {
-                  setActiveCategoryId('admin-world-systems');
-                  setCollapsed((prev) => ({ ...prev, pageLocks: false }));
-                  if (typeof window !== 'undefined') {
-                    window.location.hash = 'admin-world-systems';
-                    const runScroll = () => {
-                      document.getElementById('admin-page-locks')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                    };
-                    window.requestAnimationFrame(() => setTimeout(runScroll, 280));
-                  }
-                }}
+                onClick={() =>
+                  void activateCategory('admin-world-systems', () => {
+                    setCollapsed((prev) => ({ ...prev, pageLocks: false }));
+                    if (typeof window !== 'undefined') {
+                      const runScroll = () => {
+                        document.getElementById('admin-page-locks')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                      };
+                      window.requestAnimationFrame(() => setTimeout(runScroll, 280));
+                    }
+                  })}
               >
                 Open canonical page lock panel
               </BtnSecondary>
@@ -10636,11 +10656,13 @@ export default function Admin() {
             <div className="p-3 space-y-2">
               <p className="text-[10px] text-mutedForeground font-heading">Quick jump to adjacent moderation surfaces.</p>
               <div className="flex flex-wrap gap-2">
-                <BtnSecondary onClick={() => { setActiveCategoryId('admin-operations'); setCollapsed(prev => ({ ...prev, cheat: false })); if (typeof window !== 'undefined') window.location.hash = 'admin-operations'; }}>
+                <BtnSecondary
+                  onClick={() => void activateCategory('admin-operations', () => setCollapsed((prev) => ({ ...prev, cheat: false })))}
+                >
                   Open Cheat Detection
                 </BtnSecondary>
                 {isAdmin && (
-                  <BtnSecondary onClick={() => { setActiveCategoryId('admin-operations'); if (typeof window !== 'undefined') window.location.hash = 'admin-operations'; }}>
+                  <BtnSecondary onClick={() => void activateCategory('admin-operations')}>
                     Open Security & Cloudflare
                   </BtnSecondary>
                 )}
@@ -17121,7 +17143,7 @@ export default function Admin() {
                       <div className={`text-sm font-heading font-bold ${(ownershipProfits.grand_total_profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>${ownershipProfits.grand_total_profit?.toLocaleString() || 0}</div>
                     </div>
                     <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
-                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Total Earnings</div>
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Lifetime net (not reset)</div>
                       <div className="text-sm font-heading font-bold">${ownershipProfits.grand_total_earnings?.toLocaleString() || 0}</div>
                     </div>
                   </div>
@@ -17134,8 +17156,8 @@ export default function Admin() {
                           <th className="text-left p-1.5 text-mutedForeground">Game</th>
                           <th className="text-left p-1.5 text-mutedForeground">City</th>
                           <th className="text-left p-1.5 text-mutedForeground">Owner</th>
-                          <th className="text-right p-1.5 text-mutedForeground">Profit</th>
-                          <th className="text-right p-1.5 text-mutedForeground">Total Earnings</th>
+                          <th className="text-right p-1.5 text-mutedForeground">Profit (resettable)</th>
+                          <th className="text-right p-1.5 text-mutedForeground">Lifetime net</th>
                         </tr></thead>
                         <tbody>
                           {ownershipProfits.items.map((item, idx) => (
@@ -20999,14 +21021,13 @@ export default function Admin() {
               <button
                 type="button"
                 className="text-primary hover:underline font-bold"
-                onClick={() => {
-                  setActiveCategoryId('admin-players');
-                  setCollapsed((prev) => ({ ...prev, userAdjustHub: false }));
-                  if (typeof window !== 'undefined') {
-                    window.location.hash = 'admin-players';
-                    document.getElementById('admin-user-adjust-hub')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }
-                }}
+                onClick={() =>
+                  void activateCategory('admin-players', () => {
+                    setCollapsed((prev) => ({ ...prev, userAdjustHub: false }));
+                    if (typeof window !== 'undefined') {
+                      document.getElementById('admin-user-adjust-hub')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }
+                  })}
               >
                 Player Management → User give / take & leaderboards
               </button>
@@ -22006,11 +22027,7 @@ export default function Admin() {
             <div className="p-3 space-y-2">
               <p className="text-[10px] text-mutedForeground font-heading">Same-IP report, same-device report, login attempts, duplicate suspects.</p>
               <BtnPrimary
-                onClick={() => {
-                  setActiveCategoryId('admin-operations');
-                  setCollapsed(prev => ({ ...prev, cheat: false }));
-                  if (typeof window !== 'undefined') window.location.hash = 'admin-operations';
-                }}
+                onClick={() => void activateCategory('admin-operations', () => setCollapsed((prev) => ({ ...prev, cheat: false })))}
               >
                 Open Cheat Detection
               </BtnPrimary>
@@ -22160,10 +22177,7 @@ export default function Admin() {
                 <button
                   key={id}
                   type="button"
-                  onClick={() => {
-                    setActiveCategoryId(id);
-                    if (typeof window !== 'undefined') window.location.hash = id;
-                  }}
+                  onClick={() => void activateCategory(id)}
                   className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 min-h-[48px] rounded-lg border px-0.5 py-1 text-[10px] font-heading font-bold uppercase tracking-wide transition-colors touch-manipulation ${
                     active
                       ? 'border-primary/70 bg-primary/25 text-primary'

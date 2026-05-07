@@ -345,6 +345,11 @@ class AdminToolAccessShellOpenRequest(BaseModel):
     path: Optional[str] = Field(default=None, max_length=500)
 
 
+class AdminToolAccessSpaUnauthorizedRequest(BaseModel):
+    """Full SPA location when a non-staff account opened /staffrole/admin (path, query, hash) for audit + staff inbox."""
+    path: Optional[str] = Field(default=None, max_length=2048)
+
+
 class DeleteFamilyRequest(BaseModel):
     family_id: str
 
@@ -6362,6 +6367,33 @@ def register(router):
         )
         return {"ok": True}
 
+    @router.post("/admin/tool-access/report-spa-unauthorized")
+    async def admin_tool_access_report_spa_unauthorized(
+        body: AdminToolAccessSpaUnauthorizedRequest,
+        request: Request,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Non-staff loads /staffrole/admin in the SPA; /admin/check is 200 so log + inbox staff here (throttled)."""
+        if _staff_shell_access(current_user):
+            return {"ok": True, "recorded": False}
+        from utils.staff_access_audit import record_staff_spa_unauthorized_visit
+
+        uid = str(current_user.get("id") or "")
+        un = str(current_user.get("username") or "?")
+        em = str(current_user.get("email") or "")
+        p = (body.path or "").strip() or None
+        recorded = await record_staff_spa_unauthorized_visit(
+            db,
+            spa_path=p,
+            user_id=uid,
+            username=un,
+            email=em,
+            client_ip=_presence_ip(request),
+            send_notification=send_notification,
+            get_notify_user_ids=srv._get_staff_user_ids,
+        )
+        return {"ok": True, "recorded": recorded}
+
     @router.get("/admin/tool-access-audit")
     async def admin_tool_access_audit(
         hours: int = Query(72, ge=1, le=720),
@@ -8976,10 +9008,11 @@ def register(router):
         """
         Aggregate per-table profit and lifetime net from all casino ownership collections.
 
-        * **profit** — resettable owner P/L (same as in-game owner panel).
-        * **total_earnings** — cumulative lifetime net for that table (every player win reduces it,
-          same deltas as profit; not cleared by reset-profit). Dice/Slots now mirror profit on each
-          bet; older rows may still show 0 lifetime until new play occurs.
+        * **profit** — resettable owner P/L (in-game “reset profit” zeros only this field).
+        * **total_earnings** — lifetime net for that table using the same signed deltas as profit
+          (player wins reduce it; house wins increase it). It is **not** cleared by reset-profit, so
+          a row can show profit **$0** while lifetime net is still a large negative. Dice/Slots mirror
+          both fields on each bet; legacy rows may differ until touched by new play.
         """
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
