@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { clearStaffPortalToken, getStaffPortalToken, isStaffPortalTokenValid } from './staffPortalSession';
 
 // Empty or unset = same origin (e.g. Linode: Nginx serves app and proxies /api)
 const raw = (process.env.REACT_APP_BACKEND_URL && process.env.REACT_APP_BACKEND_URL.trim())
@@ -165,6 +166,10 @@ api.interceptors.request.use((config) => {
   const token = localStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  const pt = getStaffPortalToken();
+  if (pt && isStaffPortalTokenValid(pt)) {
+    config.headers['X-Staff-Portal-Token'] = pt;
   }
   if (typeof window !== 'undefined') {
     const p = (window.location?.pathname || '/').replace(/\/+/g, '/');
@@ -400,6 +405,20 @@ api.interceptors.response.use(
           } else {
             window.location.replace('/crime/jail');
           }
+        }
+        return Promise.reject(error);
+      }
+    }
+
+    // ── 403 Staff portal (second factor): clear portal session only; do not log out of main account ──
+    if (error.response?.status === 403 && typeof window !== 'undefined') {
+      const detail = error.response?.data?.detail;
+      if (typeof detail === 'string' && detail.includes('Staff portal')) {
+        clearStaffPortalToken();
+        try {
+          window.dispatchEvent(new CustomEvent('staff-portal-expired'));
+        } catch (_) {
+          /* ignore */
         }
         return Promise.reject(error);
       }

@@ -81,6 +81,10 @@ class PasswordResetConfirm(BaseModel):
     new_password: str
 
 
+class StaffPortalUnlockBody(BaseModel):
+    password: str = ""
+
+
 class VerifyEmailBody(BaseModel):
     token: str
 
@@ -419,6 +423,7 @@ def register(router):
     create_access_token = srv.create_access_token
     get_current_user = srv.get_current_user
     get_rank_info = srv.get_rank_info
+    _is_admin = srv._is_admin
     _is_moderator = srv._is_moderator
     _is_entertainer = srv._is_entertainer
     _is_hdo = srv._is_hdo
@@ -1121,6 +1126,29 @@ def register(router):
             err_ref = f"S-{uuid.uuid4().hex[:8]}"
             logging.exception("Login-staff 500 ref=%s login=%s: %s", err_ref, login_input or "(empty)", e)
             raise HTTPException(status_code=500, detail=f"Login failed. Please try again. Ref: {err_ref}")
+
+    @router.post("/auth/staff-portal-unlock")
+    async def staff_portal_unlock(body: StaffPortalUnlockBody, current_user: dict = Depends(get_current_user)):
+        from utils.staff_portal import (
+            create_staff_portal_token,
+            staff_portal_password_configured,
+            staff_portal_password_matches,
+            staff_portal_session_minutes,
+        )
+
+        if not staff_portal_password_configured():
+            raise HTTPException(status_code=400, detail="Staff portal is not enabled on this server.")
+        if not (_is_admin(current_user) or _is_moderator(current_user) or user_has_admin_list_email(current_user)):
+            raise HTTPException(status_code=403, detail="Staff access required")
+        if not staff_portal_password_matches(body.password or ""):
+            raise HTTPException(status_code=403, detail="Invalid staff portal password")
+        uid = str(current_user.get("id") or "").strip()
+        if not uid:
+            raise HTTPException(status_code=401, detail="Invalid session")
+        return {
+            "staff_portal_token": create_staff_portal_token(uid),
+            "expires_in_seconds": staff_portal_session_minutes() * 60,
+        }
 
     async def _do_login(user_data: UserLogin, request: Request, login_input: str, now: datetime, staff_route: bool = False):
         # Require non-empty email/username and password

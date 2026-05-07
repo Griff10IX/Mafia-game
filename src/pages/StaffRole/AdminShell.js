@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Search, User, ChevronDown, Users } from 'lucide-react';
+import { Search, User, ChevronDown, Users, Lock } from 'lucide-react';
 import api from '../../utils/api';
 import { getAdminPresenceTabId } from '../../utils/adminPresence';
+import { isStaffPortalTokenValid, setStaffPortalToken } from '../../utils/staffPortalSession';
 import Admin from './Admin';
 import AdminUsersOnline from './AdminUsersOnline';
 import AdminAttackLogs from './AdminAttackLogs';
@@ -60,6 +61,32 @@ export default function AdminShell() {
   const [targetContextOpen, setTargetContextOpen] = useState(false);
   /** null = verifying with API; only admins/moderators may see staff UI (shell + tools). */
   const [staffAllowed, setStaffAllowed] = useState(null);
+  /** When STAFF_PORTAL_PASSWORD is set, API requires X-Staff-Portal-Token for /admin/* calls except check. */
+  const [staffPortalEnabled, setStaffPortalEnabled] = useState(false);
+  const [staffPortalSessionMin, setStaffPortalSessionMin] = useState(30);
+  const [portalRefreshTick, setPortalRefreshTick] = useState(0);
+  const [portalPassword, setPortalPassword] = useState('');
+  const [portalBusy, setPortalBusy] = useState(false);
+  const [portalError, setPortalError] = useState('');
+
+  const staffPortalOk = useMemo(() => {
+    void portalRefreshTick;
+    if (!staffPortalEnabled) return true;
+    return isStaffPortalTokenValid();
+  }, [staffPortalEnabled, portalRefreshTick]);
+
+  useEffect(() => {
+    const onExpired = () => setPortalRefreshTick((t) => t + 1);
+    if (typeof window === 'undefined') return undefined;
+    window.addEventListener('staff-portal-expired', onExpired);
+    return () => window.removeEventListener('staff-portal-expired', onExpired);
+  }, []);
+
+  useEffect(() => {
+    if (!staffPortalEnabled || staffAllowed !== true) return undefined;
+    const id = setInterval(() => setPortalRefreshTick((t) => t + 1), 15000);
+    return () => clearInterval(id);
+  }, [staffPortalEnabled, staffAllowed]);
   const [presenceOpen, setPresenceOpen] = useState(false);
   const [presenceRows, setPresenceRows] = useState([]);
   const [presenceStaleSec, setPresenceStaleSec] = useState(90);
@@ -90,15 +117,21 @@ export default function AdminShell() {
         // Match server: /admin/check — admins "acting as normal" have is_admin false but has_admin_email true (ADMIN_EMAILS only).
         const ok = !!res.data?.is_admin || !!res.data?.is_moderator || !!res.data?.has_admin_email;
         setStaffAllowed(ok);
+        setStaffPortalEnabled(!!res.data?.staff_portal_enabled);
+        setStaffPortalSessionMin(Number(res.data?.staff_portal_session_minutes) || 30);
       } catch {
-        if (!cancelled) setStaffAllowed(false);
+        if (!cancelled) {
+          setStaffAllowed(false);
+          setStaffPortalEnabled(false);
+          setStaffPortalSessionMin(30);
+        }
       }
     })();
     return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
-    if (staffAllowed !== true) return undefined;
+    if (staffAllowed !== true || !staffPortalOk) return undefined;
     const tabId = getAdminPresenceTabId();
     const send = () => {
       const path = `${location.pathname}${location.search || ''}`;
@@ -113,7 +146,7 @@ export default function AdminShell() {
     send();
     const hb = setInterval(send, 25000);
     return () => clearInterval(hb);
-  }, [staffAllowed, section, location.pathname, location.search]);
+  }, [staffAllowed, staffPortalOk, section, location.pathname, location.search]);
 
   useEffect(() => {
     if (!presenceOpen) return undefined;
@@ -205,6 +238,77 @@ export default function AdminShell() {
 
   if (staffAllowed === false) {
     return <Navigate to="/account/dashboard" replace />;
+  }
+
+  const submitStaffPortal = async (e) => {
+    e.preventDefault();
+    setPortalError('');
+    const pwd = (portalPassword || '').trim();
+    if (!pwd) {
+      setPortalError('Enter the staff password.');
+      return;
+    }
+    setPortalBusy(true);
+    try {
+      const res = await api.post('/auth/staff-portal-unlock', { password: portalPassword });
+      const tok = res.data?.staff_portal_token;
+      if (!tok) {
+        setPortalError('Unexpected response. Try again.');
+        return;
+      }
+      setStaffPortalToken(tok);
+      setPortalPassword('');
+      setPortalRefreshTick((t) => t + 1);
+    } catch (err) {
+      const d = err?.response?.data?.detail;
+      setPortalError(typeof d === 'string' ? d : 'Unlock failed.');
+    } finally {
+      setPortalBusy(false);
+    }
+  };
+
+  if (staffPortalEnabled && !staffPortalOk) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[55vh] px-4 py-10">
+        <form
+          onSubmit={submitStaffPortal}
+          className="w-full max-w-sm space-y-4 rounded-xl border border-primary/25 bg-zinc-950/90 p-6 shadow-xl"
+        >
+          <div className="flex flex-col items-center gap-2 text-center">
+            <Lock className="w-10 h-10 text-primary opacity-90" aria-hidden />
+            <h2 className="font-heading text-sm uppercase tracking-[0.2em] text-primary">Staff unlock</h2>
+            <p className="text-[11px] text-mutedForeground leading-relaxed">
+              Additional password required for admin tools. Unlocked sessions last about {staffPortalSessionMin} minutes, then you
+              must enter the password again.
+            </p>
+          </div>
+          <label className="block">
+            <span className="sr-only">Staff password</span>
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={portalPassword}
+              onChange={(ev) => setPortalPassword(ev.target.value)}
+              placeholder="Staff portal password"
+              className="w-full h-11 rounded border border-zinc-700 bg-zinc-900 px-3 text-sm"
+              disabled={portalBusy}
+            />
+          </label>
+          {portalError ? (
+            <p className="text-[11px] text-red-400 font-heading" role="alert">
+              {portalError}
+            </p>
+          ) : null}
+          <button
+            type="submit"
+            disabled={portalBusy}
+            className="w-full h-11 rounded border border-primary/50 bg-primary/20 text-primary text-sm font-heading uppercase tracking-wider hover:bg-primary/30 disabled:opacity-50"
+          >
+            {portalBusy ? 'Checking…' : 'Unlock tools'}
+          </button>
+        </form>
+      </div>
+    );
   }
 
   return (

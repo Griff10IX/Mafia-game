@@ -3181,6 +3181,13 @@ try:
 except ImportError:
     print("Warning: staff_access_audit middleware not found")
 
+try:
+    from middleware.staff_portal_guard import StaffPortalGuardMiddleware
+
+    app.add_middleware(StaffPortalGuardMiddleware)
+except ImportError:
+    print("Warning: staff_portal_guard middleware not found")
+
 # Read once for startup: dedupe uvicorn access vs RequestLoggingMiddleware
 _REQ_LOG_ENABLED = (os.environ.get("REQUEST_LOGGING_ENABLED") or "1").strip().lower() in ("1", "true", "yes")
 _UVICORN_ACCESS_LOG_ENABLED = (os.environ.get("UVICORN_ACCESS_LOG") or "").strip().lower() in ("1", "true", "yes")

@@ -73,6 +73,7 @@ from utils.bank_economy_settings import (
     KEY_INTEREST_OPTIONS,
 )
 from utils.email_sender import is_email_configured, send_inactivity_reminder_email
+from utils.staff_portal import staff_portal_password_configured, staff_portal_session_minutes
 
 # Cloudflare API config for bot blocking toggle
 CF_ZONE_ID = os.environ.get("CF_ZONE_ID", "")
@@ -6287,6 +6288,8 @@ def register(router):
             "is_help_desk_operator": is_help_desk_operator,
             "is_entertainer": is_entertainer,
             "has_admin_email": has_admin_email,
+            "staff_portal_enabled": staff_portal_password_configured(),
+            "staff_portal_session_minutes": staff_portal_session_minutes(),
         }
         if is_moderator:
             doc = await db.game_settings.find_one({"key": "mod_visible_category_ids"}, {"_id": 0, "value": 1})
