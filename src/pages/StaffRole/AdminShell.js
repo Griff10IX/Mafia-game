@@ -504,7 +504,8 @@ export default function AdminShell() {
   }
 
   return (
-    <div className="space-y-3 md:space-y-4">
+    <StaffAccessVerifyContext.Provider value={verifyStaffAccess}>
+      <div className="space-y-3 md:space-y-4">
       <section className="rounded-xl border border-primary/25 bg-gradient-to-br from-zinc-900/85 via-zinc-900/65 to-zinc-800/55 p-3 md:p-4">
         <div className="flex flex-col gap-2 md:gap-3">
           <div className="flex items-start justify-between gap-2">
@@ -850,7 +851,7 @@ export default function AdminShell() {
       {hubSection === 'witness-statements' && <AdminWitnessStatements />}
       {hubSection === 'locked' && <AdminLocked />}
       {!STANDALONE_ADMIN_SECTIONS.has(hubSection) && <Admin />}
-    </div>
+      </div>
     </StaffAccessVerifyContext.Provider>
   );
 }
