@@ -6,6 +6,11 @@ import re
 
 from fastapi import Depends, Query
 
+# Module-level: visible to nested routes and easy to verify on the server (`grep ONLINE_LAST_SEEN users.py`).
+# Match server.py /auth/me last_seen cadence and jail "idle" display window.
+ONLINE_LAST_SEEN_MINUTES = 5
+IDLE_LAST_SEEN_MAX_MINUTES = 10
+
 
 def register(router):
     """Register users routes. Dependencies from server to avoid circular imports."""
@@ -22,9 +27,6 @@ def register(router):
     ActivityCountryShare = srv.ActivityCountryShare
     MOD_ONLINE_COLOR_DEFAULT = "#1e3a5f"
     HDO_ONLINE_COLOR = "#166534"  # dark green for Help Desk Operators
-    # Match server.py /auth/me last_seen bump cadence and jail list "idle" window
-    ONLINE_LAST_SEEN_MINUTES = 5
-    IDLE_LAST_SEEN_MAX_MINUTES = 10
 
     async def _get_mod_default_online_color():
         doc = await db.game_settings.find_one({"key": "mod_default_online_color"}, {"_id": 0, "value": 1})
