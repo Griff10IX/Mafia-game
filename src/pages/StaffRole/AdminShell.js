@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Search, User, ChevronDown } from 'lucide-react';
+import { Search, User, ChevronDown, Users } from 'lucide-react';
 import api from '../../utils/api';
+import { getAdminPresenceTabId } from '../../utils/adminPresence';
 import Admin from './Admin';
 import AdminUsersOnline from './AdminUsersOnline';
 import AdminAttackLogs from './AdminAttackLogs';
@@ -19,6 +20,22 @@ function routeFor(groupId) {
 
 /** Sections that render dedicated tools instead of the monolithic Admin page. */
 const STANDALONE_ADMIN_SECTIONS = new Set(['users-online', 'attack-logs', 'witness-statements', 'locked']);
+
+/** Relative time from ISO last_seen_at (re-renders periodically while the panel is open). */
+function formatSeenAgo(iso, refreshKey = 0) {
+  void refreshKey;
+  if (!iso) return '—';
+  const t = Date.parse(String(iso));
+  if (Number.isNaN(t)) return '—';
+  const sec = Math.max(0, Math.floor((Date.now() - t) / 1000));
+  if (sec < 12) return 'just now';
+  if (sec < 60) return `${sec}s ago`;
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const h = Math.floor(min / 60);
+  if (h < 48) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
 
 const LEGACY_HASH_TO_ROUTE_GROUP = {
   'admin-players': 'players',
@@ -43,6 +60,26 @@ export default function AdminShell() {
   const [targetContextOpen, setTargetContextOpen] = useState(false);
   /** null = verifying with API; only admins/moderators may see staff UI (shell + tools). */
   const [staffAllowed, setStaffAllowed] = useState(null);
+  const [presenceOpen, setPresenceOpen] = useState(false);
+  const [presenceRows, setPresenceRows] = useState([]);
+  const [presenceStaleSec, setPresenceStaleSec] = useState(90);
+  const [presenceLoading, setPresenceLoading] = useState(false);
+  /** Bumps periodically so "Xs ago" stays fresh while the panel is open. */
+  const [presenceSeenTick, setPresenceSeenTick] = useState(0);
+  const presencePanelRef = useRef(null);
+
+  const fetchPresence = useCallback(async () => {
+    setPresenceLoading(true);
+    try {
+      const res = await api.get('/admin/presence');
+      setPresenceRows(Array.isArray(res.data?.viewers) ? res.data.viewers : []);
+      setPresenceStaleSec(Number(res.data?.stale_after_seconds) || 90);
+    } catch {
+      setPresenceRows([]);
+    } finally {
+      setPresenceLoading(false);
+    }
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -59,6 +96,54 @@ export default function AdminShell() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (staffAllowed !== true) return undefined;
+    const tabId = getAdminPresenceTabId();
+    const send = () => {
+      const path = `${location.pathname}${location.search || ''}`;
+      api
+        .post('/admin/presence/heartbeat', {
+          tab_id: tabId,
+          section: (section || 'overview').toLowerCase(),
+          path,
+        })
+        .catch(() => {});
+    };
+    send();
+    const hb = setInterval(send, 25000);
+    return () => clearInterval(hb);
+  }, [staffAllowed, section, location.pathname, location.search]);
+
+  useEffect(() => {
+    if (!presenceOpen) return undefined;
+    void fetchPresence();
+    const id = setInterval(() => {
+      void fetchPresence();
+    }, 12000);
+    return () => clearInterval(id);
+  }, [presenceOpen, fetchPresence]);
+
+  useEffect(() => {
+    if (!presenceOpen) return undefined;
+    const id = setInterval(() => setPresenceSeenTick((n) => n + 1), 8000);
+    return () => clearInterval(id);
+  }, [presenceOpen]);
+
+  useEffect(() => {
+    if (!presenceOpen) return undefined;
+    const onDown = (e) => {
+      const el = presencePanelRef.current;
+      if (!el || el.contains(e.target)) return;
+      setPresenceOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('touchstart', onDown, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('touchstart', onDown);
+    };
+  }, [presenceOpen]);
 
   const hubSection = (section || 'overview').toLowerCase();
 
@@ -135,8 +220,83 @@ export default function AdminShell() {
                 Route-based tooling with consolidated sections and legacy-compatible anchors. Timestamps use UK time (GMT / BST).
               </p>
             </div>
-            <div className="hidden md:block shrink-0 text-[10px] text-mutedForeground font-heading uppercase tracking-wider">
-              {routeGroup?.label}
+            <div ref={presencePanelRef} className="flex flex-col items-end gap-1 shrink-0 relative">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPresenceOpen((o) => {
+                      const next = !o;
+                      if (!o) void fetchPresence();
+                      return next;
+                    });
+                  }}
+                  aria-expanded={presenceOpen}
+                  aria-haspopup="dialog"
+                  className="inline-flex items-center gap-1.5 rounded-md border border-primary/35 bg-zinc-950/80 px-2 py-1 text-[9px] font-heading font-bold uppercase tracking-wider text-primary hover:bg-primary/15"
+                  title="Who has staff admin pages open in this browser session"
+                >
+                  <Users size={14} className="shrink-0 opacity-90" aria-hidden />
+                  Staff on admin
+                </button>
+                <div className="hidden md:block text-[10px] text-mutedForeground font-heading uppercase tracking-wider">
+                  {routeGroup?.label}
+                </div>
+              </div>
+              {presenceOpen && (
+                <div className="absolute right-0 top-full mt-1 z-50 w-[min(100vw-1.5rem,22rem)] rounded-lg border border-primary/25 bg-zinc-950/95 backdrop-blur shadow-xl p-2 text-left">
+                  <div className="flex items-center justify-between gap-2 mb-1.5 px-0.5">
+                    <span className="text-[9px] font-heading font-bold uppercase tracking-wider text-mutedForeground">
+                      Active ({presenceStaleSec}s window)
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void fetchPresence()}
+                      className="text-[9px] font-heading uppercase text-primary hover:underline disabled:opacity-50"
+                      disabled={presenceLoading}
+                    >
+                      {presenceLoading ? '…' : 'Refresh'}
+                    </button>
+                  </div>
+                  {presenceRows.length === 0 ? (
+                    <p className="text-[10px] text-mutedForeground font-heading px-0.5 py-2">
+                      {presenceLoading ? 'Loading…' : 'No other heartbeats in window (only this tab may be open).'}
+                    </p>
+                  ) : (
+                    <ul className="max-h-64 overflow-y-auto space-y-1.5">
+                      {presenceRows.map((row) => (
+                        <li
+                          key={`${row.user_id || ''}-${row.tab_id || ''}`}
+                          className={`rounded border px-2 py-1.5 text-[10px] font-heading leading-snug ${
+                            row.is_self ? 'border-emerald-500/35 bg-emerald-500/10' : 'border-zinc-700/80 bg-zinc-900/60'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-1">
+                            <span className="font-bold text-foreground truncate">
+                              {row.username || '?'}
+                              {row.is_self ? ' (you)' : ''}
+                            </span>
+                            <span className="text-mutedForeground shrink-0 text-[9px]">{row.device_type || '—'}</span>
+                          </div>
+                          <div className="text-[9px] text-zinc-500 mt-0.5">
+                            Last seen{' '}
+                            <span className="text-mutedForeground tabular-nums">
+                              {formatSeenAgo(row.last_seen_at, presenceSeenTick)}
+                            </span>
+                          </div>
+                          <div className="text-[9px] text-mutedForeground mt-0.5 truncate" title={row.route_path || ''}>
+                            {row.section ? <span className="text-primary/90">{row.section}</span> : '—'}
+                            {row.route_path ? ` · ${row.route_path}` : ''}
+                          </div>
+                          <div className="text-[9px] text-zinc-500 mt-0.5 font-mono truncate" title={row.ip || ''}>
+                            {row.ip || 'IP —'}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
           </div>
 

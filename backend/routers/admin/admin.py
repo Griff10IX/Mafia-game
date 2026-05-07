@@ -14,7 +14,7 @@ from collections import Counter, defaultdict
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import httpx
-from fastapi import Body, Depends, HTTPException, Query
+from fastapi import Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from middleware.security import is_proxy_or_vpn, get_ip_info
@@ -337,6 +337,13 @@ class InactivityReminderEmailRequest(BaseModel):
 
 class InactivityReminderBulkEmailRequest(BaseModel):
     user_ids: List[str]
+
+
+class AdminPresenceHeartbeatRequest(BaseModel):
+    """Browser tab id (uuid) so one staff user can have multiple admin sessions listed separately."""
+    tab_id: str = Field(..., min_length=8, max_length=80)
+    section: Optional[str] = None  # e.g. overview, players, users-online
+    path: Optional[str] = None  # e.g. /staffrole/admin/overview
 
 
 class DropAllCasinosPropertiesConfirmation(BaseModel):
@@ -6181,6 +6188,99 @@ def register(router):
             await _add_user(ep["owner_id"], "property", "Speakeasy")
         out = sorted(users_by_id.values(), key=lambda x: (-len(x["items"]), x["username"].lower()))
         return {"owners": out}
+
+    def _staff_shell_access(user: dict) -> bool:
+        """Same gate as Admin SPA shell: listed admin email, moderator, or full admin powers."""
+        return bool(_is_admin(user) or _is_moderator(user) or user_has_admin_list_email(user))
+
+    def _presence_ip(request: Request) -> str:
+        cf_ip = request.headers.get("cf-connecting-ip")
+        if cf_ip:
+            n = normalize_ip_string(cf_ip)
+            if n:
+                return n[:45]
+        forwarded = request.headers.get("x-forwarded-for")
+        if forwarded:
+            first = forwarded.split(",")[0].strip()
+            n = normalize_ip_string(first)
+            if n:
+                return n[:45]
+        if request.client:
+            return (normalize_ip_string(request.client.host or "") or "")[:45]
+        return ""
+
+    def _device_type_from_ua(ua: str) -> str:
+        if not (ua or "").strip():
+            return "Unknown"
+        u_lower = (ua or "").lower()
+        if "ipad" in u_lower or ("android" in u_lower and "mobile" not in u_lower) or "tablet" in u_lower:
+            return "Tablet"
+        if "mobile" in u_lower or "android" in u_lower or "iphone" in u_lower or "ipod" in u_lower:
+            return "Mobile"
+        return "Desktop"
+
+    PRESENCE_STALE_SEC = 90
+
+    @router.post("/admin/presence/heartbeat")
+    async def admin_presence_heartbeat(
+        body: AdminPresenceHeartbeatRequest,
+        request: Request,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Register/update this browser tab as viewing staff tools (expires after ~90s without heartbeat)."""
+        if not _staff_shell_access(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        now = datetime.now(timezone.utc)
+        uid = str(current_user.get("id") or "")
+        un = str(current_user.get("username") or "?")
+        ua = request.headers.get("user-agent") or ""
+        await db.admin_tool_presence.update_one(
+            {"user_id": uid, "tab_id": body.tab_id.strip()},
+            {
+                "$set": {
+                    "username": un,
+                    "section": (body.section or "").strip()[:120] or None,
+                    "route_path": (body.path or "").strip()[:400] or None,
+                    "last_seen_at": now,
+                    "ip": _presence_ip(request),
+                    "device_type": _device_type_from_ua(ua),
+                    "user_agent_short": ua[:200] if ua else "",
+                }
+            },
+            upsert=True,
+        )
+        return {"ok": True}
+
+    @router.get("/admin/presence")
+    async def admin_presence_list(current_user: dict = Depends(get_current_user)):
+        """Who currently has staff admin routes open (recent heartbeats)."""
+        if not _staff_shell_access(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=PRESENCE_STALE_SEC)
+        me_id = str(current_user.get("id") or "")
+        cursor = db.admin_tool_presence.find(
+            {"last_seen_at": {"$gte": cutoff}},
+            {"_id": 0, "user_id": 1, "username": 1, "tab_id": 1, "section": 1, "route_path": 1, "last_seen_at": 1, "ip": 1, "device_type": 1},
+        ).sort("last_seen_at", -1)
+        rows = await cursor.to_list(200)
+        viewers = []
+        for r in rows:
+            uid = str(r.get("user_id") or "")
+            ts = r.get("last_seen_at")
+            viewers.append(
+                {
+                    "user_id": uid,
+                    "username": r.get("username") or "?",
+                    "tab_id": r.get("tab_id"),
+                    "section": r.get("section"),
+                    "route_path": r.get("route_path"),
+                    "ip": r.get("ip") or "",
+                    "device_type": r.get("device_type") or "",
+                    "last_seen_at": ts.isoformat() if hasattr(ts, "isoformat") else (str(ts) if ts else ""),
+                    "is_self": uid == me_id,
+                }
+            )
+        return {"viewers": viewers, "stale_after_seconds": PRESENCE_STALE_SEC}
 
     @router.get("/admin/check")
     async def admin_check(current_user: dict = Depends(get_current_user)):
