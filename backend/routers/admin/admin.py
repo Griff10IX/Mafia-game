@@ -1023,6 +1023,17 @@ def register(router):
             "admin_acting_as_normal": bool(current_user.get("admin_acting_as_normal", False)),
         }
 
+    @router.get("/admin/staff-access-denials")
+    async def admin_list_staff_access_denials(
+        limit: int = Query(100, ge=1, le=500),
+        current_user: dict = Depends(require_admin),
+    ):
+        """Recent HTTP 403 responses on /api/.../admin/... (signed-in users without permission). Admin-only."""
+        from utils.staff_access_audit import COLLECTION as _STAFF_DENIAL_COL
+
+        rows = await db[_STAFF_DENIAL_COL].find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+        return {"denials": rows, "count": len(rows)}
+
     @router.post("/admin/ip-normalize-mapped-v6")
     async def admin_ip_normalize_mapped_v6(
         dry_run: bool = Query(True, description="Preview only; no writes when true"),

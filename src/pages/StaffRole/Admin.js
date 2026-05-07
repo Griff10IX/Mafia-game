@@ -1,6 +1,6 @@
 import { Fragment, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate, useParams } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Grid3x3, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw, MessagesSquare, Swords, TrendingUp } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, ShieldAlert, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Grid3x3, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw, MessagesSquare, Swords, TrendingUp } from 'lucide-react';
 import api, { imageHostPublicUrl, refreshUser } from '../../utils/api';
 import { formatAdminDateTime, formatAdminDateOnly, formatAdminTimeOnly } from '../../utils/adminDateTime';
 import {
@@ -265,6 +265,7 @@ const SEARCHABLE_TOOLS = [
   // Security
   { label: 'Security Summary', categoryId: 'admin-security', collapseKey: 'security', keywords: ['security', 'summary', 'flags', 'rate', 'ban', 'ip', 'lockout', 'telegram'] },
   { label: 'Session stats', categoryId: 'admin-security', collapseKey: 'sessionStats', keywords: ['session', 'sessions', 'active', 'log out', 'revoke', '24h'] },
+  { label: 'Staff tool denials (403)', categoryId: 'admin-security', collapseKey: 'staffAccessDenials', keywords: ['403', 'denied', 'forbidden', 'staff', 'access', 'audit'], adminOnly: true },
   { label: 'Sustained pacing 429 log', categoryId: 'admin-security', collapseKey: 'sustainedRl429Log', keywords: ['429', 'rate', 'limit', 'pacing', 'sustained', 'inbox', 'spam', 'throttle'], adminOnly: true },
   { label: 'IP Bans', categoryId: 'admin-security', collapseKey: 'security', keywords: ['ip', 'ban', 'block', 'unban', 'restore'] },
   { label: 'Rate Limits', categoryId: 'admin-security', collapseKey: 'security', keywords: ['rate', 'limit', 'throttle', 'violations', 'cooldown'] },
@@ -375,8 +376,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, kenoEconomy: true, economySpikeAudit: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, kenoEconomy: true, economySpikeAudit: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, kenoEconomy: true, economySpikeAudit: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, kenoEconomy: true, economySpikeAudit: true }; }
 }
 
 function saveCollapsed(state) {
@@ -874,6 +875,8 @@ export default function Admin() {
   const [autoRankInspectError, setAutoRankInspectError] = useState('');
   const [sessionStats, setSessionStats] = useState(null);
   const [sessionStatsLoading, setSessionStatsLoading] = useState(false);
+  const [staffAccessDenials, setStaffAccessDenials] = useState(null);
+  const [staffAccessDenialsLoading, setStaffAccessDenialsLoading] = useState(false);
   const [revokeOldSessionsLoading, setRevokeOldSessionsLoading] = useState(false);
   const [revokeOldUserSessionsLoading, setRevokeOldUserSessionsLoading] = useState(false);
   const [viewRegistrationLoading, setViewRegistrationLoading] = useState(false);
@@ -4343,6 +4346,19 @@ export default function Admin() {
       setSessionStats(null);
     } finally {
       setSessionStatsLoading(false);
+    }
+  };
+
+  const handleLoadStaffAccessDenials = async () => {
+    setStaffAccessDenialsLoading(true);
+    try {
+      const res = await api.get('/admin/staff-access-denials', { params: { limit: 200 } });
+      setStaffAccessDenials(res.data ?? null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load staff access denials');
+      setStaffAccessDenials(null);
+    } finally {
+      setStaffAccessDenialsLoading(false);
     }
   };
 
@@ -14423,6 +14439,70 @@ export default function Admin() {
                 {revokeOldSessionsLoading ? '...' : 'Log out sessions older than 24h'}
               </button>
             </div>
+          </div>
+        )}
+        </div>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={ShieldAlert}
+          title="Staff tool denials (403)"
+          badge={
+            <span className="text-[10px] font-heading">
+              {staffAccessDenialsLoading ? (
+                <span className="text-mutedForeground">Loading...</span>
+              ) : staffAccessDenials != null ? (
+                <span className="text-foreground">{staffAccessDenials.count ?? 0} loaded</span>
+              ) : (
+                <span className="text-mutedForeground">—</span>
+              )}
+            </span>
+          }
+          toolAnchor="staffAccessDenials"
+          isCollapsed={collapsed.staffAccessDenials}
+          onToggle={() => toggleSection('staffAccessDenials')}
+        />
+        {!collapsed.staffAccessDenials && (
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-mutedForeground">
+              Signed-in players who received <strong className="text-foreground">403 Forbidden</strong> on an <code className="text-[9px]">/api/.../admin/...</code> route (missing mod/admin permission).
+              Full admins get an inbox alert (throttled per user + URL). Refresh to load recent rows from the server.
+            </p>
+            <BtnPrimary onClick={handleLoadStaffAccessDenials} disabled={staffAccessDenialsLoading}>
+              {staffAccessDenialsLoading ? '...' : 'Refresh list'}
+            </BtnPrimary>
+            {Array.isArray(staffAccessDenials?.denials) && staffAccessDenials.denials.length > 0 ? (
+              <div className="mt-2 max-h-[360px] overflow-auto rounded border border-zinc-700/40">
+                <table className="w-full text-[9px] font-mono">
+                  <thead className="sticky top-0 bg-zinc-900/95 text-mutedForeground text-left">
+                    <tr>
+                      <th className="p-1.5 font-heading">When</th>
+                      <th className="p-1.5 font-heading">Method / path</th>
+                      <th className="p-1.5 font-heading">User</th>
+                      <th className="p-1.5 font-heading">IP</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {staffAccessDenials.denials.map((row) => (
+                      <tr key={row.id} className="border-t border-zinc-800/80 align-top">
+                        <td className="p-1.5 whitespace-nowrap text-zinc-400">{formatAdminDateTime(row.created_at) || row.created_at || '—'}</td>
+                        <td className="p-1.5 break-all text-zinc-200">
+                          <span className="text-amber-400/90">{row.method || '?'}</span> {row.path || '—'}
+                        </td>
+                        <td className="p-1.5 break-all">
+                          <span className="text-foreground">{row.username || '?'}</span>
+                          <span className="text-zinc-500 block break-all">{row.email || row.user_id || '—'}</span>
+                        </td>
+                        <td className="p-1.5 text-zinc-400 whitespace-nowrap">{row.client_ip || '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : staffAccessDenials != null ? (
+              <p className="text-[10px] text-mutedForeground">No denials recorded yet.</p>
+            ) : null}
           </div>
         )}
         </div>
