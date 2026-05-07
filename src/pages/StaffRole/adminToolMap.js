@@ -1,4 +1,4 @@
-import { Activity, BarChart3, Crosshair, FileText, Globe, Layers, Lock, LockKeyhole, Radio, Shield, UserCog, Users, Wrench, Coins, Zap } from 'lucide-react';
+import { Activity, BarChart3, Crosshair, FileText, Globe, History, Layers, Lock, LockKeyhole, Radio, Shield, UserCog, Users, Wrench, Coins, Zap } from 'lucide-react';
 
 export const ADMIN_CATEGORIES = [
   { id: 'admin-operations', label: 'Operations', icon: UserCog },
@@ -10,7 +10,8 @@ export const ADMIN_CATEGORIES = [
 /** Listed staff email but API `is_admin` false (e.g. "Act as normal") — no destructive tools until powers restored. */
 export const LISTED_ONLY_STAFF_CATEGORY = { id: 'admin-listed-recovery', label: 'Account', icon: Shield };
 
-export const MOD_ONLY_CATEGORY_IDS = ['admin-operations', 'admin-analytics-monitoring', 'admin-world-systems'];
+/** Default category tabs visible to moderators (admins can narrow via Staff → Categories). */
+export const MOD_ONLY_CATEGORY_IDS = ADMIN_CATEGORIES.map((c) => c.id);
 
 export const ADMIN_CATEGORY_MOBILE_SHORT = {
   'admin-operations': 'Ops',
@@ -81,6 +82,7 @@ export const ADMIN_ROUTE_GROUP_MOBILE_SHORT = {
   commerce: 'Commerce',
   liveops: 'LiveOps',
   safety: 'Safety',
+  'tool-audit': 'Access',
   analytics: 'Stats',
   logs: 'Logs',
   staff: 'Staff',

@@ -1,6 +1,6 @@
 import { Fragment, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate, useParams } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, ShieldAlert, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Grid3x3, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw, MessagesSquare, Swords, TrendingUp } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, ShieldAlert, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Grid3x3, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw, MessagesSquare, Swords, TrendingUp, ClipboardList } from 'lucide-react';
 import api, { imageHostPublicUrl, refreshUser } from '../../utils/api';
 import { formatAdminDateTime, formatAdminDateOnly, formatAdminTimeOnly } from '../../utils/adminDateTime';
 import {
@@ -265,7 +265,8 @@ const SEARCHABLE_TOOLS = [
   // Security
   { label: 'Security Summary', categoryId: 'admin-security', collapseKey: 'security', keywords: ['security', 'summary', 'flags', 'rate', 'ban', 'ip', 'lockout', 'telegram'] },
   { label: 'Session stats', categoryId: 'admin-security', collapseKey: 'sessionStats', keywords: ['session', 'sessions', 'active', 'log out', 'revoke', '24h'] },
-  { label: 'Staff tool denials (403)', categoryId: 'admin-security', collapseKey: 'staffAccessDenials', keywords: ['403', 'denied', 'forbidden', 'staff', 'access', 'audit'], adminOnly: true },
+  { label: 'Staff tool denials (401/403)', categoryId: 'admin-security', collapseKey: 'staffAccessDenials', keywords: ['403', '401', 'denied', 'forbidden', 'staff', 'access', 'audit', 'login'], adminOnly: false },
+  { label: 'Staff tool access (history + live)', categoryId: 'admin-security', collapseKey: 'toolAccessAudit', keywords: ['staff', 'admin', 'tool', 'access', 'audit', 'history', 'presence', 'who', 'used', 'shell'], adminOnly: false },
   { label: 'Sustained pacing 429 log', categoryId: 'admin-security', collapseKey: 'sustainedRl429Log', keywords: ['429', 'rate', 'limit', 'pacing', 'sustained', 'inbox', 'spam', 'throttle'], adminOnly: true },
   { label: 'IP Bans', categoryId: 'admin-security', collapseKey: 'security', keywords: ['ip', 'ban', 'block', 'unban', 'restore'] },
   { label: 'Rate Limits', categoryId: 'admin-security', collapseKey: 'security', keywords: ['rate', 'limit', 'throttle', 'violations', 'cooldown'] },
@@ -337,20 +338,13 @@ const SEARCHABLE_TOOLS = [
   { label: 'Family war — force truce', categoryId: 'admin-operations', collapseKey: 'familyWarTruce', scrollToId: 'admin-family-war-truce', keywords: ['family', 'war', 'truce', 'crew', 'end war', 'peace'], adminOnly: true },
   { label: 'Mod display', categoryId: 'admin-operations', collapseKey: 'modDisplay', keywords: ['mod', 'display', 'colour', 'color', 'badge'] },
   { label: 'Cheat detection (mod)', categoryId: 'admin-operations', collapseKey: 'cheatDetectionMod', keywords: ['cheat', 'detection', 'mod', 'suspicious'] },
-  { label: 'Database tools', categoryId: 'admin-world-systems', collapseKey: 'database', keywords: ['database', 'mongo', 'wipe', 'migrate'], adminOnly: true },
   // Quick & Bulk
   { label: 'Give All Points', categoryId: 'admin-quick', collapseKey: 'quick', keywords: ['give', 'all', 'points', 'bulk'] },
   { label: 'Give All Money', categoryId: 'admin-quick', collapseKey: 'quick', keywords: ['give', 'all', 'money', 'bulk'] },
   { label: 'Bulk User Action', categoryId: 'admin-quick', collapseKey: 'bulkAction', keywords: ['bulk', 'action', 'multiple', 'users'] },
   { label: 'Redeem Codes', categoryId: 'admin-quick', collapseKey: 'redeemCodes', keywords: ['redeem', 'code', 'reward', 'cash', 'points', 'cars'] },
-  // Database
+  // Database (image host only; destructive DB tools removed from UI)
   { label: 'Image host (user uploads)', categoryId: 'admin-database', collapseKey: 'imageHostAdmin', keywords: ['image', 'host', 'upload', 'picture', 'imgur', 'photo'], adminOnly: true },
-  { label: 'Wipe Database', categoryId: 'admin-database', collapseKey: 'wipe', keywords: ['wipe', 'database', 'reset', 'delete'], adminOnly: true },
-  { label: 'New Release', categoryId: 'admin-database', collapseKey: 'newRelease', keywords: ['new', 'release', 'season'], adminOnly: true },
-  { label: 'Delete User', categoryId: 'admin-database', collapseKey: 'deleteUser', keywords: ['delete', 'user', 'remove'], adminOnly: true },
-  { label: 'Delete Family', categoryId: 'admin-database', collapseKey: 'deleteFamily', keywords: ['delete', 'family', 'crew', 'remove'], adminOnly: true },
-  { label: 'Wipe All Families', categoryId: 'admin-database', collapseKey: 'wipeAllFamilies', keywords: ['wipe', 'all', 'families', 'crews'], adminOnly: true },
-  { label: 'Create Test Users', categoryId: 'admin-database', collapseKey: 'testUsers', keywords: ['test', 'users', 'create', 'seed'], adminOnly: true },
   // Staff Management
   { label: 'Staff Management', categoryId: 'admin-staff', collapseKey: 'staff', keywords: ['staff', 'mod', 'helper', 'promote'] },
   { label: 'Add Moderator', categoryId: 'admin-staff', collapseKey: 'staff', keywords: ['mod', 'moderator', 'add', 'promote'] },
@@ -376,8 +370,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, kenoEconomy: true, economySpikeAudit: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, kenoEconomy: true, economySpikeAudit: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, kenoEconomy: true, economySpikeAudit: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, kenoEconomy: true, economySpikeAudit: true }; }
 }
 
 function saveCollapsed(state) {
@@ -574,6 +568,8 @@ export default function Admin() {
   const [isModerator, setIsModerator] = useState(false);
   /** True when email is on ADMIN_EMAILS (includes admins using "act as normal"; is_admin from API is then false). */
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
+  /** JWT from POST /auth/login-staff (required for admin/mod API when account is staff-capable). */
+  const [staffLoginSession, setStaffLoginSession] = useState(false);
   const staffCanAccessWorldSystems = isAdmin || isModerator || hasAdminEmail;
   const [loading, setLoading] = useState(true);
   const [forceOnlineInfo, setForceOnlineInfo] = useState(null);
@@ -671,15 +667,7 @@ export default function Admin() {
   
   const [searchUsername, setSearchUsername] = useState('');
   const [searchResults, setSearchResults] = useState(null);
-  const [deleteUserId, setDeleteUserId] = useState('');
-  const [adminFamiliesList, setAdminFamiliesList] = useState([]);
-  const [deleteFamilyId, setDeleteFamilyId] = useState('');
-  const [wipeAllFamiliesConfirmText, setWipeAllFamiliesConfirmText] = useState('');
-  const [wipeConfirmText, setWipeConfirmText] = useState('');
-  const [freshConfirmText, setFreshConfirmText] = useState('');
-  const [dropAllCasinosConfirmText, setDropAllCasinosConfirmText] = useState('');
   const [dbLoading, setDbLoading] = useState(false);
-  const [dbFreshLoading, setDbFreshLoading] = useState(false);
   const [giveAllPoints, setGiveAllPoints] = useState(100);
   const [giveAllMoney, setGiveAllMoney] = useState(10000);
   const [removeAllPointsLoading, setRemoveAllPointsLoading] = useState(false);
@@ -877,6 +865,9 @@ export default function Admin() {
   const [sessionStatsLoading, setSessionStatsLoading] = useState(false);
   const [staffAccessDenials, setStaffAccessDenials] = useState(null);
   const [staffAccessDenialsLoading, setStaffAccessDenialsLoading] = useState(false);
+  const [toolAccessAudit, setToolAccessAudit] = useState(null);
+  const [toolAccessAuditLoading, setToolAccessAuditLoading] = useState(false);
+  const [toolAccessAuditHours, setToolAccessAuditHours] = useState('72');
   const [revokeOldSessionsLoading, setRevokeOldSessionsLoading] = useState(false);
   const [revokeOldUserSessionsLoading, setRevokeOldUserSessionsLoading] = useState(false);
   const [viewRegistrationLoading, setViewRegistrationLoading] = useState(false);
@@ -1479,6 +1470,7 @@ export default function Admin() {
       setIsAdmin(admin);
       setIsModerator(mod);
       setHasAdminEmail(listedEmail);
+      setStaffLoginSession(!!response.data.staff_login_session);
       if (mod && Array.isArray(response.data.mod_visible_category_ids) && response.data.mod_visible_category_ids.length > 0) {
         setModVisibleCategoryIds(response.data.mod_visible_category_ids);
       }
@@ -1508,6 +1500,7 @@ export default function Admin() {
       setIsAdmin(false);
       setIsModerator(false);
       setHasAdminEmail(false);
+      setStaffLoginSession(false);
     }
     finally { setLoading(false); }
   };
@@ -1805,12 +1798,6 @@ export default function Admin() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { checkAdmin(); }, []);
-
-  useEffect(() => {
-    if (activeCategoryId === 'admin-world-systems' && isAdmin) {
-      api.get('/admin/families-list').then((res) => setAdminFamiliesList(res.data?.families || [])).catch(() => {});
-    }
-  }, [activeCategoryId, isAdmin]);
 
   // When navigating from Profile staff buttons with state (e.g. activity log / gambling log / target user)
   useEffect(() => {
@@ -4362,6 +4349,22 @@ export default function Admin() {
     }
   };
 
+  const handleLoadToolAccessAudit = async () => {
+    setToolAccessAuditLoading(true);
+    try {
+      const h = Math.max(1, Math.min(720, parseInt(toolAccessAuditHours, 10) || 72));
+      const res = await api.get('/admin/tool-access-audit', {
+        params: { hours: h, event_limit: 500, denial_limit: 150 },
+      });
+      setToolAccessAudit(res.data ?? null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load staff tool access audit');
+      setToolAccessAudit(null);
+    } finally {
+      setToolAccessAuditLoading(false);
+    }
+  };
+
   const handleRevokeOldSessions = async () => {
     if (!window.confirm('Log out all sessions older than 24 hours (site-wide)?')) return;
     setRevokeOldSessionsLoading(true);
@@ -6541,138 +6544,6 @@ export default function Admin() {
     }
   };
 
-  const handleDeleteUser = async () => {
-    if (!deleteUserId.trim()) { toast.error('Enter a user ID or username'); return; }
-    if (!window.confirm('DELETE this user?')) return;
-    setDbLoading(true);
-    try {
-      const res = await api.post('/admin/delete-user/' + encodeURIComponent(deleteUserId.trim()));
-      toast.success(res.data?.message || 'Deleted');
-      setDeleteUserId('');
-    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
-    finally { setDbLoading(false); }
-  };
-
-  const handleFetchAdminFamilies = async () => {
-    try {
-      const res = await api.get('/admin/families-list');
-      setAdminFamiliesList(res.data?.families || []);
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to load families');
-    }
-  };
-
-  const handleDeleteFamily = async () => {
-    if (!deleteFamilyId) { toast.error('Select a family'); return; }
-    if (!window.confirm('DELETE this family? All members will be removed from the crew. Cannot be undone.')) return;
-    setDbLoading(true);
-    try {
-      const res = await api.post('/admin/delete-family', { family_id: deleteFamilyId });
-      toast.success(res.data?.message || 'Family deleted');
-      setDeleteFamilyId('');
-      handleFetchAdminFamilies();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
-    finally { setDbLoading(false); }
-  };
-
-  const handleWipeAllFamilies = async () => {
-    if (wipeAllFamiliesConfirmText !== 'WIPE ALL FAMILIES') { toast.error('Type "WIPE ALL FAMILIES" to confirm'); return; }
-    if (!window.confirm('FINAL WARNING: Delete ALL families? Every user will be removed from their crew. Cannot be undone.')) return;
-    setDbLoading(true);
-    try {
-      const res = await api.post('/admin/wipe-all-families', { confirmation_text: 'WIPE ALL FAMILIES' });
-      toast.success(res.data?.message || 'All families wiped');
-      setWipeAllFamiliesConfirmText('');
-      handleFetchAdminFamilies();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
-    finally { setDbLoading(false); }
-  };
-
-  const handleDropAllCasinosProperties = async () => {
-    if (dropAllCasinosConfirmText !== 'DROP ALL CASINOS PROPERTIES') {
-      toast.error('Type "DROP ALL CASINOS PROPERTIES" to confirm');
-      return;
-    }
-    if (!window.confirm('Drop ALL casinos and properties for EVERYONE? Every dice, blackjack, slots, airport, armoury, etc. will become unclaimed.')) return;
-    setDbLoading(true);
-    try {
-      const res = await api.post('/admin/drop-all-casinos-properties', { confirmation_text: 'DROP ALL CASINOS PROPERTIES' });
-      toast.success(res.data?.message || 'All casinos and properties dropped.');
-      setDropAllCasinosConfirmText('');
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
-    } finally {
-      setDbLoading(false);
-    }
-  };
-
-  const handleWipeAllUsers = async () => {
-    if (wipeConfirmText !== 'WIPE ALL') { toast.error('Type "WIPE ALL" to confirm'); return; }
-    if (!window.confirm('FINAL WARNING: Delete ALL users?')) return;
-    setDbLoading(true);
-    try {
-      const res = await api.post('/admin/wipe-all-users', { confirmation_text: 'WIPE ALL DATA' });
-      toast.success(res.data?.message || 'Database wiped.');
-      setWipeConfirmText('');
-      // Current user no longer exists; clear token and send to login so the app doesn't break
-      localStorage.removeItem('token');
-      window.location.href = '/login';
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed');
-    } finally {
-      setDbLoading(false);
-    }
-  };
-
-  const handleDatabaseFresh = async () => {
-    if (freshConfirmText !== 'NEW RELEASE') { toast.error('Type "NEW RELEASE" to confirm'); return; }
-    if (!window.confirm('FINAL WARNING: Wipe ENTIRE database and re-seed from scratch? Game starts from zero. You will be logged out.')) return;
-    setDbFreshLoading(true);
-    try {
-      const res = await api.post('/admin/database-fresh', { confirmation_text: 'NEW RELEASE' });
-      toast.success(res.data?.message || 'Database reset. New release ready.');
-      setFreshConfirmText('');
-      localStorage.removeItem('token');
-      window.location.href = '/login';
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed');
-    } finally {
-      setDbFreshLoading(false);
-    }
-  };
-
-  const handleDropAllCars = async () => {
-    if (!window.confirm('Delete ALL cars for ALL users? Every garage will be empty. This cannot be undone.')) return;
-    setDbLoading(true);
-    try {
-      const res = await api.post('/admin/cars/delete-all');
-      toast.success(res.data?.message || 'All cars deleted');
-    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
-    finally { setDbLoading(false); }
-  };
-
-  const handleCreateTestUsers = async () => {
-    if (!window.confirm('Create 30 real test users (random ranks, crews, casino/property owners)? Password: test1234')) return;
-    try {
-      const res = await api.post('/admin/create-test-users');
-      toast.success(res.data?.message || 'Created');
-    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
-  };
-
-  const handleTestUsersAutoRank = async (enabled) => {
-    try {
-      const res = await api.post('/admin/test-users-auto-rank', { enabled });
-      toast.success(res.data?.message || (enabled ? 'Enabled' : 'Disabled'));
-    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
-  };
-
-  const handleSeededUsersAutoRank = async (enabled) => {
-    try {
-      const res = await api.post('/admin/seeded-users-auto-rank', { enabled });
-      toast.success(res.data?.message || (enabled ? 'Enabled' : 'Disabled'));
-    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
-  };
-
   const handleGiveAllPoints = async () => {
     if (!window.confirm(`Give ${giveAllPoints} points to ALL?`)) return;
     try {
@@ -7665,8 +7536,36 @@ export default function Admin() {
     );
   }
 
-  if (!isAdmin && !isModerator && !hasAdminEmail) {
+  const staffCaps = isAdmin || isModerator || hasAdminEmail;
+  if (!staffCaps) {
     return <Navigate to="/account/dashboard" replace />;
+  }
+  if (!staffLoginSession) {
+    return (
+      <div className={`space-y-4 p-4 ${styles.pageContent} mobile-page-root max-w-lg mx-auto`}>
+        <h1 className="text-sm font-heading font-bold text-primary uppercase tracking-wider">Staff login required</h1>
+        <p className="text-[11px] text-mutedForeground leading-relaxed">
+          This account is an admin or moderator, but your current session did not use the staff login page. You cannot use admin or moderator tools until you sign in that way; attempted API use is denied and may notify staff.
+        </p>
+        <p className="text-[10px] text-mutedForeground">
+          Sign out, open the staff entrance, and sign in with your staff credentials.
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <Link
+            to="/staff-entrance"
+            className="inline-flex items-center px-3 py-2 rounded border border-primary/40 bg-primary/15 text-[10px] font-heading font-bold uppercase text-primary hover:bg-primary/25"
+          >
+            Staff entrance
+          </Link>
+          <Link
+            to="/account/dashboard"
+            className="inline-flex items-center px-3 py-2 rounded border border-zinc-600 text-[10px] font-heading text-foreground hover:bg-zinc-800/50"
+          >
+            Back to dashboard
+          </Link>
+        </div>
+      </div>
+    );
   }
 
   const Input = AdminInput;
@@ -10743,6 +10642,28 @@ export default function Admin() {
               </div>
             </div>
           )}
+        </div>
+      </section>
+      )}
+
+      {activeCategoryId === 'admin-economy-progression' && isModerator && !isFullAdminUi && (
+      <section className="admin-category-nav space-y-4">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
+          <Coins size={12} />
+          Economy & Progression
+        </h2>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="p-4 space-y-2">
+            <p className="text-[11px] text-mutedForeground font-heading leading-relaxed">
+              This tab is visible so moderators share the same top-level sections as admins. Donations, store crediting, and other economy tools still require full admin API access—you will see errors if you try to use them.
+            </p>
+            <p className="text-[10px] text-mutedForeground">
+              If your team should not see this tab, a full admin can open{' '}
+              <span className="text-foreground font-heading">Staff Management → Categories visible to moderators</span>{' '}
+              and untick Economy &amp; Progression.
+            </p>
+          </div>
         </div>
       </section>
       )}
@@ -14389,13 +14310,14 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-operations' && isAdmin && (
+      {activeCategoryId === 'admin-operations' && (isAdmin || isModerator) && (
       <section id="admin-security" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Globe size={12} />
           Security & Cloudflare
         </h2>
 
+        {isAdmin && (
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
@@ -14442,12 +14364,13 @@ export default function Admin() {
           </div>
         )}
         </div>
+        )}
 
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={ShieldAlert}
-          title="Staff tool denials (403)"
+          title="Staff tool denials (401 / 403)"
           badge={
             <span className="text-[10px] font-heading">
               {staffAccessDenialsLoading ? (
@@ -14466,8 +14389,22 @@ export default function Admin() {
         {!collapsed.staffAccessDenials && (
           <div className="p-3 space-y-2">
             <p className="text-[10px] text-mutedForeground">
-              Signed-in players who received <strong className="text-foreground">403 Forbidden</strong> on an <code className="text-[9px]">/api/.../admin/...</code> route (missing mod/admin permission).
-              Full admins get an inbox alert (throttled per user + URL). Refresh to load recent rows from the server.
+              Signed-in accounts that got <strong className="text-foreground">403 Forbidden</strong> or{' '}
+              <strong className="text-foreground">401 Unauthorized</strong> on audited staff routes:
+              {' '}
+              <code className="text-[9px]">/api/.../admin/...</code>
+              {' '}
+              and
+              {' '}
+              <code className="text-[9px]">POST /api/auth/staff-portal-unlock</code>
+              {' '}
+              (wrong role, missing portal session, expired session token, etc.). Rows also include staff login events:{' '}
+              <strong className="text-foreground">admin/mod using the public login URL</strong> (must use staff login), or{' '}
+              <strong className="text-foreground">wrong password on staff login</strong> for an admin/mod account.
+              {' '}
+              <strong className="text-foreground">Admins and moderators</strong> get inbox alerts (throttled per user + route/event).
+              {' '}
+              Refresh to load recent rows.
             </p>
             <BtnPrimary onClick={handleLoadStaffAccessDenials} disabled={staffAccessDenialsLoading}>
               {staffAccessDenialsLoading ? '...' : 'Refresh list'}
@@ -14507,6 +14444,166 @@ export default function Admin() {
         )}
         </div>
 
+        <div id="admin-tool-access-audit" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={ClipboardList}
+          title="Staff tool access (history + live)"
+          badge={
+            <span className="text-[10px] font-heading">
+              {toolAccessAuditLoading ? (
+                <span className="text-mutedForeground">Loading...</span>
+              ) : toolAccessAudit != null ? (
+                <span className="text-foreground">
+                  {(toolAccessAudit.events?.length ?? 0) + (toolAccessAudit.denials?.length ?? 0)} row(s) ·{' '}
+                  {toolAccessAudit.active_viewers?.length ?? 0} tab(s) active
+                </span>
+              ) : (
+                <span className="text-mutedForeground">—</span>
+              )}
+            </span>
+          }
+          toolAnchor="toolAccessAudit"
+          isCollapsed={collapsed.toolAccessAudit}
+          onToggle={() => toggleSection('toolAccessAudit')}
+        />
+        {!collapsed.toolAccessAudit && (
+          <div className="p-3 space-y-3">
+            <p className="text-[10px] text-mutedForeground">
+              Successful staff <code className="text-[9px]">/api/.../admin/...</code> calls (and staff portal unlock), SPA shell opens,{' '}
+              <strong className="text-foreground">who has admin tabs open now</strong>, and recent{' '}
+              <strong className="text-foreground">401/403 denials</strong> in the time window. Heartbeats, presence polling, and login checks are excluded from API rows to limit noise.
+            </p>
+            <div className="flex flex-wrap gap-2 items-center">
+              <label className="flex items-center gap-1.5 text-[10px] text-mutedForeground font-heading uppercase tracking-wider">
+                Window
+                <select
+                  value={toolAccessAuditHours}
+                  onChange={(e) => setToolAccessAuditHours(e.target.value)}
+                  className="rounded border border-zinc-700 bg-zinc-900 px-1.5 py-1 text-[10px] text-foreground"
+                >
+                  <option value="24">24h</option>
+                  <option value="72">72h</option>
+                  <option value="168">7d</option>
+                </select>
+              </label>
+              <BtnPrimary onClick={handleLoadToolAccessAudit} disabled={toolAccessAuditLoading}>
+                {toolAccessAuditLoading ? '...' : 'Refresh'}
+              </BtnPrimary>
+            </div>
+            {toolAccessAudit != null ? (
+              <div>
+                <h3 className="text-[9px] font-heading font-bold uppercase tracking-widest text-mutedForeground mb-1">
+                  On admin now ({toolAccessAudit.stale_after_seconds ?? 90}s window)
+                </h3>
+                {Array.isArray(toolAccessAudit.active_viewers) && toolAccessAudit.active_viewers.length > 0 ? (
+                  <div className="max-h-[200px] overflow-auto rounded border border-zinc-700/40">
+                    <table className="w-full text-[9px] font-mono">
+                      <thead className="sticky top-0 bg-zinc-900/95 text-mutedForeground text-left">
+                        <tr>
+                          <th className="p-1.5 font-heading">User</th>
+                          <th className="p-1.5 font-heading">Section / route</th>
+                          <th className="p-1.5 font-heading">Last seen</th>
+                          <th className="p-1.5 font-heading">IP</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {toolAccessAudit.active_viewers.map((row) => (
+                          <tr key={`${row.user_id}-${row.tab_id}`} className="border-t border-zinc-800/80 align-top">
+                            <td className="p-1.5">
+                              <span className={row.is_self ? 'text-emerald-400' : 'text-foreground'}>{row.username || '?'}</span>
+                            </td>
+                            <td className="p-1.5 break-all text-zinc-300">
+                              {row.section || '—'} <span className="text-zinc-500">{row.route_path || ''}</span>
+                            </td>
+                            <td className="p-1.5 whitespace-nowrap text-zinc-400">{formatAdminDateTime(row.last_seen_at) || row.last_seen_at || '—'}</td>
+                            <td className="p-1.5 text-zinc-400 whitespace-nowrap">{row.ip || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-mutedForeground">No active admin tabs right now.</p>
+                )}
+              </div>
+            ) : null}
+            {toolAccessAudit != null ? (
+              <div>
+                <h3 className="text-[9px] font-heading font-bold uppercase tracking-widest text-mutedForeground mb-1">Events (API + shell)</h3>
+                {Array.isArray(toolAccessAudit.events) && toolAccessAudit.events.length > 0 ? (
+                  <div className="max-h-[320px] overflow-auto rounded border border-zinc-700/40">
+                    <table className="w-full text-[9px] font-mono">
+                      <thead className="sticky top-0 bg-zinc-900/95 text-mutedForeground text-left">
+                        <tr>
+                          <th className="p-1.5 font-heading">When</th>
+                          <th className="p-1.5 font-heading">Kind</th>
+                          <th className="p-1.5 font-heading">Req</th>
+                          <th className="p-1.5 font-heading">Path</th>
+                          <th className="p-1.5 font-heading">User</th>
+                          <th className="p-1.5 font-heading">IP</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {toolAccessAudit.events.map((row) => (
+                          <tr key={row.id} className="border-t border-zinc-800/80 align-top">
+                            <td className="p-1.5 whitespace-nowrap text-zinc-400">{formatAdminDateTime(row.created_at) || row.created_at || '—'}</td>
+                            <td className="p-1.5 whitespace-nowrap text-zinc-300">{row.kind === 'shell_open' ? 'Shell' : 'API'}</td>
+                            <td className="p-1.5 whitespace-nowrap text-amber-400/90">{row.method || '?'}</td>
+                            <td className="p-1.5 break-all text-zinc-200">{row.path || '—'}</td>
+                            <td className="p-1.5 break-all">
+                              <span className="text-foreground">{row.username || '?'}</span>
+                              <span className="text-zinc-500 block break-all">{row.email || row.user_id || '—'}</span>
+                            </td>
+                            <td className="p-1.5 text-zinc-400 whitespace-nowrap">{row.client_ip || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-mutedForeground">No API/shell events in this window.</p>
+                )}
+              </div>
+            ) : null}
+            {toolAccessAudit != null && Array.isArray(toolAccessAudit.denials) && toolAccessAudit.denials.length > 0 ? (
+              <div>
+                <h3 className="text-[9px] font-heading font-bold uppercase tracking-widest text-mutedForeground mb-1">Denials (same window)</h3>
+                <div className="max-h-[240px] overflow-auto rounded border border-zinc-700/40">
+                  <table className="w-full text-[9px] font-mono">
+                    <thead className="sticky top-0 bg-zinc-900/95 text-mutedForeground text-left">
+                      <tr>
+                        <th className="p-1.5 font-heading">When</th>
+                        <th className="p-1.5 font-heading">Method / path</th>
+                        <th className="p-1.5 font-heading">User</th>
+                        <th className="p-1.5 font-heading">IP</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {toolAccessAudit.denials.map((row) => (
+                        <tr key={row.id} className="border-t border-zinc-800/80 align-top">
+                          <td className="p-1.5 whitespace-nowrap text-zinc-400">{formatAdminDateTime(row.created_at) || row.created_at || '—'}</td>
+                          <td className="p-1.5 break-all text-zinc-200">
+                            <span className="text-amber-400/90">{row.method || '?'}</span> {row.path || '—'}
+                          </td>
+                          <td className="p-1.5 break-all">
+                            <span className="text-foreground">{row.username || '?'}</span>
+                            <span className="text-zinc-500 block break-all">{row.email || row.user_id || '—'}</span>
+                          </td>
+                          <td className="p-1.5 text-zinc-400 whitespace-nowrap">{row.client_ip || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
+        </div>
+
+        {isAdmin && (
+        <>
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
@@ -14612,7 +14709,6 @@ export default function Admin() {
         </div>
 
 
-            {isAdmin && (
               <div>
                 <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Broadcast system message</div>
                 <p className="text-xs text-mutedForeground mb-2">
@@ -14643,7 +14739,6 @@ export default function Admin() {
                   </button>
                 </div>
               </div>
-            )}
 
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -14930,6 +15025,8 @@ export default function Admin() {
           </div>
         )}
         </div>
+        </>
+        )}
       </section>
       )}
 
@@ -21157,8 +21254,8 @@ export default function Admin() {
       {activeCategoryId === 'admin-world-systems' && isAdmin && (
       <section id="admin-database" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
-          <Skull size={12} />
-          Database
+          <Image size={12} />
+          Image host
         </h2>
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -21254,161 +21351,6 @@ export default function Admin() {
             </div>
           )}
         </div>
-        <div className={`${styles.panel} rounded-md overflow-hidden border border-red-500/30 mobile-panel`}>
-          <SectionHeader
-            icon={Skull}
-            title="Database Management"
-            color="text-red-400"
-            toolAnchor="database"
-            isCollapsed={collapsed.database}
-            onToggle={() => toggleSection('database')}
-          />
-          {!collapsed.database && (
-          <div className="p-3 space-y-3">
-            {/* Find Duplicates */}
-            <div className="space-y-2">
-              <label className="text-[10px] text-mutedForeground font-heading uppercase">Find Duplicate Users</label>
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="text"
-                  placeholder="Username (optional)"
-                  value={searchUsername}
-                  onChange={(e) => setSearchUsername(e.target.value)}
-                  className="flex-1 min-w-0 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
-                />
-                <BtnPrimary onClick={handleFindDuplicates} disabled={dbLoading} className="w-full sm:w-auto">
-                  {dbLoading ? '...' : 'Search'}
-                </BtnPrimary>
-              </div>
-              {searchResults && (
-                <pre className="max-h-32 overflow-y-auto overflow-x-auto text-[10px] p-2 rounded bg-zinc-900/50 border border-zinc-700/50 text-mutedForeground">
-                  {JSON.stringify(searchResults, null, 2)}
-                </pre>
-              )}
-            </div>
-
-            {/* Delete User */}
-            <div className="space-y-2">
-              <label className="text-[10px] text-mutedForeground font-heading uppercase">Delete Single User</label>
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="text"
-                  placeholder="User ID or username"
-                  value={deleteUserId}
-                  onChange={(e) => setDeleteUserId(e.target.value)}
-                  className="flex-1 min-w-0 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
-                />
-                <BtnDanger onClick={handleDeleteUser} disabled={dbLoading} className="w-full sm:w-auto">
-                  {dbLoading ? '...' : 'Delete'}
-                </BtnDanger>
-              </div>
-            </div>
-
-            {/* Delete Family */}
-            <div className="space-y-2">
-              <label className="text-[10px] text-mutedForeground font-heading uppercase">Delete Family</label>
-              <div className="flex gap-2 flex-wrap items-center">
-                <select
-                  value={deleteFamilyId}
-                  onChange={(e) => setDeleteFamilyId(e.target.value)}
-                  className="flex-1 min-w-[160px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground [color-scheme:dark] focus:border-primary/50 focus:outline-none"
-                >
-                  <option value="">Select family...</option>
-                  {adminFamiliesList.map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.name} [{f.tag}]{f.wiped ? ' (wiped)' : ''}
-                    </option>
-                  ))}
-                </select>
-                <BtnDanger onClick={handleDeleteFamily} disabled={dbLoading || !deleteFamilyId}>
-                  {dbLoading ? '...' : 'Delete'}
-                </BtnDanger>
-              </div>
-            </div>
-
-            {/* Wipe All Families */}
-            <div className="space-y-2 p-2 rounded border border-red-500/50 bg-red-500/5">
-              <label className="text-[10px] text-red-400 font-heading uppercase font-bold">⚠️ Wipe All Families</label>
-              <p className="text-[10px] text-red-400/80">Delete ALL families. Every user removed from their crew. State heads cleared.</p>
-              <div className="flex gap-2 flex-wrap">
-                <input
-                  type="text"
-                  placeholder='Type "WIPE ALL FAMILIES"'
-                  value={wipeAllFamiliesConfirmText}
-                  onChange={(e) => setWipeAllFamiliesConfirmText(e.target.value)}
-                  className="flex-1 min-w-[180px] bg-zinc-900/50 border border-red-500/50 rounded px-2 py-1 text-xs text-foreground focus:border-red-500 focus:outline-none"
-                />
-                <BtnDanger onClick={handleWipeAllFamilies} disabled={dbLoading || wipeAllFamiliesConfirmText !== 'WIPE ALL FAMILIES'}>
-                  {dbLoading ? '...' : 'Wipe all'}
-                </BtnDanger>
-              </div>
-            </div>
-
-            {/* Drop everyone's cars */}
-            <div className="space-y-2 p-2 rounded border border-amber-500/50 bg-amber-500/5">
-              <label className="text-[10px] text-amber-400 font-heading uppercase font-bold">Drop everyone&apos;s cars</label>
-              <p className="text-[10px] text-mutedForeground">Permanently delete all cars for all users (every garage emptied).</p>
-              <BtnDanger onClick={handleDropAllCars} disabled={dbLoading}>
-                {dbLoading ? '...' : 'Delete all cars'}
-              </BtnDanger>
-            </div>
-
-            {/* Drop all casinos and properties */}
-            <div className="space-y-2 p-2 rounded border border-amber-500/50 bg-amber-500/5">
-              <label className="text-[10px] text-amber-400 font-heading uppercase font-bold">Drop all casinos & properties</label>
-              <p className="text-[10px] text-mutedForeground">Unclaim every casino (dice, blackjack, slots, etc.) and every property (airport, armoury) globally.</p>
-              <div className="flex gap-2 flex-wrap items-center">
-                <input
-                  type="text"
-                  placeholder='Type "DROP ALL CASINOS PROPERTIES"'
-                  value={dropAllCasinosConfirmText}
-                  onChange={(e) => setDropAllCasinosConfirmText(e.target.value)}
-                  className="flex-1 min-w-[180px] bg-zinc-900/50 border border-amber-500/50 rounded px-2 py-1 text-xs text-foreground focus:border-amber-500 focus:outline-none"
-                />
-                <BtnDanger onClick={handleDropAllCasinosProperties} disabled={dbLoading || dropAllCasinosConfirmText !== 'DROP ALL CASINOS PROPERTIES'}>
-                  {dbLoading ? '...' : 'Drop all'}
-                </BtnDanger>
-              </div>
-            </div>
-
-            {/* Wipe All */}
-            <div className="space-y-2 p-2 rounded border border-red-500/50 bg-red-500/5">
-              <label className="text-[10px] text-red-400 font-heading uppercase font-bold">⚠️ WIPE ALL USERS</label>
-              <p className="text-[10px] text-red-400/80">Permanently deletes ALL users and game data. Cannot be undone.</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="text"
-                  placeholder='Type "WIPE ALL"'
-                  value={wipeConfirmText}
-                  onChange={(e) => setWipeConfirmText(e.target.value)}
-                  className="flex-1 min-w-0 bg-zinc-900/50 border border-red-500/50 rounded px-2 py-1 text-xs text-foreground focus:border-red-500 focus:outline-none"
-                />
-                <BtnDanger onClick={handleWipeAllUsers} disabled={dbLoading || dbFreshLoading || wipeConfirmText !== 'WIPE ALL'} className="w-full sm:w-auto">
-                  {dbLoading ? '...' : 'WIPE'}
-                </BtnDanger>
-              </div>
-            </div>
-
-            {/* Database fresh / New release */}
-            <div className="space-y-2 p-2 rounded border border-red-500/50 bg-red-500/5">
-              <label className="text-[10px] text-red-400 font-heading uppercase font-bold">🔄 NEW RELEASE (full reset)</label>
-              <p className="text-[10px] text-red-400/80">Wipe entire database and re-seed weapons, properties, crimes. Game starts from the very beginning. You will be logged out.</p>
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="text"
-                  placeholder='Type "NEW RELEASE"'
-                  value={freshConfirmText}
-                  onChange={(e) => setFreshConfirmText(e.target.value)}
-                  className="flex-1 min-w-0 bg-zinc-900/50 border border-red-500/50 rounded px-2 py-1 text-xs text-foreground focus:border-red-500 focus:outline-none"
-                />
-                <BtnDanger onClick={handleDatabaseFresh} disabled={dbLoading || dbFreshLoading || freshConfirmText !== 'NEW RELEASE'} className="w-full sm:w-auto">
-                  {dbFreshLoading ? '...' : 'New release'}
-                </BtnDanger>
-              </div>
-            </div>
-          </div>
-          )}
-        </div>
       </section>
       )}
 
@@ -21426,7 +21368,7 @@ export default function Admin() {
             <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Promote / demote moderators</span>
           </div>
           <div className="p-3 space-y-3">
-            <p className="text-[10px] text-mutedForeground font-heading">Only admins can promote or demote moderators. Mods see a limited Admin page (Moderation, Logs, HDO, Moderators only).</p>
+            <p className="text-[10px] text-mutedForeground font-heading">Only admins can promote or demote moderators. By default, mods see all four category tabs (Operations, Economy, World, Analytics); economy panels stay admin-only, and you can hide categories below.</p>
 
             <details className="rounded border border-primary/20 bg-primary/5 overflow-hidden">
               <summary className="px-2.5 py-2 cursor-pointer text-[10px] font-heading font-bold text-primary uppercase tracking-wider hover:bg-primary/10 list-none flex items-center gap-2">

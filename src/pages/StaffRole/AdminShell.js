@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Search, User, ChevronDown, Users, Lock } from 'lucide-react';
-import api from '../../utils/api';
+import api, { STAFF_ADMIN_API_FORBIDDEN_EVENT } from '../../utils/api';
 import { getAdminPresenceTabId } from '../../utils/adminPresence';
 import { isStaffPortalTokenValid, setStaffPortalToken } from '../../utils/staffPortalSession';
 import Admin from './Admin';
@@ -38,6 +38,14 @@ function formatSeenAgo(iso, refreshKey = 0) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+function staffCapsFromAdminCheck(data) {
+  return !!(data?.is_admin || data?.is_moderator || data?.has_admin_email);
+}
+
+function staffShellAllowedFromCheck(data) {
+  return staffCapsFromAdminCheck(data) && !!data?.staff_login_session;
+}
+
 const LEGACY_HASH_TO_ROUTE_GROUP = {
   'admin-players': 'players',
   'admin-moderation': 'moderation',
@@ -59,7 +67,7 @@ export default function AdminShell() {
   const navigate = useNavigate();
   const [targetPlayer, setTargetPlayer] = useState('');
   const [targetContextOpen, setTargetContextOpen] = useState(false);
-  /** null = verifying with API; only admins/moderators may see staff UI (shell + tools). */
+  /** null = verifying with API; staff UI requires DB caps and a staff-issued JWT (see /admin/check staff_login_session). */
   const [staffAllowed, setStaffAllowed] = useState(null);
   /** When STAFF_PORTAL_PASSWORD is set, API requires X-Staff-Portal-Token for /admin/* calls except check. */
   const [staffPortalEnabled, setStaffPortalEnabled] = useState(false);
@@ -82,6 +90,21 @@ export default function AdminShell() {
     return () => window.removeEventListener('staff-portal-expired', onExpired);
   }, []);
 
+  /** iOS Safari: re-check portal JWT after resume (timers may lag; session may have expired in background). */
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return undefined;
+    const bump = () => setPortalRefreshTick((t) => t + 1);
+    const onVis = () => {
+      if (!document.hidden) bump();
+    };
+    window.addEventListener('pageshow', bump);
+    document.addEventListener('visibilitychange', onVis);
+    return () => {
+      window.removeEventListener('pageshow', bump);
+      document.removeEventListener('visibilitychange', onVis);
+    };
+  }, []);
+
   useEffect(() => {
     if (!staffPortalEnabled || staffAllowed !== true) return undefined;
     const id = setInterval(() => setPortalRefreshTick((t) => t + 1), 15000);
@@ -94,6 +117,7 @@ export default function AdminShell() {
   /** Bumps periodically so "Xs ago" stays fresh while the panel is open. */
   const [presenceSeenTick, setPresenceSeenTick] = useState(0);
   const presencePanelRef = useRef(null);
+  const shellOpenLoggedRef = useRef(false);
 
   const fetchPresence = useCallback(async () => {
     setPresenceLoading(true);
@@ -114,11 +138,18 @@ export default function AdminShell() {
       try {
         const res = await api.get('/admin/check');
         if (cancelled) return;
-        // Match server: /admin/check — admins "acting as normal" have is_admin false but has_admin_email true (ADMIN_EMAILS only).
-        const ok = !!res.data?.is_admin || !!res.data?.is_moderator || !!res.data?.has_admin_email;
-        setStaffAllowed(ok);
+        const caps = staffCapsFromAdminCheck(res.data);
+        const shellOk = staffShellAllowedFromCheck(res.data);
         setStaffPortalEnabled(!!res.data?.staff_portal_enabled);
         setStaffPortalSessionMin(Number(res.data?.staff_portal_session_minutes) || 30);
+        if (!caps) {
+          setStaffAllowed(false);
+        } else if (!shellOk) {
+          setStaffAllowed(false);
+          navigate('/staff-entrance', { replace: true });
+        } else {
+          setStaffAllowed(true);
+        }
       } catch {
         if (!cancelled) {
           setStaffAllowed(false);
@@ -128,7 +159,63 @@ export default function AdminShell() {
       }
     })();
     return () => { cancelled = true; };
-  }, []);
+  }, [navigate]);
+
+  useEffect(() => {
+    const onForbidden = async () => {
+      try {
+        const res = await api.get('/admin/check');
+        const caps = staffCapsFromAdminCheck(res.data);
+        const shellOk = staffShellAllowedFromCheck(res.data);
+        setStaffAllowed(shellOk);
+        setStaffPortalEnabled(!!res.data?.staff_portal_enabled);
+        setStaffPortalSessionMin(Number(res.data?.staff_portal_session_minutes) || 30);
+        if (!shellOk && typeof window !== 'undefined') {
+          const p = window.location.pathname || '';
+          if (p.startsWith('/staffrole/admin')) {
+            if (caps) navigate('/staff-entrance', { replace: true });
+            else navigate('/account/dashboard', { replace: true });
+          }
+        }
+      } catch {
+        setStaffAllowed(false);
+        setStaffPortalEnabled(false);
+        setStaffPortalSessionMin(30);
+        if (typeof window !== 'undefined') {
+          const p = window.location.pathname || '';
+          if (p.startsWith('/staffrole/admin')) navigate('/account/dashboard', { replace: true });
+        }
+      }
+    };
+    window.addEventListener(STAFF_ADMIN_API_FORBIDDEN_EVENT, onForbidden);
+    return () => window.removeEventListener(STAFF_ADMIN_API_FORBIDDEN_EVENT, onForbidden);
+  }, [navigate]);
+
+  useEffect(() => {
+    if (staffAllowed !== true) return undefined;
+    const id = setInterval(async () => {
+      try {
+        const res = await api.get('/admin/check');
+        const caps = staffCapsFromAdminCheck(res.data);
+        const shellOk = staffShellAllowedFromCheck(res.data);
+        setStaffAllowed(shellOk);
+        if (!shellOk && typeof window !== 'undefined') {
+          const p = window.location.pathname || '';
+          if (p.startsWith('/staffrole/admin')) {
+            if (caps) navigate('/staff-entrance', { replace: true });
+            else navigate('/account/dashboard', { replace: true });
+          }
+        }
+      } catch {
+        setStaffAllowed(false);
+        if (typeof window !== 'undefined') {
+          const p = window.location.pathname || '';
+          if (p.startsWith('/staffrole/admin')) navigate('/account/dashboard', { replace: true });
+        }
+      }
+    }, 180000);
+    return () => clearInterval(id);
+  }, [staffAllowed, navigate]);
 
   useEffect(() => {
     if (staffAllowed !== true || !staffPortalOk) return undefined;
@@ -147,6 +234,18 @@ export default function AdminShell() {
     const hb = setInterval(send, 25000);
     return () => clearInterval(hb);
   }, [staffAllowed, staffPortalOk, section, location.pathname, location.search]);
+
+  useEffect(() => {
+    if (staffAllowed !== true || !staffPortalOk) {
+      shellOpenLoggedRef.current = false;
+      return undefined;
+    }
+    if (shellOpenLoggedRef.current) return undefined;
+    shellOpenLoggedRef.current = true;
+    const path = `${location.pathname}${location.search || ''}`;
+    api.post('/admin/tool-access/shell-open', { path }).catch(() => {});
+    return undefined;
+  }, [staffAllowed, staffPortalOk, location.pathname, location.search]);
 
   useEffect(() => {
     if (!presenceOpen) return undefined;
@@ -287,10 +386,14 @@ export default function AdminShell() {
             <input
               type="password"
               autoComplete="current-password"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+              enterKeyHint="go"
               value={portalPassword}
               onChange={(ev) => setPortalPassword(ev.target.value)}
               placeholder="Staff portal password"
-              className="w-full h-11 rounded border border-zinc-700 bg-zinc-900 px-3 text-sm"
+              className="w-full min-h-[44px] rounded border border-zinc-700 bg-zinc-900 px-3 text-base md:text-sm"
               disabled={portalBusy}
             />
           </label>
@@ -302,7 +405,7 @@ export default function AdminShell() {
           <button
             type="submit"
             disabled={portalBusy}
-            className="w-full h-11 rounded border border-primary/50 bg-primary/20 text-primary text-sm font-heading uppercase tracking-wider hover:bg-primary/30 disabled:opacity-50"
+            className="w-full min-h-[44px] rounded border border-primary/50 bg-primary/20 text-primary text-base md:text-sm font-heading uppercase tracking-wider hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
           >
             {portalBusy ? 'Checking…' : 'Unlock tools'}
           </button>

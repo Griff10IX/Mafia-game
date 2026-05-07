@@ -56,6 +56,7 @@ def register(router):
     _is_admin = srv._is_admin
     _is_moderator = srv._is_moderator
     _is_hdo = srv._is_hdo
+    require_staff_issued_if_staff_capable = srv.require_staff_issued_if_staff_capable
 
     async def _ensure_hdo_point_request_indexes():
         coll = db.help_desk_hdo_point_requests
@@ -261,6 +262,8 @@ def register(router):
                 raise HTTPException(status_code=403, detail="Only admins can view error reports from other users")
         elif not _can_manage_tickets(current_user):
             raise HTTPException(status_code=403, detail="Not allowed to view this ticket")
+        if not is_author:
+            require_staff_issued_if_staff_capable(current_user)
         return _ticket_to_response(ticket)
 
     @router.post("/help-desk/tickets/{ticket_id}/reply")
@@ -274,6 +277,8 @@ def register(router):
         is_author = ticket["user_id"] == current_user["id"]
         if not is_author and not _can_manage_tickets(current_user):
             raise HTTPException(status_code=403, detail="Not allowed to reply to this ticket")
+        if not is_author:
+            require_staff_issued_if_staff_capable(current_user)
         reply_text = (body.body or "").strip()[: 10_000] or "No message"
         additions = await _get_profanity_additions()
         if contains_profanity(reply_text, extra_words=additions):
@@ -298,6 +303,7 @@ def register(router):
         """Close a ticket. Admin, mod, or HDO only."""
         if not _can_manage_tickets(current_user):
             raise HTTPException(status_code=403, detail="Only staff can close tickets")
+        require_staff_issued_if_staff_capable(current_user)
         ticket = await db.help_desk_tickets.find_one({"id": ticket_id}, {"_id": 0})
         if not ticket:
             raise HTTPException(status_code=404, detail="Ticket not found")
@@ -337,6 +343,7 @@ def register(router):
         """Admin-only: reward the reporting user with cash for an error report."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
+        require_staff_issued_if_staff_capable(current_user)
         if not (1 <= body.amount <= 1_000_000):
             raise HTTPException(status_code=400, detail="Amount must be between 1 and 1,000,000")
         ticket = await db.help_desk_tickets.find_one({"id": ticket_id}, {"_id": 0})
@@ -444,6 +451,7 @@ def register(router):
         """List words added to the blacklist. Staff only. can_remove = True only for admin."""
         if not _can_manage_tickets(current_user):
             raise HTTPException(status_code=403, detail="Only staff can view the blacklist")
+        require_staff_issued_if_staff_capable(current_user)
         cursor = db.profanity_additions.find({}, {"_id": 0}).sort("added_at", -1).limit(500)
         docs = await cursor.to_list(500)
         return {
@@ -456,6 +464,7 @@ def register(router):
         """Add a word to the blacklist (blocked in helpdesk and site-wide). Admin, mod, or HDO only."""
         if not _can_manage_tickets(current_user):
             raise HTTPException(status_code=403, detail="Only staff can add blacklist words")
+        require_staff_issued_if_staff_capable(current_user)
         raw = (body.word or "").strip()
         if not raw:
             raise HTTPException(status_code=400, detail="Enter a word to blacklist")
@@ -480,6 +489,7 @@ def register(router):
         """Remove a word from the blacklist. Admin only."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Only admins can remove blacklist words")
+        require_staff_issued_if_staff_capable(current_user)
         w = (word or "").strip().lower()
         if not w:
             raise HTTPException(status_code=400, detail="Specify the word to remove")
@@ -492,6 +502,7 @@ def register(router):
     async def help_desk_open_count(current_user: dict = Depends(get_current_user)):
         """Count of open tickets: for staff (admin/mod/hdo) = all open; for others = their open tickets. Used for nav badge."""
         if _can_manage_tickets(current_user):
+            require_staff_issued_if_staff_capable(current_user)
             query = {"status": "open"}
         else:
             query = {"user_id": current_user["id"], "status": "open"}
@@ -503,6 +514,7 @@ def register(router):
         """Staff (admin, mod, or HDO) change a crew's name and optionally tag. Use family tag to identify the crew."""
         if not _can_manage_tickets(current_user):
             raise HTTPException(status_code=403, detail="Only staff can change crew names")
+        require_staff_issued_if_staff_capable(current_user)
         tag = (body.family_tag or "").strip().upper().replace(" ", "")
         if len(tag) < 2:
             raise HTTPException(status_code=400, detail="Enter the crew's current tag (2+ chars)")
@@ -577,6 +589,7 @@ def register(router):
     async def list_admin_message_requests(current_user: dict = Depends(get_current_user)):
         """List admin message permission requests. Staff see all pending; users see their own."""
         if _can_manage_tickets(current_user):
+            require_staff_issued_if_staff_capable(current_user)
             # Staff sees all pending requests
             cursor = db.admin_message_requests.find(
                 {"status": "pending"},
@@ -596,6 +609,7 @@ def register(router):
         """Approve a user's request to message staff. Admin/mod only."""
         if not (_is_admin(current_user) or _is_moderator(current_user)):
             raise HTTPException(status_code=403, detail="Only admins and moderators can approve requests")
+        require_staff_issued_if_staff_capable(current_user)
         
         req = await db.admin_message_requests.find_one({"id": request_id}, {"_id": 0})
         if not req:
@@ -643,6 +657,7 @@ def register(router):
         """Deny a user's request to message staff. Admin/mod only."""
         if not (_is_admin(current_user) or _is_moderator(current_user)):
             raise HTTPException(status_code=403, detail="Only admins and moderators can deny requests")
+        require_staff_issued_if_staff_capable(current_user)
         
         req = await db.admin_message_requests.find_one({"id": request_id}, {"_id": 0})
         if not req:
@@ -679,6 +694,7 @@ def register(router):
         """Revoke a user's permission to message staff. Admin/mod only."""
         if not (_is_admin(current_user) or _is_moderator(current_user)):
             raise HTTPException(status_code=403, detail="Only admins and moderators can revoke permissions")
+        require_staff_issued_if_staff_capable(current_user)
         
         result = await db.admin_message_permissions.delete_one({"user_id": user_id})
         if result.deleted_count == 0:
@@ -700,6 +716,7 @@ def register(router):
         """List all users with admin message permissions. Admin/mod only."""
         if not (_is_admin(current_user) or _is_moderator(current_user)):
             raise HTTPException(status_code=403, detail="Only admins and moderators can view this")
+        require_staff_issued_if_staff_capable(current_user)
         
         permissions = await db.admin_message_permissions.find({}, {"_id": 0}).to_list(500)
         return {"permissions": permissions}

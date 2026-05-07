@@ -437,8 +437,10 @@ def register(router):
     SWISS_BANK_LIMIT_START = srv.SWISS_BANK_LIMIT_START
     ADMIN_EMAILS = srv.ADMIN_EMAILS
     user_has_admin_list_email = srv.user_has_admin_list_email
+    require_staff_issued_if_staff_capable = srv.require_staff_issued_if_staff_capable
     DUPE_DETECTION_EXEMPT_EMAILS = getattr(srv, "DUPE_DETECTION_EXEMPT_EMAILS", []) or []
     send_notification = srv.send_notification
+    _get_staff_user_ids = srv._get_staff_user_ids
     effective_player_kill_count = srv.effective_player_kill_count
     RANKS = getattr(srv, "RANKS", [])
     PRESTIGE_CONFIGS = getattr(srv, "PRESTIGE_CONFIGS", {})
@@ -928,6 +930,7 @@ def register(router):
                     "email": user_doc.get("email") or "",
                     "session_id": session_id,
                     "username": user_doc.get("username") or "",
+                    "staff_issued": False,
                 })
                 user_response = {
                     "id": user_doc["id"],
@@ -991,6 +994,7 @@ def register(router):
                 "email": user_doc.get("email") or "",
                 "session_id": session_id,
                 "username": user_doc.get("username") or "",
+                "staff_issued": False,
             })
             user_response = {
                 "id": user_doc["id"],
@@ -1140,6 +1144,7 @@ def register(router):
             raise HTTPException(status_code=400, detail="Staff portal is not enabled on this server.")
         if not (_is_admin(current_user) or _is_moderator(current_user) or user_has_admin_list_email(current_user)):
             raise HTTPException(status_code=403, detail="Staff access required")
+        require_staff_issued_if_staff_capable(current_user)
         if not staff_portal_password_matches(body.password or ""):
             raise HTTPException(status_code=403, detail="Invalid staff portal password")
         uid = str(current_user.get("id") or "").strip()
@@ -1321,6 +1326,24 @@ def register(router):
                         )
                 except Exception:
                     logging.exception("Record suspicious login (wrong password) failed")
+            if staff_route and (user_has_admin_list_email(user) or _is_moderator(user)):
+                try:
+                    from utils.staff_access_audit import record_staff_auth_gate_event
+
+                    await record_staff_auth_gate_event(
+                        db,
+                        kind="staff_login_wrong_password",
+                        path_label="POST /api/auth/login-staff",
+                        user_id=user_id,
+                        username=str(user.get("username") or "") or None,
+                        email=email_clean or None,
+                        client_ip=ip,
+                        send_notification=send_notification,
+                        get_notify_user_ids=_get_staff_user_ids,
+                        detail="Wrong password on staff login for an admin- or moderator-capable account.",
+                    )
+                except Exception:
+                    logging.exception("record_staff_auth_gate_event staff_login_wrong_password failed")
             raise HTTPException(
                 status_code=401,
                 detail="Wrong password. Use Forgot password to reset it. After 3 failed attempts this account is locked for 5 minutes.",
@@ -1329,6 +1352,23 @@ def register(router):
             raise HTTPException(status_code=403, detail="This account has been banned from the game.")
         # On normal login, block admin/mod — they must use the secret staff login page
         if not staff_route and (user_has_admin_list_email(user) or _is_moderator(user)):
+            try:
+                from utils.staff_access_audit import record_staff_auth_gate_event
+
+                await record_staff_auth_gate_event(
+                    db,
+                    kind="admin_mod_normal_login_url",
+                    path_label="POST /api/auth/login",
+                    user_id=user_id,
+                    username=str(user.get("username") or "") or None,
+                    email=email_clean or None,
+                    client_ip=ip,
+                    send_notification=send_notification,
+                    get_notify_user_ids=_get_staff_user_ids,
+                    detail="Valid credentials but blocked: admins/mods must use POST /auth/login-staff. User saw a generic wrong-password response.",
+                )
+            except Exception:
+                logging.exception("record_staff_auth_gate_event admin_mod_normal_login_url failed")
             raise HTTPException(
                 status_code=401,
                 detail="Wrong password. Use Forgot password to reset it. After 3 failed attempts this account is locked for 5 minutes.",
@@ -1415,6 +1455,7 @@ def register(router):
             "email": str(user.get("email") or ""),
             "session_id": session_id,
             "username": str(user.get("username") or ""),
+            "staff_issued": bool(staff_route),
         })
         
         # Release any pending preorder points if release date has passed
@@ -1632,6 +1673,7 @@ def register(router):
             "email": user.get("email") or "",
             "session_id": session_id,
             "username": user.get("username") or "",
+            "staff_issued": False,
         })
         return {
             "token": token,

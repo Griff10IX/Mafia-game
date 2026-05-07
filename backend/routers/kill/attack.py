@@ -43,6 +43,7 @@ from server import (
     log_respect_earned,
     send_notification,
     send_notification_to_family,
+    require_staff_issued_if_staff_capable,
     maybe_process_rank_up,
     maybe_respect_points_drop,
     _find_user_by_username_case_insensitive,
@@ -2623,6 +2624,7 @@ async def get_attack_timeline(
     if target_username and str(target_username).strip():
         if not viewer_is_staff:
             raise HTTPException(status_code=403, detail="Staff access required")
+        require_staff_issued_if_staff_capable(current_user)
         tf = _find_user_by_username_case_insensitive(target_username)
         tu = await db.users.find_one(tf, {"_id": 0, "id": 1, "username": 1, "current_state": 1, "email": 1})
         if not tu:

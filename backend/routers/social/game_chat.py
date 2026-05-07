@@ -8,7 +8,7 @@ from typing import Optional, List
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 
-from server import db, get_current_user, send_notification, ADMIN_EMAILS, MOD_EMAILS, _is_admin, _is_moderator
+from server import db, get_current_user, send_notification, ADMIN_EMAILS, MOD_EMAILS, _is_admin, _is_moderator, require_staff_issued_if_staff_capable
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_GAME_CHAT
 
 logger = logging.getLogger(__name__)
@@ -313,6 +313,7 @@ def register(router):
                 status_code=403,
                 detail="Only admins and moderators can clear game chat.",
             )
+        require_staff_issued_if_staff_capable(current_user)
         from utils.deleted_messages_archive import archive_many
         docs = await db.game_chat_messages.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
         if docs:

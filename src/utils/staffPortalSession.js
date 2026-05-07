@@ -1,23 +1,57 @@
-/** Session-bound staff portal JWT (second factor for /api/.../admin/... when server sets STAFF_PORTAL_PASSWORD). */
+/** Staff portal JWT for X-Staff-Portal-Token (backend STAFF_PORTAL_PASSWORD). Prefers sessionStorage; falls back to localStorage when sessionStorage is unavailable (e.g. some iOS Private modes). */
 
 const KEY = 'staff_portal_token';
 
-export function getStaffPortalToken() {
+function _ssGet() {
   try {
-    if (typeof sessionStorage === 'undefined') return '';
-    return sessionStorage.getItem(KEY) || '';
+    return typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(KEY) : null;
   } catch {
-    return '';
+    return null;
   }
 }
 
-export function setStaffPortalToken(token) {
+function _lsGet() {
   try {
-    if (typeof sessionStorage === 'undefined') return;
-    if (token) sessionStorage.setItem(KEY, String(token));
-    else sessionStorage.removeItem(KEY);
+    return typeof localStorage !== 'undefined' ? localStorage.getItem(KEY) : null;
   } catch {
-    /* ignore */
+    return null;
+  }
+}
+
+export function getStaffPortalToken() {
+  if (typeof window === 'undefined') return '';
+  return (_ssGet() || _lsGet() || '').trim();
+}
+
+export function setStaffPortalToken(token) {
+  if (typeof window === 'undefined') return;
+  const v = token ? String(token).trim() : '';
+  if (!v) {
+    try {
+      sessionStorage.removeItem(KEY);
+    } catch {
+      /* ignore */
+    }
+    try {
+      localStorage.removeItem(KEY);
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
+  try {
+    sessionStorage.setItem(KEY, v);
+    try {
+      localStorage.removeItem(KEY);
+    } catch {
+      /* ignore */
+    }
+  } catch {
+    try {
+      localStorage.setItem(KEY, v);
+    } catch {
+      /* ignore */
+    }
   }
 }
 

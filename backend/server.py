@@ -31,6 +31,7 @@ from utils.game_pass_micro_rewards import (
 from utils.game_pass_tier_reconcile import grant_missing_vip_micro_tier_rewards
 from utils.analytics_events import log_analytics_event
 from utils.point_provenance import log_points_event
+from utils.staff_access_audit import path_requires_staff_issued_jwt
 from utils.family_vault_log import log_family_vault_tx
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -1040,6 +1041,8 @@ async def get_current_user(
     await raise_http_if_ip_banned(db, request)
 
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
+    # Staff capabilities (_is_admin / _is_moderator) are derived from this document on every request, not from JWT claims
+    # (beyond sub/session), so tampering with localStorage or browser devtools cannot grant admin/mod API access.
     if user is None:
         _log_auth_failure(user_id, 401, "User not found")
         raise HTTPException(status_code=401, detail="User not found")
@@ -1329,6 +1332,18 @@ async def get_current_user(
             user["prestige_rank_multiplier"] = _expected_m
     except Exception:
         pass
+
+    staff_issued = bool(payload.get("staff_issued"))
+    user["_jwt_staff_issued"] = staff_issued
+    if request:
+        req_path = (request.url.path or "").split("?")[0].rstrip("/") or ""
+        if path_requires_staff_issued_jwt(req_path):
+            staff_capable = user_has_admin_list_email(user) or _is_moderator(user)
+            if staff_capable and not staff_issued:
+                raise HTTPException(
+                    status_code=403,
+                    detail=STAFF_LOGIN_REQUIRED_DETAIL,
+                )
 
     return user
 
@@ -2388,10 +2403,27 @@ def _admin_or_mod(user: dict) -> bool:
     return _is_admin(user) or _is_moderator(user)
 
 
+STAFF_LOGIN_REQUIRED_DETAIL = (
+    "Staff login required. Sign out and use the staff entrance (staff login) to use admin or moderator tools."
+)
+
+
+def require_staff_issued_if_staff_capable(user: dict) -> None:
+    """403 unless JWT from staff login when user is admin-listed or a moderator (DB / MOD_EMAILS).
+
+    Covers tool routes whose URL is not under /api/.../admin/... (path-based gating in get_current_user).
+    Also invoked from require_admin* for defense in depth.
+    """
+    if user_has_admin_list_email(user) or _is_moderator(user):
+        if not user.get("_jwt_staff_issued"):
+            raise HTTPException(status_code=403, detail=STAFF_LOGIN_REQUIRED_DETAIL)
+
+
 async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     """FastAPI dependency: 403 unless _is_admin (not available to act-as-normal or non-listed users)."""
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
+    require_staff_issued_if_staff_capable(current_user)
     return current_user
 
 
@@ -2399,6 +2431,7 @@ async def require_admin_or_mod(current_user: dict = Depends(get_current_user)) -
     """FastAPI dependency: 403 unless admin or moderator."""
     if not _admin_or_mod(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
+    require_staff_issued_if_staff_capable(current_user)
     return current_user
 
 
@@ -2406,6 +2439,7 @@ async def require_admin_verified(current_user: dict = Depends(get_current_user_v
     """403 unless _is_admin; chains email-verified user (same rules as get_current_user_verified)."""
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
+    require_staff_issued_if_staff_capable(current_user)
     return current_user
 
 
@@ -2413,6 +2447,7 @@ async def require_admin_or_mod_verified(current_user: dict = Depends(get_current
     """403 unless admin or moderator; chains email-verified user."""
     if not _admin_or_mod(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
+    require_staff_issued_if_staff_capable(current_user)
     return current_user
 
 
@@ -3180,6 +3215,13 @@ try:
     app.add_middleware(StaffAccessAuditMiddleware)
 except ImportError:
     print("Warning: staff_access_audit middleware not found")
+
+try:
+    from middleware.admin_tool_access_log import AdminToolAccessLogMiddleware
+
+    app.add_middleware(AdminToolAccessLogMiddleware)
+except ImportError:
+    print("Warning: admin_tool_access_log middleware not found")
 
 try:
     from middleware.staff_portal_guard import StaffPortalGuardMiddleware

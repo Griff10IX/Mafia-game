@@ -12,6 +12,7 @@ from server import (
     _is_moderator,
     send_notification,
     send_notification_to_all,
+    require_staff_issued_if_staff_capable,
 )
 from utils.text import strip_emoji
 
@@ -447,6 +448,7 @@ async def report_dispute(
 async def list_disputes(current_user: dict = Depends(get_current_user)):
     if not _is_staff(current_user):
         raise HTTPException(status_code=403, detail="Staff only")
+    require_staff_issued_if_staff_capable(current_user)
     rows = await db.forum_designer_auction_disputes.find({}, {"_id": 0}).sort("created_at", -1).to_list(200)
     return {"disputes": rows}
 
@@ -458,6 +460,7 @@ async def resolve_dispute(
 ):
     if not _is_staff(current_user):
         raise HTTPException(status_code=403, detail="Staff only")
+    require_staff_issued_if_staff_capable(current_user)
     d = await db.forum_designer_auction_disputes.find_one({"id": dispute_id}, {"_id": 0})
     if not d:
         raise HTTPException(status_code=404, detail="Dispute not found")

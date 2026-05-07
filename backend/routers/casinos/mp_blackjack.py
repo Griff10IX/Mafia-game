@@ -13,7 +13,7 @@ MP_BJ_START_COUNTDOWN = 5  # seconds after all ready before deal
 from pydantic import BaseModel, field_validator
 from fastapi import Depends, HTTPException
 
-from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin, _is_moderator
+from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin, _is_moderator, require_staff_issued_if_staff_capable
 from utils.user_mid_travel import raise_if_user_mid_travel
 
 MP_BJ_SUITS = ["H", "D", "C", "S"]
@@ -773,6 +773,8 @@ def register(router):
             raise HTTPException(status_code=400, detail="Game cannot be cancelled at this stage")
         if game.get("creator_id") != uid and not _is_admin(current_user) and not _is_moderator(current_user):
             raise HTTPException(status_code=403, detail="Only the creator or staff can cancel the game")
+        if game.get("creator_id") != uid:
+            require_staff_issued_if_staff_capable(current_user)
         now_iso = datetime.now(timezone.utc).isoformat()
         claim_res = await db.mp_blackjack_games.update_one(
             {"id": game_id, "status": {"$in": ("open", "playing")}, "phase": {"$nin": ("playing", "dealer")}},
@@ -791,6 +793,7 @@ def register(router):
         """
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
+        require_staff_issued_if_staff_capable(current_user)
         uid = current_user.get("id") or ""
         username = (current_user.get("username") or "?").strip()
         game = await db.mp_blackjack_games.find_one({"id": game_id})

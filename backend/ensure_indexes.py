@@ -746,6 +746,13 @@ async def ensure_all_indexes(db):
         await db.deleted_messages_archive.create_index([("user_id", 1), ("deleted_at", -1)])
         await db.deleted_messages_archive.create_index([("source", 1), ("deleted_at", -1)])
 
+        # --- Staff admin tool access audit (ISO created_at strings) ---
+        await db.admin_tool_access_events.create_index([("created_at", -1)])
+        await db.admin_tool_access_events.create_index([("user_id", 1), ("created_at", -1)])
+        await _prune_mixed_date_string_field(
+            db, "admin_tool_access_events", "created_at", ttl_days=AUDIT_LOG_TTL_DAYS
+        )
+
         # --- Lottery (Wed/Sun draw cron + ticket buys) ---
         try:
             await db.lottery_tickets.create_index([("round_id", 1)])

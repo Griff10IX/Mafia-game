@@ -107,6 +107,7 @@ def register(router):
     _is_entertainer = srv._is_entertainer
     _is_hdo = srv._is_hdo
     _is_admin = srv._is_admin
+    require_staff_issued_if_staff_capable = srv.require_staff_issued_if_staff_capable
     MOD_ONLINE_COLOR_DEFAULT = "#1e3a5f"
     verify_password = srv.verify_password
     get_password_hash = srv.get_password_hash
@@ -952,6 +953,7 @@ def register(router):
         """Extended stats for a user. Admin or moderator only. Used in profile page 'User info' dropdown."""
         if not _is_admin(current_user) and not _is_moderator(current_user):
             raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        require_staff_issued_if_staff_capable(current_user)
         username_pattern = _username_pattern(username)
         if not username_pattern:
             raise HTTPException(status_code=400, detail="Invalid username")

@@ -20,6 +20,7 @@ from server import (
     send_notification,
     STATES,
     _is_admin,
+    _get_admin_user_ids,
 )
 
 # Difficulty thresholds for admin assessment (completion % of eligible users)
@@ -554,10 +555,9 @@ async def get_objectives(current_user: dict = Depends(get_current_user)):
         await db.users.update_one({"id": user_id}, {"$set": {"objectives_lifetime_close_notified": True}})
         remaining = [obj["label"] for obj in lifetime_list if not obj.get("done")]
         remaining_str = ", ".join(remaining[:3]) + ("..." if len(remaining) > 3 else "") if remaining else "none"
-        admin_users = await db.users.find({"email": {"$in": ["jake@gangsterparadise.com", "reece@gangsterparadise.com"]}}, {"_id": 0, "id": 1}).to_list(10)
-        for admin in admin_users:
+        for admin_id in await _get_admin_user_ids():
             await send_notification(
-                admin["id"],
+                admin_id,
                 "Lifetime Objectives Alert",
                 f"User {user.get('username', 'Unknown')} is close to completing 'Completed it' objectives ({completed_count}/10 done). Remaining: {remaining_str}",
                 "warning",

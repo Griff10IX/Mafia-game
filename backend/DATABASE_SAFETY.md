@@ -1,123 +1,51 @@
-# 🚨 DATABASE SAFETY GUIDE
+# Database safety guide
 
-## ⚠️ DANGEROUS ENDPOINTS THAT CAN WIPE YOUR DATABASE
+## Bulk wipe endpoints (removed from the admin API)
 
-### 1. `/api/admin/wipe-all-users` (LINE 3772)
-**EXTREMELY DANGEROUS** - Deletes ALL data from the database.
+The following routes still exist for compatibility but **always return HTTP 410 Gone** with an explanatory `detail` string. They **no longer delete data**, even with a correct confirmation body. A compromised admin account cannot use them to wipe the game.
 
-**Protection Added:**
-- ✅ Now requires confirmation: `{"confirmation_text": "WIPE ALL DATA"}`
-- ✅ Logs admin email and username who initiated the wipe
-- ✅ Cannot be triggered accidentally
+| Endpoint | Former behaviour |
+|----------|------------------|
+| `POST /api/admin/wipe-all-users` | Deleted all users and related collections |
+| `POST /api/admin/database-fresh` | Emptied almost every collection and re-seeded |
+| `POST /api/admin/wipe-all-families` | Removed all families / crew data |
+| `POST /api/admin/cars/delete-all` | Deleted every row in `user_cars` |
+| `POST /api/admin/drop-all-casinos-properties` | Unclaimed all casinos and properties globally |
 
-**Before Protection:**
-```json
-POST /api/admin/wipe-all-users
-```
-
-**After Protection:**
-```json
-POST /api/admin/wipe-all-users
-{
-  "confirmation_text": "WIPE ALL DATA"
-}
-```
+**If you truly need a full reset:** use MongoDB backups, a staging environment, or a **controlled script** run with server/DB access—not the live admin panel.
 
 ---
 
-### 2. `init_game_data()` Function (LINE 9833)
-**Runs on EVERY server restart** - Currently only deletes `crimes` collection (safe), but could be modified accidentally.
+## `init_game_data()` on server start
 
-**Current Behavior:**
-- ✅ Only touches game config (crimes, weapons, properties)
-- ✅ Does NOT touch user data
-- ✅ Now has logging to show what's being initialized
+**Runs on server restart** – Currently only (re)initialises game config collections (e.g. crimes, weapons, properties). It does **not** delete user accounts.
 
-**⚠️ NEVER add `db.users.delete_many({})` to this function!**
+**Never add `db.users.delete_many({})` (or similar) to this path.**
 
 ---
 
-## 🛡️ HOW TO PREVENT DATABASE WIPES
+## How to reduce risk further
 
-### 1. **Backup Your Database Regularly**
-```bash
-# MongoDB backup command
-mongodump --uri="your_mongo_uri" --out=backup_$(date +%Y%m%d)
-```
+1. **Back up MongoDB regularly**  
+   `mongodump --uri="..." --out=backup_$(date +%Y%m%d)`
 
-### 2. **Restrict Admin Access**
-Only emails listed in the **`ADMIN_EMAILS`** environment variable (comma-separated, case-insensitive) can call dangerous admin endpoints.
+2. **Restrict who is admin**  
+   Use the **`ADMIN_EMAILS`** env list; add **staff portal password** (`STAFF_PORTAL_PASSWORD`) for a second factor on admin API calls.
 
-### 3. **Monitor Server Logs**
-All dangerous operations now log with 🚨 emoji:
-```
-🚨 DATABASE WIPE initiated by admin@example.com (AdminUser)
-🚨 DATABASE WIPE completed by admin@example.com: 15234 documents deleted
-```
-
-### 4. **Use Environment Variables**
-Set `PRODUCTION=true` in production to disable certain dangerous endpoints.
+3. **Monitor logs**  
+   Admin actions and denials should appear in your normal application / HTTP logs.
 
 ---
 
-## 🔍 WHAT COULD HAVE CAUSED YOUR DATABASE TO WIPE?
+## If data disappeared
 
-### Most Likely Causes:
-
-1. **Accidental Admin Endpoint Call**
-   - Someone with admin access called `/api/admin/wipe-all-users`
-   - This is now protected with confirmation requirement
-
-2. **Modified Startup Function**
-   - If `init_game_data()` was modified to include more `delete_many({})` calls
-   - Check git history for changes to this function
-
-3. **Test Script**
-   - A test script that calls the wipe endpoint
-   - Check for any `.http`, `.rest`, or test files
-
-4. **Third-party Tool**
-   - API testing tool (Postman, Insomnia) with saved admin requests
-   - Check for saved requests in these tools
+1. Check whether someone ran **out-of-band** commands or restores (not these API routes).  
+2. Review git history for changes to startup or maintenance scripts.  
+3. Check for saved Postman/Insomnia requests that hit old tooling.  
+4. Restore from the most recent **known-good backup**.
 
 ---
 
-## 📋 OTHER BULK DELETE ENDPOINTS (Less Dangerous)
+## Other bulk endpoints
 
-| Endpoint | What It Deletes | Risk Level |
-|----------|----------------|------------|
-| `/admin/clear-all-searches` | All attack searches | 🟡 Medium |
-| `/admin/bodyguards/drop-all` | All bodyguards | 🟡 Medium |
-| `/admin/bodyguards/clear` | One user's bodyguards | 🟢 Low |
-| `/admin/delete-user/{user_id}` | Single user + their data | 🟢 Low |
-
----
-
-## 🔐 SECURITY BEST PRACTICES
-
-1. **Never share admin credentials**
-2. **Use database backups** (daily minimum)
-3. **Enable MongoDB audit logs** to track who did what
-4. **Use read-only database replicas** for reporting
-5. **Test dangerous operations on a staging database first**
-
----
-
-## 🆘 IF YOUR DATABASE WAS WIPED
-
-1. **Check MongoDB backups** (if enabled)
-2. **Check server logs** for who called the wipe endpoint
-3. **Check git history** for unauthorized changes to `init_game_data()`
-4. **Check API request logs** (if you have request logging enabled)
-5. **Restore from backup** if available
-
----
-
-## ✅ PROTECTIONS NOW IN PLACE
-
-- ✅ Wipe endpoint requires explicit confirmation
-- ✅ All dangerous operations are logged with admin identity
-- ✅ Startup function has warnings about modifying it
-- ✅ Clear documentation of what's dangerous
-
-**Your database is now much safer!** 🛡️
+Some endpoints still perform **scoped** bulk actions (e.g. clear searches, bodyguard maintenance). Treat them as sensitive; they are listed in admin docs and still require admin where enforced.

@@ -1765,6 +1765,7 @@ def register(router):
     _is_admin = srv._is_admin
     _is_moderator = srv._is_moderator
     require_admin_or_mod = srv.require_admin_or_mod
+    require_staff_issued_if_staff_capable = srv.require_staff_issued_if_staff_capable
     cron_secret = (os.environ.get("CRON_SECRET") or "").strip()
     telegram_webhook_secret = (os.environ.get("TELEGRAM_WEBHOOK_SECRET") or "").strip()
     game_bot_token = (getattr(security_module, "TELEGRAM_BOT_TOKEN", None) or "").strip()
@@ -2290,6 +2291,7 @@ def register(router):
     async def get_interval(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
+        require_staff_issued_if_staff_capable(current_user)
         config = await get_auto_rank_config(db)
         return {
             "interval_seconds": config["interval_seconds"],
@@ -2305,6 +2307,7 @@ def register(router):
     async def start_auto_rank(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
+        require_staff_issued_if_staff_capable(current_user)
         await db.game_config.update_one({"id": GAME_CONFIG_ID}, {"$set": {"enabled": True}}, upsert=True)
         _invalidate_auto_rank_config_cache()
         return {"enabled": True, "message": "Auto Rank started."}
@@ -2313,6 +2316,7 @@ def register(router):
     async def stop_auto_rank(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
+        require_staff_issued_if_staff_capable(current_user)
         await db.game_config.update_one({"id": GAME_CONFIG_ID}, {"$set": {"enabled": False}}, upsert=True)
         _invalidate_auto_rank_config_cache()
         return {"enabled": False, "message": "Auto Rank stopped. Current cycle will finish, then no new cycles until started."}
@@ -2321,6 +2325,7 @@ def register(router):
     async def set_interval(body: IntervalBody, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
+        require_staff_issued_if_staff_capable(current_user)
         updates = {}
         if body.interval_seconds is not None:
             try:

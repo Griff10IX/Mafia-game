@@ -1,7 +1,7 @@
 # Admin: ghost mode, act-as-normal, change-rank, add-points, give-all, add-car,
 # security (summary, flags, rate-limits, telegram, clear), hitlist reset,
 # force-online, lock/kill player, search time, clear searches, check, activity/gambling log,
-# find-duplicates, cheat-detection, user-details, wipe, delete-user, events, seed-families, create-test-users.
+# find-duplicates, cheat-detection, user-details, events, seed-families, create-test-users.
 import asyncio
 import ipaddress
 import logging
@@ -82,8 +82,9 @@ CF_API_TOKEN = os.environ.get("CF_API_TOKEN", "")
 # Mod-visible admin categories: which Admin Tool categories moderators can see (configurable by admin)
 MOD_VISIBLE_CATEGORY_IDS_DEFAULT = [
     "admin-operations",
-    "admin-analytics-monitoring",
+    "admin-economy-progression",
     "admin-world-systems",
+    "admin-analytics-monitoring",
 ]
 ADMIN_CATEGORY_IDS = {
     "admin-players",
@@ -106,10 +107,6 @@ ADMIN_CATEGORY_IDS = {
 }
 
 
-class WipeConfirmation(BaseModel):
-    confirmation_text: str  # Must be exactly "WIPE ALL DATA"
-
-
 class AdminQuicktradeReason(BaseModel):
     reason: Optional[str] = Field(default=None, max_length=500)
 
@@ -124,10 +121,6 @@ class AdminRacingCrewBankAdjustBody(BaseModel):
 
     target_username: str = Field(..., min_length=1, max_length=80)
     amount: int = Field(..., ge=-2_000_000_000_000, le=2_000_000_000_000, description="Signed delta on racing_profiles.crew_bank")
-
-
-class NewReleaseConfirmation(BaseModel):
-    confirmation_text: str  # Must be exactly "NEW RELEASE"
 
 
 class EventsToggleRequest(BaseModel):
@@ -347,16 +340,13 @@ class AdminPresenceHeartbeatRequest(BaseModel):
     path: Optional[str] = None  # e.g. /staffrole/admin/overview
 
 
-class DropAllCasinosPropertiesConfirmation(BaseModel):
-    confirmation_text: str  # "DROP ALL CASINOS PROPERTIES"
+class AdminToolAccessShellOpenRequest(BaseModel):
+    """SPA route when staff shell becomes usable (one shot per tab from frontend)."""
+    path: Optional[str] = Field(default=None, max_length=500)
 
 
 class DeleteFamilyRequest(BaseModel):
     family_id: str
-
-
-class WipeAllFamiliesConfirmation(BaseModel):
-    confirmation_text: str  # "WIPE ALL FAMILIES"
 
 
 class AdminSetCasinoMaxBetRequest(BaseModel):
@@ -1022,14 +1012,15 @@ def register(router):
             "has_admin_email": bool(user_has_admin_list_email(current_user)),
             "is_help_desk_operator": bool(_is_hdo(current_user)),
             "admin_acting_as_normal": bool(current_user.get("admin_acting_as_normal", False)),
+            "staff_login_session": bool(current_user.get("_jwt_staff_issued")),
         }
 
     @router.get("/admin/staff-access-denials")
     async def admin_list_staff_access_denials(
         limit: int = Query(100, ge=1, le=500),
-        current_user: dict = Depends(require_admin),
+        current_user: dict = Depends(require_admin_or_mod),
     ):
-        """Recent HTTP 403 responses on /api/.../admin/... (signed-in users without permission). Admin-only."""
+        """Recent HTTP 403 responses on audited staff API routes (signed-in users without permission). Admin or moderator."""
         from utils.staff_access_audit import COLLECTION as _STAFF_DENIAL_COL
 
         rows = await db[_STAFF_DENIAL_COL].find({}, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
@@ -4419,11 +4410,13 @@ def register(router):
 
     @router.post("/admin/cars/delete-all")
     async def admin_delete_all_cars(current_user: dict = Depends(get_current_user)):
-        """Delete every user's cars (all documents in user_cars). For testing."""
+        """Disabled: bulk-delete all cars was removed from the API for security."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        result = await db.user_cars.delete_many({})
-        return {"message": f"Deleted {result.deleted_count} cars (everyone's garages cleared)", "deleted_count": result.deleted_count}
+        raise HTTPException(
+            status_code=410,
+            detail="Bulk delete-all-cars has been removed from the admin API. Use per-user fixes or a controlled DB script if needed.",
+        )
 
     @router.get("/admin/security/summary")
     async def admin_security_summary(limit: int = 100, flag_type: str = None, current_user: dict = Depends(get_current_user)):
@@ -6214,6 +6207,32 @@ def register(router):
 
     PRESENCE_STALE_SEC = 90
 
+    async def _admin_presence_active_viewers(me_id: str):
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=PRESENCE_STALE_SEC)
+        cursor = db.admin_tool_presence.find(
+            {"last_seen_at": {"$gte": cutoff}},
+            {"_id": 0, "user_id": 1, "username": 1, "tab_id": 1, "section": 1, "route_path": 1, "last_seen_at": 1, "ip": 1, "device_type": 1},
+        ).sort("last_seen_at", -1)
+        rows = await cursor.to_list(200)
+        viewers = []
+        for r in rows:
+            uid = str(r.get("user_id") or "")
+            ts = r.get("last_seen_at")
+            viewers.append(
+                {
+                    "user_id": uid,
+                    "username": r.get("username") or "?",
+                    "tab_id": r.get("tab_id"),
+                    "section": r.get("section"),
+                    "route_path": r.get("route_path"),
+                    "ip": r.get("ip") or "",
+                    "device_type": r.get("device_type") or "",
+                    "last_seen_at": ts.isoformat() if hasattr(ts, "isoformat") else (str(ts) if ts else ""),
+                    "is_self": uid == me_id,
+                }
+            )
+        return viewers
+
     @router.post("/admin/presence/heartbeat")
     async def admin_presence_heartbeat(
         body: AdminPresenceHeartbeatRequest,
@@ -6249,31 +6268,69 @@ def register(router):
         """Who currently has staff admin routes open (recent heartbeats)."""
         if not _staff_shell_access(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        cutoff = datetime.now(timezone.utc) - timedelta(seconds=PRESENCE_STALE_SEC)
         me_id = str(current_user.get("id") or "")
-        cursor = db.admin_tool_presence.find(
-            {"last_seen_at": {"$gte": cutoff}},
-            {"_id": 0, "user_id": 1, "username": 1, "tab_id": 1, "section": 1, "route_path": 1, "last_seen_at": 1, "ip": 1, "device_type": 1},
-        ).sort("last_seen_at", -1)
-        rows = await cursor.to_list(200)
-        viewers = []
-        for r in rows:
-            uid = str(r.get("user_id") or "")
-            ts = r.get("last_seen_at")
-            viewers.append(
-                {
-                    "user_id": uid,
-                    "username": r.get("username") or "?",
-                    "tab_id": r.get("tab_id"),
-                    "section": r.get("section"),
-                    "route_path": r.get("route_path"),
-                    "ip": r.get("ip") or "",
-                    "device_type": r.get("device_type") or "",
-                    "last_seen_at": ts.isoformat() if hasattr(ts, "isoformat") else (str(ts) if ts else ""),
-                    "is_self": uid == me_id,
-                }
-            )
+        viewers = await _admin_presence_active_viewers(me_id)
         return {"viewers": viewers, "stale_after_seconds": PRESENCE_STALE_SEC}
+
+    @router.post("/admin/tool-access/shell-open")
+    async def admin_tool_access_shell_open(
+        body: AdminToolAccessShellOpenRequest,
+        request: Request,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Record that this browser tab reached a usable staff shell (2xx staff JWT + portal if enabled)."""
+        if not _staff_shell_access(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.admin_tool_access_log import record_shell_open_event
+
+        uid = str(current_user.get("id") or "")
+        un = str(current_user.get("username") or "?")
+        em = str(current_user.get("email") or "")
+        await record_shell_open_event(
+            db,
+            user_id=uid,
+            username=un,
+            email=em,
+            client_ip=_presence_ip(request),
+            route_path=(body.path or "").strip() or None,
+        )
+        return {"ok": True}
+
+    @router.get("/admin/tool-access-audit")
+    async def admin_tool_access_audit(
+        hours: int = Query(72, ge=1, le=720),
+        event_limit: int = Query(500, ge=1, le=2000),
+        denial_limit: int = Query(150, ge=0, le=500),
+        current_user: dict = Depends(require_admin_or_mod),
+    ):
+        """Recent successful staff API usage, SPA shell opens, live admin tabs, and staff-route denials."""
+        from utils.admin_tool_access_log import COLLECTION as _TOOL_ACCESS_COL
+        from utils.staff_access_audit import COLLECTION as _DENIAL_COL
+
+        now = datetime.now(timezone.utc)
+        cutoff_iso = (now - timedelta(hours=hours)).isoformat()
+        me_id = str(current_user.get("id") or "")
+        viewers = await _admin_presence_active_viewers(me_id)
+
+        ev_cursor = db[_TOOL_ACCESS_COL].find({"created_at": {"$gte": cutoff_iso}}, {"_id": 0}).sort("created_at", -1).limit(
+            event_limit
+        )
+        events = await ev_cursor.to_list(event_limit)
+
+        denials: list = []
+        if denial_limit > 0:
+            d_cursor = (
+                db[_DENIAL_COL].find({"created_at": {"$gte": cutoff_iso}}, {"_id": 0}).sort("created_at", -1).limit(denial_limit)
+            )
+            denials = await d_cursor.to_list(denial_limit)
+
+        return {
+            "hours": hours,
+            "stale_after_seconds": PRESENCE_STALE_SEC,
+            "active_viewers": viewers,
+            "events": events,
+            "denials": denials,
+        }
 
     @router.get("/admin/check")
     async def admin_check(current_user: dict = Depends(get_current_user)):
@@ -6288,6 +6345,7 @@ def register(router):
             "is_help_desk_operator": is_help_desk_operator,
             "is_entertainer": is_entertainer,
             "has_admin_email": has_admin_email,
+            "staff_login_session": bool(current_user.get("_jwt_staff_issued")),
             "staff_portal_enabled": staff_portal_password_configured(),
             "staff_portal_session_minutes": staff_portal_session_minutes(),
         }
@@ -13148,23 +13206,14 @@ def register(router):
         return {"message": f"Dropped all casinos and properties for user", "user_id": user_id, "details": result, "total_modified": total}
 
     @router.post("/admin/drop-all-casinos-properties")
-    async def admin_drop_all_casinos_properties(confirm: DropAllCasinosPropertiesConfirmation, current_user: dict = Depends(get_current_user)):
-        """Drop all casinos and properties globally (every ownership becomes unclaimed). Admin only."""
+    async def admin_drop_all_casinos_properties(current_user: dict = Depends(get_current_user)):
+        """Disabled: global unclaim was removed from the API for security."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        if confirm.confirmation_text != "DROP ALL CASINOS PROPERTIES":
-            raise HTTPException(
-                status_code=400,
-                detail='Confirmation required. Send {"confirmation_text": "DROP ALL CASINOS PROPERTIES"} to confirm.'
-            )
-        unset = {"$set": {"owner_id": None, "owner_username": None}}
-        result = {}
-        for coll, name in _CASINO_PROPERTY_COLLECTIONS:
-            res = await coll.update_many({}, unset)
-            result[name] = res.modified_count
-        total = sum(result.values())
-        logging.warning(f"Drop all casinos/properties by {current_user.get('email')} ({current_user.get('username')}), modified={result}")
-        return {"message": f"Dropped all casinos and properties: {total} ownerships cleared", "details": result, "total_modified": total}
+        raise HTTPException(
+            status_code=410,
+            detail="Global drop-all-casinos-properties has been removed from the admin API.",
+        )
 
     @router.post("/admin/set-casino-max-bet")
     async def admin_set_casino_max_bet(body: AdminSetCasinoMaxBetRequest, current_user: dict = Depends(get_current_user)):
@@ -13244,118 +13293,24 @@ def register(router):
         return result
 
     @router.post("/admin/wipe-all-users")
-    async def admin_wipe_all_users(confirm: WipeConfirmation, current_user: dict = Depends(get_current_user)):
+    async def admin_wipe_all_users(current_user: dict = Depends(get_current_user)):
+        """Disabled: full user/database wipe was removed from the API for security."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        if confirm.confirmation_text != "WIPE ALL DATA":
-            raise HTTPException(
-                status_code=400,
-                detail='Confirmation required. Send {"confirmation_text": "WIPE ALL DATA"} to confirm database wipe.'
-            )
-        logging.warning(f"🚨 DATABASE WIPE initiated by {current_user['email']} ({current_user['username']})")
-        deleted = {}
-        deleted["users"] = (await db.users.delete_many({})).deleted_count
-        deleted["family_members"] = (await db.family_members.delete_many({})).deleted_count
-        deleted["families"] = (await db.families.delete_many({})).deleted_count
-        deleted["family_wars"] = (await db.family_wars.delete_many({})).deleted_count
-        deleted["family_war_stats"] = (await db.family_war_stats.delete_many({})).deleted_count
-        deleted["family_racket_attacks"] = (await db.family_racket_attacks.delete_many({})).deleted_count
-        deleted["bodyguards"] = (await db.bodyguards.delete_many({})).deleted_count
-        deleted["bodyguard_invites"] = (await db.bodyguard_invites.delete_many({})).deleted_count
-        deleted["user_cars"] = (await db.user_cars.delete_many({})).deleted_count
-        deleted["user_properties"] = (await db.user_properties.delete_many({})).deleted_count
-        deleted["user_weapons"] = (await db.user_weapons.delete_many({})).deleted_count
-        deleted["attacks"] = (await db.attacks.delete_many({})).deleted_count
-        deleted["notifications"] = (await db.notifications.delete_many({})).deleted_count
-        deleted["extortions"] = (await db.extortions.delete_many({})).deleted_count
-        deleted["sports_bets"] = (await db.sports_bets.delete_many({})).deleted_count
-        deleted["blackjack_games"] = (await db.blackjack_games.delete_many({})).deleted_count
-        deleted["dice_ownership"] = (await db.dice_ownership.delete_many({})).deleted_count
-        deleted["dice_buy_back_offers"] = (await db.dice_buy_back_offers.delete_many({})).deleted_count
-        deleted["slots_ownership"] = (await db.slots_ownership.delete_many({})).deleted_count
-        deleted["slots_entries"] = (await db.slots_entries.delete_many({})).deleted_count
-        deleted["slots_buy_back_offers"] = (await db.slots_buy_back_offers.delete_many({})).deleted_count
-        deleted["interest_deposits"] = (await db.interest_deposits.delete_many({})).deleted_count
-        deleted["password_resets"] = (await db.password_resets.delete_many({})).deleted_count
-        deleted["money_transfers"] = (await db.money_transfers.delete_many({})).deleted_count
-        deleted["bank_deposits"] = (await db.bank_deposits.delete_many({})).deleted_count
-        total = sum(deleted.values())
-        logging.warning(f"🚨 DATABASE WIPE completed by {current_user['email']}: {total} documents deleted")
-        return {"message": f"⚠️ DATABASE WIPED: {total} documents deleted from the game", "details": deleted}
+        raise HTTPException(
+            status_code=410,
+            detail="Bulk wipe-all-users has been removed from the admin API. Restore from backup or run a controlled maintenance script with server access.",
+        )
 
     @router.post("/admin/database-fresh")
-    async def admin_database_fresh(confirm: NewReleaseConfirmation, current_user: dict = Depends(get_current_user)):
-        """Wipe the entire database and re-seed game data so the game starts from the very beginning (new release)."""
+    async def admin_database_fresh(current_user: dict = Depends(get_current_user)):
+        """Disabled: full database reset was removed from the API for security."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        if confirm.confirmation_text != "NEW RELEASE":
-            raise HTTPException(
-                status_code=400,
-                detail='Confirmation required. Send {"confirmation_text": "NEW RELEASE"} to confirm full database reset.'
-            )
-        logging.warning(f"🚨 DATABASE FRESH / NEW RELEASE initiated by {current_user['email']} ({current_user['username']})")
-        # Wipe every collection in this database (except system.* and optional PRESERVE_COLLECTIONS), then re-seed.
-        _preserve_raw = (os.environ.get("PRESERVE_COLLECTIONS") or "").strip()
-        preserve_set = {x.strip() for x in _preserve_raw.split(",") if x.strip()}
-        skipped_system = []
-        skipped_preserved = []
-        deleted = {}
-        try:
-            all_names = await db.list_collection_names()
-        except Exception as e:
-            logging.exception("database-fresh: list_collection_names failed: %s", e)
-            raise HTTPException(status_code=500, detail=f"Could not list database collections: {e}") from e
-        for coll_name in sorted(all_names):
-            if coll_name.startswith("system."):
-                skipped_system.append(coll_name)
-                continue
-            if coll_name in preserve_set:
-                skipped_preserved.append(coll_name)
-                logging.warning("database-fresh: preserving collection %s (PRESERVE_COLLECTIONS)", coll_name)
-                continue
-            try:
-                res = await db[coll_name].delete_many({})
-                deleted[coll_name] = res.deleted_count
-                logging.info(
-                    "database-fresh: wiped collection=%s deleted_count=%s",
-                    coll_name,
-                    res.deleted_count,
-                )
-            except Exception as e:
-                logging.warning("database-fresh: skip %s: %s", coll_name, e)
-                deleted[coll_name] = 0
-        total = sum(deleted.values())
-        wipe_meta = {
-            "skipped_system_collections": skipped_system,
-            "skipped_preserved_collections": skipped_preserved,
-        }
-        logging.warning(
-            "database-fresh: wipe phase done collections=%s total_docs_deleted=%s preserved=%s system_skipped=%s",
-            len(deleted),
-            total,
-            len(skipped_preserved),
-            len(skipped_system),
+        raise HTTPException(
+            status_code=410,
+            detail="Full database-fresh / new-release reset has been removed from the admin API. Use backups and out-of-band tooling if a reset is required.",
         )
-        # Re-seed game data (weapons, properties, crimes) and ensure indexes
-        try:
-            await srv.init_game_data()
-            from ensure_indexes import ensure_all_indexes
-            await ensure_all_indexes(db)
-        except Exception as e:
-            logging.exception("database-fresh: re-seed/indexes failed: %s", e)
-            return {
-                "message": f"Database wiped ({total} documents deleted) but re-seed failed: {e}",
-                "details": deleted,
-                "wipe_meta": wipe_meta,
-                "reseed_ok": False,
-            }
-        logging.warning(f"🚨 DATABASE FRESH completed by {current_user['email']}: {total} docs deleted, game data re-seeded")
-        return {
-            "message": f"Database reset complete. {total} documents deleted. Game data re-seeded. New release ready.",
-            "details": deleted,
-            "wipe_meta": wipe_meta,
-            "reseed_ok": True,
-        }
 
     @router.post("/admin/delete-user/{user_id}")
     async def admin_delete_single_user(user_id: str, current_user: dict = Depends(get_current_user)):
@@ -13436,35 +13391,14 @@ def register(router):
         return {"message": f"Deleted family '{fam.get('name', '?')}' [{fam.get('tag', '?')}] and {total} related documents", "details": deleted}
 
     @router.post("/admin/wipe-all-families")
-    async def admin_wipe_all_families(confirm: WipeAllFamiliesConfirmation, current_user: dict = Depends(get_current_user)):
+    async def admin_wipe_all_families(current_user: dict = Depends(get_current_user)):
+        """Disabled: bulk wipe all families was removed from the API for security."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        if confirm.confirmation_text != "WIPE ALL FAMILIES":
-            raise HTTPException(
-                status_code=400,
-                detail='Confirmation required. Send {"confirmation_text": "WIPE ALL FAMILIES"} to confirm.',
-            )
-        logging.warning(f"🚨 WIPE ALL FAMILIES initiated by {current_user['email']} ({current_user['username']})")
-        set_state_head = srv.set_state_head
-        for state in (STATES or []):
-            await set_state_head(state, None)
-        await db.users.update_many({}, {"$set": {"family_id": None, "family_role": None}})
-        deleted = {}
-        deleted["family_members"] = (await db.family_members.delete_many({})).deleted_count
-        deleted["family_wars"] = (await db.family_wars.delete_many({})).deleted_count
-        deleted["family_war_stats"] = (await db.family_war_stats.delete_many({})).deleted_count
-        deleted["family_racket_attacks"] = (await db.family_racket_attacks.delete_many({})).deleted_count
-        deleted["family_crew_oc_applications"] = (await db.family_crew_oc_applications.delete_many({})).deleted_count
-        deleted["family_join_applications"] = (await db.family_join_applications.delete_many({})).deleted_count
-        deleted["families"] = (await db.families.delete_many({})).deleted_count
-        try:
-            from routers.game.families import _invalidate_list_cache
-            _invalidate_list_cache()
-        except Exception:
-            pass
-        total = sum(deleted.values())
-        logging.warning(f"🚨 WIPE ALL FAMILIES completed by {current_user['email']}: {total} documents deleted")
-        return {"message": f"All families wiped ({total} documents deleted) and users cleared from crews", "details": deleted}
+        raise HTTPException(
+            status_code=410,
+            detail="Wipe-all-families has been removed from the admin API. Delete individual families from the admin panel or use a controlled script.",
+        )
 
     @router.get("/admin/events")
     async def admin_get_events(current_user: dict = Depends(get_current_user)):

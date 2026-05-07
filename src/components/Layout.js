@@ -2,7 +2,14 @@ import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'rea
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { SAME_ROUTE_NAV_CLICK } from '../constants/navigationEvents';
 import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Grid3x3, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb } from 'lucide-react';
-import api, { getApiErrorMessage, onCooldownChange, invalidateApiCache, apiRequestWith429Retry, apiGetWithResumeRetries } from '../utils/api';
+import api, {
+  getApiErrorMessage,
+  onCooldownChange,
+  invalidateApiCache,
+  apiRequestWith429Retry,
+  apiGetWithResumeRetries,
+  STAFF_ADMIN_API_FORBIDDEN_EVENT,
+} from '../utils/api';
 import { getThemeUiPlatform } from '../utils/themePlatform';
 import { readSessionJson } from '../utils/sessionPageCache';
 import { DASHBOARD_SESSION_CACHE_KEY } from '../utils/dashboardSessionCache';
@@ -30,7 +37,7 @@ function readLayoutBootFromDashboardCache() {
 }
 
 /** Bottom bar: 6 icons. Rank = crimes/rank; Misc = everything that doesn't fit elsewhere. */
-function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEntertainer, isHelpDeskOperator) {
+function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEntertainer, isHelpDeskOperator, staffLoginSession) {
   const goItems = [
     { path: '/game/travel', label: 'Travel' },
     { path: '/game/states', label: 'States' },
@@ -359,6 +366,7 @@ export default function Layout({ children }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
+  const [staffLoginSession, setStaffLoginSession] = useState(false);
   const [rankingCounts, setRankingCounts] = useState({ crimes: 0, gta: 0, jail: 0 });
   const [sportsBettingEventCount, setSportsBettingEventCount] = useState(0);
   const [gtaExclusiveInPool, setGtaExclusiveInPool] = useState(false);
@@ -469,7 +477,7 @@ export default function Layout({ children }) {
 
   const hasCasinoOrProperty = Boolean(user?.has_casino_or_property);
   const mobileBottomNavItems = useMemo(() => {
-    let items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, !!user?.is_entertainer, !!user?.is_help_desk_operator);
+    let items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, !!user?.is_entertainer, !!user?.is_help_desk_operator, staffLoginSession);
     if (hasAdminEmail && !isAdmin) {
       items = items.map((i) =>
         i.type === 'group' && i.id === 'you'
@@ -522,7 +530,7 @@ export default function Layout({ children }) {
       }
       return i;
     });
-  }, [isAdmin, isModerator, hasAdminEmail, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
+  }, [isAdmin, isModerator, hasAdminEmail, staffLoginSession, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
 
   useEffect(() => onCooldownChange(setCooldownSeconds), []);
 
@@ -743,7 +751,11 @@ export default function Layout({ children }) {
   useEffect(() => {
     const handler = () => checkAdmin();
     window.addEventListener('app:admin-changed', handler);
-    return () => window.removeEventListener('app:admin-changed', handler);
+    window.addEventListener(STAFF_ADMIN_API_FORBIDDEN_EVENT, handler);
+    return () => {
+      window.removeEventListener('app:admin-changed', handler);
+      window.removeEventListener(STAFF_ADMIN_API_FORBIDDEN_EVENT, handler);
+    };
   }, []); // eslint-disable-line
 
   const fetchAutoRankPrefs = async () => {
@@ -1017,7 +1029,8 @@ export default function Layout({ children }) {
     try {
       const response = await api.get('/admin/check');
       setIsAdmin(!!response.data.is_admin); setIsModerator(!!response.data.is_moderator); setHasAdminEmail(!!response.data.has_admin_email);
-    } catch (error) { setIsAdmin(false); setIsModerator(false); setHasAdminEmail(false); }
+      setStaffLoginSession(!!response.data.staff_login_session);
+    } catch (error) { setIsAdmin(false); setIsModerator(false); setHasAdminEmail(false); setStaffLoginSession(false); }
   };
 
   useEffect(() => {
@@ -1224,14 +1237,14 @@ export default function Layout({ children }) {
     { path: '/account/autorank', icon: Bot, label: 'Auto Rank' },
   ];
 
-  const adminNavItems = isAdmin ? [
+  const adminNavItems = isAdmin && staffLoginSession ? [
     { path: '/staffrole/admin/overview', icon: Settings, label: 'Admin Tools' },
     { path: '/staffrole/admin/locked', icon: Lock, label: 'Locked accounts' },
     { path: '/staffrole/admin/users-online', icon: Users, label: 'Users online (live)' },
     { path: '/staffrole/admin/witness-statements', icon: FileText, label: 'Witness statements' },
     { path: '/staffrole/admin/attack-logs', icon: Crosshair, label: 'Attack logs' },
   ] : [];
-  const moderatorNavItems = isModerator && !isAdmin ? [
+  const moderatorNavItems = isModerator && !isAdmin && staffLoginSession ? [
     { path: '/staffrole/admin/overview', icon: Shield, label: 'Moderator tools' },
     { path: '/staffrole/admin/users-online', icon: Users, label: 'Users online (live)' },
     { path: '/staffrole/admin/witness-statements', icon: FileText, label: 'Witness statements' },
@@ -1873,6 +1886,16 @@ export default function Layout({ children }) {
                       </SameRouteAwareLink>
                     );
                   })}
+                </>
+              )}
+              {(isAdmin || isModerator) && !staffLoginSession && (
+                <>
+                  {showSidebarDividers && <div className={`${dividerMarginClass} mx-1 shrink-0`} style={dividerStyle} aria-hidden="true" />}
+                  <SameRouteAwareLink to="/staff-entrance" data-testid="nav-staff-sign-in"
+                    className="flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 text-amber-400/90 hover:bg-amber-500/10"
+                    onClick={() => setSidebarOpen(false)}>
+                    <Lock size={14} /><span className="uppercase tracking-widest text-xs font-heading">Staff sign-in</span>
+                  </SameRouteAwareLink>
                 </>
               )}
               {hasAdminEmail && !isAdmin && (

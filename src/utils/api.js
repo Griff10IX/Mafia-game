@@ -12,6 +12,11 @@ const api = axios.create({
   baseURL: API,
 });
 
+/** Fired when an /admin/* request returns 403: re-fetch /admin/check so UI cannot stay spoofed via devtools. */
+export const STAFF_ADMIN_API_FORBIDDEN_EVENT = 'staff-admin-api-forbidden';
+
+let _staffAdminForbiddenDispatchAt = 0;
+
 const _rawGet = api.get.bind(api);
 
 /** Merge concurrent GET /auth/me (same session token) so refresh/login prefetch storms hit the server once. */
@@ -421,6 +426,37 @@ api.interceptors.response.use(
           /* ignore */
         }
         return Promise.reject(error);
+      }
+    }
+
+    // ── 403 Admin tools: server denied access (roles come from DB per request; client-only UI edits cannot grant powers) ──
+    if (error.response?.status === 403 && typeof window !== 'undefined') {
+      const cfg = error.config || {};
+      const rawUrl = String(cfg.url || '');
+      const pathOnly = rawUrl.split('?')[0].replace(/^\/+/, '');
+      const withBase = `${cfg.baseURL || ''}/${rawUrl}`.replace(/\/+/g, '/');
+      const isAdminApi =
+        pathOnly.startsWith('admin/') ||
+        pathOnly === 'admin' ||
+        withBase.includes('/admin/');
+      if (isAdminApi && !/^admin\/check$/i.test(pathOnly)) {
+        const d = error.response?.data?.detail;
+        const detailStr = typeof d === 'string' ? d : '';
+        const looksStaffGate =
+          detailStr.includes('Admin access required') ||
+          detailStr.includes('Staff login required') ||
+          detailStr === 'Not authorized';
+        if (looksStaffGate) {
+          const now = Date.now();
+          if (now - _staffAdminForbiddenDispatchAt >= 1200) {
+            _staffAdminForbiddenDispatchAt = now;
+            try {
+              window.dispatchEvent(new CustomEvent(STAFF_ADMIN_API_FORBIDDEN_EVENT));
+            } catch (_) {
+              /* ignore */
+            }
+          }
+        }
       }
     }
 

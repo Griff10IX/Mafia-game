@@ -12,7 +12,7 @@ from pydantic import BaseModel
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import db, get_current_user, _is_admin, _is_moderator, _is_hdo, log_activity, send_notification, ADMIN_EMAILS
+from server import db, get_current_user, _is_admin, _is_moderator, _is_hdo, log_activity, send_notification, ADMIN_EMAILS, require_staff_issued_if_staff_capable
 from utils.text import strip_emoji
 from utils.sustained_page_ratelimit import PAGE_KEY_FORUM, check_sustained_page_rl
 
@@ -1304,6 +1304,7 @@ async def delete_topic(
     """Admin/Mod/HDO: delete a topic and all its comments."""
     if not (_is_admin(current_user) or _is_moderator(current_user) or _is_hdo(current_user)):
         raise HTTPException(status_code=403, detail="Staff only")
+    require_staff_issued_if_staff_capable(current_user)
     topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0})
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
@@ -1325,6 +1326,7 @@ async def delete_comment(
     """Admin/Mod/HDO: delete a single comment from a topic."""
     if not (_is_admin(current_user) or _is_moderator(current_user) or _is_hdo(current_user)):
         raise HTTPException(status_code=403, detail="Staff only")
+    require_staff_issued_if_staff_capable(current_user)
     comment = await db.forum_comments.find_one({"id": comment_id, "topic_id": topic_id}, {"_id": 0})
     if not comment:
         raise HTTPException(status_code=404, detail="Comment not found")
