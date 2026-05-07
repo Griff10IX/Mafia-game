@@ -969,6 +969,7 @@ def register(router):
     cheat_detection_aggregate_first_match = srv.cheat_detection_aggregate_first_match
     cheat_detection_find_duplicates_username_match = srv.cheat_detection_find_duplicates_username_match
     user_has_dupe_exempt_email = getattr(srv, "user_has_dupe_exempt_email", lambda _u: False)
+    user_has_admin_list_email = getattr(srv, "user_has_admin_list_email", lambda _u: False)
     _staff_exclude_user_filter = srv._staff_exclude_user_filter
     effective_player_kill_count = srv.effective_player_kill_count
 
@@ -1008,11 +1009,10 @@ def register(router):
     @router.get("/admin/whoami")
     async def admin_whoami(current_user: dict = Depends(get_current_user)):
         """Lightweight staff flags for UI gating."""
-        email = (current_user.get("email") or "").strip()
         return {
             "is_admin": bool(_is_admin(current_user)),
             "is_moderator": bool(_is_moderator(current_user)),
-            "has_admin_email": bool(email in ADMIN_EMAILS),
+            "has_admin_email": bool(user_has_admin_list_email(current_user)),
             "is_help_desk_operator": bool(_is_hdo(current_user)),
             "admin_acting_as_normal": bool(current_user.get("admin_acting_as_normal", False)),
         }
@@ -6187,7 +6187,7 @@ def register(router):
         is_admin = _is_admin(current_user)
         is_moderator = _is_moderator(current_user)
         is_help_desk_operator = _is_hdo(current_user)
-        has_admin_email = (current_user.get("email") or "") in ADMIN_EMAILS
+        has_admin_email = user_has_admin_list_email(current_user)
         is_entertainer = _is_entertainer(current_user)
         out = {
             "is_admin": is_admin,

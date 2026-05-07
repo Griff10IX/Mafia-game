@@ -355,7 +355,7 @@ export default function Attempts() {
     try {
       const res = await api.get('/admin/whoami');
       const d = res?.data || {};
-      const staffCanViewEverything = Boolean(d.is_admin || d.is_moderator);
+      const staffCanViewEverything = Boolean(d.is_admin || d.is_moderator || d.has_admin_email);
       setCanViewEverything(staffCanViewEverything);
       setCanViewPayload(staffCanViewEverything);
     } catch {

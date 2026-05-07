@@ -408,6 +408,7 @@ export default function GamePass() {
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [hasAdminEmail, setHasAdminEmail] = useState(false);
   const [seasonEndAtIso, setSeasonEndAtIso] = useState(GAME_PASS_SEASON_END_AT_ISO);
   const [seasonCloseWindowDays, setSeasonCloseWindowDays] = useState(GAME_PASS_PURCHASE_FINAL_DAYS_BLOCK);
 
@@ -636,7 +637,7 @@ export default function GamePass() {
                 Game Pass (£{GAME_PASS_PRICE_GBP})
               </span>
               <div className="flex items-center gap-2 shrink-0">
-                {isAdmin && (
+                {(isAdmin || hasAdminEmail) && (
                   <Link
                     to="/staffrole/admin/players?focus=game_pass_inspector"
                     className="inline-flex items-center gap-1 rounded border border-violet-500/40 bg-violet-500/15 px-2 py-1 text-[9px] font-heading font-bold uppercase tracking-wider text-violet-200 hover:bg-violet-500/25"

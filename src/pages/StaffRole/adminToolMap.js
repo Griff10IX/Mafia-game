@@ -7,6 +7,9 @@ export const ADMIN_CATEGORIES = [
   { id: 'admin-analytics-monitoring', label: 'Analytics & Monitoring', icon: BarChart3 },
 ];
 
+/** Listed staff email but API `is_admin` false (e.g. "Act as normal") — no destructive tools until powers restored. */
+export const LISTED_ONLY_STAFF_CATEGORY = { id: 'admin-listed-recovery', label: 'Account', icon: Shield };
+
 export const MOD_ONLY_CATEGORY_IDS = ['admin-operations', 'admin-analytics-monitoring', 'admin-world-systems'];
 
 export const ADMIN_CATEGORY_MOBILE_SHORT = {

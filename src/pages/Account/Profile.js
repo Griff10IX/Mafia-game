@@ -2369,7 +2369,7 @@ export default function Profile() {
                 </p>
               </div>
             )}
-            {(hasAdminEmail && (isAdmin || me?.admin_acting_as_normal != null)) ? (
+            {hasAdminEmail ? (
             <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-fade-in`}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-1.5">
