@@ -2585,7 +2585,7 @@ async def _apply_kill_inflation_decay(user_id: str) -> float:
     """
     Inflation system:
     - Each kill increases inflation by ~2–4% (handled elsewhere).
-    - If no kills happen, inflation decays by ~2–6% per hour.
+    - If no kills happen, inflation decays by ~3–6% per hour.
     - No upper limit.
     """
     now = datetime.now(timezone.utc)
@@ -2613,7 +2613,7 @@ async def _apply_kill_inflation_decay(user_id: str) -> float:
 
     new_inflation = inflation
     for _ in range(hours):
-        new_inflation = max(0.0, new_inflation - random.uniform(0.02, 0.06))
+        new_inflation = max(0.0, new_inflation - random.uniform(0.03, 0.06))
 
     if abs(new_inflation - inflation) > 1e-9:
         await db.users.update_one(
