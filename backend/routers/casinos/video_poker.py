@@ -74,11 +74,14 @@ VALUE_RANK = {"2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "1
 # So "even money" on a pair of Jacks requires multiplier 2 (full stake back + equal win), not 1.5.
 # Preset "enhanced" was the reference for the low tier; "normal" / "increased" match that pattern at the bottom.
 #
-# House lean: (1) replacement draws sometimes use rank-weighted picks (low cards favored).
-# (2) VIDEO_POKER_WIN_CREDIT_MULT applies to credited cash when the table multiplier is > 1.
-VIDEO_POKER_DRAW_OWNER_BIAS_P = 0.80  # per replacement card; 0 disables
-# Applied only when multiplier > 1 so nominal “push” rows are unchanged. Reduces credited cash vs displayed × stake.
-VIDEO_POKER_WIN_CREDIT_MULT = 0.93
+# House lean: (1) Opening hand sometimes dealt with rank-weighted picks (low cards favored), not a fair 5-off shuffle.
+# (2) Replacement draws sometimes use the same rank-weighted picks.
+# (3) VIDEO_POKER_WIN_CREDIT_MULT applies to credited cash when the table multiplier is > 1.
+VIDEO_POKER_DEAL_OWNER_BIAS_P = 0.75  # ~75% rank-weighted opening; ~25% fair shuffle + pop
+VIDEO_POKER_DRAW_OWNER_BIAS_P = 0.68  # per replacement card when deck has 2+ cards; 0 disables
+VIDEO_POKER_RANK_WEIGHT_EXP = 1.75  # exponent on (15.5 - rank); higher → stronger low-card bias
+VIDEO_POKER_RANK_WEIGHT_FLOOR = 0.022  # minimum weight so high ranks are never impossible
+VIDEO_POKER_WIN_CREDIT_MULT = 0.92
 VIDEO_POKER_DEFAULT_ODDS_PRESET = "normal"
 VIDEO_POKER_ODDS_PRESET_LABELS = {
     "normal": "Normal",
@@ -125,19 +128,38 @@ VIDEO_POKER_PAY_PRESETS: dict[str, dict[str, float]] = {
 PAY_TABLE = VIDEO_POKER_PAY_PRESETS[VIDEO_POKER_DEFAULT_ODDS_PRESET]
 
 
+def _vp_pop_rank_weighted_from_deck(deck: list) -> dict:
+    """Remove and return one card, favoring lower ranks (less premium connecting potential)."""
+    if not deck:
+        raise ValueError("video poker: empty deck")
+    if len(deck) == 1:
+        return deck.pop()
+    weights = []
+    exp = float(VIDEO_POKER_RANK_WEIGHT_EXP)
+    floor = float(VIDEO_POKER_RANK_WEIGHT_FLOOR)
+    for c in deck:
+        r = float(VALUE_RANK.get(str(c.get("value")), 7))
+        w = (15.5 - r) ** exp
+        weights.append(max(floor, w))
+    j = _rng.choices(range(len(deck)), weights=weights, k=1)[0]
+    return deck.pop(j)
+
+
+def _vp_deal_initial_hand(deck: list) -> list:
+    """Deal 5 cards: usually fair shuffle + pop; sometimes 5× rank-weighted pulls (weaker openings on average)."""
+    if VIDEO_POKER_DEAL_OWNER_BIAS_P > 0 and _rng.random() < VIDEO_POKER_DEAL_OWNER_BIAS_P:
+        return [_vp_pop_rank_weighted_from_deck(deck) for _ in range(5)]
+    _rng.shuffle(deck)
+    return [deck.pop() for _ in range(5)]
+
+
 def _vp_pop_replacement_card(deck: list) -> dict:
-    """Pop one card from the remaining deck. Usually next card (fair); sometimes weighted toward low ranks (owner)."""
+    """Pop one card from the remaining deck. Usually next card (fair); sometimes rank-weighted (owner)."""
     if not deck:
         raise ValueError("video poker: empty deck on draw")
     if len(deck) == 1 or VIDEO_POKER_DRAW_OWNER_BIAS_P <= 0 or _rng.random() >= VIDEO_POKER_DRAW_OWNER_BIAS_P:
         return deck.pop()
-    weights = []
-    for c in deck:
-        r = float(VALUE_RANK.get(str(c.get("value")), 7))
-        w = (15.5 - r) ** 1.72
-        weights.append(max(0.024, w))
-    j = _rng.choices(range(len(deck)), weights=weights, k=1)[0]
-    return deck.pop(j)
+    return _vp_pop_rank_weighted_from_deck(deck)
 
 
 HAND_NAMES = {
@@ -362,6 +384,8 @@ def register(router):
             "claim_cost": cc["video_poker"],
             "house_edge": VIDEO_POKER_HOUSE_EDGE,
             "draw_owner_bias_p": VIDEO_POKER_DRAW_OWNER_BIAS_P,
+            "deal_owner_bias_p": VIDEO_POKER_DEAL_OWNER_BIAS_P,
+            "rank_weight_exp": VIDEO_POKER_RANK_WEIGHT_EXP,
             "win_credit_mult": VIDEO_POKER_WIN_CREDIT_MULT,
             "odds_preset": preset,
             "odds_preset_label": VIDEO_POKER_ODDS_PRESET_LABELS.get(preset, preset.title()),
@@ -831,8 +855,7 @@ def register(router):
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": bet}})
             raise HTTPException(status_code=400, detail="Finish your current game first")
         deck = _make_deck()
-        _rng.shuffle(deck)
-        hand = [deck.pop() for _ in range(5)]
+        hand = _vp_deal_initial_hand(deck)
         if owner_id:
             await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
         odds_preset = _effective_odds_preset(doc)
