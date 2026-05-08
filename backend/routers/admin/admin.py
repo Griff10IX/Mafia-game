@@ -5865,6 +5865,23 @@ def register(router):
         await db.users.update_one({"id": target["id"]}, {"$inc": {"token_version": 1}})
         return {"message": f"{target.get('username', target_username)} has been logged out. All their sessions are invalid."}
 
+    @router.post("/admin/log-out-all-users")
+    async def admin_log_out_all_users(current_user: dict = Depends(get_current_user)):
+        """Bump token_version for every user except the caller so all JWTs invalidate; caller stays logged in."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        admin_id = current_user.get("id")
+        if not admin_id:
+            raise HTTPException(status_code=400, detail="Missing admin user id")
+        result = await db.users.update_many(
+            {"id": {"$ne": admin_id}},
+            {"$inc": {"token_version": 1}},
+        )
+        return {
+            "message": f"Logged out {result.modified_count} account(s). Your session stays active.",
+            "modified_count": result.modified_count,
+        }
+
     @router.get("/admin/user-sessions")
     async def admin_get_user_sessions(
         target_username: str = Query(..., description="Username to list sessions for"),

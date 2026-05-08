@@ -1195,11 +1195,17 @@ export default function Attack() {
 
     const load = async () => {
       try {
-        const [inflationRes, meRes, eventsRes, rlRes] = await Promise.all([
+        const [
+          inflationRes,
+          meRes,
+          eventsRes,
+          rlRes,
+        ] = await Promise.all([
           api.get('/attack/inflation').catch(() => ({ data: {} })),
           api.get('/auth/me').catch(() => ({ data: {} })),
           apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: {} })),
           api.get('/payments/release-soft-launch').catch(() => ({ data: {} })),
+          refreshAttacks(),
         ]);
         setInflationPct(Number(inflationRes.data?.inflation_pct ?? 0));
         setUserBullets(meRes.data?.bullets ?? 0);
@@ -1207,7 +1213,6 @@ export default function Attack() {
         setEvent(eventsRes.data?.event ?? null);
         setEventsEnabled(!!eventsRes.data?.events_enabled);
         setReleaseSoftLaunch(rlRes.data && typeof rlRes.data === 'object' ? rlRes.data : null);
-        await refreshAttacks();
       } catch (_) {
         setInflationPct(0);
         setUserBullets(0);

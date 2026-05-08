@@ -218,6 +218,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Founding Member', categoryId: 'admin-players', collapseKey: 'founding', keywords: ['founding', 'member', 'badge', 'founder'] },
   { label: 'Add Money', categoryId: 'admin-players', collapseKey: 'money', keywords: ['money', 'cash', 'add', 'give'] },
   { label: 'Remove money (user)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['remove', 'money', 'cash', 'take', 'deduct', 'subtract', 'wallet'] },
+  { label: 'Log all users out', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['log all users', 'logout everyone', 'site wide', 'invalidate sessions', 'sessions', 'jwt', 'token'], adminOnly: true },
   { label: 'Add Bullets', categoryId: 'admin-players', collapseKey: 'bullets', keywords: ['bullets', 'ammo', 'add'] },
   { label: 'Give Car', categoryId: 'admin-players', collapseKey: 'cars', keywords: ['car', 'vehicle', 'give'] },
   { label: 'Ghost Mode', categoryId: 'admin-players', collapseKey: 'ghost', keywords: ['ghost', 'invisible', 'hide'] },
@@ -4310,6 +4311,23 @@ export default function Admin() {
       toast.success(response.data?.message || 'User logged out');
       setAdminUserSessions(null);
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleLogOutAllUsers = async () => {
+    if (
+      !window.confirm(
+        'Log out ALL users site-wide? Every account except yours will need to log in again (JWT token_version bump).',
+      )
+    ) {
+      return;
+    }
+    try {
+      const response = await api.post('/admin/log-out-all-users');
+      toast.success(response.data?.message || 'All users logged out');
+      setAdminUserSessions(null);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
   };
 
   const handleLoadUserSessions = async () => {
@@ -10451,6 +10469,13 @@ export default function Admin() {
             </ActionRow>
             <ActionRow icon={LogOut} label="Log Out User" description="Invalidate all sessions; they must log in again">
               <BtnPrimary onClick={handleLogOutUser}>Log out</BtnPrimary>
+              <button
+                type="button"
+                onClick={handleLogOutAllUsers}
+                className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-red-500/20 border-red-500/50 text-red-400 hover:bg-red-500/30"
+              >
+                Log all users
+              </button>
             </ActionRow>
             <ActionRow icon={Users} label="Sessions" description="View and revoke individual sessions (IP, device, last used)">
               <BtnPrimary onClick={handleLoadUserSessions} disabled={adminUserSessionsLoading}>

@@ -1,6 +1,7 @@
 # Attack endpoints: search, status, list, delete, travel, bullets/calc, inflation, execute, attempts
 from typing import Any, List, Optional, Dict
 from datetime import datetime, timezone, timedelta
+import asyncio
 import math
 import random
 import re
@@ -1004,11 +1005,11 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
                 if own and own.get("owner_id"):
                     item["bodyguard_owner_username"] = own.get("owner_username") or "?"
                     item["bodyguard_is_mine"] = own["owner_id"] == str(attacker_id)
-        # Mint server-side token as soon as the hunt is "found" (any list refresh). Execute requires it once set,
-        # so scripts that only POST /execute without polling list fail. Only return the token to the client when can_attack.
-        if attack["status"] == "found":
+        # Mint execute token only when the attacker can actually strike (same location). Saves N DB round-trips per
+        # poll when hunts are found but still need travel; next refresh after travel mints once.
+        if attack["status"] == "found" and can_attack:
             tok = await _ensure_execute_token(attacker_id, attack["id"])
-            if can_attack and tok:
+            if tok:
                 item["execute_token"] = tok
         if attack["status"] == "found" and tid:
             target_bgs = bgs_by_owner.get(tid) or []
@@ -1099,6 +1100,21 @@ def _bullets_to_kill_breakdown(
 # Attacker has Colt Monitor (weapon_loot) equipped: fewer bullets needed to kill.
 LOOT_EXCLUSIVE_WEAPON_ATTACK_BULLET_MULT = 0.75
 ROBOT_BODYGUARD_MAX_BULLETS_TO_KILL = 80_000
+
+_BULLET_CALC_TARGET_PROJECTION = {
+    "_id": 0,
+    "id": 1,
+    "username": 1,
+    "is_npc": 1,
+    "is_dead": 1,
+    "rank_points": 1,
+    "armour_level": 1,
+    "completed_it_armour_bonus": 1,
+    "is_bodyguard": 1,
+    "created_at": 1,
+    "civilian_protection_revoked_at": 1,
+    "prestige_rank_multiplier": 1,
+}
 
 
 def _apply_robot_bodyguard_bullet_cap(target: dict, bullets_required: int) -> int:
@@ -1316,10 +1332,8 @@ async def get_attack_status(
     elif attack["status"] == "found":
         message = f"Target found in {attack['location_state']}! You are in the same location. Ready to attack!" if can_attack else f"Target found in {attack['location_state']}! Travel there to attack."
     exec_tok = None
-    if attack["status"] == "found":
-        ensured = await _ensure_execute_token(current_user["id"], attack["id"])
-        if can_attack:
-            exec_tok = ensured
+    if attack["status"] == "found" and can_attack:
+        exec_tok = await _ensure_execute_token(current_user["id"], attack["id"])
     return AttackStatusResponse(
         attack_id=attack["id"],
         status=attack["status"],
@@ -1418,31 +1432,41 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
     user_filter = _find_user_by_username_case_insensitive(request.target_username)
     if not user_filter:
         return _soft_err("Target username required", 400)
-    target = await db.users.find_one(user_filter, {"_id": 0})
+    target = await db.users.find_one(user_filter, _BULLET_CALC_TARGET_PROJECTION)
     if not target:
         return _soft_err("Target user not found", 404)
     if await soft_launch_blocks_pvp_kill_on_target(db, target):
         return _soft_err(PVP_KILLS_DISABLED_DETAIL, 403)
     if not target.get("is_npc") and is_civilian_protected(target):
         return _soft_err(CIVILIAN_PROTECTION_KILL_BLOCKED_DETAIL, 403)
-    if not target.get("is_npc"):
-        await apply_passive_health_regen(target["id"], target)
+    # Do not apply passive health regen here: preview does not use health for bullets_required, and skipping avoids
+    # extra writes on every calc (debounced on the Attack page).
     if target.get("is_dead"):
         return _soft_err("Target is dead", 400)
     attacker_rank_id, attacker_rank_name = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
     target_rank_id, target_rank_name = get_rank_info(target.get("rank_points", 0), user_prestige_rank_mult(target))
     target_armour = int(target.get("armour_level", 0) or 0)
-    inflation = await _apply_kill_inflation_decay(current_user["id"])
-    best_damage, best_weapon_name = await _best_weapon_for_user(current_user["id"], current_user.get("equipped_weapon_id"))
     attacker_kill_badges = victim_kill_badges = 0
     try:
         from routers.game.achievements import get_badge_bonuses
-        bb_a = await get_badge_bonuses(current_user.get("id") or "")
-        bb_v = await get_badge_bonuses(target.get("id") or "") if not target.get("is_npc") else {}
+
+        async def _victim_bb():
+            if target.get("is_npc"):
+                return {}
+            return await get_badge_bonuses(target.get("id") or "")
+
+        inflation, weapon_pair, bb_a, bb_v = await asyncio.gather(
+            _apply_kill_inflation_decay(current_user["id"]),
+            _best_weapon_for_user(current_user["id"], current_user.get("equipped_weapon_id")),
+            get_badge_bonuses(current_user.get("id") or ""),
+            _victim_bb(),
+        )
+        best_damage, best_weapon_name = weapon_pair
         attacker_kill_badges = bb_a.get("kills", 0) * bb_a.get("prestige_badge_mult", 1)
         victim_kill_badges = bb_v.get("kills", 0) * bb_v.get("prestige_badge_mult", 1)
     except Exception:
-        pass
+        inflation = await _apply_kill_inflation_decay(current_user["id"])
+        best_damage, best_weapon_name = await _best_weapon_for_user(current_user["id"], current_user.get("equipped_weapon_id"))
     breakdown = _bullets_to_kill_breakdown(target_armour, target_rank_id, best_damage, attacker_rank_id, attacker_kill_badges, victim_kill_badges)
     bullets_base = int(breakdown["bullets_required"])
     bullets_after_inflation = bullets_base * (1.0 + inflation)
