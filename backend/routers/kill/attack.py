@@ -1098,6 +1098,14 @@ def _bullets_to_kill_breakdown(
 
 # Attacker has Colt Monitor (weapon_loot) equipped: fewer bullets needed to kill.
 LOOT_EXCLUSIVE_WEAPON_ATTACK_BULLET_MULT = 0.75
+ROBOT_BODYGUARD_MAX_BULLETS_TO_KILL = 80_000
+
+
+def _apply_robot_bodyguard_bullet_cap(target: dict, bullets_required: int) -> int:
+    """Robot NPC bodyguards should never require more than the configured kill cap."""
+    if target.get("is_bodyguard") and target.get("is_npc"):
+        return min(max(1, int(bullets_required)), ROBOT_BODYGUARD_MAX_BULLETS_TO_KILL)
+    return max(1, int(bullets_required))
 
 
 async def _exclusive_car_bullet_defense_multiplier(target: dict) -> float:
@@ -1463,6 +1471,7 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
     completed_it_discount = bool(current_user.get("completed_it_bullet_reduction"))
     if completed_it_discount:
         bullets_required = max(1, int(bullets_required * 0.35))
+    bullets_required = _apply_robot_bodyguard_bullet_cap(target, bullets_required)
     return {
         "calc_ok": True,
         "target_username": target["username"],
@@ -1635,6 +1644,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     # "Completed it" perk: 65% fewer bullets needed when attacking
     if current_user.get("completed_it_bullet_reduction"):
         bullets_required = max(1, int(bullets_required * 0.35))
+    bullets_required = _apply_robot_bodyguard_bullet_cap(target, bullets_required)
     if attacker_bullets <= 0:
         await _log_attack_error(current_user["id"], current_user.get("username"), "You need bullets to attack.", req)
         raise HTTPException(status_code=400, detail="You need bullets to attack.")
