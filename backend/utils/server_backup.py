@@ -21,9 +21,11 @@ from urllib.parse import unquote
 import httpx
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
 from utils.attack_attempt_display import is_hitlist_npc_kill_excluded_from_stats
+from utils.jwt_env import require_jwt_secret_key
 
-ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
+ROOT_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(ROOT_DIR / '.env', override=True)
+load_dotenv(ROOT_DIR.parent / '.env', override=False)
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -32,7 +34,7 @@ db = client[os.environ['DB_NAME']]
 
 # Security
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'your-secret-key-change-in-production')
+SECRET_KEY = require_jwt_secret_key()
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7
 

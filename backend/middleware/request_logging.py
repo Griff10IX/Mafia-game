@@ -5,6 +5,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from jose import jwt, JWTError
 
+from utils.jwt_env import is_jwt_secret_placeholder, jwt_secret_from_env
+
 # Short logger name so journald/console lines are easier to scan (not "middleware.request_logging").
 logger = logging.getLogger("http")
 
@@ -48,8 +50,8 @@ def _extract_user_from_request(request: Request) -> tuple[str | None, str | None
         if not auth_header or not auth_header.startswith("Bearer "):
             return None, None
         token = auth_header.split(" ")[1]
-        secret = os.getenv("JWT_SECRET_KEY")
-        if not secret or secret in ("your-secret-key-here", "your-secret-key-change-in-production", "GENERATE_NEW_SECRET_HERE"):
+        secret = jwt_secret_from_env()
+        if is_jwt_secret_placeholder(secret):
             return None, None
         payload = jwt.decode(token, secret, algorithms=["HS256"])
         user_id = payload.get("sub")

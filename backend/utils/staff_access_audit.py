@@ -9,6 +9,8 @@ from typing import Any, Callable, Coroutine, Optional
 from jose import jwt
 from jose.exceptions import ExpiredSignatureError, JWTError
 
+from utils.jwt_env import is_jwt_secret_placeholder, jwt_secret_from_env
+
 logger = logging.getLogger(__name__)
 
 COLLECTION = "staff_access_denials"
@@ -58,12 +60,8 @@ def decode_jwt_bearer_user(request) -> tuple[Optional[str], Optional[str], Optio
         if not auth_header or not auth_header.startswith("Bearer "):
             return None, None, None
         token = auth_header.split(" ", 1)[1].strip()
-        secret = (os.environ.get("JWT_SECRET_KEY") or "").strip()
-        if not secret or secret in (
-            "your-secret-key-here",
-            "your-secret-key-change-in-production",
-            "GENERATE_NEW_SECRET_HERE",
-        ):
+        secret = jwt_secret_from_env()
+        if is_jwt_secret_placeholder(secret):
             return None, None, None
         try:
             payload = jwt.decode(token, secret, algorithms=["HS256"])
