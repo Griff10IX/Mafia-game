@@ -401,7 +401,7 @@ export default function ForumTopic() {
     return () => clearInterval(interval);
   }, [topicId, fetchTopic]);
   useEffect(() => {
-    api.get('/admin/check').then((r) => {
+    api.get('/auth/staff-flags').then((r) => {
       setIsAdmin(!!r.data?.is_admin);
       setIsModerator(!!r.data?.is_moderator);
       setIsHdo(!!r.data?.is_help_desk_operator);

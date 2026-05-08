@@ -611,7 +611,7 @@ export default function LootBox() {
     let cancelled = false;
     (async () => {
       try {
-        const adminRes = await api.get('/admin/check');
+        const adminRes = await api.get('/auth/staff-flags');
         if (!cancelled && adminRes.data?.is_admin) {
           setIsAdmin(true);
           const rRes = await api.get('/loot-box/admin/rarity');

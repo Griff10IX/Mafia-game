@@ -1473,7 +1473,7 @@ export default function Profile() {
       try {
         const [meRes, adminRes] = await Promise.all([
           api.get('/auth/me'),
-          api.get('/admin/check').catch(() => ({ data: {} })),
+          api.get('/auth/staff-flags').catch(() => ({ data: {} })),
         ]);
         setMe(meRes.data);
         setIsAdmin(!!adminRes.data?.is_admin);
@@ -1918,7 +1918,7 @@ export default function Profile() {
 
   const refetchAdmin = async () => {
     try {
-      const r = await api.get('/admin/check');
+      const r = await api.get('/auth/staff-flags');
       setIsAdmin(!!r.data?.is_admin);
       setIsModerator(!!r.data?.is_moderator);
       setHasAdminEmail(!!r.data?.has_admin_email);

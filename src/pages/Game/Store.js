@@ -409,7 +409,7 @@ export default function Store() {
         api.get('/auth/me'),
         api.get('/booze-run/config').catch(() => ({ data: null })),
         apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: { event: null, events_enabled: false } })),
-        api.get('/admin/check').catch(() => ({ data: { is_admin: false } })),
+        api.get('/auth/staff-flags').catch(() => ({ data: { is_admin: false } })),
         api.get('/page-locks').catch(() => ({ data: { paths: {} } })),
         api.get('/payments/pending-points').catch(() => ({ data: { pending_points: 0 } })),
       ]);

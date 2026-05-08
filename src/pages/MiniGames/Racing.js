@@ -350,7 +350,7 @@ export default function Racing() {
       const nau = autoRes.data?.next_automated_race_utc || null;
       if (nau) setNextAutoRaceUtc(nau);
       fetchMyDriver();
-      api.get("/admin/check").then(r => setIsAdmin(!!r.data?.is_admin)).catch(() => {});
+      api.get("/auth/staff-flags").then(r => setIsAdmin(!!r.data?.is_admin)).catch(() => {});
 
       _cached = {
         profile: prof, cars: profileRes.data?.owned_cars || [], availableCars: avCars,

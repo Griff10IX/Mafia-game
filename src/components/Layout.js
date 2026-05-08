@@ -1029,7 +1029,7 @@ export default function Layout({ children }) {
 
   const checkAdmin = async () => {
     try {
-      const response = await api.get('/admin/check');
+      const response = await api.get('/auth/staff-flags');
       setIsAdmin(!!response.data.is_admin); setIsModerator(!!response.data.is_moderator); setHasAdminEmail(!!response.data.has_admin_email);
       setStaffLoginSession(!!response.data.staff_login_session);
     } catch (error) { setIsAdmin(false); setIsModerator(false); setHasAdminEmail(false); setStaffLoginSession(false); }

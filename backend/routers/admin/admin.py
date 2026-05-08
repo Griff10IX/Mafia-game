@@ -194,7 +194,7 @@ class AdminSettingsUpdate(BaseModel):
     sustained_page_rl_jail_enabled: Optional[bool] = None  # Jail-style pacing (~750ms gap chain, ~22s sustain -> 10–15s cooldown)
     sustained_page_rl_entertainer_enabled: Optional[bool] = None  # Entertainer forum API (player routes)
     sustained_page_rl_forum_enabled: Optional[bool] = None  # Forum API
-    sustained_page_rl_kill_enabled: Optional[bool] = None  # Kill / attack `/attack/*` API (100ms gap; sustain 15s)
+    sustained_page_rl_kill_enabled: Optional[bool] = None  # Kill / attack `/attack/*` POSTs (~300ms gap chain; ~12s sustain→cooldown); default on if unset
     sustained_page_rl_gta_enabled: Optional[bool] = None  # GTA GETs (jail-style math)
     sustained_page_rl_crimes_enabled: Optional[bool] = None  # Crimes list/stats/logs GETs (jail-style)
     sustained_page_rl_oc_enabled: Optional[bool] = None  # OC config/status GETs (jail-style)
@@ -978,6 +978,7 @@ def register(router):
     _admin_or_mod = srv._admin_or_mod
     require_admin = srv.require_admin
     require_admin_or_mod = srv.require_admin_or_mod
+    from utils.staff_flags_payload import build_staff_flags_payload
 
     def _can_forum_mute(user: dict) -> bool:
         """Admin, mod, or HDO can mute/unmute forum users."""
@@ -6390,7 +6391,7 @@ def register(router):
         request: Request,
         current_user: dict = Depends(get_current_user),
     ):
-        """Non-staff loads /staffrole/admin in the SPA; /admin/check is 200 so log + inbox staff here (throttled)."""
+        """Non-staff loads /staffrole/admin in the SPA; log + inbox staff here (throttled)."""
         if _staff_shell_access(current_user):
             return {"ok": True, "recorded": False}
         from utils.staff_access_audit import record_staff_spa_unauthorized_visit
@@ -6462,33 +6463,8 @@ def register(router):
         }
 
     @router.get("/admin/check")
-    async def admin_check(current_user: dict = Depends(get_current_user)):
-        is_admin = _is_admin(current_user)
-        is_moderator = _is_moderator(current_user)
-        is_help_desk_operator = _is_hdo(current_user)
-        has_admin_email = user_has_admin_list_email(current_user)
-        is_entertainer = _is_entertainer(current_user)
-        out = {
-            "is_admin": is_admin,
-            "is_moderator": is_moderator,
-            "is_help_desk_operator": is_help_desk_operator,
-            "is_entertainer": is_entertainer,
-            "has_admin_email": has_admin_email,
-            "staff_login_session": bool(current_user.get("_jwt_staff_issued")),
-            "staff_portal_enabled": staff_portal_password_configured(),
-            "staff_portal_session_minutes": staff_portal_session_minutes(),
-        }
-        if is_moderator:
-            doc = await db.game_settings.find_one({"key": "mod_visible_category_ids"}, {"_id": 0, "value": 1})
-            raw = doc.get("value") if doc else None
-            if isinstance(raw, list) and raw and all(isinstance(x, str) and x in ADMIN_CATEGORY_IDS for x in raw):
-                merged = list(raw)
-                if "admin-world-systems" not in merged:
-                    merged.append("admin-world-systems")
-                out["mod_visible_category_ids"] = merged
-            else:
-                out["mod_visible_category_ids"] = list(MOD_VISIBLE_CATEGORY_IDS_DEFAULT)
-        return out
+    async def admin_check(current_user: dict = Depends(require_admin_or_mod)):
+        return await build_staff_flags_payload(db, current_user)
 
     @router.get("/admin/moderators")
     async def admin_list_moderators(current_user: dict = Depends(get_current_user)):
@@ -7009,7 +6985,8 @@ def register(router):
         sustained_page_rl_jail_enabled = bool(main_doc.get("sustained_page_rl_jail_enabled")) if main_doc else False
         sustained_page_rl_entertainer_enabled = bool(main_doc.get("sustained_page_rl_entertainer_enabled")) if main_doc else False
         sustained_page_rl_forum_enabled = bool(main_doc.get("sustained_page_rl_forum_enabled")) if main_doc else False
-        sustained_page_rl_kill_enabled = bool(main_doc.get("sustained_page_rl_kill_enabled")) if main_doc else False
+        _raw_kill_rl = main_doc.get("sustained_page_rl_kill_enabled") if main_doc else None
+        sustained_page_rl_kill_enabled = True if _raw_kill_rl is None else bool(_raw_kill_rl)
         sustained_page_rl_gta_enabled = bool(main_doc.get("sustained_page_rl_gta_enabled")) if main_doc else False
         sustained_page_rl_crimes_enabled = bool(main_doc.get("sustained_page_rl_crimes_enabled")) if main_doc else False
         sustained_page_rl_oc_enabled = bool(main_doc.get("sustained_page_rl_oc_enabled")) if main_doc else False
@@ -7501,7 +7478,8 @@ def register(router):
         sustained_page_rl_jail_enabled = bool(main_doc.get("sustained_page_rl_jail_enabled")) if main_doc else False
         sustained_page_rl_entertainer_enabled = bool(main_doc.get("sustained_page_rl_entertainer_enabled")) if main_doc else False
         sustained_page_rl_forum_enabled = bool(main_doc.get("sustained_page_rl_forum_enabled")) if main_doc else False
-        sustained_page_rl_kill_enabled = bool(main_doc.get("sustained_page_rl_kill_enabled")) if main_doc else False
+        _raw_kill_rl = main_doc.get("sustained_page_rl_kill_enabled") if main_doc else None
+        sustained_page_rl_kill_enabled = True if _raw_kill_rl is None else bool(_raw_kill_rl)
         sustained_page_rl_gta_enabled = bool(main_doc.get("sustained_page_rl_gta_enabled")) if main_doc else False
         sustained_page_rl_crimes_enabled = bool(main_doc.get("sustained_page_rl_crimes_enabled")) if main_doc else False
         sustained_page_rl_oc_enabled = bool(main_doc.get("sustained_page_rl_oc_enabled")) if main_doc else False

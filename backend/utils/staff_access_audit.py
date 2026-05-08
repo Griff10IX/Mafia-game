@@ -49,7 +49,7 @@ def is_staff_tool_api_path(path: str) -> bool:
 # Staff-capable users (admin list email or moderator) must use POST /auth/login-staff so JWT includes staff_issued.
 _STAFF_JWT_ISSUED_EXEMPT_PATHS = frozenset(
     {
-        "/api/admin/check",
+        "/api/auth/staff-flags",
         "/api/admin/whoami",
         "/api/admin/tool-access/report-spa-unauthorized",
         "/api/auth/staff-portal-unlock",
@@ -193,7 +193,7 @@ async def record_staff_spa_unauthorized_visit(
     send_notification: Callable[..., Coroutine[Any, Any, Any]],
     get_notify_user_ids: Callable[..., Coroutine[Any, Any, list]],
 ) -> bool:
-    """Persist + inbox staff when a signed-in non-staff account loads /staffrole/admin in the SPA (GET /admin/check is 200, so 403 middleware does not run). Throttled like other denials."""
+    """Persist + inbox staff when a signed-in non-staff account loads /staffrole/admin in the SPA (browser route; not gated by staff API 403). Throttled like other denials."""
     uid = (user_id or "").strip() or None
     if not uid:
         return False

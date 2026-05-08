@@ -2870,7 +2870,7 @@ async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
 
 def register(router):
     # Sustained RL only on mutating / costly POSTs. GET list/inflation/timeline were each doing find+update on
-    # sustained_page_rl_state; parallel page load (5+ GETs & 10s polling) spammed DB and could trip 100ms kill chain.
+    # sustained_page_rl_state; parallel page load (5+ GETs & 10s polling) spammed DB and could trip kill-chain RL on POSTs.
     _kill_rl_v = [Depends(_kill_sustained_rl_verified)]
     router.add_api_route("/attack/search", search_target, methods=["POST"], response_model=AttackSearchResponse, dependencies=_kill_rl_v)
     router.add_api_route("/attack/status", get_attack_status, methods=["GET"], response_model=AttackStatusResponse)

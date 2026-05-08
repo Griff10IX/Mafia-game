@@ -128,6 +128,7 @@ from routers.game.families import resolve_family_id
 from utils.family_vault_log import log_family_vault_tx
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
 from utils.location_climate import get_location_climate, rank_multiplier_for_actor, success_multiplier_for_actor
+from utils.rolling_event_stats import rolling_event_stats_pipeline, rolling_stats_response_from_doc
 
 # Family members in an active war cannot liquidate exclusive / loot-exclusive cars (list, scrap, melt).
 EXCLUSIVE_CAR_WAR_LOCK_DETAIL = (
@@ -817,47 +818,15 @@ async def get_gta_stats(current_user: dict = Depends(get_current_user)):
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     last_24h_start = now - timedelta(hours=24)
     seven_days_start = now - timedelta(days=7)
-    pipeline = [
-        {"$match": {"user_id": current_user.get("id") or ""}},
-        {
-            "$facet": {
-                "today": [
-                    {"$match": {"at": {"$gte": today_start}}},
-                    {"$group": {"_id": None, "count": {"$sum": 1}, "successes": {"$sum": {"$cond": ["$success", 1, 0]}}, "profit": {"$sum": "$profit"}}},
-                ],
-                "last_24h": [
-                    {"$match": {"at": {"$gte": last_24h_start}}},
-                    {"$group": {"_id": None, "profit": {"$sum": "$profit"}}},
-                ],
-                "last_7_days": [
-                    {"$match": {"at": {"$gte": seven_days_start}}},
-                    {"$group": {"_id": None, "count": {"$sum": 1}, "successes": {"$sum": {"$cond": ["$success", 1, 0]}}, "profit": {"$sum": "$profit"}}},
-                ],
-            }
-        },
-    ]
+    pipeline = rolling_event_stats_pipeline(
+        current_user.get("id") or "",
+        seven_days_start=seven_days_start,
+        today_start=today_start,
+        last_24h_start=last_24h_start,
+    )
     cursor = db.gta_events.aggregate(pipeline)
     result = await cursor.to_list(1)
-    doc = result[0] if result else {}
-    def _today():
-        arr = doc.get("today") or []
-        return arr[0] if arr else {"count": 0, "successes": 0, "profit": 0}
-    def _24h():
-        arr = doc.get("last_24h") or []
-        return int(arr[0].get("profit", 0)) if arr else 0
-    def _week():
-        arr = doc.get("last_7_days") or []
-        return arr[0] if arr else {"count": 0, "successes": 0, "profit": 0}
-    t, w = _today(), _week()
-    return {
-        "count_today": int(t.get("count", 0)),
-        "count_week": int(w.get("count", 0)),
-        "success_today": int(t.get("successes", 0)),
-        "success_week": int(w.get("successes", 0)),
-        "profit_today": int(t.get("profit", 0)),
-        "profit_24h": _24h(),
-        "profit_week": int(w.get("profit", 0)),
-    }
+    return rolling_stats_response_from_doc(result[0] if result else None)
 
 
 MELT_BULLETS_COOLDOWN_SECONDS = 45  # Only 1 car can be melted for bullets every 45s. Scrap has no cooldown.

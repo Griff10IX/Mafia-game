@@ -14,7 +14,7 @@ Defined in [`server.py`](server.py):
 - **`require_admin_verified`** – Same as **`require_admin`** but chains **`get_current_user_verified`** (email verification gate for normal players).
 - **`require_admin_or_mod_verified`** – Same as **`require_admin_or_mod`** with verified user — use for staff routes that already required **`get_current_user_verified`** (e.g. sports book admin read APIs).
 
-UI-only shell access (`/admin/check`, presence) may still use **`user_has_admin_list_email`**; destructive routes must **not** rely on email alone without `_is_admin` unless explicitly intended.
+General UI reads **`GET /auth/staff-flags`** (any signed-in user). The Admin Tools shell may also call **`GET /admin/check`** (**`require_admin_or_mod`** + staff JWT). Presence endpoints unchanged. UI-only gating may still use **`user_has_admin_list_email`**; destructive routes must **not** rely on email alone without `_is_admin` unless explicitly intended.
 
 ## Manual regression checks
 

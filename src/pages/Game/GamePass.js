@@ -420,7 +420,7 @@ export default function GamePass() {
     try {
       const [userRes, adminRes, seasonRes] = await Promise.all([
         api.get('/auth/me'),
-        api.get('/admin/check').catch(() => ({ data: { is_admin: false } })),
+        api.get('/auth/staff-flags').catch(() => ({ data: { is_admin: false } })),
         api.get('/payments/game-pass-season').catch(() => ({ data: null })),
       ]);
       setUser(userRes.data);

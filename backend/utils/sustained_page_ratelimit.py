@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 # Inbox admins at most this often per (user_id, page_key) for sustained RL 429s (repeat hits while in cooldown).
 _ADMIN_RL_INBOX_MIN_GAP_SEC = 180
 
-# Default streak gap / sustain for scopes not in PAGE_KEYS_JAIL_STYLE_TUNING (except kill, which uses a tighter gap).
+# Default streak gap / sustain for scopes not in PAGE_KEYS_JAIL_STYLE_TUNING (kill has its own gap/sustain).
 MAX_GAP_MS = 500.0
 SUSTAIN_SEC = 15.0
 COOLDOWN_MIN_SEC = 10
@@ -84,8 +84,10 @@ PAGE_KEYS_JAIL_STYLE_TUNING = frozenset(
     }
 )
 
-# Kill: stricter gap than jail-style (unchanged product behavior).
-_KILL_MAX_GAP_MS = 100.0
+# Kill: requests closer than this (ms) count toward the same "fast" chain. A gap ≥ this resets the chain
+# (e.g. ~300ms pause between actions breaks the chain). Tighter than 100ms-only so spaced spam still tripped RL.
+_KILL_MAX_GAP_MS = 300.0
+_KILL_SUSTAIN_SEC = 12.0
 
 
 def _max_gap_ms(page_key: str) -> float:
@@ -99,6 +101,8 @@ def _max_gap_ms(page_key: str) -> float:
 def _sustain_sec(page_key: str) -> float:
     if page_key in PAGE_KEYS_JAIL_STYLE_TUNING:
         return JAIL_STYLE_SUSTAIN_SEC
+    if page_key == PAGE_KEY_KILL:
+        return _KILL_SUSTAIN_SEC
     return SUSTAIN_SEC
 
 
@@ -269,8 +273,13 @@ async def sustained_page_rl_enabled_for(db, page_key: str) -> bool:
         return False
     doc = await db.game_settings.find_one({"_id": "main"}, {field: 1})
     if not doc:
-        return False
-    return bool(doc.get(field))
+        return page_key == PAGE_KEY_KILL
+    val = doc.get(field)
+    if page_key == PAGE_KEY_KILL:
+        if val is None:
+            return True
+        return bool(val)
+    return bool(val)
 
 
 async def check_sustained_page_rl(db, user_id: str, page_key: str) -> None:

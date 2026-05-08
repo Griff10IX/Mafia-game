@@ -18,7 +18,7 @@ const api = axios.create({
   baseURL: API,
 });
 
-/** Fired when an /admin/* request returns 403: re-fetch /admin/check so UI cannot stay spoofed via devtools. */
+/** Fired when an /admin/* request returns 403: re-fetch staff flags so UI cannot stay spoofed via devtools. */
 export const STAFF_ADMIN_API_FORBIDDEN_EVENT = 'staff-admin-api-forbidden';
 
 let _staffAdminForbiddenDispatchAt = 0;

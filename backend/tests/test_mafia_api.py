@@ -174,15 +174,40 @@ class TestAdmin:
         })
         return response.json()["token"]
     
-    def test_admin_check(self, admin_token):
-        """Test admin check endpoint"""
-        response = requests.get(f"{BASE_URL}/api/admin/check", headers={
+    def test_staff_flags(self, admin_token):
+        """Staff capability flags for any signed-in user (not under /admin)."""
+        response = requests.get(f"{BASE_URL}/api/auth/staff-flags", headers={
             "Authorization": f"Bearer {admin_token}"
         })
         assert response.status_code == 200
         data = response.json()
         assert "is_admin" in data
-        assert data["is_admin"] == True
+        assert data["is_admin"] is True
+
+    def test_admin_check_requires_staff_entrance(self, admin_token):
+        """GET /admin/check is for Admin Tools only: normal login must not suffice."""
+        response = requests.get(f"{BASE_URL}/api/admin/check", headers={
+            "Authorization": f"Bearer {admin_token}"
+        })
+        assert response.status_code == 403
+
+    def test_admin_check_after_staff_login(self):
+        """GET /admin/check works with JWT from POST /auth/login-staff."""
+        if not ADMIN_EMAIL or not ADMIN_PASSWORD:
+            pytest.skip("TEST_ADMIN_EMAIL / TEST_ADMIN_PASSWORD not set")
+        r = requests.post(f"{BASE_URL}/api/auth/login-staff", json={
+            "email": ADMIN_EMAIL,
+            "password": ADMIN_PASSWORD,
+        })
+        if r.status_code != 200:
+            pytest.skip(f"login-staff unavailable: {r.status_code}")
+        token = r.json().get("token")
+        assert token
+        response = requests.get(f"{BASE_URL}/api/admin/check", headers={
+            "Authorization": f"Bearer {token}"
+        })
+        assert response.status_code == 200
+        assert "is_admin" in response.json()
         
     def test_admin_change_rank(self, admin_token):
         """Test admin change rank - requires target user"""

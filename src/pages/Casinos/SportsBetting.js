@@ -471,7 +471,7 @@ export default function SportsBetting() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await api.get('/admin/check');
+        const res = await api.get('/auth/staff-flags');
         if (cancelled) return;
         if (res.data?.is_admin) {
           setIsAdmin(true);

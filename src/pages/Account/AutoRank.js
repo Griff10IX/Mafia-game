@@ -1333,7 +1333,7 @@ export default function AutoRank() {
       try {
         const [meRes, checkRes, intervalRes, statsRes] = await Promise.all([
           api.get('/auto-rank/me').catch(() => ({ data: null })),
-          api.get('/admin/check').catch(() => ({ data: {} })),
+          api.get('/auth/staff-flags').catch(() => ({ data: {} })),
           api.get('/auto-rank/interval').catch(() => ({ data: null })),
           api.get('/auto-rank/stats').catch(() => ({ data: null })),
         ]);

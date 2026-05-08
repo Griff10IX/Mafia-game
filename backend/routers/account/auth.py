@@ -451,6 +451,7 @@ def register(router):
     PRESTIGE_CONFIGS = getattr(srv, "PRESTIGE_CONFIGS", {})
     CARS = getattr(srv, "CARS", [])
 
+    from utils.staff_flags_payload import build_staff_flags_payload
     from utils.ip_normalize import normalize_ip_string as _normalize_ip
 
     def _client_ip(request: Request):
@@ -521,6 +522,11 @@ def register(router):
                     await send_notification(a["id"], title, msg, "system", category="admin")
         except Exception:
             logger.exception("Failed to notify admins of VPN block")
+
+    @router.get("/auth/staff-flags")
+    async def get_staff_flags(current_user: dict = Depends(get_current_user)):
+        """Staff/mod/HDO/entertainer flags for signed-in users; not under /admin (general UI). Admin Tools use GET /admin/check."""
+        return await build_staff_flags_payload(db, current_user)
 
     @router.get("/auth/launch-status")
     async def get_launch_status():

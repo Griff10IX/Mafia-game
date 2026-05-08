@@ -461,6 +461,7 @@ from routers.kill.armoury import (
 )
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
 from utils.point_provenance import log_points_event
+from utils.rolling_event_stats import rolling_event_stats_pipeline, rolling_stats_response_from_doc
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_CRIMES
 
 
@@ -1052,49 +1053,18 @@ async def get_crime_stats(current_user: dict = Depends(get_current_user)):
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     last_24h_start = now - timedelta(hours=24)
     seven_days_start = now - timedelta(days=7)
-    pipeline = [
-        {"$match": {"user_id": current_user["id"]}},
-        {
-            "$facet": {
-                "today": [
-                    {"$match": {"at": {"$gte": today_start}}},
-                    {"$group": {"_id": None, "count": {"$sum": 1}, "successes": {"$sum": {"$cond": ["$success", 1, 0]}}, "profit": {"$sum": "$profit"}}},
-                ],
-                "last_24h": [
-                    {"$match": {"at": {"$gte": last_24h_start}}},
-                    {"$group": {"_id": None, "profit": {"$sum": "$profit"}}},
-                ],
-                "last_7_days": [
-                    {"$match": {"at": {"$gte": seven_days_start}}},
-                    {"$group": {"_id": None, "count": {"$sum": 1}, "successes": {"$sum": {"$cond": ["$success", 1, 0]}}, "profit": {"$sum": "$profit"}}},
-                ],
-            }
-        },
-    ]
+    pipeline = rolling_event_stats_pipeline(
+        current_user["id"],
+        seven_days_start=seven_days_start,
+        today_start=today_start,
+        last_24h_start=last_24h_start,
+    )
     cursor = db.crime_events.aggregate(pipeline)
     result = await cursor.to_list(1)
-    doc = result[0] if result else {}
-    def _today():
-        arr = doc.get("today") or []
-        return arr[0] if arr else {"count": 0, "successes": 0, "profit": 0}
-    def _24h():
-        arr = doc.get("last_24h") or []
-        return int(arr[0].get("profit", 0)) if arr else 0
-    def _week():
-        arr = doc.get("last_7_days") or []
-        return arr[0] if arr else {"count": 0, "successes": 0, "profit": 0}
-    t, w = _today(), _week()
-    return {
-        "count_today": int(t.get("count", 0)),
-        "count_week": int(w.get("count", 0)),
-        "success_today": int(t.get("successes", 0)),
-        "success_week": int(w.get("successes", 0)),
-        "profit_today": int(t.get("profit", 0)),
-        "profit_24h": _24h(),
-        "profit_week": int(w.get("profit", 0)),
-        "profit_last_hour": _24h(),  # backward compat
-        "profit_last_7_days": int(w.get("profit", 0)),
-    }
+    out = rolling_stats_response_from_doc(result[0] if result else None)
+    out["profit_last_hour"] = out["profit_24h"]
+    out["profit_last_7_days"] = out["profit_week"]
+    return out
 
 
 async def get_crime_logs(current_user: dict = Depends(get_current_user)):

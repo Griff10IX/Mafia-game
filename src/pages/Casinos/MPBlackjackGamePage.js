@@ -248,7 +248,7 @@ export default function MPBlackjackGamePage() {
   }, []);
 
   useEffect(() => {
-    api.get('/admin/check').then((r) => {
+    api.get('/auth/staff-flags').then((r) => {
       setIsAdmin(!!r.data?.is_admin);
       setIsModerator(!!r.data?.is_moderator);
     }).catch(() => {});

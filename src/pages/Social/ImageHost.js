@@ -77,7 +77,7 @@ export default function ImageHost() {
   useEffect(() => {
     load();
     loadPublic();
-    api.get('/admin/check').then((r) => setIsAdmin(!!r.data?.is_admin)).catch(() => setIsAdmin(false));
+    api.get('/auth/staff-flags').then((r) => setIsAdmin(!!r.data?.is_admin)).catch(() => setIsAdmin(false));
   }, [load, loadPublic]);
 
   const onFile = async (e) => {

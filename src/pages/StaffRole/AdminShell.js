@@ -73,7 +73,7 @@ export default function AdminShell() {
   const navigate = useNavigate();
   const [targetPlayer, setTargetPlayer] = useState('');
   const [targetContextOpen, setTargetContextOpen] = useState(false);
-  /** null = verifying with API; staff UI requires DB caps and a staff-issued JWT (see /admin/check staff_login_session). */
+  /** null = verifying with API; staff UI requires DB caps and a staff-issued JWT (see GET /admin/check staff_login_session). */
   const [staffAllowed, setStaffAllowed] = useState(null);
   /** When STAFF_PORTAL_PASSWORD is set, API requires X-Staff-Portal-Token for /admin/* calls except check. */
   const [staffPortalEnabled, setStaffPortalEnabled] = useState(false);
@@ -89,7 +89,7 @@ export default function AdminShell() {
     return isStaffPortalTokenValid();
   }, [staffPortalEnabled, portalRefreshTick]);
 
-  /** Re-check /admin/check + portal before nav or shell actions (caps/session can change while tab stays open). */
+  /** Re-check Admin Tools GET /admin/check + portal before nav or shell actions (caps/session can change while tab stays open). */
   const verifyStaffAccess = useCallback(async () => {
     try {
       const res = await api.get('/admin/check');

@@ -63,7 +63,7 @@ export async function prefetchForumSpecialTabsData(options = {}) {
       safeGet('/forum/entertainer/find-word/history', { params: { limit: 8 } }),
       safeGet('/forum/entertainer/admin/config'),
       safeGet('/forum/designer/competitions/active'),
-      safeGet('/admin/check'),
+      safeGet('/auth/staff-flags'),
     ]);
 
     const topics = {
