@@ -46,14 +46,14 @@ const TRAVEL_STYLES = `
   .trv-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
 
-const TravelingScreen = ({ destination, timeLeft }) => (
+const TravelingScreen = ({ destination, timeLeft, pending }) => (
   <div className="flex flex-col items-center justify-center min-h-[40vh] space-y-3" data-testid="traveling-screen">
     <div className="text-4xl md:text-5xl animate-bounce">🚗</div>
     <h2 className="text-lg md:text-xl font-heading font-bold text-primary uppercase tracking-wider text-center">
       Traveling to {destination}...
     </h2>
     <div className="text-3xl md:text-4xl font-heading font-bold text-foreground tabular-nums">
-      {timeLeft}s
+      {pending ? '…' : `${Math.max(0, Math.floor(Number(timeLeft) || 0))}s`}
     </div>
     <div className="w-48 md:w-64 h-2 bg-secondary rounded-full overflow-hidden border border-primary/20">
       <div className="h-full bg-gradient-to-r from-primary via-yellow-600 to-primary animate-pulse"></div>
@@ -365,6 +365,7 @@ export default function Travel() {
   const travelBoot = readSessionJson(TRAVEL_CACHE_KEY);
   const [travelInfo, setTravelInfo] = useState(() => travelBoot?.travelInfo ?? null);
   const [traveling, setTraveling] = useState(false);
+  const [travelPostPending, setTravelPostPending] = useState(false);
   const [travelTime, setTravelTime] = useState(0);
   const [selectedDest, setSelectedDest] = useState('');
   const [autoRankBoozeOn, setAutoRankBoozeOn] = useState(() => !!travelBoot?.autoRankBoozeOn);
@@ -456,9 +457,27 @@ export default function Travel() {
     }
   }, [travelTime, selectedDest, fetchTravelInfo]);
 
+  // Recover stale UI: never stay "traveling" with no positive countdown (e.g. bad/missing travel_time).
+  useEffect(() => {
+    if (!traveling || travelPostPending) return;
+    if (travelTime > 0) return;
+    setTraveling(false);
+    fetchTravelInfo({ silent: true }).catch(() => {});
+    refreshUser();
+  }, [traveling, travelPostPending, travelTime, fetchTravelInfo]);
+
+  /** Server seconds until arrival; missing/NaN = treat as instant (same as <= 0). */
+  const parseTravelSeconds = (raw) => {
+    const n = Number(raw);
+    if (!Number.isFinite(n) || n <= 0) return 0;
+    return Math.max(1, Math.ceil(n));
+  };
+
   const handleTravel = async (destination, method, airportSlot = 1) => {
-    setTraveling(true);
     setSelectedDest(destination);
+    setTravelPostPending(true);
+    setTraveling(false);
+    setTravelTime(0);
     try {
       const [bjRes, mpBjRes] = await Promise.all([
         api.get('/casino/blackjack/current-game').catch(() => ({ data: {} })),
@@ -467,32 +486,37 @@ export default function Travel() {
       if (mpBjRes.data?.in_game && mpBjRes.data?.game_id) {
         setBjTravelBlock({ kind: 'mp', gameId: String(mpBjRes.data.game_id) });
         toast.error('Finish or leave your multiplayer blackjack game before traveling.');
-        setTraveling(false);
+        setTravelPostPending(false);
         return;
       }
       if (bjRes.data?.hasGame) {
         setBjTravelBlock({ kind: 'single' });
         toast.error('Finish your blackjack hand before traveling.');
-        setTraveling(false);
+        setTravelPostPending(false);
         return;
       }
       const payload = { destination, travel_method: method };
       if (method === 'airport' && airportSlot != null) payload.airport_slot = airportSlot;
       const response = await api.post('/travel', payload);
-      const tt = response.data.travel_time;
-      if (tt <= 0) {
+      const sec = parseTravelSeconds(response.data?.travel_time);
+      setTravelPostPending(false);
+      if (sec <= 0) {
         setTraveling(false);
+        setTravelTime(0);
         fetchTravelInfo({ silent: true });
         refreshUser();
         toast.success(`Arrived at ${destination}!`);
       } else {
-        setTravelTime(tt);
+        setTravelTime(sec);
+        setTraveling(true);
         refreshUser();
-        toast.info(response.data.message);
+        toast.info(response.data?.message || `Traveling to ${destination}…`);
       }
     } catch (error) {
+      setTravelPostPending(false);
       toast.error(error.response?.data?.detail || 'Travel failed');
       setTraveling(false);
+      setTravelTime(0);
     }
   };
 
@@ -507,8 +531,14 @@ export default function Travel() {
     }
   };
 
-  if (traveling) {
-    return <TravelingScreen destination={selectedDest} timeLeft={travelTime} />;
+  if (travelPostPending || (traveling && travelTime > 0)) {
+    return (
+      <TravelingScreen
+        destination={selectedDest || '…'}
+        timeLeft={travelTime}
+        pending={travelPostPending}
+      />
+    );
   }
 
   if (!travelInfo) {
