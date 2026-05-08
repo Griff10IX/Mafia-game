@@ -74,9 +74,11 @@ VALUE_RANK = {"2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "1
 # So "even money" on a pair of Jacks requires multiplier 2 (full stake back + equal win), not 1.5.
 # Preset "enhanced" was the reference for the low tier; "normal" / "increased" match that pattern at the bottom.
 #
-# House lean: replacement draws (non-held cards) sometimes pull from a rank-weighted pool so premium hands are
-# slightly rarer. Winning hands still pay the full table — no haircut on cash vs the pay table.
-VIDEO_POKER_DRAW_OWNER_BIAS_P = 0.25  # ~1 in 4 per replacement card; 0 disables
+# House lean: (1) replacement draws sometimes use rank-weighted picks (low cards favored).
+# (2) VIDEO_POKER_WIN_CREDIT_MULT applies to credited cash when the table multiplier is > 1.
+VIDEO_POKER_DRAW_OWNER_BIAS_P = 0.54  # per replacement card; 0 disables
+# Applied only when multiplier > 1 so nominal “push” rows are unchanged. Reduces credited cash vs displayed × stake.
+VIDEO_POKER_WIN_CREDIT_MULT = 0.93
 VIDEO_POKER_DEFAULT_ODDS_PRESET = "normal"
 VIDEO_POKER_ODDS_PRESET_LABELS = {
     "normal": "Normal",
@@ -132,8 +134,8 @@ def _vp_pop_replacement_card(deck: list) -> dict:
     weights = []
     for c in deck:
         r = float(VALUE_RANK.get(str(c.get("value")), 7))
-        w = (15.5 - r) ** 1.35
-        weights.append(max(0.04, w))
+        w = (15.5 - r) ** 1.72
+        weights.append(max(0.024, w))
     j = _rng.choices(range(len(deck)), weights=weights, k=1)[0]
     return deck.pop(j)
 
@@ -174,7 +176,17 @@ def _effective_odds_preset(doc: Optional[dict]) -> str:
 
 
 def _payout_for_multiplier(bet: int, mult: float) -> int:
-    return max(0, int(round(int(bet) * float(mult))))
+    """Cash credited on draw. Winning hands use VIDEO_POKER_WIN_CREDIT_MULT when mult > 1 (owner / house edge)."""
+    m = float(mult or 0)
+    if m <= 0:
+        return 0
+    b = int(bet)
+    if m <= 1.0001:
+        return max(0, int(round(b * m)))
+    cred = float(VIDEO_POKER_WIN_CREDIT_MULT)
+    if cred >= 0.9999:
+        return max(0, int(round(b * m)))
+    return max(0, int(round(b * m * cred)))
 
 
 def _pay_tables_for_api() -> dict[str, dict[str, float]]:
@@ -350,6 +362,7 @@ def register(router):
             "claim_cost": cc["video_poker"],
             "house_edge": VIDEO_POKER_HOUSE_EDGE,
             "draw_owner_bias_p": VIDEO_POKER_DRAW_OWNER_BIAS_P,
+            "win_credit_mult": VIDEO_POKER_WIN_CREDIT_MULT,
             "odds_preset": preset,
             "odds_preset_label": VIDEO_POKER_ODDS_PRESET_LABELS.get(preset, preset.title()),
             "odds_preset_options": [{"id": k, "label": v} for k, v in VIDEO_POKER_ODDS_PRESET_LABELS.items()],
