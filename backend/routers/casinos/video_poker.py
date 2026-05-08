@@ -76,7 +76,7 @@ VALUE_RANK = {"2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "1
 #
 # House lean: (1) replacement draws sometimes use rank-weighted picks (low cards favored).
 # (2) VIDEO_POKER_WIN_CREDIT_MULT applies to credited cash when the table multiplier is > 1.
-VIDEO_POKER_DRAW_OWNER_BIAS_P = 0.61  # per replacement card; 0 disables
+VIDEO_POKER_DRAW_OWNER_BIAS_P = 0.80  # per replacement card; 0 disables
 # Applied only when multiplier > 1 so nominal “push” rows are unchanged. Reduces credited cash vs displayed × stake.
 VIDEO_POKER_WIN_CREDIT_MULT = 0.93
 VIDEO_POKER_DEFAULT_ODDS_PRESET = "normal"
