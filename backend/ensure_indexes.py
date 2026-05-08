@@ -173,6 +173,8 @@ async def ensure_all_indexes(db):
 
         # --- Attack ---
         await db.attacks.create_index([("attacker_id", 1), ("search_started", -1)])
+        # List query: attacker + status in (searching,found) + sort by search_started (IXSCAN + no in-memory sort).
+        await db.attacks.create_index([("attacker_id", 1), ("status", 1), ("search_started", -1)])
         await db.attacks.create_index([("attacker_id", 1), ("expires_at", 1)])
         await db.attacks.create_index("id")
         await db.attacks.create_index([("attacker_id", 1), ("id", 1)])

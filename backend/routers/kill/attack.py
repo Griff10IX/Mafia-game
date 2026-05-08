@@ -1,5 +1,5 @@
 # Attack endpoints: search, status, list, delete, travel, bullets/calc, inflation, execute, attempts
-from typing import Any, List, Optional, Dict
+from typing import Any, Dict, List, Optional, Set, Tuple
 from datetime import datetime, timezone, timedelta
 import asyncio
 import math
@@ -834,6 +834,87 @@ def _parse_event_sort_key(val) -> datetime:
         return datetime.min.replace(tzinfo=timezone.utc)
 
 
+# Fields required for /attack/list response + in-loop promotion/expiry (no full attack documents).
+_ATTACK_LIST_FIELDS = {
+    "_id": 0,
+    "id": 1,
+    "target_id": 1,
+    "target_username": 1,
+    "note": 1,
+    "status": 1,
+    "expires_at": 1,
+    "search_started": 1,
+    "found_at": 1,
+    "location_state": 1,
+    "planned_location_state": 1,
+    "execute_token": 1,
+}
+
+
+async def _users_map_for_targets(target_ids: List[str]) -> Dict[str, dict]:
+    users_map: Dict[str, dict] = {}
+    if not target_ids:
+        return users_map
+    async for u in db.users.find(
+        {"id": {"$in": target_ids}},
+        {"_id": 0, "id": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1, "current_state": 1},
+    ):
+        users_map[u["id"]] = u
+    return users_map
+
+
+async def _bgs_by_owner_for_targets(target_ids: List[str]) -> Dict[str, List[dict]]:
+    """Bodyguard slot rows for targets that hire guards — parallel-friendly vs users fetch."""
+    bgs_by_owner: Dict[str, List[dict]] = {}
+    if not target_ids:
+        return bgs_by_owner
+    _proj = {"_id": 0, "user_id": 1, "bodyguard_user_id": 1, "slot_number": 1, "robot_name": 1}
+    for b in await db.bodyguards.find({"user_id": {"$in": target_ids}}, _proj).to_list(500):
+        uid = b.get("user_id")
+        if uid:
+            bgs_by_owner.setdefault(uid, []).append(b)
+    return bgs_by_owner
+
+
+async def _resolve_still_bg_and_owners(bg_target_ids: List[str]) -> Tuple[Set[Any], Dict[str, Dict[str, str]]]:
+    """Robot bodyguard row existence + owner username for guard targets."""
+    still_bg_tids: Set[Any] = set()
+    bg_owner_by_guard_uid: Dict[str, Dict[str, str]] = {}
+    if not bg_target_ids:
+        return still_bg_tids, bg_owner_by_guard_uid
+    async for b in db.bodyguards.find(
+        {"bodyguard_user_id": {"$in": bg_target_ids}},
+        {"_id": 0, "bodyguard_user_id": 1, "user_id": 1},
+    ):
+        still_bg_tids.add(b["bodyguard_user_id"])
+        gid = b.get("bodyguard_user_id")
+        ouid = b.get("user_id")
+        if gid and ouid:
+            bg_owner_by_guard_uid[str(gid)] = {"owner_id": str(ouid), "owner_username": ""}
+    owner_uid_list = list({d["owner_id"] for d in bg_owner_by_guard_uid.values() if d.get("owner_id")})
+    owner_username_by_id: Dict[str, str] = {}
+    if owner_uid_list:
+        async for u in db.users.find({"id": {"$in": owner_uid_list}}, {"_id": 0, "id": 1, "username": 1}):
+            owner_username_by_id[str(u["id"])] = str(u.get("username") or "?")
+    for gid, d in list(bg_owner_by_guard_uid.items()):
+        oid = d.get("owner_id")
+        if oid:
+            d["owner_username"] = owner_username_by_id.get(oid, "?")
+    return still_bg_tids, bg_owner_by_guard_uid
+
+
+async def _guard_username_map(guard_ids: List[str]) -> Dict[str, dict]:
+    guard_users: Dict[str, dict] = {}
+    if not guard_ids:
+        return guard_users
+    async for u in db.users.find(
+        {"id": {"$in": guard_ids}},
+        {"_id": 0, "id": 1, "username": 1},
+    ):
+        guard_users[u["id"]] = u
+    return guard_users
+
+
 async def _build_active_attacks_list(attacker_id: str, attacker_current_state: str) -> List[dict]:
     """
     Load active searches/found attacks for attacker; apply same expiry, promotions, and cleanup as GET /attack/list.
@@ -843,49 +924,18 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
     cutoff = now - timedelta(hours=24)
     attacks = await db.attacks.find(
         {"attacker_id": attacker_id, "status": {"$in": ["searching", "found"]}},
-        {"_id": 0},
+        _ATTACK_LIST_FIELDS,
     ).sort("search_started", -1).to_list(None)
     if not attacks:
         return []
 
     target_ids = list({a["target_id"] for a in attacks if a.get("target_id")})
-    users_map: Dict[str, dict] = {}
-    if target_ids:
-        async for u in db.users.find(
-            {"id": {"$in": target_ids}},
-            {"_id": 0, "id": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1, "current_state": 1},
-        ):
-            users_map[u["id"]] = u
+    users_map, bgs_by_owner = await asyncio.gather(
+        _users_map_for_targets(target_ids),
+        _bgs_by_owner_for_targets(target_ids),
+    )
 
     bg_target_ids = [tid for tid in target_ids if (users_map.get(tid) or {}).get("is_bodyguard")]
-    still_bg_tids = set()
-    bg_owner_by_guard_uid: Dict[str, Dict[str, str]] = {}
-    if bg_target_ids:
-        async for b in db.bodyguards.find(
-            {"bodyguard_user_id": {"$in": bg_target_ids}},
-            {"_id": 0, "bodyguard_user_id": 1, "user_id": 1},
-        ):
-            still_bg_tids.add(b["bodyguard_user_id"])
-            gid = b.get("bodyguard_user_id")
-            ouid = b.get("user_id")
-            if gid and ouid:
-                bg_owner_by_guard_uid[str(gid)] = {"owner_id": str(ouid), "owner_username": ""}
-        owner_uid_list = list({d["owner_id"] for d in bg_owner_by_guard_uid.values() if d.get("owner_id")})
-        owner_username_by_id: Dict[str, str] = {}
-        if owner_uid_list:
-            async for u in db.users.find({"id": {"$in": owner_uid_list}}, {"_id": 0, "id": 1, "username": 1}):
-                owner_username_by_id[str(u["id"])] = str(u.get("username") or "?")
-        for gid, d in list(bg_owner_by_guard_uid.items()):
-            oid = d.get("owner_id")
-            if oid:
-                d["owner_username"] = owner_username_by_id.get(oid, "?")
-
-    bgs_by_owner: Dict[str, List[dict]] = {}
-    if target_ids:
-        for b in await db.bodyguards.find({"user_id": {"$in": target_ids}}, {"_id": 0}).to_list(500):
-            uid = b.get("user_id")
-            if uid:
-                bgs_by_owner.setdefault(uid, []).append(b)
     guard_ids = list(
         {
             b["bodyguard_user_id"]
@@ -894,16 +944,15 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
             if b.get("bodyguard_user_id")
         }
     )
-    guard_users: Dict[str, dict] = {}
-    if guard_ids:
-        async for u in db.users.find(
-            {"id": {"$in": guard_ids}},
-            {"_id": 0, "id": 1, "username": 1},
-        ):
-            guard_users[u["id"]] = u
+    # Independent: guard usernames vs bodyguard hire rows for NPC guards
+    (still_bg_tids, bg_owner_by_guard_uid), guard_users = await asyncio.gather(
+        _resolve_still_bg_and_owners(bg_target_ids),
+        _guard_username_map(guard_ids),
+    )
 
     delete_ids: List[str] = []
     bulk_ops: List[UpdateOne] = []
+    token_deferred: List[Tuple[int, str]] = []
 
     items = []
     ac_state = attacker_current_state or ""
@@ -1001,16 +1050,13 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
                 if own and own.get("owner_id"):
                     item["bodyguard_owner_username"] = own.get("owner_username") or "?"
                     item["bodyguard_is_mine"] = own["owner_id"] == str(attacker_id)
-        # Mint execute token only when the attacker can actually strike (same location). Reuse token already on the
-        # attack row (hot path every poll); only hit DB to mint when missing.
+        # Mint execute token only when the attacker can actually strike (same location). Reuse token on row; batch mint.
         if attack["status"] == "found" and can_attack:
             existing_tok = attack.get("execute_token")
             if isinstance(existing_tok, str) and len(existing_tok) >= 16:
                 item["execute_token"] = existing_tok
             else:
-                tok = await _ensure_execute_token(attacker_id, attack["id"])
-                if tok:
-                    item["execute_token"] = tok
+                token_deferred.append((len(items), attack["id"]))
         if attack["status"] == "found" and tid:
             target_bgs = bgs_by_owner.get(tid) or []
             if target_bgs:
@@ -1030,6 +1076,16 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
                 )
                 item["bodyguard_count"] = len(target_bgs)
         items.append(item)
+
+    if token_deferred:
+        minted = await asyncio.gather(
+            *[_ensure_execute_token(attacker_id, aid) for _, aid in token_deferred],
+            return_exceptions=True,
+        )
+        for (idx, _), tok in zip(token_deferred, minted):
+            if isinstance(tok, BaseException) or not tok:
+                continue
+            items[idx]["execute_token"] = tok
 
     if delete_ids:
         await db.attacks.delete_many({"attacker_id": attacker_id, "id": {"$in": delete_ids}})
