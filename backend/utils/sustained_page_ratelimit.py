@@ -23,7 +23,7 @@ SUSTAIN_SEC = 15.0
 COOLDOWN_MIN_SEC = 10
 COOLDOWN_MAX_SEC = 15
 COLL = "sustained_page_rl_state"
-# Staff-visible audit trail (replaces per-admin inbox spam from send_notification).
+# Staff-visible audit trail. Kill/attack also sends a throttled inbox to full admins (see _notify_admins_sustained_rl_429).
 ADMIN_RL_EVENTS_COLL = "admin_sustained_rl_events"
 
 # Jail-style profile: same math as jail (750ms max gap between requests in a chain, 22s wall-clock sustain).
@@ -104,6 +104,16 @@ def _sustain_sec(page_key: str) -> float:
     if page_key == PAGE_KEY_KILL:
         return _KILL_SUSTAIN_SEC
     return SUSTAIN_SEC
+
+
+def _kill_rl_inbox_detail(reason: str) -> str:
+    if reason == "sustained_fast_chain":
+        return (
+            f"Sustained fast attack requests (gaps under {int(_KILL_MAX_GAP_MS)}ms within the sustain window; cooldown issued)."
+        )
+    if reason == "cooldown_active":
+        return "Repeat requests while attack pacing cooldown was still active."
+    return reason
 
 
 _SETTINGS_FIELD_BY_PAGE = {
@@ -240,7 +250,7 @@ async def _notify_admins_sustained_rl_429(
     retry_after_sec: int,
     reason: str,
 ) -> None:
-    """Record sustained page RL 429 for Admin Safety log (no inbox — avoids spamming staff notifications). Best-effort; never raises."""
+    """Record sustained page RL 429 for Admin Safety log. For kill/attack, inbox full admins (same throttle as event). Best-effort; never raises."""
     if not user_id:
         return
     uname = "?"
@@ -265,6 +275,30 @@ async def _notify_admins_sustained_rl_429(
         await db[ADMIN_RL_EVENTS_COLL].insert_one(doc)
     except Exception:
         logger.exception("sustained RL admin event insert failed user_id=%s page_key=%s", user_id, page_key)
+
+    if page_key != PAGE_KEY_KILL:
+        return
+    try:
+        import server as srv
+
+        admin_ids = await srv._get_admin_user_ids(db)
+        if not admin_ids:
+            return
+        title = "Attack pacing limit triggered (429)"
+        detail = _kill_rl_inbox_detail(reason)
+        body = (
+            f"{detail}\n\n"
+            f"Player: {uname}\n"
+            f"User id: {user_id}\n"
+            f"Retry-after (approx): {int(max(0, retry_after_sec))}s"
+        )
+        for oid in admin_ids:
+            try:
+                await srv.send_notification(oid, title, body, "system", category="admin")
+            except Exception:
+                logger.exception("sustained kill RL inbox notify failed admin_id=%s", oid)
+    except Exception:
+        logger.exception("sustained kill RL inbox notify failed user_id=%s", user_id)
 
 
 async def sustained_page_rl_enabled_for(db, page_key: str) -> bool:

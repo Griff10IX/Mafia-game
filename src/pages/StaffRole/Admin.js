@@ -13211,8 +13211,8 @@ export default function Admin() {
         {!collapsed.sustainedPageRl && (
           <div className="p-3 space-y-4">
             <p className="text-[10px] text-mutedForeground font-heading leading-relaxed max-w-3xl">
-              When a scope is on, that area&apos;s authenticated GETs that form a <span className="text-foreground/90">fast chain</span> (gaps under ~750ms between requests) for ~22s wall-clock get a random 10–15s cooldown (HTTP 429, <code className="text-[9px] bg-muted px-1 rounded">Retry-After</code>). Each scope is independent. Off by default. Toggles apply immediately and are included when you use Save settings in Admin display.{' '}
-              <span className="text-foreground/80">Kill / attack</span> uses a <span className="text-foreground/90">100ms</span> gap and ~15s sustain (stricter than jail-style).
+              When a scope is on, that area&apos;s authenticated requests that form a <span className="text-foreground/90">fast chain</span> get a random 10–15s cooldown (HTTP 429, <code className="text-[9px] bg-muted px-1 rounded">Retry-After</code>). Jail-style scopes: gaps under ~750ms for ~22s. Each scope is independent. Kill/attack defaults <span className="text-foreground/90">on</span> when unset in DB; other scopes off until enabled. Toggles apply immediately and are included when you use Save settings in Admin display.{' '}
+              <span className="text-foreground/80">Kill / attack POSTs</span> use a <span className="text-foreground/90">~300ms</span> gap chain and ~12s sustain (then cooldown).
             </p>
             <p className="text-[10px] text-amber-400/90 font-heading leading-relaxed max-w-3xl rounded border border-amber-500/25 bg-amber-500/5 px-2 py-1.5">
               <span className="font-bold">Normal UI:</span> gaps above the threshold reset the chain, so typical polling (e.g. ~1Hz) and page loads usually <span className="italic">do not</span> trigger this. It targets scripted or click-spam bursts.
