@@ -100,11 +100,12 @@ const HONOUR_BOARD_FALLBACK = {
   'Most Points Spent': 'points_spent',
 };
 
-function honourLeaderboardTo(h) {
+function honourLeaderboardTo(h, isDead = false) {
   const board = h?.board || HONOUR_BOARD_FALLBACK[h?.label];
   const rank = Number(h?.rank);
   if (!board || !Number.isFinite(rank) || rank < 1) return '/game/leaderboard';
-  return `/game/leaderboard?period=alltime&board=${encodeURIComponent(board)}&rank=${encodeURIComponent(rank)}`;
+  const deadParam = isDead ? '&dead=1' : '';
+  return `/game/leaderboard?period=alltime&board=${encodeURIComponent(board)}&rank=${encodeURIComponent(rank)}${deadParam}`;
 }
 
 const STAFF_ADMIN_HOME = '/staffrole/admin/overview';
@@ -744,7 +745,7 @@ const ProfileInfoCard = ({
                     return (
                       <Link
                         key={i}
-                        to={honourLeaderboardTo(h)}
+                        to={honourLeaderboardTo(h, !!profile?.is_dead)}
                         title={`${h.label} — #${h.rank} on leaderboards`}
                         className={`flex items-center gap-0.5 px-1 py-0.5 rounded border text-[8px] font-heading leading-tight min-w-0 w-full transition-colors hover:border-primary/40 hover:bg-primary/10 ${
                           top10 ? 'border-primary/20 bg-primary/5' : 'border-zinc-500/30 bg-zinc-500/5'
@@ -971,7 +972,7 @@ const ProfileInfoCard = ({
   );
 };
 
-const HonoursCard = ({ honours }) => (
+const HonoursCard = ({ honours, isDead = false }) => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
@@ -999,7 +1000,7 @@ const HonoursCard = ({ honours }) => (
             return (
               <Link
                 key={i}
-                to={honourLeaderboardTo(h)}
+                to={honourLeaderboardTo(h, isDead)}
                 title={`${h.label} — #${h.rank} on leaderboards`}
                 className={`prof-row flex items-center gap-2 rounded-md border px-2.5 py-1.5 transition-colors hover:border-primary/40 hover:bg-primary/10 ${
                   top10 ? 'border-primary/20 bg-primary/5' : 'border-zinc-500/20 bg-zinc-500/5'

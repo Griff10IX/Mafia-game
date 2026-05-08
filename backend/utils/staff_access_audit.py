@@ -1,7 +1,6 @@
 # Log staff-gated API denials and sensitive auth attempts; inbox-notify admins and moderators (throttled).
 import logging
 import os
-import re
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Any, Callable, Coroutine, Optional
@@ -16,14 +15,31 @@ logger = logging.getLogger(__name__)
 COLLECTION = "staff_access_denials"
 NOTIFY_COOLDOWN_SEC = int((os.environ.get("STAFF_ACCESS_DENIAL_NOTIFY_COOLDOWN_SEC") or "900").strip() or "900")
 
+# Explicit staff tool API families (avoid broad "/admin" matching that can catch non-critical admin-named endpoints).
+_STAFF_TOOL_API_PREFIXES = (
+    "/api/admin",
+    "/api/help-desk/admin-message",
+    "/api/notifications/admin",
+    "/api/casino/mp-poker/tournaments/admin-settings",
+)
+_STAFF_TOOL_API_EXACT_EXCLUDE = frozenset(
+    {
+        # Client-side toast telemetry can be high-volume/noisy; do not emit staff denial inbox alerts for it.
+        "/api/admin/toast-events/ingest",
+    }
+)
+
 
 def is_staff_tool_api_path(path: str) -> bool:
-    """True if URL path is a staff-gated API route we audit on 403 (mod/admin tools + staff portal unlock)."""
+    """True if URL path is in an explicit staff-gated API family (plus staff portal unlock helper)."""
     raw = (path or "").split("?")[0].rstrip("/") or ""
     if not raw.startswith("/api/"):
         return False
-    if re.search(r"/admin(?:/|$)", raw):
-        return True
+    if raw in _STAFF_TOOL_API_EXACT_EXCLUDE:
+        return False
+    for pfx in _STAFF_TOOL_API_PREFIXES:
+        if raw == pfx or raw.startswith(f"{pfx}/"):
+            return True
     # Staff-only auth helpers (same abuse surface as admin tools)
     if raw == "/api/auth/staff-portal-unlock":
         return True

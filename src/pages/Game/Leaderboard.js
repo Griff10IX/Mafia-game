@@ -158,12 +158,14 @@ export default function Leaderboard() {
     if (deepLinkConsumedRef.current) return;
     const board = (searchParams.get('board') || '').trim();
     const rankRaw = searchParams.get('rank');
+    const deadRaw = (searchParams.get('dead') || '').trim().toLowerCase();
+    const deepLinkDead = deadRaw === '1' || deadRaw === 'true' || deadRaw === 'dead';
     const rank = rankRaw != null ? parseInt(String(rankRaw), 10) : NaN;
     if (!board || !LB_BOARD_KEYS.has(board) || !Number.isFinite(rank) || rank < 1) return;
     deepLinkConsumedRef.current = true;
     const needTop = TOP_OPTIONS.find((n) => n >= rank) ?? 100;
     setPeriodPersist('alltime');
-    setViewMode('alive');
+    setViewMode(deepLinkDead ? 'dead' : 'alive');
     setTopLimit((prev) => Math.max(prev, needTop));
     setPendingHighlight({ board, rank });
   }, [searchParams, setPeriodPersist]);
