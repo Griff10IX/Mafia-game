@@ -301,6 +301,24 @@ async def _notify_admins_sustained_rl_429(
         logger.exception("sustained kill RL inbox notify failed user_id=%s", user_id)
 
 
+def _kill_sustain_setting_enabled(val: Any) -> bool:
+    """Kill/attack sustained RL: on when unset. Coerce Mongo/primitive types (avoid bool('false') == True)."""
+    if val is None:
+        return True
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, (int, float)):
+        return val != 0
+    if isinstance(val, str):
+        s = val.strip().lower()
+        if s in ("false", "0", "no", "off", ""):
+            return False
+        if s in ("true", "1", "yes", "on"):
+            return True
+        return False
+    return bool(val)
+
+
 async def sustained_page_rl_enabled_for(db, page_key: str) -> bool:
     field = _SETTINGS_FIELD_BY_PAGE.get(page_key)
     if not field:
@@ -310,9 +328,7 @@ async def sustained_page_rl_enabled_for(db, page_key: str) -> bool:
         return page_key == PAGE_KEY_KILL
     val = doc.get(field)
     if page_key == PAGE_KEY_KILL:
-        if val is None:
-            return True
-        return bool(val)
+        return _kill_sustain_setting_enabled(val)
     return bool(val)
 
 

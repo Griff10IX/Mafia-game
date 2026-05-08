@@ -1236,7 +1236,8 @@ export default function Admin() {
   const [sustainedPageRlJailEnabled, setSustainedPageRlJailEnabled] = useState(false);
   const [sustainedPageRlEntEnabled, setSustainedPageRlEntEnabled] = useState(false);
   const [sustainedPageRlForumEnabled, setSustainedPageRlForumEnabled] = useState(false);
-  const [sustainedPageRlKillEnabled, setSustainedPageRlKillEnabled] = useState(false);
+  // Match server: kill/attack sustained RL defaults ON when unset in game_settings.main
+  const [sustainedPageRlKillEnabled, setSustainedPageRlKillEnabled] = useState(true);
   const [sustainedPageRlGtaEnabled, setSustainedPageRlGtaEnabled] = useState(false);
   const [sustainedPageRlCrimesEnabled, setSustainedPageRlCrimesEnabled] = useState(false);
   const [sustainedPageRlOcEnabled, setSustainedPageRlOcEnabled] = useState(false);
@@ -2119,7 +2120,7 @@ export default function Admin() {
       setSustainedPageRlJailEnabled(!!res.data?.sustained_page_rl_jail_enabled);
       setSustainedPageRlEntEnabled(!!res.data?.sustained_page_rl_entertainer_enabled);
       setSustainedPageRlForumEnabled(!!res.data?.sustained_page_rl_forum_enabled);
-      setSustainedPageRlKillEnabled(!!res.data?.sustained_page_rl_kill_enabled);
+      setSustainedPageRlKillEnabled(res.data?.sustained_page_rl_kill_enabled !== false);
       setSustainedPageRlGtaEnabled(!!res.data?.sustained_page_rl_gta_enabled);
       setSustainedPageRlCrimesEnabled(!!res.data?.sustained_page_rl_crimes_enabled);
       setSustainedPageRlOcEnabled(!!res.data?.sustained_page_rl_oc_enabled);
@@ -2212,7 +2213,7 @@ export default function Admin() {
       setSustainedPageRlJailEnabled(false);
       setSustainedPageRlEntEnabled(false);
       setSustainedPageRlForumEnabled(false);
-      setSustainedPageRlKillEnabled(false);
+      setSustainedPageRlKillEnabled(true);
       setSustainedPageRlGtaEnabled(false);
       setSustainedPageRlCrimesEnabled(false);
       setSustainedPageRlOcEnabled(false);
@@ -2427,7 +2428,7 @@ export default function Admin() {
         setSustainedPageRlForumEnabled(!!res.data.sustained_page_rl_forum_enabled);
       }
       if (res.data?.sustained_page_rl_kill_enabled !== undefined) {
-        setSustainedPageRlKillEnabled(!!res.data.sustained_page_rl_kill_enabled);
+        setSustainedPageRlKillEnabled(res.data.sustained_page_rl_kill_enabled !== false);
       }
       if (res.data?.sustained_page_rl_gta_enabled !== undefined) {
         setSustainedPageRlGtaEnabled(!!res.data.sustained_page_rl_gta_enabled);
@@ -2599,7 +2600,7 @@ export default function Admin() {
     try {
       const res = await api.patch('/admin/settings', { sustained_page_rl_kill_enabled: !!enabled });
       if (res.data?.sustained_page_rl_kill_enabled !== undefined) {
-        setSustainedPageRlKillEnabled(!!res.data.sustained_page_rl_kill_enabled);
+        setSustainedPageRlKillEnabled(res.data.sustained_page_rl_kill_enabled !== false);
       }
       toast.success(enabled ? 'Kill / attack pacing limiter enabled' : 'Kill / attack pacing limiter disabled');
     } catch (e) {
@@ -13295,7 +13296,7 @@ export default function Admin() {
             <div className="space-y-1 rounded border border-zinc-700/40 p-2">
               <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Kill / attack</p>
               <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                All <code className="text-[9px] bg-muted px-1 rounded">/attack/*</code> routes (search, status, list, travel, execute, timeline, etc.). Uses a <span className="text-foreground/90">100ms</span> gap threshold (other scopes use ~500ms).
+                Costly <code className="text-[9px] bg-muted px-1 rounded">/attack/*</code> <span className="text-foreground/85">POST</span>s only (search, travel, execute, bullets/calc, delete). Kill chain: gaps <span className="text-foreground/90">300ms</span> count as one fast streak → ~12s wall-clock then cooldown. Jail-style scopes ~750ms; other default scopes ~500ms. GETs (list, status, timeline, …) are not paced here.
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <button

@@ -74,6 +74,7 @@ from utils.bank_economy_settings import (
 )
 from utils.email_sender import is_email_configured, send_inactivity_reminder_email
 from utils.staff_portal import staff_portal_password_configured, staff_portal_session_minutes
+from utils.sustained_page_ratelimit import _kill_sustain_setting_enabled
 
 # Cloudflare API config for bot blocking toggle
 CF_ZONE_ID = os.environ.get("CF_ZONE_ID", "")
@@ -6985,8 +6986,9 @@ def register(router):
         sustained_page_rl_jail_enabled = bool(main_doc.get("sustained_page_rl_jail_enabled")) if main_doc else False
         sustained_page_rl_entertainer_enabled = bool(main_doc.get("sustained_page_rl_entertainer_enabled")) if main_doc else False
         sustained_page_rl_forum_enabled = bool(main_doc.get("sustained_page_rl_forum_enabled")) if main_doc else False
-        _raw_kill_rl = main_doc.get("sustained_page_rl_kill_enabled") if main_doc else None
-        sustained_page_rl_kill_enabled = True if _raw_kill_rl is None else bool(_raw_kill_rl)
+        sustained_page_rl_kill_enabled = (
+            _kill_sustain_setting_enabled(main_doc.get("sustained_page_rl_kill_enabled")) if main_doc else True
+        )
         sustained_page_rl_gta_enabled = bool(main_doc.get("sustained_page_rl_gta_enabled")) if main_doc else False
         sustained_page_rl_crimes_enabled = bool(main_doc.get("sustained_page_rl_crimes_enabled")) if main_doc else False
         sustained_page_rl_oc_enabled = bool(main_doc.get("sustained_page_rl_oc_enabled")) if main_doc else False
@@ -7478,8 +7480,9 @@ def register(router):
         sustained_page_rl_jail_enabled = bool(main_doc.get("sustained_page_rl_jail_enabled")) if main_doc else False
         sustained_page_rl_entertainer_enabled = bool(main_doc.get("sustained_page_rl_entertainer_enabled")) if main_doc else False
         sustained_page_rl_forum_enabled = bool(main_doc.get("sustained_page_rl_forum_enabled")) if main_doc else False
-        _raw_kill_rl = main_doc.get("sustained_page_rl_kill_enabled") if main_doc else None
-        sustained_page_rl_kill_enabled = True if _raw_kill_rl is None else bool(_raw_kill_rl)
+        sustained_page_rl_kill_enabled = (
+            _kill_sustain_setting_enabled(main_doc.get("sustained_page_rl_kill_enabled")) if main_doc else True
+        )
         sustained_page_rl_gta_enabled = bool(main_doc.get("sustained_page_rl_gta_enabled")) if main_doc else False
         sustained_page_rl_crimes_enabled = bool(main_doc.get("sustained_page_rl_crimes_enabled")) if main_doc else False
         sustained_page_rl_oc_enabled = bool(main_doc.get("sustained_page_rl_oc_enabled")) if main_doc else False

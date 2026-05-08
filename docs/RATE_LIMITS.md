@@ -14,15 +14,15 @@ Legacy Mongo collections (`rate_limit_clicks`, `endpoint_rl_violations`) and ind
 
 ## Sustained page pacing (optional)
 
-- **Behavior:** [`backend/utils/sustained_page_ratelimit.py`](../backend/utils/sustained_page_ratelimit.py) — per-user, per-scope gap-based streak. When enabled for a scope, consecutive authenticated requests spaced **under the scope’s max gap** for **~15s wall time** trigger a **random 10–15s** cooldown (`429`, `Retry-After`, JSON `cooldown_seconds`). Scopes are independent (separate state per user per scope). Default max gap is **500ms**; **kill / attack** uses **100ms** (stricter).
+- **Behavior:** [`backend/utils/sustained_page_ratelimit.py`](../backend/utils/sustained_page_ratelimit.py) — per-user, per-scope gap-based streak. When enabled for a scope, consecutive authenticated requests spaced **under the scope’s max gap** for the scope’s **sustain window** trigger a **random 10–15s** cooldown (`429`, `Retry-After`, JSON `cooldown_seconds`). Scopes are independent (separate state per user per scope). Default max gap (non–jail-style scopes) is **500ms**; **jail-style** scopes use **~750ms / ~22s**; **kill / attack** uses **300ms** gap with **~12s** sustain (then cooldown).
 - **Not triggered by normal jail browsing or F5:** the jail UI refreshes `/jail/status` about every **1s** and `/jail/players` about every **3s** (see `src/pages/Crime/Jail.js`). Any gap **≥ 500ms** resets the “fast” chain, so typical polling and full page reloads stay under the threshold. This feature is aimed at **very fast repeated API calls** (scripts / autoclickers), not at limiting refresh or the built-in poll interval.
 - **Scopes & wiring:**
   - **Jail** — [`backend/routers/crime/jail.py`](../backend/routers/crime/jail.py) (player jail actions).
   - **Forum** — [`backend/routers/social/forum.py`](../backend/routers/social/forum.py) (`/forum/topics…` routes).
   - **Entertainer** — [`backend/routers/game/entertainer.py`](../backend/routers/game/entertainer.py) (player entertainer APIs under `/forum/entertainer/…` except staff **`/forum/entertainer/admin/*`**, **`/forum/entertainer/find-word/admin/start`**, and **`/forum/entertainer/games/{id}/roll`**).
-  - **Kill / attack** — [`backend/routers/kill/attack.py`](../backend/routers/kill/attack.py) (all **`/attack/*`** routes: search, status, list, travel, execute, timeline, etc.). **100ms** max gap (not 500ms).
+  - **Kill / attack** — [`backend/routers/kill/attack.py`](../backend/routers/kill/attack.py): **POST** routes only (e.g. search, travel, execute, bullets/calc, delete). **GET** list/status/timeline/inflation are **not** paced here. **300ms** max gap, **~12s** sustain.
 - **State:** Mongo collection `sustained_page_rl_state` (document `_id` = `{user_id}:{page_key}` with `page_key` one of `jail`, `forum`, `entertainer`, `kill`).
-- **Settings:** `game_settings` document `_id: "main"` — booleans (default off when unset):
+- **Settings:** `game_settings` document `_id: "main"` — booleans (default **off** when unset for jail/forum/entertainer; **kill defaults on** when the flag is missing):
   - `sustained_page_rl_jail_enabled`
   - `sustained_page_rl_forum_enabled`
   - `sustained_page_rl_entertainer_enabled`
