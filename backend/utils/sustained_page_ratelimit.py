@@ -367,6 +367,20 @@ async def check_sustained_page_rl(db, user_id: str, page_key: str) -> None:
     if not await sustained_page_rl_enabled_for(db, page_key):
         return
 
+    max_gap_ms = float(_max_gap_ms(page_key))
+    sustain_sec = float(_sustain_sec(page_key))
+    if page_key == PAGE_KEY_KILL:
+        try:
+            gs = await db.game_settings.find_one(
+                {"_id": "main"},
+                {"sustained_page_rl_kill_max_gap_ms": 1, "sustained_page_rl_kill_sustain_sec": 1},
+            )
+        except Exception:
+            gs = None
+        if gs:
+            max_gap_ms = float(clamp_kill_rl_max_gap_ms(gs.get("sustained_page_rl_kill_max_gap_ms")))
+            sustain_sec = float(clamp_kill_rl_sustain_sec(gs.get("sustained_page_rl_kill_sustain_sec")))
+
     now = _now()
     doc_id = f"{user_id}:{page_key}"
     doc = await db[COLL].find_one({"_id": doc_id}) or {}
