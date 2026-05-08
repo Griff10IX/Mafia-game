@@ -4,7 +4,7 @@ from typing import List, Optional
 import uuid
 import secrets
 _rng = secrets.SystemRandom()
-from fastapi import Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
 from pymongo import ReturnDocument
 
@@ -19,6 +19,7 @@ from utils.entertainer_service import (
 from routers.kill.armoury import TOKEN_TYPES, TOKEN_CONFIG
 from utils.point_provenance import log_points_event
 from utils.sustained_page_ratelimit import PAGE_KEY_ENTERTAINER, check_sustained_page_rl
+from utils.staff_portal import assert_staff_portal_unlocked
 
 
 async def _entertainer_sustained_rl_user(current_user: dict = Depends(get_current_user)):
@@ -1314,7 +1315,11 @@ async def guess_hangman(
 
 
 # ---------- Manual roll: admin or creator (for manual_roll games) ----------
-async def admin_roll_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
+async def admin_roll_game(
+    game_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user_verified),
+):
     """Force settle (roll) an open game now. Admin can always roll; creator can roll if game is manual_roll."""
     game = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
     if not game:
@@ -1322,6 +1327,12 @@ async def admin_roll_game(game_id: str, current_user: dict = Depends(get_current
     if game.get("status") == "completed":
         raise HTTPException(status_code=400, detail="Game already completed")
     is_admin = _is_admin(current_user)
+    if is_admin:
+        assert_staff_portal_unlocked(
+            str(current_user.get("id") or ""),
+            request.headers.get("X-Staff-Portal-Token"),
+            request.headers.get("X-Staff-Portal-Device-Id"),
+        )
     is_creator = game.get("creator_id") == current_user["id"] and game.get("creator_id") != "system"
     if not is_admin and not (is_creator and game.get("manual_roll")):
         raise HTTPException(status_code=403, detail="Only the game creator can roll manual games; admins can roll any game.")

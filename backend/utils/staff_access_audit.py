@@ -21,6 +21,13 @@ _STAFF_TOOL_API_PREFIXES = (
     "/api/help-desk/admin-message",
     "/api/notifications/admin",
     "/api/casino/mp-poker/tournaments/admin-settings",
+    # Admin handlers outside routers/admin/admin.py (would otherwise skip staff-portal middleware).
+    "/api/loot-box/admin",
+    "/api/store/points-transfers/admin",
+    "/api/forum/entertainer/admin",
+    "/api/forum/entertainer/find-word/admin",
+    "/api/racing/admin",
+    "/api/image-host/admin",
 )
 _STAFF_TOOL_API_EXACT_EXCLUDE = frozenset(
     {

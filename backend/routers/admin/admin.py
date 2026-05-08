@@ -74,7 +74,11 @@ from utils.bank_economy_settings import (
 )
 from utils.email_sender import is_email_configured, send_inactivity_reminder_email
 from utils.staff_portal import staff_portal_password_configured, staff_portal_session_minutes
-from utils.sustained_page_ratelimit import _kill_sustain_setting_enabled
+from utils.sustained_page_ratelimit import (
+    _kill_sustain_setting_enabled,
+    clamp_kill_rl_max_gap_ms,
+    clamp_kill_rl_sustain_sec,
+)
 
 # Cloudflare API config for bot blocking toggle
 CF_ZONE_ID = os.environ.get("CF_ZONE_ID", "")
@@ -196,6 +200,8 @@ class AdminSettingsUpdate(BaseModel):
     sustained_page_rl_entertainer_enabled: Optional[bool] = None  # Entertainer forum API (player routes)
     sustained_page_rl_forum_enabled: Optional[bool] = None  # Forum API
     sustained_page_rl_kill_enabled: Optional[bool] = None  # Kill / attack `/attack/*` POSTs (~300ms gap chain; ~12s sustain→cooldown); default on if unset
+    sustained_page_rl_kill_max_gap_ms: Optional[float] = None  # Max gap (ms) between kill POSTs in a fast chain; clamped 50–2000; default 300 when unset
+    sustained_page_rl_kill_sustain_sec: Optional[float] = None  # Wall-clock seconds in chain before cooldown; clamped 3–120; default 12 when unset
     sustained_page_rl_gta_enabled: Optional[bool] = None  # GTA GETs (jail-style math)
     sustained_page_rl_crimes_enabled: Optional[bool] = None  # Crimes list/stats/logs GETs (jail-style)
     sustained_page_rl_oc_enabled: Optional[bool] = None  # OC config/status GETs (jail-style)
@@ -6989,6 +6995,12 @@ def register(router):
         sustained_page_rl_kill_enabled = (
             _kill_sustain_setting_enabled(main_doc.get("sustained_page_rl_kill_enabled")) if main_doc else True
         )
+        sustained_page_rl_kill_max_gap_ms = clamp_kill_rl_max_gap_ms(
+            main_doc.get("sustained_page_rl_kill_max_gap_ms") if main_doc else None
+        )
+        sustained_page_rl_kill_sustain_sec = clamp_kill_rl_sustain_sec(
+            main_doc.get("sustained_page_rl_kill_sustain_sec") if main_doc else None
+        )
         sustained_page_rl_gta_enabled = bool(main_doc.get("sustained_page_rl_gta_enabled")) if main_doc else False
         sustained_page_rl_crimes_enabled = bool(main_doc.get("sustained_page_rl_crimes_enabled")) if main_doc else False
         sustained_page_rl_oc_enabled = bool(main_doc.get("sustained_page_rl_oc_enabled")) if main_doc else False
@@ -7041,6 +7053,8 @@ def register(router):
             "sustained_page_rl_entertainer_enabled": sustained_page_rl_entertainer_enabled,
             "sustained_page_rl_forum_enabled": sustained_page_rl_forum_enabled,
             "sustained_page_rl_kill_enabled": sustained_page_rl_kill_enabled,
+            "sustained_page_rl_kill_max_gap_ms": sustained_page_rl_kill_max_gap_ms,
+            "sustained_page_rl_kill_sustain_sec": sustained_page_rl_kill_sustain_sec,
             "sustained_page_rl_gta_enabled": sustained_page_rl_gta_enabled,
             "sustained_page_rl_crimes_enabled": sustained_page_rl_crimes_enabled,
             "sustained_page_rl_oc_enabled": sustained_page_rl_oc_enabled,
@@ -7183,6 +7197,20 @@ def register(router):
             await db.game_settings.update_one(
                 {"_id": "main"},
                 {"$set": {"sustained_page_rl_kill_enabled": bool(body.sustained_page_rl_kill_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_kill_max_gap_ms is not None:
+            gap = clamp_kill_rl_max_gap_ms(body.sustained_page_rl_kill_max_gap_ms)
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_kill_max_gap_ms": gap}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_kill_sustain_sec is not None:
+            sec = clamp_kill_rl_sustain_sec(body.sustained_page_rl_kill_sustain_sec)
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_kill_sustain_sec": sec}},
                 upsert=True,
             )
         if body.sustained_page_rl_gta_enabled is not None:
@@ -7483,6 +7511,12 @@ def register(router):
         sustained_page_rl_kill_enabled = (
             _kill_sustain_setting_enabled(main_doc.get("sustained_page_rl_kill_enabled")) if main_doc else True
         )
+        sustained_page_rl_kill_max_gap_ms = clamp_kill_rl_max_gap_ms(
+            main_doc.get("sustained_page_rl_kill_max_gap_ms") if main_doc else None
+        )
+        sustained_page_rl_kill_sustain_sec = clamp_kill_rl_sustain_sec(
+            main_doc.get("sustained_page_rl_kill_sustain_sec") if main_doc else None
+        )
         sustained_page_rl_gta_enabled = bool(main_doc.get("sustained_page_rl_gta_enabled")) if main_doc else False
         sustained_page_rl_crimes_enabled = bool(main_doc.get("sustained_page_rl_crimes_enabled")) if main_doc else False
         sustained_page_rl_oc_enabled = bool(main_doc.get("sustained_page_rl_oc_enabled")) if main_doc else False
@@ -7529,6 +7563,8 @@ def register(router):
             "sustained_page_rl_entertainer_enabled": sustained_page_rl_entertainer_enabled,
             "sustained_page_rl_forum_enabled": sustained_page_rl_forum_enabled,
             "sustained_page_rl_kill_enabled": sustained_page_rl_kill_enabled,
+            "sustained_page_rl_kill_max_gap_ms": sustained_page_rl_kill_max_gap_ms,
+            "sustained_page_rl_kill_sustain_sec": sustained_page_rl_kill_sustain_sec,
             "sustained_page_rl_gta_enabled": sustained_page_rl_gta_enabled,
             "sustained_page_rl_crimes_enabled": sustained_page_rl_crimes_enabled,
             "sustained_page_rl_oc_enabled": sustained_page_rl_oc_enabled,

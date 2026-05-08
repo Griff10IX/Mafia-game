@@ -2430,9 +2430,9 @@ const NoFamilyView = ({
 // ============================================================================
 
 export default function FamilyPage() {
-  const [families, setFamilies] = useState([]);
-  const [myFamily, setMyFamily] = useState(null);
-  const [config, setConfig] = useState(null);
+  const [families, setFamilies] = useState(() => getFamiliesPrefetch()?.families ?? []);
+  const [myFamily, setMyFamily] = useState(() => getFamiliesPrefetch()?.myFamily ?? null);
+  const [config, setConfig] = useState(() => getFamiliesPrefetch()?.config ?? null);
   const [activeTab, setActiveTab] = useState('rackets');
   const [createName, setCreateName] = useState('');
   const [createTag, setCreateTag] = useState('');
@@ -2455,14 +2455,14 @@ export default function FamilyPage() {
   const [compoundWithdrawCash, setCompoundWithdrawCash] = useState('');
   const [compoundWithdrawPoints, setCompoundWithdrawPoints] = useState('');
   const [compoundWithdrawLootPieces, setCompoundWithdrawLootPieces] = useState('');
-  const [warStats, setWarStats] = useState(null);
-  const [warHistory, setWarHistory] = useState([]);
+  const [warStats, setWarStats] = useState(() => getFamiliesPrefetch()?.warStats ?? null);
+  const [warHistory, setWarHistory] = useState(() => getFamiliesPrefetch()?.warHistory ?? []);
   const [showWarModal, setShowWarModal] = useState(false);
   const [selectedWarIndex, setSelectedWarIndex] = useState(0);
-  const [event, setEvent] = useState(null);
-  const [eventsEnabled, setEventsEnabled] = useState(false);
+  const [event, setEvent] = useState(() => getFamiliesPrefetch()?.event ?? null);
+  const [eventsEnabled, setEventsEnabled] = useState(() => !!getFamiliesPrefetch()?.eventsEnabled);
   const [, setTick] = useState(0);
-  const [racketAttackTargets, setRacketAttackTargets] = useState([]);
+  const [racketAttackTargets, setRacketAttackTargets] = useState(() => getFamiliesPrefetch()?.racketAttackTargets ?? []);
   const [racketAttackLoading, setRacketAttackLoading] = useState(null);
   const [collectAllRacketsLoading, setCollectAllRacketsLoading] = useState(false);
   const [targetsRefreshing, setTargetsRefreshing] = useState(false);
@@ -2473,23 +2473,10 @@ export default function FamilyPage() {
   const [detailsWarId, setDetailsWarId] = useState(null);
   const [stateTakeoverLoading, setStateTakeoverLoading] = useState(false);
   const [relinquishHoSLoading, setRelinquishHoSLoading] = useState(false);
-  const [vaultTransactions, setVaultTransactions] = useState([]);
-  const [vaultTxTotal, setVaultTxTotal] = useState(0);
-
-  useEffect(() => {
-    const cached = getFamiliesPrefetch();
-    if (!cached) return;
-    setFamilies(cached.families ?? []);
-    setMyFamily(cached.myFamily ?? null);
-    setConfig(cached.config ?? null);
-    setWarHistory(cached.warHistory ?? []);
-    setEvent(cached.event ?? null);
-    setEventsEnabled(!!cached.eventsEnabled);
-    setWarStats(cached.warStats ?? null);
-    setRacketAttackTargets(cached.racketAttackTargets ?? []);
-    setVaultTransactions(cached.vaultTransactions ?? []);
-    setVaultTxTotal(cached.vaultTxTotal ?? 0);
-  }, []);
+  const [vaultTransactions, setVaultTransactions] = useState(() => getFamiliesPrefetch()?.vaultTransactions ?? []);
+  const [vaultTxTotal, setVaultTxTotal] = useState(() => getFamiliesPrefetch()?.vaultTxTotal ?? 0);
+  /** False until we have a /families/my-shaped payload (prefetch or first fetch). Avoids one frame of join/create UI while myFamily is still null. */
+  const [familyMembershipResolved, setFamilyMembershipResolved] = useState(() => getFamiliesPrefetch()?.myFamily != null);
 
   const family = myFamily?.family;
   const members = myFamily?.members || [];
@@ -2596,6 +2583,7 @@ export default function FamilyPage() {
         vaultTxTotal: nextVaultTxTotal,
       });
     } catch (e) { toast.error(apiDetail(e)); }
+    finally { setFamilyMembershipResolved(true); }
   }, []);
 
   const fetchRacketAttackTargets = useCallback(async () => {
@@ -3308,6 +3296,11 @@ export default function FamilyPage() {
             </div>
           </div>
         </>
+      ) : !familyMembershipResolved ? (
+        <div className={`${styles.panel} rounded-xl overflow-hidden fam-fade-in mobile-panel px-4 py-12 flex flex-col items-center justify-center gap-3`}>
+          <RefreshCw size={22} className="text-primary/60 animate-spin" aria-hidden />
+          <p className="text-[11px] text-zinc-500 font-heading uppercase tracking-widest text-center">Loading families…</p>
+        </div>
       ) : (
         <NoFamilyView
           families={families}

@@ -260,7 +260,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Casino per-game max bets', categoryId: 'admin-gameworld', collapseKey: 'casinoMaxBets', keywords: ['casino', 'max bet', 'per game', 'slots', 'blackjack', 'roulette'] },
   { label: 'Casinos on dead owners', categoryId: 'admin-gameworld', collapseKey: 'casinosDeadOwners', keywords: ['dead', 'casino', 'ownership', 'stuck', 'invalid', 'takeover'] },
   { label: 'Admin display & signup', categoryId: 'admin-gameworld', collapseKey: 'adminDisplay', keywords: ['admin', 'display', 'colour', 'color', 'online', 'email', 'verification', 'vpn', 'proxy', 'user agent', 'signup'], adminOnly: true },
-  { label: 'Sustained page pacing (jail, forum, entertainer, kill)', categoryId: 'admin-gameworld', collapseKey: 'sustainedPageRl', keywords: ['sustained', 'pacing', 'rate', 'forum', 'entertainer', 'jail', 'kill', 'attack', '429', 'cooldown', 'bot'], adminOnly: true },
+  { label: 'Sustained page pacing (jail, forum, entertainer, kill)', categoryId: 'admin-gameworld', collapseKey: 'sustainedPageRl', keywords: ['sustained', 'pacing', 'rate', 'forum', 'entertainer', 'jail', 'kill', 'attack', '429', 'cooldown', 'bot', 'gap', 'sustain'], adminOnly: true },
   { label: 'Swiss & interest bank limits', categoryId: 'admin-gameworld', collapseKey: 'bankEconomy', keywords: ['swiss', 'interest', 'bank', 'limit', 'deposit', 'maturity', 'principal'], adminOnly: true },
   { label: 'Launch & login lock', categoryId: 'admin-gameworld', collapseKey: 'launchSettings', keywords: ['login', 'lock', 'launch', 'store', 'preorder', 'preregister', 'banner', 'landing'], adminOnly: true },
   { label: 'Maintenance banner', categoryId: 'admin-gameworld', collapseKey: 'maintenanceBanner', keywords: ['maintenance', 'banner', 'downtime'] },
@@ -1238,6 +1238,9 @@ export default function Admin() {
   const [sustainedPageRlForumEnabled, setSustainedPageRlForumEnabled] = useState(false);
   // Match server: kill/attack sustained RL defaults ON when unset in game_settings.main
   const [sustainedPageRlKillEnabled, setSustainedPageRlKillEnabled] = useState(true);
+  const [sustainedPageRlKillMaxGapMs, setSustainedPageRlKillMaxGapMs] = useState('300');
+  const [sustainedPageRlKillSustainSec, setSustainedPageRlKillSustainSec] = useState('12');
+  const [sustainedKillRlTuningSaving, setSustainedKillRlTuningSaving] = useState(false);
   const [sustainedPageRlGtaEnabled, setSustainedPageRlGtaEnabled] = useState(false);
   const [sustainedPageRlCrimesEnabled, setSustainedPageRlCrimesEnabled] = useState(false);
   const [sustainedPageRlOcEnabled, setSustainedPageRlOcEnabled] = useState(false);
@@ -2121,6 +2124,14 @@ export default function Admin() {
       setSustainedPageRlEntEnabled(!!res.data?.sustained_page_rl_entertainer_enabled);
       setSustainedPageRlForumEnabled(!!res.data?.sustained_page_rl_forum_enabled);
       setSustainedPageRlKillEnabled(res.data?.sustained_page_rl_kill_enabled !== false);
+      {
+        const g = res.data?.sustained_page_rl_kill_max_gap_ms;
+        const s = res.data?.sustained_page_rl_kill_sustain_sec;
+        const gn = Number(g);
+        const sn = Number(s);
+        setSustainedPageRlKillMaxGapMs(Number.isFinite(gn) ? String(gn) : '300');
+        setSustainedPageRlKillSustainSec(Number.isFinite(sn) ? String(sn) : '12');
+      }
       setSustainedPageRlGtaEnabled(!!res.data?.sustained_page_rl_gta_enabled);
       setSustainedPageRlCrimesEnabled(!!res.data?.sustained_page_rl_crimes_enabled);
       setSustainedPageRlOcEnabled(!!res.data?.sustained_page_rl_oc_enabled);
@@ -2214,6 +2225,8 @@ export default function Admin() {
       setSustainedPageRlEntEnabled(false);
       setSustainedPageRlForumEnabled(false);
       setSustainedPageRlKillEnabled(true);
+      setSustainedPageRlKillMaxGapMs('300');
+      setSustainedPageRlKillSustainSec('12');
       setSustainedPageRlGtaEnabled(false);
       setSustainedPageRlCrimesEnabled(false);
       setSustainedPageRlOcEnabled(false);
@@ -2369,6 +2382,8 @@ export default function Admin() {
         sustained_page_rl_entertainer_enabled: sustainedPageRlEntEnabled,
         sustained_page_rl_forum_enabled: sustainedPageRlForumEnabled,
         sustained_page_rl_kill_enabled: sustainedPageRlKillEnabled,
+        sustained_page_rl_kill_max_gap_ms: Math.min(2000, Math.max(50, parseFloat(String(sustainedPageRlKillMaxGapMs).replace(/,/g, '.')) || 300)),
+        sustained_page_rl_kill_sustain_sec: Math.min(120, Math.max(3, parseFloat(String(sustainedPageRlKillSustainSec).replace(/,/g, '.')) || 12)),
         sustained_page_rl_gta_enabled: sustainedPageRlGtaEnabled,
         sustained_page_rl_crimes_enabled: sustainedPageRlCrimesEnabled,
         sustained_page_rl_oc_enabled: sustainedPageRlOcEnabled,
@@ -2429,6 +2444,14 @@ export default function Admin() {
       }
       if (res.data?.sustained_page_rl_kill_enabled !== undefined) {
         setSustainedPageRlKillEnabled(res.data.sustained_page_rl_kill_enabled !== false);
+      }
+      if (res.data?.sustained_page_rl_kill_max_gap_ms != null) {
+        const gn = Number(res.data.sustained_page_rl_kill_max_gap_ms);
+        if (Number.isFinite(gn)) setSustainedPageRlKillMaxGapMs(String(gn));
+      }
+      if (res.data?.sustained_page_rl_kill_sustain_sec != null) {
+        const sn = Number(res.data.sustained_page_rl_kill_sustain_sec);
+        if (Number.isFinite(sn)) setSustainedPageRlKillSustainSec(String(sn));
       }
       if (res.data?.sustained_page_rl_gta_enabled !== undefined) {
         setSustainedPageRlGtaEnabled(!!res.data.sustained_page_rl_gta_enabled);
@@ -2607,6 +2630,31 @@ export default function Admin() {
       toast.error(e.response?.data?.detail ?? 'Failed to update');
     } finally {
       setSustainedKillRlSaving(false);
+    }
+  };
+
+  const applySustainedKillRlTuning = async () => {
+    const gap = Math.min(2000, Math.max(50, parseFloat(String(sustainedPageRlKillMaxGapMs).replace(/,/g, '.')) || 300));
+    const sec = Math.min(120, Math.max(3, parseFloat(String(sustainedPageRlKillSustainSec).replace(/,/g, '.')) || 12));
+    setSustainedKillRlTuningSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', {
+        sustained_page_rl_kill_max_gap_ms: gap,
+        sustained_page_rl_kill_sustain_sec: sec,
+      });
+      if (res.data?.sustained_page_rl_kill_max_gap_ms != null) {
+        const gn = Number(res.data.sustained_page_rl_kill_max_gap_ms);
+        if (Number.isFinite(gn)) setSustainedPageRlKillMaxGapMs(String(gn));
+      }
+      if (res.data?.sustained_page_rl_kill_sustain_sec != null) {
+        const sn = Number(res.data.sustained_page_rl_kill_sustain_sec);
+        if (Number.isFinite(sn)) setSustainedPageRlKillSustainSec(String(sn));
+      }
+      toast.success('Kill / attack pacing numbers saved');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setSustainedKillRlTuningSaving(false);
     }
   };
 
@@ -13213,7 +13261,7 @@ export default function Admin() {
           <div className="p-3 space-y-4">
             <p className="text-[10px] text-mutedForeground font-heading leading-relaxed max-w-3xl">
               When a scope is on, that area&apos;s authenticated requests that form a <span className="text-foreground/90">fast chain</span> get a random 10–15s cooldown (HTTP 429, <code className="text-[9px] bg-muted px-1 rounded">Retry-After</code>). Jail-style scopes: gaps under ~750ms for ~22s. Each scope is independent. Kill/attack defaults <span className="text-foreground/90">on</span> when unset in DB; other scopes off until enabled. Toggles apply immediately and are included when you use Save settings in Admin display.{' '}
-              <span className="text-foreground/80">Kill / attack POSTs</span> use a <span className="text-foreground/90">~300ms</span> gap chain and ~12s sustain (then cooldown).
+              <span className="text-foreground/80">Kill / attack POSTs</span> use configurable max gap (ms) and sustain window (seconds), then cooldown — defaults <span className="text-foreground/90">300ms</span> gap and <span className="text-foreground/90">12s</span> sustain when unset.
             </p>
             <p className="text-[10px] text-amber-400/90 font-heading leading-relaxed max-w-3xl rounded border border-amber-500/25 bg-amber-500/5 px-2 py-1.5">
               <span className="font-bold">Normal UI:</span> gaps above the threshold reset the chain, so typical polling (e.g. ~1Hz) and page loads usually <span className="italic">do not</span> trigger this. It targets scripted or click-spam bursts.
@@ -13296,7 +13344,7 @@ export default function Admin() {
             <div className="space-y-1 rounded border border-zinc-700/40 p-2">
               <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Kill / attack</p>
               <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                Costly <code className="text-[9px] bg-muted px-1 rounded">/attack/*</code> <span className="text-foreground/85">POST</span>s only (search, travel, execute, bullets/calc, delete). Kill chain: gaps <span className="text-foreground/90">300ms</span> count as one fast streak → ~12s wall-clock then cooldown. Jail-style scopes ~750ms; other default scopes ~500ms. GETs (list, status, timeline, …) are not paced here.
+                Costly <code className="text-[9px] bg-muted px-1 rounded">/attack/*</code> <span className="text-foreground/85">POST</span>s only (search, travel, execute, bullets/calc, delete). Fast streak: consecutive POSTs with gaps <span className="text-foreground/90">under</span> the max gap (ms) for the sustain window (seconds) → random 10–15s cooldown. Server clamps gap 50–2000ms, sustain 3–120s. GETs (list, status, timeline, …) are not paced here.
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -13316,6 +13364,40 @@ export default function Admin() {
                   {sustainedKillRlSaving ? '…' : 'Disable'}
                 </button>
                 <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlKillEnabled ? 'on' : 'off'}</span>
+              </div>
+              <div className="mt-2 flex flex-wrap items-end gap-2">
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-heading uppercase tracking-wider text-mutedForeground">Max gap (ms)</span>
+                  <input
+                    type="number"
+                    min={50}
+                    max={2000}
+                    step={10}
+                    value={sustainedPageRlKillMaxGapMs}
+                    onChange={(e) => setSustainedPageRlKillMaxGapMs(e.target.value)}
+                    className="w-[100px] rounded border border-zinc-600 bg-zinc-900/80 px-2 py-1 text-[11px] font-heading text-zinc-100"
+                  />
+                </label>
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-heading uppercase tracking-wider text-mutedForeground">Sustain (sec)</span>
+                  <input
+                    type="number"
+                    min={3}
+                    max={120}
+                    step={1}
+                    value={sustainedPageRlKillSustainSec}
+                    onChange={(e) => setSustainedPageRlKillSustainSec(e.target.value)}
+                    className="w-[88px] rounded border border-zinc-600 bg-zinc-900/80 px-2 py-1 text-[11px] font-heading text-zinc-100"
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={sustainedKillRlTuningSaving}
+                  onClick={() => void applySustainedKillRlTuning()}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedKillRlTuningSaving ? '…' : 'Save kill pacing'}
+                </button>
               </div>
             </div>
             <div className="space-y-1 rounded border border-zinc-700/40 p-2">

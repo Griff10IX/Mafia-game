@@ -8,11 +8,14 @@ import os
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
+from fastapi import HTTPException
 from jose import JWTError, jwt
 
 logger = logging.getLogger(__name__)
 
 _STAFF_PORTAL_TYP = "staff_portal"
+
+STAFF_PORTAL_403_DETAIL = "Staff portal: unlock required. Enter the staff password to continue."
 
 
 def staff_portal_password_configured() -> bool:
@@ -66,6 +69,24 @@ def verify_staff_portal_token(portal_jwt: str, user_id: str, client_device_id: O
         except Exception:
             return False
     return True
+
+
+def assert_staff_portal_unlocked(
+    user_id: str,
+    portal_jwt: Optional[str],
+    client_device_id: Optional[str],
+) -> None:
+    """Raise 403 when STAFF_PORTAL_PASSWORD is set and headers do not carry a valid portal JWT (same rules as middleware)."""
+    if not staff_portal_password_configured():
+        return
+    uid = (user_id or "").strip()
+    if not uid:
+        raise HTTPException(status_code=403, detail=STAFF_PORTAL_403_DETAIL)
+    portal = (portal_jwt or "").strip()
+    device_hdr = (client_device_id or "").strip()[:80]
+    if verify_staff_portal_token(portal, uid, device_hdr):
+        return
+    raise HTTPException(status_code=403, detail=STAFF_PORTAL_403_DETAIL)
 
 
 def staff_portal_password_matches(given: str) -> bool:

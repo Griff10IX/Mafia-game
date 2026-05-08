@@ -43,45 +43,55 @@ export function setStaffPortalToken(token) {
   if (typeof window === 'undefined') return;
   const v = token ? String(token).trim() : '';
   _portalTokenMem = v;
-  if (!v) {
-    try {
-      sessionStorage.removeItem(KEY);
-    } catch {
-      /* ignore */
+  try {
+    if (!v) {
+      try {
+        sessionStorage.removeItem(KEY);
+      } catch {
+        /* ignore */
+      }
+      try {
+        localStorage.removeItem(KEY);
+      } catch {
+        /* ignore */
+      }
+      return;
     }
-    try {
-      localStorage.removeItem(KEY);
-    } catch {
-      /* ignore */
+    const mobile = _mobileUa();
+    if (mobile) {
+      try {
+        sessionStorage.setItem(KEY, v);
+      } catch {
+        /* memory only */
+      }
+      try {
+        localStorage.removeItem(KEY);
+      } catch {
+        /* ignore */
+      }
+      return;
     }
-    return;
-  }
-  const mobile = _mobileUa();
-  if (mobile) {
     try {
       sessionStorage.setItem(KEY, v);
+      try {
+        localStorage.removeItem(KEY);
+      } catch {
+        /* ignore */
+      }
     } catch {
-      /* memory only */
+      try {
+        localStorage.setItem(KEY, v);
+      } catch {
+        /* memory only */
+      }
     }
+  } finally {
     try {
-      localStorage.removeItem(KEY);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('staff-portal-session-changed'));
+      }
     } catch {
       /* ignore */
-    }
-    return;
-  }
-  try {
-    sessionStorage.setItem(KEY, v);
-    try {
-      localStorage.removeItem(KEY);
-    } catch {
-      /* ignore */
-    }
-  } catch {
-    try {
-      localStorage.setItem(KEY, v);
-    } catch {
-      /* memory only */
     }
   }
 }

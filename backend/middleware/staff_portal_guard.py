@@ -7,14 +7,13 @@ from starlette.responses import JSONResponse
 
 from utils.staff_access_audit import decode_jwt_bearer_user, is_staff_tool_api_path, record_staff_route_forbidden
 from utils.staff_portal import (
+    STAFF_PORTAL_403_DETAIL,
     is_staff_portal_exempt_path,
     staff_portal_password_configured,
     verify_staff_portal_token,
 )
 
 logger = logging.getLogger(__name__)
-
-_STAFF_PORTAL_403_DETAIL = "Staff portal: unlock required. Enter the staff password to continue."
 
 
 class StaffPortalGuardMiddleware(BaseHTTPMiddleware):
@@ -64,5 +63,5 @@ class StaffPortalGuardMiddleware(BaseHTTPMiddleware):
             logger.exception("StaffPortalGuardMiddleware staff_access audit/notify failed")
         return JSONResponse(
             status_code=403,
-            content={"detail": _STAFF_PORTAL_403_DETAIL},
+            content={"detail": STAFF_PORTAL_403_DETAIL},
         )

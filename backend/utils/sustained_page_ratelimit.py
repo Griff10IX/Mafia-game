@@ -88,6 +88,32 @@ PAGE_KEYS_JAIL_STYLE_TUNING = frozenset(
 # (e.g. ~300ms pause between actions breaks the chain). Tighter than 100ms-only so spaced spam still tripped RL.
 _KILL_MAX_GAP_MS = 300.0
 _KILL_SUSTAIN_SEC = 12.0
+_KILL_GAP_MS_MIN = 50.0
+_KILL_GAP_MS_MAX = 2000.0
+_KILL_SUSTAIN_SEC_MIN = 3.0
+_KILL_SUSTAIN_SEC_MAX = 120.0
+
+
+def clamp_kill_rl_max_gap_ms(raw: Any) -> float:
+    """game_settings `sustained_page_rl_kill_max_gap_ms`; default _KILL_MAX_GAP_MS when unset/invalid."""
+    if raw is None:
+        return float(_KILL_MAX_GAP_MS)
+    try:
+        v = float(raw)
+    except (TypeError, ValueError):
+        return float(_KILL_MAX_GAP_MS)
+    return max(_KILL_GAP_MS_MIN, min(_KILL_GAP_MS_MAX, v))
+
+
+def clamp_kill_rl_sustain_sec(raw: Any) -> float:
+    """game_settings `sustained_page_rl_kill_sustain_sec`; default _KILL_SUSTAIN_SEC when unset/invalid."""
+    if raw is None:
+        return float(_KILL_SUSTAIN_SEC)
+    try:
+        v = float(raw)
+    except (TypeError, ValueError):
+        return float(_KILL_SUSTAIN_SEC)
+    return max(_KILL_SUSTAIN_SEC_MIN, min(_KILL_SUSTAIN_SEC_MAX, v))
 
 
 def _max_gap_ms(page_key: str) -> float:
@@ -106,10 +132,11 @@ def _sustain_sec(page_key: str) -> float:
     return SUSTAIN_SEC
 
 
-def _kill_rl_inbox_detail(reason: str) -> str:
+def _kill_rl_inbox_detail(reason: str, max_gap_ms: Optional[float] = None) -> str:
+    gap = int(max_gap_ms) if max_gap_ms is not None else int(_KILL_MAX_GAP_MS)
     if reason == "sustained_fast_chain":
         return (
-            f"Sustained fast attack requests (gaps under {int(_KILL_MAX_GAP_MS)}ms within the sustain window; cooldown issued)."
+            f"Sustained fast attack requests (gaps under {gap}ms within the sustain window; cooldown issued)."
         )
     if reason == "cooldown_active":
         return "Repeat requests while attack pacing cooldown was still active."
@@ -249,6 +276,7 @@ async def _notify_admins_sustained_rl_429(
     page_key: str,
     retry_after_sec: int,
     reason: str,
+    kill_max_gap_ms: Optional[float] = None,
 ) -> None:
     """Record sustained page RL 429 for Admin Safety log. For kill/attack, inbox full admins (same throttle as event). Best-effort; never raises."""
     if not user_id:
@@ -285,7 +313,7 @@ async def _notify_admins_sustained_rl_429(
         if not admin_ids:
             return
         title = "Attack pacing limit triggered (429)"
-        detail = _kill_rl_inbox_detail(reason)
+        detail = _kill_rl_inbox_detail(reason, kill_max_gap_ms)
         body = (
             f"{detail}\n\n"
             f"Player: {uname}\n"
@@ -356,7 +384,12 @@ async def check_sustained_page_rl(db, user_id: str, page_key: str) -> None:
             except Exception:
                 logger.exception("sustained RL: failed to set last_admin_rl_inbox_at (cooldown path)")
             await _notify_admins_sustained_rl_429(
-                db, user_id=user_id, page_key=page_key, retry_after_sec=sec, reason="cooldown_active",
+                db,
+                user_id=user_id,
+                page_key=page_key,
+                retry_after_sec=sec,
+                reason="cooldown_active",
+                kill_max_gap_ms=max_gap_ms if page_key == PAGE_KEY_KILL else None,
             )
         raise HTTPException(
             status_code=429,
@@ -389,7 +422,7 @@ async def check_sustained_page_rl(db, user_id: str, page_key: str) -> None:
 
     gap_ms = (now - last_at).total_seconds() * 1000.0
 
-    if gap_ms >= _max_gap_ms(page_key):
+    if gap_ms >= max_gap_ms:
         await db[COLL].update_one(
             {"_id": doc_id},
             {
@@ -406,7 +439,7 @@ async def check_sustained_page_rl(db, user_id: str, page_key: str) -> None:
     if fast_chain_start is None:
         fast_chain_start = last_at
 
-    if (now - fast_chain_start).total_seconds() >= _sustain_sec(page_key):
+    if (now - fast_chain_start).total_seconds() >= sustain_sec:
         cd_sec = _rng.randint(COOLDOWN_MIN_SEC, COOLDOWN_MAX_SEC)
         until = now + timedelta(seconds=cd_sec)
         last_inbox = _parse_iso(doc.get("last_admin_rl_inbox_at"))
@@ -426,7 +459,12 @@ async def check_sustained_page_rl(db, user_id: str, page_key: str) -> None:
         )
         if touch_inbox_ts:
             await _notify_admins_sustained_rl_429(
-                db, user_id=user_id, page_key=page_key, retry_after_sec=cd_sec, reason="sustained_fast_chain",
+                db,
+                user_id=user_id,
+                page_key=page_key,
+                retry_after_sec=cd_sec,
+                reason="sustained_fast_chain",
+                kill_max_gap_ms=max_gap_ms if page_key == PAGE_KEY_KILL else None,
             )
         raise HTTPException(
             status_code=429,

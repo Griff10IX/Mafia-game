@@ -447,6 +447,7 @@ export default function Travel() {
             clearInterval(timer);
             setTraveling(false);
             fetchTravelInfo({ silent: true });
+            refreshUser();
             toast.success(`Arrived at ${selectedDest}!`);
             return 0;
           }
@@ -455,7 +456,7 @@ export default function Travel() {
       }, 1000);
       return () => clearInterval(timer);
     }
-  }, [travelTime, selectedDest, fetchTravelInfo]);
+  }, [travelTime, selectedDest, fetchTravelInfo, refreshUser]);
 
   // Recover stale UI: never stay "traveling" with no positive countdown (e.g. bad/missing travel_time).
   useEffect(() => {
