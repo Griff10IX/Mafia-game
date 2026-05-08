@@ -267,6 +267,7 @@ const SEARCHABLE_TOOLS = [
   // Security
   { label: 'Security Summary', categoryId: 'admin-security', collapseKey: 'security', keywords: ['security', 'summary', 'flags', 'rate', 'ban', 'ip', 'lockout', 'telegram'] },
   { label: 'Session stats', categoryId: 'admin-security', collapseKey: 'sessionStats', keywords: ['session', 'sessions', 'active', 'log out', 'revoke', '24h'] },
+  { label: 'Log out all users', categoryId: 'admin-security', collapseKey: 'sessionStats', keywords: ['log all users', 'logout everyone', 'invalidate all', 'site wide sessions', 'jwt', 'token'], adminOnly: true },
   { label: 'Staff tool denials (401/403)', categoryId: 'admin-security', collapseKey: 'staffAccessDenials', keywords: ['403', '401', 'denied', 'forbidden', 'staff', 'access', 'audit', 'login'], adminOnly: false },
   { label: 'Staff tool access (history + live)', categoryId: 'admin-security', collapseKey: 'toolAccessAudit', keywords: ['staff', 'admin', 'tool', 'access', 'audit', 'history', 'presence', 'who', 'used', 'shell'], adminOnly: false },
   { label: 'Sustained pacing 429 log', categoryId: 'admin-security', collapseKey: 'sustainedRl429Log', keywords: ['429', 'rate', 'limit', 'pacing', 'sustained', 'inbox', 'spam', 'throttle'], adminOnly: true },
@@ -10467,15 +10468,11 @@ export default function Admin() {
               <Input type="email" value={formData.adminNewEmail} onChange={(e) => setFormData((prev) => ({ ...prev, adminNewEmail: e.target.value }))} placeholder="new@email.com" className="flex-1 min-w-0 text-[11px]" />
               <BtnPrimary onClick={handleChangeEmail}>Set</BtnPrimary>
             </ActionRow>
-            <ActionRow icon={LogOut} label="Log Out User" description="Invalidate all sessions; they must log in again">
+            <ActionRow icon={LogOut} label="Log Out User" description="Invalidate target user’s sessions, or log out everyone (site-wide) except you">
               <BtnPrimary onClick={handleLogOutUser}>Log out</BtnPrimary>
-              <button
-                type="button"
-                onClick={handleLogOutAllUsers}
-                className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-red-500/20 border-red-500/50 text-red-400 hover:bg-red-500/30"
-              >
-                Log all users
-              </button>
+              <BtnDanger type="button" onClick={handleLogOutAllUsers} title="Same as Security → Session stats">
+                Log out all users
+              </BtnDanger>
             </ActionRow>
             <ActionRow icon={Users} label="Sessions" description="View and revoke individual sessions (IP, device, last used)">
               <BtnPrimary onClick={handleLoadUserSessions} disabled={adminUserSessionsLoading}>
@@ -14412,7 +14409,13 @@ export default function Admin() {
               >
                 {revokeOldSessionsLoading ? '...' : 'Log out sessions older than 24h'}
               </button>
+              <BtnDanger type="button" onClick={handleLogOutAllUsers} title="Bump token_version for every account except yours">
+                Log out all users
+              </BtnDanger>
             </div>
+            <p className="text-[9px] text-red-400/90 font-heading">
+              <strong>Log out all users</strong> invalidates every player session (JWT). Your staff session stays active. Also under Player Management → User give/take if that panel is expanded.
+            </p>
           </div>
         )}
         </div>

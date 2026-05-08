@@ -81,10 +81,6 @@ from utils.staff_bot_client_alert import maybe_notify_staff_bot_attack_from_ua, 
 from utils.sustained_page_ratelimit import PAGE_KEY_KILL, check_sustained_page_rl
 
 
-async def _kill_sustained_rl_user(current_user: dict = Depends(get_current_user)):
-    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_KILL)
-
-
 async def _kill_sustained_rl_verified(current_user: dict = Depends(get_current_user_verified)):
     await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_KILL)
 
@@ -1005,12 +1001,16 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
                 if own and own.get("owner_id"):
                     item["bodyguard_owner_username"] = own.get("owner_username") or "?"
                     item["bodyguard_is_mine"] = own["owner_id"] == str(attacker_id)
-        # Mint execute token only when the attacker can actually strike (same location). Saves N DB round-trips per
-        # poll when hunts are found but still need travel; next refresh after travel mints once.
+        # Mint execute token only when the attacker can actually strike (same location). Reuse token already on the
+        # attack row (hot path every poll); only hit DB to mint when missing.
         if attack["status"] == "found" and can_attack:
-            tok = await _ensure_execute_token(attacker_id, attack["id"])
-            if tok:
-                item["execute_token"] = tok
+            existing_tok = attack.get("execute_token")
+            if isinstance(existing_tok, str) and len(existing_tok) >= 16:
+                item["execute_token"] = existing_tok
+            else:
+                tok = await _ensure_execute_token(attacker_id, attack["id"])
+                if tok:
+                    item["execute_token"] = tok
         if attack["status"] == "found" and tid:
             target_bgs = bgs_by_owner.get(tid) or []
             if target_bgs:
@@ -1333,7 +1333,11 @@ async def get_attack_status(
         message = f"Target found in {attack['location_state']}! You are in the same location. Ready to attack!" if can_attack else f"Target found in {attack['location_state']}! Travel there to attack."
     exec_tok = None
     if attack["status"] == "found" and can_attack:
-        exec_tok = await _ensure_execute_token(current_user["id"], attack["id"])
+        et = attack.get("execute_token")
+        if isinstance(et, str) and len(et) >= 16:
+            exec_tok = et
+        else:
+            exec_tok = await _ensure_execute_token(current_user["id"], attack["id"])
     return AttackStatusResponse(
         attack_id=attack["id"],
         status=attack["status"],
@@ -2809,15 +2813,16 @@ async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
 
 
 def register(router):
-    _kill_rl_u = [Depends(_kill_sustained_rl_user)]
+    # Sustained RL only on mutating / costly POSTs. GET list/inflation/timeline were each doing find+update on
+    # sustained_page_rl_state; parallel page load (5+ GETs & 10s polling) spammed DB and could trip 100ms kill chain.
     _kill_rl_v = [Depends(_kill_sustained_rl_verified)]
     router.add_api_route("/attack/search", search_target, methods=["POST"], response_model=AttackSearchResponse, dependencies=_kill_rl_v)
-    router.add_api_route("/attack/status", get_attack_status, methods=["GET"], response_model=AttackStatusResponse, dependencies=_kill_rl_u)
-    router.add_api_route("/attack/list", list_attacks, methods=["GET"], dependencies=_kill_rl_u)
+    router.add_api_route("/attack/status", get_attack_status, methods=["GET"], response_model=AttackStatusResponse)
+    router.add_api_route("/attack/list", list_attacks, methods=["GET"])
     router.add_api_route("/attack/delete", delete_attacks, methods=["POST"], dependencies=_kill_rl_v)
     router.add_api_route("/attack/travel", travel_to_target, methods=["POST"], dependencies=_kill_rl_v)
     router.add_api_route("/attack/bullets/calc", calc_bullets, methods=["POST"], dependencies=_kill_rl_v)
-    router.add_api_route("/attack/inflation", get_attack_inflation, methods=["GET"], dependencies=_kill_rl_u)
+    router.add_api_route("/attack/inflation", get_attack_inflation, methods=["GET"])
     router.add_api_route("/attack/execute", execute_attack, methods=["POST"], response_model=AttackExecuteResponse, dependencies=_kill_rl_v)
-    router.add_api_route("/attack/attempts", get_attack_attempts, methods=["GET"], dependencies=_kill_rl_u)
-    router.add_api_route("/attack/timeline", get_attack_timeline, methods=["GET"], dependencies=_kill_rl_u)
+    router.add_api_route("/attack/attempts", get_attack_attempts, methods=["GET"])
+    router.add_api_route("/attack/timeline", get_attack_timeline, methods=["GET"])
