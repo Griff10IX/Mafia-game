@@ -101,6 +101,34 @@ function writeCachedAttacks(list) {
   } catch (_e) { /* quota / disabled storage is non-fatal */ }
 }
 
+// Travel info cache: server already memoizes /travel/info for 5s, but a fresh page nav still pays the
+// full network round-trip when the modal opens. Pre-fetch + sessionStorage cache so the modal opens
+// instantly with prior data, then refreshes in the background.
+const _TRAVEL_INFO_CACHE_KEY = 'kill_travel_info_cache_v1';
+const _TRAVEL_INFO_CACHE_MAX_AGE_MS = 30 * 1000;
+function readCachedTravelInfo() {
+  try {
+    if (typeof window === 'undefined') return null;
+    const raw = window.sessionStorage.getItem(_TRAVEL_INFO_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.data) return null;
+    if (typeof parsed.savedAt !== 'number' || Date.now() - parsed.savedAt > _TRAVEL_INFO_CACHE_MAX_AGE_MS) return null;
+    return parsed.data;
+  } catch (_e) {
+    return null;
+  }
+}
+function writeCachedTravelInfo(data) {
+  try {
+    if (typeof window === 'undefined' || !data) return;
+    window.sessionStorage.setItem(
+      _TRAVEL_INFO_CACHE_KEY,
+      JSON.stringify({ savedAt: Date.now(), data }),
+    );
+  } catch (_e) { /* quota / disabled storage is non-fatal */ }
+}
+
 /** Kill / execute feedback: same pattern as roulette — compact banner, × to dismiss only (no auto-close). */
 const KillNotificationBanner = ({ message, onDismiss }) => {
   if (!message) return null;
@@ -1036,7 +1064,7 @@ export default function Attack() {
   const [userBullets, setUserBullets] = useState(0);
   const [userMolotovs, setUserMolotovs] = useState(0);
   const [travelModalDestination, setTravelModalDestination] = useState(null);
-  const [travelInfo, setTravelInfo] = useState(null);
+  const [travelInfo, setTravelInfo] = useState(() => readCachedTravelInfo());
   const [travelSubmitLoading, setTravelSubmitLoading] = useState(false);
   const [travelCountdown, setTravelCountdown] = useState(null);
   const [pendingResend, setPendingResend] = useState(null);
@@ -1094,6 +1122,25 @@ export default function Attack() {
       if (canceled) return null;
       return [];
     }
+  }, []);
+
+  // Pre-fetch /travel/info shortly after the page settles so the modal opens instantly when the user clicks Travel.
+  // Backed by sessionStorage cache + 30s TTL so navigation back to Kill is also instant. /travel/info is 5s
+  // server-cached and no longer rate-limited so this is cheap.
+  useEffect(() => {
+    let cancelled = false;
+    const t = setTimeout(() => {
+      if (cancelled) return;
+      api.get('/travel/info').then((r) => {
+        if (cancelled) return;
+        setTravelInfo(r.data);
+        writeCachedTravelInfo(r.data);
+      }).catch(() => { /* non-fatal: modal will fetch on open */ });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
   }, []);
 
   const loadCombatTimeline = useCallback(async () => {
@@ -1452,11 +1499,13 @@ export default function Attack() {
 
   const openTravelModal = (locationState) => {
     setTravelModalDestination(locationState || null);
-    setTravelInfo(null);
+    // Don't clear travelInfo: showing slightly-stale options instantly is far better UX than
+    // forcing "Loading travel options..." for a 1-2s round-trip every time. We refresh in the background.
     if (locationState) {
-      // Plain GET (no 429-retry-with-2.5s-sleep wrapper). /travel/info is read-only and 5s server-cached;
-      // a 429 retry was the cause of the 4-5s "Loading travel options..." freeze under high traffic.
-      api.get('/travel/info').then((r) => setTravelInfo(r.data)).catch(() => setTravelInfo(null));
+      api.get('/travel/info').then((r) => {
+        setTravelInfo(r.data);
+        writeCachedTravelInfo(r.data);
+      }).catch(() => { /* keep prior cached travelInfo on error */ });
     }
   };
 
