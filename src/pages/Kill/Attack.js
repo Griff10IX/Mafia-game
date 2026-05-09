@@ -74,6 +74,33 @@ const EventBanner = ({ event }) => (
 // Only run the F5-resend check once per document load so navigating away and back doesn't resend
 let attackResendCheckDoneThisLoad = false;
 
+// Session-scoped cache: render the previously-loaded "My Searches" instantly on mount so the box is never blank
+// while /attack/list is in flight. Keyed by JWT-bearing token presence (sessionStorage) — cleared on browser close.
+const _ATTACK_LIST_CACHE_KEY = 'kill_attacks_cache_v1';
+const _ATTACK_LIST_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
+function readCachedAttacks() {
+  try {
+    if (typeof window === 'undefined') return [];
+    const raw = window.sessionStorage.getItem(_ATTACK_LIST_CACHE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!parsed || !Array.isArray(parsed.attacks)) return [];
+    if (typeof parsed.savedAt !== 'number' || Date.now() - parsed.savedAt > _ATTACK_LIST_CACHE_MAX_AGE_MS) return [];
+    return parsed.attacks;
+  } catch (_e) {
+    return [];
+  }
+}
+function writeCachedAttacks(list) {
+  try {
+    if (typeof window === 'undefined') return;
+    window.sessionStorage.setItem(
+      _ATTACK_LIST_CACHE_KEY,
+      JSON.stringify({ savedAt: Date.now(), attacks: Array.isArray(list) ? list : [] }),
+    );
+  } catch (_e) { /* quota / disabled storage is non-fatal */ }
+}
+
 /** Kill / execute feedback: same pattern as roulette — compact banner, × to dismiss only (no auto-close). */
 const KillNotificationBanner = ({ message, onDismiss }) => {
   if (!message) return null;
@@ -921,7 +948,7 @@ export default function Attack() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [targetUsername, setTargetUsername] = useState('');
   const [note, setNote] = useState('');
-  const [attacks, setAttacks] = useState([]);
+  const [attacks, setAttacks] = useState(() => readCachedAttacks());
   const [selectedAttackIds, setSelectedAttackIds] = useState([]);
   /** Kill / execute / delete / travel rows — not Find User search. */
   const [loading, setLoading] = useState(false);
@@ -1053,6 +1080,11 @@ export default function Attack() {
       const response = await api.get('/attack/list', { signal: ac.signal });
       const list = response.data?.attacks || [];
       setAttacks(list);
+      writeCachedAttacks(list);
+      // Inflation comes inline now (Tier 3 plan item: drop the dedicated /attack/inflation page-load call).
+      if (response.data && typeof response.data.inflation_pct === 'number') {
+        setInflationPct(Number(response.data.inflation_pct));
+      }
       return list;
     } catch (error) {
       const canceled =
@@ -1217,19 +1249,17 @@ export default function Attack() {
 
     const load = async () => {
       try {
+        // /attack/list now returns inflation_pct inline so we drop the dedicated /attack/inflation page-load call.
         const [
-          inflationRes,
           meRes,
           eventsRes,
           rlRes,
         ] = await Promise.all([
-          api.get('/attack/inflation').catch(() => ({ data: {} })),
           api.get('/auth/me').catch(() => ({ data: {} })),
           apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: {} })),
           api.get('/payments/release-soft-launch').catch(() => ({ data: {} })),
           refreshAttacks(),
         ]);
-        setInflationPct(Number(inflationRes.data?.inflation_pct ?? 0));
         setUserBullets(meRes.data?.bullets ?? 0);
         setUserMolotovs(meRes.data?.molotovs ?? 0);
         setEvent(eventsRes.data?.event ?? null);
@@ -1424,7 +1454,9 @@ export default function Attack() {
     setTravelModalDestination(locationState || null);
     setTravelInfo(null);
     if (locationState) {
-      apiRequestWith429Retry(() => api.get('/travel/info')).then((r) => setTravelInfo(r.data)).catch(() => setTravelInfo(null));
+      // Plain GET (no 429-retry-with-2.5s-sleep wrapper). /travel/info is read-only and 5s server-cached;
+      // a 429 retry was the cause of the 4-5s "Loading travel options..." freeze under high traffic.
+      api.get('/travel/info').then((r) => setTravelInfo(r.data)).catch(() => setTravelInfo(null));
     }
   };
 

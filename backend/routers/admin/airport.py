@@ -1,6 +1,7 @@
 # Travel (info, travel, buy-airmiles) and Airports (list, claim, set-price, transfer, sell-on-trade)
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+import asyncio
 import random
 import time
 from pydantic import BaseModel
@@ -240,18 +241,25 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
     now_utc = datetime.now(timezone.utc)
     from routers.game.families import family_airport_crew_perk_context
 
-    crew_ctx = await family_airport_crew_perk_context(current_user)
+    current_state_for_load = current_user.get("current_state", STATES[0] if STATES else "")
+    # Run the four independent reads (crew perks, all user cars, owner-airport check, current-state airport
+    # slots) concurrently. Previously these were sequential awaits across the function body.
+    crew_ctx, all_user_cars, user_owns_any_airport, _existing_airport_rows = await asyncio.gather(
+        family_airport_crew_perk_context(current_user),
+        db.user_cars.find({"user_id": uid}).to_list(USER_CARS_FETCH_LIMIT),
+        db.airport_ownership.find_one({"owner_id": uid}, {"_id": 1}),
+        db.airport_ownership.find({"state": current_state_for_load}, {"_id": 0}).to_list(AIRPORT_SLOTS_PER_STATE * 2),
+    )
     family_crew_pts = bool(crew_ctx.get("family_airport_points_discount"))
     fam_time_red = int(crew_ctx.get("family_airport_travel_reduction_seconds") or 0)
     airport_time_effective = max(0, TRAVEL_TIMES["airport"] - fam_time_red)
-    # Fetch custom separately so it is never dropped by non-custom pagination/limits.
-    custom_cars = await db.user_cars.find({"user_id": uid, "car_id": "car_custom"}).to_list(20)
-    user_cars_bulk = await db.user_cars.find({"user_id": uid, "car_id": {"$ne": "car_custom"}}).to_list(USER_CARS_FETCH_LIMIT)
-    extra_cars: list = []
+    # Partition the single user_cars find above: custom rows, non-custom bulk, always-include extras.
+    custom_cars = [uc for uc in all_user_cars if uc.get("car_id") == "car_custom"][:20]
+    user_cars_bulk = [uc for uc in all_user_cars if uc.get("car_id") != "car_custom"]
     if _TRAVEL_ALWAYS_INCLUDE_CAR_IDS:
-        extra_cars = await db.user_cars.find(
-            {"user_id": uid, "car_id": {"$in": list(_TRAVEL_ALWAYS_INCLUDE_CAR_IDS)}}
-        ).to_list(200)
+        extra_cars = [uc for uc in all_user_cars if uc.get("car_id") in _TRAVEL_ALWAYS_INCLUDE_CAR_IDS][:200]
+    else:
+        extra_cars = []
     user_cars = _merge_user_cars_for_travel(user_cars_bulk, extra_cars)
     cars_with_travel_times = []
     for uc in user_cars:
@@ -308,13 +316,39 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
             seconds_remaining = secs if secs > 0 else None
 
     carrying_booze = _booze_user_carrying_total(current_user.get("booze_carrying") or {}) > 0
-    user_owns_any_airport = await db.airport_ownership.find_one({"owner_id": uid}, {"_id": 1})
+
+    # `user_owns_any_airport` and the existing airport slots were already fetched in the gather() above.
+    by_slot = {int(d.get("slot") or 0): d for d in _existing_airport_rows}
+    missing_slots = [s for s in range(1, AIRPORT_SLOTS_PER_STATE + 1) if s not in by_slot]
+    if missing_slots:
+        try:
+            await db.airport_ownership.insert_many(
+                [
+                    {
+                        "state": current_state,
+                        "slot": s,
+                        "owner_id": None,
+                        "owner_username": None,
+                        "price_per_travel": AIRPORT_COST,
+                    }
+                    for s in missing_slots
+                ],
+                ordered=False,
+            )
+        except Exception:
+            pass
+        for s in missing_slots:
+            by_slot[s] = {
+                "state": current_state,
+                "slot": s,
+                "owner_id": None,
+                "owner_username": None,
+                "price_per_travel": AIRPORT_COST,
+            }
+
     airports = []
     for slot in range(1, AIRPORT_SLOTS_PER_STATE + 1):
-        doc = await db.airport_ownership.find_one({"state": current_state, "slot": slot}, {"_id": 0})
-        if not doc:
-            await db.airport_ownership.insert_one({"state": current_state, "slot": slot, "owner_id": None, "owner_username": None, "price_per_travel": AIRPORT_COST})
-            doc = await db.airport_ownership.find_one({"state": current_state, "slot": slot}, {"_id": 0})
+        doc = by_slot.get(slot) or {}
         price = max(AIRPORT_PRICE_MIN, min(doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX))
         you_own = doc.get("owner_id") == uid
         effective_price = _effective_airport_points(
@@ -741,8 +775,12 @@ async def airport_sell_on_trade(req: AirportSellRequest, current_user: dict = De
 
 
 def register(router):
-    router.add_api_route("/travel/status", get_travel_status, methods=["GET"], dependencies=_travel_rl_u)
-    router.add_api_route("/travel/info", get_travel_info, methods=["GET"], dependencies=_travel_rl_u)
+    # /travel/info and /travel/status are read-only and 5-20s server-cached; the cache itself acts as the rate
+    # limit. Removing the sustained-RL gate eliminates the 429 retries that caused the 4-5s "Loading travel
+    # options..." freeze on the Kill page travel modal under high traffic. Mutating routes (POST /travel,
+    # claim, set-price, transfer, sell) keep their existing protections.
+    router.add_api_route("/travel/status", get_travel_status, methods=["GET"])
+    router.add_api_route("/travel/info", get_travel_info, methods=["GET"])
     router.add_api_route("/travel", travel, methods=["POST"])
     router.add_api_route("/travel/buy-airmiles", buy_extra_airmiles, methods=["POST"])
     router.add_api_route("/airports", list_airports, methods=["GET"], dependencies=_travel_rl_u)

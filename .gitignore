@@ -32,6 +32,8 @@ logs/
 backups/
 *.tar.gz
 backup_*/
+# Per-file timestamped backups (e.g. attack.py.bak-20260509-194139)
+*.bak-*
 
 # MongoDB dumps
 dump/

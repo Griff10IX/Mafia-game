@@ -192,6 +192,17 @@ async def ensure_all_indexes(db):
         await db.witness_statement_listings.create_index("id", unique=True)
         await db.witness_statement_listings.create_index([("seller_id", 1), ("status", 1)])
 
+        # --- Attack client audit (per-search/per-execute audit; admin investigations) ---
+        # Previously unindexed and unbounded. TTL keeps the collection small so writes stay fast.
+        try:
+            await db.attack_client_audit.create_index([("user_id", 1), ("created_at", -1)])
+            await db.attack_client_audit.create_index([("event", 1), ("created_at", -1)])
+            await db.attack_client_audit.create_index(
+                [("created_at", 1)], expireAfterSeconds=EVENT_LOG_TTL_DAYS * 24 * 3600
+            )
+        except Exception as e:
+            logger.warning("attack_client_audit indexes: %s", e)
+
         # --- User cars / GTA ---
         await db.user_cars.create_index("user_id")
         await db.user_cars.create_index([("user_id", 1), ("acquired_at", -1)])

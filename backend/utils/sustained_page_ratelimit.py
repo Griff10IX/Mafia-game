@@ -364,22 +364,34 @@ async def check_sustained_page_rl(db, user_id: str, page_key: str) -> None:
     """Raise HTTPException 429 when pacing cooldown applies; no-op when disabled, unknown scope, or no user."""
     if not user_id or page_key not in _SETTINGS_FIELD_BY_PAGE:
         return
-    if not await sustained_page_rl_enabled_for(db, page_key):
+
+    field = _SETTINGS_FIELD_BY_PAGE.get(page_key)
+    # Combined read: fetches the enabled flag + (for KILL) the kill-specific gap/sustain in one round-trip.
+    # Previously this was two separate find_one calls per /attack/* request.
+    proj: dict = {field: 1} if field else {}
+    if page_key == PAGE_KEY_KILL:
+        proj["sustained_page_rl_kill_max_gap_ms"] = 1
+        proj["sustained_page_rl_kill_sustain_sec"] = 1
+    try:
+        gs = await db.game_settings.find_one({"_id": "main"}, proj) if proj else None
+    except Exception:
+        gs = None
+
+    if not field:
+        return
+    val = (gs or {}).get(field)
+    if page_key == PAGE_KEY_KILL:
+        enabled = _kill_sustain_setting_enabled(val) if gs is not None else True
+    else:
+        enabled = bool(val)
+    if not enabled:
         return
 
     max_gap_ms = float(_max_gap_ms(page_key))
     sustain_sec = float(_sustain_sec(page_key))
-    if page_key == PAGE_KEY_KILL:
-        try:
-            gs = await db.game_settings.find_one(
-                {"_id": "main"},
-                {"sustained_page_rl_kill_max_gap_ms": 1, "sustained_page_rl_kill_sustain_sec": 1},
-            )
-        except Exception:
-            gs = None
-        if gs:
-            max_gap_ms = float(clamp_kill_rl_max_gap_ms(gs.get("sustained_page_rl_kill_max_gap_ms")))
-            sustain_sec = float(clamp_kill_rl_sustain_sec(gs.get("sustained_page_rl_kill_sustain_sec")))
+    if page_key == PAGE_KEY_KILL and gs:
+        max_gap_ms = float(clamp_kill_rl_max_gap_ms(gs.get("sustained_page_rl_kill_max_gap_ms")))
+        sustain_sec = float(clamp_kill_rl_sustain_sec(gs.get("sustained_page_rl_kill_sustain_sec")))
 
     now = _now()
     doc_id = f"{user_id}:{page_key}"

@@ -26,6 +26,36 @@ _ATTACK_MICRO_COOLDOWN_PRUNE_AFTER_SEC = 60.0
 _attack_micro_cooldown_seen: Dict[str, float] = {}
 _attack_micro_cooldown_lock = asyncio.Lock()
 
+# Per-user 1s coalescing cache for GET /attack/list. Key = (attacker_id, ac_state) so a state change
+# (e.g. just landed in a new city) invalidates automatically without explicit calls. Search/delete
+# also invalidate explicitly so a user clicking Search sees the new row immediately.
+_ATTACK_LIST_CACHE_TTL_SEC = 1.0
+_ATTACK_LIST_CACHE_MAX = 5000
+_attack_list_cache: Dict[Tuple[str, str], Tuple[float, List[dict]]] = {}
+
+
+def _attack_list_cache_get(attacker_id: str, ac_state: str) -> Optional[List[dict]]:
+    cached = _attack_list_cache.get((attacker_id, ac_state))
+    if not cached:
+        return None
+    if cached[0] <= time.monotonic():
+        return None
+    return cached[1]
+
+
+def _attack_list_cache_set(attacker_id: str, ac_state: str, items: List[dict]) -> None:
+    now = time.monotonic()
+    _attack_list_cache[(attacker_id, ac_state)] = (now + _ATTACK_LIST_CACHE_TTL_SEC, items)
+    if len(_attack_list_cache) > _ATTACK_LIST_CACHE_MAX:
+        for k, (exp, _items) in list(_attack_list_cache.items())[:512]:
+            if exp < now:
+                _attack_list_cache.pop(k, None)
+
+
+def _attack_list_cache_invalidate(attacker_id: str) -> None:
+    for k in [k for k in _attack_list_cache if k[0] == attacker_id]:
+        _attack_list_cache.pop(k, None)
+
 _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend not in sys.path:
     sys.path.insert(0, _backend)
@@ -1023,6 +1053,8 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
 
     delete_ids: List[str] = []
     bulk_ops: List[UpdateOne] = []
+    # Status-flip ops that ALSO mint a fresh execute_token must be awaited (fire-and-forget would race with /attack/execute).
+    urgent_bulk_ops: List[UpdateOne] = []
     token_deferred: List[Tuple[int, str]] = []
 
     items = []
@@ -1073,12 +1105,21 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
             if now >= found_time:
                 tu = users_map.get(attack.get("target_id") or "")
                 new_location = _hunt_location_when_search_timer_fires(tu, attack)
-                bulk_ops.append(
-                    UpdateOne(
-                        {"id": attack["id"]},
-                        {"$set": {"status": "found", "location_state": new_location}},
-                    )
-                )
+                set_fields = {"status": "found", "location_state": new_location}
+                # Token-on-flip: when this attack is going to land in same-location ("can_attack"), mint the
+                # execute token in the same write so the next /attack/list reuses it instead of paying for a
+                # second round-trip via _ensure_execute_token. This op is awaited (urgent_bulk_ops) so the row
+                # is durable before the response surfaces the token to the client.
+                flip_token: Optional[str] = None
+                if new_location and ac_state and new_location == ac_state and not attack.get("execute_token"):
+                    flip_token = secrets.token_urlsafe(24)
+                    set_fields["execute_token"] = flip_token
+                op = UpdateOne({"id": attack["id"]}, {"$set": set_fields})
+                if flip_token:
+                    urgent_bulk_ops.append(op)
+                    attack["execute_token"] = flip_token
+                else:
+                    bulk_ops.append(op)
                 attack["status"] = "found"
                 attack["location_state"] = new_location
         if attack["status"] == "found":
@@ -1158,11 +1199,33 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
                 continue
             items[idx]["execute_token"] = tok
 
+    # Token-bearing flips MUST be awaited so /attack/execute can find the token in the row.
+    if urgent_bulk_ops:
+        try:
+            await db.attacks.bulk_write(urgent_bulk_ops, ordered=False)
+        except Exception as e:
+            logger.warning("attack/list urgent flip writeback failed: %s", e)
+    # Fire-and-forget cleanup: response items already reflect the post-cleanup state in memory,
+    # so we don't need to await Mongo before returning. Saves 1-2 round-trips on every /attack/list.
     if delete_ids:
-        await db.attacks.delete_many({"attacker_id": attacker_id, "id": {"$in": delete_ids}})
+        asyncio.create_task(_attack_list_writeback_delete(attacker_id, delete_ids))
     if bulk_ops:
-        await db.attacks.bulk_write(bulk_ops, ordered=False)
+        asyncio.create_task(_attack_list_writeback_bulk(bulk_ops))
     return items
+
+
+async def _attack_list_writeback_delete(attacker_id: str, ids: List[str]) -> None:
+    try:
+        await db.attacks.delete_many({"attacker_id": attacker_id, "id": {"$in": ids}})
+    except Exception as e:
+        logger.warning("attack/list writeback delete failed: %s", e)
+
+
+async def _attack_list_writeback_bulk(ops: List[UpdateOne]) -> None:
+    try:
+        await db.attacks.bulk_write(ops, ordered=False)
+    except Exception as e:
+        logger.warning("attack/list writeback bulk failed: %s", e)
 
 
 def _bullets_to_kill(
@@ -1392,6 +1455,7 @@ async def search_target(payload: AttackSearchRequest, req: Request, current_user
         "result": None,
         "rewards": None
     })
+    _attack_list_cache_invalidate(current_user["id"])
     try:
         meta = _request_meta(req)
         await db[ATTACK_CLIENT_AUDIT_COLLECTION].insert_one(
@@ -1506,8 +1570,18 @@ async def get_attack_status(
 async def list_attacks(current_user: dict = Depends(get_current_user)):
     attacker_id = current_user["id"]
     ac_state = (current_user.get("current_state") or "")
-    items = await _build_active_attacks_list(attacker_id, ac_state)
-    return {"attacks": items}
+    cached = _attack_list_cache_get(attacker_id, ac_state)
+    if cached is not None:
+        # Inflation is already memoized for 3s in _get_kill_inflation_cached; the extra await is cheap.
+        inflation = await _get_kill_inflation_cached(attacker_id)
+        return {"attacks": cached, "inflation": inflation, "inflation_pct": int(round(inflation * 100))}
+    # Run list build and inflation calc concurrently to drop one round-trip from page load.
+    items, inflation = await asyncio.gather(
+        _build_active_attacks_list(attacker_id, ac_state),
+        _get_kill_inflation_cached(attacker_id),
+    )
+    _attack_list_cache_set(attacker_id, ac_state, items)
+    return {"attacks": items, "inflation": inflation, "inflation_pct": int(round(inflation * 100))}
 
 async def delete_attacks(request: AttackDeleteRequest, current_user: dict = Depends(get_current_user_verified)):
     ids = [x for x in (request.attack_ids or []) if isinstance(x, str) and x.strip()]
@@ -1515,6 +1589,7 @@ async def delete_attacks(request: AttackDeleteRequest, current_user: dict = Depe
     if not ids:
         raise HTTPException(status_code=400, detail="No attack ids provided")
     res = await db.attacks.delete_many({"attacker_id": current_user["id"], "id": {"$in": ids}})
+    _attack_list_cache_invalidate(current_user["id"])
     return {"message": f"Deleted {res.deleted_count} search(es)", "deleted": res.deleted_count}
 
 async def travel_to_target(body: AttackIdRequest, req: Request, current_user: dict = Depends(get_current_user_verified)):
@@ -1775,10 +1850,40 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
 
     # Require an owned and equipped gun before attacking. This avoids \"punch\" attacks
     # and gives clearer feedback when players forget to buy/equip a weapon.
-    owned_weapons = await db.user_weapons.find(
-        {"user_id": current_user["id"], "quantity": {"$gt": 0}},
-        {"_id": 0, "weapon_id": 1},
-    ).to_list(100)
+    # Parallel: reads below are independent of each other (each only depends on `target`/current_user, not on prior awaits).
+    # Cuts wall-clock under high traffic by removing 5 sequential round-trips.
+    from routers.game.achievements import get_badge_bonuses as _get_badge_bonuses
+    async def _badge_bonuses_safe(uid: str) -> dict:
+        if not uid:
+            return {}
+        try:
+            return (await _get_badge_bonuses(uid)) or {}
+        except Exception:
+            return {}
+    (
+        owned_weapons,
+        inflation,
+        bb_a,
+        bb_v,
+        exclusive_car_bullet_mult,
+        target_bodyguards,
+    ) = await asyncio.gather(
+        db.user_weapons.find(
+            {"user_id": current_user["id"], "quantity": {"$gt": 0}},
+            {"_id": 0, "weapon_id": 1},
+        ).to_list(100),
+        _get_kill_inflation_cached(current_user["id"]),
+        _badge_bonuses_safe(current_user.get("id") or ""),
+        _badge_bonuses_safe(target.get("id") or "") if not target.get("is_npc") else _badge_bonuses_safe(""),
+        _exclusive_car_bullet_defense_multiplier(target),
+        db.bodyguards.find(
+            {"user_id": target["id"]},
+            {"_id": 0, "slot_number": 1, "robot_name": 1, "bodyguard_user_id": 1},
+        ).to_list(10),
+    )
+    attacker_kill_badges = bb_a.get("kills", 0) * bb_a.get("prestige_badge_mult", 1)
+    victim_kill_badges = bb_v.get("kills", 0) * bb_v.get("prestige_badge_mult", 1)
+
     owned_weapon_ids = {w.get("weapon_id") for w in owned_weapons if w.get("weapon_id")}
     if not owned_weapon_ids:
         await _log_attack_error(current_user["id"], current_user.get("username"), "You don't own a gun. Visit the armoury or store to buy one before you can attack.", req)
@@ -1793,19 +1898,12 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             detail="You need to equip a gun before you can attack.",
         )
 
-    best_damage, best_weapon_name = await _best_weapon_for_user(current_user["id"], equipped_weapon_id)
-    inflation = await _get_kill_inflation_cached(current_user["id"])
-    attacker_kill_badges = victim_kill_badges = 0
-    try:
-        from routers.game.achievements import get_badge_bonuses
-        bb_a = await get_badge_bonuses(current_user.get("id") or "")
-        bb_v = await get_badge_bonuses(target.get("id") or "") if not target.get("is_npc") else {}
-        attacker_kill_badges = bb_a.get("kills", 0) * bb_a.get("prestige_badge_mult", 1)
-        victim_kill_badges = bb_v.get("kills", 0) * bb_v.get("prestige_badge_mult", 1)
-    except Exception:
-        pass
+    # Parallel: best weapon damage + per-weapon mastery; both only need a validated equipped_weapon_id.
+    (best_damage, best_weapon_name), mastery_pct = await asyncio.gather(
+        _best_weapon_for_user(current_user["id"], equipped_weapon_id),
+        _get_weapon_mastery_pct(current_user["id"], equipped_weapon_id),
+    )
     bullets_base = _bullets_to_kill(target_armour, target_rank_id, best_damage, attacker_rank_id, attacker_kill_badges, victim_kill_badges)
-    mastery_pct = await _get_weapon_mastery_pct(current_user["id"], equipped_weapon_id)
     discount = (mastery_pct / 100.0) * (MASTERY_MAX_BULLET_REDUCTION_PCT / 100.0)
     bullets_required = int(math.ceil(bullets_base * (1.0 + inflation) * (1.0 - discount)))
     # "Completed it" perk on target: 2x bullets required to attack them
@@ -1818,7 +1916,6 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             target_has_armour_bonus = bool((owner_user or {}).get("completed_it_armour_bonus"))
     if target_has_armour_bonus:
         bullets_required = bullets_required * 2
-    exclusive_car_bullet_mult = await _exclusive_car_bullet_defense_multiplier(target)
     if exclusive_car_bullet_mult > 1.0:
         bullets_required = int(math.ceil(bullets_required * exclusive_car_bullet_mult))
     if equipped_weapon_id == LOOT_EXCLUSIVE_WEAPON_ID:
@@ -1830,10 +1927,6 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     if attacker_bullets <= 0:
         await _log_attack_error(current_user["id"], current_user.get("username"), "You need bullets to attack.", req)
         raise HTTPException(status_code=400, detail="You need bullets to attack.")
-    target_bodyguards = await db.bodyguards.find(
-        {"user_id": target["id"]},
-        {"_id": 0, "slot_number": 1, "robot_name": 1, "bodyguard_user_id": 1},
-    ).to_list(10)
     if target_bodyguards:
         first_bg = max(target_bodyguards, key=lambda b: b.get("slot_number", 0))
         display_name = first_bg.get("robot_name") or "bodyguard"
