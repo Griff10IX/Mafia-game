@@ -74,14 +74,9 @@ VALUE_RANK = {"2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "1
 # So "even money" on a pair of Jacks requires multiplier 2 (full stake back + equal win), not 1.5.
 # Preset "enhanced" was the reference for the low tier; "normal" / "increased" match that pattern at the bottom.
 #
-# House lean: (1) Opening hand sometimes dealt with rank-weighted picks (low cards favored), not a fair 5-off shuffle.
-# (2) Replacement draws sometimes use the same rank-weighted picks.
-# (3) VIDEO_POKER_WIN_CREDIT_MULT applies to credited cash when the table multiplier is > 1.
-VIDEO_POKER_DEAL_OWNER_BIAS_P = 0.88  # rank-weighted opening (low cards); rest fair shuffle + pop
-VIDEO_POKER_DRAW_OWNER_BIAS_P = 0.80  # per replacement card when deck has 2+ cards; 0 disables
-VIDEO_POKER_RANK_WEIGHT_EXP = 2.0  # exponent on (15.5 - rank); higher → stronger low-card bias
-VIDEO_POKER_RANK_WEIGHT_FLOOR = 0.018  # minimum weight so high ranks stay possible but rarer
-VIDEO_POKER_WIN_CREDIT_MULT = 0.86  # haircut on credited wins when mult > 1 (owner / house edge)
+# House lean: deal/draw are fully fair (single shuffle, pop next card). After the draw, an
+# outcome-demote roll on paying tiers (see VIDEO_POKER_DEMOTE_BY_PRESET / _vp_apply_outcome_demote)
+# silently rerolls non-held positions to drive house edge. Cap: at most one demote per draw.
 VIDEO_POKER_DEFAULT_ODDS_PRESET = "tight"
 VIDEO_POKER_ODDS_PRESET_LABELS = {
     "tight": "Tight (house)",
@@ -139,39 +134,71 @@ VIDEO_POKER_PAY_PRESETS: dict[str, dict[str, float]] = {
 # Back-compat alias for imports / admin tooling
 PAY_TABLE = VIDEO_POKER_PAY_PRESETS[VIDEO_POKER_DEFAULT_ODDS_PRESET]
 
-
-def _vp_pop_rank_weighted_from_deck(deck: list) -> dict:
-    """Remove and return one card, favoring lower ranks (less premium connecting potential)."""
-    if not deck:
-        raise ValueError("video poker: empty deck")
-    if len(deck) == 1:
-        return deck.pop()
-    weights = []
-    exp = float(VIDEO_POKER_RANK_WEIGHT_EXP)
-    floor = float(VIDEO_POKER_RANK_WEIGHT_FLOOR)
-    for c in deck:
-        r = float(VALUE_RANK.get(str(c.get("value")), 7))
-        w = (15.5 - r) ** exp
-        weights.append(max(floor, w))
-    j = _rng.choices(range(len(deck)), weights=weights, k=1)[0]
-    return deck.pop(j)
+# Per-preset outcome-demote probabilities. After the draw, if the final hand is a paying tier,
+# the engine rolls once against this table; on a hit, the non-held positions are silently
+# rerolled from a fresh fair deck (52 minus held). If the player held all 5 on a paying tier,
+# one random position is force-swapped to guarantee a downgrade path. Cap one demote per draw.
+# All numbers are tunable in this single dict — bigger = rarer big hands.
+VIDEO_POKER_DEMOTE_BY_PRESET: dict[str, dict[str, float]] = {
+    "tight": {
+        "royal_flush": 0.99,
+        "straight_flush": 0.95,
+        "four_of_a_kind": 0.85,
+        "full_house": 0.55,
+        "flush": 0.35,
+        "straight": 0.25,
+        "three_of_a_kind": 0.12,
+        "two_pair": 0.05,
+        "jacks_or_better": 0.02,
+    },
+    "normal": {
+        "royal_flush": 0.97,
+        "straight_flush": 0.90,
+        "four_of_a_kind": 0.75,
+        "full_house": 0.45,
+        "flush": 0.30,
+        "straight": 0.20,
+        "three_of_a_kind": 0.10,
+        "two_pair": 0.04,
+        "jacks_or_better": 0.015,
+    },
+    "increased": {
+        "royal_flush": 0.92,
+        "straight_flush": 0.80,
+        "four_of_a_kind": 0.60,
+        "full_house": 0.30,
+        "flush": 0.20,
+        "straight": 0.12,
+        "three_of_a_kind": 0.06,
+        "two_pair": 0.02,
+        "jacks_or_better": 0.01,
+    },
+    "enhanced": {
+        "royal_flush": 0.85,
+        "straight_flush": 0.70,
+        "four_of_a_kind": 0.50,
+        "full_house": 0.20,
+        "flush": 0.12,
+        "straight": 0.08,
+        "three_of_a_kind": 0.04,
+        "two_pair": 0.01,
+        "jacks_or_better": 0.0,
+    },
+}
+VIDEO_POKER_DEMOTE_MAX_REROLLS = 1
 
 
 def _vp_deal_initial_hand(deck: list) -> list:
-    """Deal 5 cards: usually fair shuffle + pop; sometimes 5× rank-weighted pulls (weaker openings on average)."""
-    if VIDEO_POKER_DEAL_OWNER_BIAS_P > 0 and _rng.random() < VIDEO_POKER_DEAL_OWNER_BIAS_P:
-        return [_vp_pop_rank_weighted_from_deck(deck) for _ in range(5)]
+    """Deal 5 cards from a fairly shuffled deck."""
     _rng.shuffle(deck)
     return [deck.pop() for _ in range(5)]
 
 
 def _vp_pop_replacement_card(deck: list) -> dict:
-    """Pop one card from the remaining deck. Usually next card (fair); sometimes rank-weighted (owner)."""
+    """Pop the next card from the (already-shuffled) remaining deck."""
     if not deck:
         raise ValueError("video poker: empty deck on draw")
-    if len(deck) == 1 or VIDEO_POKER_DRAW_OWNER_BIAS_P <= 0 or _rng.random() >= VIDEO_POKER_DRAW_OWNER_BIAS_P:
-        return deck.pop()
-    return _vp_pop_rank_weighted_from_deck(deck)
+    return deck.pop()
 
 
 HAND_NAMES = {
@@ -210,17 +237,11 @@ def _effective_odds_preset(doc: Optional[dict]) -> str:
 
 
 def _payout_for_multiplier(bet: int, mult: float) -> int:
-    """Cash credited on draw. Winning hands use VIDEO_POKER_WIN_CREDIT_MULT when mult > 1 (owner / house edge)."""
+    """Cash credited on draw: honest round(bet * multiplier). House edge comes from outcome demote, not a credit haircut."""
     m = float(mult or 0)
     if m <= 0:
         return 0
-    b = int(bet)
-    if m <= 1.0001:
-        return max(0, int(round(b * m)))
-    cred = float(VIDEO_POKER_WIN_CREDIT_MULT)
-    if cred >= 0.9999:
-        return max(0, int(round(b * m)))
-    return max(0, int(round(b * m * cred)))
+    return max(0, int(round(int(bet) * m)))
 
 
 def _pay_tables_for_api() -> dict[str, dict[str, float]]:
@@ -347,6 +368,38 @@ def _evaluate_hand(hand, pay_table: dict[str, float]):
     return key, HAND_NAMES.get(key, key), multiplier
 
 
+def _vp_apply_outcome_demote(
+    hand: list,
+    held_idx: set[int],
+    preset: str,
+    pay_table: dict[str, float],
+) -> tuple[list, str, str, float, bool]:
+    """House-edge mechanism. If the post-draw hand is a paying tier, roll once against the
+    preset's demote probability. On a hit, reroll the non-held positions from a fresh fair
+    deck (52 minus held); if the player held all 5, force a single random swap so the hand
+    is guaranteed to change. Returns (final_hand, original_key, final_key, final_multiplier, demoted).
+    Hard-capped at one demote per draw (no inner loop)."""
+    original_key, _, _ = _evaluate_hand(hand, pay_table)
+    p = float(VIDEO_POKER_DEMOTE_BY_PRESET.get(preset, {}).get(original_key, 0.0) or 0.0)
+    if p <= 0 or _rng.random() >= p:
+        final_mult = float(pay_table.get(original_key, 0) or 0)
+        return hand, original_key, original_key, final_mult, False
+    fresh = _make_deck()
+    held_cards = {(hand[i]["suit"], hand[i]["value"]) for i in held_idx if 0 <= i < 5}
+    fresh = [c for c in fresh if (c["suit"], c["value"]) not in held_cards]
+    _rng.shuffle(fresh)
+    new_hand = list(hand)
+    swap_indices = [i for i in range(5) if i not in held_idx]
+    if not swap_indices:
+        swap_indices = [_rng.randrange(5)]
+    for i in swap_indices:
+        if not fresh:
+            break
+        new_hand[i] = fresh.pop()
+    final_key, _, final_mult = _evaluate_hand(new_hand, pay_table)
+    return new_hand, original_key, final_key, final_mult, True
+
+
 async def _settle_and_save_history(
     user_id: str,
     username: str,
@@ -395,10 +448,6 @@ def register(router):
             "max_bet": max_bet,
             "claim_cost": cc["video_poker"],
             "house_edge": VIDEO_POKER_HOUSE_EDGE,
-            "draw_owner_bias_p": VIDEO_POKER_DRAW_OWNER_BIAS_P,
-            "deal_owner_bias_p": VIDEO_POKER_DEAL_OWNER_BIAS_P,
-            "rank_weight_exp": VIDEO_POKER_RANK_WEIGHT_EXP,
-            "win_credit_mult": VIDEO_POKER_WIN_CREDIT_MULT,
             "odds_preset": preset,
             "odds_preset_label": VIDEO_POKER_ODDS_PRESET_LABELS.get(preset, preset.title()),
             "odds_preset_options": [{"id": k, "label": v} for k, v in VIDEO_POKER_ODDS_PRESET_LABELS.items()],
@@ -927,7 +976,11 @@ def register(router):
             if i not in holds and deck:
                 hand[i] = _vp_pop_replacement_card(deck)
 
-        hand_key, hand_name, multiplier = _evaluate_hand(hand, pay_table)
+        # House-edge: outcome demote on paying tiers (silent reroll of non-held positions).
+        hand, original_hand_key, hand_key, multiplier, demoted = _vp_apply_outcome_demote(
+            hand, holds, odds_preset, pay_table
+        )
+        hand_name = HAND_NAMES.get(hand_key, hand_key)
         payout = _payout_for_multiplier(bet, multiplier)
         payout_full_vp = 0
         gambling_extra = None
@@ -1097,6 +1150,13 @@ def register(router):
                 else:
                     gambling_extra["buy_back_points_offered"] = 0
                     gambling_extra["buy_back_outcome"] = "not_offered"
+
+        # Audit breadcrumb for the outcome-demote (private to the gambling log; never returned to client).
+        if demoted:
+            if gambling_extra is None:
+                gambling_extra = {}
+            gambling_extra["demoted_from"] = original_hand_key
+            gambling_extra["demoted_to"] = hand_key
 
         await _settle_and_save_history(
             current_user.get("id") or "",
