@@ -5,6 +5,7 @@ import math
 import re
 import secrets
 _rng = secrets.SystemRandom()
+import time
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Tuple
@@ -83,14 +84,61 @@ def _safe_int(val, default: int = 0) -> int:
 MOD_DEFAULT_ONLINE_COLOR = "#1e3a5f"
 HDO_ONLINE_COLOR = "#166534"
 
+_JAIL_COLOR_CACHE_TTL_SEC = 30.0
+_jail_color_cache: dict[str, Tuple[float, str]] = {}
+_JAIL_SHORT_CACHE_TTL_SEC = 2.0
+_jail_players_cache: dict[str, Tuple[float, dict]] = {}
+_jail_visible_npcs_cache: dict[str, Tuple[float, List[dict]]] = {}
+_jail_private_cell_cache: dict[str, Tuple[float, dict]] = {}
+
+
+def _jail_cache_get(cache: dict, key: str):
+    cached = cache.get(key)
+    if not cached:
+        return None
+    expires_at, value = cached
+    if expires_at <= time.monotonic():
+        cache.pop(key, None)
+        return None
+    return value
+
+
+def _jail_cache_set(cache: dict, key: str, value, ttl: float) -> None:
+    cache[key] = (time.monotonic() + ttl, value)
+
+
+def _invalidate_jail_user_caches(user_id: str) -> None:
+    _jail_players_cache.pop(user_id, None)
+    _jail_visible_npcs_cache.pop(user_id, None)
+    _jail_private_cell_cache.pop(user_id, None)
+
+
+def _invalidate_all_jail_players_cache() -> None:
+    _jail_players_cache.clear()
+    _jail_visible_npcs_cache.clear()
+    _jail_private_cell_cache.clear()
+
+
+async def _get_game_setting_color_cached(key: str, default: str) -> str:
+    cached = _jail_cache_get(_jail_color_cache, key)
+    if cached is not None:
+        return cached
+    doc = await db.game_settings.find_one({"key": key}, {"_id": 0, "value": 1})
+    raw = (doc.get("value") or default) if doc else default
+    if not isinstance(raw, str) or not raw.strip():
+        raw = default
+    raw = raw.strip()
+    value = raw if raw.startswith("#") and len(raw) <= 9 else default
+    _jail_cache_set(_jail_color_cache, key, value, _JAIL_COLOR_CACHE_TTL_SEC)
+    return value
+
 
 async def _get_mod_default_online_color_jail():
-    doc = await db.game_settings.find_one({"key": "mod_default_online_color"}, {"_id": 0, "value": 1})
-    raw = (doc.get("value") or MOD_DEFAULT_ONLINE_COLOR) if doc else MOD_DEFAULT_ONLINE_COLOR
-    if not isinstance(raw, str) or not raw.strip():
-        return MOD_DEFAULT_ONLINE_COLOR
-    raw = raw.strip()
-    return raw if raw.startswith("#") and len(raw) <= 9 else MOD_DEFAULT_ONLINE_COLOR
+    return await _get_game_setting_color_cached("mod_default_online_color", MOD_DEFAULT_ONLINE_COLOR)
+
+
+async def _get_admin_online_color_jail():
+    return await _get_game_setting_color_cached("admin_online_color", "#a78bfa")
 
 
 def _jail_row_online_styling(
@@ -330,6 +378,7 @@ async def _try_insert_one_global_jail_npc() -> bool:
                 "spawned_at": datetime.now(timezone.utc).isoformat(),
             }
         )
+        _invalidate_all_jail_players_cache()
         return True
     return False
 
@@ -340,9 +389,16 @@ async def _count_personal_jail_npcs(user_id: str) -> int:
 
 async def _get_visible_jail_npcs(user_id: str) -> List[dict]:
     """Global jail NPCs plus this user's private-cell NPCs only."""
-    g = await db.jail_npcs.find(_global_jail_npc_filter(), {"_id": 0}).to_list(30)
-    p = await db.jail_npcs.find({"owner_user_id": user_id}, {"_id": 0}).to_list(JAIL_PRIVATE_CELL_MAX + 2)
-    return list(g) + list(p)
+    cached = _jail_cache_get(_jail_visible_npcs_cache, user_id)
+    if cached is not None:
+        return cached
+    g, p = await asyncio.gather(
+        db.jail_npcs.find(_global_jail_npc_filter(), {"_id": 0}).to_list(30),
+        db.jail_npcs.find({"owner_user_id": user_id}, {"_id": 0}).to_list(JAIL_PRIVATE_CELL_MAX + 2),
+    )
+    npcs = list(g) + list(p)
+    _jail_cache_set(_jail_visible_npcs_cache, user_id, npcs, _JAIL_SHORT_CACHE_TTL_SEC)
+    return npcs
 
 
 def _npc_visible_to_user_filter(user_id: str) -> dict:
@@ -356,12 +412,17 @@ def _npc_visible_to_user_filter(user_id: str) -> dict:
 
 
 async def _private_cell_meta(user_id: str) -> dict:
+    cached = _jail_cache_get(_jail_private_cell_cache, user_id)
+    if cached is not None:
+        return cached
     now = datetime.now(timezone.utc)
-    global_count = await _count_global_jail_npcs()
-    personal_count = await _count_personal_jail_npcs(user_id)
-    me = await db.users.find_one(
-        {"id": user_id},
-        {"_id": 0, "jail_private_cell_last_spawn_at": 1, "in_jail": 1},
+    global_count, personal_count, me = await asyncio.gather(
+        _count_global_jail_npcs(),
+        _count_personal_jail_npcs(user_id),
+        db.users.find_one(
+            {"id": user_id},
+            {"_id": 0, "jail_private_cell_last_spawn_at": 1, "in_jail": 1},
+        ),
     )
     in_jail = bool((me or {}).get("in_jail"))
     last_raw = (me or {}).get("jail_private_cell_last_spawn_at")
@@ -382,54 +443,58 @@ async def _private_cell_meta(user_id: str) -> dict:
         and personal_count == 0
         and cooldown_remaining == 0
     )
-    return {
+    meta = {
         "available": available,
         "cooldown_seconds": cooldown_remaining,
         "global_npc_count": global_count,
         "personal_npc_count": personal_count,
     }
+    _jail_cache_set(_jail_private_cell_cache, user_id, meta, _JAIL_SHORT_CACHE_TTL_SEC)
+    return meta
 
 
-async def get_jailed_players(current_user: dict = Depends(get_current_user)):
+async def get_jailed_players(current_user: dict = Depends(get_current_user), include_status: bool = True):
+    user_id = current_user["id"]
+    cached = _jail_cache_get(_jail_players_cache, user_id)
+    if cached is not None:
+        payload = dict(cached)
+        if include_status:
+            payload["status"] = await get_jail_status(current_user)
+        return payload
     now = datetime.now(timezone.utc)
-    five_min_ago = now - timedelta(minutes=5)
-    ten_min_ago = now - timedelta(minutes=10)
-    admin_color_doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
-    admin_online_color = (admin_color_doc.get("value") or "#a78bfa") if admin_color_doc else "#a78bfa"
-    if not isinstance(admin_online_color, str) or not admin_online_color.strip():
-        admin_online_color = "#a78bfa"
-    admin_online_color = admin_online_color.strip()
-    mod_default_online_color = await _get_mod_default_online_color_jail()
-
-    real_players_raw = await db.users.find(
-        {"in_jail": True},
-        {
-            "_id": 0,
-            "username": 1,
-            "id": 1,
-            "rank_points": 1,
-            "prestige_rank_multiplier": 1,
-            "jail_until": 1,
-            "bust_reward_cash": 1,
-            "money": 1,
-            "email": 1,
-            "is_moderator": 1,
-            "is_help_desk_operator": 1,
-            "is_entertainer": 1,
-            "mod_online_color": 1,
-            "entertainer_online_color": 1,
-            "hdo_online_color": 1,
-            "admin_ghost_mode": 1,
-        },
-    ).to_list(50)
+    admin_online_color, mod_default_online_color, real_players_raw, npcs, private_cell = await asyncio.gather(
+        _get_admin_online_color_jail(),
+        _get_mod_default_online_color_jail(),
+        db.users.find(
+            {"in_jail": True},
+            {
+                "_id": 0,
+                "username": 1,
+                "id": 1,
+                "rank_points": 1,
+                "prestige_rank_multiplier": 1,
+                "jail_until": 1,
+                "bust_reward_cash": 1,
+                "money": 1,
+                "email": 1,
+                "is_moderator": 1,
+                "is_help_desk_operator": 1,
+                "is_entertainer": 1,
+                "mod_online_color": 1,
+                "entertainer_online_color": 1,
+                "hdo_online_color": 1,
+                "admin_ghost_mode": 1,
+            },
+        ).to_list(50),
+        _get_visible_jail_npcs(user_id),
+        _private_cell_meta(user_id),
+    )
     real_players = []
+    cleanup_ids = []
     for p in real_players_raw:
         jail_until_iso = p.get("jail_until")
         if not jail_until_iso:
-            await db.users.update_one(
-                {"id": p["id"]},
-                {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}, "$unset": {"auto_rank_next_run_at": ""}},
-            )
+            cleanup_ids.append(p["id"])
             continue
         try:
             jail_until = datetime.fromisoformat(str(jail_until_iso).replace("Z", "+00:00"))
@@ -438,13 +503,11 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
         except Exception:
             continue
         if jail_until <= now:
-            await db.users.update_one(
-                {"id": p["id"]},
-                {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}, "$unset": {"auto_rank_next_run_at": ""}},
-            )
+            cleanup_ids.append(p["id"])
             continue
         real_players.append(p)
-    npcs = await _get_visible_jail_npcs(current_user["id"])
+    if cleanup_ids:
+        asyncio.create_task(_jail_cleanup_expired_players(cleanup_ids))
     players_data = []
     for player in real_players:
         _rp = int(player.get("rank_points") or 0)
@@ -473,7 +536,7 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
             {
                 "username": username,
                 "rank_name": rank_name,
-                "is_self": player["id"] == current_user["id"],
+                "is_self": player["id"] == user_id,
                 "is_jail_list_npc": False,
                 "bust_reward_cash": reward_cash,
                 **styling,
@@ -491,13 +554,46 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
             row["private_cell_npc"] = True
         players_data.append(row)
     players_data.sort(key=lambda x: int(x.get("bust_reward_cash") or 0), reverse=True)
-    private_cell = await _private_cell_meta(current_user["id"])
-    return {
+    payload = {
         "players": players_data,
         "admin_online_color": admin_online_color,
         "mod_default_online_color": mod_default_online_color,
         "private_cell": private_cell,
     }
+    _jail_cache_set(_jail_players_cache, user_id, payload, _JAIL_SHORT_CACHE_TTL_SEC)
+    if include_status:
+        payload = dict(payload)
+        payload["status"] = await get_jail_status(current_user)
+    return payload
+
+
+async def _jail_cleanup_expired_players(user_ids: List[str]) -> None:
+    ids = [uid for uid in dict.fromkeys(user_ids) if uid]
+    if not ids:
+        return
+    try:
+        await db.users.update_many(
+            {"id": {"$in": ids}},
+            {
+                "$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False},
+                "$unset": {"auto_rank_next_run_at": ""},
+            },
+        )
+        _invalidate_all_jail_players_cache()
+    except Exception as e:
+        logger.warning("jail players cleanup failed: %s", e)
+
+
+async def _clear_user_jail_state(user_id: str) -> None:
+    await db.users.update_one(
+        {"id": user_id},
+        {
+            "$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False},
+            "$unset": {"auto_rank_next_run_at": ""},
+        },
+    )
+    _invalidate_jail_user_caches(user_id)
+    _jail_players_cache.clear()
 
 
 async def _record_bust_event(user_id: str, success: bool, profit: int, target_username: str = None, is_npc: bool = False):
@@ -831,6 +927,7 @@ async def bust_out_of_jail(
         raise HTTPException(status_code=500, detail="Failed to process bust. Please try again.")
     if result.get("error"):
         raise HTTPException(status_code=result.get("error_code", 400), detail=result["error"])
+    _invalidate_all_jail_players_cache()
     await log_activity(current_user["id"], current_user.get("username", "?"), "jail_bust", {
         "target": request.target_username, "success": result.get("success", False),
         "cash_reward": result.get("cash_reward", 0), "rp": result.get("rank_points_earned", 0),
@@ -861,7 +958,7 @@ async def get_jail_bootstrap(current_user: dict = Depends(get_current_user)):
     Avoids multiple first-paint round trips by bundling status + players + stats + lightweight extras.
     """
     status_task = get_jail_status(current_user)
-    players_task = get_jailed_players(current_user)
+    players_task = get_jailed_players(current_user, include_status=False)
     stats_task = get_jail_stats(current_user)
     status, players, stats = await asyncio.gather(status_task, players_task, stats_task)
     return {
@@ -896,27 +993,18 @@ async def get_jail_status(current_user: dict = Depends(get_current_user)):
         return {"in_jail": False, **base}
     jail_until_iso = current_user.get("jail_until")
     if not jail_until_iso:
-        await db.users.update_one(
-            {"id": current_user["id"]},
-            {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}, "$unset": {"auto_rank_next_run_at": ""}},
-        )
+        await _clear_user_jail_state(current_user["id"])
         return {"in_jail": False, **base}
     try:
         jail_until = datetime.fromisoformat(str(jail_until_iso).strip().replace("Z", "+00:00"))
         if jail_until.tzinfo is None:
             jail_until = jail_until.replace(tzinfo=timezone.utc)
     except (ValueError, TypeError):
-        await db.users.update_one(
-            {"id": current_user["id"]},
-            {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}, "$unset": {"auto_rank_next_run_at": ""}},
-        )
+        await _clear_user_jail_state(current_user["id"])
         return {"in_jail": False, **base}
     now = datetime.now(timezone.utc)
     if jail_until <= now:
-        await db.users.update_one(
-            {"id": current_user["id"]},
-            {"$set": {"in_jail": False, "jail_until": None, "snitch_attempted_this_term": False}, "$unset": {"auto_rank_next_run_at": ""}},
-        )
+        await _clear_user_jail_state(current_user["id"])
         return {"in_jail": False, **base}
     seconds_remaining = int((jail_until - now).total_seconds())
     return {
@@ -947,6 +1035,7 @@ async def set_bust_reward(
         {"id": current_user["id"]},
         {"$set": {"bust_reward_cash": amount}},
     )
+    _invalidate_jail_user_caches(current_user["id"])
     return {"message": f"Bust reward set to ${amount:,}" if amount else "Bust reward cleared.", "bust_reward_cash": amount}
 
 
@@ -967,6 +1056,7 @@ async def leave_jail(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="You need at least 3 points to leave jail")
+    _invalidate_all_jail_players_cache()
     await log_points_event(db, user_id=current_user["id"], points=-3, event_type="jail_leave", event_ref=current_user["id"], meta={"points_spent": 3})
     await log_activity(current_user["id"], current_user.get("username", "?"), "jail_leave", {"points_spent": 3})
     return {
@@ -1109,6 +1199,7 @@ async def snitch(
         {"id": target["id"]},
         {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "snitched_on_until": snitch_immunity_until.isoformat(), "snitch_attempted_this_term": False}},
     )
+    _invalidate_all_jail_players_cache()
     await send_notification(
         target["id"],
         "Snitched on",
@@ -1218,6 +1309,7 @@ async def try_spawn_private_jail_cell(uid: str) -> Tuple[bool, Optional[str], in
         {"id": uid},
         {"$set": {"jail_private_cell_last_spawn_at": now_iso}},
     )
+    _invalidate_jail_user_caches(uid)
     return True, None, 200
 
 
@@ -1230,6 +1322,7 @@ async def spawn_private_jail_cell(
     ok, err, code = await try_spawn_private_jail_cell(uid)
     if not ok:
         raise HTTPException(status_code=code, detail=err or "Failed")
+    _invalidate_jail_user_caches(uid)
     return {
         "message": f"{JAIL_PRIVATE_CELL_BATCH} private inmates appeared — only you can see them.",
         "added": JAIL_PRIVATE_CELL_BATCH,

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Lock, Users, AlertCircle, DoorOpen, Bot, UserMinus } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
@@ -24,9 +24,10 @@ const JAIL_BACKGROUND_IMAGE =
 /** Keep in sync with `JAIL_BUST_MIN_INTERVAL_SEC` in backend `routers/crime/jail.py`. */
 const JAIL_BUST_MIN_INTERVAL_SEC = 3;
 
-/** While the Jail page is visible — each open tab used 1s + 3s polling, which scaled badly on the server. */
-const JAIL_STATUS_POLL_MS = 3000;
+/** While the Jail page is visible — polling is collapsed into one /jail/players call that also returns status. */
 const JAIL_PLAYERS_POLL_MS = 6000;
+const JAIL_BOOTSTRAP_CACHE_KEY = 'jail_bootstrap_cache_v1';
+const JAIL_BOOTSTRAP_CACHE_MAX_AGE_MS = 30 * 1000;
 
 function parseBustWaitSecondsFromDetail(detail) {
   const s =
@@ -41,35 +42,28 @@ function parseBustWaitSecondsFromDetail(detail) {
   return Number.isFinite(n) && n >= 1 ? n : null;
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function readCachedJailBootstrap() {
+  try {
+    if (typeof window === 'undefined') return null;
+    const raw = window.sessionStorage.getItem(JAIL_BOOTSTRAP_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.data) return null;
+    if (typeof parsed.savedAt !== 'number' || Date.now() - parsed.savedAt > JAIL_BOOTSTRAP_CACHE_MAX_AGE_MS) return null;
+    return parsed.data;
+  } catch (_e) {
+    return null;
+  }
 }
 
-/**
- * Jail sustained RL is stored server-side (Mongo), so it survives a full browser refresh.
- * On 429, wait Retry-After (or a short default) and retry so a refresh mid-cooldown can still load.
- * Sequential jail GETs on first paint avoid three parallel hits in the same RL window.
- */
-async function jailGetWith429Retry(requestFn, maxAttempts = 3) {
-  let lastErr;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      return await requestFn();
-    } catch (e) {
-      lastErr = e;
-      const st = e?.response?.status;
-      if (st === 429 && attempt < maxAttempts - 1) {
-        const h = e?.response?.headers;
-        const raw = h?.['retry-after'] ?? h?.['Retry-After'];
-        const sec = parseInt(String(raw), 10);
-        const ms = Number.isFinite(sec) && sec > 0 && sec <= 120 ? sec * 1000 : 2500;
-        await sleep(ms);
-        continue;
-      }
-      throw e;
-    }
-  }
-  throw lastErr;
+function writeCachedJailBootstrap(data) {
+  try {
+    if (typeof window === 'undefined' || !data) return;
+    window.sessionStorage.setItem(
+      JAIL_BOOTSTRAP_CACHE_KEY,
+      JSON.stringify({ savedAt: Date.now(), data }),
+    );
+  } catch (_e) { /* storage disabled/quota is non-fatal */ }
 }
 
 const JailStatusCard = ({ 
@@ -352,14 +346,18 @@ const InfoSection = () => (
 
 // Main component
 export default function Jail() {
-  const [jailStatus, setJailStatus] = useState({ in_jail: false });
-  const [jailedPlayers, setJailedPlayers] = useState([]);
-  const [jailStats, setJailStats] = useState({
+  const cachedBoot = readCachedJailBootstrap();
+  const cachedPlayers = cachedBoot?.players || {};
+  const [jailStatus, setJailStatus] = useState(cachedBoot?.status || { in_jail: false });
+  const [jailedPlayers, setJailedPlayers] = useState(() => (
+    Array.isArray(cachedPlayers.players) ? cachedPlayers.players : []
+  ));
+  const [jailStats, setJailStats] = useState(cachedBoot?.stats || {
     count_today: 0, count_week: 0, success_today: 0, success_week: 0,
     profit_today: 0, profit_24h: 0, profit_week: 0,
   });
   const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
+  const [initialLoading, setInitialLoading] = useState(!cachedBoot);
   const [bustRewardInput, setBustRewardInput] = useState('');
   const [setRewardLoading, setSetRewardLoading] = useState(false);
   const [leavingJail, setLeavingJail] = useState(false);
@@ -367,26 +365,34 @@ export default function Jail() {
   const [snitchTargetInput, setSnitchTargetInput] = useState('');
   const [snitching, setSnitching] = useState(false);
 
-  const [autoRankJailDisabled, setAutoRankJailDisabled] = useState(false);
-  const [privateCell, setPrivateCell] = useState({
-    available: false,
-    cooldown_seconds: 0,
-    global_npc_count: 0,
-    personal_npc_count: 0,
+  const [autoRankJailDisabled, setAutoRankJailDisabled] = useState(() => {
+    const ar = cachedBoot?.auto_rank || {};
+    return !!(ar.auto_rank_enabled && ar.auto_rank_bust_every_5_sec);
+  });
+  const [privateCell, setPrivateCell] = useState(() => {
+    const pc = cachedPlayers.private_cell || {};
+    return {
+      available: !!pc.available,
+      cooldown_seconds: Math.max(0, Number(pc.cooldown_seconds) || 0),
+      global_npc_count: Math.max(0, Number(pc.global_npc_count) || 0),
+      personal_npc_count: Math.max(0, Number(pc.personal_npc_count) || 0),
+    };
   });
   const [privateCellLoading, setPrivateCellLoading] = useState(false);
   const [privateCellCooldownRemaining, setPrivateCellCooldownRemaining] = useState(0);
   const [bustCooldownRemaining, setBustCooldownRemaining] = useState(0);
-  const [user, setUser] = useState(null);
+  const [user, setUser] = useState(cachedBoot?.me || null);
   const [staffListColors, setStaffListColors] = useState({
-    admin_online_color: '#a78bfa',
-    mod_default_online_color: DEFAULT_MOD_COLOR,
+    admin_online_color: cachedPlayers.admin_online_color || '#a78bfa',
+    mod_default_online_color: cachedPlayers.mod_default_online_color || DEFAULT_MOD_COLOR,
   });
+  const jailStatusRef = useRef(jailStatus);
 
-  const fetchJailData = async () => {
-    try {
-      const bootRes = await jailGetWith429Retry(() => api.get('/jail/bootstrap'));
-      const boot = bootRes?.data || {};
+  useEffect(() => {
+    jailStatusRef.current = jailStatus;
+  }, [jailStatus]);
+
+  const applyJailBootstrap = (boot) => {
       setJailStatus(boot.status || { in_jail: false });
       const pd = boot.players || {};
       setJailedPlayers(Array.isArray(pd.players) ? pd.players : []);
@@ -408,16 +414,23 @@ export default function Jail() {
       if (boot.me) {
         setUser((prev) => ({ ...(prev || {}), ...boot.me }));
       }
-      // Keep user object fresh for components that rely on broader /auth/me fields.
-      const meRes = await api.get('/auth/me').catch(() => ({ data: null }));
-      if (meRes.data) setUser(meRes.data);
+  };
+
+  const fetchJailData = async () => {
+    try {
+      const bootRes = await api.get('/jail/bootstrap');
+      const boot = bootRes?.data || {};
+      applyJailBootstrap(boot);
+      writeCachedJailBootstrap(boot);
       setInitialLoading(false);
     } catch (error) {
       console.error('Failed to load jail data:', error);
-      toast.error('Failed to load jail data');
-      setJailStatus({ in_jail: false });
-      setJailedPlayers([]);
-      setJailStats({ count_today: 0, count_week: 0, success_today: 0, success_week: 0, profit_today: 0, profit_24h: 0, profit_week: 0 });
+      if (!cachedBoot) {
+        toast.error('Failed to load jail data');
+        setJailStatus({ in_jail: false });
+        setJailedPlayers([]);
+        setJailStats({ count_today: 0, count_week: 0, success_today: 0, success_week: 0, profit_today: 0, profit_24h: 0, profit_week: 0 });
+      }
       setInitialLoading(false);
     }
   };
@@ -441,46 +454,35 @@ export default function Jail() {
           mod_default_online_color: pd.mod_default_online_color ?? prev.mod_default_online_color,
         }));
       }
+      if (pd.status && typeof pd.status === 'object') {
+        const wasInJail = !!jailStatusRef.current?.in_jail;
+        jailStatusRef.current = pd.status;
+        setJailStatus(pd.status);
+        if (wasInJail && !pd.status.in_jail) {
+          toast.success('You are free!');
+          fetchJailData();
+        }
+      }
     } catch (error) {
       // Silent fail — players list will refresh on next full fetch
       console.error('Failed to refresh jail players:', error);
     }
   };
 
-  const fetchJailStatus = async () => {
-    try {
-      const response = await api.get('/jail/status');
-      const wasInJail = jailStatus.in_jail;
-      setJailStatus(response.data);
-      
-      if (wasInJail && !response.data.in_jail) {
-        toast.success('You are free!');
-        fetchJailData();
-      }
-    } catch (error) {
-      console.error('Failed to check jail status:', error);
-    }
-  };
-
   useEffect(() => {
     fetchJailData();
-    let statusIntervalId;
     let playersIntervalId;
     const clearPolling = () => {
-      if (statusIntervalId != null) clearInterval(statusIntervalId);
       if (playersIntervalId != null) clearInterval(playersIntervalId);
-      statusIntervalId = undefined;
       playersIntervalId = undefined;
     };
     const startPolling = () => {
       clearPolling();
-      statusIntervalId = window.setInterval(fetchJailStatus, JAIL_STATUS_POLL_MS);
       playersIntervalId = window.setInterval(fetchJailPlayers, JAIL_PLAYERS_POLL_MS);
     };
     const onVisibility = () => {
       if (document.hidden) clearPolling();
       else {
-        void fetchJailStatus();
         void fetchJailPlayers();
         startPolling();
       }
