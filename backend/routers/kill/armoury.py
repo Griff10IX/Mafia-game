@@ -1639,6 +1639,8 @@ async def sell_armour(current_user: dict = Depends(get_current_user)):
 _get_weapons_cache: dict = {}  # user_id -> (result_list, expires_at)
 _GET_WEAPONS_CACHE_TTL_SEC = 10
 _GET_WEAPONS_CACHE_MAX_ENTRIES = 5000
+_best_weapon_catalog_cache: Tuple[Dict[str, Dict[str, Any]], float] = ({}, 0.0)
+_BEST_WEAPON_CATALOG_TTL_SEC = 10
 
 
 def _invalidate_weapons_cache(user_id: str):
@@ -1924,17 +1926,30 @@ async def _best_weapon_for_user(user_id: str, equipped_weapon_id: str | None = N
     Return (damage, weapon_name) for combat.
     If equipped_weapon_id is provided and owned, use it; otherwise fall back to best owned.
     """
-    user_weapons = await db.user_weapons.find({"user_id": user_id, "quantity": {"$gt": 0}}, {"_id": 0}).to_list(100)
-    weapons_list = await db.weapons.find({}, {"_id": 0, "id": 1, "damage": 1, "name": 1}).to_list(200)
+    user_weapons = await db.user_weapons.find({"user_id": user_id, "quantity": {"$gt": 0}}, {"_id": 0, "weapon_id": 1}).to_list(100)
+    global _best_weapon_catalog_cache
+    now = time.time()
+    weapons_by_id, expires_at = _best_weapon_catalog_cache
+    if not weapons_by_id or now > expires_at:
+        weapons_list = await db.weapons.find({}, {"_id": 0, "id": 1, "damage": 1, "name": 1}).to_list(200)
+        weapons_by_id = {
+            str(w.get("id")): {
+                "damage": int(w.get("damage", 5) or 5),
+                "name": str(w.get("name") or "Weapon"),
+            }
+            for w in weapons_list
+            if w.get("id")
+        }
+        _best_weapon_catalog_cache = (weapons_by_id, now + _BEST_WEAPON_CATALOG_TTL_SEC)
     owned_ids = {uw.get("weapon_id") for uw in user_weapons}
     if equipped_weapon_id and equipped_weapon_id in owned_ids:
-        w = next((x for x in weapons_list if x.get("id") == equipped_weapon_id), None)
+        w = weapons_by_id.get(equipped_weapon_id)
         if w:
             return int(w.get("damage", 5) or 5), (w.get("name") or "Weapon")
     best_damage = 5
     best_name = "Brass Knuckles"
     for uw in user_weapons:
-        w = next((x for x in weapons_list if x.get("id") == uw.get("weapon_id")), None)
+        w = weapons_by_id.get(uw.get("weapon_id"))
         dmg = int(w.get("damage", 0) or 0) if w else 0
         if dmg > best_damage:
             best_damage = dmg

@@ -6,6 +6,7 @@ import math
 import random
 import re
 import secrets
+import time
 from urllib.parse import urlparse
 import uuid
 import os
@@ -13,9 +14,12 @@ import sys
 import logging
 from fastapi import Depends, HTTPException, Request, Query
 from pydantic import BaseModel, field_validator, model_validator
-from pymongo import UpdateOne
+from pymongo import DeleteOne, ReturnDocument, UpdateOne
 
 logger = logging.getLogger(__name__)
+
+_KILL_INFLATION_CACHE_TTL_SEC = 3.0
+_kill_inflation_cache: Dict[str, Tuple[float, float]] = {}
 
 _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend not in sys.path:
@@ -144,20 +148,33 @@ async def _ensure_execute_token(attacker_id: str, attack_id: str) -> Optional[st
     Lazy scripts that only POST /attack/execute never see this value until they poll list or status.
     Clients may send only this token on execute (no attack UUID in the JSON body).
     """
-    doc = await db.attacks.find_one({"id": attack_id, "attacker_id": attacker_id}, {"_id": 0, "execute_token": 1})
+    base_filter = {"id": attack_id, "attacker_id": attacker_id}
+    doc = await db.attacks.find_one(base_filter, {"_id": 0, "execute_token": 1})
     if not doc:
         return None
     t = doc.get("execute_token")
     if isinstance(t, str) and len(t) >= 16:
         return t
     new_t = secrets.token_urlsafe(24)
-    await db.attacks.update_one(
-        {"id": attack_id, "attacker_id": attacker_id, "$or": [{"execute_token": {"$exists": False}}, {"execute_token": None}, {"execute_token": ""}]},
+    updated = await db.attacks.find_one_and_update(
+        {
+            **base_filter,
+            "$or": [
+                {"execute_token": {"$exists": False}},
+                {"execute_token": None},
+                {"execute_token": ""},
+            ],
+        },
         {"$set": {"execute_token": new_t}},
+        return_document=ReturnDocument.AFTER,
+        projection={"_id": 0, "execute_token": 1},
     )
-    doc2 = await db.attacks.find_one({"id": attack_id, "attacker_id": attacker_id}, {"_id": 0, "execute_token": 1})
-    out = (doc2 or {}).get("execute_token")
-    return out if isinstance(out, str) and len(out) >= 16 else new_t
+    out = (updated or {}).get("execute_token")
+    if isinstance(out, str) and len(out) >= 16:
+        return out
+    doc2 = await db.attacks.find_one(base_filter, {"_id": 0, "execute_token": 1})
+    out2 = (doc2 or {}).get("execute_token")
+    return out2 if isinstance(out2, str) and len(out2) >= 16 else new_t
 
 
 def _parse_iso_datetime(val):
@@ -172,6 +189,17 @@ def _parse_iso_datetime(val):
         return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
     except (ValueError, TypeError):
         return None
+
+
+async def _get_kill_inflation_cached(user_id: str) -> float:
+    """Tiny TTL cache to avoid duplicate inflation recalcs in bursty attack requests."""
+    now = time.monotonic()
+    cached = _kill_inflation_cache.get(user_id)
+    if cached and cached[1] > now:
+        return float(cached[0])
+    value = float(await _apply_kill_inflation_decay(user_id))
+    _kill_inflation_cache[user_id] = (value, now + _KILL_INFLATION_CACHE_TTL_SEC)
+    return value
 
 
 def _hunt_location_when_search_timer_fires(target_user: Optional[dict], attack: dict) -> Optional[str]:
@@ -1173,6 +1201,31 @@ _BULLET_CALC_TARGET_PROJECTION = {
     "prestige_rank_multiplier": 1,
 }
 
+_SEARCH_TARGET_PROJECTION = {
+    "_id": 0,
+    "id": 1,
+    "username": 1,
+    "email": 1,
+    "is_npc": 1,
+    "is_bodyguard": 1,
+    "is_dead": 1,
+    "current_state": 1,
+    "civilian_protection_revoked_at": 1,
+    "created_at": 1,
+}
+
+_ATTACK_STATUS_ROW_PROJECTION = {
+    "_id": 0,
+    "id": 1,
+    "status": 1,
+    "target_id": 1,
+    "target_username": 1,
+    "location_state": 1,
+    "planned_location_state": 1,
+    "found_at": 1,
+    "execute_token": 1,
+}
+
 
 def _apply_bullet_caps(target: dict, bullets_required: int) -> int:
     """Apply global and role-specific bullet caps."""
@@ -1225,7 +1278,7 @@ async def search_target(payload: AttackSearchRequest, req: Request, current_user
     user_filter = _find_user_by_username_case_insensitive(payload.target_username)
     if not user_filter:
         raise HTTPException(status_code=400, detail="Target username required")
-    target = await db.users.find_one(user_filter, {"_id": 0})
+    target = await db.users.find_one(user_filter, _SEARCH_TARGET_PROJECTION)
     if not target:
         raise HTTPException(status_code=404, detail="Target user not found")
     if user_has_admin_list_email(target) or _is_moderator(target):
@@ -1331,17 +1384,17 @@ async def get_attack_status(
         # Prefer FOUND (or traveling) for this target so we use existing search instead of starting a new one
         attack = await db.attacks.find_one(
             {**base_filter, "target_username": {"$regex": f"^{re.escape(want)}$", "$options": "i"}, "status": {"$in": ["found", "traveling"]}},
-            {"_id": 0},
+            _ATTACK_STATUS_ROW_PROJECTION,
             sort=_attack_sort,
         )
         if not attack:
             attack = await db.attacks.find_one(
                 {**base_filter, "target_username": {"$regex": f"^{re.escape(want)}$", "$options": "i"}, "status": "searching"},
-                {"_id": 0},
+                _ATTACK_STATUS_ROW_PROJECTION,
                 sort=_attack_sort,
             )
     if not attack:
-        attack = await db.attacks.find_one(base_filter, {"_id": 0}, sort=_attack_sort)
+        attack = await db.attacks.find_one(base_filter, _ATTACK_STATUS_ROW_PROJECTION, sort=_attack_sort)
     if not attack:
         raise HTTPException(status_code=404, detail="No active attack")
     # If target is dead or is a bodyguard who was killed (e.g. by someone else), remove this search and return 404
@@ -1518,7 +1571,7 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
             return await get_badge_bonuses(target.get("id") or "")
 
         inflation, weapon_pair, bb_a, bb_v = await asyncio.gather(
-            _apply_kill_inflation_decay(current_user["id"]),
+            _get_kill_inflation_cached(current_user["id"]),
             _best_weapon_for_user(current_user["id"], current_user.get("equipped_weapon_id")),
             get_badge_bonuses(current_user.get("id") or ""),
             _victim_bb(),
@@ -1527,7 +1580,7 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
         attacker_kill_badges = bb_a.get("kills", 0) * bb_a.get("prestige_badge_mult", 1)
         victim_kill_badges = bb_v.get("kills", 0) * bb_v.get("prestige_badge_mult", 1)
     except Exception:
-        inflation = await _apply_kill_inflation_decay(current_user["id"])
+        inflation = await _get_kill_inflation_cached(current_user["id"])
         best_damage, best_weapon_name = await _best_weapon_for_user(current_user["id"], current_user.get("equipped_weapon_id"))
     breakdown = _bullets_to_kill_breakdown(target_armour, target_rank_id, best_damage, attacker_rank_id, attacker_kill_badges, victim_kill_badges)
     bullets_base = int(breakdown["bullets_required"])
@@ -1583,7 +1636,7 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
     }
 
 async def get_attack_inflation(current_user: dict = Depends(get_current_user)):
-    inflation = await _apply_kill_inflation_decay(current_user["id"])
+    inflation = await _get_kill_inflation_cached(current_user["id"])
     return {"inflation": inflation, "inflation_pct": int(round(inflation * 100))}
 
 async def execute_attack(request: AttackExecuteRequest, req: Request, current_user: dict = Depends(get_current_user_verified)):
@@ -1698,7 +1751,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         )
 
     best_damage, best_weapon_name = await _best_weapon_for_user(current_user["id"], equipped_weapon_id)
-    inflation = await _apply_kill_inflation_decay(current_user["id"])
+    inflation = await _get_kill_inflation_cached(current_user["id"])
     attacker_kill_badges = victim_kill_badges = 0
     try:
         from routers.game.achievements import get_badge_bonuses
@@ -1734,7 +1787,10 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     if attacker_bullets <= 0:
         await _log_attack_error(current_user["id"], current_user.get("username"), "You need bullets to attack.", req)
         raise HTTPException(status_code=400, detail="You need bullets to attack.")
-    target_bodyguards = await db.bodyguards.find({"user_id": target["id"]}, {"_id": 0}).to_list(10)
+    target_bodyguards = await db.bodyguards.find(
+        {"user_id": target["id"]},
+        {"_id": 0, "slot_number": 1, "robot_name": 1, "bodyguard_user_id": 1},
+    ).to_list(10)
     if target_bodyguards:
         first_bg = max(target_bodyguards, key=lambda b: b.get("slot_number", 0))
         display_name = first_bg.get("robot_name") or "bodyguard"
@@ -2154,36 +2210,45 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             logging.exception("Rank-up notification (kill): %s", e)
         # Transfer cars to killer; exclusive + loot-exclusive get a new id so old view-car links are dead
         killer_has_loot_car = await db.user_cars.count_documents({"user_id": killer_id, "car_id": "car21"})
+        car_transfer_ops: List[Any] = []
         for uc in victim_cars:
             car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
             is_loot_exclusive = car_info and car_info.get("rarity") == "loot_exclusive"
             if is_loot_exclusive:
                 if killer_has_loot_car >= 1:
-                    await db.user_cars.delete_one({"_id": uc["_id"]})
+                    car_transfer_ops.append(DeleteOne({"_id": uc["_id"]}))
                 else:
-                    await db.user_cars.update_one(
+                    car_transfer_ops.append(
+                        UpdateOne(
+                            {"_id": uc["_id"]},
+                            {
+                                "$set": {"user_id": killer_id, "id": str(uuid.uuid4())},
+                                "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""},
+                            },
+                        )
+                    )
+                    killer_has_loot_car = 1
+                continue
+            is_exclusive = car_info and car_info.get("rarity") == "exclusive"
+            if is_exclusive:
+                car_transfer_ops.append(
+                    UpdateOne(
                         {"_id": uc["_id"]},
                         {
                             "$set": {"user_id": killer_id, "id": str(uuid.uuid4())},
                             "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""},
                         },
                     )
-                    killer_has_loot_car = 1
-                continue
-            is_exclusive = car_info and car_info.get("rarity") == "exclusive"
-            if is_exclusive:
-                await db.user_cars.update_one(
-                    {"_id": uc["_id"]},
-                    {
-                        "$set": {"user_id": killer_id, "id": str(uuid.uuid4())},
-                        "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""},
-                    },
                 )
             else:
-                await db.user_cars.update_one(
-                    {"_id": uc["_id"]},
-                    {"$set": {"user_id": killer_id}, "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""}},
+                car_transfer_ops.append(
+                    UpdateOne(
+                        {"_id": uc["_id"]},
+                        {"$set": {"user_id": killer_id}, "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""}},
+                    )
                 )
+        if car_transfer_ops:
+            await db.user_cars.bulk_write(car_transfer_ops, ordered=False)
         from routers.money.properties import process_portfolio_kill_rewards
         from routers.kill.armoury import TOKEN_CONFIG
 

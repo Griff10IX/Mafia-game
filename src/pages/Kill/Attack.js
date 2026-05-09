@@ -345,11 +345,29 @@ const SearchesCard = ({
   onFillKillTarget,
   pvpKillsDisabled,
 }) => {
+  const [isDesktop, setIsDesktop] = useState(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
+    return window.matchMedia('(min-width: 768px)').matches;
+  });
   const showKillForRow = (a) => {
     if (!a.can_attack || !onFillKillTarget) return false;
     if (!pvpKillsDisabled) return true;
     return a.target_is_npc === true;
   };
+  const selectedIdSet = useMemo(() => new Set(selectedAttackIds), [selectedAttackIds]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+    const mql = window.matchMedia('(min-width: 768px)');
+    const onChange = (e) => setIsDesktop(e.matches);
+    setIsDesktop(mql.matches);
+    if (typeof mql.addEventListener === 'function') {
+      mql.addEventListener('change', onChange);
+      return () => mql.removeEventListener('change', onChange);
+    }
+    mql.addListener(onChange);
+    return () => mql.removeListener(onChange);
+  }, []);
   // Live countdown: re-render every second so EXPIRES shows h/m/s ticking
   const [, setTick] = useState(0);
   useEffect(() => {
@@ -422,7 +440,8 @@ const SearchesCard = ({
           </div>
         ) : (
           <>
-            <div className="hidden md:block border border-zinc-700/40 rounded overflow-hidden">
+            {isDesktop ? (
+            <div className="border border-zinc-700/40 rounded overflow-hidden">
               <div className="grid grid-cols-12 bg-zinc-800/50 text-[8px] uppercase tracking-wider font-heading text-zinc-500 px-2 py-1 border-b border-zinc-700/40">
                 <div className="col-span-1"></div>
                 <div className="col-span-4">User / Note</div>
@@ -441,7 +460,7 @@ const SearchesCard = ({
                     <div className="col-span-1 pt-0.5">
                       <input
                         type="checkbox"
-                        checked={selectedAttackIds.includes(a.attack_id)}
+                        checked={selectedIdSet.has(a.attack_id)}
                         onChange={() => toggleSelected(a.attack_id)}
                         className="w-3 h-3 accent-primary cursor-pointer"
                         data-testid={`attack-select-${a.attack_id}`}
@@ -536,8 +555,8 @@ const SearchesCard = ({
                 ))}
               </div>
             </div>
-
-            <div className="md:hidden space-y-2">
+            ) : (
+            <div className="space-y-2">
               {attacks.map((a) => (
                 <div
                   key={a.attack_id}
@@ -548,7 +567,7 @@ const SearchesCard = ({
                   <div className="flex items-start gap-2">
                     <input
                       type="checkbox"
-                      checked={selectedAttackIds.includes(a.attack_id)}
+                      checked={selectedIdSet.has(a.attack_id)}
                       onChange={() => toggleSelected(a.attack_id)}
                       className="w-3 h-3 accent-primary cursor-pointer mt-0.5"
                       data-testid={`attack-select-${a.attack_id}`}
@@ -635,6 +654,7 @@ const SearchesCard = ({
                 </div>
               ))}
             </div>
+            )}
           </>
         )}
         
@@ -992,7 +1012,6 @@ export default function Attack() {
   const [travelInfo, setTravelInfo] = useState(null);
   const [travelSubmitLoading, setTravelSubmitLoading] = useState(false);
   const [travelCountdown, setTravelCountdown] = useState(null);
-  const [, setCountdownTick] = useState(0);
   const [pendingResend, setPendingResend] = useState(null);
   const [killBannerMessage, setKillBannerMessage] = useState(null);
   const [combatTimelineOpen, setCombatTimelineOpen] = useState(false);
@@ -1003,6 +1022,8 @@ export default function Attack() {
 
   /** Abort in-flight GET /attack/list so overlapping polls/loads cannot apply out-of-order (empty after full). */
   const attackListAbortRef = useRef(null);
+  /** Abort in-flight kill-form bullet calc while typing. */
+  const killCalcAbortRef = useRef(null);
 
   const showKillResult = (text, type, options = {}) => {
     const { description, action } = options;
@@ -1106,12 +1127,6 @@ export default function Attack() {
       }
     };
   }, [attacks, refreshAttacks]);
-
-  // Tick every second so expiry countdowns update (24h → 00:00)
-  useEffect(() => {
-    const id = setInterval(() => setCountdownTick((t) => t + 1), 1000);
-    return () => clearInterval(id);
-  }, []);
 
   const hitlistNpcAutoFillRef = useRef(false);
 
@@ -1489,17 +1504,20 @@ export default function Attack() {
       return;
     }
 
-    // Refetch attacks so we have the latest list (e.g. after refresh), then use that list
-    let list;
-    try {
-      list = await refreshAttacks();
-      if (!Array.isArray(list)) list = attacks;
-    } catch {
-      list = attacks;
+    // Use current list first; refresh only if needed.
+    let list = Array.isArray(attacks) ? attacks : [];
+    let found = list.filter((a) => (a.target_username || '').toLowerCase() === username.toLowerCase() && a.status === 'found');
+    let best = found.find((a) => a.can_attack);
+    if (!best) {
+      try {
+        const latest = await refreshAttacks();
+        if (Array.isArray(latest)) list = latest;
+      } catch {
+        /* keep existing list */
+      }
+      found = list.filter((a) => (a.target_username || '').toLowerCase() === username.toLowerCase() && a.status === 'found');
+      best = found.find((a) => a.can_attack);
     }
-
-    const found = list.filter((a) => (a.target_username || '').toLowerCase() === username.toLowerCase() && a.status === 'found');
-    const best = found.find((a) => a.can_attack);
 
     if (!best) {
       if (found.length > 0) {
@@ -1567,15 +1585,24 @@ export default function Attack() {
   // Debounced fetch of bullets needed to kill the user in the kill form
   useEffect(() => {
     const trimmed = (killUsername || '').trim();
+    killCalcAbortRef.current?.abort();
     if (!trimmed) {
       setKillBulletsResult(null);
       setKillBulletsLoading(false);
       return;
     }
     setKillBulletsLoading(true);
+    let cancelled = false;
     const timer = setTimeout(async () => {
+      const ac = new AbortController();
+      killCalcAbortRef.current = ac;
       try {
-        const res = await api.post('/attack/bullets/calc', { target_username: trimmed, soft_fail: true });
+        const res = await api.post(
+          '/attack/bullets/calc',
+          { target_username: trimmed, soft_fail: true },
+          { signal: ac.signal },
+        );
+        if (cancelled) return;
         if (res.data?.calc_ok === false) {
           setKillBulletsResult(null);
           return;
@@ -1595,13 +1622,22 @@ export default function Attack() {
           hitlistNpcAutoFillRef.current = false;
           setBulletsToUse(String(result.bullets));
         }
-      } catch {
+      } catch (error) {
+        const canceled =
+          error?.code === 'ERR_CANCELED'
+          || error?.name === 'CanceledError'
+          || (typeof error?.message === 'string' && error.message.toLowerCase().includes('canceled'));
+        if (canceled) return;
         setKillBulletsResult(null);
       } finally {
-        setKillBulletsLoading(false);
+        if (!cancelled) setKillBulletsLoading(false);
       }
     }, 400);
-    return () => clearTimeout(timer);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+      killCalcAbortRef.current?.abort();
+    };
   }, [killUsername]);
 
   // Convenience: if molotov mode is on and molotovs alone can cover the kill requirement,
@@ -1646,9 +1682,10 @@ export default function Attack() {
     return hit.target_is_npc !== true;
   }, [pvpKillsDisabled, killUsername, foundAndReady]);
   
+  const selectedAttackIdSet = useMemo(() => new Set(selectedAttackIds), [selectedAttackIds]);
   const allFilteredSelected = useMemo(
-    () => filteredIds.length > 0 && filteredIds.every((id) => selectedAttackIds.includes(id)),
-    [filteredIds, selectedAttackIds]
+    () => filteredIds.length > 0 && filteredIds.every((id) => selectedAttackIdSet.has(id)),
+    [filteredIds, selectedAttackIdSet]
   );
 
   return (
