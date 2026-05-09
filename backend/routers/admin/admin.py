@@ -344,7 +344,7 @@ class AdminPresenceHeartbeatRequest(BaseModel):
     """Browser tab id (uuid) so one staff user can have multiple admin sessions listed separately."""
     tab_id: str = Field(..., min_length=8, max_length=80)
     section: Optional[str] = None  # e.g. overview, players, users-online
-    path: Optional[str] = None  # e.g. /staffrole/admin/overview
+    path: Optional[str] = None  # e.g. /tjjeujr3wa/overview
 
 
 class AdminToolAccessShellOpenRequest(BaseModel):
@@ -353,7 +353,7 @@ class AdminToolAccessShellOpenRequest(BaseModel):
 
 
 class AdminToolAccessSpaUnauthorizedRequest(BaseModel):
-    """Full SPA location when a non-staff account opened /staffrole/admin (path, query, hash) for audit + staff inbox."""
+    """Full SPA location when a non-staff account opened the staff area (path, query, hash) for audit + staff inbox."""
     path: Optional[str] = Field(default=None, max_length=2048)
 
 
@@ -6398,7 +6398,7 @@ def register(router):
         request: Request,
         current_user: dict = Depends(get_current_user),
     ):
-        """Non-staff loads /staffrole/admin in the SPA; log + inbox staff here (throttled)."""
+        """Non-staff loads the staff area in the SPA; log + inbox staff here (throttled)."""
         if _staff_shell_access(current_user):
             return {"ok": True, "recorded": False}
         from utils.staff_access_audit import record_staff_spa_unauthorized_visit

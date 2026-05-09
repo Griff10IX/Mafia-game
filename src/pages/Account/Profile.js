@@ -108,7 +108,7 @@ function honourLeaderboardTo(h, isDead = false) {
   return `/game/leaderboard?period=alltime&board=${encodeURIComponent(board)}&rank=${encodeURIComponent(rank)}${deadParam}`;
 }
 
-const STAFF_ADMIN_HOME = '/staffrole/admin/overview';
+const STAFF_ADMIN_HOME = '/tjjeujr3wa/overview';
 
 const StaffProfileActions = ({ username, isDead, isAdmin, isModerator, onDone }) => {
   const [loading, setLoading] = useState(null);
@@ -2547,7 +2547,7 @@ export default function Profile() {
                   <span className="text-[9px] md:text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Moderation tools</span>
                 </div>
                 <Link
-                  to="/admin"
+                  to="/tjjeujr3wa/overview"
                   className="px-2.5 py-1 rounded text-[9px] font-heading font-bold uppercase border border-primary/50 bg-primary/20 text-primary hover:bg-primary/30"
                 >
                   Open
@@ -2564,7 +2564,7 @@ export default function Profile() {
               </div>
               <div className="px-2.5 py-2 md:px-3 md:py-2.5">
                 <p className="text-[9px] md:text-[10px] text-mutedForeground font-heading">
-                  Set your colour for the Users Online page from <Link to="/admin" className="text-primary hover:underline font-heading">Admin → Mod display</Link> (mod tools), not here.
+                  Set your colour for the Users Online page from <Link to="/tjjeujr3wa/overview" className="text-primary hover:underline font-heading">Admin → Mod display</Link> (mod tools), not here.
                 </p>
               </div>
             </div>

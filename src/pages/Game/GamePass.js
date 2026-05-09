@@ -639,7 +639,7 @@ export default function GamePass() {
               <div className="flex items-center gap-2 shrink-0">
                 {(isAdmin || hasAdminEmail) && (
                   <Link
-                    to="/staffrole/admin/players?focus=game_pass_inspector"
+                    to="/tjjeujr3wa/players?focus=game_pass_inspector"
                     className="inline-flex items-center gap-1 rounded border border-violet-500/40 bg-violet-500/15 px-2 py-1 text-[9px] font-heading font-bold uppercase tracking-wider text-violet-200 hover:bg-violet-500/25"
                     title="Open Game Pass inspector (admin)"
                   >

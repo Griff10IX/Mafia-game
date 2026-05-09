@@ -144,8 +144,8 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
         { action: 'theme', label: 'Theme' },
         { action: 'logout', label: 'Logout' },
         { path: '/account/autorank', label: 'Auto Rank' },
-        ...(staffToolsNavVisible && isAdmin ? [{ path: '/staffrole/admin/overview', label: 'Admin Tools' }, { path: '/staffrole/admin/locked', label: 'Locked accounts' }] : []),
-        ...(staffToolsNavVisible && isModerator && !isAdmin ? [{ path: '/staffrole/admin/overview', label: 'Moderator tools' }] : []),
+        ...(staffToolsNavVisible && isAdmin ? [{ path: '/tjjeujr3wa/overview', label: 'Admin Tools' }, { path: '/tjjeujr3wa/locked', label: 'Locked accounts' }] : []),
+        ...(staffToolsNavVisible && isModerator && !isAdmin ? [{ path: '/tjjeujr3wa/overview', label: 'Moderator tools' }] : []),
       ],
     },
     {
@@ -1272,17 +1272,17 @@ export default function Layout({ children }) {
   ];
 
   const adminNavItems = isAdmin && staffToolsNavVisible ? [
-    { path: '/staffrole/admin/overview', icon: Settings, label: 'Admin Tools' },
-    { path: '/staffrole/admin/locked', icon: Lock, label: 'Locked accounts' },
-    { path: '/staffrole/admin/users-online', icon: Users, label: 'Users online (live)' },
-    { path: '/staffrole/admin/witness-statements', icon: FileText, label: 'Witness statements' },
-    { path: '/staffrole/admin/attack-logs', icon: Crosshair, label: 'Attack logs' },
+    { path: '/tjjeujr3wa/overview', icon: Settings, label: 'Admin Tools' },
+    { path: '/tjjeujr3wa/locked', icon: Lock, label: 'Locked accounts' },
+    { path: '/tjjeujr3wa/users-online', icon: Users, label: 'Users online (live)' },
+    { path: '/tjjeujr3wa/witness-statements', icon: FileText, label: 'Witness statements' },
+    { path: '/tjjeujr3wa/attack-logs', icon: Crosshair, label: 'Attack logs' },
   ] : [];
   const moderatorNavItems = isModerator && !isAdmin && staffToolsNavVisible ? [
-    { path: '/staffrole/admin/overview', icon: Shield, label: 'Moderator tools' },
-    { path: '/staffrole/admin/users-online', icon: Users, label: 'Users online (live)' },
-    { path: '/staffrole/admin/witness-statements', icon: FileText, label: 'Witness statements' },
-    { path: '/staffrole/admin/attack-logs', icon: Crosshair, label: 'Attack logs' },
+    { path: '/tjjeujr3wa/overview', icon: Shield, label: 'Moderator tools' },
+    { path: '/tjjeujr3wa/users-online', icon: Users, label: 'Users online (live)' },
+    { path: '/tjjeujr3wa/witness-statements', icon: FileText, label: 'Witness statements' },
+    { path: '/tjjeujr3wa/attack-logs', icon: Crosshair, label: 'Attack logs' },
   ] : [];
   const staffTopBarEntry = isAdmin && staffToolsNavVisible ? adminNavItems[0] : (isModerator && staffToolsNavVisible ? moderatorNavItems[0] : null);
   const StaffTopBarIcon = staffTopBarEntry?.icon;
@@ -2236,7 +2236,7 @@ export default function Layout({ children }) {
               </>
             );
           })()}
-          {user && staffTopBarEntry && StaffTopBarIcon && !String(location.pathname || '').startsWith('/staffrole') && (
+          {user && staffTopBarEntry && StaffTopBarIcon && !String(location.pathname || '').startsWith('/tjjeujr3wa') && (
             <SameRouteAwareLink
               to={staffTopBarEntry.path}
               data-testid="topbar-admin"
@@ -2694,7 +2694,7 @@ export default function Layout({ children }) {
 
       {/* ── TOUCH BALL ───────────────────────────────────────────────────────── */}
       {user && notificationBallPosition && isMobileViewport && mobileStatsDisplay === 'touch_ball'
-        && !String(location.pathname || '').startsWith('/staffrole') && (
+        && !String(location.pathname || '').startsWith('/tjjeujr3wa') && (
         <div ref={notificationBallRef} data-layout="touch-ball" className="fixed z-50 touch-none" style={{ left: notificationBallPosition.x, top: notificationBallPosition.y, width: 56, height: 56 }}>
           <button type="button"
             className="relative w-full h-full rounded-full flex items-center justify-center shadow-xl border-2 transition-transform active:scale-95 select-none"

@@ -577,7 +577,7 @@ function App() {
           <Route path="/gta/car/:carId" element={<CarProfileRedirect />} />
           {/* ═══ STAFF ROLE GROUP ═══ */}
           <Route
-            path="/staffrole/admin/:section?"
+            path="/tjjeujr3wa/:section?"
             element={
               isAuthenticated ? (
                 <Layout>
@@ -588,17 +588,6 @@ function App() {
               )
             }
           />
-          <Route path="/staffrole/mod" element={<Navigate to="/staffrole/admin" replace />} />
-          <Route path="/staffrole/locked" element={<Navigate to="/staffrole/admin/locked" replace />} />
-          <Route path="/staffrole/users-online" element={<Navigate to="/staffrole/admin/users-online" replace />} />
-          <Route path="/staffrole/witness-statements" element={<Navigate to="/staffrole/admin/witness-statements" replace />} />
-          <Route path="/staffrole/attack-logs" element={<Navigate to="/staffrole/admin/attack-logs" replace />} />
-          {/* Staff redirects */}
-          <Route path="/admin" element={<Navigate to="/staffrole/admin/overview" replace />} />
-          <Route path="/admin/locked" element={<Navigate to="/staffrole/admin/locked" replace />} />
-          <Route path="/admin/users-online" element={<Navigate to="/staffrole/admin/users-online" replace />} />
-          <Route path="/admin/witness-statements" element={<Navigate to="/staffrole/admin/witness-statements" replace />} />
-          <Route path="/admin/attack-logs" element={<Navigate to="/staffrole/admin/attack-logs" replace />} />
           <Route
             path="/account/autorank"
             element={

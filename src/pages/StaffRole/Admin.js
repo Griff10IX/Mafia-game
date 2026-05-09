@@ -1862,7 +1862,7 @@ export default function Admin() {
     }
   }, [location.state]);
 
-  // Shared shell context: /staffrole/admin/*?target=username
+  // Shared shell context: /tjjeujr3wa/*?target=username
   useEffect(() => {
     const params = new URLSearchParams(location.search || '');
     const target = (params.get('target') || '').trim();

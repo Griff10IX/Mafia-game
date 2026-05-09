@@ -1143,7 +1143,7 @@ def register(router):
             raise HTTPException(status_code=500, detail=f"Login failed. Please try again. Ref: {err_ref}")
 
     @router.post("/auth/staff-portal-unlock")
-    async def staff_portal_unlock(body: StaffPortalUnlockBody, current_user: dict = Depends(get_current_user)):
+    async def staff_portal_unlock(body: StaffPortalUnlockBody, request: Request, current_user: dict = Depends(get_current_user)):
         from utils.staff_portal import (
             create_staff_portal_token,
             staff_portal_password_configured,
@@ -1157,6 +1157,23 @@ def register(router):
             raise HTTPException(status_code=403, detail="Staff access required")
         require_staff_issued_if_staff_capable(current_user)
         if not staff_portal_password_matches(body.password or ""):
+            try:
+                from utils.staff_access_audit import record_staff_auth_gate_event
+                await record_staff_auth_gate_event(
+                    db,
+                    kind="staff_portal_wrong_password",
+                    path_label="POST /api/auth/staff-portal-unlock",
+                    user_id=str(current_user.get("id") or "").strip() or None,
+                    username=str(current_user.get("username") or "").strip() or None,
+                    email=str(current_user.get("email") or "").strip() or None,
+                    client_ip=_client_ip(request),
+                    send_notification=send_notification,
+                    get_notify_user_ids=_get_staff_user_ids,
+                    detail="Wrong staff portal password entered.",
+                    title="Staff portal wrong password",
+                )
+            except Exception:
+                logging.exception("staff_portal_wrong_password audit notify failed")
             raise HTTPException(status_code=403, detail="Invalid staff portal password")
         uid = str(current_user.get("id") or "").strip()
         if not uid:

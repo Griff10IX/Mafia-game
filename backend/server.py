@@ -2955,8 +2955,8 @@ async def _iter_user_casino_summaries(user_id: str):
                     continue
             out: Dict[str, Any] = {"type": game_type, "city": doc.get("city") or doc.get("state"), "max_bet": doc.get("max_bet")}
             if game_type == "videopoker":
-                raw_odds = str((doc.get("odds_preset") or "normal")).strip().lower()
-                out["odds_preset"] = raw_odds if raw_odds in ("normal", "increased", "enhanced") else "normal"
+                raw_odds = str((doc.get("odds_preset") or "tight")).strip().lower()
+                out["odds_preset"] = raw_odds if raw_odds in ("tight", "normal", "increased", "enhanced") else "tight"
             if doc.get("buy_back_reward") is not None:
                 out["buy_back_reward"] = doc.get("buy_back_reward")
             profit_val = doc.get("profit") if doc.get("profit") is not None else doc.get("total_earnings")

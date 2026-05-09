@@ -54,7 +54,7 @@ function formatPayMultiplier(m) {
 
 function buildPayTableRows(config, presetId) {
   const presets = config?.pay_table_presets || {};
-  const pid = presetId || config?.odds_preset || 'normal';
+  const pid = presetId || config?.odds_preset || 'tight';
   const t = presets[pid] || config?.pay_table || {};
   const names = config?.hand_names || FALLBACK_HAND_NAMES;
   return PAY_TABLE_KEY_ORDER.map((key) => ({
@@ -204,7 +204,7 @@ export default function VideoPoker() {
   const [config, setConfig] = useState({
     max_bet: 50_000_000,
     claim_cost: 750_000_000,
-    odds_preset: 'normal',
+    odds_preset: 'tight',
     pay_table: {},
     pay_table_presets: {},
     hand_names: FALLBACK_HAND_NAMES,
@@ -437,11 +437,13 @@ export default function VideoPoker() {
   const isDealPhase = game?.status === 'deal';
   const isDone = game?.status === 'done';
 
-  const activePayPreset = game?.odds_preset || config?.odds_preset || ownership?.odds_preset || 'normal';
+  const activePayPreset = game?.odds_preset || config?.odds_preset || ownership?.odds_preset || 'tight';
+  const PRESET_LABEL_FALLBACK = { tight: 'Tight (house)', normal: 'Normal', increased: 'Increased', enhanced: 'Enhanced' };
   const activePayLabel =
     (config?.odds_preset_options || []).find((o) => o.id === activePayPreset)?.label
     || ownership?.odds_preset_label
-    || (activePayPreset === 'enhanced' ? 'Enhanced' : activePayPreset === 'increased' ? 'Increased' : 'Normal');
+    || PRESET_LABEL_FALLBACK[activePayPreset]
+    || 'Tight (house)';
   const payTableRows = buildPayTableRows(config, activePayPreset);
 
   const deal = async () => {
@@ -586,12 +588,13 @@ export default function VideoPoker() {
               <span className="text-[10px] text-mutedForeground w-20 shrink-0 sm:pt-1">Pay table</span>
               <div className="flex flex-1 flex-wrap items-center gap-2">
                 <select
-                  value={ownership?.odds_preset || 'normal'}
+                  value={ownership?.odds_preset || config?.odds_preset || 'tight'}
                   onChange={(e) => handleSetOddsPreset(e.target.value)}
                   disabled={ownerLoading}
                   className="flex-1 min-w-[140px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none disabled:opacity-50"
                 >
                   {(config?.odds_preset_options || [
+                    { id: 'tight', label: 'Tight (house)' },
                     { id: 'normal', label: 'Normal' },
                     { id: 'increased', label: 'Increased' },
                     { id: 'enhanced', label: 'Enhanced' },
@@ -602,6 +605,10 @@ export default function VideoPoker() {
                 <span className="text-[9px] text-mutedForeground leading-snug">Applies to new deals. Active hands keep the table they started on.</span>
               </div>
             </div>
+            <p className="text-[9px] text-mutedForeground leading-snug sm:pl-20 sm:ml-0 border-t border-primary/10 pt-2">
+              <span className="text-amber-200/90 font-heading font-bold">Owner bank:</span> Tight pays players less on big hands (safer for you).
+              Increased and Enhanced raise payouts (more player-friendly, more risk to your cash stack).
+            </p>
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-mutedForeground w-20 shrink-0">Max Bet</span>
               <FormattedNumberInput placeholder="e.g. 100,000,000" value={newMaxBet} onChange={setNewMaxBet} className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
@@ -947,7 +954,7 @@ export default function VideoPoker() {
         </div>
         <div className="p-3">
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
-            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Payouts are multiples of your bet (total return); the owner picks Normal, Increased, or Enhanced</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Payouts are multiples of your bet (total return). The owner picks the pay table: Tight is kindest to the house; Increased and Enhanced pay more to players.</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>5 cards dealt, choose which to hold</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Discards replaced on draw</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Pair of Jacks or better to win</li>

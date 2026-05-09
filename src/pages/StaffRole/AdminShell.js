@@ -22,7 +22,7 @@ import {
 import { StaffAccessVerifyContext } from './staffAccessVerifyContext';
 
 function routeFor(groupId) {
-  return `/staffrole/admin/${groupId}`;
+  return `/tjjeujr3wa/${groupId}`;
 }
 
 /** Sections that render dedicated tools instead of the monolithic Admin page. */
@@ -110,7 +110,7 @@ export default function AdminShell() {
         setStaffAllowed(false);
         if (typeof window !== 'undefined') {
           const p = window.location.pathname || '';
-          if (p.startsWith('/staffrole/admin')) navigate('/staff-entrance', { replace: true });
+          if (p.startsWith('/tjjeujr3wa')) navigate('/staff-entrance', { replace: true });
         }
         return false;
       }
@@ -126,7 +126,7 @@ export default function AdminShell() {
       setStaffPortalSessionMin(30);
       if (typeof window !== 'undefined') {
         const p = window.location.pathname || '';
-        if (p.startsWith('/staffrole/admin')) navigate('/account/dashboard', { replace: true });
+        if (p.startsWith('/tjjeujr3wa')) navigate('/account/dashboard', { replace: true });
       }
       return false;
     }
@@ -234,7 +234,7 @@ export default function AdminShell() {
         setStaffPortalSessionMin(Number(res.data?.staff_portal_session_minutes) || 30);
         if (!shellOk && typeof window !== 'undefined') {
           const p = window.location.pathname || '';
-          if (p.startsWith('/staffrole/admin')) {
+          if (p.startsWith('/tjjeujr3wa')) {
             if (caps) navigate('/staff-entrance', { replace: true });
             else navigate('/account/dashboard', { replace: true });
           }
@@ -245,7 +245,7 @@ export default function AdminShell() {
         setStaffPortalSessionMin(30);
         if (typeof window !== 'undefined') {
           const p = window.location.pathname || '';
-          if (p.startsWith('/staffrole/admin')) navigate('/account/dashboard', { replace: true });
+          if (p.startsWith('/tjjeujr3wa')) navigate('/account/dashboard', { replace: true });
         }
       }
     };
@@ -263,7 +263,7 @@ export default function AdminShell() {
         setStaffAllowed(shellOk);
         if (!shellOk && typeof window !== 'undefined') {
           const p = window.location.pathname || '';
-          if (p.startsWith('/staffrole/admin')) {
+          if (p.startsWith('/tjjeujr3wa')) {
             if (caps) navigate('/staff-entrance', { replace: true });
             else navigate('/account/dashboard', { replace: true });
           }
@@ -272,7 +272,7 @@ export default function AdminShell() {
         setStaffAllowed(false);
         if (typeof window !== 'undefined') {
           const p = window.location.pathname || '';
-          if (p.startsWith('/staffrole/admin')) navigate('/account/dashboard', { replace: true });
+          if (p.startsWith('/tjjeujr3wa')) navigate('/account/dashboard', { replace: true });
         }
       }
     }, 180000);
@@ -350,7 +350,7 @@ export default function AdminShell() {
     if (!section) {
       const hash = (typeof window !== 'undefined' ? (window.location.hash || '').replace('#', '').trim() : '');
       const redirectedSection = LEGACY_HASH_TO_ROUTE_GROUP[hash] || 'overview';
-      navigate(`/staffrole/admin/${redirectedSection}`, { replace: true });
+      navigate(`/tjjeujr3wa/${redirectedSection}`, { replace: true });
     }
   }, [section, navigate]);
 
@@ -393,7 +393,7 @@ export default function AdminShell() {
     setTargetContextOpen(false);
   };
 
-  if (!section) return <Navigate to="/staffrole/admin/overview" replace />;
+  if (!section) return <Navigate to="/tjjeujr3wa/overview" replace />;
 
   if (staffAllowed === null) {
     return (

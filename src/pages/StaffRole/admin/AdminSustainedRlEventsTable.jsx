@@ -41,7 +41,7 @@ export default function AdminSustainedRlEventsTable() {
       <p className="text-[10px] text-mutedForeground leading-relaxed">
         HTTP 429 incidents from sustained page pacing (per-scope throttling). These are no longer sent to staff inboxes.
         Configure toggles under{' '}
-        <Link to="/staffrole/admin/liveops" className="text-primary underline hover:no-underline">
+          <Link to="/tjjeujr3wa/liveops" className="text-primary underline hover:no-underline">
           LiveOps → Sustained page pacing
         </Link>
         .

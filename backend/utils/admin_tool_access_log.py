@@ -81,7 +81,7 @@ async def record_shell_open_event(
     route_path: Optional[str],
 ) -> None:
     now_iso = datetime.now(timezone.utc).isoformat()
-    rp = (route_path or "").strip()[:500] or "/staffrole/admin"
+    rp = (route_path or "").strip()[:500] or "/tjjeujr3wa"
     doc = {
         "id": str(uuid.uuid4()),
         "created_at": now_iso,

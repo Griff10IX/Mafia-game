@@ -1115,7 +1115,7 @@ export default function StaffUserDetailsPanel({
                       )}
                       <ToolRow label="Activity log">
                         <Link
-                          to="/admin"
+                          to="/tjjeujr3wa/overview"
                           state={{ activityLogUsername: username }}
                           className={btnClass}
                         >
@@ -1124,7 +1124,7 @@ export default function StaffUserDetailsPanel({
                       </ToolRow>
                       <ToolRow label="Gambling log">
                         <Link
-                          to="/admin"
+                          to="/tjjeujr3wa/overview"
                           state={{ gamblingLogUsername: username }}
                           className={btnClass}
                         >

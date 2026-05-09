@@ -2013,7 +2013,7 @@ export default function Forum() {
                 <span className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-[0.15em]">🛠️ E-Games Admin</span>
                 <p className="text-[9px] text-mutedForeground mt-1.5 font-heading leading-snug">
                   Referral report / prereg heal / manual links:{' '}
-                  <Link to="/staffrole/admin#admin-players" className="text-primary hover:underline">Admin Tools → Player Management → Referrals & prereg heal</Link>
+                  <Link to="/tjjeujr3wa/overview#admin-players" className="text-primary hover:underline">Admin Tools → Player Management → Referrals & prereg heal</Link>
                 </p>
               </div>
               <div className="p-3 flex flex-wrap items-center gap-3">

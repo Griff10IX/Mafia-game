@@ -77,19 +77,31 @@ VALUE_RANK = {"2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "1
 # House lean: (1) Opening hand sometimes dealt with rank-weighted picks (low cards favored), not a fair 5-off shuffle.
 # (2) Replacement draws sometimes use the same rank-weighted picks.
 # (3) VIDEO_POKER_WIN_CREDIT_MULT applies to credited cash when the table multiplier is > 1.
-VIDEO_POKER_DEAL_OWNER_BIAS_P = 0.75  # ~75% rank-weighted opening; ~25% fair shuffle + pop
-VIDEO_POKER_DRAW_OWNER_BIAS_P = 0.68  # per replacement card when deck has 2+ cards; 0 disables
-VIDEO_POKER_RANK_WEIGHT_EXP = 1.75  # exponent on (15.5 - rank); higher → stronger low-card bias
-VIDEO_POKER_RANK_WEIGHT_FLOOR = 0.022  # minimum weight so high ranks are never impossible
-VIDEO_POKER_WIN_CREDIT_MULT = 0.92
-VIDEO_POKER_DEFAULT_ODDS_PRESET = "normal"
+VIDEO_POKER_DEAL_OWNER_BIAS_P = 0.88  # rank-weighted opening (low cards); rest fair shuffle + pop
+VIDEO_POKER_DRAW_OWNER_BIAS_P = 0.80  # per replacement card when deck has 2+ cards; 0 disables
+VIDEO_POKER_RANK_WEIGHT_EXP = 2.0  # exponent on (15.5 - rank); higher → stronger low-card bias
+VIDEO_POKER_RANK_WEIGHT_FLOOR = 0.018  # minimum weight so high ranks stay possible but rarer
+VIDEO_POKER_WIN_CREDIT_MULT = 0.86  # haircut on credited wins when mult > 1 (owner / house edge)
+VIDEO_POKER_DEFAULT_ODDS_PRESET = "tight"
 VIDEO_POKER_ODDS_PRESET_LABELS = {
+    "tight": "Tight (house)",
     "normal": "Normal",
     "increased": "Increased",
     "enhanced": "Enhanced",
 }
 # Between normal and enhanced (rounded); not specified by players — middle tier.
 VIDEO_POKER_PAY_PRESETS: dict[str, dict[str, float]] = {
+    "tight": {
+        "royal_flush": 75,
+        "straight_flush": 40,
+        "four_of_a_kind": 20,
+        "full_house": 8,
+        "flush": 6,
+        "straight": 4,
+        "three_of_a_kind": 3.5,
+        "two_pair": 2.5,
+        "jacks_or_better": 2,
+    },
     "normal": {
         "royal_flush": 100,
         "straight_flush": 50,
@@ -616,7 +628,7 @@ def register(router):
             raise HTTPException(status_code=403, detail="You do not own this table")
         raw = (request.odds_preset or "").strip().lower()
         if raw not in VIDEO_POKER_PAY_PRESETS:
-            raise HTTPException(status_code=400, detail="Invalid odds preset. Use normal, increased, or enhanced.")
+            raise HTTPException(status_code=400, detail="Invalid odds preset. Use tight, normal, increased, or enhanced.")
         preset = raw
         await db.videopoker_ownership.update_one({"city": stored_city or city}, {"$set": {"odds_preset": preset}})
         return {

@@ -200,7 +200,7 @@ async def record_staff_spa_unauthorized_visit(
     send_notification: Callable[..., Coroutine[Any, Any, Any]],
     get_notify_user_ids: Callable[..., Coroutine[Any, Any, list]],
 ) -> bool:
-    """Persist + inbox staff when a signed-in non-staff account loads /staffrole/admin in the SPA (browser route; not gated by staff API 403). Throttled like other denials."""
+    """Persist + inbox staff when a signed-in non-staff account loads the staff area in the SPA (browser route; not gated by staff API 403). Throttled like other denials."""
     uid = (user_id or "").strip() or None
     if not uid:
         return False
@@ -220,7 +220,7 @@ async def record_staff_spa_unauthorized_visit(
         recent = None
     if recent:
         return False
-    path_for_log = ((spa_path or "").strip() or "/staffrole/admin")[:2048]
+    path_for_log = ((spa_path or "").strip() or "/tjjeujr3wa")[:2048]
     title = "Non-staff user opened Admin Tools URL"
     body = (
         "A signed-in account without mod/admin access loaded the in-game Admin Tools route in the browser.\n\n"
@@ -301,6 +301,7 @@ async def record_staff_auth_gate_event(
     send_notification: Callable[..., Coroutine[Any, Any, Any]],
     get_notify_user_ids: Callable[..., Coroutine[Any, Any, list]],
     detail: Optional[str] = None,
+    title: Optional[str] = None,
 ) -> None:
     """Notify staff on sensitive login routing (e.g. mod using public login URL). Throttled per user + kind."""
     uid = (user_id or "").strip() or None
@@ -319,7 +320,7 @@ async def record_staff_auth_gate_event(
     )
     if d:
         body = f"{body}\n{d}\n"
-    title = "Staff account login / access attempt"
+    resolved_title = (title or "").strip() or "Staff account login / access attempt"
     await _persist_denial_and_notify_staff(
         db,
         method="POST",
@@ -329,7 +330,7 @@ async def record_staff_auth_gate_event(
         email=email,
         client_ip=client_ip,
         throttle_path_key=throttle_path_key,
-        title=title,
+        title=resolved_title,
         body=body,
         send_notification=send_notification,
         get_notify_user_ids=get_notify_user_ids,
