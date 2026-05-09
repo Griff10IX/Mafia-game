@@ -13,7 +13,7 @@ function SlotsIcon({ size = 10, className = '' }) {
     </svg>
   );
 }
-import api, { apiRequestWith429Retry } from '../../utils/api';
+import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
@@ -93,6 +93,60 @@ function climateCardShell(climateBand) {
 // ============================================================================
 
 const GAMES_WITH_BUYBACK = ['dice', 'blackjack', 'roulette', 'horseracing', 'videopoker', 'slots'];
+const STATES_BOOTSTRAP_CACHE_KEY = 'states_bootstrap_cache_v1';
+const STATES_BOOTSTRAP_CACHE_MAX_AGE_MS = 30_000;
+
+const emptyStatesData = {
+  cities: [],
+  games: [],
+  state_heads: {},
+  location_climate: null,
+};
+
+function normalizeStatesPayload(raw = {}) {
+  return {
+    data: {
+      cities: raw.cities ?? [],
+      games: raw.games ?? [],
+      dice_owners: raw.dice_owners ?? {},
+      roulette_owners: raw.roulette_owners ?? {},
+      blackjack_owners: raw.blackjack_owners ?? {},
+      horseracing_owners: raw.horseracing_owners ?? {},
+      videopoker_owners: raw.videopoker_owners ?? {},
+      slots_owners: raw.slots_owners ?? {},
+      state_heads: raw.state_heads ?? {},
+      location_climate: raw.location_climate ?? null,
+    },
+    bulletFactories: raw.bullet_factories ?? [],
+    airports: raw.airports ?? [],
+    airportClaimCost: raw.airport_claim_cost != null ? Number(raw.airport_claim_cost) : 175_000_000,
+    userCurrentCity: raw.user_current_state ?? null,
+    familyMy: raw.family_my ?? null,
+  };
+}
+
+function readCachedStatesBootstrap() {
+  try {
+    const raw = sessionStorage.getItem(STATES_BOOTSTRAP_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || Date.now() - Number(parsed.cachedAt || 0) > STATES_BOOTSTRAP_CACHE_MAX_AGE_MS) {
+      sessionStorage.removeItem(STATES_BOOTSTRAP_CACHE_KEY);
+      return null;
+    }
+    return normalizeStatesPayload(parsed.payload || {});
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedStatesBootstrap(payload) {
+  try {
+    sessionStorage.setItem(STATES_BOOTSTRAP_CACHE_KEY, JSON.stringify({ cachedAt: Date.now(), payload }));
+  } catch {
+    // Cache is only for perceived speed; ignore storage failures.
+  }
+}
 
 const CityCard = ({
   city,
@@ -446,74 +500,52 @@ const StatsOverview = ({ cities, games, allOwners, bulletFactories, airports }) 
 // ============================================================================
 
 export default function States() {
-  const [data, setData] = useState({ cities: [], games: [], state_heads: {}, location_climate: null });
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const cachedBootstrap = useMemo(() => readCachedStatesBootstrap(), []);
+  const [data, setData] = useState(cachedBootstrap?.data ?? emptyStatesData);
+  const [hasLoaded, setHasLoaded] = useState(!!cachedBootstrap);
   const [loadError, setLoadError] = useState(false);
-  const [bulletFactories, setBulletFactories] = useState([]);
-  const [airports, setAirports] = useState([]);
-  const [airportClaimCost, setAirportClaimCost] = useState(175_000_000);
+  const [bulletFactories, setBulletFactories] = useState(cachedBootstrap?.bulletFactories ?? []);
+  const [airports, setAirports] = useState(cachedBootstrap?.airports ?? []);
+  const [airportClaimCost, setAirportClaimCost] = useState(cachedBootstrap?.airportClaimCost ?? 175_000_000);
   const [expandedCities, setExpandedCities] = useState({});
   const [claimingCity, setClaimingCity] = useState(null);
   const [claimingState, setClaimingState] = useState(null);
-  const [userCurrentCity, setUserCurrentCity] = useState(null);
-  const [familyMy, setFamilyMy] = useState(null);
+  const [userCurrentCity, setUserCurrentCity] = useState(cachedBootstrap?.userCurrentCity ?? null);
+  const [familyMy, setFamilyMy] = useState(cachedBootstrap?.familyMy ?? null);
 
-  const fetchUserCity = useCallback(() => {
-    api.get('/auth/me').then((r) => setUserCurrentCity(r.data?.current_state ?? null)).catch(() => setUserCurrentCity(null));
-  }, []);
-  useEffect(() => { fetchUserCity(); }, [fetchUserCity]);
-  useEffect(() => {
-    const onFocus = () => fetchUserCity();
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
-  }, [fetchUserCity]);
+  const applyStatesPayload = useCallback((payload) => {
+    const normalized = normalizeStatesPayload(payload);
+    setData(normalized.data);
+    setBulletFactories(normalized.bulletFactories);
+    setAirports(normalized.airports);
+    setAirportClaimCost(normalized.airportClaimCost);
+    setUserCurrentCity(normalized.userCurrentCity);
+    setFamilyMy(normalized.familyMy);
 
-  const fetchFamilyMy = useCallback(() => {
-    apiRequestWith429Retry(() => api.get('/families/my')).then((r) => setFamilyMy(r.data ?? null)).catch(() => setFamilyMy(null));
+    const citiesList = normalized.data.cities ?? [];
+    if (citiesList.length) {
+      const all = {};
+      citiesList.forEach(c => { all[c] = true; });
+      setExpandedCities(all);
+    }
   }, []);
-  useEffect(() => { fetchFamilyMy(); }, [fetchFamilyMy]);
 
   const fetchStates = useCallback(() => {
     api.get('/states')
       .then((res) => {
         setLoadError(false);
-        setData({
-          cities: res.data?.cities ?? [],
-          games: res.data?.games ?? [],
-          dice_owners: res.data?.dice_owners ?? {},
-          roulette_owners: res.data?.roulette_owners ?? {},
-          blackjack_owners: res.data?.blackjack_owners ?? {},
-          horseracing_owners: res.data?.horseracing_owners ?? {},
-          videopoker_owners: res.data?.videopoker_owners ?? {},
-          slots_owners: res.data?.slots_owners ?? {},
-          state_heads: res.data?.state_heads ?? {},
-          location_climate: res.data?.location_climate ?? null,
-        });
-        // Expand all cities by default
-        const citiesList = res.data?.cities ?? [];
-        if (citiesList.length) {
-          const all = {};
-          citiesList.forEach(c => { all[c] = true; });
-          setExpandedCities(all);
-        }
+        applyStatesPayload(res.data || {});
+        writeCachedStatesBootstrap(res.data || {});
       })
       .catch(() => {
         setLoadError(true);
         toast.error('Failed to load states');
-        setData({ cities: [], games: [], state_heads: {}, location_climate: null });
+        if (!cachedBootstrap) setData(emptyStatesData);
       })
       .finally(() => setHasLoaded(true));
-  }, []);
+  }, [applyStatesPayload, cachedBootstrap]);
 
   useEffect(() => { fetchStates(); }, [fetchStates]);
-
-  useEffect(() => {
-    api.get('/bullet-factory/list').then((r) => setBulletFactories(r.data?.factories ?? [])).catch(() => setBulletFactories([]));
-    api.get('/airports').then((r) => {
-      setAirports(r.data?.airports ?? []);
-      if (r.data?.claim_cost != null) setAirportClaimCost(Number(r.data.claim_cost));
-    }).catch(() => setAirports([]));
-  }, []);
 
   useEffect(() => {
     let lastWakeRefetchAt = 0;
@@ -522,13 +554,6 @@ export default function States() {
       if (now - lastWakeRefetchAt < 2500) return;
       lastWakeRefetchAt = now;
       fetchStates();
-      fetchFamilyMy();
-      fetchUserCity();
-      api.get('/bullet-factory/list').then((r) => setBulletFactories(r.data?.factories ?? [])).catch(() => setBulletFactories([]));
-      api.get('/airports').then((r) => {
-        setAirports(r.data?.airports ?? []);
-        if (r.data?.claim_cost != null) setAirportClaimCost(Number(r.data.claim_cost));
-      }).catch(() => setAirports([]));
     };
     const onVisibility = () => {
       if (!document.hidden) onWake();
@@ -541,7 +566,7 @@ export default function States() {
       window.removeEventListener('pageshow', onWake);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [fetchStates, fetchFamilyMy, fetchUserCity]);
+  }, [fetchStates]);
 
   const cities = useMemo(() => (Array.isArray(data.cities) ? data.cities : []), [data.cities]);
   const games = useMemo(() => (Array.isArray(data.games) ? data.games : []), [data.games]);
@@ -620,10 +645,7 @@ export default function States() {
     try {
       await api.post('/airports/claim', { state, slot: 1 });
       toast.success('You now own this airport. Set price in Travel or States.');
-      const r = await api.get('/airports');
-      setAirports(r.data?.airports ?? []);
-      if (r.data?.claim_cost != null) setAirportClaimCost(Number(r.data.claim_cost));
-      fetchUserCity();
+      fetchStates();
       window.dispatchEvent(new CustomEvent('app:refresh-user'));
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to claim');
@@ -638,7 +660,6 @@ export default function States() {
       await api.post('/states/claim', { state });
       toast.success(`Your family is now head of ${state}.`);
       fetchStates();
-      fetchFamilyMy();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to claim state');
     } finally {

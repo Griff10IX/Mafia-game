@@ -1,4 +1,6 @@
 # States: cities (travel), casino games, all casino owners per city
+import asyncio
+import time
 from datetime import datetime, timezone
 from fastapi import Depends, HTTPException, Body
 from pydantic import BaseModel
@@ -24,6 +26,9 @@ from routers.casinos.blackjack import BLACKJACK_MAX_BET
 from routers.casinos.horseracing import HORSERACING_MAX_BET
 from routers.casinos.slots import SLOTS_MAX_BET
 from routers.casinos.video_poker import VIDEO_POKER_MAX_BET
+from routers.admin.airport import AIRPORT_COST, AIRPORT_PRICE_MIN, AIRPORT_PRICE_MAX
+from routers.kill.armoury import _accumulated_bullets
+from utils.claim_costs import load_claim_costs
 from utils.location_climate import get_location_climate
 
 CASINO_GAMES = [
@@ -40,16 +45,86 @@ class StateClaimRequest(BaseModel):
     state: str
 
 
+_states_page_cache: dict[str, dict] = {}
+_STATES_PAGE_TTL_SEC = 3
+_STATES_PAGE_MAX_ENTRIES = 5000
+
+
+def _invalidate_states_page_cache(user_id: str | None = None):
+    if user_id:
+        _states_page_cache.pop(user_id, None)
+        return
+    _states_page_cache.clear()
+
+
+def _states_cache_get(user_id: str):
+    entry = _states_page_cache.get(user_id)
+    if not entry:
+        return None
+    if time.monotonic() > entry["expires_at"]:
+        _states_page_cache.pop(user_id, None)
+        return None
+    return entry["data"]
+
+
+def _states_cache_set(user_id: str, payload: dict):
+    if len(_states_page_cache) >= _STATES_PAGE_MAX_ENTRIES and user_id not in _states_page_cache:
+        _states_page_cache.pop(next(iter(_states_page_cache)), None)
+    _states_page_cache[user_id] = {"expires_at": time.monotonic() + _STATES_PAGE_TTL_SEC, "data": payload}
+
+
+async def _state_claim_context(current_user: dict) -> dict:
+    family_id = (current_user.get("family_id") or "").strip()
+    if not family_id:
+        return {"my_role": None, "qualifies_for_state_head": False}
+    member_task = db.family_members.find_one(
+        {"family_id": family_id, "user_id": current_user["id"]},
+        {"_id": 0, "role": 1},
+    )
+    qualifies_task = family_qualifies_for_state_head(family_id)
+    member, qualifies = await asyncio.gather(member_task, qualifies_task)
+    role = (member or {}).get("role") or current_user.get("family_role")
+    return {
+        "my_role": str(role or "").strip().lower() or None,
+        "qualifies_for_state_head": bool(qualifies),
+    }
+
+
 async def get_states(current_user: dict = Depends(get_current_user)):
     """List all cities (travel destinations), casino games with max bet, and casino owners per city."""
-    dice_docs = await db.dice_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1}).to_list(20)
-    rlt_docs = await db.roulette_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1}).to_list(20)
-    blackjack_docs = await db.blackjack_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1}).to_list(20)
-    horseracing_docs = await db.horseracing_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1}).to_list(20)
-    videopoker_docs = await db.videopoker_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1}).to_list(20)
-    slots_docs = await db.slots_ownership.find({}, {"_id": 0, "state": 1, "owner_id": 1, "owner_username": 1, "max_bet": 1, "buy_back_reward": 1, "expires_at": 1, "next_draw_at": 1}).to_list(20)
+    user_id = current_user.get("id") or ""
+    cached = _states_cache_get(user_id)
+    if cached is not None:
+        return cached
 
-    all_docs = dice_docs + rlt_docs + blackjack_docs + horseracing_docs + videopoker_docs + slots_docs
+    states_count = len(STATES or []) or 1
+    (
+        dice_docs,
+        rlt_docs,
+        blackjack_docs,
+        horseracing_docs,
+        videopoker_docs,
+        slots_docs,
+        bullet_factory_docs,
+        airport_docs,
+        claim_costs,
+        heads_raw,
+        claim_context,
+    ) = await asyncio.gather(
+        db.dice_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1}).to_list(states_count),
+        db.roulette_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1}).to_list(states_count),
+        db.blackjack_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1}).to_list(states_count),
+        db.horseracing_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1}).to_list(states_count),
+        db.videopoker_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1}).to_list(states_count),
+        db.slots_ownership.find({}, {"_id": 0, "state": 1, "owner_id": 1, "owner_username": 1, "max_bet": 1, "buy_back_reward": 1, "expires_at": 1, "next_draw_at": 1}).to_list(states_count),
+        db.bullet_factory.find({}, {"_id": 0, "state": 1, "owner_id": 1, "owner_username": 1, "last_collected_at": 1, "price_per_bullet": 1, "unowned_price": 1}).to_list(states_count),
+        db.airport_ownership.find({"slot": 1}, {"_id": 0, "state": 1, "slot": 1, "owner_username": 1, "price_per_travel": 1}).to_list(states_count),
+        load_claim_costs(db),
+        get_state_heads(),
+        _state_claim_context(current_user),
+    )
+
+    all_docs = dice_docs + rlt_docs + blackjack_docs + horseracing_docs + videopoker_docs + slots_docs + bullet_factory_docs
     owner_ids = list({d["owner_id"] for d in all_docs if d.get("owner_id")})
     users = await db.users.find({"id": {"$in": owner_ids}}, {"_id": 0, "id": 1, "username": 1, "money": 1}).to_list(len(owner_ids) or 1)
     user_map = {u["id"]: u for u in users}
@@ -135,8 +210,9 @@ async def get_states(current_user: dict = Depends(get_current_user)):
             videopoker_owners[st] = {"username": None, "max_bet": vp_max}
 
     # Slots: one per state; include state-owned (no owner) with next_draw_at
+    slots_docs_by_state = {(d.get("state") or "").strip(): d for d in slots_docs if d.get("state")}
     for st in STATES or []:
-        doc = next((d for d in slots_docs if (d.get("state") or "").strip() == st), None)
+        doc = slots_docs_by_state.get(st)
         next_draw_at = doc.get("next_draw_at") if doc else None
         slots_max = doc.get("max_bet") if doc and doc.get("max_bet") is not None else SLOTS_MAX_BET
         if doc and doc.get("owner_id") and not _slots_expired(doc):
@@ -148,8 +224,36 @@ async def get_states(current_user: dict = Depends(get_current_user)):
             # State-owned or no doc: still include so frontend can show "State owned" and next_draw_at
             slots_owners[st] = {"username": None, "max_bet": slots_max, "next_draw_at": next_draw_at}
 
+    bullet_factories = []
+    bullet_docs_by_state = {(d.get("state") or "").strip(): d for d in bullet_factory_docs if d.get("state")}
+    for st in STATES or []:
+        factory = bullet_docs_by_state.get(st) or {}
+        owner_id = factory.get("owner_id")
+        owner = user_map.get(owner_id or "", {})
+        owner_username = factory.get("owner_username") or (owner.get("username") if owner_id else None)
+        price = factory.get("price_per_bullet") if owner_id else factory.get("unowned_price")
+        bullet_factories.append({
+            "state": st,
+            "owner_id": owner_id,
+            "owner_username": owner_username or "Unclaimed",
+            "accumulated_bullets": _accumulated_bullets(factory),
+            "price_per_bullet": price,
+        })
+
+    airports = []
+    airport_docs_by_state = {(d.get("state") or "").strip(): d for d in airport_docs if d.get("state")}
+    for st in STATES or []:
+        airport = airport_docs_by_state.get(st) or {}
+        raw_price = airport.get("price_per_travel") or AIRPORT_COST
+        price = max(AIRPORT_PRICE_MIN, min(int(raw_price), AIRPORT_PRICE_MAX))
+        airports.append({
+            "state": st,
+            "slot": 1,
+            "owner_username": airport.get("owner_username") or "Unclaimed",
+            "price_per_travel": price,
+        })
+
     # State heads: which family (if any) is head of each state
-    heads_raw = await get_state_heads()
     state_heads = {}
     head_family_ids = [fid for fid in (heads_raw or {}).values() if fid]
     head_families = await db.families.find(
@@ -171,7 +275,7 @@ async def get_states(current_user: dict = Depends(get_current_user)):
         else:
             state_heads[st] = None
 
-    return {
+    payload = {
         "cities": list(STATES),
         "games": CASINO_GAMES,
         "dice_owners": dice_owners,
@@ -181,8 +285,15 @@ async def get_states(current_user: dict = Depends(get_current_user)):
         "videopoker_owners": videopoker_owners,
         "slots_owners": slots_owners,
         "state_heads": state_heads,
+        "bullet_factories": bullet_factories,
+        "airports": airports,
+        "airport_claim_cost": claim_costs["airport"],
+        "user_current_state": current_user.get("current_state"),
+        "family_my": claim_context,
         "location_climate": get_location_climate(now_utc),
     }
+    _states_cache_set(user_id, payload)
+    return payload
 
 
 async def states_claim(
@@ -217,6 +328,7 @@ async def states_claim(
     err = await set_state_head(state, family_id)
     if err:
         raise HTTPException(status_code=400, detail=err)
+    _invalidate_states_page_cache()
     return {"ok": True, "state": state, "message": f"Your family is now head of {state}."}
 
 
