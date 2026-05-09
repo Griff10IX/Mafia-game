@@ -25,6 +25,9 @@ const CASINO_NAMES = { dice: 'Dice', roulette: 'Roulette', blackjack: 'Blackjack
 const CASINO_PATHS = { dice: '/casino/dice', roulette: '/casino/roulette', blackjack: '/casino/blackjack', horseracing: '/casino/horseracing', videopoker: '/casino/videopoker', slots: '/casino/slots' };
 /** Casino types that support buy-back points (My Properties + game pages). */
 const CASINO_TYPES_WITH_BUY_BACK = ['dice', 'blackjack', 'roulette', 'horseracing', 'videopoker', 'slots'];
+const MY_PROPERTIES_CACHE_KEY = 'my_properties_bootstrap_v1';
+const MY_PROPERTIES_CACHE_MAX_AGE_MS = 30_000;
+const EMPTY_MY_PROPERTIES_DATA = { casinos: [], airport: null, armoury: null, points: 0 };
 
 const VIDEO_POKER_ODDS_OPTIONS = [
   { id: 'normal', label: 'Normal' },
@@ -35,6 +38,37 @@ const VIDEO_POKER_ODDS_OPTIONS = [
 function normalizeVideoPokerOddsPreset(raw) {
   const s = String(raw || 'normal').trim().toLowerCase();
   return VIDEO_POKER_ODDS_OPTIONS.some((o) => o.id === s) ? s : 'normal';
+}
+
+function normalizeMyPropertiesPayload(props) {
+  const casinos = Array.isArray(props?.casinos) && props.casinos.length
+    ? props.casinos
+    : (props?.casino ? [props.casino] : []);
+  const airport = props?.airport ?? (props?.property?.type === 'airport' ? props.property : null);
+  const armoury = props?.armoury ?? (props?.property?.type === 'bullet_factory' ? props.property : null);
+  const points = Number(props?.points ?? 0) || 0;
+  return {
+    data: { casinos, airport, armoury, points },
+    armouryDetail: props?.armoury_detail || null,
+  };
+}
+
+function readCachedMyProperties() {
+  try {
+    const raw = sessionStorage.getItem(MY_PROPERTIES_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.savedAt || Date.now() - parsed.savedAt > MY_PROPERTIES_CACHE_MAX_AGE_MS) return null;
+    return normalizeMyPropertiesPayload(parsed.payload || {});
+  } catch (_) {
+    return null;
+  }
+}
+
+function writeCachedMyProperties(payload) {
+  try {
+    sessionStorage.setItem(MY_PROPERTIES_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), payload }));
+  } catch (_) {}
 }
 
 function casinoResetProfitPayload(casino) {
@@ -309,44 +343,40 @@ function CasinoBlock({ casino, points, onRefresh }) {
 }
 
 export default function MyProperties() {
-  const [data, setData] = useState({ casinos: [], airport: null, armoury: null, points: 0 });
+  const [cachedBootstrap] = useState(() => readCachedMyProperties());
+  const [data, setData] = useState(cachedBootstrap?.data || EMPTY_MY_PROPERTIES_DATA);
   const [saving, setSaving] = useState(false);
-  const [airportPrice, setAirportPrice] = useState('');
+  const [airportPrice, setAirportPrice] = useState(
+    cachedBootstrap?.data?.airport?.price_per_travel != null ? String(cachedBootstrap.data.airport.price_per_travel) : ''
+  );
   const [airportTransferUsername, setAirportTransferUsername] = useState('');
   const [airportSellPoints, setAirportSellPoints] = useState('');
-  const [bulletPrice, setBulletPrice] = useState('');
-  const [armouryDetail, setArmouryDetail] = useState(null);
+  const [bulletPrice, setBulletPrice] = useState(
+    cachedBootstrap?.data?.armoury?.price_per_bullet != null ? String(cachedBootstrap.data.armoury.price_per_bullet) : ''
+  );
+  const [armouryDetail, setArmouryDetail] = useState(cachedBootstrap?.armouryDetail || null);
   const [armourySellPoints, setArmourySellPoints] = useState('');
   const [armouryTransferUsername, setArmouryTransferUsername] = useState('');
 
   const fetchMyProperties = useCallback(async () => {
     try {
-      const [res, bulletListRes] = await Promise.all([
-        api.get('/my-properties'),
-        api.get('/bullet-factory/list').catch(() => ({ data: { factories: [] } })),
-      ]);
+      const res = await api.get('/my-properties');
       const props = res.data;
-      const casinos = Array.isArray(props?.casinos) && props.casinos.length
-        ? props.casinos
-        : (props?.casino ? [props.casino] : []);
-      const airport = props?.airport ?? (props?.property?.type === 'airport' ? props.property : null);
-      const armoury = props?.armoury ?? (props?.property?.type === 'bullet_factory' ? props.property : null);
-      const points = Number(props?.points ?? 0) || 0;
-      setData({ casinos, airport, armoury, points });
+      const { data: nextData, armouryDetail: nextArmouryDetail } = normalizeMyPropertiesPayload(props);
+      const { airport, armoury } = nextData;
+      setData(nextData);
       if (airport?.price_per_travel != null) setAirportPrice(String(airport.price_per_travel));
       if (armoury?.state) {
-        const list = bulletListRes.data?.factories ?? [];
-        const f = list.find((x) => x.state === armoury.state);
-        if (f?.price_per_bullet != null) setBulletPrice(String(f.price_per_bullet));
-        const detailRes = await api.get('/bullet-factory', { params: { state: armoury.state } }).catch(() => ({ data: null }));
-        setArmouryDetail(detailRes.data || null);
+        if (armoury.price_per_bullet != null) setBulletPrice(String(armoury.price_per_bullet));
+        setArmouryDetail(nextArmouryDetail);
       } else {
         setArmouryDetail(null);
       }
+      writeCachedMyProperties(props);
     } catch (error) {
       const detail = error.response?.data?.detail || error.message || 'Unknown error';
       toast.error(`Failed to load properties: ${detail}`);
-      setData({ casinos: [], airport: null, armoury: null, points: 0 });
+      setData(EMPTY_MY_PROPERTIES_DATA);
     }
   }, []);
 

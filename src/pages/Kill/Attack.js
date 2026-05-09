@@ -192,6 +192,7 @@ const KillUserCard = ({
   bulletsNeededForKill,
   bulletsNeededLoading,
   killPvpBlocked,
+  loading,
 }) => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-card atk-fade-in mobile-panel`}>
     <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none atk-glow" />
@@ -307,13 +308,13 @@ const KillUserCard = ({
       
       <button
         type="button"
-        disabled={killPvpBlocked || !killUsername.trim() || !bulletsToUse.trim() || parseInt(bulletsToUse, 10) < 1}
+        disabled={loading || killPvpBlocked || !killUsername.trim() || !bulletsToUse.trim() || parseInt(bulletsToUse, 10) < 1}
         onClick={onKill}
         title={killPvpBlocked ? 'Player kills are disabled during release soft-launch (NPCs still allowed).' : undefined}
         className="w-full bg-gradient-to-r from-red-700 via-red-800 to-red-900 hover:from-red-600 hover:via-red-700 hover:to-red-800 text-white rounded font-heading font-bold uppercase tracking-widest py-2 text-[10px] border-2 border-red-600/50 shadow-lg shadow-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
         data-testid="kill-inline-button"
       >
-        💀 Kill User
+        {loading ? '⏳ Killing...' : '💀 Kill User'}
       </button>
     </div>
     <div className="atk-art-line text-primary mx-2" />
@@ -1400,7 +1401,8 @@ export default function Attack() {
           const execRes = await api.post('/attack/execute', execBody);
           refreshUser();
           fetchBullets();
-          await refreshAttacks();
+          // Background refresh — the result toast/feedback below doesn't need the latest list.
+          refreshAttacks();
           if (execRes.data?.success) {
             const rewardMoney = execRes.data.rewards?.money;
             showKillResult(execRes.data?.message || 'Kill executed.', 'success', {
@@ -1570,7 +1572,9 @@ export default function Attack() {
       }
       refreshUser();
       fetchBullets();
-      await refreshAttacks();
+      // Refresh in the background — toast already fired, no need to keep the button busy
+      // for another /attack/list round-trip (which can be 0.5-1.5s under load).
+      refreshAttacks();
     } catch (error) {
       showKillResult(error.response?.data?.detail || 'Failed to execute attack', 'error');
     } finally {
@@ -1585,22 +1589,19 @@ export default function Attack() {
       return;
     }
 
-    // Use current list first; refresh only if needed.
-    let list = Array.isArray(attacks) ? attacks : [];
-    let found = list.filter((a) => (a.target_username || '').toLowerCase() === username.toLowerCase() && a.status === 'found');
-    let best = found.find((a) => a.can_attack);
-    if (!best) {
-      try {
-        const latest = await refreshAttacks();
-        if (Array.isArray(latest)) list = latest;
-      } catch {
-        /* keep existing list */
-      }
-      found = list.filter((a) => (a.target_username || '').toLowerCase() === username.toLowerCase() && a.status === 'found');
-      best = found.find((a) => a.can_attack);
-    }
+    // Flip loading on the first synchronous tick so the button gives feedback within one frame.
+    // executeAttack() will manage it from there once we hand off; if we early-exit, we reset.
+    setLoading(true);
+
+    // Use the cached attacks list directly. Polling already keeps it fresh on a 10s loop, and
+    // forcing a /attack/list round-trip here just adds 0.5-1.5s of perceived latency under load
+    // for cases where the result wouldn't have changed (still searching, wrong location, etc.).
+    const list = Array.isArray(attacks) ? attacks : [];
+    const found = list.filter((a) => (a.target_username || '').toLowerCase() === username.toLowerCase() && a.status === 'found');
+    const best = found.find((a) => a.can_attack);
 
     if (!best) {
+      setLoading(false);
       if (found.length > 0) {
         showKillResult('You must be in the target\'s location to attack or bodyguard-check. Travel there first.', 'error');
         return;
@@ -1618,6 +1619,7 @@ export default function Attack() {
 
     const bulletNum = bulletsToUse !== "" && bulletsToUse != null ? parseInt(bulletsToUse, 10) : NaN;
     if (Number.isNaN(bulletNum) || bulletNum < 1) {
+      setLoading(false);
       showKillResult('Enter how many bullets to use (at least 1).', 'error');
       return;
     }
@@ -1639,7 +1641,8 @@ export default function Attack() {
       }));
     } catch (_) {}
     await executeAttack(best.attack_id, extra);
-    await fetchInflation();
+    // Inflation is part of /attack/list now (returned inline) — refresh in the background.
+    fetchInflation();
   };
 
   const runCalc = async () => {
@@ -1832,6 +1835,7 @@ export default function Attack() {
             bulletsNeededForKill={killBulletsResult}
             bulletsNeededLoading={killBulletsLoading}
             killPvpBlocked={killPvpBlocked}
+            loading={loading}
           />
 
           <FindUserCard

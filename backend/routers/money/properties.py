@@ -2,6 +2,7 @@
 # Progression: buy in order; first property pays least, last pays most. Must max previous to unlock next.
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
+import asyncio
 import math
 from pydantic import BaseModel
 import secrets
@@ -1092,23 +1093,33 @@ def register(router):
     _user_owns_all_casinos = srv._user_owns_all_casinos
     _user_owns_airport = srv._user_owns_airport
     _user_owns_bullet_factory = srv._user_owns_bullet_factory
+    from routers.kill.armoury import get_bullet_factory
 
     async def get_my_properties(current_user: dict = Depends(get_current_user)):
         """Return current user's casino (if any), airport and/or armoury. Rule: max 1 casino; max 1 airport and max 1 armoury (may hold both)."""
         user_id = current_user["id"]
-        casinos = await _user_owns_all_casinos(user_id)
+        casinos, airport, armoury, urow = await asyncio.gather(
+            _user_owns_all_casinos(user_id),
+            _user_owns_airport(user_id),
+            _user_owns_bullet_factory(user_id),
+            db.users.find_one({"id": user_id}, {"points": 1}),
+        )
         casino = casinos[0] if casinos else None
-        airport = await _user_owns_airport(user_id)
-        armoury = await _user_owns_bullet_factory(user_id)
         property_ = airport or armoury
-        urow = await db.users.find_one({"id": user_id}, {"points": 1})
         points = int((urow or {}).get("points") or 0)
+        armoury_detail = None
+        if armoury and armoury.get("state"):
+            try:
+                armoury_detail = await get_bullet_factory(state=armoury["state"], current_user=current_user)
+            except Exception:
+                armoury_detail = None
         return {
             "casino": casino,
             "casinos": casinos,
             "property": property_,
             "airport": airport,
             "armoury": armoury,
+            "armoury_detail": armoury_detail,
             "points": points,
         }
 
