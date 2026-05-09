@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Search, User, ChevronDown, Users, Lock } from 'lucide-react';
+import { toast } from 'sonner';
 import api, { STAFF_ADMIN_API_FORBIDDEN_EVENT } from '../../utils/api';
 import { getAdminPresenceTabId } from '../../utils/adminPresence';
 import {
@@ -206,6 +207,7 @@ export default function AdminShell() {
             const p = `${window.location.pathname}${window.location.search || ''}${window.location.hash || ''}`;
             api.post('/admin/tool-access/report-spa-unauthorized', { path: p }).catch(() => {});
           }
+          toast.warning('Access denied. Our staff team has been notified of this attempt.', { duration: 6000 });
         } else if (!shellOk) {
           setStaffAllowed(false);
           navigate('/staff-entrance', { replace: true });
