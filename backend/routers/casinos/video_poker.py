@@ -74,9 +74,9 @@ VALUE_RANK = {"2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "1
 # So "even money" on a pair of Jacks requires multiplier 2 (full stake back + equal win), not 1.5.
 # Preset "enhanced" was the reference for the low tier; "normal" / "increased" match that pattern at the bottom.
 #
-# House lean: deal/draw are fully fair (single shuffle, pop next card). After the draw, an
-# outcome-demote roll on paying tiers (see VIDEO_POKER_DEMOTE_BY_PRESET / _vp_apply_outcome_demote)
-# silently rerolls non-held positions to drive house edge. Cap: at most one demote per draw.
+# House lean: cards are generated with a strong house-favouring outcome bias. Payouts remain honest:
+# if the visible final hand is a paying tier, it pays exactly according to the pay table. The edge
+# comes from making paying deals/draws much rarer, not from reducing payouts after the fact.
 VIDEO_POKER_DEFAULT_ODDS_PRESET = "tight"
 VIDEO_POKER_ODDS_PRESET_LABELS = {
     "tight": "Tight (house)",
@@ -134,71 +134,79 @@ VIDEO_POKER_PAY_PRESETS: dict[str, dict[str, float]] = {
 # Back-compat alias for imports / admin tooling
 PAY_TABLE = VIDEO_POKER_PAY_PRESETS[VIDEO_POKER_DEFAULT_ODDS_PRESET]
 
-# Per-preset outcome-demote probabilities. After the draw, if the final hand is a paying tier,
-# the engine rolls once against this table; on a hit, the non-held positions are silently
-# rerolled from a fresh fair deck (52 minus held). If the player held all 5 on a paying tier,
-# one random position is force-swapped to guarantee a downgrade path. Cap one demote per draw.
-# All numbers are tunable in this single dict — bigger = rarer big hands.
-VIDEO_POKER_DEMOTE_BY_PRESET: dict[str, dict[str, float]] = {
-    "tight": {
-        "royal_flush": 0.99,
-        "straight_flush": 0.95,
-        "four_of_a_kind": 0.85,
-        "full_house": 0.55,
-        "flush": 0.35,
-        "straight": 0.25,
-        "three_of_a_kind": 0.12,
-        "two_pair": 0.05,
-        "jacks_or_better": 0.02,
-    },
-    "normal": {
-        "royal_flush": 0.97,
-        "straight_flush": 0.90,
-        "four_of_a_kind": 0.75,
-        "full_house": 0.45,
-        "flush": 0.30,
-        "straight": 0.20,
-        "three_of_a_kind": 0.10,
-        "two_pair": 0.04,
-        "jacks_or_better": 0.015,
-    },
-    "increased": {
-        "royal_flush": 0.92,
-        "straight_flush": 0.80,
-        "four_of_a_kind": 0.60,
-        "full_house": 0.30,
-        "flush": 0.20,
-        "straight": 0.12,
-        "three_of_a_kind": 0.06,
-        "two_pair": 0.02,
-        "jacks_or_better": 0.01,
-    },
-    "enhanced": {
-        "royal_flush": 0.85,
-        "straight_flush": 0.70,
-        "four_of_a_kind": 0.50,
-        "full_house": 0.20,
-        "flush": 0.12,
-        "straight": 0.08,
-        "three_of_a_kind": 0.04,
-        "two_pair": 0.01,
-        "jacks_or_better": 0.0,
-    },
+# Per-preset card-generation bias. Each deal/draw samples candidate visible hands and strongly
+# rejects candidates that would pay. This targets roughly 5-10% wins on tight/normal while keeping
+# payouts perfectly aligned with the visible final hand.
+VIDEO_POKER_GENERATION_BIAS_BY_PRESET: dict[str, dict[str, float | int]] = {
+    "tight": {"deal_avoid_paying": 0.90, "draw_avoid_paying": 0.90, "deal_attempts": 48, "draw_attempts": 48},
+    "normal": {"deal_avoid_paying": 0.86, "draw_avoid_paying": 0.86, "deal_attempts": 40, "draw_attempts": 40},
+    "increased": {"deal_avoid_paying": 0.86, "draw_avoid_paying": 0.86, "deal_attempts": 40, "draw_attempts": 40},
+    "enhanced": {"deal_avoid_paying": 0.86, "draw_avoid_paying": 0.86, "deal_attempts": 40, "draw_attempts": 40},
 }
-VIDEO_POKER_DEMOTE_MAX_REROLLS = 1
 
 
-def _vp_deal_initial_hand(deck: list) -> list:
-    """Deal 5 cards from a fairly shuffled deck."""
-    _rng.shuffle(deck)
-    return [deck.pop() for _ in range(5)]
+def _vp_generation_bias(preset: str) -> dict[str, float | int]:
+    return VIDEO_POKER_GENERATION_BIAS_BY_PRESET.get(
+        _normalize_odds_preset(preset),
+        VIDEO_POKER_GENERATION_BIAS_BY_PRESET[VIDEO_POKER_DEFAULT_ODDS_PRESET],
+    )
 
 
-def _vp_pop_replacement_card(deck: list) -> dict:
-    """Pop the next card from the (already-shuffled) remaining deck."""
-    if not deck:
-        raise ValueError("video poker: empty deck on draw")
-    return deck.pop()
+def _vp_sample_cards(deck: list, count: int) -> tuple[list, list]:
+    candidate_deck = list(deck)
+    _rng.shuffle(candidate_deck)
+    hand = [candidate_deck.pop() for _ in range(min(count, len(candidate_deck)))]
+    return hand, candidate_deck
+
+
+def _vp_accept_paying_candidate(hand_key: str, avoid_paying: float) -> bool:
+    if hand_key == "nothing":
+        return True
+    return _rng.random() >= max(0.0, min(1.0, float(avoid_paying or 0.0)))
+
+
+def _vp_deal_initial_hand(deck: list, preset: str, pay_table: dict[str, float]) -> list:
+    """Deal a visible 5-card hand while strongly preferring non-paying opening deals."""
+    profile = _vp_generation_bias(preset)
+    attempts = max(1, int(profile.get("deal_attempts") or 1))
+    avoid_paying = float(profile.get("deal_avoid_paying") or 0.0)
+    last_hand = None
+    last_deck = None
+    for _ in range(attempts):
+        hand, remaining = _vp_sample_cards(deck, 5)
+        last_hand, last_deck = hand, remaining
+        hand_key, _, _ = _evaluate_hand(hand, pay_table)
+        if _vp_accept_paying_candidate(hand_key, avoid_paying):
+            deck[:] = remaining
+            return hand
+    deck[:] = last_deck or []
+    return last_hand or []
+
+
+def _vp_draw_biased_hand(hand: list, held_idx: set[int], deck: list, preset: str, pay_table: dict[str, float]) -> list:
+    """Draw replacement cards while strongly preferring a non-paying final visible hand."""
+    swap_indices = [i for i in range(5) if i not in held_idx]
+    if not swap_indices:
+        return hand
+    profile = _vp_generation_bias(preset)
+    attempts = max(1, int(profile.get("draw_attempts") or 1))
+    avoid_paying = float(profile.get("draw_avoid_paying") or 0.0)
+    last_hand = None
+    last_deck = None
+    for _ in range(attempts):
+        candidate_deck = list(deck)
+        _rng.shuffle(candidate_deck)
+        candidate_hand = list(hand)
+        for i in swap_indices:
+            if candidate_deck:
+                candidate_hand[i] = candidate_deck.pop()
+        last_hand, last_deck = candidate_hand, candidate_deck
+        hand_key, _, _ = _evaluate_hand(candidate_hand, pay_table)
+        if _vp_accept_paying_candidate(hand_key, avoid_paying):
+            deck[:] = candidate_deck
+            return candidate_hand
+    deck[:] = last_deck or []
+    return last_hand or hand
 
 
 HAND_NAMES = {
@@ -237,7 +245,7 @@ def _effective_odds_preset(doc: Optional[dict]) -> str:
 
 
 def _payout_for_multiplier(bet: int, mult: float) -> int:
-    """Cash credited on draw: honest round(bet * multiplier). House edge comes from outcome demote, not a credit haircut."""
+    """Cash credited on draw: honest round(bet * multiplier). House edge comes from card generation, not a credit haircut."""
     m = float(mult or 0)
     if m <= 0:
         return 0
@@ -366,38 +374,6 @@ def _evaluate_hand(hand, pay_table: dict[str, float]):
 
     multiplier = float(pay_table.get(key, 0) or 0)
     return key, HAND_NAMES.get(key, key), multiplier
-
-
-def _vp_apply_outcome_demote(
-    hand: list,
-    held_idx: set[int],
-    preset: str,
-    pay_table: dict[str, float],
-) -> tuple[list, str, str, float, bool]:
-    """House-edge mechanism. If the post-draw hand is a paying tier, roll once against the
-    preset's demote probability. On a hit, reroll the non-held positions from a fresh fair
-    deck (52 minus held); if the player held all 5, force a single random swap so the hand
-    is guaranteed to change. Returns (final_hand, original_key, final_key, final_multiplier, demoted).
-    Hard-capped at one demote per draw (no inner loop)."""
-    original_key, _, _ = _evaluate_hand(hand, pay_table)
-    p = float(VIDEO_POKER_DEMOTE_BY_PRESET.get(preset, {}).get(original_key, 0.0) or 0.0)
-    if p <= 0 or _rng.random() >= p:
-        final_mult = float(pay_table.get(original_key, 0) or 0)
-        return hand, original_key, original_key, final_mult, False
-    fresh = _make_deck()
-    held_cards = {(hand[i]["suit"], hand[i]["value"]) for i in held_idx if 0 <= i < 5}
-    fresh = [c for c in fresh if (c["suit"], c["value"]) not in held_cards]
-    _rng.shuffle(fresh)
-    new_hand = list(hand)
-    swap_indices = [i for i in range(5) if i not in held_idx]
-    if not swap_indices:
-        swap_indices = [_rng.randrange(5)]
-    for i in swap_indices:
-        if not fresh:
-            break
-        new_hand[i] = fresh.pop()
-    final_key, _, final_mult = _evaluate_hand(new_hand, pay_table)
-    return new_hand, original_key, final_key, final_mult, True
 
 
 async def _settle_and_save_history(
@@ -915,11 +891,12 @@ def register(router):
         if existing:
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": bet}})
             raise HTTPException(status_code=400, detail="Finish your current game first")
+        odds_preset = _effective_odds_preset(doc)
+        pay_table = _pay_table_for_preset(odds_preset)
         deck = _make_deck()
-        hand = _vp_deal_initial_hand(deck)
+        hand = _vp_deal_initial_hand(deck, odds_preset, pay_table)
         if owner_id:
             await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
-        odds_preset = _effective_odds_preset(doc)
         await db.videopoker_games.insert_one({
             "user_id": current_user.get("id") or "",
             "city": stored_city or city,
@@ -931,7 +908,6 @@ def register(router):
             "odds_preset": odds_preset,
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
-        pay_table = _pay_table_for_preset(odds_preset)
         dk, dname, dmult = _evaluate_hand(hand, pay_table)
         return {
             "status": "deal",
@@ -972,14 +948,8 @@ def register(router):
             if 0 <= idx <= 4:
                 holds.add(idx)
 
-        for i in range(5):
-            if i not in holds and deck:
-                hand[i] = _vp_pop_replacement_card(deck)
-
-        # House-edge: outcome demote on paying tiers (silent reroll of non-held positions).
-        hand, original_hand_key, hand_key, multiplier, demoted = _vp_apply_outcome_demote(
-            hand, holds, odds_preset, pay_table
-        )
+        hand = _vp_draw_biased_hand(hand, holds, deck, odds_preset, pay_table)
+        hand_key, _, multiplier = _evaluate_hand(hand, pay_table)
         hand_name = HAND_NAMES.get(hand_key, hand_key)
         payout = _payout_for_multiplier(bet, multiplier)
         payout_full_vp = 0
@@ -1150,13 +1120,6 @@ def register(router):
                 else:
                     gambling_extra["buy_back_points_offered"] = 0
                     gambling_extra["buy_back_outcome"] = "not_offered"
-
-        # Audit breadcrumb for the outcome-demote (private to the gambling log; never returned to client).
-        if demoted:
-            if gambling_extra is None:
-                gambling_extra = {}
-            gambling_extra["demoted_from"] = original_hand_key
-            gambling_extra["demoted_to"] = hand_key
 
         await _settle_and_save_history(
             current_user.get("id") or "",

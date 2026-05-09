@@ -85,7 +85,15 @@ export async function apiRequestWith429Retry(requestFn, maxAttempts = 3) {
         const h = e?.response?.headers;
         const raw = h?.['retry-after'] ?? h?.['Retry-After'];
         const sec = parseInt(String(raw), 10);
-        const ms = Number.isFinite(sec) && sec > 0 && sec <= 120 ? sec * 1000 : 2500;
+        // Sustained-RL 429s carry Retry-After (server-told cooldown, typically 10-15s) — honor that, capped at 2s
+        // so we never freeze the UI longer than that on a single retry. Headerless 429s (transient Mongo / gateway
+        // hiccups under kill load) fall through to a quick 250ms retry instead of the old 2,500ms freeze.
+        let ms;
+        if (Number.isFinite(sec) && sec > 0 && sec <= 120) {
+          ms = Math.min(sec * 1000, 2000);
+        } else {
+          ms = 250;
+        }
         await _sleep429Retry(ms);
         continue;
       }
