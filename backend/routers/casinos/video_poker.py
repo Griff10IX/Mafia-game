@@ -134,14 +134,16 @@ VIDEO_POKER_PAY_PRESETS: dict[str, dict[str, float]] = {
 # Back-compat alias for imports / admin tooling
 PAY_TABLE = VIDEO_POKER_PAY_PRESETS[VIDEO_POKER_DEFAULT_ODDS_PRESET]
 
-# Per-preset card-generation bias. Each deal/draw samples candidate visible hands and strongly
-# rejects candidates that would pay. This targets roughly 5-10% wins on tight/normal while keeping
-# payouts perfectly aligned with the visible final hand.
+# Per-preset card-generation bias. Each deal/draw samples candidate visible hands and rejects
+# candidates that would pay with the configured probability. Tight is the floor for player wins
+# (~1-in-7-8 hands, ~13%) and the looser presets give players progressively more wins. Payouts
+# remain perfectly aligned with the visible final hand — the house edge comes only from making
+# winning hands rarer, never from shrinking the pay table.
 VIDEO_POKER_GENERATION_BIAS_BY_PRESET: dict[str, dict[str, float | int]] = {
-    "tight": {"deal_avoid_paying": 0.90, "draw_avoid_paying": 0.90, "deal_attempts": 48, "draw_attempts": 48},
-    "normal": {"deal_avoid_paying": 0.86, "draw_avoid_paying": 0.86, "deal_attempts": 40, "draw_attempts": 40},
-    "increased": {"deal_avoid_paying": 0.86, "draw_avoid_paying": 0.86, "deal_attempts": 40, "draw_attempts": 40},
-    "enhanced": {"deal_avoid_paying": 0.86, "draw_avoid_paying": 0.86, "deal_attempts": 40, "draw_attempts": 40},
+    "tight": {"deal_avoid_paying": 0.72, "draw_avoid_paying": 0.72, "deal_attempts": 24, "draw_attempts": 24},
+    "normal": {"deal_avoid_paying": 0.55, "draw_avoid_paying": 0.55, "deal_attempts": 18, "draw_attempts": 18},
+    "increased": {"deal_avoid_paying": 0.40, "draw_avoid_paying": 0.40, "deal_attempts": 14, "draw_attempts": 14},
+    "enhanced": {"deal_avoid_paying": 0.25, "draw_avoid_paying": 0.25, "deal_attempts": 10, "draw_attempts": 10},
 }
 
 
