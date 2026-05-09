@@ -192,7 +192,6 @@ const KillUserCard = ({
   bulletsNeededForKill,
   bulletsNeededLoading,
   killPvpBlocked,
-  loading,
 }) => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-card atk-fade-in mobile-panel`}>
     <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none atk-glow" />
@@ -308,13 +307,13 @@ const KillUserCard = ({
       
       <button
         type="button"
-        disabled={loading || killPvpBlocked || !killUsername.trim() || !bulletsToUse.trim() || parseInt(bulletsToUse, 10) < 1}
+        disabled={killPvpBlocked || !killUsername.trim() || !bulletsToUse.trim() || parseInt(bulletsToUse, 10) < 1}
         onClick={onKill}
         title={killPvpBlocked ? 'Player kills are disabled during release soft-launch (NPCs still allowed).' : undefined}
         className="w-full bg-gradient-to-r from-red-700 via-red-800 to-red-900 hover:from-red-600 hover:via-red-700 hover:to-red-800 text-white rounded font-heading font-bold uppercase tracking-widest py-2 text-[10px] border-2 border-red-600/50 shadow-lg shadow-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
         data-testid="kill-inline-button"
       >
-        {loading ? '⏳ Killing...' : '💀 Kill User'}
+        💀 Kill User
       </button>
     </div>
     <div className="atk-art-line text-primary mx-2" />
@@ -1209,6 +1208,7 @@ export default function Attack() {
   }, [attacks, refreshAttacks]);
 
   const hitlistNpcAutoFillRef = useRef(false);
+  const killByUsernameInFlightRef = useRef(false);
 
   // Hitlist board crosshair → /attack?target=… — prefill kill form and start a search (same as Find User submit)
   useEffect(() => {
@@ -1583,66 +1583,69 @@ export default function Attack() {
   };
 
   const killByUsername = async () => {
-    const username = (killUsername || '').trim();
-    if (!username) {
-      showKillResult('Enter a username', 'error');
-      return;
-    }
-
-    // Flip loading on the first synchronous tick so the button gives feedback within one frame.
-    // executeAttack() will manage it from there once we hand off; if we early-exit, we reset.
-    setLoading(true);
-
-    // Use the cached attacks list directly. Polling already keeps it fresh on a 10s loop, and
-    // forcing a /attack/list round-trip here just adds 0.5-1.5s of perceived latency under load
-    // for cases where the result wouldn't have changed (still searching, wrong location, etc.).
-    const list = Array.isArray(attacks) ? attacks : [];
-    const found = list.filter((a) => (a.target_username || '').toLowerCase() === username.toLowerCase() && a.status === 'found');
-    const best = found.find((a) => a.can_attack);
-
-    if (!best) {
-      setLoading(false);
-      if (found.length > 0) {
-        showKillResult('You must be in the target\'s location to attack or bodyguard-check. Travel there first.', 'error');
+    // Silent in-flight guard: blocks double-fires on the same click without disabling/relabelling
+    // the button. The user dislikes any "killing..." indicator — we rely on the toast for feedback
+    // and the server-side micro-cooldown for spam protection.
+    if (killByUsernameInFlightRef.current) return;
+    killByUsernameInFlightRef.current = true;
+    try {
+      const username = (killUsername || '').trim();
+      if (!username) {
+        showKillResult('Enter a username', 'error');
         return;
       }
-      const alreadySearching = list.some(
-        (a) => (a.target_username || '').toLowerCase() === username.toLowerCase() && a.status === 'searching'
-      );
-      if (alreadySearching) {
-        showKillResult('A search is already in progress for this target. Wait for it to finish.', 'error');
-      } else {
-        showKillResult('Target not found. Use "Find User" to search for them first.', 'error');
-      }
-      return;
-    }
 
-    const bulletNum = bulletsToUse !== "" && bulletsToUse != null ? parseInt(bulletsToUse, 10) : NaN;
-    if (Number.isNaN(bulletNum) || bulletNum < 1) {
-      setLoading(false);
-      showKillResult('Enter how many bullets to use (at least 1).', 'error');
-      return;
+      // Use the cached attacks list directly. Polling already keeps it fresh on a 10s loop, and
+      // forcing a /attack/list round-trip here just adds 0.5-1.5s of perceived latency under load
+      // for cases where the result wouldn't have changed (still searching, wrong location, etc.).
+      const list = Array.isArray(attacks) ? attacks : [];
+      const found = list.filter((a) => (a.target_username || '').toLowerCase() === username.toLowerCase() && a.status === 'found');
+      const best = found.find((a) => a.can_attack);
+
+      if (!best) {
+        if (found.length > 0) {
+          showKillResult('You must be in the target\'s location to attack or bodyguard-check. Travel there first.', 'error');
+          return;
+        }
+        const alreadySearching = list.some(
+          (a) => (a.target_username || '').toLowerCase() === username.toLowerCase() && a.status === 'searching'
+        );
+        if (alreadySearching) {
+          showKillResult('A search is already in progress for this target. Wait for it to finish.', 'error');
+        } else {
+          showKillResult('Target not found. Use "Find User" to search for them first.', 'error');
+        }
+        return;
+      }
+
+      const bulletNum = bulletsToUse !== "" && bulletsToUse != null ? parseInt(bulletsToUse, 10) : NaN;
+      if (Number.isNaN(bulletNum) || bulletNum < 1) {
+        showKillResult('Enter how many bullets to use (at least 1).', 'error');
+        return;
+      }
+      const extra = {
+        death_message: deathMessage,
+        make_public: makePublic,
+        bullets_to_use: bulletNum,
+        use_molotovs: useMolotovs,
+        ...(best.execute_token ? { execute_token: best.execute_token } : {}),
+      };
+      try {
+        sessionStorage.setItem('attack-last-submit', JSON.stringify({
+          type: 'kill',
+          killUsername: username,
+          bulletsToUse: bulletNum,
+          deathMessage,
+          makePublic,
+          useMolotovs,
+        }));
+      } catch (_) {}
+      await executeAttack(best.attack_id, extra);
+      // Inflation is part of /attack/list now (returned inline) — refresh in the background.
+      fetchInflation();
+    } finally {
+      killByUsernameInFlightRef.current = false;
     }
-    const extra = {
-      death_message: deathMessage,
-      make_public: makePublic,
-      bullets_to_use: bulletNum,
-      use_molotovs: useMolotovs,
-      ...(best.execute_token ? { execute_token: best.execute_token } : {}),
-    };
-    try {
-      sessionStorage.setItem('attack-last-submit', JSON.stringify({
-        type: 'kill',
-        killUsername: username,
-        bulletsToUse: bulletNum,
-        deathMessage,
-        makePublic,
-        useMolotovs,
-      }));
-    } catch (_) {}
-    await executeAttack(best.attack_id, extra);
-    // Inflation is part of /attack/list now (returned inline) — refresh in the background.
-    fetchInflation();
   };
 
   const runCalc = async () => {
@@ -1835,7 +1838,6 @@ export default function Attack() {
             bulletsNeededForKill={killBulletsResult}
             bulletsNeededLoading={killBulletsLoading}
             killPvpBlocked={killPvpBlocked}
-            loading={loading}
           />
 
           <FindUserCard

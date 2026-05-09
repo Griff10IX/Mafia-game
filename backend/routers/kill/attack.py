@@ -26,6 +26,31 @@ _ATTACK_MICRO_COOLDOWN_PRUNE_AFTER_SEC = 60.0
 _attack_micro_cooldown_seen: Dict[str, float] = {}
 _attack_micro_cooldown_lock = asyncio.Lock()
 
+# Background tasks scheduled by _fire_and_forget. Holding strong refs prevents the event loop
+# from garbage-collecting them mid-flight (asyncio only weak-refs tasks). Tasks self-remove on done.
+_kill_bg_tasks: Set[asyncio.Task] = set()
+
+
+def _fire_and_forget(coro, *, label: str = "kill_bg") -> None:
+    """Run an awaitable in the background without blocking the request response.
+    Used for audit logs, notifications, and stats writes that must not slow down the
+    /attack/execute response. Any exception is logged but never raised."""
+    async def _runner():
+        try:
+            await coro
+        except Exception:
+            logger.exception("kill background task failed: %s", label)
+    try:
+        task = asyncio.create_task(_runner())
+        _kill_bg_tasks.add(task)
+        task.add_done_callback(_kill_bg_tasks.discard)
+    except RuntimeError:
+        # No running event loop (shouldn't happen inside a request); swallow the coroutine cleanly.
+        try:
+            coro.close()
+        except Exception:
+            pass
+
 # Per-user 1s coalescing cache for GET /attack/list. Key = (attacker_id, ac_state) so a state change
 # (e.g. just landed in a new city) invalidates automatically without explicit calls. Search/delete
 # also invalidate explicitly so a user clicking Search sees the new row immediately.
@@ -1765,51 +1790,59 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         request.execute_token,
     )
     if not attack:
-        await _log_attack_error(current_user["id"], current_user.get("username"), "No active attack to execute", req)
+        _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "No active attack to execute", req), label="log_no_active_attack")
         raise HTTPException(status_code=404, detail="No active attack to execute")
-    target = await db.users.find_one({"id": attack["target_id"]}, {"_id": 0})
+    # Parallel: target + attacker location lookups are independent — saves one round trip
+    target, attacker_row = await asyncio.gather(
+        db.users.find_one({"id": attack["target_id"]}, {"_id": 0}),
+        db.users.find_one({"id": current_user["id"]}, {"_id": 0, "current_state": 1}),
+    )
     if not target:
-        await _log_attack_error(current_user["id"], current_user.get("username"), "Target not found", req)
+        _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "Target not found", req), label="log_target_not_found")
         raise HTTPException(status_code=404, detail="Target not found")
     target_location = _resolved_target_location(attack, target)
     if not target_location:
-        await _log_attack_error(current_user["id"], current_user.get("username"), "Target location unknown; cannot attack.", req)
+        _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "Target location unknown; cannot attack.", req), label="log_target_location_unknown")
         raise HTTPException(status_code=400, detail="Target location unknown; cannot attack.")
     attack["location_state"] = target_location
-    # Re-fetch attacker location from DB so we never use stale state (e.g. after instant travel)
-    attacker_row = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "current_state": 1})
     attacker_location = (attacker_row or {}).get("current_state") or ""
     if attacker_location != target_location:
-        await _log_attack_error(current_user["id"], current_user.get("username"), "You must be in the target's location to attack or bodyguard-check. Travel there first.", req)
+        _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "You must be in the target's location to attack or bodyguard-check. Travel there first.", req), label="log_wrong_location")
         raise HTTPException(status_code=400, detail="You must be in the target's location to attack or bodyguard-check. Travel there first.")
     stored_tok = attack.get("execute_token")
     if isinstance(stored_tok, str) and len(stored_tok) >= 16:
         if not _safe_compare_execute_token(stored_tok, request.execute_token):
-            await _log_attack_error(
-                current_user["id"],
-                current_user.get("username"),
-                "Execute rejected: invalid or missing session token (anti-bot / scripted client).",
-                req,
-                extra={
-                    "integrity_violation": "execute_token",
-                    "attack_id": attack.get("id"),
-                    "location_state": target_location,
-                },
+            _fire_and_forget(
+                _log_attack_error(
+                    current_user["id"],
+                    current_user.get("username"),
+                    "Execute rejected: invalid or missing session token (anti-bot / scripted client).",
+                    req,
+                    extra={
+                        "integrity_violation": "execute_token",
+                        "attack_id": attack.get("id"),
+                        "location_state": target_location,
+                    },
+                ),
+                label="log_execute_token_invalid",
             )
             try:
                 _tok_meta = _request_meta(req)
-                await maybe_notify_staff_attack_execute_token_fail(
-                    db=db,
-                    request=req,
-                    attacker_id=str(current_user["id"]),
-                    attacker_username=current_user.get("username") or "?",
-                    target_id=str(target.get("id") or ""),
-                    target_username=(target.get("username") or "").strip() or "?",
-                    attack_id=attack.get("id"),
-                    location_state=target_location,
-                    client_risk_score=_tok_meta.get("client_risk_score"),
-                    attacker_client_signal=_tok_meta.get("attacker_client_signal"),
-                    client_anomaly_flags=_tok_meta.get("client_anomaly_flags"),
+                _fire_and_forget(
+                    maybe_notify_staff_attack_execute_token_fail(
+                        db=db,
+                        request=req,
+                        attacker_id=str(current_user["id"]),
+                        attacker_username=current_user.get("username") or "?",
+                        target_id=str(target.get("id") or ""),
+                        target_username=(target.get("username") or "").strip() or "?",
+                        attack_id=attack.get("id"),
+                        location_state=target_location,
+                        client_risk_score=_tok_meta.get("client_risk_score"),
+                        attacker_client_signal=_tok_meta.get("attacker_client_signal"),
+                        client_anomaly_flags=_tok_meta.get("client_anomaly_flags"),
+                    ),
+                    label="staff_notify_token_fail",
                 )
             except Exception:
                 pass
@@ -1822,14 +1855,14 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 ),
             )
     if await soft_launch_blocks_pvp_kill_on_target(db, target):
-        await _log_attack_error(current_user["id"], current_user.get("username"), "Release soft-launch PvP block", req)
+        _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "Release soft-launch PvP block", req), label="log_soft_launch_block")
         raise HTTPException(status_code=403, detail=PVP_KILLS_DISABLED_DETAIL)
     if not target.get("is_npc") and is_civilian_protected(target):
-        await _log_attack_error(current_user["id"], current_user.get("username"), "Target under civilian protection", req)
+        _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "Target under civilian protection", req), label="log_civilian_protected")
         raise HTTPException(status_code=403, detail=CIVILIAN_PROTECTION_KILL_BLOCKED_DETAIL)
     if target.get("is_dead"):
         await db.attacks.delete_one({"id": attack["id"], "attacker_id": current_user["id"]})
-        await _log_attack_error(current_user["id"], current_user.get("username"), "Target is already dead", req)
+        _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "Target is already dead", req), label="log_target_already_dead")
         raise HTTPException(
             status_code=400,
             detail="Target is already dead. This search has been removed — refresh your list and search for another target if needed.",
@@ -1837,7 +1870,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     if not target.get("is_npc"):
         await apply_passive_health_regen(target["id"], target)
     if user_has_admin_list_email(target) or _is_moderator(target):
-        await _log_attack_error(current_user["id"], current_user.get("username"), "Target cannot be attacked", req)
+        _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "Target cannot be attacked", req), label="log_target_unattackable")
         raise HTTPException(status_code=403, detail="Target cannot be attacked")
     target_armour = target.get("armour_level", 0)
     attacker_rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
@@ -1886,13 +1919,13 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
 
     owned_weapon_ids = {w.get("weapon_id") for w in owned_weapons if w.get("weapon_id")}
     if not owned_weapon_ids:
-        await _log_attack_error(current_user["id"], current_user.get("username"), "You don't own a gun. Visit the armoury or store to buy one before you can attack.", req)
+        _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "You don't own a gun. Visit the armoury or store to buy one before you can attack.", req), label="log_no_gun")
         raise HTTPException(
             status_code=400,
             detail="You don't own a gun. Visit the armoury or store to buy one before you can attack.",
         )
     if not equipped_weapon_id or equipped_weapon_id not in owned_weapon_ids:
-        await _log_attack_error(current_user["id"], current_user.get("username"), "You need to equip a gun before you can attack.", req)
+        _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "You need to equip a gun before you can attack.", req), label="log_no_equipped_gun")
         raise HTTPException(
             status_code=400,
             detail="You need to equip a gun before you can attack.",
@@ -1925,7 +1958,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         bullets_required = max(1, int(bullets_required * 0.35))
     bullets_required = _apply_bullet_caps(target, bullets_required)
     if attacker_bullets <= 0:
-        await _log_attack_error(current_user["id"], current_user.get("username"), "You need bullets to attack.", req)
+        _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "You need bullets to attack.", req), label="log_no_bullets")
         raise HTTPException(status_code=400, detail="You need bullets to attack.")
     if target_bodyguards:
         first_bg = max(target_bodyguards, key=lambda b: b.get("slot_number", 0))
@@ -1943,7 +1976,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             msg = f"{target_name} has a bodyguard called {display_name}. You need to kill them first."
             try:
                 meta = _request_meta(req)
-                await db.attack_attempts.insert_one({
+                attempt_doc = {
                     "id": str(uuid.uuid4()),
                     "attacker_id": current_user["id"],
                     "attacker_username": current_user.get("username") or "?",
@@ -1957,13 +1990,17 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     "first_bodyguard": {"display_name": display_name, "search_username": search_username, "slot_number": slot_n, "target_username": target_name},
                     "created_at": datetime.now(timezone.utc),
                     **meta,
-                })
-                await _notify_target_if_bot_attack(
-                    target["id"], current_user.get("username") or "?", "bodyguard",
-                    attack.get("location_state"), msg, meta.get("attacker_is_bot", False),
-                    attacker_id=str(current_user.get("id") or ""),
-                    target_username=target_name,
-                    meta=meta,
+                }
+                _fire_and_forget(db.attack_attempts.insert_one(attempt_doc), label="bg_block_attempt_log")
+                _fire_and_forget(
+                    _notify_target_if_bot_attack(
+                        target["id"], current_user.get("username") or "?", "bodyguard",
+                        attack.get("location_state"), msg, meta.get("attacker_is_bot", False),
+                        attacker_id=str(current_user.get("id") or ""),
+                        target_username=target_name,
+                        meta=meta,
+                    ),
+                    label="bg_block_notify_target",
                 )
             except Exception:
                 pass
@@ -1980,7 +2017,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         msg = f"{target_name} has a bodyguard. You need to kill them first."
         try:
             meta = _request_meta(req)
-            await db.attack_attempts.insert_one({
+            attempt_doc = {
                 "id": str(uuid.uuid4()),
                 "attacker_id": current_user["id"],
                 "attacker_username": current_user.get("username") or "?",
@@ -1994,13 +2031,17 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 "first_bodyguard": {"display_name": display_name or "bodyguard", "search_username": None, "slot_number": slot_n, "target_username": target_name},
                 "created_at": datetime.now(timezone.utc),
                 **meta,
-            })
-            await _notify_target_if_bot_attack(
-                target["id"], current_user.get("username") or "?", "bodyguard",
-                attack.get("location_state"), msg, meta.get("attacker_is_bot", False),
-                attacker_id=str(current_user.get("id") or ""),
-                target_username=target_name,
-                meta=meta,
+            }
+            _fire_and_forget(db.attack_attempts.insert_one(attempt_doc), label="bg_block_attempt_log_anon")
+            _fire_and_forget(
+                _notify_target_if_bot_attack(
+                    target["id"], current_user.get("username") or "?", "bodyguard",
+                    attack.get("location_state"), msg, meta.get("attacker_is_bot", False),
+                    attacker_id=str(current_user.get("id") or ""),
+                    target_username=target_name,
+                    meta=meta,
+                ),
+                label="bg_block_notify_target_anon",
             )
         except Exception:
             pass
@@ -2017,7 +2058,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     target_name = target["username"]
     target_health = float(target.get("health", DEFAULT_HEALTH))
     if not request.bullets_to_use or request.bullets_to_use < 1:
-        await _log_attack_error(current_user["id"], current_user.get("username"), "You must enter how many bullets to use (at least 1).", req)
+        _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "You must enter how many bullets to use (at least 1).", req), label="log_zero_bullets_to_use")
         raise HTTPException(status_code=400, detail="You must enter how many bullets to use (at least 1).")
 
     requested_bullets = int(request.bullets_to_use)
@@ -2159,11 +2200,14 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 if isinstance(booze, dict) and booze: reward_parts.append("booze")
                 success_message = f"You killed {target_name}! (NPC) You got: " + ", ".join(reward_parts) + "."
                 try:
-                    await log_activity(
-                        killer_id,
-                        current_user.get("username") or "?",
-                        "hitlist_npc_kill",
-                        {"victim_username": target_name, "victim_id": victim_id, "rewards": rewards},
+                    _fire_and_forget(
+                        log_activity(
+                            killer_id,
+                            current_user.get("username") or "?",
+                            "hitlist_npc_kill",
+                            {"victim_username": target_name, "victim_id": victim_id, "rewards": rewards},
+                        ),
+                        label="npc_kill_log_activity",
                     )
                 except Exception:
                     pass
@@ -2219,64 +2263,83 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                         "is_bodyguard_kill": _is_npc_bodyguard,
                         "target_is_npc": True,
                     }
-                    await _insert_attack_attempt_with_fallback(
-                        full_attempt_doc,
-                        fallback_attempt_doc,
-                        context="npc_kill",
+                    _fire_and_forget(
+                        _insert_attack_attempt_with_fallback(
+                            full_attempt_doc,
+                            fallback_attempt_doc,
+                            context="npc_kill",
+                        ),
+                        label="npc_kill_attempt_log",
                     )
                 except Exception:
                     logger.exception("npc kill attempt logging failed")
-                await send_notification(killer_id, "Hitlist NPC kill", success_message, "attack", category="attacks")
-                # If this NPC was a bodyguard (e.g. robot), do bodyguard cleanup and record vendetta war stats
+                _fire_and_forget(
+                    send_notification(killer_id, "Hitlist NPC kill", success_message, "attack", category="attacks"),
+                    label="npc_kill_notify_killer",
+                )
+                # If this NPC was a bodyguard (e.g. robot), do bodyguard cleanup and record vendetta war stats.
+                # The whole cleanup loop runs in the background so the killer's response returns immediately;
+                # it only affects the bodyguard-owner's view, which they'll see on their next refresh.
                 if target.get("is_bodyguard"):
-                    victim_as_bodyguard = await db.bodyguards.find({"bodyguard_user_id": victim_id}, {"_id": 0, "id": 1, "user_id": 1, "hire_cost": 1}).to_list(10)
-                    # Fallback: robot user doc has bodyguard_owner_id if bodyguard collection doc missing
-                    if not victim_as_bodyguard and target.get("bodyguard_owner_id"):
-                        victim_as_bodyguard = [{"id": None, "user_id": target["bodyguard_owner_id"], "hire_cost": 0}]
-                    owner_ids_bg = list({bg["user_id"] for bg in victim_as_bodyguard if bg.get("user_id")})
-                    owner_map_bg: Dict[str, dict] = {}
-                    if owner_ids_bg:
-                        async for u in db.users.find(
-                            {"id": {"$in": owner_ids_bg}},
-                            {"_id": 0, "id": 1, "username": 1, "family_id": 1},
-                        ):
-                            owner_map_bg[u["id"]] = u
-                    for bg in victim_as_bodyguard:
-                        owner_id = bg["user_id"]
-                        owner_doc = owner_map_bg.get(owner_id)
-                        bg_hire_cost = int(bg.get("hire_cost") or 0)
-                        delete_criteria = {"user_id": owner_id, "bodyguard_user_id": victim_id}
-                        if bg.get("id"):
-                            await db.bodyguards.delete_one({"id": bg["id"]})
-                        else:
-                            await db.bodyguards.delete_one(delete_criteria)
-                        await db.users.update_one({"id": owner_id}, _bodyguard_owner_slot_dec_update(target, killer_id, owner_id))
-                        await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
-                        await _record_vendetta_bg_kill(
-                            killer_id, current_user.get("family_id"), owner_id, owner_doc,
-                            bg_username=target_name, bullets_used=bullets_used, bg_hire_cost=bg_hire_cost,
-                        )
-                        try:
-                            await db.hitlist_bodyguard_events.insert_one({
-                                "at": datetime.now(timezone.utc),
-                                "type": "bodyguard_killed",
-                                "owner_id": owner_id,
-                                "owner_username": (owner_doc or {}).get("username") or "",
-                                "guard_user_id": victim_id,
-                                "guard_username": target_name,
-                                "killer_id": killer_id,
-                                "killer_username": current_user.get("username") or "",
-                                "location_state": attack.get("location_state"),
-                                "hire_cost": bg_hire_cost,
-                                "bullets_used": int(bullets_used or 0),
-                            })
-                        except Exception:
-                            logging.exception("hitlist_bodyguard_events bodyguard_killed (npc bg)")
-                        remaining = await db.bodyguards.find({"user_id": owner_id}, {"_id": 0, "id": 1, "slot_number": 1}).sort("slot_number", 1).to_list(10)
-                        for i, b in enumerate(remaining, 1):
-                            if b["slot_number"] != i:
-                                update_criteria = {"id": b["id"]} if b.get("id") else {"user_id": owner_id, "slot_number": b["slot_number"]}
-                                await db.bodyguards.update_one(update_criteria, {"$set": {"slot_number": i}})
+                    _bg_target_snapshot = dict(target)
+                    _bg_killer_family = current_user.get("family_id")
+                    _bg_killer_username = current_user.get("username") or ""
+                    _bg_location_state = attack.get("location_state")
+                    _bg_bullets_used = bullets_used
+                    _bg_target_name = target_name
+                    _bg_killer_id = killer_id
+                    _bg_victim_id = victim_id
+
+                    async def _npc_bodyguard_cleanup() -> None:
+                        victim_as_bodyguard = await db.bodyguards.find({"bodyguard_user_id": _bg_victim_id}, {"_id": 0, "id": 1, "user_id": 1, "hire_cost": 1}).to_list(10)
+                        if not victim_as_bodyguard and _bg_target_snapshot.get("bodyguard_owner_id"):
+                            victim_as_bodyguard = [{"id": None, "user_id": _bg_target_snapshot["bodyguard_owner_id"], "hire_cost": 0}]
+                        owner_ids_bg = list({bg["user_id"] for bg in victim_as_bodyguard if bg.get("user_id")})
+                        owner_map_bg: Dict[str, dict] = {}
+                        if owner_ids_bg:
+                            async for u in db.users.find(
+                                {"id": {"$in": owner_ids_bg}},
+                                {"_id": 0, "id": 1, "username": 1, "family_id": 1},
+                            ):
+                                owner_map_bg[u["id"]] = u
+                        for bg in victim_as_bodyguard:
+                            owner_id = bg["user_id"]
+                            owner_doc = owner_map_bg.get(owner_id)
+                            bg_hire_cost = int(bg.get("hire_cost") or 0)
+                            delete_criteria = {"user_id": owner_id, "bodyguard_user_id": _bg_victim_id}
+                            if bg.get("id"):
+                                await db.bodyguards.delete_one({"id": bg["id"]})
+                            else:
+                                await db.bodyguards.delete_one(delete_criteria)
+                            await db.users.update_one({"id": owner_id}, _bodyguard_owner_slot_dec_update(_bg_target_snapshot, _bg_killer_id, owner_id))
+                            await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
+                            await _record_vendetta_bg_kill(
+                                _bg_killer_id, _bg_killer_family, owner_id, owner_doc,
+                                bg_username=_bg_target_name, bullets_used=_bg_bullets_used, bg_hire_cost=bg_hire_cost,
+                            )
+                            try:
+                                await db.hitlist_bodyguard_events.insert_one({
+                                    "at": datetime.now(timezone.utc),
+                                    "type": "bodyguard_killed",
+                                    "owner_id": owner_id,
+                                    "owner_username": (owner_doc or {}).get("username") or "",
+                                    "guard_user_id": _bg_victim_id,
+                                    "guard_username": _bg_target_name,
+                                    "killer_id": _bg_killer_id,
+                                    "killer_username": _bg_killer_username,
+                                    "location_state": _bg_location_state,
+                                    "hire_cost": bg_hire_cost,
+                                    "bullets_used": int(_bg_bullets_used or 0),
+                                })
+                            except Exception:
+                                logging.exception("hitlist_bodyguard_events bodyguard_killed (npc bg)")
+                            remaining = await db.bodyguards.find({"user_id": owner_id}, {"_id": 0, "id": 1, "slot_number": 1}).sort("slot_number", 1).to_list(10)
+                            for i, b in enumerate(remaining, 1):
+                                if b["slot_number"] != i:
+                                    update_criteria = {"id": b["id"]} if b.get("id") else {"user_id": owner_id, "slot_number": b["slot_number"]}
+                                    await db.bodyguards.update_one(update_criteria, {"$set": {"slot_number": i}})
+
+                    _fire_and_forget(_npc_bodyguard_cleanup(), label="npc_kill_bg_cleanup")
                 return AttackExecuteResponse(success=True, message=success_message, rewards=rewards)
             # Any other is_npc (robot bodyguard, or searchable NPC not on hitlist) uses standard kill flow below
         now_iso = datetime.now(timezone.utc).isoformat()
@@ -2679,170 +2742,207 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             success_message += f' Death message: "{death_message}"'
         if make_public:
             try:
-                await db.public_kills.insert_one({
-                    "id": str(uuid.uuid4()),
-                    "killer_id": current_user["id"],
-                    "killer_username": current_user.get("username") or "?",
-                    "victim_id": victim_id,
-                    "victim_username": target_name,
-                    "death_message": death_message or None,
-                    "bullets_used": bullets_used,
-                    "bullets_required": bullets_required,
-                    "make_public": True,
-                    "created_at": datetime.now(timezone.utc),
-                })
+                _fire_and_forget(
+                    db.public_kills.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "killer_id": current_user["id"],
+                        "killer_username": current_user.get("username") or "?",
+                        "victim_id": victim_id,
+                        "victim_username": target_name,
+                        "death_message": death_message or None,
+                        "bullets_used": bullets_used,
+                        "bullets_required": bullets_required,
+                        "make_public": True,
+                        "created_at": datetime.now(timezone.utc),
+                    }),
+                    label="public_kill_log",
+                )
             except Exception:
                 pass
         await db.attacks.delete_many({"target_id": victim_id})
-        await send_notification(killer_id, "Kill", success_message, "attack", category="attacks")
-        max_statements = max(0, min(6, 7 - (best_damage // 20)))
-        if current_user.get("has_silencer"):
-            max_statements = max(0, max_statements - 2)
-        # At least one witness notification whenever the cap allows (still 0 when cap is 0, e.g. very high weapon damage).
-        number_to_send = random.randint(1, max_statements) if max_statements >= 1 else 0
-        if number_to_send > 0:
-            now_w = datetime.now(timezone.utc)
-            five_min_ago = now_w - timedelta(minutes=5)
-            five_iso = five_min_ago.isoformat()
-            now_iso = now_w.isoformat()
-            location = attack.get("location_state") or "Unknown"
-            time_str = now_w.strftime("%Y-%m-%d %H:%M UTC")
-            # Human and robot bodyguards both use is_bodyguard on the victim user doc; include who they guarded when known.
-            if target.get("is_bodyguard"):
-                owner_un = (bodyguard_owner_username or "").strip()
-                victim_label = (
-                    f"bodyguard {target_name} (guarding {owner_un})"
-                    if owner_un
-                    else f"bodyguard {target_name}"
-                )
-            else:
-                victim_label = target_name
-            witness_msg = f"{current_user.get('username') or 'Someone'} killed {victim_label}. Weapon: {best_weapon_name}. Bullets used: {bullets_used:,}. Location: {location}. Time: {time_str}."
-            # Witness statements only go to accounts that are online (same rule as /users/online), not dead/offline.
-            all_user_ids = await db.users.find(
-                {
-                    "is_dead": {"$ne": True},
-                    "is_npc": {"$ne": True},
-                    "is_bodyguard": {"$ne": True},
-                    "id": {"$ne": killer_id},
-                    "$or": [
-                        {"last_seen": {"$gte": five_iso}},
-                        {"forced_online_until": {"$gt": now_iso}},
-                    ],
-                },
-                {"_id": 0, "id": 1},
-            ).to_list(5000)
-            recipient_ids = [u["id"] for u in all_user_ids]
-            if recipient_ids:
-                to_send = min(number_to_send, len(recipient_ids))
-                for uid in random.sample(recipient_ids, to_send):
-                    # Do not use category="attacks": muted "Kills & attack alerts" would skip the inbox row
-                    # while witness_statements still incremented — log and balance must stay in sync.
-                    notif = await send_notification(uid, "Witness statement", witness_msg, "attack", category=None)
-                    if notif:
-                        try:
-                            await db.users.update_one(
-                                {"id": uid},
-                                {"$inc": {"witness_statements": 1, "witness_nav_red": 1}},
-                            )
-                        except Exception:
-                            pass
-        killer_family_id = await resolve_family_id(killer_id) or current_user.get("family_id")
-        killer_family_id = str(killer_family_id).strip() if killer_family_id else None
-        victim_family_id = await resolve_family_id(victim_id) or target.get("family_id")
-        victim_family_id = str(victim_family_id).strip() if victim_family_id else None
-        # Start vendetta before recording stats so the kill that declares war is counted (was previously after stats).
-        if victim_family_id and killer_family_id and killer_family_id != victim_family_id:
-            try:
-                await _family_war_start(killer_family_id, victim_family_id)
-            except Exception as e:
-                logging.exception("Family war start on kill: %s", e)
-        # Bodyguard war start is done earlier in the bodyguard loop (before recording) so the triggering kill is counted
-        if victim_family_id:
-            try:
-                if killer_family_id:
-                    war = await _get_active_war_between(killer_family_id, victim_family_id)
+
+        # ----------------------------------------------------------------
+        # Tail of the PvP kill path is pure logging / notifications / stats /
+        # witness statements / family-war bookkeeping. The killer's response
+        # only depends on (success_message, cash_loot, rank_points, victim_cars_count,
+        # victim_props_count, exclusive_car_count) — all already computed above.
+        # We run this tail in a background task so the API response returns
+        # immediately. Any work that follows just lands in the DB seconds later.
+        # ----------------------------------------------------------------
+        _kp_killer_id = killer_id
+        _kp_victim_id = victim_id
+        _kp_target_name = target_name
+        _kp_success_message = success_message
+        _kp_best_damage = best_damage
+        _kp_best_weapon_name = best_weapon_name
+        _kp_bullets_used = bullets_used
+        _kp_target_health = target_health
+        _kp_death_message = death_message
+        _kp_make_public = make_public
+        _kp_bullets_required = bullets_required
+        _kp_attempt_base = dict(attempt_base)
+        _kp_attack = dict(attack)
+        _kp_target = dict(target)
+        _kp_current_user = dict(current_user)
+        _kp_bodyguard_owner_username = bodyguard_owner_username
+        _kp_cash_loot = cash_loot
+        _kp_rank_points = rank_points
+        _kp_victim_cars_count = victim_cars_count
+        _kp_victim_props_count = victim_props_count
+        _kp_meta_snapshot = _request_meta(req)
+        _kp_has_silencer = bool(current_user.get("has_silencer"))
+
+        async def _player_kill_post_tasks() -> None:
+            _kp_killer_username = _kp_current_user.get("username") or "?"
+            _fire_and_forget(
+                send_notification(_kp_killer_id, "Kill", _kp_success_message, "attack", category="attacks"),
+                label="player_kill_notify_killer",
+            )
+            max_statements = max(0, min(6, 7 - (_kp_best_damage // 20)))
+            if _kp_has_silencer:
+                max_statements = max(0, max_statements - 2)
+            number_to_send = random.randint(1, max_statements) if max_statements >= 1 else 0
+            if number_to_send > 0:
+                now_w = datetime.now(timezone.utc)
+                five_min_ago = now_w - timedelta(minutes=5)
+                five_iso = five_min_ago.isoformat()
+                now_iso = now_w.isoformat()
+                location = _kp_attack.get("location_state") or "Unknown"
+                time_str = now_w.strftime("%Y-%m-%d %H:%M UTC")
+                if _kp_target.get("is_bodyguard"):
+                    owner_un = (_kp_bodyguard_owner_username or "").strip()
+                    victim_label = (
+                        f"bodyguard {_kp_target_name} (guarding {owner_un})"
+                        if owner_un
+                        else f"bodyguard {_kp_target_name}"
+                    )
                 else:
-                    war = await _get_active_war_for_family(victim_family_id)
-                if war and war.get("id"):
-                    await _record_war_stats_player_kill(war["id"], killer_id, killer_family_id, victim_id, victim_family_id)
-                    try:
-                        await db.war_kill_feed.insert_one({
-                            "id": str(uuid.uuid4()),
-                            "war_id": war["id"],
-                            "kill_type": "player",
-                            "killer_id": killer_id,
-                            "killer_username": current_user.get("username", "?"),
-                            "killer_family_id": killer_family_id,
-                            "victim_id": victim_id,
-                            "victim_username": target_name,
-                            "victim_family_id": victim_family_id,
-                            "bg_username": None,
-                            "bg_owner_username": None,
-                            "bullets_used": int(bullets_used or 0),
-                            "bg_hire_cost": 0,
-                            "cash_taken": cash_loot,
-                            "props_taken": victim_props_count,
-                            "cars_taken": victim_cars_count,
-                            "created_at": datetime.now(timezone.utc),
-                        })
-                    except Exception as feed_exc:
-                        logging.exception("War kill feed (player): %s", feed_exc)
-            except Exception as e:
-                logging.exception("War stats record on kill: %s", e)
-        if victim_family_id:
+                    victim_label = _kp_target_name
+                witness_msg = f"{_kp_killer_username} killed {victim_label}. Weapon: {_kp_best_weapon_name}. Bullets used: {_kp_bullets_used:,}. Location: {location}. Time: {time_str}."
+                all_user_ids = await db.users.find(
+                    {
+                        "is_dead": {"$ne": True},
+                        "is_npc": {"$ne": True},
+                        "is_bodyguard": {"$ne": True},
+                        "id": {"$ne": _kp_killer_id},
+                        "$or": [
+                            {"last_seen": {"$gte": five_iso}},
+                            {"forced_online_until": {"$gt": now_iso}},
+                        ],
+                    },
+                    {"_id": 0, "id": 1},
+                ).to_list(5000)
+                recipient_ids = [u["id"] for u in all_user_ids]
+                if recipient_ids:
+                    to_send = min(number_to_send, len(recipient_ids))
+                    for uid in random.sample(recipient_ids, to_send):
+                        notif = await send_notification(uid, "Witness statement", witness_msg, "attack", category=None)
+                        if notif:
+                            try:
+                                await db.users.update_one(
+                                    {"id": uid},
+                                    {"$inc": {"witness_statements": 1, "witness_nav_red": 1}},
+                                )
+                            except Exception:
+                                pass
+            killer_family_id = await resolve_family_id(_kp_killer_id) or _kp_current_user.get("family_id")
+            killer_family_id = str(killer_family_id).strip() if killer_family_id else None
+            victim_family_id = await resolve_family_id(_kp_victim_id) or _kp_target.get("family_id")
+            victim_family_id = str(victim_family_id).strip() if victim_family_id else None
+            if victim_family_id and killer_family_id and killer_family_id != victim_family_id:
+                try:
+                    await _family_war_start(killer_family_id, victim_family_id)
+                except Exception as e:
+                    logging.exception("Family war start on kill: %s", e)
+            if victim_family_id:
+                try:
+                    if killer_family_id:
+                        war = await _get_active_war_between(killer_family_id, victim_family_id)
+                    else:
+                        war = await _get_active_war_for_family(victim_family_id)
+                    if war and war.get("id"):
+                        await _record_war_stats_player_kill(war["id"], _kp_killer_id, killer_family_id, _kp_victim_id, victim_family_id)
+                        try:
+                            await db.war_kill_feed.insert_one({
+                                "id": str(uuid.uuid4()),
+                                "war_id": war["id"],
+                                "kill_type": "player",
+                                "killer_id": _kp_killer_id,
+                                "killer_username": _kp_killer_username,
+                                "killer_family_id": killer_family_id,
+                                "victim_id": _kp_victim_id,
+                                "victim_username": _kp_target_name,
+                                "victim_family_id": victim_family_id,
+                                "bg_username": None,
+                                "bg_owner_username": None,
+                                "bullets_used": int(_kp_bullets_used or 0),
+                                "bg_hire_cost": 0,
+                                "cash_taken": _kp_cash_loot,
+                                "props_taken": _kp_victim_props_count,
+                                "cars_taken": _kp_victim_cars_count,
+                                "created_at": datetime.now(timezone.utc),
+                            })
+                        except Exception as feed_exc:
+                            logging.exception("War kill feed (player): %s", feed_exc)
+                except Exception as e:
+                    logging.exception("War stats record on kill: %s", e)
+            if victim_family_id:
+                try:
+                    killer_name_for_notice = _kp_killer_username if _kp_make_public else "Unknown"
+                    await send_notification_to_family(
+                        victim_family_id,
+                        "💀 Family Member Killed",
+                        f"{_kp_target_name} was killed by {killer_name_for_notice}.",
+                        "attack",
+                    )
+                    await _family_war_check_wipe_and_award(victim_family_id, killer_family_id, _kp_killer_id)
+                except Exception as e:
+                    logging.exception("Family notify/war on kill: %s", e)
             try:
-                killer_name_for_notice = current_user["username"] if make_public else "Unknown"
-                await send_notification_to_family(
-                    victim_family_id,
-                    "💀 Family Member Killed",
-                    f"{target_name} was killed by {killer_name_for_notice}.",
-                    "attack",
+                damage_done = float(_kp_target_health)
+                full_attempt_doc = {
+                    **_kp_attempt_base,
+                    "outcome": "killed",
+                    "player_message": _kp_success_message,
+                    "death_message": _kp_death_message or None,
+                    "make_public": _kp_make_public,
+                    "rewards": {"money": _kp_cash_loot, "rank_points": _kp_rank_points, "cars_taken": _kp_victim_cars_count, "properties_taken": _kp_victim_props_count},
+                    "target_health_before": _kp_target_health,
+                    "target_health_after": 0.0,
+                    "damage_done": damage_done,
+                    **_kp_meta_snapshot,
+                }
+                fallback_attempt_doc = {
+                    **_kp_attempt_base,
+                    "outcome": "killed",
+                    "player_message": _kp_success_message,
+                    "target_health_before": _kp_target_health,
+                    "target_health_after": 0.0,
+                    "damage_done": damage_done,
+                }
+                await _insert_attack_attempt_with_fallback(
+                    full_attempt_doc,
+                    fallback_attempt_doc,
+                    context="player_kill",
                 )
-                await _family_war_check_wipe_and_award(victim_family_id, killer_family_id, killer_id)
-            except Exception as e:
-                logging.exception("Family notify/war on kill: %s", e)
-        try:
-            damage_done = float(target_health)
-            meta = _request_meta(req)
-            full_attempt_doc = {
-                **attempt_base,
-                "outcome": "killed",
-                "player_message": success_message,
-                "death_message": death_message or None,
-                "make_public": make_public,
-                "rewards": {"money": cash_loot, "rank_points": rank_points, "cars_taken": victim_cars_count, "properties_taken": victim_props_count},
-                "target_health_before": target_health,
-                "target_health_after": 0.0,
-                "damage_done": damage_done,
-                **meta,
-            }
-            fallback_attempt_doc = {
-                **attempt_base,
-                "outcome": "killed",
-                "player_message": success_message,
-                "target_health_before": target_health,
-                "target_health_after": 0.0,
-                "damage_done": damage_done,
-            }
-            await _insert_attack_attempt_with_fallback(
-                full_attempt_doc,
-                fallback_attempt_doc,
-                context="player_kill",
-            )
-            await _notify_target_if_bot_attack(
-                attempt_base["target_id"], current_user.get("username") or "?", "killed",
-                attempt_base.get("location_state"), success_message, meta.get("attacker_is_bot", False),
-                attacker_id=str(current_user.get("id") or ""),
-                target_username=target_name,
-                meta=meta,
-            )
-        except Exception:
-            logger.exception("player kill attempt logging failed")
-        await log_activity(killer_id, current_user.get("username", "?"), "attack_kill", {
-            "victim": target_name, "cash_loot": cash_loot, "rp": rank_points,
-            "bullets_used": bullets_used, "cars_taken": victim_cars_count, "props_taken": victim_props_count,
-        })
+                await _notify_target_if_bot_attack(
+                    _kp_attempt_base["target_id"], _kp_killer_username, "killed",
+                    _kp_attempt_base.get("location_state"), _kp_success_message, _kp_meta_snapshot.get("attacker_is_bot", False),
+                    attacker_id=str(_kp_current_user.get("id") or ""),
+                    target_username=_kp_target_name,
+                    meta=_kp_meta_snapshot,
+                )
+            except Exception:
+                logger.exception("player kill attempt logging failed")
+            try:
+                await log_activity(_kp_killer_id, _kp_killer_username, "attack_kill", {
+                    "victim": _kp_target_name, "cash_loot": _kp_cash_loot, "rp": _kp_rank_points,
+                    "bullets_used": _kp_bullets_used, "cars_taken": _kp_victim_cars_count, "props_taken": _kp_victim_props_count,
+                })
+            except Exception:
+                logger.exception("player kill log_activity failed")
+
+        _fire_and_forget(_player_kill_post_tasks(), label="player_kill_post_tasks")
         return AttackExecuteResponse(
             success=True,
             message=success_message,
@@ -2851,35 +2951,41 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     else:
         damage_done = float(health_dealt_pct)
         dmg_iso = datetime.now(timezone.utc).isoformat()
-        await db.users.update_one(
-            {"id": target["id"]},
-            [{"$set": {
-                "health": {"$max": [0.0, {"$subtract": [{"$ifNull": ["$health", 100.0]}, health_dealt_pct]}]},
-                "health_regen_last_at": dmg_iso,
-            }}],
+        # Parallel: damage write and "last attack" status write are independent — saves one round trip
+        await asyncio.gather(
+            db.users.update_one(
+                {"id": target["id"]},
+                [{"$set": {
+                    "health": {"$max": [0.0, {"$subtract": [{"$ifNull": ["$health", 100.0]}, health_dealt_pct]}]},
+                    "health_regen_last_at": dmg_iso,
+                }}],
+            ),
+            db.attacks.update_one(
+                {"id": attack["id"]},
+                {"$set": {"last_attack_result": "damaged", "last_attack_at": dmg_iso}}
+            ),
         )
         new_health = max(0.0, target_health - health_dealt_pct)
-        await db.attacks.update_one(
-            {"id": attack["id"]},
-            {"$set": {"last_attack_result": "damaged", "last_attack_at": datetime.now(timezone.utc).isoformat()}}
-        )
         health_pct_str = f"{health_dealt_pct:.1f}" if health_dealt_pct != int(health_dealt_pct) else str(int(health_dealt_pct))
         fail_message = f'You failed to kill {target_name}. You used {bullets_used:,} bullets — they only lost {health_pct_str}% health.'
         try:
-            await db.attack_attempts.insert_one({
-                **attempt_base,
-                "outcome": "failed",
-                "player_message": fail_message,
-                "death_message": None,
-                "make_public": False,
-                "rewards": None,
-                "target_health_before": target_health,
-                "target_health_after": new_health,
-                "health_dealt_pct": float(health_dealt_pct),
-                "damage_done": damage_done,
-                "message": fail_message,
-                **_request_meta(req),
-            })
+            _fire_and_forget(
+                db.attack_attempts.insert_one({
+                    **attempt_base,
+                    "outcome": "failed",
+                    "player_message": fail_message,
+                    "death_message": None,
+                    "make_public": False,
+                    "rewards": None,
+                    "target_health_before": target_health,
+                    "target_health_after": new_health,
+                    "health_dealt_pct": float(health_dealt_pct),
+                    "damage_done": damage_done,
+                    "message": fail_message,
+                    **_request_meta(req),
+                }),
+                label="failed_attack_attempt_log",
+            )
         except Exception:
             pass
         return AttackExecuteResponse(success=False, message=fail_message, rewards=None)
