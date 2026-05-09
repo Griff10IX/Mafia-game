@@ -41,6 +41,13 @@ function formatCountdown(expiresAtIso) {
 // Shown in toast when caught during booze run (prohibition bust)
 const BOOZE_CAUGHT_IMAGE = 'https://historicipswich.net/wp-content/uploads/2021/12/0a79f-boston-rum-prohibition1.jpg';
 const MOLOTOV_BULLET_EQUIV = 5000;
+const MAX_BULLETS_REQUIRED = 150000;
+
+function clampBulletsRequired(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.min(Math.round(n), MAX_BULLETS_REQUIRED);
+}
 
 /** Strip legacy server copy like " in slot 2" so kill toasts never show slot numbers. */
 function stripBodyguardSlotFromToastMessage(msg) {
@@ -1545,7 +1552,10 @@ export default function Attack() {
     setCalcLoading(true);
     try {
       const res = await api.post('/attack/bullets/calc', { target_username: username });
-      setCalcResult(res.data);
+      setCalcResult({
+        ...res.data,
+        bullets_required: clampBulletsRequired(res.data?.bullets_required),
+      });
     } catch (error) {
       setCalcResult(null);
       toast.error(error.response?.data?.detail || 'Failed to calculate bullets');
@@ -1572,7 +1582,7 @@ export default function Attack() {
         }
         const result = {
           username: res.data.target_username ?? trimmed,
-          bullets: res.data.bullets_required ?? 0,
+          bullets: clampBulletsRequired(res.data?.bullets_required),
           isNpc: res.data.target_is_npc === true,
         };
         setKillBulletsResult(result);

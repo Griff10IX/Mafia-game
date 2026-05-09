@@ -1155,6 +1155,7 @@ def _bullets_to_kill_breakdown(
 
 # Attacker has Colt Monitor (weapon_loot) equipped: fewer bullets needed to kill.
 LOOT_EXCLUSIVE_WEAPON_ATTACK_BULLET_MULT = 0.75
+MAX_BULLETS_TO_KILL = 150_000
 ROBOT_BODYGUARD_MAX_BULLETS_TO_KILL = 80_000
 
 _BULLET_CALC_TARGET_PROJECTION = {
@@ -1173,11 +1174,12 @@ _BULLET_CALC_TARGET_PROJECTION = {
 }
 
 
-def _apply_robot_bodyguard_bullet_cap(target: dict, bullets_required: int) -> int:
-    """Robot NPC bodyguards should never require more than the configured kill cap."""
+def _apply_bullet_caps(target: dict, bullets_required: int) -> int:
+    """Apply global and role-specific bullet caps."""
+    capped = min(max(1, int(bullets_required)), MAX_BULLETS_TO_KILL)
     if target.get("is_bodyguard") and target.get("is_npc"):
-        return min(max(1, int(bullets_required)), ROBOT_BODYGUARD_MAX_BULLETS_TO_KILL)
-    return max(1, int(bullets_required))
+        capped = min(capped, ROBOT_BODYGUARD_MAX_BULLETS_TO_KILL)
+    return capped
 
 
 async def _exclusive_car_bullet_defense_multiplier(target: dict) -> float:
@@ -1555,7 +1557,7 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
     completed_it_discount = bool(current_user.get("completed_it_bullet_reduction"))
     if completed_it_discount:
         bullets_required = max(1, int(bullets_required * 0.35))
-    bullets_required = _apply_robot_bodyguard_bullet_cap(target, bullets_required)
+    bullets_required = _apply_bullet_caps(target, bullets_required)
     return {
         "calc_ok": True,
         "target_username": target["username"],
@@ -1728,7 +1730,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     # "Completed it" perk: 65% fewer bullets needed when attacking
     if current_user.get("completed_it_bullet_reduction"):
         bullets_required = max(1, int(bullets_required * 0.35))
-    bullets_required = _apply_robot_bodyguard_bullet_cap(target, bullets_required)
+    bullets_required = _apply_bullet_caps(target, bullets_required)
     if attacker_bullets <= 0:
         await _log_attack_error(current_user["id"], current_user.get("username"), "You need bullets to attack.", req)
         raise HTTPException(status_code=400, detail="You need bullets to attack.")
