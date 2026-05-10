@@ -166,7 +166,7 @@ export default function WitnessStatements() {
             <h1 className="text-sm font-heading font-bold text-primary uppercase tracking-[0.12em]">Witness statements</h1>
           </div>
           <p className="text-[10px] text-mutedForeground mt-1 max-w-xl leading-relaxed">
-            When you receive a <strong className="text-foreground">Witness statement</strong> notification from a kill, you gain one tradable statement here.
+            When you receive a <strong className="text-foreground">Witness statement</strong> from a kill (always delivered to your inbox), you gain one tradable statement here.
             Choose specific lines from your log to list for <strong className="text-foreground">cash</strong> (total price for the lot). Other players see the text with the <strong className="text-foreground">killer hidden</strong> until they buy. You can <strong className="text-foreground">hide your name</strong> as seller on the market.
           </p>
         </div>
@@ -241,15 +241,6 @@ export default function WitnessStatements() {
               Inbox
             </Link>
             .
-            {balance > 0 && (
-              <p className="mt-4 max-w-lg mx-auto text-[10px] text-amber-400/95 font-heading leading-relaxed border border-amber-700/40 rounded-md px-3 py-2 bg-amber-950/30">
-                Your account shows <strong className="text-amber-200">{balance}</strong> tradable statement(s), but there are no saved log lines.
-                That usually means <strong className="text-amber-200">Attack / kill alerts</strong> were turned off in{' '}
-                <Link to="/account/profile" className="text-primary hover:underline">Profile → notification settings</Link>
-                {' '}before a fix: witness inbox rows were skipped while your balance still increased. New witness drops always save here now.
-                If you still cannot list or use them, ask staff to reconcile your balance.
-              </p>
-            )}
           </div>
         ) : (
           <div className="overflow-x-auto">

@@ -26,11 +26,32 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import Depends, HTTPException, Body, Header, Query
 from pydantic import BaseModel
 from bson.objectid import ObjectId
+from pymongo import ReturnDocument
 
 from utils.game_timezone import game_week_range_utc
 from utils.notepad_color import notepad_color_for_api_response, normalize_notepad_color_for_set
 from utils.point_provenance import log_points_event
 from utils.family_vault_log import log_family_vault_tx
+from utils.family_perks import (
+    PERK_IDS,
+    clean_family_perks,
+    utc_calendar_month_end,
+    perk_catalog_prices,
+    FAMILY_PERK_COST_CREW_OC,
+    FAMILY_PERK_COST_MELT,
+    FAMILY_PERK_COST_GTA,
+    FAMILY_PERK_COST_HITLIST,
+    FAMILY_PERK_COST_RACKET,
+    FAMILY_PERK_COST_BOOZE_STEP,
+    FAMILY_PERK_CREW_OC_HOURS_OFF,
+    FAMILY_PERK_MELT_SECONDS_OFF,
+    FAMILY_PERK_GTA_SECONDS_OFF,
+    FAMILY_PERK_HITLIST_NPC_SLOTS,
+    FAMILY_PERK_RACKET_BONUS_PERCENT,
+    FAMILY_PERK_BOOZE_STEP_AMOUNT,
+    FAMILY_PERK_BOOZE_BONUS_CAP,
+    family_perk_modifiers,
+)
 from utils.civilian_protection import maybe_revoke_civilian_protection
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_FAMILIES
 
@@ -363,6 +384,18 @@ class CompoundWithdrawRequest(BaseModel):
 
 class CompoundReturnToMemberRequest(BaseModel):
     user_id: str
+
+
+class FamilyPerksPurchaseRequest(BaseModel):
+    perk_id: str
+    booze_steps: int = 1
+
+
+class FamilyPerksContributeRequest(BaseModel):
+    points: int
+
+
+FAMILY_PERK_CONTRIBUTE_POINTS_MAX = 250_000
 
 
 class CompoundClaimForFamilyRequest(BaseModel):
@@ -1673,6 +1706,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "airport_crew_perk_set_at": fam.get("airport_crew_perk_set_at"),
             "property_holdings": _ph,
             "crew_bonuses": _cb,
+            "family_perks": clean_family_perks(fam.get("family_perks"), datetime.now(timezone.utc)),
         },
         "members": members, "fallen": fallen, "rackets": rackets, "my_role": my_role,
         "vault_and_rackets_locked": vault_and_rackets_locked,
@@ -3026,6 +3060,224 @@ async def families_compound_claim_for_family(request: CompoundClaimForFamilyRequ
     return {"message": "Claimed compound share for the family"}
 
 
+async def families_perks_state(current_user: dict = Depends(get_current_user)):
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "boss_id": 1, "family_perks": 1})
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    now = datetime.now(timezone.utc)
+    perks = clean_family_perks(fam.get("family_perks"), now)
+    boss_id = _uid_str(fam.get("boss_id"))
+    boss_username = None
+    if boss_id:
+        bu = await db.users.find_one({"id": boss_id}, {"_id": 0, "username": 1})
+        boss_username = (bu or {}).get("username")
+    me_pts = await db.users.find_one({"id": current_user.get("id")}, {"_id": 0, "points": 1})
+    my_points = int((me_pts or {}).get("points") or 0)
+    return {
+        "catalog": perk_catalog_prices(),
+        "family_perks": perks,
+        "boss_id": boss_id,
+        "boss_username": boss_username,
+        "month_ends_at": utc_calendar_month_end(now).isoformat(),
+        "my_points": my_points,
+    }
+
+
+async def families_perks_purchase(request: FamilyPerksPurchaseRequest, current_user: dict = Depends(get_current_user)):
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    if await _family_in_active_war(family_id):
+        raise HTTPException(status_code=403, detail="Family perks are locked until the war is over")
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "boss_id": 1, "family_perks": 1})
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    boss_id = _uid_str(fam.get("boss_id"))
+    uid = _uid_str(current_user.get("id"))
+    if not boss_id or uid != boss_id:
+        raise HTTPException(status_code=403, detail="Only the Don can purchase family perks")
+    perk_id = (request.perk_id or "").strip().lower()
+    if perk_id not in PERK_IDS:
+        raise HTTPException(status_code=400, detail="Invalid perk")
+    now = datetime.now(timezone.utc)
+    valid_iso = utc_calendar_month_end(now).isoformat()
+    perks = clean_family_perks(fam.get("family_perks"), now)
+
+    cost = 0
+    new_perks = dict(perks)
+
+    if perk_id == "crew_oc":
+        cost = FAMILY_PERK_COST_CREW_OC
+        if new_perks.get("crew_oc"):
+            raise HTTPException(status_code=400, detail="This perk is already active this month")
+        new_perks["crew_oc"] = {"valid_until": valid_iso, "hours_off": FAMILY_PERK_CREW_OC_HOURS_OFF}
+    elif perk_id == "melt":
+        cost = FAMILY_PERK_COST_MELT
+        if new_perks.get("melt"):
+            raise HTTPException(status_code=400, detail="This perk is already active this month")
+        new_perks["melt"] = {"valid_until": valid_iso, "seconds_off": FAMILY_PERK_MELT_SECONDS_OFF}
+    elif perk_id == "gta":
+        cost = FAMILY_PERK_COST_GTA
+        if new_perks.get("gta"):
+            raise HTTPException(status_code=400, detail="This perk is already active this month")
+        new_perks["gta"] = {"valid_until": valid_iso, "seconds_off": FAMILY_PERK_GTA_SECONDS_OFF}
+    elif perk_id == "hitlist":
+        cost = FAMILY_PERK_COST_HITLIST
+        if new_perks.get("hitlist"):
+            raise HTTPException(status_code=400, detail="This perk is already active this month")
+        new_perks["hitlist"] = {"valid_until": valid_iso, "npc_bonus_slots": FAMILY_PERK_HITLIST_NPC_SLOTS}
+    elif perk_id == "racket":
+        cost = FAMILY_PERK_COST_RACKET
+        if new_perks.get("racket"):
+            raise HTTPException(status_code=400, detail="This perk is already active this month")
+        new_perks["racket"] = {"valid_until": valid_iso, "bonus_percent": FAMILY_PERK_RACKET_BONUS_PERCENT}
+    elif perk_id == "booze":
+        steps = max(1, int(request.booze_steps or 1))
+        steps = min(steps, 40)
+        b_row = new_perks.get("booze") or {}
+        current_cargo = int(b_row.get("cargo_bonus") or 0)
+        room = max(0, FAMILY_PERK_BOOZE_BONUS_CAP - current_cargo)
+        max_steps = room // FAMILY_PERK_BOOZE_STEP_AMOUNT
+        if max_steps <= 0:
+            raise HTTPException(status_code=400, detail="Booze cargo bonus is already at the monthly cap (+300)")
+        steps = min(steps, max_steps)
+        cost = FAMILY_PERK_COST_BOOZE_STEP * steps
+        new_cargo = min(FAMILY_PERK_BOOZE_BONUS_CAP, current_cargo + steps * FAMILY_PERK_BOOZE_STEP_AMOUNT)
+        new_perks["booze"] = {"valid_until": valid_iso, "cargo_bonus": new_cargo}
+
+    if cost <= 0:
+        raise HTTPException(status_code=400, detail="Invalid purchase")
+
+    boss_before = await db.users.find_one({"id": boss_id}, {"_id": 0, "points": 1})
+    pts_before = int((boss_before or {}).get("points") or 0)
+    if pts_before < cost:
+        raise HTTPException(status_code=400, detail="Not enough points")
+
+    boss_after = await db.users.find_one_and_update(
+        {"id": boss_id, "points": {"$gte": cost}},
+        {"$inc": {"points": -cost}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not boss_after:
+        raise HTTPException(status_code=400, detail="Not enough points")
+
+    try:
+        await db.families.update_one({"id": family_id}, {"$set": {"family_perks": new_perks}})
+    except Exception:
+        await db.users.update_one({"id": boss_id}, {"$inc": {"points": cost}})
+        raise
+
+    pts_after = int(boss_after.get("points") or 0)
+    await log_points_event(
+        db,
+        user_id=boss_id,
+        points=-cost,
+        event_type="family_perk_purchase",
+        meta={"family_id": family_id, "perk_id": perk_id},
+        wallet_points_before=pts_before,
+        wallet_points_after=pts_after,
+    )
+    await log_family_vault_tx(
+        db,
+        family_id,
+        "family_perk_purchase",
+        boss_id,
+        current_user.get("username") or "?",
+        meta={"perk_id": perk_id, "points_cost": cost, "valid_until": valid_iso},
+    )
+    await log_activity(boss_id, current_user.get("username", "?"), "family_perk_purchase", {"family_id": family_id, "perk_id": perk_id, "cost": cost})
+    _invalidate_list_cache()
+    _invalidate_my_cache(boss_id)
+    return {
+        "message": "Perk purchased",
+        "family_perks": new_perks,
+        "points_spent": cost,
+        "points_remaining": pts_after,
+    }
+
+
+async def families_perks_contribute(request: FamilyPerksContributeRequest, current_user: dict = Depends(get_current_user)):
+    amt = int(request.points or 0)
+    if amt < 1:
+        raise HTTPException(status_code=400, detail="Enter at least 1 point")
+    if amt > FAMILY_PERK_CONTRIBUTE_POINTS_MAX:
+        raise HTTPException(status_code=400, detail="Amount too large")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    if await _family_in_active_war(family_id):
+        raise HTTPException(status_code=403, detail="Contributions are locked until the war is over")
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "boss_id": 1})
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    boss_id = _uid_str(fam.get("boss_id"))
+    uid = _uid_str(current_user.get("id"))
+    if not boss_id:
+        raise HTTPException(status_code=400, detail="Family has no Don")
+    if uid == boss_id:
+        raise HTTPException(status_code=400, detail="Members contribute points to the Don — you are the Don")
+
+    src_before = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1})
+    sb = int((src_before or {}).get("points") or 0)
+    if sb < amt:
+        raise HTTPException(status_code=400, detail="Not enough points")
+
+    src_after = await db.users.find_one_and_update(
+        {"id": uid, "points": {"$gte": amt}},
+        {"$inc": {"points": -amt}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not src_after:
+        raise HTTPException(status_code=400, detail="Not enough points")
+
+    boss_after = await db.users.find_one_and_update(
+        {"id": boss_id},
+        {"$inc": {"points": amt}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not boss_after:
+        await db.users.update_one({"id": uid}, {"$inc": {"points": amt}})
+        raise HTTPException(status_code=500, detail="Transfer failed; try again")
+
+    await log_points_event(
+        db,
+        user_id=uid,
+        points=-amt,
+        event_type="family_perk_contribute_out",
+        meta={"family_id": family_id, "to_user_id": boss_id},
+        wallet_points_before=sb,
+        wallet_points_after=int(src_after.get("points") or 0),
+    )
+    await log_points_event(
+        db,
+        user_id=boss_id,
+        points=amt,
+        event_type="family_perk_contribute_in",
+        meta={"family_id": family_id, "from_user_id": uid},
+        wallet_points_after=int(boss_after.get("points") or 0),
+    )
+    _bu = await db.users.find_one({"id": boss_id}, {"username": 1})
+    bn = (_bu or {}).get("username") or "?"
+    await log_family_vault_tx(
+        db,
+        family_id,
+        "family_perk_contribute",
+        uid,
+        current_user.get("username") or "?",
+        target_user_id=boss_id,
+        target_username=bn,
+        meta={"points": amt},
+    )
+    await log_activity(uid, current_user.get("username", "?"), "family_perk_contribute", {"family_id": family_id, "amount": amt})
+    _invalidate_list_cache()
+    _invalidate_my_cache(uid)
+    _invalidate_my_cache(boss_id)
+    return {"message": f"Sent {amt:,} points to the Don", "points": amt}
+
+
 async def families_crew_oc_set_fee(request: FamilyCrewOCSetFeeRequest, current_user: dict = Depends(get_current_user)):
     if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
         raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can set Crew OC fee")
@@ -3665,6 +3917,10 @@ async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)
             pass
     has_timer = bool(current_user.get("crew_oc_timer_reduced", False))
     cooldown_hours = CREW_OC_COOLDOWN_HOURS_REDUCED if has_timer else CREW_OC_COOLDOWN_HOURS
+    mods = await family_perk_modifiers(db, family_id)
+    oc_off = int(mods.get("crew_oc_hours_off") or 0)
+    if oc_off > 0:
+        cooldown_hours = max(1, cooldown_hours - oc_off)
     new_cooldown_until = now + timedelta(hours=cooldown_hours)
     members = await db.family_members.find({"family_id": family_id}, {"_id": 0, "user_id": 1}).to_list(100)
     member_ids = [m["user_id"] for m in members]
@@ -3741,6 +3997,9 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
     ev = await get_effective_event()
     income, cooldown_h = _racket_income_and_cooldown(racket_id, level, ev)
     bonus_pct = float((fam.get("racket_income_bonus_percent") or 0) or 0)
+    rpm = await family_perk_modifiers(db, family_id)
+    perk_racket_pct = float(rpm.get("racket_bonus_percent") or 0)
+    bonus_pct += perk_racket_pct
     income_final = int(income * (1 + bonus_pct / 100.0) * founding_member_income_mult(current_user))
     last_at = state.get("last_collected_at")
     now = datetime.now(timezone.utc)
@@ -4695,6 +4954,9 @@ def register(router):
     router.add_api_route("/families/kick", families_kick, methods=["POST"])
     router.add_api_route("/families/assign-role", families_assign_role, methods=["POST"])
     router.add_api_route("/families/deposit", families_deposit, methods=["POST"])
+    router.add_api_route("/families/perks", families_perks_state, methods=["GET"], dependencies=_families_rl_u)
+    router.add_api_route("/families/perks/purchase", families_perks_purchase, methods=["POST"])
+    router.add_api_route("/families/perks/contribute", families_perks_contribute, methods=["POST"])
     router.add_api_route("/families/withdraw", families_withdraw, methods=["POST"])
     router.add_api_route(
         "/families/vault-transactions",

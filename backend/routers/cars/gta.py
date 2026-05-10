@@ -12,6 +12,8 @@ from bson.objectid import ObjectId
 from pydantic import BaseModel
 from pymongo import ReturnDocument, UpdateOne
 
+from utils.family_perks import family_perk_modifiers
+
 from utils.referral_ids import (
     apply_referrer_referral_increment,
     normalize_referred_by_ids,
@@ -440,7 +442,14 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
     now = datetime.now(timezone.utc)
     uid = current_user.get("id") or ""
     now_iso = now.isoformat()
-    cooldown_until = now + timedelta(seconds=option["cooldown"])
+    gta_cd_off = 0
+    try:
+        rpm = await family_perk_modifiers(db, current_user.get("family_id"))
+        gta_cd_off = int(rpm.get("gta_seconds_off") or 0)
+    except Exception:
+        pass
+    cd_sec = max(1, int(option["cooldown"]) - gta_cd_off)
+    cooldown_until = now + timedelta(seconds=cd_sec)
     cooldown_iso = cooldown_until.isoformat()
 
     claimed = await db.gta_cooldowns.update_one(
@@ -1186,6 +1195,13 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
                 bb = await get_badge_bonuses(user.get("id") or "")
                 bullets_mult = max(0.5, 1 - bb.get("bullets_melted", 0) * 0.001 * bb.get("prestige_badge_mult", 1))
                 cooldown_seconds = int(cooldown_seconds * bullets_mult)
+            except Exception:
+                pass
+            try:
+                rpm = await family_perk_modifiers(db, family_id)
+                ms = int(rpm.get("melt_seconds_off") or 0)
+                if ms > 0:
+                    cooldown_seconds = max(1, cooldown_seconds - ms)
             except Exception:
                 pass
             cooldown_until = now + timedelta(seconds=cooldown_seconds)

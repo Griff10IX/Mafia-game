@@ -2830,7 +2830,14 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 if recipient_ids:
                     to_send = min(number_to_send, len(recipient_ids))
                     for uid in random.sample(recipient_ids, to_send):
-                        notif = await send_notification(uid, "Witness statement", witness_msg, "attack", category=None)
+                        notif = await send_notification(
+                            uid,
+                            "Witness statement",
+                            witness_msg,
+                            "attack",
+                            category="attacks",
+                            always_deliver=True,
+                        )
                         if notif:
                             try:
                                 await db.users.update_one(

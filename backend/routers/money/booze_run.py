@@ -31,6 +31,7 @@ from server import (
 )
 from utils.minigame_captcha_gate import require_turnstile_for_game_action
 from utils.point_provenance import log_points_event
+from utils.family_perks import family_perk_modifiers, FAMILY_PERK_BOOZE_BONUS_CAP
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_BOOZE
 
 
@@ -274,15 +275,23 @@ def _booze_daily_estimate_rough(capacity: int, prices_map: dict, secs_per_leg: i
     return int(profitable_runs * capacity * profit_per_unit * BOOZE_RUN_PROFIT_MULT)
 
 
-def _booze_user_capacity(current_user: dict) -> int:
+def _booze_user_capacity(current_user: dict, *, family_cargo_bonus: int = 0) -> int:
     rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
     capacity_from_rank = BOOZE_CAPACITY_BASE_RANK1 + (rank_id - 1) * BOOZE_CAPACITY_EXTRA_PER_RANK
     bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
-    capacity = max(1, capacity_from_rank + bonus)
+    fb = max(0, min(FAMILY_PERK_BOOZE_BONUS_CAP, int(family_cargo_bonus or 0)))
+    capacity = max(1, capacity_from_rank + bonus + fb)
     # "Completed it" perk: 2x booze capacity
     if current_user.get("completed_it_booze_capacity"):
         capacity = capacity * 2
     return capacity
+
+
+async def _family_booze_cargo_extra(family_id) -> int:
+    if not family_id:
+        return 0
+    rpm = await family_perk_modifiers(db, str(family_id).strip())
+    return max(0, min(FAMILY_PERK_BOOZE_BONUS_CAP, int(rpm.get("booze_cargo_bonus") or 0)))
 
 
 def _booze_user_carrying_total(carrying: dict) -> int:
@@ -413,7 +422,8 @@ async def _booze_buy_impl(user: dict, booze_id: str, amount: int, *, via_auto_ra
         price = max(1, int(price * 0.9))
     cost = price * amount
     carrying = dict(user.get("booze_carrying") or {})
-    capacity = _booze_user_capacity(user)
+    fam_extra = await _family_booze_cargo_extra(user.get("family_id"))
+    capacity = _booze_user_capacity(user, family_cargo_bonus=fam_extra)
     current_carry = _booze_user_carrying_total(carrying)
     if current_carry + amount > capacity:
         raise HTTPException(status_code=400, detail=f"Over capacity (max {capacity} units)")
@@ -722,7 +732,8 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
     carrying = current_user.get("booze_carrying") or {}
     rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
     capacity_from_rank = BOOZE_CAPACITY_BASE_RANK1 + (rank_id - 1) * BOOZE_CAPACITY_EXTRA_PER_RANK
-    capacity = _booze_user_capacity(current_user)
+    fam_extra = await _family_booze_cargo_extra(current_user.get("family_id"))
+    capacity = _booze_user_capacity(current_user, family_cargo_bonus=fam_extra)
     booze_until = _parse_iso_datetime(current_user.get("booze_until"))
     booze_boost_active = bool(booze_until and datetime.now(timezone.utc) < booze_until)
 
@@ -778,6 +789,7 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
         "capacity_extra_per_rank": BOOZE_CAPACITY_EXTRA_PER_RANK,
         "capacity_bonus": capacity_bonus,
         "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX,
+        "family_cargo_bonus": fam_extra,
         "carrying_total": _booze_user_carrying_total(carrying),
         "listed_price_global_mult": _lpm,
         "listed_price_global_percent_off": round((1.0 - _lpm) * 100.0, 2) if _lpm < 1.0 else 0.0,
@@ -832,7 +844,11 @@ async def buy_booze_capacity(current_user: dict = Depends(get_current_user)):
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
     await log_points_event(db, user_id=current_user["id"], points=-BOOZE_CAPACITY_UPGRADE_COST, event_type="booze_upgrade", meta={"add_bonus": add_bonus, "new_bonus": current_bonus + add_bonus})
-    new_capacity = _booze_user_capacity({**current_user, "booze_capacity_bonus": current_bonus + add_bonus})
+    fam_extra = await _family_booze_cargo_extra(current_user.get("family_id"))
+    new_capacity = _booze_user_capacity(
+        {**current_user, "booze_capacity_bonus": current_bonus + add_bonus},
+        family_cargo_bonus=fam_extra,
+    )
     _invalidate_config_cache(current_user["id"])
     return {"message": f"+{add_bonus} booze capacity for {BOOZE_CAPACITY_UPGRADE_COST} points", "new_capacity": new_capacity, "capacity_bonus": current_bonus + add_bonus, "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX}
 

@@ -50,6 +50,8 @@ const VAULT_TX_KIND_LABELS = {
   gta_melt: 'Garage melt',
   hourly_bullets_bonus: 'Hourly vault bullets',
   war_prize_in: 'War spoils',
+  family_perk_purchase: 'Family perk (Don)',
+  family_perk_contribute: 'Points to Don',
 };
 
 const formatVaultTxDeltas = (tx) => {
@@ -833,6 +835,207 @@ const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
     )}
   </div>
 );
+
+// ============================================================================
+// FAMILY PERKS TAB — Don buys monthly perks; members contribute points to Don
+// ============================================================================
+
+const PERK_CARD_ORDER = ['crew_oc', 'melt', 'gta', 'hitlist', 'racket'];
+
+const FamilyPerksTab = ({ myRole, vaultAndRacketsLocked, onRefresh }) => {
+  const isBoss = (myRole || '').toLowerCase() === 'boss';
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(null);
+  const [contrib, setContrib] = useState('');
+  const [boozeSteps, setBoozeSteps] = useState(1);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/families/perks');
+      setData(res.data);
+    } catch (e) {
+      toast.error(apiDetail(e));
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const purchase = async (perkId) => {
+    if (!isBoss) return;
+    setBusy(perkId);
+    try {
+      const body =
+        perkId === 'booze'
+          ? { perk_id: perkId, booze_steps: Math.max(1, parseInt(String(boozeSteps), 10) || 1) }
+          : { perk_id: perkId };
+      await api.post('/families/perks/purchase', body);
+      toast.success('Perk purchased');
+      await load();
+      refreshUser();
+      onRefresh?.();
+    } catch (e) {
+      toast.error(apiDetail(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const contribute = async () => {
+    const n = parseInt(String(contrib).replace(/\D/g, ''), 10) || 0;
+    if (n < 1) {
+      toast.error('Enter at least 1 point');
+      return;
+    }
+    setBusy('contrib');
+    try {
+      await api.post('/families/perks/contribute', { points: n });
+      toast.success('Points sent to the Don');
+      setContrib('');
+      await load();
+      refreshUser();
+      onRefresh?.();
+    } catch (e) {
+      toast.error(apiDetail(e));
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const fmtUntil = (iso) => {
+    if (!iso) return '—';
+    try {
+      return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    } catch {
+      return String(iso);
+    }
+  };
+
+  if (loading && !data) {
+    return <div className="text-[11px] text-mutedForeground font-heading py-8 text-center">Loading perks…</div>;
+  }
+
+  const catalog = data?.catalog || {};
+  const fp = data?.family_perks || {};
+  const monthEnd = data?.month_ends_at;
+  const perkActive = (id) => !!fp[id];
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+        <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+          Family perks are purchased with <strong className="text-foreground">points</strong> by the <strong className="text-foreground">Don</strong> and expire at the end of the UTC calendar month
+          {monthEnd ? <> (after {fmtUntil(monthEnd)})</> : ''}.
+        </p>
+        <p className="text-[10px] text-primary font-heading mt-1 tabular-nums">Your points: {(data?.my_points ?? 0).toLocaleString()}</p>
+      </div>
+
+      {vaultAndRacketsLocked && (
+        <p className="text-[10px] text-amber-400 font-heading">Locked during family war.</p>
+      )}
+
+      <div className="grid gap-2 sm:grid-cols-2">
+        {PERK_CARD_ORDER.map((id) => {
+          const c = catalog[id];
+          if (!c) return null;
+          const active = perkActive(id);
+          const row = fp[id];
+          return (
+            <div key={id} className="rounded-md border border-zinc-700/50 bg-zinc-900/40 p-2.5 flex flex-col gap-1.5">
+              <div className="text-[11px] font-heading font-bold text-foreground">{c.label}</div>
+              <div className="text-[10px] text-primary tabular-nums">{typeof c.cost === 'number' ? `${c.cost.toLocaleString()} pts` : ''}</div>
+              {active ? (
+                <span className="text-[9px] text-emerald-400 font-heading">Active until {fmtUntil(row?.valid_until)}</span>
+              ) : (
+                <span className="text-[9px] text-zinc-500 font-heading">Inactive</span>
+              )}
+              {isBoss && (
+                <button
+                  type="button"
+                  disabled={!!busy || vaultAndRacketsLocked || active}
+                  onClick={() => purchase(id)}
+                  className="mt-1 px-2 py-1.5 rounded border border-primary/40 bg-primary/15 text-[10px] font-heading font-bold uppercase text-primary hover:bg-primary/25 disabled:opacity-40"
+                >
+                  {busy === id ? '…' : active ? 'Active' : 'Buy'}
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="rounded-md border border-zinc-700/50 bg-zinc-900/40 p-2.5 space-y-2">
+        <div className="text-[11px] font-heading font-bold text-foreground">{catalog.booze?.label}</div>
+        <div className="text-[10px] text-mutedForeground font-heading">
+          {catalog.booze?.cost_per_step} pts per +{catalog.booze?.step_cargo} cargo (family cap +{catalog.booze?.cap}). Current crew cargo bonus:{' '}
+          <span className="text-foreground font-bold tabular-nums">{fp.booze?.cargo_bonus ?? 0}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[9px] text-zinc-500 font-heading uppercase">Steps</span>
+          <input
+            type="number"
+            min={1}
+            max={40}
+            value={boozeSteps}
+            onChange={(e) => setBoozeSteps(Math.max(1, parseInt(e.target.value, 10) || 1))}
+            className="w-16 bg-zinc-950 border border-zinc-700 rounded px-1 py-0.5 text-[11px]"
+          />
+          <span className="text-[9px] text-zinc-500 font-heading tabular-nums">
+            Cost {((catalog.booze?.cost_per_step ?? 50) * boozeSteps).toLocaleString()} pts
+          </span>
+        </div>
+        {fp.booze?.valid_until && (
+          <p className="text-[9px] text-zinc-500 font-heading">Booze perk month ends {fmtUntil(fp.booze.valid_until)}</p>
+        )}
+        {isBoss && (
+          <button
+            type="button"
+            disabled={
+              !!busy ||
+              vaultAndRacketsLocked ||
+              (fp.booze?.cargo_bonus ?? 0) >= (catalog.booze?.cap ?? 300)
+            }
+            onClick={() => purchase('booze')}
+            className="px-2 py-1.5 rounded border border-primary/40 bg-primary/15 text-[10px] font-heading font-bold uppercase text-primary hover:bg-primary/25 disabled:opacity-40"
+          >
+            {busy === 'booze' ? '…' : 'Buy booze steps'}
+          </button>
+        )}
+      </div>
+
+      {!isBoss && (
+        <div className="rounded-lg border border-zinc-700/50 p-3 space-y-2">
+          <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Contribute to the Don</div>
+          <p className="text-[9px] text-mutedForeground font-heading">
+            Transfer points to <span className="text-foreground">{data?.boss_username || 'the Don'}</span>.
+          </p>
+          <div className="flex flex-wrap gap-2 items-center">
+            <FormattedNumberInput
+              value={contrib}
+              onChange={setContrib}
+              placeholder="Points"
+              className="flex-1 min-w-[120px] bg-zinc-950 border border-zinc-700 rounded px-2 py-1.5 text-[11px]"
+            />
+            <button
+              type="button"
+              disabled={!!busy || vaultAndRacketsLocked}
+              onClick={contribute}
+              className="px-3 py-1.5 rounded bg-primary/20 border border-primary/40 text-[10px] font-heading font-bold uppercase text-primary disabled:opacity-40"
+            >
+              {busy === 'contrib' ? '…' : 'Send'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
 
 // ============================================================================
 // ROSTER TAB — hierarchy layout with role badges
@@ -3157,6 +3360,7 @@ export default function FamilyPage() {
                 Crew OC
               </Tab>
               <Tab active={activeTab === 'treasury'} onClick={() => setActiveTab('treasury')} icon={<DollarSign size={10} />}>Vault</Tab>
+              <Tab active={activeTab === 'perks'} onClick={() => setActiveTab('perks')} icon={<Sparkles size={10} />}>Perks</Tab>
               {family?.head_of_state && (
                 <Tab active={activeTab === 'statehead'} onClick={() => setActiveTab('statehead')} icon={<MapPin size={10} />}>Head of state</Tab>
               )}
@@ -3191,6 +3395,9 @@ export default function FamilyPage() {
               {activeTab === 'raid' && (
                 <RaidTab targets={racketAttackTargets} loading={racketAttackLoading}
                   onRaid={attackFamilyRacket} onRefresh={fetchRacketAttackTargets} refreshing={targetsRefreshing} />
+              )}
+              {activeTab === 'perks' && (
+                <FamilyPerksTab myRole={myRole} vaultAndRacketsLocked={vaultAndRacketsLocked} onRefresh={fetchData} />
               )}
               {activeTab === 'treasury' && <TreasuryTab
                 treasury={family.treasury}

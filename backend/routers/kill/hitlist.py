@@ -11,6 +11,7 @@ from fastapi import Depends, HTTPException
 
 from utils.kill_search_duration import KILL_SEARCH_RANDOM_MAX_MINUTES, KILL_SEARCH_RANDOM_MIN_MINUTES
 from utils.point_provenance import log_points_event
+from utils.family_perks import family_perk_modifiers
 from utils.civilian_protection import maybe_revoke_civilian_protection
 from server import (
     db,
@@ -93,10 +94,15 @@ HITLIST_NPC_TEMPLATES = [
 ]
 
 
-def _hitlist_npc_max_per_window_for_user(user: dict) -> int:
+async def _hitlist_npc_max_per_window_for_user(user: dict) -> int:
     bonus = int((user or {}).get("hitlist_npc_bonus_slots") or 0)
     bonus = max(0, min(HITLIST_NPC_STORE_BONUS_SLOTS_MAX, bonus))
-    return HITLIST_NPC_MAX_PER_WINDOW + bonus
+    n = HITLIST_NPC_MAX_PER_WINDOW + bonus
+    fid = (user or {}).get("family_id")
+    if fid:
+        rpm = await family_perk_modifiers(db, str(fid).strip())
+        n += int(rpm.get("hitlist_npc_slots") or 0)
+    return n
 
 
 async def _hitlist_npc_active_on_board_count(placer_id: str) -> int:
@@ -263,7 +269,7 @@ async def hitlist_add(request: HitlistAddRequest, current_user: dict = Depends(g
 async def hitlist_npc_status(current_user: dict = Depends(get_current_user)):
     """Practice NPCs: cap = how many of your NPC rows are still on the hitlist; kill one to free a slot (no rolling timer)."""
     uid = current_user["id"]
-    max_on_board = _hitlist_npc_max_per_window_for_user(current_user)
+    max_on_board = await _hitlist_npc_max_per_window_for_user(current_user)
     active = await _hitlist_npc_active_on_board_count(uid)
     can_add = active < max_on_board
     return {
@@ -283,7 +289,7 @@ async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
     """Add a random NPC to the hitlist. At most N practice NPCs on the board at once (N=3 base, up to 6 with store)."""
     now = datetime.now(timezone.utc)
     now_iso = now.replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    max_on_board = _hitlist_npc_max_per_window_for_user(current_user)
+    max_on_board = await _hitlist_npc_max_per_window_for_user(current_user)
     uid = current_user["id"]
     active = await _hitlist_npc_active_on_board_count(uid)
     if active >= max_on_board:

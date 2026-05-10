@@ -2305,11 +2305,16 @@ export default function Profile() {
                 <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Notifications</h2>
               </div>
               <div className="p-3 space-y-2">
-                <p className="text-xs text-mutedForeground mb-2">Choose which inbox notifications you receive.</p>
+                <p className="text-xs text-mutedForeground mb-2">
+                  Choose which inbox notifications you receive.{' '}
+                  <span className="text-[11px] text-foreground/90">
+                    Witness statements (when you observe a kill) are always delivered to your inbox and cannot be disabled here.
+                  </span>
+                </p>
                 {[
                   { key: 'ent_games', label: 'E-Games (dice & gbox results, new games)' },
                   { key: 'oc_invites', label: 'OC Heist invites' },
-                  { key: 'attacks', label: 'Kills & attack alerts' },
+                  { key: 'attacks', label: 'Kill confirmations & attack alerts (not witness statements)' },
                   { key: 'system', label: 'System (rank ups, rewards)' },
                   { key: 'quicktrade', label: 'Quick Trade (listings sold or buy offers filled)' },
                   { key: 'messages', label: 'Direct messages' },
