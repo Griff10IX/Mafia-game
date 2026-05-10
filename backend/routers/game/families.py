@@ -3076,6 +3076,22 @@ async def families_perks_state(current_user: dict = Depends(get_current_user)):
         boss_username = (bu or {}).get("username")
     me_pts = await db.users.find_one({"id": current_user.get("id")}, {"_id": 0, "points": 1})
     my_points = int((me_pts or {}).get("points") or 0)
+    contrib_cursor = db.family_vault_transactions.find(
+        {"family_id": family_id, "kind": "family_perk_contribute"},
+        {"_id": 0, "at": 1, "actor_username": 1, "target_username": 1, "meta": 1},
+    ).sort("at", -1).limit(80)
+    contrib_rows = await contrib_cursor.to_list(length=80)
+    contribution_log = []
+    for r in contrib_rows:
+        meta = r.get("meta") or {}
+        contribution_log.append(
+            {
+                "at": r.get("at"),
+                "from_username": (r.get("actor_username") or "?").strip() or "?",
+                "to_username": (r.get("target_username") or "?").strip() or "?",
+                "points": int(meta.get("points") or 0),
+            }
+        )
     return {
         "catalog": perk_catalog_prices(),
         "family_perks": perks,
@@ -3083,6 +3099,7 @@ async def families_perks_state(current_user: dict = Depends(get_current_user)):
         "boss_username": boss_username,
         "month_ends_at": utc_calendar_month_end(now).isoformat(),
         "my_points": my_points,
+        "contribution_log": contribution_log,
     }
 
 

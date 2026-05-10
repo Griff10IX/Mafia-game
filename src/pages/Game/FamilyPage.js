@@ -940,6 +940,39 @@ const FamilyPerksTab = ({ myRole, vaultAndRacketsLocked, onRefresh }) => {
         <p className="text-[10px] text-amber-400 font-heading">Locked during family war.</p>
       )}
 
+      <div className={`${styles.panel} p-3 space-y-2`}>
+        <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Contribution log</div>
+        <p className="text-[9px] text-mutedForeground font-heading">
+          Points sent to the Don — visible to the whole crew.
+        </p>
+        {(data?.contribution_log || []).length === 0 ? (
+          <p className="text-[10px] text-zinc-500 font-heading py-2">No contributions yet.</p>
+        ) : (
+          <div className="overflow-x-auto rounded border border-zinc-700/40">
+            <table className="w-full text-[10px] font-heading">
+              <thead>
+                <tr className="border-b border-zinc-700/50 bg-zinc-950/60 text-left text-zinc-500 uppercase tracking-wider">
+                  <th className="px-2 py-1.5 font-bold">Member</th>
+                  <th className="px-2 py-1.5 font-bold tabular-nums">Points</th>
+                  <th className="px-2 py-1.5 font-bold">When</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data?.contribution_log || []).map((row, idx) => (
+                  <tr key={`${row.at}-${idx}`} className="border-b border-zinc-800/50 last:border-0">
+                    <td className="px-2 py-1.5 text-foreground">{row.from_username}</td>
+                    <td className="px-2 py-1.5 text-primary tabular-nums font-bold">
+                      {(row.points ?? 0).toLocaleString()}
+                    </td>
+                    <td className="px-2 py-1.5 text-zinc-400">{fmtUntil(row.at)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
       <div className="grid gap-2 sm:grid-cols-2">
         {PERK_CARD_ORDER.map((id) => {
           const c = catalog[id];
