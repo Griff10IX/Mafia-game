@@ -522,28 +522,28 @@ function MpPokerTournamentHandToast({ snapshot, myUserId, visible, compact }) {
   // Outer shell: flex centering only — do NOT put animate-pkr-fade here; its keyframes set
   // `transform` and would override -translate-x-1/2, breaking horizontal center on mobile.
   return (
-    <div
-      className={`pointer-events-none absolute inset-x-0 z-[25] flex justify-center px-2 sm:px-3 ${compact ? 'top-[22%]' : 'top-[30%] sm:top-[34%]'}`}
-    >
       <div
-        className={`animate-pkr-fade w-full max-w-[min(100%,300px)] rounded-lg border shadow-2xl overflow-hidden ${compact ? 'px-1.5 py-1' : 'px-2 py-2'}`}
+        className={`pointer-events-none absolute inset-x-0 z-[25] flex justify-center px-2 sm:px-3 ${compact ? 'top-[7%]' : 'top-[30%] sm:top-[34%]'}`}
+      >
+      <div
+        className={`animate-pkr-fade w-full max-w-[min(96vw,360px)] rounded-xl border shadow-2xl overflow-hidden ${compact ? 'px-2 py-1.5' : 'px-3 py-2.5'}`}
         style={{
           borderColor: 'rgba(212,175,55,0.6)',
-          background: 'linear-gradient(165deg,rgba(15,23,42,0.92),rgba(0,0,0,0.88))',
+          background: 'linear-gradient(165deg,rgba(20,20,24,0.96),rgba(0,0,0,0.9))',
           backdropFilter: 'blur(10px)',
           WebkitBackdropFilter: 'blur(10px)',
-          boxShadow: '0 20px 56px rgba(0,0,0,0.8), 0 0 0 1px rgba(212,175,55,0.15), 0 0 32px rgba(212,175,55,0.14)',
-          maxHeight: compact ? 'min(38vh, 220px)' : 'min(48vh, 320px)',
+          boxShadow: '0 20px 56px rgba(0,0,0,0.8), 0 0 0 1px rgba(212,175,55,0.18), 0 0 34px rgba(212,175,55,0.2)',
+          maxHeight: compact ? 'min(54vh, 330px)' : 'min(48vh, 320px)',
         }}
       >
       <p className={`font-heading uppercase tracking-[0.2em] text-center ${compact ? 'text-[9px]' : 'text-[10px]'}`} style={{ color: 'rgba(255,255,255,0.4)' }}>
         Hand #{snapshot.hand_number} · Showdown
       </p>
       <p
-        className={`text-center font-heading font-black uppercase tracking-wide mt-0.5 truncate px-0.5 ${compact ? 'text-xs' : 'text-[12px] sm:text-sm'}`}
+        className={`text-center font-heading font-black uppercase tracking-wide mt-0.5 truncate px-0.5 ${compact ? 'text-sm' : 'text-[12px] sm:text-sm'}`}
         style={{ color: 'var(--noir-primary-bright)' }}
       >
-        {winnerLabel}
+        {winnerLabel} {primary.length > 1 ? 'split the pot' : 'wins'}
       </p>
       {primary.length > 1 ? (
         <div className={`mt-0.5 space-y-0.5 ${compact ? 'px-0.5' : 'px-1'}`}>
@@ -551,9 +551,9 @@ function MpPokerTournamentHandToast({ snapshot, myUserId, visible, compact }) {
             w.hand ? (
               <p
                 key={w.user_id}
-                className={`text-center font-heading font-bold leading-snug text-white/70 ${compact ? 'text-[11px]' : 'text-[7px]'}`}
+                className={`text-center font-heading font-bold leading-snug text-white/80 ${compact ? 'text-[11px]' : 'text-[10px]'}`}
               >
-                <span className="text-white/35 uppercase tracking-wider mr-0.5">Hand</span>
+                <span className="text-white/35 uppercase tracking-wider mr-0.5">Winning hand</span>
                 {w.user_id === myUserId ? 'You' : players.find((p) => p.user_id === w.user_id)?.username ?? 'Winner'}: {w.hand}
               </p>
             ) : null
@@ -562,9 +562,9 @@ function MpPokerTournamentHandToast({ snapshot, myUserId, visible, compact }) {
       ) : (
         primary[0]?.hand && (
           <p
-            className={`text-center font-heading font-bold mt-0.5 px-1 leading-snug text-white/70 ${compact ? 'text-[11px]' : 'text-[8px]'}`}
+            className={`text-center font-heading font-bold mt-1 px-1 leading-snug text-white/85 ${compact ? 'text-[12px]' : 'text-[11px]'}`}
           >
-            <span className="text-white/35 uppercase tracking-wider mr-0.5">Hand</span>
+            <span className="block text-white/35 uppercase tracking-[0.18em] text-[8px]">Winning hand</span>
             {primary[0].hand}
           </p>
         )
@@ -581,8 +581,8 @@ function MpPokerTournamentHandToast({ snapshot, myUserId, visible, compact }) {
           Pot <span className="font-bold text-emerald-400">{formatMoneyFull(pot)}</span>
         </p>
       )}
-      <p className={`font-heading uppercase tracking-wider text-center text-white/30 ${compact ? 'text-[5px] mt-0.5' : 'text-[6px] mt-1'}`}>Cards and hand</p>
-      <div className={`mt-0.5 space-y-1 overflow-y-auto pr-0.5 min-h-0 ${compact ? 'max-h-[120px]' : 'max-h-[200px]'}`}>
+      <p className={`font-heading uppercase tracking-wider text-center text-white/30 ${compact ? 'text-[7px] mt-1' : 'text-[7px] mt-1'}`}>Showdown cards</p>
+      <div className={`mt-1 space-y-1 overflow-y-auto pr-0.5 min-h-0 touch-pan-y ${compact ? 'max-h-[150px]' : 'max-h-[200px]'}`}>
         {showdownRows.map(({ uid, r, pl }) => {
           const payout = Number(r.payout) || 0;
           const pWon = payout > 0;
@@ -997,9 +997,9 @@ export default function MPPokerGamePage() {
     if (toastShownHandsRef.current.has(n)) return;
     toastShownHandsRef.current.add(n);
     setTournamentToast({ visible: true, snap: lh });
-    const id = setTimeout(() => setTournamentToast((prev) => ({ ...prev, visible: false })), 5000);
+    const id = setTimeout(() => setTournamentToast((prev) => ({ ...prev, visible: false })), compactUi ? 8000 : 5500);
     return () => clearTimeout(id);
-  }, [game?.mode, game?.status, game?.last_hand_showdown?.hand_number]);
+  }, [game?.mode, game?.status, game?.last_hand_showdown?.hand_number, compactUi]);
 
   useEffect(() => {
     if (game?.mode !== 'tournament') {
@@ -1486,6 +1486,7 @@ export default function MPPokerGamePage() {
         .animate-pkr-ready   { animation: pkr-ready-pulse 2s ease-in-out infinite; }
         .animate-pkr-chip    { animation: pkr-chip-bounce 1.2s ease-in-out infinite; }
         .pkr-mp-root {
+          padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
           background:
             radial-gradient(ellipse 100% 70% at 50% -15%, rgba(212,175,55,0.09), transparent 55%),
             radial-gradient(ellipse 80% 50% at 100% 50%, rgba(34,197,94,0.04), transparent 45%),
@@ -1788,7 +1789,7 @@ export default function MPPokerGamePage() {
               <MpPokerTournamentHandToast
                 snapshot={tournamentToast.snap}
                 myUserId={myUserId}
-                visible={tournamentToast.visible && !compactUi}
+                visible={tournamentToast.visible}
                 compact={compactUi}
               />
             )}
@@ -1938,8 +1939,8 @@ export default function MPPokerGamePage() {
       {/* ══ ACTION BAR ══ */}
       {status === 'playing' && (phase === 'playing' || isVsDealer) && isMyTurn && myPlayer?.status !== 'folded' && myPlayer?.status !== 'all_in' && (
         <div
-          className="rounded-xl overflow-hidden border-2 animate-pkr-fade"
-          style={{ borderColor: '#5a3e1b', boxShadow: '0 8px 28px rgba(0,0,0,0.35)' }}
+          className="sticky bottom-2 z-40 rounded-xl overflow-hidden border-2 animate-pkr-fade sm:static"
+          style={{ borderColor: '#5a3e1b', boxShadow: '0 12px 34px rgba(0,0,0,0.55), 0 0 0 1px rgba(212,175,55,0.12)' }}
         >
           <div style={PKR_GOLD_BAR} />
           <div
@@ -1950,7 +1951,7 @@ export default function MPPokerGamePage() {
               WebkitBackdropFilter: 'blur(6px)',
             }}
           >
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-1.5">
               <span className="text-[9px] font-heading text-primary/60 uppercase tracking-wider">Your Action</span>
               <span className="text-[9px] font-heading text-mutedForeground">
                 Stack <span className={`font-bold ${myStack === 0 ? 'text-red-400' : 'text-primary'}`}>{formatMoneyFull(myStack)}</span>
@@ -1964,21 +1965,21 @@ export default function MPPokerGamePage() {
                 <p className="text-[9px] font-heading text-yellow-400/70 text-center">
                   {needToCall > 0 ? 'You have no chips left to call — go all-in or fold.' : 'No chips remaining — check to continue.'}
                 </p>
-                <div className="flex items-center gap-2 justify-center">
+                <div className="grid grid-cols-2 gap-2 sm:flex sm:items-center sm:justify-center">
                   <button type="button" disabled={actionLoading} onClick={() => act('fold')}
-                    className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                    className="px-4 py-3 sm:py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[44px] sm:min-h-0"
                     style={{ borderColor: 'rgba(248,113,113,0.5)', background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>
                     Fold
                   </button>
                   {needToCall > 0 ? (
                     <button type="button" disabled={actionLoading} onClick={() => act('all_in')}
-                      className="px-5 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                      className="px-5 py-3 sm:py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[44px] sm:min-h-0"
                       style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}>
                       All-In (committed)
                     </button>
                   ) : (
                     <button type="button" disabled={actionLoading} onClick={() => act('check')}
-                      className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                      className="px-4 py-3 sm:py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[44px] sm:min-h-0"
                       style={{ borderColor: 'rgba(161,161,170,0.4)', background: 'rgba(161,161,170,0.08)', color: '#a1a1aa' }}>
                       Check
                     </button>
@@ -1988,34 +1989,34 @@ export default function MPPokerGamePage() {
             ) : (
               <>
                 {/* Primary actions */}
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="grid grid-cols-3 gap-2 sm:flex sm:items-center sm:flex-wrap">
                   <button type="button" disabled={actionLoading} onClick={() => act('fold')}
-                    className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                    className="px-3 py-3 sm:px-4 sm:py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[44px] sm:min-h-0"
                     style={{ borderColor: 'rgba(248,113,113,0.5)', background: 'rgba(248,113,113,0.1)', color: '#f87171' }}>
                     Fold
                   </button>
                   {needToCall <= 0 ? (
                     <button type="button" disabled={actionLoading} onClick={() => act('check')}
-                      className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                      className="px-3 py-3 sm:px-4 sm:py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[44px] sm:min-h-0"
                       style={{ borderColor: 'rgba(161,161,170,0.4)', background: 'rgba(161,161,170,0.08)', color: '#a1a1aa' }}>
                       Check
                     </button>
                   ) : (
                     <button type="button" disabled={actionLoading} onClick={() => act('call')}
-                      className="px-4 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                      className="px-3 py-3 sm:px-4 sm:py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[44px] sm:min-h-0"
                       style={{ borderColor: 'var(--noir-primary-bright)', background: 'rgba(212,175,55,0.12)', color: 'var(--noir-primary)' }}>
                       Call {formatMoneyFull(Math.min(needToCall, myStack))}
                     </button>
                   )}
                   <button type="button" disabled={actionLoading} onClick={() => act('all_in')}
-                    className="px-4 py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                    className="px-3 py-3 sm:px-4 sm:py-2 rounded-lg border font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50 min-h-[44px] sm:min-h-0"
                     style={{ borderColor: 'rgba(251,113,133,0.5)', background: 'rgba(251,113,133,0.1)', color: '#fb7185' }}>
                     All-In {formatMoney(myStack)}
                   </button>
                 </div>
 
                 {/* Raise row */}
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="grid grid-cols-4 gap-2 sm:flex sm:items-center sm:flex-wrap">
                   <input
                     type="number"
                     min={minRaise}
@@ -2023,12 +2024,12 @@ export default function MPPokerGamePage() {
                     value={raiseAmount}
                     onChange={(e) => setRaiseAmount(e.target.value)}
                     placeholder={`Min ${formatMoneyFull(minRaise)}`}
-                    className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg font-heading text-[10px] focus:outline-none"
+                    className="col-span-2 flex-1 min-w-0 px-2.5 py-2.5 sm:py-1.5 rounded-lg font-heading text-[10px] focus:outline-none"
                     style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(212,175,55,0.2)', color: 'inherit', minWidth: 80 }}
                   />
                   <button type="button" disabled={actionLoading || !raiseAmount}
                     onClick={() => { act(needToCall > 0 ? 'raise' : 'bet', parseInt(raiseAmount, 10) || minRaise); setRaiseAmount(''); }}
-                    className="px-4 py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                    className="px-3 py-2.5 sm:px-4 sm:py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
                     style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}>
                     {needToCall > 0 ? 'Raise' : 'Bet'}
                   </button>
@@ -2037,7 +2038,7 @@ export default function MPPokerGamePage() {
                     return (
                       <button key={f} type="button"
                         onClick={() => setRaiseAmount(String(amt))}
-                        className="px-2 py-1.5 rounded font-heading text-[8px] uppercase tracking-wider border border-primary/20 text-primary/60 hover:text-primary hover:border-primary/40 transition-colors">
+                        className="px-2 py-2 sm:py-1.5 rounded font-heading text-[8px] uppercase tracking-wider border border-primary/20 text-primary/60 hover:text-primary hover:border-primary/40 transition-colors">
                         {f === 1 ? 'Pot' : `${f * 100}%`}
                       </button>
                     );

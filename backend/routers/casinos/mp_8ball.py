@@ -29,8 +29,8 @@ MP_8BALL_TABLE_H = 1.1
 MP_8BALL_BALL_R = 0.028
 # Head string at W/4 from the breaking end (left); kitchen is behind it toward the head cushion.
 MP_8BALL_HEAD_STRING_X = MP_8BALL_TABLE_W * 0.25
-MP_8BALL_POCKET_R = 0.045
-MP_8BALL_CORNER_POCKET_R = 0.052
+MP_8BALL_POCKET_R = 0.058
+MP_8BALL_CORNER_POCKET_R = 0.066
 MP_8BALL_RESTITUTION = 0.985
 MP_8BALL_FRICTION = 0.994
 MP_8BALL_STOP_SPEED = 0.012
@@ -271,9 +271,9 @@ def _apply_pocket_gravity(out: List[dict]) -> None:
             dx = px - b["x"]
             dy = py - b["y"]
             dist = math.hypot(dx, dy)
-            threshold = pr * 1.3
+            threshold = pr * 1.75
             if dist < threshold and dist > 0.001:
-                strength = 0.0008 * (1.0 - dist / threshold)
+                strength = 0.00135 * (1.0 - dist / threshold)
                 b["vx"] += (dx / dist) * strength
                 b["vy"] += (dy / dist) * strength
 

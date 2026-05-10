@@ -10,16 +10,29 @@ const W = 480, H = 640;
 const LANES = [-120, 0, 120];
 const LANE_COUNT = 3;
 const TILE_H = 80;
+const HORIZON_Y = H * 0.24;
+const ROAD_TOP_W = W * 0.22;
+const ROAD_BOTTOM_W = W * 0.86;
 
 const RULES = [
-  "Swipe or use arrow keys to change lanes",
-  "Tap/Press UP or swipe up to jump over barriers",
-  "Tap/Press DOWN or swipe down to slide under police tape",
-  "Collect cash bundles for bonus money",
-  "Avoid cops and FBI agents",
+  "Swipe left/right or use arrow keys to snap between three lanes",
+  "Swipe up / press UP to vault wooden barricades",
+  "Swipe down / press DOWN to slide under police tape",
+  "Dodge FBI agents and police cars — they cannot be jumped through",
+  "Follow cash trails for bonus money",
   "Distance + coins = your final score",
   "Max 10 runs per 2 hours",
 ];
+
+function lightHaptic(ms = 12) {
+  try {
+    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+      navigator.vibrate(ms);
+    }
+  } catch (_) {
+    /* ignore unsupported haptics */
+  }
+}
 
 export default function TheGetaway() {
   const { getCaptchaToken, captchaModal } = useMinigameCaptcha();
@@ -54,6 +67,8 @@ export default function TheGetaway() {
     pathTiles: [],
     buildings: [],
     clouds: [],
+    streaks: [],
+    shake: 0,
     gameStartTime: null,
   });
   const animRef = useRef(null);
@@ -66,12 +81,20 @@ export default function TheGetaway() {
   const touchStartRef = useRef({ x: 0, y: 0 });
   const getawaySessionRef = useRef(null);
 
-  const laneX = useCallback((l) => W / 2 + LANES[l], []);
-
   const perspScale = useCallback((y) => {
-    const t = Math.max(0, Math.min(1, (y - H * 0.28) / (H * 0.55)));
-    return 0.35 + 0.65 * t;
+    const t = Math.max(0, Math.min(1, (y - HORIZON_Y) / (H - HORIZON_Y - 42)));
+    return 0.18 + 0.92 * (t * t * 0.65 + t * 0.35);
   }, []);
+
+  const roadT = useCallback((y) => Math.max(0, Math.min(1, (y - HORIZON_Y) / (H - HORIZON_Y))), []);
+  const roadWidthAtY = useCallback((y) => {
+    const t = roadT(y);
+    return ROAD_TOP_W + (ROAD_BOTTOM_W - ROAD_TOP_W) * (t * t * 0.72 + t * 0.28);
+  }, [roadT]);
+  const laneScreenX = useCallback((lane, y) => {
+    const w = roadWidthAtY(y);
+    return W / 2 - w / 2 + ((lane + 0.5) / LANE_COUNT) * w;
+  }, [roadWidthAtY]);
 
   const addParticle = useCallback((x, y, color) => {
     const s = stateRef.current;
@@ -93,25 +116,27 @@ export default function TheGetaway() {
     const s = stateRef.current;
     const type = Math.random();
     const lane = Math.floor(Math.random() * 3);
-    if (type < 0.35) {
-      s.obstacles.push({ lane, x: laneX(lane), y: -40, w: 44, h: 52, type: 'barrier', dead: false });
-    } else if (type < 0.65) {
-      s.obstacles.push({ lane, x: laneX(lane), y: -40, w: 52, h: 30, type: 'lowbar', dead: false });
+    if (type < 0.28) {
+      s.obstacles.push({ lane, y: HORIZON_Y - 70, w: 50, h: 54, type: 'cop', dead: false });
+    } else if (type < 0.52) {
+      s.obstacles.push({ lane, y: HORIZON_Y - 70, w: 54, h: 44, type: 'barrier', dead: false });
+    } else if (type < 0.76) {
+      s.obstacles.push({ lane, y: HORIZON_Y - 70, w: 66, h: 30, type: 'lowbar', dead: false });
     } else {
       const l2 = (lane + 1) % 3;
-      s.obstacles.push({ lane, x: laneX(lane), y: -40, w: 44, h: 52, type: 'barrier', dead: false });
-      s.obstacles.push({ lane: l2, x: laneX(l2), y: -40, w: 44, h: 52, type: 'barrier', dead: false });
+      s.obstacles.push({ lane, y: HORIZON_Y - 70, w: 50, h: 54, type: 'cop', dead: false });
+      s.obstacles.push({ lane: l2, y: HORIZON_Y - 70, w: 54, h: 44, type: 'barrier', dead: false });
     }
-  }, [laneX]);
+  }, []);
 
   const spawnCoins = useCallback(() => {
     const s = stateRef.current;
     const lane = Math.floor(Math.random() * 3);
     const count = 3 + Math.floor(Math.random() * 4);
     for (let i = 0; i < count; i++) {
-      s.coinItems.push({ lane, x: laneX(lane), y: -40 - i * 52, r: 10, collected: false });
+      s.coinItems.push({ lane, y: HORIZON_Y - 50 - i * 46, r: 10, collected: false });
     }
-  }, [laneX]);
+  }, []);
 
   const resetGame = useCallback(() => {
     const s = stateRef.current;
@@ -136,6 +161,8 @@ export default function TheGetaway() {
     s.pathTiles = [];
     s.buildings = [];
     s.clouds = [];
+    s.streaks = [];
+    s.shake = 0;
     s.gameStartTime = Date.now();
 
     for (let i = 0; i < 12; i++) {
@@ -143,12 +170,20 @@ export default function TheGetaway() {
     }
     for (let i = 0; i < 8; i++) {
       s.buildings.push({
-        x: Math.random() < 0.5 ? W * 0.05 + Math.random() * 50 : W * 0.75 + Math.random() * 50,
-        y: 180 + Math.random() * 260,
+        side: Math.random() < 0.5 ? 'left' : 'right',
+        y: HORIZON_Y + Math.random() * (H - HORIZON_Y),
         w: 40 + Math.random() * 60,
         h: 80 + Math.random() * 120,
         windows: Math.floor(Math.random() * 3) + 2,
         neonColor: ['#ff00ff', '#00ffff', '#ffff00', '#ff6600'][Math.floor(Math.random() * 4)],
+      });
+    }
+    for (let i = 0; i < 18; i++) {
+      s.streaks.push({
+        side: Math.random() < 0.5 ? -1 : 1,
+        y: HORIZON_Y + Math.random() * (H - HORIZON_Y),
+        len: 18 + Math.random() * 38,
+        alpha: 0.15 + Math.random() * 0.3,
       });
     }
     for (let i = 0; i < 5; i++) {
@@ -201,6 +236,7 @@ export default function TheGetaway() {
   const jump = useCallback(() => {
     const p = stateRef.current.player;
     if (!p.jumping && !p.sliding) {
+      lightHaptic(8);
       p.jumping = true;
       p.vy = -14;
     }
@@ -209,6 +245,7 @@ export default function TheGetaway() {
   const slide = useCallback(() => {
     const p = stateRef.current.player;
     if (!p.jumping) {
+      lightHaptic(8);
       p.sliding = true;
       p.slideTimer = 45;
     }
@@ -216,12 +253,18 @@ export default function TheGetaway() {
 
   const moveLeft = useCallback(() => {
     const p = stateRef.current.player;
-    if (p.targetLane > 0) p.targetLane--;
+    if (p.targetLane > 0) {
+      lightHaptic(6);
+      p.targetLane--;
+    }
   }, []);
 
   const moveRight = useCallback(() => {
     const p = stateRef.current.player;
-    if (p.targetLane < 2) p.targetLane++;
+    if (p.targetLane < 2) {
+      lightHaptic(6);
+      p.targetLane++;
+    }
   }, []);
 
   const handleStart = useCallback(async () => {
@@ -295,55 +338,74 @@ export default function TheGetaway() {
   }, []);
 
   const drawBuilding = useCallback((ctx, b) => {
-    ctx.fillStyle = '#1a1a2a';
-    ctx.fillRect(b.x, b.y - b.h, b.w, b.h);
+    const s = stateRef.current;
+    const t = roadT(b.y);
+    const roadW = roadWidthAtY(b.y);
+    const sideSign = b.side === 'left' ? -1 : 1;
+    const bw = b.w * (0.45 + t * 0.95);
+    const bh = b.h * (0.35 + t * 1.05);
+    const x = W / 2 + sideSign * (roadW / 2 + 16 + bw / 2 + t * 34);
+    const y = b.y;
+
+    ctx.fillStyle = '#161623';
+    ctx.fillRect(x - bw / 2, y - bh, bw, bh);
     
     ctx.strokeStyle = b.neonColor;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(b.x, b.y - b.h, b.w, b.h);
+    ctx.lineWidth = 1 + t;
+    ctx.strokeRect(x - bw / 2, y - bh, bw, bh);
     
-    const windowW = 8;
-    const windowH = 12;
-    const cols = Math.floor(b.w / 16);
-    const rows = Math.floor(b.h / 20);
+    const windowW = Math.max(3, 8 * (0.55 + t));
+    const windowH = Math.max(4, 12 * (0.55 + t));
+    const cols = Math.max(1, Math.floor(bw / (windowW * 2)));
+    const rows = Math.max(1, Math.floor(bh / (windowH * 1.7)));
     
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        const wx = b.x + 4 + c * 16;
-        const wy = b.y - b.h + 6 + r * 20;
-        const lit = Math.random() > 0.3;
+        const wx = x - bw / 2 + 5 + c * windowW * 2;
+        const wy = y - bh + 8 + r * windowH * 1.7;
+        const lit = ((r * 7 + c * 11 + Math.floor(s.frame / 20)) % 5) !== 0;
         ctx.fillStyle = lit ? 'rgba(255,220,100,0.7)' : 'rgba(20,20,40,0.8)';
         ctx.fillRect(wx, wy, windowW, windowH);
       }
     }
     
-    if (Math.random() > 0.7) {
-      ctx.fillStyle = b.neonColor;
-      ctx.globalAlpha = 0.6 + Math.sin(stateRef.current.frame * 0.1) * 0.3;
-      ctx.fillRect(b.x + 5, b.y - b.h - 8, b.w - 10, 6);
-      ctx.globalAlpha = 1;
+    ctx.fillStyle = b.neonColor;
+    ctx.globalAlpha = 0.35 + Math.sin(s.frame * 0.1 + b.y * 0.02) * 0.18;
+    ctx.fillRect(x - bw / 2 + 5, y - bh - 8 * (0.6 + t), bw - 10, 5 * (0.5 + t));
+    ctx.globalAlpha = 1;
+
+    b.y += Math.max(0.7, s.speed * (0.08 + t * 0.16));
+    if (b.y - bh > H + 40) {
+      b.y = HORIZON_Y + Math.random() * 60;
+      b.side = Math.random() < 0.5 ? 'left' : 'right';
+      b.w = 40 + Math.random() * 60;
+      b.h = 80 + Math.random() * 120;
     }
-  }, []);
+  }, [roadT, roadWidthAtY]);
 
   const drawPath = useCallback((ctx) => {
     const s = stateRef.current;
+    const skyGlow = ctx.createRadialGradient(W / 2, HORIZON_Y, 20, W / 2, HORIZON_Y, W * 0.55);
+    skyGlow.addColorStop(0, 'rgba(255,210,110,0.16)');
+    skyGlow.addColorStop(1, 'rgba(255,210,110,0)');
+    ctx.fillStyle = skyGlow;
+    ctx.fillRect(0, HORIZON_Y - 100, W, 220);
+
     s.pathTiles.forEach(tile => {
       const yy = tile.y;
       const top = yy;
       const bot = yy + TILE_H;
-      const wTop = W * 0.38;
-      const wBot = W * 0.64;
       const cx = W / 2;
+      const tW = roadWidthAtY(top);
+      const bW = roadWidthAtY(bot);
+      const depth = roadT(bot);
 
-      const tFrac = Math.max(0, Math.min(1, (top - (H * 0.28)) / (H * 0.55)));
-      const bFrac = Math.max(0, Math.min(1, (bot - (H * 0.28)) / (H * 0.55)));
-
-      const tW = wTop * (1 - tFrac) + wBot * tFrac;
-      const bW = wTop * (1 - bFrac) + wBot * bFrac;
-
-      ctx.fillStyle = '#2a2a3a';
-      ctx.strokeStyle = 'rgba(100,100,140,0.5)';
-      ctx.lineWidth = 1;
+      const roadGrad = ctx.createLinearGradient(0, top, 0, bot);
+      roadGrad.addColorStop(0, '#1d1d2c');
+      roadGrad.addColorStop(1, '#303043');
+      ctx.fillStyle = roadGrad;
+      ctx.strokeStyle = 'rgba(201,164,96,0.26)';
+      ctx.lineWidth = 0.8 + depth * 1.2;
       ctx.beginPath();
       ctx.moveTo(cx - tW / 2, top);
       ctx.lineTo(cx + tW / 2, top);
@@ -353,28 +415,47 @@ export default function TheGetaway() {
       ctx.fill();
       ctx.stroke();
 
-      ctx.strokeStyle = 'rgba(255,255,100,0.15)';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([10, 10]);
-      const centerX = cx;
-      ctx.beginPath();
-      ctx.moveTo(centerX, top);
-      ctx.lineTo(centerX, bot);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      ctx.strokeStyle = 'rgba(140,140,180,0.3)';
-      ctx.lineWidth = 0.5;
+      ctx.strokeStyle = `rgba(255,225,120,${0.08 + depth * 0.17})`;
+      ctx.lineWidth = 1 + depth * 2.2;
       for (let li = 0; li < LANE_COUNT - 1; li++) {
         const ratio = (li + 1) / LANE_COUNT;
         const txl = cx - tW / 2 + tW * ratio;
         const bxl = cx - bW / 2 + bW * ratio;
+        ctx.setLineDash([6 + depth * 20, 7 + depth * 15]);
         ctx.beginPath();
         ctx.moveTo(txl, top);
         ctx.lineTo(bxl, bot);
         ctx.stroke();
       }
+      ctx.setLineDash([]);
+
+      ctx.strokeStyle = `rgba(255,70,70,${0.16 + depth * 0.18})`;
+      ctx.lineWidth = 2 + depth * 2;
+      ctx.beginPath();
+      ctx.moveTo(cx - tW / 2, top);
+      ctx.lineTo(cx - bW / 2, bot);
+      ctx.moveTo(cx + tW / 2, top);
+      ctx.lineTo(cx + bW / 2, bot);
+      ctx.stroke();
       tile.y += s.speed;
+    });
+
+    s.streaks.forEach((st) => {
+      const t = roadT(st.y);
+      const roadW = roadWidthAtY(st.y);
+      const x = W / 2 + st.side * (roadW / 2 + 10 + t * 30);
+      ctx.strokeStyle = `rgba(255,255,255,${st.alpha * t})`;
+      ctx.lineWidth = 1 + t * 3;
+      ctx.beginPath();
+      ctx.moveTo(x, st.y - st.len * t);
+      ctx.lineTo(x + st.side * 18 * t, st.y + st.len);
+      ctx.stroke();
+      st.y += s.speed * (0.55 + t * 1.2);
+      if (st.y > H + 60) {
+        st.y = HORIZON_Y + Math.random() * 70;
+        st.side = Math.random() < 0.5 ? -1 : 1;
+        st.alpha = 0.15 + Math.random() * 0.3;
+      }
     });
 
     while (s.pathTiles.length > 0 && s.pathTiles[0].y > H + TILE_H) {
@@ -384,42 +465,46 @@ export default function TheGetaway() {
       const last = s.pathTiles[s.pathTiles.length - 1];
       s.pathTiles.push({ y: last.y - TILE_H });
     }
-  }, []);
+  }, [roadT, roadWidthAtY]);
 
   const drawObstacle = useCallback((ctx, o) => {
     const s = stateRef.current;
     const scale = perspScale(o.y);
-    const cx = W / 2 + LANES[o.lane] * scale;
+    const cx = laneScreenX(o.lane, o.y);
+    const shadowW = (o.w || 50) * scale * 0.85;
+
+    ctx.save();
+    ctx.globalAlpha = Math.max(0.2, scale);
+    ctx.fillStyle = 'rgba(0,0,0,0.38)';
+    ctx.beginPath();
+    ctx.ellipse(cx, o.y + 4 * scale, shadowW * 0.55, 8 * scale, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
 
     if (o.type === 'barrier') {
       ctx.save();
       ctx.translate(cx, o.y);
-      ctx.scale(scale * 0.8, scale * 0.8);
+      ctx.scale(scale * 0.95, scale * 0.95);
       
-      ctx.fillStyle = '#1a3a6a';
-      ctx.strokeStyle = '#4488ff';
+      ctx.fillStyle = '#301a0a';
+      ctx.strokeStyle = '#ffb020';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.roundRect(-22, -52, 44, 52, 4);
+      ctx.roundRect(-28, -18, 56, 34, 4);
       ctx.fill();
       ctx.stroke();
-      
-      ctx.fillStyle = '#ff0000';
-      ctx.beginPath();
-      ctx.arc(0, -40, 6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = '#0000ff';
-      ctx.beginPath();
-      ctx.arc(0, -40, 6 * (0.5 + 0.5 * Math.sin(s.frame * 0.3)), 0, Math.PI * 2);
-      ctx.fill();
+      for (let i = 0; i < 5; i++) {
+        ctx.fillStyle = i % 2 === 0 ? '#ffb020' : '#1a1410';
+        ctx.fillRect(-27 + i * 11, -14, 10, 25);
+      }
       
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold 10px sans-serif';
+      ctx.font = 'bold 8px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('POLICE', 0, -20);
+      ctx.fillText('JUMP', 0, -24);
       
       ctx.restore();
-    } else {
+    } else if (o.type === 'lowbar') {
       ctx.save();
       ctx.translate(cx, o.y);
       ctx.scale(scale * 0.85, scale * 0.85);
@@ -436,18 +521,44 @@ export default function TheGetaway() {
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 6px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('CAUTION', 0, -2);
+      ctx.fillText('SLIDE', 0, -2);
       
       ctx.restore();
+    } else {
+      ctx.save();
+      ctx.translate(cx, o.y);
+      ctx.scale(scale, scale);
+
+      const flash = Math.sin(s.frame * 0.32) > 0 ? '#ff1f35' : '#1f66ff';
+      ctx.fillStyle = '#152747';
+      ctx.strokeStyle = flash;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.roundRect(-22, -48, 44, 50, 6);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = flash;
+      ctx.globalAlpha = 0.45;
+      ctx.beginPath();
+      ctx.arc(0, -48, 14, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#e8eefc';
+      ctx.font = 'bold 9px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('FBI', 0, -22);
+      ctx.fillStyle = '#111827';
+      ctx.fillRect(-15, -8, 30, 10);
+      ctx.restore();
     }
-    o.y += s.speed;
-  }, [perspScale]);
+    o.y += s.speed * (0.88 + scale * 0.18);
+  }, [perspScale, laneScreenX]);
 
   const drawCoin = useCallback((ctx, c) => {
     if (c.collected) return;
     const s = stateRef.current;
     const scale = perspScale(c.y);
-    const cx = W / 2 + LANES[c.lane] * scale;
+    const cx = laneScreenX(c.lane, c.y);
     const pulse = 0.85 + 0.15 * Math.sin(s.frame * 0.12 + c.y * 0.05);
     
     ctx.save();
@@ -469,20 +580,19 @@ export default function TheGetaway() {
     ctx.fillText('$', 0, 0);
     
     ctx.restore();
-    c.y += s.speed;
-  }, [perspScale]);
+    c.y += s.speed * (0.9 + scale * 0.12);
+  }, [perspScale, laneScreenX]);
 
   const drawPlayer = useCallback((ctx) => {
     const s = stateRef.current;
     const p = s.player;
     if (p.invincible > 0 && Math.floor(s.frame / 4) % 2 === 0) return;
 
-    const tx = laneX(p.targetLane);
-    p.x += (tx - p.x) * 0.22;
-
     const bY = H - 120;
-    const jumpH = p.jumping ? -p.vy * 6 : 0;
-    const pY = bY + jumpH;
+    const tx = laneScreenX(p.targetLane, bY);
+    p.x += (tx - p.x) * 0.26;
+    const jumpH = p.jumping ? Math.max(0, -p.vy * 6) : 0;
+    const pY = bY - jumpH;
     const sh = p.sliding ? p.h * 0.5 : p.h;
     const sy = p.sliding ? p.h * 0.5 : 0;
 
@@ -570,7 +680,7 @@ export default function TheGetaway() {
     }
 
     ctx.restore();
-  }, [laneX]);
+  }, [laneScreenX]);
 
   const drawParticles = useCallback((ctx) => {
     const s = stateRef.current;
@@ -592,14 +702,23 @@ export default function TheGetaway() {
   const drawHUD = useCallback((ctx) => {
     const s = stateRef.current;
     const distText = `${Math.floor(s.score)} m`;
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillStyle = 'rgba(0,0,0,0.58)';
     ctx.beginPath();
-    ctx.roundRect(8, 8, 130, 30, 6);
+    ctx.roundRect(8, 8, 172, 34, 8);
     ctx.fill();
     ctx.fillStyle = '#4afa4a';
     ctx.font = 'bold 14px sans-serif';
     ctx.textAlign = 'left';
-    ctx.fillText('🏃 ' + distText + '  💵 ' + s.coins, 16, 27);
+    ctx.fillText('🏃 ' + distText + '  💵 ' + s.coins, 16, 29);
+
+    ctx.fillStyle = 'rgba(0,0,0,0.58)';
+    ctx.beginPath();
+    ctx.roundRect(W - 142, 8, 134, 34, 8);
+    ctx.fill();
+    ctx.fillStyle = '#ff4455';
+    ctx.font = 'bold 11px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(`WANTED  ${Math.round(s.speed * 10)} mph`, W - 16, 29);
   }, []);
 
   const drawTitle = useCallback((ctx) => {
@@ -614,13 +733,13 @@ export default function TheGetaway() {
 
     ctx.fillStyle = 'rgba(196,30,58,0.6)';
     ctx.font = '15px sans-serif';
-    ctx.fillText('Escape the feds!', W / 2, H / 2 - 45);
+    ctx.fillText('Run the alley. Dodge the feds. Grab the cash.', W / 2, H / 2 - 45);
 
     ctx.fillStyle = '#aaa';
     ctx.font = '13px sans-serif';
-    ctx.fillText('← → to change lane', W / 2, H / 2 + 5);
-    ctx.fillText('↑ to jump · ↓ to slide', W / 2, H / 2 + 28);
-    ctx.fillText('Swipe on mobile!', W / 2, H / 2 + 51);
+    ctx.fillText('← → / swipe: change lanes', W / 2, H / 2 + 5);
+    ctx.fillText('↑ jump barricades · ↓ slide tape', W / 2, H / 2 + 28);
+    ctx.fillText('Stay alive as the street speeds up', W / 2, H / 2 + 51);
 
     ctx.fillStyle = '#4afa4a';
     ctx.font = 'bold 18px sans-serif';
@@ -718,9 +837,9 @@ export default function TheGetaway() {
     for (let o of s.obstacles) {
       if (o.dead) continue;
       const scale = perspScale(o.y);
-      const ox = W / 2 + LANES[o.lane] * scale;
-      const ow = o.w * scale * 0.8;
-      const oh = o.h * scale * 0.8;
+      const ox = laneScreenX(o.lane, o.y);
+      const ow = o.w * scale * 0.9;
+      const oh = o.h * scale * 0.9;
       const oTop = o.y - oh;
 
       if (Math.abs(px - ox) < (18 + ow / 2) && pTop < o.y && pY > oTop) {
@@ -730,6 +849,8 @@ export default function TheGetaway() {
         o.dead = true;
         addParticle(ox, o.y, o.type === 'barrier' ? '#4488ff' : '#ffff00');
         s.lives--;
+        s.shake = 18;
+        lightHaptic(35);
         p.invincible = 90;
         setDisplayLives(s.lives);
         
@@ -745,7 +866,7 @@ export default function TheGetaway() {
     for (let c of s.coinItems) {
       if (c.collected) continue;
       const scale = perspScale(c.y);
-      const cx2 = W / 2 + LANES[c.lane] * scale;
+      const cx2 = laneScreenX(c.lane, c.y);
       if (Math.abs(px - cx2) < 28 && Math.abs(pY - c.y) < 30) {
         c.collected = true;
         s.coins++;
@@ -755,7 +876,7 @@ export default function TheGetaway() {
         setDisplayScore(Math.floor(s.score));
       }
     }
-  }, [perspScale, addParticle]);
+  }, [perspScale, laneScreenX, addParticle]);
 
   const gameLoop = useCallback(() => {
     const canvas = canvasRef.current;
@@ -764,6 +885,12 @@ export default function TheGetaway() {
     const s = stateRef.current;
 
     ctx.clearRect(0, 0, W, H);
+    ctx.save();
+    if (s.shake > 0) {
+      const amt = Math.min(8, s.shake * 0.45);
+      ctx.translate((Math.random() - 0.5) * amt, (Math.random() - 0.5) * amt);
+      s.shake--;
+    }
     drawSky(ctx);
 
     s.buildings.forEach(b => drawBuilding(ctx, b));
@@ -772,6 +899,7 @@ export default function TheGetaway() {
       drawPath(ctx);
       drawTitle(ctx);
       s.frame++;
+      ctx.restore();
       animRef.current = requestAnimationFrame(gameLoop);
       return;
     }
@@ -780,6 +908,7 @@ export default function TheGetaway() {
       drawPath(ctx);
       drawGameOver(ctx);
       s.frame++;
+      ctx.restore();
       animRef.current = requestAnimationFrame(gameLoop);
       return;
     }
@@ -788,7 +917,7 @@ export default function TheGetaway() {
 
     s.frame++;
     s.score += s.speed * 0.04;
-    s.speed = 6 + Math.floor(s.score / 200) * 0.5;
+    s.speed = 6 + Math.min(12, s.score / 360);
     if (s.speed > 18) s.speed = 18;
 
     setDisplayScore(Math.floor(s.score));
@@ -820,6 +949,7 @@ export default function TheGetaway() {
     drawParticles(ctx);
     drawHUD(ctx);
     checkCollisions();
+    ctx.restore();
 
     animRef.current = requestAnimationFrame(gameLoop);
   }, [drawSky, drawBuilding, drawPath, drawTitle, drawGameOver, drawCoin, drawObstacle, drawPlayer, drawParticles, drawHUD, checkCollisions, spawnObstacle, spawnCoins]);
@@ -856,13 +986,19 @@ export default function TheGetaway() {
   }, [handleStart, moveLeft, moveRight, jump, slide]);
 
   const handleTouchStart = useCallback((e) => {
+    e.preventDefault();
     touchStartRef.current = {
       x: e.touches[0].clientX,
       y: e.touches[0].clientY,
     };
   }, []);
 
+  const handleTouchMove = useCallback((e) => {
+    e.preventDefault();
+  }, []);
+
   const handleTouchEnd = useCallback((e) => {
+    e.preventDefault();
     const s = stateRef.current;
     if (s.state !== 'playing') {
       void handleStart();
@@ -871,32 +1007,39 @@ export default function TheGetaway() {
     const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
     const dy = e.changedTouches[0].clientY - touchStartRef.current.y;
     
-    if (Math.abs(dx) > Math.abs(dy)) {
-      if (dx < -30) moveLeft();
-      else if (dx > 30) moveRight();
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
+    const threshold = 22;
+    if (absX < threshold && absY < threshold) {
+      jump();
+      return;
+    }
+    if (absX > absY) {
+      if (dx < -threshold) moveLeft();
+      else if (dx > threshold) moveRight();
     } else {
-      if (dy < -20) jump();
-      else if (dy > 20) slide();
+      if (dy < -threshold) jump();
+      else if (dy > threshold) slide();
     }
   }, [handleStart, moveLeft, moveRight, jump, slide]);
 
   return (
-    <div className={`${styles.pageContent} mobile-page-root space-y-4`}>
+    <div className={`${styles.pageContent} mobile-page-root space-y-2 sm:space-y-4`}>
       {captchaModal}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-lg font-heading font-bold text-primary uppercase tracking-wider">The Getaway</h1>
-          <p className="text-[10px] text-mutedForeground">Escape through the city streets</p>
+          <h1 className="text-base sm:text-lg font-heading font-bold text-primary uppercase tracking-wider">The Getaway</h1>
+          <p className="text-[9px] sm:text-[10px] text-mutedForeground">Swipe-run alley chase through the city</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {playsLeft != null && (
-            <span className={`text-[10px] font-heading ${canPlay ? 'text-mutedForeground' : 'text-red-500 font-bold'}`}>
+            <span className={`text-[9px] sm:text-[10px] font-heading ${canPlay ? 'text-mutedForeground' : 'text-red-500 font-bold'}`}>
               {playsLeft}/{maxPlays} plays
             </span>
           )}
           <button
             onClick={() => setShowRules(!showRules)}
-            className="px-3 py-1 rounded border border-primary/30 text-primary text-xs font-heading hover:bg-primary/10"
+            className="px-2.5 sm:px-3 py-1 rounded border border-primary/30 text-primary text-[10px] sm:text-xs font-heading hover:bg-primary/10"
           >
             {showRules ? 'Hide Rules' : 'Show Rules'}
           </button>
@@ -917,8 +1060,8 @@ export default function TheGetaway() {
         </div>
       )}
 
-      <div className={`${styles.panel} mobile-panel rounded-lg p-2`}>
-        <div className="flex justify-between items-center px-2 py-1 text-xs font-heading text-foreground">
+      <div className={`${styles.panel} mobile-panel rounded-lg p-1.5 sm:p-2`}>
+        <div className="flex justify-between items-center gap-2 px-1.5 sm:px-2 py-1 text-[10px] sm:text-xs font-heading text-foreground">
           <span>Score: <span className="text-primary">{displayScore}</span></span>
           <span>Cash: <span className="text-emerald-400">${(displayCoins * 25).toLocaleString()}</span></span>
           <span>Lives: {'❤️'.repeat(displayLives)}{'🖤'.repeat(3 - displayLives)}</span>
@@ -930,36 +1073,46 @@ export default function TheGetaway() {
           ref={canvasRef}
           onClick={() => void handleStart()}
           onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
-          className="rounded-lg cursor-pointer touch-none select-none"
-          style={{ maxWidth: '100%', width: W, height: 'auto', aspectRatio: `${W}/${H}` }}
+          className="rounded-lg cursor-pointer touch-none select-none border border-primary/20 shadow-2xl shadow-black/40 bg-black"
+          style={{
+            maxWidth: '100%',
+            width: 'min(100%, 480px, calc((100dvh - 210px) * 0.75))',
+            minWidth: 'min(100%, 300px)',
+            height: 'auto',
+            aspectRatio: `${W}/${H}`,
+            touchAction: 'none',
+            WebkitUserSelect: 'none',
+            userSelect: 'none',
+          }}
         />
       </div>
 
-      <div className="flex w-full justify-between gap-2 flex-wrap">
+      <div className={`${styles.panel} mobile-panel rounded-lg p-2 grid grid-cols-4 gap-2 sm:flex sm:w-full sm:justify-between sm:flex-wrap`}>
         <button
           onClick={() => { if (gameState === 'playing') moveLeft(); else void handleStart(); }}
-          className={`px-4 py-2 rounded border border-primary/30 text-primary text-sm font-heading hover:bg-primary/10 touch-manipulation min-w-[60px]`}
+          className={`px-2 sm:px-4 py-3 sm:py-2 rounded border border-primary/30 text-primary text-[11px] sm:text-sm font-heading font-bold hover:bg-primary/10 touch-manipulation min-h-[48px] sm:min-w-[60px] active:scale-95 transition-transform`}
         >
-          ← Left
+          ←<span className="hidden sm:inline"> Left</span>
         </button>
         <button
           onClick={() => { if (gameState === 'playing') jump(); else void handleStart(); }}
-          className={`px-4 py-2 rounded border border-primary/30 text-primary text-sm font-heading hover:bg-primary/10 touch-manipulation min-w-[60px]`}
+          className={`px-2 sm:px-4 py-3 sm:py-2 rounded border border-primary/30 text-primary text-[11px] sm:text-sm font-heading font-bold hover:bg-primary/10 touch-manipulation min-h-[48px] sm:min-w-[60px] active:scale-95 transition-transform`}
         >
-          ↑ Jump
+          ↑<span className="hidden sm:inline"> Jump</span>
         </button>
         <button
           onClick={() => { if (gameState === 'playing') slide(); else void handleStart(); }}
-          className={`px-4 py-2 rounded border border-primary/30 text-primary text-sm font-heading hover:bg-primary/10 touch-manipulation min-w-[60px]`}
+          className={`px-2 sm:px-4 py-3 sm:py-2 rounded border border-primary/30 text-primary text-[11px] sm:text-sm font-heading font-bold hover:bg-primary/10 touch-manipulation min-h-[48px] sm:min-w-[60px] active:scale-95 transition-transform`}
         >
-          ↓ Slide
+          ↓<span className="hidden sm:inline"> Slide</span>
         </button>
         <button
           onClick={() => { if (gameState === 'playing') moveRight(); else void handleStart(); }}
-          className={`px-4 py-2 rounded border border-primary/30 text-primary text-sm font-heading hover:bg-primary/10 touch-manipulation min-w-[60px]`}
+          className={`px-2 sm:px-4 py-3 sm:py-2 rounded border border-primary/30 text-primary text-[11px] sm:text-sm font-heading font-bold hover:bg-primary/10 touch-manipulation min-h-[48px] sm:min-w-[60px] active:scale-95 transition-transform`}
         >
-          Right →
+          <span className="hidden sm:inline">Right </span>→
         </button>
       </div>
     </div>

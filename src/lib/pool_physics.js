@@ -4,8 +4,8 @@
 export const TABLE_W = 2.2;
 export const TABLE_H = 1.1;
 export const BALL_R = 0.028;
-export const POCKET_R = 0.045;
-export const CORNER_POCKET_R = 0.052;
+export const POCKET_R = 0.058;
+export const CORNER_POCKET_R = 0.066;
 const RESTITUTION = 0.985;
 const FRICTION = 0.994;
 const STOP_SPEED = 0.012;
@@ -82,9 +82,9 @@ function applyPocketGravity(balls) {
       const dx = pk.x - b.x;
       const dy = pk.y - b.y;
       const dist = hypot(dx, dy);
-      const threshold = pk.r * 1.3;
+      const threshold = pk.r * 1.75;
       if (dist < threshold && dist > 0.001) {
-        const strength = 0.0008 * (1 - dist / threshold);
+        const strength = 0.00135 * (1 - dist / threshold);
         b.vx += (dx / dist) * strength;
         b.vy += (dy / dist) * strength;
       }

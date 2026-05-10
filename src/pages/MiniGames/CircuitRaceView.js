@@ -1300,6 +1300,7 @@ export default function CircuitRaceView({
   const liveInitDone = useRef(false);
   const lapDeadlineRef = useRef(lapDeadline);
   const liveResultOrderRef = useRef(liveResultOrder);
+  const resultOrderRef = useRef(resultOrder);
 
   useEffect(() => { liveCarStatesRef.current = liveCarStates; }, [liveCarStates]);
   useEffect(() => { liveIncidentsRef.current = liveIncidents; }, [liveIncidents]);
@@ -1308,6 +1309,7 @@ export default function CircuitRaceView({
   useEffect(() => { liveTotalLapsRef.current = liveTotalLaps; }, [liveTotalLaps]);
   useEffect(() => { lapDeadlineRef.current = lapDeadline; }, [lapDeadline]);
   useEffect(() => { liveResultOrderRef.current = liveResultOrder; }, [liveResultOrder]);
+  useEffect(() => { resultOrderRef.current = resultOrder; }, [resultOrder]);
 
   const liveRaceEventsRef = useRef(liveRaceEvents);
   const liveGapsToAheadRef = useRef(liveGapsToAhead);
@@ -3312,7 +3314,8 @@ export default function CircuitRaceView({
         });
       }
 
-      // Race finished: replay uses visual lap; interactive-live ends on visual classification
+      // Race finished: replay uses visual lap; interactive-live waits until the
+      // visual run is classified, then displays the server order if available.
       if (raceShouldEnd && totLaps > 0 && !st._raceFinished) {
         st._raceFinished = true;
         st._raceFinishedAt = nowSec;
@@ -3334,8 +3337,23 @@ export default function CircuitRaceView({
           setUiPhase("done");
           const allR = [...r];
 
-          // Visual is truth — sort by what the player saw on screen
-          const ordered = [...allR].sort(compareInteractiveFinalResult);
+          // Backend is the source of truth for classified results. The canvas can
+          // visually drift a little under acceleration / rubber-banding, so use the
+          // server's precomputed/saved order when present and append any missing
+          // visual racers as a fallback for older race docs.
+          const byId = Object.fromEntries(allR.map((x) => [x.id, x]));
+          const rawAuthoritativeOrder = mode === "interactive-live"
+            ? (Array.isArray(liveResultOrderRef.current) ? liveResultOrderRef.current : [])
+            : (Array.isArray(resultOrderRef.current) ? resultOrderRef.current : []);
+          const seenAuth = new Set();
+          const authoritativeOrder = rawAuthoritativeOrder
+            .filter((id) => byId[id] && !seenAuth.has(id) && seenAuth.add(id));
+          const ordered = authoritativeOrder.length
+            ? [
+                ...authoritativeOrder.map((id) => byId[id]),
+                ...allR.filter((x) => !seenAuth.has(x.id)).sort(compareInteractiveFinalResult),
+              ]
+            : [...allR].sort(compareInteractiveFinalResult);
           const fastest = st.fastestLap || { holderId: null, time: Infinity };
           setResults(ordered.map((x, i) => ({
             pos: i + 1, id: x.id, name: x.name, isPlayer: x.isPlayer, color: x.color,
@@ -3347,6 +3365,7 @@ export default function CircuitRaceView({
           debugRace("emit_on_complete", {
             emittedOrder: rOIds,
             emittedDnf: dIds,
+            orderSource: authoritativeOrder.length ? "server" : "visual_fallback",
           });
           setTimeout(() => onCompleteRef.current?.(rOIds, dIds), 1200);
         }

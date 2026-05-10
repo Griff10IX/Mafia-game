@@ -77,6 +77,10 @@ function checkWin(board) {
   return board.every(row => row.every(cell => cell.mine ? !cell.revealed : cell.revealed));
 }
 
+function countFlags(board) {
+  return board.reduce((sum, row) => sum + row.filter(cell => cell.flagged && !cell.revealed).length, 0);
+}
+
 export default function Minesweeper() {
   const { getCaptchaToken, captchaModal } = useMinigameCaptcha();
   const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays, applyPlaysLeftPayload } = useMinigamePlaysLeft("minesweeper");
@@ -89,16 +93,28 @@ export default function Minesweeper() {
   const [deathCell, setDeathCell] = useState(null);
   const [leaderboard, setLeaderboard] = useState([]);
   const [reward, setReward] = useState(null);
+  const [submitError, setSubmitError] = useState("");
+  const [compactUi, setCompactUi] = useState(false);
   const timerRef = useRef(null);
   const submittedRef = useRef(false);
   const runSessionRef = useRef(null);
   const firstRevealLockRef = useRef(false);
   const msDeadSyncRef = useRef(false);
+  const flagTouchTimerRef = useRef(null);
+  const suppressRevealRef = useRef(false);
 
   const cfg = DIFFICULTIES[difficulty];
 
   useEffect(() => {
     fetchLeaderboard();
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 640px)");
+    const apply = () => setCompactUi(mq.matches);
+    apply();
+    mq.addEventListener("change", apply);
+    return () => mq.removeEventListener("change", apply);
   }, []);
 
   const fetchLeaderboard = async () => {
@@ -141,6 +157,7 @@ export default function Minesweeper() {
 
   const DIFF_REWARDS = { snitch: { cash: 1250, respect: 5 }, capo: { cash: 3750, respect: 15 }, godfather: { cash: 12500, respect: 50 } };
   const submitWin = async () => {
+    setSubmitError("");
     try {
       const res = await api.post("/minesweeper/win", {
         difficulty,
@@ -157,6 +174,9 @@ export default function Minesweeper() {
       else refreshPlays();
     } catch (e) {
       console.error("Failed to submit win", e);
+      const msg = e.response?.data?.detail || e.message || "Could not verify this win.";
+      setSubmitError(msg);
+      toast.error(msg);
       refreshPlays();
     }
   };
@@ -170,9 +190,12 @@ export default function Minesweeper() {
     setMinesReady(false);
     setDeathCell(null);
     setReward(null);
+    setSubmitError("");
     submittedRef.current = false;
     runSessionRef.current = null;
     firstRevealLockRef.current = false;
+    suppressRevealRef.current = false;
+    clearTimeout(flagTouchTimerRef.current);
   }, [difficulty]);
 
   const handleDifficulty = (d) => {
@@ -218,22 +241,49 @@ export default function Minesweeper() {
     }
     const newBoard = revealCells(b, cfg.rows, cfg.cols, r, c);
     setBoard(newBoard);
-    if (checkWin(newBoard)) setPhase("won");
+    if (checkWin(newBoard)) {
+      setMinesLeft(0);
+      setPhase("won");
+    }
   };
 
   const handleFlag = (e, r, c) => {
-    e.preventDefault();
+    e?.preventDefault?.();
     if (phase === "won" || phase === "dead" || board[r][c].revealed) return;
     const newBoard = board.map(row => row.map(cell =>
       cell.r === r && cell.c === c ? { ...cell, flagged: !cell.flagged } : cell
     ));
     setBoard(newBoard);
-    setMinesLeft(m => board[r][c].flagged ? m + 1 : m - 1);
+    setMinesLeft(Math.max(0, cfg.mines - countFlags(newBoard)));
+  };
+
+  const handleCellClick = (r, c) => {
+    if (suppressRevealRef.current) {
+      suppressRevealRef.current = false;
+      return;
+    }
+    void handleReveal(r, c);
+  };
+
+  const handleTouchStart = (r, c) => {
+    clearTimeout(flagTouchTimerRef.current);
+    suppressRevealRef.current = false;
+    flagTouchTimerRef.current = setTimeout(() => {
+      suppressRevealRef.current = true;
+      handleFlag(null, r, c);
+      if (navigator.vibrate) navigator.vibrate(18);
+    }, 420);
+  };
+
+  const clearFlagTouch = () => {
+    clearTimeout(flagTouchTimerRef.current);
   };
 
   const fmtTime = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 
-  const cellSize = difficulty === "godfather" ? 28 : difficulty === "capo" ? 32 : 38;
+  const cellSize = compactUi
+    ? difficulty === "godfather" ? 22 : difficulty === "capo" ? 26 : 34
+    : difficulty === "godfather" ? 28 : difficulty === "capo" ? 32 : 38;
 
   return (
     <div className={`${styles.pageContent} mobile-page-root`}>
@@ -243,26 +293,45 @@ export default function Minesweeper() {
         .ms-cell {
           display: flex; align-items: center; justify-content: center;
           cursor: pointer; user-select: none; position: relative;
-          border: 1px solid rgba(212,175,55,0.15);
-          transition: background 0.1s;
+          border: 1px solid rgba(212,175,55,0.14);
+          transition: transform 0.12s ease, background 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
           font-family: 'Crimson Text', serif;
           font-weight: 600;
+          touch-action: manipulation;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .ms-cell::after {
+          content: "";
+          position: absolute;
+          inset: 2px;
+          border-radius: 3px;
+          pointer-events: none;
+          opacity: 0.45;
+          background: linear-gradient(135deg, rgba(255,255,255,0.08), transparent 46%, rgba(0,0,0,0.18));
         }
         .ms-cell.unrevealed {
-          background: rgba(212,175,55,0.06);
+          background: linear-gradient(145deg, rgba(85,60,25,0.78), rgba(23,18,12,0.92));
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), inset 0 -2px 0 rgba(0,0,0,0.35), 0 1px 3px rgba(0,0,0,0.35);
         }
         .ms-cell.unrevealed:hover {
-          background: rgba(212,175,55,0.14);
+          background: linear-gradient(145deg, rgba(120,86,32,0.86), rgba(34,25,15,0.96));
+          border-color: rgba(212,175,55,0.4);
+          transform: translateY(-1px);
         }
         .ms-cell.revealed {
-          background: rgba(0,0,0,0.35);
+          background: radial-gradient(circle at 50% 45%, rgba(21,18,14,0.78), rgba(0,0,0,0.55));
+          border-color: rgba(255,255,255,0.06);
           cursor: default;
+          box-shadow: inset 0 0 12px rgba(0,0,0,0.36);
         }
         .ms-cell.mine-death {
-          background: #7a1a1a !important;
+          background: radial-gradient(circle, #f87171 0%, #7a1a1a 48%, #250707 100%) !important;
+          border-color: rgba(248,113,113,0.8);
+          box-shadow: 0 0 18px rgba(248,113,113,0.45), inset 0 0 18px rgba(0,0,0,0.6);
         }
         .ms-cell.mine-revealed {
-          background: rgba(120,20,20,0.3);
+          background: radial-gradient(circle, rgba(120,20,20,0.62), rgba(30,8,8,0.92));
+          border-color: rgba(248,113,113,0.28);
         }
         .diff-btn {
           background: transparent;
@@ -278,9 +347,10 @@ export default function Minesweeper() {
         }
         .diff-btn:hover { border-color: rgba(212,175,55,0.7); color: var(--noir-primary); }
         .diff-btn.active {
-          background: rgba(212,175,55,0.1);
+          background: linear-gradient(180deg, rgba(212,175,55,0.16), rgba(212,175,55,0.05));
           border-color: var(--noir-primary);
           color: var(--noir-primary);
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 0 18px rgba(212,175,55,0.08);
         }
         .new-game-btn {
           background: rgba(212,175,55,0.08);
@@ -296,24 +366,49 @@ export default function Minesweeper() {
         }
         .new-game-btn:hover { background: rgba(212,175,55,0.18); border-color: var(--noir-primary); }
         .stat-box {
-          background: rgba(0,0,0,0.4);
+          background: linear-gradient(180deg, rgba(0,0,0,0.58), rgba(0,0,0,0.34));
           border: 1px solid rgba(212,175,55,0.2);
           padding: 6px 16px;
           min-width: 80px;
           text-align: center;
+          box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 4px 16px rgba(0,0,0,0.22);
         }
         .overlay-banner {
           position: absolute; left: 0; right: 0;
           top: 50%; transform: translateY(-50%);
           text-align: center;
-          background: rgba(10,8,6,0.92);
+          background: linear-gradient(180deg, rgba(10,8,6,0.96), rgba(0,0,0,0.9));
           border-top: 1px solid rgba(212,175,55,0.4);
           border-bottom: 1px solid rgba(212,175,55,0.4);
           padding: 1.5rem;
           z-index: 10;
           pointer-events: none;
+          box-shadow: 0 12px 36px rgba(0,0,0,0.65);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
         }
-        .board-wrap { position: relative; }
+        .board-shell {
+          display: flex;
+          justify-content: center;
+          overflow-x: auto;
+          padding: 10px 0 14px;
+          scrollbar-color: rgba(212,175,55,0.45) rgba(0,0,0,0.25);
+        }
+        .board-wrap {
+          position: relative;
+          border: 1px solid rgba(212,175,55,0.32);
+          background:
+            radial-gradient(ellipse at 50% 0%, rgba(212,175,55,0.1), transparent 45%),
+            linear-gradient(180deg, rgba(14,10,7,0.96), rgba(0,0,0,0.82));
+          box-shadow: 0 14px 48px rgba(0,0,0,0.48), inset 0 1px 0 rgba(255,255,255,0.06);
+          padding: 6px;
+        }
+        @media (max-width: 640px) {
+          .diff-btn { flex: 1; padding: 8px 7px; font-size: 9px; }
+          .new-game-btn { width: 100%; min-height: 42px; }
+          .stat-box { flex: 1; min-width: 118px; }
+          .overlay-banner { padding: 1rem 0.75rem; }
+        }
       `}</style>
 
       {/* Back link */}
@@ -322,11 +417,11 @@ export default function Minesweeper() {
       </Link>
 
       {/* Title */}
-      <div style={{ textAlign: "center", marginBottom: "1.5rem" }}>
+      <div style={{ textAlign: "center", marginBottom: compactUi ? "1rem" : "1.5rem" }}>
         <div style={{ fontSize: 11, letterSpacing: "0.3em", color: "rgba(212,175,55,0.5)", marginBottom: 6, textTransform: "uppercase" }}>
           The Family's Game
         </div>
-        <h1 style={{ fontSize: 28, fontWeight: 900, color: "var(--noir-primary)", margin: 0, letterSpacing: "0.08em", textTransform: "uppercase" }}>
+        <h1 style={{ fontSize: compactUi ? 24 : 28, fontWeight: 900, color: "var(--noir-primary)", margin: 0, letterSpacing: "0.08em", textTransform: "uppercase" }}>
           Minefield
         </h1>
         <div style={{ fontSize: 11, color: "rgba(212,175,55,0.35)", letterSpacing: "0.2em", marginTop: 4, fontFamily: "'Crimson Text', serif", fontStyle: "italic" }}>
@@ -340,10 +435,11 @@ export default function Minesweeper() {
       </div>
 
       {/* Difficulty */}
-      <div style={{ display: "flex", gap: 0, marginBottom: "1.25rem", border: "1px solid rgba(212,175,55,0.15)", justifyContent: "center" }}>
+      <div style={{ display: "flex", gap: 0, marginBottom: compactUi ? "0.9rem" : "1.25rem", border: "1px solid rgba(212,175,55,0.15)", justifyContent: "center" }}>
         {Object.entries(DIFFICULTIES).map(([key, d]) => (
           <button key={key} className={`diff-btn${difficulty === key ? " active" : ""}`} onClick={() => handleDifficulty(key)}>
-            {d.label}
+            <span>{d.label}</span>
+            {!compactUi && <span style={{ display: "block", fontSize: 8, opacity: 0.55, marginTop: 2 }}>{d.mines} mines</span>}
           </button>
         ))}
       </div>
@@ -351,7 +447,7 @@ export default function Minesweeper() {
       {/* Stats bar */}
       <div style={{ display: "flex", gap: 12, marginBottom: "1rem", alignItems: "center", justifyContent: "center", flexWrap: "wrap" }}>
         <div className="stat-box">
-          <div style={{ fontSize: 9, color: "rgba(212,175,55,0.5)", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 2 }}>Snitches</div>
+          <div style={{ fontSize: 9, color: "rgba(212,175,55,0.5)", letterSpacing: "0.15em", textTransform: "uppercase", marginBottom: 2 }}>Mines left</div>
           <div style={{ fontSize: 20, color: "var(--noir-primary)", fontWeight: 700, letterSpacing: "0.05em" }}>
             {String(Math.max(0, minesLeft)).padStart(3, "0")}
           </div>
@@ -370,12 +466,13 @@ export default function Minesweeper() {
       </div>
 
       {/* Board */}
-      <div style={{ display: "flex", justifyContent: "center", overflowX: "auto" }}>
-        <div className="board-wrap" style={{ border: "1px solid rgba(212,175,55,0.25)", background: "rgba(0,0,0,0.4)" }}>
+      <div className="board-shell">
+        <div className="board-wrap">
           <div style={{
             display: "grid",
             gridTemplateColumns: `repeat(${cfg.cols}, ${cellSize}px)`,
             gridTemplateRows: `repeat(${cfg.rows}, ${cellSize}px)`,
+            gap: compactUi ? 1 : 2,
           }}>
             {board.map(row => row.map(cell => {
               const isDeath = deathCell && cell.r === deathCell.r && cell.c === deathCell.c;
@@ -389,8 +486,12 @@ export default function Minesweeper() {
                   key={`${cell.r}-${cell.c}`}
                   className={cls}
                   style={{ width: cellSize, height: cellSize, fontSize: cellSize * 0.42 }}
-                  onClick={() => void handleReveal(cell.r, cell.c)}
+                  onClick={() => handleCellClick(cell.r, cell.c)}
                   onContextMenu={(e) => handleFlag(e, cell.r, cell.c)}
+                  onTouchStart={() => handleTouchStart(cell.r, cell.c)}
+                  onTouchEnd={clearFlagTouch}
+                  onTouchCancel={clearFlagTouch}
+                  title={cell.revealed ? undefined : "Tap to reveal. Long press or right click to flag."}
                 >
                   {cell.flagged && !cell.revealed && (
                     <span style={{ fontSize: cellSize * 0.48 }}>🚩</span>
@@ -416,9 +517,19 @@ export default function Minesweeper() {
                   <div style={{ fontSize: 13, color: "rgba(212,175,55,0.6)", marginTop: 6, fontFamily: "'Crimson Text', serif", fontStyle: "italic" }}>
                     You navigated the field — {fmtTime(elapsed)} — like a true made man.
                   </div>
+                  {!reward && !submitError && (
+                    <div style={{ marginTop: 8, fontSize: 12, color: "rgba(212,175,55,0.6)" }}>
+                      Verifying the payout...
+                    </div>
+                  )}
                   {reward && (
                     <div style={{ marginTop: 8, fontSize: 12, color: "var(--noir-primary)" }}>
                       +${reward.cash?.toLocaleString()} cash • +{reward.respect} respect
+                    </div>
+                  )}
+                  {submitError && (
+                    <div style={{ marginTop: 8, fontSize: 12, color: "#f87171" }}>
+                      Win not paid: {submitError}
                     </div>
                   )}
                 </>
@@ -439,7 +550,7 @@ export default function Minesweeper() {
 
       {/* Footer hint */}
       <div style={{ marginTop: "1rem", fontSize: 11, color: "rgba(212,175,55,0.3)", letterSpacing: "0.12em", textAlign: "center", fontFamily: "'Crimson Text', serif" }}>
-        Left click to reveal · Right click to plant a flag
+        Tap to reveal · Long press or right click to plant a flag
       </div>
 
       {/* Leaderboard */}

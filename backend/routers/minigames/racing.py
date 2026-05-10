@@ -2985,7 +2985,7 @@ async def run_racing_automated_race_ticker():
 
 
 async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: dict = Depends(get_current_user_verified)):
-    """Finalize a race. Interactive mode: validate client result_order/dnf_ids and persist (no server re-order). Other modes may sim or use stored order."""
+    """Finalize a race using the stored server result_order when available."""
     race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
     if not race:
         raise HTTPException(status_code=404, detail="Race not found")
@@ -3116,7 +3116,7 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
     _rdebug(race_id, "COMPLETE_RACE_FINAL_ORDER",
             result_order=result_order,
             dnf_ids=dnf_ids,
-            source="interactive_client" if is_interactive else "non_interactive")
+            source="server_stored" if race.get("result_order") else "server_recomputed")
 
     claim = await db.racing_races.update_one(
         {"id": race_id, "state": "running"},

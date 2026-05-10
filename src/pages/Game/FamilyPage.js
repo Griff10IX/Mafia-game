@@ -85,6 +85,40 @@ const vaultTxSubtitle = (tx) => {
   return bits.filter(Boolean).join(' · ') || null;
 };
 
+const TERRITORY_FAMILY_PERK_ORDER = ['crew_oc', 'melt', 'gta', 'hitlist', 'racket', 'booze'];
+const TERRITORY_FAMILY_PERK_TITLE = {
+  crew_oc: 'Crew OC cooldown −1h',
+  melt: 'Family melt cooldown −5s',
+  gta: 'Family GTA cooldown −5s',
+  hitlist: '+2 hitlist NPC slots',
+  racket: '+5% daily racket income',
+};
+
+function territoryFamilyPerkRows(familyPerks) {
+  const fp = familyPerks && typeof familyPerks === 'object' ? familyPerks : {};
+  const out = [];
+  for (const id of TERRITORY_FAMILY_PERK_ORDER) {
+    const row = fp[id];
+    if (!row || !row.valid_until) continue;
+    let title = TERRITORY_FAMILY_PERK_TITLE[id];
+    if (id === 'booze') {
+      title = `Booze run cargo +${Number(row.cargo_bonus || 0)}`;
+    }
+    if (!title) continue;
+    out.push({ id, title, valid_until: row.valid_until });
+  }
+  return out;
+}
+
+function formatTerritoryPerkUntil(iso) {
+  if (!iso) return '—';
+  try {
+    return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  } catch {
+    return String(iso);
+  }
+}
+
 const formatMoney = (n) => {
   const num = Number(n ?? 0);
   if (Number.isNaN(num)) return '$0';
@@ -3343,12 +3377,19 @@ export default function FamilyPage() {
             const ph = family.property_holdings ?? { airports: [], armouries: [], casinos: [] };
             const cb = family.crew_bonuses ?? { summary_lines: [], bonus_warnings: [], treasury_bullets_hourly: { active: false }, airport_crew_perk: { active: false } };
             const n = (ph.airports?.length || 0) + (ph.armouries?.length || 0) + (ph.casinos?.length || 0);
+            const perkRows = territoryFamilyPerkRows(family.family_perks);
+            const perkN = perkRows.length;
             return (
               <div className="rounded-lg border border-primary/15 bg-zinc-900/40 px-3 py-2.5 space-y-2">
                 <div className="flex items-center gap-2 text-[9px] font-heading font-bold uppercase tracking-wider text-primary/70">
                   <Building2 size={11} className="text-primary/60 shrink-0" />
                   Territory and perks
-                  {n > 0 && <span className="text-zinc-500 font-normal normal-case ml-auto">{n} crew holding{n !== 1 ? 's' : ''}</span>}
+                  {(n > 0 || perkN > 0) && (
+                    <span className="text-zinc-500 font-normal normal-case ml-auto flex flex-wrap gap-x-2 justify-end max-w-[70%]">
+                      {n > 0 && <span>{n} crew holding{n !== 1 ? 's' : ''}</span>}
+                      {perkN > 0 && <span>{perkN} monthly perk{perkN !== 1 ? 's' : ''}</span>}
+                    </span>
+                  )}
                 </div>
                 <p className="text-[8px] text-zinc-600 leading-snug border-b border-primary/5 pb-2">
                   Each member may hold <span className="text-zinc-400 font-heading font-bold">one</span> airport and <span className="text-zinc-400 font-heading font-bold">one</span> armoury. Hourly drip bullets stack when high command holds both for <span className="text-zinc-500">this family</span> (airport + armoury) and credit the <span className="text-amber-400/90 font-heading">bullet treasury</span> on the Vault tab—not vault cash. Casinos are separate.
@@ -3368,6 +3409,24 @@ export default function FamilyPage() {
                 ) : (
                   <p className="text-[9px] text-zinc-600">No crew-owned airports, armouries, or casinos yet.</p>
                 )}
+                {perkRows.length > 0 ? (
+                  <div className="pt-1 border-t border-primary/10 space-y-1">
+                    <p className="text-[9px] font-heading uppercase tracking-wider text-primary/80 flex items-center gap-1">
+                      <Sparkles size={9} /> Monthly perks (Don / points)
+                    </p>
+                    <ul className="text-[9px] text-zinc-400 space-y-0.5">
+                      {perkRows.map((p) => (
+                        <li key={p.id} className="flex flex-wrap gap-x-2 gap-y-0.5 justify-between items-baseline">
+                          <span className="text-emerald-400/95 font-heading">{p.title}</span>
+                          <span className="text-zinc-600 tabular-nums shrink-0">until {formatTerritoryPerkUntil(p.valid_until)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="text-[8px] text-zinc-600 leading-snug">
+                      Purchased with points by the Don; expires end of UTC month. Full catalog under the <span className="text-zinc-500 font-heading">Perks</span> tab.
+                    </p>
+                  </div>
+                ) : null}
                 {(cb.summary_lines || []).length > 0 || (cb.bonus_warnings || []).length > 0 ? (
                   <div className="pt-1 border-t border-primary/10 space-y-0.5">
                     <p className="text-[9px] font-heading uppercase tracking-wider text-zinc-500 flex items-center gap-1"><Sparkles size={9} /> Bonuses</p>

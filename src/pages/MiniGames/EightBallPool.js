@@ -66,35 +66,48 @@ const PREVIEW_TABLE_MARGIN = 14;
 const POOL_CANVAS_W = 900;
 const POOL_CANVAS_H = 450;
 
+function tableViewport(canvasW = POOL_CANVAS_W, canvasH = POOL_CANVAS_H) {
+  const m = PREVIEW_TABLE_MARGIN;
+  const availW = Math.max(1, canvasW - 2 * m);
+  const availH = Math.max(1, canvasH - 2 * m);
+  const tableAspect = TABLE_W / TABLE_H;
+  let playW = availW;
+  let playH = playW / tableAspect;
+  if (playH > availH) {
+    playH = availH;
+    playW = playH * tableAspect;
+  }
+  const playL = (canvasW - playW) / 2;
+  const playT = (canvasH - playH) / 2;
+  return { playL, playT, playR: playL + playW, playB: playT + playH, playW, playH, scale: playW / TABLE_W };
+}
+
 /** Map physics table coords to the inner felt rectangle (same basis as wall bounces in aim preview). */
 function tableToCanvasX(tx, canvasW = POOL_CANVAS_W) {
-  const m = PREVIEW_TABLE_MARGIN;
-  return m + (Number(tx) / TABLE_W) * (canvasW - 2 * m);
+  const vp = tableViewport(canvasW, POOL_CANVAS_H);
+  return vp.playL + (Number(tx) / TABLE_W) * vp.playW;
 }
 function tableToCanvasY(ty, canvasH = POOL_CANVAS_H) {
-  const m = PREVIEW_TABLE_MARGIN;
-  return m + (Number(ty) / TABLE_H) * (canvasH - 2 * m);
+  const vp = tableViewport(POOL_CANVAS_W, canvasH);
+  return vp.playT + (Number(ty) / TABLE_H) * vp.playH;
 }
-/** Pixel radii on the felt — TABLE_W / TABLE_H differ, so the ball is an ellipse in canvas space (matches physics circle in table space). */
+/** Pixel radii on the felt. Viewport preserves table aspect, so balls render as true circles. */
 function ballRadiiPx(canvasW = POOL_CANVAS_W, canvasH = POOL_CANVAS_H) {
-  const m = PREVIEW_TABLE_MARGIN;
-  const fw = canvasW - 2 * m;
-  const fh = canvasH - 2 * m;
-  const rx = Math.max(4, (BALL_R / TABLE_W) * fw);
-  const ry = Math.max(4, (BALL_R / TABLE_H) * fh);
-  return { rx, ry };
+  const vp = tableViewport(canvasW, canvasH);
+  const r = Math.max(4, BALL_R * vp.scale);
+  return { rx: r, ry: r };
 }
 function ballRadiusMax(canvasW = POOL_CANVAS_W, canvasH = POOL_CANVAS_H) {
   const { rx, ry } = ballRadiiPx(canvasW, canvasH);
   return Math.max(rx, ry);
 }
 function canvasToTableX(sx, canvasW = POOL_CANVAS_W) {
-  const m = PREVIEW_TABLE_MARGIN;
-  return ((Number(sx) - m) / (canvasW - 2 * m)) * TABLE_W;
+  const vp = tableViewport(canvasW, POOL_CANVAS_H);
+  return ((Number(sx) - vp.playL) / vp.playW) * TABLE_W;
 }
 function canvasToTableY(sy, canvasH = POOL_CANVAS_H) {
-  const m = PREVIEW_TABLE_MARGIN;
-  return ((Number(sy) - m) / (canvasH - 2 * m)) * TABLE_H;
+  const vp = tableViewport(POOL_CANVAS_W, canvasH);
+  return ((Number(sy) - vp.playT) / vp.playH) * TABLE_H;
 }
 
 /** Mirror backend mp_8ball._upgrade_milestones / _upgrade_effects for aim preview parity */
@@ -256,6 +269,8 @@ export default function EightBallPool() {
   const lastTargetBallsRef = useRef([]);
   const pocketedSetRef = useRef(new Set());
   const fxRef = useRef({ impacts: [], pockets: [], pocketDrops: [] });
+  const powerRef = useRef(0.6);
+  const angleDegRef = useRef(-12);
 
   const activeGame = tab === 'ai' ? aiGame : pvpGame;
   const balls = useMemo(() => activeGame?.table_state?.balls || [], [activeGame?.table_state?.balls]);
@@ -306,6 +321,9 @@ export default function EightBallPool() {
     replayActiveRef.current = replayActive;
     if (replayActive) setIsAiming(false);
   }, [replayActive]);
+
+  useEffect(() => { powerRef.current = Number(power || 0); }, [power]);
+  useEffect(() => { angleDegRef.current = Number(angleDeg || 0); }, [angleDeg]);
 
 
   useEffect(() => {
@@ -531,11 +549,8 @@ export default function EightBallPool() {
     if (!cue || !canAim) return { segments: [], ghost: null, objectLineWidth: 1.55 };
     const w = POOL_CANVAS_W;
     const h = POOL_CANVAS_H;
-    const m = PREVIEW_TABLE_MARGIN;
-    const fw = w - 2 * m;
-    const fh = h - 2 * m;
-    const pxPerMeter = (fw / TABLE_W + fh / TABLE_H) / 2;
-    const a = (Number(angleDeg || 0) * Math.PI) / 180;
+    const pxPerMeter = tableViewport(w, h).scale;
+    const a = (Number(angleDegRef.current || angleDeg || 0) * Math.PI) / 180;
     const objectLineWidth = 1.55 + (previewTier * 0.52) + Math.min(2.85, previewLevel * 0.05);
     const maxCuePathPx = previewDistance + (Number(power || 0) * 120);
     const maxObjectPathPx = 90 + (previewLevel * 14) + (previewTier * 48) + (Number(effPower || 0) * 95);
@@ -854,10 +869,7 @@ export default function EightBallPool() {
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
-    const playL = PREVIEW_TABLE_MARGIN;
-    const playT = PREVIEW_TABLE_MARGIN;
-    const playR = w - PREVIEW_TABLE_MARGIN;
-    const playB = h - PREVIEW_TABLE_MARGIN;
+    const { playL, playT, playR, playB, playW: feltW } = tableViewport(w, h);
     const cushionClrs = currentSkin.cushion || [currentSkin.felt[2], currentSkin.felt[1], currentSkin.rail[0]];
     const wood = ctx.createLinearGradient(0, 0, w, h);
     wood.addColorStop(0, currentSkin.rail[0]);
@@ -966,7 +978,6 @@ export default function EightBallPool() {
       drawStud(w - 10, sy);
     }
 
-    const feltW = playR - playL;
     const tcx = tableToCanvasX(TABLE_W * 0.5, w);
     const tcy = tableToCanvasY(TABLE_H * 0.5, h);
     for (let pi = 0; pi < POCKET_CENTERS_TABLE.length; pi += 1) {
@@ -1633,16 +1644,18 @@ export default function EightBallPool() {
     if (!canAim || !ballsSettled) return;
     setBusy(true);
     try {
-      const angle = (Number(angleDeg) * Math.PI) / 180;
+      const shotPower = Math.max(0.02, Math.min(1, Number(powerRef.current || power || 0.6)));
+      const shotAngleDeg = Number(angleDegRef.current || angleDeg || 0);
+      const angle = (shotAngleDeg * Math.PI) / 180;
       const cue = ballsForRender.find((b) => b.number === 0 && !b.pocketed);
       const canvas = canvasRef.current;
       if (cue && canvas) {
         const cx = tableToCanvasX(cue.x, canvas.width);
         const cy = tableToCanvasY(cue.y, canvas.height);
         fxRef.current.impacts.push({ x: cx, y: cy, at: Date.now() });
-        playSfx('cue', Number(power || 0.6));
+        playSfx('cue', shotPower);
       }
-      const payload = { angle, power: Number(power), spin_x: Number(spinX), spin_y: Number(spinY) };
+      const payload = { angle, power: shotPower, spin_x: Number(spinX), spin_y: Number(spinY) };
       if (tab === 'ai') {
         const res = await api.post('/casino/mp-8ball/vs-ai/shoot', payload);
         playShotReplay(res.data || null, setAiGame);
@@ -1684,8 +1697,9 @@ export default function EightBallPool() {
     const dist = Math.hypot(dx, dy);
     if (dist < 1) return;
     const targetDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
-    const damping = dist < 55 ? 0.4 : 0.65;
-    setAngleDeg((prev) => prev + (targetDeg - prev) * damping);
+    const next = Number(targetDeg.toFixed(2));
+    angleDegRef.current = next;
+    setAngleDeg(next);
   };
 
   const updatePullPower = (event) => {
@@ -1700,7 +1714,9 @@ export default function EightBallPool() {
     const behindY = ptr.sy - cy;
     const pullDist = -(behindX * Math.cos(a) + behindY * Math.sin(a));
     const normalized = Math.max(0.02, Math.min(1, pullDist / MAX_PULL_PX));
-    setPower(Math.pow(normalized, 0.9));
+    const nextPower = Number(Math.pow(normalized, 0.9).toFixed(3));
+    powerRef.current = nextPower;
+    setPower(nextPower);
   };
 
   const updateSpinFromPad = useCallback((event) => {
@@ -1722,6 +1738,23 @@ export default function EightBallPool() {
     const ny = dist > 1e-6 ? (dy / dist) * clamped : 0;
     setSpinX(Number(nx.toFixed(3)));
     setSpinY(Number((-ny).toFixed(3)));
+  }, []);
+
+  const nudgeAim = useCallback((delta) => {
+    setAngleDeg((prev) => {
+      let next = Number(prev || 0) + delta;
+      while (next > 180) next -= 360;
+      while (next <= -180) next += 360;
+      const rounded = Number(next.toFixed(2));
+      angleDegRef.current = rounded;
+      return rounded;
+    });
+  }, []);
+
+  const setShotPower = useCallback((next) => {
+    const p = Math.max(0.02, Math.min(1, Number(next) || 0));
+    powerRef.current = p;
+    setPower(p);
   }, []);
 
   const buyCue = async (cueId) => {
@@ -1961,7 +1994,7 @@ export default function EightBallPool() {
                         if (cb) {
                           const ccx = tableToCanvasX(cb.x, ptr.canvas.width);
                           const ccy = tableToCanvasY(cb.y, ptr.canvas.height);
-                          const ang = (Number(angleDeg || 0) * Math.PI) / 180;
+                          const ang = (Number(angleDegRef.current || angleDeg || 0) * Math.PI) / 180;
                           const behind = -((ptr.sx - ccx) * Math.cos(ang) + (ptr.sy - ccy) * Math.sin(ang));
                           if (behind > 10) {
                             setAimPhase('pulling');
@@ -1994,19 +2027,65 @@ export default function EightBallPool() {
                 />
                 </div>
               </div>
-              <div className="rounded-md border border-primary/20 bg-zinc-900/55 p-2 xl:p-1.5 space-y-1">
-                <div className="flex items-center justify-between text-[10px] font-heading">
-                  <span className="text-mutedForeground uppercase">Force</span>
-                  <span className="text-primary font-bold">{(Number(power || 0) * 100).toFixed(1)}%</span>
+              <div className="rounded-md border border-primary/20 bg-zinc-900/55 p-2 xl:p-1.5 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-heading">
+                  <span className="text-mutedForeground uppercase">Shot controls</span>
+                  <span className="text-primary font-bold">Power {(Number(power || 0) * 100).toFixed(0)}%</span>
                 </div>
-                <div className="h-2 rounded bg-zinc-800/70 border border-zinc-700/50 overflow-hidden">
-                  <div
-                    className="h-full rounded"
-                    style={{
-                      width: `${Math.max(3, Math.min(100, Number(power || 0) * 100))}%`,
-                      background: `linear-gradient(90deg, ${currentSkin.felt[0]}, ${currentSkin.felt[1]}, ${currentSkin.rail[0]})`,
-                    }}
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-center">
+                  <div className="space-y-1">
+                    <input
+                      type="range"
+                      min="0.05"
+                      max="1"
+                      step="0.01"
+                      value={Number(power || 0)}
+                      onChange={(e) => setShotPower(e.target.value)}
+                      disabled={!canAim || busy || replayActive || !ballsSettled}
+                      className="w-full accent-cyan-300 disabled:opacity-40"
+                      aria-label="Shot power"
+                    />
+                    <div className="h-2 rounded bg-zinc-800/70 border border-zinc-700/50 overflow-hidden">
+                      <div
+                        className="h-full rounded transition-all"
+                        style={{
+                          width: `${Math.max(3, Math.min(100, Number(power || 0) * 100))}%`,
+                          background: `linear-gradient(90deg, ${currentSkin.felt[0]}, ${currentSkin.felt[1]}, ${currentSkin.rail[0]})`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={shoot}
+                    disabled={!canAim || busy || cueBusy || replayActive || !ballsSettled || inBreakPlacement}
+                    className="min-h-[42px] px-4 py-2 rounded-lg border-2 border-primary/55 bg-primary/20 text-primary text-[10px] font-heading font-bold uppercase tracking-wider active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Shoot
+                  </button>
+                </div>
+                <div className="grid grid-cols-[auto_1fr_auto] gap-2 items-center text-[10px] font-heading">
+                  <button
+                    type="button"
+                    onClick={() => nudgeAim(-1)}
+                    disabled={!canAim || replayActive || !ballsSettled}
+                    className="px-3 py-2 rounded border border-zinc-700 text-mutedForeground hover:text-foreground disabled:opacity-40"
+                    title="Aim left"
+                  >
+                    -1°
+                  </button>
+                  <div className="text-center text-mutedForeground">
+                    Aim <span className="text-foreground font-bold tabular-nums">{Number(angleDeg || 0).toFixed(1)}°</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => nudgeAim(1)}
+                    disabled={!canAim || replayActive || !ballsSettled}
+                    className="px-3 py-2 rounded border border-zinc-700 text-mutedForeground hover:text-foreground disabled:opacity-40"
+                    title="Aim right"
+                  >
+                    +1°
+                  </button>
                 </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
@@ -2054,8 +2133,9 @@ export default function EightBallPool() {
                     ? 'Tap the kitchen area to place the cue ball'
                     : canAim
                       ? <>
-                          <span className="text-foreground font-bold">Aim:</span> Drag on felt.{' '}
-                          <span className="text-foreground font-bold">Shoot:</span> Drag behind cue ball, pull back, release.
+                          <span className="text-foreground font-bold">Aim:</span> Drag on felt or tap ±1°.{' '}
+                          <span className="text-foreground font-bold">Power:</span> use the slider.{' '}
+                          <span className="text-foreground font-bold">Shoot:</span> press Shoot, or pull back and release.
                         </>
                       : (replayActive || !ballsSettled)
                         ? 'Balls rolling...'
