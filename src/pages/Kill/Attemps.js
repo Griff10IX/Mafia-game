@@ -64,11 +64,16 @@ function buildAttemptCopySummary(attempt) {
     : killed
       ? 'Killed'
       : 'Failed';
-  const bu = Number(attempt.bullets_used || 0).toLocaleString();
+  const bu = Number(attempt.bullets_used || 0);
+  const mv = Number(attempt.molotovs_used || 0);
+  const ammoBits = [];
+  if (bu) ammoBits.push(`${bu.toLocaleString()} bullet${bu === 1 ? '' : 's'}`);
+  if (mv) ammoBits.push(`${mv.toLocaleString()} molotov${mv === 1 ? '' : 's'}`);
+  const ammoStr = ammoBits.length ? ammoBits.join(', ') : '0 bullets';
   const parts = [
     outgoingRow ? `Outgoing vs ${otherUser}` : `Incoming from ${otherUser}`,
     statusLabel,
-    `${bu} bullets`,
+    ammoStr,
   ];
   if (!killed && attempt.bullets_required) {
     parts.push(`required ${Number(attempt.bullets_required).toLocaleString()}`);
@@ -109,6 +114,9 @@ const AttemptRow = ({ attempt }) => {
     : killed
       ? 'Killed'
       : 'Failed';
+
+  const buN = Number(attempt.bullets_used || 0);
+  const mvN = Number(attempt.molotovs_used || 0);
 
   const onCopyAttempt = async (e) => {
     e.preventDefault();
@@ -171,7 +179,14 @@ const AttemptRow = ({ attempt }) => {
             </div>
           )}
 
-          <div className="flex items-center gap-3 text-[9px] pl-5">
+          <div className="flex items-center gap-3 text-[9px] pl-5 flex-wrap">
+            {(buN > 0 || mvN > 0) && (
+              <span className="text-zinc-500 font-heading tabular-nums">
+                {buN > 0 && <span className="text-primary font-bold">{buN.toLocaleString()} bullets</span>}
+                {buN > 0 && mvN > 0 && <span className="text-zinc-600 mx-1">·</span>}
+                {mvN > 0 && <span className="text-amber-500 font-bold">{mvN.toLocaleString()} molotovs</span>}
+              </span>
+            )}
             {rewardMoney != null && (
               <div className="flex items-center gap-1 text-emerald-400 font-heading font-bold">
                 <DollarSign size={9} />
@@ -198,11 +213,21 @@ const AttemptRow = ({ attempt }) => {
           </button>
           <div className="text-right">
             <div className="text-sm font-heading font-bold text-primary tabular-nums">
-              {Number(attempt.bullets_used || 0).toLocaleString()}
+              {buN.toLocaleString()}
             </div>
             <div className="text-[9px] text-mutedForeground font-heading">
               bullets
             </div>
+            {mvN > 0 && (
+              <>
+                <div className="text-sm font-heading font-bold text-amber-500 tabular-nums mt-0.5">
+                  {mvN.toLocaleString()}
+                </div>
+                <div className="text-[9px] text-amber-600/80 dark:text-amber-400/90 font-heading">
+                  molotovs
+                </div>
+              </>
+            )}
             {!killed && attempt.bullets_required && (
               <div className="text-[9px] text-mutedForeground font-heading mt-0.5">
                 / {Number(attempt.bullets_required || 0).toLocaleString()}

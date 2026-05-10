@@ -4711,13 +4711,14 @@ async def families_war_feed(war_id: str, current_user: dict = Depends(get_curren
     fid_a = _norm_fid(war["family_a_id"])
     fid_b = _norm_fid(war["family_b_id"])
     totals: dict = {
-        fid_a: {"bullets_used": 0, "bg_points_spent": 0},
-        fid_b: {"bullets_used": 0, "bg_points_spent": 0},
+        fid_a: {"bullets_used": 0, "molotovs_used": 0, "bg_points_spent": 0},
+        fid_b: {"bullets_used": 0, "molotovs_used": 0, "bg_points_spent": 0},
     }
     for d in docs:
         fid = _norm_fid(d.get("killer_family_id"))
         if fid in totals:
             totals[fid]["bullets_used"] += int(d.get("bullets_used") or 0)
+            totals[fid]["molotovs_used"] += int(d.get("molotovs_used") or 0)
         # bg_hire_cost is charged to the VICTIM family (they paid for the BG)
         victim_fid = _norm_fid(d.get("victim_family_id"))
         if victim_fid in totals:
@@ -4730,8 +4731,8 @@ async def families_war_feed(war_id: str, current_user: dict = Depends(get_curren
     return {
         "feed": docs,
         "war_over": war_over,
-        "my_totals": totals.get(my_fid, {"bullets_used": 0, "bg_points_spent": 0}),
-        "other_totals": totals.get(other_fid, {"bullets_used": 0, "bg_points_spent": 0}),
+        "my_totals": totals.get(my_fid, {"bullets_used": 0, "molotovs_used": 0, "bg_points_spent": 0}),
+        "other_totals": totals.get(other_fid, {"bullets_used": 0, "molotovs_used": 0, "bg_points_spent": 0}),
         "family_a_id": fid_a,
         "family_b_id": fid_b,
     }

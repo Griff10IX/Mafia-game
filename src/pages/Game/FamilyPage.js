@@ -1874,6 +1874,9 @@ const WarDetailsModal = ({ warId, onClose }) => {
                             </div>
                             <div className="flex flex-wrap gap-2 mt-0.5 text-[9px] text-zinc-600 font-heading">
                               {(ev.bullets_used || 0) > 0 && <span>🔫 {Number(ev.bullets_used).toLocaleString()}</span>}
+                              {(ev.molotovs_used || 0) > 0 && (
+                                <span className="text-amber-500/90">🍾 {Number(ev.molotovs_used).toLocaleString()}</span>
+                              )}
                               {(ev.cash_loot || ev.cash_taken || 0) > 0 && (
                                 <span>💰 ${Number(ev.cash_loot ?? ev.cash_taken ?? 0).toLocaleString()}</span>
                               )}
@@ -1987,8 +1990,8 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
           setFeed(res.data?.feed ?? []);
           setFeedMeta({
             war_over: res.data?.war_over ?? false,
-            my_totals: res.data?.my_totals ?? { bullets_used: 0, bg_points_spent: 0 },
-            other_totals: res.data?.other_totals ?? { bullets_used: 0, bg_points_spent: 0 },
+            my_totals: res.data?.my_totals ?? { bullets_used: 0, molotovs_used: 0, bg_points_spent: 0 },
+            other_totals: res.data?.other_totals ?? { bullets_used: 0, molotovs_used: 0, bg_points_spent: 0 },
           });
         })
         .catch(() => { setFeed([]); setFeedMeta(null); })
@@ -2228,9 +2231,12 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
                         ) : (
                           <span className="text-zinc-500"> killed <span className="text-zinc-300 font-bold">{event.victim_username}</span></span>
                         )}
-                        {(event.bullets_used > 0 || (!isBG && (event.cash_taken > 0 || event.props_taken > 0 || event.cars_taken > 0))) && (
+                        {(event.bullets_used > 0 || (event.molotovs_used || 0) > 0 || (!isBG && (event.cash_taken > 0 || event.props_taken > 0 || event.cars_taken > 0))) && (
                           <div className="text-[8px] text-zinc-600 mt-0.5 flex flex-wrap gap-1.5">
                             {event.bullets_used > 0 && <span className="text-zinc-500">{Number(event.bullets_used).toLocaleString()} bullets</span>}
+                            {(event.molotovs_used || 0) > 0 && (
+                              <span className="text-amber-500/90">{Number(event.molotovs_used).toLocaleString()} molotovs</span>
+                            )}
                             {!isBG && event.cash_taken > 0 && <span className="text-primary font-bold">${Number(event.cash_taken).toLocaleString()}</span>}
                             {!isBG && event.props_taken > 0 && <span>{event.props_taken} prop{event.props_taken > 1 ? 's' : ''}</span>}
                             {!isBG && event.cars_taken > 0 && <span>{event.cars_taken} car{event.cars_taken > 1 ? 's' : ''}</span>}
@@ -2260,6 +2266,10 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
                       <div className="flex items-center justify-between text-zinc-500">
                         <span>Bullets used</span>
                         <span className="text-zinc-300 font-bold">{Number(totals.bullets_used).toLocaleString()}</span>
+                      </div>
+                      <div className="flex items-center justify-between text-zinc-500">
+                        <span>Molotovs used</span>
+                        <span className="text-zinc-300 font-bold">{Number(totals.molotovs_used ?? 0).toLocaleString()}</span>
                       </div>
                       <div className="flex items-center justify-between text-zinc-500">
                         <span>Points on BGs</span>

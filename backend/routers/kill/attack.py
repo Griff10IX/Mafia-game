@@ -706,6 +706,7 @@ async def _notify_target_if_bot_attack(
 async def _record_vendetta_bg_kill(
     killer_id: str, killer_fid: str, owner_id: str, owner_doc: dict,
     bg_username: str = None, bullets_used: int = 0, bg_hire_cost: int = 0,
+    molotovs_used: int = 0,
 ):
     """
     Record a bodyguard kill into family_war_stats when the two players are in an active war.
@@ -713,6 +714,7 @@ async def _record_vendetta_bg_kill(
     owner_doc    : the bodyguard owner's users doc (contains family_id)
     bg_username  : the bodyguard NPC/player's own username
     bullets_used : bullets fired in this attack
+    molotovs_used: molotovs consumed in this attack (war feed / UI)
     bg_hire_cost : points paid when the BG was hired (stored in bodyguard doc)
     """
     try:
@@ -791,6 +793,7 @@ async def _record_vendetta_bg_kill(
                 "bg_username": bg_username,            # the bodyguard NPC's own name
                 "bg_owner_username": (owner_doc or {}).get("username"),  # who hired/owns the BG
                 "bullets_used": int(bullets_used or 0),
+                "molotovs_used": int(molotovs_used or 0),
                 "bg_hire_cost": int(bg_hire_cost or 0),
                 "cash_taken": 0,
                 "props_taken": 0,
@@ -2280,6 +2283,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     _bg_killer_username = current_user.get("username") or ""
                     _bg_location_state = attack.get("location_state")
                     _bg_bullets_used = bullets_used
+                    _bg_molotovs_used = molotovs_used
                     _bg_target_name = target_name
                     _bg_killer_id = killer_id
                     _bg_victim_id = victim_id
@@ -2310,6 +2314,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                             await _record_vendetta_bg_kill(
                                 _bg_killer_id, _bg_killer_family, owner_id, owner_doc,
                                 bg_username=_bg_target_name, bullets_used=_bg_bullets_used, bg_hire_cost=bg_hire_cost,
+                                molotovs_used=_bg_molotovs_used,
                             )
                             try:
                                 await db.hitlist_bodyguard_events.insert_one({
@@ -2745,6 +2750,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                         "victim_username": target_name,
                         "death_message": death_message or None,
                         "bullets_used": bullets_used,
+                        "molotovs_used": molotovs_used,
                         "bullets_required": bullets_required,
                         "make_public": True,
                         "created_at": datetime.now(timezone.utc),
@@ -2770,6 +2776,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         _kp_best_damage = best_damage
         _kp_best_weapon_name = best_weapon_name
         _kp_bullets_used = bullets_used
+        _kp_molotovs_used = molotovs_used
         _kp_target_health = target_health
         _kp_death_message = death_message
         _kp_make_public = make_public
@@ -2812,7 +2819,14 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     )
                 else:
                     victim_label = _kp_target_name
-                witness_msg = f"{_kp_killer_username} killed {victim_label}. Weapon: {_kp_best_weapon_name}. Bullets used: {_kp_bullets_used:,}. Location: {location}. Time: {time_str}."
+                _ammo_tail = ""
+                if (_kp_molotovs_used or 0) > 0 and (_kp_bullets_used or 0) > 0:
+                    _ammo_tail = f" Used {_kp_bullets_used:,} bullet{'s' if _kp_bullets_used != 1 else ''} and {_kp_molotovs_used:,} molotov{'s' if _kp_molotovs_used != 1 else ''}."
+                elif (_kp_molotovs_used or 0) > 0:
+                    _ammo_tail = f" Used {_kp_molotovs_used:,} molotov{'s' if _kp_molotovs_used != 1 else ''}."
+                else:
+                    _ammo_tail = f" Bullets used: {_kp_bullets_used:,}."
+                witness_msg = f"{_kp_killer_username} killed {victim_label}. Weapon: {_kp_best_weapon_name}.{_ammo_tail} Location: {location}. Time: {time_str}."
                 all_user_ids = await db.users.find(
                     {
                         "is_dead": {"$ne": True},
@@ -2877,6 +2891,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                                 "bg_username": None,
                                 "bg_owner_username": None,
                                 "bullets_used": int(_kp_bullets_used or 0),
+                                "molotovs_used": int(_kp_molotovs_used or 0),
                                 "bg_hire_cost": 0,
                                 "cash_taken": _kp_cash_loot,
                                 "props_taken": _kp_victim_props_count,
@@ -2938,7 +2953,8 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             try:
                 await log_activity(_kp_killer_id, _kp_killer_username, "attack_kill", {
                     "victim": _kp_target_name, "cash_loot": _kp_cash_loot, "rp": _kp_rank_points,
-                    "bullets_used": _kp_bullets_used, "cars_taken": _kp_victim_cars_count, "props_taken": _kp_victim_props_count,
+                    "bullets_used": _kp_bullets_used, "molotovs_used": _kp_molotovs_used,
+                    "cars_taken": _kp_victim_cars_count, "props_taken": _kp_victim_props_count,
                 })
             except Exception:
                 logger.exception("player kill log_activity failed")
@@ -2968,7 +2984,13 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         )
         new_health = max(0.0, target_health - health_dealt_pct)
         health_pct_str = f"{health_dealt_pct:.1f}" if health_dealt_pct != int(health_dealt_pct) else str(int(health_dealt_pct))
-        fail_message = f'You failed to kill {target_name}. You used {bullets_used:,} bullets — they only lost {health_pct_str}% health.'
+        if molotovs_used > 0:
+            fail_message = (
+                f'You failed to kill {target_name}. You used {bullets_used:,} bullet{"s" if bullets_used != 1 else ""} '
+                f'and {molotovs_used:,} molotov{"s" if molotovs_used != 1 else ""} — they only lost {health_pct_str}% health.'
+            )
+        else:
+            fail_message = f'You failed to kill {target_name}. You used {bullets_used:,} bullets — they only lost {health_pct_str}% health.'
         try:
             _fire_and_forget(
                 db.attack_attempts.insert_one({
@@ -3070,6 +3092,9 @@ async def get_attack_timeline(
         other = (doc.get("target_username") if direction == "outgoing" else doc.get("attacker_username")) or "?"
         outcome = doc.get("outcome") or "unknown"
         summary = (doc.get("player_message") or outcome or "")[:800]
+        mv_am = int(doc.get("molotovs_used") or 0)
+        if mv_am > 0:
+            summary = f"{summary} · {mv_am:,} molotov{'s' if mv_am != 1 else ''}"
         stripped = _strip_attack_attempt_for_player(doc)
         events.append(
             {
@@ -3121,11 +3146,14 @@ async def get_attack_timeline(
                 continue
             cash = det.get("cash_loot")
             bu = det.get("bullets_used")
+            mv = det.get("molotovs_used")
             summary = f"Kill logged: {det.get('victim', '?')}"
             if cash is not None:
                 summary += f" · ${int(cash):,} loot"
             if bu is not None:
                 summary += f" · {int(bu):,} bullets"
+            if mv:
+                summary += f" · {int(mv):,} molotovs"
         elif action == "attack_travel":
             city = det.get("target_city") or "?"
             summary = f"Traveled to {city}"
@@ -3187,6 +3215,7 @@ async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
         "target_username": 1,
         "outcome": 1,
         "bullets_used": 1,
+        "molotovs_used": 1,
         "bullets_required": 1,
         "rewards": 1,
         "is_bodyguard_kill": 1,
@@ -3204,6 +3233,61 @@ async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
     return {"attempts": docs}
 
 
+KILL_FAVORITE_TARGETS_MAX = 80
+
+
+def _normalize_kill_favorite_username(s: Optional[str]) -> str:
+    return (s or "").strip().lower()[:120]
+
+
+def _sanitize_kill_favorite_list(raw: Any) -> List[str]:
+    if not isinstance(raw, list):
+        return []
+    out: List[str] = []
+    seen: Set[str] = set()
+    for x in raw:
+        n = _normalize_kill_favorite_username(str(x))
+        if n and n not in seen:
+            seen.add(n)
+            out.append(n)
+        if len(out) >= KILL_FAVORITE_TARGETS_MAX:
+            break
+    return out
+
+
+class KillFavoriteToggleBody(BaseModel):
+    target_username: str
+
+
+async def get_kill_favorites(current_user: dict = Depends(get_current_user)):
+    """Starred search targets by username — persists across devices (stored on user doc)."""
+    u = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "kill_favorite_targets": 1})
+    targets = _sanitize_kill_favorite_list((u or {}).get("kill_favorite_targets"))
+    return {"targets": targets}
+
+
+async def post_kill_favorites_toggle(
+    body: KillFavoriteToggleBody,
+    current_user: dict = Depends(get_current_user_verified),
+):
+    target = _normalize_kill_favorite_username(body.target_username)
+    if not target:
+        raise HTTPException(status_code=400, detail="Username required")
+    uid = current_user["id"]
+    u = await db.users.find_one({"id": uid}, {"_id": 0, "kill_favorite_targets": 1})
+    cur = _sanitize_kill_favorite_list((u or {}).get("kill_favorite_targets"))
+    if target in cur:
+        nxt = [x for x in cur if x != target]
+        favorited = False
+    else:
+        if len(cur) >= KILL_FAVORITE_TARGETS_MAX:
+            raise HTTPException(status_code=400, detail="Favorite list is full")
+        nxt = cur + [target]
+        favorited = True
+    await db.users.update_one({"id": uid}, {"$set": {"kill_favorite_targets": nxt}})
+    return {"targets": nxt, "favorited": favorited}
+
+
 def register(router):
     # Sustained RL only on mutating / costly POSTs. GET list/inflation/timeline were each doing find+update on
     # sustained_page_rl_state; parallel page load (5+ GETs & 10s polling) spammed DB and could trip kill-chain RL on POSTs.
@@ -3219,3 +3303,5 @@ def register(router):
     router.add_api_route("/attack/execute", execute_attack, methods=["POST"], response_model=AttackExecuteResponse, dependencies=_attack_button_rl_v)
     router.add_api_route("/attack/attempts", get_attack_attempts, methods=["GET"])
     router.add_api_route("/attack/timeline", get_attack_timeline, methods=["GET"])
+    router.add_api_route("/attack/favorites", get_kill_favorites, methods=["GET"])
+    router.add_api_route("/attack/favorites/toggle", post_kill_favorites_toggle, methods=["POST"], dependencies=_kill_rl_v)

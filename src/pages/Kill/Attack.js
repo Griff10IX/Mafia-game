@@ -100,11 +100,17 @@ function writeCachedAttacks(list) {
   } catch (_e) { /* quota / disabled storage is non-fatal */ }
 }
 
-const _ATTACK_FAVORITES_KEY = 'kill_attack_favorites_v1';
-function readFavoriteAttackIds() {
+/** Normalized username — matches server kill_favorite_targets. */
+function normKillFavUser(name) {
+  return String(name || '').trim().toLowerCase();
+}
+
+/** Same-origin tabs: mirror server favorites so storage events sync instantly. */
+const _KILL_FAV_MIRROR_KEY = 'kill_attack_favorite_targets_mirror_v2';
+function readKillFavoriteMirror() {
   try {
     if (typeof window === 'undefined') return new Set();
-    const raw = window.localStorage.getItem(_ATTACK_FAVORITES_KEY);
+    const raw = window.localStorage.getItem(_KILL_FAV_MIRROR_KEY);
     if (!raw) return new Set();
     const arr = JSON.parse(raw);
     return new Set(Array.isArray(arr) ? arr.filter((x) => typeof x === 'string' && x) : []);
@@ -112,10 +118,10 @@ function readFavoriteAttackIds() {
     return new Set();
   }
 }
-function writeFavoriteAttackIds(set) {
+function writeKillFavoriteMirror(set) {
   try {
     if (typeof window === 'undefined') return;
-    window.localStorage.setItem(_ATTACK_FAVORITES_KEY, JSON.stringify([...set]));
+    window.localStorage.setItem(_KILL_FAV_MIRROR_KEY, JSON.stringify([...set].sort()));
   } catch (_e) { /* quota */ }
 }
 
@@ -407,7 +413,7 @@ const SearchesCard = ({
   setShow,
   targetFilter,
   setTargetFilter,
-  favoriteIds,
+  isFavoriteTarget,
   toggleFavorite,
   selectedAttackIds,
   toggleSelected,
@@ -559,17 +565,17 @@ const SearchesCard = ({
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            toggleFavorite(a.attack_id);
+                            toggleFavorite(a.target_username);
                           }}
                           className="shrink-0 p-0.5 rounded hover:bg-white/5 mt-0.5"
-                          aria-label={favoriteIds.has(a.attack_id) ? 'Remove from favorites' : 'Add to favorites'}
-                          aria-pressed={favoriteIds.has(a.attack_id)}
+                          aria-label={isFavoriteTarget(a) ? 'Remove from favorites' : 'Add to favorites'}
+                          aria-pressed={isFavoriteTarget(a)}
                           data-testid={`attack-favorite-${a.attack_id}`}
                         >
                           <Star
                             size={12}
                             className={
-                              favoriteIds.has(a.attack_id)
+                              isFavoriteTarget(a)
                                 ? 'text-red-500 fill-red-500'
                                 : 'text-zinc-500 fill-transparent'
                             }
@@ -685,17 +691,17 @@ const SearchesCard = ({
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            toggleFavorite(a.attack_id);
+                            toggleFavorite(a.target_username);
                           }}
                           className="shrink-0 p-0.5 rounded hover:bg-white/5 mt-0.5"
-                          aria-label={favoriteIds.has(a.attack_id) ? 'Remove from favorites' : 'Add to favorites'}
-                          aria-pressed={favoriteIds.has(a.attack_id)}
+                          aria-label={isFavoriteTarget(a) ? 'Remove from favorites' : 'Add to favorites'}
+                          aria-pressed={isFavoriteTarget(a)}
                           data-testid={`attack-favorite-${a.attack_id}`}
                         >
                           <Star
                             size={13}
                             className={
-                              favoriteIds.has(a.attack_id)
+                              isFavoriteTarget(a)
                                 ? 'text-red-500 fill-red-500'
                                 : 'text-zinc-500 fill-transparent'
                             }
@@ -1057,16 +1063,40 @@ export default function Attack() {
   const [filterText, setFilterText] = useState('');
   const [show, setShow] = useState('all');
   const [targetFilter, setTargetFilter] = useState('all');
-  const [favoriteIds, setFavoriteIds] = useState(() => readFavoriteAttackIds());
-  const toggleFavorite = useCallback((attackId) => {
-    if (!attackId) return;
-    setFavoriteIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(attackId)) next.delete(attackId);
-      else next.add(attackId);
-      writeFavoriteAttackIds(next);
-      return next;
+  const [favoriteTargets, setFavoriteTargets] = useState(() => readKillFavoriteMirror());
+
+  const isFavoriteTarget = useCallback(
+    (a) => !!(a?.target_username && favoriteTargets.has(normKillFavUser(a.target_username))),
+    [favoriteTargets],
+  );
+
+  const toggleFavorite = useCallback(async (targetUsername) => {
+    const key = normKillFavUser(targetUsername);
+    if (!key) return;
+    let prevRef = null;
+    setFavoriteTargets((p) => {
+      prevRef = p;
+      const optimistic = new Set(p);
+      if (optimistic.has(key)) optimistic.delete(key);
+      else optimistic.add(key);
+      writeKillFavoriteMirror(optimistic);
+      return optimistic;
     });
+    try {
+      const res = await api.post('/attack/favorites/toggle', { target_username: targetUsername });
+      const arr = res.data?.targets;
+      if (Array.isArray(arr)) {
+        const synced = new Set(arr.filter((x) => typeof x === 'string'));
+        setFavoriteTargets(synced);
+        writeKillFavoriteMirror(synced);
+      }
+    } catch (e) {
+      if (prevRef) {
+        setFavoriteTargets(prevRef);
+        writeKillFavoriteMirror(prevRef);
+      }
+      toast.error(getApiErrorMessage(e) || 'Could not update favorites');
+    }
   }, []);
 
   const [killUsername, setKillUsernameState] = useState(() => {
@@ -1259,21 +1289,50 @@ export default function Attack() {
   }, [refreshAttacks]);
 
   useEffect(() => {
-    const valid = new Set(attacks.map((a) => a.attack_id).filter(Boolean));
-    setFavoriteIds((prev) => {
-      let stale = false;
-      for (const id of prev) {
-        if (!valid.has(id)) {
-          stale = true;
-          break;
-        }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get('/attack/favorites');
+        const arr = res.data?.targets;
+        if (cancelled || !Array.isArray(arr)) return;
+        const s = new Set(arr.filter((x) => typeof x === 'string'));
+        setFavoriteTargets(s);
+        writeKillFavoriteMirror(s);
+      } catch {
+        /* keep mirror from initial read */
       }
-      if (!stale) return prev;
-      const next = new Set([...prev].filter((id) => valid.has(id)));
-      writeFavoriteAttackIds(next);
-      return next;
-    });
-  }, [attacks]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key !== _KILL_FAV_MIRROR_KEY) return;
+      if (e.newValue == null) return;
+      try {
+        const arr = JSON.parse(e.newValue);
+        if (!Array.isArray(arr)) return;
+        setFavoriteTargets(new Set(arr.filter((x) => typeof x === 'string')));
+      } catch {
+        /* ignore */
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('storage', onStorage);
+      return () => window.removeEventListener('storage', onStorage);
+    }
+    return undefined;
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage?.removeItem('kill_attack_favorites_v1');
+    } catch {
+      /* ignore */
+    }
+  }, []);
 
   const searchCompleteTimeoutRef = useRef(null);
 
@@ -1856,11 +1915,11 @@ export default function Attack() {
     const fav = [];
     const rest = [];
     for (const a of list) {
-      if (favoriteIds.has(a.attack_id)) fav.push(a);
+      if (a.target_username && favoriteTargets.has(normKillFavUser(a.target_username))) fav.push(a);
       else rest.push(a);
     }
     return [...fav, ...rest];
-  }, [attacks, filterText, show, targetFilter, favoriteIds]);
+  }, [attacks, filterText, show, targetFilter, favoriteTargets]);
 
   const filteredIds = useMemo(() => filteredAttacks.map((a) => a.attack_id), [filteredAttacks]);
 
@@ -1929,7 +1988,7 @@ export default function Attack() {
           setShow={setShow}
           targetFilter={targetFilter}
           setTargetFilter={setTargetFilter}
-          favoriteIds={favoriteIds}
+          isFavoriteTarget={isFavoriteTarget}
           toggleFavorite={toggleFavorite}
           selectedAttackIds={selectedAttackIds}
           toggleSelected={toggleSelected}
