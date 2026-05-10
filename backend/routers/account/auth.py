@@ -943,14 +943,12 @@ def register(router):
                 token = create_access_token({
                     "sub": user_id,
                     "v": user_doc.get("token_version", 0),
-                    "email": user_doc.get("email") or "",
                     "session_id": session_id,
                     "username": user_doc.get("username") or "",
                     "staff_issued": False,
                 })
                 user_response = {
                     "id": user_doc["id"],
-                    "email": user_doc["email"],
                     "username": user_doc["username"],
                     "rank": user_doc["rank"],
                     "money": user_doc["money"],
@@ -1007,14 +1005,12 @@ def register(router):
             token = create_access_token({
                 "sub": user_id,
                 "v": user_doc.get("token_version", 0),
-                "email": user_doc.get("email") or "",
                 "session_id": session_id,
                 "username": user_doc.get("username") or "",
                 "staff_issued": False,
             })
             user_response = {
                 "id": user_doc["id"],
-                "email": user_doc["email"],
                 "username": user_doc["username"],
                 "rank": user_doc["rank"],
                 "money": user_doc["money"],
@@ -1047,6 +1043,7 @@ def register(router):
         # Theme/dashboard sync via GET /profile/theme and /profile/dashboard — omit here to slim login JSON.
         skip = {
             "password_hash", "is_dead", "dead_at", "points_at_death", "retrieval_used",
+            "email",
             "theme_preferences",
             "theme_preferences_pc",
             "theme_preferences_mobile",
@@ -1485,7 +1482,6 @@ def register(router):
         token = create_access_token({
             "sub": user_id,
             "v": int(user.get("token_version") or 0),
-            "email": str(user.get("email") or ""),
             "session_id": session_id,
             "username": str(user.get("username") or ""),
             "staff_issued": bool(staff_route),
@@ -1655,7 +1651,7 @@ def register(router):
         user = await db.users.find_one({"id": record["user_id"]}, {"_id": 0})
         if not user:
             raise HTTPException(status_code=400, detail="User not found.")
-        user_response = {k: v for k, v in user.items() if k not in ("password_hash", "is_dead", "dead_at", "points_at_death", "retrieval_used")}
+        user_response = {k: v for k, v in user.items() if k not in ("password_hash", "email", "is_dead", "dead_at", "points_at_death", "retrieval_used")}
 
         # If login is currently locked (pre-launch), do NOT issue a JWT/session on verification link click.
         # This prevents "click-to-login" while the game is closed.
@@ -1703,7 +1699,6 @@ def register(router):
         token = create_access_token({
             "sub": user["id"],
             "v": user.get("token_version", 0),
-            "email": user.get("email") or "",
             "session_id": session_id,
             "username": user.get("username") or "",
             "staff_issued": False,
@@ -1815,7 +1810,7 @@ def register(router):
     @router.get(
         "/auth/me",
         response_model=UserResponse,
-        response_model_exclude={"theme_preferences", "dashboard_preferences"},
+        response_model_exclude={"email", "theme_preferences", "dashboard_preferences"},
     )
     async def get_me(request: Request, current_user: dict = Depends(get_current_user)):
         user_id = current_user.get("id") or "unknown"
@@ -1938,7 +1933,7 @@ def register(router):
                 referred_by_legacy = ref_ids[0]
             return UserResponse(
                 id=str(u["id"]),
-                email=str(u.get("email") or ""),
+                email="",
                 username=str(u.get("username") or ""),
                 rank=rank_id,
                 rank_name=rank_name,

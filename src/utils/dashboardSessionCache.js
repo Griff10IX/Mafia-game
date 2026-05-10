@@ -13,6 +13,23 @@ export const DEFAULT_SECTION_ORDER = [
 
 export const DEFAULT_AT_A_GLANCE_STATS = ['money', 'rank', 'wealth', 'rp', 'location', 'kills'];
 
+export function sanitizeDashboardUser(user) {
+  if (!user || typeof user !== 'object') return user ?? null;
+  const safe = { ...user };
+  delete safe.email;
+  return safe;
+}
+
+export function readDashboardSessionCache() {
+  const entry = readSessionJson(DASHBOARD_SESSION_CACHE_KEY);
+  if (!entry || typeof entry !== 'object') return entry;
+  const safeEntry = { ...entry, user: sanitizeDashboardUser(entry.user) };
+  if (entry.user?.email) {
+    writeSessionJson(DASHBOARD_SESSION_CACHE_KEY, safeEntry);
+  }
+  return safeEntry;
+}
+
 /** Align with Dashboard fetchData preference merge (session write path). */
 export function mergeDashboardPreferences(dashResData, prevEntry) {
   if (dashResData) {
@@ -57,7 +74,7 @@ export async function prefetchDashboardData(options = {}) {
     const prev = readSessionJson(DASHBOARD_SESSION_CACHE_KEY);
     const storedPrefs = mergeDashboardPreferences(dashRes?.data ?? null, prev);
     writeSessionJson(DASHBOARD_SESSION_CACHE_KEY, {
-      user: userRes.data,
+      user: sanitizeDashboardUser(userRes.data),
       rankProgress: progressRes.data,
       preferences: storedPrefs,
       civilianProtection: civRes?.data ?? null,

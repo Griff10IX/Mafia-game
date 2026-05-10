@@ -22,7 +22,9 @@ import {
   DASHBOARD_SESSION_CACHE_KEY,
   DEFAULT_AT_A_GLANCE_STATS,
   DEFAULT_SECTION_ORDER,
+  readDashboardSessionCache,
   mergeDashboardPreferences,
+  sanitizeDashboardUser,
 } from '../../utils/dashboardSessionCache';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
@@ -218,10 +220,10 @@ const STAT_OPTIONS = [
 ];
 
 export default function Dashboard() {
-  const [user, setUser] = useState(() => readSessionJson(DASHBOARD_SESSION_CACHE_KEY)?.user ?? null);
-  const [rankProgress, setRankProgress] = useState(() => readSessionJson(DASHBOARD_SESSION_CACHE_KEY)?.rankProgress ?? null);
+  const [user, setUser] = useState(() => readDashboardSessionCache()?.user ?? null);
+  const [rankProgress, setRankProgress] = useState(() => readDashboardSessionCache()?.rankProgress ?? null);
   const [preferences, setPreferences] = useState(() => {
-    const p = readSessionJson(DASHBOARD_SESSION_CACHE_KEY)?.preferences;
+    const p = readDashboardSessionCache()?.preferences;
     return {
       section_order: p?.section_order || DEFAULT_SECTION_ORDER,
       at_a_glance_visible: p?.at_a_glance_visible !== false,
@@ -232,7 +234,7 @@ export default function Dashboard() {
   const [saving, setSaving] = useState(false);
   const [editPrefs, setEditPrefs] = useState(null);
   const [civilianProtection, setCivilianProtection] = useState(
-    () => readSessionJson(DASHBOARD_SESSION_CACHE_KEY)?.civilianProtection ?? null
+    () => readDashboardSessionCache()?.civilianProtection ?? null
   );
   const [cpPanelOpen, setCpPanelOpen] = useState(true);
   const [cpTick, setCpTick] = useState(0);
@@ -247,16 +249,17 @@ export default function Dashboard() {
         api.get('/profile/dashboard').catch(() => ({ data: null })),
         api.get('/account/civilian-protection').catch(() => ({ data: null })),
       ]);
-      setUser(userRes.data);
+      const safeUser = sanitizeDashboardUser(userRes.data);
+      setUser(safeUser);
       setRankProgress(progressRes.data);
       setCivilianProtection(civRes?.data ?? null);
-      const prev = readSessionJson(DASHBOARD_SESSION_CACHE_KEY);
+      const prev = readDashboardSessionCache();
       const storedPrefs = mergeDashboardPreferences(dashRes?.data ?? null, prev);
       if (dashRes?.data) {
         setPreferences(storedPrefs);
       }
       writeSessionJson(DASHBOARD_SESSION_CACHE_KEY, {
-        user: userRes.data,
+        user: safeUser,
         rankProgress: progressRes.data,
         preferences: storedPrefs,
         civilianProtection: civRes?.data ?? null,
@@ -314,7 +317,7 @@ export default function Dashboard() {
   }, []);
 
   const handleWidgetRefresh = useCallback(() => {
-    api.get('/auth/me').then((r) => setUser(r.data)).catch(() => {});
+    api.get('/auth/me').then((r) => setUser(sanitizeDashboardUser(r.data))).catch(() => {});
     api.get('/account/civilian-protection').then((r) => setCivilianProtection(r.data)).catch(() => {});
   }, []);
 

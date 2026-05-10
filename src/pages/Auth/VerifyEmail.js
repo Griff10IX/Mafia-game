@@ -12,7 +12,7 @@ export default function VerifyEmail({ setIsAuthenticated }) {
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState('loading'); // 'loading' | 'success' | 'error' | 'unverified'
   const [message, setMessage] = useState('');
-  const [unverifiedEmail, setUnverifiedEmail] = useState('');
+  const [resendIdentifier, setResendIdentifier] = useState('');
   const [resendLoading, setResendLoading] = useState(false);
   const [resendCooldownSeconds, setResendCooldownSeconds] = useState(0);
   const ran = useRef(false);
@@ -62,7 +62,7 @@ export default function VerifyEmail({ setIsAuthenticated }) {
         const data = response.data;
         if (data && data.email_verified === false) {
           setStatus('unverified');
-          setUnverifiedEmail(data.email || '');
+          setResendIdentifier(data.username || '');
           setMessage('');
         } else {
           setStatus('error');
@@ -76,11 +76,11 @@ export default function VerifyEmail({ setIsAuthenticated }) {
   }, [searchParams, navigate, setIsAuthenticated]);
 
   const handleResend = async () => {
-    const email = unverifiedEmail?.trim();
-    if (!email || resendCooldownSeconds > 0) return;
+    const identifier = resendIdentifier?.trim();
+    if (!identifier || resendCooldownSeconds > 0) return;
     setResendLoading(true);
     try {
-      const response = await api.post('/auth/resend-verification', { email });
+      const response = await api.post('/auth/resend-verification', { email: identifier });
       toast.success(response.data.message || 'If an account exists with that email, a new verification link has been sent.');
       setResendCooldownSeconds(120);
     } catch (err) {
@@ -126,10 +126,10 @@ export default function VerifyEmail({ setIsAuthenticated }) {
               </p>
               <div className="flex flex-col gap-2 mb-4">
                 <input
-                  type="email"
-                  value={unverifiedEmail}
-                  onChange={(e) => setUnverifiedEmail(e.target.value)}
-                  placeholder="Your email"
+                  type="text"
+                  value={resendIdentifier}
+                  onChange={(e) => setResendIdentifier(e.target.value)}
+                  placeholder="Email or username"
                   className={`${styles.input} w-full px-3 py-2 rounded-sm font-heading text-sm`}
                   style={{ color: 'var(--noir-foreground)', backgroundColor: 'var(--noir-surface)' }}
                 />

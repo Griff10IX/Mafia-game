@@ -12,8 +12,7 @@ import api, {
 } from '../utils/api';
 import { clearStaffPortalSession, isStaffPortalTokenValid } from '../utils/staffPortalSession';
 import { getThemeUiPlatform } from '../utils/themePlatform';
-import { readSessionJson } from '../utils/sessionPageCache';
-import { DASHBOARD_SESSION_CACHE_KEY } from '../utils/dashboardSessionCache';
+import { readDashboardSessionCache } from '../utils/dashboardSessionCache';
 import { warmLeaderboardCaches } from '../utils/leaderboardTopCache';
 import { setCrimesPrefetch, getCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -32,7 +31,7 @@ import FamilyEmblem from './FamilyEmblem';
 import styles from '../styles/noir.module.css';
 
 function readLayoutBootFromDashboardCache() {
-  const row = readSessionJson(DASHBOARD_SESSION_CACHE_KEY);
+  const row = readDashboardSessionCache();
   if (!row?.user?.id) return { user: null, rankProgress: null };
   return { user: row.user, rankProgress: row.rankProgress ?? null };
 }

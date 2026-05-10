@@ -30,7 +30,7 @@ class TestAuth:
         data = response.json()
         assert "token" in data, "Token not in response"
         assert "user" in data, "User not in response"
-        assert data["user"]["email"] == ADMIN_EMAIL
+        assert "email" not in data["user"], "Login response should not expose raw email"
         
     def test_login_invalid_credentials(self):
         """Test login with invalid credentials"""
