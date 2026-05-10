@@ -94,6 +94,8 @@ def register(router):
     """Register profile routes. Dependencies from server to avoid circular imports."""
     import server as srv
 
+    WAR_RAT_BADGE_UNSET = {"war_rat_badge_until": "", "war_rat_family_id": "", "war_rat_war_ids": ""}
+
     db = srv.db
     effective_player_kill_count = srv.effective_player_kill_count
     mongodb_effective_kill_count_expr = srv.mongodb_effective_kill_count_expr
@@ -348,6 +350,70 @@ def register(router):
                 return cand[0]
         return None
 
+    async def _war_rat_badge_active(user: dict) -> bool:
+        """Rat badge stays while the specific war(s) active when the user left are still ongoing."""
+        uid = user.get("id")
+        war_ids = [str(w).strip() for w in (user.get("war_rat_war_ids") or []) if str(w or "").strip()]
+        family_id = str(user.get("war_rat_family_id") or "").strip()
+        active_query = {"status": {"$in": ["active", "truce_offered"]}}
+        if war_ids:
+            active_query["id"] = {"$in": war_ids}
+        elif family_id:
+            active_query["$or"] = [{"family_a_id": family_id}, {"family_b_id": family_id}]
+        else:
+            # Legacy records only had a timer. If this user has war stats, recover the
+            # specific active war so the badge follows the war instead of the old timer.
+            if uid and user.get("war_rat_badge_until"):
+                legacy_stats = await db.family_war_stats.find(
+                    {"user_id": uid},
+                    {"_id": 0, "war_id": 1, "family_id": 1},
+                ).sort("war_id", -1).limit(20).to_list(20)
+                legacy_war_ids = [str(s.get("war_id") or "").strip() for s in legacy_stats if str(s.get("war_id") or "").strip()]
+                if legacy_war_ids:
+                    legacy_war = await db.family_wars.find_one(
+                        {"id": {"$in": legacy_war_ids}, "status": {"$in": ["active", "truce_offered"]}},
+                        {"_id": 0, "id": 1, "family_a_id": 1, "family_b_id": 1},
+                    )
+                    if legacy_war:
+                        stat_family = next((str(s.get("family_id") or "").strip() for s in legacy_stats if s.get("war_id") == legacy_war.get("id")), "")
+                        await db.users.update_one(
+                            {"id": uid},
+                            {
+                                "$set": {
+                                    "war_rat_war_ids": [legacy_war["id"]],
+                                    "war_rat_family_id": stat_family,
+                                }
+                            },
+                        )
+                        return True
+                    await db.users.update_one(
+                        {"id": uid},
+                        {"$unset": WAR_RAT_BADGE_UNSET},
+                    )
+                    return False
+
+            # Last fallback for records too old to tie back to a war.
+            wr_until = user.get("war_rat_badge_until")
+            if not wr_until:
+                return False
+            try:
+                wdt = datetime.fromisoformat(str(wr_until).replace("Z", "+00:00"))
+                if wdt.tzinfo is None:
+                    wdt = wdt.replace(tzinfo=timezone.utc)
+                return datetime.now(timezone.utc) < wdt
+            except Exception:
+                return False
+
+        active = await db.family_wars.count_documents(active_query, limit=1)
+        if active:
+            return True
+        if uid:
+            await db.users.update_one(
+                {"id": uid},
+                {"$unset": WAR_RAT_BADGE_UNSET},
+            )
+        return False
+
     async def _build_profile_honours(user: dict, is_dead: bool) -> list:
         """Honour ranks (expensive DB work); callable from full profile or GET .../profile/honours."""
         if _user_excluded_from_stat_leaderboards(user):
@@ -454,6 +520,8 @@ def register(router):
                 "jail_busts": 1,
                 "family_id": 1,
                 "war_rat_badge_until": 1,
+                "war_rat_family_id": 1,
+                "war_rat_war_ids": 1,
             },
         )
         if not user:
@@ -534,17 +602,7 @@ def register(router):
         )
         family_display, family_emblem_preset_id, family_emblem_avatar_url = family_data or (None, None, None)
 
-        preview_now = datetime.now(timezone.utc)
-        wr_until = user.get("war_rat_badge_until")
-        show_war_rat = False
-        if wr_until:
-            try:
-                wdt = datetime.fromisoformat(str(wr_until).replace("Z", "+00:00"))
-                if wdt.tzinfo is None:
-                    wdt = wdt.replace(tzinfo=timezone.utc)
-                show_war_rat = preview_now < wdt
-            except Exception:
-                show_war_rat = False
+        show_war_rat = await _war_rat_badge_active(user)
 
         return {
             "username": user.get("username"),
@@ -834,15 +892,7 @@ def register(router):
             "achievement_badges": achievement_badges,
         }
         wr_until = user.get("war_rat_badge_until")
-        show_war_rat = False
-        if wr_until:
-            try:
-                wdt = datetime.fromisoformat(str(wr_until).replace("Z", "+00:00"))
-                if wdt.tzinfo is None:
-                    wdt = wdt.replace(tzinfo=timezone.utc)
-                show_war_rat = now_utc < wdt
-            except Exception:
-                show_war_rat = False
+        show_war_rat = await _war_rat_badge_active(user)
         out["war_rat_badge_until"] = wr_until if show_war_rat else None
         out["show_war_rat_badge"] = show_war_rat
         if show_war_rat:

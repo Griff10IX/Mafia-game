@@ -95,6 +95,7 @@ FAMILY_ROLES = ["boss", "underboss", "consigliere", "capo", "soldier", "associat
 FAMILY_ROLE_LIMITS = {"boss": 1, "underboss": 1, "consigliere": 1, "capo": 4, "soldier": 15, "associate": 30}
 FAMILY_ROLE_ORDER = {"boss": 0, "underboss": 1, "consigliere": 2, "capo": 3, "soldier": 4, "associate": 5}
 FAMILY_WAR_RECRUITMENT_WINDOW_HOURS = 24
+WAR_RAT_BADGE_UNSET = {"war_rat_badge_until": "", "war_rat_family_id": "", "war_rat_war_ids": ""}
 
 # High command (chain of command top 3) + legacy "don" role stored on some crews
 TOP3_FAMILY_ROLES = ("boss", "don", "underboss", "consigliere")
@@ -1956,12 +1957,19 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
     if is_admin:
         result = await db.users.update_one(
             uid_filter,
-            {"$set": {"family_id": family_id, "family_role": "boss", **melt_reset}},
+            {
+                "$set": {"family_id": family_id, "family_role": "boss", **melt_reset},
+                "$unset": WAR_RAT_BADGE_UNSET,
+            },
         )
     else:
         result = await db.users.update_one(
             {**uid_filter, "money": {"$gte": FAMILY_CREATE_COST}},
-            {"$set": {"family_id": family_id, "family_role": "boss", **melt_reset}, "$inc": {"money": -FAMILY_CREATE_COST}},
+            {
+                "$set": {"family_id": family_id, "family_role": "boss", **melt_reset},
+                "$inc": {"money": -FAMILY_CREATE_COST},
+                "$unset": WAR_RAT_BADGE_UNSET,
+            },
         )
     if result.modified_count == 0:
         await db.families.delete_one({"id": family_id})
@@ -2017,7 +2025,10 @@ async def _add_member_to_family(family_id: str, user_id: str) -> None:
     })
     await db.users.update_one(
         _user_id_filter_for_users_collection(user_id),
-        {"$set": {"family_id": family_id, "family_role": "associate", **_family_melt_stats_reset_fields()}},
+        {
+            "$set": {"family_id": family_id, "family_role": "associate", **_family_melt_stats_reset_fields()},
+            "$unset": WAR_RAT_BADGE_UNSET,
+        },
     )
     await maybe_revoke_civilian_protection(db, user_id, "crew_join")
 
@@ -2251,12 +2262,18 @@ async def families_leave(current_user: dict = Depends(get_current_user)):
     fam = await db.families.find_one({"id": family_id}, {"_id": 0, "boss_id": 1})
     if fam and fam.get("boss_id") == current_user["id"]:
         raise HTTPException(status_code=400, detail="Boss must transfer leadership or dissolve family first")
-    in_war = await _family_in_active_war(family_id)
+    active_wars_on_leave = await db.family_wars.find(
+        {"$or": [{"family_a_id": family_id}, {"family_b_id": family_id}], "status": {"$in": ["active", "truce_offered"]}},
+        {"_id": 0, "id": 1},
+    ).to_list(10)
+    in_war = bool(active_wars_on_leave)
     variants = _user_id_variants_for_family_members(current_user["id"])
     if variants:
         await db.family_members.delete_many({"family_id": family_id, "user_id": {"$in": variants}})
     leave_set = {"family_id": None, "family_role": None, **_family_melt_stats_reset_fields()}
     if in_war:
+        leave_set["war_rat_family_id"] = family_id
+        leave_set["war_rat_war_ids"] = [w["id"] for w in active_wars_on_leave if w.get("id")]
         leave_set["war_rat_badge_until"] = (
             datetime.now(timezone.utc) + timedelta(hours=FAMILY_WAR_RECRUITMENT_WINDOW_HOURS)
         ).isoformat()
@@ -2395,7 +2412,10 @@ async def complete_family_quicktrade_sale(
     )
     await db.users.update_one(
         _user_id_filter_for_users_collection(buyer_id),
-        {"$set": {"family_id": fid, "family_role": "boss", **melt_reset}},
+        {
+            "$set": {"family_id": fid, "family_role": "boss", **melt_reset},
+            "$unset": WAR_RAT_BADGE_UNSET,
+        },
     )
     await db.families.update_one({"id": fid}, {"$set": {"boss_id": buyer_id}})
     _invalidate_list_cache()
