@@ -134,23 +134,77 @@ VIDEO_POKER_PAY_PRESETS: dict[str, dict[str, float]] = {
 # Back-compat alias for imports / admin tooling
 PAY_TABLE = VIDEO_POKER_PAY_PRESETS[VIDEO_POKER_DEFAULT_ODDS_PRESET]
 
-# Per-preset card-generation bias. Each deal/draw samples candidate visible hands and rejects
-# candidates that would pay with the configured probability. Tight is the floor for player wins
-# (~1-in-7-8 hands, ~13%) and the looser presets give players progressively more wins. Payouts
-# remain perfectly aligned with the visible final hand — the house edge comes only from making
-# winning hands rarer, never from shrinking the pay table.
-VIDEO_POKER_GENERATION_BIAS_BY_PRESET: dict[str, dict[str, float | int]] = {
-    "tight": {"deal_avoid_paying": 0.72, "draw_avoid_paying": 0.72, "deal_attempts": 24, "draw_attempts": 24},
-    "normal": {"deal_avoid_paying": 0.55, "draw_avoid_paying": 0.55, "deal_attempts": 18, "draw_attempts": 18},
-    "increased": {"deal_avoid_paying": 0.40, "draw_avoid_paying": 0.40, "deal_attempts": 14, "draw_attempts": 14},
-    "enhanced": {"deal_avoid_paying": 0.25, "draw_avoid_paying": 0.25, "deal_attempts": 10, "draw_attempts": 10},
+# Per-preset card-generation profile. Instead of rejecting all winning hands equally, accept
+# small wins much more often and make big hands significantly harder to land. This keeps the
+# casino owner favoured while still letting players see regular low-tier hits.
+VIDEO_POKER_GENERATION_PROFILE_BY_PRESET: dict[str, dict[str, Any]] = {
+    "tight": {
+        "deal_attempts": 14,
+        "draw_attempts": 22,
+        "accept": {
+            "jacks_or_better": 0.45,
+            "two_pair": 0.34,
+            "three_of_a_kind": 0.22,
+            "straight": 0.12,
+            "flush": 0.09,
+            "full_house": 0.055,
+            "four_of_a_kind": 0.03,
+            "straight_flush": 0.018,
+            "royal_flush": 0.01,
+        },
+    },
+    "normal": {
+        "deal_attempts": 12,
+        "draw_attempts": 18,
+        "accept": {
+            "jacks_or_better": 0.56,
+            "two_pair": 0.43,
+            "three_of_a_kind": 0.30,
+            "straight": 0.17,
+            "flush": 0.125,
+            "full_house": 0.08,
+            "four_of_a_kind": 0.045,
+            "straight_flush": 0.025,
+            "royal_flush": 0.015,
+        },
+    },
+    "increased": {
+        "deal_attempts": 10,
+        "draw_attempts": 15,
+        "accept": {
+            "jacks_or_better": 0.68,
+            "two_pair": 0.54,
+            "three_of_a_kind": 0.40,
+            "straight": 0.24,
+            "flush": 0.18,
+            "full_house": 0.11,
+            "four_of_a_kind": 0.065,
+            "straight_flush": 0.04,
+            "royal_flush": 0.025,
+        },
+    },
+    "enhanced": {
+        "deal_attempts": 8,
+        "draw_attempts": 12,
+        "accept": {
+            "jacks_or_better": 0.80,
+            "two_pair": 0.66,
+            "three_of_a_kind": 0.52,
+            "straight": 0.34,
+            "flush": 0.25,
+            "full_house": 0.16,
+            "four_of_a_kind": 0.095,
+            "straight_flush": 0.06,
+            "royal_flush": 0.035,
+        },
+    },
 }
 
 
-def _vp_generation_bias(preset: str) -> dict[str, float | int]:
-    return VIDEO_POKER_GENERATION_BIAS_BY_PRESET.get(
+def _vp_generation_profile(preset: str) -> dict[str, Any]:
+    return VIDEO_POKER_GENERATION_PROFILE_BY_PRESET.get(
         _normalize_odds_preset(preset),
-        VIDEO_POKER_GENERATION_BIAS_BY_PRESET[VIDEO_POKER_DEFAULT_ODDS_PRESET],
+        VIDEO_POKER_GENERATION_PROFILE_BY_PRESET[VIDEO_POKER_DEFAULT_ODDS_PRESET],
     )
 
 
@@ -161,24 +215,25 @@ def _vp_sample_cards(deck: list, count: int) -> tuple[list, list]:
     return hand, candidate_deck
 
 
-def _vp_accept_paying_candidate(hand_key: str, avoid_paying: float) -> bool:
+def _vp_accept_candidate(hand_key: str, profile: dict[str, Any]) -> bool:
     if hand_key == "nothing":
         return True
-    return _rng.random() >= max(0.0, min(1.0, float(avoid_paying or 0.0)))
+    accept = profile.get("accept") or {}
+    chance = max(0.0, min(1.0, float(accept.get(hand_key, 0.0) or 0.0)))
+    return _rng.random() < chance
 
 
 def _vp_deal_initial_hand(deck: list, preset: str, pay_table: dict[str, float]) -> list:
-    """Deal a visible 5-card hand while strongly preferring non-paying opening deals."""
-    profile = _vp_generation_bias(preset)
+    """Deal a visible 5-card hand while making high-paying openings harder than small pairs."""
+    profile = _vp_generation_profile(preset)
     attempts = max(1, int(profile.get("deal_attempts") or 1))
-    avoid_paying = float(profile.get("deal_avoid_paying") or 0.0)
     last_hand = None
     last_deck = None
     for _ in range(attempts):
         hand, remaining = _vp_sample_cards(deck, 5)
         last_hand, last_deck = hand, remaining
         hand_key, _, _ = _evaluate_hand(hand, pay_table)
-        if _vp_accept_paying_candidate(hand_key, avoid_paying):
+        if _vp_accept_candidate(hand_key, profile):
             deck[:] = remaining
             return hand
     deck[:] = last_deck or []
@@ -186,13 +241,12 @@ def _vp_deal_initial_hand(deck: list, preset: str, pay_table: dict[str, float]) 
 
 
 def _vp_draw_biased_hand(hand: list, held_idx: set[int], deck: list, preset: str, pay_table: dict[str, float]) -> list:
-    """Draw replacement cards while strongly preferring a non-paying final visible hand."""
+    """Draw replacements while allowing mostly small wins and making big hands much rarer."""
     swap_indices = [i for i in range(5) if i not in held_idx]
     if not swap_indices:
         return hand
-    profile = _vp_generation_bias(preset)
+    profile = _vp_generation_profile(preset)
     attempts = max(1, int(profile.get("draw_attempts") or 1))
-    avoid_paying = float(profile.get("draw_avoid_paying") or 0.0)
     last_hand = None
     last_deck = None
     for _ in range(attempts):
@@ -204,7 +258,7 @@ def _vp_draw_biased_hand(hand: list, held_idx: set[int], deck: list, preset: str
                 candidate_hand[i] = candidate_deck.pop()
         last_hand, last_deck = candidate_hand, candidate_deck
         hand_key, _, _ = _evaluate_hand(candidate_hand, pay_table)
-        if _vp_accept_paying_candidate(hand_key, avoid_paying):
+        if _vp_accept_candidate(hand_key, profile):
             deck[:] = candidate_deck
             return candidate_hand
     deck[:] = last_deck or []

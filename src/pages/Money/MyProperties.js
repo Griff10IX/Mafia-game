@@ -30,14 +30,58 @@ const MY_PROPERTIES_CACHE_MAX_AGE_MS = 30_000;
 const EMPTY_MY_PROPERTIES_DATA = { casinos: [], airport: null, armoury: null, points: 0 };
 
 const VIDEO_POKER_ODDS_OPTIONS = [
+  { id: 'tight', label: 'Tight (house)' },
   { id: 'normal', label: 'Normal' },
   { id: 'increased', label: 'Increased' },
   { id: 'enhanced', label: 'Enhanced' },
 ];
 
 function normalizeVideoPokerOddsPreset(raw) {
-  const s = String(raw || 'normal').trim().toLowerCase();
-  return VIDEO_POKER_ODDS_OPTIONS.some((o) => o.id === s) ? s : 'normal';
+  const s = String(raw || 'tight').trim().toLowerCase();
+  return VIDEO_POKER_ODDS_OPTIONS.some((o) => o.id === s) ? s : 'tight';
+}
+
+const VIDEO_POKER_PAY_TABLE_KEY_ORDER = [
+  'royal_flush',
+  'straight_flush',
+  'four_of_a_kind',
+  'full_house',
+  'flush',
+  'straight',
+  'three_of_a_kind',
+  'two_pair',
+  'jacks_or_better',
+];
+
+const VIDEO_POKER_FALLBACK_HAND_NAMES = {
+  royal_flush: 'Royal Flush',
+  straight_flush: 'Straight Flush',
+  four_of_a_kind: 'Four of a Kind',
+  full_house: 'Full House',
+  flush: 'Flush',
+  straight: 'Straight',
+  three_of_a_kind: 'Three of a Kind',
+  two_pair: 'Two Pair',
+  jacks_or_better: 'Jacks or Better',
+};
+
+function formatVideoPokerMultiplier(m) {
+  const n = Number(m);
+  if (Number.isNaN(n)) return '—';
+  const s = Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100).replace(/\.?0+$/, '');
+  return `${s}x`;
+}
+
+function buildVideoPokerPayTableRows(config, presetId) {
+  const presets = config?.pay_table_presets || {};
+  const pid = presetId || 'tight';
+  const t = presets[pid] || {};
+  const names = config?.hand_names || VIDEO_POKER_FALLBACK_HAND_NAMES;
+  return VIDEO_POKER_PAY_TABLE_KEY_ORDER.map((key) => ({
+    key,
+    name: names[key] || key,
+    multiplier: t[key] ?? 0,
+  }));
 }
 
 function normalizeMyPropertiesPayload(props) {
@@ -77,7 +121,7 @@ function casinoResetProfitPayload(casino) {
   return { city: casino.city };
 }
 
-function CasinoBlock({ casino, points, onRefresh }) {
+function CasinoBlock({ casino, points, onRefresh, videoPokerConfig }) {
   const [saving, setSaving] = useState(false);
   const [casinoMaxBet, setCasinoMaxBet] = useState('');
   const [casinoBuyBack, setCasinoBuyBack] = useState('');
@@ -247,24 +291,57 @@ function CasinoBlock({ casino, points, onRefresh }) {
           {(casino.profit ?? 0) >= 0 ? '' : '-'}{formatMoney(Math.abs(casino.profit ?? 0))}
         </span>
       </p>
-      {casino.type === 'videopoker' && (
-        <div className="mb-2">
-          <div className="flex flex-wrap gap-2 items-center">
-            <span className="text-[11px] text-mutedForeground w-16 shrink-0">Pay table</span>
-            <select
-              value={normalizeVideoPokerOddsPreset(casino.odds_preset)}
-              onChange={(e) => handleVideoPokerSetOdds(e.target.value)}
-              disabled={saving}
-              className="flex-1 min-w-[140px] px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm text-foreground"
-            >
-              {VIDEO_POKER_ODDS_OPTIONS.map((o) => (
-                <option key={o.id} value={o.id}>{o.label}</option>
-              ))}
-            </select>
+      {casino.type === 'videopoker' && (() => {
+        const selectedPreset = normalizeVideoPokerOddsPreset(casino.odds_preset);
+        const selectedLabel = (
+          VIDEO_POKER_ODDS_OPTIONS.find((o) => o.id === selectedPreset)?.label
+          || selectedPreset
+        );
+        const payTableRows = videoPokerConfig
+          ? buildVideoPokerPayTableRows(videoPokerConfig, selectedPreset)
+          : null;
+        return (
+          <div className="mb-2">
+            <div className="flex flex-wrap gap-2 items-center">
+              <span className="text-[11px] text-mutedForeground w-16 shrink-0">Pay table</span>
+              <select
+                value={selectedPreset}
+                onChange={(e) => handleVideoPokerSetOdds(e.target.value)}
+                disabled={saving}
+                className="flex-1 min-w-[140px] px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm text-foreground"
+              >
+                {VIDEO_POKER_ODDS_OPTIONS.map((o) => (
+                  <option key={o.id} value={o.id}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+            <p className="text-[10px] text-zinc-500 mt-1 ml-[4.5rem]">Applies to new deals at your table.</p>
+            <p className="text-[10px] text-amber-200/90 mt-1 ml-[4.5rem] leading-snug">
+              <span className="font-heading font-bold">Owner bank:</span> Tight pays players less on big hands (safer for you).
+              Increased and Enhanced raise payouts (more player-friendly, more risk to your cash stack).
+            </p>
+            {payTableRows && (
+              <div className="mt-2 ml-[4.5rem] border border-zinc-800 rounded overflow-hidden">
+                <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
+                  <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
+                    Pay table — {selectedLabel}
+                  </span>
+                </div>
+                <div className="divide-y divide-zinc-800/60">
+                  {payTableRows.map((row) => (
+                    <div key={row.key} className="flex items-center justify-between px-2 py-1 text-[11px]">
+                      <span className="text-zinc-300 font-heading">{row.name}</span>
+                      <span className="text-primary font-heading font-bold tabular-nums">
+                        {formatVideoPokerMultiplier(row.multiplier)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
-          <p className="text-[10px] text-zinc-500 mt-1 ml-[4.5rem]">Applies to new deals at your table.</p>
-        </div>
-      )}
+        );
+      })()}
       <div className="flex flex-wrap gap-2 items-center mb-2">
         <span className="text-[11px] text-mutedForeground w-16 shrink-0">Max bet</span>
         <FormattedNumberInput
@@ -357,6 +434,9 @@ export default function MyProperties() {
   const [armouryDetail, setArmouryDetail] = useState(cachedBootstrap?.armouryDetail || null);
   const [armourySellPoints, setArmourySellPoints] = useState('');
   const [armouryTransferUsername, setArmouryTransferUsername] = useState('');
+  // Pay-table data for any owned Video Poker casinos. Static across cities, so a single fetch
+  // covers every CasinoBlock. Stays null until needed (only fetched if the user owns a VP casino).
+  const [videoPokerConfig, setVideoPokerConfig] = useState(null);
 
   const fetchMyProperties = useCallback(async () => {
     try {
@@ -387,6 +467,24 @@ export default function MyProperties() {
     window.addEventListener('app:refresh-user', onRefresh);
     return () => window.removeEventListener('app:refresh-user', onRefresh);
   }, [fetchMyProperties]);
+
+  // Lazy-fetch the static Video Poker pay tables only if the user actually owns a VP casino.
+  // Pay tables don't change at runtime, so one fetch per page mount is enough.
+  useEffect(() => {
+    if (videoPokerConfig) return;
+    const hasVideoPoker = Array.isArray(data?.casinos) && data.casinos.some((c) => c?.type === 'videopoker');
+    if (!hasVideoPoker) return;
+    let cancelled = false;
+    api
+      .get('/casino/videopoker/config')
+      .then((res) => {
+        if (!cancelled && res?.data) setVideoPokerConfig(res.data);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [data?.casinos, videoPokerConfig]);
 
   const handleAirportSetPrice = async () => {
     const p = data.airport;
@@ -554,7 +652,13 @@ export default function MyProperties() {
           <div className="p-3">
             {data.casinos.length ? (
               data.casinos.map((c) => (
-                <CasinoBlock key={`${c.type}-${c.city}`} casino={c} points={data.points} onRefresh={fetchMyProperties} />
+                <CasinoBlock
+                  key={`${c.type}-${c.city}`}
+                  casino={c}
+                  points={data.points}
+                  onRefresh={fetchMyProperties}
+                  videoPokerConfig={c.type === 'videopoker' ? videoPokerConfig : null}
+                />
               ))
             ) : (
               <p className="text-sm text-mutedForeground">
