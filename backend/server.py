@@ -2693,7 +2693,7 @@ async def _get_casino_property_profit(user_id: str):
 
     casino_tasks = [fetch_casino(gt, c) for gt, c in casino_colls]
     airport_task = db.airport_ownership.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "slot": 1, "price_per_travel": 1, "total_earnings": 1})
-    bullet_task = db.bullet_factory.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "price_per_bullet": 1})
+    bullet_task = db.bullet_factory.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "price_per_bullet": 1, "owner_pending_profit_points": 1})
     results = await asyncio.gather(*casino_tasks, airport_task, bullet_task)
     casino_docs = results[:6]
     airport_doc, bullet_doc = results[6], results[7]
@@ -2711,14 +2711,16 @@ async def _get_casino_property_profit(user_id: str):
         has_casino = True
         break
 
+    airport_points = int((airport_doc or {}).get("total_earnings") or 0)
+    armoury_points = int((bullet_doc or {}).get("owner_pending_profit_points") or 0)
     if airport_doc:
         prop = {"type": "airport", "state": airport_doc.get("state"), "slot": airport_doc.get("slot", 1), "price_per_travel": airport_doc.get("price_per_travel"), "total_earnings": airport_doc.get("total_earnings", 0)}
     elif bullet_doc:
-        prop = {"type": "bullet_factory", "state": bullet_doc.get("state"), "price_per_bullet": bullet_doc.get("price_per_bullet"), "total_earnings": 0}
+        prop = {"type": "bullet_factory", "state": bullet_doc.get("state"), "price_per_bullet": bullet_doc.get("price_per_bullet"), "total_earnings": armoury_points}
     else:
         prop = None
-    property_pts = int(prop.get("total_earnings") or 0) if prop else 0
-    has_property = prop is not None
+    property_pts = airport_points + armoury_points
+    has_property = bool(airport_doc or bullet_doc)
     return (casino_cash, property_pts, has_casino, has_property, casino_lifetime)
 
 
@@ -3015,14 +3017,19 @@ async def _user_owns_airport(user_id: str):
 
 async def _user_owns_bullet_factory(user_id: str):
     """Return bullet factory (armoury) owned by user or None. Max one armoury per account."""
-    doc = await db.bullet_factory.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "price_per_bullet": 1})
+    doc = await db.bullet_factory.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "price_per_bullet": 1, "owner_pending_profit_points": 1})
     if doc:
         state = doc.get("state")
         if state:
             await maybe_auto_relinquish_below_capo(db.bullet_factory, {"state": state})
-        doc = await db.bullet_factory.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "price_per_bullet": 1})
+        doc = await db.bullet_factory.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "price_per_bullet": 1, "owner_pending_profit_points": 1})
         if doc:
-            return {"type": "bullet_factory", "state": doc.get("state"), "price_per_bullet": doc.get("price_per_bullet")}
+            return {
+                "type": "bullet_factory",
+                "state": doc.get("state"),
+                "price_per_bullet": doc.get("price_per_bullet"),
+                "total_earnings": int(doc.get("owner_pending_profit_points") or 0),
+            }
     return None
 
 
