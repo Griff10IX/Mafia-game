@@ -61,6 +61,7 @@ ROULETTE_HOUSE_EDGE = 0.0005  # 0.05% house edge goes to owner
 ROULETTE_DEFAULT_MAX_BET = 50_000_000
 ROULETTE_ABSOLUTE_MAX_BET = 500_000_000
 ROULETTE_BUY_BACK_EXPIRY_MINUTES = 10
+ROULETTE_ZERO_EXTRA_PROBABILITY = 0.01
 
 # ----- Models -----
 class RouletteBetItem(BaseModel):
@@ -177,6 +178,16 @@ def _roulette_get_multiplier(bet_type: str) -> int:
         return 3
     else:
         return 2
+
+
+def _roulette_spin_result(has_zero_straight_bet: bool = False) -> int:
+    """Spin the wheel, with a small zero bias unless a straight-zero bet would exploit it."""
+    if has_zero_straight_bet:
+        return _rng.randint(0, 36)
+    zero_probability = min((1.0 / 37.0) + ROULETTE_ZERO_EXTRA_PROBABILITY, 1.0)
+    if _rng.random() < zero_probability:
+        return 0
+    return _rng.randint(1, 36)
 
 
 def register(router):
@@ -611,6 +622,7 @@ def register(router):
             raise HTTPException(status_code=400, detail="You cannot gamble at your own roulette table")
         total_stake = 0
         validated_bets = []
+        has_zero_straight_bet = False
         for b in bets:
             bet_type = b.get("type", "").lower()
             selection = b.get("selection")
@@ -622,6 +634,8 @@ def register(router):
                 if not (0 <= sel_int <= 36):
                     raise HTTPException(status_code=400, detail=f"Invalid straight bet: {selection}")
                 selection = sel_int
+                if selection == 0:
+                    has_zero_straight_bet = True
             elif bet_type in ("dozen", "column"):
                 sel_int = int(selection)
                 if sel_int not in (1, 2, 3):
@@ -644,7 +658,7 @@ def register(router):
         )
         if not debit_res:
             raise HTTPException(status_code=400, detail="Not enough money")
-        result = _rng.randint(0, 36)
+        result = _roulette_spin_result(has_zero_straight_bet)
         total_payout = 0
         for bet in validated_bets:
             if _roulette_check_bet_win(bet["type"], bet["selection"], result):

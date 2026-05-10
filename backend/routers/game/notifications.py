@@ -299,7 +299,7 @@ def register(router):
     @router.post("/notifications/admin/broadcast")
     async def admin_broadcast_system_message(request: AdminBroadcastRequest, current_user: dict = Depends(get_current_user)):
         """Admin: send a system notification to all users (respects notification preferences for 'system')."""
-        if (current_user.get("email") or "") not in (ADMIN_EMAILS or []):
+        if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         title = (request.title or "").strip() or "System message"
         message = (request.message or "").strip()

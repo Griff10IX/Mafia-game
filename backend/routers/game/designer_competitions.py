@@ -10,7 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 
-from server import db, get_current_user, send_notification, send_notification_to_all, _is_admin, _is_moderator
+from server import db, get_current_user, require_admin_or_mod, send_notification, send_notification_to_all
 from utils.text import strip_emoji
 from utils.point_provenance import log_points_event
 
@@ -79,14 +79,8 @@ class VoteRequest(BaseModel):
     entry_id: str
 
 
-def _admin_or_mod(user: dict) -> bool:
-    return _is_admin(user) or _is_moderator(user)
-
-
-async def create_competition(body: CompetitionCreate, current_user: dict = Depends(get_current_user)):
+async def create_competition(body: CompetitionCreate, current_user: dict = Depends(require_admin_or_mod)):
     """Admin or mod: create a draft competition."""
-    if not _admin_or_mod(current_user):
-        raise HTTPException(status_code=403, detail="Admin or moderator access required")
     comp_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     doc = {
@@ -109,10 +103,8 @@ async def create_competition(body: CompetitionCreate, current_user: dict = Depen
     return {"id": comp_id, "message": "Competition created as draft", "competition": _strip_mongo(doc)}
 
 
-async def update_competition(comp_id: str, body: CompetitionUpdate, current_user: dict = Depends(get_current_user)):
+async def update_competition(comp_id: str, body: CompetitionUpdate, current_user: dict = Depends(require_admin_or_mod)):
     """Admin or mod: update a draft competition."""
-    if not _admin_or_mod(current_user):
-        raise HTTPException(status_code=403, detail="Admin or moderator access required")
     comp = await db.designer_competitions.find_one({"id": comp_id}, {"_id": 0})
     if not comp:
         raise HTTPException(status_code=404, detail="Competition not found")
@@ -140,10 +132,8 @@ async def update_competition(comp_id: str, body: CompetitionUpdate, current_user
     return {"message": "Updated", "competition": _strip_mongo(comp)}
 
 
-async def start_competition(comp_id: str, current_user: dict = Depends(get_current_user)):
+async def start_competition(comp_id: str, current_user: dict = Depends(require_admin_or_mod)):
     """Admin or mod: set competition to active, create one stickied topic for entries, notify all users."""
-    if not _admin_or_mod(current_user):
-        raise HTTPException(status_code=403, detail="Admin or moderator access required")
     comp = await db.designer_competitions.find_one({"id": comp_id}, {"_id": 0})
     if not comp:
         raise HTTPException(status_code=404, detail="Competition not found")
@@ -186,10 +176,8 @@ async def start_competition(comp_id: str, current_user: dict = Depends(get_curre
     return {"message": "Competition started; topic created and pinned; all users notified", "competition": _strip_mongo(comp)}
 
 
-async def end_competition(comp_id: str, current_user: dict = Depends(get_current_user)):
+async def end_competition(comp_id: str, current_user: dict = Depends(require_admin_or_mod)):
     """Admin or mod: set competition to ended, compute winner, pay rewards."""
-    if not _admin_or_mod(current_user):
-        raise HTTPException(status_code=403, detail="Admin or moderator access required")
     comp = await db.designer_competitions.find_one({"id": comp_id}, {"_id": 0})
     if not comp:
         raise HTTPException(status_code=404, detail="Competition not found")

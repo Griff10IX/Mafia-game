@@ -1013,6 +1013,45 @@ const FORUM_TABS = [
   { id: 'crew_oc', label: 'Crew OC' },
 ];
 
+const FORUM_TOPICS_CACHE_PREFIX = 'forum_topics_cache_v1';
+const FORUM_TOPICS_CACHE_MAX_AGE_MS = 2 * 60 * 1000;
+
+function forumTopicsCacheKey(category, page) {
+  return `${FORUM_TOPICS_CACHE_PREFIX}:${category || 'general'}:${Number(page) || 1}`;
+}
+
+function readForumTopicsCache(category, page) {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(forumTopicsCacheKey(category, page));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (Date.now() - Number(parsed.ts || 0) > FORUM_TOPICS_CACHE_MAX_AGE_MS) return null;
+    return parsed.data || null;
+  } catch {
+    return null;
+  }
+}
+
+function writeForumTopicsCache(category, page, data) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(
+      forumTopicsCacheKey(category, page),
+      JSON.stringify({ ts: Date.now(), data }),
+    );
+  } catch {
+    /* sessionStorage may be full or unavailable */
+  }
+}
+
+function forumTopicsSignature(list) {
+  return (Array.isArray(list) ? list : [])
+    .map((t) => `${t.id || ''}:${t.updated_at || t.last_reply_at || t.created_at || ''}:${t.views || 0}:${t.comment_count || 0}:${t.is_sticky ? 1 : 0}:${t.is_important ? 1 : 0}`)
+    .join('|');
+}
+
 export default function Forum() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1021,9 +1060,10 @@ export default function Forum() {
     if (t === 'entertainer' || t === 'designer' || t === 'crew_oc' || t === 'game_ideas') return t;
     return 'general';
   });
-  const [topics, setTopics] = useState([]);
+  const initialTopicsCache = readForumTopicsCache(activeTab, 1);
+  const [topics, setTopics] = useState(Array.isArray(initialTopicsCache?.topics) ? initialTopicsCache.topics : []);
   const [forumPage, setForumPage] = useState(1);
-  const [canViewPage2, setCanViewPage2] = useState(false);
+  const [canViewPage2, setCanViewPage2] = useState(!!initialTopicsCache?.can_view_page_2);
   useEffect(() => {
     if (searchParams.get('tab') === 'entertainer' || location.state?.category === 'entertainer') setActiveTab('entertainer');
     else if (searchParams.get('tab') === 'designer') setActiveTab('designer');
@@ -1031,7 +1071,7 @@ export default function Forum() {
     else if (searchParams.get('tab') === 'game_ideas') setActiveTab('game_ideas');
     else setActiveTab('general');
   }, [searchParams, location.state?.category]);
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(!!initialTopicsCache);
   const [modalOpen, setModalOpen] = useState(false);
   const [gameModalOpen, setGameModalOpen] = useState(false);
   const [entertainerGames, setEntertainerGames] = useState([]);
@@ -1146,11 +1186,18 @@ export default function Forum() {
   const fetchTopics = useCallback(async (silent = false) => {
     try {
       const res = await api.get('/forum/topics', { params: { category: activeTab, page: forumPage } });
-      setTopics(res.data?.topics ?? []);
-      setCanViewPage2(!!res.data?.can_view_page_2);
+      const nextTopics = res.data?.topics ?? [];
+      const nextCanViewPage2 = !!res.data?.can_view_page_2;
+      writeForumTopicsCache(activeTab, forumPage, {
+        topics: nextTopics,
+        can_view_page_2: nextCanViewPage2,
+      });
+      setTopics((prev) => (
+        forumTopicsSignature(prev) === forumTopicsSignature(nextTopics) ? prev : nextTopics
+      ));
+      setCanViewPage2(nextCanViewPage2);
     } catch {
       if (!silent) toast.error('Failed to load forum');
-      if (!silent) setTopics([]);
     } finally {
       setHasLoaded(true);
     }
@@ -1213,6 +1260,16 @@ export default function Forum() {
   });
   /** After session warm hydrate, skip one "Loading games…" flash while refetching. */
   const skipEntertainerGamesLoadSpinnerRef = useRef(false);
+
+  useLayoutEffect(() => {
+    const cached = readForumTopicsCache(activeTab, forumPage);
+    if (!cached || !Array.isArray(cached.topics)) return;
+    setTopics((prev) => (
+      forumTopicsSignature(prev) === forumTopicsSignature(cached.topics) ? prev : cached.topics
+    ));
+    setCanViewPage2(!!cached.can_view_page_2);
+    setHasLoaded(true);
+  }, [activeTab, forumPage]);
 
   useLayoutEffect(() => {
     const warm = readForumSpecialTabsWarm();

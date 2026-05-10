@@ -7,6 +7,34 @@ import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
 
+const ATTEMPTS_CACHE_KEY = 'kill_attempts_cache_v1';
+const ATTEMPTS_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
+const WHOAMI_CACHE_KEY = 'kill_attempts_whoami_v1';
+const WHOAMI_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
+
+function readSessionCache(key, maxAgeMs) {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.sessionStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return null;
+    if (Date.now() - Number(parsed.ts || 0) > maxAgeMs) return null;
+    return parsed.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSessionCache(key, data) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.sessionStorage.setItem(key, JSON.stringify({ ts: Date.now(), data }));
+  } catch {
+    /* sessionStorage may be full or unavailable; ignore */
+  }
+}
+
 const ATTEMPTS_STYLES = `
   @keyframes atmp-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .atmp-fade-in { animation: atmp-fade-in 0.4s ease-out both; }
@@ -304,16 +332,19 @@ const AttemptsCard = ({ title, attempts, icon: Icon, emptyMessage, delay = 0 }) 
 
 // Main component
 export default function Attempts() {
+  const cachedAttempts = readSessionCache(ATTEMPTS_CACHE_KEY, ATTEMPTS_CACHE_MAX_AGE_MS);
+  const cachedWhoami = readSessionCache(WHOAMI_CACHE_KEY, WHOAMI_CACHE_MAX_AGE_MS);
+
   const [tab, setTab] = useState('summary');
   const [summaryLoading, setSummaryLoading] = useState(false);
   /** True on first paint so default 'Everything' tab shows spinner until GET /attack/timeline returns. */
   const [timelineLoading, setTimelineLoading] = useState(true);
-  const [attempts, setAttempts] = useState([]);
+  const [attempts, setAttempts] = useState(Array.isArray(cachedAttempts) ? cachedAttempts : []);
   const [timelineEvents, setTimelineEvents] = useState([]);
   const [timelineErr, setTimelineErr] = useState(null);
   const [timelineExpanded, setTimelineExpanded] = useState({});
-  const [canViewPayload, setCanViewPayload] = useState(false);
-  const [canViewEverything, setCanViewEverything] = useState(false);
+  const [canViewPayload, setCanViewPayload] = useState(Boolean(cachedWhoami?.canViewPayload));
+  const [canViewEverything, setCanViewEverything] = useState(Boolean(cachedWhoami?.canViewEverything));
   const [timelineSubjectUsername, setTimelineSubjectUsername] = useState(null);
   const [adminTargetInput, setAdminTargetInput] = useState('');
   const [adminTargetApplied, setAdminTargetApplied] = useState('');
@@ -322,11 +353,12 @@ export default function Attempts() {
     setSummaryLoading(true);
     try {
       const res = await api.get('/attack/attempts');
-      setAttempts(res.data.attempts || []);
+      const list = res.data.attempts || [];
+      setAttempts(list);
+      writeSessionCache(ATTEMPTS_CACHE_KEY, list);
     } catch (e) {
       toast.error('Failed to load attempts');
       console.error('Error fetching attempts:', e);
-      setAttempts([]);
     } finally {
       setSummaryLoading(false);
     }
@@ -358,6 +390,10 @@ export default function Attempts() {
       const staffCanViewEverything = Boolean(d.is_admin || d.is_moderator || d.has_admin_email);
       setCanViewEverything(staffCanViewEverything);
       setCanViewPayload(staffCanViewEverything);
+      writeSessionCache(WHOAMI_CACHE_KEY, {
+        canViewEverything: staffCanViewEverything,
+        canViewPayload: staffCanViewEverything,
+      });
     } catch {
       setCanViewEverything(false);
       setCanViewPayload(false);

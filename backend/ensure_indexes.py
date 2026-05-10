@@ -534,6 +534,7 @@ async def ensure_all_indexes(db):
         # --- Forum ---
         await db.forum_topics.create_index("id", unique=True)
         await db.forum_topics.create_index([("is_important", -1), ("is_sticky", -1), ("updated_at", -1)])
+        await db.forum_topics.create_index([("category", 1), ("is_important", -1), ("is_sticky", -1), ("updated_at", -1)])
         await db.forum_comments.create_index("id", unique=True)
         await db.forum_comments.create_index([("id", 1), ("topic_id", 1)])
         await db.forum_comments.create_index("topic_id")

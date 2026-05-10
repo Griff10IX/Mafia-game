@@ -1160,7 +1160,10 @@ def register(router):
 
     @router.post("/admin/act-as-normal")
     async def admin_act_as_normal(acting: bool, current_user: dict = Depends(get_current_user)):
-        if current_user.get("email") not in ADMIN_EMAILS:
+        # Use user_has_admin_list_email (case-insensitive) instead of raw ADMIN_EMAILS membership.
+        # Cannot use _is_admin here because it returns False once admin_acting_as_normal=True,
+        # which would lock listed admins out of toggling the flag back off.
+        if not user_has_admin_list_email(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         await db.users.update_one(
             {"id": current_user["id"]},

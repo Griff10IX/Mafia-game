@@ -28,11 +28,6 @@ class JailSetBustRewardRequest(BaseModel):
     amount: int  # $ reward for whoever busts you out (0 to clear)
 
 
-class NPCToggleRequest(BaseModel):
-    enabled: bool
-    count: int
-
-
 class SnitchRequest(BaseModel):
     target_username: Optional[str] = None  # if None or "random", pick random online user
 
@@ -1219,18 +1214,6 @@ async def snitch(
     }
 
 
-async def get_admin_npcs(current_user: dict = Depends(get_current_user)):
-    if current_user["email"] not in ADMIN_EMAILS:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    raise HTTPException(status_code=410, detail="Deprecated: NPC seeding tools have been removed")
-
-
-async def toggle_npcs(request: NPCToggleRequest, current_user: dict = Depends(get_current_user)):
-    if current_user["email"] not in ADMIN_EMAILS:
-        raise HTTPException(status_code=403, detail="Admin access required")
-    raise HTTPException(status_code=410, detail="Deprecated: NPC seeding tools have been removed")
-
-
 async def try_spawn_private_jail_cell(uid: str) -> Tuple[bool, Optional[str], int]:
     """
     Spawn 5 private jail NPCs for uid if rules allow. Used by POST /jail/private-cell and Auto Rank bust.
@@ -1367,6 +1350,4 @@ def register(router):
     router.add_api_route("/jail/set-bust-reward", set_bust_reward, methods=["POST"])
     router.add_api_route("/jail/leave", leave_jail, methods=["POST"])
     router.add_api_route("/jail/snitch", snitch, methods=["POST"])
-    router.add_api_route("/admin/npcs", get_admin_npcs, methods=["GET"])
-    router.add_api_route("/admin/npcs/toggle", toggle_npcs, methods=["POST"])
     router.add_api_route("/npcs/list", list_npcs_for_attack, methods=["GET"])

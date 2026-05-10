@@ -384,7 +384,24 @@ async def get_topics(
     sort = [("is_important", -1), ("is_sticky", -1), ("updated_at", -1)]
     per_page = FORUM_CREW_OC_TOPICS_PER_PAGE if category == "crew_oc" else FORUM_TOPICS_PER_PAGE
     skip = (page - 1) * per_page
-    topics = await db.forum_topics.find(query, {"_id": 0}).sort(sort).skip(skip).limit(per_page).to_list(per_page)
+    topic_projection = {
+        "_id": 0,
+        "id": 1,
+        "title": 1,
+        "title_color": 1,
+        "author_id": 1,
+        "author_username": 1,
+        "category": 1,
+        "views": 1,
+        "is_sticky": 1,
+        "is_important": 1,
+        "is_locked": 1,
+        "created_at": 1,
+        "updated_at": 1,
+        "crew_oc_family_id": 1,
+        "redeem_code": 1,
+    }
+    topics = await db.forum_topics.find(query, topic_projection).sort(sort).skip(skip).limit(per_page).to_list(per_page)
     author_ids = [t.get("author_id") for t in topics if t.get("author_id")]
     # Resolve every displayed author_username so staff colors work even when author_id is stale (wrong id, legacy import).
     username_to_id = {}
