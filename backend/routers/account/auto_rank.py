@@ -1,5 +1,6 @@
 # Auto Rank: background task that auto-commits crimes and GTA for users who bought it, sends results to Telegram
 import asyncio
+import hmac
 import logging
 import os
 from datetime import datetime, timezone, timedelta
@@ -1838,7 +1839,7 @@ def register(router):
         """Telegram bot webhook: receive commands from users who have Telegram set for Auto Rank. Commands: /start, /autorank, /summary, /enable, /disable."""
         if telegram_webhook_secret:
             secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token") or ""
-            if secret and (secret.strip() != telegram_webhook_secret):
+            if not hmac.compare_digest(secret.strip(), telegram_webhook_secret):
                 raise HTTPException(status_code=403, detail="Invalid webhook secret")
         try:
             body = await request.json()

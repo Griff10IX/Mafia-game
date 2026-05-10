@@ -10,7 +10,7 @@ import itertools
 from pydantic import BaseModel, field_validator, model_validator
 from fastapi import Depends, HTTPException, Body
 
-from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin, _is_moderator, _is_entertainer, send_notification
+from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin, _is_moderator, _is_entertainer, send_notification, require_admin_verified
 from utils.point_provenance import log_points_event
 from utils.entertainer_service import (
     ENTERTAINER_MP_POKER_MAX_POINTS_PER_GAME,
@@ -1270,18 +1270,14 @@ def register(router):
         return {"tournaments": out}
 
     @router.get("/casino/mp-poker/tournaments/admin-settings")
-    async def get_tournament_admin_settings(current_user: dict = Depends(get_current_user_verified)):
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
+    async def get_tournament_admin_settings(current_user: dict = Depends(require_admin_verified)):
         return await _get_tournament_settings()
 
     @router.patch("/casino/mp-poker/tournaments/admin-settings")
     async def patch_tournament_admin_settings(
         body: PokerTournamentSettingsPatchRequest,
-        current_user: dict = Depends(get_current_user_verified),
+        current_user: dict = Depends(require_admin_verified),
     ):
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
         set_doc: Dict[str, Any] = {}
         if body.require_approval is not None:
             set_doc["mp_poker_tournament_require_approval"] = bool(body.require_approval)
@@ -1604,9 +1600,7 @@ def register(router):
         return {"message": f"Inbox reminder sent to {len(targets)} player(s)", "count": len(targets), "inactive_reminder_sent_at": now_iso}
 
     @router.get("/admin/mp-poker/tournaments/pending")
-    async def admin_list_pending_tournaments(current_user: dict = Depends(get_current_user_verified)):
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
+    async def admin_list_pending_tournaments(current_user: dict = Depends(require_admin_verified)):
         rows = await db.mp_poker_games.find(
             {"mode": "tournament", "approval_status": "pending"},
             {"_id": 0, "id": 1, "creator_id": 1, "creator_username": 1, "max_players": 1, "buy_in": 1, "prize_pool": 1, "created_at": 1, "players": 1},
@@ -1631,10 +1625,8 @@ def register(router):
     async def admin_approve_tournament(
         game_id: str,
         body: PokerTournamentDecisionRequest,
-        current_user: dict = Depends(get_current_user_verified),
+        current_user: dict = Depends(require_admin_verified),
     ):
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
         now_iso = datetime.now(timezone.utc).isoformat()
         bonus_cfg = {
             "money": max(0, int(body.bonus_money or 0)),
@@ -1678,10 +1670,8 @@ def register(router):
     async def admin_deny_tournament(
         game_id: str,
         body: PokerTournamentDecisionRequest,
-        current_user: dict = Depends(get_current_user_verified),
+        current_user: dict = Depends(require_admin_verified),
     ):
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g or not _is_tournament_game(g):
             raise HTTPException(status_code=404, detail="Tournament not found")
@@ -1721,10 +1711,8 @@ def register(router):
     async def admin_tournament_bonus_rewards(
         game_id: str,
         body: PokerTournamentBonusRequest,
-        current_user: dict = Depends(get_current_user_verified),
+        current_user: dict = Depends(require_admin_verified),
     ):
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g or not _is_tournament_game(g):
             raise HTTPException(status_code=404, detail="Tournament not found")
@@ -1754,10 +1742,8 @@ def register(router):
     async def admin_fix_tournament(
         game_id: str,
         body: PokerTournamentAdminFixRequest,
-        current_user: dict = Depends(get_current_user_verified),
+        current_user: dict = Depends(require_admin_verified),
     ):
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g or not _is_tournament_game(g):
             raise HTTPException(status_code=404, detail="Tournament not found")
@@ -1857,10 +1843,8 @@ def register(router):
     async def admin_refund_tournament(
         game_id: str,
         body: PokerTournamentAdminFixRequest,
-        current_user: dict = Depends(get_current_user_verified),
+        current_user: dict = Depends(require_admin_verified),
     ):
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g or not _is_tournament_game(g):
             raise HTTPException(status_code=404, detail="Tournament not found")

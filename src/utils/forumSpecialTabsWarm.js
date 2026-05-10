@@ -48,7 +48,6 @@ export async function prefetchForumSpecialTabsData(options = {}) {
       prizesRes,
       fwActiveRes,
       fwHistRes,
-      cfgRes,
       activeDesignerRes,
       adminRes,
     ] = await Promise.all([
@@ -61,7 +60,6 @@ export async function prefetchForumSpecialTabsData(options = {}) {
       safeGet('/forum/entertainer/prizes'),
       safeGet('/forum/entertainer/find-word/active'),
       safeGet('/forum/entertainer/find-word/history', { params: { limit: 8 } }),
-      safeGet('/forum/entertainer/admin/config'),
       safeGet('/forum/designer/competitions/active'),
       safeGet('/auth/staff-flags'),
     ]);
@@ -99,7 +97,7 @@ export async function prefetchForumSpecialTabsData(options = {}) {
       prizes: prizesRes.data ?? null,
       findWordActive: fwActiveRes.data ?? { active: false },
       findWordHistory: fwHistRes.data?.rounds ?? [],
-      config: cfgRes.data && typeof cfgRes.data === 'object' ? cfgRes.data : defaultCfg,
+      config: defaultCfg,
     };
 
     const activeRes = activeDesignerRes.data ?? null;

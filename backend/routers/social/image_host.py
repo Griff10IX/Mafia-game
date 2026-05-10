@@ -54,10 +54,9 @@ def register(r) -> None:
     from server import (
         ROOT_DIR,
         _find_user_by_username_case_insensitive,
-        _is_admin,
         db,
-        get_current_user,
         get_current_user_verified,
+        require_admin,
     )
 
     upload_root = ROOT_DIR / "uploads" / "image_host"
@@ -432,17 +431,12 @@ def register(r) -> None:
             rdoc["username"] = uname_by_id.get(rdoc.get("user_id") or "", "") or None
         return {"items": rows, "total": total, "skip": skip, "limit": limit}
 
-    async def require_admin_user(current_user: dict = Depends(get_current_user)):
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin only")
-        return current_user
-
     async def admin_list_uploads(
         limit: int = Query(100, ge=1, le=500),
         skip: int = Query(0, ge=0),
         user_id: Optional[str] = Query(None, max_length=64),
         username: Optional[str] = Query(None, max_length=64),
-        _admin: dict = Depends(require_admin_user),
+        _admin: dict = Depends(require_admin),
     ):
         """List active hosted images (all users). Optional filter by user_id or username."""
         filt: dict = {"deleted_at": None}
@@ -495,7 +489,7 @@ def register(r) -> None:
 
     async def admin_delete_upload(
         public_id: str,
-        _admin: dict = Depends(require_admin_user),
+        _admin: dict = Depends(require_admin),
     ):
         doc = await db.image_host_uploads.find_one({"public_id": public_id, "deleted_at": None})
         if not doc:

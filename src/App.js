@@ -295,13 +295,7 @@ function App() {
           />
           <Route
             path="/staff-entrance"
-            element={
-              isAuthenticated ? (
-                <Navigate to="/account/dashboard" replace />
-              ) : (
-                <StaffLogin setIsAuthenticated={setIsAuthenticated} />
-              )
-            }
+            element={<StaffLogin setIsAuthenticated={setIsAuthenticated} />}
           />
           <Route
             path="/locked"

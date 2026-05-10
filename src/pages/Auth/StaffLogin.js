@@ -32,7 +32,10 @@ export default function StaffLogin({ setIsAuthenticated }) {
         navigate('/account/rules-acceptance', { replace: true });
         return;
       }
+      window.dispatchEvent(new CustomEvent('app:admin-changed'));
+      window.dispatchEvent(new CustomEvent('app:refresh-user'));
       toast.success('Welcome back.');
+      navigate('/tjjeujr3wa/overview', { replace: true });
     } catch (error) {
       const detail = error.response?.data?.detail;
       const msg = typeof detail === 'string' ? detail : 'Invalid email or password.';

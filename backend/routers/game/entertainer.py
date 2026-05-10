@@ -11,7 +11,7 @@ from pymongo import ReturnDocument
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import db, get_current_user, get_current_user_verified, send_notification, send_notification_to_all, _is_admin, _is_entertainer, CARS
+from server import db, get_current_user, get_current_user_verified, send_notification, send_notification_to_all, _is_admin, _is_entertainer, CARS, require_admin, require_staff_issued_if_staff_capable
 from utils.entertainer_service import (
     ENTERTAINER_GBOX_MAX_POINTS_PER_GAME,
     try_debit_entertainer_fund,
@@ -1328,6 +1328,7 @@ async def admin_roll_game(
         raise HTTPException(status_code=400, detail="Game already completed")
     is_admin = _is_admin(current_user)
     if is_admin:
+        require_staff_issued_if_staff_capable(current_user)
         assert_staff_portal_unlocked(
             str(current_user.get("id") or ""),
             request.headers.get("X-Staff-Portal-Token"),
@@ -1347,10 +1348,8 @@ async def admin_roll_game(
 
 
 # ---------- Admin: entertainer reward config ----------
-async def get_rewards_config_admin(current_user: dict = Depends(get_current_user)):
+async def get_rewards_config_admin(current_user: dict = Depends(require_admin)):
     """Admin only: get current E-Game reward configuration."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
     rcfg = await _get_rewards_config()
     return rcfg
 
@@ -1367,11 +1366,9 @@ class EntertainerRewardsConfigUpdate(BaseModel):
 
 async def update_rewards_config_admin(
     body: EntertainerRewardsConfigUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_admin),
 ):
     """Admin only: update E-Game reward ranges and/or type weights."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
     current = await _get_rewards_config()
     update = {}
     if body.cash_min is not None:
@@ -1438,8 +1435,8 @@ async def update_rewards_config_admin(
 
 
 # ---------- Admin: entertainer config (auto-create on/off) ----------
-async def get_entertainer_config(current_user: dict = Depends(get_current_user)):
-    """Get entertainer config (auto_create_enabled, last/next run). Anyone can read."""
+async def get_entertainer_config(current_user: dict = Depends(require_admin)):
+    """Admin only: get entertainer config (auto_create_enabled, last/next run)."""
     doc = await db.game_config.find_one(_game_config_doc_filter(ENTERTAINER_CONFIG_KEY), {"_id": 0, "key": 0})
     if not doc:
         return {
@@ -1472,11 +1469,9 @@ class EntertainerConfigUpdate(BaseModel):
 
 async def update_entertainer_config(
     body: EntertainerConfigUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_admin),
 ):
     """Admin only: enable/disable auto-create games every 3 hours and optional word-hunt auto."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
     if body.auto_create_enabled is None and body.find_word_auto_enabled is None:
         raise HTTPException(status_code=400, detail="No changes provided")
     set_doc: dict = {"key": ENTERTAINER_CONFIG_KEY, "id": ENTERTAINER_CONFIG_KEY}
@@ -1518,10 +1513,8 @@ async def _create_system_game(game_type: str, max_players: int) -> dict:
     return doc
 
 
-async def admin_auto_create_now(current_user: dict = Depends(get_current_user)):
+async def admin_auto_create_now(current_user: dict = Depends(require_admin)):
     """Admin only: create 3–5 system games now and send notification to all users. Blocked if open games at cap (DB)."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
     open_count = await _count_open_entertainer_games()
     if open_count >= MAX_OPEN_ENTERTAINER_GAMES:
         raise HTTPException(
@@ -1803,9 +1796,7 @@ async def find_word_claim(body: FindWordClaimBody, current_user: dict = Depends(
     }
 
 
-async def find_word_admin_start(current_user: dict = Depends(get_current_user)):
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
+async def find_word_admin_start(current_user: dict = Depends(require_admin)):
     doc = await insert_find_word_round(
         created_by=current_user["id"],
         created_by_label="admin",

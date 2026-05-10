@@ -25,7 +25,7 @@ from .racing_lap_engine import (
 from pydantic import BaseModel
 from pymongo import UpdateOne
 
-from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, user_prestige_rank_mult, send_notification, log_gambling, _is_admin, _get_staff_user_ids, log_respect_delta
+from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, user_prestige_rank_mult, send_notification, log_gambling, _is_admin, _get_staff_user_ids, log_respect_delta, require_admin_verified
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
 from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 import pathlib as _pathlib
@@ -4806,10 +4806,8 @@ async def get_rnd_status(current_user: dict = Depends(get_current_user_verified)
     }
 
 
-async def admin_clear_crew_bank_debt(current_user: dict = Depends(get_current_user_verified)):
+async def admin_clear_crew_bank_debt(current_user: dict = Depends(require_admin_verified)):
     """Admin: set every negative crew_bank to 0 (does not touch positive balances)."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
     res = await db.racing_profiles.update_many(
         {"crew_bank": {"$lt": 0}},
         [{"$set": {"crew_bank": 0}}],
@@ -4820,11 +4818,8 @@ async def admin_clear_crew_bank_debt(current_user: dict = Depends(get_current_us
     }
 
 
-async def admin_wipe_all_teams(current_user: dict = Depends(get_current_user_verified)):
+async def admin_wipe_all_teams(current_user: dict = Depends(require_admin_verified)):
     """Admin tool: wipe ALL racing teams, profiles, cars, upgrades, races, championships, and R&D. Full reset."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
-
     del_profiles = await db.racing_profiles.delete_many({})
     del_cars = await db.user_racing_cars.delete_many({})
     del_upgrades = await db.racing_upgrades.delete_many({})
@@ -4903,7 +4898,7 @@ def register(router):
 
     async def verify_racing_cron_secret(x_cron_secret: Optional[str] = Header(None, alias="X-Cron-Secret")):
         if not cron_secret:
-            return
+            raise HTTPException(status_code=503, detail="Cron not configured (CRON_SECRET unset)")
         if (x_cron_secret or "").strip() != cron_secret:
             raise HTTPException(status_code=403, detail="Invalid cron secret")
 

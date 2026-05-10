@@ -20,6 +20,7 @@ from server import (
     log_activity,
     send_notification,
     _is_admin,
+    require_admin,
     _username_pattern,
     CARS,
     ARMOUR_BASE_BULLETS,
@@ -276,10 +277,8 @@ async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
     }
 
 
-async def get_loot_box_rarity_admin(current_user: dict = Depends(get_current_user)):
+async def get_loot_box_rarity_admin(current_user: dict = Depends(require_admin)):
     """Admin only: return current loot box rarity config for the admin UI (exclusive % and box quality %)."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
     config = await _get_loot_rarity_config()
     return {
         "exclusive_chance_pct": round(config["exclusive_chance"] * 100, 2),
@@ -291,11 +290,9 @@ async def get_loot_box_rarity_admin(current_user: dict = Depends(get_current_use
 
 async def set_loot_box_rarity_admin(
     body: LootBoxRarityAdminUpdate,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_admin),
 ):
     """Admin only: update loot box rarity (percent 0–100). exclusive_chance_pct = chance per prize for exclusive (e.g. 10 = 10%)."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
     config = await _get_loot_rarity_config()
     if body.exclusive_chance_pct is not None:
         x = float(body.exclusive_chance_pct)
@@ -889,11 +886,9 @@ async def admin_loot_box_opens_list(
     username: Optional[str] = None,
     limit: int = Query(100, ge=1, le=500),
     skip: int = Query(0, ge=0, le=100_000),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_admin),
 ):
     """Admin only: paginated loot box opens from economy_events (newest first). Optional username filter."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
     q: Dict[str, Any] = {"type": "loot_box_open"}
     raw_un = (username or "").strip()
     if raw_un:

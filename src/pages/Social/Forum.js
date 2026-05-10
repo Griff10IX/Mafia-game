@@ -1312,6 +1312,10 @@ export default function Forum() {
   }, [activeTab, forumPage]);
 
   const fetchEntertainerConfig = useCallback(async () => {
+    if (!isAdmin) {
+      setEntertainerConfig({ ...defaultEntertainerConfig.current });
+      return;
+    }
     try {
       const res = await api.get('/forum/entertainer/admin/config');
       setEntertainerConfig(res.data ?? {
@@ -1330,7 +1334,7 @@ export default function Forum() {
         last_find_word_auto_at: null,
       });
     }
-  }, []);
+  }, [isAdmin]);
 
   useEffect(() => { fetchTopics(); }, [fetchTopics]);
   

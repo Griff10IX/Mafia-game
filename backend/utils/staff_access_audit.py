@@ -14,6 +14,10 @@ logger = logging.getLogger(__name__)
 
 COLLECTION = "staff_access_denials"
 NOTIFY_COOLDOWN_SEC = int((os.environ.get("STAFF_ACCESS_DENIAL_NOTIFY_COOLDOWN_SEC") or "900").strip() or "900")
+SPA_UNAUTHORIZED_REPORT_DEDUPE_SEC = int(
+    (os.environ.get("STAFF_SPA_UNAUTHORIZED_REPORT_DEDUPE_SEC") or str(NOTIFY_COOLDOWN_SEC)).strip()
+    or str(NOTIFY_COOLDOWN_SEC)
+)
 
 # Explicit staff tool API families (avoid broad "/admin" matching that can catch non-critical admin-named endpoints).
 _STAFF_TOOL_API_PREFIXES = (

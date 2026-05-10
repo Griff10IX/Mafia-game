@@ -94,7 +94,7 @@ from server import (
     log_respect_delta,
     send_notification,
     _username_pattern,
-    _is_admin,
+    require_admin,
     DEFAULT_GARAGE_BATCH_LIMIT,
     GARAGE_BATCH_UPGRADE_COST,
     GARAGE_BATCH_UPGRADE_INCREMENT,
@@ -722,11 +722,9 @@ async def get_my_points_transfers(current_user: dict = Depends(get_current_user)
 
 async def admin_points_transfers(
     limit: int = Query(500, ge=1, le=1000),
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(require_admin),
 ):
     """Admin: last N points transfers (default 500)."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
     cursor = db.points_transfers.find(
         {},
         {"_id": 0, "id": 1, "from_user_id": 1, "from_username": 1, "to_user_id": 1, "to_username": 1, "amount": 1, "created_at": 1},
