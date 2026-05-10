@@ -867,14 +867,30 @@ const FamilyPerksTab = ({ myRole, vaultAndRacketsLocked, onRefresh }) => {
     load();
   }, [load]);
 
+  useEffect(() => {
+    const b = data?.catalog?.booze;
+    if (!b) return;
+    const cap = b.cap ?? 300;
+    const chunk = b.step_cargo ?? 15;
+    const cur = data?.family_perks?.booze?.cargo_bonus ?? 0;
+    const maxPurch = Math.floor(Math.max(0, cap - cur) / chunk);
+    if (maxPurch >= 1) setBoozeSteps((s) => Math.min(Math.max(1, s), maxPurch));
+  }, [data?.catalog?.booze, data?.family_perks?.booze?.cargo_bonus]);
+
   const purchase = async (perkId) => {
     if (!isBoss) return;
     setBusy(perkId);
     try {
-      const body =
-        perkId === 'booze'
-          ? { perk_id: perkId, booze_steps: Math.max(1, parseInt(String(boozeSteps), 10) || 1) }
-          : { perk_id: perkId };
+      let body = { perk_id: perkId };
+      if (perkId === 'booze') {
+        const b = data?.catalog?.booze;
+        const cap = b?.cap ?? 300;
+        const chunk = b?.step_cargo ?? 15;
+        const cur = data?.family_perks?.booze?.cargo_bonus ?? 0;
+        const maxPurch = Math.floor(Math.max(0, cap - cur) / chunk);
+        const steps = maxPurch < 1 ? 1 : Math.min(Math.max(1, boozeSteps), maxPurch);
+        body = { perk_id: perkId, booze_steps: steps };
+      }
       await api.post('/families/perks/purchase', body);
       toast.success('Perk purchased');
       await load();
@@ -925,6 +941,14 @@ const FamilyPerksTab = ({ myRole, vaultAndRacketsLocked, onRefresh }) => {
   const fp = data?.family_perks || {};
   const monthEnd = data?.month_ends_at;
   const perkActive = (id) => !!fp[id];
+
+  const boozeCap = catalog.booze?.cap ?? 300;
+  const boozeCost = catalog.booze?.cost_per_step ?? 50;
+  const boozeChunk = catalog.booze?.step_cargo ?? 15;
+  const boozeCurrent = fp.booze?.cargo_bonus ?? 0;
+  const boozeRoom = Math.max(0, boozeCap - boozeCurrent);
+  const boozeMaxPurchases = Math.floor(boozeRoom / boozeChunk);
+  const boozeAtCap = boozeMaxPurchases < 1;
 
   return (
     <div className="space-y-4">
@@ -1005,40 +1029,66 @@ const FamilyPerksTab = ({ myRole, vaultAndRacketsLocked, onRefresh }) => {
 
       <div className="rounded-md border border-zinc-700/50 bg-zinc-900/40 p-2.5 space-y-2">
         <div className="text-[11px] font-heading font-bold text-foreground">{catalog.booze?.label}</div>
-        <div className="text-[10px] text-mutedForeground font-heading">
-          {catalog.booze?.cost_per_step} pts per +{catalog.booze?.step_cargo} cargo (family cap +{catalog.booze?.cap}). Current crew cargo bonus:{' '}
-          <span className="text-foreground font-bold tabular-nums">{fp.booze?.cargo_bonus ?? 0}</span>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[9px] text-zinc-500 font-heading uppercase">Steps</span>
-          <input
-            type="number"
-            min={1}
-            max={40}
-            value={boozeSteps}
-            onChange={(e) => setBoozeSteps(Math.max(1, parseInt(e.target.value, 10) || 1))}
-            className="w-16 bg-zinc-950 border border-zinc-700 rounded px-1 py-0.5 text-[11px]"
-          />
-          <span className="text-[9px] text-zinc-500 font-heading tabular-nums">
-            Cost {((catalog.booze?.cost_per_step ?? 50) * boozeSteps).toLocaleString()} pts
-          </span>
-        </div>
+        <dl className="text-[10px] font-heading space-y-1">
+          <div className="flex justify-between gap-3">
+            <dt className="text-zinc-500 shrink-0">Cost</dt>
+            <dd className="text-foreground text-right tabular-nums">
+              <span className="text-primary font-bold">{boozeCost.toLocaleString()} pts</span>
+              <span className="text-mutedForeground"> → +{boozeChunk} extra cargo</span>
+            </dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt className="text-zinc-500 shrink-0">Monthly cap</dt>
+            <dd className="text-foreground text-right tabular-nums">
+              +{boozeCap.toLocaleString()} extra cargo <span className="text-mutedForeground">(whole crew)</span>
+            </dd>
+          </div>
+          <div className="flex justify-between gap-3 pt-0.5 border-t border-zinc-700/40">
+            <dt className="text-zinc-500 shrink-0">This month</dt>
+            <dd className="text-foreground font-bold tabular-nums">
+              {boozeCurrent.toLocaleString()} / {boozeCap.toLocaleString()}
+              {boozeAtCap && <span className="text-emerald-400 font-heading font-bold ml-1">· max</span>}
+            </dd>
+          </div>
+        </dl>
         {fp.booze?.valid_until && (
-          <p className="text-[9px] text-zinc-500 font-heading">Booze perk month ends {fmtUntil(fp.booze.valid_until)}</p>
+          <p className="text-[9px] text-zinc-500 font-heading">Resets {fmtUntil(fp.booze.valid_until)}</p>
         )}
-        {isBoss && (
-          <button
-            type="button"
-            disabled={
-              !!busy ||
-              vaultAndRacketsLocked ||
-              (fp.booze?.cargo_bonus ?? 0) >= (catalog.booze?.cap ?? 300)
-            }
-            onClick={() => purchase('booze')}
-            className="px-2 py-1.5 rounded border border-primary/40 bg-primary/15 text-[10px] font-heading font-bold uppercase text-primary hover:bg-primary/25 disabled:opacity-40"
-          >
-            {busy === 'booze' ? '…' : 'Buy booze steps'}
-          </button>
+        {boozeAtCap ? (
+          <p className="text-[10px] text-amber-400/90 font-heading">Cargo bonus is at the monthly cap. Buy again after it resets.</p>
+        ) : (
+          isBoss && (
+            <>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[9px] text-zinc-500 font-heading whitespace-nowrap">Purchases (max {boozeMaxPurchases})</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={boozeMaxPurchases}
+                  value={Math.min(boozeSteps, boozeMaxPurchases)}
+                  onChange={(e) => {
+                    const raw = parseInt(e.target.value, 10);
+                    const n = Number.isFinite(raw) ? raw : 1;
+                    setBoozeSteps(Math.min(boozeMaxPurchases, Math.max(1, n)));
+                  }}
+                  className="w-16 bg-zinc-950 border border-zinc-700 rounded px-1 py-0.5 text-[11px]"
+                />
+                <span className="text-[9px] text-primary font-heading font-bold tabular-nums">
+                  {(boozeCost * Math.min(boozeSteps, boozeMaxPurchases)).toLocaleString()} pts total
+                </span>
+              </div>
+              <button
+                type="button"
+                disabled={!!busy || vaultAndRacketsLocked}
+                onClick={() => purchase('booze')}
+                className="px-2 py-1.5 rounded border border-primary/40 bg-primary/15 text-[10px] font-heading font-bold uppercase text-primary hover:bg-primary/25 disabled:opacity-40"
+              >
+                {busy === 'booze'
+                  ? '…'
+                  : `Buy +${boozeChunk * Math.min(boozeSteps, boozeMaxPurchases)} cargo`}
+              </button>
+            </>
+          )
         )}
       </div>
 

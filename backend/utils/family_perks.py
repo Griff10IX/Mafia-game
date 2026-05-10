@@ -117,6 +117,6 @@ def perk_catalog_prices() -> Dict[str, Any]:
             "cost_per_step": FAMILY_PERK_COST_BOOZE_STEP,
             "step_cargo": FAMILY_PERK_BOOZE_STEP_AMOUNT,
             "cap": FAMILY_PERK_BOOZE_BONUS_CAP,
-            "label": "Booze run cargo (+15 per step, max +300)",
+            "label": "Booze run cargo",
         },
     }
