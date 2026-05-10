@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CircleDollarSign, Coins, MapPin, Repeat2, ShieldCheck, Sparkles } from 'lucide-react';
+import { CircleDollarSign, Coins, Flame, MapPin, Repeat2, ShieldCheck, Sparkles, Trophy, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { getApiErrorMessage, refreshUser } from '../../utils/api';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -19,13 +19,42 @@ const COIN_FLIP_STYLES = `
   }
   .coinflip-coin {
     transform-style: preserve-3d;
-    box-shadow: inset 0 2px 0 rgba(255,255,255,0.28), inset 0 -10px 18px rgba(54,36,8,0.55), 0 22px 50px rgba(0,0,0,0.45), 0 0 34px rgba(212,175,55,0.22);
+    background:
+      radial-gradient(circle at 33% 25%, rgba(255,244,184,0.92), transparent 9%),
+      radial-gradient(circle at 50% 52%, rgba(30,18,4,0.15), transparent 38%),
+      linear-gradient(145deg, #332107 0%, #9a6a14 34%, #e2b949 54%, #6b430b 78%, #211405 100%);
+    box-shadow: inset 0 2px 0 rgba(255,255,255,0.22), inset 0 -18px 24px rgba(37,22,3,0.66), 0 24px 54px rgba(0,0,0,0.52), 0 0 38px rgba(212,175,55,0.18);
   }
-  .coinflip-coin.flipping { animation: coinflip-spin 0.9s cubic-bezier(.16,.84,.28,1) both; }
+  .coinflip-coin:before {
+    content: "";
+    position: absolute;
+    inset: 10px;
+    border-radius: 999px;
+    border: 2px dashed rgba(24,18,8,0.55);
+    box-shadow: inset 0 0 0 10px rgba(255,228,118,0.08), inset 0 0 24px rgba(0,0,0,0.42);
+  }
+  .coinflip-coin:after {
+    content: "FAMIGLIA";
+    position: absolute;
+    bottom: 17%;
+    left: 0;
+    right: 0;
+    font-family: var(--font-heading, serif);
+    font-size: 0.62rem;
+    font-weight: 900;
+    letter-spacing: 0.32em;
+    color: rgba(24,18,8,0.68);
+    text-shadow: 0 1px 0 rgba(255,236,157,0.24);
+  }
+  .coinflip-coin.flipping { animation: coinflip-spin 1.05s cubic-bezier(.15,.82,.2,1) both; }
   @keyframes coinflip-spin {
-    0% { transform: rotateY(0deg) rotateX(0deg) scale(0.96); }
-    48% { transform: rotateY(720deg) rotateX(18deg) scale(1.08); }
-    100% { transform: rotateY(1080deg) rotateX(0deg) scale(1); }
+    0% { transform: rotateY(0deg) rotateX(0deg) scale(0.96); filter: brightness(0.92); }
+    34% { transform: rotateY(540deg) rotateX(14deg) scale(1.06); filter: brightness(1.2); }
+    68% { transform: rotateY(900deg) rotateX(-8deg) scale(1.02); filter: brightness(0.98); }
+    100% { transform: rotateY(1260deg) rotateX(0deg) scale(1); filter: brightness(1.04); }
+  }
+  .coinflip-crest {
+    text-shadow: 0 1px 0 rgba(255,235,150,0.3), 0 5px 12px rgba(0,0,0,0.3);
   }
   .coinflip-choice { transition: transform 0.18s ease, border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease; }
   .coinflip-choice:active { transform: scale(0.985); }
@@ -41,8 +70,21 @@ function formatMoney(n) {
   return `$${Math.trunc(num).toLocaleString()}`;
 }
 
+function formatSignedMoney(n) {
+  const num = Number(n ?? 0);
+  if (Number.isNaN(num) || num === 0) return '$0';
+  return `${num > 0 ? '+' : '-'}$${Math.abs(Math.trunc(num)).toLocaleString()}`;
+}
+
 function labelChoice(v) {
   return v === 'tails' ? 'Tails' : 'Heads';
+}
+
+function streakLabel(type, count) {
+  const n = Number(count || 0);
+  if (!type || n <= 0) return 'No flips';
+  if (type === 'wins') return `${n} win${n === 1 ? '' : 's'}`;
+  return `${n} loss${n === 1 ? '' : 'es'}`;
 }
 
 export default function CoinFlipPage() {
@@ -56,7 +98,10 @@ export default function CoinFlipPage() {
   const [choice, setChoice] = useState('heads');
   const [bet, setBet] = useState('100000');
   const [loading, setLoading] = useState(false);
+  const [isFlipping, setIsFlipping] = useState(false);
+  const [skipAnimation, setSkipAnimation] = useState(false);
   const [lastRound, setLastRound] = useState(null);
+  const [stats, setStats] = useState(null);
   const lastBetRef = useRef('100000');
 
   const maxBet = Number(config.max_bet || 5_000_000);
@@ -71,9 +116,17 @@ export default function CoinFlipPage() {
       .catch(() => toast.error('Could not load Coin Flip config'));
   }, []);
 
+  const fetchStats = useCallback(() => {
+    api
+      .get('/casino/coin-flip/stats')
+      .then((r) => setStats(r.data || null))
+      .catch(() => setStats(null));
+  }, []);
+
   useEffect(() => {
     fetchConfig();
-  }, [fetchConfig]);
+    fetchStats();
+  }, [fetchConfig, fetchStats]);
 
   const setQuickBet = (amount) => {
     setBet(String(Math.min(amount, maxBet)));
@@ -94,29 +147,39 @@ export default function CoinFlipPage() {
       return;
     }
     setLoading(true);
+    if (!skipAnimation) setIsFlipping(true);
     try {
       const res = await api.post('/casino/coin-flip/play', { choice, bet: betNum });
       const d = res.data || {};
       lastBetRef.current = String(betNum);
-      setLastRound({
+      const nextRound = {
         choice: d.choice || choice,
         result: d.result,
         won: !!d.won,
         bet: d.bet ?? betNum,
         payout: d.payout ?? 0,
         net: d.net ?? 0,
-      });
+      };
+      if (!skipAnimation) {
+        await new Promise((resolve) => setTimeout(resolve, 720));
+      }
+      setLastRound(nextRound);
       requestAnimationFrame(() => refreshUser());
+      fetchStats();
       if (d.won) toast.success(`${labelChoice(d.result)} landed. Paid ${formatMoney(d.payout)}`);
       else toast.message(`${labelChoice(d.result)} landed. No payout.`);
     } catch (e) {
       toast.error(getApiErrorMessage(e) || 'Flip failed');
     } finally {
+      setIsFlipping(false);
       setLoading(false);
     }
   };
 
-  const coinFace = loading ? '?' : lastRound?.result ? labelChoice(lastRound.result).slice(0, 1) : labelChoice(choice).slice(0, 1);
+  const coinFace = isFlipping ? 'M' : lastRound?.result ? labelChoice(lastRound.result).slice(0, 1) : labelChoice(choice).slice(0, 1);
+  const netProfit = Number(stats?.net_profit || 0);
+  const streakType = stats?.streak?.current_type;
+  const streakCount = Number(stats?.streak?.current_count || 0);
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-0`} data-testid="coin-flip-page">
@@ -224,18 +287,30 @@ export default function CoinFlipPage() {
                   >
                     <Repeat2 size={13} /> Repeat last bet
                   </button>
+                  <label className="coinflip-touch ml-2 inline-flex items-center gap-1.5 rounded border border-zinc-700/60 bg-zinc-900/50 px-2 py-1 text-[10px] font-heading text-zinc-400">
+                    <input
+                      type="checkbox"
+                      checked={skipAnimation}
+                      onChange={(e) => setSkipAnimation(e.target.checked)}
+                      className="h-3.5 w-3.5 accent-primary"
+                    />
+                    Skip animation
+                  </label>
                 </div>
               </div>
 
               <div className="rounded-xl border border-primary/20 bg-gradient-to-b from-zinc-900/80 to-zinc-950/90 p-4 sm:p-5 flex flex-col items-center justify-center text-center min-h-[21rem]">
                 <div
-                  className={`coinflip-coin ${loading ? 'flipping' : ''} relative flex h-40 w-40 sm:h-52 sm:w-52 items-center justify-center rounded-full border-[10px] border-primary/70 bg-gradient-to-br from-yellow-200 via-primary to-amber-900`}
+                  className={`coinflip-coin ${isFlipping ? 'flipping' : ''} relative flex h-40 w-40 sm:h-52 sm:w-52 items-center justify-center rounded-full border-[10px] border-primary/70 bg-gradient-to-br from-yellow-200 via-primary to-amber-900`}
                 >
-                  <div className="absolute inset-4 rounded-full border border-amber-950/40 bg-black/10" />
-                  <span className="relative font-heading text-6xl sm:text-7xl font-black text-zinc-950 drop-shadow-sm">{coinFace}</span>
+                  <div className="absolute inset-7 rounded-full border border-amber-950/50 bg-black/10" />
+                  <span className="coinflip-crest relative z-10 font-heading text-6xl sm:text-7xl font-black text-zinc-950 drop-shadow-sm">{coinFace}</span>
+                  <span className="absolute top-[18%] left-0 right-0 z-10 text-[8px] sm:text-[9px] font-heading font-black tracking-[0.32em] text-zinc-950/65">
+                    THE HOUSE
+                  </span>
                 </div>
                 <div className="mt-4 space-y-1">
-                  <p className="text-[9px] font-heading uppercase tracking-[0.25em] text-zinc-500">Potential return</p>
+                  <p className="text-[9px] font-heading uppercase tracking-[0.25em] text-zinc-500">{isFlipping ? 'The coin is in the air' : 'Potential return'}</p>
                   <p className="text-2xl font-heading font-black text-primary tabular-nums">{formatMoney(potentialReturn)}</p>
                   <p className="text-[10px] font-heading text-zinc-500">Stake {formatMoney(betNum)} · Pick {labelChoice(choice)}</p>
                 </div>
@@ -248,6 +323,47 @@ export default function CoinFlipPage() {
                   <Sparkles size={17} />
                   {loading ? 'Flipping...' : 'Flip coin'}
                 </button>
+              </div>
+            </div>
+
+            <div className="relative grid grid-cols-2 lg:grid-cols-4 gap-2">
+              <div className={`rounded-xl border p-3 shadow-inner ${netProfit >= 0 ? 'border-emerald-500/25 bg-emerald-950/20' : 'border-rose-500/25 bg-rose-950/15'}`}>
+                <div className="flex items-center gap-1.5 text-[9px] font-heading uppercase tracking-wider text-zinc-500">
+                  <TrendingUp size={13} className={netProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'} />
+                  Overall
+                </div>
+                <div className={`mt-1 text-lg sm:text-xl font-heading font-black tabular-nums ${netProfit >= 0 ? 'text-emerald-300' : 'text-rose-300'}`}>
+                  {formatSignedMoney(netProfit)}
+                </div>
+                <div className="text-[9px] font-heading text-zinc-500">{netProfit >= 0 ? 'In profit overall' : 'Not in profit overall'}</div>
+              </div>
+              <div className="rounded-xl border border-zinc-700/55 bg-zinc-950/45 p-3 shadow-inner">
+                <div className="flex items-center gap-1.5 text-[9px] font-heading uppercase tracking-wider text-zinc-500">
+                  <CircleDollarSign size={13} className="text-primary/80" />
+                  Won / paid
+                </div>
+                <div className="mt-1 text-lg sm:text-xl font-heading font-black text-primary tabular-nums">{formatMoney(stats?.total_paid || 0)}</div>
+                <div className="text-[9px] font-heading text-zinc-500">Staked {formatMoney(stats?.total_wagered || 0)}</div>
+              </div>
+              <div className="rounded-xl border border-zinc-700/55 bg-zinc-950/45 p-3 shadow-inner">
+                <div className="flex items-center gap-1.5 text-[9px] font-heading uppercase tracking-wider text-zinc-500">
+                  <Flame size={13} className={streakType === 'wins' ? 'text-emerald-300' : 'text-rose-300'} />
+                  Current run
+                </div>
+                <div className={`mt-1 text-lg sm:text-xl font-heading font-black tabular-nums ${streakType === 'wins' ? 'text-emerald-300' : streakType === 'losses' ? 'text-rose-300' : 'text-zinc-300'}`}>
+                  {streakLabel(streakType, streakCount)}
+                </div>
+                <div className="text-[9px] font-heading text-zinc-500">Longest scanned: {stats?.streak?.longest_win_run || 0}W / {stats?.streak?.longest_loss_run || 0}L</div>
+              </div>
+              <div className="rounded-xl border border-zinc-700/55 bg-zinc-950/45 p-3 shadow-inner">
+                <div className="flex items-center gap-1.5 text-[9px] font-heading uppercase tracking-wider text-zinc-500">
+                  <Trophy size={13} className="text-amber-300/90" />
+                  Record
+                </div>
+                <div className="mt-1 text-lg sm:text-xl font-heading font-black text-zinc-100 tabular-nums">{(stats?.rounds || 0).toLocaleString()} flips</div>
+                <div className="text-[9px] font-heading text-zinc-500">
+                  {(stats?.wins || 0).toLocaleString()}W / {(stats?.losses || 0).toLocaleString()}L · {Number(stats?.win_rate || 0).toFixed(2)}%
+                </div>
               </div>
             </div>
 
@@ -265,7 +381,7 @@ export default function CoinFlipPage() {
                     <span className="rounded border border-zinc-700/60 bg-zinc-950/50 px-2 py-1">Stake <b>{formatMoney(lastRound.bet)}</b></span>
                     <span className="rounded border border-zinc-700/60 bg-zinc-950/50 px-2 py-1">Paid <b className="text-primary">{formatMoney(lastRound.payout)}</b></span>
                     <span className="rounded border border-zinc-700/60 bg-zinc-950/50 px-2 py-1">
-                      Net <b className={lastRound.net >= 0 ? 'text-emerald-400' : 'text-rose-300'}>{lastRound.net >= 0 ? '+' : ''}{formatMoney(lastRound.net)}</b>
+                      Net <b className={lastRound.net >= 0 ? 'text-emerald-400' : 'text-rose-300'}>{formatSignedMoney(lastRound.net)}</b>
                     </span>
                   </div>
                 </div>
