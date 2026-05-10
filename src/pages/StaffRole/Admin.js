@@ -605,6 +605,7 @@ export default function Admin() {
   const [lotteryMoneyTrailLoading, setLotteryMoneyTrailLoading] = useState(false);
   const [lotteryMoneyTrailRoundsLoading, setLotteryMoneyTrailRoundsLoading] = useState(false);
   const [lotteryRepairLoading, setLotteryRepairLoading] = useState(false);
+  const [lotteryForceDrawLoading, setLotteryForceDrawLoading] = useState(false);
   const [racingEconomyPage, setRacingEconomyPage] = useState(1);
   const [racingEconomySort, setRacingEconomySort] = useState('crew_bank');
   const [racingEconomyDir, setRacingEconomyDir] = useState('desc');
@@ -3327,6 +3328,33 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to repair lottery rounds');
     } finally {
       setLotteryRepairLoading(false);
+    }
+  };
+
+  const handleLotteryForceDraw = async (mode) => {
+    const id = String(lotteryMoneyTrailRoundId || '').trim();
+    if (!id) {
+      toast.error('Select a round');
+      return;
+    }
+    const label = mode === 'random_ticket' ? 'random eligible ticket' : 'standard ball draw';
+    if (!window.confirm(`Force lottery draw (${label}) for round ${id}? This closes the round and pays winners.`)) {
+      return;
+    }
+    setLotteryForceDrawLoading(true);
+    try {
+      const res = await api.post('/admin/lottery/draw-round', { round_id: id, mode });
+      const d = res.data || {};
+      toast.success(
+        `Draw complete. Winner: ${d.winner_username || '—'} · Net payout $${Number(d.payout || 0).toLocaleString()} · Fallback: ${d.draw_fallback ? 'yes' : 'no'}`,
+      );
+      setLotteryMoneyTrailRoundId('');
+      await fetchLotteryMoneyTrailRounds();
+      setLotteryMoneyTrailData(null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Force draw failed');
+    } finally {
+      setLotteryForceDrawLoading(false);
     }
   };
 
@@ -12147,6 +12175,29 @@ export default function Admin() {
               <BtnPrimary type="button" onClick={() => fetchLotteryMoneyTrail()} disabled={lotteryMoneyTrailLoading}>
                 {lotteryMoneyTrailLoading ? 'Loading…' : 'Load money trail'}
               </BtnPrimary>
+            </div>
+            <div className="border border-zinc-700/40 rounded p-2 bg-zinc-900/30 space-y-2">
+              <p className="text-[10px] text-mutedForeground font-heading">
+                Force-close an <strong className="text-foreground">open</strong> or <strong className="text-foreground">drawing</strong> round (pick below).
+                <strong className="text-primary"> Random winner</strong> picks one eligible player ticket and sets winning numbers to that line.
+                Use when the scheduled draw did not run or you need a payout without waiting for an exact 6-number match.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <BtnSecondary
+                  type="button"
+                  onClick={() => handleLotteryForceDraw('standard')}
+                  disabled={lotteryForceDrawLoading || lotteryMoneyTrailRoundsLoading}
+                >
+                  {lotteryForceDrawLoading ? 'Drawing…' : 'Force draw (standard)'}
+                </BtnSecondary>
+                <BtnPrimary
+                  type="button"
+                  onClick={() => handleLotteryForceDraw('random_ticket')}
+                  disabled={lotteryForceDrawLoading || lotteryMoneyTrailRoundsLoading}
+                >
+                  {lotteryForceDrawLoading ? 'Drawing…' : 'Force draw (random ticket)'}
+                </BtnPrimary>
+              </div>
             </div>
             {lotteryMoneyTrailData && (() => {
               const tr = lotteryMoneyTrailData.round || {};

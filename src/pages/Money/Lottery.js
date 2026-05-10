@@ -533,7 +533,7 @@ function Lottery() {
             </div>
             {rolloverIn > 0 && (
               <div className="text-[9px] text-amber-400/90 font-heading">
-                Includes {formatMoney(rolloverIn)} carried over from the last draw (no exact match).
+                Includes {formatMoney(rolloverIn)} carried over from the last draw (no jackpot paid).
               </div>
             )}
           </div>
@@ -673,11 +673,17 @@ function Lottery() {
                 <TicketNumbersMini numbers={last.winning_numbers} />
                 {Number(last.rollover_to_next) > 0 ? (
                   <p className="text-[9px] text-amber-400/90 font-heading leading-snug">
-                    No exact match — {formatMoney(last.rollover_to_next)} net rolled into the next round&apos;s jackpot.
+                    No jackpot paid — {formatMoney(last.rollover_to_next)} net rolled into the next round&apos;s jackpot.
                   </p>
                 ) : Number(last.exact_match_count) > 0 ? (
                   <p className="text-[9px] text-zinc-500 font-heading leading-snug">
-                    {last.exact_match_count} winning ticket{Number(last.exact_match_count) !== 1 ? 's' : ''} matched this line (net pot split).
+                    {last.draw_fallback ? (
+                      <>Winner chosen by random ticket — displayed numbers match an eligible player ticket; net pot paid.</>
+                    ) : (
+                      <>
+                        {last.exact_match_count} winning ticket{Number(last.exact_match_count) !== 1 ? 's' : ''} matched this line (net pot split).
+                      </>
+                    )}
                   </p>
                 ) : null}
               </div>
@@ -714,7 +720,7 @@ function Lottery() {
         </div>
       )}
 
-      {/* ── LAST 10 WINNERS (draws with at least one exact match) ── */}
+      {/* ── LAST 10 WINNERS (paid jackpot draws) ── */}
       <div className={`${styles.panel} rounded-md overflow-hidden lot-fade-in lot-delay-3`}>
         <div className="px-3 py-1.5 flex items-center gap-1.5" style={{ background: 'rgba(var(--noir-primary-rgb), 0.05)', borderBottom: '1px solid rgba(var(--noir-primary-rgb), 0.1)' }}>
           <Trophy size={12} className="text-primary/70" />
@@ -723,7 +729,7 @@ function Lottery() {
         <div className="p-3 space-y-2">
           {recentWinners.length === 0 ? (
             <p className="text-[10px] text-zinc-500 font-heading leading-relaxed">
-              No jackpot wins recorded yet. When someone matches all six numbers, they&apos;ll appear here.
+              No jackpot wins recorded yet. Winners appear after each draw pays out (exact match or random ticket selection).
             </p>
           ) : (
             recentWinners.map((draw, idx) => {
@@ -778,7 +784,7 @@ function Lottery() {
           {[
             { step: '1', title: 'Buy Tickets', desc: `Each ticket costs ${formatMoney(state?.ticket_price)}. Buy up to 500 per transaction.` },
             { step: '2', title: 'Wait for the Draw', desc: 'Draws happen Wednesday & Sunday at 00:00 UTC. The pot grows with every ticket sold.' },
-            { step: '3', title: 'Win the Jackpot', desc: `Six winning numbers are drawn. Tickets that match all six split ${100 - taxPct}% of the gross pot (including any rolled amount). If no one matches, that net pot rolls to the next draw. ${taxPct}% is removed as tax.` },
+            { step: '3', title: 'Win the Jackpot', desc: `Six numbers are drawn at random. Tickets that match all six split ${100 - taxPct}% of the gross pot (including any rolled amount). If nobody matches the draw, one eligible player ticket may be picked at random so the jackpot still pays—displayed numbers will match that ticket. Only if there is still no payout does the net pot roll forward. ${taxPct}% is removed as tax.` },
           ].map(({ step, title, desc }) => (
             <div key={step} className="flex gap-2.5">
               <div

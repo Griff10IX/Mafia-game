@@ -3972,6 +3972,17 @@ def register(router):
             )
         return {"rounds": out, "ticket_price": lottery_audit_mod.TICKET_PRICE, "pot_tax_percent": lottery_audit_mod.POT_TAX_PERCENT}
 
+    class AdminLotteryDrawRoundBody(BaseModel):
+        round_id: str
+        mode: str = "random_ticket"  # standard | random_ticket
+
+    @router.post("/admin/lottery/draw-round")
+    async def admin_lottery_draw_round(body: AdminLotteryDrawRoundBody, current_user: dict = Depends(get_current_user)):
+        """Admin: force-settle an open or stuck drawing lottery round (standard draw or random eligible ticket)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return await lottery_audit_mod.lottery_admin_force_draw(body.round_id, body.mode, current_user)
+
     @router.get("/admin/racing/crew-banks")
     async def admin_racing_crew_banks(
         page: int = 1,

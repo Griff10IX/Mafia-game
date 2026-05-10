@@ -9,11 +9,12 @@ import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 import {
   GAME_PASS_PRICE_GBP,
-  GAME_PASS_POINTS_PRICE,
   SILVER_PACK_POINTS,
   SILVER_PACK_PRICE_GBP,
 } from '../../constants/gamePassPricing';
 import { formatGameDateTime, formatGameDateTimeShort, formatGameDateOnly } from '../../utils/gameDateTime';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import { STORE_PAGE_CACHE_KEY } from '../../utils/sessionStaleCache';
 
 const STORE_STYLES = `
   .store-fade-in { animation: store-fade-in 0.4s ease-out both; }
@@ -257,12 +258,13 @@ const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, onBuy, loadi
 );
 
 export default function Store() {
+  const storeBoot = readSessionJson(STORE_PAGE_CACHE_KEY);
   const [loading, setLoading] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
-  const [user, setUser] = useState(null);
-  const [boozeConfig, setBoozeConfig] = useState(null);
-  const [event, setEvent] = useState(null);
-  const [eventsEnabled, setEventsEnabled] = useState(false);
+  const [user, setUser] = useState(() => storeBoot?.user ?? null);
+  const [boozeConfig, setBoozeConfig] = useState(() => storeBoot?.boozeConfig ?? null);
+  const [event, setEvent] = useState(() => storeBoot?.event ?? null);
+  const [eventsEnabled, setEventsEnabled] = useState(() => !!storeBoot?.eventsEnabled);
   const [customCarName, setCustomCarName] = useState('');
   const [activeTab, setActiveTab] = useState('points');
   const [searchParams, setSearchParams] = useSearchParams();
@@ -282,15 +284,15 @@ export default function Store() {
   const [customPointsInput, setCustomPointsInput] = useState('');
   const [customGbpInput, setCustomGbpInput] = useState('');
   const [customQuote, setCustomQuote] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [pointsTabLocked, setPointsTabLocked] = useState(false);
-  const [pointsTabLockMessage, setPointsTabLockMessage] = useState('');
-  const [paymentTransactions, setPaymentTransactions] = useState([]);
-  const [preorderActive, setPreorderActive] = useState(false);
-  const [preorderReleaseDate, setPreorderReleaseDate] = useState(null);
-  const [storePointsAutoCredit, setStorePointsAutoCredit] = useState(true);
-  const [manualCreditEta, setManualCreditEta] = useState(null);
-  const [pendingPoints, setPendingPoints] = useState(0);
+  const [isAdmin, setIsAdmin] = useState(() => !!storeBoot?.isAdmin);
+  const [pointsTabLocked, setPointsTabLocked] = useState(() => !!storeBoot?.pointsTabLocked);
+  const [pointsTabLockMessage, setPointsTabLockMessage] = useState(() => storeBoot?.pointsTabLockMessage ?? '');
+  const [paymentTransactions, setPaymentTransactions] = useState(() => storeBoot?.paymentTransactions ?? []);
+  const [preorderActive, setPreorderActive] = useState(() => !!storeBoot?.preorderActive);
+  const [preorderReleaseDate, setPreorderReleaseDate] = useState(() => storeBoot?.preorderReleaseDate ?? null);
+  const [storePointsAutoCredit, setStorePointsAutoCredit] = useState(() => storeBoot?.storePointsAutoCredit !== false);
+  const [manualCreditEta, setManualCreditEta] = useState(() => storeBoot?.manualCreditEta ?? null);
+  const [pendingPoints, setPendingPoints] = useState(() => storeBoot?.pendingPoints ?? 0);
   const [claimingPending, setClaimingPending] = useState(false);
   const [storePayWith, setStorePayWith] = useState('points');
   const [cashPricePerPoint, setCashPricePerPoint] = useState(0);
@@ -397,13 +399,16 @@ export default function Store() {
   const fetchPaymentTransactions = useCallback(async () => {
     try {
       const res = await api.get('/payments/my-transactions');
-      setPaymentTransactions(res.data?.transactions || []);
+      const txs = res.data?.transactions || [];
+      setPaymentTransactions(txs);
+      return txs;
     } catch {
       setPaymentTransactions([]);
+      return [];
     }
   }, []);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async ({ silent = false } = {}) => {
     try {
       const [userRes, boozeRes, eventsRes, adminRes, locksRes, pendingRes] = await Promise.all([
         api.get('/auth/me'),
@@ -414,13 +419,19 @@ export default function Store() {
         api.get('/payments/pending-points').catch(() => ({ data: { pending_points: 0 } })),
       ]);
       setUser(userRes.data);
-      setBoozeConfig(boozeRes?.data || null);
-      setEvent(eventsRes.data?.event ?? null);
-      setEventsEnabled(!!eventsRes.data?.events_enabled);
-      setIsAdmin(!!adminRes.data?.is_admin);
+      const nextBooze = boozeRes?.data || null;
+      setBoozeConfig(nextBooze);
+      const nextEvent = eventsRes.data?.event ?? null;
+      const nextEventsEnabled = !!eventsRes.data?.events_enabled;
+      setEvent(nextEvent);
+      setEventsEnabled(nextEventsEnabled);
+      const nextIsAdmin = !!adminRes.data?.is_admin;
+      setIsAdmin(nextIsAdmin);
       const paths = locksRes?.data?.paths ?? {};
-      setPointsTabLocked(!!paths['/store/points']);
-      setPointsTabLockMessage(paths['/store/points'] || 'Points purchase temporarily unavailable');
+      const pointsLocked = !!paths['/store/points'];
+      const pointsLockMsg = paths['/store/points'] || 'Points purchase temporarily unavailable';
+      setPointsTabLocked(pointsLocked);
+      setPointsTabLockMessage(pointsLockMsg);
       const pending = pendingRes?.data || {};
       const releaseDate = pending.release_date || null;
       let preorderOn = false;
@@ -433,12 +444,30 @@ export default function Store() {
       }
       setPreorderActive(preorderOn);
       setPreorderReleaseDate(releaseDate);
-      setStorePointsAutoCredit(pending.store_points_auto_credit !== false);
-      setManualCreditEta(pending.manual_credit_eta ?? null);
-      setPendingPoints(pending.pending_points || 0);
-      await fetchPaymentTransactions();
+      const nextAutoCredit = pending.store_points_auto_credit !== false;
+      const nextManualEta = pending.manual_credit_eta ?? null;
+      const nextPendingPts = pending.pending_points || 0;
+      setStorePointsAutoCredit(nextAutoCredit);
+      setManualCreditEta(nextManualEta);
+      setPendingPoints(nextPendingPts);
+      const txs = await fetchPaymentTransactions();
+      writeSessionJson(STORE_PAGE_CACHE_KEY, {
+        user: userRes.data,
+        boozeConfig: nextBooze,
+        event: nextEvent,
+        eventsEnabled: nextEventsEnabled,
+        isAdmin: nextIsAdmin,
+        pointsTabLocked: pointsLocked,
+        pointsTabLockMessage: pointsLockMsg,
+        preorderActive: preorderOn,
+        preorderReleaseDate: releaseDate,
+        storePointsAutoCredit: nextAutoCredit,
+        manualCreditEta: nextManualEta,
+        pendingPoints: nextPendingPts,
+        paymentTransactions: txs,
+      });
     } catch {
-      toast.error('Failed to load data');
+      if (!silent) toast.error('Failed to load data');
     }
   }, [fetchPaymentTransactions]);
 
@@ -491,7 +520,8 @@ export default function Store() {
           /* checkPaymentStatus will surface errors; avoid blocking store load */
         }
       }
-      fetchData();
+      const bootForSilent = readSessionJson(STORE_PAGE_CACHE_KEY);
+      fetchData({ silent: !!bootForSilent?.user });
       if (sessionId) checkPaymentStatus(sessionId);
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -883,7 +913,7 @@ export default function Store() {
             </div>
             <div className="p-3 space-y-2">
               <p className="text-[10px] text-zinc-400 font-heading">
-                {`Opens the Game Pass page — £${GAME_PASS_PRICE_GBP}, ${GAME_PASS_POINTS_PRICE.toLocaleString()} pts, rewards & status (grouped with Points, not Combat).`}
+                {`Opens the Game Pass page — £${GAME_PASS_PRICE_GBP}, rewards & status (grouped with Points, not Combat).`}
               </p>
               <Link
                 to="/game-pass"

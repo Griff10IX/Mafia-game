@@ -11,7 +11,6 @@ import {
   GAME_PASS_DURATION_LABEL,
   GAME_PASS_PACKAGE_ID,
   GAME_PASS_PURCHASE_FINAL_DAYS_BLOCK,
-  GAME_PASS_POINTS_PRICE,
   GAME_PASS_PRICE_GBP,
   GAME_PASS_SEASON_END_AT_ISO,
   SILVER_PACK_POINTS,
@@ -452,7 +451,6 @@ export default function GamePass() {
   const nowTs = seasonEndMs ? tickMs : Date.now();
   const passTokensHeld = Number(user?.rank_xp_pass_tokens ?? 0);
   const vipClaimed = user?.rank_xp_pass_rewards_granted === true;
-  const pointsBalance = Number(user?.points ?? 0);
   const passExpiryUntil = user?.rank_xp_pass_token_expires_at ? new Date(user.rank_xp_pass_token_expires_at) : null;
   const passIsUnactivatedValid = passTokensHeld > 0 && !!(passExpiryUntil && passExpiryUntil.getTime() > nowTs);
   const passIsUnactivatedExpired = passTokensHeld > 0 && !!(passExpiryUntil && passExpiryUntil.getTime() <= nowTs);
@@ -531,23 +529,6 @@ export default function GamePass() {
         origin_url: window.location.origin + '/game-pass',
       });
       window.location.href = res.data.url;
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handlePurchaseWithPoints = async () => {
-    if (!user) return;
-    setLoading(true);
-    try {
-      const res = await api.post('/payments/buy-game-pass-with-points', {
-        origin_url: window.location.origin + '/game-pass',
-      });
-      toast.success(res?.data?.message || 'Game Pass purchased.');
-      refreshUser();
-      await fetchData();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
@@ -716,37 +697,6 @@ export default function GamePass() {
                   <Clock size={14} className="shrink-0" />
                   Activate
                 </Link>
-              </div>
-
-              <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                <button
-                  type="button"
-                  onClick={handlePurchaseWithPoints}
-                  disabled={
-                    !user
-                    || loading
-                    || gamePassPurchaseLocked
-                    || vipClaimed
-                    || passIsUnactivatedValid
-                    || passIsUnactivatedUnknownExpiry
-                    || !!gamePassPurchaseBlockedFinalFortnight
-                    || pointsBalance < GAME_PASS_POINTS_PRICE
-                  }
-                  className="flex-1 w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 disabled:opacity-50 touch-manipulation"
-                >
-                  {loading
-                    ? '...'
-                    : gamePassPurchaseBlockedFinalFortnight
-                      ? 'Too close to pass end'
-                      : gamePassPurchaseLocked
-                        ? 'Unavailable until unlock'
-                        : pointsBalance < GAME_PASS_POINTS_PRICE
-                          ? `Need ${GAME_PASS_POINTS_PRICE.toLocaleString()} points`
-                          : `Buy for ${GAME_PASS_POINTS_PRICE.toLocaleString()} points`}
-                </button>
-                <div className="text-[9px] text-zinc-400 font-heading italic sm:text-right sm:flex-1">
-                  Deducts points to grant an unactivated Game Pass token.
-                </div>
               </div>
 
               <p className="text-[8px] text-zinc-500/90 font-heading leading-relaxed border-t border-primary/10 pt-2">

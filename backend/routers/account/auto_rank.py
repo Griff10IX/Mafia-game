@@ -1406,7 +1406,19 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_
                     {"auto_rank_next_run_at": {"$lte": now.isoformat()}},
                 ],
             },
-            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1, "email": 1, "is_moderator": 1},
+            {
+                "_id": 0,
+                "id": 1,
+                "username": 1,
+                "telegram_chat_id": 1,
+                "telegram_bot_token": 1,
+                "last_seen": 1,
+                "email": 1,
+                "is_moderator": 1,
+                "last_seen_country": 1,
+                "last_request_ip": 1,
+                "last_login_ip": 1,
+            },
         )
         .sort("auto_rank_next_run_at", 1)
         .limit(cap)
@@ -1430,9 +1442,23 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_
     if not crimes:
         logger.warning("Auto rank: crimes collection empty; each user will try to load crimes in-run")
 
+    # Serialize IP→country lookups (ip-api free tier); cache hits stay fast inside get_or_fetch_ip_geodata.
+    country_fill_sem = asyncio.Semaphore(1)
+
     async def run_one(u):
         chat_id = (u.get("telegram_chat_id") or "").strip()
         bot_token = (u.get("telegram_bot_token") or "").strip() or None
+        try:
+            from utils.ip_enrichment import maybe_fill_last_seen_country_for_auto_rank
+
+            async with country_fill_sem:
+                await maybe_fill_last_seen_country_for_auto_rank(db, u)
+        except Exception:
+            logger.debug(
+                "Auto rank: last_seen_country backfill skipped for %s",
+                u.get("id"),
+                exc_info=True,
+            )
         try:
             await _run_auto_rank_for_user(u["id"], u.get("username", "?"), chat_id, bot_token, crimes=crimes if crimes else None)
         except Exception as e:

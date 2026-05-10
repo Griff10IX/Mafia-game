@@ -34,7 +34,6 @@ STORE_POINTS_LOOT_GBP_MINOR_PER_BLOCK = 500
 STORE_POINTS_LOOT_PIECES_PER_BLOCK = 50
 
 RANK_XP_PASS_PACKAGE_ID = "rank_xp_pass_499"
-GAME_PASS_POINTS_PRICE = 8_000
 # No new Game Pass checkout while an active pass is within this many days of rank_xp_pass_token_expires_at.
 GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS = 7
 GAME_PASS_SEASON_END_AT = DEFAULT_GAME_PASS_SEASON_END_AT
@@ -535,7 +534,7 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
 
         season_rp = int((user or {}).get("rank_xp_pass_season_rp") or 0)
         expires_at = _add_months(now, 1).isoformat()
-        # Match `/payments/buy-game-pass-with-points`: clear stale VIP snapshot fields so activation
+        # Same rank_xp_pass token fields as legacy points purchase (removed): clear stale VIP snapshots so activation
         # is not blocked by a previous pass / admin state.
         await db.users.update_one(
             {"id": user_id},
@@ -1008,123 +1007,12 @@ def register(router):
         }
 
     @router.post("/payments/buy-game-pass-with-points")
-    async def buy_game_pass_with_points(request: BuyGamePassWithPointsRequest, current_user: dict = Depends(get_current_user)):
-        """Buy a Game Pass token using in-game points (no Stripe). Grants an unactivated `rank_xp_pass` token."""
-        now = datetime.now(timezone.utc)
-        now_iso = now.isoformat()
-
-        token_expires_raw = current_user.get("rank_xp_pass_token_expires_at")
-        token_expires_dt = _parse_utc(token_expires_raw)
-        existing_tokens = int(current_user.get("rank_xp_pass_tokens") or 0)
-        is_vip_claimed = current_user.get("rank_xp_pass_rewards_granted") is True
-
-        # Don't allow buying while VIP is already claimed.
-        if is_vip_claimed:
-            raise HTTPException(status_code=400, detail="Game Pass rewards already claimed.")
-
-        # Disallow stacking multiple unactivated tokens to keep UX consistent.
-        if existing_tokens > 0:
-            # If expiry is missing, treat it as an "unactivated token ready" and require activation.
-            if token_expires_dt is None or token_expires_dt > now:
-                raise HTTPException(status_code=400, detail="You already have an unactivated Game Pass token. Activate it before buying again.")
-
-        # If expired, clear old entitlement fields (and allow repurchase).
-        if existing_tokens > 0 and token_expires_dt and token_expires_dt <= now:
-            await db.users.update_one(
-                {"id": current_user["id"]},
-                {
-                    "$set": {
-                        "rank_xp_pass_tokens": 0,
-                        "rank_xp_pass_rewards_granted": False,
-                        "rank_xp_pass_pending_tier_snapshot": None,
-                        "rank_xp_pass_last_granted_micro_tier": 0,
-                    },
-                    "$unset": {"rank_xp_pass_token_expires_at": "", "rank_xp_pass_pending_tier_snapshot": ""},
-                },
-            )
-
-        rl = await get_release_soft_launch_public(db)
-        if rl.get("game_pass_purchase_locked"):
-            raise HTTPException(status_code=403, detail=game_pass_purchase_locked_detail(rl))
-
-        season = await get_game_pass_season_public(db)
-        block_msg = game_pass_purchase_blocked_in_final_window(
-            current_user,
-            now,
-            season_end_at=season.get("game_pass_season_end_at"),
+    async def buy_game_pass_with_points(_request: BuyGamePassWithPointsRequest, current_user: dict = Depends(get_current_user)):
+        """Deprecated: points purchase removed; use card checkout on Game Pass page."""
+        raise HTTPException(
+            status_code=400,
+            detail="Game Pass cannot be purchased with points. Use the card purchase option on the Game Pass page.",
         )
-        if block_msg:
-            raise HTTPException(status_code=403, detail=block_msg)
-
-        points = int(current_user.get("points") or 0)
-        if points < GAME_PASS_POINTS_PRICE:
-            raise HTTPException(status_code=400, detail=f"Not enough points. Need {GAME_PASS_POINTS_PRICE:,} points.")
-
-        # Atomic consume points + set entitlement token.
-        season_rp = int(current_user.get("rank_xp_pass_season_rp") or 0)
-        expires_at = _add_months(now, 1).isoformat()
-        updated = await db.users.update_one(
-            {"id": current_user["id"], "points": {"$gte": GAME_PASS_POINTS_PRICE}},
-            {
-                "$inc": {"points": -GAME_PASS_POINTS_PRICE},
-                "$set": {
-                    "rank_xp_pass_tokens": 1,
-                    "rank_xp_pass_token_expires_at": expires_at,
-                    "rank_xp_pass_pending_tier_snapshot": season_rp,
-                    "rank_xp_pass_rewards_granted": False,
-                    "rank_xp_pass_last_granted_micro_tier": 0,
-                    # Legacy field support (kept harmless for multiplier removal).
-                    "rank_xp_pass_bonus_until": None,
-                    "rank_xp_pass_tier_snapshot": None,
-                },
-            },
-        )
-        if updated.modified_count == 0:
-            raise HTTPException(status_code=400, detail="Could not process purchase (race condition).")
-        await log_points_event(db, user_id=current_user["id"], points=-GAME_PASS_POINTS_PRICE, event_type="buy_game_pass_points", meta={"expires_at": expires_at})
-
-        # Auto-activate: grant VIP rewards for all tiers already completed.
-        from routers.kill.armoury import _activate_rank_xp_pass_and_grant_cumulative_micro_tiers
-
-        u_pts = await db.users.find_one(
-            {"id": current_user["id"]},
-            {"_id": 0, "rank_xp_pass_season_rp": 1, "rank_xp_pass_free_last_micro_tier_granted": 1},
-        )
-        free_cash_last_micro = int((u_pts or {}).get("rank_xp_pass_free_last_micro_tier_granted") or 0)
-        activated = await _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
-            db,
-            current_user["id"],
-            season_rp,
-            free_cash_last_micro_tier_granted=free_cash_last_micro,
-        )
-        if activated:
-            await db.users.update_one(
-                {"id": current_user["id"]},
-                {"$set": {"rank_xp_pass_tokens": 0}},
-            )
-
-        if activated:
-            await send_notification(
-                current_user["id"],
-                "Game Pass",
-                "Your Game Pass has been activated and rewards have been granted!",
-                "rank_xp_pass_activated",
-            )
-        else:
-            await send_notification(
-                current_user["id"],
-                "Game Pass",
-                "Your Game Pass token is ready. Use it in the Armoury/My Inventory to claim your one-time rewards.",
-                "rank_xp_pass_token_entitled",
-            )
-
-        return {
-            "message": "Game Pass purchased and activated. Rewards granted!" if activated else "Game Pass purchased with points. Activate it in My Inventory/Armoury to claim rewards.",
-            "rank_xp_pass_tokens": 1 if not activated else 0,
-            "rank_xp_pass_token_expires_at": expires_at,
-            "points_spent": GAME_PASS_POINTS_PRICE,
-            "auto_activated": activated,
-        }
 
     @router.post("/payments/checkout")
     async def create_checkout(request: CheckoutRequest, current_user: dict = Depends(get_current_user)):

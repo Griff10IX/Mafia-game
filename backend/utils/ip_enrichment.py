@@ -1,5 +1,6 @@
 # Best-effort ISP / mobile / ASN for an IP (admin tooling). Uses ip-api.com free tier — rate-limited; results cached in MongoDB.
 import asyncio
+import ipaddress
 import logging
 from collections import Counter
 from datetime import datetime, timezone
@@ -109,6 +110,40 @@ async def get_or_fetch_ip_geodata(db, ip: str) -> Dict[str, Any]:
         logger.exception("ip_geodata_cache upsert failed ip=%s", ipn)
     await asyncio.sleep(_FETCH_THROTTLE_SEC)
     return data
+
+
+def is_public_routable_ip(ip: Optional[str]) -> bool:
+    """True if IPv4/IPv6 is globally routable (not loopback, private, link-local, etc.)."""
+    ipn = normalize_ip(ip or "")
+    if not ipn:
+        return False
+    try:
+        return ipaddress.ip_address(ipn).is_global
+    except ValueError:
+        return False
+
+
+async def maybe_fill_last_seen_country_for_auto_rank(db, user: dict) -> None:
+    """When edge headers never set last_seen_country (typical for auto-rank-only sessions), derive ISO2 from stored IP via ip_geodata cache / ip-api."""
+    uid = user.get("id")
+    if not uid:
+        return
+    raw = (user.get("last_seen_country") or "").strip().upper()
+    if len(raw) == 2 and raw.isalpha() and raw not in ("XX", "T1"):
+        return
+    ip = normalize_ip(user.get("last_request_ip") or user.get("last_login_ip") or "")
+    if not ip or not is_public_routable_ip(ip):
+        return
+    g = await get_or_fetch_ip_geodata(db, ip)
+    if not g.get("ok"):
+        return
+    code = (g.get("countryCode") or "").strip().upper()
+    if len(code) != 2 or not code.isalpha() or code in ("XX", "T1"):
+        return
+    try:
+        await db.users.update_one({"id": uid}, {"$set": {"last_seen_country": code}})
+    except Exception:
+        logger.exception("maybe_fill_last_seen_country_for_auto_rank update failed user=%s", uid)
 
 
 def network_label(g: Dict[str, Any]) -> str:

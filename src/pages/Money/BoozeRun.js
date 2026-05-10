@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { MapPin, Package, Clock, Wine, TrendingUp, DollarSign, ShoppingCart, Bot } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import { BOOZE_RUN_MOUNT_CACHE_KEY } from '../../utils/sessionStaleCache';
 import styles from '../../styles/noir.module.css';
 import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 import { useGameActionsTurnstile } from '../../hooks/useGameActionsTurnstile';
@@ -609,32 +611,90 @@ const InfoCard = ({ rotationHours, rotationSeconds, dailyEstimateRough }) => (
 
 // Main component
 export default function BoozeRun() {
-  const [config, setConfig] = useState(null);
+  const boozeBootRef = useRef(null);
+  if (boozeBootRef.current === null) {
+    boozeBootRef.current = readSessionJson(BOOZE_RUN_MOUNT_CACHE_KEY);
+  }
+  const boozeBoot = boozeBootRef.current;
+
+  const [config, setConfig] = useState(() => boozeBoot?.config ?? null);
   const [tradeAmounts, setTradeAmounts] = useState({});
   const [tradeMode, setTradeMode] = useState('buy');
   const [timer, setTimer] = useState('');
-  const [autoRankBoozeDisabled, setAutoRankBoozeDisabled] = useState(false);
-  const [user, setUser] = useState(null);
+  const [autoRankBoozeDisabled, setAutoRankBoozeDisabled] = useState(() => !!boozeBoot?.autoRankBoozeDisabled);
+  const [user, setUser] = useState(() => boozeBoot?.user ?? null);
   const { getCaptchaToken, captchaModal } = useGameActionsTurnstile();
 
-  const fetchConfig = useCallback(async () => {
+  const userRef = useRef(user);
+  userRef.current = user;
+  const autoRankRef = useRef(autoRankBoozeDisabled);
+  autoRankRef.current = autoRankBoozeDisabled;
+  const configRef = useRef(config);
+  configRef.current = config;
+
+  const fetchMountData = useCallback(async ({ silent = false } = {}) => {
+    const [cfgRes, arRes, meRes] = await Promise.allSettled([
+      api.get('/booze-run/config'),
+      api.get('/auto-rank/me'),
+      api.get('/auth/me'),
+    ]);
+
+    let nextConfig = null;
+    if (cfgRes.status === 'fulfilled' && cfgRes.value?.data != null) {
+      nextConfig = cfgRes.value.data;
+      setConfig(nextConfig);
+    } else if (!silent) {
+      const err = cfgRes.status === 'rejected' ? cfgRes.reason : null;
+      toast.error(apiErrorDetail(err, 'Failed to load booze run'));
+      setConfig(null);
+      nextConfig = null;
+    } else {
+      nextConfig = configRef.current;
+    }
+
+    let nextAr = autoRankRef.current;
+    if (arRes.status === 'fulfilled' && arRes.value?.data) {
+      const ar = arRes.value.data;
+      nextAr = !!(ar.auto_rank_enabled && ar.auto_rank_booze);
+      setAutoRankBoozeDisabled(nextAr);
+    }
+
+    let nextUser = userRef.current;
+    if (meRes.status === 'fulfilled' && meRes.value?.data) {
+      nextUser = meRes.value.data;
+      setUser(nextUser);
+    }
+
+    writeSessionJson(BOOZE_RUN_MOUNT_CACHE_KEY, {
+      config: nextConfig,
+      autoRankBoozeDisabled: nextAr,
+      user: nextUser,
+      savedAt: Date.now(),
+    });
+  }, []);
+
+  const fetchConfig = useCallback(async ({ silent = false } = {}) => {
     try {
       const r = await api.get('/booze-run/config');
       setConfig(r.data);
+      writeSessionJson(BOOZE_RUN_MOUNT_CACHE_KEY, {
+        config: r.data,
+        user: userRef.current,
+        autoRankBoozeDisabled: autoRankRef.current,
+        savedAt: Date.now(),
+      });
     } catch (e) {
-      toast.error(apiErrorDetail(e, 'Failed to load booze run'));
-      setConfig(null);
+      if (!silent) {
+        toast.error(apiErrorDetail(e, 'Failed to load booze run'));
+        setConfig(null);
+      }
     }
   }, []);
 
   useEffect(() => {
-    fetchConfig();
-  }, [fetchConfig]);
-
-  useEffect(() => {
-    api.get('/auto-rank/me').then((r) => setAutoRankBoozeDisabled(!!(r.data?.auto_rank_enabled && r.data?.auto_rank_booze))).catch(() => setAutoRankBoozeDisabled(false));
-    api.get('/auth/me').then((r) => setUser(r.data)).catch(() => {});
-  }, []);
+    const boot = readSessionJson(BOOZE_RUN_MOUNT_CACHE_KEY);
+    fetchMountData({ silent: !!boot?.config });
+  }, [fetchMountData]);
 
   const rotationEndRef = useRef(null);
   useEffect(() => {
@@ -645,7 +705,7 @@ export default function BoozeRun() {
       if (end <= now) {
         if (rotationEndRef.current !== config.rotation_ends_at) {
           rotationEndRef.current = config.rotation_ends_at;
-          fetchConfig();
+          fetchConfig({ silent: true });
           toast.success('Prices rotated — new rates and best routes');
         }
         setTimer('00:00:00');

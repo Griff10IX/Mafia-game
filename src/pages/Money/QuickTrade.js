@@ -1,10 +1,17 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Coins, ArrowLeftRight, Users, Building2, TrendingUp, TrendingDown, HelpCircle, Zap } from 'lucide-react';
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
+import {
+  QUICKTRADE_SESSION_CACHE_KEY,
+  readSessionJsonWithTtl,
+  writeSessionJsonWithSavedAt,
+} from '../../utils/sessionStaleCache';
+
+const QT_CACHE_TTL_MS = 90_000;
 
 const QT_STYLES = `
   .qt-fade-in { animation: qt-fade-in 0.4s ease-out both; }
@@ -19,12 +26,18 @@ const qtActionBtn = 'relative z-[2] touch-manipulation';
 const qtOffersListScroll = 'max-h-[min(52rem,92vh)] overflow-y-auto';
 
 export default function QuickTrade() {
+  const qtBootRef = useRef(null);
+  if (qtBootRef.current === null) {
+    qtBootRef.current = readSessionJsonWithTtl(QUICKTRADE_SESSION_CACHE_KEY, QT_CACHE_TTL_MS);
+  }
+  const qtBoot = qtBootRef.current;
+
   const [hasLoaded, setHasLoaded] = useState(false);
-  const [sellOffers, setSellOffers] = useState([]);
-  const [buyOffers, setBuyOffers] = useState([]);
-  const [tokenOffers, setTokenOffers] = useState([]);
-  const [properties, setProperties] = useState([]);
-  const [tokenBalances, setTokenBalances] = useState({});
+  const [sellOffers, setSellOffers] = useState(() => qtBoot?.sellOffers ?? []);
+  const [buyOffers, setBuyOffers] = useState(() => qtBoot?.buyOffers ?? []);
+  const [tokenOffers, setTokenOffers] = useState(() => qtBoot?.tokenOffers ?? []);
+  const [properties, setProperties] = useState(() => qtBoot?.properties ?? []);
+  const [tokenBalances, setTokenBalances] = useState(() => qtBoot?.tokenBalances ?? {});
 
   const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus'];
   const formatTokenName = (t) => t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -47,10 +60,6 @@ export default function QuickTrade() {
   const [creatingToken, setCreatingToken] = useState(false);
 
   const TOKEN_MIN_CASH_PER_TOKEN = 250_000;
-
-  useEffect(() => {
-    fetchTrades();
-  }, []);
 
   /** Server masks anon listings as "[Anonymous]" for normal players; admins get the real username in `username`. */
   const isMaskedQtUsername = (u) => !u || u === 'Anonymous' || u === '[Anonymous]';
@@ -76,7 +85,7 @@ export default function QuickTrade() {
     return u || '[Unknown]';
   };
 
-  const fetchTrades = async () => {
+  const fetchTrades = useCallback(async ({ silent = false } = {}) => {
     try {
       const [sellRes, buyRes, tokenRes, propRes, balancesRes] = await Promise.all([
         apiRequestWith429Retry(() => api.get('/trade/sell-offers')),
@@ -85,15 +94,34 @@ export default function QuickTrade() {
         apiRequestWith429Retry(() => api.get('/trade/properties')),
         apiRequestWith429Retry(() => api.get('/trade/my-token-balances')),
       ]);
-      setSellOffers(sellRes.data || []);
-      setBuyOffers(buyRes.data || []);
-      setTokenOffers(tokenRes.data || []);
-      setProperties(propRes.data || []);
-      setTokenBalances(balancesRes.data || {});
+      const nextSell = sellRes.data || [];
+      const nextBuy = buyRes.data || [];
+      const nextToken = tokenRes.data || [];
+      const nextProp = propRes.data || [];
+      const nextBal = balancesRes.data || {};
+      setSellOffers(nextSell);
+      setBuyOffers(nextBuy);
+      setTokenOffers(nextToken);
+      setProperties(nextProp);
+      setTokenBalances(nextBal);
+      writeSessionJsonWithSavedAt(QUICKTRADE_SESSION_CACHE_KEY, {
+        sellOffers: nextSell,
+        buyOffers: nextBuy,
+        tokenOffers: nextToken,
+        properties: nextProp,
+        tokenBalances: nextBal,
+      });
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to load trades');
-    } finally { setHasLoaded(true); }
-  };
+      if (!silent) toast.error(e.response?.data?.detail || 'Failed to load trades');
+    } finally {
+      setHasLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    const boot = readSessionJsonWithTtl(QUICKTRADE_SESSION_CACHE_KEY, QT_CACHE_TTL_MS);
+    fetchTrades({ silent: !!boot });
+  }, [fetchTrades]);
 
   // Auto-fill offer/cost from existing offers: buy = highest + 1, sell = lowest - 1 (only when field is empty)
   const didAutoFill = useRef({ buy: false, sell: false });
