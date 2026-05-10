@@ -182,6 +182,8 @@ async def ensure_all_indexes(db):
             [("attacker_id", 1), ("status", 1), ("execute_token", 1)],
             sparse=True,
         )
+        # Travel + execute by attack id: find_one(attacker_id, status found, id).
+        await db.attacks.create_index([("attacker_id", 1), ("status", 1), ("id", 1)])
         await db.attacks.create_index("target_id")
         await db.attack_attempts.create_index([("attacker_id", 1), ("created_at", -1)])
         await db.attack_attempts.create_index([("target_id", 1), ("created_at", -1)])
@@ -310,6 +312,7 @@ async def ensure_all_indexes(db):
         await db.bodyguard_payouts.create_index("guard_id")
         await db.hitlist.create_index("target_id")
         await db.hitlist.create_index([("target_id", 1), ("target_type", 1)])
+        await db.hitlist.create_index([("placer_id", 1), ("target_id", 1), ("target_type", 1)])
         await db.hitlist.create_index([("reward_amount", -1), ("created_at", -1)])
 
         # --- Hitlist / bodyguard events (admin analytics) ---
