@@ -128,10 +128,13 @@ def register(router):
         pass_bonus_until_dt = _parse_iso_utc(dead_user.get("rank_xp_pass_bonus_until"))
         pass_token_expires_dt = _parse_iso_utc(dead_user.get("rank_xp_pass_token_expires_at"))
         has_dead_rank_xp_carry = _dead_has_rank_xp_pass_carryover(dead_user, now, pass_bonus_until_dt, pass_token_expires_dt)
+        dead_current_xp = max(0, int(dead_user.get("rank_xp_pass_season_rp") or 0))
+        current_current_xp = max(0, int(current_user.get("rank_xp_pass_season_rp") or 0))
+        missing_game_pass_current_xp = dead_current_xp > current_current_xp
         if dead_user.get("retrieval_used"):
             if swiss_at_death > 0 and not swiss_retrieval_used:
                 supplemental_swiss_only = True
-            elif has_dead_rank_xp_carry and not rank_pass_carry_used:
+            elif has_dead_rank_xp_carry and (not rank_pass_carry_used or missing_game_pass_current_xp):
                 supplemental_rank_pass_only = True
             else:
                 raise HTTPException(status_code=400, detail="That dead account has already been used for a transfer.")
@@ -156,11 +159,17 @@ def register(router):
                 projection={"_id": 0, "swiss_balance": 1},
             )
         elif supplemental_rank_pass_only:
-            claim = await db.users.find_one_and_update(
-                {"id": dead_user["id"], "is_dead": True, "rank_xp_pass_dead_alive_carry_used": {"$ne": True}},
-                {"$set": {"rank_xp_pass_dead_alive_carry_used": True}},
-                projection={"_id": 0, "swiss_balance": 1},
-            )
+            if rank_pass_carry_used:
+                claim = await db.users.find_one(
+                    {"id": dead_user["id"], "is_dead": True},
+                    {"_id": 0, "swiss_balance": 1},
+                )
+            else:
+                claim = await db.users.find_one_and_update(
+                    {"id": dead_user["id"], "is_dead": True, "rank_xp_pass_dead_alive_carry_used": {"$ne": True}},
+                    {"$set": {"rank_xp_pass_dead_alive_carry_used": True}},
+                    projection={"_id": 0, "swiss_balance": 1},
+                )
         else:
             claim = await db.users.find_one_and_update(
                 {"id": dead_user["id"], "is_dead": True, "retrieval_used": {"$ne": True}},
@@ -213,7 +222,6 @@ def register(router):
         # Dead > Alive carry-over for Rank-XP pass state (only when dead had meaningful Game Pass data — do not wipe recipient).
         if has_rank_xp_merge:
             pass_updates = {}
-            pass_max_updates = {}
             pass_active = bool(pass_bonus_until_dt and pass_bonus_until_dt > now)
             pass_rewards_granted = bool(dead_user.get("rank_xp_pass_rewards_granted", False))
             pass_pending = bool(pass_token_expires_dt and pass_token_expires_dt > now)
@@ -255,12 +263,9 @@ def register(router):
                 int(dead_user.get("rank_xp_pass_free_last_micro_tier_granted") or 0),
                 int(current_user.get("rank_xp_pass_free_last_micro_tier_granted") or 0),
             )
-            pass_max_updates["rank_xp_pass_prestige_carry_rp"] = int(dead_user.get("rank_xp_pass_prestige_carry_rp") or 0)
-
-            pass_update_doc = {"$set": pass_updates}
-            if pass_max_updates["rank_xp_pass_prestige_carry_rp"] > 0:
-                pass_update_doc["$max"] = pass_max_updates
-            await db.users.update_one({"id": current_user["id"]}, pass_update_doc)
+            # Carry Game Pass Current XP only. Do not merge the dead account's lifetime rank
+            # points or prestige carry, because that feeds "Most Rank Points Earned".
+            await db.users.update_one({"id": current_user["id"]}, {"$set": pass_updates})
 
         if has_estate or has_token_restore:
             msg = f"Transferred inheritance from your dead account ({dead_user['username']}): "

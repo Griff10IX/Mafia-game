@@ -1,6 +1,6 @@
 import { Fragment, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate, useParams } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, ShieldAlert, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Grid3x3, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw, MessagesSquare, Swords, TrendingUp, ClipboardList } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, ShieldAlert, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Grid3x3, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw, MessagesSquare, Swords, TrendingUp, ClipboardList, CircleDot } from 'lucide-react';
 import api, { imageHostPublicUrl, refreshUser } from '../../utils/api';
 import { formatAdminDateTime, formatAdminDateOnly, formatAdminTimeOnly } from '../../utils/adminDateTime';
 import {
@@ -245,6 +245,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Game Events', categoryId: 'admin-gameworld', collapseKey: 'events', keywords: ['events', 'toggle', 'enable', 'disable', 'random', 'bundle', 'daily', 'modifiers', 'roll'], adminOnly: true },
   { label: 'Booze Run rotation & global discount', categoryId: 'admin-gameworld', collapseKey: 'boozeRun', keywords: ['booze', 'run', 'rotation', 'prices', 'discount', 'listed', 'nudge', 'global', 'jail', 'bust', 'prohibition'], adminOnly: true },
   { label: 'Booze Run analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'boozeRunAnalytics', keywords: ['booze', 'analytics', 'economy', 'events', 'profit', 'revenue', 'jail', 'leaderboard'] },
+  { label: 'Coin Flip economy', categoryId: 'admin-analytics-monitoring', collapseKey: 'coinFlipEconomy', keywords: ['coin', 'flip', 'casino', 'economy', 'heads', 'tails', 'bets', 'winners', 'house'] },
   { label: 'Keno economy', categoryId: 'admin-analytics-monitoring', collapseKey: 'kenoEconomy', keywords: ['keno', 'casino', 'economy', 'payout', 'gambling', 'state', 'max bet', 'keno settings', 'top wins', 'player'] },
   { label: 'Presence simulator', categoryId: 'admin-gameworld', collapseKey: 'presenceSimulator', keywords: ['presence', 'simulator', 'online', 'active', 'fake', 'last_seen'], adminOnly: true },
   { label: 'Slots Draw', categoryId: 'admin-gameworld', collapseKey: 'slotsDraw', keywords: ['slots', 'draw', 'lottery'] },
@@ -372,8 +373,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true }; }
 }
 
 function saveCollapsed(state) {
@@ -831,6 +832,10 @@ export default function Admin() {
   const [userLbAdjustRemoveCount, setUserLbAdjustRemoveCount] = useState('10');
   const [userLbAdjustDryRun, setUserLbAdjustDryRun] = useState(false);
   const [userLbAdjustLoading, setUserLbAdjustLoading] = useState(false);
+  const [userLbRankPointsPeriod, setUserLbRankPointsPeriod] = useState('weekly');
+  const [userLbRankPointsValue, setUserLbRankPointsValue] = useState('0');
+  const [userLbRankPointsDryRun, setUserLbRankPointsDryRun] = useState(false);
+  const [userLbRankPointsLoading, setUserLbRankPointsLoading] = useState(false);
   const [userHubMoneyDelta, setUserHubMoneyDelta] = useState(0);
   const [userHubMoneyRemove, setUserHubMoneyRemove] = useState(0);
   const [userHubMoneyLoading, setUserHubMoneyLoading] = useState(false);
@@ -996,6 +1001,9 @@ export default function Admin() {
   const [kenoEconomyDays, setKenoEconomyDays] = useState(30);
   const [kenoEconomyData, setKenoEconomyData] = useState(null);
   const [kenoEconomyLoading, setKenoEconomyLoading] = useState(false);
+  const [coinFlipEconomyDays, setCoinFlipEconomyDays] = useState(30);
+  const [coinFlipEconomyData, setCoinFlipEconomyData] = useState(null);
+  const [coinFlipEconomyLoading, setCoinFlipEconomyLoading] = useState(false);
   const [kenoAdminMaxBet, setKenoAdminMaxBet] = useState('');
   const [kenoAdminMaxBetDefault, setKenoAdminMaxBetDefault] = useState(null);
   const [kenoAdminMaxBetLoading, setKenoAdminMaxBetLoading] = useState(false);
@@ -5163,6 +5171,40 @@ export default function Admin() {
     }
   };
 
+  const handleUserLeaderboardSetRankPoints = async (opts) => {
+    const dryRun = opts?.dryRun === true;
+    const username = (formData.targetUsername || '').trim();
+    if (!username) {
+      toast.error('Enter target username');
+      return;
+    }
+    const value = parseInt(String(userLbRankPointsValue), 10);
+    if (!Number.isFinite(value) || value < 0) {
+      toast.error('Enter a valid rank-points value');
+      return;
+    }
+    const useDry = dryRun || userLbRankPointsDryRun;
+    const label = userLbRankPointsPeriod === 'weekly'
+      ? 'weekly Game Pass Current XP'
+      : 'all-time rank-points board total';
+    if (!useDry && !window.confirm(`Set ${username}'s ${label} to ${value.toLocaleString()}?`)) return;
+    setUserLbRankPointsLoading(true);
+    try {
+      const res = await api.post('/admin/leaderboards/set-rank-points', {
+        target_username: username,
+        period: userLbRankPointsPeriod,
+        value,
+        dry_run: useDry,
+      });
+      toast.success(res.data?.message || 'Done');
+      if (!useDry) await fetchUserLeaderboardScores(true);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    } finally {
+      setUserLbRankPointsLoading(false);
+    }
+  };
+
   const handleUserHubAdjustMoney = async () => {
     const username = (formData.targetUsername || '').trim();
     if (!username) {
@@ -6070,6 +6112,19 @@ export default function Admin() {
       setKenoEconomyData(null);
     } finally {
       setKenoEconomyLoading(false);
+    }
+  };
+
+  const handleFetchCoinFlipEconomy = async () => {
+    setCoinFlipEconomyLoading(true);
+    try {
+      const res = await api.get('/admin/casinos/coin-flip-economy', { params: { days: coinFlipEconomyDays } });
+      setCoinFlipEconomyData(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load Coin Flip economy');
+      setCoinFlipEconomyData(null);
+    } finally {
+      setCoinFlipEconomyLoading(false);
     }
   };
 
@@ -8736,6 +8791,7 @@ export default function Admin() {
                         </thead>
                         <tbody>
                           {[
+                            ['Rank points / XP', userLbScores.weekly?.rank_points, userLbScores.alltime?.rank_points],
                             ['Crimes', userLbScores.weekly?.crimes, userLbScores.alltime?.total_crimes],
                             ['GTA', userLbScores.weekly?.gta, userLbScores.alltime?.total_gta],
                             ['Jail busts', userLbScores.weekly?.jail_busts, userLbScores.alltime?.jail_busts],
@@ -8755,8 +8811,47 @@ export default function Admin() {
                         </tbody>
                       </table>
                     </div>
+                    <div className="text-[9px] text-mutedForeground">
+                      Rank points: weekly = Game Pass Current XP (`rank_xp_pass_season_rp`), all-time = public board total (`rank_points + rank_xp_pass_prestige_carry_rp`).
+                      Current RP: <span className="text-foreground font-mono">{Number(userLbScores.alltime?.current_rank_points ?? 0).toLocaleString()}</span>
+                      {' · '}
+                      Prestige carry: <span className="text-foreground font-mono">{Number(userLbScores.alltime?.prestige_carry_rank_points ?? 0).toLocaleString()}</span>
+                    </div>
                   </div>
                 )}
+              </div>
+
+              <div className="rounded-md border border-sky-500/30 bg-sky-950/20 p-3 space-y-2">
+                <div className="text-[10px] font-heading font-bold text-sky-200/90 uppercase tracking-wider">Set rank-points values</div>
+                <p className="text-[9px] text-mutedForeground font-heading">
+                  Weekly sets Game Pass <span className="text-foreground">Current XP</span>. All-time sets the public rank-points board total.
+                </p>
+                <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
+                  <AdminSelect value={userLbRankPointsPeriod} onChange={(e) => setUserLbRankPointsPeriod(e.target.value)}>
+                    <option value="weekly">weekly / Game Pass Current XP</option>
+                    <option value="alltime">all-time board total</option>
+                  </AdminSelect>
+                  <input
+                    type="number"
+                    min={0}
+                    value={userLbRankPointsValue}
+                    onChange={(e) => setUserLbRankPointsValue(e.target.value)}
+                    className="w-32 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs"
+                    placeholder="0"
+                  />
+                  <label className="flex items-center gap-1 cursor-pointer text-mutedForeground">
+                    <input type="checkbox" checked={userLbRankPointsDryRun} onChange={(e) => setUserLbRankPointsDryRun(e.target.checked)} />
+                    Dry run
+                  </label>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <BtnSecondary type="button" onClick={() => handleUserLeaderboardSetRankPoints({ dryRun: true })} disabled={userLbRankPointsLoading || !(formData.targetUsername || '').trim()}>
+                    {userLbRankPointsLoading ? '…' : 'Dry run'}
+                  </BtnSecondary>
+                  <BtnPrimary type="button" onClick={() => handleUserLeaderboardSetRankPoints({})} disabled={userLbRankPointsLoading || !(formData.targetUsername || '').trim()}>
+                    {userLbRankPointsLoading ? '…' : userLbRankPointsDryRun ? 'Apply (dry run)' : 'Set rank points'}
+                  </BtnPrimary>
+                </div>
               </div>
 
               <div className="rounded-md border border-amber-600/30 bg-amber-950/20 p-3 space-y-2">
@@ -17901,6 +17996,163 @@ export default function Admin() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* Coin Flip economy (gambling_log — house table) */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={CircleDot}
+            title="Coin Flip economy"
+            badge={
+              coinFlipEconomyData?.summary ? (
+                <span className="text-[10px] font-heading text-mutedForeground">
+                  {coinFlipEconomyData.days}d · {coinFlipEconomyData.summary.rounds?.toLocaleString?.() ?? 0} flips
+                </span>
+              ) : null
+            }
+            toolAnchor="coinFlipEconomy"
+            isCollapsed={collapsed.coinFlipEconomy}
+            onToggle={() => toggleSection('coinFlipEconomy')}
+            color="text-primary"
+          />
+          {!collapsed.coinFlipEconomy && (
+            <div className="p-3 space-y-4">
+              <div className="rounded-xl border border-primary/20 bg-gradient-to-br from-amber-950/20 via-zinc-900/45 to-zinc-950/90 p-3">
+                <p className="text-[10px] text-zinc-300 font-heading leading-relaxed">
+                  <span className="text-primary font-semibold">House Coin Flip</span>
+                  {' — '}
+                  tracks every heads/tails wager from <code className="text-[9px] bg-zinc-900/80 px-1 rounded border border-zinc-700/60">gambling_log</code>.
+                  <strong className="text-foreground/90"> Total wagered</strong> is every bet, <strong className="text-foreground/90">paid to players</strong> is winning payouts, and
+                  <strong className="text-primary"> net to house</strong> is wagered − paid.
+                </p>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[9px] text-mutedForeground font-heading uppercase">Window</span>
+                {[7, 30, 90].map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setCoinFlipEconomyDays(d)}
+                    className={`px-2 py-1 rounded border text-[10px] font-heading touch-manipulation ${
+                      coinFlipEconomyDays === d ? 'bg-primary/20 border-primary/50 text-primary' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
+                    }`}
+                  >
+                    {d}d
+                  </button>
+                ))}
+                <BtnPrimary onClick={handleFetchCoinFlipEconomy} disabled={coinFlipEconomyLoading}>
+                  {coinFlipEconomyLoading ? 'Loading…' : 'Load Coin Flip'}
+                </BtnPrimary>
+                {coinFlipEconomyData?.cutoff_iso && (
+                  <span className="text-[9px] text-mutedForeground font-heading">Since {formatAdminDateTime(coinFlipEconomyData.cutoff_iso)}</span>
+                )}
+              </div>
+
+              {coinFlipEconomyData?.summary && (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                    <div className="rounded-lg p-2.5 border border-zinc-700/50 bg-zinc-900/50 shadow-inner">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase tracking-wide">Bets placed</div>
+                      <div className="text-lg font-heading font-bold tabular-nums">{(coinFlipEconomyData.summary.rounds ?? 0).toLocaleString()}</div>
+                      <div className="text-[8px] text-zinc-500 font-heading">
+                        {(coinFlipEconomyData.summary.win_rounds ?? 0).toLocaleString()} wins · {(coinFlipEconomyData.summary.lose_rounds ?? 0).toLocaleString()} losses
+                      </div>
+                    </div>
+                    <div className="rounded-lg p-2.5 border border-zinc-700/50 bg-zinc-900/50 shadow-inner">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase tracking-wide">Total wagered</div>
+                      <div className="text-lg font-heading font-bold text-foreground tabular-nums">{formatAdminMoneyInt(coinFlipEconomyData.summary.total_stake)}</div>
+                    </div>
+                    <div className="rounded-lg p-2.5 border border-sky-500/20 bg-sky-950/15 shadow-inner">
+                      <div className="text-[9px] text-sky-200/80 font-heading uppercase tracking-wide">Paid to players</div>
+                      <div className="text-lg font-heading font-bold text-sky-300 tabular-nums">{formatAdminMoneyInt(coinFlipEconomyData.summary.total_payout)}</div>
+                    </div>
+                    <div className="rounded-lg p-2.5 border border-primary/25 bg-primary/10 shadow-inner">
+                      <div className="text-[9px] text-primary font-heading uppercase tracking-wide">Net to house</div>
+                      <div className="text-lg font-heading font-bold text-primary tabular-nums">{formatAdminMoneyInt(coinFlipEconomyData.summary.house_net)}</div>
+                    </div>
+                    <div className="rounded-lg p-2.5 border border-zinc-700/50 bg-zinc-900/50 shadow-inner">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase tracking-wide">Unique players</div>
+                      <div className="text-lg font-heading font-bold tabular-nums">{(coinFlipEconomyData.summary.unique_players ?? 0).toLocaleString()}</div>
+                    </div>
+                    <div className="rounded-lg p-2.5 border border-zinc-700/50 bg-zinc-900/50 shadow-inner">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase tracking-wide">Avg bet</div>
+                      <div className="text-lg font-heading font-bold tabular-nums">{formatAdminMoneyInt(Math.round(coinFlipEconomyData.summary.avg_bet || 0))}</div>
+                    </div>
+                    <div className="rounded-lg p-2.5 border border-zinc-700/50 bg-zinc-900/50 shadow-inner">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase tracking-wide">Largest payout</div>
+                      <div className="text-lg font-heading font-bold text-amber-300/90 tabular-nums">{formatAdminMoneyInt(coinFlipEconomyData.summary.max_single_payout)}</div>
+                    </div>
+                    <div className="rounded-lg p-2.5 border border-zinc-700/50 bg-zinc-900/50 shadow-inner">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase tracking-wide">RTP</div>
+                      <div className="text-lg font-heading font-bold tabular-nums">
+                        {coinFlipEconomyData.summary.rtp_percent != null ? `${coinFlipEconomyData.summary.rtp_percent}%` : '—'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                    <div className="space-y-1.5">
+                      <div className="text-[9px] font-heading text-primary uppercase tracking-wider">Last 5 winners</div>
+                      <div className="rounded-lg border border-zinc-700/40 overflow-hidden">
+                        {(coinFlipEconomyData.last_winners || []).length > 0 ? (
+                          <div className="divide-y divide-zinc-800/70">
+                            {coinFlipEconomyData.last_winners.map((w, idx) => (
+                              <div key={`${w.user_id}-${w.created_at}-${idx}`} className="grid grid-cols-[1fr_auto] gap-2 p-2 text-[10px] font-heading bg-zinc-950/35">
+                                <div className="min-w-0">
+                                  <div className="truncate text-foreground font-semibold">{w.username || '—'}</div>
+                                  <div className="text-zinc-500 truncate">
+                                    {w.created_at ? formatAdminDateTime(w.created_at) : '—'} · {w.state || '—'} · {String(w.result || '').toUpperCase()}
+                                  </div>
+                                </div>
+                                <div className="text-right tabular-nums">
+                                  <div className="text-primary font-bold">{formatAdminMoneyInt(w.payout)}</div>
+                                  <div className="text-zinc-500">bet {formatAdminMoneyInt(w.bet)}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="p-3 text-[10px] text-mutedForeground font-heading">No winners in this window.</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <div className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider">Recent flips</div>
+                      <div className="overflow-x-auto rounded-lg border border-zinc-700/40">
+                        <table className="w-full text-[10px] font-heading">
+                          <thead>
+                            <tr className="bg-zinc-900/90 border-b border-zinc-700/50">
+                              <th className="text-left p-2 text-mutedForeground">User</th>
+                              <th className="text-left p-2 text-mutedForeground">Pick</th>
+                              <th className="text-left p-2 text-mutedForeground">Result</th>
+                              <th className="text-right p-2 text-mutedForeground">Bet</th>
+                              <th className="text-right p-2 text-mutedForeground">Net</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(coinFlipEconomyData.recent || []).slice(0, 12).map((r, idx) => (
+                              <tr key={`${r.id || r.user_id}-${r.created_at}-${idx}`} className="border-b border-zinc-800/60 hover:bg-zinc-800/30">
+                                <td className="p-2 font-medium text-foreground max-w-[120px] truncate">{r.username || '—'}</td>
+                                <td className="p-2 text-mutedForeground uppercase">{r.choice || '—'}</td>
+                                <td className={r.won ? 'p-2 text-emerald-300 uppercase' : 'p-2 text-rose-300 uppercase'}>{r.result || '—'}</td>
+                                <td className="p-2 text-right tabular-nums">{formatAdminMoneyInt(r.bet)}</td>
+                                <td className={Number(r.net || 0) >= 0 ? 'p-2 text-right tabular-nums text-emerald-300' : 'p-2 text-right tabular-nums text-rose-300'}>
+                                  {Number(r.net || 0) >= 0 ? '+' : ''}{formatAdminMoneyInt(r.net)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

@@ -131,6 +131,7 @@ const Blackjack = lazy(() => import("./pages/Casinos/BlackjackPage"));
 const HorseRacing = lazy(() => import("./pages/Casinos/HorseRacingPage"));
 const Slots = lazy(() => import("./pages/Casinos/SlotsPage"));
 const Keno = lazy(() => import("./pages/Casinos/KenoPage"));
+const CoinFlip = lazy(() => import("./pages/Casinos/CoinFlipPage"));
 const VideoPoker = lazy(() => import("./pages/Casinos/VideoPokerPage"));
 const MDG = lazy(() => import("./pages/Casinos/MDGPage"));
 const EntertainerHub = lazy(() => import("./pages/Game/EntertainerHub"));
@@ -816,6 +817,20 @@ function App() {
                 <Layout>
                   <ErrorBoundary>
                     <Keno />
+                  </ErrorBoundary>
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/casino/coin-flip"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <ErrorBoundary>
+                    <CoinFlip />
                   </ErrorBoundary>
                 </Layout>
               ) : (

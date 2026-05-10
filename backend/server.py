@@ -3046,7 +3046,7 @@ async def _user_owns_any_property(user_id: str):
 from routers.account import auth, profile, prestige, user_progress, users
 from routers.admin import admin, security_admin, airport, investigate
 from routers.cars import gta
-from routers.casinos import dice, roulette, blackjack, mp_blackjack, mp_poker, mp_8ball, horseracing, slots, keno, video_poker, mdg, sports_betting
+from routers.casinos import dice, roulette, blackjack, mp_blackjack, mp_poker, mp_8ball, horseracing, slots, keno, coin_flip, video_poker, mdg, sports_betting
 from routers.crime import crimes, jail, organised_crime, oc
 from routers.game import families, leaderboard, states, stats, store, dead_alive, events, notifications, meta, entertainer, entertainer_staff, achievements
 from routers.kill import attack, armoury, bodyguards, hitlist, witness_statements
@@ -3102,6 +3102,7 @@ mp_8ball.register(api_router)
 horseracing.register(api_router)
 slots.register(api_router)
 keno.register(api_router)
+coin_flip.register(api_router)
 video_poker.register(api_router)
 mdg.register(api_router)
 stock_market.register(api_router)

@@ -743,6 +743,9 @@ const TreasuryTab = ({
 const RacketsTab = ({ rackets, config, canUpgrade, vaultAndRacketsLocked, onCollect, onCollectAll, collectAllLoading, readyCount, onUpgrade, onUnlock, event, eventsEnabled }) => {
   const maxLevel = config?.racket_max_level ?? 5;
   const showDebugReadout = (rackets || []).some((r) => r.debug_last_collected_at || r.debug_next_collect_at);
+  const list = rackets || [];
+  const allUnlocked = list.length > 0 && list.every((r) => (r.level || 0) > 0);
+  const allMaxed = list.length > 0 && list.every((r) => (r.level || 0) >= maxLevel);
 
   const effectiveCanUpgrade = canUpgrade && !vaultAndRacketsLocked;
   const effectiveCanCollect = !vaultAndRacketsLocked;
@@ -781,10 +784,20 @@ const RacketsTab = ({ rackets, config, canUpgrade, vaultAndRacketsLocked, onColl
         ))}
       </div>
 
-      {/* Footer Stats */}
+      {/* Footer: reference costs while progression remains; no misleading prices when fully maxed */}
       <div className="flex items-center justify-between text-[10px] text-zinc-500 px-1 pt-2 border-t border-zinc-700/30">
-        {config?.racket_unlock_cost && <span className="flex items-center gap-1"><Unlock size={9} /> Unlock: {formatMoney(config.racket_unlock_cost)}</span>}
-        {config?.racket_upgrade_cost && <span className="flex items-center gap-1"><ArrowUpCircle size={9} /> Expand: {formatMoney(config.racket_upgrade_cost)}</span>}
+        {config?.racket_unlock_cost != null && config?.racket_unlock_cost !== '' && (
+          <span className={`flex items-center gap-1 ${allUnlocked ? 'text-emerald-500/90' : ''}`}>
+            <Unlock size={9} />
+            {allUnlocked ? 'Unlock: complete' : `Unlock: ${formatMoney(config.racket_unlock_cost)}`}
+          </span>
+        )}
+        {config?.racket_upgrade_cost != null && config?.racket_upgrade_cost !== '' && (
+          <span className={`flex items-center gap-1 ${allMaxed ? 'text-emerald-500/90' : ''}`}>
+            <ArrowUpCircle size={9} />
+            {allMaxed ? 'Expand: max' : `Expand: ${formatMoney(config.racket_upgrade_cost)}`}
+          </span>
+        )}
       </div>
     </div>
   );

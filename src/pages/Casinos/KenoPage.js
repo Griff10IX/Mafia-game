@@ -42,10 +42,35 @@ const KENO_STYLES = `
     box-shadow: 0 0 0 1px rgba(52,211,153,0.55), 0 0 12px rgba(52,211,153,0.28);
   }
   .keno-touch { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .keno-ticket-shell {
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px;
+    border: 1px solid rgba(212,175,55,0.18);
+    background:
+      radial-gradient(circle at 50% 0%, rgba(212,175,55,0.16), transparent 34%),
+      linear-gradient(180deg, rgba(22,22,24,0.96) 0%, rgba(7,7,9,0.98) 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.06), 0 14px 34px rgba(0,0,0,0.36);
+  }
+  .keno-ticket-shell::before,
+  .keno-ticket-shell::after {
+    content: "";
+    position: absolute;
+    top: 50%;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    background: rgba(5,5,7,0.98);
+    border: 1px solid rgba(212,175,55,0.16);
+    transform: translateY(-50%);
+    z-index: 1;
+  }
+  .keno-ticket-shell::before { left: -10px; }
+  .keno-ticket-shell::after { right: -10px; }
   .keno-board-grid {
     display: grid;
     grid-template-columns: repeat(10, minmax(0, 1fr));
-    gap: 4px;
+    gap: 5px;
   }
   .keno-cell-btn {
     min-width: 0;
@@ -53,38 +78,83 @@ const KENO_STYLES = `
     align-items: center;
     justify-content: center;
     font-size: 11px;
+    min-height: 2.15rem;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+  }
+  .keno-cell-btn:focus-visible {
+    outline: 2px solid rgba(230,194,41,0.75);
+    outline-offset: 2px;
+  }
+  .keno-selected-strip {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(212,175,55,0.45) rgba(24,24,27,0.5);
+  }
+  .keno-pay-row {
+    display: grid;
+    grid-template-columns: minmax(4.7rem, 5.8rem) 1fr;
+  }
+  .keno-pay-mults {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+  .keno-pay-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2rem;
+    border-radius: 999px;
+    border: 1px solid rgba(113,113,122,0.35);
+    background: rgba(9,9,11,0.55);
+    padding: 0.16rem 0.45rem;
   }
   /* Desktop: fixed row height — avoid aspect-square (height tracked column width and cells became huge on wide screens). */
   @media (min-width: 640px) {
     .keno-board-grid {
-      gap: 4px;
-      grid-auto-rows: 1.8125rem;
+      gap: 5px;
+      grid-auto-rows: 2.05rem;
     }
     .keno-cell-btn {
       font-size: 10px;
-      border-radius: 4px;
+      border-radius: 7px;
+      min-height: 0;
     }
   }
   @media (min-width: 1024px) {
     .keno-board-grid {
-      grid-auto-rows: 1.6875rem;
-      gap: 3px;
+      grid-auto-rows: 2rem;
+      gap: 4px;
     }
     .keno-cell-btn {
-      font-size: 9px;
+      font-size: 10px;
     }
   }
   @media (max-width: 639px) {
     .keno-board-grid {
-      gap: 2px;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      gap: 5px;
       grid-auto-rows: auto;
     }
     .keno-cell-btn {
       aspect-ratio: 1;
-      min-height: 0;
+      min-height: 2.55rem;
       min-width: 0;
+      font-size: 11px;
+      border-radius: 8px;
+    }
+    .keno-pay-row {
+      grid-template-columns: 1fr;
+    }
+    .keno-pay-mults {
+      gap: 0.3rem;
+    }
+  }
+  @media (max-width: 370px) {
+    .keno-board-grid {
+      gap: 4px;
+    }
+    .keno-cell-btn {
+      min-height: 2.28rem;
       font-size: 10px;
-      border-radius: 5px;
     }
   }
 `;
@@ -509,13 +579,14 @@ export default function KenoPage() {
               </p>
             </div>
 
-            <div className="relative rounded-xl p-1 max-md:pb-5 sm:p-3">
+            <div className="relative keno-ticket-shell p-2 max-md:pb-5 sm:p-4">
               <div
                 className="absolute inset-0 rounded-xl pointer-events-none"
                 style={{
                   background:
-                    'radial-gradient(ellipse 90% 70% at 50% 0%, rgba(212,175,55,0.1), transparent 55%), linear-gradient(180deg, rgba(30,30,30,0.4) 0%, rgba(0,0,0,0.55) 100%)',
-                  border: '1px solid rgba(212,175,55,0.12)',
+                    'linear-gradient(90deg, rgba(212,175,55,0.08) 1px, transparent 1px), linear-gradient(180deg, rgba(212,175,55,0.04) 1px, transparent 1px)',
+                  backgroundSize: '10% 12.5%',
+                  opacity: 0.5,
                 }}
               />
               {loading && (
@@ -525,7 +596,35 @@ export default function KenoPage() {
                   </p>
                 </div>
               )}
-              <div className="w-full max-w-none sm:max-w-md md:max-w-lg lg:max-w-xl sm:mx-auto">
+              <div className="relative z-[2] mb-2 flex flex-col gap-2 min-[420px]:flex-row min-[420px]:items-center min-[420px]:justify-between">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-primary/35 bg-primary/10 text-[10px] font-heading font-black text-primary tabular-nums">
+                    {picksArr.length}
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-heading uppercase tracking-[0.22em] text-zinc-500">Ticket spots</p>
+                    <p className="text-[10px] font-heading text-zinc-400 truncate">
+                      Pick {minPick} to {maxPick} numbers · {config.draw_count ?? 20} balls drawn
+                    </p>
+                  </div>
+                </div>
+                <div className="keno-selected-strip flex max-w-full gap-1 overflow-x-auto pb-1 min-[420px]:justify-end">
+                  {picksArr.length ? (
+                    picksArr.map((n) => (
+                      <span
+                        key={`picked-${n}`}
+                        className="shrink-0 rounded-full border border-primary/40 bg-primary/12 px-2 py-1 text-[10px] font-heading font-bold text-primary tabular-nums"
+                      >
+                        {n}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-[10px] font-heading italic text-zinc-600">No numbers picked yet</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="w-full max-w-none sm:max-w-xl lg:max-w-2xl sm:mx-auto relative z-[2]">
                 <div className="relative keno-board-grid">
                 {BOARD.map((n) => {
                   const isOn = selected.has(n);
@@ -538,15 +637,17 @@ export default function KenoPage() {
                       type="button"
                       onClick={() => toggle(n)}
                       disabled={loading || autoRolling}
+                      aria-pressed={isOn}
+                      aria-label={`Keno number ${n}${isOn ? ', selected' : ''}${isHit ? ', hit' : isDrawn ? ', drawn' : ''}`}
                       className={[
-                        'keno-cell-btn keno-touch relative h-full w-full max-sm:aspect-square rounded-md font-heading font-bold tabular-nums transition-[color,background-color,border-color,opacity] duration-150 border active:scale-[0.96] disabled:cursor-not-allowed',
+                        'keno-cell-btn keno-touch relative h-full w-full max-sm:aspect-square rounded-md font-heading font-bold tabular-nums transition-[color,background-color,border-color,opacity,transform] duration-150 border active:scale-[0.95] disabled:cursor-not-allowed',
                         isHit
-                          ? 'keno-cell-hit z-[1] bg-gradient-to-br from-emerald-600 to-emerald-800 text-white border-emerald-300/90 scale-[1.02]'
+                          ? 'keno-cell-hit z-[1] bg-gradient-to-br from-emerald-500 via-emerald-700 to-emerald-950 text-white border-emerald-300/90 scale-[1.03]'
                           : isDrawn && !isOn
-                            ? 'bg-gradient-to-br from-zinc-600 to-zinc-900 text-zinc-100 border-zinc-400/40 shadow-inner'
+                            ? 'bg-gradient-to-br from-slate-500 to-zinc-950 text-zinc-100 border-zinc-300/50 shadow-inner'
                             : isOn
-                              ? 'bg-gradient-to-br from-[rgba(212,175,55,0.35)] to-[rgba(80,60,15,0.5)] text-primary border-primary/70 shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_0_0_1px_rgba(212,175,55,0.15)]'
-                              : 'bg-zinc-950/80 text-zinc-500 border-zinc-800/90 hover:border-primary/35 hover:text-zinc-200 hover:bg-zinc-900/90',
+                              ? 'bg-gradient-to-br from-[rgba(230,194,41,0.4)] via-[rgba(212,175,55,0.22)] to-[rgba(75,52,12,0.62)] text-primary border-primary/75 shadow-[inset_0_1px_0_rgba(255,255,255,0.16),0_0_0_1px_rgba(212,175,55,0.2),0_8px_18px_rgba(0,0,0,0.18)]'
+                              : 'bg-zinc-950/85 text-zinc-500 border-zinc-800/90 hover:border-primary/40 hover:text-zinc-200 hover:bg-zinc-900/95',
                         isMissPick ? 'opacity-45 saturate-50' : '',
                       ].join(' ')}
                     >
@@ -662,7 +763,7 @@ export default function KenoPage() {
               State paytable
             </h2>
             <span className="flex items-center gap-2 shrink-0">
-              <span className="text-[9px] text-zinc-500 font-heading hidden sm:inline">× bet (before skim)</span>
+              <span className="text-[9px] text-zinc-500 font-heading hidden sm:inline">hit chips show × bet</span>
               <span className="text-[10px] font-heading text-primary/80 sm:hidden">{paytableOpen ? 'Tap to hide' : 'Tap to show'}</span>
             </span>
           </button>
@@ -679,11 +780,11 @@ export default function KenoPage() {
                 return (
                 <div
                   key={n}
-                  className={`flex flex-col gap-1.5 sm:flex-row sm:items-baseline sm:gap-3 px-2.5 sm:px-3 py-2.5 sm:py-2 border-b border-zinc-800/60 font-heading text-[10px] sm:text-[11px] transition-colors hover:bg-primary/[0.04] ${
+                  className={`keno-pay-row gap-1.5 sm:gap-3 px-2.5 sm:px-3 py-2.5 sm:py-2 border-b border-zinc-800/60 font-heading text-[10px] sm:text-[11px] transition-colors hover:bg-primary/[0.04] ${
                     idx % 2 === 0 ? 'bg-black/10' : ''
                   } ${isLastRoundRow ? 'sm:ring-1 sm:ring-inset sm:ring-primary/35 bg-primary/[0.08]' : ''}`}
                 >
-                  <span className="text-primary font-bold shrink-0 uppercase tracking-wide flex flex-wrap items-center gap-x-1.5 gap-y-0.5 sm:w-24 sm:flex-nowrap">
+                  <span className="text-primary font-bold shrink-0 uppercase tracking-wide flex flex-wrap items-center gap-x-1.5 gap-y-0.5 sm:flex-nowrap">
                     <span>{n} spots</span>
                     {isLastRoundRow ? (
                       <span className="text-[8px] font-heading font-black uppercase tracking-wider text-primary/90 px-1.5 py-0.5 rounded border border-primary/30 bg-black/40 whitespace-nowrap">
@@ -691,11 +792,11 @@ export default function KenoPage() {
                       </span>
                     ) : null}
                   </span>
-                  <span className="text-zinc-400 leading-relaxed min-w-0 pl-0.5 sm:pl-0 break-words">
+                  <span className="keno-pay-mults text-zinc-400 leading-relaxed min-w-0 pl-0.5 sm:pl-0">
                     {Object.entries(config.paytable[String(n)] || {})
                       .map(([hits, mult]) => (
-                        <span key={hits} className="inline mr-2 last:mr-0">
-                          <span className="text-zinc-600">{hits} hit{Number(hits) === 1 ? '' : 's'}:</span>{' '}
+                        <span key={hits} className="keno-pay-chip">
+                          <span className="text-zinc-500">{hits} hit{Number(hits) === 1 ? '' : 's'}</span>
                           <span className="text-zinc-200 font-semibold tabular-nums">{mult}×</span>
                         </span>
                       ))}

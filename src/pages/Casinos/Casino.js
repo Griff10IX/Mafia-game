@@ -17,6 +17,7 @@ const GAMES = [
   { to: '/casino/horseracing', label: 'Horse Racing', desc: 'Bet on the fastest', Icon: TrendingUp, testId: 'play-horse-racing' },
   { to: '/casino/slots', label: 'Slots', desc: 'Enter draw · own 3h · max bet & buy-back', Icon: Coins, testId: 'play-slots' },
   { to: '/casino/keno', label: 'Keno', desc: 'State table · pick numbers · 20 from 80', Icon: LayoutGrid, testId: 'play-keno' },
+  { to: '/casino/coin-flip', label: 'Coin Flip', desc: 'House table · heads or tails · max $5M', Icon: Coins, testId: 'play-coin-flip' },
   { to: '/casino/videopoker', label: 'Video Poker', desc: 'Jacks or Better', Icon: Spade, testId: 'play-video-poker' },
   { to: '/casino/mdg', label: 'MDG', desc: 'Pot game · fee, one winner takes all', Icon: Users, testId: 'play-mdg' },
   { to: '/casino/mp-blackjack', label: 'Multiplayer Blackjack', desc: 'Pot game · 2–8 players, best hand wins', Icon: Spade, testId: 'play-mp-blackjack' },

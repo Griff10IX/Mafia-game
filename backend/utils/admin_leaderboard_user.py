@@ -78,6 +78,9 @@ async def get_user_leaderboard_scores(db, *, user_id: str) -> Dict[str, Any]:
         {
             "_id": 0,
             "username": 1,
+            "rank_points": 1,
+            "rank_xp_pass_prestige_carry_rp": 1,
+            "rank_xp_pass_season_rp": 1,
             "total_kills": 1,
             "total_crimes": 1,
             "total_gta": 1,
@@ -92,6 +95,7 @@ async def get_user_leaderboard_scores(db, *, user_id: str) -> Dict[str, Any]:
     uname = (u or {}).get("username") or "?"
 
     weekly = {
+        "rank_points": int((u or {}).get("rank_xp_pass_season_rp") or 0),
         "crimes": await _aggregate_count_week(
             db, collection="crime_events", user_match={"user_id": user_id}, time_field="at", week_start=week_start, week_end=week_end
         ),
@@ -154,6 +158,9 @@ async def get_user_leaderboard_scores(db, *, user_id: str) -> Dict[str, Any]:
     }
 
     alltime = {
+        "rank_points": int((u or {}).get("rank_points") or 0) + int((u or {}).get("rank_xp_pass_prestige_carry_rp") or 0),
+        "current_rank_points": int((u or {}).get("rank_points") or 0),
+        "prestige_carry_rank_points": int((u or {}).get("rank_xp_pass_prestige_carry_rp") or 0),
         "total_kills": int((u or {}).get("total_kills") or 0),
         "total_crimes": int((u or {}).get("total_crimes") or 0),
         "total_gta": int((u or {}).get("total_gta") or 0),
@@ -368,4 +375,81 @@ async def adjust_user_leaderboard_metric(
             patch[field] = max(0, cur + delta)
         await db.users.update_one({"id": user_id}, {"$set": patch})
 
+    return result
+
+
+async def set_user_rank_points_leaderboard_value(
+    db,
+    *,
+    user_id: str,
+    period: str,
+    value: int,
+    dry_run: bool,
+) -> Dict[str, Any]:
+    p = (period or "").strip().lower()
+    if p not in ("weekly", "alltime"):
+        raise ValueError("period must be 'weekly' or 'alltime'")
+    if value < 0:
+        raise ValueError("value must be at least 0")
+    if value > 2_000_000_000:
+        raise ValueError("value is too high")
+
+    user = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "rank_points": 1, "rank_xp_pass_prestige_carry_rp": 1, "rank_xp_pass_season_rp": 1, "prestige_rank_multiplier": 1, "rank_up_rewarded_to_rank": 1},
+    )
+    if not user:
+        raise ValueError("User not found")
+
+    current_rank_points = int(user.get("rank_points") or 0)
+    current_carry = int(user.get("rank_xp_pass_prestige_carry_rp") or 0)
+    current_weekly = int(user.get("rank_xp_pass_season_rp") or 0)
+    current_alltime = current_rank_points + current_carry
+
+    if p == "weekly":
+        set_doc = {"rank_xp_pass_season_rp": value}
+        before = current_weekly
+        after = value
+        note = "weekly rank-points repair sets Game Pass Current XP (rank_xp_pass_season_rp)"
+    else:
+        # The public all-time rank board is rank_points + rank_xp_pass_prestige_carry_rp.
+        # Preserve current street RP when possible; if the requested total is below it,
+        # lower rank_points too so the board can match exactly.
+        if value >= current_rank_points:
+            next_rank_points = current_rank_points
+            next_carry = value - current_rank_points
+        else:
+            next_rank_points = value
+            next_carry = 0
+
+        try:
+            import server as srv
+
+            rank_id, _ = srv.get_rank_info(next_rank_points, float(user.get("prestige_rank_multiplier") or 1.0))
+        except Exception:
+            rank_id = 1
+        set_doc = {
+            "rank_points": next_rank_points,
+            "rank_xp_pass_prestige_carry_rp": next_carry,
+            "rank": rank_id,
+            "rank_up_rewarded_to_rank": min(int(user.get("rank_up_rewarded_to_rank") or 1), rank_id),
+        }
+        before = current_alltime
+        after = value
+        note = "all-time rank-points repair sets rank_points + rank_xp_pass_prestige_carry_rp"
+
+    result = {
+        "metric": "rank_points",
+        "period": p,
+        "before": before,
+        "after": after,
+        "set": set_doc,
+        "dry_run": dry_run,
+        "note": note,
+    }
+    if dry_run:
+        return result
+
+    await db.users.update_one({"id": user_id}, {"$set": set_doc})
+    result["modified"] = True
     return result
