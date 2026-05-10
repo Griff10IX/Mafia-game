@@ -15,7 +15,7 @@ from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 from utils.ban_user_wipe import user_has_active_account_ban
-from utils.disposable_email import is_disposable_email
+from utils.disposable_email import is_disposable_email, is_registration_player_email_blocked
 from utils.point_provenance import log_points_event
 from utils.login_user_agent import auth_client_headers_blocked
 from utils.staff_bot_client_alert import maybe_notify_staff_bot_client_blocked
@@ -579,6 +579,11 @@ def register(router):
                 raise HTTPException(
                     status_code=400,
                     detail="Disposable or temporary email addresses are not allowed.",
+                )
+            if is_registration_player_email_blocked(email_clean):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Use a personal email (Gmail, Outlook, etc.). You cannot register using this site's email domain.",
                 )
             client_ip = _client_ip(request)
             main_settings = await db.game_settings.find_one({"_id": "main"}, {"_id": 0})
@@ -2383,6 +2388,11 @@ def register(router):
         email_clean = (body.email or "").strip().lower()
         if is_disposable_email(email_clean):
             raise HTTPException(status_code=400, detail="Disposable email addresses are not allowed.")
+        if is_registration_player_email_blocked(email_clean):
+            raise HTTPException(
+                status_code=400,
+                detail="Use a personal email. You cannot use this site's domain for pre-registration.",
+            )
 
         main_settings = await db.game_settings.find_one({"_id": "main"}, {"_id": 0})
         blocked_cli, cli_reason = auth_client_headers_blocked(request.headers, main_settings)

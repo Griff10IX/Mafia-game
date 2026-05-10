@@ -5630,7 +5630,23 @@ def register(router):
                     {"auto_rank_enabled": True},
                 ],
             },
-            {"_id": 0, "id": 1, "username": 1, "last_seen": 1, "last_path": 1, "last_request_ip": 1, "last_login_ip": 1, "email": 1, "is_moderator": 1, "admin_ghost_mode": 1},
+            {
+                "_id": 0,
+                "id": 1,
+                "username": 1,
+                "last_seen": 1,
+                "last_path": 1,
+                "last_request_ip": 1,
+                "last_login_ip": 1,
+                "email": 1,
+                "is_moderator": 1,
+                "admin_ghost_mode": 1,
+                "last_seen_country": 1,
+                "is_npc": 1,
+                "auto_rank_enabled": 1,
+                "auto_rank_idle": 1,
+                "forced_online_until": 1,
+            },
         )
         raw = await cursor.to_list(200)
         users = []
@@ -5638,12 +5654,40 @@ def register(router):
             if (user_has_admin_list_email(u) or _is_moderator(u)) and u.get("admin_ghost_mode"):
                 continue
             ip = _normalize_ip(u.get("last_request_ip") or u.get("last_login_ip") or "")
+            cc_raw = (u.get("last_seen_country") or "").strip().upper()
+            country = cc_raw if (len(cc_raw) == 2 and cc_raw.isalpha()) else ""
+            forced_until_raw = u.get("forced_online_until")
+            is_forced_online = False
+            if forced_until_raw:
+                try:
+                    fu_dt = datetime.fromisoformat(forced_until_raw)
+                    if fu_dt.tzinfo is None:
+                        fu_dt = fu_dt.replace(tzinfo=timezone.utc)
+                    is_forced_online = fu_dt > now
+                except Exception:
+                    is_forced_online = False
+            last_seen_recent = False
+            ls_raw = u.get("last_seen")
+            if ls_raw:
+                try:
+                    ls_dt = datetime.fromisoformat(ls_raw)
+                    if ls_dt.tzinfo is None:
+                        ls_dt = ls_dt.replace(tzinfo=timezone.utc)
+                    last_seen_recent = ls_dt >= five_min_ago
+                except Exception:
+                    last_seen_recent = False
             users.append({
                 "id": u.get("id"),
                 "username": u.get("username"),
                 "last_seen": u.get("last_seen"),
                 "last_path": u.get("last_path"),
                 "ip": ip,
+                "country": country,
+                "is_npc": bool(u.get("is_npc")),
+                "auto_rank_enabled": bool(u.get("auto_rank_enabled")),
+                "auto_rank_idle": bool(u.get("auto_rank_idle")),
+                "forced_online": is_forced_online,
+                "last_seen_recent": last_seen_recent,
                 "_dupe_exempt": bool(user_has_dupe_exempt_email(u)),
             })
         # Same-IP badge: ignore DUPE_DETECTION_EXEMPT_EMAILS accounts (not counted, never show linked).
@@ -6252,7 +6296,18 @@ def register(router):
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=lookback_sec)
         cursor = db.admin_tool_presence.find(
             {"last_seen_at": {"$gte": cutoff}},
-            {"_id": 0, "user_id": 1, "username": 1, "tab_id": 1, "section": 1, "route_path": 1, "last_seen_at": 1, "ip": 1, "device_type": 1},
+            {
+                "_id": 0,
+                "user_id": 1,
+                "username": 1,
+                "tab_id": 1,
+                "section": 1,
+                "route_path": 1,
+                "last_seen_at": 1,
+                "ip": 1,
+                "device_type": 1,
+                "is_non_staff": 1,
+            },
         ).sort("last_seen_at", -1)
         rows = await cursor.to_list(max_rows)
         viewers = []
@@ -6270,6 +6325,7 @@ def register(router):
                     "device_type": r.get("device_type") or "",
                     "last_seen_at": ts.isoformat() if hasattr(ts, "isoformat") else (str(ts) if ts else ""),
                     "is_self": uid == me_id,
+                    "is_non_staff": bool(r.get("is_non_staff")),
                 }
             )
         return viewers
@@ -6293,11 +6349,14 @@ def register(router):
                     "last_section": v.get("section"),
                     "last_route_path": v.get("route_path"),
                     "is_self": bool(v.get("is_self")),
+                    "is_non_staff": bool(v.get("is_non_staff")),
                 }
             ent = by_uid[uid]
             ent["tab_count"] = int(ent.get("tab_count") or 0) + 1
             if ip:
                 ent["ips"].add(ip)
+            if v.get("is_non_staff"):
+                ent["is_non_staff"] = True
             old_ts = str(ent.get("last_seen_at") or "")
             if ts_str and (not old_ts or ts_str > old_ts):
                 ent["last_seen_at"] = ts_str
@@ -6319,13 +6378,18 @@ def register(router):
         request: Request,
         current_user: dict = Depends(get_current_user),
     ):
-        """Register/update this browser tab as viewing staff tools (expires after ~90s without heartbeat)."""
-        if not _staff_shell_access(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
+        """Register/update this browser tab as viewing staff tools (expires after ~90s without heartbeat).
+
+        Accepts non-staff callers too — their tab is recorded with is_non_staff=True so the staff
+        presence popover can surface anyone landing on the admin URL as a live tripwire. A
+        non-staff visitor only auto-fires this once (per AdminShell mount) before being redirected,
+        so they fall off the popover after the standard ~90s stale window.
+        """
         now = datetime.now(timezone.utc)
         uid = str(current_user.get("id") or "")
         un = str(current_user.get("username") or "?")
         ua = request.headers.get("user-agent") or ""
+        is_non_staff = not _staff_shell_access(current_user)
         await db.admin_tool_presence.update_one(
             {"user_id": uid, "tab_id": body.tab_id.strip()},
             {
@@ -6337,6 +6401,7 @@ def register(router):
                     "ip": _presence_ip(request),
                     "device_type": _device_type_from_ua(ua),
                     "user_agent_short": ua[:200] if ua else "",
+                    "is_non_staff": is_non_staff,
                 }
             },
             upsert=True,

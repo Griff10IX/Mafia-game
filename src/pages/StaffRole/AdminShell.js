@@ -104,6 +104,18 @@ export default function AdminShell() {
         if (typeof window !== 'undefined') {
           const p = `${window.location.pathname}${window.location.search || ''}${window.location.hash || ''}`;
           api.post('/admin/tool-access/report-spa-unauthorized', { path: p }).catch(() => {});
+          try {
+            const tabId = getAdminPresenceTabId();
+            api
+              .post('/admin/presence/heartbeat', {
+                tab_id: tabId,
+                section: (section || 'overview').toLowerCase(),
+                path: `${window.location.pathname}${window.location.search || ''}`,
+              })
+              .catch(() => {});
+          } catch {
+            /* tab id unavailable; skip live tripwire */
+          }
         }
         return false;
       }
@@ -206,6 +218,18 @@ export default function AdminShell() {
           if (typeof window !== 'undefined') {
             const p = `${window.location.pathname}${window.location.search || ''}${window.location.hash || ''}`;
             api.post('/admin/tool-access/report-spa-unauthorized', { path: p }).catch(() => {});
+            try {
+              const tabId = getAdminPresenceTabId();
+              api
+                .post('/admin/presence/heartbeat', {
+                  tab_id: tabId,
+                  section: (section || 'overview').toLowerCase(),
+                  path: `${window.location.pathname}${window.location.search || ''}`,
+                })
+                .catch(() => {});
+            } catch {
+              /* tab id unavailable; skip live tripwire */
+            }
           }
           toast.warning('Access denied. Our staff team has been notified of this attempt.', { duration: 6000 });
         } else if (!shellOk) {
@@ -640,13 +664,27 @@ export default function AdminShell() {
                             <li
                               key={acc.user_id}
                               className={`rounded px-1.5 py-1 text-[9px] font-heading leading-snug ${
-                                acc.is_self ? 'bg-emerald-500/10 text-emerald-100/95' : 'text-foreground'
+                                acc.is_non_staff
+                                  ? 'bg-red-500/15 text-red-100 ring-1 ring-red-500/40'
+                                  : acc.is_self
+                                    ? 'bg-emerald-500/10 text-emerald-100/95'
+                                    : 'text-foreground'
                               }`}
                             >
-                              <div className="flex justify-between gap-1">
-                                <span className="font-bold truncate">
-                                  {acc.username || '?'}
-                                  {acc.is_self ? ' (you)' : ''}
+                              <div className="flex flex-wrap items-center justify-between gap-1">
+                                <span className="font-bold truncate flex items-center gap-1.5 min-w-0">
+                                  <span className="truncate">
+                                    {acc.username || '?'}
+                                    {acc.is_self ? ' (you)' : ''}
+                                  </span>
+                                  {acc.is_non_staff && (
+                                    <span
+                                      className="inline-flex shrink-0 items-center px-1 py-0.5 rounded border border-red-500/60 bg-red-500/30 text-red-200 text-[7px] uppercase tracking-wider"
+                                      title="This account does NOT have admin/mod access — it landed on the staff URL and was bounced. Audit log written."
+                                    >
+                                      Non-staff
+                                    </span>
+                                  )}
                                 </span>
                                 <span className="shrink-0 text-mutedForeground tabular-nums">
                                   {acc.tab_count > 1 ? `${acc.tab_count} tabs` : '1 tab'}
@@ -682,13 +720,27 @@ export default function AdminShell() {
                         <li
                           key={`${row.user_id || ''}-${row.tab_id || ''}`}
                           className={`rounded border px-2 py-1.5 text-[10px] font-heading leading-snug ${
-                            row.is_self ? 'border-emerald-500/35 bg-emerald-500/10' : 'border-zinc-700/80 bg-zinc-900/60'
+                            row.is_non_staff
+                              ? 'border-red-500/55 bg-red-500/15'
+                              : row.is_self
+                                ? 'border-emerald-500/35 bg-emerald-500/10'
+                                : 'border-zinc-700/80 bg-zinc-900/60'
                           }`}
                         >
-                          <div className="flex items-center justify-between gap-1">
-                            <span className="font-bold text-foreground truncate">
-                              {row.username || '?'}
-                              {row.is_self ? ' (you)' : ''}
+                          <div className="flex flex-wrap items-center justify-between gap-1">
+                            <span className="font-bold text-foreground truncate flex items-center gap-1.5 min-w-0">
+                              <span className="truncate">
+                                {row.username || '?'}
+                                {row.is_self ? ' (you)' : ''}
+                              </span>
+                              {row.is_non_staff && (
+                                <span
+                                  className="inline-flex shrink-0 items-center px-1 py-0.5 rounded border border-red-500/60 bg-red-500/30 text-red-200 text-[8px] uppercase tracking-wider"
+                                  title="This account does NOT have admin/mod access — it landed on the staff URL and was bounced. Audit log written."
+                                >
+                                  Non-staff
+                                </span>
+                              )}
                             </span>
                             <span className="text-mutedForeground shrink-0 text-[9px]">{row.device_type || '—'}</span>
                           </div>

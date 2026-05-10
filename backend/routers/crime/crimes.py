@@ -586,20 +586,33 @@ async def commit_all_crimes(current_user: dict = Depends(get_current_user_verifi
     errors: list[str] = []
     for crime_id in available_ids:
         try:
-            rp_sync = await db.users.find_one({"id": current_user["id"]}, {"rank_points": 1})
-            if rp_sync and "rank_points" in rp_sync:
-                current_user["rank_points"] = rp_sync.get("rank_points", 0)
             res = await commit_crime_locked(crime_id, current_user)
             if bool(getattr(res, "success", False)):
                 committed += 1
                 total_cash += int(getattr(res, "reward", 0) or 0)
                 total_respect += int(getattr(res, "respect_points", 0) or 0)
+                rp_add = int(getattr(res, "rank_points_earned", 0) or 0)
+                if rp_add:
+                    current_user["rank_points"] = int(current_user.get("rank_points") or 0) + rp_add
             else:
                 failed += 1
-                errors.append(f"{crime_id}: {getattr(res, 'message', 'Failed')}")
+                msg = getattr(res, "message", "Failed") or "Failed"
+                errors.append(f"{crime_id}: {msg}")
+                # Casino heist fail jails the player; further commits in this batch would 400.
+                if "jail" in str(msg).lower():
+                    break
         except HTTPException as e:
             failed += 1
-            errors.append(f"{crime_id}: {e.detail}")
+            d = e.detail
+            if isinstance(d, str):
+                detail_s = d
+            elif isinstance(d, dict) and "message" in d:
+                detail_s = str(d.get("message") or d)
+            else:
+                detail_s = str(d)
+            errors.append(f"{crime_id}: {detail_s}")
+            if "jail" in detail_s.lower():
+                break
         except Exception:
             failed += 1
             errors.append(f"{crime_id}: Request failed")

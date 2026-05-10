@@ -1,6 +1,8 @@
 # Disposable / throwaway email domain blocklist for registration.
 # Domains are lowercase; add more as needed. See disposable-email-domains on GitHub for a full list.
 
+import os
+
 DISPOSABLE_DOMAINS = frozenset({
     "0-mail.com", "10minutemail.com", "10minutemail.net", "10minutemail.org",
     "10minutemails.in", "123-m.com", "126.com", "139.com", "150ml.com",
@@ -737,6 +739,27 @@ DISPOSABLE_DOMAINS = frozenset({
     "zxcvbnm.tk", "zydecofan.com", "zylpu.ru", "zymuying.com",
     "zzi.us", "zzrgg.com", "zzz.com",
 })
+
+# Player signups must not use the game's own domain (staff / system mailboxes). Always includes mafiawars.co.uk.
+# Merge REGISTRATION_BLOCKED_DOMAINS env (comma-separated) for extra domains.
+_registration_blocked_base = frozenset({"mafiawars.co.uk"})
+_registration_blocked_extra_raw = (os.environ.get("REGISTRATION_BLOCKED_DOMAINS") or "").strip()
+_registration_blocked_extra = (
+    {e.strip().lower() for e in _registration_blocked_extra_raw.split(",") if e.strip()}
+    if _registration_blocked_extra_raw
+    else set()
+)
+REGISTRATION_BLOCKED_DOMAINS = frozenset(set(_registration_blocked_base) | _registration_blocked_extra)
+
+
+def is_registration_player_email_blocked(email: str) -> bool:
+    """True if this email's domain may not be used for player signup or preregister (game-operated domains)."""
+    if not email or "@" not in email:
+        return False
+    domain = email.strip().lower().split("@")[-1]
+    if not domain:
+        return False
+    return domain in REGISTRATION_BLOCKED_DOMAINS
 
 
 def is_disposable_email(email: str) -> bool:

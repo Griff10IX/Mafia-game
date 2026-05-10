@@ -10,6 +10,9 @@ const BUY_STYLES = `
   .bc-fade-in { animation: bc-fade-in 0.4s ease-out both; }
   .bc-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
   .bc-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+  @media (max-width: 767px) {
+    .bc-row td { padding-top: 3px !important; padding-bottom: 3px !important; }
+  }
 `;
 
 // Rarities and travel times – must match backend GTA (server CARS + gta.py TRAVEL_TIMES)
@@ -41,6 +44,23 @@ const RARITY_LABELS = {
 const DEALER_BUY_BATCH_GAP_MS = 500;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function VehicleSelectCheckbox({ selected, canAfford, onToggle }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="min-h-[28px] min-w-[28px] inline-flex items-center justify-center rounded hover:bg-primary/10"
+      title={canAfford ? 'Select to buy' : 'Select — need more cash to purchase'}
+    >
+      {selected ? (
+        <CheckSquare size={12} className={canAfford ? 'text-primary' : 'text-amber-400'} />
+      ) : (
+        <Square size={12} className={canAfford ? 'text-mutedForeground' : 'text-amber-500/80'} />
+      )}
+    </button>
+  );
+}
 
 const RARITY_COLOR = {
   common: 'text-gray-400',
@@ -110,39 +130,47 @@ export default function BuyCars() {
   }, [dealerCars, marketplaceListings]);
 
   const allVehicles = useMemo(() => {
+    const cash = userMoney != null ? Number(userMoney) : null;
+    const moneyKnown = cash != null && !Number.isNaN(cash);
     const rows = [];
     dealerCars.forEach((c, i) => {
       const inStock = c.in_stock ?? 0;
       const canBuyFromApi = c.can_buy ?? false;
-      const hasEnoughMoney = (userMoney ?? 0) >= (c.dealer_price ?? 0);
+      const price = c.dealer_price ?? 0;
+      const canAfford = !moneyKnown || cash >= price;
       rows.push({
         id: `dealer:${c.id}:${i}`,
         source: 'dealer',
         carId: c.id,
         name: c.name,
-        price: c.dealer_price ?? 0,
+        price,
         speed: TRAVEL_TIMES[c.rarity] ?? 45,
         owner: 'Dealer',
         rarity: c.rarity || 'common',
         inStock,
         minRank: c.min_rank ?? 1,
-        canBuy: canBuyFromApi && hasEnoughMoney && inStock > 0,
+        /** Stock + API; selection does not depend on client cash (fixes blank /auth/me or stale money blocking checkboxes). */
+        canSelect: canBuyFromApi && inStock > 0,
+        canAfford,
         damage_percent: 0,
       });
     });
     marketplaceListings.forEach((l) => {
       const own = !!l.is_own_listing;
+      const price = l.sale_price ?? 0;
+      const canAfford = !moneyKnown || cash >= price;
       rows.push({
         id: `listing:${l.user_car_id}`,
         source: 'listing',
         userCarId: l.user_car_id,
         name: l.name,
-        price: l.sale_price ?? 0,
+        price,
         speed: TRAVEL_TIMES[l.rarity] ?? 45,
         owner: l.seller_username ?? '?',
         rarity: l.rarity || 'common',
         isOwnListing: own,
-        canBuy: !own && (userMoney ?? 0) >= (l.sale_price ?? 0),
+        canSelect: !own,
+        canAfford,
         damage_percent: l.damage_percent ?? 0,
       });
     });
@@ -165,7 +193,7 @@ export default function BuyCars() {
     let sum = 0;
     selectedIds.forEach((id) => {
       const row = allVehicles.find((v) => v.id === id);
-      if (row && row.canBuy) sum += row.price;
+      if (row && row.canSelect) sum += row.price;
     });
     return sum;
   }, [selectedIds, allVehicles]);
@@ -180,21 +208,28 @@ export default function BuyCars() {
   };
 
   const toggleSelectAll = () => {
-    const canSelect = filteredVehicles.filter((v) => v.canBuy).map((v) => v.id);
-    const allSelected = canSelect.length > 0 && canSelect.every((id) => selectedIds.has(id));
+    const selectableIds = filteredVehicles.filter((v) => v.canSelect).map((v) => v.id);
+    const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
     setSelectedIds((prev) => {
       const next = new Set(prev);
-      if (allSelected) canSelect.forEach((id) => next.delete(id));
-      else canSelect.forEach((id) => next.add(id));
+      if (allSelected) selectableIds.forEach((id) => next.delete(id));
+      else selectableIds.forEach((id) => next.add(id));
       return next;
     });
   };
 
   const handleBuySelected = async () => {
+    const cash = userMoney != null ? Number(userMoney) : null;
+    const moneyOk = cash != null && !Number.isNaN(cash);
     const toBuy = [...selectedIds].map((id) => allVehicles.find((v) => v.id === id)).filter(Boolean);
-    const valid = toBuy.filter((r) => r.canBuy);
+    const valid = toBuy.filter((r) => {
+      if (!r.canSelect) return false;
+      if (!moneyOk) return true;
+      return cash >= (r.price || 0);
+    });
     if (valid.length === 0) {
-      toast.error('Select at least one car you can afford');
+      const anySelectable = toBuy.some((r) => r.canSelect);
+      toast.error(anySelectable && moneyOk ? 'Select at least one car you can afford' : 'Select at least one vehicle');
       return;
     }
     setBuying(true);
@@ -270,8 +305,8 @@ export default function BuyCars() {
       <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bc-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         {/* Compact rarity row: click to filter */}
-        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="text-[10px] font-heading text-mutedForeground uppercase">Source:</span>
+        <div className="px-2.5 sm:px-3 py-2 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center gap-x-2 sm:gap-x-3 gap-y-1">
+          <span className="text-[9px] font-heading text-mutedForeground uppercase tracking-[0.12em]">Source:</span>
           {['all', 'dealer', 'listing'].map((src) => (
             <button
               key={src}
@@ -286,7 +321,7 @@ export default function BuyCars() {
               {src === 'all' ? 'All' : src === 'dealer' ? 'Dealer only' : 'Players only'}
             </button>
           ))}
-          <span className="text-[10px] font-heading text-mutedForeground uppercase ml-1">By rarity:</span>
+          <span className="text-[9px] font-heading text-mutedForeground uppercase tracking-[0.12em] ml-1">By rarity:</span>
           {raritySummary.length === 0 ? (
             <span className="text-[10px] text-mutedForeground">None</span>
           ) : (
@@ -319,11 +354,11 @@ export default function BuyCars() {
         <div className="overflow-x-auto">
           <table className="w-full text-[11px]">
             <thead>
-              <tr className={`${styles.surface} text-[10px] uppercase tracking-wider font-heading text-primary/80 border-b border-border`}>
-                <th className="w-7 py-1 pl-1.5 pr-0">
-                  <button type="button" onClick={toggleSelectAll} className="p-0.5 rounded hover:bg-primary/10" title="Check all">
-                    {filteredVehicles.filter((v) => v.canBuy).length > 0 &&
-                    filteredVehicles.filter((v) => v.canBuy).every((v) => selectedIds.has(v.id)) ? (
+              <tr className={`${styles.surface} text-[9px] uppercase tracking-wider font-heading text-primary/80 border-b border-border`}>
+                <th className="w-8 py-1 pl-1.5 pr-0">
+                  <button type="button" onClick={toggleSelectAll} className="min-h-[28px] min-w-[28px] inline-flex items-center justify-center rounded hover:bg-primary/10" title="Check all">
+                    {filteredVehicles.filter((v) => v.canSelect).length > 0 &&
+                    filteredVehicles.filter((v) => v.canSelect).every((v) => selectedIds.has(v.id)) ? (
                       <CheckSquare size={12} className="text-primary" />
                     ) : (
                       <Square size={12} className="text-mutedForeground" />
@@ -340,41 +375,37 @@ export default function BuyCars() {
             </thead>
             <tbody className="divide-y divide-border">
               {filteredVehicles.map((row) => (
-                <tr key={row.id} className={`bc-row transition-colors ${!row.canBuy && !row.isOwnListing ? 'opacity-60' : ''}`}>
-                  <td className="py-1 pl-1.5 pr-0">
+                <tr
+                  key={row.id}
+                  className={`bc-row transition-colors ${
+                    !row.canSelect && !row.isOwnListing ? 'opacity-60' : ''
+                  } ${row.canSelect && !row.canAfford ? 'bg-amber-500/[0.04]' : ''}`}
+                >
+                  <td className="py-1 pl-1.5 pr-0 align-middle">
                     {row.source === 'dealer' && (row.inStock ?? 0) > 0 ? (
-                      row.canBuy ? (
-                        <button type="button" onClick={() => toggleSelect(row.id)} className="p-0.5 rounded hover:bg-primary/10" title="Select to buy">
-                          {selectedIds.has(row.id) ? (
-                            <CheckSquare size={12} className="text-primary" />
-                          ) : (
-                            <Square size={12} className="text-mutedForeground" />
-                          )}
-                        </button>
+                      row.canSelect ? (
+                        <VehicleSelectCheckbox
+                          selected={selectedIds.has(row.id)}
+                          canAfford={row.canAfford}
+                          onToggle={() => toggleSelect(row.id)}
+                        />
                       ) : (
-                        <span
-                          className="inline-flex items-center justify-center w-5 h-5 rounded border border-amber-500/50 opacity-70 cursor-not-allowed"
-                          title={(userMoney ?? 0) >= (row.price ?? 0) ? `Rank ${row.minRank ?? 1} required to buy` : 'Insufficient funds'}
-                        >
-                          <Square size={12} className="text-amber-500/70" />
+                        <span className="inline-flex items-center justify-center min-w-[28px] min-h-[28px] text-mutedForeground/40" title="Unavailable">
+                          —
                         </span>
                       )
                     ) : row.source === 'listing' ? (
                       row.isOwnListing ? (
-                        <span className="inline-block w-4" title="Your listing — cancel in Owner column or Sell Cars" />
-                      ) : row.canBuy ? (
-                        <button type="button" onClick={() => toggleSelect(row.id)} className="p-0.5 rounded hover:bg-primary/10">
-                          {selectedIds.has(row.id) ? (
-                            <CheckSquare size={12} className="text-primary" />
-                          ) : (
-                            <Square size={12} className="text-mutedForeground" />
-                          )}
-                        </button>
+                        <span className="inline-block min-w-[28px] min-h-[28px]" title="Your listing — cancel in Owner column or Sell Cars" />
                       ) : (
-                        <span className="inline-block w-4" title="Insufficient funds" />
+                        <VehicleSelectCheckbox
+                          selected={selectedIds.has(row.id)}
+                          canAfford={row.canAfford}
+                          onToggle={() => toggleSelect(row.id)}
+                        />
                       )
                     ) : (
-                      <span className="inline-block w-4" />
+                      <span className="inline-block min-w-[28px] min-h-[28px]" />
                     )}
                   </td>
                   <td className="py-1 px-2">
@@ -433,9 +464,15 @@ export default function BuyCars() {
           </p>
         )}
 
-        <div className="px-3 py-2.5 bg-primary/8 border-t border-primary/20 flex flex-wrap items-center justify-between gap-2">
+        <div className="px-2.5 sm:px-3 py-2 bg-primary/8 border-t border-primary/20 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-mutedForeground font-heading uppercase">Check all</span>
+            <button
+              type="button"
+              onClick={toggleSelectAll}
+              className="text-[9px] font-heading font-bold uppercase tracking-wide text-mutedForeground hover:text-primary border border-transparent hover:border-primary/30 rounded px-1.5 py-0.5"
+            >
+              Check all
+            </button>
             <button
               type="button"
               disabled={selectedIds.size === 0 || buying}

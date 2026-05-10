@@ -660,13 +660,14 @@ export default function Crimes() {
         toast.success(parts.join(' and '));
       }
       errors.slice(0, 3).forEach((msg) => toast.error(String(msg)));
-      clearCrimesPrefetch();
-      await fetchCrimes();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
       setCommitAllLoading(false);
     }
+    // Refetch after the button stops loading so the wait matches server work, not a second full page round-trip.
+    clearCrimesPrefetch();
+    fetchCrimes(true).catch(() => {});
   };
 
   const regularCrimeRows = crimeRows.filter((c) => c.crime_type !== 'prestige');

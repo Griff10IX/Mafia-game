@@ -99,6 +99,7 @@ const ActivitySnapshotCard = ({
   countriesHour = [],
   countriesDay = [],
   countriesWeek = [],
+  staffUnknownFooter = null,
 }) => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-card uo-fade-in mobile-panel`}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -122,6 +123,9 @@ const ActivitySnapshotCard = ({
         {snapshotTile(CalendarRange, 'Past week', activeWeek, 'Accounts', undefined, countriesWeek)}
       </div>
     </div>
+    {staffUnknownFooter ? (
+      <div className="px-2.5 pb-2 pt-0 border-t border-primary/15">{staffUnknownFooter}</div>
+    ) : null}
     <div className="uo-art-line text-primary mx-2.5" />
   </div>
 );
@@ -495,6 +499,7 @@ export default function UsersOnline() {
   const [profileHoverEnabled, setProfileHoverEnabled] = useState(() =>
     typeof window !== 'undefined' ? !window.matchMedia('(max-width: 767px)').matches : true,
   );
+  const [staffFlags, setStaffFlags] = useState(null);
 
   const hdoKeyColors = useMemo(
     () => uniqueOnlineColorsForRole(users, (u) => u.is_help_desk_operator, DEFAULT_HDO_COLOR),
@@ -527,6 +532,39 @@ export default function UsersOnline() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get('/auth/staff-flags');
+        if (!cancelled) setStaffFlags(res.data || null);
+      } catch {
+        if (!cancelled) setStaffFlags(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const unknownRosterCount = useMemo(() => {
+    const row = (countriesRoster || []).find((r) => !(String(r.code ?? '').trim()));
+    return Number(row?.count) || 0;
+  }, [countriesRoster]);
+
+  const staffUnknownFooter = useMemo(() => {
+    const ok = !!(staffFlags?.is_admin || staffFlags?.is_moderator);
+    if (!ok || unknownRosterCount <= 0) return null;
+    return (
+      <Link
+        to="/tjjeujr3wa/users-online?unknown=1"
+        className="inline-flex items-center gap-1 text-[9px] font-heading font-bold uppercase tracking-wide text-amber-400/95 hover:text-amber-300 border border-amber-500/35 rounded px-2 py-1 bg-amber-500/10"
+      >
+        Staff — who has unknown country? ({unknownRosterCount})
+      </Link>
+    );
+  }, [staffFlags, unknownRosterCount]);
 
   const fetchOnlineUsers = useCallback(async (silent = false) => {
     try {
@@ -619,6 +657,7 @@ export default function UsersOnline() {
         countriesHour={countriesHour}
         countriesDay={countriesDay}
         countriesWeek={countriesWeek}
+        staffUnknownFooter={staffUnknownFooter}
       />
 
       {users.length === 0 ? (
