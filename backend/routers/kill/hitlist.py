@@ -12,6 +12,7 @@ from fastapi import Depends, HTTPException
 from utils.kill_search_duration import KILL_SEARCH_RANDOM_MAX_MINUTES, KILL_SEARCH_RANDOM_MIN_MINUTES
 from utils.point_provenance import log_points_event
 from utils.family_perks import family_perk_modifiers
+from utils.hitlist_resolution import resolve_user_hitlist_kill
 from utils.civilian_protection import maybe_revoke_civilian_protection
 from server import (
     db,
@@ -421,11 +422,23 @@ async def hitlist_list(current_user: dict = Depends(get_current_user)):
     if target_ids:
         dead_targets = await db.users.find(
             {"id": {"$in": target_ids}, "is_dead": True},
-            {"_id": 0, "id": 1},
+            {"_id": 0, "id": 1, "username": 1, "killed_by_user_id": 1, "killed_by_username": 1},
         ).to_list(500)
-        dead_ids = [u["id"] for u in dead_targets if u.get("id")]
-        if dead_ids:
-            await db.hitlist.delete_many({"target_id": {"$in": dead_ids}, "target_type": {"$in": ["user", "bodyguards"]}})
+        for dead in dead_targets:
+            dead_id = dead.get("id")
+            killer_id = (dead.get("killed_by_user_id") or "").strip()
+            if not dead_id:
+                continue
+            if killer_id:
+                await resolve_user_hitlist_kill(
+                    db,
+                    killer_id=killer_id,
+                    killer_username=(dead.get("killed_by_username") or "Unknown"),
+                    victim_id=dead_id,
+                    victim_username=(dead.get("username") or "Unknown"),
+                )
+            else:
+                await db.hitlist.delete_many({"target_id": dead_id, "target_type": {"$in": ["user", "bodyguards"]}})
     query = {"$or": [
         {"target_type": {"$ne": "npc"}},
         {"target_type": "npc", "placer_id": user_id},

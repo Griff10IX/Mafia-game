@@ -84,6 +84,9 @@ export default function DeadAlive() {
       toast.success(response.data.message);
       setDeadUsername('');
       setDeadPassword('');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('app:refresh-user'));
+      }
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Transfer failed — the books do not lie.');
     } finally {
@@ -105,7 +108,7 @@ export default function DeadAlive() {
             Dead Man&apos;s Inheritance
           </h1>
           <p className="text-[11px] mt-0.5 leading-relaxed max-w-lg font-heading" style={{ color: 'var(--noir-muted)' }}>
-            Even in death, a made man&apos;s debts are honored. Claim what is owed from a fallen account once: <strong className="text-foreground">100% of points</strong> at death, and <strong className="text-foreground">99.95% of cash</strong> (0.05% state head tithe on money only).
+            Even in death, a made man&apos;s debts are honored. Claim what is owed from a fallen account once: <strong className="text-foreground">100% of points</strong>, <strong className="text-foreground">100% of Swiss cash</strong>, and <strong className="text-foreground">99.95% of cash</strong> (0.05% state head tithe on money only).
           </p>
         </div>
       </div>

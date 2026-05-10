@@ -46,6 +46,7 @@ from fastapi import Body, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
 from utils.civilian_protection import civilian_protection_status_payload, maybe_revoke_civilian_protection
+from utils.hitlist_resolution import resolve_user_hitlist_kill
 from utils.bbcode_normalize import normalize_bbcode_media_typos
 from utils.imgbb_resolve import rewrite_imgbb_urls_in_banner_text
 from utils.notepad_color import (
@@ -909,7 +910,17 @@ def register(router):
         # Hitlist banner: dead accounts cannot keep active user/bodyguard contracts.
         hitlist_query = {"target_id": user_id, "target_type": {"$in": ["user", "bodyguards"]}}
         if user.get("is_dead"):
-            await db.hitlist.delete_many(hitlist_query)
+            killer_id = (user.get("killed_by_user_id") or "").strip()
+            if killer_id:
+                await resolve_user_hitlist_kill(
+                    db,
+                    killer_id=killer_id,
+                    killer_username=(user.get("killed_by_username") or "Unknown"),
+                    victim_id=user_id,
+                    victim_username=(user.get("username") or "Unknown"),
+                )
+            else:
+                await db.hitlist.delete_many(hitlist_query)
             hitlist_entries = []
         else:
             hitlist_entries = await db.hitlist.find(

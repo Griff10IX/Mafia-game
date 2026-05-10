@@ -113,38 +113,54 @@ def register(router):
             raise HTTPException(status_code=404, detail="No account found with that username")
         if not dead_user.get("is_dead"):
             raise HTTPException(status_code=400, detail="That account is not dead. Only dead accounts can be used.")
-        if dead_user.get("retrieval_used"):
-            raise HTTPException(status_code=400, detail="That dead account has already been used for a transfer.")
         if not verify_password(request.dead_password, dead_user["password_hash"]):
             raise HTTPException(status_code=401, detail="Invalid password for that account")
         points_at_death = int(dead_user.get("points_at_death") or 0)
         money_at_death = int(dead_user.get("money_at_death") or 0)
+        swiss_at_death = int(dead_user.get("swiss_balance") or 0)
+        swiss_retrieval_used = bool(dead_user.get("swiss_retrieval_used"))
+        supplemental_swiss_only = False
+        if dead_user.get("retrieval_used"):
+            if swiss_at_death > 0 and not swiss_retrieval_used:
+                supplemental_swiss_only = True
+            else:
+                raise HTTPException(status_code=400, detail="That dead account has already been used for a transfer.")
         now = datetime.now(timezone.utc)
         pass_bonus_until_dt = _parse_iso_utc(dead_user.get("rank_xp_pass_bonus_until"))
         pass_token_expires_dt = _parse_iso_utc(dead_user.get("rank_xp_pass_token_expires_at"))
         tokens_at_death_raw = dead_user.get("tokens_at_death") or {}
         token_inc, tokens_restored = _compute_token_restore_for_dead_alive(tokens_at_death_raw, pass_token_expires_dt, now)
 
-        has_estate = points_at_death > 0 or money_at_death > 0
-        has_rank_xp_merge = _dead_has_rank_xp_pass_carryover(dead_user, now, pass_bonus_until_dt, pass_token_expires_dt)
-        has_token_restore = bool(token_inc)
+        add_swiss = swiss_at_death if not swiss_retrieval_used else 0
+        has_estate = points_at_death > 0 or money_at_death > 0 or add_swiss > 0
+        has_rank_xp_merge = (not supplemental_swiss_only) and _dead_has_rank_xp_pass_carryover(dead_user, now, pass_bonus_until_dt, pass_token_expires_dt)
+        has_token_restore = (not supplemental_swiss_only) and bool(token_inc)
         if not has_estate and not has_token_restore and not has_rank_xp_merge:
             raise HTTPException(
                 status_code=400,
-                detail="That account had no points, cash, restorable tokens, or Game Pass state to transfer.",
+                detail="That account had no points, cash, Swiss cash, restorable tokens, or Game Pass state to transfer.",
             )
 
         # Atomically claim — prevents double-retrieval race condition
-        claim = await db.users.find_one_and_update(
-            {"id": dead_user["id"], "is_dead": True, "retrieval_used": {"$ne": True}},
-            {"$set": {"retrieval_used": True}},
-        )
+        if supplemental_swiss_only:
+            claim = await db.users.find_one_and_update(
+                {"id": dead_user["id"], "is_dead": True, "swiss_retrieval_used": {"$ne": True}, "swiss_balance": {"$gt": 0}},
+                {"$set": {"swiss_retrieval_used": True, "swiss_balance": 0}},
+                projection={"_id": 0, "swiss_balance": 1},
+            )
+        else:
+            claim = await db.users.find_one_and_update(
+                {"id": dead_user["id"], "is_dead": True, "retrieval_used": {"$ne": True}},
+                {"$set": {"retrieval_used": True, "swiss_retrieval_used": True, "swiss_balance": 0}},
+                projection={"_id": 0, "swiss_balance": 1},
+            )
         if not claim:
             raise HTTPException(status_code=400, detail="That dead account has already been used for a transfer.")
-        add_points = max(0, int(points_at_death * float(DEAD_ALIVE_POINTS_PERCENT)))
-        add_money = max(0, int(money_at_death * DEAD_ALIVE_PERCENT))
-        tax_money = max(0, int(money_at_death * (1 - DEAD_ALIVE_PERCENT)))
-        tax_points = max(0, int(points_at_death * (1 - float(DEAD_ALIVE_POINTS_PERCENT))))
+        add_swiss = max(0, int((claim or {}).get("swiss_balance") or add_swiss or 0))
+        add_points = 0 if supplemental_swiss_only else max(0, int(points_at_death * float(DEAD_ALIVE_POINTS_PERCENT)))
+        add_money = 0 if supplemental_swiss_only else max(0, int(money_at_death * DEAD_ALIVE_PERCENT))
+        tax_money = 0 if supplemental_swiss_only else max(0, int(money_at_death * (1 - DEAD_ALIVE_PERCENT)))
+        tax_points = 0 if supplemental_swiss_only else max(0, int(points_at_death * (1 - float(DEAD_ALIVE_POINTS_PERCENT))))
         dead_state = (dead_user.get("current_state") or "").strip()
         head_family_id = await get_head_family_id_for_state(dead_state) if dead_state else None
         if head_family_id:
@@ -163,12 +179,19 @@ def register(router):
             user_inc["points"] = add_points
         if add_money > 0:
             user_inc["money"] = add_money
-        if token_inc:
+        if add_swiss > 0:
+            user_inc["swiss_balance"] = add_swiss
+        if has_token_restore and token_inc:
             user_inc.update(token_inc)
         if user_inc:
+            user_update = {"$inc": user_inc}
+            dead_swiss_limit = int(dead_user.get("swiss_limit") or 0)
+            current_swiss_limit = int(current_user.get("swiss_limit") or 0)
+            if dead_swiss_limit > current_swiss_limit:
+                user_update["$max"] = {"swiss_limit": dead_swiss_limit}
             await db.users.update_one(
                 {"id": current_user["id"]},
-                {"$inc": user_inc}
+                user_update,
             )
         if add_points > 0:
             await log_points_event(db, user_id=current_user["id"], points=add_points, event_type="dead_alive_retrieve", event_ref=dead_user["id"])
@@ -211,6 +234,8 @@ def register(router):
         parts = []
         if add_money > 0:
             parts.append(f"${add_money:,} cash")
+        if add_swiss > 0:
+            parts.append(f"${add_swiss:,} Swiss cash")
         if add_points > 0:
             parts.append(f"{add_points:,} points")
         if tokens_restored:
@@ -227,6 +252,7 @@ def register(router):
             "message": msg,
             "points_transferred": add_points,
             "money_transferred": add_money,
+            "swiss_transferred": add_swiss,
             "tokens_restored": tokens_restored,
         }
 
