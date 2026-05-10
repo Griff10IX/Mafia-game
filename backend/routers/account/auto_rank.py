@@ -645,7 +645,7 @@ async def _booze_sell_at_city(db, user, user_id: str, username: str, telegram_ch
 
 async def _booze_buy_and_travel(db, user, user_id: str, username: str, telegram_chat_id: str, bot_token, now: datetime, lines: list, buy_city: str, sell_city: str, buy_idx: int, sell_idx: int):
     """Buy optimal booze at buy_city and travel to sell_city. Booze only uses cars (no airport). If no car, skip and retry next cycle (every 5s)."""
-    from routers.money.booze_run import BOOZE_TYPES, _booze_prices_for_rotation, _booze_user_capacity, _booze_buy_impl
+    from routers.money.booze_run import BOOZE_TYPES, _booze_prices_for_rotation, _booze_user_capacity, _booze_buy_impl, _family_booze_cargo_extra
     from routers.admin.airport import _start_travel_impl
 
     travel_method = await _get_travel_method(db, user_id)
@@ -654,7 +654,8 @@ async def _booze_buy_and_travel(db, user, user_id: str, username: str, telegram_
         return False
 
     prices_map = _booze_prices_for_rotation()
-    capacity = _booze_user_capacity(user)
+    fam_extra = await _family_booze_cargo_extra(user.get("family_id"))
+    capacity = _booze_user_capacity(user, family_cargo_bonus=fam_extra)
     money = int(user.get("money") or 0)
 
     best_profit = -1
