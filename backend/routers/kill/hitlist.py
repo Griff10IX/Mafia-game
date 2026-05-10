@@ -413,6 +413,19 @@ async def hitlist_list(current_user: dict = Depends(get_current_user)):
     """List public hitlist entries (user bounties) + only this user's NPC entries. NPCs are personal per placer.
     Never expose placer_id or target_id in response (privacy: prevent correlating placers with other data)."""
     user_id = current_user["id"]
+    active_user_entries = await db.hitlist.find(
+        {"target_type": {"$in": ["user", "bodyguards"]}},
+        {"_id": 0, "target_id": 1},
+    ).to_list(500)
+    target_ids = list({e.get("target_id") for e in active_user_entries if e.get("target_id")})
+    if target_ids:
+        dead_targets = await db.users.find(
+            {"id": {"$in": target_ids}, "is_dead": True},
+            {"_id": 0, "id": 1},
+        ).to_list(500)
+        dead_ids = [u["id"] for u in dead_targets if u.get("id")]
+        if dead_ids:
+            await db.hitlist.delete_many({"target_id": {"$in": dead_ids}, "target_type": {"$in": ["user", "bodyguards"]}})
     query = {"$or": [
         {"target_type": {"$ne": "npc"}},
         {"target_type": "npc", "placer_id": user_id},

@@ -81,6 +81,73 @@ def _attack_list_cache_invalidate(attacker_id: str) -> None:
     for k in [k for k in _attack_list_cache if k[0] == attacker_id]:
         _attack_list_cache.pop(k, None)
 
+
+async def _resolve_user_hitlist_kill(
+    *,
+    killer_id: str,
+    killer_username: str,
+    victim_id: str,
+    victim_username: str,
+) -> Dict[str, Any]:
+    """Pay active user bounties for a PvP kill and clear now-unattackable victim contracts."""
+    entries = await db.hitlist.find(
+        {"target_id": victim_id, "target_type": {"$in": ["user", "bodyguards"]}},
+        {
+            "_id": 0,
+            "id": 1,
+            "target_type": 1,
+            "reward_type": 1,
+            "reward_amount": 1,
+            "placer_id": 1,
+            "placer_username": 1,
+            "hidden": 1,
+        },
+    ).to_list(200)
+    if not entries:
+        return {"cash": 0, "points": 0, "paid_count": 0, "cleared_count": 0}
+
+    user_bounties = [e for e in entries if e.get("target_type") == "user"]
+    reward_cash = sum(int(e.get("reward_amount") or 0) for e in user_bounties if e.get("reward_type") == "cash")
+    reward_points = sum(int(e.get("reward_amount") or 0) for e in user_bounties if e.get("reward_type") == "points")
+    entry_ids = [e.get("id") for e in entries if e.get("id")]
+    delete_filter: Dict[str, Any] = {"target_id": victim_id, "target_type": {"$in": ["user", "bodyguards"]}}
+    if entry_ids:
+        delete_filter = {"id": {"$in": entry_ids}}
+    deleted = await db.hitlist.delete_many(delete_filter)
+
+    if reward_points > 0:
+        await log_points_event(
+            db,
+            user_id=killer_id,
+            points=reward_points,
+            event_type="hitlist_kill_reward",
+            event_ref=f"victim:{victim_id}",
+            meta={"victim_username": victim_username, "bounty_count": len(user_bounties)},
+        )
+
+    try:
+        await db.hitlist_bodyguard_events.insert_one({
+            "at": datetime.now(timezone.utc).isoformat(),
+            "type": "hitlist_user_killed",
+            "killer_id": killer_id,
+            "killer_username": killer_username,
+            "target_id": victim_id,
+            "target_username": victim_username,
+            "reward_cash": reward_cash,
+            "reward_points": reward_points,
+            "paid_count": len(user_bounties),
+            "cleared_count": int(deleted.deleted_count or 0),
+        })
+    except Exception:
+        logging.exception("hitlist user kill event failed")
+
+    return {
+        "cash": reward_cash,
+        "points": reward_points,
+        "paid_count": len(user_bounties),
+        "cleared_count": int(deleted.deleted_count or 0),
+    }
+
 _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend not in sys.path:
     sys.path.insert(0, _backend)
@@ -127,6 +194,7 @@ from server import (
     founding_member_income_mult,
 )
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
+from utils.point_provenance import log_points_event
 from utils.kill_search_duration import KILL_SEARCH_RANDOM_MAX_MINUTES, KILL_SEARCH_RANDOM_MIN_MINUTES
 from utils.civilian_protection import (
     CIVILIAN_PROTECTION_KILL_BLOCKED_DETAIL,
@@ -2395,7 +2463,17 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         killer_doc = await db.users.find_one({"id": killer_id}, {"_id": 0, "rank_points": 1, "username": 1, "prestige_rank_multiplier": 1})
         killer_rp_before = int((killer_doc or {}).get("rank_points") or 0)
         killer_pm = float((killer_doc or {}).get("prestige_rank_multiplier") or 1.0)
+        hitlist_reward = await _resolve_user_hitlist_kill(
+            killer_id=killer_id,
+            killer_username=current_user.get("username") or "?",
+            victim_id=victim_id,
+            victim_username=target_name,
+        )
         kill_inc = {"money": cash_loot, "rank_points": rank_points}
+        if int(hitlist_reward.get("cash") or 0) > 0:
+            kill_inc["money"] = int(kill_inc.get("money") or 0) + int(hitlist_reward["cash"])
+        if int(hitlist_reward.get("points") or 0) > 0:
+            kill_inc["points"] = int(hitlist_reward["points"])
         # Count kills vs real players and robot bodyguards; not vs hitlist NPCs (handled above) or other NPCs.
         if not target.get("is_npc") or target.get("is_bodyguard"):
             kill_inc["total_kills"] = 1
@@ -2737,6 +2815,13 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             success_message += " and their assets."
         if target.get("is_bodyguard") and (bodyguard_owner_username or "").strip():
             success_message += f" They were a bodyguard for {str(bodyguard_owner_username).strip()}."
+        hitlist_reward_parts = []
+        if int(hitlist_reward.get("cash") or 0) > 0:
+            hitlist_reward_parts.append(f"${int(hitlist_reward['cash']):,}")
+        if int(hitlist_reward.get("points") or 0) > 0:
+            hitlist_reward_parts.append(f"{int(hitlist_reward['points']):,} points")
+        if hitlist_reward_parts:
+            success_message += f" Hitlist reward claimed: {' + '.join(hitlist_reward_parts)}."
         if death_message:
             success_message += f' Death message: "{death_message}"'
         if make_public:
@@ -2790,6 +2875,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         _kp_rank_points = rank_points
         _kp_victim_cars_count = victim_cars_count
         _kp_victim_props_count = victim_props_count
+        _kp_hitlist_reward = dict(hitlist_reward)
         _kp_meta_snapshot = _request_meta(req)
         _kp_has_silencer = bool(current_user.get("has_silencer"))
 
@@ -2922,7 +3008,13 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     "player_message": _kp_success_message,
                     "death_message": _kp_death_message or None,
                     "make_public": _kp_make_public,
-                    "rewards": {"money": _kp_cash_loot, "rank_points": _kp_rank_points, "cars_taken": _kp_victim_cars_count, "properties_taken": _kp_victim_props_count},
+                    "rewards": {
+                        "money": _kp_cash_loot,
+                        "rank_points": _kp_rank_points,
+                        "cars_taken": _kp_victim_cars_count,
+                        "properties_taken": _kp_victim_props_count,
+                        "hitlist": _kp_hitlist_reward,
+                    },
                     "target_health_before": _kp_target_health,
                     "target_health_after": 0.0,
                     "damage_done": damage_done,
@@ -2963,7 +3055,14 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         return AttackExecuteResponse(
             success=True,
             message=success_message,
-            rewards={"money": cash_loot, "rank_points": rank_points, "cars_taken": victim_cars_count, "properties_taken": victim_props_count, "exclusive_cars": exclusive_car_count}
+            rewards={
+                "money": cash_loot,
+                "rank_points": rank_points,
+                "cars_taken": victim_cars_count,
+                "properties_taken": victim_props_count,
+                "exclusive_cars": exclusive_car_count,
+                "hitlist": hitlist_reward,
+            }
         )
     else:
         damage_done = float(health_dealt_pct)

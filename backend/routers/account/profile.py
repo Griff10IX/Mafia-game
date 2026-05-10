@@ -906,11 +906,16 @@ def register(router):
             _hdo_def = "#166534"
             raw_h = (user.get("hdo_online_color") or "").strip() or _hdo_def
             out["hdo_online_color"] = raw_h if raw_h.startswith("#") and len(raw_h) <= 9 else _hdo_def
-        # Hitlist banner: is this user on the hitlist? (public info: totals only)
-        hitlist_entries = await db.hitlist.find(
-            {"target_id": user_id, "target_type": {"$in": ["user", "bodyguards"]}},
-            {"_id": 0, "reward_type": 1, "reward_amount": 1},
-        ).to_list(100)
+        # Hitlist banner: dead accounts cannot keep active user/bodyguard contracts.
+        hitlist_query = {"target_id": user_id, "target_type": {"$in": ["user", "bodyguards"]}}
+        if user.get("is_dead"):
+            await db.hitlist.delete_many(hitlist_query)
+            hitlist_entries = []
+        else:
+            hitlist_entries = await db.hitlist.find(
+                hitlist_query,
+                {"_id": 0, "reward_type": 1, "reward_amount": 1},
+            ).to_list(100)
         hitlist_cash = sum(int(e.get("reward_amount") or 0) for e in hitlist_entries if e.get("reward_type") == "cash")
         hitlist_points = sum(int(e.get("reward_amount") or 0) for e in hitlist_entries if e.get("reward_type") == "points")
         out["hitlist_on"] = len(hitlist_entries) > 0
