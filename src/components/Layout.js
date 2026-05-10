@@ -952,11 +952,15 @@ export default function Layout({ children }) {
         return;
       }
       const progressRes = await progressPromise;
+      const authUserData = { ...(userRes.data || {}) };
+      delete authUserData.casino_profit;
+      delete authUserData.property_profit;
+      delete authUserData.has_casino_or_property;
       setUser((prev) => ({
-        ...userRes.data,
-        casino_profit: prev?.casino_profit ?? userRes.data.casino_profit,
-        property_profit: prev?.property_profit ?? userRes.data.property_profit,
-        has_casino_or_property: prev?.has_casino_or_property ?? userRes.data.has_casino_or_property,
+        ...authUserData,
+        casino_profit: prev?.casino_profit ?? 0,
+        property_profit: prev?.property_profit ?? 0,
+        has_casino_or_property: prev?.has_casino_or_property ?? false,
       }));
       setRankProgress(progressRes.data);
     } catch (error) {
