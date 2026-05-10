@@ -15,7 +15,6 @@ from utils.game_pass_season import (
     get_game_pass_season_public,
 )
 from utils.point_provenance import mint_purchase_lot_if_missing, log_points_event
-from utils.release_soft_launch import game_pass_purchase_locked_detail, get_release_soft_launch_public
 from utils.store_points_pricing import (
     CUSTOM_POINTS_PACKAGE_ID,
     CUSTOM_POINTS_MAX,
@@ -992,11 +991,6 @@ def register(router):
 
     _store_rl_u = [Depends(_store_sustained_rl_user)]
 
-    @router.get("/payments/release-soft-launch")
-    async def get_release_soft_launch_status():
-        """Public flags for UI: PvP kill pause and Game Pass purchase lock during release soft-launch."""
-        return await get_release_soft_launch_public(db)
-
     @router.get("/payments/game-pass-season")
     async def get_game_pass_season_status():
         """Public Game Pass season settings for page countdown and purchase windows."""
@@ -1083,9 +1077,6 @@ def register(router):
 
         # Pre-check: disallow buying again while the user already has an unactivated pass token.
         if package_id == RANK_XP_PASS_PACKAGE_ID:
-            rl = await get_release_soft_launch_public(db)
-            if rl.get("game_pass_purchase_locked"):
-                raise HTTPException(status_code=403, detail=game_pass_purchase_locked_detail(rl))
             season = await get_game_pass_season_public(db)
             block_msg = game_pass_purchase_blocked_in_final_window(
                 current_user,

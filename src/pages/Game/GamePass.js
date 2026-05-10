@@ -518,8 +518,6 @@ export default function GamePass() {
   const selectedTierObj = selectedMicroTier ? getTierRewardObj(selectedMicroTier) : null;
   const selectedNextTierObj = selectedMicroTier && selectedMicroTier < 100 ? getTierRewardObj(selectedMicroTier + 1) : null;
 
-  const gamePassPurchaseLocked = false;
-
   const handlePurchase = async () => {
     if (!user) return;
     setLoading(true);
@@ -609,7 +607,6 @@ export default function GamePass() {
         </div>
       ) : (
         <div className="max-w-5xl mx-auto space-y-4">
-          {/* Release soft-launch banner removed — Game Pass is fully open */}
           {/* Membership header + purchase CTA */}
           <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -670,7 +667,6 @@ export default function GamePass() {
                   disabled={
                     !user
                     || loading
-                    || gamePassPurchaseLocked
                     || vipClaimed
                     || passIsUnactivatedValid
                     || passIsUnactivatedUnknownExpiry
@@ -682,13 +678,11 @@ export default function GamePass() {
                     ? '...'
                     : gamePassPurchaseBlockedFinalFortnight
                       ? 'Too close to pass end'
-                      : gamePassPurchaseLocked
-                        ? 'Unavailable until unlock'
-                        : vipClaimed
-                          ? 'VIP claimed'
-                          : passIsUnactivatedValid
-                            ? 'Token ready (activate to claim)'
-                            : `Buy for £${GAME_PASS_PRICE_GBP}`}
+                      : vipClaimed
+                        ? 'VIP claimed'
+                        : passIsUnactivatedValid
+                          ? 'Token ready (activate to claim)'
+                          : `Buy for £${GAME_PASS_PRICE_GBP}`}
                 </button>
                 <Link
                   to="/account/inventory"

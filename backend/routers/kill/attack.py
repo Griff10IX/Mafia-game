@@ -128,7 +128,6 @@ from server import (
 )
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
 from utils.kill_search_duration import KILL_SEARCH_RANDOM_MAX_MINUTES, KILL_SEARCH_RANDOM_MIN_MINUTES
-from utils.release_soft_launch import PVP_KILLS_DISABLED_DETAIL, soft_launch_blocks_pvp_kill_on_target
 from utils.civilian_protection import (
     CIVILIAN_PROTECTION_KILL_BLOCKED_DETAIL,
     is_civilian_protected,
@@ -1418,8 +1417,6 @@ async def search_target(payload: AttackSearchRequest, req: Request, current_user
         raise HTTPException(status_code=400, detail="That account is dead and cannot be attacked")
     if target["id"] == current_user["id"]:
         raise HTTPException(status_code=400, detail="Cannot attack yourself")
-    if await soft_launch_blocks_pvp_kill_on_target(db, target):
-        raise HTTPException(status_code=403, detail=PVP_KILLS_DISABLED_DETAIL)
     if target.get("is_npc") and not target.get("is_bodyguard"):
         hitlist_npc = await db.hitlist.find_one(
             {"target_id": target["id"], "target_type": "npc", "placer_id": current_user["id"]},
@@ -1693,8 +1690,6 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
     target = await db.users.find_one(user_filter, _BULLET_CALC_TARGET_PROJECTION)
     if not target:
         return _soft_err("Target user not found", 404)
-    if await soft_launch_blocks_pvp_kill_on_target(db, target):
-        return _soft_err(PVP_KILLS_DISABLED_DETAIL, 403)
     if not target.get("is_npc") and is_civilian_protected(target):
         return _soft_err(CIVILIAN_PROTECTION_KILL_BLOCKED_DETAIL, 403)
     # Do not apply passive health regen here: preview does not use health for bullets_required, and skipping avoids
@@ -1854,9 +1849,6 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     "A report has been sent to staff."
                 ),
             )
-    if await soft_launch_blocks_pvp_kill_on_target(db, target):
-        _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "Release soft-launch PvP block", req), label="log_soft_launch_block")
-        raise HTTPException(status_code=403, detail=PVP_KILLS_DISABLED_DETAIL)
     if not target.get("is_npc") and is_civilian_protected(target):
         _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "Target under civilian protection", req), label="log_civilian_protected")
         raise HTTPException(status_code=403, detail=CIVILIAN_PROTECTION_KILL_BLOCKED_DETAIL)

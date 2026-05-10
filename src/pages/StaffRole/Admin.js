@@ -252,8 +252,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Bootleg Runs economy', categoryId: 'admin-gameworld', collapseKey: 'racingEconomy', keywords: ['racing', 'bootleg', 'crew', 'bank', 'adjust crew', 'crew bank', 'lifetime', 'earnings', 'payout', 'wallet', 'runs', 'audit'], adminOnly: true },
   { label: 'Crack the Safe jackpot', categoryId: 'admin-gameworld', collapseKey: 'crackSafeJackpot', keywords: ['crack', 'safe', 'jackpot', 'pot', 'lower'] },
   { label: 'State Heads', categoryId: 'admin-gameworld', collapseKey: 'stateHeads', keywords: ['state', 'heads', 'family', 'territory'] },
-  { label: 'Release soft-launch', categoryId: 'admin-gameworld', collapseKey: 'releaseSoftLaunch', keywords: ['release', 'soft', 'launch', 'pvp', 'kill', 'game pass'], adminOnly: true },
-  { label: 'Game Pass season end', categoryId: 'admin-gameworld', collapseKey: 'releaseSoftLaunch', keywords: ['game pass', 'season', 'end', 'countdown', 'date', 'time', 'global'], adminOnly: true },
+  { label: 'Game Pass season end', categoryId: 'admin-gameworld', collapseKey: 'gamePassSeason', keywords: ['game pass', 'season', 'end', 'countdown', 'date', 'time', 'global'], adminOnly: true },
   { label: 'Reset Racket Cooldown', categoryId: 'admin-gameworld', collapseKey: 'racketReset', keywords: ['racket', 'cooldown', 'reset', 'family'], adminOnly: true },
   { label: 'Casino limits (global caps)', categoryId: 'admin-gameworld', collapseKey: 'casinoLimits', keywords: ['casino', 'limits', 'caps', 'max bet', 'buyback', 'poker', 'blind'] },
   { label: 'Claim costs (casino, airport, armoury)', categoryId: 'admin-gameworld', collapseKey: 'claimCosts', keywords: ['claim', 'cost', 'casino', 'airport', 'armoury', 'bullet', 'factory', 'dice', 'roulette'], adminOnly: true },
@@ -373,8 +372,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, kenoEconomy: true, economySpikeAudit: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, kenoEconomy: true, economySpikeAudit: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true }; }
 }
 
 function saveCollapsed(state) {
@@ -1415,10 +1414,7 @@ export default function Admin() {
   const [systemHealthLoading, setSystemHealthLoading] = useState(false);
   const [maintenanceBanner, setMaintenanceBanner] = useState(null);
   const [maintenanceBannerLoading, setMaintenanceBannerLoading] = useState(false);
-  const [releaseSoftLaunchAdmin, setReleaseSoftLaunchAdmin] = useState(null);
-  const [releaseSoftLaunchLoading, setReleaseSoftLaunchLoading] = useState(false);
-  const [releaseSoftLaunchUnlockAt, setReleaseSoftLaunchUnlockAt] = useState('2026-04-04T17:00:00+00:00');
-  const [releaseSoftLaunchPvpUnlockAt, setReleaseSoftLaunchPvpUnlockAt] = useState('2026-04-04T17:00:00+00:00');
+  const [gamePassSeasonLoading, setGamePassSeasonLoading] = useState(false);
   const [gamePassSeasonAdmin, setGamePassSeasonAdmin] = useState(null);
   const [gamePassSeasonEndAt, setGamePassSeasonEndAt] = useState('2026-05-01T14:00:00+00:00');
   const [maintenanceMsg, setMaintenanceMsg] = useState('');
@@ -7577,46 +7573,19 @@ export default function Admin() {
     finally { setMaintenanceBannerLoading(false); }
   };
 
-  const handleFetchReleaseSoftLaunch = async () => {
-    setReleaseSoftLaunchLoading(true);
-    try {
-      const res = await api.get('/admin/release-soft-launch');
-      setReleaseSoftLaunchAdmin(res.data ?? null);
-      const u = res.data?.game_pass_unlock_at || res.data?.stored?.game_pass_unlock_at;
-      if (u) setReleaseSoftLaunchUnlockAt(String(u));
-      const pv = res.data?.pvp_kills_unlock_at || res.data?.stored?.pvp_kills_unlock_at;
-      if (pv) setReleaseSoftLaunchPvpUnlockAt(String(pv));
-    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to load release soft-launch'); }
-    finally { setReleaseSoftLaunchLoading(false); }
-  };
-
   const handleFetchGamePassSeason = async () => {
-    setReleaseSoftLaunchLoading(true);
+    setGamePassSeasonLoading(true);
     try {
       const res = await api.get('/admin/game-pass-season');
       setGamePassSeasonAdmin(res.data ?? null);
       const v = res.data?.game_pass_season_end_at || res.data?.stored?.season_end_at;
       if (v) setGamePassSeasonEndAt(String(v));
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed to load Game Pass season'); }
-    finally { setReleaseSoftLaunchLoading(false); }
-  };
-
-  const handleSetReleaseSoftLaunch = async (enabled) => {
-    setReleaseSoftLaunchLoading(true);
-    try {
-      const res = await api.post('/admin/release-soft-launch', {
-        enabled,
-        game_pass_unlock_at: releaseSoftLaunchUnlockAt.trim() || undefined,
-        pvp_kills_unlock_at: releaseSoftLaunchPvpUnlockAt.trim() || undefined,
-      });
-      setReleaseSoftLaunchAdmin(res.data ?? null);
-      toast.success(res.data?.message || 'Updated release soft-launch');
-    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to update release soft-launch'); }
-    finally { setReleaseSoftLaunchLoading(false); }
+    finally { setGamePassSeasonLoading(false); }
   };
 
   const handleSetGamePassSeason = async () => {
-    setReleaseSoftLaunchLoading(true);
+    setGamePassSeasonLoading(true);
     try {
       const res = await api.post('/admin/game-pass-season', {
         season_end_at: gamePassSeasonEndAt.trim(),
@@ -7627,7 +7596,7 @@ export default function Admin() {
       }
       toast.success(res.data?.message || 'Game Pass season end updated');
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed to update Game Pass season end'); }
-    finally { setReleaseSoftLaunchLoading(false); }
+    finally { setGamePassSeasonLoading(false); }
   };
 
   const handleBulkAction = async () => {
@@ -14215,103 +14184,42 @@ export default function Admin() {
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={AlertTriangle}
-          title="Release soft-launch"
-          badge={releaseSoftLaunchAdmin?.release_soft_launch_enabled ? <span className="text-[10px] font-heading text-amber-400">Active</span> : null}
-          toolAnchor="releaseSoftLaunch"
-          isCollapsed={collapsed.releaseSoftLaunch}
+          title="Game Pass season end"
+          toolAnchor="gamePassSeason"
+          isCollapsed={collapsed.gamePassSeason}
           onToggle={() => {
-            toggleSection('releaseSoftLaunch');
-            if (collapsed.releaseSoftLaunch) {
-              if (!releaseSoftLaunchAdmin) handleFetchReleaseSoftLaunch();
-              if (!gamePassSeasonAdmin) handleFetchGamePassSeason();
-            }
+            toggleSection('gamePassSeason');
+            if (collapsed.gamePassSeason && !gamePassSeasonAdmin) handleFetchGamePassSeason();
           }}
         />
-        {!collapsed.releaseSoftLaunch && (
+        {!collapsed.gamePassSeason && (
           <div className="p-3 space-y-2">
             <p className="text-[10px] text-mutedForeground font-heading">
-              While enabled, each feature stays off until its own unlock time (below). Game Pass / points use the first field; PvP kills on real players use the second (often later). Hitlist NPCs are unaffected. Leave this enabled if you still want banners until staff disable it.
+              Sets the global season end used for Game Pass countdown and purchase windows. Use ISO 8601 UTC.
             </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <BtnPrimary onClick={handleFetchReleaseSoftLaunch} disabled={releaseSoftLaunchLoading}>
-                {releaseSoftLaunchLoading ? '…' : 'Refresh status'}
-              </BtnPrimary>
-              <span className="text-[10px] font-heading text-mutedForeground">
-                {releaseSoftLaunchAdmin?.pvp_kills_disabled ? <span className="text-amber-400 font-bold">Player PvP kills paused</span> : <span>Player PvP kills allowed</span>}
-              </span>
-            </div>
-            {releaseSoftLaunchAdmin && (
-              <div className="text-[10px] text-mutedForeground font-heading space-y-1">
-                <p>
-                  Game Pass / points:{' '}
-                  <span className={releaseSoftLaunchAdmin.game_pass_purchase_locked ? 'text-amber-400 font-bold' : 'text-emerald-400'}>
-                    {releaseSoftLaunchAdmin.game_pass_purchase_locked ? 'locked' : 'unlocked'}
-                  </span>
-                  {releaseSoftLaunchAdmin.game_pass_unlock_at && (
-                    <span className="text-foreground font-mono text-[9px] ml-1">{releaseSoftLaunchAdmin.game_pass_unlock_at}</span>
-                  )}
-                </p>
-                <p>
-                  PvP kills:{' '}
-                  <span className={releaseSoftLaunchAdmin.pvp_kills_disabled ? 'text-amber-400 font-bold' : 'text-emerald-400'}>
-                    {releaseSoftLaunchAdmin.pvp_kills_disabled ? 'paused' : 'allowed'}
-                  </span>
-                  {releaseSoftLaunchAdmin.pvp_kills_unlock_at && (
-                    <span className="text-foreground font-mono text-[9px] ml-1">{releaseSoftLaunchAdmin.pvp_kills_unlock_at}</span>
-                  )}
-                </p>
-              </div>
+            {gamePassSeasonAdmin?.game_pass_season_end_at && (
+              <p className="text-[10px] text-mutedForeground font-heading">
+                Current season end:{' '}
+                <span className="text-foreground font-mono text-[9px]">{gamePassSeasonAdmin.game_pass_season_end_at}</span>
+              </p>
             )}
             <div>
-              <label className="block text-[10px] font-heading uppercase tracking-wider text-mutedForeground mb-1">Unlock — points store / Game Pass (ISO 8601, UTC)</label>
+              <label className="block text-[10px] font-heading uppercase tracking-wider text-mutedForeground mb-1">Season end timestamp (ISO 8601, UTC)</label>
               <input
                 type="text"
-                value={releaseSoftLaunchUnlockAt}
-                onChange={(e) => setReleaseSoftLaunchUnlockAt(e.target.value)}
+                value={gamePassSeasonEndAt}
+                onChange={(e) => setGamePassSeasonEndAt(e.target.value)}
                 className="w-full px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-mono text-foreground"
-                placeholder="2026-04-01T12:00:00+00:00"
+                placeholder="2026-05-01T14:00:00+00:00"
               />
-            </div>
-            <div>
-              <label className="block text-[10px] font-heading uppercase tracking-wider text-mutedForeground mb-1">Unlock — PvP kills on players (ISO 8601, UTC)</label>
-              <input
-                type="text"
-                value={releaseSoftLaunchPvpUnlockAt}
-                onChange={(e) => setReleaseSoftLaunchPvpUnlockAt(e.target.value)}
-                className="w-full px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-mono text-foreground"
-                placeholder="2026-04-04T17:00:00+00:00"
-              />
-            </div>
-            <div className="border-t border-primary/15 pt-2 space-y-2">
-              <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Game Pass season end (global)</div>
-              {gamePassSeasonAdmin?.game_pass_season_end_at && (
-                <p className="text-[10px] text-mutedForeground font-heading">
-                  Current season end:{' '}
-                  <span className="text-foreground font-mono text-[9px]">{gamePassSeasonAdmin.game_pass_season_end_at}</span>
-                </p>
-              )}
-              <div>
-                <label className="block text-[10px] font-heading uppercase tracking-wider text-mutedForeground mb-1">Season end timestamp (ISO 8601, UTC)</label>
-                <input
-                  type="text"
-                  value={gamePassSeasonEndAt}
-                  onChange={(e) => setGamePassSeasonEndAt(e.target.value)}
-                  className="w-full px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-mono text-foreground"
-                  placeholder="2026-05-01T14:00:00+00:00"
-                />
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <BtnSecondary onClick={handleFetchGamePassSeason} disabled={releaseSoftLaunchLoading}>
-                  {releaseSoftLaunchLoading ? '…' : 'Refresh season'}
-                </BtnSecondary>
-                <BtnPrimary onClick={handleSetGamePassSeason} disabled={releaseSoftLaunchLoading}>
-                  Update season end
-                </BtnPrimary>
-              </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <BtnPrimary onClick={() => handleSetReleaseSoftLaunch(true)} disabled={releaseSoftLaunchLoading}>Enable soft-launch</BtnPrimary>
-              <BtnDanger onClick={() => handleSetReleaseSoftLaunch(false)} disabled={releaseSoftLaunchLoading}>Disable soft-launch</BtnDanger>
+              <BtnSecondary onClick={handleFetchGamePassSeason} disabled={gamePassSeasonLoading}>
+                {gamePassSeasonLoading ? '…' : 'Refresh season'}
+              </BtnSecondary>
+              <BtnPrimary onClick={handleSetGamePassSeason} disabled={gamePassSeasonLoading}>
+                Update season end
+              </BtnPrimary>
             </div>
           </div>
         )}

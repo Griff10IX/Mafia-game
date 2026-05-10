@@ -1,8 +1,7 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { Search, Plane, Car, Crosshair, Clock, MapPin, Skull, Calculator, Zap, FileText, Users, AlertTriangle, History, ChevronDown, ChevronRight } from 'lucide-react';
+import { Search, Plane, Car, Crosshair, Clock, MapPin, Skull, Calculator, Zap, FileText, Users, History, ChevronDown, ChevronRight } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import api, { refreshUser, getApiErrorMessage, apiRequestWith429Retry } from '../../utils/api';
-import { formatReleaseUnlockLine } from '../../utils/releaseSoftLaunchDisplay';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
@@ -191,7 +190,6 @@ const KillUserCard = ({
   onOpenCalc,
   bulletsNeededForKill,
   bulletsNeededLoading,
-  killPvpBlocked,
 }) => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-card atk-fade-in mobile-panel`}>
     <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none atk-glow" />
@@ -307,9 +305,8 @@ const KillUserCard = ({
       
       <button
         type="button"
-        disabled={killPvpBlocked || !killUsername.trim() || !bulletsToUse.trim() || parseInt(bulletsToUse, 10) < 1}
+        disabled={!killUsername.trim() || !bulletsToUse.trim() || parseInt(bulletsToUse, 10) < 1}
         onClick={onKill}
-        title={killPvpBlocked ? 'Player kills are disabled during release soft-launch (NPCs still allowed).' : undefined}
         className="w-full bg-gradient-to-r from-red-700 via-red-800 to-red-900 hover:from-red-600 hover:via-red-700 hover:to-red-800 text-white rounded font-heading font-bold uppercase tracking-widest py-2 text-[10px] border-2 border-red-600/50 shadow-lg shadow-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
         data-testid="kill-inline-button"
       >
@@ -398,17 +395,12 @@ const SearchesCard = ({
   onTravel,
   onAttack,
   onFillKillTarget,
-  pvpKillsDisabled,
 }) => {
   const [isDesktop, setIsDesktop] = useState(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
     return window.matchMedia('(min-width: 768px)').matches;
   });
-  const showKillForRow = (a) => {
-    if (!a.can_attack || !onFillKillTarget) return false;
-    if (!pvpKillsDisabled) return true;
-    return a.target_is_npc === true;
-  };
+  const showKillForRow = (a) => !!(a.can_attack && onFillKillTarget);
   const selectedIdSet = useMemo(() => new Set(selectedAttackIds), [selectedAttackIds]);
 
   useEffect(() => {
@@ -1060,7 +1052,6 @@ export default function Attack() {
   const [killBulletsLoading, setKillBulletsLoading] = useState(false);
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
-  const [releaseSoftLaunch, setReleaseSoftLaunch] = useState(null);
   const [userBullets, setUserBullets] = useState(0);
   const [userMolotovs, setUserMolotovs] = useState(0);
   const [travelModalDestination, setTravelModalDestination] = useState(null);
@@ -1298,28 +1289,23 @@ export default function Attack() {
     const load = async () => {
       try {
         // /attack/list now returns inflation_pct inline so we drop the dedicated /attack/inflation page-load call.
-        const [
-          meRes,
-          eventsRes,
-          rlRes,
-        ] = await Promise.all([
+        const all = await Promise.all([
           api.get('/auth/me').catch(() => ({ data: {} })),
           apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: {} })),
-          api.get('/payments/release-soft-launch').catch(() => ({ data: {} })),
           refreshAttacks(),
         ]);
+        const meRes = all[0];
+        const eventsRes = all[1];
         setUserBullets(meRes.data?.bullets ?? 0);
         setUserMolotovs(meRes.data?.molotovs ?? 0);
         setEvent(eventsRes.data?.event ?? null);
         setEventsEnabled(!!eventsRes.data?.events_enabled);
-        setReleaseSoftLaunch(rlRes.data && typeof rlRes.data === 'object' ? rlRes.data : null);
       } catch (_) {
         setInflationPct(0);
         setUserBullets(0);
         setUserMolotovs(0);
         setEvent(null);
         setEventsEnabled(false);
-        setReleaseSoftLaunch(null);
         await refreshAttacks();
       }
     };
@@ -1755,20 +1741,6 @@ export default function Attack() {
 
   const filteredIds = useMemo(() => filteredAttacks.map((a) => a.attack_id), [filteredAttacks]);
 
-  const pvpKillsDisabled = !!releaseSoftLaunch?.pvp_kills_disabled;
-  const releaseUnlockKillDisplay = formatReleaseUnlockLine(
-    releaseSoftLaunch?.pvp_kills_unlock_at || releaseSoftLaunch?.game_pass_unlock_at,
-  );
-
-  const killPvpBlocked = useMemo(() => {
-    if (!pvpKillsDisabled) return false;
-    const u = (killUsername || '').trim().toLowerCase();
-    if (!u) return false;
-    const hit = foundAndReady.find((a) => (a.target_username || '').toLowerCase() === u);
-    if (!hit) return false;
-    return hit.target_is_npc !== true;
-  }, [pvpKillsDisabled, killUsername, foundAndReady]);
-  
   const selectedAttackIdSet = useMemo(() => new Set(selectedAttackIds), [selectedAttackIds]);
   const allFilteredSelected = useMemo(
     () => filteredIds.length > 0 && filteredIds.every((id) => selectedAttackIdSet.has(id)),
@@ -1783,30 +1755,6 @@ export default function Attack() {
 
       {eventsEnabled && event && (event.kill_cash !== 1 || event.rank_points !== 1) && event.name && (
         <EventBanner event={event} />
-      )}
-
-      {pvpKillsDisabled && (
-        <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-2 flex items-start gap-2">
-          <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
-          <div className="text-[10px] text-amber-100 font-heading leading-snug space-y-1.5 min-w-0">
-            <p>
-              Release mode: player vs player attacks stay off until the <span className="text-foreground font-semibold">PvP unlock</span> below.
-              That is separate from Game Pass / point packs — those use the{' '}
-              <Link to="/game/store?tab=points" className="text-primary font-bold underline-offset-2 hover:underline">
-                Store → Points
-              </Link>{' '}
-              unlock (usually earlier).
-            </p>
-            {releaseUnlockKillDisplay && (
-              <p>
-                <span className="text-amber-200/90 uppercase tracking-wider font-bold">PvP unlock</span>
-                {': '}
-                <span className="text-foreground font-bold break-words">{releaseUnlockKillDisplay.line}</span>
-              </p>
-            )}
-            <p>Hitlist NPCs and other NPC targets can still be searched and killed.</p>
-          </div>
-        </div>
       )}
 
       {killBannerMessage && (
@@ -1837,7 +1785,6 @@ export default function Attack() {
             onOpenCalc={() => setShowCalcModal(true)}
             bulletsNeededForKill={killBulletsResult}
             bulletsNeededLoading={killBulletsLoading}
-            killPvpBlocked={killPvpBlocked}
           />
 
           <FindUserCard
@@ -1865,7 +1812,6 @@ export default function Attack() {
           onDelete={deleteSelected}
           onTravel={openTravelModal}
           onFillKillTarget={setKillUsername}
-          pvpKillsDisabled={pvpKillsDisabled}
         />
       </div>
 

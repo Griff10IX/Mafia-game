@@ -35,11 +35,6 @@ from utils.cheat_detection_utils import (
     compute_dupe_risk_score,
 )
 from routers.kill.armoury import TOKEN_CONFIG
-from utils.release_soft_launch import (
-    DEFAULT_GAME_PASS_UNLOCK_AT,
-    RELEASE_SOFT_LAUNCH_KEY,
-    get_release_soft_launch_public,
-)
 from utils.game_pass_season import (
     GAME_PASS_SEASON_SETTINGS_KEY,
     get_game_pass_season_public,
@@ -15232,64 +15227,9 @@ def register(router):
         )
         return {"message": f"Maintenance banner {'enabled' if req.enabled else 'disabled'}", **value}
 
-    class ReleaseSoftLaunchRequest(BaseModel):
-        enabled: bool
-        game_pass_unlock_at: Optional[str] = None
-        pvp_kills_unlock_at: Optional[str] = None
-        force_game_pass_purchase_locked: Optional[bool] = None
-
     class GamePassSeasonSettingsRequest(BaseModel):
         season_end_at: str
         season_id: Optional[str] = None
-
-    @router.get("/admin/release-soft-launch")
-    async def admin_get_release_soft_launch(current_user: dict = Depends(get_current_user)):
-        """Release soft-launch: separate unlock times for points/Game Pass vs PvP kills."""
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
-        doc = await db.game_settings.find_one({"key": RELEASE_SOFT_LAUNCH_KEY}, {"_id": 0, "value": 1})
-        stored = (doc or {}).get("value") if doc else None
-        if not isinstance(stored, dict):
-            stored = {}
-        pub = await get_release_soft_launch_public(db)
-        return {**pub, "stored": stored}
-
-    @router.post("/admin/release-soft-launch")
-    async def admin_set_release_soft_launch(req: ReleaseSoftLaunchRequest, current_user: dict = Depends(get_current_user)):
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
-        doc = await db.game_settings.find_one({"key": RELEASE_SOFT_LAUNCH_KEY}, {"_id": 0, "value": 1})
-        prev = (doc or {}).get("value") if isinstance((doc or {}).get("value"), dict) else {}
-        unlock_raw = (req.game_pass_unlock_at or "").strip() if req.game_pass_unlock_at else ""
-        game_pass_unlock_at = unlock_raw or prev.get("game_pass_unlock_at") or DEFAULT_GAME_PASS_UNLOCK_AT
-        pvp_raw = (req.pvp_kills_unlock_at or "").strip() if req.pvp_kills_unlock_at else ""
-        if pvp_raw:
-            pvp_kills_unlock_at = pvp_raw
-        else:
-            pvp_kills_unlock_at = prev.get("pvp_kills_unlock_at") or game_pass_unlock_at
-        if req.force_game_pass_purchase_locked is None:
-            force_game_pass_purchase_locked = bool(prev.get("force_game_pass_purchase_locked"))
-        else:
-            force_game_pass_purchase_locked = bool(req.force_game_pass_purchase_locked)
-        value = {
-            "enabled": req.enabled,
-            "game_pass_unlock_at": game_pass_unlock_at,
-            "pvp_kills_unlock_at": pvp_kills_unlock_at,
-            "force_game_pass_purchase_locked": force_game_pass_purchase_locked,
-            "set_by": current_user.get("username", "?"),
-            "set_at": datetime.now(timezone.utc).isoformat(),
-        }
-        await db.game_settings.update_one(
-            {"key": RELEASE_SOFT_LAUNCH_KEY},
-            {"$set": {"key": RELEASE_SOFT_LAUNCH_KEY, "value": value}},
-            upsert=True,
-        )
-        pub = await get_release_soft_launch_public(db)
-        return {
-            "message": f"Release soft-launch {'enabled' if req.enabled else 'disabled'}",
-            **pub,
-            "stored": value,
-        }
 
     @router.get("/admin/game-pass-season")
     async def admin_get_game_pass_season(current_user: dict = Depends(get_current_user)):
