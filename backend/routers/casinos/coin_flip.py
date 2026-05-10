@@ -18,7 +18,7 @@ _rng = secrets.SystemRandom()
 
 COIN_FLIP_MAX_BET = 5_000_000
 COIN_FLIP_CHOICES = ("heads", "tails")
-COIN_FLIP_STREAK_SCAN_LIMIT = 500
+COIN_FLIP_STREAK_SCAN_LIMIT = 120
 
 
 class CoinFlipPlayRequest(BaseModel):

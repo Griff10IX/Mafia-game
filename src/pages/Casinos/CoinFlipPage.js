@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CircleDollarSign, Coins, Flame, MapPin, Repeat2, ShieldCheck, Sparkles, Trophy, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
-import api, { getApiErrorMessage, refreshUser } from '../../utils/api';
+import api, { apiRequestWith429Retry, getApiErrorMessage, refreshUser } from '../../utils/api';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 
@@ -19,11 +19,13 @@ const COIN_FLIP_STYLES = `
   }
   .coinflip-coin {
     transform-style: preserve-3d;
+    backface-visibility: hidden;
+    will-change: transform;
     background:
       radial-gradient(circle at 33% 25%, rgba(255,244,184,0.92), transparent 9%),
       radial-gradient(circle at 50% 52%, rgba(30,18,4,0.15), transparent 38%),
       linear-gradient(145deg, #332107 0%, #9a6a14 34%, #e2b949 54%, #6b430b 78%, #211405 100%);
-    box-shadow: inset 0 2px 0 rgba(255,255,255,0.22), inset 0 -18px 24px rgba(37,22,3,0.66), 0 24px 54px rgba(0,0,0,0.52), 0 0 38px rgba(212,175,55,0.18);
+    box-shadow: inset 0 2px 0 rgba(255,255,255,0.2), inset 0 -14px 20px rgba(37,22,3,0.58), 0 18px 38px rgba(0,0,0,0.44);
   }
   .coinflip-coin:before {
     content: "";
@@ -46,12 +48,12 @@ const COIN_FLIP_STYLES = `
     color: rgba(24,18,8,0.68);
     text-shadow: 0 1px 0 rgba(255,236,157,0.24);
   }
-  .coinflip-coin.flipping { animation: coinflip-spin 1.05s cubic-bezier(.15,.82,.2,1) both; }
+  .coinflip-coin.flipping { animation: coinflip-spin 0.78s cubic-bezier(.15,.82,.2,1) both; }
   @keyframes coinflip-spin {
-    0% { transform: rotateY(0deg) rotateX(0deg) scale(0.96); filter: brightness(0.92); }
-    34% { transform: rotateY(540deg) rotateX(14deg) scale(1.06); filter: brightness(1.2); }
-    68% { transform: rotateY(900deg) rotateX(-8deg) scale(1.02); filter: brightness(0.98); }
-    100% { transform: rotateY(1260deg) rotateX(0deg) scale(1); filter: brightness(1.04); }
+    0% { transform: translateZ(0) rotateY(0deg) rotateX(0deg) scale(0.97); }
+    40% { transform: translateZ(0) rotateY(560deg) rotateX(10deg) scale(1.045); }
+    75% { transform: translateZ(0) rotateY(920deg) rotateX(-5deg) scale(1.015); }
+    100% { transform: translateZ(0) rotateY(1260deg) rotateX(0deg) scale(1); }
   }
   .coinflip-crest {
     text-shadow: 0 1px 0 rgba(255,235,150,0.3), 0 5px 12px rgba(0,0,0,0.3);
@@ -87,6 +89,58 @@ function streakLabel(type, count) {
   return `${n} loss${n === 1 ? '' : 'es'}`;
 }
 
+function runAfterUiSettles(fn) {
+  if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(fn, { timeout: 1200 });
+    return;
+  }
+  setTimeout(fn, 250);
+}
+
+function applyRoundToStats(prev, round) {
+  if (!round) return prev;
+  const bet = Number(round.bet || 0);
+  const payout = Number(round.payout || 0);
+  const won = !!round.won;
+  const base = prev || {
+    rounds: 0,
+    wins: 0,
+    losses: 0,
+    total_wagered: 0,
+    total_paid: 0,
+    net_profit: 0,
+    biggest_win: 0,
+    win_rate: 0,
+    streak: { current_type: null, current_count: 0, longest_win_run: 0, longest_loss_run: 0, scanned: 0 },
+  };
+  const rounds = Number(base.rounds || 0) + 1;
+  const wins = Number(base.wins || 0) + (won ? 1 : 0);
+  const losses = Number(base.losses || 0) + (won ? 0 : 1);
+  const currentType = won ? 'wins' : 'losses';
+  const previousStreak = base.streak || {};
+  const currentCount = previousStreak.current_type === currentType ? Number(previousStreak.current_count || 0) + 1 : 1;
+  return {
+    ...base,
+    rounds,
+    wins,
+    losses,
+    total_wagered: Number(base.total_wagered || 0) + bet,
+    total_paid: Number(base.total_paid || 0) + payout,
+    net_profit: Number(base.net_profit || 0) + Number(round.net || payout - bet),
+    in_profit: Number(base.net_profit || 0) + Number(round.net || payout - bet) >= 0,
+    biggest_win: Math.max(Number(base.biggest_win || 0), payout),
+    win_rate: rounds ? Number(((wins / rounds) * 100).toFixed(2)) : 0,
+    streak: {
+      ...previousStreak,
+      current_type: currentType,
+      current_count: currentCount,
+      longest_win_run: won ? Math.max(Number(previousStreak.longest_win_run || 0), currentCount) : Number(previousStreak.longest_win_run || 0),
+      longest_loss_run: !won ? Math.max(Number(previousStreak.longest_loss_run || 0), currentCount) : Number(previousStreak.longest_loss_run || 0),
+      scanned: Math.min(Number(previousStreak.scanned || 0) + 1, 500),
+    },
+  };
+}
+
 export default function CoinFlipPage() {
   const [config, setConfig] = useState({
     current_state: '',
@@ -110,15 +164,13 @@ export default function CoinFlipPage() {
   const potentialReturn = useMemo(() => betNum * Number(config.payout_multiplier || 2), [betNum, config.payout_multiplier]);
 
   const fetchConfig = useCallback(() => {
-    api
-      .get('/casino/coin-flip/config')
+    apiRequestWith429Retry(() => api.get('/casino/coin-flip/config'))
       .then((r) => setConfig((prev) => ({ ...prev, ...(r.data || {}) })))
       .catch(() => toast.error('Could not load Coin Flip config'));
   }, []);
 
   const fetchStats = useCallback(() => {
-    api
-      .get('/casino/coin-flip/stats')
+    apiRequestWith429Retry(() => api.get('/casino/coin-flip/stats'))
       .then((r) => setStats(r.data || null))
       .catch(() => setStats(null));
   }, []);
@@ -149,7 +201,7 @@ export default function CoinFlipPage() {
     setLoading(true);
     if (!skipAnimation) setIsFlipping(true);
     try {
-      const res = await api.post('/casino/coin-flip/play', { choice, bet: betNum });
+      const res = await apiRequestWith429Retry(() => api.post('/casino/coin-flip/play', { choice, bet: betNum }));
       const d = res.data || {};
       lastBetRef.current = String(betNum);
       const nextRound = {
@@ -161,11 +213,14 @@ export default function CoinFlipPage() {
         net: d.net ?? 0,
       };
       if (!skipAnimation) {
-        await new Promise((resolve) => setTimeout(resolve, 720));
+        await new Promise((resolve) => setTimeout(resolve, 520));
       }
       setLastRound(nextRound);
-      requestAnimationFrame(() => refreshUser());
-      fetchStats();
+      setStats((prev) => applyRoundToStats(prev, nextRound));
+      runAfterUiSettles(() => {
+        refreshUser();
+        fetchStats();
+      });
       if (d.won) toast.success(`${labelChoice(d.result)} landed. Paid ${formatMoney(d.payout)}`);
       else toast.message(`${labelChoice(d.result)} landed. No payout.`);
     } catch (e) {
