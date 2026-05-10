@@ -1165,6 +1165,7 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
             f"Target found in {attack['location_state']}! You are in the same location. Ready to attack!" if can_attack
             else f"Target found in {attack['location_state']}! Travel there to attack."
         )
+        tu_row = users_map.get(tid or "") if tid else None
         item = {
             "attack_id": attack["id"],
             "status": attack["status"],
@@ -1177,7 +1178,8 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
             "can_travel": can_travel,
             "can_attack": can_attack,
             "message": msg,
-            "target_is_npc": bool((users_map.get(tid or "") or {}).get("is_npc")) if tid else False,
+            "target_is_npc": bool((tu_row or {}).get("is_npc")) if tid else False,
+            "target_is_robot_bodyguard": bool(tu_row and tu_row.get("is_npc") and tu_row.get("is_bodyguard")),
         }
         if tid:
             tu_bg = users_map.get(tid)

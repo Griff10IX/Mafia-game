@@ -22,7 +22,7 @@ except Exception:
     pass
 
 from pydantic import BaseModel
-from fastapi import Depends, Header, HTTPException, Query
+from fastapi import Body, Depends, Header, HTTPException, Query
 import httpx
 
 from server import (
@@ -70,6 +70,10 @@ class SportsSettleEventRequest(BaseModel):
 
 class AdminAddSportsEventRequest(BaseModel):
     template_id: str
+
+
+class AdminSportsAutoBoardRunRequest(BaseModel):
+    refresh_odds: bool = True
 
 
 class AdminCancelEventRequest(BaseModel):
@@ -301,6 +305,44 @@ def _kickoff_still_upcoming_for_template_list(start_time_iso: Optional[str], *, 
         return True
 
 
+_FAR_FUTURE_AUTO_BOARD = datetime(9999, 12, 31, 23, 59, 59, tzinfo=timezone.utc)
+
+
+def _template_effective_start_iso(t: dict) -> Optional[str]:
+    st = t.get("start_time")
+    if st is not None:
+        s = str(st).strip()
+        if s:
+            return s
+    z = _parse_commence_time(t.get("commence_time"))
+    return z if z else None
+
+
+def _template_valid_upcoming_for_auto_board(t: dict, *, now: datetime) -> bool:
+    iso = _template_effective_start_iso(t)
+    if not iso:
+        return False
+    return _kickoff_still_upcoming_for_template_list(iso, now=now)
+
+
+def _is_auto_board_eligible_template(t: dict, *, soccer_keys: frozenset[str], now: datetime) -> bool:
+    cat = (t.get("category") or "").strip()
+    sk = (t.get("external_sport_key") or "").strip()
+    if not _template_valid_upcoming_for_auto_board(t, now=now):
+        return False
+    if cat == "Football":
+        return bool(sk and sk in soccer_keys)
+    if cat in ("UFC", "Boxing"):
+        return True
+    return False
+
+
+def _template_auto_board_sort_key(t: dict) -> datetime:
+    iso = _template_effective_start_iso(t)
+    dt = _parse_start_time_utc(iso) if iso else None
+    return dt if dt is not None else _FAR_FUTURE_AUTO_BOARD
+
+
 def _team_matches_option(team: str, opt_name: str) -> bool:
     """Loose match for Odds API outcome names vs home_team / away_team (abbreviations, suffixes)."""
     t = (team or "").strip().lower()
@@ -521,6 +563,40 @@ SOCCER_ODDS_REGION_ATTEMPTS = (
     "uk,us,eu,fr,se",
     "uk,us,eu,fr,se,au",
 )
+
+# Auto-board: promote Odds-backed templates to sports_events (cron / admin). Football uses allowlist; UFC + Boxing always.
+_AUTO_BOARD_SOCCER_DEFAULT_KEYS = (
+    "soccer_epl",
+    "soccer_spain_la_liga",
+    "soccer_germany_bundesliga",
+    "soccer_italy_serie_a",
+    "soccer_france_ligue_one",
+    "soccer_fa_cup",
+    "soccer_uefa_champs_league",
+    "soccer_uefa_europa_league",
+    "soccer_uefa_europa_conference_league",
+    "soccer_fifa_world_cup",
+    "soccer_uefa_european_championship",
+    "soccer_uefa_nations_league",
+)
+
+
+def _auto_board_soccer_sport_keys() -> frozenset[str]:
+    raw = (os.environ.get("SPORTS_AUTO_BOARD_SOCCER_KEYS") or "").strip()
+    if raw:
+        return frozenset(x.strip() for x in raw.split(",") if x.strip())
+    return frozenset(_AUTO_BOARD_SOCCER_DEFAULT_KEYS)
+
+
+def _sports_auto_board_max() -> int:
+    raw = (os.environ.get("SPORTS_AUTO_BOARD_MAX") or "").strip()
+    if raw:
+        try:
+            return max(1, min(500, int(raw)))
+        except ValueError:
+            pass
+    return 40
+
 
 # Boxing/MMA: merge across regions so fights with only EU/UK books (e.g. PPV cards) still appear.
 FIGHT_SPORTS_ODDS_REGION_ATTEMPTS = (
@@ -2068,7 +2144,7 @@ async def _open_board_template_ids() -> set:
     return ids
 
 
-async def _create_sports_board_event_from_template(template: dict) -> dict:
+async def _create_sports_board_event_from_template(template: dict, *, auto_board: bool = False) -> dict:
     """Insert sports_events from template; sets source_template_id. Returns inserted event doc."""
     now = datetime.now(timezone.utc)
     template_id_key = (template.get("id") or "").strip()
@@ -2094,11 +2170,60 @@ async def _create_sports_board_event_from_template(template: dict) -> dict:
         "status": "open",
         "source_template_id": template_id_key,
     }
+    if auto_board:
+        ev["auto_board"] = True
     if template.get("external_event_id") and template.get("external_sport_key"):
         ev["external_event_id"] = template["external_event_id"]
         ev["external_sport_key"] = template["external_sport_key"]
     await db.sports_events.insert_one(ev)
     return ev
+
+
+async def auto_populate_sports_board(*, refresh_odds: bool = True, max_n: Optional[int] = None) -> dict:
+    """Promote Odds-backed templates to open sports_events (priority football + all UFC/Boxing), up to max_n."""
+    cap = max_n if max_n is not None else _sports_auto_board_max()
+    cap = max(1, min(500, int(cap)))
+    soccer_keys = _auto_board_soccer_sport_keys()
+    if refresh_odds:
+        await _refresh_sports_live_cache(force=True)
+    on_board = await _open_board_template_ids()
+    merged = await _merged_sports_templates_for_admin()
+    now = datetime.now(timezone.utc)
+    candidates = [t for t in merged if _is_auto_board_eligible_template(t, soccer_keys=soccer_keys, now=now)]
+    candidates.sort(key=_template_auto_board_sort_key)
+    added = 0
+    skipped_on_board = 0
+    errors: list = []
+    added_template_ids: list[str] = []
+    for t in candidates:
+        if added >= cap:
+            break
+        tid = (t.get("id") or "").strip()
+        if not tid:
+            continue
+        if tid in on_board:
+            skipped_on_board += 1
+            continue
+        try:
+            await _create_sports_board_event_from_template(t, auto_board=True)
+            on_board.add(tid)
+            added += 1
+            added_template_ids.append(tid)
+        except HTTPException as ex:
+            errors.append({"template_id": tid, "detail": ex.detail, "status_code": ex.status_code})
+            logger.warning("sports auto-board: skip template %s: %s", tid, ex.detail)
+        except Exception as ex:
+            errors.append({"template_id": tid, "detail": str(ex)})
+            logger.warning("sports auto-board: skip template %s: %s", tid, ex)
+    return {
+        "added": added,
+        "skipped_already_on_board": skipped_on_board,
+        "candidates": len(candidates),
+        "max_n": cap,
+        "refresh_odds": refresh_odds,
+        "added_template_ids": added_template_ids,
+        "errors": errors[:40],
+    }
 
 
 async def _notify_staff_sports_event_request(
@@ -2705,6 +2830,14 @@ async def admin_sports_refresh(current_user: dict = Depends(require_admin_verifi
 async def admin_sports_auto_settle_run(current_user: dict = Depends(require_admin_verified)):
     """Admin: run the same Odds API score poll as cron; returns settled / skipped counts."""
     return await _auto_settle_from_scores()
+
+
+async def admin_sports_auto_board_run(
+    body: AdminSportsAutoBoardRunRequest = Body(default=AdminSportsAutoBoardRunRequest()),
+    current_user: dict = Depends(require_admin_verified),
+):
+    """Admin: promote priority Odds templates onto the open board (same logic as cron auto-board)."""
+    return await auto_populate_sports_board(refresh_odds=body.refresh_odds)
 
 
 async def admin_sports_templates_load_db(current_user: dict = Depends(require_admin_verified)):
@@ -3569,6 +3702,7 @@ def register(router):
     router.add_api_route("/admin/sports-betting/templates/load-db", admin_sports_templates_load_db, methods=["POST"])
     router.add_api_route("/admin/sports-betting/refresh", admin_sports_refresh, methods=["POST"])
     router.add_api_route("/admin/sports-betting/auto-settle-run", admin_sports_auto_settle_run, methods=["POST"])
+    router.add_api_route("/admin/sports-betting/auto-board-run", admin_sports_auto_board_run, methods=["POST"])
     router.add_api_route("/admin/sports-betting/events", admin_sports_add_event, methods=["POST"])
     router.add_api_route("/admin/sports-betting/custom-event", admin_sports_add_custom_event, methods=["POST"])
     router.add_api_route("/admin/sports-betting/events/betting-window", admin_sports_patch_event_betting_window, methods=["PATCH"])
@@ -3595,4 +3729,9 @@ def register(router):
         """Cron: poll Odds API scores, settle matching events, pay winners. Call every 15-30 min. Header: X-Cron-Secret."""
         return await _auto_settle_from_scores()
 
+    async def cron_sports_auto_board(_: None = Depends(verify_sports_cron_secret)):
+        """Cron: populate sports_events from Odds templates (refresh + promote). Prefer 1–2×/day if quota-sensitive. Header: X-Cron-Secret."""
+        return await auto_populate_sports_board(refresh_odds=True)
+
     router.add_api_route("/sports-betting/cron/auto-settle", cron_sports_auto_settle, methods=["POST"])
+    router.add_api_route("/sports-betting/cron/auto-board", cron_sports_auto_board, methods=["POST"])

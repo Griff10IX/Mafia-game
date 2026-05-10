@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { Search, Plane, Car, Crosshair, Clock, MapPin, Skull, Calculator, Zap, FileText, Users, History, ChevronDown, ChevronRight } from 'lucide-react';
+import { Search, Plane, Car, Crosshair, Clock, MapPin, Skull, Calculator, Zap, FileText, Users, History, ChevronDown, ChevronRight, Star } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import api, { refreshUser, getApiErrorMessage, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
@@ -98,6 +98,25 @@ function writeCachedAttacks(list) {
       JSON.stringify({ savedAt: Date.now(), attacks: Array.isArray(list) ? list : [] }),
     );
   } catch (_e) { /* quota / disabled storage is non-fatal */ }
+}
+
+const _ATTACK_FAVORITES_KEY = 'kill_attack_favorites_v1';
+function readFavoriteAttackIds() {
+  try {
+    if (typeof window === 'undefined') return new Set();
+    const raw = window.localStorage.getItem(_ATTACK_FAVORITES_KEY);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr.filter((x) => typeof x === 'string' && x) : []);
+  } catch (_e) {
+    return new Set();
+  }
+}
+function writeFavoriteAttackIds(set) {
+  try {
+    if (typeof window === 'undefined') return;
+    window.localStorage.setItem(_ATTACK_FAVORITES_KEY, JSON.stringify([...set]));
+  } catch (_e) { /* quota */ }
 }
 
 // Travel info cache: server already memoizes /travel/info for 5s, but a fresh page nav still pays the
@@ -386,6 +405,10 @@ const SearchesCard = ({
   setFilterText,
   show,
   setShow,
+  targetFilter,
+  setTargetFilter,
+  favoriteIds,
+  toggleFavorite,
   selectedAttackIds,
   toggleSelected,
   toggleSelectAll,
@@ -393,7 +416,6 @@ const SearchesCard = ({
   loading,
   onDelete,
   onTravel,
-  onAttack,
   onFillKillTarget,
 }) => {
   const [isDesktop, setIsDesktop] = useState(() => {
@@ -427,23 +449,39 @@ const SearchesCard = ({
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-card atk-fade-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
       <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none atk-glow" />
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2">
+      <div className="px-2 py-1 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
         <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1">
           <Users size={14} />
           My Searches ({attacks.length})
         </h2>
-        <div className="flex items-center gap-1">
-          <span className="text-[9px] text-mutedForeground font-heading">Show:</span>
-          <select
-            value={show}
-            onChange={(e) => setShow(e.target.value)}
-            className="bg-secondary border border-border rounded px-1.5 py-0.5 text-[9px] font-heading text-foreground focus:border-primary/50 focus:outline-none"
-            data-testid="attack-show-filter"
-          >
-            <option value="all">All</option>
-            <option value="searching">Searching</option>
-            <option value="found">Found</option>
-          </select>
+        <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
+          <div className="flex items-center gap-1">
+            <span className="text-[9px] text-mutedForeground font-heading">Show:</span>
+            <select
+              value={show}
+              onChange={(e) => setShow(e.target.value)}
+              className="bg-secondary border border-border rounded px-1.5 py-0.5 text-[9px] font-heading text-foreground focus:border-primary/50 focus:outline-none"
+              data-testid="attack-show-filter"
+            >
+              <option value="all">All</option>
+              <option value="searching">Searching</option>
+              <option value="found">Found</option>
+            </select>
+          </div>
+          <div className="flex items-center gap-1">
+            <span className="text-[9px] text-mutedForeground font-heading">Target:</span>
+            <select
+              value={targetFilter}
+              onChange={(e) => setTargetFilter(e.target.value)}
+              className="bg-secondary border border-border rounded px-1.5 py-0.5 text-[9px] font-heading text-foreground focus:border-primary/50 focus:outline-none max-w-[11rem]"
+              data-testid="attack-target-filter"
+              title="Filter by search target type"
+            >
+              <option value="all">All</option>
+              <option value="robot">Robot bodyguards</option>
+              <option value="users">Users only</option>
+            </select>
+          </div>
         </div>
       </div>
       
@@ -516,6 +554,27 @@ const SearchesCard = ({
 
                     <div className="col-span-4 min-w-0">
                       <div className="flex items-start gap-1.5 min-w-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleFavorite(a.attack_id);
+                          }}
+                          className="shrink-0 p-0.5 rounded hover:bg-white/5 mt-0.5"
+                          aria-label={favoriteIds.has(a.attack_id) ? 'Remove from favorites' : 'Add to favorites'}
+                          aria-pressed={favoriteIds.has(a.attack_id)}
+                          data-testid={`attack-favorite-${a.attack_id}`}
+                        >
+                          <Star
+                            size={12}
+                            className={
+                              favoriteIds.has(a.attack_id)
+                                ? 'text-red-500 fill-red-500'
+                                : 'text-zinc-500 fill-transparent'
+                            }
+                          />
+                        </button>
                         <Link
                           to={`/profile/${encodeURIComponent(a.target_username)}`}
                           className="font-heading font-bold text-foreground hover:text-primary transition-colors block text-[10px] truncate min-w-0"
@@ -621,6 +680,27 @@ const SearchesCard = ({
                     />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start gap-1.5 min-w-0">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            toggleFavorite(a.attack_id);
+                          }}
+                          className="shrink-0 p-0.5 rounded hover:bg-white/5 mt-0.5"
+                          aria-label={favoriteIds.has(a.attack_id) ? 'Remove from favorites' : 'Add to favorites'}
+                          aria-pressed={favoriteIds.has(a.attack_id)}
+                          data-testid={`attack-favorite-${a.attack_id}`}
+                        >
+                          <Star
+                            size={13}
+                            className={
+                              favoriteIds.has(a.attack_id)
+                                ? 'text-red-500 fill-red-500'
+                                : 'text-zinc-500 fill-transparent'
+                            }
+                          />
+                        </button>
                         <Link
                           to={`/profile/${encodeURIComponent(a.target_username)}`}
                           className="font-heading font-bold text-foreground hover:text-primary transition-colors block text-[11px] truncate min-w-0"
@@ -976,6 +1056,19 @@ export default function Attack() {
   const [searchLoading, setSearchLoading] = useState(false);
   const [filterText, setFilterText] = useState('');
   const [show, setShow] = useState('all');
+  const [targetFilter, setTargetFilter] = useState('all');
+  const [favoriteIds, setFavoriteIds] = useState(() => readFavoriteAttackIds());
+  const toggleFavorite = useCallback((attackId) => {
+    if (!attackId) return;
+    setFavoriteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(attackId)) next.delete(attackId);
+      else next.add(attackId);
+      writeFavoriteAttackIds(next);
+      return next;
+    });
+  }, []);
+
   const [killUsername, setKillUsernameState] = useState(() => {
     try {
       return sessionStorage.getItem('attack-kill-username') || '';
@@ -1164,6 +1257,23 @@ export default function Attack() {
     }
     return undefined;
   }, [refreshAttacks]);
+
+  useEffect(() => {
+    const valid = new Set(attacks.map((a) => a.attack_id).filter(Boolean));
+    setFavoriteIds((prev) => {
+      let stale = false;
+      for (const id of prev) {
+        if (!valid.has(id)) {
+          stale = true;
+          break;
+        }
+      }
+      if (!stale) return prev;
+      const next = new Set([...prev].filter((id) => valid.has(id)));
+      writeFavoriteAttackIds(next);
+      return next;
+    });
+  }, [attacks]);
 
   const searchCompleteTimeoutRef = useRef(null);
 
@@ -1730,14 +1840,27 @@ export default function Attack() {
   
   const filteredAttacks = useMemo(() => {
     const t = filterText.trim().toLowerCase();
-    return attacks
+    const list = attacks
       .filter((a) => (show === 'all' ? true : a.status === show))
+      .filter((a) => {
+        if (targetFilter === 'all') return true;
+        const isRobot = a.target_is_robot_bodyguard === true;
+        if (targetFilter === 'robot') return isRobot;
+        return !isRobot;
+      })
       .filter((a) => {
         if (!t) return true;
         const hay = `${a.target_username || ''} ${a.note || ''}`.toLowerCase();
         return hay.includes(t);
       });
-  }, [attacks, filterText, show]);
+    const fav = [];
+    const rest = [];
+    for (const a of list) {
+      if (favoriteIds.has(a.attack_id)) fav.push(a);
+      else rest.push(a);
+    }
+    return [...fav, ...rest];
+  }, [attacks, filterText, show, targetFilter, favoriteIds]);
 
   const filteredIds = useMemo(() => filteredAttacks.map((a) => a.attack_id), [filteredAttacks]);
 
@@ -1804,6 +1927,10 @@ export default function Attack() {
           setFilterText={setFilterText}
           show={show}
           setShow={setShow}
+          targetFilter={targetFilter}
+          setTargetFilter={setTargetFilter}
+          favoriteIds={favoriteIds}
+          toggleFavorite={toggleFavorite}
           selectedAttackIds={selectedAttackIds}
           toggleSelected={toggleSelected}
           toggleSelectAll={() => toggleSelectAllFiltered(filteredIds)}
