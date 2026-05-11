@@ -386,6 +386,11 @@ export default function AttackLogsPanel({
                     {attackLogViewRow.attack_id && (
                       <p className="text-[9px] font-mono text-white/70 mt-1">Attack id: {attackLogViewRow.attack_id}</p>
                     )}
+                    {attackLogViewRow.token_failure_reason && (
+                      <p className="text-[9px] font-mono text-white/70 mt-1">
+                        Reason: {String(attackLogViewRow.token_failure_reason).replace(/_/g, ' ')}
+                      </p>
+                    )}
                   </div>
                 )}
                 <div>

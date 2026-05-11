@@ -41,6 +41,10 @@ export function formatAttackLogBotRationale(row) {
   const parts = [];
   const sig = row.attacker_client_signal;
   if (sig) parts.push(`Client signal: ${sig}`);
+  if (row.integrity_violation === 'execute_token') {
+    const reason = String(row.token_failure_reason || 'execute_token_invalid').replace(/_/g, ' ');
+    parts.push(`Integrity signal: ${reason}`);
+  }
   const det = String(row.attacker_client_signal_detail || '').replace(/_/g, ' ').trim();
   if (det) parts.push(`Signal detail: ${det}`);
   if (row.attacker_bot_label) parts.push(`Bot label: ${row.attacker_bot_label}`);
@@ -79,6 +83,13 @@ export function formatAttackLogBotCell(row) {
     const short = detail ? `Suspicious — ${detail}` : 'Weak browser fingerprint (not a confirmed bot)';
     return { text: 'Suspicious', className: 'text-amber-500 font-medium', title: pickTitle(short) };
   }
+  if (row.integrity_violation === 'execute_token') {
+    return {
+      text: 'Suspicious',
+      className: 'text-amber-500 font-medium',
+      title: pickTitle('Attack execute failed the server-issued session token check'),
+    };
+  }
   if (sig === 'browser') {
     return { text: 'No', className: 'text-mutedForeground', title: pickTitle('Classified as normal browser request') };
   }
@@ -103,10 +114,13 @@ export function formatAttackLogIntegrityCell(row) {
   }
   const v = row.integrity_violation;
   if (v === 'execute_token') {
+    const reason = String(row.token_failure_reason || '').replace(/_/g, ' ');
     return {
       text: 'Token fail',
       className: 'text-red-400 font-bold',
-      title: 'POST /attack/execute without valid session token (anti-bot). Staff were notified (throttled).',
+      title: reason
+        ? `POST /attack/execute failed session token check: ${reason}. Staff were notified (throttled).`
+        : 'POST /attack/execute without valid session token (anti-bot). Staff were notified (throttled).',
     };
   }
   if (v) {

@@ -470,10 +470,13 @@ def register(router):
                     "created_at": 1,
                     "attacker_id": 1,
                     "attacker_username": 1,
+                    "target_username": 1,
                     "client_ip": 1,
                     "attacker_client_signal": 1,
+                    "attacker_client_signal_detail": 1,
                     "client_risk_score": 1,
                     "client_anomaly_flags": 1,
+                    "token_failure_reason": 1,
                     "player_message": 1,
                 },
             )

@@ -366,6 +366,7 @@ def _client_header_snapshot(request: Optional[Request]) -> Dict[str, Any]:
         "sec_fetch_dest": _hdr_trim(request, "sec-fetch-dest", 40),
         "sec_ch_ua": _hdr_trim(request, "sec-ch-ua", 200),
         "sec_ch_ua_mobile": _hdr_trim(request, "sec-ch-ua-mobile", 24),
+        "sec_ch_ua_platform": _hdr_trim(request, "sec-ch-ua-platform", 80),
         "accept": _hdr_trim(request, "accept", 200),
         "accept_language": _hdr_trim(request, "accept-language", 120),
         "origin": _hdr_trim(request, "origin", 160),
@@ -404,6 +405,35 @@ def _compute_client_risk_score(meta: Dict[str, Any]) -> int:
     if isinstance(flags, list) and flags:
         score += min(35, len(flags) * 7)
     return min(100, int(score))
+
+
+def _merge_client_anomaly_flags(meta: Dict[str, Any], *flags: str) -> None:
+    existing = meta.get("client_anomaly_flags")
+    merged: List[str] = []
+    if isinstance(existing, list):
+        merged.extend(str(x).strip() for x in existing if str(x or "").strip())
+    merged.extend(str(x).strip() for x in flags if str(x or "").strip())
+    meta["client_anomaly_flags"] = list(dict.fromkeys(merged))
+    meta["client_risk_score"] = _compute_client_risk_score(meta)
+
+
+def _append_client_signal_detail(meta: Dict[str, Any], *details: str) -> None:
+    existing = str(meta.get("attacker_client_signal_detail") or "").strip()
+    parts = [x for x in existing.split(",") if x] if existing else []
+    parts.extend(str(x).strip() for x in details if str(x or "").strip())
+    if parts:
+        meta["attacker_client_signal_detail"] = ",".join(list(dict.fromkeys(parts)))[:_CLIENT_SIGNAL_DETAIL_MAX]
+
+
+def _mark_execute_token_integrity_meta(meta: Dict[str, Any], reason: str) -> None:
+    """Token failures are not proof alone, but they are strong enough to stop showing Bot? as "No"."""
+    flag = (reason or "execute_token_invalid").strip() or "execute_token_invalid"
+    sig = meta.get("attacker_client_signal") or ""
+    if sig in ("", "browser"):
+        meta["attacker_client_signal"] = "suspicious"
+        meta["attacker_is_bot"] = False
+    _append_client_signal_detail(meta, flag)
+    _merge_client_anomaly_flags(meta, flag)
 
 
 def _is_automation_ua(user_agent: str) -> bool:
@@ -546,6 +576,9 @@ def _classify_attack_client(request: Optional[Request]) -> Dict[str, Any]:
 
     ua_raw = (request.headers.get("user-agent") or "").strip()
     ua_l = ua_raw.lower()
+    sec_ch_ua = (request.headers.get("sec-ch-ua") or "").strip().lower()
+    sec_ch_mobile = (request.headers.get("sec-ch-ua-mobile") or "").strip().strip('"').lower()
+    sec_ch_platform = (request.headers.get("sec-ch-ua-platform") or "").strip().strip('"').lower()
 
     if ua_raw and _is_automation_ua(ua_raw):
         lab = _automation_label_from_ua(ua_raw)
@@ -567,21 +600,37 @@ def _classify_attack_client(request: Optional[Request]) -> Dict[str, Any]:
     reasons: List[str] = []
     if len(ua_raw) < 12:
         reasons.append("empty_or_short_ua")
-    elif "mozilla" in ua_l and "chrome" in ua_l:
-        if not (request.headers.get("sec-fetch-mode") or "").strip():
-            reasons.append("chrome_like_no_sec_fetch_mode")
-        if os.environ.get("ATTACK_STRICT_SEC_FETCH_SITE", "").strip() == "1":
-            if not (request.headers.get("sec-fetch-site") or "").strip():
-                reasons.append("chrome_like_no_sec_fetch_site")
-        if os.environ.get("ATTACK_STRICT_SEC_CH_UA", "").strip() == "1":
-            try:
-                min_maj = int(os.environ.get("ATTACK_STRICT_SEC_CH_UA_MIN_CHROME", "100") or 100)
-            except ValueError:
-                min_maj = 100
-            maj = _chrome_major_version(ua_raw)
-            if maj is not None and maj >= min_maj:
-                if len((request.headers.get("sec-ch-ua") or "").strip()) < 3:
-                    reasons.append("chrome_like_missing_sec_ch_ua")
+    else:
+        ua_mobile = any(x in ua_l for x in ("iphone", "ipod", "ipad", "android", "mobile"))
+        ua_ios = any(x in ua_l for x in ("iphone", "ipod", "ipad"))
+        ua_android = "android" in ua_l
+        ch_has_chrome = "google chrome" in sec_ch_ua or "chromium" in sec_ch_ua
+        ua_is_chrome_family = any(x in ua_l for x in ("chrome/", "crios/", "chromium/", "edg/", "edgios/"))
+        if ch_has_chrome and "safari" in ua_l and not ua_is_chrome_family:
+            reasons.append("safari_ua_with_chrome_client_hint")
+        if ua_mobile and sec_ch_mobile == "?0":
+            reasons.append("mobile_ua_with_desktop_ch_mobile_hint")
+        if not ua_mobile and sec_ch_mobile == "?1":
+            reasons.append("desktop_ua_with_mobile_ch_mobile_hint")
+        if ua_ios and sec_ch_platform and sec_ch_platform not in ("ios", "ipados"):
+            reasons.append("ios_ua_with_non_ios_client_platform")
+        if ua_android and sec_ch_platform and sec_ch_platform != "android":
+            reasons.append("android_ua_with_non_android_client_platform")
+        if "mozilla" in ua_l and "chrome" in ua_l:
+            if not (request.headers.get("sec-fetch-mode") or "").strip():
+                reasons.append("chrome_like_no_sec_fetch_mode")
+            if os.environ.get("ATTACK_STRICT_SEC_FETCH_SITE", "").strip() == "1":
+                if not (request.headers.get("sec-fetch-site") or "").strip():
+                    reasons.append("chrome_like_no_sec_fetch_site")
+            if os.environ.get("ATTACK_STRICT_SEC_CH_UA", "").strip() == "1":
+                try:
+                    min_maj = int(os.environ.get("ATTACK_STRICT_SEC_CH_UA_MIN_CHROME", "100") or 100)
+                except ValueError:
+                    min_maj = 100
+                maj = _chrome_major_version(ua_raw)
+                if maj is not None and maj >= min_maj:
+                    if len((request.headers.get("sec-ch-ua") or "").strip()) < 3:
+                        reasons.append("chrome_like_missing_sec_ch_ua")
         if os.environ.get("ATTACK_STRICT_ACCEPT_JSON", "").strip() == "1":
             acc = (request.headers.get("accept") or "").lower()
             if "application/json" not in acc:
@@ -639,6 +688,8 @@ async def _log_attack_error(
     """Log a failed execute attempt (validation/perm error) so admin sees every click."""
     try:
         meta = _request_meta(req)
+        if extra and extra.get("integrity_violation") == "execute_token":
+            _mark_execute_token_integrity_meta(meta, str(extra.get("token_failure_reason") or "execute_token_invalid"))
         doc: Dict[str, Any] = {
             "id": str(uuid.uuid4()),
             "attacker_id": attacker_id,
@@ -926,6 +977,7 @@ _PLAYER_ATTACK_ATTEMPT_META_KEYS = frozenset(
         "client_risk_score",
         "integrity_violation",
         "attack_id",
+        "token_failure_reason",
     }
 )
 
@@ -1863,6 +1915,8 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     stored_tok = attack.get("execute_token")
     if isinstance(stored_tok, str) and len(stored_tok) >= 16:
         if not _safe_compare_execute_token(stored_tok, request.execute_token):
+            submitted_tok = (request.execute_token or "").strip()
+            token_failure_reason = "execute_token_mismatch" if submitted_tok else "execute_token_missing"
             _fire_and_forget(
                 _log_attack_error(
                     current_user["id"],
@@ -1871,7 +1925,10 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     req,
                     extra={
                         "integrity_violation": "execute_token",
+                        "token_failure_reason": token_failure_reason,
                         "attack_id": attack.get("id"),
+                        "target_id": target.get("id"),
+                        "target_username": (target.get("username") or "").strip() or "?",
                         "location_state": target_location,
                     },
                 ),
