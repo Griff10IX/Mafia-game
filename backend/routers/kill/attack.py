@@ -25,6 +25,7 @@ _ATTACK_MICRO_COOLDOWN_SEC = 1.0 / 8.0
 _ATTACK_MICRO_COOLDOWN_PRUNE_AFTER_SEC = 60.0
 _attack_micro_cooldown_seen: Dict[str, float] = {}
 _attack_micro_cooldown_lock = asyncio.Lock()
+ACCOUNT_LOCKED_ATTACK_BLOCK_DETAIL = "Error, this account has been locked for investigation."
 
 # Background tasks scheduled by _fire_and_forget. Holding strong refs prevents the event loop
 # from garbage-collecting them mid-flight (asyncio only weak-refs tasks). Tasks self-remove on done.
@@ -1903,6 +1904,22 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     if not target:
         _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "Target not found", req), label="log_target_not_found")
         raise HTTPException(status_code=404, detail="Target not found")
+    if target.get("account_locked"):
+        _fire_and_forget(
+            _log_attack_error(
+                current_user["id"],
+                current_user.get("username"),
+                ACCOUNT_LOCKED_ATTACK_BLOCK_DETAIL,
+                req,
+                extra={
+                    "integrity_violation": "target_account_locked",
+                    "attack_id": attack.get("id"),
+                    "target_id": target.get("id"),
+                },
+            ),
+            label="log_target_account_locked",
+        )
+        raise HTTPException(status_code=403, detail=ACCOUNT_LOCKED_ATTACK_BLOCK_DETAIL)
     target_location = _resolved_target_location(attack, target)
     if not target_location:
         _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "Target location unknown; cannot attack.", req), label="log_target_location_unknown")
