@@ -188,6 +188,10 @@ class AdminSettingsUpdate(BaseModel):
     block_script_user_agent_game_actions: Optional[bool] = None  # UA checks: crimes, GTA, jail, OC, bodyguards, attack
     game_actions_client_strict: Optional[bool] = None  # Stricter Sec-Fetch / Accept on game-action API writes (main doc)
     game_actions_turnstile_enabled: Optional[bool] = None  # Turnstile on selected gameplay POSTs (GTA melt, booze sell); uses minigame site key
+    attack_turnstile_enabled: Optional[bool] = None  # Attack-page-only Turnstile gate
+    attack_turnstile_master_disabled: Optional[bool] = None  # Emergency off switch without deploy
+    attack_turnstile_mode: Optional[str] = None  # execute_only | search_and_execute | risk_based
+    attack_turnstile_enforce: Optional[str] = None  # off | log_only | enforce
     minigame_turnstile_enabled: Optional[bool] = None  # Cloudflare Turnstile before minigame run start
     minigame_turnstile_site_key: Optional[str] = None  # Public site key (secret stays in TURNSTILE_SECRET_KEY env)
     login_turnstile_enabled: Optional[bool] = None  # Turnstile on /auth/login; reuses site key above
@@ -7122,6 +7126,14 @@ def register(router):
         block_script_user_agent_game_actions = True if not main_doc else bool(main_doc.get("block_script_user_agent_game_actions", True))
         game_actions_client_strict = bool(main_doc.get("game_actions_client_strict")) if main_doc else False
         game_actions_turnstile_enabled = bool(main_doc.get("game_actions_turnstile_enabled")) if main_doc else False
+        attack_turnstile_enabled = bool(main_doc.get("attack_turnstile_enabled")) if main_doc else False
+        attack_turnstile_master_disabled = bool(main_doc.get("attack_turnstile_master_disabled")) if main_doc else False
+        attack_turnstile_mode = (main_doc.get("attack_turnstile_mode") or "execute_only") if main_doc else "execute_only"
+        if attack_turnstile_mode not in ("execute_only", "search_and_execute", "risk_based"):
+            attack_turnstile_mode = "execute_only"
+        attack_turnstile_enforce = (main_doc.get("attack_turnstile_enforce") or "off") if main_doc else "off"
+        if attack_turnstile_enforce not in ("off", "log_only", "enforce"):
+            attack_turnstile_enforce = "off"
         minigame_turnstile_enabled = bool(main_doc.get("minigame_turnstile_enabled")) if main_doc else False
         minigame_turnstile_site_key = (main_doc.get("minigame_turnstile_site_key") or "") if main_doc else ""
         login_turnstile_enabled = bool(main_doc.get("login_turnstile_enabled")) if main_doc else False
@@ -7182,6 +7194,10 @@ def register(router):
             "block_script_user_agent_game_actions": block_script_user_agent_game_actions,
             "game_actions_client_strict": game_actions_client_strict,
             "game_actions_turnstile_enabled": game_actions_turnstile_enabled,
+            "attack_turnstile_enabled": attack_turnstile_enabled,
+            "attack_turnstile_master_disabled": attack_turnstile_master_disabled,
+            "attack_turnstile_mode": attack_turnstile_mode,
+            "attack_turnstile_enforce": attack_turnstile_enforce,
             "minigame_turnstile_enabled": minigame_turnstile_enabled,
             "minigame_turnstile_site_key": (minigame_turnstile_site_key or "").strip(),
             "login_turnstile_enabled": login_turnstile_enabled,
@@ -7290,6 +7306,36 @@ def register(router):
             await db.game_settings.update_one(
                 {"_id": "main"},
                 {"$set": {"game_actions_turnstile_enabled": bool(body.game_actions_turnstile_enabled)}},
+                upsert=True,
+            )
+        if body.attack_turnstile_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"attack_turnstile_enabled": bool(body.attack_turnstile_enabled)}},
+                upsert=True,
+            )
+        if body.attack_turnstile_master_disabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"attack_turnstile_master_disabled": bool(body.attack_turnstile_master_disabled)}},
+                upsert=True,
+            )
+        if body.attack_turnstile_mode is not None:
+            mode = (body.attack_turnstile_mode or "execute_only").strip().lower()
+            if mode not in ("execute_only", "search_and_execute", "risk_based"):
+                raise HTTPException(status_code=400, detail="attack_turnstile_mode must be execute_only, search_and_execute, or risk_based")
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"attack_turnstile_mode": mode}},
+                upsert=True,
+            )
+        if body.attack_turnstile_enforce is not None:
+            enforce = (body.attack_turnstile_enforce or "off").strip().lower()
+            if enforce not in ("off", "log_only", "enforce"):
+                raise HTTPException(status_code=400, detail="attack_turnstile_enforce must be off, log_only, or enforce")
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"attack_turnstile_enforce": enforce}},
                 upsert=True,
             )
         if body.minigame_turnstile_enabled is not None:
@@ -7638,6 +7684,14 @@ def register(router):
         block_script_user_agent_game_actions = True if not main_doc else bool(main_doc.get("block_script_user_agent_game_actions", True))
         game_actions_client_strict = bool(main_doc.get("game_actions_client_strict")) if main_doc else False
         game_actions_turnstile_enabled = bool(main_doc.get("game_actions_turnstile_enabled")) if main_doc else False
+        attack_turnstile_enabled = bool(main_doc.get("attack_turnstile_enabled")) if main_doc else False
+        attack_turnstile_master_disabled = bool(main_doc.get("attack_turnstile_master_disabled")) if main_doc else False
+        attack_turnstile_mode = (main_doc.get("attack_turnstile_mode") or "execute_only") if main_doc else "execute_only"
+        if attack_turnstile_mode not in ("execute_only", "search_and_execute", "risk_based"):
+            attack_turnstile_mode = "execute_only"
+        attack_turnstile_enforce = (main_doc.get("attack_turnstile_enforce") or "off") if main_doc else "off"
+        if attack_turnstile_enforce not in ("off", "log_only", "enforce"):
+            attack_turnstile_enforce = "off"
         minigame_turnstile_enabled = bool(main_doc.get("minigame_turnstile_enabled")) if main_doc else False
         minigame_turnstile_site_key = (main_doc.get("minigame_turnstile_site_key") or "") if main_doc else ""
         login_turnstile_enabled = bool(main_doc.get("login_turnstile_enabled")) if main_doc else False
@@ -7692,6 +7746,10 @@ def register(router):
             "block_script_user_agent_game_actions": block_script_user_agent_game_actions,
             "game_actions_client_strict": game_actions_client_strict,
             "game_actions_turnstile_enabled": game_actions_turnstile_enabled,
+            "attack_turnstile_enabled": attack_turnstile_enabled,
+            "attack_turnstile_master_disabled": attack_turnstile_master_disabled,
+            "attack_turnstile_mode": attack_turnstile_mode,
+            "attack_turnstile_enforce": attack_turnstile_enforce,
             "minigame_turnstile_enabled": minigame_turnstile_enabled,
             "minigame_turnstile_site_key": (minigame_turnstile_site_key or "").strip(),
             "login_turnstile_enabled": login_turnstile_enabled,

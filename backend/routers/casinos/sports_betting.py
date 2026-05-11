@@ -3502,6 +3502,21 @@ def _sports_auto_settle_ticker_wait_cap_sec() -> int:
         return 900
 
 
+def _sports_auto_board_ticker_initial_delay_sec() -> int:
+    try:
+        return max(5, int(os.environ.get("SPORTS_AUTO_BOARD_TICKER_INITIAL_DELAY_SEC", "45")))
+    except ValueError:
+        return 45
+
+
+def _sports_auto_board_ticker_interval_sec() -> int:
+    try:
+        # Default 6h keeps the board fresh without burning Odds API quota every few minutes.
+        return max(900, int(os.environ.get("SPORTS_AUTO_BOARD_TICKER_INTERVAL_SEC", "21600")))
+    except ValueError:
+        return 21600
+
+
 def _parse_start_time_utc(iso_s) -> Optional[datetime]:
     if not iso_s:
         return None
@@ -3676,6 +3691,39 @@ async def run_sports_auto_settle_ticker() -> None:
         except Exception as ex:
             log.exception("Sports auto-settle ticker: loop error: %s", ex)
             await asyncio.sleep(300)
+
+
+async def run_sports_auto_board_ticker() -> None:
+    """
+    Background loop: refresh Odds-backed templates and promote upcoming games to the sports board.
+    Disable with SPORTS_AUTO_BOARD_TICKER=0, or set SPORTS_AUTO_BOARD_USE_CRON=1 and call the cron route externally.
+    """
+    log = logging.getLogger(__name__)
+    await asyncio.sleep(_sports_auto_board_ticker_initial_delay_sec())
+    while True:
+        try:
+            out = await auto_populate_sports_board(refresh_odds=True)
+            added = int(out.get("added") or 0)
+            if added > 0:
+                log.info(
+                    "Sports auto-board ticker: added=%s candidates=%s skipped_already_on_board=%s",
+                    added,
+                    out.get("candidates"),
+                    out.get("skipped_already_on_board"),
+                )
+            else:
+                log.debug(
+                    "Sports auto-board ticker: added=0 candidates=%s skipped_already_on_board=%s errors=%s",
+                    out.get("candidates"),
+                    out.get("skipped_already_on_board"),
+                    len(out.get("errors") or []),
+                )
+            await asyncio.sleep(_sports_auto_board_ticker_interval_sec())
+        except asyncio.CancelledError:
+            raise
+        except Exception as ex:
+            log.exception("Sports auto-board ticker: loop error: %s", ex)
+            await asyncio.sleep(900)
 
 
 def register(router):

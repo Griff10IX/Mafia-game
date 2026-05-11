@@ -145,6 +145,11 @@ from routers.kill.armoury import (
 from routers.game.families import resolve_family_id
 from utils.staff_bot_client_alert import maybe_notify_staff_bot_attack_from_ua, maybe_notify_staff_attack_execute_token_fail
 from utils.sustained_page_ratelimit import PAGE_KEY_KILL, check_sustained_page_rl
+from utils.attack_turnstile_gate import (
+    attack_turnstile_config as load_attack_turnstile_config,
+    issue_attack_turnstile_nonce,
+    require_attack_turnstile,
+)
 
 
 async def _attack_micro_cooldown(request: Request):
@@ -814,6 +819,8 @@ async def _record_vendetta_bg_kill(
 class AttackSearchRequest(BaseModel):
     target_username: str
     note: Optional[str] = None
+    captcha_token: Optional[str] = None
+    captcha_nonce: Optional[str] = None
 
 class AttackSearchResponse(BaseModel):
     attack_id: str
@@ -846,6 +853,8 @@ class AttackExecuteRequest(BaseModel):
     use_molotovs: Optional[bool] = False
     # Issued when GET /attack/list or GET /attack/status shows can_attack; required if the attack row has a token.
     execute_token: Optional[str] = None
+    captcha_token: Optional[str] = None
+    captcha_nonce: Optional[str] = None
 
     @model_validator(mode="after")
     def _require_attack_handle(self):
@@ -880,6 +889,10 @@ class BulletCalcRequest(BaseModel):
     target_username: str
     # When true (live preview while typing), return 200 + calc_ok:false instead of 4xx so DevTools stays clean.
     soft_fail: bool = False
+
+
+class AttackTurnstileNonceRequest(BaseModel):
+    action: str
 
 # ---------------------------------------------------------------------------
 # Pure helpers (no db)
@@ -1408,7 +1421,35 @@ async def _exclusive_car_bullet_defense_multiplier(target: dict) -> float:
 # Route handlers
 # ---------------------------------------------------------------------------
 
+async def attack_turnstile_config(current_user: dict = Depends(get_current_user_verified)):
+    return await load_attack_turnstile_config(db)
+
+
+async def attack_turnstile_nonce(
+    body: AttackTurnstileNonceRequest,
+    req: Request,
+    current_user: dict = Depends(get_current_user_verified),
+):
+    meta = _request_meta(req)
+    return await issue_attack_turnstile_nonce(
+        db,
+        current_user=current_user,
+        action=(body.action or "").strip().lower(),
+        risk_score=int(meta.get("client_risk_score") or 0),
+    )
+
+
 async def search_target(payload: AttackSearchRequest, req: Request, current_user: dict = Depends(get_current_user_verified)):
+    meta = _request_meta(req)
+    await require_attack_turnstile(
+        db,
+        request=req,
+        current_user=current_user,
+        action="search",
+        captcha_token=payload.captcha_token,
+        captcha_nonce=payload.captcha_nonce,
+        risk_score=int(meta.get("client_risk_score") or 0),
+    )
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     await db.attacks.delete_many({"attacker_id": current_user["id"], "search_started": {"$lte": cutoff.isoformat()}})
     user_filter = _find_user_by_username_case_insensitive(payload.target_username)
@@ -1485,7 +1526,6 @@ async def search_target(payload: AttackSearchRequest, req: Request, current_user
     })
     _attack_list_cache_invalidate(current_user["id"])
     try:
-        meta = _request_meta(req)
         await db[ATTACK_CLIENT_AUDIT_COLLECTION].insert_one(
             {
                 "id": str(uuid.uuid4()),
@@ -1785,6 +1825,7 @@ async def get_attack_inflation(current_user: dict = Depends(get_current_user)):
 
 async def execute_attack(request: AttackExecuteRequest, req: Request, current_user: dict = Depends(get_current_user_verified)):
   try:
+    meta = _request_meta(req)
     attack = await _resolve_attack_row_for_execute(
         current_user["id"],
         request.attack_id,
@@ -1793,6 +1834,15 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     if not attack:
         _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "No active attack to execute", req), label="log_no_active_attack")
         raise HTTPException(status_code=404, detail="No active attack to execute")
+    await require_attack_turnstile(
+        db,
+        request=req,
+        current_user=current_user,
+        action="execute",
+        captcha_token=request.captcha_token,
+        captcha_nonce=request.captcha_nonce,
+        risk_score=int(meta.get("client_risk_score") or 0),
+    )
     # Parallel: target + attacker location lookups are independent — saves one round trip
     target, attacker_row = await asyncio.gather(
         db.users.find_one({"id": attack["target_id"]}, {"_id": 0}),
@@ -3322,6 +3372,8 @@ def register(router):
     # sustained_page_rl_state; parallel page load (5+ GETs & 10s polling) spammed DB and could trip kill-chain RL on POSTs.
     _kill_rl_v = [Depends(_kill_sustained_rl_verified)]
     _attack_button_rl_v = [Depends(_attack_micro_cooldown), Depends(_kill_sustained_rl_verified)]
+    router.add_api_route("/attack/turnstile-config", attack_turnstile_config, methods=["GET"])
+    router.add_api_route("/attack/turnstile-nonce", attack_turnstile_nonce, methods=["POST"], dependencies=_kill_rl_v)
     router.add_api_route("/attack/search", search_target, methods=["POST"], response_model=AttackSearchResponse, dependencies=_attack_button_rl_v)
     router.add_api_route("/attack/status", get_attack_status, methods=["GET"], response_model=AttackStatusResponse)
     router.add_api_route("/attack/list", list_attacks, methods=["GET"])

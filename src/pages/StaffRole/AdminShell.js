@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { Search, User, ChevronDown, Users, Lock } from 'lucide-react';
+import { Search, User, ChevronDown, Users, Lock, ShieldAlert } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { STAFF_ADMIN_API_FORBIDDEN_EVENT } from '../../utils/api';
 import { getAdminPresenceTabId } from '../../utils/adminPresence';
@@ -372,6 +372,23 @@ export default function AdminShell() {
     return ADMIN_ROUTE_GROUP_MAP[hubSection] || ADMIN_ROUTE_GROUP_MAP.overview;
   }, [hubSection]);
 
+  const nonStaffPresenceAccounts = useMemo(
+    () => presenceUniqueAccounts.filter((acc) => acc?.is_non_staff),
+    [presenceUniqueAccounts]
+  );
+  const staffPresenceAccounts = useMemo(
+    () => presenceUniqueAccounts.filter((acc) => !acc?.is_non_staff),
+    [presenceUniqueAccounts]
+  );
+  const nonStaffPresenceRows = useMemo(
+    () => presenceRows.filter((row) => row?.is_non_staff),
+    [presenceRows]
+  );
+  const staffPresenceRows = useMemo(
+    () => presenceRows.filter((row) => !row?.is_non_staff),
+    [presenceRows]
+  );
+
   useEffect(() => {
     if (!section) {
       const hash = (typeof window !== 'undefined' ? (window.location.hash || '').replace('#', '').trim() : '');
@@ -575,10 +592,15 @@ export default function AdminShell() {
                   aria-expanded={presenceOpen}
                   aria-haspopup="dialog"
                   className="inline-flex items-center gap-1.5 rounded-md border border-primary/35 bg-zinc-950/80 px-2 py-1 text-[9px] font-heading font-bold uppercase tracking-wider text-primary hover:bg-primary/15"
-                  title="Staff on admin: live (~90s), last 24h, or last 7 days (by heartbeat)"
+                  title="Admin presence: staff tabs plus non-staff admin URL hits for breach checks"
                 >
                   <Users size={14} className="shrink-0 opacity-90" aria-hidden />
-                  Staff on admin
+                  Admin presence
+                  {nonStaffPresenceAccounts.length > 0 && (
+                    <span className="inline-flex min-w-[1rem] justify-center rounded border border-red-500/60 bg-red-500/25 px-1 py-0.5 text-[8px] text-red-100">
+                      {nonStaffPresenceAccounts.length}
+                    </span>
+                  )}
                 </button>
                 <div className="hidden md:block text-[10px] text-mutedForeground font-heading uppercase tracking-wider">
                   {routeGroup?.label}
@@ -650,13 +672,65 @@ export default function AdminShell() {
                       {presenceLoading ? '…' : 'Refresh'}
                     </button>
                   </div>
+                  {nonStaffPresenceAccounts.length > 0 ? (
+                    <div className="mb-2 rounded-lg border border-red-500/35 bg-red-500/10 p-1.5">
+                      <div className="mb-1 flex items-center justify-between gap-2 px-0.5">
+                        <span className="inline-flex items-center gap-1 text-[8px] font-heading font-bold uppercase tracking-wider text-red-200">
+                          <ShieldAlert size={11} aria-hidden />
+                          Non-staff admin hits ({nonStaffPresenceAccounts.length})
+                        </span>
+                        <span className="text-[8px] font-heading text-red-200/70">
+                          Security breach check
+                        </span>
+                      </div>
+                      <ul className="max-h-36 overflow-y-auto space-y-1">
+                        {nonStaffPresenceAccounts.map((acc) => {
+                          const ips = Array.isArray(acc.ips) ? acc.ips : [];
+                          const ipLine =
+                            ips.length === 0 ? '—' : ips.length === 1 ? ips[0] : `${ips[0]} +${ips.length - 1}`;
+                          return (
+                            <li
+                              key={`nonstaff-${acc.user_id}`}
+                              className="rounded border border-red-500/35 bg-zinc-950/55 px-1.5 py-1 text-[9px] font-heading leading-snug text-red-50"
+                            >
+                              <div className="flex flex-wrap items-center justify-between gap-1">
+                                <span className="font-bold truncate">
+                                  {acc.username || '?'}
+                                  {acc.is_self ? ' (you)' : ''}
+                                </span>
+                                <span className="shrink-0 text-red-100/70 tabular-nums">
+                                  {acc.tab_count > 1 ? `${acc.tab_count} tabs` : '1 tab'}
+                                </span>
+                              </div>
+                              <div className="text-[8px] text-red-100/70 mt-0.5">
+                                Last <span className="text-red-50">{formatSeenAgo(acc.last_seen_at, presenceSeenTick)}</span>
+                                {acc.last_section ? <> · <span className="text-red-100">{acc.last_section}</span></> : null}
+                              </div>
+                              <div className="text-[8px] text-red-100/60 font-mono truncate mt-0.5" title={ips.join(', ')}>
+                                {ipLine}
+                              </div>
+                              {acc.last_route_path ? (
+                                <div className="text-[8px] text-red-100/60 truncate mt-0.5" title={acc.last_route_path}>
+                                  {acc.last_route_path}
+                                </div>
+                              ) : null}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    </div>
+                  ) : null}
                   {presenceUniqueAccounts.length > 0 ? (
                     <div className="mb-2">
                       <div className="text-[8px] font-heading uppercase tracking-wider text-zinc-500 px-0.5 mb-1">
-                        By account ({presenceUniqueAccounts.length})
+                        Staff accounts ({staffPresenceAccounts.length})
                       </div>
                       <ul className="max-h-36 overflow-y-auto space-y-1 rounded border border-zinc-800/80 bg-zinc-900/40 p-1">
-                        {presenceUniqueAccounts.map((acc) => {
+                        {staffPresenceAccounts.length === 0 ? (
+                          <li className="px-1.5 py-2 text-[9px] font-heading text-mutedForeground">
+                            No staff accounts in this window.
+                          </li>
+                        ) : staffPresenceAccounts.map((acc) => {
                           const ips = Array.isArray(acc.ips) ? acc.ips : [];
                           const ipLine =
                             ips.length === 0 ? '—' : ips.length === 1 ? ips[0] : `${ips[0]} +${ips.length - 1}`;
@@ -664,11 +738,7 @@ export default function AdminShell() {
                             <li
                               key={acc.user_id}
                               className={`rounded px-1.5 py-1 text-[9px] font-heading leading-snug ${
-                                acc.is_non_staff
-                                  ? 'bg-red-500/15 text-red-100 ring-1 ring-red-500/40'
-                                  : acc.is_self
-                                    ? 'bg-emerald-500/10 text-emerald-100/95'
-                                    : 'text-foreground'
+                                acc.is_self ? 'bg-emerald-500/10 text-emerald-100/95' : 'text-foreground'
                               }`}
                             >
                               <div className="flex flex-wrap items-center justify-between gap-1">
@@ -677,14 +747,6 @@ export default function AdminShell() {
                                     {acc.username || '?'}
                                     {acc.is_self ? ' (you)' : ''}
                                   </span>
-                                  {acc.is_non_staff && (
-                                    <span
-                                      className="inline-flex shrink-0 items-center px-1 py-0.5 rounded border border-red-500/60 bg-red-500/30 text-red-200 text-[7px] uppercase tracking-wider"
-                                      title="This account does NOT have admin/mod access — it landed on the staff URL and was bounced. Audit log written."
-                                    >
-                                      Non-staff
-                                    </span>
-                                  )}
                                 </span>
                                 <span className="shrink-0 text-mutedForeground tabular-nums">
                                   {acc.tab_count > 1 ? `${acc.tab_count} tabs` : '1 tab'}
@@ -705,6 +767,7 @@ export default function AdminShell() {
                   ) : null}
                   <div className="text-[8px] font-heading uppercase tracking-wider text-zinc-500 px-0.5 mb-1">
                     Browser tabs ({presenceRows.length})
+                    {nonStaffPresenceRows.length > 0 ? ` · ${nonStaffPresenceRows.length} non-staff` : ''}
                   </div>
                   {presenceRows.length === 0 ? (
                     <p className="text-[10px] text-mutedForeground font-heading px-0.5 py-2">
@@ -716,7 +779,7 @@ export default function AdminShell() {
                     </p>
                   ) : (
                     <ul className="max-h-52 overflow-y-auto space-y-1.5">
-                      {presenceRows.map((row) => (
+                      {[...nonStaffPresenceRows, ...staffPresenceRows].map((row) => (
                         <li
                           key={`${row.user_id || ''}-${row.tab_id || ''}`}
                           className={`rounded border px-2 py-1.5 text-[10px] font-heading leading-snug ${

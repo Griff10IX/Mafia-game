@@ -1238,6 +1238,10 @@ export default function Admin() {
   const [blockScriptGameActionsSaving, setBlockScriptGameActionsSaving] = useState(false);
   const [gameActionsClientStrict, setGameActionsClientStrict] = useState(false);
   const [gameActionsTurnstileEnabled, setGameActionsTurnstileEnabled] = useState(false);
+  const [attackTurnstileEnabled, setAttackTurnstileEnabled] = useState(false);
+  const [attackTurnstileMasterDisabled, setAttackTurnstileMasterDisabled] = useState(false);
+  const [attackTurnstileMode, setAttackTurnstileMode] = useState('execute_only');
+  const [attackTurnstileEnforce, setAttackTurnstileEnforce] = useState('off');
   const [minigameTurnstileEnabled, setMinigameTurnstileEnabled] = useState(false);
   const [minigameTurnstileSiteKey, setMinigameTurnstileSiteKey] = useState('');
   const [loginTurnstileEnabled, setLoginTurnstileEnabled] = useState(false);
@@ -2122,6 +2126,10 @@ export default function Admin() {
       setBlockScriptUserAgentGameActions(res.data?.block_script_user_agent_game_actions !== false);
       setGameActionsClientStrict(!!res.data?.game_actions_client_strict);
       setGameActionsTurnstileEnabled(!!res.data?.game_actions_turnstile_enabled);
+      setAttackTurnstileEnabled(!!res.data?.attack_turnstile_enabled);
+      setAttackTurnstileMasterDisabled(!!res.data?.attack_turnstile_master_disabled);
+      setAttackTurnstileMode(['execute_only', 'search_and_execute', 'risk_based'].includes(res.data?.attack_turnstile_mode) ? res.data.attack_turnstile_mode : 'execute_only');
+      setAttackTurnstileEnforce(['off', 'log_only', 'enforce'].includes(res.data?.attack_turnstile_enforce) ? res.data.attack_turnstile_enforce : 'off');
       setMinigameTurnstileEnabled(!!res.data?.minigame_turnstile_enabled);
       setMinigameTurnstileSiteKey((res.data?.minigame_turnstile_site_key ?? '').trim());
       setLoginTurnstileEnabled(!!res.data?.login_turnstile_enabled);
@@ -2223,6 +2231,10 @@ export default function Admin() {
       setBlockScriptUserAgentGameActions(true);
       setGameActionsClientStrict(false);
       setGameActionsTurnstileEnabled(false);
+      setAttackTurnstileEnabled(false);
+      setAttackTurnstileMasterDisabled(false);
+      setAttackTurnstileMode('execute_only');
+      setAttackTurnstileEnforce('off');
       setMinigameTurnstileEnabled(false);
       setMinigameTurnstileSiteKey('');
       setLoginTurnstileEnabled(false);
@@ -2380,6 +2392,10 @@ export default function Admin() {
         block_script_user_agent_game_actions: blockScriptUserAgentGameActions,
         game_actions_client_strict: gameActionsClientStrict,
         game_actions_turnstile_enabled: gameActionsTurnstileEnabled,
+        attack_turnstile_enabled: attackTurnstileEnabled,
+        attack_turnstile_master_disabled: attackTurnstileMasterDisabled,
+        attack_turnstile_mode: attackTurnstileMode,
+        attack_turnstile_enforce: attackTurnstileEnforce,
         minigame_turnstile_enabled: minigameTurnstileEnabled,
         minigame_turnstile_site_key: minigameTurnstileSiteKey.trim(),
         login_turnstile_enabled: loginTurnstileEnabled,
@@ -2432,6 +2448,18 @@ export default function Admin() {
       if (res.data?.game_actions_client_strict !== undefined) setGameActionsClientStrict(!!res.data.game_actions_client_strict);
       if (res.data?.game_actions_turnstile_enabled !== undefined) {
         setGameActionsTurnstileEnabled(!!res.data.game_actions_turnstile_enabled);
+      }
+      if (res.data?.attack_turnstile_enabled !== undefined) {
+        setAttackTurnstileEnabled(!!res.data.attack_turnstile_enabled);
+      }
+      if (res.data?.attack_turnstile_master_disabled !== undefined) {
+        setAttackTurnstileMasterDisabled(!!res.data.attack_turnstile_master_disabled);
+      }
+      if (res.data?.attack_turnstile_mode !== undefined) {
+        setAttackTurnstileMode(['execute_only', 'search_and_execute', 'risk_based'].includes(res.data.attack_turnstile_mode) ? res.data.attack_turnstile_mode : 'execute_only');
+      }
+      if (res.data?.attack_turnstile_enforce !== undefined) {
+        setAttackTurnstileEnforce(['off', 'log_only', 'enforce'].includes(res.data.attack_turnstile_enforce) ? res.data.attack_turnstile_enforce : 'off');
       }
       setMinigameTurnstileEnabled(!!res.data?.minigame_turnstile_enabled);
       if (res.data?.minigame_turnstile_site_key !== undefined) {
@@ -13266,6 +13294,75 @@ export default function Admin() {
                   commits)
                 </span>
               </label>
+              <div className="rounded border border-red-500/20 bg-red-500/5 p-2 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p className="text-[10px] font-heading uppercase tracking-wider text-red-300">Attack page Turnstile</p>
+                    <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                      Attack-only solver defense. Not shown on every click: it can run on execute only, search + execute, or risk-based.
+                    </p>
+                  </div>
+                  <span className={`text-[10px] font-heading px-2 py-0.5 rounded border ${
+                    attackTurnstileMasterDisabled || attackTurnstileEnforce === 'off' || !attackTurnstileEnabled
+                      ? 'border-zinc-600 text-zinc-400'
+                      : attackTurnstileEnforce === 'log_only'
+                        ? 'border-amber-500/40 text-amber-300'
+                        : 'border-red-500/40 text-red-300'
+                  }`}>
+                    {attackTurnstileMasterDisabled || attackTurnstileEnforce === 'off' || !attackTurnstileEnabled
+                      ? 'Off'
+                      : attackTurnstileEnforce === 'log_only' ? 'Log only' : 'Enforcing'}
+                  </span>
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer text-sm font-heading">
+                  <input
+                    type="checkbox"
+                    checked={attackTurnstileEnabled}
+                    onChange={(e) => setAttackTurnstileEnabled(e.target.checked)}
+                    className="rounded border-input"
+                  />
+                  <span>Enable attack-page Turnstile gate</span>
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-sm font-heading">
+                  <input
+                    type="checkbox"
+                    checked={attackTurnstileMasterDisabled}
+                    onChange={(e) => setAttackTurnstileMasterDisabled(e.target.checked)}
+                    className="rounded border-input"
+                  />
+                  <span>Emergency disable attack Turnstile immediately</span>
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">When to ask</span>
+                    <select
+                      value={attackTurnstileMode}
+                      onChange={(e) => setAttackTurnstileMode(e.target.value)}
+                      className="px-2 py-1.5 rounded border border-input bg-background text-[11px] font-heading"
+                    >
+                      <option value="execute_only">Execute only</option>
+                      <option value="search_and_execute">Search and execute</option>
+                      <option value="risk_based">Risk based</option>
+                    </select>
+                  </label>
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Rollout state</span>
+                    <select
+                      value={attackTurnstileEnforce}
+                      onChange={(e) => setAttackTurnstileEnforce(e.target.value)}
+                      className="px-2 py-1.5 rounded border border-input bg-background text-[11px] font-heading"
+                    >
+                      <option value="off">Off</option>
+                      <option value="log_only">Log only</option>
+                      <option value="enforce">Enforce</option>
+                    </select>
+                  </label>
+                </div>
+                <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                  Server env <code className="text-[9px] bg-muted px-1 rounded">ATTACK_TURNSTILE_DISABLED=1</code> also forces this off.
+                  Existing execute tokens and kill rate limits stay active.
+                </p>
+              </div>
               <div className="flex flex-col gap-1 max-w-md">
                 <label className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Site key (public)</label>
                 <input
@@ -15338,8 +15435,8 @@ export default function Admin() {
                   Kill / attack — execute_token failures (UA spoof telemetry)
                 </div>
                 <p className="text-[9px] text-mutedForeground font-heading leading-snug">
-                  Correlates <code className="text-[8px]">integrity_violation: execute_token</code> rows with client signal, risk score, and IPs. Includes{' '}
-                  <code className="text-[8px]">attack_client_audit</code> search-start counts (header snapshots). Staff notifications for token fails already include risk/flags when available.
+                  Correlates <code className="text-[8px]">integrity_violation: execute_token</code> rows with client signal, risk score, IPs,
+                  high-risk <code className="text-[8px]">attack_client_audit</code> search rows, and attack Turnstile failure samples.
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[10px] text-mutedForeground font-heading">Window (hours)</span>

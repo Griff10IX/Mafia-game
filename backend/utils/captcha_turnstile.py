@@ -18,6 +18,10 @@ class TurnstileVerifyResult:
     success: bool
     error_codes: List[str] = field(default_factory=list)
     http_error: Optional[str] = None
+    hostname: Optional[str] = None
+    action: Optional[str] = None
+    cdata: Optional[str] = None
+    challenge_ts: Optional[str] = None
 
 
 async def verify_turnstile_token(
@@ -41,11 +45,24 @@ async def verify_turnstile_token(
         r.raise_for_status()
         body = r.json()
         if body.get("success"):
-            return TurnstileVerifyResult(success=True)
+            return TurnstileVerifyResult(
+                success=True,
+                hostname=str(body.get("hostname") or "")[:255] or None,
+                action=str(body.get("action") or "")[:128] or None,
+                cdata=str(body.get("cdata") or "")[:255] or None,
+                challenge_ts=str(body.get("challenge_ts") or "")[:80] or None,
+            )
         err = body.get("error-codes") or []
         codes = [str(x) for x in err] if isinstance(err, list) else [str(err)]
         logger.info("Turnstile verification failed: %s", codes)
-        return TurnstileVerifyResult(success=False, error_codes=codes)
+        return TurnstileVerifyResult(
+            success=False,
+            error_codes=codes,
+            hostname=str(body.get("hostname") or "")[:255] or None,
+            action=str(body.get("action") or "")[:128] or None,
+            cdata=str(body.get("cdata") or "")[:255] or None,
+            challenge_ts=str(body.get("challenge_ts") or "")[:80] or None,
+        )
     except Exception as ex:
         logger.exception("Turnstile siteverify request failed")
         return TurnstileVerifyResult(success=False, error_codes=["request-error"], http_error=str(ex)[:200])

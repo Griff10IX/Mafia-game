@@ -485,8 +485,56 @@ def register(router):
         audit_q = {"$or": [{"created_at": {"$gte": since}}, {"created_at": {"$gte": since_iso}}]}
         try:
             search_audit_count = await db[ATTACK_CLIENT_AUDIT].count_documents(audit_q)
+            high_risk_q = {
+                **audit_q,
+                "client_risk_score": {"$gte": 35},
+            }
+            high_risk_search_count = await db[ATTACK_CLIENT_AUDIT].count_documents(high_risk_q)
+            high_risk_search_samples = await db[ATTACK_CLIENT_AUDIT].find(
+                high_risk_q,
+                {
+                    "_id": 0,
+                    "created_at": 1,
+                    "user_id": 1,
+                    "username": 1,
+                    "target_username": 1,
+                    "client_ip": 1,
+                    "attacker_client_signal": 1,
+                    "client_risk_score": 1,
+                    "client_anomaly_flags": 1,
+                    "client_header_snapshot": 1,
+                },
+            ).sort("created_at", -1).limit(12).to_list(12)
         except Exception:
             search_audit_count = None
+            high_risk_search_count = None
+            high_risk_search_samples = []
+
+        try:
+            turnstile_q = {
+                "$and": [
+                    {"$or": [{"at": {"$gte": since}}, {"at": {"$gte": since_iso}}]},
+                    {"path": {"$regex": r"/attack/", "$options": "i"}},
+                ]
+            }
+            attack_turnstile_failures = await db["captcha_turnstile_failures"].count_documents(turnstile_q)
+            attack_turnstile_failure_samples = await db["captcha_turnstile_failures"].find(
+                turnstile_q,
+                {
+                    "_id": 0,
+                    "at": 1,
+                    "user_id": 1,
+                    "username": 1,
+                    "reason": 1,
+                    "path": 1,
+                    "ip": 1,
+                    "turnstile_error_codes": 1,
+                    "detail": 1,
+                },
+            ).sort("at", -1).limit(12).to_list(12)
+        except Exception:
+            attack_turnstile_failures = None
+            attack_turnstile_failure_samples = []
 
         return {
             "window_hours": hours,
@@ -502,6 +550,11 @@ def register(router):
             ],
             "recent_token_fail_samples": samples,
             "attack_search_audit_rows_in_window": search_audit_count,
+            "high_risk_attack_search_rows": high_risk_search_count,
+            "recent_high_risk_attack_search_samples": high_risk_search_samples,
+            "attack_turnstile_failures": attack_turnstile_failures,
+            "recent_attack_turnstile_failure_samples": attack_turnstile_failure_samples,
             "note": "Strict header checks are opt-in via ATTACK_STRICT_* env vars in attack router. "
-            "attack_client_audit logs each successful /attack/search with client_header_snapshot.",
+            "attack_client_audit logs each successful /attack/search with client_header_snapshot. "
+            "Attack Turnstile failures are also included when the attack gate is enabled.",
         }

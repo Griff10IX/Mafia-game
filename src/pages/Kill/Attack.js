@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 import { formatGameDateTimeShort as formatDateTime } from '../../utils/gameDateTime';
+import { useAttackTurnstile } from '../../hooks/useAttackTurnstile';
 
 const ATTACK_STYLES = `
   @keyframes atk-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -1052,6 +1053,7 @@ const CalcModal = ({
 // Main component
 export default function Attack() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { getAttackCaptcha, captchaModal } = useAttackTurnstile();
   const [targetUsername, setTargetUsername] = useState('');
   const [note, setNote] = useState('');
   const [attacks, setAttacks] = useState(() => readCachedAttacks());
@@ -1370,6 +1372,11 @@ export default function Attack() {
   const hitlistNpcAutoFillRef = useRef(false);
   const killByUsernameInFlightRef = useRef(false);
 
+  const withAttackCaptcha = useCallback(async (action, body) => {
+    const captcha = await getAttackCaptcha(action);
+    return captcha ? { ...body, ...captcha } : body;
+  }, [getAttackCaptcha]);
+
   // Hitlist board crosshair → /attack?target=… — prefill kill form and start a search (same as Find User submit)
   useEffect(() => {
     const t = searchParams.get('target');
@@ -1401,11 +1408,8 @@ export default function Attack() {
             JSON.stringify({ type: 'search', target_username: trimmed, note: noteFromBoard }),
           );
         } catch (_) {}
-        const response = await api.post(
-          '/attack/search',
-          { target_username: trimmed, note: noteFromBoard },
-          { signal: ac.signal },
-        );
+        const searchBody = await withAttackCaptcha('search', { target_username: trimmed, note: noteFromBoard });
+        const response = await api.post('/attack/search', searchBody, { signal: ac.signal });
         if (cancelled) return;
         stripBoardQuery();
         toast.success(response.data?.message || 'Search started');
@@ -1425,7 +1429,7 @@ export default function Attack() {
       cancelled = true;
       ac.abort();
     };
-  }, [searchParams, setSearchParams]);
+  }, [searchParams, setSearchParams, withAttackCaptcha]);
 
   // Clear stored submit when leaving the page so "Kill → go to Crimes → back to Kill" never auto-sends. F5 on Attack page still resends (reload doesn't run this cleanup).
   useEffect(() => {
@@ -1513,10 +1517,11 @@ export default function Attack() {
       if (payload.type === 'search') {
         setSearchLoading(true);
         try {
-          const response = await api.post('/attack/search', {
+          const searchBody = await withAttackCaptcha('search', {
             target_username: payload.target_username || '',
             note: payload.note || '',
           });
+          const response = await api.post('/attack/search', searchBody);
           toast.success(response.data?.message || 'Search started');
           await refreshAttacks();
         } catch (error) {
@@ -1553,7 +1558,8 @@ export default function Attack() {
             best.execute_token && String(best.execute_token).trim().length >= 16
               ? extra
               : { attack_id: best.attack_id, ...extra };
-          const execRes = await api.post('/attack/execute', execBody);
+          const securedExecBody = await withAttackCaptcha('execute', execBody);
+          const execRes = await api.post('/attack/execute', securedExecBody);
           refreshUser();
           fetchBullets();
           // Background refresh — the result toast/feedback below doesn't need the latest list.
@@ -1576,7 +1582,8 @@ export default function Attack() {
                     setSearchLoading(true);
                     try {
                       const note = bg.target_username ? `Bodyguard for: ${bg.target_username}` : '';
-                      const res = await api.post('/attack/search', { target_username: bg.search_username, note });
+                      const searchBody = await withAttackCaptcha('search', { target_username: bg.search_username, note });
+                      const res = await api.post('/attack/search', searchBody);
                       toast.success(res.data?.message || 'Search started', { duration: 10000 });
                       await refreshAttacks();
                     } catch (err) {
@@ -1599,7 +1606,7 @@ export default function Attack() {
       }
     };
     run();
-  }, [pendingResend]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pendingResend, withAttackCaptcha]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleSelected = (attackId) => {
     setSelectedAttackIds((prev) => (
@@ -1642,7 +1649,8 @@ export default function Attack() {
       try {
         sessionStorage.setItem('attack-last-submit', JSON.stringify({ type: 'search', target_username: target, note: noteVal }));
       } catch (_) {}
-      const response = await api.post('/attack/search', { target_username: target, note: noteVal });
+      const searchBody = await withAttackCaptcha('search', { target_username: target, note: noteVal });
+      const response = await api.post('/attack/search', searchBody);
       toast.success(response.data.message);
       setTargetUsername('');
       setNote('');
@@ -1694,7 +1702,8 @@ export default function Attack() {
       const tok = extra && typeof extra.execute_token === 'string' ? extra.execute_token.trim() : '';
       const payload =
         tok.length >= 16 ? { ...extra } : extra ? { attack_id: attackId, ...extra } : { attack_id: attackId };
-      const response = await api.post('/attack/execute', payload);
+      const securedPayload = await withAttackCaptcha('execute', payload);
+      const response = await api.post('/attack/execute', securedPayload);
       setLoading(false);
       if (response.data.success) {
         const rewardMoney = response.data.rewards?.money;
@@ -1711,7 +1720,8 @@ export default function Attack() {
               setSearchLoading(true);
               try {
                 const note = bg.target_username ? `Bodyguard for: ${bg.target_username}` : '';
-                const res = await api.post('/attack/search', { target_username: bg.search_username, note });
+                const searchBody = await withAttackCaptcha('search', { target_username: bg.search_username, note });
+                const res = await api.post('/attack/search', searchBody);
                 toast.success(res.data?.message || 'Search started', { duration: 10000 });
                 await refreshAttacks();
               } catch (err) {
@@ -1932,6 +1942,7 @@ export default function Attack() {
   return (
     <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="attack-page">
       <style>{ATTACK_STYLES}</style>
+      {captchaModal}
 
       <p className="text-[9px] text-zinc-500 font-heading italic">Search, travel, and strike. No witnesses, no mercy.</p>
 
