@@ -10,6 +10,7 @@ from utils.point_provenance import log_points_event
 REVEAL_KILLER_COST = 1000
 TOKEN_RESTORE_PERCENT = 0.50  # 50% of tokens restored on Dead > Alive
 REVIVE_COST = 50_000  # points to revive one dead account (same email, once per email)
+ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL = "Error, this account has been locked for investigation."
 
 
 def _parse_iso_utc(s):
@@ -115,6 +116,8 @@ def register(router):
             raise HTTPException(status_code=404, detail="No account found with that username")
         if not dead_user.get("is_dead"):
             raise HTTPException(status_code=400, detail="That account is not dead. Only dead accounts can be used.")
+        if dead_user.get("account_locked"):
+            raise HTTPException(status_code=403, detail=ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL)
         if not verify_password(request.dead_password, dead_user["password_hash"]):
             raise HTTPException(status_code=401, detail="Invalid password for that account")
         points_at_death = int(dead_user.get("points_at_death") or 0)
@@ -154,29 +157,32 @@ def register(router):
         # Atomically claim — prevents double-retrieval race condition
         if supplemental_swiss_only:
             claim = await db.users.find_one_and_update(
-                {"id": dead_user["id"], "is_dead": True, "swiss_retrieval_used": {"$ne": True}, "swiss_balance": {"$gt": 0}},
+                {"id": dead_user["id"], "is_dead": True, "account_locked": {"$ne": True}, "swiss_retrieval_used": {"$ne": True}, "swiss_balance": {"$gt": 0}},
                 {"$set": {"swiss_retrieval_used": True, "swiss_balance": 0}},
                 projection={"_id": 0, "swiss_balance": 1},
             )
         elif supplemental_rank_pass_only:
             if rank_pass_carry_used:
                 claim = await db.users.find_one(
-                    {"id": dead_user["id"], "is_dead": True},
+                    {"id": dead_user["id"], "is_dead": True, "account_locked": {"$ne": True}},
                     {"_id": 0, "swiss_balance": 1},
                 )
             else:
                 claim = await db.users.find_one_and_update(
-                    {"id": dead_user["id"], "is_dead": True, "rank_xp_pass_dead_alive_carry_used": {"$ne": True}},
+                    {"id": dead_user["id"], "is_dead": True, "account_locked": {"$ne": True}, "rank_xp_pass_dead_alive_carry_used": {"$ne": True}},
                     {"$set": {"rank_xp_pass_dead_alive_carry_used": True}},
                     projection={"_id": 0, "swiss_balance": 1},
                 )
         else:
             claim = await db.users.find_one_and_update(
-                {"id": dead_user["id"], "is_dead": True, "retrieval_used": {"$ne": True}},
+                {"id": dead_user["id"], "is_dead": True, "account_locked": {"$ne": True}, "retrieval_used": {"$ne": True}},
                 {"$set": {"retrieval_used": True, "swiss_retrieval_used": True, "rank_xp_pass_dead_alive_carry_used": True, "swiss_balance": 0}},
                 projection={"_id": 0, "swiss_balance": 1},
             )
         if not claim:
+            locked_now = await db.users.find_one({"id": dead_user["id"], "account_locked": True}, {"_id": 0, "id": 1})
+            if locked_now:
+                raise HTTPException(status_code=403, detail=ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL)
             raise HTTPException(status_code=400, detail="That dead account has already been used for a transfer.")
         add_swiss = max(0, int((claim or {}).get("swiss_balance") or add_swiss or 0))
         supplemental_no_estate = supplemental_swiss_only or supplemental_rank_pass_only
@@ -337,9 +343,21 @@ def register(router):
             }
         dead_same_email = await db.users.find(
             {"email": email, "is_dead": True},
-            {"_id": 0, "username": 1},
+            {"_id": 0, "username": 1, "account_locked": 1},
         ).to_list(50)
-        dead_accounts_same_email = [{"username": u.get("username")} for u in dead_same_email if u.get("username")]
+        dead_accounts_same_email = [
+            {"username": u.get("username")}
+            for u in dead_same_email
+            if u.get("username") and not u.get("account_locked")
+        ]
+        if not dead_accounts_same_email and any(bool(u.get("account_locked")) for u in dead_same_email):
+            return {
+                "can_revive": False,
+                "reason": ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL,
+                "points_balance": points_balance,
+                "revive_used": False,
+                "dead_accounts_same_email": [],
+            }
         return {
             "can_revive": True,
             "reason": None,
@@ -368,6 +386,8 @@ def register(router):
             raise HTTPException(status_code=404, detail="No account found with that username.")
         if not dead_user.get("is_dead"):
             raise HTTPException(status_code=400, detail="That account is not dead.")
+        if dead_user.get("account_locked"):
+            raise HTTPException(status_code=403, detail=ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL)
         dead_email = (dead_user.get("email") or "").strip().lower()
         emails_match = dead_email == email
         if not emails_match:
@@ -408,8 +428,8 @@ def register(router):
 
         try:
             # 3) Revive dead account: alive, receive reviver's money and points (after 50k deduction)
-            await db.users.update_one(
-                {"id": dead_user["id"]},
+            revive_result = await db.users.update_one(
+                {"id": dead_user["id"], "is_dead": True, "account_locked": {"$ne": True}},
                 {
                     "$set": {
                         "is_dead": False,
@@ -434,6 +454,11 @@ def register(router):
                     },
                 },
             )
+            if revive_result.modified_count == 0:
+                locked_now = await db.users.find_one({"id": dead_user["id"], "account_locked": True}, {"_id": 0, "id": 1})
+                if locked_now:
+                    raise HTTPException(status_code=403, detail=ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL)
+                raise HTTPException(status_code=400, detail="That account could not be revived.")
             if reviver_points_after > 0:
                 await log_points_event(db, user_id=dead_user["id"], points=reviver_points_after, event_type="dead_alive_reviver_pay", event_ref=current_user["id"])
             # 4) Kill reviving account
