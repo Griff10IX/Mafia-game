@@ -2494,6 +2494,14 @@ async def families_assign_role(request: FamilyRoleRequest, current_user: dict = 
     member = await db.family_members.find_one({"family_id": family_id, "user_id": request.user_id}, {"_id": 0})
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
+    target_user = await db.users.find_one(
+        _user_id_filter_for_users_collection(request.user_id),
+        {"_id": 0, "id": 1, "family_id": 1, "is_dead": 1},
+    )
+    if not _user_belongs_on_family_roster(target_user, family_id):
+        raise HTTPException(status_code=404, detail="Member not found")
+    if target_user.get("is_dead"):
+        raise HTTPException(status_code=400, detail="Cannot assign roles to dead members")
     target_role = (member.get("role") or "").strip().lower()
     # Underboss can only manage capo / soldier / associate ranks (not Don, Underboss, or Consigliere)
     if my_role == "underboss":
@@ -2501,11 +2509,22 @@ async def families_assign_role(request: FamilyRoleRequest, current_user: dict = 
             raise HTTPException(status_code=403, detail="Only the Don can assign that rank")
         if target_role in ("boss", "underboss", "consigliere"):
             raise HTTPException(status_code=403, detail="Only the Don can change that member's rank")
-    counts = await db.family_members.aggregate([
-        {"$match": {"family_id": family_id}},
-        {"$group": {"_id": "$role", "c": {"$sum": 1}}},
-    ]).to_list(20)
-    by_role = {x["_id"]: x["c"] for x in counts}
+    members_for_count = await db.family_members.find(
+        {"family_id": family_id},
+        {"_id": 0, "user_id": 1, "role": 1},
+    ).to_list(100)
+    users_by_id = await _users_map_by_ids(
+        [m.get("user_id") for m in members_for_count if m.get("user_id")],
+        {"_id": 0, "id": 1, "family_id": 1, "is_dead": 1},
+    )
+    by_role = defaultdict(int)
+    for m in members_for_count:
+        u = users_by_id.get(_uid_str(m.get("user_id")))
+        if not _user_belongs_on_family_roster(u, family_id) or u.get("is_dead"):
+            continue
+        role = (m.get("role") or "").strip().lower()
+        if role:
+            by_role[role] += 1
     limit = FAMILY_ROLE_LIMITS.get(request.role, 0)
     # Allow leadership transfer even though boss limit is 1 (the boss role is moved, not added).
     if request.role != "boss" and limit and (by_role.get(request.role) or 0) >= limit and member.get("role") != request.role:

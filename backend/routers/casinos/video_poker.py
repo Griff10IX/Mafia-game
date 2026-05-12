@@ -467,6 +467,24 @@ async def _settle_and_save_history(
     await log_gambling(user_id, username or "?", "videopoker", log_details)
 
 
+async def user_has_active_video_poker_game(user_id) -> bool:
+    """True if the user has an unfinished video poker hand."""
+    if not user_id:
+        return False
+    candidates = [user_id, str(user_id)]
+    if isinstance(user_id, str) and user_id.isdigit():
+        try:
+            candidates.append(int(user_id))
+        except ValueError:
+            pass
+    uniq = list(dict.fromkeys(candidates))
+    game = await db.videopoker_games.find_one(
+        {"user_id": {"$in": uniq}},
+        {"_id": 1},
+    )
+    return game is not None
+
+
 def register(router):
     @router.get("/casino/videopoker/config")
     async def casino_videopoker_config(current_user: dict = Depends(get_current_user_verified)):

@@ -409,9 +409,10 @@ async def _start_travel_impl(
     booze_run: bool = False,
 ) -> dict:
     """Start travel for user (by user dict). Returns {message, travel_time, destination} or raises HTTPException. Used by travel() and auto_rank booze. If booze_run=True, damage is 0.3%% per run and custom/exclusive cars take no damage."""
-    # Block all travel (manual, attack, auto-rank booze, etc.) while blackjack is unfinished.
+    # Block all travel (manual, attack, auto-rank booze, etc.) while casino hands are unfinished.
     from routers.casinos.blackjack import user_has_blocking_singleplayer_blackjack
     from routers.casinos.mp_blackjack import user_in_active_mp_blackjack_game
+    from routers.casinos.video_poker import user_has_active_video_poker_game
 
     uid = user.get("id")
     if await user_has_blocking_singleplayer_blackjack(uid):
@@ -423,6 +424,11 @@ async def _start_travel_impl(
         raise HTTPException(
             status_code=400,
             detail="Finish or leave your multiplayer blackjack game before traveling.",
+        )
+    if await user_has_active_video_poker_game(uid):
+        raise HTTPException(
+            status_code=400,
+            detail="Finish your video poker hand before traveling.",
         )
     if booze_run and travel_method == "airport":
         raise HTTPException(status_code=400, detail="Booze runs can only use a car, not airport.")
