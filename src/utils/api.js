@@ -483,7 +483,7 @@ api.interceptors.response.use(
       if (error.response?.status === 401 || (error.response?.status === 403 && isAuthMe)) {
         hasRedirectedOnAuthFailure = true;
         const detail = error.response?.data?.detail;
-        const msg = typeof detail === 'string' ? detail : (error.response?.status === 403 ? 'Access denied.' : 'Session expired or invalid. Please log in again.');
+        const msg = typeof detail === 'string' ? detail : (error.response?.status === 403 ? 'Access denied.' : 'Your session expired due to inactivity or the login time limit. Please log in again.');
         try {
           sessionStorage.setItem(AUTH_ERROR_KEY, msg);
         } catch (_) {}
@@ -547,7 +547,7 @@ export function getApiErrorMessage(error) {
   if (detail && typeof detail === 'object' && typeof detail.msg === 'string') return detail.msg;
   if (typeof data?.message === 'string') return data.message;
   if (error.response?.status === 502 || error.response?.status === 503 || error.response?.status === 504) return SERVER_UNAVAILABLE_MSG;
-  if (error.response?.status === 401) return 'Please log in again.';
+  if (error.response?.status === 401) return 'Your session expired due to inactivity or the login time limit. Please log in again.';
   if (error.response?.status === 403) return 'Not allowed.';
   if (!error.response) return error.message || NETWORK_ERROR_MSG;
   return error.response.status ? `Error (${error.response.status}). Please try again.` : 'Something went wrong. Please try again.';

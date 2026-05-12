@@ -8,6 +8,26 @@ import styles from '../../styles/noir.module.css';
 
 const landingGangsterImg = `${process.env.PUBLIC_URL || ''}/images/landing-gangster.png`;
 
+/** Normalize auth redirect / API messages to inactivity-focused copy for the login card. */
+function friendlyAuthSessionMessage(msg) {
+  const s = String(msg || '').trim();
+  const toInactivity =
+    'Your session expired due to inactivity or the login time limit. Please log in again.';
+  if (
+    s === 'Invalid authentication credentials'
+    || s === 'Login session is invalid or expired. Please log in again.'
+    || s === 'Login session is invalid. Please log in again.'
+    || s === 'Your session ended due to inactivity or the login time limit. Please log in again.'
+    || s === 'Session expired due to inactivity. Please log in again.'
+  ) {
+    return toInactivity;
+  }
+  if (s === 'Your session expired or is no longer valid. Please log in again.') {
+    return toInactivity;
+  }
+  return s;
+}
+
 export default function Landing({ setIsAuthenticated, defaultTab }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -19,9 +39,10 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
     const msg = sessionStorage.getItem(AUTH_ERROR_KEY);
     if (msg) {
       sessionStorage.removeItem(AUTH_ERROR_KEY);
-      toast.error(msg);
+      const shown = friendlyAuthSessionMessage(msg);
+      toast.error(shown);
       setAuthInlineError({
-        message: String(msg),
+        message: shown,
         status: null,
         supportCode: `AUTH-${Date.now().toString().slice(-6)}`,
       });
@@ -337,9 +358,9 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
       if (error.response?.status === 403 && typeof msg === 'string' && msg.toLowerCase().includes('verify your email')) {
         setVerifySentForEmail(formData.email);
       }
-      toast.error(msg);
+      toast.error(friendlyAuthSessionMessage(msg));
       setAuthInlineError({
-        message: String(msg || 'Unknown login error'),
+        message: friendlyAuthSessionMessage(String(msg || 'Unknown login error')),
         status: error.response?.status || null,
         supportCode: `AUTH-${(error.response?.status || 'X')}-${Date.now().toString().slice(-6)}`,
       });

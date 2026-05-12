@@ -36,6 +36,7 @@ from utils.family_vault_log import log_family_vault_tx
 from utils.jwt_env import require_jwt_secret_key
 from passlib.context import CryptContext
 from jose import JWTError, jwt
+from jose.exceptions import ExpiredSignatureError
 import random
 import secrets
 import math
@@ -69,12 +70,12 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 SECRET_KEY = require_jwt_secret_key()
 ALGORITHM = "HS256"
-# Session length: default 24h so stepping away doesn't log you out. Override with JWT_EXPIRE_MINUTES in .env (e.g. 10080 = 7 days).
+# Session length: default 7d. Override with JWT_EXPIRE_MINUTES in .env (minutes; e.g. 43200 = 30 days).
 _access_expire = os.environ.get("JWT_EXPIRE_MINUTES", "").strip()
-ACCESS_TOKEN_EXPIRE_MINUTES = int(_access_expire) if _access_expire.isdigit() else 60 * 24
+ACCESS_TOKEN_EXPIRE_MINUTES = int(_access_expire) if _access_expire.isdigit() else 60 * 24 * 7
 # Inactivity timeout: session ends after this many minutes with no requests. 0 = disabled (only JWT expiry applies). Override with SESSION_INACTIVITY_MINUTES in .env.
 _inactivity = os.environ.get("SESSION_INACTIVITY_MINUTES", "").strip()
-SESSION_INACTIVITY_MINUTES = int(_inactivity) if _inactivity.isdigit() else 60 * 24  # default 24h; matches JWT default so idle timeout is not stricter than token
+SESSION_INACTIVITY_MINUTES = int(_inactivity) if _inactivity.isdigit() else 60 * 24 * 7  # default 7d; matches JWT default so idle timeout is not stricter than token
 
 security = HTTPBearer()
 
@@ -1016,10 +1017,23 @@ async def get_current_user(
         user_id = payload.get("sub")
         if user_id is None:
             _log_auth_failure(None, 401, "Invalid authentication credentials (no sub)")
-            raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+            raise HTTPException(
+                status_code=401,
+                detail="Your session is no longer valid. Please log in again.",
+            )
+    except ExpiredSignatureError:
+        # Wall-clock JWT expiry (JWT_EXPIRE_MINUTES) — usually after stepping away / no requests.
+        _log_auth_failure(user_id, 401, "JWT expired")
+        raise HTTPException(
+            status_code=401,
+            detail="Your session expired due to inactivity or the login time limit. Please log in again.",
+        )
     except JWTError:
         _log_auth_failure(user_id, 401, "Invalid or expired token")
-        raise HTTPException(status_code=401, detail="Invalid authentication credentials")
+        raise HTTPException(
+            status_code=401,
+            detail="Your session expired or is no longer valid. Please log in again.",
+        )
 
     # Before user load / account_locked whitelist: IP ban must win over "investigation" locked messaging.
     await raise_http_if_ip_banned(db, request)
@@ -1091,7 +1105,7 @@ async def get_current_user(
                                 _log_auth_failure(user_id, 401, "Session expired due to inactivity")
                                 raise HTTPException(
                                     status_code=401,
-                                    detail="Session expired due to inactivity. Please log in again.",
+                                    detail="Your session expired due to inactivity. Please log in again.",
                                 )
                         # Update last_used_at every 5 minutes to avoid write storm
                         if inactive_seconds >= 300:
