@@ -99,13 +99,24 @@ def _travel_token_active(user: dict, now_utc: datetime) -> bool:
     return bool(until and now_utc < until)
 
 
-def _effective_car_travel_seconds(base_seconds: int, user: dict, now_utc: datetime) -> int:
-    """Base TRAVEL_TIMES seconds for car/custom; applies travel token when active."""
+def _effective_car_travel_seconds(
+    base_seconds: int,
+    user: dict,
+    now_utc: datetime,
+    crew_travel_reduction_seconds: int = 0,
+) -> int:
+    """Base TRAVEL_TIMES seconds for car/custom; applies travel token when active, then family airport-crew flat seconds off (same perk as timed airport travel)."""
     if base_seconds <= 0:
         return base_seconds
-    if not _travel_token_active(user, now_utc):
-        return base_seconds
-    return max(TRAVEL_TOKEN_CAR_TIME_MIN, int(base_seconds * TRAVEL_TOKEN_CAR_TIME_FACTOR))
+    try:
+        red = max(0, int(crew_travel_reduction_seconds or 0))
+    except (TypeError, ValueError):
+        red = 0
+    if _travel_token_active(user, now_utc):
+        t = max(TRAVEL_TOKEN_CAR_TIME_MIN, int(base_seconds * TRAVEL_TOKEN_CAR_TIME_FACTOR))
+    else:
+        t = base_seconds
+    return max(0, t - red)
 
 
 def _effective_airport_points(
@@ -266,7 +277,7 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
         car_info = next((c for c in CARS if c["id"] == uc["car_id"]), None)
         if car_info:
             base_time = TRAVEL_TIMES.get(car_info["rarity"], 45)
-            travel_time = _effective_car_travel_seconds(base_time, current_user, now_utc)
+            travel_time = _effective_car_travel_seconds(base_time, current_user, now_utc, fam_time_red)
             user_car_id = uc.get("id") or str(uc["_id"])
             name = car_info["name"]
             image = car_info.get("image", "")
@@ -298,7 +309,7 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
         custom_damage = min(100, max(0, float(first_custom.get("damage_percent", 0))))
         custom_car = {
             "name": first_custom.get("custom_name") or "Custom Car",
-            "travel_time": _effective_car_travel_seconds(TRAVEL_TIMES["custom"], current_user, now_utc),
+            "travel_time": _effective_car_travel_seconds(TRAVEL_TIMES["custom"], current_user, now_utc, fam_time_red),
             "image": first_custom.get("custom_image_url") or "",
             "damage_percent": custom_damage,
             "can_travel": custom_damage < 100,
@@ -453,6 +464,12 @@ async def _start_travel_impl(
     method_name = "Walking"
     car_to_damage = None  # user_car doc to apply travel damage (2–4%) when travel_time > 0
 
+    from routers.game.families import family_airport_crew_perk_context
+
+    crew_ctx = await family_airport_crew_perk_context(user)
+    family_crew_pts = bool(crew_ctx.get("family_airport_points_discount"))
+    fam_time_red = int(crew_ctx.get("family_airport_travel_reduction_seconds") or 0)
+
     if travel_method == "airport":
         # Airport limit (travels per hour) applies only to airport; car travel is unlimited
         if not booze_run:
@@ -470,11 +487,6 @@ async def _start_travel_impl(
             airport_doc = await db.airport_ownership.find_one({"state": current_location, "slot": slot}, {"_id": 0})
         listed = max(AIRPORT_PRICE_MIN, min(airport_doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX))
         user_owns_any_airport = await db.airport_ownership.find_one({"owner_id": user["id"]}, {"_id": 1})
-        from routers.game.families import family_airport_crew_perk_context
-
-        crew_ctx = await family_airport_crew_perk_context(user)
-        family_crew_pts = bool(crew_ctx.get("family_airport_points_discount"))
-        fam_time_red = int(crew_ctx.get("family_airport_travel_reduction_seconds") or 0)
         airport_price = _effective_airport_points(
             listed, user, now_utc, bool(user_owns_any_airport), family_crew_pts
         )
@@ -554,7 +566,7 @@ async def _start_travel_impl(
             car_to_damage = user_car
 
     if travel_method != "airport" and travel_time > 0:
-        travel_time = _effective_car_travel_seconds(travel_time, user, now_utc)
+        travel_time = _effective_car_travel_seconds(travel_time, user, now_utc, fam_time_red)
 
     # Only count airport travel against the hourly limit; car travel is unlimited
     inc_travels = {} if booze_run or travel_method != "airport" else {"travels_this_hour": 1}

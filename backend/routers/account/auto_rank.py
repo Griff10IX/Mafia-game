@@ -504,7 +504,12 @@ def _auto_rank_telegram_notify(user: Optional[dict]) -> bool:
     """True unless the user explicitly turned off Auto Rank Telegram push notifications."""
     if not user:
         return True
-    return user.get("auto_rank_telegram_notify", True) is not False
+    v = user.get("auto_rank_telegram_notify", True)
+    if v is False or v == 0:
+        return False
+    if isinstance(v, str) and v.strip().lower() in ("false", "0", "no", "off"):
+        return False
+    return True
 
 
 def _format_crime_prestige_bonus_telegram(bonus: Optional[dict]) -> Optional[str]:
@@ -618,7 +623,9 @@ async def _booze_sell_at_city(db, user, user_id: str, username: str, telegram_ch
         try:
             out = await _booze_sell_impl(user, bid, amt, via_auto_rank=True)
             if out.get("caught"):
-                await _send_jail_notification(telegram_chat_id, username, "booze sell bust", 20, bot_token)
+                await _send_jail_notification(
+                    telegram_chat_id, username, "booze sell bust", 20, bot_token, notify=_auto_rank_telegram_notify(user)
+                )
                 return False, None
             profit = out.get("profit") or 0
             if out.get("is_run"):
