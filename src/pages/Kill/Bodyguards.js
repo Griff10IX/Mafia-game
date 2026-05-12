@@ -252,13 +252,71 @@ export default function Bodyguards() {
   const hireBodyguard = async (isRobot) => {
     const slot = claimNextSlot();
     if (slot == null) return;
+    const estimatedCost = getHireCost(slot);
     pendingHiresRef.current += 1;
+    if (isRobot) {
+      setBodyguards((prev) =>
+        prev.map((b) =>
+          b.slot_number === slot
+            ? {
+                ...b,
+                is_robot: true,
+                bodyguard_username: 'Hiring robot...',
+                bodyguard_rank_name: null,
+                armour_level: 0,
+                hire_cost: estimatedCost,
+                pending_hire: true,
+              }
+            : b
+        )
+      );
+    }
     try {
       const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
+      const hiredSlot = response?.data?.slot ?? slot;
+      const hiredBodyguard = response?.data?.bodyguard;
+      if (hiredBodyguard) {
+        setBodyguards((prev) =>
+          prev.map((b) =>
+            b.slot_number === hiredSlot || b.slot_number === slot
+              ? { ...b, ...hiredBodyguard, pending_hire: false }
+              : b
+          )
+        );
+      } else if (response?.data?.bodyguard_name) {
+        setBodyguards((prev) =>
+          prev.map((b) =>
+            b.slot_number === slot
+              ? { ...b, bodyguard_username: response.data.bodyguard_name, pending_hire: false }
+              : b
+          )
+        );
+      }
+      if (typeof response?.data?.next_hire_inflation_pct === 'number') {
+        setNextHireInflationPct(response.data.next_hire_inflation_pct);
+      }
+      if (response?.data?.inflation_window_ends_at) {
+        setInflationWindowEndsAt(response.data.inflation_window_ends_at);
+      }
       showHireBanner('success', response?.data?.message ?? 'Bodyguard hired');
     } catch (error) {
       claimedSlotsRef.current.delete(slot);
       setHiringSlots(new Set(claimedSlotsRef.current));
+      setBodyguards((prev) =>
+        prev.map((b) =>
+          b.slot_number === slot && b.pending_hire
+            ? {
+                ...b,
+                is_robot: false,
+                bodyguard_username: null,
+                bodyguard_rank_name: null,
+                armour_level: 0,
+                hire_cost: 0,
+                pending_hire: false,
+              }
+            : b
+        )
+      );
       const raw = error.response?.data?.detail;
       const detail =
         typeof raw === 'string'
@@ -278,12 +336,7 @@ export default function Bodyguards() {
       if (pendingHiresRef.current === 0) {
         claimedSlotsRef.current.clear();
         refreshUser().catch(() => {});
-        await fetchData();
-        try {
-          const inflRes = await api.get('/bodyguards/inflation', noCacheGetConfig());
-          setNextHireInflationPct(inflRes.data?.next_hire_inflation_pct ?? 0);
-          setInflationWindowEndsAt(inflRes.data?.inflation_window_ends_at ?? null);
-        } catch { /* fetchData already set inflation */ }
+        fetchData().catch(() => {});
       }
     }
   };
@@ -420,11 +473,12 @@ export default function Bodyguards() {
 
   const renderBodyguardCard = (bg) => {
     const isExpanded = expandedSlot === bg.slot_number;
+    const isPendingHire = !!bg.pending_hire;
     return (
       <div
         key={bg.slot_number}
         data-testid={`bodyguard-slot-${bg.slot_number}`}
-        className="bg-row rounded-lg transition-all bg-zinc-800/30 border border-transparent hover:border-primary/20"
+        className={`bg-row rounded-lg transition-all bg-zinc-800/30 border ${isPendingHire ? 'border-primary/30 animate-pulse' : 'border-transparent hover:border-primary/20'}`}
       >
         <div
           className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer"
@@ -444,14 +498,18 @@ export default function Bodyguards() {
                 </span>
               </div>
               <div className="text-[10px] text-mutedForeground truncate hidden sm:block">
-                <Link
-                  to={`/profile/${encodeURIComponent(bg.bodyguard_username ?? '')}`}
-                  className="hover:text-primary"
-                  data-testid={`bodyguard-profile-${bg.slot_number}`}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {bg.bodyguard_username ?? '—'}
-                </Link>
+                {isPendingHire ? (
+                  <span className="text-primary">{bg.bodyguard_username ?? 'Hiring robot...'}</span>
+                ) : (
+                  <Link
+                    to={`/profile/${encodeURIComponent(bg.bodyguard_username ?? '')}`}
+                    className="hover:text-primary"
+                    data-testid={`bodyguard-profile-${bg.slot_number}`}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {bg.bodyguard_username ?? '—'}
+                  </Link>
+                )}
                 {bg.bodyguard_rank_name && <span> • {bg.bodyguard_rank_name}</span>}
               </div>
               <div className="text-[10px] text-mutedForeground sm:hidden">
@@ -468,11 +526,11 @@ export default function Bodyguards() {
             {bg.is_robot ? (
               <button
                 onClick={() => upgradeArmour(bg.slot_number)}
-                disabled={(bg.armour_level || 0) >= 5}
+                disabled={isPendingHire || (bg.armour_level || 0) >= 5}
                 className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation disabled:opacity-40 disabled:cursor-not-allowed font-heading"
                 data-testid={`upgrade-armour-${bg.slot_number}`}
               >
-                {upgradingSlot === bg.slot_number ? '…' : (bg.armour_level || 0) >= 5 ? '🛡️ Max' : `🛡️ Upgrade (${getUpgradeCost(bg.armour_level)} pts)`}
+                {isPendingHire ? 'Hiring…' : upgradingSlot === bg.slot_number ? '…' : (bg.armour_level || 0) >= 5 ? '🛡️ Max' : `🛡️ Upgrade (${getUpgradeCost(bg.armour_level)} pts)`}
               </button>
             ) : (
               <span className="text-[10px] text-mutedForeground italic">Your armour</span>
@@ -484,13 +542,17 @@ export default function Bodyguards() {
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="bg-zinc-900/50 rounded p-2">
                 <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Guard</div>
-                <Link
-                  to={`/profile/${encodeURIComponent(bg.bodyguard_username ?? '')}`}
-                  className="text-foreground font-bold hover:text-primary"
-                  data-testid={`bodyguard-profile-expanded-${bg.slot_number}`}
-                >
-                  {bg.bodyguard_username ?? '—'}
-                </Link>
+                {isPendingHire ? (
+                  <div className="text-primary font-bold">{bg.bodyguard_username ?? 'Hiring robot...'}</div>
+                ) : (
+                  <Link
+                    to={`/profile/${encodeURIComponent(bg.bodyguard_username ?? '')}`}
+                    className="text-foreground font-bold hover:text-primary"
+                    data-testid={`bodyguard-profile-expanded-${bg.slot_number}`}
+                  >
+                    {bg.bodyguard_username ?? '—'}
+                  </Link>
+                )}
               </div>
               <div className="bg-zinc-900/50 rounded p-2">
                 <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Type</div>
@@ -546,7 +608,7 @@ export default function Bodyguards() {
     );
   }
 
-  const activeCount = bodyguards.filter(bg => bg.bodyguard_username).length + hiringSlots.size;
+  const activeCount = bodyguards.filter(bg => bg.bodyguard_username).length;
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="bodyguards-page">
@@ -584,9 +646,10 @@ export default function Bodyguards() {
         <div className="flex items-center gap-3 text-xs font-heading">
           {activeCount < 4 && nextEmptySlot && !bodyguardFor?.owner_username && (
             <button
+              type="button"
               onClick={() => hireBodyguard(true)}
               data-testid="hire-robot-next"
-              className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation font-heading shrink-0"
+              className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all active:scale-95 touch-manipulation font-heading shrink-0"
             >
               {`🤖 Hire robot (${getHireCost(nextEmptySlot)} pts${nextHireInflationPct > 0 ? ` +${nextHireInflationPct}%` : ''})`}
             </button>

@@ -1935,8 +1935,16 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     if attacker_location != target_location:
         _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "You must be in the target's location to attack or bodyguard-check. Travel there first.", req), label="log_wrong_location")
         raise HTTPException(status_code=400, detail="You must be in the target's location to attack or bodyguard-check. Travel there first.")
+    is_hitlist_npc_target = bool(target.get("is_npc") and not target.get("is_bodyguard"))
+    if is_hitlist_npc_target:
+        hitlist_npc = await db.hitlist.find_one(
+            {"target_id": target["id"], "target_type": "npc", "placer_id": current_user["id"]},
+            {"_id": 1},
+        )
+        if not hitlist_npc:
+            raise HTTPException(status_code=400, detail="You can only attack NPCs you added to your hitlist")
     stored_tok = attack.get("execute_token")
-    if isinstance(stored_tok, str) and len(stored_tok) >= 16:
+    if not is_hitlist_npc_target and isinstance(stored_tok, str) and len(stored_tok) >= 16:
         if not _safe_compare_execute_token(stored_tok, request.execute_token):
             submitted_tok = (request.execute_token or "").strip()
             token_failure_reason = "execute_token_mismatch" if submitted_tok else "execute_token_missing"

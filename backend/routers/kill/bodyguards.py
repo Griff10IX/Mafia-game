@@ -633,7 +633,26 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
     await log_activity(current_user["id"], current_user.get("username", "?"), "bodyguard_hire", {
         "slot": slot, "is_robot": is_robot, "cost": total_cost, "name": robot_name,
     })
-    return {"message": f"{'Robot bodyguard ' + robot_name if is_robot else 'Human bodyguard slot'} hired for {total_cost} points", "bodyguard_name": robot_name}
+    return {
+        "message": f"{'Robot bodyguard ' + robot_name if is_robot else 'Human bodyguard slot'} hired for {total_cost} points",
+        "bodyguard_name": robot_name,
+        "slot": slot,
+        "cost": total_cost,
+        "next_hire_inflation_pct": round(_bodyguard_inflation_percent_for_level(inflation_level + 1) * 100),
+        "inflation_window_ends_at": window_end.isoformat(),
+        "bodyguard": {
+            "slot_number": slot,
+            "is_robot": is_robot,
+            "bodyguard_username": robot_name,
+            "bodyguard_rank_name": None,
+            "armour_level": 0,
+            "hired_at": bodyguard_doc["hired_at"],
+            "hire_cost": total_cost,
+            "payment_points": 0,
+            "payment_money": 0,
+            "payout_weekday": None,
+        },
+    }
 
 
 def _weekday_name(weekday: int) -> str:
