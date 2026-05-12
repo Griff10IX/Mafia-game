@@ -41,7 +41,6 @@ from server import (
     user_prestige_rank_mult,
     RANKS,
     STATES,
-    get_password_hash,
     DEFAULT_HEALTH,
     DEFAULT_GARAGE_BATCH_LIMIT,
     _is_admin,
@@ -163,23 +162,14 @@ async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str, str]
     ranks_made_man_plus = [r for r in RANKS if r["id"] >= ROBOT_BODYGUARD_MIN_RANK_ID]
     rank = random.choice(ranks_made_man_plus) if ranks_made_man_plus else RANKS[-1]
     rank_points = random.randint(int(rank["required_points"]), int(rank["required_points"]) + 500)
-    username = None
-    for _ in range(80):
-        suffix = random.randint(100000, 9999999)
-        candidate = f"{base}{suffix}"
-        exists = await db.users.find_one({"username": candidate}, {"_id": 0, "id": 1})
-        if not exists:
-            username = candidate
-            break
-    if not username:
-        raise HTTPException(status_code=500, detail="Failed to generate unique robot name")
     robot_user_id = str(uuid.uuid4())
+    username = f"{base}{robot_user_id.replace('-', '')[:8]}"
     now_iso = datetime.now(timezone.utc).isoformat()
     robot_doc = {
         "id": robot_user_id,
         "email": f"{username.lower()}@robot.mafia",
         "username": username,
-        "password_hash": get_password_hash(str(uuid.uuid4())),
+        "password_hash": "disabled",
         "rank": int(rank["id"]),
         "money": 0.0,
         "points": 0,
