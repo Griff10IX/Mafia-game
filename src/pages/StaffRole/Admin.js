@@ -1326,6 +1326,7 @@ export default function Admin() {
   const [storePointsAutoCredit, setStorePointsAutoCredit] = useState(true);
   const [storePointsManualCreditEta, setStorePointsManualCreditEta] = useState('');
   const [storePointsEventEnabled, setStorePointsEventEnabled] = useState(true);
+  const [storePointsEventForceUntil, setStorePointsEventForceUntil] = useState('');
   const [launchSettingsSaving, setLaunchSettingsSaving] = useState(false);
   const [preorderReleaseLoading, setPreorderReleaseLoading] = useState(false);
   const [manualCreditLoading, setManualCreditLoading] = useState(null);
@@ -2211,6 +2212,7 @@ export default function Admin() {
       setStorePointsAutoCredit(res.data?.store_points_auto_credit !== false);
       setStorePointsManualCreditEta(res.data?.store_points_manual_credit_eta || '');
       setStorePointsEventEnabled(res.data?.store_points_event_enabled !== false);
+      setStorePointsEventForceUntil(res.data?.store_points_event_force_until || '');
       setCasinoGlobalMaxBet(res.data?.casino_global_max_bet || 1000000000);
       setCasinoBuybackMaxPoints(res.data?.casino_buyback_max_points || 15000);
       setMpPokerMaxBlind(res.data?.mp_poker_max_blind || 2500000);
@@ -3101,9 +3103,26 @@ export default function Admin() {
         store_points_event_enabled: storePointsEventEnabled,
       });
       setStorePointsEventEnabled(res.data?.store_points_event_enabled !== false);
+      setStorePointsEventForceUntil(res.data?.store_points_event_force_until || '');
       toast.success('Store sale event settings saved');
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Failed to save store sale event');
+    } finally {
+      setLaunchSettingsSaving(false);
+    }
+  };
+
+  const handleForceStorePointsEventToday = async (forceToday) => {
+    setLaunchSettingsSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', {
+        store_points_event_force_today: !!forceToday,
+      });
+      setStorePointsEventEnabled(res.data?.store_points_event_enabled !== false);
+      setStorePointsEventForceUntil(res.data?.store_points_event_force_until || '');
+      toast.success(forceToday ? 'Store sale forced on for today' : 'Forced store sale cleared');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update forced sale');
     } finally {
       setLaunchSettingsSaving(false);
     }
@@ -10982,6 +11001,11 @@ export default function Admin() {
                 <p className="text-[10px] text-mutedForeground">
                   Randomly comes online 2-3 days per UTC week. When active, card point purchases get +25% extra points and players see a Sale badge on the Store menu.
                 </p>
+                {storePointsEventForceUntil && (
+                  <p className="rounded border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[10px] text-emerald-300 font-heading">
+                    Forced sale is active until {String(storePointsEventForceUntil).replace('T', ' ').slice(0, 16)} UTC.
+                  </p>
+                )}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                   <button
                     type="button"
@@ -11009,6 +11033,24 @@ export default function Admin() {
                 >
                   {launchSettingsSaving ? 'Saving...' : 'Save sale event'}
                 </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleForceStorePointsEventToday(true)}
+                    disabled={launchSettingsSaving}
+                    className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+                  >
+                    Force sale today
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleForceStorePointsEventToday(false)}
+                    disabled={launchSettingsSaving || !storePointsEventForceUntil}
+                    className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-zinc-700/30 text-zinc-300 border border-zinc-600/60 hover:bg-zinc-700/50 disabled:opacity-50"
+                  >
+                    Clear forced sale
+                  </button>
+                </div>
               </div>
 
               <div className="h-px bg-zinc-700/30" />

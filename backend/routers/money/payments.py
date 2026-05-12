@@ -228,7 +228,12 @@ def loot_box_pieces_for_gbp_stripe_minor(amount_minor: Optional[int], currency: 
     return (m // STORE_POINTS_LOOT_GBP_MINOR_PER_BLOCK) * STORE_POINTS_LOOT_PIECES_PER_BLOCK
 
 
-def _store_points_event_payload(now: Optional[datetime] = None, *, enabled: bool = True) -> dict:
+def _store_points_event_payload(
+    now: Optional[datetime] = None,
+    *,
+    enabled: bool = True,
+    force_until: Optional[str] = None,
+) -> dict:
     """Deterministic weekly random store points event: active 2 or 3 UTC days per week."""
     n = now or datetime.now(timezone.utc)
     if n.tzinfo is None:
@@ -243,7 +248,9 @@ def _store_points_event_payload(now: Optional[datetime] = None, *, enabled: bool
         return hashlib.sha256(f"{week_key}:{day}".encode("utf-8")).hexdigest()
 
     active_weekdays = sorted(sorted(range(7), key=day_score)[:active_days_count])
-    active = bool(enabled) and n.weekday() in active_weekdays
+    forced_until_dt = _parse_utc(force_until)
+    forced_active = bool(enabled) and bool(forced_until_dt and forced_until_dt > n)
+    active = bool(enabled) and (forced_active or n.weekday() in active_weekdays)
     mult = 1.0 + STORE_POINTS_EVENT_BONUS_RATE
     return {
         "id": f"store_points_bonus_{week_key}",
@@ -251,6 +258,8 @@ def _store_points_event_payload(now: Optional[datetime] = None, *, enabled: bool
         "message": "Store point purchases get +25% extra points today.",
         "enabled": bool(enabled),
         "active": active,
+        "forced_active": forced_active,
+        "force_until": force_until if forced_active else None,
         "bonus_rate": STORE_POINTS_EVENT_BONUS_RATE,
         "multiplier": mult,
         "active_weekdays": active_weekdays,
@@ -259,9 +268,12 @@ def _store_points_event_payload(now: Optional[datetime] = None, *, enabled: bool
 
 
 async def _store_points_event_payload_for_db(db, now: Optional[datetime] = None) -> dict:
-    settings = await db.game_settings.find_one({"_id": "main"}, {"_id": 0, "store_points_event_enabled": 1})
+    settings = await db.game_settings.find_one(
+        {"_id": "main"},
+        {"_id": 0, "store_points_event_enabled": 1, "store_points_event_force_until": 1},
+    )
     enabled = True if settings is None or settings.get("store_points_event_enabled") is None else bool(settings.get("store_points_event_enabled"))
-    return _store_points_event_payload(now, enabled=enabled)
+    return _store_points_event_payload(now, enabled=enabled, force_until=(settings or {}).get("store_points_event_force_until"))
 
 
 def _apply_store_points_event_bonus(base_points: int, event: Optional[dict]) -> tuple[int, int, Optional[dict]]:
