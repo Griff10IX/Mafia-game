@@ -121,8 +121,10 @@ SPORTS_BET_MAX_TOTAL_OPEN_STAKE = 25_000_000
 _SPORTS_BET_STAKE_CAP_CEILING = 10**15
 # Placing bets and cancelling open bets both end this many minutes before scheduled start.
 SPORTS_BETTING_CLOSE_BEFORE_START_MINUTES = 10
-# Public board: return enough open events that high-volume Football does not crowd out UFC/Boxing/F1.
-SPORTS_BETTING_PUBLIC_EVENTS_LIMIT = 500
+# Public board/sidebar: keep the visible board focused on the next 45 open events.
+SPORTS_BETTING_PUBLIC_EVENTS_LIMIT = 45
+# Auto-board should not flood the board if cron/admin runs multiple times in the same UTC day.
+SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT = 45
 # Player-submitted requests to add a template to the board (UTC calendar day).
 SPORTS_EVENT_REQUESTS_PER_DAY = 3
 SPORTS_EVENT_REQUEST_MAX_HOURS_AHEAD = 24
@@ -592,10 +594,10 @@ def _sports_auto_board_max() -> int:
     raw = (os.environ.get("SPORTS_AUTO_BOARD_MAX") or "").strip()
     if raw:
         try:
-            return max(1, min(500, int(raw)))
+            return max(1, min(SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT, int(raw)))
         except ValueError:
             pass
-    return 40
+    return SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT
 
 
 # Boxing/MMA: merge across regions so fights with only EU/UK books (e.g. PPV cards) still appear.
@@ -2126,6 +2128,20 @@ async def _count_sports_event_requests_today(user_id: str) -> int:
     )
 
 
+async def _count_auto_board_events_added_today(now: Optional[datetime] = None) -> int:
+    day0 = _utc_day_start(now)
+    day1 = day0 + timedelta(days=1)
+    return await db.sports_events.count_documents(
+        {
+            "auto_board": True,
+            "auto_board_added_at": {
+                "$gte": day0.isoformat(),
+                "$lt": day1.isoformat(),
+            },
+        }
+    )
+
+
 async def _open_board_template_ids() -> set:
     ids: set = set()
     cursor = db.sports_events.find(
@@ -2172,6 +2188,7 @@ async def _create_sports_board_event_from_template(template: dict, *, auto_board
     }
     if auto_board:
         ev["auto_board"] = True
+        ev["auto_board_added_at"] = now.isoformat()
     if template.get("external_event_id") and template.get("external_sport_key"):
         ev["external_event_id"] = template["external_event_id"]
         ev["external_sport_key"] = template["external_sport_key"]
@@ -2182,13 +2199,16 @@ async def _create_sports_board_event_from_template(template: dict, *, auto_board
 async def auto_populate_sports_board(*, refresh_odds: bool = True, max_n: Optional[int] = None) -> dict:
     """Promote Odds-backed templates to open sports_events (priority football + all UFC/Boxing), up to max_n."""
     cap = max_n if max_n is not None else _sports_auto_board_max()
-    cap = max(1, min(500, int(cap)))
+    cap = max(1, min(SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT, int(cap)))
     soccer_keys = _auto_board_soccer_sport_keys()
     if refresh_odds:
         await _refresh_sports_live_cache(force=True)
     on_board = await _open_board_template_ids()
     merged = await _merged_sports_templates_for_admin()
     now = datetime.now(timezone.utc)
+    added_today = await _count_auto_board_events_added_today(now)
+    remaining_today = max(0, SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT - added_today)
+    cap = min(cap, remaining_today)
     candidates = [t for t in merged if _is_auto_board_eligible_template(t, soccer_keys=soccer_keys, now=now)]
     candidates.sort(key=_template_auto_board_sort_key)
     added = 0
@@ -2220,6 +2240,10 @@ async def auto_populate_sports_board(*, refresh_odds: bool = True, max_n: Option
         "skipped_already_on_board": skipped_on_board,
         "candidates": len(candidates),
         "max_n": cap,
+        "daily_limit": SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT,
+        "added_today_before_run": added_today,
+        "remaining_today_before_run": remaining_today,
+        "remaining_today_after_run": max(0, remaining_today - added),
         "refresh_odds": refresh_odds,
         "added_template_ids": added_template_ids,
         "errors": errors[:40],

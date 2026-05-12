@@ -91,18 +91,6 @@ _bodyguards_cache: dict = {}
 _BODYGUARDS_CACHE_TTL_SEC = 10
 _BODYGUARDS_CACHE_MAX_ENTRIES = 5000
 
-# Per-user lock: all hire requests for the same user are serialized so each sees fresh DB state
-_hire_locks: dict = {}
-_hire_locks_meta_lock = asyncio.Lock()
-
-
-async def _hire_lock(user_id: str):
-    async with _hire_locks_meta_lock:
-        if user_id not in _hire_locks:
-            _hire_locks[user_id] = asyncio.Lock()
-        return _hire_locks[user_id]
-
-
 def _invalidate_bodyguards_cache(user_id: str):
     _bodyguards_cache.pop(user_id, None)
 
@@ -494,12 +482,16 @@ async def buy_bodyguard_slot(current_user: dict = Depends(get_current_user)):
 
 
 async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Depends(get_current_user)):
-    is_robot = request.is_robot
-    async with await _hire_lock(current_user["id"]):
-        return await _do_hire_bodyguard(request.slot, is_robot, current_user)
+    return await _do_hire_bodyguard(request.slot, request.is_robot, current_user)
 
 
 async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
+    try:
+        requested_slot = int(slot)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Invalid bodyguard slot")
+    if requested_slot < 1 or requested_slot > 4:
+        raise HTTPException(status_code=400, detail="Invalid bodyguard slot")
     if await db.bodyguards.find_one({"bodyguard_user_id": current_user["id"], "is_robot": False}, {"_id": 1}):
         raise HTTPException(
             status_code=400,
@@ -507,6 +499,39 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
         )
     if not is_robot:
         raise HTTPException(status_code=400, detail="Human bodyguards are temporarily disabled. Use robot bodyguards.")
+    reserve_field = f"bodyguard_hire_reservations.{requested_slot}"
+    reservation_id = str(uuid.uuid4())
+    reserve_result = await db.users.update_one(
+        {
+            "id": current_user["id"],
+            reserve_field: {"$exists": False},
+        },
+        {"$set": {reserve_field: reservation_id}},
+    )
+    if reserve_result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="That bodyguard slot is already being hired")
+    try:
+        return await _do_hire_bodyguard_reserved(
+            requested_slot,
+            is_robot,
+            current_user,
+            reserve_field,
+            reservation_id,
+        )
+    finally:
+        await db.users.update_one(
+            {"id": current_user["id"], reserve_field: reservation_id},
+            {"$unset": {reserve_field: ""}},
+        )
+
+
+async def _do_hire_bodyguard_reserved(
+    slot: int,
+    is_robot: bool,
+    current_user: dict,
+    reserve_field: str,
+    reservation_id: str,
+):
     fresh = await db.users.find_one(
         {"id": current_user["id"]},
         {
@@ -529,8 +554,9 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
         {"_id": 0, "slot_number": 1}
     ).to_list(10)
     occupied = {b["slot_number"] for b in existing_bgs}
-    slot = next((s for s in range(1, 5) if s not in occupied), None)
-    if slot is None:
+    if slot in occupied:
+        raise HTTPException(status_code=400, detail="Slot already occupied")
+    if len(occupied) >= 4:
         raise HTTPException(status_code=400, detail="All bodyguard slots are full")
     unlock_next_slot = slot > slots
     ev = await get_effective_event()
@@ -553,17 +579,18 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
         "bodyguard_lifetime_spent_hires": total_cost,
         "lifetime_points_spent": total_cost,
     }
-    if unlock_next_slot:
-        inc_doc["bodyguard_slots"] = 1
     update_op = {
         "$inc": inc_doc,
         "$set": {
             "bodyguard_inflation_until": window_end.isoformat(),
-            "bodyguard_inflation_level": inflation_level + 1,
         },
+        "$unset": {"bodyguard_robot_loss_hire_allowed_after": ""},
     }
+    if unlock_next_slot:
+        update_op["$max"] = {"bodyguard_slots": slot}
+    update_op["$inc"]["bodyguard_inflation_level"] = 1
     hire_result = await db.users.update_one(
-        {"id": current_user["id"], "points": {"$gte": total_cost}},
+        {"id": current_user["id"], "points": {"$gte": total_cost}, reserve_field: reservation_id},
         update_op,
     )
     if hire_result.modified_count == 0:
