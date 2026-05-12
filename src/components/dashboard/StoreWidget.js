@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { ShoppingBag, ChevronRight, Heart, Crosshair, Zap } from 'lucide-react';
+import { ShoppingBag, ChevronRight, Heart, Crosshair, Zap, Sparkles } from 'lucide-react';
 import styles from '../../styles/noir.module.css';
 
 function formatInt(n) {
@@ -7,11 +7,12 @@ function formatInt(n) {
   return Number.isNaN(num) ? '0' : Math.floor(num).toLocaleString();
 }
 
-export default function StoreWidget({ user }) {
+export default function StoreWidget({ user, storePointsEvent }) {
   const points = Number(user?.points ?? 0);
   const bullets = Number(user?.bullets ?? 0);
   const health = Number(user?.health ?? 100);
   const healthPct = Math.max(0, Math.min(100, Math.round(health)));
+  const saleActive = !!storePointsEvent?.active;
 
   return (
     <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
@@ -20,12 +21,28 @@ export default function StoreWidget({ user }) {
         <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">
           <ShoppingBag size={10} />
           Store
+          {saleActive && (
+            <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border border-emerald-500/40 bg-emerald-500/15 text-[8px] text-emerald-300">
+              <Sparkles size={8} /> Sale
+            </span>
+          )}
         </h2>
         <Link to="/game/store?tab=points" className="text-[9px] font-heading text-primary hover:text-primary/80 flex items-center gap-0.5">
           Browse <ChevronRight size={10} />
         </Link>
       </div>
       <div className="p-2 space-y-1.5">
+        {saleActive && (
+          <Link
+            to="/game/store?tab=points"
+            className="flex items-center justify-between gap-2 rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[9px] font-heading text-emerald-300 hover:bg-emerald-500/15"
+          >
+            <span className="inline-flex items-center gap-1 uppercase tracking-wider">
+              <Sparkles size={9} /> +25% points sale
+            </span>
+            <ChevronRight size={10} />
+          </Link>
+        )}
         <div className="flex items-center justify-between text-[10px] font-heading">
           <span className="text-mutedForeground">Points</span>
           <span className="font-bold text-primary tabular-nums">{formatInt(points)}</span>

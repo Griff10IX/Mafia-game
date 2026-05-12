@@ -8,6 +8,7 @@ const WIDGET_KEY = 'events_active';
 
 export default function EventOrStoreSlot({ user, userId }) {
   const [eventData, setEventData] = useState(null);
+  const [storePointsEvent, setStorePointsEvent] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,9 +33,13 @@ export default function EventOrStoreSlot({ user, userId }) {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    api
+      .get('/payments/store-points-event')
+      .then((res) => setStorePointsEvent(res.data?.event ?? null))
+      .catch(() => setStorePointsEvent(null));
   }, [userId]);
 
   const hasEvent = !loading && eventData?.events_enabled && eventData?.event && eventData?.event?.id !== 'none';
   if (hasEvent) return <ActiveEventWidget />;
-  return <StoreWidget user={user} />;
+  return <StoreWidget user={user} storePointsEvent={storePointsEvent} />;
 }

@@ -265,6 +265,7 @@ export default function Store() {
   const [boozeConfig, setBoozeConfig] = useState(() => storeBoot?.boozeConfig ?? null);
   const [event, setEvent] = useState(() => storeBoot?.event ?? null);
   const [eventsEnabled, setEventsEnabled] = useState(() => !!storeBoot?.eventsEnabled);
+  const [storePointsEvent, setStorePointsEvent] = useState(() => storeBoot?.storePointsEvent ?? null);
   const [customCarName, setCustomCarName] = useState('');
   const [activeTab, setActiveTab] = useState('points');
   const [searchParams, setSearchParams] = useSearchParams();
@@ -410,10 +411,11 @@ export default function Store() {
 
   const fetchData = useCallback(async ({ silent = false } = {}) => {
     try {
-      const [userRes, boozeRes, eventsRes, adminRes, locksRes, pendingRes] = await Promise.all([
+      const [userRes, boozeRes, eventsRes, storePointsEventRes, adminRes, locksRes, pendingRes] = await Promise.all([
         api.get('/auth/me'),
         api.get('/booze-run/config').catch(() => ({ data: null })),
         apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: { event: null, events_enabled: false } })),
+        api.get('/payments/store-points-event').catch(() => ({ data: { event: null } })),
         api.get('/auth/staff-flags').catch(() => ({ data: { is_admin: false } })),
         api.get('/page-locks').catch(() => ({ data: { paths: {} } })),
         api.get('/payments/pending-points').catch(() => ({ data: { pending_points: 0 } })),
@@ -425,6 +427,8 @@ export default function Store() {
       const nextEventsEnabled = !!eventsRes.data?.events_enabled;
       setEvent(nextEvent);
       setEventsEnabled(nextEventsEnabled);
+      const nextStorePointsEvent = storePointsEventRes.data?.event ?? null;
+      setStorePointsEvent(nextStorePointsEvent);
       const nextIsAdmin = !!adminRes.data?.is_admin;
       setIsAdmin(nextIsAdmin);
       const paths = locksRes?.data?.paths ?? {};
@@ -456,6 +460,7 @@ export default function Store() {
         boozeConfig: nextBooze,
         event: nextEvent,
         eventsEnabled: nextEventsEnabled,
+        storePointsEvent: nextStorePointsEvent,
         isAdmin: nextIsAdmin,
         pointsTabLocked: pointsLocked,
         pointsTabLockMessage: pointsLockMsg,
@@ -640,7 +645,7 @@ export default function Store() {
       const origin = `${window.location.origin}/game/store`;
       const body =
         customPurchaseMode === 'points'
-          ? { package_id: CUSTOM_POINTS_PACKAGE, origin_url: origin, custom_points: customQuote.points }
+          ? { package_id: CUSTOM_POINTS_PACKAGE, origin_url: origin, custom_points: customQuote.base_points || customQuote.points }
           : { package_id: CUSTOM_POINTS_PACKAGE, origin_url: origin, custom_gbp: parseFloat(String(customGbpInput).replace(/[^0-9.]/g, '')) || 0 };
       const res = await api.post('/payments/checkout', body);
       window.location.href = res.data.url;
@@ -840,6 +845,16 @@ export default function Store() {
                 <span className="text-violet-400/90">GBP card checkouts earn 50 loot box pieces per £5 charged</span> (credited when your points are).
               </p>
             </div>
+            {storePointsEvent?.active && (
+              <div className="mx-3 mt-3 rounded border border-emerald-500/25 bg-emerald-500/10 px-3 py-2">
+                <p className="text-[10px] font-heading font-bold uppercase tracking-[0.14em] text-emerald-400">
+                  Store event live: +25% points
+                </p>
+                <p className="text-[9px] font-heading text-zinc-400 mt-0.5">
+                  Buy points today and get x0.25 added on top at checkout.
+                </p>
+              </div>
+            )}
             <div className="p-3 space-y-2">
               <div className="flex gap-1">
                 <button
@@ -879,6 +894,9 @@ export default function Store() {
                   {customPurchaseMode === 'points' ? (
                     <>
                       <span className="text-primary font-bold">{Number(customQuote.points).toLocaleString()} pts</span>
+                      {Number(customQuote.bonus_points || 0) > 0 && (
+                        <span className="text-emerald-400/90"> ({Number(customQuote.base_points || 0).toLocaleString()} + {Number(customQuote.bonus_points || 0).toLocaleString()} bonus)</span>
+                      )}
                       {' · '}
                       <span className="text-emerald-400/90">£{Number(customQuote.price_gbp).toFixed(2)}</span>
                     </>
@@ -887,7 +905,10 @@ export default function Store() {
                       Pay <span className="text-emerald-400/90 font-bold">£{Number(customQuote.price_gbp).toFixed(2)}</span>
                       {' → '}
                       <span className="text-primary font-bold">{Number(customQuote.points).toLocaleString()} pts</span>
-                      <span className="block text-[8px] text-mutedForeground mt-0.5">GBP mode charges the shown amount (largest whole points that fit your budget).</span>
+                      {Number(customQuote.bonus_points || 0) > 0 && (
+                        <span className="text-emerald-400/90"> ({Number(customQuote.base_points || 0).toLocaleString()} + {Number(customQuote.bonus_points || 0).toLocaleString()} bonus)</span>
+                      )}
+                      <span className="block text-[8px] text-mutedForeground mt-0.5">GBP mode charges the shown amount (largest whole base points that fit your budget; event bonus is added on top).</span>
                     </>
                   )}
                 </p>

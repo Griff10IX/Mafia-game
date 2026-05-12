@@ -373,6 +373,7 @@ export default function Layout({ children }) {
   const [portalNavTick, setPortalNavTick] = useState(0);
   const [rankingCounts, setRankingCounts] = useState({ crimes: 0, gta: 0, jail: 0 });
   const [sportsBettingEventCount, setSportsBettingEventCount] = useState(0);
+  const [storePointsEventActive, setStorePointsEventActive] = useState(false);
   const [gtaExclusiveInPool, setGtaExclusiveInPool] = useState(false);
   const [ocStatus, setOcStatus] = useState(null);
   const [atWar, setAtWar] = useState(false);
@@ -515,6 +516,16 @@ export default function Layout({ children }) {
           }),
         };
       }
+      if (i.type === 'group' && i.id === 'money') {
+        return {
+          ...i,
+          items: i.items.map((sub) => (
+            sub.path === '/game/store'
+              ? { ...sub, saleBadge: storePointsEventActive }
+              : sub
+          )),
+        };
+      }
       if (i.type === 'group' && i.id === 'casinos') {
         return {
           ...i,
@@ -540,7 +551,7 @@ export default function Layout({ children }) {
       }
       return i;
     });
-  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
+  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, storePointsEventActive, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
 
   useEffect(() => onCooldownChange(setCooldownSeconds), []);
 
@@ -909,9 +920,19 @@ export default function Layout({ children }) {
     }
   };
 
+  const fetchStorePointsEvent = async () => {
+    try {
+      const res = await api.get('/payments/store-points-event');
+      setStorePointsEventActive(!!res.data?.event?.active);
+    } catch {
+      setStorePointsEventActive(false);
+    }
+  };
+
   useEffect(() => { const t = setTimeout(() => { api.get('/objectives').catch(() => {}); }, 500); return () => clearTimeout(t); }, []);
 
   useEffect(() => { fetchFlashNews(); const id = setInterval(fetchFlashNews, 60000); return () => clearInterval(id); }, []); // eslint-disable-line
+  useEffect(() => { fetchStorePointsEvent(); const id = setInterval(fetchStorePointsEvent, 60000); return () => clearInterval(id); }, []); // eslint-disable-line
 
   useEffect(() => {
     const onSameRoute = () => {
@@ -1267,7 +1288,7 @@ export default function Layout({ children }) {
     ...(user?.is_entertainer ? [{ path: '/game/entertainer', icon: Mic2, label: 'Entertainer Hub' }] : []),
     ...(user?.is_help_desk_operator ? [{ path: '/game/help-desk-hub', icon: Headphones, label: 'Help Desk Hub' }] : []),
     { path: '/game/leaderboard', icon: Trophy, label: 'Leaderboard' },
-    { path: '/game/store', icon: ShoppingBag, label: 'Store' },
+    { path: '/game/store', icon: ShoppingBag, label: 'Store', saleBadge: storePointsEventActive },
     { path: '/game-pass', icon: Package, label: 'Game Pass' },
     { path: '/money/quick-trade', icon: ArrowLeftRight, label: 'Quick Trade' },
     { path: '/game/family/list', icon: Building2, label: 'Families' },
@@ -1649,6 +1670,14 @@ export default function Layout({ children }) {
               title="Players online"
             >
               {item.countBadge.toLocaleString()}
+            </span>
+          )}
+          {item.saleBadge && (
+            <span
+              className="inline-flex items-center gap-0.5 bg-emerald-600/20 text-emerald-300 text-[8px] px-1 py-0.5 rounded font-bold border border-emerald-500/35 uppercase shrink-0"
+              title="Store points sale active"
+            >
+              <Sparkles size={8} /> Sale
             </span>
           )}
           {item.badge > 0 && <span className="bg-red-600/20 text-red-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-red-500/30">{item.badge > 9 ? '9+' : item.badge}</span>}
@@ -2617,6 +2646,11 @@ export default function Layout({ children }) {
                         title={isGtaExclusive ? 'Exclusive car in GTA pool!' : undefined}>
                         {isGtaExclusive && <span className="text-violet-400 font-bold shrink-0" aria-hidden>★</span>}
                         <span className="leading-tight">{sub.label}</span>
+                        {sub.saleBadge && (
+                          <span className="shrink-0 rounded border border-emerald-500/40 bg-emerald-600/25 px-1 py-0.5 text-[8px] font-bold text-emerald-200">
+                            Sale
+                          </span>
+                        )}
                         {typeof sub.onlineCountBadge === 'number' && (
                           <span className="shrink-0 min-w-[16px] h-[16px] rounded px-0.5 bg-emerald-600/25 text-emerald-400 text-[9px] font-bold border border-emerald-500/40 flex items-center justify-center tabular-nums">
                             {sub.onlineCountBadge.toLocaleString()}
@@ -2674,6 +2708,7 @@ export default function Layout({ children }) {
                     });
                     const showInboxBadge = item.items.some((sub) => sub.path === '/social/inbox') && unreadCount > 0;
                     const showGtaExclusiveStar = item.id === 'rank' && gtaExclusiveInPool;
+                    const showStoreSale = item.items.some((sub) => sub.saleBadge);
                     return (
                       <button key={item.id} type="button" onClick={(e) => { e.stopPropagation(); setMobileBottomMenuOpen(isOpen ? null : item.id); }}
                         className={boxBase} style={isOpen || isActive ? boxActive : boxInactive}
@@ -2682,6 +2717,7 @@ export default function Layout({ children }) {
                           <Icon size={13} strokeWidth={2} />
                           {showInboxBadge && <span className="absolute -top-0.5 -right-1 min-w-[10px] h-[10px] rounded-full bg-red-600 text-[8px] font-bold text-white flex items-center justify-center px-0.5">{unreadCount > 9 ? '9+' : unreadCount}</span>}
                           {showGtaExclusiveStar && <span className="absolute -top-0.5 -left-1 text-violet-400 text-[10px] font-bold" aria-hidden title="Exclusive car in GTA pool">★</span>}
+                          {showStoreSale && <span className="absolute -top-1 -right-1 text-emerald-300 text-[10px] font-bold" aria-hidden title="Store points sale active">★</span>}
                         </span>
                         <span className="text-[7px] font-heading uppercase tracking-wider truncate max-w-[44px] leading-tight">{item.mobileShortLabel ?? item.label}</span>
                       </button>

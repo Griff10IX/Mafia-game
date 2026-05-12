@@ -2,6 +2,7 @@
 import os
 import asyncio
 import logging
+import hashlib
 from datetime import datetime, timezone, timedelta
 
 from typing import Any, Dict, Optional, Tuple
@@ -31,6 +32,7 @@ logger = logging.getLogger(__name__)
 # GBP store points (Stripe): bonus loot box pieces — 50 pieces per whole £5 charged (currency must be GBP).
 STORE_POINTS_LOOT_GBP_MINOR_PER_BLOCK = 500
 STORE_POINTS_LOOT_PIECES_PER_BLOCK = 50
+STORE_POINTS_EVENT_BONUS_RATE = 0.25
 
 RANK_XP_PASS_PACKAGE_ID = "rank_xp_pass_499"
 # No new Game Pass checkout while an active pass is within this many days of rank_xp_pass_token_expires_at.
@@ -226,6 +228,51 @@ def loot_box_pieces_for_gbp_stripe_minor(amount_minor: Optional[int], currency: 
     return (m // STORE_POINTS_LOOT_GBP_MINOR_PER_BLOCK) * STORE_POINTS_LOOT_PIECES_PER_BLOCK
 
 
+def _store_points_event_payload(now: Optional[datetime] = None, *, enabled: bool = True) -> dict:
+    """Deterministic weekly random store points event: active 2 or 3 UTC days per week."""
+    n = now or datetime.now(timezone.utc)
+    if n.tzinfo is None:
+        n = n.replace(tzinfo=timezone.utc)
+    n = n.astimezone(timezone.utc)
+    iso = n.isocalendar()
+    week_key = f"{iso.year}-W{iso.week:02d}"
+    seed = hashlib.sha256(f"store-points-event:{week_key}".encode("utf-8")).digest()
+    active_days_count = 2 + (seed[0] % 2)
+
+    def day_score(day: int) -> str:
+        return hashlib.sha256(f"{week_key}:{day}".encode("utf-8")).hexdigest()
+
+    active_weekdays = sorted(sorted(range(7), key=day_score)[:active_days_count])
+    active = bool(enabled) and n.weekday() in active_weekdays
+    mult = 1.0 + STORE_POINTS_EVENT_BONUS_RATE
+    return {
+        "id": f"store_points_bonus_{week_key}",
+        "name": "Store Points Bonus",
+        "message": "Store point purchases get +25% extra points today.",
+        "enabled": bool(enabled),
+        "active": active,
+        "bonus_rate": STORE_POINTS_EVENT_BONUS_RATE,
+        "multiplier": mult,
+        "active_weekdays": active_weekdays,
+        "week_key": week_key,
+    }
+
+
+async def _store_points_event_payload_for_db(db, now: Optional[datetime] = None) -> dict:
+    settings = await db.game_settings.find_one({"_id": "main"}, {"_id": 0, "store_points_event_enabled": 1})
+    enabled = True if settings is None or settings.get("store_points_event_enabled") is None else bool(settings.get("store_points_event_enabled"))
+    return _store_points_event_payload(now, enabled=enabled)
+
+
+def _apply_store_points_event_bonus(base_points: int, event: Optional[dict]) -> tuple[int, int, Optional[dict]]:
+    base = max(0, int(base_points or 0))
+    ev = event or _store_points_event_payload(enabled=False)
+    if base <= 0 or not ev.get("active"):
+        return base, 0, None
+    bonus = int(base * STORE_POINTS_EVENT_BONUS_RATE)
+    return base + bonus, bonus, ev
+
+
 def _minor_and_currency_for_store_points_loot_bonus(
     txn: Optional[Dict[str, Any]],
     package_id: str,
@@ -283,6 +330,10 @@ def _resolve_points_for_stripe_payment(
         if pts <= 0:
             return 0, "invalid_points"
         return pts, None
+    if package_id != RANK_XP_PASS_PACKAGE_ID and txn:
+        pts = int(txn.get("points") or 0)
+        if pts > 0:
+            return pts, None
     pkg = POINT_PACKAGES.get(package_id) or {}
     pts = int(pkg.get("points") or 0)
     return pts, None
@@ -1037,6 +1088,9 @@ def register(router):
         now = datetime.now(timezone.utc)
         package_id = (request.package_id or "").strip()
         points = 0
+        base_points = 0
+        bonus_points = 0
+        store_points_event = await _store_points_event_payload_for_db(db, now)
         price_gbp = 0.0
         expected_amount_minor: Optional[int] = None
 
@@ -1050,16 +1104,18 @@ def register(router):
                 msg = validate_custom_points_input(request.custom_points)
                 if msg:
                     raise HTTPException(status_code=400, detail=msg)
-                points = int(request.custom_points)
-                price_gbp = float(price_gbp_for_points(points))
+                base_points = int(request.custom_points)
+                price_gbp = float(price_gbp_for_points(base_points))
             else:
                 msg = validate_custom_gbp_budget(request.custom_gbp)
                 if msg:
                     raise HTTPException(status_code=400, detail=msg)
-                points, price_gbp = points_and_price_for_gbp_budget(float(request.custom_gbp))
+                base_points, price_gbp = points_and_price_for_gbp_budget(float(request.custom_gbp))
                 price_gbp = float(price_gbp)
-                if points <= 0:
+                if base_points <= 0:
                     raise HTTPException(status_code=400, detail="No points for that budget")
+            points, bonus_points, active_store_points_event = _apply_store_points_event_bonus(base_points, store_points_event)
+            store_points_event = active_store_points_event or store_points_event
             expected_amount_minor = gbp_to_minor_pence(price_gbp)
         else:
             if request.custom_points is not None or request.custom_gbp is not None:
@@ -1070,7 +1126,11 @@ def register(router):
             if package_id not in POINT_PACKAGES:
                 raise HTTPException(status_code=400, detail="Invalid package")
             package = POINT_PACKAGES[package_id]
-            points = int(package["points"])
+            base_points = int(package["points"])
+            points = base_points
+            if package_id != RANK_XP_PASS_PACKAGE_ID:
+                points, bonus_points, active_store_points_event = _apply_store_points_event_bonus(base_points, store_points_event)
+                store_points_event = active_store_points_event or store_points_event
             price_gbp = float(package["price_gbp"])
 
         unit_amount_minor = gbp_to_minor_pence(price_gbp)
@@ -1116,6 +1176,8 @@ def register(router):
             import stripe
             stripe.api_key = api_key
             product_name = f"{points} points"
+            if bonus_points > 0:
+                product_name = f"{points} points (includes +{bonus_points} bonus)"
             if package_id == RANK_XP_PASS_PACKAGE_ID:
                 product_name = "Game Pass"
             md = {
@@ -1123,6 +1185,10 @@ def register(router):
                 "package_id": package_id,
                 "points": str(points),
             }
+            if bonus_points > 0:
+                md["base_points"] = str(base_points)
+                md["bonus_points"] = str(bonus_points)
+                md["store_points_event_id"] = store_points_event.get("id") if store_points_event else ""
             if package_id == CUSTOM_POINTS_PACKAGE_ID and expected_amount_minor is not None:
                 md["pricing_version"] = "1"
                 md["expected_amount_minor"] = str(int(expected_amount_minor))
@@ -1133,7 +1199,7 @@ def register(router):
                         "currency": "gbp",
                         "unit_amount": int(unit_amount_minor),
                         "product_data": {
-                        "name": product_name,
+                            "name": product_name,
                             "metadata": {"package_id": package_id},
                         },
                     },
@@ -1161,6 +1227,11 @@ def register(router):
             "payment_status": "pending",
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
+        if base_points and base_points != points:
+            txn_doc["base_points"] = base_points
+        if bonus_points:
+            txn_doc["bonus_points"] = bonus_points
+            txn_doc["store_points_event"] = store_points_event
         if expected_amount_minor is not None:
             txn_doc["expected_amount_minor"] = int(expected_amount_minor)
         await db.payment_transactions.insert_one(txn_doc)
@@ -1180,6 +1251,11 @@ def register(router):
                 logger.exception("checkout: failed to touch session last_used_at user=%s", current_user.get("id"))
 
         return {"url": session.url}
+
+    @router.get("/payments/store-points-event", dependencies=_store_rl_u)
+    async def payments_store_points_event(current_user: dict = Depends(get_current_user)):
+        _ = current_user
+        return {"event": await _store_points_event_payload_for_db(db)}
 
     @router.get("/payments/custom-quote", dependencies=_store_rl_u)
     async def payments_custom_quote(
@@ -1201,26 +1277,36 @@ def register(router):
             p = int(points)
             pr = price_gbp_for_points(p)
             m = gbp_to_minor_pence(pr)
+            store_points_event = await _store_points_event_payload_for_db(db)
+            credited_points, bonus_points, active_store_points_event = _apply_store_points_event_bonus(p, store_points_event)
             return {
                 "mode": "points",
-                "points": p,
+                "base_points": p,
+                "points": credited_points,
+                "bonus_points": bonus_points,
                 "price_gbp": round(float(pr), 2),
                 "expected_amount_minor": m,
                 "min_points": CUSTOM_POINTS_MIN,
                 "max_points": CUSTOM_POINTS_MAX,
+                "store_points_event": active_store_points_event,
             }
         msg = validate_custom_gbp_budget(float(gbp))
         if msg:
             raise HTTPException(status_code=400, detail=msg)
         pts, pr = points_and_price_for_gbp_budget(float(gbp))
         m = gbp_to_minor_pence(pr)
+        store_points_event = await _store_points_event_payload_for_db(db)
+        credited_points, bonus_points, active_store_points_event = _apply_store_points_event_bonus(pts, store_points_event)
         return {
             "mode": "gbp",
-            "points": pts,
+            "base_points": pts,
+            "points": credited_points,
+            "bonus_points": bonus_points,
             "price_gbp": round(float(pr), 2),
             "expected_amount_minor": m,
             "min_points": CUSTOM_POINTS_MIN,
             "max_points": CUSTOM_POINTS_MAX,
+            "store_points_event": active_store_points_event,
         }
 
     @router.post("/payments/mark-checkout-cancelled/{session_id}")

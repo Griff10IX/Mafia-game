@@ -234,6 +234,7 @@ class AdminSettingsUpdate(BaseModel):
     preorder_points_release_date: Optional[str] = None  # ISO datetime - points held until this date
     store_points_auto_credit: Optional[bool] = None  # False = staff credits store points manually after payment
     store_points_manual_credit_eta: Optional[str] = None  # ISO datetime shown to users (informational)
+    store_points_event_enabled: Optional[bool] = None  # Random +25% store points sale event toggle
     casino_global_max_bet: Optional[int] = None  # Max bet cap for all casinos (default 1B)
     casino_buyback_max_points: Optional[int] = None  # Max points for buy-back reward (default 15000)
     mp_poker_max_blind: Optional[int] = None  # Max MP poker small blind cap (default 2.5M)
@@ -7175,6 +7176,9 @@ def register(router):
         if store_points_auto_credit is None:
             store_points_auto_credit = True
         store_points_manual_credit_eta = main_doc.get("store_points_manual_credit_eta") if main_doc else None
+        store_points_event_enabled = main_doc.get("store_points_event_enabled") if main_doc else None
+        if store_points_event_enabled is None:
+            store_points_event_enabled = True
         casino_global_max_bet = int(main_doc.get("casino_global_max_bet") or 1_000_000_000) if main_doc else 1_000_000_000
         casino_buyback_max_points = int(main_doc.get("casino_buyback_max_points") or 15_000) if main_doc else 15_000
         mp_poker_max_blind = int(main_doc.get("mp_poker_max_blind") or 2_500_000) if main_doc else 2_500_000
@@ -7240,6 +7244,7 @@ def register(router):
             "preorder_points_release_date": preorder_points_release_date,
             "store_points_auto_credit": bool(store_points_auto_credit),
             "store_points_manual_credit_eta": store_points_manual_credit_eta,
+            "store_points_event_enabled": bool(store_points_event_enabled),
             "casino_global_max_bet": casino_global_max_bet,
             "casino_buyback_max_points": casino_buyback_max_points,
             "mp_poker_max_blind": mp_poker_max_blind,
@@ -7596,6 +7601,12 @@ def register(router):
                 {"$set": {"store_points_manual_credit_eta": eta}},
                 upsert=True,
             )
+        if body.store_points_event_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"store_points_event_enabled": bool(body.store_points_event_enabled)}},
+                upsert=True,
+            )
         if body.casino_global_max_bet is not None:
             await db.game_settings.update_one(
                 {"_id": "main"},
@@ -7733,6 +7744,9 @@ def register(router):
         if store_points_auto_credit is None:
             store_points_auto_credit = True
         store_points_manual_credit_eta = main_doc.get("store_points_manual_credit_eta") if main_doc else None
+        store_points_event_enabled = main_doc.get("store_points_event_enabled") if main_doc else None
+        if store_points_event_enabled is None:
+            store_points_event_enabled = True
         casino_global_max_bet = int(main_doc.get("casino_global_max_bet") or 1_000_000_000) if main_doc else 1_000_000_000
         casino_buyback_max_points = int(main_doc.get("casino_buyback_max_points") or 15_000) if main_doc else 15_000
         mp_poker_max_blind = int(main_doc.get("mp_poker_max_blind") or 2_500_000) if main_doc else 2_500_000
@@ -7792,6 +7806,7 @@ def register(router):
             "preorder_points_release_date": preorder_points_release_date,
             "store_points_auto_credit": bool(store_points_auto_credit),
             "store_points_manual_credit_eta": store_points_manual_credit_eta,
+            "store_points_event_enabled": bool(store_points_event_enabled),
             "casino_global_max_bet": casino_global_max_bet,
             "casino_buyback_max_points": casino_buyback_max_points,
             "mp_poker_max_blind": mp_poker_max_blind,

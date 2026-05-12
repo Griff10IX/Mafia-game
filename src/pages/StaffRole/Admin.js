@@ -1325,6 +1325,7 @@ export default function Admin() {
   const [preorderReleaseDate, setPreorderReleaseDate] = useState('');
   const [storePointsAutoCredit, setStorePointsAutoCredit] = useState(true);
   const [storePointsManualCreditEta, setStorePointsManualCreditEta] = useState('');
+  const [storePointsEventEnabled, setStorePointsEventEnabled] = useState(true);
   const [launchSettingsSaving, setLaunchSettingsSaving] = useState(false);
   const [preorderReleaseLoading, setPreorderReleaseLoading] = useState(false);
   const [manualCreditLoading, setManualCreditLoading] = useState(null);
@@ -2209,6 +2210,7 @@ export default function Admin() {
       setPreorderReleaseDate(res.data?.preorder_points_release_date || '');
       setStorePointsAutoCredit(res.data?.store_points_auto_credit !== false);
       setStorePointsManualCreditEta(res.data?.store_points_manual_credit_eta || '');
+      setStorePointsEventEnabled(res.data?.store_points_event_enabled !== false);
       setCasinoGlobalMaxBet(res.data?.casino_global_max_bet || 1000000000);
       setCasinoBuybackMaxPoints(res.data?.casino_buyback_max_points || 15000);
       setMpPokerMaxBlind(res.data?.mp_poker_max_blind || 2500000);
@@ -3087,6 +3089,21 @@ export default function Admin() {
       toast.success('Manual credit time cleared');
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Failed to clear');
+    } finally {
+      setLaunchSettingsSaving(false);
+    }
+  };
+
+  const handleSaveStorePointsEvent = async () => {
+    setLaunchSettingsSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', {
+        store_points_event_enabled: storePointsEventEnabled,
+      });
+      setStorePointsEventEnabled(res.data?.store_points_event_enabled !== false);
+      toast.success('Store sale event settings saved');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to save store sale event');
     } finally {
       setLaunchSettingsSaving(false);
     }
@@ -10955,6 +10972,42 @@ export default function Admin() {
                   className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-sky-500/20 text-sky-300 border border-sky-500/40 hover:bg-sky-500/30 disabled:opacity-50"
                 >
                   {launchSettingsSaving ? 'Saving...' : 'Save store crediting'}
+                </button>
+              </div>
+
+              <div className="h-px bg-zinc-700/30" />
+
+              <div className="space-y-3">
+                <p className="text-[10px] font-heading font-bold text-emerald-400 uppercase tracking-wider">Store Points Sale Event</p>
+                <p className="text-[10px] text-mutedForeground">
+                  Randomly comes online 2-3 days per UTC week. When active, card point purchases get +25% extra points and players see a Sale badge on the Store menu.
+                </p>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStorePointsEventEnabled(!storePointsEventEnabled)}
+                    disabled={launchSettingsSaving}
+                    className={`shrink-0 px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded border disabled:opacity-50 ${
+                      storePointsEventEnabled
+                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/25'
+                        : 'bg-zinc-700/30 text-zinc-400 border-zinc-600/60 hover:bg-zinc-700/50'
+                    }`}
+                  >
+                    {storePointsEventEnabled ? 'Sale event: enabled' : 'Sale event: disabled'}
+                  </button>
+                  <p className="text-[10px] text-mutedForeground flex-1">
+                    {storePointsEventEnabled
+                      ? 'The weekly random sale schedule can activate automatically.'
+                      : 'The sale schedule is paused and no bonus points will be added.'}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleSaveStorePointsEvent}
+                  disabled={launchSettingsSaving}
+                  className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/30 disabled:opacity-50"
+                >
+                  {launchSettingsSaving ? 'Saving...' : 'Save sale event'}
                 </button>
               </div>
 
