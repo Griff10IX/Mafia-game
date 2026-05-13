@@ -50,6 +50,8 @@ from utils.family_perks import (
     FAMILY_PERK_RACKET_BONUS_PERCENT,
     FAMILY_PERK_BOOZE_STEP_AMOUNT,
     FAMILY_PERK_BOOZE_BONUS_CAP,
+    FAMILY_PERK_COST_CREW_OC_AUTO_COMMIT,
+    FAMILY_PERK_CREW_OC_AUTO_COMMIT_DAYS,
     family_perk_modifiers,
 )
 from utils.civilian_protection import maybe_revoke_civilian_protection
@@ -3170,6 +3172,13 @@ async def families_perks_purchase(request: FamilyPerksPurchaseRequest, current_u
         if new_perks.get("crew_oc"):
             raise HTTPException(status_code=400, detail="This perk is already active this month")
         new_perks["crew_oc"] = {"valid_until": valid_iso, "hours_off": FAMILY_PERK_CREW_OC_HOURS_OFF}
+    elif perk_id == "crew_oc_auto_commit":
+        cost = FAMILY_PERK_COST_CREW_OC_AUTO_COMMIT
+        if new_perks.get("crew_oc_auto_commit"):
+            raise HTTPException(status_code=400, detail="This perk is already active")
+        vu = (now + timedelta(days=FAMILY_PERK_CREW_OC_AUTO_COMMIT_DAYS)).isoformat()
+        new_perks["crew_oc_auto_commit"] = {"valid_until": vu}
+        valid_iso = vu
     elif perk_id == "melt":
         cost = FAMILY_PERK_COST_MELT
         if new_perks.get("melt"):
@@ -3225,6 +3234,9 @@ async def families_perks_purchase(request: FamilyPerksPurchaseRequest, current_u
     except Exception:
         await db.users.update_one({"id": boss_id}, {"$inc": {"points": cost}})
         raise
+
+    if perk_id == "crew_oc_auto_commit":
+        await schedule_crew_oc_auto_commit_for_family(family_id)
 
     pts_after = int(boss_after.get("points") or 0)
     await log_points_event(
@@ -3563,6 +3575,9 @@ CREW_OC_AUTO_APPLY_MAX_USERS_PER_TICK = 40
 CREW_OC_AUTO_APPLY_MAX_FAMILIES_PER_USER = 25
 CREW_OC_AUTO_APPLY_MAX_APPLIES_PER_TICK = 40
 
+CREW_OC_AUTO_COMMIT_DELAY_MINUTES = 10
+CREW_OC_AUTO_COMMIT_MAX_FAMILIES_PER_TICK = 25
+
 
 def _crew_oc_parse_dt_utc(val) -> Optional[datetime]:
     if not val:
@@ -3587,6 +3602,43 @@ def _crew_oc_family_is_auto_apply_eligible(fam_doc: dict, now_utc: datetime) -> 
         return True
     pre = cd - timedelta(minutes=CREW_OC_AUTO_APPLY_PRE_AVAILABLE_MINUTES)
     return now_utc >= pre
+
+
+async def schedule_crew_oc_auto_commit_for_family(family_id: str) -> None:
+    """When family perk ``crew_oc_auto_commit`` is active and a Crew OC forum topic exists, set due time for auto-commit tick."""
+    fid = (family_id or "").strip()
+    if not fid:
+        return
+    now = datetime.now(timezone.utc)
+    fam = await db.families.find_one(
+        {"id": fid},
+        {"_id": 0, "family_perks": 1, "crew_oc_forum_topic_id": 1, "crew_oc_cooldown_until": 1},
+    )
+    if not fam:
+        return
+    unset_sched = {"$unset": {"crew_oc_auto_commit_due_at": "", "crew_oc_auto_commit_topic_id": ""}}
+    perks = clean_family_perks(fam.get("family_perks"), now)
+    if not perks.get("crew_oc_auto_commit"):
+        await db.families.update_one({"id": fid}, unset_sched)
+        return
+    tid = fam.get("crew_oc_forum_topic_id")
+    if not tid:
+        await db.families.update_one({"id": fid}, unset_sched)
+        return
+    topic = await db.forum_topics.find_one({"id": tid}, {"_id": 0, "created_at": 1})
+    if not topic:
+        await db.families.update_one({"id": fid}, unset_sched)
+        return
+    t0 = _crew_oc_parse_dt_utc(topic.get("created_at")) or now
+    base_due = t0 + timedelta(minutes=CREW_OC_AUTO_COMMIT_DELAY_MINUTES)
+    cd = _crew_oc_parse_dt_utc(fam.get("crew_oc_cooldown_until"))
+    due = max(base_due, cd) if cd and cd > base_due else base_due
+    if due < now:
+        due = now
+    await db.families.update_one(
+        {"id": fid},
+        {"$set": {"crew_oc_auto_commit_due_at": due.isoformat(), "crew_oc_auto_commit_topic_id": tid}},
+    )
 
 
 async def _crew_oc_apply_user_to_family(
@@ -3749,6 +3801,84 @@ async def families_cron_crew_oc_auto_apply(_: None = Depends(verify_cron_secret_
     return await run_crew_oc_auto_apply_tick_once(db)
 
 
+async def run_crew_oc_auto_commit_tick_once(db) -> Dict[str, Any]:
+    """Families with due ``crew_oc_auto_commit_due_at``: commit OC using Boss as actor (store timer on Boss)."""
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    cursor = db.families.find(
+        {"crew_oc_auto_commit_due_at": {"$lte": now_iso}},
+        {"_id": 0, "id": 1},
+    ).sort("crew_oc_auto_commit_due_at", 1).limit(CREW_OC_AUTO_COMMIT_MAX_FAMILIES_PER_TICK)
+    rows = await cursor.to_list(CREW_OC_AUTO_COMMIT_MAX_FAMILIES_PER_TICK)
+    committed = 0
+    for row in rows:
+        fid = row.get("id")
+        if not fid:
+            continue
+        try:
+            if await _family_in_active_war(fid):
+                continue
+            fam = await db.families.find_one(
+                {"id": fid},
+                {"_id": 0, "boss_id": 1, "family_perks": 1, "crew_oc_forum_topic_id": 1, "crew_oc_auto_commit_topic_id": 1},
+            )
+            if not fam:
+                await db.families.update_one({"id": fid}, {"$unset": {"crew_oc_auto_commit_due_at": "", "crew_oc_auto_commit_topic_id": ""}})
+                continue
+            perks = clean_family_perks(fam.get("family_perks"), now)
+            if not perks.get("crew_oc_auto_commit"):
+                await db.families.update_one({"id": fid}, {"$unset": {"crew_oc_auto_commit_due_at": "", "crew_oc_auto_commit_topic_id": ""}})
+                continue
+            if fam.get("crew_oc_auto_commit_topic_id") != fam.get("crew_oc_forum_topic_id"):
+                await db.families.update_one({"id": fid}, {"$unset": {"crew_oc_auto_commit_due_at": "", "crew_oc_auto_commit_topic_id": ""}})
+                continue
+            boss_id = _uid_str(fam.get("boss_id"))
+            if not boss_id:
+                logger.warning("crew_oc_auto_commit: family %s has no boss_id", fid)
+                await db.families.update_one({"id": fid}, {"$unset": {"crew_oc_auto_commit_due_at": "", "crew_oc_auto_commit_topic_id": ""}})
+                continue
+            boss = await db.users.find_one(
+                {"id": boss_id},
+                {"_id": 0, "id": 1, "username": 1, "crew_oc_timer_reduced": 1, "is_dead": 1},
+            )
+            if not boss or boss.get("is_dead"):
+                logger.warning("crew_oc_auto_commit: boss missing or dead family=%s boss_id=%s", fid, boss_id)
+                await db.families.update_one({"id": fid}, {"$unset": {"crew_oc_auto_commit_due_at": "", "crew_oc_auto_commit_topic_id": ""}})
+                continue
+            res = await _execute_crew_oc_commit(fid, boss, meta_extra={"crew_oc_auto_commit": True})
+            if res.get("ok"):
+                committed += 1
+            else:
+                await db.families.update_one({"id": fid}, {"$unset": {"crew_oc_auto_commit_due_at": "", "crew_oc_auto_commit_topic_id": ""}})
+                detail = res.get("detail") or res.get("reason") or "commit failed"
+                await send_notification(
+                    boss_id,
+                    "Crew OC auto-commit skipped",
+                    f"Scheduled automatic OC commit did not run: {detail}. Commit manually from Families → Crew OC when ready.",
+                    "system",
+                    category="crew_oc",
+                )
+        except Exception:
+            logger.warning("crew_oc_auto_commit tick family=%s", fid, exc_info=True)
+        await asyncio.sleep(0)
+    return {"ok": True, "families_scanned": len(rows), "committed": committed}
+
+
+async def run_crew_oc_auto_commit_ticker():
+    """Background loop (~60s + jitter). Prefer cron-only in multi-worker (CREW_OC_AUTO_COMMIT_USE_CRON=1)."""
+    while True:
+        try:
+            await run_crew_oc_auto_commit_tick_once(db)
+        except Exception:
+            logger.exception("crew_oc_auto_commit ticker tick failed")
+        await asyncio.sleep(60 + _rng.random() * 15)
+
+
+async def families_cron_crew_oc_auto_commit(_: None = Depends(verify_cron_secret_families)):
+    """One bounded Crew OC auto-commit pass. Schedule ~60s when CREW_OC_AUTO_COMMIT_USE_CRON=1. Header: X-Cron-Secret."""
+    return await run_crew_oc_auto_commit_tick_once(db)
+
+
 async def families_crew_oc_advertise(current_user: dict = Depends(get_current_user)):
     if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
         raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can advertise Crew OC")
@@ -3793,6 +3923,7 @@ async def families_crew_oc_advertise(current_user: dict = Depends(get_current_us
     await db.forum_topics.insert_one(doc)
     await db.families.update_one({"id": family_id}, {"$set": {"crew_oc_forum_topic_id": topic_id}})
     await _prune_forum_topics_for_category("crew_oc")
+    await schedule_crew_oc_auto_commit_for_family(family_id)
     _invalidate_my_cache(current_user["id"])
     return {"message": "Crew OC topic created.", "topic_id": topic_id, "title": title}
 
@@ -3950,15 +4081,22 @@ async def families_crew_oc_kick(application_id: str, current_user: dict = Depend
     return {"message": "Crew member kicked." + (f" ${refunded:,} refunded." if refunded > 0 else " (Treasury insufficient for refund)" if amount_paid > 0 else "")}
 
 
-async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)):
-    if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
-        raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can commit Crew OC")
-    family_id = current_user.get("family_id")
-    if not family_id:
-        raise HTTPException(status_code=400, detail="Not in a family")
-    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "name": 1, "tag": 1, "treasury": 1, "crew_oc_cooldown_until": 1, "crew_oc_forum_topic_id": 1})
+async def _execute_crew_oc_commit(
+    family_id: str,
+    actor_user_doc: dict,
+    *,
+    meta_extra: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Run Crew OC commit rewards and cooldown. ``actor_user_doc`` is used for vault log and store timer (Boss doc for auto-commit)."""
+    aid = actor_user_doc.get("id")
+    if not (family_id and aid):
+        return {"ok": False, "reason": "bad_args", "detail": "Missing family or actor"}
+    fam = await db.families.find_one(
+        {"id": family_id},
+        {"_id": 0, "name": 1, "tag": 1, "treasury": 1, "crew_oc_cooldown_until": 1, "crew_oc_forum_topic_id": 1},
+    )
     if not fam:
-        raise HTTPException(status_code=404, detail="Family not found")
+        return {"ok": False, "reason": "not_found", "detail": "Family not found"}
     now = datetime.now(timezone.utc)
     cooldown_until = fam.get("crew_oc_cooldown_until")
     if cooldown_until:
@@ -3966,12 +4104,10 @@ async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)
             until = datetime.fromisoformat(str(cooldown_until).replace("Z", "+00:00"))
             if until > now:
                 secs = int((until - now).total_seconds())
-                raise HTTPException(status_code=400, detail=f"Crew OC on cooldown. Try again in {secs}s")
-        except HTTPException:
-            raise
+                return {"ok": False, "reason": "cooldown", "detail": f"Crew OC on cooldown. Try again in {secs}s"}
         except Exception:
             pass
-    has_timer = bool(current_user.get("crew_oc_timer_reduced", False))
+    has_timer = bool(actor_user_doc.get("crew_oc_timer_reduced", False))
     cooldown_hours = CREW_OC_COOLDOWN_HOURS_REDUCED if has_timer else CREW_OC_COOLDOWN_HOURS
     mods = await family_perk_modifiers(db, family_id)
     oc_off = int(mods.get("crew_oc_hours_off") or 0)
@@ -3986,7 +4122,7 @@ async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)
     living = await db.users.find({"id": {"$in": roster_ids}, "is_dead": {"$ne": True}}, {"_id": 0, "id": 1, "rank_points": 1, "username": 1, "prestige_rank_multiplier": 1}).to_list(100)
     living_ids = [u["id"] for u in living]
     if not living_ids:
-        raise HTTPException(status_code=400, detail="No living crew members")
+        return {"ok": False, "reason": "no_crew", "detail": "No living crew members"}
     fam_name = (fam.get("name") or fam.get("tag") or "Crew").strip() or "Crew"
     for u in living:
         uid = u["id"]
@@ -4017,22 +4153,62 @@ async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)
             "reward",
             category="crew_oc",
         )
-    await db.families.update_one({"id": family_id}, {"$inc": {"treasury": CREW_OC_TREASURY_LUMP}, "$set": {"crew_oc_cooldown_until": new_cooldown_until.isoformat()}, "$unset": {"crew_oc_forum_topic_id": ""}})
+    await db.families.update_one(
+        {"id": family_id},
+        {
+            "$inc": {"treasury": CREW_OC_TREASURY_LUMP},
+            "$set": {"crew_oc_cooldown_until": new_cooldown_until.isoformat()},
+            "$unset": {
+                "crew_oc_forum_topic_id": "",
+                "crew_oc_auto_commit_due_at": "",
+                "crew_oc_auto_commit_topic_id": "",
+            },
+        },
+    )
+    meta = {"crew_oc_cooldown_until": new_cooldown_until.isoformat(), "cooldown_hours": cooldown_hours}
+    if meta_extra:
+        meta.update(meta_extra)
     await log_family_vault_tx(
         db,
         family_id,
         "crew_oc_commit",
-        current_user["id"],
-        current_user.get("username") or "?",
+        aid,
+        (actor_user_doc.get("username") or "?").strip() or "?",
         cash_delta=CREW_OC_TREASURY_LUMP,
-        meta={"crew_oc_cooldown_until": new_cooldown_until.isoformat(), "cooldown_hours": cooldown_hours},
+        meta=meta,
     )
     await db.family_crew_oc_applications.delete_many({"family_id": family_id})
     topic_id = fam.get("crew_oc_forum_topic_id")
     if topic_id:
         await db.forum_topics.update_one({"id": topic_id}, {"$set": {"is_locked": True}})
-    _invalidate_my_cache(current_user["id"])
-    return {"message": "Crew OC committed. All crew rewarded.", "crew_oc_cooldown_until": new_cooldown_until.isoformat(), "cooldown_hours": cooldown_hours}
+    _invalidate_my_cache(aid)
+    return {
+        "ok": True,
+        "crew_oc_cooldown_until": new_cooldown_until.isoformat(),
+        "cooldown_hours": cooldown_hours,
+    }
+
+
+async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)):
+    if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
+        raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can commit Crew OC")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    await db.families.update_one(
+        {"id": family_id},
+        {"$unset": {"crew_oc_auto_commit_due_at": "", "crew_oc_auto_commit_topic_id": ""}},
+    )
+    res = await _execute_crew_oc_commit(family_id, current_user)
+    if not res.get("ok"):
+        d = res.get("detail") or res.get("reason") or "Could not commit Crew OC"
+        code = 404 if res.get("reason") == "not_found" else 400
+        raise HTTPException(status_code=code, detail=d)
+    return {
+        "message": "Crew OC committed. All crew rewarded.",
+        "crew_oc_cooldown_until": res["crew_oc_cooldown_until"],
+        "cooldown_hours": res["cooldown_hours"],
+    }
 
 
 async def families_racket_collect(racket_id: str, current_user: dict = Depends(get_current_user)):
@@ -5067,4 +5243,5 @@ def register(router):
     router.add_api_route("/families/head-of-state/relinquish", relinquish_head_of_state, methods=["POST"])
     router.add_api_route("/families/cron/treasury-bullets-hourly", families_cron_treasury_bullets_hourly, methods=["POST"])
     router.add_api_route("/families/cron/crew-oc-auto-apply", families_cron_crew_oc_auto_apply, methods=["POST"])
+    router.add_api_route("/families/cron/crew-oc-auto-commit", families_cron_crew_oc_auto_commit, methods=["POST"])
     router.add_api_route("/families/airport-crew-perk", families_set_airport_crew_perk, methods=["PATCH"])

@@ -28,6 +28,7 @@ from server import (
     casino_ownership_write_below_capo_ops,
     maybe_auto_relinquish_below_capo,
     CASINO_MIN_OWNER_MAX_BET,
+    effective_public_casino_max_bet,
     _user_owns_any_casino,
     raise_if_dead_casino_transfer_target,
     _username_pattern,
@@ -232,7 +233,7 @@ def register(router):
                 "is_owner": False,
                 "is_unclaimed": True,
                 "claim_cost": cc["roulette"],
-                "max_bet": ROULETTE_DEFAULT_MAX_BET,
+                "max_bet": effective_public_casino_max_bet(None, None, default_when_owned_positive=ROULETTE_DEFAULT_MAX_BET),
                 "buy_back_reward": None,
                 "buy_back_offer": None,
             }
@@ -251,14 +252,8 @@ def register(router):
                 _, owner_wealth_rank_name, owner_wealth_rank_color = get_wealth_rank(int((owner.get("money") or 0) or 0))
                 owner_wealth_rank_range = get_wealth_rank_range(int((owner.get("money") or 0) or 0))
         is_owner = owner_id == current_user.get("id") or ""
-        raw_mb = doc.get("max_bet")
-        if raw_mb is None:
-            max_bet = ROULETTE_DEFAULT_MAX_BET
-        else:
-            try:
-                max_bet = int(raw_mb)
-            except (TypeError, ValueError):
-                max_bet = ROULETTE_DEFAULT_MAX_BET
+        oid = (str(owner_id).strip() or None) if owner_id is not None else None
+        max_bet = effective_public_casino_max_bet(oid, doc.get("max_bet"), default_when_owned_positive=ROULETTE_DEFAULT_MAX_BET)
         total_earnings = doc.get("total_earnings", 0)
         profit = _ownership_display_profit(doc)
         buy_back_reward = doc.get("buy_back_reward")
@@ -606,18 +601,14 @@ def register(router):
             raise HTTPException(status_code=400, detail="No bets provided")
         city = _normalize_city_for_roulette(current_user.get("current_state", ""))
         stored_city, ownership_doc = await _get_roulette_ownership_doc(city) if city else (city, None)
-        owner_id = ownership_doc.get("owner_id") if ownership_doc else None
-        if ownership_doc:
-            raw_mb = ownership_doc.get("max_bet")
-            if raw_mb is None:
-                max_bet = ROULETTE_DEFAULT_MAX_BET
-            else:
-                try:
-                    max_bet = int(raw_mb)
-                except (TypeError, ValueError):
-                    max_bet = ROULETTE_DEFAULT_MAX_BET
-        else:
-            max_bet = ROULETTE_DEFAULT_MAX_BET
+        raw_owner = ownership_doc.get("owner_id") if ownership_doc else None
+        owner_id = raw_owner
+        oid = (str(raw_owner).strip() or None) if raw_owner is not None else None
+        max_bet = effective_public_casino_max_bet(
+            oid,
+            ownership_doc.get("max_bet") if ownership_doc else None,
+            default_when_owned_positive=ROULETTE_DEFAULT_MAX_BET,
+        )
         if owner_id and owner_id == current_user.get("id"):
             raise HTTPException(status_code=400, detail="You cannot gamble at your own roulette table")
         total_stake = 0

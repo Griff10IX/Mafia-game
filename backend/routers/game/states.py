@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from fastapi import Depends, HTTPException, Body
 from pydantic import BaseModel
 
-from server import db, get_current_user, get_wealth_rank, STATES, get_state_heads, set_state_head
+from server import db, get_current_user, get_wealth_rank, STATES, get_state_heads, set_state_head, effective_public_casino_max_bet
 
 
 def _parse_iso_datetime(s):
@@ -156,7 +156,11 @@ async def get_states(current_user: dict = Depends(get_current_user)):
     for st in STATES or []:
         # Dice
         d = dice_docs_by_city.get(st)
-        dice_max = d.get("max_bet") if d and d.get("max_bet") is not None else DICE_MAX_BET
+        dice_max = effective_public_casino_max_bet(
+            d.get("owner_id") if d and d.get("owner_id") else None,
+            d.get("max_bet") if d else None,
+            default_when_owned_positive=DICE_MAX_BET,
+        )
         if d and d.get("owner_id"):
             u = user_map.get(d["owner_id"], {})
             money = int((u.get("money") or 0) or 0)
@@ -167,7 +171,11 @@ async def get_states(current_user: dict = Depends(get_current_user)):
 
         # Roulette
         d = rlt_docs_by_city.get(st)
-        rlt_max = d.get("max_bet") if d and d.get("max_bet") is not None else ROULETTE_MAX_BET
+        rlt_max = effective_public_casino_max_bet(
+            d.get("owner_id") if d and d.get("owner_id") else None,
+            d.get("max_bet") if d else None,
+            default_when_owned_positive=ROULETTE_MAX_BET,
+        )
         if d and d.get("owner_id"):
             u = user_map.get(d["owner_id"], {})
             money = int((u.get("money") or 0) or 0)
@@ -178,7 +186,11 @@ async def get_states(current_user: dict = Depends(get_current_user)):
 
         # Blackjack
         d = blackjack_docs_by_city.get(st)
-        bj_max = d.get("max_bet") if d and d.get("max_bet") is not None else BLACKJACK_MAX_BET
+        bj_max = effective_public_casino_max_bet(
+            d.get("owner_id") if d and d.get("owner_id") else None,
+            d.get("max_bet") if d else None,
+            default_when_owned_positive=BLACKJACK_MAX_BET,
+        )
         if d and d.get("owner_id"):
             u = user_map.get(d["owner_id"], {})
             money = int((u.get("money") or 0) or 0)
@@ -189,7 +201,11 @@ async def get_states(current_user: dict = Depends(get_current_user)):
 
         # Horse Racing
         d = horseracing_docs_by_city.get(st)
-        hr_max = d.get("max_bet") if d and d.get("max_bet") is not None else HORSERACING_MAX_BET
+        hr_max = effective_public_casino_max_bet(
+            d.get("owner_id") if d and d.get("owner_id") else None,
+            d.get("max_bet") if d else None,
+            default_when_owned_positive=HORSERACING_MAX_BET,
+        )
         if d and d.get("owner_id"):
             u = user_map.get(d["owner_id"], {})
             money = int((u.get("money") or 0) or 0)
@@ -200,7 +216,11 @@ async def get_states(current_user: dict = Depends(get_current_user)):
 
         # Video Poker
         d = videopoker_docs_by_city.get(st)
-        vp_max = d.get("max_bet") if d and d.get("max_bet") is not None else VIDEO_POKER_MAX_BET
+        vp_max = effective_public_casino_max_bet(
+            d.get("owner_id") if d and d.get("owner_id") else None,
+            d.get("max_bet") if d else None,
+            default_when_owned_positive=VIDEO_POKER_MAX_BET,
+        )
         if d and d.get("owner_id"):
             u = user_map.get(d["owner_id"], {})
             money = int((u.get("money") or 0) or 0)
@@ -214,7 +234,12 @@ async def get_states(current_user: dict = Depends(get_current_user)):
     for st in STATES or []:
         doc = slots_docs_by_state.get(st)
         next_draw_at = doc.get("next_draw_at") if doc else None
-        slots_max = doc.get("max_bet") if doc and doc.get("max_bet") is not None else SLOTS_MAX_BET
+        slots_owner_for_cap = doc.get("owner_id") if doc and doc.get("owner_id") and not _slots_expired(doc) else None
+        slots_max = effective_public_casino_max_bet(
+            slots_owner_for_cap,
+            doc.get("max_bet") if doc else None,
+            default_when_owned_positive=SLOTS_MAX_BET,
+        )
         if doc and doc.get("owner_id") and not _slots_expired(doc):
             u = user_map.get(doc["owner_id"], {})
             money = int((u.get("money") or 0) or 0)

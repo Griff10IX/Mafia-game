@@ -7,6 +7,8 @@ from typing import Any, Dict, Optional
 
 # Costs (users.points)
 FAMILY_PERK_COST_CREW_OC = 250
+FAMILY_PERK_COST_CREW_OC_AUTO_COMMIT = 250
+FAMILY_PERK_CREW_OC_AUTO_COMMIT_DAYS = 2
 FAMILY_PERK_COST_MELT = 250
 FAMILY_PERK_COST_GTA = 250
 FAMILY_PERK_COST_HITLIST = 300
@@ -21,7 +23,7 @@ FAMILY_PERK_RACKET_BONUS_PERCENT = 5
 FAMILY_PERK_BOOZE_STEP_AMOUNT = 15
 FAMILY_PERK_BOOZE_BONUS_CAP = 300
 
-PERK_IDS = frozenset({"crew_oc", "melt", "gta", "hitlist", "racket", "booze"})
+PERK_IDS = frozenset({"crew_oc", "crew_oc_auto_commit", "melt", "gta", "hitlist", "racket", "booze"})
 
 
 def utc_calendar_month_end(now: Optional[datetime] = None) -> datetime:
@@ -63,7 +65,7 @@ def clean_family_perks(perks: Optional[Dict[str, Any]], now: datetime) -> Dict[s
         return {}
     out: Dict[str, Any] = {}
     now = now.astimezone(timezone.utc) if now.tzinfo else now.replace(tzinfo=timezone.utc)
-    for key in ("crew_oc", "melt", "gta", "hitlist", "racket"):
+    for key in ("crew_oc", "crew_oc_auto_commit", "melt", "gta", "hitlist", "racket"):
         row = perks.get(key)
         if isinstance(row, dict) and valid_until_active(row.get("valid_until"), now):
             out[key] = dict(row)
@@ -109,6 +111,10 @@ async def family_perk_modifiers(db, family_id: Optional[str]) -> Dict[str, Any]:
 def perk_catalog_prices() -> Dict[str, Any]:
     return {
         "crew_oc": {"cost": FAMILY_PERK_COST_CREW_OC, "label": "Crew OC cooldown −1h"},
+        "crew_oc_auto_commit": {
+            "cost": FAMILY_PERK_COST_CREW_OC_AUTO_COMMIT,
+            "label": "Auto-commit Crew OC (10m after ad, 2d)",
+        },
         "melt": {"cost": FAMILY_PERK_COST_MELT, "label": "Family melt cooldown −5s"},
         "gta": {"cost": FAMILY_PERK_COST_GTA, "label": "Family GTA cooldown −5s"},
         "hitlist": {"cost": FAMILY_PERK_COST_HITLIST, "label": "+2 hitlist NPC slots"},

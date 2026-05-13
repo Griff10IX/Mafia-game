@@ -28,6 +28,7 @@ from server import (
     casino_ownership_write_below_capo_ops,
     maybe_auto_relinquish_below_capo,
     CASINO_MIN_OWNER_MAX_BET,
+    effective_public_casino_max_bet,
     _user_owns_any_casino,
     raise_if_dead_casino_transfer_target,
     _username_pattern,
@@ -491,7 +492,13 @@ def register(router):
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         city = _normalize_city(raw) if raw else (STATES[0] if STATES else "")
         _, doc = await _get_ownership_doc(city) if city else (None, None)
-        max_bet = doc.get("max_bet", VIDEO_POKER_DEFAULT_MAX_BET) if doc else VIDEO_POKER_DEFAULT_MAX_BET
+        raw_oid = doc.get("owner_id") if doc else None
+        oid = (str(raw_oid).strip() or None) if raw_oid is not None else None
+        max_bet = effective_public_casino_max_bet(
+            oid,
+            doc.get("max_bet") if doc else None,
+            default_when_owned_positive=VIDEO_POKER_DEFAULT_MAX_BET,
+        )
         cc = await load_claim_costs(db)
         preset = _effective_odds_preset(doc)
         return {
@@ -532,7 +539,7 @@ def register(router):
                 "is_owner": False,
                 "is_unclaimed": True,
                 "claim_cost": cc["video_poker"],
-                "max_bet": VIDEO_POKER_DEFAULT_MAX_BET,
+                "max_bet": effective_public_casino_max_bet(None, None, default_when_owned_positive=VIDEO_POKER_DEFAULT_MAX_BET),
                 "buy_back_reward": None,
                 "buy_back_offer": None,
                 "odds_preset": VIDEO_POKER_DEFAULT_ODDS_PRESET,
@@ -553,7 +560,8 @@ def register(router):
                 _, owner_wealth_rank_name, owner_wealth_rank_color = get_wealth_rank(int((u.get("money") or 0) or 0))
                 owner_wealth_rank_range = get_wealth_rank_range(int((u.get("money") or 0) or 0))
         is_owner = owner_id == current_user.get("id") or ""
-        max_bet = doc.get("max_bet", VIDEO_POKER_DEFAULT_MAX_BET)
+        oid = (str(owner_id).strip() or None) if owner_id is not None else None
+        max_bet = effective_public_casino_max_bet(oid, doc.get("max_bet"), default_when_owned_positive=VIDEO_POKER_DEFAULT_MAX_BET)
         total_earnings = doc.get("total_earnings", 0)
         profit = _ownership_display_profit(doc)
         buy_back_reward = doc.get("buy_back_reward")
@@ -946,8 +954,14 @@ def register(router):
         if not city:
             raise HTTPException(status_code=400, detail="No current city")
         stored_city, doc = await _get_ownership_doc(city)
-        max_bet = doc.get("max_bet", VIDEO_POKER_DEFAULT_MAX_BET) if doc else VIDEO_POKER_DEFAULT_MAX_BET
-        owner_id = doc.get("owner_id") if doc else None
+        raw_owner = doc.get("owner_id") if doc else None
+        owner_id = raw_owner
+        oid = (str(raw_owner).strip() or None) if raw_owner is not None else None
+        max_bet = effective_public_casino_max_bet(
+            oid,
+            doc.get("max_bet") if doc else None,
+            default_when_owned_positive=VIDEO_POKER_DEFAULT_MAX_BET,
+        )
         if owner_id and owner_id == current_user.get("id"):
             raise HTTPException(status_code=400, detail="You cannot play at your own table")
         bet = max(0, int(request.bet))

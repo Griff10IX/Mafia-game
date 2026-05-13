@@ -772,6 +772,9 @@ async def create_topic(
             {"id": crew_oc_family_id},
             {"$set": {"crew_oc_forum_topic_id": topic_id}},
         )
+        from routers.game import families as families_mod
+
+        await families_mod.schedule_crew_oc_auto_commit_for_family(crew_oc_family_id)
     await log_activity(
         current_user["id"],
         current_user.get("username") or "?",

@@ -24,6 +24,7 @@ from server import (
     casino_ownership_write_below_capo_ops,
     maybe_auto_relinquish_below_capo,
     CASINO_MIN_OWNER_MAX_BET,
+    effective_public_casino_max_bet,
     log_gambling,
     resolve_gambling_log_buy_back,
     get_head_family_id_for_state,
@@ -221,7 +222,7 @@ async def _run_slots_draw_if_needed(state: str):
                 if ost != _normalize_state(filter_state):
                     await db.slots_ownership.update_one(
                         {"_id": stale["_id"]},
-                        {"$set": {"owner_id": None, "owner_username": None}},
+                        {"$set": {"owner_id": None, "owner_username": None, "max_bet": CASINO_MIN_OWNER_MAX_BET}},
                     )
             logging.getLogger().info(
                 "Slots draw winner state=%s winner=%s (%s) matched=%s modified=%s",
@@ -352,15 +353,18 @@ def register(router):
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         current_state = _normalize_state(raw) if raw else (STATES[0] if STATES else "")
         stored_state, doc = await _get_slots_ownership_doc(current_state)
-        max_bet = SLOTS_MAX_BET
-        state_owned = True
-        owner_id = None
-        expires_at = None
+        owner_id_for_cap = None
         if doc and doc.get("owner_id") and not _is_slots_ownership_expired(doc):
-            max_bet = doc.get("max_bet") if doc.get("max_bet") is not None else SLOTS_MAX_BET
-            state_owned = False
-            owner_id = doc.get("owner_id")
-            expires_at = doc.get("expires_at")
+            raw_o = doc.get("owner_id")
+            owner_id_for_cap = (str(raw_o).strip() or None) if raw_o is not None else None
+        max_bet = effective_public_casino_max_bet(
+            owner_id_for_cap,
+            doc.get("max_bet") if doc else None,
+            default_when_owned_positive=SLOTS_MAX_BET,
+        )
+        state_owned = owner_id_for_cap is None
+        owner_id = owner_id_for_cap
+        expires_at = doc.get("expires_at") if owner_id_for_cap else None
         next_draw_at = (doc.get("next_draw_at") or doc.get("expires_at")) if doc else None
         if not next_draw_at:
             next_draw_at = _next_draw_utc().isoformat()
@@ -384,12 +388,20 @@ def register(router):
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         state = _normalize_state(raw) if raw else (STATES[0] if STATES else "")
         if state not in (STATES or []):
-            return {"state": state, "is_owner": False, "max_bet": SLOTS_MAX_BET, "can_enter": False, "entries_count": 0}
+            return {"state": state, "is_owner": False, "max_bet": effective_public_casino_max_bet(None, None, default_when_owned_positive=SLOTS_MAX_BET), "can_enter": False, "entries_count": 0}
         await _run_slots_draw_if_needed(state)
         stored_state, doc = await _get_slots_ownership_doc(state)
         owner_id = doc.get("owner_id") if doc else None
         is_valid_owner = owner_id and not _is_slots_ownership_expired(doc)
-        max_bet = (doc.get("max_bet") if doc.get("max_bet") is not None else SLOTS_MAX_BET) if doc else SLOTS_MAX_BET
+        cap_owner = None
+        if is_valid_owner:
+            raw_o = owner_id
+            cap_owner = (str(raw_o).strip() or None) if raw_o is not None else None
+        max_bet = effective_public_casino_max_bet(
+            cap_owner,
+            doc.get("max_bet") if doc else None,
+            default_when_owned_positive=SLOTS_MAX_BET,
+        )
         buy_back_reward = (doc.get("buy_back_reward") or 0) if doc else 0
         expires_at = doc.get("expires_at") if doc else None
         is_owner = is_valid_owner and owner_id == current_user.get("id") or ""
@@ -645,8 +657,15 @@ def register(router):
         stored_state, doc = await _get_slots_ownership_doc(state)
         owner_id = doc.get("owner_id") if doc else None
         is_valid_owner = owner_id and not _is_slots_ownership_expired(doc)
-        # No owner (or expired) = state-owned: always allow play, house pays
-        max_bet = (doc.get("max_bet") if doc and doc.get("max_bet") is not None else SLOTS_MAX_BET)
+        cap_owner = None
+        if is_valid_owner:
+            raw_o = owner_id
+            cap_owner = (str(raw_o).strip() or None) if raw_o is not None else None
+        max_bet = effective_public_casino_max_bet(
+            cap_owner,
+            doc.get("max_bet") if doc else None,
+            default_when_owned_positive=SLOTS_MAX_BET,
+        )
         if is_valid_owner and owner_id == current_user.get("id"):
             raise HTTPException(status_code=400, detail="You cannot play at your own slots")
         bet = int(request.bet or 0)

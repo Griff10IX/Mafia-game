@@ -85,9 +85,10 @@ const vaultTxSubtitle = (tx) => {
   return bits.filter(Boolean).join(' · ') || null;
 };
 
-const TERRITORY_FAMILY_PERK_ORDER = ['crew_oc', 'melt', 'gta', 'hitlist', 'racket', 'booze'];
+const TERRITORY_FAMILY_PERK_ORDER = ['crew_oc', 'crew_oc_auto_commit', 'melt', 'gta', 'hitlist', 'racket', 'booze'];
 const TERRITORY_FAMILY_PERK_TITLE = {
   crew_oc: 'Crew OC cooldown −1h',
+  crew_oc_auto_commit: 'Auto-commit Crew OC (10m after ad, 2d)',
   melt: 'Family melt cooldown −5s',
   gta: 'Family GTA cooldown −5s',
   hitlist: '+2 hitlist NPC slots',
@@ -887,7 +888,7 @@ const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
 // FAMILY PERKS TAB — Don buys monthly perks; members contribute points to Don
 // ============================================================================
 
-const PERK_CARD_ORDER = ['crew_oc', 'melt', 'gta', 'hitlist', 'racket'];
+const PERK_CARD_ORDER = ['crew_oc', 'crew_oc_auto_commit', 'melt', 'gta', 'hitlist', 'racket'];
 
 const FamilyPerksTab = ({ myRole, vaultAndRacketsLocked, onRefresh }) => {
   const isBoss = (myRole || '').toLowerCase() === 'boss';
@@ -1001,8 +1002,9 @@ const FamilyPerksTab = ({ myRole, vaultAndRacketsLocked, onRefresh }) => {
     <div className="space-y-4">
       <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
         <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-          Family perks are purchased with <strong className="text-foreground">points</strong> by the <strong className="text-foreground">Don</strong> and expire at the end of the UTC calendar month
-          {monthEnd ? <> (after {fmtUntil(monthEnd)})</> : ''}.
+          Family perks are purchased with <strong className="text-foreground">points</strong> by the <strong className="text-foreground">Don</strong>.
+          Most expire at the end of the UTC calendar month
+          {monthEnd ? <> (after {fmtUntil(monthEnd)})</> : ''}. Auto-commit Crew OC lasts <strong className="text-foreground">2 days</strong> from purchase (see card).
         </p>
         <p className="text-[10px] text-primary font-heading mt-1 tabular-nums">Your points: {(data?.my_points ?? 0).toLocaleString()}</p>
       </div>

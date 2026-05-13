@@ -2015,6 +2015,23 @@ def mongodb_effective_kill_count_expr() -> dict:
 CASINO_MIN_OWNER_MAX_BET = 50_000
 
 
+def effective_public_casino_max_bet(owner_id, stored_max_bet, *, default_when_owned_positive: int) -> int:
+    """
+    No owner: public play is capped at CASINO_MIN_OWNER_MAX_BET only (no one backs larger limits).
+    Owned: use stored max_bet when > 0, else default_when_owned_positive (claim / template defaults).
+    """
+    oid = owner_id
+    if oid is None or oid == "":
+        return int(CASINO_MIN_OWNER_MAX_BET)
+    try:
+        raw = int(stored_max_bet) if stored_max_bet is not None else 0
+    except (TypeError, ValueError):
+        raw = 0
+    if raw <= 0:
+        return int(default_when_owned_positive)
+    return int(raw)
+
+
 async def maybe_auto_relinquish_below_capo(coll, filter_dict: dict, *, reset_casino_max_bet: bool = False):
     """If the ownership doc has owner_id and below_capo_acquired_at and 3+ hours have passed, clear ownership."""
     doc = await coll.find_one(filter_dict, {"_id": 0, "owner_id": 1, "below_capo_acquired_at": 1})
@@ -3450,6 +3467,19 @@ async def startup_db():
         asyncio.create_task(families.run_crew_oc_auto_apply_ticker())
         logging.getLogger(__name__).info(
             "Crew OC auto-apply: in-process ticker enabled (~60s+jitter; CREW_OC_AUTO_APPLY_TICKER=0 to disable). Multi-worker: prefer cron-only."
+        )
+    # Family perk: auto-commit Crew OC after forum ad (bounded ticker vs cron-only)
+    crew_oc_auto_commit_use_cron = (os.environ.get("CREW_OC_AUTO_COMMIT_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
+    _crew_oc_auto_commit_ticker_raw = (os.environ.get("CREW_OC_AUTO_COMMIT_TICKER") or "").strip().lower()
+    crew_oc_auto_commit_ticker_on = _crew_oc_auto_commit_ticker_raw not in ("0", "false", "no", "off")
+    if crew_oc_auto_commit_use_cron:
+        logging.getLogger(__name__).info(
+            "Crew OC auto-commit: ticker disabled (CREW_OC_AUTO_COMMIT_USE_CRON=1). Schedule POST /api/families/cron/crew-oc-auto-commit ~every 60s. Header: X-Cron-Secret."
+        )
+    elif crew_oc_auto_commit_ticker_on:
+        asyncio.create_task(families.run_crew_oc_auto_commit_ticker())
+        logging.getLogger(__name__).info(
+            "Crew OC auto-commit: in-process ticker enabled (~60s+jitter; CREW_OC_AUTO_COMMIT_TICKER=0 to disable). Multi-worker: prefer cron-only."
         )
     # Family vault hourly bullets (airport + armoury high command): credits ``treasury_bullets``, not cash
     family_tb_hourly_use_cron = (os.environ.get("FAMILY_TREASURY_BULLETS_HOURLY_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
