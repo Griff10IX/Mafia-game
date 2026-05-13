@@ -24,6 +24,7 @@ from utils.login_turnstile_gate import login_turnstile_effective_config, require
 from middleware.security import is_proxy_or_vpn, get_ip_info
 from utils.geo_country import country_code_from_request_headers
 from utils.game_pass_season import get_game_pass_season_public
+from utils.redeem_code_lifecycle import reconcile_stale_dead_redeemers_on_code
 
 
 class UserRegister(BaseModel):
@@ -2199,6 +2200,9 @@ def register(router):
         user_id = current_user.get("id")
         if not user_id:
             raise HTTPException(status_code=401, detail="Not authenticated")
+        if code_normalized in (current_user.get("redeemed_codes") or []):
+            raise HTTPException(status_code=400, detail="You have already used this code.")
+        await reconcile_stale_dead_redeemers_on_code(db, code_normalized)
         doc = await db.redeem_codes.find_one({"code": code_normalized, "active": True})
         if not doc:
             raise HTTPException(status_code=400, detail="Invalid or inactive code")
@@ -2252,7 +2256,12 @@ def register(router):
             if tt != "rank_xp_pass"
         )
         if inc:
-            await db.users.update_one({"id": user_id}, {"$inc": inc})
+            await db.users.update_one(
+                {"id": user_id},
+                {"$inc": inc, "$addToSet": {"redeemed_codes": code_normalized}},
+            )
+        else:
+            await db.users.update_one({"id": user_id}, {"$addToSet": {"redeemed_codes": code_normalized}})
         if inc.get("points", 0) > 0:
             await log_points_event(db, user_id=user_id, points=inc["points"], event_type="redeem_code", event_ref=code_normalized, meta={"code": code_normalized})
         for car_id in (rewards.get("cars") or []):

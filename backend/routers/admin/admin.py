@@ -5857,6 +5857,12 @@ def register(router):
             }, "$inc": {"total_deaths": 1}}
         )
         try:
+            from utils.redeem_code_lifecycle import release_redeem_slots_for_deceased_user
+
+            await release_redeem_slots_for_deceased_user(db, target["id"])
+        except Exception:
+            logging.exception("release_redeem_slots_for_deceased_user (admin kill)")
+        try:
             from routers.game.families import maybe_promote_after_boss_death, _invalidate_list_cache
             await maybe_promote_after_boss_death(target["id"])
             _invalidate_list_cache()

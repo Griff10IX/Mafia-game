@@ -2321,6 +2321,12 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     {"id": victim_id},
                     {"$set": {"is_dead": True, "dead_at": now_iso, "money": 0, "health": 0, "health_regen_last_at": now_iso}, "$inc": {"total_deaths": 1}},
                 )
+                try:
+                    from utils.redeem_code_lifecycle import release_redeem_slots_for_deceased_user
+
+                    await release_redeem_slots_for_deceased_user(db, victim_id)
+                except Exception:
+                    logger.exception("release_redeem_slots_for_deceased_user (npc victim)")
                 await db.attacks.delete_many({"target_id": victim_id})
                 try:
                     from routers.money.quicktrade import cancel_offers_on_death
@@ -2500,6 +2506,12 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         )
         if not death_claim:
             raise HTTPException(status_code=400, detail="Target is already dead")
+        try:
+            from utils.redeem_code_lifecycle import release_redeem_slots_for_deceased_user
+
+            await release_redeem_slots_for_deceased_user(db, victim_id)
+        except Exception:
+            logger.exception("release_redeem_slots_for_deceased_user (attack victim)")
         victim_money = int(death_claim.get("money", 0))
         cash_loot = int(victim_money * KILL_CASH_PERCENT)
         rank_points = 25

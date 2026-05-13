@@ -400,6 +400,27 @@ function applyModernPerfFlagToDocument(themeVariant, modernVisualQuality) {
   }
 }
 
+/** Android Blink/WebView: backdrop-filter on fixed/floating UI + scroll often shows GPU "static" (e.g. Samsung Chrome). */
+function shouldApplyMobileCompositorBackdropWorkaround() {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  if (!/Android/i.test(ua)) return false;
+  if (/Firefox/i.test(ua)) return false;
+  return /Chrome\/|SamsungBrowser|Version\/[\d.]+.*Chrome|CriOS|EdgA/i.test(ua);
+}
+
+function applyMobileCompositorSafeToDocument() {
+  const body = document.body;
+  const root = document.documentElement;
+  if (shouldApplyMobileCompositorBackdropWorkaround()) {
+    body.setAttribute('data-mobile-compositor-safe', 'on');
+    root.setAttribute('data-mobile-compositor-safe', 'on');
+  } else {
+    body.removeAttribute('data-mobile-compositor-safe');
+    root.removeAttribute('data-mobile-compositor-safe');
+  }
+}
+
 const ThemeContext = createContext(null);
 
 export function ThemeProvider({ children }) {
@@ -612,6 +633,10 @@ export function ThemeProvider({ children }) {
     applyThemeVariantToDocument(themeVariant);
     applyModernPerfFlagToDocument(themeVariant, modernVisualQuality);
   }, [themeVariant, modernVisualQuality]);
+
+  useEffect(() => {
+    applyMobileCompositorSafeToDocument();
+  }, []);
 
   const themeLoadedRef = useRef(false);
   const serverThemePcRef = useRef(null);

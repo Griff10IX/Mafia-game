@@ -1,11 +1,13 @@
 # Dead-alive: cash 99.95% to recipient (0.05% state head tax); points 100% to recipient; 50% of tokens restored (one-time)
 # 50% of tokens are also restored
 # Revive: pay 50k points to bring back a dead account (same email, once per email)
+import logging
 from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException
 from routers.kill.armoury import TOKEN_CONFIG
 from utils.point_provenance import log_points_event
+from utils.redeem_code_lifecycle import release_redeem_slots_for_deceased_user
 
 REVEAL_KILLER_COST = 1000
 TOKEN_RESTORE_PERCENT = 0.50  # 50% of tokens restored on Dead > Alive
@@ -477,6 +479,10 @@ def register(router):
                     },
                 },
             )
+            try:
+                await release_redeem_slots_for_deceased_user(db, current_user["id"])
+            except Exception:
+                logging.getLogger(__name__).exception("release_redeem_slots_for_deceased_user (revive reviver death)")
 
             # 5) Notify the revived user with before/after balances so they can verify the transfer
             notification_body = (

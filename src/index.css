@@ -917,6 +917,24 @@ body > #root {
   z-index: 1;
 }
 
+/*
+ * Android Blink (Chrome, Samsung Internet, in-app WebViews): backdrop-filter on fixed layers
+ * over scrolling content often produces rectangular "static" / color-noise corruption (common on Samsung).
+ * ThemeContext sets data-mobile-compositor-safe="on" on html/body when UA matches.
+ */
+body[data-mobile-compositor-safe="on"] [data-layout="topbar"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+body[data-mobile-compositor-safe="on"] [data-layout="bottom-nav-submenu"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+body[data-mobile-compositor-safe="on"] [data-testid="inbox-page"] .backdrop-blur-sm {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
 /* Hide Emergent hosting badge/overlays */
 #emergent-badge,
 a#emergent-badge,
