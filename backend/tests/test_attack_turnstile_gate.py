@@ -96,6 +96,38 @@ async def test_attack_turnstile_disabled_by_default_allows_without_token(monkeyp
 
 
 @pytest.mark.asyncio
+async def test_attack_turnstile_target_rollout_excludes_nonlisted_user(monkeypatch):
+    monkeypatch.delenv("ATTACK_TURNSTILE_DISABLED", raising=False)
+    monkeypatch.setenv("TURNSTILE_SECRET_KEY", "secret")
+    db = _DB(
+        {
+            "_id": "main",
+            "attack_turnstile_enabled": True,
+            "attack_turnstile_enforce": "enforce",
+            "attack_turnstile_mode": "execute_only",
+            "minigame_turnstile_site_key": "site",
+            "attack_turnstile_target_usernames": ["alphauser"],
+        }
+    )
+    cfg_other = await gate.attack_turnstile_config(db, current_user={"id": "u2", "username": "Other"})
+    assert cfg_other["enabled"] is False
+    assert cfg_other["target_rollout_active"] is True
+    cfg_alpha = await gate.attack_turnstile_config(db, current_user={"id": "u1", "username": "AlphaUser"})
+    assert cfg_alpha["enabled"] is True
+    out = await gate.require_attack_turnstile(
+        db,
+        request=_Request(),
+        current_user={"id": "u2", "username": "Other"},
+        action="execute",
+        captcha_token=None,
+        captcha_nonce=None,
+        risk_score=100,
+    )
+    assert out["allowed"] is True
+    assert out["reason"] == "not_required"
+
+
+@pytest.mark.asyncio
 async def test_attack_turnstile_nonce_is_one_time(monkeypatch):
     monkeypatch.setenv("TURNSTILE_SECRET_KEY", "secret")
     db = _DB(

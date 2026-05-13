@@ -1230,6 +1230,7 @@ export default function Admin() {
   const [attackClientSpoofLoading, setAttackClientSpoofLoading] = useState(false);
 
   const [cheaterImpactQuery, setCheaterImpactQuery] = useState('');
+  const [cheaterImpactTargetOwners, setCheaterImpactTargetOwners] = useState('');
   const [cheaterImpactSince, setCheaterImpactSince] = useState('');
   const [cheaterImpactUntil, setCheaterImpactUntil] = useState('');
   const [cheaterImpactLimit, setCheaterImpactLimit] = useState('5000');
@@ -1253,6 +1254,7 @@ export default function Admin() {
   const [attackTurnstileMasterDisabled, setAttackTurnstileMasterDisabled] = useState(false);
   const [attackTurnstileMode, setAttackTurnstileMode] = useState('execute_only');
   const [attackTurnstileEnforce, setAttackTurnstileEnforce] = useState('off');
+  const [attackTurnstileTargetUsernames, setAttackTurnstileTargetUsernames] = useState('');
   const [minigameTurnstileEnabled, setMinigameTurnstileEnabled] = useState(false);
   const [minigameTurnstileSiteKey, setMinigameTurnstileSiteKey] = useState('');
   const [loginTurnstileEnabled, setLoginTurnstileEnabled] = useState(false);
@@ -2143,6 +2145,11 @@ export default function Admin() {
       setAttackTurnstileMasterDisabled(!!res.data?.attack_turnstile_master_disabled);
       setAttackTurnstileMode(['execute_only', 'search_and_execute', 'risk_based'].includes(res.data?.attack_turnstile_mode) ? res.data.attack_turnstile_mode : 'execute_only');
       setAttackTurnstileEnforce(['off', 'log_only', 'enforce'].includes(res.data?.attack_turnstile_enforce) ? res.data.attack_turnstile_enforce : 'off');
+      setAttackTurnstileTargetUsernames(
+        Array.isArray(res.data?.attack_turnstile_target_usernames) && res.data.attack_turnstile_target_usernames.length
+          ? res.data.attack_turnstile_target_usernames.join('\n')
+          : '',
+      );
       setMinigameTurnstileEnabled(!!res.data?.minigame_turnstile_enabled);
       setMinigameTurnstileSiteKey((res.data?.minigame_turnstile_site_key ?? '').trim());
       setLoginTurnstileEnabled(!!res.data?.login_turnstile_enabled);
@@ -2250,6 +2257,7 @@ export default function Admin() {
       setAttackTurnstileMasterDisabled(false);
       setAttackTurnstileMode('execute_only');
       setAttackTurnstileEnforce('off');
+      setAttackTurnstileTargetUsernames('');
       setMinigameTurnstileEnabled(false);
       setMinigameTurnstileSiteKey('');
       setLoginTurnstileEnabled(false);
@@ -2411,6 +2419,21 @@ export default function Admin() {
         attack_turnstile_master_disabled: attackTurnstileMasterDisabled,
         attack_turnstile_mode: attackTurnstileMode,
         attack_turnstile_enforce: attackTurnstileEnforce,
+        attack_turnstile_target_usernames: (() => {
+          const raw = attackTurnstileTargetUsernames.trim();
+          if (!raw) return [];
+          const parts = raw.split(/[\s,;|]+/).map((p) => p.trim()).filter(Boolean);
+          const seen = new Set();
+          const out = [];
+          for (const p of parts.slice(0, 200)) {
+            const t = p.length > 80 ? p.slice(0, 80) : p;
+            const k = t.toLowerCase();
+            if (seen.has(k)) continue;
+            seen.add(k);
+            out.push(t);
+          }
+          return out;
+        })(),
         minigame_turnstile_enabled: minigameTurnstileEnabled,
         minigame_turnstile_site_key: minigameTurnstileSiteKey.trim(),
         login_turnstile_enabled: loginTurnstileEnabled,
@@ -2475,6 +2498,11 @@ export default function Admin() {
       }
       if (res.data?.attack_turnstile_enforce !== undefined) {
         setAttackTurnstileEnforce(['off', 'log_only', 'enforce'].includes(res.data.attack_turnstile_enforce) ? res.data.attack_turnstile_enforce : 'off');
+      }
+      if (Array.isArray(res.data?.attack_turnstile_target_usernames)) {
+        setAttackTurnstileTargetUsernames(
+          res.data.attack_turnstile_target_usernames.length ? res.data.attack_turnstile_target_usernames.join('\n') : '',
+        );
       }
       setMinigameTurnstileEnabled(!!res.data?.minigame_turnstile_enabled);
       if (res.data?.minigame_turnstile_site_key !== undefined) {
@@ -5917,6 +5945,8 @@ export default function Admin() {
       if (cheaterImpactUntil.trim()) params.set('until', cheaterImpactUntil.trim());
       const lim = Math.max(1, Math.min(20000, parseInt(String(cheaterImpactLimit), 10) || 5000));
       params.set('limit', String(lim));
+      const tgt = cheaterImpactTargetOwners.trim();
+      if (tgt) params.set('target_guard_owners', tgt);
       const res = await api.get(`/admin/cheater-kill-impact?${params.toString()}`);
       setCheaterImpactData(res.data);
       setCheaterImpactConfirmUser('');
@@ -5949,7 +5979,10 @@ export default function Admin() {
       return;
     }
     const nOwners = cheaterImpactData.bodyguard_by_owner?.length ?? 0;
-    if (!window.confirm(`Refund ${pct}% of recorded bodyguard hire costs to up to ${nOwners} owner(s)? Re-running adds more points (not idempotent).`)) return;
+    const tgtNote = cheaterImpactTargetOwners.trim()
+      ? ` Only guard owners matching the target list (${nOwners} row(s) in this filtered view).`
+      : ` Up to ${nOwners} owner(s) from the full killer scope.`;
+    if (!window.confirm(`Refund ${pct}% of recorded bodyguard hire costs?${tgtNote} Re-running adds more points (not idempotent).`)) return;
     setCheaterImpactRefundLoading(true);
     try {
       const body = {
@@ -5958,6 +5991,7 @@ export default function Admin() {
         killer_user_id: cheaterImpactData.killer.id,
         since: cheaterImpactSince.trim() || undefined,
         until: cheaterImpactUntil.trim() || undefined,
+        target_guard_owners: cheaterImpactTargetOwners.trim() || undefined,
       };
       const res = await api.post('/admin/cheater-kill-impact/refund-bodyguard-hire', body);
       toast.success(res.data?.message || 'Refund applied');
@@ -13476,6 +13510,7 @@ export default function Admin() {
                     <p className="text-[10px] font-heading uppercase tracking-wider text-red-300">Attack page Turnstile</p>
                     <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
                       Attack-only solver defense. Not shown on every click: it can run on execute only, search + execute, or risk-based.
+                      Leave the box below empty to apply the mode to everyone; when it has names, only those accounts see the Turnstile flow.
                     </p>
                   </div>
                   <span className={`text-[10px] font-heading px-2 py-0.5 rounded border ${
@@ -13488,6 +13523,9 @@ export default function Admin() {
                     {attackTurnstileMasterDisabled || attackTurnstileEnforce === 'off' || !attackTurnstileEnabled
                       ? 'Off'
                       : attackTurnstileEnforce === 'log_only' ? 'Log only' : 'Enforcing'}
+                    {attackTurnstileTargetUsernames.trim() && attackTurnstileEnabled && attackTurnstileEnforce !== 'off' && !attackTurnstileMasterDisabled ? (
+                      <span className="ml-1.5 text-sky-300/90">· Targeted</span>
+                    ) : null}
                   </span>
                 </div>
                 <label className="flex items-center gap-2 cursor-pointer text-sm font-heading">
@@ -13534,6 +13572,20 @@ export default function Admin() {
                     </select>
                   </label>
                 </div>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">
+                    Target accounts only (optional)
+                  </span>
+                  <textarea
+                    value={attackTurnstileTargetUsernames}
+                    onChange={(e) => setAttackTurnstileTargetUsernames(e.target.value)}
+                    placeholder={'One username per line, or comma-separated — max 200, 80 chars each'}
+                    rows={3}
+                    spellCheck={false}
+                    autoComplete="off"
+                    className="w-full max-w-lg px-2 py-1.5 rounded border border-input bg-background text-[11px] font-mono text-foreground resize-y min-h-[3.5rem]"
+                  />
+                </label>
                 <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
                   Server env <code className="text-[9px] bg-muted px-1 rounded">ATTACK_TURNSTILE_DISABLED=1</code> also forces this off.
                   Existing execute tokens and kill rate limits stay active.
@@ -15894,6 +15946,7 @@ export default function Admin() {
                 All successful kills by a player (from attack logs), distinct player victims, bodyguard kills, and{' '}
                 <span className="text-foreground font-bold">one-time hire_cost</span> recorded when each guard died (from bodyguard_killed events).
                 Weekly bodyguard pay is <span className="text-amber-200/90">not</span> included. Moderators can load the report; only admins can apply refunds. Re-running refund stacks credits.
+                Optional <span className="text-foreground font-bold">target guard owners</span> narrows hire totals, victim list, recent kills, and refunds to those usernames or user ids (comma, space, or newline separated).
               </p>
               <div className="flex flex-wrap items-end gap-2">
                 <div className="flex flex-col gap-0.5">
@@ -15944,6 +15997,23 @@ export default function Admin() {
                   {cheaterImpactLoading ? 'Loading…' : 'Load impact'}
                 </BtnPrimary>
               </div>
+              <div className="flex flex-col gap-0.5 max-w-2xl">
+                <span className="text-[9px] font-heading text-mutedForeground uppercase">
+                  Target guard owners / victims (optional — usernames or user ids, comma space or newline)
+                </span>
+                <textarea
+                  value={cheaterImpactTargetOwners}
+                  onChange={(e) => setCheaterImpactTargetOwners(e.target.value)}
+                  placeholder={'e.g. DonCorleone, LuckyLuciano\nor paste UUIDs'}
+                  rows={2}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-[11px] font-mono w-full resize-y min-h-[2.5rem] text-foreground"
+                  spellCheck={false}
+                  autoComplete="off"
+                />
+                <p className="text-[9px] text-mutedForeground font-heading">
+                  Refund uses this box at apply time. Edit targets, then Load impact again so the table matches what you will refund.
+                </p>
+              </div>
               {cheaterImpactData && (
                 <div className="space-y-3 rounded border border-zinc-700/40 bg-zinc-950/40 p-2">
                   <div className="text-[10px] font-heading text-rose-300 uppercase">
@@ -15952,6 +16022,12 @@ export default function Admin() {
                   </div>
                   {cheaterImpactData.note && (
                     <p className="text-[9px] text-mutedForeground font-heading border-l-2 border-amber-500/40 pl-2">{cheaterImpactData.note}</p>
+                  )}
+                  {(cheaterImpactData.guard_owner_target_filter?.unmatched_tokens?.length ?? 0) > 0 && (
+                    <p className="text-[9px] text-amber-200/90 font-heading border-l-2 border-amber-500/50 pl-2">
+                      Owner filter tokens with no guard hire row for this killer in range:{' '}
+                      {(cheaterImpactData.guard_owner_target_filter.unmatched_tokens || []).join(', ')}
+                    </p>
                   )}
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-heading">
                     <div className="rounded bg-zinc-900/60 border border-zinc-700/50 p-1.5">
@@ -15995,6 +16071,8 @@ export default function Admin() {
                         <thead>
                           <tr className="border-b border-zinc-700/60 text-mutedForeground text-left">
                             <th className="p-1">Owner</th>
+                            <th className="p-1">Refund credits to</th>
+                            <th className="p-1 text-left">Match</th>
                             <th className="p-1 text-right">Kills</th>
                             <th className="p-1 text-right">Sum hire pts</th>
                             <th className="p-1 text-right">Preview refund</th>
@@ -16003,15 +16081,28 @@ export default function Admin() {
                         <tbody>
                           {(cheaterImpactData.bodyguard_by_owner || []).length === 0 ? (
                             <tr>
-                              <td colSpan={4} className="p-2 text-mutedForeground">No bodyguard_killed events for this killer in range.</td>
+                              <td colSpan={6} className="p-2 text-mutedForeground">No bodyguard_killed events for this killer in range.</td>
                             </tr>
                           ) : (
                             cheaterImpactData.bodyguard_by_owner.map((row) => {
                               const pct = Math.max(1, Math.min(100, parseInt(String(cheaterImpactRefundPct), 10) || 0));
                               const preview = Math.floor((row.sum_hire_cost || 0) * pct / 100);
+                              const rr = row.refund_redirect_reason;
+                              const creditName = row.refund_credit_username;
+                              const creditId = row.refund_credit_user_id;
                               return (
                                 <tr key={row.owner_id} className="border-b border-zinc-800/50">
                                   <td className="p-1 text-foreground">{row.owner_username} <span className="font-mono text-[9px] text-zinc-500">{row.owner_id}</span></td>
+                                  <td className="p-1 text-foreground text-[10px]">
+                                    {creditName != null && creditId != null ? (
+                                      <>
+                                        {creditName} <span className="font-mono text-[9px] text-zinc-500">{creditId}</span>
+                                      </>
+                                    ) : (
+                                      <span className="text-mutedForeground">—</span>
+                                    )}
+                                  </td>
+                                  <td className="p-1 text-[9px] text-mutedForeground font-mono max-w-[140px] truncate" title={rr || ''}>{rr || '—'}</td>
                                   <td className="p-1 text-right">{row.kill_count}</td>
                                   <td className="p-1 text-right text-sky-300">{(row.sum_hire_cost || 0).toLocaleString()}</td>
                                   <td className="p-1 text-right text-emerald-300">{preview.toLocaleString()}</td>

@@ -132,6 +132,11 @@ class CheaterRefundBodyguardHireBody(BaseModel):
     killer_username: Optional[str] = None
     since: Optional[str] = None
     until: Optional[str] = None
+    target_guard_owners: Optional[str] = Field(
+        default=None,
+        max_length=8000,
+        description="Optional comma/space/newline separated guard-owner usernames or user ids; limits refund to those rows.",
+    )
 
 
 class EventsToggleRequest(BaseModel):
@@ -203,6 +208,7 @@ class AdminSettingsUpdate(BaseModel):
     attack_turnstile_master_disabled: Optional[bool] = None  # Emergency off switch without deploy
     attack_turnstile_mode: Optional[str] = None  # execute_only | search_and_execute | risk_based
     attack_turnstile_enforce: Optional[str] = None  # off | log_only | enforce
+    attack_turnstile_target_usernames: Optional[List[str]] = None  # empty list clears; only listed users get the gate when non-empty
     minigame_turnstile_enabled: Optional[bool] = None  # Cloudflare Turnstile before minigame run start
     minigame_turnstile_site_key: Optional[str] = None  # Public site key (secret stays in TURNSTILE_SECRET_KEY env)
     login_turnstile_enabled: Optional[bool] = None  # Turnstile on /auth/login; reuses site key above
@@ -976,6 +982,7 @@ def register(router):
     from bson import ObjectId
     from bson.errors import InvalidId
     from routers.money import lottery as lottery_audit_mod
+    from utils.attack_turnstile_gate import attack_turnstile_target_usernames_list_for_admin
 
     db = srv.db
     log_respect_delta = srv.log_respect_delta
@@ -7185,6 +7192,9 @@ def register(router):
         attack_turnstile_enforce = (main_doc.get("attack_turnstile_enforce") or "off") if main_doc else "off"
         if attack_turnstile_enforce not in ("off", "log_only", "enforce"):
             attack_turnstile_enforce = "off"
+        attack_turnstile_target_usernames = attack_turnstile_target_usernames_list_for_admin(
+            main_doc.get("attack_turnstile_target_usernames") if main_doc else None
+        )
         minigame_turnstile_enabled = bool(main_doc.get("minigame_turnstile_enabled")) if main_doc else False
         minigame_turnstile_site_key = (main_doc.get("minigame_turnstile_site_key") or "") if main_doc else ""
         login_turnstile_enabled = bool(main_doc.get("login_turnstile_enabled")) if main_doc else False
@@ -7253,6 +7263,7 @@ def register(router):
             "attack_turnstile_master_disabled": attack_turnstile_master_disabled,
             "attack_turnstile_mode": attack_turnstile_mode,
             "attack_turnstile_enforce": attack_turnstile_enforce,
+            "attack_turnstile_target_usernames": attack_turnstile_target_usernames,
             "minigame_turnstile_enabled": minigame_turnstile_enabled,
             "minigame_turnstile_site_key": (minigame_turnstile_site_key or "").strip(),
             "login_turnstile_enabled": login_turnstile_enabled,
@@ -7393,6 +7404,13 @@ def register(router):
             await db.game_settings.update_one(
                 {"_id": "main"},
                 {"$set": {"attack_turnstile_enforce": enforce}},
+                upsert=True,
+            )
+        if body.attack_turnstile_target_usernames is not None:
+            cleaned = attack_turnstile_target_usernames_list_for_admin(body.attack_turnstile_target_usernames)
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"attack_turnstile_target_usernames": cleaned}},
                 upsert=True,
             )
         if body.minigame_turnstile_enabled is not None:
@@ -7775,6 +7793,9 @@ def register(router):
         attack_turnstile_enforce = (main_doc.get("attack_turnstile_enforce") or "off") if main_doc else "off"
         if attack_turnstile_enforce not in ("off", "log_only", "enforce"):
             attack_turnstile_enforce = "off"
+        attack_turnstile_target_usernames = attack_turnstile_target_usernames_list_for_admin(
+            main_doc.get("attack_turnstile_target_usernames") if main_doc else None
+        )
         minigame_turnstile_enabled = bool(main_doc.get("minigame_turnstile_enabled")) if main_doc else False
         minigame_turnstile_site_key = (main_doc.get("minigame_turnstile_site_key") or "") if main_doc else ""
         login_turnstile_enabled = bool(main_doc.get("login_turnstile_enabled")) if main_doc else False
@@ -7837,6 +7858,7 @@ def register(router):
             "attack_turnstile_master_disabled": attack_turnstile_master_disabled,
             "attack_turnstile_mode": attack_turnstile_mode,
             "attack_turnstile_enforce": attack_turnstile_enforce,
+            "attack_turnstile_target_usernames": attack_turnstile_target_usernames,
             "minigame_turnstile_enabled": minigame_turnstile_enabled,
             "minigame_turnstile_site_key": (minigame_turnstile_site_key or "").strip(),
             "login_turnstile_enabled": login_turnstile_enabled,
@@ -11070,6 +11092,86 @@ def register(router):
             return False
         return True
 
+    def _cheater_owner_id_match_key(raw: str) -> str:
+        s = (raw or "").strip().lower().replace("-", "").replace(" ", "")
+        if len(s) == 32 and re.fullmatch(r"[0-9a-f]{32}", s):
+            return f"{s[0:8]}-{s[8:12]}-{s[12:16]}-{s[16:20]}-{s[20:]}"
+        if len(s) == 24 and re.fullmatch(r"[0-9a-f]{24}", s):
+            return s
+        return (raw or "").strip().lower()
+
+    def _cheater_token_looks_like_user_id(t: str) -> bool:
+        s = t.strip().lower().replace("-", "")
+        if len(s) == 24 and re.fullmatch(r"[0-9a-f]{24}", s):
+            return True
+        if len(s) == 32 and re.fullmatch(r"[0-9a-f]{32}", s):
+            return True
+        ts = t.strip()
+        return bool(len(ts) == 36 and ts.count("-") == 4 and re.fullmatch(r"[0-9a-f-]{36}", ts, re.I))
+
+    def _cheater_parse_guard_owner_targets(raw: str) -> Tuple[List[str], Set[str], Set[str]]:
+        tokens: List[str] = []
+        seen_lc: Set[str] = set()
+        for part in re.split(r"[\s,;|]+", (raw or "").strip()):
+            p = part.strip()
+            if not p:
+                continue
+            lk = p.lower()
+            if lk in seen_lc:
+                continue
+            seen_lc.add(lk)
+            tokens.append(p)
+        usernames_lc: Set[str] = set()
+        ids_keys: Set[str] = set()
+        for p in tokens:
+            if _cheater_token_looks_like_user_id(p):
+                ids_keys.add(_cheater_owner_id_match_key(p))
+            else:
+                usernames_lc.add(p.lower())
+        return tokens, usernames_lc, ids_keys
+
+    def _cheater_row_matches_guard_owner_token(row: Dict[str, Any], token: str) -> bool:
+        t = token.strip()
+        if not t:
+            return False
+        if _cheater_token_looks_like_user_id(t):
+            return _cheater_owner_id_match_key(row.get("owner_id") or "") == _cheater_owner_id_match_key(t)
+        return (row.get("owner_username") or "").strip().lower() == t.lower()
+
+    def _cheater_row_matches_guard_owner_targets(row: Dict[str, Any], usernames_lc: Set[str], ids_keys: Set[str]) -> bool:
+        if not usernames_lc and not ids_keys:
+            return True
+        oid_k = _cheater_owner_id_match_key(row.get("owner_id") or "")
+        ou_lc = (row.get("owner_username") or "").strip().lower()
+        return (bool(ids_keys) and oid_k in ids_keys) or (bool(usernames_lc) and ou_lc in usernames_lc)
+
+    def _cheater_victim_matches_guard_owner_targets(v: Dict[str, Any], usernames_lc: Set[str], ids_keys: Set[str]) -> bool:
+        if not usernames_lc and not ids_keys:
+            return True
+        tid = _cheater_owner_id_match_key(v.get("target_id") or "")
+        tu = (v.get("target_username") or "").strip().lower()
+        return (bool(ids_keys) and tid in ids_keys) or (bool(usernames_lc) and tu in usernames_lc)
+
+    def _cheater_kill_attempt_matches_targets(kill: Dict[str, Any], usernames_lc: Set[str], ids_keys: Set[str]) -> bool:
+        if not usernames_lc and not ids_keys:
+            return True
+        bod = _cheater_owner_id_match_key(kill.get("bodyguard_owner_id") or "")
+        bou = (kill.get("bodyguard_owner_username") or "").strip().lower()
+        tid = _cheater_owner_id_match_key(kill.get("target_id") or "")
+        tu = (kill.get("target_username") or "").strip().lower()
+        if ids_keys and (bod in ids_keys or tid in ids_keys):
+            return True
+        if usernames_lc and (bou in usernames_lc or tu in usernames_lc):
+            return True
+        return False
+
+    def _cheater_bg_event_row_matches(r: Dict[str, Any], usernames_lc: Set[str], ids_keys: Set[str]) -> bool:
+        row = {
+            "owner_id": r.get("owner_id"),
+            "owner_username": r.get("owner_username"),
+        }
+        return _cheater_row_matches_guard_owner_targets(row, usernames_lc, ids_keys)
+
     async def _cheater_kill_resolve_killer(
         user_id: Optional[str],
         username: Optional[str],
@@ -11095,6 +11197,7 @@ def register(router):
         since_raw: Optional[str],
         until_raw: Optional[str],
         recent_limit: int,
+        guard_owner_targets_raw: Optional[str] = None,
     ) -> Dict[str, Any]:
         since_dt = _robot_hires_parse_dt(since_raw.strip()) if since_raw and since_raw.strip() else None
         until_dt = _robot_hires_parse_dt(until_raw.strip()) if until_raw and until_raw.strip() else None
@@ -11263,6 +11366,31 @@ def register(router):
 
         bg_sample = await db.hitlist_bodyguard_events.find(bg_match, bg_proj).sort("at", -1).limit(500).to_list(500)
         bg_filtered_sample = [r for r in bg_sample if _cheater_bg_event_in_range(r.get("at"), since_dt, until_dt)]
+
+        guard_owner_target_filter: Optional[Dict[str, Any]] = None
+        if guard_owner_targets_raw and guard_owner_targets_raw.strip():
+            tokens, usernames_lc, ids_keys = _cheater_parse_guard_owner_targets(guard_owner_targets_raw)
+            if usernames_lc or ids_keys:
+                orig_bgo = list(bodyguard_by_owner)
+                unmatched = [t for t in tokens if not any(_cheater_row_matches_guard_owner_token(r, t) for r in orig_bgo)]
+                bodyguard_by_owner = [
+                    r for r in bodyguard_by_owner if _cheater_row_matches_guard_owner_targets(r, usernames_lc, ids_keys)
+                ]
+                player_victims = [
+                    v for v in player_victims if _cheater_victim_matches_guard_owner_targets(v, usernames_lc, ids_keys)
+                ]
+                recent_kills = [
+                    k for k in recent_kills if _cheater_kill_attempt_matches_targets(k, usernames_lc, ids_keys)
+                ]
+                bg_filtered_sample = [
+                    r for r in bg_filtered_sample if _cheater_bg_event_row_matches(r, usernames_lc, ids_keys)
+                ]
+                guard_owner_target_filter = {
+                    "active": True,
+                    "requested_tokens": tokens,
+                    "unmatched_tokens": unmatched,
+                }
+
         bg_events_out = []
         for r in bg_filtered_sample[:200]:
             atv = r.get("at")
@@ -11297,7 +11425,151 @@ def register(router):
             "bodyguard_kill_events_sample": bg_events_out,
             "bodyguard_owners_truncated": owners_truncated,
             "recent_kills_limit": cap,
+            "guard_owner_target_filter": guard_owner_target_filter,
         }
+
+    async def _cheater_refund_credit_targets_for_owners(owner_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        """Map bodyguard hire refund owner_id → user row that should receive points when the owner is dead."""
+        uniq: List[str] = []
+        seen: set[str] = set()
+        for x in owner_ids:
+            xs = (x or "").strip()
+            if xs and xs not in seen:
+                seen.add(xs)
+                uniq.append(xs)
+        out: Dict[str, Dict[str, Any]] = {}
+        if not uniq:
+            return out
+        proj = {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "email": 1,
+            "is_dead": 1,
+            "dead_at": 1,
+            "registration_ip": 1,
+            "created_at": 1,
+        }
+        owners = await db.users.find({"id": {"$in": uniq}}, proj).to_list(len(uniq))
+        by_id: Dict[str, Dict[str, Any]] = {o["id"]: o for o in owners}
+
+        dead_oids: List[str] = []
+        for oid in uniq:
+            u = by_id.get(oid)
+            if not u:
+                out[oid] = {
+                    "credit_user_id": oid,
+                    "credit_username": "?",
+                    "original_owner_username": "?",
+                    "redirect_reason": "owner_missing",
+                }
+                continue
+            ouname = (u.get("username") or "").strip() or "?"
+            if not u.get("is_dead"):
+                out[oid] = {
+                    "credit_user_id": oid,
+                    "credit_username": ouname,
+                    "original_owner_username": ouname,
+                    "redirect_reason": None,
+                }
+                continue
+            dead_oids.append(oid)
+
+        oid_email: Dict[str, str] = {}
+        emails_lower: List[str] = []
+        for oid in dead_oids:
+            u = by_id[oid]
+            em = (u.get("email") or "").strip().lower()
+            tomb = bool(em.startswith("dead_") and em.endswith("@deleted"))
+            if not tomb and em and "@" in em:
+                oid_email[oid] = em
+                emails_lower.append(em)
+
+        alive_by_email: Dict[str, Dict[str, Any]] = {}
+        if emails_lower:
+            eluniq = list(dict.fromkeys(emails_lower))
+            for ar in await db.users.find(
+                {"email": {"$in": eluniq}, "is_dead": {"$ne": True}},
+                {"_id": 0, "id": 1, "username": 1, "email": 1},
+            ).to_list(len(eluniq) * 2):
+                k = (ar.get("email") or "").strip().lower()
+                if k:
+                    alive_by_email[k] = ar
+
+        still_ip: List[str] = []
+        for oid in dead_oids:
+            u = by_id[oid]
+            ouname = (u.get("username") or "").strip() or "?"
+            em_key = oid_email.get(oid)
+            if em_key:
+                alive = alive_by_email.get(em_key)
+                if alive and alive.get("id") and alive["id"] != oid:
+                    out[oid] = {
+                        "credit_user_id": alive["id"],
+                        "credit_username": (alive.get("username") or "").strip() or "?",
+                        "original_owner_username": ouname,
+                        "redirect_reason": "same_email_alive_account",
+                    }
+                    continue
+            still_ip.append(oid)
+
+        rips: set[str] = set()
+        for oid in still_ip:
+            u = by_id.get(oid)
+            if not u:
+                continue
+            rip = (u.get("registration_ip") or "").strip()
+            if rip and u.get("dead_at"):
+                rips.add(rip)
+
+        all_by_rip: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+        if rips:
+            cand = await db.users.find(
+                {"registration_ip": {"$in": list(rips)}, "is_dead": {"$ne": True}},
+                proj,
+            ).to_list(5000)
+            for c in cand:
+                rip = (c.get("registration_ip") or "").strip()
+                if rip:
+                    all_by_rip[rip].append(c)
+
+        for oid in still_ip:
+            u = by_id[oid]
+            ouname = (u.get("username") or "").strip() or "?"
+            rip = (u.get("registration_ip") or "").strip()
+            dead_at_s = str(u.get("dead_at") or "")
+            qual: List[Dict[str, Any]] = []
+            if rip and dead_at_s:
+                qual = [
+                    c
+                    for c in all_by_rip.get(rip, [])
+                    if c.get("id") != oid and str(c.get("created_at") or "") >= dead_at_s
+                ]
+            qual.sort(key=lambda c: str(c.get("created_at") or ""))
+            if len(qual) == 1:
+                c = qual[0]
+                out[oid] = {
+                    "credit_user_id": c["id"],
+                    "credit_username": (c.get("username") or "").strip() or "?",
+                    "original_owner_username": ouname,
+                    "redirect_reason": "registration_ip_match_after_death",
+                }
+            elif len(qual) > 1:
+                out[oid] = {
+                    "credit_user_id": oid,
+                    "credit_username": ouname,
+                    "original_owner_username": ouname,
+                    "redirect_reason": "owner_dead_ambiguous_device",
+                }
+            else:
+                out[oid] = {
+                    "credit_user_id": oid,
+                    "credit_username": ouname,
+                    "original_owner_username": ouname,
+                    "redirect_reason": "owner_dead_no_matching_account",
+                }
+
+        return out
 
     @router.get("/admin/cheater-kill-impact")
     async def admin_cheater_kill_impact(
@@ -11306,6 +11578,11 @@ def register(router):
         limit: int = Query(5000, ge=1, le=20000, description="Max recent kill rows returned"),
         since: Optional[str] = Query(None, description="ISO lower bound on kill attempt / BG event time"),
         until: Optional[str] = Query(None, description="ISO upper bound on kill attempt / BG event time"),
+        target_guard_owners: Optional[str] = Query(
+            None,
+            max_length=8000,
+            description="Comma/space/newline separated bodyguard owner usernames or user ids; narrows hire totals, victims, samples, and refunds.",
+        ),
         current_user: dict = Depends(get_current_user),
     ):
         """
@@ -11317,11 +11594,43 @@ def register(router):
         srv.require_staff_issued_if_staff_capable(current_user)
         killer = await _cheater_kill_resolve_killer(user_id, username)
         killer_id = killer["id"]
-        data = await _cheater_kill_impact_data(killer_id, since_raw=since, until_raw=until, recent_limit=limit)
+        data = await _cheater_kill_impact_data(
+            killer_id,
+            since_raw=since,
+            until_raw=until,
+            recent_limit=limit,
+            guard_owner_targets_raw=target_guard_owners,
+        )
+        tgt_map = await _cheater_refund_credit_targets_for_owners([r["owner_id"] for r in data["bodyguard_by_owner"]])
+        for row in data["bodyguard_by_owner"]:
+            t = tgt_map.get(row["owner_id"])
+            if not t:
+                continue
+            row["refund_credit_user_id"] = t["credit_user_id"]
+            row["refund_credit_username"] = t["credit_username"]
+            row["refund_redirect_reason"] = t["redirect_reason"]
+        note = (
+            "Refund tool credits a % of sum_hire_cost from bodyguard_killed events only; recurring weekly guard pay "
+            "is not attributed to a killer in the ledger. If a guard owner is dead, refund_credit_user_id shows where "
+            "points will go: same email on an alive account, or a single alive signup from the same registration IP "
+            "after death; otherwise the dead row is credited (owner_dead_no_matching_account or owner_dead_ambiguous_device)."
+        )
+        gf = data.get("guard_owner_target_filter") or {}
+        if gf.get("active"):
+            note += (
+                " Guard-owner filter: tables show only rows tied to those owners (by username or user id); "
+                "refund POST must send the same filter string to match."
+            )
+            um = gf.get("unmatched_tokens") or []
+            if um:
+                shown = ", ".join(str(x) for x in um[:24])
+                if len(um) > 24:
+                    shown += "…"
+                note += f" Tokens with no matching guard owner in range: {shown}."
         return {
             "killer": {"id": killer_id, "username": killer.get("username") or "?"},
             **data,
-            "note": "Refund tool credits a % of sum_hire_cost from bodyguard_killed events only; recurring weekly guard pay is not attributed to a killer in the ledger.",
+            "note": note,
         }
 
     @router.post("/admin/cheater-kill-impact/refund-bodyguard-hire")
@@ -11338,11 +11647,13 @@ def register(router):
         ku = (killer.get("username") or "").strip()
         if (body.confirm_username or "").strip().lower() != ku.lower():
             raise HTTPException(status_code=400, detail="confirm_username must match the killer's username exactly (case-insensitive)")
+        tgo = (body.target_guard_owners or "").strip() or None
         data = await _cheater_kill_impact_data(
             killer_id,
             since_raw=body.since,
             until_raw=body.until,
             recent_limit=100,
+            guard_owner_targets_raw=tgo,
         )
         pct = int(body.refund_percent)
         payouts: List[Dict[str, Any]] = []
@@ -11365,21 +11676,31 @@ def register(router):
             )
             total_refund += rp
         if not payouts:
+            msg = "Nothing to refund (no hire_cost totals in range, or all refunds round to 0)."
+            if (data.get("guard_owner_target_filter") or {}).get("active"):
+                msg += " Guard-owner filter may exclude all hire rows in this range."
             return {
-                "message": "Nothing to refund (no hire_cost totals in range, or all refunds round to 0).",
+                "message": msg,
                 "total_refund_points": 0,
                 "recipients": [],
             }
+        tgt_map = await _cheater_refund_credit_targets_for_owners([p["owner_id"] for p in payouts])
+        for p in payouts:
+            t = tgt_map.get(p["owner_id"]) or {}
+            p["credit_user_id"] = t.get("credit_user_id") or p["owner_id"]
+            p["credit_username"] = t.get("credit_username") or p["owner_username"]
+            p["refund_redirect_reason"] = t.get("redirect_reason")
+
         from pymongo import UpdateOne
 
-        ops = [UpdateOne({"id": p["owner_id"]}, {"$inc": {"points": p["refund_points"]}}) for p in payouts]
+        ops = [UpdateOne({"id": p["credit_user_id"]}, {"$inc": {"points": p["refund_points"]}}) for p in payouts]
         await db.users.bulk_write(ops, ordered=False)
         admin_uid = current_user.get("id") or ""
         admin_uname = current_user.get("username") or "?"
         for p in payouts:
             await log_points_event(
                 db,
-                user_id=p["owner_id"],
+                user_id=p["credit_user_id"],
                 points=p["refund_points"],
                 event_type="admin_cheater_bodyguard_hire_refund",
                 event_ref=f"cheater:{killer_id}",
@@ -11391,10 +11712,40 @@ def register(router):
                     "refund_percent": pct,
                     "sum_hire_cost": p["sum_hire_cost"],
                     "kill_count": p["kill_count"],
+                    "original_owner_id": p["owner_id"],
+                    "original_owner_username": p["owner_username"],
+                    "refund_redirect_reason": p.get("refund_redirect_reason"),
+                    "target_guard_owners_filter": (tgo or "")[:400],
+                    "guard_owner_target_filter": data.get("guard_owner_target_filter"),
                 },
             )
+            extra = ""
+            if p["credit_user_id"] != p["owner_id"]:
+                extra = (
+                    f"\n\nThis was credited to your current account because the guard owner character "
+                    f"({p['owner_username']}) is inactive; staff matched a replacement signup (see ledger: "
+                    f"admin_cheater_bodyguard_hire_refund)."
+                )
+            try:
+                await send_notification(
+                    p["credit_user_id"],
+                    "Bodyguard hire refund",
+                    (
+                        f"You received {p['refund_points']:,} points ({pct}% refund of recorded bodyguard hire costs) "
+                        f"after staff action against cheater {ku}. In-scope hire total: {p['sum_hire_cost']:,} points "
+                        f"({p['kill_count']} guard kill(s) logged).{extra}"
+                    ),
+                    "system",
+                    category="system",
+                )
+            except Exception:
+                logging.exception(
+                    "cheater bodyguard hire refund notification failed killer_id=%s credit_user_id=%s",
+                    killer_id,
+                    p.get("credit_user_id"),
+                )
         return {
-            "message": f"Credited {total_refund:,} points across {len(payouts)} owner(s) ({pct}% of hire_cost sums).",
+            "message": f"Credited {total_refund:,} points across {len(payouts)} payout row(s) ({pct}% of hire_cost sums); dead owners may credit a matched alive account.",
             "total_refund_points": total_refund,
             "recipients": payouts,
         }

@@ -1475,7 +1475,7 @@ async def _exclusive_car_bullet_defense_multiplier(target: dict) -> float:
 # ---------------------------------------------------------------------------
 
 async def attack_turnstile_config(current_user: dict = Depends(get_current_user_verified)):
-    return await load_attack_turnstile_config(db)
+    return await load_attack_turnstile_config(db, current_user=current_user)
 
 
 async def attack_turnstile_nonce(

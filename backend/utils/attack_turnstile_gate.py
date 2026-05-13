@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import secrets
 import uuid
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, FrozenSet, List, Optional
 
 from fastapi import HTTPException, Request
 
@@ -23,6 +24,55 @@ ATTACK_TURNSTILE_NONCE_TTL_SECONDS = 180
 ATTACK_TURNSTILE_RISK_SCORE_THRESHOLD = 35
 ATTACK_TURNSTILE_VALID_MODES = {"execute_only", "search_and_execute", "risk_based"}
 ATTACK_TURNSTILE_VALID_ENFORCE = {"off", "log_only", "enforce"}
+ATTACK_TURNSTILE_TARGET_USERNAMES_MAX = 200
+ATTACK_TURNSTILE_TARGET_USERNAME_MAX_LEN = 80
+
+
+def _attack_turnstile_target_usernames_lower(raw: Any) -> FrozenSet[str]:
+    """Lowercased usernames from stored list or string; used for rollout scoping."""
+    parts: List[str] = []
+    if raw is None:
+        return frozenset()
+    if isinstance(raw, str):
+        parts = [p.strip() for p in re.split(r"[\s,;|]+", raw) if p.strip()]
+    elif isinstance(raw, list):
+        parts = [str(p).strip() for p in raw if str(p).strip()]
+    else:
+        return frozenset()
+    seen: set[str] = set()
+    out: List[str] = []
+    for p in parts[:ATTACK_TURNSTILE_TARGET_USERNAMES_MAX]:
+        if len(p) > ATTACK_TURNSTILE_TARGET_USERNAME_MAX_LEN:
+            p = p[: ATTACK_TURNSTILE_TARGET_USERNAME_MAX_LEN]
+        sl = p.lower()
+        if sl in seen:
+            continue
+        seen.add(sl)
+        out.append(sl)
+    return frozenset(out)
+
+
+def attack_turnstile_target_usernames_list_for_admin(raw: Any) -> List[str]:
+    """Deduped display list for admin settings (case-insensitive uniqueness)."""
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        parts = [p.strip() for p in re.split(r"[\s,;|]+", raw) if p.strip()]
+    elif isinstance(raw, list):
+        parts = [str(p).strip() for p in raw if str(p).strip()]
+    else:
+        return []
+    seen: set[str] = set()
+    out: List[str] = []
+    for p in parts[:ATTACK_TURNSTILE_TARGET_USERNAMES_MAX]:
+        if len(p) > ATTACK_TURNSTILE_TARGET_USERNAME_MAX_LEN:
+            p = p[:ATTACK_TURNSTILE_TARGET_USERNAME_MAX_LEN]
+        sl = p.lower()
+        if sl in seen:
+            continue
+        seen.add(sl)
+        out.append(p)
+    return out
 
 
 def _env_disabled() -> bool:
@@ -57,7 +107,7 @@ def _clean_enforce(raw: Any) -> str:
     return val if val in ATTACK_TURNSTILE_VALID_ENFORCE else ATTACK_TURNSTILE_DEFAULT_ENFORCE
 
 
-async def attack_turnstile_config(db) -> Dict[str, Any]:
+async def attack_turnstile_config(db, *, current_user: Optional[dict] = None) -> Dict[str, Any]:
     main = await db.game_settings.find_one(
         {"_id": "main"},
         {
@@ -66,6 +116,7 @@ async def attack_turnstile_config(db) -> Dict[str, Any]:
             "attack_turnstile_master_disabled": 1,
             "attack_turnstile_mode": 1,
             "attack_turnstile_enforce": 1,
+            "attack_turnstile_target_usernames": 1,
             "minigame_turnstile_site_key": 1,
         },
     )
@@ -77,6 +128,12 @@ async def attack_turnstile_config(db) -> Dict[str, Any]:
     enforce = _clean_enforce(main.get("attack_turnstile_enforce"))
     if enforce == "off":
         enabled = False
+    targets_lc = _attack_turnstile_target_usernames_lower(main.get("attack_turnstile_target_usernames"))
+    target_rollout = bool(targets_lc)
+    if target_rollout and current_user is not None:
+        uname_lc = ((current_user.get("username") or "").strip().lower())[:ATTACK_TURNSTILE_TARGET_USERNAME_MAX_LEN]
+        if uname_lc not in targets_lc:
+            enabled = False
     return {
         "enabled": enabled,
         "configured": configured,
@@ -87,6 +144,7 @@ async def attack_turnstile_config(db) -> Dict[str, Any]:
         "env_disabled": _env_disabled(),
         "nonce_ttl_seconds": ATTACK_TURNSTILE_NONCE_TTL_SECONDS,
         "risk_score_threshold": ATTACK_TURNSTILE_RISK_SCORE_THRESHOLD,
+        "target_rollout_active": target_rollout,
     }
 
 
@@ -102,7 +160,7 @@ def attack_turnstile_required_for_action(config: Dict[str, Any], *, action: str,
 
 
 async def issue_attack_turnstile_nonce(db, *, current_user: dict, action: str, risk_score: int = 0) -> Dict[str, Any]:
-    cfg = await attack_turnstile_config(db)
+    cfg = await attack_turnstile_config(db, current_user=current_user)
     action = (action or "").strip().lower()
     if action not in ("search", "execute"):
         raise HTTPException(status_code=400, detail="Invalid attack Turnstile action")
@@ -159,7 +217,7 @@ async def require_attack_turnstile(
     captcha_nonce: Optional[str],
     risk_score: int = 0,
 ) -> Dict[str, Any]:
-    cfg = await attack_turnstile_config(db)
+    cfg = await attack_turnstile_config(db, current_user=current_user)
     action = (action or "").strip().lower()
     if action not in ("search", "execute"):
         return {"required": False, "allowed": True, "reason": "invalid_action"}
