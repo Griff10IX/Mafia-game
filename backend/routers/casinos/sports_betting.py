@@ -74,6 +74,8 @@ class AdminAddSportsEventRequest(BaseModel):
 
 class AdminSportsAutoBoardRunRequest(BaseModel):
     refresh_odds: bool = True
+    # None = use SPORTS_AUTO_BOARD_TEMPLATE_SOURCE env (default database). "merged" = in-memory Odds + DB merge (mem wins).
+    template_source: Optional[str] = None
 
 
 class AdminCancelEventRequest(BaseModel):
@@ -566,7 +568,8 @@ SOCCER_ODDS_REGION_ATTEMPTS = (
     "uk,us,eu,fr,se,au",
 )
 
-# Auto-board: promote Odds-backed templates to sports_events (cron / admin). Football uses allowlist; UFC + Boxing always.
+# Auto-board: promote templates to sports_events (cron / admin). Football uses allowlist; UFC + Boxing always.
+# Template pool: SPORTS_AUTO_BOARD_TEMPLATE_SOURCE (default database = MongoDB sports_betting_templates only).
 _AUTO_BOARD_SOCCER_DEFAULT_KEYS = (
     "soccer_epl",
     "soccer_spain_la_liga",
@@ -598,6 +601,14 @@ def _sports_auto_board_max() -> int:
         except ValueError:
             pass
     return SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT
+
+
+def _sports_auto_board_template_source() -> str:
+    """Which template pool auto-board / ticker / cron uses. Default: MongoDB only (no Odds refresh on that path)."""
+    raw = (os.environ.get("SPORTS_AUTO_BOARD_TEMPLATE_SOURCE") or "database").strip().lower()
+    if raw in ("merged", "odds", "memory", "api", "all"):
+        return "merged"
+    return "database"
 
 
 # Boxing/MMA: merge across regions so fights with only EU/UK books (e.g. PPV cards) still appear.
@@ -2196,15 +2207,28 @@ async def _create_sports_board_event_from_template(template: dict, *, auto_board
     return ev
 
 
-async def auto_populate_sports_board(*, refresh_odds: bool = True, max_n: Optional[int] = None) -> dict:
-    """Promote Odds-backed templates to open sports_events (priority football + all UFC/Boxing), up to max_n."""
+async def auto_populate_sports_board(
+    *,
+    refresh_odds: bool = True,
+    max_n: Optional[int] = None,
+    template_source: Optional[str] = None,
+) -> dict:
+    """Promote templates to open sports_events (priority football + all UFC/Boxing), up to max_n / daily cap."""
+    raw_src = (template_source or _sports_auto_board_template_source() or "database").strip().lower()
+    src = "merged" if raw_src in ("merged", "odds", "memory", "api", "all") else "database"
     cap = max_n if max_n is not None else _sports_auto_board_max()
     cap = max(1, min(SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT, int(cap)))
     soccer_keys = _auto_board_soccer_sport_keys()
-    if refresh_odds:
+    refresh_applied = False
+    if src == "merged" and refresh_odds:
         await _refresh_sports_live_cache(force=True)
+        refresh_applied = True
     on_board = await _open_board_template_ids()
-    merged = await _merged_sports_templates_for_admin()
+    merged = (
+        await _load_sports_templates_from_db()
+        if src == "database"
+        else await _merged_sports_templates_for_admin()
+    )
     now = datetime.now(timezone.utc)
     added_today = await _count_auto_board_events_added_today(now)
     remaining_today = max(0, SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT - added_today)
@@ -2244,7 +2268,8 @@ async def auto_populate_sports_board(*, refresh_odds: bool = True, max_n: Option
         "added_today_before_run": added_today,
         "remaining_today_before_run": remaining_today,
         "remaining_today_after_run": max(0, remaining_today - added),
-        "refresh_odds": refresh_odds,
+        "template_source": src,
+        "refresh_odds": refresh_applied,
         "added_template_ids": added_template_ids,
         "errors": errors[:40],
     }
@@ -2860,8 +2885,11 @@ async def admin_sports_auto_board_run(
     body: AdminSportsAutoBoardRunRequest = Body(default=AdminSportsAutoBoardRunRequest()),
     current_user: dict = Depends(require_admin_verified),
 ):
-    """Admin: promote priority Odds templates onto the open board (same logic as cron auto-board)."""
-    return await auto_populate_sports_board(refresh_odds=body.refresh_odds)
+    """Admin: promote templates onto the open board (same logic as cron auto-board)."""
+    return await auto_populate_sports_board(
+        refresh_odds=body.refresh_odds,
+        template_source=body.template_source,
+    )
 
 
 async def admin_sports_templates_load_db(current_user: dict = Depends(require_admin_verified)):
@@ -3535,10 +3563,10 @@ def _sports_auto_board_ticker_initial_delay_sec() -> int:
 
 def _sports_auto_board_ticker_interval_sec() -> int:
     try:
-        # Default 6h keeps the board fresh without burning Odds API quota every few minutes.
-        return max(900, int(os.environ.get("SPORTS_AUTO_BOARD_TICKER_INTERVAL_SEC", "21600")))
+        # Default 2h: re-scan saved DB templates for games to add (no Odds calls when SPORTS_AUTO_BOARD_TEMPLATE_SOURCE=database).
+        return max(900, int(os.environ.get("SPORTS_AUTO_BOARD_TICKER_INTERVAL_SEC", "7200")))
     except ValueError:
-        return 21600
+        return 7200
 
 
 def _parse_start_time_utc(iso_s) -> Optional[datetime]:
@@ -3719,14 +3747,14 @@ async def run_sports_auto_settle_ticker() -> None:
 
 async def run_sports_auto_board_ticker() -> None:
     """
-    Background loop: refresh Odds-backed templates and promote upcoming games to the sports board.
+    Background loop: promote upcoming games to the sports board from saved templates (MongoDB by default).
     Disable with SPORTS_AUTO_BOARD_TICKER=0, or set SPORTS_AUTO_BOARD_USE_CRON=1 and call the cron route externally.
     """
     log = logging.getLogger(__name__)
     await asyncio.sleep(_sports_auto_board_ticker_initial_delay_sec())
     while True:
         try:
-            out = await auto_populate_sports_board(refresh_odds=True)
+            out = await auto_populate_sports_board()
             added = int(out.get("added") or 0)
             if added > 0:
                 log.info(
@@ -3802,8 +3830,8 @@ def register(router):
         return await _auto_settle_from_scores()
 
     async def cron_sports_auto_board(_: None = Depends(verify_sports_cron_secret)):
-        """Cron: populate sports_events from Odds templates (refresh + promote). Prefer 1–2×/day if quota-sensitive. Header: X-Cron-Secret."""
-        return await auto_populate_sports_board(refresh_odds=True)
+        """Cron: add eligible open events from saved templates (MongoDB default; no Odds refresh). Schedule ~every 2h. Header: X-Cron-Secret."""
+        return await auto_populate_sports_board()
 
     router.add_api_route("/sports-betting/cron/auto-settle", cron_sports_auto_settle, methods=["POST"])
     router.add_api_route("/sports-betting/cron/auto-board", cron_sports_auto_board, methods=["POST"])

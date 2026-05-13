@@ -14,3 +14,6 @@
 
 # Or with public URL:
 # */30 * * * * curl -s -X POST -H "X-Cron-Secret: YOUR_CRON_SECRET" -H "Content-Type: application/json" https://mafiawars.co.uk/api/sports-betting/cron/auto-settle
+#
+# Sports auto-board (add events from saved DB templates; no Odds quota on default path). Every 2 hours:
+# 0 */2 * * * curl -s -X POST -H "X-Cron-Secret: YOUR_CRON_SECRET" -H "Content-Type: application/json" http://127.0.0.1:8000/api/sports-betting/cron/auto-board

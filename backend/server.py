@@ -3423,7 +3423,7 @@ async def startup_db():
         logging.getLogger(__name__).info(
             "Sports auto-settle: in-process ticker enabled (default ON; set SPORTS_AUTO_SETTLE_TICKER=0 to disable). Multi-worker: each worker runs a ticker — use one worker or cron-only mode."
         )
-    # Sports betting auto-board: refresh Odds templates and add upcoming events automatically
+    # Sports betting auto-board: add upcoming events from saved templates (MongoDB by default; see SPORTS_AUTO_BOARD_TEMPLATE_SOURCE)
     sports_auto_board_use_cron = (os.environ.get("SPORTS_AUTO_BOARD_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
     _sports_auto_board_ticker_raw = (os.environ.get("SPORTS_AUTO_BOARD_TICKER") or "").strip().lower()
     sports_auto_board_ticker = _sports_auto_board_ticker_raw not in ("0", "false", "no", "off")
@@ -3436,7 +3436,7 @@ async def startup_db():
 
         asyncio.create_task(sports_betting_mod.run_sports_auto_board_ticker())
         logging.getLogger(__name__).info(
-            "Sports auto-board: in-process ticker enabled (default ON; set SPORTS_AUTO_BOARD_TICKER=0 to disable). Multi-worker: each worker may refresh Odds API — prefer cron-only for multi-worker setups."
+            "Sports auto-board: in-process ticker enabled (default ON; set SPORTS_AUTO_BOARD_TICKER=0 to disable). Default: DB templates every 2h, no Odds refresh on that path. Multi-worker: prefer cron-only."
         )
     # Crew OC store-token auto-apply: bounded ticker vs cron-only (multi-worker safe)
     crew_oc_auto_apply_use_cron = (os.environ.get("CREW_OC_AUTO_APPLY_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
