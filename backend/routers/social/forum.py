@@ -354,10 +354,24 @@ async def _prune_forum_topics_for_category(category: str) -> None:
     max_total = FORUM_CREW_OC_MAX_TOTAL if category == "crew_oc" else FORUM_TOPICS_MAX_TOTAL
     sort = [("is_important", -1), ("is_sticky", -1), ("updated_at", -1)]
     all_in_category = await db.forum_topics.find(cleanup_query, {"_id": 0, "id": 1, "prune_exempt": 1}).sort(sort).to_list(max_total + 50)
+    active_crew_oc_topic_ids = set()
+    if category == "crew_oc":
+        async for fam in db.families.find(
+            {"crew_oc_forum_topic_id": {"$exists": True}},
+            {"_id": 0, "crew_oc_forum_topic_id": 1},
+        ):
+            raw = fam.get("crew_oc_forum_topic_id")
+            if raw and str(raw).strip():
+                active_crew_oc_topic_ids.add(str(raw).strip())
     for t in all_in_category[max_total:]:
         if t.get("prune_exempt"):
             continue
-        await _delete_topic_fully(t["id"])
+        tid = t.get("id")
+        if not tid:
+            continue
+        if category == "crew_oc" and str(tid) in active_crew_oc_topic_ids:
+            continue
+        await _delete_topic_fully(tid)
 
 
 async def get_topics(

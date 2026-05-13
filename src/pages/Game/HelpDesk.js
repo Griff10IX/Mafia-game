@@ -1,5 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
-import { HelpCircle, Send, MessageSquare, X, ChevronRight, VolumeX, Building2, ShieldBan } from 'lucide-react';
+import { HelpCircle, Send, MessageSquare, X, ChevronRight, VolumeX, Building2, ShieldBan, ChevronsUpDown, Check } from 'lucide-react';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { cn } from '@/lib/utils';
 import api from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
@@ -51,7 +61,10 @@ export default function HelpDesk() {
   const [muteLogOpen, setMuteLogOpen] = useState(false);
   const [muteLog, setMuteLog] = useState([]);
   const [muteLogLoading, setMuteLogLoading] = useState(false);
-  const [familyTag, setFamilyTag] = useState('');
+  const [renameFamilyOpen, setRenameFamilyOpen] = useState(false);
+  const [renameFamilies, setRenameFamilies] = useState([]);
+  const [renameFamiliesLoading, setRenameFamiliesLoading] = useState(false);
+  const [selectedRenameFamily, setSelectedRenameFamily] = useState(null);
   const [newFamilyName, setNewFamilyName] = useState('');
   const [newFamilyTag, setNewFamilyTag] = useState('');
   const [changingFamily, setChangingFamily] = useState(false);
@@ -129,6 +142,24 @@ export default function HelpDesk() {
       setBlacklistLoading(false);
     }
   }, [canManage]);
+
+  const fetchRenameFamilies = useCallback(async () => {
+    setRenameFamiliesLoading(true);
+    try {
+      const r = await api.get('/help-desk/families-for-rename');
+      setRenameFamilies(Array.isArray(r.data?.families) ? r.data.families : []);
+    } catch (_) {
+      setRenameFamilies([]);
+      toast.error('Failed to load crews');
+    } finally {
+      setRenameFamiliesLoading(false);
+    }
+  }, []);
+
+  const onRenameFamilyOpenChange = (open) => {
+    setRenameFamilyOpen(open);
+    if (open) fetchRenameFamilies();
+  };
 
   useEffect(() => { fetchCheck(); }, [fetchCheck]);
   useEffect(() => { fetchTickets(); }, [fetchTickets]);
@@ -307,9 +338,9 @@ export default function HelpDesk() {
 
   const handleChangeFamilyName = async (e) => {
     e.preventDefault();
-    const tag = (familyTag || '').trim().toUpperCase();
+    const tag = (selectedRenameFamily?.tag || '').trim().toUpperCase();
     const name = (newFamilyName || '').trim();
-    if (!tag) { toast.error('Enter the crew\'s current tag'); return; }
+    if (!tag) { toast.error('Select a crew from the list'); return; }
     if (name.length < 2 || name.length > 30) { toast.error('New name must be 2–30 characters'); return; }
     const tagVal = (newFamilyTag || '').trim();
     if (tagVal && (tagVal.length < 2 || tagVal.length > 4)) {
@@ -325,7 +356,7 @@ export default function HelpDesk() {
         new_tag: tagVal || undefined,
       });
       toast.success('Crew renamed');
-      setFamilyTag('');
+      setSelectedRenameFamily(null);
       setNewFamilyName('');
       setNewFamilyTag('');
     } catch (e) {
@@ -691,18 +722,71 @@ export default function HelpDesk() {
             <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Crew name change</span>
           </div>
           <p className="px-2.5 py-1.5 text-[9px] text-mutedForeground font-heading">
-            Change a crew&apos;s name and optionally tag. Use the crew&apos;s current tag to identify them.
+            Change a crew&apos;s name and optionally tag. Pick the crew from the searchable list (no need to type the tag).
           </p>
           <form onSubmit={handleChangeFamilyName} className="px-2.5 py-2 space-y-2 border-t border-primary/10">
             <div className="flex flex-wrap gap-2 items-end">
-              <input
-                type="text"
-                value={familyTag}
-                onChange={(e) => setFamilyTag(e.target.value)}
-                placeholder="Current tag (e.g. CORL)"
-                maxLength={4}
-                className="w-24 px-2 py-1 bg-secondary border border-primary/20 rounded text-[11px] font-heading uppercase"
-              />
+              <Popover open={renameFamilyOpen} onOpenChange={onRenameFamilyOpenChange}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    role="combobox"
+                    aria-expanded={renameFamilyOpen}
+                    className={cn(
+                      'flex h-[30px] min-w-[10.5rem] max-w-[14rem] flex-1 items-center justify-between gap-1 rounded border border-primary/20 bg-secondary px-2 py-1 text-left text-[11px] font-heading text-foreground shadow-sm hover:bg-secondary/80 hover:border-primary/35 focus:outline-none focus:ring-1 focus:ring-primary/40',
+                      !selectedRenameFamily && 'text-mutedForeground',
+                    )}
+                  >
+                    <span className="truncate">
+                      {selectedRenameFamily
+                        ? `${selectedRenameFamily.name} [${selectedRenameFamily.tag}]`
+                        : 'Select crew…'}
+                    </span>
+                    <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 opacity-50" aria-hidden />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="w-[min(100vw-1.5rem,18rem)] border border-primary/25 bg-secondary p-0 text-foreground shadow-xl z-[200]"
+                  align="start"
+                  sideOffset={4}
+                >
+                  {renameFamiliesLoading ? (
+                    <p className="py-6 text-center text-[10px] font-heading text-mutedForeground">Loading crews…</p>
+                  ) : (
+                    <Command className="rounded-md bg-transparent [&_[cmdk-input-wrapper]]:border-primary/20">
+                      <CommandInput
+                        placeholder="Search name or tag…"
+                        className="h-8 border-0 text-[11px] font-heading placeholder:text-mutedForeground"
+                      />
+                      <CommandList className="max-h-[min(40vh,220px)]">
+                        <CommandEmpty className="py-4 text-[10px] font-heading text-mutedForeground">No crew found.</CommandEmpty>
+                        <CommandGroup className="p-0">
+                          {renameFamilies.map((f) => (
+                            <CommandItem
+                              key={f.id}
+                              value={`${f.name} ${f.tag}`}
+                              onSelect={() => {
+                                setSelectedRenameFamily(f);
+                                setRenameFamilyOpen(false);
+                              }}
+                              className="cursor-pointer rounded-sm px-2 py-1.5 text-[11px] font-heading aria-selected:bg-primary/15 data-[selected=true]:bg-primary/15"
+                            >
+                              <Check
+                                className={cn(
+                                  'mr-1.5 h-3.5 w-3.5 shrink-0 text-primary',
+                                  selectedRenameFamily?.id === f.id ? 'opacity-100' : 'opacity-0',
+                                )}
+                              />
+                              <span className="truncate">{f.name}</span>
+                              <span className="ml-1 shrink-0 text-primary">[{f.tag}]</span>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  )}
+                </PopoverContent>
+              </Popover>
               <input
                 type="text"
                 value={newFamilyName}

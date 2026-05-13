@@ -280,6 +280,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Cheat Detection', categoryId: 'admin-cheat', collapseKey: 'cheat', keywords: ['cheat', 'detection', 'suspicious'] },
   { label: 'Bot / script investigation', categoryId: 'admin-cheat', collapseKey: 'botInvestigation', keywords: ['bot', 'script', 'automation', 'investigation', 'cheat', 'suspicious', 'ip', 'network', 'mobile', 'isp', 'vpn', 'attack', 'execute_token', 'spoof', 'ua', 'kill'] },
   { label: 'Find Duplicates', categoryId: 'admin-cheat', collapseKey: 'duplicates', keywords: ['duplicate', 'multi', 'account'] },
+  { label: 'Cheater kill impact', categoryId: 'admin-cheat', collapseKey: 'cheaterKillImpact', keywords: ['cheater', 'kill', 'impact', 'bodyguard', 'refund', 'hire'] },
   // Analytics
   { label: 'Login page unique visitors', categoryId: 'admin-analytics', collapseKey: 'loginPageVisitors', keywords: ['login', 'visitors', 'unique', 'page', 'stats'] },
   { label: 'Casino Ownership Profits', categoryId: 'admin-analytics', collapseKey: 'ownershipProfits', keywords: ['casino', 'ownership', 'profit', 'owner', 'earnings'] },
@@ -373,8 +374,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true }; }
 }
 
 function saveCollapsed(state) {
@@ -1227,6 +1228,16 @@ export default function Admin() {
   const [attackClientSpoofReport, setAttackClientSpoofReport] = useState(null);
   const [attackClientSpoofHours, setAttackClientSpoofHours] = useState(24);
   const [attackClientSpoofLoading, setAttackClientSpoofLoading] = useState(false);
+
+  const [cheaterImpactQuery, setCheaterImpactQuery] = useState('');
+  const [cheaterImpactSince, setCheaterImpactSince] = useState('');
+  const [cheaterImpactUntil, setCheaterImpactUntil] = useState('');
+  const [cheaterImpactLimit, setCheaterImpactLimit] = useState('5000');
+  const [cheaterImpactData, setCheaterImpactData] = useState(null);
+  const [cheaterImpactLoading, setCheaterImpactLoading] = useState(false);
+  const [cheaterImpactRefundPct, setCheaterImpactRefundPct] = useState('50');
+  const [cheaterImpactConfirmUser, setCheaterImpactConfirmUser] = useState('');
+  const [cheaterImpactRefundLoading, setCheaterImpactRefundLoading] = useState(false);
 
   const [adminOnlineColor, setAdminOnlineColor] = useState('#a78bfa');
   const [modDefaultOnlineColor, setModDefaultOnlineColor] = useState('#1e3a5f');
@@ -5885,6 +5896,76 @@ export default function Admin() {
       setAttackClientSpoofReport(null);
     } finally {
       setAttackClientSpoofLoading(false);
+    }
+  };
+
+  const loadCheaterKillImpact = async (opts = {}) => {
+    const q = cheaterImpactQuery.trim();
+    if (!q) {
+      toast.error('Enter the killer username or user id');
+      return;
+    }
+    setCheaterImpactLoading(true);
+    setCheaterImpactData(null);
+    try {
+      const params = new URLSearchParams();
+      const compact = q.replace(/-/g, '');
+      const looksUserId = /^[0-9a-f]{24}$/i.test(q) || /^[0-9a-f]{32}$/i.test(compact) || /^[0-9a-f-]{36}$/i.test(q);
+      if (looksUserId) params.set('user_id', q);
+      else params.set('username', q);
+      if (cheaterImpactSince.trim()) params.set('since', cheaterImpactSince.trim());
+      if (cheaterImpactUntil.trim()) params.set('until', cheaterImpactUntil.trim());
+      const lim = Math.max(1, Math.min(20000, parseInt(String(cheaterImpactLimit), 10) || 5000));
+      params.set('limit', String(lim));
+      const res = await api.get(`/admin/cheater-kill-impact?${params.toString()}`);
+      setCheaterImpactData(res.data);
+      setCheaterImpactConfirmUser('');
+      if (!opts.silent) toast.success('Kill impact loaded');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load kill impact');
+      setCheaterImpactData(null);
+    } finally {
+      setCheaterImpactLoading(false);
+    }
+  };
+
+  const applyCheaterBodyguardHireRefund = async () => {
+    if (!cheaterImpactData?.killer?.id) {
+      toast.error('Load impact first');
+      return;
+    }
+    if (!isAdmin) {
+      toast.error('Only admins can apply refunds');
+      return;
+    }
+    const pct = Math.max(1, Math.min(100, parseInt(String(cheaterImpactRefundPct), 10) || 0));
+    if (!Number.isFinite(pct) || pct < 1) {
+      toast.error('Refund % must be between 1 and 100');
+      return;
+    }
+    const ku = (cheaterImpactData.killer.username || '').trim();
+    if ((cheaterImpactConfirmUser || '').trim().toLowerCase() !== ku.toLowerCase()) {
+      toast.error(`Type the killer username exactly: ${ku || '(unknown)'}`);
+      return;
+    }
+    const nOwners = cheaterImpactData.bodyguard_by_owner?.length ?? 0;
+    if (!window.confirm(`Refund ${pct}% of recorded bodyguard hire costs to up to ${nOwners} owner(s)? Re-running adds more points (not idempotent).`)) return;
+    setCheaterImpactRefundLoading(true);
+    try {
+      const body = {
+        refund_percent: pct,
+        confirm_username: cheaterImpactConfirmUser.trim(),
+        killer_user_id: cheaterImpactData.killer.id,
+        since: cheaterImpactSince.trim() || undefined,
+        until: cheaterImpactUntil.trim() || undefined,
+      };
+      const res = await api.post('/admin/cheater-kill-impact/refund-bodyguard-hire', body);
+      toast.success(res.data?.message || 'Refund applied');
+      await loadCheaterKillImpact({ silent: true });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Refund failed');
+    } finally {
+      setCheaterImpactRefundLoading(false);
     }
   };
 
@@ -15793,6 +15874,207 @@ export default function Admin() {
             )}
           </div>
         )}
+        </div>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-rose-500/25 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-rose-500/30 to-transparent" />
+          <SectionHeader
+            icon={Skull}
+            title="Cheater kill impact & bodyguard hire refund"
+            badge={cheaterImpactData?.killer?.username ? (
+              <span className="text-[10px] font-heading text-rose-300">{cheaterImpactData.killer.username}</span>
+            ) : null}
+            toolAnchor="cheaterKillImpact"
+            isCollapsed={collapsed.cheaterKillImpact}
+            onToggle={() => toggleSection('cheaterKillImpact')}
+          />
+          {!collapsed.cheaterKillImpact && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                All successful kills by a player (from attack logs), distinct player victims, bodyguard kills, and{' '}
+                <span className="text-foreground font-bold">one-time hire_cost</span> recorded when each guard died (from bodyguard_killed events).
+                Weekly bodyguard pay is <span className="text-amber-200/90">not</span> included. Moderators can load the report; only admins can apply refunds. Re-running refund stacks credits.
+              </p>
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-heading text-mutedForeground uppercase">Killer (username or user id)</span>
+                  <input
+                    type="text"
+                    value={cheaterImpactQuery}
+                    onChange={(e) => setCheaterImpactQuery(e.target.value)}
+                    placeholder="Username or UUID"
+                    className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs w-52 max-w-full font-heading"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-heading text-mutedForeground uppercase">Since (ISO, optional)</span>
+                  <input
+                    type="text"
+                    value={cheaterImpactSince}
+                    onChange={(e) => setCheaterImpactSince(e.target.value)}
+                    placeholder="2025-01-01"
+                    className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-[11px] w-36 font-mono"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-heading text-mutedForeground uppercase">Until (optional)</span>
+                  <input
+                    type="text"
+                    value={cheaterImpactUntil}
+                    onChange={(e) => setCheaterImpactUntil(e.target.value)}
+                    placeholder="2026-12-31"
+                    className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-[11px] w-36 font-mono"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-heading text-mutedForeground uppercase">Recent kills cap</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={20000}
+                    value={cheaterImpactLimit}
+                    onChange={(e) => setCheaterImpactLimit(e.target.value)}
+                    className="w-20 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono"
+                  />
+                </div>
+                <BtnPrimary type="button" onClick={() => void loadCheaterKillImpact()} disabled={cheaterImpactLoading}>
+                  {cheaterImpactLoading ? 'Loading…' : 'Load impact'}
+                </BtnPrimary>
+              </div>
+              {cheaterImpactData && (
+                <div className="space-y-3 rounded border border-zinc-700/40 bg-zinc-950/40 p-2">
+                  <div className="text-[10px] font-heading text-rose-300 uppercase">
+                    Killer: <span className="text-foreground">{cheaterImpactData.killer?.username || '?'}</span>
+                    <span className="ml-2 font-mono text-[9px] text-mutedForeground">{cheaterImpactData.killer?.id}</span>
+                  </div>
+                  {cheaterImpactData.note && (
+                    <p className="text-[9px] text-mutedForeground font-heading border-l-2 border-amber-500/40 pl-2">{cheaterImpactData.note}</p>
+                  )}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-heading">
+                    <div className="rounded bg-zinc-900/60 border border-zinc-700/50 p-1.5">
+                      <div className="text-mutedForeground uppercase text-[9px]">Total kills</div>
+                      <div className="text-foreground font-bold text-sm">{cheaterImpactData.summary?.total_kills ?? 0}</div>
+                    </div>
+                    <div className="rounded bg-zinc-900/60 border border-zinc-700/50 p-1.5">
+                      <div className="text-mutedForeground uppercase text-[9px]">Player kills</div>
+                      <div className="text-emerald-300 font-bold text-sm">{cheaterImpactData.summary?.player_kills ?? 0}</div>
+                    </div>
+                    <div className="rounded bg-zinc-900/60 border border-zinc-700/50 p-1.5">
+                      <div className="text-mutedForeground uppercase text-[9px]">NPC / hitlist</div>
+                      <div className="text-amber-300 font-bold text-sm">{cheaterImpactData.summary?.npc_kills ?? 0}</div>
+                    </div>
+                    <div className="rounded bg-zinc-900/60 border border-zinc-700/50 p-1.5">
+                      <div className="text-mutedForeground uppercase text-[9px]">Bodyguard kills</div>
+                      <div className="text-rose-300 font-bold text-sm">{cheaterImpactData.summary?.bodyguard_kills ?? 0}</div>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-heading text-primary uppercase mb-1">Player victims (distinct)</div>
+                    <div className="max-h-36 overflow-y-auto text-[10px] font-heading text-mutedForeground flex flex-wrap gap-x-2 gap-y-0.5">
+                      {(cheaterImpactData.player_victims || []).length === 0 ? (
+                        <span>None in range</span>
+                      ) : (
+                        cheaterImpactData.player_victims.map((v) => (
+                          <span key={v.target_id} className="whitespace-nowrap">
+                            {v.target_username}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-heading text-primary uppercase mb-1">Bodyguard owners — hire_cost totals</div>
+                    {cheaterImpactData.bodyguard_owners_truncated && (
+                      <p className="text-[9px] text-amber-400 mb-1">More than 5,000 distinct bodyguard owners matched; table shows top 5,000 by hire_cost sum. Refund uses the same capped list.</p>
+                    )}
+                    <div className="max-h-56 overflow-x-auto">
+                      <table className="w-full text-[10px] font-heading border-collapse">
+                        <thead>
+                          <tr className="border-b border-zinc-700/60 text-mutedForeground text-left">
+                            <th className="p-1">Owner</th>
+                            <th className="p-1 text-right">Kills</th>
+                            <th className="p-1 text-right">Sum hire pts</th>
+                            <th className="p-1 text-right">Preview refund</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(cheaterImpactData.bodyguard_by_owner || []).length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="p-2 text-mutedForeground">No bodyguard_killed events for this killer in range.</td>
+                            </tr>
+                          ) : (
+                            cheaterImpactData.bodyguard_by_owner.map((row) => {
+                              const pct = Math.max(1, Math.min(100, parseInt(String(cheaterImpactRefundPct), 10) || 0));
+                              const preview = Math.floor((row.sum_hire_cost || 0) * pct / 100);
+                              return (
+                                <tr key={row.owner_id} className="border-b border-zinc-800/50">
+                                  <td className="p-1 text-foreground">{row.owner_username} <span className="font-mono text-[9px] text-zinc-500">{row.owner_id}</span></td>
+                                  <td className="p-1 text-right">{row.kill_count}</td>
+                                  <td className="p-1 text-right text-sky-300">{(row.sum_hire_cost || 0).toLocaleString()}</td>
+                                  <td className="p-1 text-right text-emerald-300">{preview.toLocaleString()}</td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-heading text-primary uppercase mb-1">Recent kills (newest first, capped)</div>
+                    <div className="max-h-40 overflow-y-auto text-[9px] font-mono text-mutedForeground space-y-0.5">
+                      {(cheaterImpactData.recent_kills || []).slice(0, 40).map((k) => (
+                        <div key={k.id || `${k.target_id}-${k.created_at}`} className="border-b border-zinc-800/40 pb-0.5">
+                          <span className="text-foreground">{k.target_username}</span>
+                          {k.is_bodyguard_kill ? <span className="text-rose-300"> · BG</span> : null}
+                          {k.target_is_npc ? <span className="text-amber-300"> · NPC</span> : null}
+                          {k.bodyguard_owner_username ? <span className="text-zinc-400"> · for {k.bodyguard_owner_username}</span> : null}
+                          <span className="text-zinc-500"> · {k.created_at ? formatAdminDateTime(k.created_at) : '—'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {isAdmin ? (
+                    <div className="rounded border border-emerald-500/25 bg-emerald-500/5 p-2 space-y-2">
+                      <div className="text-[10px] font-heading text-emerald-300 uppercase">Apply hire refund (admin)</div>
+                      <div className="flex flex-wrap items-end gap-2">
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-[9px] text-mutedForeground uppercase">Refund %</span>
+                          <input
+                            type="number"
+                            min={1}
+                            max={100}
+                            value={cheaterImpactRefundPct}
+                            onChange={(e) => setCheaterImpactRefundPct(e.target.value)}
+                            className="w-16 px-2 py-1 rounded border border-input bg-transparent text-[11px]"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-0.5 flex-1 min-w-[160px]">
+                          <span className="text-[9px] text-mutedForeground uppercase">Confirm killer username</span>
+                          <input
+                            type="text"
+                            value={cheaterImpactConfirmUser}
+                            onChange={(e) => setCheaterImpactConfirmUser(e.target.value)}
+                            placeholder={cheaterImpactData.killer?.username || ''}
+                            className="px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
+                            autoComplete="off"
+                          />
+                        </div>
+                        <BtnPrimary type="button" onClick={() => void applyCheaterBodyguardHireRefund()} disabled={cheaterImpactRefundLoading || cheaterImpactLoading}>
+                          {cheaterImpactRefundLoading ? 'Applying…' : 'Apply refund'}
+                        </BtnPrimary>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-mutedForeground font-heading">Refund action is admin-only. Load impact as moderator to review; ask an admin to apply credits.</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className={`${styles.panel} rounded-md overflow-hidden border border-amber-500/30 mobile-panel`}>

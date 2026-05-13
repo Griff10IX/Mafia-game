@@ -509,6 +509,25 @@ def register(router):
         count = await db.help_desk_tickets.count_documents(query)
         return {"open_tickets_count": count}
 
+    @router.get("/help-desk/families-for-rename")
+    async def list_families_for_rename(current_user: dict = Depends(get_current_user)):
+        """Active crews (id, name, tag) for Help Desk crew rename picker. Staff only."""
+        if not _can_manage_tickets(current_user):
+            raise HTTPException(status_code=403, detail="Only staff can list crews for rename")
+        require_staff_issued_if_staff_capable(current_user)
+        q = {"wiped": {"$ne": True}, "tag": {"$exists": True, "$nin": [None, ""]}}
+        cursor = db.families.find(q, {"_id": 0, "id": 1, "name": 1, "tag": 1}).sort("name", 1).limit(2000)
+        rows = await cursor.to_list(2000)
+        out = []
+        for d in rows:
+            tid = d.get("id")
+            name = (d.get("name") or "").strip() or "?"
+            tag = (d.get("tag") or "").strip()
+            if not tid or len(tag) < 2:
+                continue
+            out.append({"id": tid, "name": name, "tag": tag.upper()})
+        return {"families": out}
+
     @router.post("/help-desk/change-family-name")
     async def change_family_name(body: FamilyChangeNameRequest, current_user: dict = Depends(get_current_user)):
         """Staff (admin, mod, or HDO) change a crew's name and optionally tag. Use family tag to identify the crew."""

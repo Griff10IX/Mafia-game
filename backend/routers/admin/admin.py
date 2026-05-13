@@ -123,6 +123,17 @@ class AdminRacingCrewBankAdjustBody(BaseModel):
     amount: int = Field(..., ge=-2_000_000_000_000, le=2_000_000_000_000, description="Signed delta on racing_profiles.crew_bank")
 
 
+class CheaterRefundBodyguardHireBody(BaseModel):
+    """Refund a percentage of recorded bodyguard hire_cost for guards killed by a cheater (per hitlist_bodyguard_events)."""
+
+    refund_percent: int = Field(..., ge=1, le=100)
+    confirm_username: str = Field(..., min_length=1, max_length=80)
+    killer_user_id: Optional[str] = None
+    killer_username: Optional[str] = None
+    since: Optional[str] = None
+    until: Optional[str] = None
+
+
 class EventsToggleRequest(BaseModel):
     enabled: bool
 
@@ -11046,6 +11057,347 @@ def register(router):
             except Exception:
                 return None
         return None
+
+    def _cheater_bg_event_in_range(at_val: Any, since_dt: Optional[datetime], until_dt: Optional[datetime]) -> bool:
+        if since_dt is None and until_dt is None:
+            return True
+        dt = at_val if isinstance(at_val, datetime) else _robot_hires_parse_dt(at_val)
+        if dt is None:
+            return since_dt is None and until_dt is None
+        if since_dt and dt < since_dt:
+            return False
+        if until_dt and dt > until_dt:
+            return False
+        return True
+
+    async def _cheater_kill_resolve_killer(
+        user_id: Optional[str],
+        username: Optional[str],
+    ) -> Dict[str, Any]:
+        uid = (user_id or "").strip()
+        uname = (username or "").strip()
+        if bool(uid) == bool(uname):
+            raise HTTPException(status_code=400, detail="Provide exactly one of user_id or username")
+        if uid:
+            u = await db.users.find_one({"id": uid}, {"_id": 0, "id": 1, "username": 1})
+        else:
+            u = await db.users.find_one({"username": _username_pattern(uname)}, {"_id": 0, "id": 1, "username": 1})
+            if not u:
+                pat = re.compile("^" + re.escape(uname) + "$", re.IGNORECASE)
+                u = await db.users.find_one({"username": pat}, {"_id": 0, "id": 1, "username": 1})
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        return u
+
+    async def _cheater_kill_impact_data(
+        killer_id: str,
+        *,
+        since_raw: Optional[str],
+        until_raw: Optional[str],
+        recent_limit: int,
+    ) -> Dict[str, Any]:
+        since_dt = _robot_hires_parse_dt(since_raw.strip()) if since_raw and since_raw.strip() else None
+        until_dt = _robot_hires_parse_dt(until_raw.strip()) if until_raw and until_raw.strip() else None
+        attempt_match: Dict[str, Any] = {"attacker_id": killer_id, "outcome": "killed"}
+        if since_dt or until_dt:
+            cr: Dict[str, Any] = {}
+            if since_dt:
+                cr["$gte"] = since_dt
+            if until_dt:
+                cr["$lte"] = until_dt
+            attempt_match["created_at"] = cr
+
+        summary_pipeline = [
+            {"$match": attempt_match},
+            {
+                "$group": {
+                    "_id": None,
+                    "total_kills": {"$sum": 1},
+                    "player_kills": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$and": [
+                                        {"$ne": ["$is_bodyguard_kill", True]},
+                                        {"$ne": ["$target_is_npc", True]},
+                                    ]
+                                },
+                                1,
+                                0,
+                            ]
+                        }
+                    },
+                    "npc_kills": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$and": [
+                                        {"$ne": ["$is_bodyguard_kill", True]},
+                                        {"$eq": ["$target_is_npc", True]},
+                                    ]
+                                },
+                                1,
+                                0,
+                            ]
+                        }
+                    },
+                    "bodyguard_kills": {"$sum": {"$cond": [{"$eq": ["$is_bodyguard_kill", True]}, 1, 0]}},
+                }
+            },
+        ]
+        summary_rows = await db.attack_attempts.aggregate(summary_pipeline).to_list(1)
+        summary = summary_rows[0] if summary_rows else {}
+        total_kills = int(summary.get("total_kills") or 0)
+        player_kills = int(summary.get("player_kills") or 0)
+        npc_kills = int(summary.get("npc_kills") or 0)
+        bodyguard_kills = int(summary.get("bodyguard_kills") or 0)
+
+        victims_pipeline = [
+            {
+                "$match": {
+                    **attempt_match,
+                    "is_bodyguard_kill": {"$ne": True},
+                    "target_is_npc": {"$ne": True},
+                }
+            },
+            {"$group": {"_id": "$target_id", "target_username": {"$first": "$target_username"}}},
+            {"$match": {"_id": {"$nin": [None, ""]}}},
+            {"$sort": {"target_username": 1}},
+            {"$limit": 5000},
+        ]
+        victim_rows = await db.attack_attempts.aggregate(victims_pipeline).to_list(5000)
+        player_victims = [
+            {"target_id": r["_id"], "target_username": r.get("target_username") or "?"}
+            for r in victim_rows
+            if r.get("_id")
+        ]
+
+        cap = max(1, min(int(recent_limit or 5000), 20000))
+        recent_proj = {
+            "_id": 0,
+            "id": 1,
+            "target_id": 1,
+            "target_username": 1,
+            "created_at": 1,
+            "is_bodyguard_kill": 1,
+            "target_is_npc": 1,
+            "bodyguard_owner_id": 1,
+            "bodyguard_owner_username": 1,
+            "bullets_used": 1,
+        }
+        recent_raw = await db.attack_attempts.find(attempt_match, recent_proj).sort("created_at", -1).limit(cap).to_list(cap)
+        recent_kills = []
+        for d in recent_raw:
+            row = dict(d)
+            ca = row.get("created_at")
+            if hasattr(ca, "isoformat"):
+                row["created_at"] = ca.isoformat()
+            recent_kills.append(row)
+
+        bg_proj = {
+            "_id": 0,
+            "at": 1,
+            "owner_id": 1,
+            "owner_username": 1,
+            "guard_user_id": 1,
+            "guard_username": 1,
+            "hire_cost": 1,
+        }
+        bg_match: Dict[str, Any] = {
+            "type": "bodyguard_killed",
+            "killer_id": killer_id,
+            "owner_id": {"$nin": [None, ""]},
+        }
+        bg_agg_pipeline: List[Dict[str, Any]] = [
+            {"$match": bg_match},
+            {
+                "$addFields": {
+                    "_ev_at": {
+                        "$switch": {
+                            "branches": [
+                                {"case": {"$eq": [{"$type": "$at"}, "date"]}, "then": "$at"},
+                                {
+                                    "case": {"$eq": [{"$type": "$at"}, "string"]},
+                                    "then": {"$dateFromString": {"dateString": "$at", "onError": None}},
+                                },
+                            ],
+                            "default": None,
+                        }
+                    }
+                }
+            },
+        ]
+        if since_dt:
+            bg_agg_pipeline.append({"$match": {"_ev_at": {"$gte": since_dt}}})
+        if until_dt:
+            bg_agg_pipeline.append({"$match": {"_ev_at": {"$lte": until_dt}}})
+        bg_agg_pipeline.extend(
+            [
+                {
+                    "$group": {
+                        "_id": "$owner_id",
+                        "kill_count": {"$sum": 1},
+                        "sum_hire_cost": {"$sum": {"$ifNull": ["$hire_cost", 0]}},
+                        "owner_username": {"$last": "$owner_username"},
+                    }
+                },
+                {"$sort": {"sum_hire_cost": -1, "owner_username": 1}},
+                {"$limit": 5000},
+            ]
+        )
+        owner_agg_rows = await db.hitlist_bodyguard_events.aggregate(bg_agg_pipeline).to_list(5000)
+        owners_truncated = len(owner_agg_rows) >= 5000
+        bodyguard_by_owner = []
+        for r in owner_agg_rows:
+            oid = r.get("_id")
+            if not oid:
+                continue
+            bodyguard_by_owner.append(
+                {
+                    "owner_id": str(oid),
+                    "owner_username": (r.get("owner_username") or "").strip() or "?",
+                    "kill_count": int(r.get("kill_count") or 0),
+                    "sum_hire_cost": int(r.get("sum_hire_cost") or 0),
+                }
+            )
+
+        bg_sample = await db.hitlist_bodyguard_events.find(bg_match, bg_proj).sort("at", -1).limit(500).to_list(500)
+        bg_filtered_sample = [r for r in bg_sample if _cheater_bg_event_in_range(r.get("at"), since_dt, until_dt)]
+        bg_events_out = []
+        for r in bg_filtered_sample[:200]:
+            atv = r.get("at")
+            if hasattr(atv, "isoformat"):
+                atv = atv.isoformat()
+            bg_events_out.append(
+                {
+                    "at": atv,
+                    "owner_id": r.get("owner_id"),
+                    "owner_username": r.get("owner_username"),
+                    "guard_user_id": r.get("guard_user_id"),
+                    "guard_username": r.get("guard_username"),
+                    "hire_cost": int(r.get("hire_cost") or 0),
+                }
+            )
+
+        total_bg_kills_in_range = sum(int(x.get("kill_count") or 0) for x in bodyguard_by_owner)
+
+        return {
+            "since_dt": since_dt.isoformat() if since_dt else None,
+            "until_dt": until_dt.isoformat() if until_dt else None,
+            "summary": {
+                "total_kills": total_kills,
+                "player_kills": player_kills,
+                "npc_kills": npc_kills,
+                "bodyguard_kills": bodyguard_kills,
+            },
+            "player_victims": player_victims,
+            "bodyguard_by_owner": bodyguard_by_owner,
+            "bodyguard_kills_in_range": total_bg_kills_in_range,
+            "recent_kills": recent_kills,
+            "bodyguard_kill_events_sample": bg_events_out,
+            "bodyguard_owners_truncated": owners_truncated,
+            "recent_kills_limit": cap,
+        }
+
+    @router.get("/admin/cheater-kill-impact")
+    async def admin_cheater_kill_impact(
+        user_id: Optional[str] = Query(None, description="Killer user id (mutually exclusive with username)"),
+        username: Optional[str] = Query(None, description="Killer username (mutually exclusive with user_id)"),
+        limit: int = Query(5000, ge=1, le=20000, description="Max recent kill rows returned"),
+        since: Optional[str] = Query(None, description="ISO lower bound on kill attempt / BG event time"),
+        until: Optional[str] = Query(None, description="ISO upper bound on kill attempt / BG event time"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Investigation: all successful kills by a user, player victims, bodyguard kills, and hire_cost sums per guard owner.
+        Admin or moderator. Refunds use POST (admin-only). Weekly bodyguard pay vs this killer is not in scope.
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        srv.require_staff_issued_if_staff_capable(current_user)
+        killer = await _cheater_kill_resolve_killer(user_id, username)
+        killer_id = killer["id"]
+        data = await _cheater_kill_impact_data(killer_id, since_raw=since, until_raw=until, recent_limit=limit)
+        return {
+            "killer": {"id": killer_id, "username": killer.get("username") or "?"},
+            **data,
+            "note": "Refund tool credits a % of sum_hire_cost from bodyguard_killed events only; recurring weekly guard pay is not attributed to a killer in the ledger.",
+        }
+
+    @router.post("/admin/cheater-kill-impact/refund-bodyguard-hire")
+    async def admin_cheater_refund_bodyguard_hire(
+        body: CheaterRefundBodyguardHireBody,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Admin only. Recomputes hire_cost totals and credits owners floor(sum * percent / 100). Repeating stacks refunds."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        srv.require_staff_issued_if_staff_capable(current_user)
+        killer = await _cheater_kill_resolve_killer(body.killer_user_id, body.killer_username)
+        killer_id = killer["id"]
+        ku = (killer.get("username") or "").strip()
+        if (body.confirm_username or "").strip().lower() != ku.lower():
+            raise HTTPException(status_code=400, detail="confirm_username must match the killer's username exactly (case-insensitive)")
+        data = await _cheater_kill_impact_data(
+            killer_id,
+            since_raw=body.since,
+            until_raw=body.until,
+            recent_limit=100,
+        )
+        pct = int(body.refund_percent)
+        payouts: List[Dict[str, Any]] = []
+        total_refund = 0
+        for row in data["bodyguard_by_owner"]:
+            s = int(row.get("sum_hire_cost") or 0)
+            if s <= 0:
+                continue
+            rp = int(s * pct / 100)
+            if rp <= 0:
+                continue
+            payouts.append(
+                {
+                    "owner_id": row["owner_id"],
+                    "owner_username": row.get("owner_username") or "?",
+                    "sum_hire_cost": s,
+                    "kill_count": int(row.get("kill_count") or 0),
+                    "refund_points": rp,
+                }
+            )
+            total_refund += rp
+        if not payouts:
+            return {
+                "message": "Nothing to refund (no hire_cost totals in range, or all refunds round to 0).",
+                "total_refund_points": 0,
+                "recipients": [],
+            }
+        from pymongo import UpdateOne
+
+        ops = [UpdateOne({"id": p["owner_id"]}, {"$inc": {"points": p["refund_points"]}}) for p in payouts]
+        await db.users.bulk_write(ops, ordered=False)
+        admin_uid = current_user.get("id") or ""
+        admin_uname = current_user.get("username") or "?"
+        for p in payouts:
+            await log_points_event(
+                db,
+                user_id=p["owner_id"],
+                points=p["refund_points"],
+                event_type="admin_cheater_bodyguard_hire_refund",
+                event_ref=f"cheater:{killer_id}",
+                meta={
+                    "admin_user_id": admin_uid,
+                    "admin_username": admin_uname,
+                    "killer_id": killer_id,
+                    "killer_username": ku,
+                    "refund_percent": pct,
+                    "sum_hire_cost": p["sum_hire_cost"],
+                    "kill_count": p["kill_count"],
+                },
+            )
+        return {
+            "message": f"Credited {total_refund:,} points across {len(payouts)} owner(s) ({pct}% of hire_cost sums).",
+            "total_refund_points": total_refund,
+            "recipients": payouts,
+        }
 
     @router.get("/admin/bodyguards/robot-hires")
     async def admin_bodyguards_robot_hires(

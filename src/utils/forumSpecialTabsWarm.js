@@ -6,6 +6,8 @@ import api from './api';
 import { readSessionJson, writeSessionJson } from './sessionPageCache';
 
 const FORUM_SPECIAL_TABS_WARM_KEY = 'mafia_forum_special_tabs_warm_v1';
+/** Must match Forum.js `forum_topics_cache_v1` + `:crew_oc:` */
+const FORUM_TOPICS_SESSION_CREW_OC_PREFIX = 'forum_topics_cache_v1:crew_oc:';
 const MAX_WARM_AGE_MS = 90_000;
 
 let lastForumWarmAt = 0;
@@ -23,6 +25,19 @@ export function readForumSpecialTabsWarm() {
   const row = readSessionJson(FORUM_SPECIAL_TABS_WARM_KEY);
   if (!row || Date.now() - (row.ts || 0) > MAX_WARM_AGE_MS) return null;
   return row;
+}
+
+/** Call after Crew OC advertise (or similar) so Forum Crew OC tab is not stuck on warm/sessionStorage. */
+export function invalidateForumCrewOcClientCaches() {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.removeItem(FORUM_SPECIAL_TABS_WARM_KEY);
+    Object.keys(sessionStorage).forEach((k) => {
+      if (k.startsWith(FORUM_TOPICS_SESSION_CREW_OC_PREFIX)) sessionStorage.removeItem(k);
+    });
+  } catch (_) {
+    /* sessionStorage unavailable */
+  }
 }
 
 /**

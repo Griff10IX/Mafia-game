@@ -7,6 +7,7 @@ import { getRacketAccent } from '../../constants';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 import { getFamiliesPrefetch, setFamiliesPrefetch } from '../../utils/prefetchCache';
+import { invalidateForumCrewOcClientCaches } from '../../utils/forumSpecialTabsWarm';
 import FamilyEmblem, { FAMILY_EMBLEM_PRESETS, groupFamilyEmblemPresets } from '../../components/FamilyEmblem';
 import { fileToCompressedDataUrl, validateSafeImageFile } from '../../utils/fileToCompressedDataUrl';
 
@@ -3246,7 +3247,12 @@ export default function FamilyPage() {
   };
   const handleCrewOCAdvertise = async () => {
     setCrewOCAdvertiseLoading(true);
-    try { const res = await api.post('/families/crew-oc/advertise'); toast.success(res.data?.message || 'Crew OC topic created.'); fetchData(); }
+    try {
+      const res = await api.post('/families/crew-oc/advertise');
+      invalidateForumCrewOcClientCaches();
+      toast.success(res.data?.message || 'Crew OC topic created.');
+      fetchData();
+    }
     catch (e) { toast.error(apiDetail(e)); } finally { setCrewOCAdvertiseLoading(false); }
   };
   const handleCrewOCAccept = async (applicationId) => {
