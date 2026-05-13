@@ -4290,6 +4290,14 @@ def register(router):
                     uname = f"NPC ({eid_str})"
                 elif not uname:
                     uname = uid or "?"
+                cash_i = int(rw.get("cash") or 0)
+                sp_i = int(rw.get("sponsor_income") or 0)
+                credited_raw = rw.get("crew_bank_credited")
+                if credited_raw is not None:
+                    c = int(credited_raw or 0)
+                    prize_to_crew = min(cash_i, max(0, c - sp_i))
+                else:
+                    prize_to_crew = cash_i
                 entrants.append(
                     {
                         "entrant_id": eid_str,
@@ -4298,7 +4306,7 @@ def register(router):
                         "is_npc": is_npc,
                         "position": int(rw.get("position") or 0),
                         "dnf": bool(rw.get("dnf")),
-                        "prize_to_crew": int(rw.get("cash") or 0),
+                        "prize_to_crew": prize_to_crew,
                         "sponsor_to_crew": int(rw.get("sponsor_income") or 0),
                         "driver_salary": int(rw.get("driver_salary") or 0),
                         "net_crew_bank": int(rw.get("net_crew_bank") or 0),

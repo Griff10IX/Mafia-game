@@ -12703,7 +12703,7 @@ export default function Admin() {
                               <tr className="text-left text-mutedForeground border-b border-zinc-700/50">
                                 <th className="py-0.5 pr-1">P</th>
                                 <th className="py-0.5 pr-2">Driver</th>
-                                <th className="py-0.5 pr-2">Prize→crew</th>
+                                <th className="py-0.5 pr-2" title="Position prize share actually credited to crew (after caps); sponsor is separate column">Prize→crew</th>
                                 <th className="py-0.5 pr-2">Sponsor→crew</th>
                                 <th className="py-0.5 pr-2">Salary</th>
                                 <th className="py-0.5 pr-2">Net crew Δ</th>

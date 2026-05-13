@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any, Dict, Optional, Tuple
 
 from pymongo import ReturnDocument
@@ -62,6 +62,25 @@ def entertainer_utc_today() -> str:
     return datetime.now(timezone.utc).date().isoformat()
 
 
+def _normalize_entertainer_refill_utc_day(val: Any) -> Optional[str]:
+    """UTC calendar day YYYY-MM-DD for idempotency (handles BSON date, datetime, ISO string)."""
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        dt = val
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+        return dt.date().isoformat()
+    if type(val) is date:
+        return val.isoformat()
+    s = str(val).strip()
+    if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+        return s[:10]
+    return None
+
+
 def _sanitize_hex_color(raw: Optional[str], default: str = ENTERTAINER_ONLINE_COLOR_DEFAULT) -> str:
     s = (raw or "").strip() or default
     if not (s.startswith("#") and len(s) in (4, 7) and all(c in "0123456789AaBbCcDdEeFf" for c in s[1:])):
@@ -117,7 +136,7 @@ async def insert_funded_game_row(
 
 
 async def run_entertainer_daily_refills(db, send_notification) -> None:
-    """Credit daily fund to all live entertainers once per UTC day each (per-user idempotency)."""
+    """Accrue daily allowance once per UTC day into pending; entertainers collect into the spendable fund in Hub."""
     today = entertainer_utc_today()
     cursor = db.users.find(
         {"is_entertainer": True, "is_dead": {"$ne": True}},
@@ -135,7 +154,7 @@ async def run_entertainer_daily_refills(db, send_notification) -> None:
         if not uid:
             continue
         last = u.get("entertainer_fund_last_refill_utc_date")
-        if last == today:
+        if _normalize_entertainer_refill_utc_day(last) == today:
             continue
         current_cash = float(u.get("entertainer_fund_cash") or 0.0)
         current_points = int(u.get("entertainer_fund_points") or 0)
@@ -151,6 +170,15 @@ async def run_entertainer_daily_refills(db, send_notification) -> None:
                 max(0, int(ENTERTAINER_FUND_POINTS_MAX - current_points)),
             )
         )
+        inc_doc: Dict[str, Any] = {
+            "entertainer_lifetime_fund_cash_granted": add_cash,
+            "entertainer_lifetime_fund_points_granted": add_points,
+        }
+        if add_cash > 0:
+            inc_doc["entertainer_pending_fund_cash"] = float(add_cash)
+        if add_points > 0:
+            inc_doc["entertainer_pending_fund_points"] = int(add_points)
+
         res = await db.users.update_one(
             {
                 "id": uid,
@@ -162,17 +190,7 @@ async def run_entertainer_daily_refills(db, send_notification) -> None:
                     {"entertainer_fund_last_refill_utc_date": {"$ne": today}},
                 ],
             },
-            {
-                "$inc": {
-                    "entertainer_lifetime_fund_cash_granted": add_cash,
-                    "entertainer_lifetime_fund_points_granted": add_points,
-                },
-                "$set": {
-                    "entertainer_fund_cash": min(current_cash, float(ENTERTAINER_FUND_CASH_MAX)) + add_cash,
-                    "entertainer_fund_points": min(current_points, int(ENTERTAINER_FUND_POINTS_MAX)) + add_points,
-                    "entertainer_fund_last_refill_utc_date": today,
-                },
-            },
+            {"$inc": inc_doc, "$set": {"entertainer_fund_last_refill_utc_date": today}},
         )
         if res.modified_count:
             uname = u.get("username") or "?"
@@ -180,15 +198,16 @@ async def run_entertainer_daily_refills(db, send_notification) -> None:
                 try:
                     await send_notification(
                         uid,
-                        "Entertainer daily fund",
-                        f"Your entertainer fund was topped up: +${add_cash:,.0f} cash and +{add_points:,} fund points (UTC day {today}).",
+                        "Entertainer daily allowance",
+                        f"+${add_cash:,.0f} cash and +{add_points:,} fund points are ready in your pending balance (UTC {today}). "
+                        "Open Entertainer Hub and tap Collect to move them into your spendable fund (up to fund caps).",
                         "system",
                         category="entertainer",
                     )
                 except Exception as e:
                     _logger.warning("Entertainer refill notify failed uid=%s: %s", uid, e)
             _logger.info(
-                "Entertainer daily refill for %s (%s): +$%s, +%s pts (caps cash=%s pts=%s)",
+                "Entertainer daily accrual for %s (%s): +$%s, +%s pts pending (caps cash=%s pts=%s)",
                 uname,
                 uid,
                 f"{add_cash:,}",
@@ -196,6 +215,96 @@ async def run_entertainer_daily_refills(db, send_notification) -> None:
                 f"{ENTERTAINER_FUND_CASH_MAX:,}",
                 f"{ENTERTAINER_FUND_POINTS_MAX:,}",
             )
+
+
+async def collect_entertainer_pending_to_fund(db, entertainer_id: str) -> Dict[str, Any]:
+    """Move pending daily allowance into entertainer_fund_* up to caps. Atomic aggregation pipeline."""
+    before = await db.users.find_one(
+        {"id": entertainer_id, "is_entertainer": True, "is_dead": {"$ne": True}},
+        {
+            "_id": 0,
+            "entertainer_fund_cash": 1,
+            "entertainer_fund_points": 1,
+            "entertainer_pending_fund_cash": 1,
+            "entertainer_pending_fund_points": 1,
+        },
+    )
+    if not before:
+        return {"ok": False, "detail": "Entertainer not found"}
+    pc0 = float(before.get("entertainer_pending_fund_cash") or 0.0)
+    pp0 = int(before.get("entertainer_pending_fund_points") or 0)
+    fc0 = float(before.get("entertainer_fund_cash") or 0.0)
+    fp0 = int(before.get("entertainer_fund_points") or 0)
+    cash_max = float(ENTERTAINER_FUND_CASH_MAX)
+    pts_max = int(ENTERTAINER_FUND_POINTS_MAX)
+    pipeline = [
+        {
+            "$set": {
+                "_fc": {"$toDouble": {"$ifNull": ["$entertainer_fund_cash", 0]}},
+                "_fp": {"$toInt": {"$ifNull": ["$entertainer_fund_points", 0]}},
+                "_pc": {"$toDouble": {"$ifNull": ["$entertainer_pending_fund_cash", 0]}},
+                "_pp": {"$toInt": {"$ifNull": ["$entertainer_pending_fund_points", 0]}},
+            }
+        },
+        {
+            "$set": {
+                "_mc": {
+                    "$max": [
+                        0,
+                        {"$min": ["$_pc", {"$subtract": [cash_max, "$_fc"]}]},
+                    ]
+                },
+                "_mp": {
+                    "$max": [
+                        0,
+                        {"$min": ["$_pp", {"$subtract": [pts_max, "$_fp"]}]},
+                    ]
+                },
+            }
+        },
+        {
+            "$set": {
+                "entertainer_fund_cash": {"$add": ["$_fc", "$_mc"]},
+                "entertainer_fund_points": {"$add": ["$_fp", "$_mp"]},
+                "entertainer_pending_fund_cash": {"$subtract": ["$_pc", "$_mc"]},
+                "entertainer_pending_fund_points": {"$subtract": ["$_pp", "$_mp"]},
+            }
+        },
+        {"$unset": ["_fc", "_fp", "_pc", "_pp", "_mc", "_mp"]},
+    ]
+    r = await db.users.update_one(
+        {"id": entertainer_id, "is_entertainer": True, "is_dead": {"$ne": True}},
+        pipeline,
+    )
+    if not r.matched_count:
+        return {"ok": False, "detail": "Entertainer not found"}
+    after = await db.users.find_one(
+        {"id": entertainer_id},
+        {
+            "_id": 0,
+            "entertainer_fund_cash": 1,
+            "entertainer_fund_points": 1,
+            "entertainer_pending_fund_cash": 1,
+            "entertainer_pending_fund_points": 1,
+        },
+    )
+    fc1 = float((after or {}).get("entertainer_fund_cash") or 0.0)
+    fp1 = int((after or {}).get("entertainer_fund_points") or 0)
+    pc1 = float((after or {}).get("entertainer_pending_fund_cash") or 0.0)
+    pp1 = int((after or {}).get("entertainer_pending_fund_points") or 0)
+    moved_cash = max(0.0, round(fc1 - fc0, 2))
+    moved_pts = max(0, fp1 - fp0)
+    return {
+        "ok": True,
+        "moved_cash": moved_cash,
+        "moved_points": moved_pts,
+        "entertainer_fund_cash": fc1,
+        "entertainer_fund_points": fp1,
+        "entertainer_pending_fund_cash": pc1,
+        "entertainer_pending_fund_points": pp1,
+        "had_pending_before": pc0 > 0 or pp0 > 0,
+        "nothing_moved": moved_cash <= 0 and moved_pts <= 0,
+    }
 
 
 async def _load_entertainer_counters(db, entertainer_id: str) -> dict:
@@ -456,6 +565,8 @@ async def build_entertainer_dashboard(db, entertainer_id: str) -> Dict[str, Any]
             "is_entertainer": 1,
             "entertainer_fund_cash": 1,
             "entertainer_fund_points": 1,
+            "entertainer_pending_fund_cash": 1,
+            "entertainer_pending_fund_points": 1,
             "entertainer_lifetime_bonus_points_paid": 1,
             "entertainer_lifetime_fund_cash_granted": 1,
             "entertainer_lifetime_fund_points_granted": 1,
@@ -507,6 +618,8 @@ async def build_entertainer_dashboard(db, entertainer_id: str) -> Dict[str, Any]
         "username": u.get("username"),
         "entertainer_fund_cash": float(u.get("entertainer_fund_cash") or 0),
         "entertainer_fund_points": int(u.get("entertainer_fund_points") or 0),
+        "entertainer_pending_fund_cash": float(u.get("entertainer_pending_fund_cash") or 0),
+        "entertainer_pending_fund_points": int(u.get("entertainer_pending_fund_points") or 0),
         "funded_games_today_count": funded_today,
         "funded_ledger_open_count": int(funded_ledger_open),
         "funded_ledger_completed_count": int(funded_ledger_completed),

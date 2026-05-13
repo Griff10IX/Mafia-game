@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import api from '../../utils/api';
@@ -32,6 +32,8 @@ export default function EntertainerHub() {
   const [perkType, setPerkType] = useState('xp_crimes');
   const [perkAmt, setPerkAmt] = useState(1);
   const [perkSubmitting, setPerkSubmitting] = useState(false);
+  const [collecting, setCollecting] = useState(false);
+  const collectInFlightRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -102,6 +104,41 @@ export default function EntertainerHub() {
   const remAuto = Number(dash.perk_auto_rank_remaining_today ?? 2);
   const maxPerkAmt =
     perkType === 'auto_rank_2h' ? Math.min(remTotal, remAuto, 10) : Math.min(remTotal, 10);
+
+  const collectPending = async () => {
+    if (collectInFlightRef.current) return;
+    collectInFlightRef.current = true;
+    setCollecting(true);
+    try {
+      const res = await api.post('/entertainer/collect-pending-fund', {});
+      const d = res.data || {};
+      const mc = Number(d.moved_cash || 0);
+      const mp = Number(d.moved_points || 0);
+      if (d.nothing_moved && !d.had_pending_before) {
+        toast.message('No pending allowance to collect.');
+      } else if (d.nothing_moved && d.had_pending_before) {
+        const pc = Number(d.entertainer_pending_fund_cash || 0);
+        const pp = Number(d.entertainer_pending_fund_points || 0);
+        toast.message(
+          `Spendable fund is at the cap. $${Math.trunc(pc).toLocaleString()} cash and ${pp.toLocaleString()} points stay in pending until you spend fund room.`,
+        );
+      } else if (mc > 0 || mp > 0) {
+        const parts = [];
+        if (mc > 0) parts.push(`$${Math.trunc(mc).toLocaleString()} cash`);
+        if (mp > 0) parts.push(`${mp.toLocaleString()} points`);
+        toast.success(`Collected ${parts.join(' and ')} into your entertainer fund.`);
+      } else {
+        toast.message('Nothing to collect right now.');
+      }
+      await load();
+    } catch (e) {
+      const msg = e.response?.data?.detail;
+      toast.error(typeof msg === 'string' ? msg : 'Could not collect');
+    } finally {
+      collectInFlightRef.current = false;
+      setCollecting(false);
+    }
+  };
 
   const submitPerk = async () => {
     const uname = perkTarget.trim();
@@ -225,13 +262,38 @@ export default function EntertainerHub() {
         </div>
       </section>
 
+      <section className="rounded-lg border border-amber-500/25 bg-amber-950/15 p-4 space-y-3">
+        <h2 className="text-[11px] font-heading uppercase tracking-widest text-amber-200/90">Daily allowance (pending)</h2>
+        <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+          Each UTC day the server credits your daily allowance here first. Use <strong className="text-foreground">Collect</strong> to move it into your spendable fund (respecting fund caps). Leave it pending to stack across days.
+        </p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="rounded-lg border border-amber-500/20 bg-zinc-950/50 p-3">
+            <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Pending cash</div>
+            <div className="text-lg font-heading font-bold text-amber-300">${Math.trunc(Number(dash.entertainer_pending_fund_cash || 0)).toLocaleString()}</div>
+          </div>
+          <div className="rounded-lg border border-amber-500/20 bg-zinc-950/50 p-3">
+            <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Pending points</div>
+            <div className="text-lg font-heading font-bold text-amber-200/90">{Number(dash.entertainer_pending_fund_points || 0).toLocaleString()}</div>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={collectPending}
+          disabled={collecting}
+          className="w-full sm:w-auto px-4 py-2 rounded-lg bg-amber-500/90 hover:bg-amber-500 text-zinc-950 text-xs font-heading font-black uppercase tracking-wide disabled:opacity-50"
+        >
+          {collecting ? 'Collecting…' : 'Collect pay'}
+        </button>
+      </section>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="rounded-lg border border-primary/20 bg-zinc-900/50 p-4">
-          <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Fund cash</div>
+          <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Fund cash (spendable)</div>
           <div className="text-xl font-heading font-bold text-emerald-400">${Number(dash.entertainer_fund_cash || 0).toLocaleString()}</div>
         </div>
         <div className="rounded-lg border border-primary/20 bg-zinc-900/50 p-4">
-          <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Fund points</div>
+          <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Fund points (spendable)</div>
           <div className="text-xl font-heading font-bold text-sky-400">{Number(dash.entertainer_fund_points || 0).toLocaleString()}</div>
         </div>
       </div>
@@ -324,7 +386,7 @@ export default function EntertainerHub() {
       </section>
 
       <p className="text-[10px] text-mutedForeground font-heading">
-        Daily fund top-up runs automatically (UTC). Use this fund only when creating MDG games or MP Poker tables as an Entertainer — normal wallet is not charged for those flows.
+        Daily allowance accrues to pending automatically (UTC). Collect when you want it in your spendable fund. Use that fund when creating MDG games or MP Poker tables as an Entertainer — your normal wallet is not charged for those flows.
       </p>
     </div>
   );

@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from utils.entertainer_service import (
     build_entertainer_dashboard,
+    collect_entertainer_pending_to_fund,
     entertainer_perk_label,
     entertainer_utc_today,
     grant_entertainer_perk_tokens,
@@ -105,6 +106,28 @@ def register(router):
         if not dash:
             raise HTTPException(status_code=403, detail="Entertainer access required")
         return dash
+
+    @router.post("/entertainer/collect-pending-fund")
+    async def entertainer_collect_pending_fund(current_user: dict = Depends(get_current_user)):
+        """Move pending daily allowance into the spendable entertainer fund (up to fund caps). Idempotent."""
+        if not _is_entertainer(current_user):
+            raise HTTPException(status_code=403, detail="Entertainer access required")
+        out = await collect_entertainer_pending_to_fund(db, current_user["id"])
+        if not out.get("ok"):
+            raise HTTPException(status_code=404, detail=out.get("detail") or "Entertainer not found")
+        try:
+            await log_activity(
+                current_user["id"],
+                (current_user.get("username") or "?").strip(),
+                "entertainer_collect_pending_fund",
+                {
+                    "moved_cash": out.get("moved_cash"),
+                    "moved_points": out.get("moved_points"),
+                },
+            )
+        except Exception:
+            pass
+        return out
 
     @router.get("/admin/entertainer-dashboard")
     async def entertainer_dashboard_admin(

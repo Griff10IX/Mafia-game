@@ -157,6 +157,8 @@ export default function CoinFlipPage() {
   const [lastRound, setLastRound] = useState(null);
   const [stats, setStats] = useState(null);
   const lastBetRef = useRef('100000');
+  /** Blocks a second play() before React re-renders (double-click / touch+click races). */
+  const playInFlightRef = useRef(false);
 
   const maxBet = Number(config.max_bet || 5_000_000);
   const betNum = parseInt(String(bet || '').replace(/\D/g, ''), 10) || 0;
@@ -189,7 +191,7 @@ export default function CoinFlipPage() {
   };
 
   const play = async () => {
-    if (loading) return;
+    if (playInFlightRef.current || loading) return;
     if (betNum < 1) {
       toast.error('Enter a bet');
       return;
@@ -198,6 +200,7 @@ export default function CoinFlipPage() {
       toast.error(`Max bet is ${formatMoney(maxBet)}`);
       return;
     }
+    playInFlightRef.current = true;
     setLoading(true);
     if (!skipAnimation) setIsFlipping(true);
     try {
@@ -226,6 +229,7 @@ export default function CoinFlipPage() {
     } catch (e) {
       toast.error(getApiErrorMessage(e) || 'Flip failed');
     } finally {
+      playInFlightRef.current = false;
       setIsFlipping(false);
       setLoading(false);
     }

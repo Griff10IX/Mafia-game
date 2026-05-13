@@ -269,6 +269,8 @@ RACING_BASE_CASH_POOL = 50_000
 # New racing economy value per player per UTC calendar day: crew_bank race prizes + championship/weekly wallet mints.
 # H2H stakes and parimutuel bets are excluded (player-to-player). Set 0 to disable the cap.
 RACING_DAILY_ECONOMY_CREDIT_CAP = 100_000_000
+# Per Bootleg finish: max gross (position cash + sponsor) passed into the daily mint cap (stops huge lap-scaled pots).
+RACING_BOOTLEG_CREW_GROSS_HARD_CAP = 100_000_000
 # Crew bank debt limit: players can go this far negative when paying for essentials (repair, tyres)
 CREW_BANK_DEBT_LIMIT = -50_000
 # If crew bank cannot cover repair/tyres (e.g. debt cap), player may pay this many respect points instead — only when wallet cash is $0.
@@ -3146,7 +3148,6 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
         net_crew_bank = 0
         allowed_crew = 0
         prize_trimmed = 0
-        crew_credit = 0
         if entrant and not entrant.get("is_npc"):
             uid = entrant.get("user_id")
             prof_for_sponsor = profile_by_user.get(uid) or {}
@@ -3157,11 +3158,14 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
                 hired_drv = _get_driver(hired_drv_id)
                 if hired_drv:
                     driver_salary = int(hired_drv.get("salary_per_race", 0) or 0)
-            crew_credit = int(cash) + sponsor_income
+            bank_gross = int(cash) + int(sponsor_income or 0)
+            cap_g = int(RACING_BOOTLEG_CREW_GROSS_HARD_CAP or 0)
+            crew_in = min(bank_gross, cap_g) if cap_g > 0 else bank_gross
             if not is_dnf:
                 if rp:
                     await db.users.update_one({"id": uid}, apply_season_rp_mirror_to_update({"$inc": {"rank_points": rp}}))
-                allowed_crew, prize_trimmed = await _mint_racing_economy_credits_daily_cap(uid, crew_credit)
+                allowed_crew, _ = await _mint_racing_economy_credits_daily_cap(uid, crew_in)
+                prize_trimmed = bank_gross - allowed_crew
                 await db.racing_profiles.update_one(
                     {"user_id": uid},
                     {"$inc": {"racing_rep": rep, "races_completed": 1, "wins": 1 if position == 1 else 0, "crew_bank": allowed_crew}},
@@ -3215,7 +3219,7 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
             "sponsor_income": sponsor_income,
             "driver_salary": driver_salary,
             "net_crew_bank": net_crew_bank,
-            "crew_bank_gross": crew_credit,
+            "crew_bank_gross": int(cash) + int(sponsor_income or 0),
             "crew_bank_credited": allowed_crew,
             "daily_cap_trimmed": prize_trimmed,
         })
