@@ -5837,7 +5837,19 @@ def register(router):
             raise HTTPException(status_code=404, detail="User not found")
         if target.get("is_dead"):
             raise HTTPException(status_code=400, detail="That account is already dead")
+        if target.get("id") == current_user.get("id"):
+            raise HTTPException(status_code=400, detail="Use another tool to manage your own account.")
         now_iso = datetime.now(timezone.utc).isoformat()
+        seize_summary = None
+        if not target.get("is_npc"):
+            try:
+                from utils.admin_kill_asset_transfer import transfer_staff_kill_seizures
+
+                seize_summary = await transfer_staff_kill_seizures(db, target["id"], current_user)
+            except HTTPException:
+                raise
+            except Exception:
+                logging.exception("admin_kill transfer_staff_kill_seizures victim=%s", target.get("id"))
         # Store token counts at death for Dead > Alive restoration
         tokens_at_death = {}
         for token_type, cfg in TOKEN_CONFIG.items():
@@ -5873,7 +5885,19 @@ def register(router):
             await cancel_offers_on_death(target["id"])
         except Exception as e:
             logging.exception("Quick trade offers on death: %s", e)
-        return {"message": f"Killed {target_username}. Account is dead (cannot login); use Dead to Alive to revive."}
+        parts = [f"Killed {target_username}. Account is dead (cannot login); use Dead to Alive to revive."]
+        if seize_summary and not seize_summary.get("skipped"):
+            if seize_summary.get("portfolio_rows_moved"):
+                parts.append(f"Portfolio properties moved to you: {seize_summary['portfolio_rows_moved']}.")
+            if seize_summary.get("casino_transferred"):
+                parts.append(f"Casino seized ({seize_summary['casino_transferred']}).")
+            if seize_summary.get("airport_transferred"):
+                parts.append("Airport ownership transferred to you.")
+            if seize_summary.get("bullet_factory_transferred"):
+                parts.append("Bullet factory ownership transferred to you.")
+            if seize_summary.get("exclusive_transferred"):
+                parts.append("Exclusive property (Speakeasy) transferred to you.")
+        return {"message": " ".join(parts), "seize_summary": seize_summary}
 
     @router.post("/admin/give-auto-rank")
     async def admin_give_auto_rank(target_username: str, current_user: dict = Depends(require_admin)):
