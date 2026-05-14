@@ -7,7 +7,7 @@ import sys
 import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 
 from server import db, get_current_user, _is_admin, send_notification, send_notification_to_all
@@ -124,6 +124,35 @@ async def _final_vote_counts(season_id: str) -> Dict[str, int]:
     async for row in db.game_idea_votes.aggregate(pipeline):
         out[row["_id"]] = int(row.get("c") or 0)
     return out
+
+
+async def _game_ideas_season_client_payload(season: Optional[dict], uid: Optional[str]) -> dict:
+    """Shared shape for GET /forum/game-ideas/active-season (global or hub-scoped)."""
+    if not season:
+        return {"season": None, "my_entry_comment_id": None, "my_entry_id": None, "my_vote_entry_id": None, "vote_phase": None}
+    my_entry = None
+    if uid:
+        my_entry = await db.game_idea_entries.find_one(
+            {"season_id": season["id"], "user_id": uid},
+            {"_id": 0, "comment_id": 1, "id": 1},
+        )
+    phase = "primary" if season.get("status") == "primary" else "final" if season.get("status") == "final" else None
+    my_vote = None
+    if phase and uid:
+        v = await db.game_idea_votes.find_one(
+            {"season_id": season["id"], "user_id": uid, "phase": phase},
+            {"_id": 0, "entry_id": 1},
+        )
+        my_vote = v.get("entry_id") if v else None
+    out = _strip_mongo(season)
+    out["hub_topic_id"] = season.get("hub_topic_id")
+    return {
+        "season": out,
+        "my_entry_comment_id": (my_entry or {}).get("comment_id"),
+        "my_entry_id": (my_entry or {}).get("id"),
+        "my_vote_entry_id": my_vote,
+        "vote_phase": phase,
+    }
 
 
 def register(router):
@@ -458,7 +487,15 @@ def register(router):
         }
 
     @router.get("/forum/game-ideas/active-season")
-    async def game_ideas_active_season(current_user: dict = Depends(get_current_user)):
+    async def game_ideas_active_season(
+        hub_season_id: Optional[str] = Query(None, description="When set, return this season (hub topic) instead of the latest global season"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        uid = current_user.get("id")
+        hub = (hub_season_id or "").strip()
+        if hub:
+            season = await db.game_idea_seasons.find_one({"id": hub}, {"_id": 0})
+            return await _game_ideas_season_client_payload(season, uid)
         season = await db.game_idea_seasons.find_one(
             {"status": {"$in": ["primary", "final"]}},
             {"_id": 0},
@@ -470,27 +507,7 @@ def register(router):
                 {"_id": 0},
                 sort=[("created_at", -1)],
             )
-        if not season:
-            return {"season": None}
-        uid = current_user.get("id")
-        my_entry = await db.game_idea_entries.find_one({"season_id": season["id"], "user_id": uid}, {"_id": 0, "comment_id": 1, "id": 1})
-        phase = "primary" if season.get("status") == "primary" else "final" if season.get("status") == "final" else None
-        my_vote = None
-        if phase and uid:
-            v = await db.game_idea_votes.find_one(
-                {"season_id": season["id"], "user_id": uid, "phase": phase},
-                {"_id": 0, "entry_id": 1},
-            )
-            my_vote = v.get("entry_id") if v else None
-        out = _strip_mongo(season)
-        out["hub_topic_id"] = season.get("hub_topic_id")
-        return {
-            "season": out,
-            "my_entry_comment_id": (my_entry or {}).get("comment_id"),
-            "my_entry_id": (my_entry or {}).get("id"),
-            "my_vote_entry_id": my_vote,
-            "vote_phase": phase,
-        }
+        return await _game_ideas_season_client_payload(season, uid)
 
     @router.get("/forum/game-ideas/seasons/{season_id}/entries")
     async def game_ideas_list_entries(season_id: str, current_user: dict = Depends(get_current_user)):

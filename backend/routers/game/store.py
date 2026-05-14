@@ -453,7 +453,10 @@ async def buy_booze_capacity(
 ):
     current_bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
     if current_bonus >= BOOZE_CAPACITY_BONUS_MAX:
-        raise HTTPException(status_code=400, detail="Booze capacity bonus is already at the maximum (1000)")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Booze capacity bonus is already at the maximum ({BOOZE_CAPACITY_BONUS_MAX})",
+        )
     cost_used, inc, gte_filter = _store_cost_inc(current_user, BOOZE_CAPACITY_UPGRADE_COST, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")

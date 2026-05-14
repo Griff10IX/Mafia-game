@@ -11244,7 +11244,20 @@ def register(router):
                             ]
                         }
                     },
-                    "bodyguard_kills": {"$sum": {"$cond": [{"$eq": ["$is_bodyguard_kill", True]}, 1, 0]}},
+                    "bodyguard_kills": {
+                        "$sum": {
+                            "$cond": [
+                                {
+                                    "$and": [
+                                        {"$eq": ["$is_bodyguard_kill", True]},
+                                        {"$ne": [{"$ifNull": ["$bodyguard_owner_id", ""]}, killer_id]},
+                                    ]
+                                },
+                                1,
+                                0,
+                            ]
+                        }
+                    },
                 }
             },
         ]
@@ -11290,8 +11303,11 @@ def register(router):
         }
         recent_raw = await db.attack_attempts.find(attempt_match, recent_proj).sort("created_at", -1).limit(cap).to_list(cap)
         recent_kills = []
+        kid_lc = (killer_id or "").strip().lower()
         for d in recent_raw:
             row = dict(d)
+            if row.get("is_bodyguard_kill") and str(row.get("bodyguard_owner_id") or "").strip().lower() == kid_lc:
+                continue
             ca = row.get("created_at")
             if hasattr(ca, "isoformat"):
                 row["created_at"] = ca.isoformat()
@@ -11309,7 +11325,7 @@ def register(router):
         bg_match: Dict[str, Any] = {
             "type": "bodyguard_killed",
             "killer_id": killer_id,
-            "owner_id": {"$nin": [None, ""]},
+            "owner_id": {"$nin": [None, "", killer_id]},
         }
         bg_agg_pipeline: List[Dict[str, Any]] = [
             {"$match": bg_match},
@@ -11354,6 +11370,8 @@ def register(router):
         for r in owner_agg_rows:
             oid = r.get("_id")
             if not oid:
+                continue
+            if str(oid).strip().lower() == kid_lc:
                 continue
             bodyguard_by_owner.append(
                 {
@@ -11611,7 +11629,8 @@ def register(router):
             row["refund_redirect_reason"] = t["redirect_reason"]
         note = (
             "Refund tool credits a % of sum_hire_cost from bodyguard_killed events only; recurring weekly guard pay "
-            "is not attributed to a killer in the ledger. If a guard owner is dead, refund_credit_user_id shows where "
+            "is not attributed to a killer in the ledger. Bodyguard hire rows where the guard owner is the killer "
+            "(own guards) are excluded from hire totals and refunds. If a guard owner is dead, refund_credit_user_id shows where "
             "points will go: same email on an alive account, or a single alive signup from the same registration IP "
             "after death; otherwise the dead row is credited (owner_dead_no_matching_account or owner_dead_ambiguous_device)."
         )

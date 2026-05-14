@@ -3604,15 +3604,78 @@ def _crew_oc_family_is_auto_apply_eligible(fam_doc: dict, now_utc: datetime) -> 
     return now_utc >= pre
 
 
+def _crew_oc_advertisement_window_allows(fam_doc: dict) -> bool:
+    """True when a Crew OC forum ad may be posted (same rule as manual advertise / forum crew_oc create)."""
+    raw = fam_doc.get("crew_oc_cooldown_until")
+    if not raw:
+        return True
+    until = _crew_oc_parse_dt_utc(raw)
+    if not until:
+        return True
+    now = datetime.now(timezone.utc)
+    window_start = until - timedelta(minutes=CREW_OC_TOPIC_WINDOW_MINUTES)
+    return now >= window_start
+
+
+async def _crew_oc_insert_crew_oc_forum_ad(
+    family_id: str,
+    *,
+    author_id: str,
+    author_username: str,
+    fam_name: Optional[str],
+    fam_tag: Optional[str],
+    content_extra: str = "",
+) -> str:
+    """Create the standard Crew OC forum ad (deletes prior ads for this family). Returns topic id."""
+    from routers.social.forum import _delete_all_crew_oc_topics_for_family, _prune_forum_topics_for_category
+
+    fid = (family_id or "").strip()
+    topic_id = str(uuid.uuid4())
+    now_iso = datetime.now(timezone.utc).isoformat()
+    name = (fam_name or "?").strip() or "?"
+    tag = (fam_tag or "?").strip() or "?"
+    title = f"Crew OC: {name} [{tag}]"
+    body = (
+        f"Apply here to join {name} [{tag}] for their next Crew OC run. Set your join fee in Families → Crew OC."
+        + (content_extra or "")
+    )
+    doc = {
+        "id": topic_id,
+        "title": title,
+        "content": body,
+        "category": "crew_oc",
+        "crew_oc_family_id": fid,
+        "author_id": author_id,
+        "author_username": author_username or "?",
+        "created_at": now_iso,
+        "updated_at": now_iso,
+        "views": 0,
+        "is_sticky": False,
+        "is_important": False,
+        "is_locked": False,
+    }
+    await _delete_all_crew_oc_topics_for_family(fid)
+    await db.forum_topics.insert_one(doc)
+    await db.families.update_one({"id": fid}, {"$set": {"crew_oc_forum_topic_id": topic_id}})
+    await _prune_forum_topics_for_category("crew_oc")
+    await log_activity(
+        author_id,
+        author_username or "?",
+        "forum_topic",
+        {"topic_id": topic_id, "title": title, "crew_oc_auto_ad": bool((content_extra or "").strip())},
+    )
+    return topic_id
+
+
 async def schedule_crew_oc_auto_commit_for_family(family_id: str) -> None:
-    """When family perk ``crew_oc_auto_commit`` is active and a Crew OC forum topic exists, set due time for auto-commit tick."""
+    """When ``crew_oc_auto_commit`` is active: ensure a Crew OC forum ad exists (post automatically if allowed), then set auto-commit due time."""
     fid = (family_id or "").strip()
     if not fid:
         return
     now = datetime.now(timezone.utc)
     fam = await db.families.find_one(
         {"id": fid},
-        {"_id": 0, "family_perks": 1, "crew_oc_forum_topic_id": 1, "crew_oc_cooldown_until": 1},
+        {"_id": 0, "family_perks": 1, "crew_oc_forum_topic_id": 1, "crew_oc_cooldown_until": 1, "name": 1, "tag": 1, "boss_id": 1},
     )
     if not fam:
         return
@@ -3621,11 +3684,28 @@ async def schedule_crew_oc_auto_commit_for_family(family_id: str) -> None:
     if not perks.get("crew_oc_auto_commit"):
         await db.families.update_one({"id": fid}, unset_sched)
         return
-    tid = fam.get("crew_oc_forum_topic_id")
-    if not tid:
-        await db.families.update_one({"id": fid}, unset_sched)
-        return
-    topic = await db.forum_topics.find_one({"id": tid}, {"_id": 0, "created_at": 1})
+    tid = (fam.get("crew_oc_forum_topic_id") or "").strip()
+    topic = await db.forum_topics.find_one({"id": tid}, {"_id": 0, "created_at": 1}) if tid else None
+    if not topic:
+        if not _crew_oc_advertisement_window_allows(fam):
+            await db.families.update_one({"id": fid}, unset_sched)
+            return
+        boss_id = _uid_str(fam.get("boss_id"))
+        boss = await db.users.find_one({"id": boss_id}, {"_id": 0, "id": 1, "username": 1}) if boss_id else None
+        if not boss:
+            await db.families.update_one({"id": fid}, unset_sched)
+            return
+        extra = "\n\n[color=#888888](Posted automatically — family has Auto-commit Crew OC active.)[/color]"
+        tid = await _crew_oc_insert_crew_oc_forum_ad(
+            fid,
+            author_id=boss["id"],
+            author_username=boss.get("username") or "?",
+            fam_name=fam.get("name"),
+            fam_tag=fam.get("tag"),
+            content_extra=extra,
+        )
+        _invalidate_my_cache(boss["id"])
+        topic = await db.forum_topics.find_one({"id": tid}, {"_id": 0, "created_at": 1})
     if not topic:
         await db.families.update_one({"id": fid}, unset_sched)
         return
@@ -3861,7 +3941,40 @@ async def run_crew_oc_auto_commit_tick_once(db) -> Dict[str, Any]:
         except Exception:
             logger.warning("crew_oc_auto_commit tick family=%s", fid, exc_info=True)
         await asyncio.sleep(0)
-    return {"ok": True, "families_scanned": len(rows), "committed": committed}
+    pickup = 0
+    try:
+        pickup_cursor = db.families.find(
+            {
+                "wiped": {"$ne": True},
+                "family_perks.crew_oc_auto_commit": {"$exists": True},
+                "$or": [
+                    {"crew_oc_auto_commit_due_at": {"$exists": False}},
+                    {"crew_oc_auto_commit_due_at": None},
+                    {"crew_oc_auto_commit_due_at": ""},
+                ],
+            },
+            {"_id": 0, "id": 1},
+        ).limit(40)
+        for prow in await pickup_cursor.to_list(40):
+            pid = prow.get("id")
+            if not pid:
+                continue
+            fam_p = await db.families.find_one(
+                {"id": pid},
+                {"_id": 0, "family_perks": 1, "crew_oc_forum_topic_id": 1, "crew_oc_cooldown_until": 1, "name": 1, "tag": 1, "boss_id": 1, "wiped": 1},
+            )
+            if not fam_p or fam_p.get("wiped"):
+                continue
+            perks_p = clean_family_perks(fam_p.get("family_perks"), now)
+            if not perks_p.get("crew_oc_auto_commit"):
+                continue
+            if not _crew_oc_advertisement_window_allows(fam_p):
+                continue
+            await schedule_crew_oc_auto_commit_for_family(pid)
+            pickup += 1
+    except Exception:
+        logger.exception("crew_oc_auto_commit pickup pass")
+    return {"ok": True, "families_scanned": len(rows), "committed": committed, "pickup_scheduled": pickup}
 
 
 async def run_crew_oc_auto_commit_ticker():
@@ -3891,38 +4004,20 @@ async def families_crew_oc_advertise(current_user: dict = Depends(get_current_us
     )
     if not fam:
         raise HTTPException(status_code=404, detail="Family not found")
-    # Only allow when Crew OC is available or within CREW_OC_TOPIC_WINDOW_MINUTES before it becomes available
-    cooldown_until = fam.get("crew_oc_cooldown_until")
-    if cooldown_until:
-        try:
-            until = datetime.fromisoformat(str(cooldown_until).replace("Z", "+00:00"))
-            now = datetime.now(timezone.utc)
-            window_start = until - timedelta(minutes=CREW_OC_TOPIC_WINDOW_MINUTES)
-            if now < window_start:
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"You can only create a Crew OC topic when your Crew OC is available or up to {CREW_OC_TOPIC_WINDOW_MINUTES} minutes before it becomes available.",
-                )
-        except HTTPException:
-            raise
-        except Exception:
-            pass
-    from routers.social.forum import _delete_all_crew_oc_topics_for_family, _prune_forum_topics_for_category
-
-    await _delete_all_crew_oc_topics_for_family(family_id)
-    topic_id = str(uuid.uuid4())
-    now = datetime.now(timezone.utc).isoformat()
+    if not _crew_oc_advertisement_window_allows(fam):
+        raise HTTPException(
+            status_code=400,
+            detail=f"You can only create a Crew OC topic when your Crew OC is available or up to {CREW_OC_TOPIC_WINDOW_MINUTES} minutes before it becomes available.",
+        )
+    topic_id = await _crew_oc_insert_crew_oc_forum_ad(
+        family_id,
+        author_id=current_user["id"],
+        author_username=current_user.get("username") or "?",
+        fam_name=fam.get("name"),
+        fam_tag=fam.get("tag"),
+        content_extra="",
+    )
     title = f"Crew OC: {fam.get('name')} [{fam.get('tag')}]"
-    content = f"Apply here to join {fam.get('name')} [{fam.get('tag')}] for their next Crew OC run. Set your join fee in Families → Crew OC."
-    doc = {
-        "id": topic_id, "title": title, "content": content, "category": "crew_oc",
-        "crew_oc_family_id": family_id, "author_id": current_user["id"],
-        "author_username": current_user.get("username") or "?", "created_at": now, "updated_at": now,
-        "views": 0, "is_sticky": False, "is_important": False, "is_locked": False,
-    }
-    await db.forum_topics.insert_one(doc)
-    await db.families.update_one({"id": family_id}, {"$set": {"crew_oc_forum_topic_id": topic_id}})
-    await _prune_forum_topics_for_category("crew_oc")
     await schedule_crew_oc_auto_commit_for_family(family_id)
     _invalidate_my_cache(current_user["id"])
     return {"message": "Crew OC topic created.", "topic_id": topic_id, "title": title}

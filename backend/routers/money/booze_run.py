@@ -24,6 +24,7 @@ from server import (
     get_rank_info,
     user_prestige_rank_mult,
     STATES,
+    GODFATHER_RANK_ID,
     _is_admin,
     log_activity,
     require_admin,
@@ -68,10 +69,13 @@ BOOZE_TYPES = [
 ]
 
 BOOZE_CAPACITY_BASE_RANK1 = 50
-BOOZE_CAPACITY_EXTRA_PER_RANK = 25
 BOOZE_CAPACITY_UPGRADE_COST = 100
 BOOZE_CAPACITY_UPGRADE_AMOUNT = 25
 BOOZE_CAPACITY_BONUS_MAX = 1000
+# Max total booze cargo at Godfather (prestige 0..5): rank + Points Store bonus + family perk combined.
+BOOZE_GODFATHER_TOTAL_CARGO_BY_PRESTIGE = (1600, 1800, 2000, 2300, 2500, 3000)
+# Backwards-compatible alias (same tuple).
+BOOZE_GODFATHER_CARGO_BY_PRESTIGE = BOOZE_GODFATHER_TOTAL_CARGO_BY_PRESTIGE
 BOOZE_RUN_HISTORY_MAX = 10
 BOOZE_RUN_JAIL_CHANCE_MIN = 0.05
 BOOZE_RUN_JAIL_CHANCE_MAX = 0.15
@@ -275,16 +279,50 @@ def _booze_daily_estimate_rough(capacity: int, prices_map: dict, secs_per_leg: i
     return int(profitable_runs * capacity * profit_per_unit * BOOZE_RUN_PROFIT_MULT)
 
 
-def _booze_user_capacity(current_user: dict, *, family_cargo_bonus: int = 0) -> int:
-    rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
-    capacity_from_rank = BOOZE_CAPACITY_BASE_RANK1 + (rank_id - 1) * BOOZE_CAPACITY_EXTRA_PER_RANK
-    bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
+def _booze_prestige_level_clamped(user: Optional[dict]) -> int:
+    return max(0, min(5, int((user or {}).get("prestige_level") or 0)))
+
+
+def _booze_godfather_total_cargo_cap(prestige_level: int) -> int:
+    pl = max(0, min(5, int(prestige_level or 0)))
+    return int(BOOZE_GODFATHER_TOTAL_CARGO_BY_PRESTIGE[pl])
+
+
+def _booze_godfather_rank_only_at_top(prestige_level: int) -> int:
+    """Rank-only slice at Godfather so max store + family + rank hits the prestige total cap."""
+    total = _booze_godfather_total_cargo_cap(prestige_level)
+    floor = int(BOOZE_CAPACITY_BASE_RANK1)
+    raw = int(total) - int(BOOZE_CAPACITY_BONUS_MAX) - int(FAMILY_PERK_BOOZE_BONUS_CAP)
+    return max(floor, raw)
+
+
+def _booze_rank_base_capacity(rank_id: int, prestige_level: int) -> int:
+    floor = int(BOOZE_CAPACITY_BASE_RANK1)
+    god_rank_only = _booze_godfather_rank_only_at_top(prestige_level)
+    r = max(1, min(int(rank_id or 1), int(GODFATHER_RANK_ID)))
+    span = int(GODFATHER_RANK_ID) - 1
+    if span <= 0:
+        return max(1, floor)
+    return floor + int(round((god_rank_only - floor) * (r - 1) / span))
+
+
+def _booze_user_capacity_sync(current_user: dict, *, family_cargo_bonus: int = 0) -> int:
+    rank_id, _ = get_rank_info(int(current_user.get("rank_points") or 0), user_prestige_rank_mult(current_user))
+    pl = _booze_prestige_level_clamped(current_user)
+    capacity_from_rank = _booze_rank_base_capacity(rank_id, pl)
+    bonus = min(int(current_user.get("booze_capacity_bonus") or 0), BOOZE_CAPACITY_BONUS_MAX)
     fb = max(0, min(FAMILY_PERK_BOOZE_BONUS_CAP, int(family_cargo_bonus or 0)))
-    capacity = max(1, capacity_from_rank + bonus + fb)
-    # "Completed it" perk: 2x booze capacity
+    subtotal = capacity_from_rank + bonus + fb
+    cap_total = _booze_godfather_total_cargo_cap(pl)
+    subtotal = min(int(subtotal), int(cap_total))
+    subtotal = max(1, subtotal)
     if current_user.get("completed_it_booze_capacity"):
-        capacity = capacity * 2
-    return capacity
+        subtotal = min(int(cap_total) * 2, int(subtotal) * 2)
+    return int(subtotal)
+
+
+def _booze_user_capacity(current_user: dict, *, family_cargo_bonus: int = 0) -> int:
+    return _booze_user_capacity_sync(current_user, family_cargo_bonus=family_cargo_bonus)
 
 
 async def _family_booze_cargo_extra(family_id) -> int:
@@ -731,7 +769,14 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
     prices_map = _booze_prices_for_rotation()
     carrying = current_user.get("booze_carrying") or {}
     rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
-    capacity_from_rank = BOOZE_CAPACITY_BASE_RANK1 + (rank_id - 1) * BOOZE_CAPACITY_EXTRA_PER_RANK
+    pl = _booze_prestige_level_clamped(current_user)
+    godfather_total_cap = _booze_godfather_total_cargo_cap(pl)
+    godfather_rank_only = _booze_godfather_rank_only_at_top(pl)
+    capacity_from_rank = _booze_rank_base_capacity(rank_id, pl)
+    rank_span = max(1, int(GODFATHER_RANK_ID) - 1)
+    capacity_extra_per_rank_display = int(
+        round((godfather_rank_only - int(BOOZE_CAPACITY_BASE_RANK1)) / rank_span)
+    )
     fam_extra = await _family_booze_cargo_extra(current_user.get("family_id"))
     capacity = _booze_user_capacity(current_user, family_cargo_bonus=fam_extra)
     booze_until = _parse_iso_datetime(current_user.get("booze_until"))
@@ -786,7 +831,12 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
         "booze_buy_location": dict(current_user.get("booze_buy_location") or {}),
         "capacity": capacity,
         "capacity_from_rank": capacity_from_rank,
-        "capacity_extra_per_rank": BOOZE_CAPACITY_EXTRA_PER_RANK,
+        "prestige_level": pl,
+        "cargo_godfather_cap": godfather_total_cap,
+        "cargo_godfather_rank_only": godfather_rank_only,
+        "cargo_rank_min": BOOZE_CAPACITY_BASE_RANK1,
+        "cargo_derived_absolute_max": godfather_total_cap,
+        "capacity_extra_per_rank": capacity_extra_per_rank_display,
         "capacity_bonus": capacity_bonus,
         "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX,
         "family_cargo_bonus": fam_extra,
@@ -835,7 +885,10 @@ async def buy_booze_capacity(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Insufficient points")
     current_bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
     if current_bonus >= BOOZE_CAPACITY_BONUS_MAX:
-        raise HTTPException(status_code=400, detail="Booze capacity bonus is already at the maximum (1000)")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Booze capacity bonus is already at the maximum ({BOOZE_CAPACITY_BONUS_MAX})",
+        )
     add_bonus = min(BOOZE_CAPACITY_UPGRADE_AMOUNT, BOOZE_CAPACITY_BONUS_MAX - current_bonus)
     result = await db.users.update_one(
         {"id": current_user["id"], "points": {"$gte": BOOZE_CAPACITY_UPGRADE_COST}},

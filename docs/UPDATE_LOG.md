@@ -6,6 +6,21 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-05-14 12:00 UTC[/color][/b] — [b]Booze run: cargo rework (prestige, caps, API, stats, Store)[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Money → Booze run[/b] — cargo no longer uses the old flat formula ([b]50 + 25 per rank step[/b] plus bonuses). It now scales from [b]Rat[/b] to [b]Godfather[/b] along your [b]street rank[/b], while your [b]prestige level[/b] sets how high that climb can go.[/color]
+[*][color=#888888][b]Changed:[/b] At [b]Godfather[/b], your prestige sets a single [b]total[/b] cargo ceiling for that cycle (prestige [b]0→5[/b]: [b]1,600[/b] / [b]1,800[/b] / [b]2,000[/b] / [b]2,300[/b] / [b]2,500[/b] / [b]3,000[/b]). That number is the [b]maximum you can hold from rank + Points Store booze bonus + family[/b] monthly booze cargo combined — not an extra layer on top. Between Rat and Godfather, the [b]rank[/b] portion grows so that with [b]max[/b] store bonus ([b]+1,000[/b]) and [b]max[/b] family perk ([b]+300[/b]) you still land on that cap at the top rank.[/color]
+[*][color=#888888][b]Changed:[/b] [b]Completed It[/b] (objectives) still [b]doubles[/b] booze cargo, but only up to [b]twice[/b] your prestige’s Godfather [b]total[/b] cap (e.g. prestige [b]0[/b]: up to [b]3,200[/b] total at Godfather with max bonuses; prestige [b]5[/b]: up to [b]6,000[/b]).[/color]
+[*][color=#888888][b]API:[/b] [b]GET /booze-run/config[/b] exposes extra fields for the client: [b]prestige_level[/b], [b]cargo_godfather_cap[/b] (your prestige’s Godfather [b]total[/b] cap), [b]cargo_godfather_rank_only[/b] (rank slice at Godfather after reserving max store + family), [b]cargo_rank_min[/b], [b]cargo_derived_absolute_max[/b] (same as the Godfather total cap for your prestige), and an average [b]capacity_extra_per_rank[/b] step for the current prestige (for display).[/color]
+[*][color=#888888][b]Changed:[/b] [b]My Stats[/b] / overview booze [b]capacity[/b] now uses the [b]same server rules[/b] as the live booze run (aligned with the booze router helper; family monthly cargo is still omitted on that stats path).[/color]
+[*][color=#888888][b]UI:[/b] [b]Booze run[/b] — [b]Bootlegger’s Guide[/b] mentions rank + prestige; shows your prestige’s [b]max total[/b] cap when the API sends it; [b]Cargo[/b] tooltip explains total vs rank-only slice. [b]Game → Store → Booze Capacity[/b] copy shows [b]total[/b] capacity and [b]bonus current / max[/b] from the same config.[/color]
+[*][color=#888888][b]Note:[/b] After [b]prestige[/b], [b]rank points[/b] reset — the rank portion of cargo starts from the bottom of the curve until you rank up again; [b]Points Store[/b] and [b]family[/b] bonuses still apply and still count toward the same prestige [b]total[/b] cap. [b]Inventory[/b] is not wiped on prestige (you can be over the new cap until you sell).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-30 12:00 UTC[/color][/b] — [b]Loot box: bigger payouts, bonus pieces, accurate piece count[/b][/size]
 [quote]
 [list]

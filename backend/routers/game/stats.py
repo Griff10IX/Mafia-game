@@ -170,9 +170,8 @@ def _gambling_log_entry_dt(created_at) -> Optional[datetime]:
 
 
 def _booze_stats(u: dict) -> dict:
-    """Build booze stats dict. Uses get_rank_info and booze_run capacity logic."""
-    from routers.money.booze_run import BOOZE_TYPES, BOOZE_CAPACITY_BASE_RANK1, BOOZE_CAPACITY_EXTRA_PER_RANK, BOOZE_CAPACITY_BONUS_MAX
-    from server import get_rank_info, user_prestige_rank_mult
+    """Build booze stats dict. Uses same capacity math as booze_run (family bonus 0 here)."""
+    from routers.money.booze_run import BOOZE_TYPES, _booze_user_capacity_sync
     profit_by_type = dict(u.get("booze_profit_by_type") or {})
     best_id = None
     best_profit = 0
@@ -184,9 +183,7 @@ def _booze_stats(u: dict) -> dict:
     best_name = None
     if best_id:
         best_name = next((b["name"] for b in BOOZE_TYPES if b.get("id") == best_id), best_id)
-    rank_id, _ = get_rank_info(int(u.get("rank_points") or 0), user_prestige_rank_mult(u))
-    bonus = min(int(u.get("booze_capacity_bonus") or 0), BOOZE_CAPACITY_BONUS_MAX)
-    capacity = max(1, BOOZE_CAPACITY_BASE_RANK1 + (rank_id - 1) * BOOZE_CAPACITY_EXTRA_PER_RANK + bonus)
+    capacity = _booze_user_capacity_sync(u, family_cargo_bonus=0)
     return {
         "profit_total": int(u.get("booze_profit_total") or 0),
         "runs_count": int(u.get("booze_runs_count") or 0),

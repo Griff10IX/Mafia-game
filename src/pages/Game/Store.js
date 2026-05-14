@@ -95,7 +95,10 @@ const UPGRADES = [
   { id: 'oc-timer', title: 'OC Timer', Icon: Clock, price: 300, path: '/store/buy-oc-timer', ownedKey: 'oc_timer_reduced', desc: 'Heist cooldown 4h instead of 6h' },
   { id: 'crew-oc-timer', title: 'Crew OC Timer', Icon: Clock, price: 350, path: '/store/buy-crew-oc-timer', ownedKey: 'crew_oc_timer_reduced', desc: 'Family Crew OC 6h when you commit' },
   { id: 'garage', title: 'Garage Batch', Icon: Zap, price: 75, path: '/store/upgrade-garage-batch', ownedKey: null, desc: '+10 melt/scrap at once', extra: (u) => ({ line: 'Limit', value: u?.garage_batch_limit ?? 6 }) },
-  { id: 'booze', title: 'Booze Capacity', Icon: ShoppingBag, price: 100, path: '/store/buy-booze-capacity', ownedKey: null, desc: '+25 capacity (max 1000)', extra: (u, cfg) => cfg && ({ line: 'Capacity', value: cfg.capacity ?? '—' }) },
+  { id: 'booze', title: 'Booze Capacity', Icon: ShoppingBag, price: 100, path: '/store/buy-booze-capacity', ownedKey: null, desc: '+25 bonus cargo from Points Store (rank + prestige set your base)', extra: (u, cfg) => cfg && ({
+    line: 'Cargo',
+    value: `Total ${cfg.capacity != null ? Number(cfg.capacity).toLocaleString() : '—'} · bonus +${Number(cfg.capacity_bonus ?? 0).toLocaleString()}/${cfg.capacity_bonus_max != null ? Number(cfg.capacity_bonus_max).toLocaleString() : '—'}`,
+  }) },
   {
     id: 'hitlist-npc-cap',
     title: 'Practice Targets',

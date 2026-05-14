@@ -89,7 +89,7 @@ const vaultTxSubtitle = (tx) => {
 const TERRITORY_FAMILY_PERK_ORDER = ['crew_oc', 'crew_oc_auto_commit', 'melt', 'gta', 'hitlist', 'racket', 'booze'];
 const TERRITORY_FAMILY_PERK_TITLE = {
   crew_oc: 'Crew OC cooldown −1h',
-  crew_oc_auto_commit: 'Auto-commit Crew OC (10m after ad, 2d)',
+  crew_oc_auto_commit: 'Auto-commit Crew OC (posts forum ad when allowed, then commits 10m later; 2d)',
   melt: 'Family melt cooldown −5s',
   gta: 'Family GTA cooldown −5s',
   hitlist: '+2 hitlist NPC slots',

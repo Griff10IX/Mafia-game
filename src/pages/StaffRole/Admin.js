@@ -15944,7 +15944,7 @@ export default function Admin() {
             <div className="p-3 space-y-3">
               <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
                 All successful kills by a player (from attack logs), distinct player victims, bodyguard kills, and{' '}
-                <span className="text-foreground font-bold">one-time hire_cost</span> recorded when each guard died (from bodyguard_killed events).
+                <span className="text-foreground font-bold">one-time hire_cost</span> recorded when each guard died (from bodyguard_killed events); the killer is never counted as the hire owner for their own guards.
                 Weekly bodyguard pay is <span className="text-amber-200/90">not</span> included. Moderators can load the report; only admins can apply refunds. Re-running refund stacks credits.
                 Optional <span className="text-foreground font-bold">target guard owners</span> narrows hire totals, victim list, recent kills, and refunds to those usernames or user ids (comma, space, or newline separated).
               </p>

@@ -100,7 +100,14 @@ const StatsCard = ({ config, timer }) => {
           <div className="text-[11px] font-heading font-bold text-primary truncate">{config.current_location}</div>
         </div>
         
-        <div className="space-y-0.5">
+        <div
+          className="space-y-0.5"
+          title={
+            config.cargo_godfather_cap != null
+              ? `Max total cargo at Godfather for your prestige: ${Number(config.cargo_godfather_cap).toLocaleString()} (includes Points Store + family). Rank-only slice at top: ${config.cargo_godfather_rank_only != null ? Number(config.cargo_godfather_rank_only).toLocaleString() : '—'}.`
+              : undefined
+          }
+        >
           <div className="flex items-center gap-0.5 text-[8px] text-zinc-500 uppercase tracking-[0.1em] font-heading">
             <Package size={8} className="text-primary" />
             Cargo
@@ -573,7 +580,7 @@ const HistoryCard = ({ history }) => (
   </div>
 );
 
-const InfoCard = ({ rotationHours, rotationSeconds, dailyEstimateRough }) => (
+const InfoCard = ({ rotationHours, rotationSeconds, dailyEstimateRough, cargoDerivedMax }) => (
   <div className={`${styles.panel} rounded-md overflow-hidden border border-zinc-700/30 bz-fade-in mobile-panel`} style={{ animationDelay: '0.25s' }}>
     <div className="px-2.5 py-1.5 border-b border-zinc-700/30">
       <h3 className="text-[9px] font-heading font-bold text-zinc-400 uppercase tracking-[0.12em]">
@@ -592,7 +599,16 @@ const InfoCard = ({ rotationHours, rotationSeconds, dailyEstimateRough }) => (
         </li>
         <li className="flex items-start gap-1">
           <Package size={8} className="text-primary shrink-0 mt-0.5" />
-          <span>Cargo capacity increases with rank; upgrade in Points Store</span>
+          <span>
+            Cargo scales with <strong className="text-foreground">rank</strong> and <strong className="text-foreground">prestige</strong>; Points Store and family perks add more.
+            {cargoDerivedMax != null && (
+              <>
+                {' '}
+                Max total (rank + bonuses) is capped at{' '}
+                <strong className="text-foreground">{Number(cargoDerivedMax).toLocaleString()}</strong>.
+              </>
+            )}
+          </span>
         </li>
         {dailyEstimateRough != null && dailyEstimateRough > 0 && (
           <li className="flex items-start gap-1">
@@ -920,7 +936,12 @@ export default function BoozeRun() {
 
       <HistoryCard history={historyList} />
 
-      <InfoCard rotationHours={config.rotation_hours} rotationSeconds={config.rotation_seconds} dailyEstimateRough={config.daily_estimate_rough} />
+      <InfoCard
+        rotationHours={config.rotation_hours}
+        rotationSeconds={config.rotation_seconds}
+        dailyEstimateRough={config.daily_estimate_rough}
+        cargoDerivedMax={config.cargo_derived_absolute_max}
+      />
 
       {captchaModal}
     </div>

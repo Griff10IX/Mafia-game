@@ -448,9 +448,9 @@ export default function ForumTopic() {
       setGameIdeaMyEntryCommentId(null);
       return;
     }
-    api.get('/forum/game-ideas/active-season').then((r) => {
+    api.get('/forum/game-ideas/active-season', { params: { hub_season_id: sid } }).then((r) => {
       const s = r.data?.season;
-      if (s?.id === sid) {
+      if (s) {
         setActiveGameIdeaSeason(s);
         setGameIdeaMyEntryCommentId(r.data?.my_entry_comment_id ?? null);
       } else {
@@ -1631,7 +1631,7 @@ export default function ForumTopic() {
                       </button>
                     ) : null
                   )}
-                  {!isGameIdeasLog && topic?.game_idea_season_id && activeGameIdeaSeason?.status === 'primary' && user && c.author_id === user.id && (
+                  {!isGameIdeasLog && topic?.game_idea_season_id && activeGameIdeaSeason?.status === 'primary' && user && String(c.author_id) === String(user.id) && (
                     gameIdeaMyEntryCommentId === c.id ? (
                       <span className="text-[10px] font-heading font-bold text-emerald-400 px-2 py-1">Registered idea</span>
                     ) : !gameIdeaMyEntryCommentId ? (

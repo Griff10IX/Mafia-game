@@ -113,7 +113,7 @@ def perk_catalog_prices() -> Dict[str, Any]:
         "crew_oc": {"cost": FAMILY_PERK_COST_CREW_OC, "label": "Crew OC cooldown −1h"},
         "crew_oc_auto_commit": {
             "cost": FAMILY_PERK_COST_CREW_OC_AUTO_COMMIT,
-            "label": "Auto-commit Crew OC (10m after ad, 2d)",
+            "label": "Auto-commit Crew OC (posts ad + commit, 2d)",
         },
         "melt": {"cost": FAMILY_PERK_COST_MELT, "label": "Family melt cooldown −5s"},
         "gta": {"cost": FAMILY_PERK_COST_GTA, "label": "Family GTA cooldown −5s"},
