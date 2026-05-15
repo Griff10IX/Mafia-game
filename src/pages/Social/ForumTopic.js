@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams, useLocation } from 'react-router-dom';
 import { Lock, ThumbsUp, ThumbsDown, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package, UserPlus, Bold, Italic, Image, Palette, Pencil, X, Plus, Mic2 } from 'lucide-react';
 import api from '../../utils/api';
 import { confirmEntertainerGameCreatorDeduction, ENTERTAINER_GBOX_MAX_POINTS } from '../../utils/entertainerGameCreateConfirm';
@@ -142,6 +142,16 @@ function getTimeAgo(iso) {
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
   return `${Math.floor(s / 86400)}d ago`;
+}
+
+/** Scroll to a comment or topic OP block (`forum-comment-*` / `forum-topic-*`). */
+function scrollToForumElementById(elementId) {
+  if (!elementId) return;
+  const run = () => {
+    const el = document.getElementById(elementId);
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  };
+  requestAnimationFrame(() => requestAnimationFrame(run));
 }
 
 /** Telegram-style emoji reactions on topic OP or a comment */
@@ -299,6 +309,7 @@ function getAuctionEndStatusLabel(auction) {
 export default function ForumTopic() {
   const { topicId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const [topic, setTopic] = useState(null);
   const [comments, setComments] = useState([]);
@@ -354,6 +365,8 @@ export default function ForumTopic() {
   const [designerDisputeReason, setDesignerDisputeReason] = useState('');
   const [designerDisputeSubmitting, setDesignerDisputeSubmitting] = useState(false);
 
+  const forumHashScrollDoneRef = useRef('');
+
   const fetchTopic = useCallback(async (silent = false) => {
     if (!topicId) return;
     try {
@@ -394,6 +407,22 @@ export default function ForumTopic() {
       fetchTopic(false);
     }
   }, [topicId, fetchTopic]);
+
+  useEffect(() => {
+    forumHashScrollDoneRef.current = '';
+  }, [topicId]);
+
+  // Deep link: /forum/topic/:id#forum-comment-… or #forum-topic-…
+  useEffect(() => {
+    if (!hasLoaded || !topic?.id) return;
+    const raw = (location.hash || '').replace(/^#/, '');
+    if (!raw || (!raw.startsWith('forum-comment-') && !raw.startsWith('forum-topic-'))) return;
+    if (forumHashScrollDoneRef.current === raw) return;
+    const el = document.getElementById(raw);
+    if (!el) return;
+    scrollToForumElementById(raw);
+    forumHashScrollDoneRef.current = raw;
+  }, [hasLoaded, topic?.id, location.hash, comments.length]);
 
   useEffect(() => {
     if (!topicId) return;
@@ -645,10 +674,17 @@ export default function ForumTopic() {
             my_emoji_reaction: res.data.comment.my_emoji_reaction ?? null,
           }
         : null;
+      const anchorId = newComment?.id ? `forum-comment-${newComment.id}` : null;
       if (newComment) setComments((prev) => [newComment, ...prev]);
       toast.success('Posted');
-      setReplyToComment(null);
-      fetchTopic().catch(() => {});
+      if (anchorId) {
+        scrollToForumElementById(anchorId);
+        fetchTopic()
+          .then(() => scrollToForumElementById(anchorId))
+          .catch(() => {});
+      } else {
+        fetchTopic().catch(() => {});
+      }
     } catch (err) {
       const status = err.response?.status;
       const detail = err.response?.data?.detail;
@@ -686,10 +722,18 @@ export default function ForumTopic() {
             my_emoji_reaction: res.data.comment.my_emoji_reaction ?? null,
           }
         : null;
+      const anchorId = newComment?.id ? `forum-comment-${newComment.id}` : null;
       if (newComment) setComments((prev) => [newComment, ...prev]);
       setReplyToComment(null);
       toast.success('GIF posted');
-      fetchTopic().catch(() => {});
+      if (anchorId) {
+        scrollToForumElementById(anchorId);
+        fetchTopic()
+          .then(() => scrollToForumElementById(anchorId))
+          .catch(() => {});
+      } else {
+        fetchTopic().catch(() => {});
+      }
     } catch (err) {
       const status = err.response?.status;
       const detail = err.response?.data?.detail;
@@ -1214,7 +1258,7 @@ export default function ForumTopic() {
       )}
 
       {/* Topic Content */}
-      <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
+      <div id={topic?.id ? `forum-topic-${topic.id}` : undefined} className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">📝 Original Post</span>
           {topic.redeem_code && topic.redeem_max_uses != null && topic.redeem_uses_remaining != null && (

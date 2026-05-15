@@ -2192,7 +2192,11 @@ def register(router):
 
     @router.post("/account/redeem")
     async def redeem_code(body: RedeemRequestBody, current_user: dict = Depends(get_current_user)):
-        """Redeem a code. One redemption per user per code; respects max_uses."""
+        """Redeem a code. One redemption per user id per code; respects max_uses.
+
+        Support: if a *new* user id cannot redeem after the old character died, check redeem_codes.used_by / used_count
+        (reconcile runs on each attempt). If the *same* character (same users.id) revived, redeemed_codes still blocks — by design.
+        """
         from routers.kill.armoury import TOKEN_CONFIG
         code_normalized = (body.code or "").strip().upper()
         if not code_normalized:
@@ -2201,18 +2205,18 @@ def register(router):
         if not user_id:
             raise HTTPException(status_code=401, detail="Not authenticated")
         if code_normalized in (current_user.get("redeemed_codes") or []):
-            raise HTTPException(status_code=400, detail="You have already used this code.")
+            raise HTTPException(status_code=400, detail="This character has already redeemed this code.")
         await reconcile_stale_dead_redeemers_on_code(db, code_normalized)
         doc = await db.redeem_codes.find_one({"code": code_normalized, "active": True})
         if not doc:
             raise HTTPException(status_code=400, detail="Invalid or inactive code")
         used_by = doc.get("used_by") or []
         if user_id in used_by:
-            raise HTTPException(status_code=400, detail="You have already used this code.")
+            raise HTTPException(status_code=400, detail="This character is already recorded for this redeem code.")
         max_uses = doc.get("max_uses")
         used_count = int(doc.get("used_count", 0))
         if max_uses is not None and used_count >= max_uses:
-            raise HTTPException(status_code=400, detail="This code has reached its redemption limit.")
+            raise HTTPException(status_code=400, detail="This code has no redemptions left.")
 
         claim_filter = {
             "code": code_normalized,
@@ -2226,7 +2230,7 @@ def register(router):
             {"$inc": {"used_count": 1}, "$push": {"used_by": user_id}},
         )
         if not claimed:
-            raise HTTPException(status_code=400, detail="Code already used or limit reached.")
+            raise HTTPException(status_code=400, detail="Could not claim this code (try again).")
         new_used = int(claimed.get("used_count", 0)) + 1
 
         rewards = doc.get("rewards") or {}

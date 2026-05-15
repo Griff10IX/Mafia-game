@@ -14,7 +14,7 @@ import { clearStaffPortalSession, isStaffPortalTokenValid } from '../utils/staff
 import { getThemeUiPlatform } from '../utils/themePlatform';
 import { readDashboardSessionCache } from '../utils/dashboardSessionCache';
 import { warmLeaderboardCaches } from '../utils/leaderboardTopCache';
-import { setCrimesPrefetch, getCrimesPrefetch } from '../utils/prefetchCache';
+import { setCrimesPrefetch, getCrimesPrefetch, clearProfileSessionLastMeUsername, setProfileSessionLastMeUsername } from '../utils/prefetchCache';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { useTheme } from '../context/ThemeContext';
@@ -969,6 +969,7 @@ export default function Layout({ children }) {
       if (!userRes.data?.rules_accepted && location.pathname !== '/account/rules-acceptance') {
         sinkProgress(progressPromise);
         setUser((prev) => ({ ...userRes.data, ...prev }));
+        if (userRes.data?.username) setProfileSessionLastMeUsername(userRes.data.username);
         navigate('/account/rules-acceptance', { replace: true });
         return;
       }
@@ -983,6 +984,7 @@ export default function Layout({ children }) {
         property_profit: prev?.property_profit ?? 0,
         has_casino_or_property: prev?.has_casino_or_property ?? false,
       }));
+      if (userRes.data?.username) setProfileSessionLastMeUsername(userRes.data.username);
       setRankProgress(progressRes.data);
     } catch (error) {
       const status = error?.response?.status;
@@ -991,6 +993,7 @@ export default function Layout({ children }) {
         toast.error(msg || 'Session expired. Please log in again.');
         console.error('Auth failure, logging out:', error);
         localStorage.removeItem('token');
+        clearProfileSessionLastMeUsername();
         clearStaffPortalSession();
         navigate('/');
       } else {
@@ -1181,6 +1184,7 @@ export default function Layout({ children }) {
   const handleLogout = () => {
     localStorage.removeItem('token');
     clearStaffPortalSession();
+    clearProfileSessionLastMeUsername();
     window.location.href = '/';
   };
 

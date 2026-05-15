@@ -518,10 +518,22 @@ def register(router):
                 "robot_bodyguard_kills": 1,
                 "total_kills_excludes_npc_v1": 1,
                 "jail_busts": 1,
+                "hide_kills_on_profile": 1,
+                "hide_jailbusts_on_profile": 1,
+                "rank_points": 1,
+                "prestige_rank_multiplier": 1,
+                "prestige_level": 1,
+                "money": 1,
+                "founding_member": 1,
+                "current_state": 1,
                 "family_id": 1,
                 "war_rat_badge_until": 1,
                 "war_rat_family_id": 1,
                 "war_rat_war_ids": 1,
+                "is_moderator": 1,
+                "is_help_desk_operator": 1,
+                "is_entertainer": 1,
+                "email": 1,
             },
         )
         if not user:
@@ -592,6 +604,7 @@ def register(router):
             family_data,
             owns_casino,
             property_type,
+            show_war_rat,
         ) = await asyncio.gather(
             _hitlist_count(),
             _messages_received(),
@@ -599,16 +612,33 @@ def register(router):
             _family(),
             _owns_casino(),
             _property_type(),
+            _war_rat_badge_active(user),
         )
         family_display, family_emblem_preset_id, family_emblem_avatar_url = family_data or (None, None, None)
 
-        show_war_rat = await _war_rat_badge_active(user)
+        _prestige_mult = float(user.get("prestige_rank_multiplier") or 1.0)
+        _rp = int(user.get("rank_points") or 0)
+        rank_id, rank_name = get_rank_info(_rp, _prestige_mult)
+        _game_rank_name = rank_name
+        if user_has_admin_list_email(user):
+            rank_name = "Admin"
+        elif _is_moderator(user):
+            rank_name = "Moderator"
+        elif user.get("is_help_desk_operator"):
+            rank_name = f"(HDO) {_game_rank_name}"
+        elif _is_entertainer(user):
+            rank_name = f"(Entertainer) {_game_rank_name}"
+        _prestige_level = int(user.get("prestige_level") or 0)
+        _prestige_name = PRESTIGE_CONFIGS.get(_prestige_level, {}).get("name", "") if _prestige_level > 0 else ""
+        _, wealth_name, wealth_color = get_wealth_rank(user.get("money", 0))
+        hide_kills = bool(user.get("hide_kills_on_profile"))
+        hide_jail = bool(user.get("hide_jailbusts_on_profile"))
 
         return {
             "username": user.get("username"),
             "avatar_url": user.get("avatar_url"),
-            "kills": effective_player_kill_count(user),
-            "jail_busts": int(user.get("jail_busts") or 0),
+            "kills": None if hide_kills else effective_player_kill_count(user),
+            "jail_busts": None if hide_jail else int(user.get("jail_busts") or 0),
             "on_hitlist": hitlist_count > 0,
             "messages_sent": messages_sent,
             "messages_received": messages_received,
@@ -618,6 +648,14 @@ def register(router):
             "owns_casino": owns_casino,
             "property_type": property_type,
             "show_war_rat_badge": show_war_rat,
+            "rank_name": rank_name,
+            "rank": rank_id,
+            "wealth_rank_name": wealth_name,
+            "wealth_rank_color": wealth_color,
+            "prestige_level": _prestige_level,
+            "prestige_name": _prestige_name or None,
+            "founding_member": bool(user.get("founding_member")),
+            "location": ((user.get("current_state") or "").strip() or None),
         }
 
     @router.get("/users/{username}/profile")
@@ -792,6 +830,7 @@ def register(router):
             property_,
             message_counts,
             top_cars,
+            show_war_rat,
         ) = await asyncio.gather(
             _family_name_and_tag(),
             _casinos_for_type("dice", db.dice_ownership),
@@ -810,6 +849,7 @@ def register(router):
                     [user.get("profile_featured_car_id")] if user.get("profile_featured_car_id") else []
                 ),
             ),
+            _war_rat_badge_active(user),
         )
         messages_received, messages_sent_count = message_counts
 
@@ -892,7 +932,6 @@ def register(router):
             "achievement_badges": achievement_badges,
         }
         wr_until = user.get("war_rat_badge_until")
-        show_war_rat = await _war_rat_badge_active(user)
         out["war_rat_badge_until"] = wr_until if show_war_rat else None
         out["show_war_rat_badge"] = show_war_rat
         if show_war_rat:

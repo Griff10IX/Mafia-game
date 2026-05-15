@@ -336,7 +336,7 @@ def _is_auto_board_eligible_template(t: dict, *, soccer_keys: frozenset[str], no
         return False
     if cat == "Football":
         return bool(sk and sk in soccer_keys)
-    if cat in ("UFC", "Boxing"):
+    if cat in ("UFC", "Boxing", "Formula 1"):
         return True
     return False
 
@@ -568,22 +568,10 @@ SOCCER_ODDS_REGION_ATTEMPTS = (
     "uk,us,eu,fr,se,au",
 )
 
-# Auto-board: promote templates to sports_events (cron / admin). Football uses allowlist; UFC + Boxing always.
+# Auto-board: promote templates to sports_events (cron / admin). Football allowlist matches SOCCER_LEAGUES
+# (same keys admin refresh can save). UFC, Boxing, Formula 1: all eligible. Snooker stays manual-only.
 # Template pool: SPORTS_AUTO_BOARD_TEMPLATE_SOURCE (default database = MongoDB sports_betting_templates only).
-_AUTO_BOARD_SOCCER_DEFAULT_KEYS = (
-    "soccer_epl",
-    "soccer_spain_la_liga",
-    "soccer_germany_bundesliga",
-    "soccer_italy_serie_a",
-    "soccer_france_ligue_one",
-    "soccer_fa_cup",
-    "soccer_uefa_champs_league",
-    "soccer_uefa_europa_league",
-    "soccer_uefa_europa_conference_league",
-    "soccer_fifa_world_cup",
-    "soccer_uefa_european_championship",
-    "soccer_uefa_nations_league",
-)
+_AUTO_BOARD_SOCCER_DEFAULT_KEYS = SOCCER_LEAGUES
 
 
 def _auto_board_soccer_sport_keys() -> frozenset[str]:

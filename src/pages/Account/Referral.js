@@ -136,7 +136,7 @@ export default function Referral() {
       const msg =
         err?.code === 'ECONNABORTED'
           ? 'Redeem request timed out. Try again.'
-          : err.response?.data?.detail || 'Invalid or already used code';
+          : err.response?.data?.detail || 'Could not redeem that code';
       toast.error(msg);
     } finally {
       setRedeemLoading(false);

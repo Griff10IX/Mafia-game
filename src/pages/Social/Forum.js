@@ -1,5 +1,5 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
-import { Link, useLocation, useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { MessageSquare, Lock, Pin, AlertCircle, Plus, ChevronRight, Eye, MessageCircle, Dice5, Package, Users, Bold, Italic, Image, Palette, Puzzle, Mic2 } from 'lucide-react';
 import api from '../../utils/api';
 import { confirmEntertainerGameCreatorDeduction, ENTERTAINER_GBOX_MAX_POINTS } from '../../utils/entertainerGameCreateConfirm';
@@ -405,6 +405,7 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general', ca
     if (!title.trim()) { toast.error('Enter a title'); return; }
     setSubmitting(true);
     try {
+      let createdTopicId = null;
       if (category === 'designer' && isAuction) {
         const endAtIso = auctionEndAt ? new Date(auctionEndAt).toISOString() : '';
         if (!auctionImageUrl.trim()) {
@@ -424,7 +425,7 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general', ca
           setSubmitting(false);
           return;
         }
-        await api.post('/forum/designer/auctions', {
+        const auctionRes = await api.post('/forum/designer/auctions', {
           title: title.trim(),
           content: content.trim(),
           image_url: auctionImageUrl.trim(),
@@ -434,12 +435,14 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general', ca
           title_color: titleColor || undefined,
         });
         toast.success('Designer auction created');
+        createdTopicId = auctionRes.data?.topic_id || null;
       } else {
         const payload = { title: title.trim(), content: content.trim(), category };
         if (topicGifUrl.trim()) payload.gif_url = topicGifUrl.trim();
         if (titleColor) payload.title_color = titleColor;
-        await api.post('/forum/topics', payload);
+        const topicRes = await api.post('/forum/topics', payload);
         toast.success('Topic created');
+        createdTopicId = topicRes.data?.id || null;
       }
       setTitle('');
       setTitleColor('');
@@ -451,7 +454,7 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general', ca
       setAuctionStartingBid('');
       setAuctionEndAt('');
       onClose();
-      onCreated();
+      onCreated(createdTopicId ? { topicId: createdTopicId } : undefined);
     } catch (err) {
       const detail = err.response?.data?.detail;
       toast.error(typeof detail === 'string' ? detail : (Array.isArray(detail) ? detail.map((x) => x?.msg || x).join(', ') : null) || 'Failed to create topic');
@@ -1054,6 +1057,7 @@ function forumTopicsSignature(list) {
 
 export default function Forum() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState(() => {
     const t = searchParams.get('tab');
@@ -2671,7 +2675,17 @@ export default function Forum() {
         <div className="f-art-line text-primary mx-3" />
       </div>
 
-      <CreateTopicModal isOpen={modalOpen} onClose={() => setModalOpen(false)} onCreated={fetchTopics} category={currentCategory} canUseColors={isAdmin || isModerator} />
+      <CreateTopicModal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        onCreated={(info) => {
+          fetchTopics();
+          const tid = info?.topicId;
+          if (tid) navigate(`/forum/topic/${tid}#forum-topic-${tid}`);
+        }}
+        category={currentCategory}
+        canUseColors={isAdmin || isModerator}
+      />
       <CreateGameModal isOpen={gameModalOpen} onClose={() => setGameModalOpen(false)} onCreated={() => { fetchEntertainerGames(); window.dispatchEvent(new CustomEvent('app:refresh-user')); }} me={user} />
 
       {/* Manage designer competitions modal (admin/mod) */}

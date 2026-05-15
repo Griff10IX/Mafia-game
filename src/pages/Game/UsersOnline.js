@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, User, Target, Building2, Plane, Factory, Mail, Radio, Clock, CalendarDays, CalendarRange } from 'lucide-react';
+import { Users, User, Target, Building2, Plane, Factory, Mail, Radio, Clock, CalendarDays, CalendarRange, MapPin, Skull, Trophy, Crown, Sparkles } from 'lucide-react';
 import api from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import { toast } from 'sonner';
@@ -27,7 +27,56 @@ const UO_STYLES = `
   }
   .uo-hitlist:hover { box-shadow: 0 0 20px rgba(220, 38, 38, 0.65), 0 4px 16px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(220, 38, 38, 0.4); }
   .uo-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+  @keyframes uo-preview-enter { from { opacity: 0.65; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+  .uo-preview-enter { animation: uo-preview-enter 0.28s ease-out both; }
+  @keyframes uo-preview-shimmer { 0% { opacity: 0.35; } 50% { opacity: 0.85; } 100% { opacity: 0.35; } }
+  .uo-preview-shimmer { animation: uo-preview-shimmer 1.1s ease-in-out infinite; }
 `;
+
+const UO_PREVIEW_CACHE_MAX_MS = 55_000;
+
+function previewSessionKey(username) {
+  return `mafia_uo_pv_${String(username || '').trim().toLowerCase()}`;
+}
+
+function readCachedProfilePreview(username) {
+  try {
+    if (typeof window === 'undefined') return null;
+    const raw = window.sessionStorage.getItem(previewSessionKey(username));
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    if (!o || typeof o.ts !== 'number' || Date.now() - o.ts > UO_PREVIEW_CACHE_MAX_MS) return null;
+    return o.data && typeof o.data === 'object' && !o.data.error ? o.data : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedProfilePreview(username, data) {
+  try {
+    if (typeof window === 'undefined' || !data) return;
+    window.sessionStorage.setItem(previewSessionKey(username), JSON.stringify({ ts: Date.now(), data }));
+  } catch (_) {
+    /* quota */
+  }
+}
+
+/** Instant panel from roster row while /profile-preview loads (same fields as online payload). */
+function rosterPreviewStub(rosterUser) {
+  const u = rosterUser?.username;
+  if (!u) return null;
+  return {
+    _stub: true,
+    username: u,
+    avatar_url: rosterUser.avatar_url || null,
+    rank_name: rosterUser.rank_name,
+    prestige_level: rosterUser.prestige_level ?? 0,
+    founding_member: !!rosterUser.founding_member,
+    location: rosterUser.location != null && String(rosterUser.location).trim() ? String(rosterUser.location).trim() : null,
+    status: rosterUser.status,
+    in_jail: !!rosterUser.in_jail,
+  };
+}
 
 let _regionNamesEn;
 function countryDisplayName(code) {
@@ -211,9 +260,9 @@ const RoleKey = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor, hdoK
   );
 };
 
-const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, adminOnlineColor, modDefaultOnlineColor, profileHoverEnabled, myUsername }) => {
+const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, modDefaultOnlineColor, profileHoverEnabled, myUsername }) => {
   const preview = profileCache[user.username];
-  const isLoading = !!profileLoading[user.username];
+  const isStub = !!preview?._stub;
   const adminColor = (adminOnlineColor && adminOnlineColor.trim()) || '#a78bfa';
   const modColor = (modDefaultOnlineColor && modDefaultOnlineColor.trim()) || DEFAULT_MOD_COLOR;
   const displayColor =
@@ -241,17 +290,22 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
     </Link>
   );
 
+  const showHitlistBanner = preview?.on_hitlist ?? user.on_hitlist;
+  const showKills = preview && !isStub && typeof preview.kills === 'number';
+  const showJail = preview && !isStub && typeof preview.jail_busts === 'number';
+  const wealthColor = preview?.wealth_rank_color && String(preview.wealth_rank_color).trim() ? preview.wealth_rank_color : undefined;
+
   const hoverPreview = profileHoverEnabled ? (
     <HoverCard
       openDelay={0}
-      closeDelay={100}
+      closeDelay={120}
       onOpenChange={(open) => {
-        if (open) ensureProfilePreview(user.username);
+        if (open) ensureProfilePreview(user.username, user);
       }}
     >
       <HoverCardTrigger asChild>
         {profileLink({
-          onPointerEnter: () => ensureProfilePreview(user.username),
+          onPointerEnter: () => ensureProfilePreview(user.username, user),
         })}
       </HoverCardTrigger>
       {user.prestige_level > 0 && (
@@ -263,24 +317,21 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
         <HoverCardContent
           align="start"
           sideOffset={8}
-          className={`z-[9999] w-72 max-w-[90vw] ${styles.panel} border-2 border-primary/30 rounded-md shadow-2xl p-0 overflow-hidden`}
+          className={`z-[9999] w-[20rem] max-w-[92vw] ${styles.panel} border-2 border-primary/35 rounded-lg shadow-2xl p-0 overflow-hidden backdrop-blur-sm`}
         >
           {preview?.error ? (
-            <div className="p-2 text-[10px] text-mutedForeground font-heading">
-              Failed to load preview
-            </div>
-          ) : isLoading && !preview ? (
-            <div className="p-2 text-[10px] text-mutedForeground font-heading">
-              Loading preview...
-            </div>
+            <div className="p-3 text-[10px] text-mutedForeground font-heading text-center">Couldn&apos;t load preview — tap name for full profile</div>
           ) : preview ? (
-            <>
-              <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
-                <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
-                  Profile Preview
-                </h3>
+            <div className={isStub ? '' : 'uo-preview-enter'}>
+              <div className="px-2.5 py-1.5 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent border-b border-primary/20 flex items-center justify-between gap-2">
+                <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.14em]">Profile</h3>
+                {!isStub && preview.prestige_level > 0 && (
+                  <span className="text-[8px] font-heading text-mutedForeground uppercase tracking-wide truncate max-w-[9rem]">
+                    {preview.prestige_name ? `${preview.prestige_name}` : `Prestige ${preview.prestige_level}`}
+                  </span>
+                )}
               </div>
-              {preview.on_hitlist && (
+              {showHitlistBanner && (
                 <div className="px-2.5 py-1 bg-red-500/20 border-b border-red-500/30 flex items-center gap-1.5">
                   <Target size={12} className="text-red-400 shrink-0" aria-hidden />
                   <span className="text-[10px] font-heading font-bold text-red-400 uppercase">On the hitlist</span>
@@ -289,89 +340,146 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
               {preview.show_war_rat_badge && (
                 <div className="px-2.5 py-1 bg-rose-500/15 border-b border-rose-500/25 flex items-center gap-1.5">
                   <span className="text-[10px] font-heading font-bold text-rose-300 uppercase">Rat</span>
-                  <span className="text-[9px] text-mutedForeground font-heading">Left a crew during war (24h)</span>
+                  <span className="text-[9px] text-mutedForeground font-heading">Crew war dodge (24h)</span>
                 </div>
               )}
-              <div className="p-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-11 h-11 rounded-md overflow-hidden border border-primary/25 bg-secondary flex items-center justify-center shrink-0">
+              <div className="p-2.5 space-y-2">
+                <div className="flex items-start gap-2.5">
+                  <div className="w-12 h-12 rounded-lg overflow-hidden border-2 border-primary/30 bg-secondary flex items-center justify-center shrink-0 ring-1 ring-black/20 shadow-inner">
                     {preview.avatar_url ? (
-                      <img src={preview.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                      <img src={preview.avatar_url} alt="" className="w-full h-full object-cover" />
                     ) : (
-                      <User size={18} className="text-mutedForeground" />
+                      <User size={20} className="text-mutedForeground" />
                     )}
                   </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="font-heading font-bold text-foreground text-[12px] truncate leading-tight">
-                      {preview.username}
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-heading font-bold text-foreground text-[13px] truncate leading-tight">{preview.username}</span>
+                      {preview.founding_member ? (
+                        <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border border-amber-500/40 bg-amber-500/15 text-[8px] font-heading font-bold uppercase tracking-wide text-amber-200 shrink-0">
+                          <Crown size={10} className="text-amber-300" aria-hidden />
+                          Founder
+                        </span>
+                      ) : null}
                     </div>
-                    <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] font-heading">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-mutedForeground">Kills</span>
-                        <span className="text-foreground font-bold tabular-nums">{preview.kills}</span>
+                    <div className="flex items-center gap-1 text-[10px] font-heading text-primary font-bold truncate">
+                      <Trophy size={12} className="shrink-0 opacity-80" aria-hidden />
+                      <span className="truncate">{preview.rank_name || user.rank_name || '—'}</span>
+                    </div>
+                    {!isStub && preview.wealth_rank_name ? (
+                      <div className="flex items-center gap-1 text-[9px] font-heading font-semibold truncate" style={wealthColor ? { color: wealthColor } : undefined}>
+                        <Sparkles size={11} className="shrink-0 opacity-70" aria-hidden />
+                        <span className="truncate">{preview.wealth_rank_name}</span>
                       </div>
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-mutedForeground">Jail</span>
-                        <span className="text-foreground font-bold tabular-nums">{preview.jail_busts}</span>
-                      </div>
-                      <div className="col-span-2 flex items-center justify-between gap-2">
-                        <span className="text-mutedForeground inline-flex items-center gap-1">
-                          <Mail size={12} className="opacity-70" aria-hidden />
-                          Msgs
+                    ) : null}
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[9px] font-heading text-mutedForeground">
+                      <span className="inline-flex items-center gap-1">
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full shrink-0 ${(preview.status || userStatus) === 'idle' ? 'bg-amber-500' : 'bg-emerald-500'}`}
+                          aria-hidden
+                        />
+                        {(preview.status || userStatus) === 'idle' ? 'Idle' : 'Online'}
+                      </span>
+                      {(preview.in_jail ?? user.in_jail) ? (
+                        <span className="text-red-400 font-bold uppercase">In jail</span>
+                      ) : null}
+                      {(preview.location || user.location) ? (
+                        <span className="inline-flex items-center gap-0.5 min-w-0 max-w-full">
+                          <MapPin size={11} className="shrink-0 opacity-70" aria-hidden />
+                          <span className="truncate">{preview.location || user.location}</span>
                         </span>
-                        <span className="text-foreground font-bold tabular-nums">
-                          {(preview.messages_sent ?? 0)} / {(preview.messages_received ?? 0)}
-                        </span>
-                      </div>
+                      ) : null}
                     </div>
                   </div>
                 </div>
-                {(preview.family || preview.owns_casino || preview.property_type) && (
-                  <div className="mt-2 pt-2 border-t border-border/70 space-y-1 text-[10px] font-heading">
-                    {preview.family && (
+
+                <div className="rounded-md border border-border/60 bg-black/25 px-2 py-1.5">
+                  <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 text-[10px] font-heading">
+                    {isStub ? (
+                      <>
+                        <div className="h-3.5 rounded bg-zinc-700/45 uo-preview-shimmer col-span-2" />
+                        <div className="h-3.5 rounded bg-zinc-700/45 uo-preview-shimmer col-span-2" />
+                        <div className="h-3.5 rounded bg-zinc-700/45 uo-preview-shimmer col-span-2" />
+                      </>
+                    ) : (
+                      <>
+                        {showKills ? (
+                          <div className="col-span-2 flex items-center justify-between gap-2">
+                            <span className="text-mutedForeground inline-flex items-center gap-1">
+                              <Skull size={12} className="opacity-70" aria-hidden />
+                              Kills
+                            </span>
+                            <span className="text-foreground font-bold tabular-nums">{preview.kills}</span>
+                          </div>
+                        ) : null}
+                        {showJail ? (
+                          <div className="col-span-2 flex items-center justify-between gap-2">
+                            <span className="text-mutedForeground">Jail busts</span>
+                            <span className="text-foreground font-bold tabular-nums">{preview.jail_busts}</span>
+                          </div>
+                        ) : null}
+                        {preview.kills === null && preview.jail_busts === null ? (
+                          <div className="col-span-2 text-[9px] text-mutedForeground italic text-center py-0.5">
+                            Kills & jail busts hidden on profile
+                          </div>
+                        ) : null}
+                        <div className="col-span-2 flex items-center justify-between gap-2">
+                          <span className="text-mutedForeground inline-flex items-center gap-1">
+                            <Mail size={12} className="opacity-70" aria-hidden />
+                            Messages
+                          </span>
+                          <span className="text-foreground font-bold tabular-nums">
+                            {(preview.messages_sent ?? 0)} / {(preview.messages_received ?? 0)}
+                          </span>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {(preview.family || preview.owns_casino || preview.property_type) && !isStub ? (
+                  <div className="pt-1 border-t border-border/60 space-y-1.5 text-[10px] font-heading">
+                    {preview.family ? (
                       <div className="flex items-center justify-between gap-2">
-                        <span className="text-mutedForeground">Family</span>
-                        <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="text-mutedForeground shrink-0">Family</span>
+                        <div className="flex items-center gap-1.5 min-w-0 justify-end">
                           <FamilyEmblem
                             emblemPresetId={preview.family_emblem_preset_id}
                             avatarUrl={preview.family_emblem_avatar_url}
                             size={18}
                           />
-                          <span className="text-foreground truncate">{preview.family}</span>
+                          <span className="text-foreground truncate text-right">{preview.family}</span>
                         </div>
                       </div>
-                    )}
-                    <div className="flex flex-wrap items-center gap-1.5">
+                    ) : null}
+                    <div className="flex flex-wrap items-center gap-1.5 justify-end">
                       {preview.owns_casino ? (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-primary/10 border border-primary/20 text-foreground">
-                          <Building2 size={12} className="text-primary/80" aria-hidden />
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-primary/12 border border-primary/25 text-foreground">
+                          <Building2 size={12} className="text-primary/85" aria-hidden />
                           Casino
                         </span>
                       ) : null}
                       {preview.property_type === 'airport' ? (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-primary/10 border border-primary/20 text-foreground">
-                          <Plane size={12} className="text-primary/80" aria-hidden />
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-primary/12 border border-primary/25 text-foreground">
+                          <Plane size={12} className="text-primary/85" aria-hidden />
                           Airport
                         </span>
                       ) : null}
                       {preview.property_type === 'armoury' ? (
-                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-primary/10 border border-primary/20 text-foreground">
-                          <Factory size={12} className="text-primary/80" aria-hidden />
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-primary/12 border border-primary/25 text-foreground">
+                          <Factory size={12} className="text-primary/85" aria-hidden />
                           Armoury
                         </span>
                       ) : null}
                     </div>
                   </div>
-                )}
-                <div className="mt-2 pt-2 border-t border-border/70 text-[9px] text-mutedForeground font-heading italic text-center">
-                  Click username to open full profile
-                </div>
+                ) : null}
+
+                <p className="text-[9px] text-mutedForeground/90 font-heading italic text-center pt-0.5">Click username for full dossier</p>
               </div>
-            </>
-          ) : (
-            <div className="p-2 text-[10px] text-mutedForeground font-heading">
-              Hover to preview profile
             </div>
+          ) : (
+            <div className="p-3 text-[10px] text-mutedForeground font-heading text-center">Hover username to preview</div>
           )}
         </HoverCardContent>
       </HoverCardPortal>
@@ -393,13 +501,13 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
       data-testid="user-card"
     >
       <div className="flex items-center gap-1 min-h-[20px] w-full">
-        <span 
+        <span
           className={`w-2 h-2 rounded-full shrink-0 ${userStatus === 'idle' ? 'bg-amber-500' : 'bg-emerald-500'}`}
           title={userStatus === 'idle' ? 'Idle' : 'Online'}
           aria-hidden
         />
         {hoverPreview}
-        
+
         {user.in_jail && (
           <span className="shrink-0 inline-flex items-center px-1 py-0.5 rounded text-[9px] font-heading font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/30">
             Jail
@@ -494,7 +602,7 @@ export default function UsersOnline() {
   const [hdoOnlineColor, setHdoOnlineColor] = useState(() => bootCache?.hdo_online_color ?? DEFAULT_HDO_COLOR);
   const [hasLoaded, setHasLoaded] = useState(() => !!bootCache);
   const [profileCache, setProfileCache] = useState({});
-  const [profileLoading, setProfileLoading] = useState({});
+  const previewInflightRef = useRef(new Set());
   const [myUsername, setMyUsername] = useState(null);
   const [profileHoverEnabled, setProfileHoverEnabled] = useState(() =>
     typeof window !== 'undefined' ? !window.matchMedia('(max-width: 767px)').matches : true,
@@ -607,20 +715,37 @@ export default function UsersOnline() {
     }
   }, []);
 
-  const ensureProfilePreview = useCallback(async (username) => {
-    if (!username) return;
-    if (profileCache[username] || profileLoading[username]) return;
-    
-    setProfileLoading((prev) => ({ ...prev, [username]: true }));
-    try {
-      const res = await api.get(`/users/${encodeURIComponent(username)}/profile-preview`);
-      setProfileCache((prev) => ({ ...prev, [username]: res.data }));
-    } catch (e) {
-      setProfileCache((prev) => ({ ...prev, [username]: { error: true } }));
-    } finally {
-      setProfileLoading((prev) => ({ ...prev, [username]: false }));
+  const ensureProfilePreview = useCallback((username, rosterUser) => {
+    const u = String(username || '').trim();
+    if (!u) return;
+    const key = u.toLowerCase();
+
+    const cached = readCachedProfilePreview(u);
+    if (cached) {
+      setProfileCache((prev) => ({ ...prev, [u]: cached }));
+    } else if (rosterUser) {
+      setProfileCache((prev) => {
+        if (prev[u] && !prev[u]._stub && !prev[u].error) return prev;
+        const stub = rosterPreviewStub(rosterUser);
+        return stub ? { ...prev, [u]: stub } : prev;
+      });
     }
-  }, [profileCache, profileLoading]);
+
+    if (previewInflightRef.current.has(key)) return;
+    previewInflightRef.current.add(key);
+    api
+      .get(`/users/${encodeURIComponent(u)}/profile-preview`)
+      .then((res) => {
+        writeCachedProfilePreview(u, res.data);
+        setProfileCache((prev) => ({ ...prev, [u]: res.data }));
+      })
+      .catch(() => {
+        setProfileCache((prev) => ({ ...prev, [u]: { error: true } }));
+      })
+      .finally(() => {
+        previewInflightRef.current.delete(key);
+      });
+  }, []);
 
   useEffect(() => {
     const c = readSessionJson(UO_CACHE_KEY);
@@ -686,7 +811,6 @@ export default function UsersOnline() {
                     key={user.username || `user-${idx}`}
                     user={user}
                     profileCache={profileCache}
-                    profileLoading={profileLoading}
                     ensureProfilePreview={ensureProfilePreview}
                     adminOnlineColor={adminOnlineColor}
                     modDefaultOnlineColor={modDefaultOnlineColor}

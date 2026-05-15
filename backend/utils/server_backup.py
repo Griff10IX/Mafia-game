@@ -4454,6 +4454,12 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
                 "health": 0
             }, "$inc": {"total_deaths": 1}}
         )
+        try:
+            from utils.redeem_code_lifecycle import release_redeem_slots_for_deceased_user
+
+            await release_redeem_slots_for_deceased_user(db, victim_id)
+        except Exception:
+            logging.getLogger(__name__).exception("release_redeem_slots_for_deceased_user (server_backup execute_attack victim)")
         # If the victim was someone's bodyguard, remove them and the owner permanently loses that slot
         victim_as_bodyguard = await db.bodyguards.find({"bodyguard_user_id": victim_id}, {"_id": 0, "id": 1, "user_id": 1}).to_list(10)
         for bg in victim_as_bodyguard:

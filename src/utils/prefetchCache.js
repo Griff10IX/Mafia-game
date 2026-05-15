@@ -1,5 +1,35 @@
 const CRIMES_PREFETCH_MAX_AGE_MS = 30000;
 const PROFILE_PREFETCH_MAX_AGE_MS = 60000;
+
+/** Last /auth/me username in this tab — lets /profile/:user render before /auth/me finishes when viewing someone else. */
+const PROFILE_SESSION_LAST_ME_USERNAME_KEY = 'mafia_last_me_username_v1';
+
+export function getProfileSessionLastMeUsername() {
+  try {
+    const s = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(PROFILE_SESSION_LAST_ME_USERNAME_KEY) : null;
+    return s ? String(s).trim().toLowerCase() : '';
+  } catch {
+    return '';
+  }
+}
+
+export function setProfileSessionLastMeUsername(username) {
+  try {
+    const u = String(username || '').trim();
+    if (u && typeof sessionStorage !== 'undefined') sessionStorage.setItem(PROFILE_SESSION_LAST_ME_USERNAME_KEY, u);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearProfileSessionLastMeUsername() {
+  try {
+    if (typeof sessionStorage !== 'undefined') sessionStorage.removeItem(PROFILE_SESSION_LAST_ME_USERNAME_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 const FAMILIES_PREFETCH_MAX_AGE_MS = 30000;
 const FAMILY_PROFILE_PREFETCH_MAX_AGE_MS = 30000;
 const SPORTS_BETTING_PREFETCH_MAX_AGE_MS = 30000;

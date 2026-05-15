@@ -651,8 +651,15 @@ async def _booze_sell_at_city(db, user, user_id: str, username: str, telegram_ch
 
 
 async def _booze_buy_and_travel(db, user, user_id: str, username: str, telegram_chat_id: str, bot_token, now: datetime, lines: list, buy_city: str, sell_city: str, buy_idx: int, sell_idx: int):
-    """Buy optimal booze at buy_city and travel to sell_city. Booze only uses cars (no airport). If no car, skip and retry next cycle (every 5s)."""
-    from routers.money.booze_run import BOOZE_TYPES, _booze_prices_for_rotation, _booze_user_capacity, _booze_buy_impl, _family_booze_cargo_extra
+    """Buy optimal booze at buy_city and travel to sell_city. Booze only uses cars (no airport). If no car, skip and retry next cycle (every 5s). Capacity matches live Booze Run (prestige total cap, rank slice, store/family bonuses, Completed It)."""
+    from routers.money.booze_run import (
+        BOOZE_TYPES,
+        _booze_prices_for_rotation,
+        _booze_user_capacity,
+        _booze_user_carrying_total,
+        _booze_buy_impl,
+        _family_booze_cargo_extra,
+    )
     from routers.admin.airport import _start_travel_impl
 
     travel_method = await _get_travel_method(db, user_id)
@@ -663,6 +670,8 @@ async def _booze_buy_and_travel(db, user, user_id: str, username: str, telegram_
     prices_map = _booze_prices_for_rotation()
     fam_extra = await _family_booze_cargo_extra(user.get("family_id"))
     capacity = _booze_user_capacity(user, family_cargo_bonus=fam_extra)
+    carrying_now = _booze_user_carrying_total(dict(user.get("booze_carrying") or {}))
+    room = max(0, capacity - carrying_now)
     money = int(user.get("money") or 0)
 
     best_profit = -1
@@ -679,7 +688,10 @@ async def _booze_buy_and_travel(db, user, user_id: str, username: str, telegram_
     if not best_booze_id or best_profit <= 0 or best_buy_price <= 0:
         logger.info("Auto rank booze %s: no profitable booze route (best_profit=%s)", user_id, best_profit)
         return False
-    amount = min(capacity, money // best_buy_price)
+    if room <= 0:
+        logger.info("Auto rank booze %s: no cargo room (%s/%s)", user_id, carrying_now, capacity)
+        return False
+    amount = min(room, money // best_buy_price)
     if amount <= 0:
         logger.info("Auto rank booze %s: insufficient money ($%s) for buy (price=$%s)", user_id, money, best_buy_price)
         return False

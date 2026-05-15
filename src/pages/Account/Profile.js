@@ -18,7 +18,12 @@ import styles from '../../styles/noir.module.css';
 import { BadgeShield, BADGE_STYLES as RANKING_BADGE_STYLES, CATEGORY_LABELS } from '../Game/RankingBadges';
 import StaffUserDetailsPanel from '../../components/StaffUserDetailsPanel';
 import FamilyEmblem from '../../components/FamilyEmblem';
-import { getProfilePrefetch, setProfilePrefetch } from '../../utils/prefetchCache';
+import {
+  getProfilePrefetch,
+  setProfilePrefetch,
+  getProfileSessionLastMeUsername,
+  setProfileSessionLastMeUsername,
+} from '../../utils/prefetchCache';
 import { getProfileEditWarm } from '../../utils/profilePageWarm';
 import { fileToAvatarDataUrl, validateSafeImageFile, AVATAR_RAW_UPLOAD_MAX_BYTES } from '../../utils/fileToCompressedDataUrl';
 import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
@@ -1364,29 +1369,52 @@ export default function Profile() {
     try {
       const meRes = await api.get('/auth/me');
       setMe(meRes.data);
+      if (meRes.data?.username) setProfileSessionLastMeUsername(meRes.data.username);
     } catch (_) {}
   };
 
   const refetchProfile = async ({ silent = true, forceLoading = false, usernameOverride } = {}) => {
     const targetUsername = String(usernameOverride || username || '').trim();
     if (!targetUsername) return null;
+    const targetKey = targetUsername.toLowerCase();
     const reqId = ++profileRequestIdRef.current;
     if (forceLoading) setLoading(true);
     setProfileLoading(true);
     setProfileLoadError('');
+    let mainPaintDone = false;
     try {
-      const [profileRes, honoursRes] = await Promise.all([
-        api.get(`/users/${encodeURIComponent(targetUsername)}/profile`, { params: { include_honours: false } }),
-        api.get(`/users/${encodeURIComponent(targetUsername)}/profile/honours`).catch(() => ({ data: { honours: [] } })),
-      ]);
+      const profileRes = await api.get(`/users/${encodeURIComponent(targetUsername)}/profile`, {
+        params: { include_honours: false },
+      });
       if (reqId !== profileRequestIdRef.current) return null;
-      const merged = {
-        ...profileRes.data,
-        honours: honoursRes.data?.honours ?? [],
-      };
-      setProfile(merged);
-      setProfilePrefetch(targetUsername, merged);
-      return merged;
+      const base = { ...profileRes.data, honours: profileRes.data?.honours ?? [] };
+      setProfile(base);
+      setProfilePrefetch(targetUsername, base);
+      mainPaintDone = true;
+      if (reqId === profileRequestIdRef.current) {
+        if (forceLoading) setLoading(false);
+        setProfileLoading(false);
+      }
+
+      (async () => {
+        let honoursList = [];
+        try {
+          const honoursRes = await api.get(`/users/${encodeURIComponent(targetUsername)}/profile/honours`);
+          honoursList = honoursRes.data?.honours ?? [];
+        } catch {
+          honoursList = [];
+        }
+        if (reqId !== profileRequestIdRef.current) return;
+        const merged = { ...base, honours: honoursList };
+        setProfile((prev) => {
+          if (!prev) return merged;
+          if (String(prev.username || '').trim().toLowerCase() !== targetKey) return prev;
+          return merged;
+        });
+        setProfilePrefetch(targetUsername, merged);
+      })();
+
+      return base;
     } catch (e) {
       if (reqId === profileRequestIdRef.current && !silent) {
         setProfileLoadError(e.response?.data?.detail || 'Failed to load profile');
@@ -1394,8 +1422,10 @@ export default function Profile() {
       if (!silent) throw e;
       return null;
     } finally {
-      if (forceLoading) setLoading(false);
-      if (reqId === profileRequestIdRef.current) setProfileLoading(false);
+      if (!mainPaintDone && reqId === profileRequestIdRef.current) {
+        if (forceLoading) setLoading(false);
+        setProfileLoading(false);
+      }
     }
   };
 
@@ -1476,6 +1506,7 @@ export default function Profile() {
           api.get('/auth/staff-flags').catch(() => ({ data: {} })),
         ]);
         setMe(meRes.data);
+        if (meRes.data?.username) setProfileSessionLastMeUsername(meRes.data.username);
         setIsAdmin(!!adminRes.data?.is_admin);
         setIsModerator(!!adminRes.data?.is_moderator);
         setHasAdminEmail(!!adminRes.data?.has_admin_email);
@@ -2006,7 +2037,12 @@ export default function Profile() {
     );
   }
 
-  if (usernameParam && profile && !authMeReady) {
+  const lastMeHint = getProfileSessionLastMeUsername();
+  const profileSubject = String(profile?.username || '').trim().toLowerCase();
+  const canShowProfileBeforeAuthReady =
+    Boolean(usernameParam && profile && lastMeHint && profileSubject && lastMeHint !== profileSubject);
+
+  if (usernameParam && profile && !authMeReady && !canShowProfileBeforeAuthReady) {
     return (
       <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
         <style>{PROFILE_STYLES}</style>

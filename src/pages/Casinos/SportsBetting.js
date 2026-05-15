@@ -147,6 +147,16 @@ const DEFAULT_REQUEST_INFO = {
   recent_requests: [],
 };
 
+/** Cleared admin template state when user is not admin or admin data failed to load. */
+const EMPTY_ADMIN_TEMPLATES = {
+  categories: [],
+  templates: {},
+  odds_api_configured: null,
+  templates_total: null,
+  template_source: null,
+  football_league_filter_options: null,
+};
+
 function StatusDot({ status }) {
   if (status === 'in_play') return <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)] inline-block" title="In play" />;
   if (status === 'finished') return <span className="w-2 h-2 rounded-full bg-zinc-500 inline-block" title="Finished" />;
@@ -308,6 +318,7 @@ export default function SportsBetting() {
   const [addingTemplateId, setAddingTemplateId] = useState(null);
   const [checkingEvents, setCheckingEvents] = useState(false);
   const [autoSettling, setAutoSettling] = useState(false);
+  const [autoBoarding, setAutoBoarding] = useState(false);
   const [settleEvent, setSettleEvent] = useState(null);
   const [settleWinningId, setSettleWinningId] = useState('');
   const [settling, setSettling] = useState(false);
@@ -370,13 +381,26 @@ export default function SportsBetting() {
   }, [browseCategory]);
 
   const fetchPendingPlayerRequests = useCallback(async () => {
+    if (!isAdmin) {
+      setPendingPlayerRequests([]);
+      return;
+    }
     try {
       const pr = await api.get('/admin/sports-betting/event-requests');
       setPendingPlayerRequests(pr.data?.requests ?? []);
     } catch {
       setPendingPlayerRequests([]);
     }
-  }, []);
+  }, [isAdmin]);
+
+  /** Server enforces admin on all /admin/sports-betting/* routes; this avoids noisy calls and tampered UI state. */
+  const assertAdmin = useCallback(() => {
+    if (!isAdmin) {
+      toast.error('Admin access required');
+      return false;
+    }
+    return true;
+  }, [isAdmin]);
 
   useEffect(() => {
     const cached = getSportsBettingPrefetch();
@@ -475,16 +499,22 @@ export default function SportsBetting() {
         if (cancelled) return;
         if (res.data?.is_admin) {
           setIsAdmin(true);
-          const tRes = await api.get('/admin/sports-betting/templates');
-          if (!cancelled) {
-            setTemplates({
-              categories: tRes.data?.categories ?? [],
-              templates: tRes.data?.templates ?? {},
-              odds_api_configured: tRes.data?.odds_api_configured ?? null,
-              templates_total: tRes.data?.templates_total ?? null,
-              template_source: tRes.data?.template_source ?? null,
-              football_league_filter_options: tRes.data?.football_league_filter_options ?? null,
-            });
+          try {
+            const tRes = await api.get('/admin/sports-betting/templates');
+            if (!cancelled) {
+              setTemplates({
+                categories: tRes.data?.categories ?? [],
+                templates: tRes.data?.templates ?? {},
+                odds_api_configured: tRes.data?.odds_api_configured ?? null,
+                templates_total: tRes.data?.templates_total ?? null,
+                template_source: tRes.data?.template_source ?? null,
+                football_league_filter_options: tRes.data?.football_league_filter_options ?? null,
+              });
+            }
+          } catch {
+            if (!cancelled) {
+              setTemplates({ ...EMPTY_ADMIN_TEMPLATES });
+            }
           }
           try {
             const pr = await api.get('/admin/sports-betting/event-requests');
@@ -492,11 +522,33 @@ export default function SportsBetting() {
           } catch {
             if (!cancelled) setPendingPlayerRequests([]);
           }
+        } else {
+          setIsAdmin(false);
+          if (!cancelled) {
+            setTemplates({ ...EMPTY_ADMIN_TEMPLATES });
+            setPendingPlayerRequests([]);
+          }
         }
-      } catch { if (!cancelled) setIsAdmin(false); }
+      } catch {
+        if (!cancelled) {
+          setIsAdmin(false);
+          setTemplates({ ...EMPTY_ADMIN_TEMPLATES });
+          setPendingPlayerRequests([]);
+        }
+      }
     })();
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (!isAdmin) {
+      setSettleEvent(null);
+      setSettleWinningId('');
+      setBetWindowEvent(null);
+      setBetWindowOpensLocal('');
+      setBetWindowClosesLocal('');
+    }
+  }, [isAdmin]);
 
   const placeBet = async () => {
     if (!selectedEvent || !selectedOption) return;
@@ -527,6 +579,7 @@ export default function SportsBetting() {
   const openBetModal = (event, option) => { setSelectedEvent(event); setSelectedOption(option); setStake(''); };
 
   const checkForEvents = async () => {
+    if (!assertAdmin()) return;
     setCheckingEvents(true);
     try {
       const res = await api.post('/admin/sports-betting/refresh');
@@ -568,6 +621,7 @@ export default function SportsBetting() {
   };
 
   const runAutoSettle = async () => {
+    if (!assertAdmin()) return;
     setAutoSettling(true);
     try {
       const res = await api.post('/admin/sports-betting/auto-settle-run');
@@ -588,7 +642,33 @@ export default function SportsBetting() {
     }
   };
 
+  const runAutoBoardNow = async () => {
+    if (!assertAdmin()) return;
+    setAutoBoarding(true);
+    try {
+      const res = await api.post('/admin/sports-betting/auto-board-run', {});
+      const d = res.data || {};
+      const added = Number(d.added ?? 0);
+      const skipped = Number(d.skipped_already_on_board ?? 0);
+      const candidates = Number(d.candidates ?? 0);
+      const remaining = d.remaining_today_after_run;
+      const remainingStr = remaining != null && Number.isFinite(Number(remaining))
+        ? ` · ${remaining} auto-board slot(s) left today`
+        : '';
+      toast.success(
+        `Auto-board: ${added} event(s) added · ${skipped} already on board · ${candidates} eligible${remainingStr}`,
+      );
+      await fetchAll();
+      await fetchPendingPlayerRequests();
+    } catch (e) {
+      toast.error(apiErrorDetail(e, 'Auto-board failed'));
+    } finally {
+      setAutoBoarding(false);
+    }
+  };
+
   const loadTemplatesFromDb = async () => {
+    if (!assertAdmin()) return;
     setLoadingDbTemplates(true);
     try {
       const res = await api.post('/admin/sports-betting/templates/load-db');
@@ -619,6 +699,7 @@ export default function SportsBetting() {
   };
 
   const runSettle = async () => {
+    if (!assertAdmin()) return;
     if (!settleEvent || !settleWinningId) { toast.error('Select the winning option'); return; }
     setSettling(true);
     try {
@@ -649,6 +730,7 @@ export default function SportsBetting() {
   };
 
   const cancelEvent = async (ev) => {
+    if (!assertAdmin()) return;
     if (!ev?.id || !window.confirm(`Cancel "${ev.name}"? All bets refunded.`)) return;
     setCancellingEventId(ev.id);
     try {
@@ -659,6 +741,7 @@ export default function SportsBetting() {
   };
 
   const addEventFromTemplate = async (templateId) => {
+    if (!assertAdmin()) return;
     setAddingTemplateId(templateId);
     try {
       await api.post('/admin/sports-betting/events', { template_id: templateId });
@@ -703,6 +786,7 @@ export default function SportsBetting() {
   };
 
   const approvePlayerRequest = async (requestId) => {
+    if (!assertAdmin()) return;
     setProcessingPlayerRequestId(requestId);
     try {
       await api.post('/admin/sports-betting/event-requests/approve', { request_id: requestId });
@@ -714,6 +798,7 @@ export default function SportsBetting() {
   };
 
   const denyPlayerRequest = async (requestId) => {
+    if (!assertAdmin()) return;
     const reason = window.prompt('Deny reason (optional — shown to the player):');
     if (reason === null) return;
     setProcessingPlayerRequestId(requestId);
@@ -729,6 +814,7 @@ export default function SportsBetting() {
   };
 
   const addCustomEvent = async () => {
+    if (!assertAdmin()) return;
     const name = (customEventName || '').trim();
     if (!name) { toast.error('Enter event name'); return; }
     const opts = customEventOptions.map((o) => ({ name: (o.name || '').trim(), odds: Number(o.odds) || 2 })).filter((o) => o.name);
@@ -756,6 +842,7 @@ export default function SportsBetting() {
   };
 
   const toggleAdminPanel = (hide) => {
+    if (!isAdmin) return;
     setAdminPanelHidden(hide);
     try { if (hide) localStorage.setItem('sports-betting-admin-hidden', '1'); else localStorage.removeItem('sports-betting-admin-hidden'); } catch {}
   };
@@ -1072,13 +1159,13 @@ export default function SportsBetting() {
                 </div>
               ) : null}
               <div className="flex flex-wrap items-center gap-2">
-                <button onClick={checkForEvents} disabled={checkingEvents || loadingDbTemplates || autoSettling} className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50">
+                <button onClick={checkForEvents} disabled={checkingEvents || loadingDbTemplates || autoSettling || autoBoarding} className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50">
                   {checkingEvents ? 'Checking...' : 'Check for events'}
                 </button>
                 <button
                   type="button"
                   onClick={runAutoSettle}
-                  disabled={autoSettling || checkingEvents || loadingDbTemplates}
+                  disabled={autoSettling || checkingEvents || loadingDbTemplates || autoBoarding}
                   className="bg-emerald-500/15 text-emerald-400 rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase border border-emerald-500/40 hover:bg-emerald-500/25 disabled:opacity-50"
                   title="Poll Odds API scores and settle matching board events (same as cron)"
                 >
@@ -1087,11 +1174,20 @@ export default function SportsBetting() {
                 <button
                   type="button"
                   onClick={loadTemplatesFromDb}
-                  disabled={loadingDbTemplates || checkingEvents || autoSettling}
+                  disabled={loadingDbTemplates || checkingEvents || autoSettling || autoBoarding}
                   className="bg-zinc-800/80 text-zinc-200 rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase border border-zinc-600/50 hover:bg-zinc-700/80 hover:border-zinc-500/50 disabled:opacity-50"
                   title="No API quota — lists templates last saved from Check for events"
                 >
                   {loadingDbTemplates ? 'Loading...' : 'Load saved (DB)'}
+                </button>
+                <button
+                  type="button"
+                  onClick={runAutoBoardNow}
+                  disabled={autoBoarding || checkingEvents || loadingDbTemplates || autoSettling}
+                  className="bg-amber-500/12 text-amber-300 rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase border border-amber-500/35 hover:bg-amber-500/20 disabled:opacity-50"
+                  title="Promote eligible templates to the live board (same as server auto-board / cron). Default uses saved DB pool — no Odds quota unless SPORTS_AUTO_BOARD_TEMPLATE_SOURCE=merged on the server."
+                >
+                  {autoBoarding ? 'Boarding...' : 'Run auto-board'}
                 </button>
                 {templateTotal > 0 ? (
                   <span
@@ -1111,6 +1207,7 @@ export default function SportsBetting() {
               <p className="text-[9px] text-zinc-600 font-heading leading-snug">
                 <span className="font-bold text-zinc-500">Check for events</span> — fetch from the API, save to DB, show list (uses quota).{' '}
                 <span className="font-bold text-zinc-500">Load saved (DB)</span> — reload the list from the database only (no API).{' '}
+                <span className="font-bold text-zinc-500">Run auto-board</span> — push eligible templates onto the live betting board now (same job as the server ticker/cron; daily cap still applies).{' '}
                 Games already on the open board are hidden here.
               </p>
 
@@ -1708,7 +1805,7 @@ export default function SportsBetting() {
       )}
 
       {/* ═══ Betting window (admin) ═══ */}
-      {betWindowEvent && (
+      {betWindowEvent && isAdmin && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
           onClick={() => { if (!savingBetWindow) { setBetWindowEvent(null); setBetWindowOpensLocal(''); setBetWindowClosesLocal(''); } }}
@@ -1743,7 +1840,7 @@ export default function SportsBetting() {
               <button
                 type="button"
                 onClick={async () => {
-                  if (!betWindowEvent) return;
+                  if (!betWindowEvent || !assertAdmin()) return;
                   setSavingBetWindow(true);
                   try {
                     await api.patch('/admin/sports-betting/events/betting-window', {
@@ -1781,7 +1878,7 @@ export default function SportsBetting() {
       )}
 
       {/* ═══ Settle modal ═══ */}
-      {settleEvent && (
+      {settleEvent && isAdmin && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" onClick={() => { setSettleEvent(null); setSettleWinningId(''); }}>
           <div className={`${styles.panel} rounded-lg p-5 w-full max-w-sm shadow-2xl border border-primary/30 animate-sb-slide-up`} onClick={(e) => e.stopPropagation()}>
             <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Settle Event</h3>

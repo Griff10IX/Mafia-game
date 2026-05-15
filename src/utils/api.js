@@ -6,6 +6,7 @@ import {
   getStaffPortalToken,
   isStaffPortalTokenValid,
 } from './staffPortalSession';
+import { clearProfileSessionLastMeUsername } from './prefetchCache';
 
 // Empty or unset = same origin (e.g. Linode: Nginx serves app and proxies /api)
 const raw = (process.env.REACT_APP_BACKEND_URL && process.env.REACT_APP_BACKEND_URL.trim())
@@ -488,6 +489,7 @@ api.interceptors.response.use(
           sessionStorage.setItem(AUTH_ERROR_KEY, msg);
         } catch (_) {}
         localStorage.removeItem('token');
+        clearProfileSessionLastMeUsername();
         clearStaffPortalSession();
         window.location.replace('/');
       }

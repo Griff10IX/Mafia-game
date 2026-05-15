@@ -191,6 +191,8 @@ def register(router):
                 "prestige_level": _prestige_level,
                 "online_color": online_color,
                 "status": user_status,
+                "avatar_url": user.get("avatar_url") or None,
+                "founding_member": bool(user.get("founding_member")),
             }
             raw_cc = (user.get("last_seen_country") or "").strip().upper()
             roster_country_counter[raw_cc if len(raw_cc) == 2 and raw_cc.isalpha() else "__"] += 1

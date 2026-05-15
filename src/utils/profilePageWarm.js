@@ -2,7 +2,7 @@
  * Background warm for /account/profile: chunk + profile doc + own-profile edit APIs.
  */
 import api from './api';
-import { setProfilePrefetch } from './prefetchCache';
+import { getProfilePrefetch, setProfilePrefetch, setProfileSessionLastMeUsername } from './prefetchCache';
 import { readSessionJson, writeSessionJson } from './sessionPageCache';
 
 const PROFILE_EDIT_WARM_KEY = 'mafia_profile_edit_warm_v1';
@@ -32,6 +32,8 @@ export async function prefetchProfilePageData(options = {}) {
     const uid = meRes.data?.id;
     const u = String(meRes.data?.username || '').trim();
     if (!uid || !u) return;
+
+    setProfileSessionLastMeUsername(u);
 
     const [profRes, honRes, prefRes, telRes, spotRes, censRes] = await Promise.all([
       api.get(`/users/${encodeURIComponent(u)}/profile`, { params: { include_honours: false } }),
