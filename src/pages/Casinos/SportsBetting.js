@@ -1,16 +1,27 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Trophy, Target, TrendingUp, Clock, Shield, Plus, ChevronDown, ChevronUp, RefreshCw, X, Filter } from 'lucide-react';
+import { Trophy, Target, TrendingUp, Clock, Shield, Plus, ChevronDown, ChevronUp, RefreshCw, X } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import { refreshUser } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 import { getSportsBettingPrefetch, setSportsBettingPrefetch } from '../../utils/prefetchCache';
-import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover';
 import { formatGameDateTime } from '../../utils/gameDateTime';
 
-const BOARD_EVENTS_FILTER_STORAGE_KEY = 'sb-events-board-filter';
+const BOARD_SPORT_TAB_STORAGE_KEY = 'sb-board-sport-tab';
+const BOARD_LEAGUE_TAB_STORAGE_KEY = 'sb-board-league-tab';
 
-/** Stable key for Events tab filter (football = API league key or label; other sports = category). */
+const BOARD_SPORT_TAB_ORDER = ['Football', 'Basketball', 'Tennis', 'Golf', 'UFC', 'Boxing', 'Formula 1', 'Snooker'];
+
+function readSessionString(key, fallback) {
+  try {
+    const raw = sessionStorage.getItem(key);
+    return typeof raw === 'string' && raw.length ? raw : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/** Stable key for Events tab filter (football = API league key or label; other sports = category + sport key when present). */
 function boardEventFilterKey(ev) {
   const cat = ev?.category || '';
   if (cat === 'Football') {
@@ -19,12 +30,19 @@ function boardEventFilterKey(ev) {
     const lbl = (ev.league_label || '').trim();
     return lbl ? `f:l:${lbl}` : 'f:other';
   }
+  if (['Basketball', 'Tennis', 'Golf'].includes(cat)) {
+    const k = (ev.external_sport_key || '').trim();
+    if (k) return `x:${cat}:${k}`;
+    const lbl = (ev.league_label || '').trim();
+    return lbl ? `x:${cat}:l:${lbl}` : `x:${cat}:other`;
+  }
   return `c:${cat || 'other'}`;
 }
 
 function boardEventFilterLabel(ev) {
   const cat = ev?.category || '';
   if (cat === 'Football') return ev.league_label || ev.external_sport_key || 'Football';
+  if (['Basketball', 'Tennis', 'Golf'].includes(cat)) return ev.league_label || ev.external_sport_key || cat;
   return cat || 'Other';
 }
 
@@ -32,6 +50,8 @@ const SB_STYLES = `
   .sb-fade-in { animation: sb-fade-in 0.4s ease-out both; }
   @keyframes sb-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .sb-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+  .sb-tab-scroll { -webkit-overflow-scrolling: touch; scrollbar-width: none; -ms-overflow-style: none; }
+  .sb-tab-scroll::-webkit-scrollbar { display: none; }
 `;
 
 function formatMoney(n) {
@@ -120,9 +140,18 @@ const STAKE_CHIPS = [
   { label: '25M', value: 25_000_000, color: '#6d28d9', ring: '#4c1d95' },
 ];
 
-const SPORTS_BOARD_CATEGORIES = ['Football', 'UFC', 'Boxing', 'Formula 1', 'Snooker'];
+const SPORTS_BOARD_CATEGORIES = ['Football', 'Basketball', 'Tennis', 'Golf', 'UFC', 'Boxing', 'Formula 1', 'Snooker'];
 
-const CATEGORY_ICONS = { Football: '⚽', UFC: '🥊', Boxing: '🥊', 'Formula 1': '🏎️', Snooker: '🎱' };
+const CATEGORY_ICONS = {
+  Football: '⚽',
+  Basketball: '🏀',
+  Tennis: '🎾',
+  Golf: '⛳',
+  UFC: '🥊',
+  Boxing: '🥊',
+  'Formula 1': '🏎️',
+  Snooker: '🎱',
+};
 
 const DEFAULT_MY_BETS = {
   open: [],
@@ -176,89 +205,85 @@ function EventCard({ event, onPlaceBet, isAdmin, onSettle, onCancelEvent, onEdit
   const beforeScheduledOpen = opensAt != null && !Number.isNaN(opensAt) && nowTs < opensAt;
 
   return (
-    <div className="relative rounded-lg border border-primary/20 overflow-hidden transition-all hover:border-primary/40 group bg-zinc-900/50">
-      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      {/* Header */}
-      <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
-        <span className="text-sm">{icon}</span>
-        <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{event.category}</span>
-        <div className="flex-1" />
+    <div className="relative rounded-lg border border-primary/25 overflow-hidden transition-all hover:border-primary/45 group bg-gradient-to-b from-zinc-900/90 to-zinc-950/95 shadow-sm shadow-black/20">
+      <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/45 to-transparent" />
+      <div className="px-2.5 py-2 sm:px-3 sm:py-2.5 bg-primary/[0.07] border-b border-primary/15 flex items-center gap-1.5 sm:gap-2">
+        <span className="text-[13px] sm:text-sm shrink-0">{icon}</span>
+        <span className="text-[9px] sm:text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] sm:tracking-[0.15em] truncate">{event.category}</span>
+        <div className="flex-1 min-w-0" />
         <StatusDot status={event.status} />
-        <span className="text-[9px] font-heading text-zinc-500">{event.start_time_display || formatDateTime(event.start_time)}</span>
+        <span className="text-[8px] sm:text-[9px] font-heading text-zinc-500 whitespace-nowrap tabular-nums">{event.start_time_display || formatDateTime(event.start_time)}</span>
       </div>
 
-      {/* Event name */}
-      <div className="px-3 pt-2.5 pb-1.5">
-        <p className="text-sm font-heading font-bold text-foreground leading-snug">{event.name}</p>
+      <div className="px-2.5 pt-2 pb-1 sm:px-3 sm:pt-2.5 sm:pb-1.5">
+        <p className="text-[13px] sm:text-sm font-heading font-bold text-foreground leading-snug line-clamp-2">{event.name}</p>
         {event.league_label ? (
-          <p className="text-[9px] font-heading text-primary/80 mt-0.5 truncate" title={event.league_label}>{event.league_label}</p>
+          <p className="text-[8px] sm:text-[9px] font-heading text-primary/85 mt-0.5 truncate" title={event.league_label}>{event.league_label}</p>
         ) : null}
       </div>
 
       {bettingOpen && event.betting_deadline_at ? (
-        <p className="text-[9px] text-zinc-500 font-heading px-3 -mt-1 pb-1">
-          Betting closes {formatDateTime(event.betting_deadline_at)}
+        <p className="text-[8px] sm:text-[9px] text-zinc-500 font-heading px-2.5 sm:px-3 -mt-0.5 pb-1">
+          Closes {formatDateTime(event.betting_deadline_at)}
         </p>
       ) : null}
       {!bettingOpen ? (
-        <p className="text-[9px] text-amber-500/90 font-heading px-3 -mt-1 pb-1">
+        <p className="text-[8px] sm:text-[9px] text-amber-500/90 font-heading px-2.5 sm:px-3 -mt-0.5 pb-1">
           {beforeScheduledOpen
-            ? `Betting opens ${formatDateTime(event.betting_opens_at)}`
+            ? `Opens ${formatDateTime(event.betting_opens_at)}`
             : event.betting_deadline_at
-              ? `Betting closed (closed ${formatDateTime(event.betting_deadline_at)})`
+              ? `Closed ${formatDateTime(event.betting_deadline_at)}`
               : 'Betting closed'}
         </p>
       ) : null}
 
-      {/* Odds buttons */}
-      <div className="px-3 pb-3 flex flex-wrap gap-1.5">
+      <div className="px-2.5 pb-2.5 sm:px-3 sm:pb-3 flex flex-wrap gap-1 sm:gap-1.5">
         {options.map((opt) => (
           <button
             key={opt.id}
             type="button"
             onClick={() => bettingOpen && onPlaceBet(event, opt)}
             disabled={!bettingOpen}
-            className={`flex-1 min-w-[80px] relative rounded py-2 px-2 text-center transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.97] group/opt border ${
-              bettingOpen ? 'bg-primary/10 border-primary/20 hover:bg-primary/15' : 'bg-zinc-800/50 border-zinc-700/50'
+            className={`flex-1 min-w-[calc(50%-0.25rem)] sm:min-w-[80px] relative rounded-md py-1.5 sm:py-2 px-1.5 sm:px-2 text-center transition-all disabled:opacity-40 disabled:cursor-not-allowed active:scale-[0.98] group/opt border ${
+              bettingOpen ? 'bg-primary/10 border-primary/25 hover:bg-primary/16' : 'bg-zinc-800/50 border-zinc-700/50'
             }`}
           >
-            <span className="block text-[10px] font-heading text-zinc-400 truncate">{opt.name}</span>
-            <span className="block text-sm font-heading font-black text-primary mt-0.5">{Number(opt.odds).toFixed(2)}</span>
-            <span className="block text-[9px] font-heading text-zinc-500 mt-1 tabular-nums leading-tight">
+            <span className="block text-[9px] sm:text-[10px] font-heading text-zinc-400 truncate leading-tight">{opt.name}</span>
+            <span className="block text-xs sm:text-sm font-heading font-black text-primary mt-0.5 tabular-nums">{Number(opt.odds).toFixed(2)}</span>
+            <span className="block text-[8px] sm:text-[9px] font-heading text-zinc-500 mt-0.5 sm:mt-1 tabular-nums leading-tight">
               {poolTotal > 0 ? (
                 <>
                   {formatMoney(opt.open_stake_total ?? 0)}
                   <span className="text-zinc-600"> · </span>
-                  {Number(opt.open_stake_pct ?? 0).toFixed(1)}% of pool
+                  {Number(opt.open_stake_pct ?? 0).toFixed(0)}%
                 </>
               ) : (
-                <span className="text-zinc-600">$0 · —</span>
+                <span className="text-zinc-600">$0</span>
               )}
             </span>
           </button>
         ))}
       </div>
 
-      {/* Admin row */}
       {isAdmin && (
-        <div className="px-3 pb-2 pt-1 flex flex-wrap gap-1.5 justify-end border-t border-primary/10">
-          <button type="button" onClick={() => onEditBetWindow?.(event)} className="text-[9px] font-heading font-bold text-sky-400 border border-sky-500/30 hover:bg-sky-500/10 px-2 py-1 rounded transition-all">
-            Betting window
+        <div className="px-2.5 pb-2 pt-0.5 sm:px-3 sm:pb-2 sm:pt-1 flex flex-wrap gap-1 justify-end border-t border-primary/10">
+          <button type="button" onClick={() => onEditBetWindow?.(event)} className="text-[8px] sm:text-[9px] font-heading font-bold text-sky-400 border border-sky-500/30 hover:bg-sky-500/10 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded transition-all">
+            Window
           </button>
-          <button type="button" onClick={() => onSettle(event)} className="text-[9px] font-heading font-bold text-amber-400 border border-amber-500/30 hover:bg-amber-500/10 px-2 py-1 rounded transition-all">
+          <button type="button" onClick={() => onSettle(event)} className="text-[8px] sm:text-[9px] font-heading font-bold text-amber-400 border border-amber-500/30 hover:bg-amber-500/10 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded transition-all">
             Settle
           </button>
           <button
             type="button"
             onClick={() => onCancelEvent(event)}
             disabled={cancellingEventId === event.id}
-            className="text-[9px] font-heading font-bold text-red-400 border border-red-500/30 hover:bg-red-500/10 px-2 py-1 rounded transition-all disabled:opacity-50"
+            className="text-[8px] sm:text-[9px] font-heading font-bold text-red-400 border border-red-500/30 hover:bg-red-500/10 px-1.5 sm:px-2 py-0.5 sm:py-1 rounded transition-all disabled:opacity-50"
           >
             {cancellingEventId === event.id ? '…' : 'Cancel'}
           </button>
         </div>
       )}
-      <div className="sb-art-line text-primary mx-3" />
+      <div className="sb-art-line text-primary mx-2.5 sm:mx-3 opacity-80" />
     </div>
   );
 }
@@ -354,23 +379,29 @@ export default function SportsBetting() {
   const [templateSearchQuery, setTemplateSearchQuery] = useState('');
   const [templateDatePreset, setTemplateDatePreset] = useState('');
   const [templateDateSpecific, setTemplateDateSpecific] = useState('');
-  const [eventsBoardFilterKeys, setEventsBoardFilterKeys] = useState(() => {
+  const [boardSportTab, setBoardSportTab] = useState(() => readSessionString(BOARD_SPORT_TAB_STORAGE_KEY, 'all'));
+  const [boardLeagueKey, setBoardLeagueKey] = useState(() => {
     try {
-      const raw = sessionStorage.getItem(BOARD_EVENTS_FILTER_STORAGE_KEY);
-      if (!raw) return [];
-      const p = JSON.parse(raw);
-      return Array.isArray(p) ? p.filter((k) => typeof k === 'string') : [];
+      const raw = sessionStorage.getItem(BOARD_LEAGUE_TAB_STORAGE_KEY);
+      if (raw == null || raw === '') return null;
+      return typeof raw === 'string' ? raw : null;
     } catch {
-      return [];
+      return null;
     }
   });
-  const [eventsBoardFilterPopoverOpen, setEventsBoardFilterPopoverOpen] = useState(false);
 
-  const persistBoardEventFilter = useCallback((keys) => {
+  useEffect(() => {
     try {
-      sessionStorage.setItem(BOARD_EVENTS_FILTER_STORAGE_KEY, JSON.stringify(keys));
+      sessionStorage.setItem(BOARD_SPORT_TAB_STORAGE_KEY, boardSportTab);
     } catch (_) {}
-  }, []);
+  }, [boardSportTab]);
+
+  useEffect(() => {
+    try {
+      if (boardLeagueKey == null || boardLeagueKey === '') sessionStorage.removeItem(BOARD_LEAGUE_TAB_STORAGE_KEY);
+      else sessionStorage.setItem(BOARD_LEAGUE_TAB_STORAGE_KEY, boardLeagueKey);
+    } catch (_) {}
+  }, [boardLeagueKey]);
 
   useEffect(() => {
     setTemplateLeagueFilter('');
@@ -676,7 +707,7 @@ export default function SportsBetting() {
       } else if (added === 0 && sameDay === 0 && upcomingAny > 0) {
         tail = ' No eligible fixtures with kickoff on this UTC calendar day (upcoming games exist on other days — next UTC day or manual add).';
       } else if (added === 0 && sameDay === 0 && pool > 0) {
-        tail = ' No eligible templates (kickoff may be in the past, or category/league is outside auto-board rules: Football allowlist, UFC, Boxing, F1).';
+        tail = ' No eligible templates (kickoff may be in the past, or category/league is outside auto-board rules: Football allowlist, Basketball, Tennis, Golf, UFC, Boxing, F1).';
       } else if (added === 0 && sameDay > 0 && skipped >= sameDay) {
         tail = ' Every eligible template for this UTC day already has a matching open board line.';
       } else if (added === 0 && Array.isArray(d.errors) && d.errors.length) {
@@ -997,58 +1028,68 @@ export default function SportsBetting() {
 
   const shownBrowseCount = filteredBrowseTemplates.length;
 
-  const boardFilterOptions = useMemo(() => {
+  const boardSportTabs = useMemo(() => {
+    const counts = new Map();
+    events.forEach((e) => {
+      const c = e.category || 'Other';
+      counts.set(c, (counts.get(c) || 0) + 1);
+    });
+    const out = [];
+    BOARD_SPORT_TAB_ORDER.forEach((sport) => {
+      const n = counts.get(sport);
+      if (n) out.push({ sport, count: n });
+    });
+    counts.forEach((n, sport) => {
+      if (!BOARD_SPORT_TAB_ORDER.includes(sport)) out.push({ sport, count: n });
+    });
+    return out;
+  }, [events]);
+
+  const boardLeagueTabsForSport = useMemo(() => {
+    if (boardSportTab === 'all') return [];
+    const sub = events.filter((e) => (e.category || '') === boardSportTab);
+    if (!sub.length) return [];
     const m = new Map();
-    events.forEach((ev) => {
+    sub.forEach((ev) => {
       const key = boardEventFilterKey(ev);
       const label = boardEventFilterLabel(ev);
       if (!m.has(key)) m.set(key, { key, label, count: 0 });
       m.get(key).count += 1;
     });
-    return Array.from(m.values()).sort((a, b) => a.label.localeCompare(b.label));
-  }, [events]);
-
-  const filteredBoardEvents = useMemo(() => {
-    if (!eventsBoardFilterKeys.length) return events;
-    const sel = new Set(eventsBoardFilterKeys);
-    return events.filter((ev) => sel.has(boardEventFilterKey(ev)));
-  }, [events, eventsBoardFilterKeys]);
-
-  const boardFilterActive = eventsBoardFilterKeys.length > 0;
-  const boardFilterOptionKeySet = useMemo(() => new Set(boardFilterOptions.map((o) => o.key)), [boardFilterOptions]);
+    const arr = Array.from(m.values()).sort((a, b) => a.label.localeCompare(b.label));
+    if (arr.length < 2) return [];
+    return arr;
+  }, [events, boardSportTab]);
 
   useEffect(() => {
-    if (events.length === 0) return;
-    setEventsBoardFilterKeys((prev) => {
-      if (!prev.length) return prev;
-      const next = prev.filter((k) => boardFilterOptionKeySet.has(k));
-      if (next.length === prev.length) return prev;
-      persistBoardEventFilter(next);
-      return next;
+    if (boardSportTab === 'all') return;
+    const valid = new Set(boardSportTabs.map((t) => t.sport));
+    if (!valid.has(boardSportTab) && events.length > 0) {
+      setBoardSportTab('all');
+      setBoardLeagueKey(null);
+    }
+  }, [boardSportTab, boardSportTabs, events.length]);
+
+  useEffect(() => {
+    if (!boardLeagueKey) return;
+    const valid = boardLeagueTabsForSport.some((t) => t.key === boardLeagueKey);
+    if (!valid) setBoardLeagueKey(null);
+  }, [boardLeagueTabsForSport, boardLeagueKey]);
+
+  const displayBoardEvents = useMemo(() => {
+    let list = events;
+    if (boardSportTab !== 'all') {
+      list = list.filter((e) => (e.category || '') === boardSportTab);
+    }
+    if (boardLeagueKey && boardSportTab !== 'all' && boardLeagueTabsForSport.length > 0) {
+      list = list.filter((e) => boardEventFilterKey(e) === boardLeagueKey);
+    }
+    return [...list].sort((a, b) => {
+      const ta = new Date(a.start_time || 0).getTime();
+      const tb = new Date(b.start_time || 0).getTime();
+      return ta - tb;
     });
-  }, [events.length, boardFilterOptionKeySet, persistBoardEventFilter]);
-
-  const toggleBoardFilterKey = useCallback(
-    (key) => {
-      setEventsBoardFilterKeys((prev) => {
-        const next = prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key];
-        persistBoardEventFilter(next);
-        return next;
-      });
-    },
-    [persistBoardEventFilter],
-  );
-
-  const selectAllBoardFilterKeys = useCallback(() => {
-    const next = boardFilterOptions.map((o) => o.key);
-    setEventsBoardFilterKeys(next);
-    persistBoardEventFilter(next);
-  }, [boardFilterOptions, persistBoardEventFilter]);
-
-  const clearBoardFilterKeys = useCallback(() => {
-    setEventsBoardFilterKeys([]);
-    persistBoardEventFilter([]);
-  }, [persistBoardEventFilter]);
+  }, [events, boardSportTab, boardLeagueKey, boardLeagueTabsForSport]);
 
   if (!hasLoaded) {
     return (
@@ -1076,23 +1117,23 @@ export default function SportsBetting() {
       </div>
 
       {/* ═══ Stats bar ═══ */}
-      <div className="relative flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-lg border border-primary/20 bg-primary/5 overflow-hidden">
+      <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg border border-primary/20 bg-primary/5 overflow-hidden">
         <div className="h-0.5 absolute top-0 left-0 right-0 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] font-heading uppercase tracking-wider">
-          <span className="text-zinc-500">{events.length} <span className="text-zinc-600">events</span></span>
-          <span className="text-zinc-500">{myBets.open.length} <span className="text-zinc-600">open bets</span></span>
+        <div className="sb-tab-scroll flex flex-nowrap items-center gap-x-3 sm:gap-x-4 overflow-x-auto min-w-0 text-[9px] sm:text-[10px] font-heading uppercase tracking-wider">
+          <span className="text-zinc-500 shrink-0">{events.length} <span className="text-zinc-600">events</span></span>
+          <span className="text-zinc-500 shrink-0">{myBets.open.length} <span className="text-zinc-600">open bets</span></span>
           {stats && (
-            <span className={`font-bold ${(stats.profit_loss ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`} title="Your net on settled bets">
+            <span className={`font-bold shrink-0 ${(stats.profit_loss ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`} title="Your net on settled bets">
               You P/L {formatMoney(stats.profit_loss)}
             </span>
           )}
           {stats?.global_book && (
             <>
-              <span className="text-zinc-500 border-l border-zinc-700/80 pl-4" title="Every sports bet ever placed (including open and cancelled)">
+              <span className="text-zinc-500 border-l border-zinc-700/80 pl-3 sm:pl-4 shrink-0" title="Every sports bet ever placed (including open and cancelled)">
                 {(stats.global_book.total_bets_all_time ?? 0).toLocaleString()} <span className="text-zinc-600">book bets</span>
               </span>
               <span
-                className={`font-bold ${(stats.global_book.aggregate_player_profit_loss ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
+                className={`font-bold shrink-0 ${(stats.global_book.aggregate_player_profit_loss ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
                 title="Combined net for all players on settled won/lost bets (payouts minus stakes)"
               >
                 All players net {formatMoney(stats.global_book.aggregate_player_profit_loss)}
@@ -1103,7 +1144,7 @@ export default function SportsBetting() {
         <button
           type="button"
           onClick={() => fetchAll()}
-          className="flex items-center gap-1.5 text-[10px] font-heading text-zinc-500 hover:text-primary transition-all"
+          className="flex items-center gap-1.5 text-[9px] sm:text-[10px] font-heading text-zinc-500 hover:text-primary transition-all shrink-0 self-end sm:self-auto"
         >
           <RefreshCw size={12} />
           Refresh
@@ -1111,7 +1152,7 @@ export default function SportsBetting() {
       </div>
 
       {/* ═══ Tab navigation ═══ */}
-      <div className="relative flex gap-1 p-1 rounded-lg border border-primary/20 bg-primary/5 overflow-hidden">
+      <div className="relative sb-tab-scroll flex gap-1 p-1 rounded-lg border border-primary/20 bg-primary/5 overflow-x-auto snap-x snap-mandatory">
         <div className="h-0.5 absolute top-0 left-0 right-0 bg-gradient-to-r from-transparent via-primary/40 to-transparent rounded-t-lg pointer-events-none" aria-hidden />
         {[
           { id: 'events', label: 'Events', count: events.length },
@@ -1121,8 +1162,9 @@ export default function SportsBetting() {
         ].map((tab) => (
           <button
             key={tab.id}
+            type="button"
             onClick={() => setActiveTab(tab.id)}
-            className={`flex-1 py-2 px-3 rounded-md text-[10px] font-heading font-bold uppercase tracking-wider transition-all border ${
+            className={`flex-1 min-w-[5.5rem] sm:min-w-0 py-2 px-2 sm:px-3 rounded-md text-[9px] sm:text-[10px] font-heading font-bold uppercase tracking-wider transition-all border snap-start shrink-0 ${
               activeTab === tab.id
                 ? 'text-primary bg-primary/10 border-primary/20'
                 : 'text-zinc-500 hover:text-zinc-300 border-transparent'
@@ -1239,7 +1281,7 @@ export default function SportsBetting() {
               <p className="text-[9px] text-zinc-600 font-heading leading-snug">
                 <span className="font-bold text-zinc-500">Check for events</span> — fetch from the API, save to DB, show list (uses quota).{' '}
                 <span className="font-bold text-zinc-500">Load saved (DB)</span> — reload the list from the database only (no API).{' '}
-                <span className="font-bold text-zinc-500">Run auto-board</span> — add all eligible fixtures whose kickoff is on the <span className="text-zinc-400">current UTC calendar day</span>, in start-time order, until the daily cap (45) or per-run limit; same window as the UTC day counter. Lines already on the open board are skipped and hidden in the template list below.
+                <span className="font-bold text-zinc-500">Run auto-board</span> — add all eligible fixtures whose kickoff is on the <span className="text-zinc-400">current UTC calendar day</span>, in start-time order, until the daily cap (55) or per-run limit; same window as the UTC day counter. Lines already on the open board are skipped and hidden in the template list below.
               </p>
               <p className="text-[9px] text-zinc-500 font-heading leading-snug border border-zinc-700/40 rounded px-2 py-1.5 bg-zinc-900/40">
                 <span className="font-bold text-amber-400/90">UTC day (auto-board daily cap)</span> — the server counts &quot;today&quot; from{' '}
@@ -1249,7 +1291,7 @@ export default function SportsBetting() {
 
               {templates.odds_api_configured === false ? (
                 <p className="text-[9px] text-amber-500/90 font-heading">
-                  THE_ODDS_API_KEY is not set on the API server — Football/UFC/Boxing/F1 use fallbacks where available; Snooker is always staff-created. Set the key and restart, then Check for events again.
+                  THE_ODDS_API_KEY is not set on the API server — Football, UFC, Boxing, and F1 use fallbacks where available; Basketball, Tennis, and Golf feeds need the key. Snooker is staff-created unless you set SNOOKER_ODDS_SPORT_KEYS. Set the key and restart, then Check for events again.
                 </p>
               ) : null}
               {templates.odds_api_configured && adminCategory === 'Snooker' && (templateMap.Snooker || []).length === 0 ? (
@@ -1551,7 +1593,7 @@ export default function SportsBetting() {
 
       {/* ═══ EVENTS TAB ═══ */}
       {activeTab === 'events' && (
-        <div className="space-y-3">
+        <div className="space-y-2 sm:space-y-3">
           {events.length === 0 ? (
             <div className="relative text-center py-12 rounded-lg border border-primary/20 bg-primary/5 overflow-hidden">
               <div className="h-0.5 absolute top-0 left-0 right-0 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -1560,101 +1602,130 @@ export default function SportsBetting() {
             </div>
           ) : (
             <>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <p className="text-[10px] font-heading text-zinc-500 min-w-0 flex-1">
-                  {boardFilterActive ? (
-                    <>
-                      Showing <span className="text-primary font-bold tabular-nums">{filteredBoardEvents.length}</span>
-                      <span className="text-zinc-600"> of </span>
-                      <span className="tabular-nums">{events.length}</span> events
-                    </>
-                  ) : (
-                    <span className="text-zinc-600">All events visible — open the filter to show only certain leagues or categories.</span>
-                  )}
-                </p>
-                <Popover open={eventsBoardFilterPopoverOpen} onOpenChange={setEventsBoardFilterPopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <button
-                      type="button"
-                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-heading font-bold uppercase tracking-wider transition-all shrink-0 ${
-                        boardFilterActive
-                          ? 'border-primary/50 bg-primary/15 text-primary'
-                          : 'border-primary/20 bg-primary/5 text-zinc-400 hover:text-primary hover:border-primary/40'
-                      }`}
-                    >
-                      <Filter size={12} className="shrink-0" aria-hidden />
-                      Filter
-                      {boardFilterActive ? (
-                        <span className="tabular-nums text-primary/80">({eventsBoardFilterKeys.length})</span>
-                      ) : null}
-                    </button>
-                  </PopoverTrigger>
-                  <PopoverContent
-                    align="end"
-                    className={`${styles.panel} border-primary/20 w-[min(100vw-2rem,22rem)] p-3 space-y-2.5`}
-                  >
-                    <div className="flex items-start justify-between gap-2 border-b border-primary/15 pb-2">
-                      <div>
-                        <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-widest">Leagues & categories</p>
-                        <p className="text-[9px] text-zinc-500 font-heading mt-1 leading-snug">
-                          With nothing ticked, every board event is shown. Tick one or more to narrow the grid.
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={selectAllBoardFilterKeys}
-                        className="text-[9px] font-heading font-bold text-sky-400 border border-sky-500/30 hover:bg-sky-500/10 px-2 py-1 rounded transition-all"
-                      >
-                        Select all listed
-                      </button>
-                      <button
-                        type="button"
-                        onClick={clearBoardFilterKeys}
-                        className="text-[9px] font-heading font-bold text-zinc-400 border border-zinc-600/40 hover:bg-zinc-800/60 px-2 py-1 rounded transition-all"
-                      >
-                        Show all events
-                      </button>
-                    </div>
-                    <div className="max-h-64 overflow-y-auto space-y-1 pr-0.5">
-                      {boardFilterOptions.map((o) => (
-                        <label
-                          key={o.key}
-                          className="flex items-center gap-2 rounded border border-zinc-700/40 bg-zinc-900/40 px-2 py-1.5 cursor-pointer hover:border-primary/25 transition-colors"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={eventsBoardFilterKeys.includes(o.key)}
-                            onChange={() => toggleBoardFilterKey(o.key)}
-                            className="rounded border-primary/40 bg-zinc-900 text-primary focus:ring-primary/30 shrink-0"
-                          />
-                          <span className="flex-1 min-w-0 text-[10px] font-heading text-foreground truncate" title={o.label}>
-                            {o.label}
-                          </span>
-                          <span className="text-[9px] text-zinc-500 tabular-nums shrink-0">{o.count}</span>
-                        </label>
-                      ))}
-                    </div>
-                  </PopoverContent>
-                </Popover>
-              </div>
-              {filteredBoardEvents.length === 0 ? (
-                <div className="relative text-center py-10 rounded-lg border border-amber-500/25 bg-amber-500/5 overflow-hidden">
-                  <div className="h-0.5 absolute top-0 left-0 right-0 bg-gradient-to-r from-transparent via-amber-500/30 to-transparent" />
-                  <p className="text-[11px] font-heading font-bold text-amber-400/90">No events match this filter</p>
+              <div className="sticky top-0 z-20 -mx-1 px-1 pt-1 pb-2 space-y-2 bg-zinc-950/90 backdrop-blur-md border-b border-primary/15 sm:static sm:bg-transparent sm:backdrop-blur-none sm:border-0 sm:p-0 sm:space-y-2">
+                <div className="sb-tab-scroll flex flex-nowrap gap-1.5 overflow-x-auto pb-0.5">
                   <button
                     type="button"
-                    onClick={clearBoardFilterKeys}
+                    onClick={() => {
+                      setBoardSportTab('all');
+                      setBoardLeagueKey(null);
+                    }}
+                    className={`shrink-0 snap-start rounded-lg border px-2.5 py-1.5 text-[9px] sm:text-[10px] font-heading font-bold uppercase tracking-wider transition-all ${
+                      boardSportTab === 'all'
+                        ? 'border-primary/45 bg-primary/15 text-primary'
+                        : 'border-primary/15 bg-primary/5 text-zinc-500 hover:text-zinc-300 hover:border-primary/30'
+                    }`}
+                  >
+                    All <span className="tabular-nums text-primary/70">({events.length})</span>
+                  </button>
+                  {boardSportTabs.map(({ sport, count }) => (
+                    <button
+                      key={sport}
+                      type="button"
+                      onClick={() => {
+                        setBoardSportTab(sport);
+                        setBoardLeagueKey(null);
+                      }}
+                      className={`shrink-0 snap-start rounded-lg border px-2.5 py-1.5 text-[9px] sm:text-[10px] font-heading font-bold uppercase tracking-wider transition-all max-w-[11rem] sm:max-w-none ${
+                        boardSportTab === sport
+                          ? 'border-primary/45 bg-primary/15 text-primary'
+                          : 'border-primary/15 bg-primary/5 text-zinc-500 hover:text-zinc-300 hover:border-primary/30'
+                      }`}
+                    >
+                      <span className="truncate inline-block max-w-[9rem] sm:max-w-none align-bottom">{sport}</span>{' '}
+                      <span className="tabular-nums text-primary/70">({count})</span>
+                    </button>
+                  ))}
+                </div>
+                {boardLeagueTabsForSport.length > 0 ? (
+                  <div className="sb-tab-scroll flex flex-nowrap gap-1 overflow-x-auto">
+                    <button
+                      type="button"
+                      onClick={() => setBoardLeagueKey(null)}
+                      className={`shrink-0 snap-start rounded-md border px-2 py-1 text-[8px] sm:text-[9px] font-heading font-bold uppercase tracking-wide transition-all ${
+                        boardLeagueKey == null
+                          ? 'border-sky-500/40 bg-sky-500/15 text-sky-300'
+                          : 'border-zinc-700/50 bg-zinc-900/50 text-zinc-500 hover:border-primary/25 hover:text-zinc-300'
+                      }`}
+                    >
+                      All leagues{' '}
+                      <span className="tabular-nums opacity-80">
+                        (
+                        {events.filter((e) => (e.category || '') === boardSportTab).length}
+                        )
+                      </span>
+                    </button>
+                    {boardLeagueTabsForSport.map((row) => (
+                      <button
+                        key={row.key}
+                        type="button"
+                        onClick={() => setBoardLeagueKey(row.key)}
+                        className={`shrink-0 snap-start rounded-md border px-2 py-1 text-[8px] sm:text-[9px] font-heading font-bold uppercase tracking-wide transition-all max-w-[10rem] sm:max-w-[14rem] ${
+                          boardLeagueKey === row.key
+                            ? 'border-sky-500/40 bg-sky-500/15 text-sky-300'
+                            : 'border-zinc-700/50 bg-zinc-900/50 text-zinc-500 hover:border-primary/25 hover:text-zinc-300'
+                        }`}
+                        title={row.label}
+                      >
+                        <span className="truncate block">{row.label}</span>
+                        <span className="tabular-nums opacity-80"> ({row.count})</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+                <p className="text-[9px] font-heading text-zinc-600 leading-snug sm:hidden">
+                  {boardSportTab === 'all' ? (
+                    <span>{events.length} events · swipe sport tabs</span>
+                  ) : (
+                    <span className="tabular-nums text-primary font-bold">{displayBoardEvents.length}</span>
+                  )}
+                  {boardSportTab !== 'all' ? <span className="text-zinc-600"> {boardSportTab}</span> : null}
+                  {boardLeagueKey ? (
+                    <span className="text-zinc-500">
+                      {' '}
+                      · {boardLeagueTabsForSport.find((t) => t.key === boardLeagueKey)?.label || 'League'}
+                    </span>
+                  ) : null}
+                </p>
+                <p className="text-[9px] font-heading text-zinc-600 leading-snug hidden sm:block">
+                  {boardSportTab === 'all' ? (
+                    <span>Use sport tabs to jump to a category, then pick a league when more than one is listed.</span>
+                  ) : boardLeagueKey ? (
+                    <>
+                      Showing <span className="text-primary font-bold tabular-nums">{displayBoardEvents.length}</span>
+                      <span className="text-zinc-600"> in </span>
+                      <span className="text-zinc-400">{boardLeagueTabsForSport.find((t) => t.key === boardLeagueKey)?.label || 'League'}</span>
+                      <span className="text-zinc-600"> · </span>
+                      <span className="tabular-nums">{boardSportTab}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="tabular-nums text-primary font-bold">{displayBoardEvents.length}</span>
+                      <span className="text-zinc-600"> {boardSportTab} events</span>
+                      {boardLeagueTabsForSport.length === 0 ? <span className="text-zinc-600"> — one league on the board.</span> : null}
+                    </>
+                  )}
+                </p>
+              </div>
+              {displayBoardEvents.length === 0 ? (
+                <div className="relative text-center py-10 rounded-lg border border-amber-500/25 bg-amber-500/5 overflow-hidden">
+                  <div className="h-0.5 absolute top-0 left-0 right-0 bg-gradient-to-r from-transparent via-amber-500/30 to-transparent" />
+                  <p className="text-[11px] font-heading font-bold text-amber-400/90">No events match this view</p>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBoardSportTab('all');
+                      setBoardLeagueKey(null);
+                    }}
                     className="mt-2 text-[10px] font-heading text-primary hover:underline"
                   >
-                    Clear filter
+                    Show all sports
                   </button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {filteredBoardEvents.map((ev, i) => (
-                    <div key={ev.id} className="animate-sb-fade-in" style={{ animationDelay: `${i * 0.05}s` }}>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2 sm:gap-3">
+                  {displayBoardEvents.map((ev, i) => (
+                    <div key={ev.id} className="animate-sb-fade-in" style={{ animationDelay: `${Math.min(i, 14) * 0.03}s` }}>
                       <EventCard
                         event={ev}
                         onPlaceBet={openBetModal}

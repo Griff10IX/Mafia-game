@@ -129,7 +129,7 @@ SPORTS_BETTING_PUBLIC_EVENTS_LIMIT = 45
 # so visible upcoming lines are not starved when many stale opens sit at the head of the sort.
 SPORTS_BETTING_PUBLIC_OPEN_SCAN_MAX = 3000
 # Auto-board should not flood the board if cron/admin runs multiple times in the same UTC day.
-SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT = 45
+SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT = 55
 # Player-submitted requests to add a template to the board (UTC calendar day).
 SPORTS_EVENT_REQUESTS_PER_DAY = 3
 SPORTS_EVENT_REQUEST_MAX_HOURS_AHEAD = 24
@@ -140,7 +140,17 @@ THESPORTSDB_LEAGUE_LALIGA = 4335
 THESPORTSDB_LEAGUE_UFC = 4443
 THESPORTSDB_LEAGUE_BOXING = 4445
 
-_sports_live_cache = {"football": [], "ufc": [], "boxing": [], "f1": [], "snooker": [], "updated_at": 0.0}
+_sports_live_cache = {
+    "football": [],
+    "basketball": [],
+    "tennis": [],
+    "golf": [],
+    "ufc": [],
+    "boxing": [],
+    "f1": [],
+    "snooker": [],
+    "updated_at": 0.0,
+}
 # GET /v4/sports (used to discover Snooker keys when Odds API adds them). Short TTL to limit quota.
 _odds_sports_catalog_cache = {"at": 0.0, "rows": []}
 _ODDS_SPORTS_CATALOG_TTL_SEC = 600
@@ -339,7 +349,7 @@ def _is_auto_board_eligible_template(t: dict, *, soccer_keys: frozenset[str], no
         return False
     if cat == "Football":
         return bool(sk and sk in soccer_keys)
-    if cat in ("UFC", "Boxing", "Formula 1"):
+    if cat in ("UFC", "Boxing", "Formula 1", "Basketball", "Tennis", "Golf"):
         return True
     return False
 
@@ -582,8 +592,9 @@ SOCCER_ODDS_REGION_ATTEMPTS = (
     "uk,us,eu,fr,se,au",
 )
 
-# Auto-board: promote templates to sports_events (cron / admin). Football allowlist matches SOCCER_LEAGUES
-# (same keys admin refresh can save). UFC, Boxing, Formula 1: all eligible. Snooker stays manual-only.
+# Auto-board: promote templates to sports_events (cron / admin). Football uses SOCCER_LEAGUES allowlist.
+# Basketball (NBA), Tennis & Golf (Odds API keys from /v4/sports + env overrides), UFC, Boxing, F1: all eligible when
+# templates exist. Snooker stays manual-only unless Odds exposes keys.
 # Template pool: SPORTS_AUTO_BOARD_TEMPLATE_SOURCE (default database = MongoDB sports_betting_templates only).
 _AUTO_BOARD_SOCCER_DEFAULT_KEYS = SOCCER_LEAGUES
 
@@ -668,6 +679,23 @@ def _soccer_league_display_name(sport_key: str) -> str:
     if sport_key in labels:
         return labels[sport_key]
     return sport_key.replace("soccer_", "").replace("_", " ").title()
+
+
+def _board_league_label_for_category(category: str, sport_key: str) -> Optional[str]:
+    sk = (sport_key or "").strip()
+    if not sk:
+        return None
+    if category == "Football":
+        return _soccer_league_display_name(sk)
+    if category == "Basketball" and sk == "basketball_nba":
+        return "NBA"
+    if category == "Basketball":
+        return sk.replace("basketball_", "").replace("_", " ").title()
+    if category == "Tennis":
+        return sk.replace("tennis_", "").replace("_", " ").title()
+    if category == "Golf":
+        return sk.replace("golf_", "").replace("_", " ").title()
+    return None
 
 
 def _is_future_event(ev: dict, require_time: bool = False, buffer_minutes: int = 10) -> bool:
@@ -833,6 +861,20 @@ def _snooker_sport_keys_env_override() -> list[str]:
     return [x.strip() for x in raw.split(",") if x.strip()][:8]
 
 
+def _tennis_sport_keys_env_override() -> list[str]:
+    raw = (os.environ.get("TENNIS_ODDS_SPORT_KEYS") or "").strip()
+    if not raw:
+        return []
+    return [x.strip() for x in raw.split(",") if x.strip()][:12]
+
+
+def _golf_sport_keys_env_override() -> list[str]:
+    raw = (os.environ.get("GOLF_ODDS_SPORT_KEYS") or "").strip()
+    if not raw:
+        return []
+    return [x.strip() for x in raw.split(",") if x.strip()][:8]
+
+
 def _snooker_sport_keys_from_odds_catalog(rows: list) -> list[str]:
     """Keys from /v4/sports whose key or title mentions snooker (in-season / active entries only)."""
     out: list[str] = []
@@ -852,6 +894,48 @@ def _snooker_sport_keys_from_odds_catalog(rows: list) -> list[str]:
         seen.add(k)
         out.append(k)
     return out
+
+
+def _tennis_sport_keys_from_odds_catalog(rows: list) -> list[str]:
+    """In-season tennis keys from /v4/sports (match h2h feeds; skip outright-only keys)."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        k = (row.get("key") or "").strip()
+        if not k or k in seen:
+            continue
+        if row.get("active") is False:
+            continue
+        if row.get("has_outrights") is True:
+            continue
+        if not k.lower().startswith("tennis_"):
+            continue
+        seen.add(k)
+        out.append(k)
+    return out[:12]
+
+
+def _golf_sport_keys_from_odds_catalog(rows: list) -> list[str]:
+    """In-season golf keys that are not outright-only (e.g. matchups / h2h markets when offered)."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        k = (row.get("key") or "").strip()
+        if not k or k in seen:
+            continue
+        if row.get("active") is False:
+            continue
+        if row.get("has_outrights") is True:
+            continue
+        if not k.lower().startswith("golf_"):
+            continue
+        seen.add(k)
+        out.append(k)
+    return out[:8]
 
 
 async def _fetch_snooker_events() -> list:
@@ -889,6 +973,89 @@ async def _fetch_snooker_events() -> list:
                     out.append(parsed)
     except Exception as ex:
         logger.warning("Odds API snooker: %s", ex)
+    return out
+
+
+async def _fetch_odds_api_basketball() -> list:
+    if not _odds_api_key():
+        return []
+    out: list = []
+    try:
+        events = await _fetch_odds_api_h2h_events_merged("basketball_nba")
+        for ev in events[:80]:
+            if not _is_future_event(ev, require_time=True, buffer_minutes=0):
+                continue
+            parsed = _parse_odds_event(ev, "Basketball", three_way=False, sport_key="basketball_nba")
+            if parsed:
+                out.append(parsed)
+    except Exception as ex:
+        logger.warning("Odds API basketball: %s", ex)
+    return out
+
+
+async def _fetch_tennis_events() -> list:
+    if not _odds_api_key():
+        return []
+    out: list = []
+    seen_pair: set[tuple[str, str]] = set()
+    try:
+        catalog = await _odds_api_fetch_sports_catalog_rows()
+        keys = _tennis_sport_keys_from_odds_catalog(catalog)
+        for k in _tennis_sport_keys_env_override():
+            if k not in keys:
+                keys.append(k)
+        keys = keys[:12]
+        if not keys:
+            return []
+        for sport_key in keys:
+            events = await _fetch_odds_api_h2h_events_merged(sport_key)
+            for ev in events[:30]:
+                if not _is_future_event(ev, require_time=True, buffer_minutes=0):
+                    continue
+                eid = (ev.get("id") or "").strip()
+                dedupe = (sport_key, eid)
+                if eid and dedupe in seen_pair:
+                    continue
+                parsed = _parse_odds_event(ev, "Tennis", three_way=False, sport_key=sport_key)
+                if parsed:
+                    if eid:
+                        seen_pair.add(dedupe)
+                    out.append(parsed)
+    except Exception as ex:
+        logger.warning("Odds API tennis: %s", ex)
+    return out
+
+
+async def _fetch_golf_events() -> list:
+    if not _odds_api_key():
+        return []
+    out: list = []
+    seen_pair: set[tuple[str, str]] = set()
+    try:
+        catalog = await _odds_api_fetch_sports_catalog_rows()
+        keys = _golf_sport_keys_from_odds_catalog(catalog)
+        for k in _golf_sport_keys_env_override():
+            if k not in keys:
+                keys.append(k)
+        keys = keys[:8]
+        if not keys:
+            return []
+        for sport_key in keys:
+            events = await _fetch_odds_api_h2h_events_merged(sport_key)
+            for ev in events[:25]:
+                if not _is_future_event(ev, require_time=True, buffer_minutes=0):
+                    continue
+                eid = (ev.get("id") or "").strip()
+                dedupe = (sport_key, eid)
+                if eid and dedupe in seen_pair:
+                    continue
+                parsed = _parse_odds_event(ev, "Golf", three_way=False, sport_key=sport_key)
+                if parsed:
+                    if eid:
+                        seen_pair.add(dedupe)
+                    out.append(parsed)
+    except Exception as ex:
+        logger.warning("Odds API golf: %s", ex)
     return out
 
 
@@ -963,13 +1130,23 @@ async def _fetch_odds_api_f1() -> list:
 # ----- Odds API Scores (for auto-settle) -----
 ODDS_API_SPORT_KEYS = {
     "Football": list(SOCCER_LEAGUES),
+    "Basketball": ["basketball_nba"],
     "UFC": ["mma_mixed_martial_arts"],
     "Boxing": ["boxing_boxing"],
     "Formula 1": ["motor_racing_f1"],
 }
 
-# Admin / browse template library tabs (Odds-backed + Snooker: manual custom events only, no Odds API feed).
-SPORTS_BOARD_CATEGORIES = ("Football", "UFC", "Boxing", "Formula 1", "Snooker")
+# Admin / browse template library tabs (Odds-backed categories + Snooker manual/custom).
+SPORTS_BOARD_CATEGORIES = (
+    "Football",
+    "Basketball",
+    "Tennis",
+    "Golf",
+    "UFC",
+    "Boxing",
+    "Formula 1",
+    "Snooker",
+)
 
 
 async def _fetch_odds_api_scores(sport_key: str, days_from: int = 1) -> list:
@@ -1881,8 +2058,21 @@ async def _refresh_sports_live_cache(force: bool = False):
     if force:
         # Admin "Check for events" should see newly-added sports (e.g. Snooker) without waiting for catalog TTL.
         _odds_sports_catalog_cache["at"] = 0.0
-    football, ufc, boxing, f1_drivers, f1_odds_events, snooker = await asyncio.gather(
+    (
+        football,
+        basketball,
+        tennis,
+        golf,
+        ufc,
+        boxing,
+        f1_drivers,
+        f1_odds_events,
+        snooker,
+    ) = await asyncio.gather(
         _fetch_football_events(),
+        _fetch_odds_api_basketball(),
+        _fetch_tennis_events(),
+        _fetch_golf_events(),
         _fetch_ufc_events(),
         _fetch_boxing_events(),
         _fetch_f1_drivers(),
@@ -1890,6 +2080,9 @@ async def _refresh_sports_live_cache(force: bool = False):
         _fetch_snooker_events(),
     )
     _sports_live_cache["football"] = football
+    _sports_live_cache["basketball"] = basketball
+    _sports_live_cache["tennis"] = tennis
+    _sports_live_cache["golf"] = golf
     _sports_live_cache["ufc"] = ufc
     _sports_live_cache["boxing"] = boxing
     _sports_live_cache["snooker"] = snooker
@@ -1943,6 +2136,9 @@ async def _refresh_sports_live_cache(force: bool = False):
 def _get_all_sports_templates() -> list:
     return (
         (_sports_live_cache.get("football") or [])
+        + (_sports_live_cache.get("basketball") or [])
+        + (_sports_live_cache.get("tennis") or [])
+        + (_sports_live_cache.get("golf") or [])
         + (_sports_live_cache.get("ufc") or [])
         + (_sports_live_cache.get("boxing") or [])
         + (_sports_live_cache.get("f1") or [])
@@ -2057,8 +2253,10 @@ def _sports_template_to_response(t):
     exk = t.get("external_sport_key")
     if exk:
         row["external_sport_key"] = exk
-        if (t.get("category") or "") == "Football":
-            row["league_label"] = _soccer_league_display_name(exk)
+        cat = (t.get("category") or "").strip()
+        lab = _board_league_label_for_category(cat, exk)
+        if lab:
+            row["league_label"] = lab
     return row
 
 
@@ -2390,8 +2588,9 @@ async def sports_betting_events(current_user: dict = Depends(get_current_user_ve
             status = "finished"
         exk = (ev_doc.get("external_sport_key") or "").strip()
         league_label = None
-        if (ev_doc.get("category") or "") == "Football" and exk:
-            league_label = _soccer_league_display_name(exk)
+        catg = (ev_doc.get("category") or "").strip()
+        if exk and catg:
+            league_label = _board_league_label_for_category(catg, exk)
         row = {
             "id": ev_doc["id"],
             "name": ev_doc.get("name", "?"),
@@ -3831,11 +4030,11 @@ async def run_sports_auto_board_ticker() -> None:
 def register(router):
     if _odds_api_key():
         logger.info(
-            "Sports betting: THE_ODDS_API_KEY is set — using The Odds API for Football/UFC/Boxing/F1 (where available) and for auto-settle; Snooker is manual-only.",
+            "Sports betting: THE_ODDS_API_KEY is set — using The Odds API for Football, Basketball (NBA), Tennis, Golf (when h2h keys exist), UFC, Boxing, F1 (where available) and for auto-settle; Snooker is manual unless keys exist.",
         )
     else:
         logger.warning(
-            "Sports betting: THE_ODDS_API_KEY is not set — Football/UFC/Boxing/F1 use fallback sources where applicable; auto-settle limited; Snooker is manual-only.",
+            "Sports betting: THE_ODDS_API_KEY is not set — Football/UFC/Boxing/F1 use fallback sources where applicable; Basketball/Tennis/Golf feeds disabled; auto-settle limited; Snooker is manual-only.",
         )
 
     router.add_api_route("/sports-betting/events", sports_betting_events, methods=["GET"])
