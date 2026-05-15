@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, User, Target, Building2, Plane, Factory, Mail, Radio, Clock, CalendarDays, CalendarRange, MapPin, Skull, Trophy, Crown, Sparkles } from 'lucide-react';
+import { Users, User, Target, Building2, Plane, Factory, Mail, Radio, Clock, CalendarDays, CalendarRange, Skull, Trophy, Crown, Sparkles } from 'lucide-react';
 import api from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import { toast } from 'sonner';
@@ -72,7 +72,6 @@ function rosterPreviewStub(rosterUser) {
     rank_name: rosterUser.rank_name,
     prestige_level: rosterUser.prestige_level ?? 0,
     founding_member: !!rosterUser.founding_member,
-    location: rosterUser.location != null && String(rosterUser.location).trim() ? String(rosterUser.location).trim() : null,
     status: rosterUser.status,
     in_jail: !!rosterUser.in_jail,
   };
@@ -383,12 +382,6 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
                       {(preview.in_jail ?? user.in_jail) ? (
                         <span className="text-red-400 font-bold uppercase">In jail</span>
                       ) : null}
-                      {(preview.location || user.location) ? (
-                        <span className="inline-flex items-center gap-0.5 min-w-0 max-w-full">
-                          <MapPin size={11} className="shrink-0 opacity-70" aria-hidden />
-                          <span className="truncate">{preview.location || user.location}</span>
-                        </span>
-                      ) : null}
                     </div>
                   </div>
                 </div>
@@ -409,13 +402,13 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
                               <Skull size={12} className="opacity-70" aria-hidden />
                               Kills
                             </span>
-                            <span className="text-foreground font-bold tabular-nums">{preview.kills}</span>
+                            <span className="text-foreground font-bold tabular-nums">{Number(preview.kills).toLocaleString()}</span>
                           </div>
                         ) : null}
                         {showJail ? (
                           <div className="col-span-2 flex items-center justify-between gap-2">
                             <span className="text-mutedForeground">Jail busts</span>
-                            <span className="text-foreground font-bold tabular-nums">{preview.jail_busts}</span>
+                            <span className="text-foreground font-bold tabular-nums">{Number(preview.jail_busts).toLocaleString()}</span>
                           </div>
                         ) : null}
                         {preview.kills === null && preview.jail_busts === null ? (
@@ -429,7 +422,7 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
                             Messages
                           </span>
                           <span className="text-foreground font-bold tabular-nums">
-                            {(preview.messages_sent ?? 0)} / {(preview.messages_received ?? 0)}
+                            {Number(preview.messages_sent ?? 0).toLocaleString()} / {Number(preview.messages_received ?? 0).toLocaleString()}
                           </span>
                         </div>
                       </>

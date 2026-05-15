@@ -525,7 +525,6 @@ def register(router):
                 "prestige_level": 1,
                 "money": 1,
                 "founding_member": 1,
-                "current_state": 1,
                 "family_id": 1,
                 "war_rat_badge_until": 1,
                 "war_rat_family_id": 1,
@@ -655,7 +654,6 @@ def register(router):
             "prestige_level": _prestige_level,
             "prestige_name": _prestige_name or None,
             "founding_member": bool(user.get("founding_member")),
-            "location": ((user.get("current_state") or "").strip() or None),
         }
 
     @router.get("/users/{username}/profile")

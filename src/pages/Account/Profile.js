@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
-import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink, X } from 'lucide-react';
+import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink, X, Crown } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
 import {
   getOrCreateStaffPortalDeviceId,
@@ -38,6 +38,8 @@ const PROFILE_STYLES = `
   .prof-row { transition: all 0.2s ease; }
   .prof-row:hover { background-color: rgba(var(--noir-primary-rgb), 0.04); }
   .prof-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+  @keyframes prof-dossier-enter { from { opacity: 0.88; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .prof-dossier-enter { animation: prof-dossier-enter 0.34s ease-out both; }
   /* Forum BBCode [img]/[gif] use inline max-height 300–400px — tall art shrinks to a narrow strip; override on profile only */
   .prof-banner-content .forum-content-media {
     max-width: 100% !important;
@@ -394,8 +396,8 @@ const ProfileInfoCard = ({
       label: 'Messages', 
       icon: Mail,
       value: profile.messages_sent != null 
-        ? `${profile.messages_sent} sent / ${profile.messages_received ?? 0} received` 
-        : `${profile.messages_received ?? 0} received`, 
+        ? `${Number(profile.messages_sent).toLocaleString()} sent / ${Number(profile.messages_received ?? 0).toLocaleString()} received` 
+        : `${Number(profile.messages_received ?? 0).toLocaleString()} received`, 
       valueClass: 'text-foreground font-heading text-[10px] md:text-sm' 
     },
     { 
@@ -407,12 +409,12 @@ const ProfileInfoCard = ({
     { 
       label: 'Kills', 
       icon: Skull,
-      value: String(profile.kills ?? 0), 
+      value: Number(profile.kills ?? 0).toLocaleString(), 
       valueClass: 'text-red-400 font-heading font-bold',
       ...(isAdmin && !isMe ? {
         component: (
           <span className="flex items-center gap-1.5 justify-end">
-            <span className="text-red-400 font-heading font-bold text-[10px] md:text-sm">{String(profile.kills ?? 0)}</span>
+            <span className="text-red-400 font-heading font-bold text-[10px] md:text-sm">{Number(profile.kills ?? 0).toLocaleString()}</span>
             <button type="button" onClick={fetchKillDebug} disabled={killDebugLoading || !staffCanUseAdminApi}
               className="text-[8px] px-1.5 py-0.5 rounded border border-zinc-600/50 bg-zinc-800/50 text-zinc-400 hover:text-primary hover:border-primary/40 transition-colors disabled:opacity-50"
               title={staffCanUseAdminApi ? 'Debug kill count' : 'Requires staff login + staff portal unlock'}>
@@ -445,17 +447,17 @@ const ProfileInfoCard = ({
     : undefined;
 
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`}>
-      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-1.5">
-        <div className="flex items-center gap-2 min-w-0">
-          <div className="w-11 h-11 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-md overflow-hidden border border-primary/30 bg-secondary flex items-center justify-center shrink-0">
+    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border-2 border-primary/35 shadow-2xl backdrop-blur-sm prof-card prof-dossier-enter mobile-panel`}>
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/45 to-transparent" />
+      <div className="px-2.5 py-2 md:px-3 md:py-2.5 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent border-b border-primary/25 flex items-start justify-between gap-2">
+        <div className="flex items-start gap-2.5 md:gap-3 min-w-0 flex-1">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-lg overflow-hidden border-2 border-primary/35 bg-secondary flex items-center justify-center shrink-0 ring-1 ring-black/25 shadow-inner">
             {profile?.avatar_url ? (
               onAvatarPreview ? (
                 <button
                   type="button"
                   onClick={() => onAvatarPreview(profile.avatar_url)}
-                  className="w-full h-full p-0 border-0 bg-transparent cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-md"
+                  className="w-full h-full p-0 border-0 bg-transparent cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-lg"
                   aria-label={`View ${profile.username} profile picture`}
                 >
                   <img src={profile.avatar_url} alt="" className="w-full h-full object-cover pointer-events-none" />
@@ -464,27 +466,35 @@ const ProfileInfoCard = ({
                 <img src={profile.avatar_url} alt={`${profile.username} avatar`} className="w-full h-full object-cover" />
               )
             ) : (
-              <UserIcon size={22} className="text-mutedForeground" />
+              <UserIcon size={26} className="text-mutedForeground" />
             )}
           </div>
-          <h2 className="text-[10px] md:text-xs font-heading font-bold text-primary uppercase tracking-[0.12em] truncate">
-            {profile.username}
-          </h2>
-          {isFoundingMember && (
-            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] md:text-[9px] font-heading font-bold uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/40 shrink-0">
-              ⭐ Founder
+          <div className="min-w-0 flex-1 flex flex-col gap-1">
+            <span className="text-[8px] md:text-[9px] font-heading font-bold text-primary uppercase tracking-[0.16em]">
+              Dossier
             </span>
-          )}
-          {isWarRat && (
-            <span
-              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] md:text-[9px] font-heading font-bold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/45 shrink-0"
-              title="Left a crew during an active family war"
-            >
-              Rat
-            </span>
-          )}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="text-[12px] sm:text-[13px] md:text-sm font-heading font-bold text-foreground truncate leading-tight">
+                {profile.username}
+              </span>
+              {isFoundingMember && (
+                <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border border-amber-500/40 bg-amber-500/15 text-[8px] md:text-[9px] font-heading font-bold uppercase tracking-wide text-amber-200 shrink-0">
+                  <Crown size={10} className="text-amber-300 shrink-0" aria-hidden />
+                  Founder
+                </span>
+              )}
+              {isWarRat && (
+                <span
+                  className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] md:text-[9px] font-heading font-bold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/45 shrink-0"
+                  title="Left a crew during an active family war"
+                >
+                  Rat
+                </span>
+              )}
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-1.5 md:gap-2 shrink-0 flex-wrap justify-end">
+        <div className="flex items-start gap-1.5 md:gap-2 shrink-0 flex-wrap justify-end pt-0.5">
           {profile.profile_country_code ? (
             <span
               className="inline-flex shrink-0 items-center leading-none"
@@ -504,7 +514,7 @@ const ProfileInfoCard = ({
               <button
                 type="button"
                 onClick={onOpenSettings}
-                className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
+                className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/35 bg-black/30 hover:bg-primary/15 hover:border-primary/50 text-primary transition-all active:scale-95"
                 title="Profile settings"
                 aria-label="Profile settings"
               >
@@ -516,7 +526,7 @@ const ProfileInfoCard = ({
                 <button
                   type="button"
                   onClick={onAddToSearch}
-                  className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
+                  className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/35 bg-black/30 hover:bg-primary/15 hover:border-primary/50 text-primary transition-all active:scale-95"
                   title="Add to Attack searches"
                   aria-label="Add to Attack searches"
                   data-testid="profile-add-to-search"
@@ -527,7 +537,7 @@ const ProfileInfoCard = ({
                   <button
                     type="button"
                     onClick={() => onSendMessage?.()}
-                    className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
+                    className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/35 bg-black/30 hover:bg-primary/15 hover:border-primary/50 text-primary transition-all active:scale-95"
                     title="Send message"
                     aria-label="Send message"
                   >
@@ -537,7 +547,7 @@ const ProfileInfoCard = ({
                 <button
                   type="button"
                   onClick={() => onSendMoney?.()}
-                  className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/30 bg-secondary hover:bg-secondary/80 hover:border-primary/50 text-primary transition-all active:scale-95"
+                  className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/35 bg-black/30 hover:bg-primary/15 hover:border-primary/50 text-primary transition-all active:scale-95"
                   title="Send money"
                   aria-label="Send money"
                 >
@@ -634,14 +644,15 @@ const ProfileInfoCard = ({
         </>
       )}
 
-      <div className="divide-y divide-zinc-700/30">
+      <div className="px-2.5 pt-1.5 pb-2 md:px-3 md:pt-2 md:pb-2.5">
+        <div className="rounded-lg border border-border/55 bg-black/25 divide-y divide-zinc-700/40 overflow-hidden">
         {profileRows.map((row) => {
           const Icon = row.icon;
           return (
             <div
               key={row.label}
               className={`prof-row grid grid-cols-12 gap-1.5 md:gap-2 px-2.5 py-1.5 md:px-3 md:py-2 ${
-                row.highlight ? 'border-l-4 border-l-primary/50' : ''
+                row.highlight ? 'border-l-4 border-l-primary/50 bg-primary/5' : ''
               }`}
             >
               <div className="col-span-5 sm:col-span-4 flex items-center gap-1 md:gap-1.5">
@@ -718,6 +729,7 @@ const ProfileInfoCard = ({
             </div>
           );
         })}
+        </div>
       </div>
 
       {profile.is_npc && (
@@ -730,8 +742,8 @@ const ProfileInfoCard = ({
 
       {/* Compact Honours + Properties (under stats, above notepad) */}
       {showCompactHonoursAndProperties && (
-        <div className="border-t border-zinc-700/30">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 px-2.5 py-1.5 md:px-3 md:py-1.5">
+        <div className="border-t border-primary/15 bg-zinc-950/25">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 px-2.5 py-2 md:px-3 md:py-2">
             <div>
               <Link
                 to="/game/leaderboard"
@@ -747,16 +759,17 @@ const ProfileInfoCard = ({
                 ) : (
                   honours.map((h, i) => {
                     const top10 = Number(h.rank) <= 10;
+                    const rankDisp = Number(h.rank).toLocaleString();
                     return (
                       <Link
                         key={i}
                         to={honourLeaderboardTo(h, !!profile?.is_dead)}
-                        title={`${h.label} — #${h.rank} on leaderboards`}
+                        title={`${h.label} — #${rankDisp} on leaderboards`}
                         className={`flex items-center gap-0.5 px-1 py-0.5 rounded border text-[8px] font-heading leading-tight min-w-0 w-full transition-colors hover:border-primary/40 hover:bg-primary/10 ${
                           top10 ? 'border-primary/20 bg-primary/5' : 'border-zinc-500/30 bg-zinc-500/5'
                         }`}
                       >
-                        <span className={`font-bold shrink-0 ${top10 ? 'text-primary' : 'text-zinc-400'}`}>#{h.rank}</span>
+                        <span className={`font-bold shrink-0 ${top10 ? 'text-primary' : 'text-zinc-400'}`}>#{rankDisp}</span>
                         <span className="text-foreground truncate min-w-0">{h.label}</span>
                       </Link>
                     );
@@ -782,7 +795,7 @@ const ProfileInfoCard = ({
             </div>
           </div>
           {/* Achievement Badges under Honours (always visible on profile — same for you and other players) */}
-          <div className="border-t border-zinc-700/30 px-2.5 py-1.5 md:px-3 md:py-1.5">
+          <div className="border-t border-primary/15 px-2.5 py-2 md:px-3 md:py-2 bg-black/20">
             <div className="flex items-center gap-0.5 mb-1">
               <Award size={9} className="text-primary shrink-0" />
               <span className="text-[8px] font-heading font-bold text-primary uppercase tracking-wider">Badges</span>
@@ -1002,11 +1015,12 @@ const HonoursCard = ({ honours, isDead = false }) => (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-1.5">
           {honours.map((h, i) => {
             const top10 = Number(h.rank) <= 10;
+            const rankDisp = Number(h.rank).toLocaleString();
             return (
               <Link
                 key={i}
                 to={honourLeaderboardTo(h, isDead)}
-                title={`${h.label} — #${h.rank} on leaderboards`}
+                title={`${h.label} — #${rankDisp} on leaderboards`}
                 className={`prof-row flex items-center gap-2 rounded-md border px-2.5 py-1.5 transition-colors hover:border-primary/40 hover:bg-primary/10 ${
                   top10 ? 'border-primary/20 bg-primary/5' : 'border-zinc-500/20 bg-zinc-500/5'
                 }`}
@@ -1017,7 +1031,7 @@ const HonoursCard = ({ honours, isDead = false }) => (
                   <span className={`font-heading font-bold text-[10px] md:text-xs ${
                     top10 ? 'text-primary' : 'text-zinc-400'
                   }`}>
-                    #{h.rank}
+                    #{rankDisp}
                   </span>
                 </div>
                 <span className="text-foreground font-heading text-[10px] md:text-xs flex-1 leading-tight">
@@ -2671,8 +2685,8 @@ export default function Profile() {
           /* ─── View Profile: full profile (stats, notepad display, honours, etc.) ─── */
           <>
             {profile.hitlist_on && (
-              <div className={`relative ${styles.panel} rounded-md overflow-hidden border-2 border-red-500/50 bg-red-950/30 prof-fade-in`}>
-                <div className="h-px bg-gradient-to-r from-transparent via-red-500/40 to-transparent" />
+              <div className={`relative ${styles.panel} rounded-lg overflow-hidden border-2 border-red-500/50 bg-red-950/30 shadow-xl prof-fade-in`}>
+                <div className="h-px bg-gradient-to-r from-transparent via-red-500/45 to-transparent" />
                 <div className="px-3 py-2 flex items-center gap-2">
                   <Target size={18} className="text-red-400 shrink-0" aria-hidden />
                   <div>
@@ -2690,7 +2704,7 @@ export default function Profile() {
                         <>{Number(profile.hitlist_total_points).toLocaleString()} points in bounties</>
                       )}
                       {profile.hitlist_count > 0 && (
-                        <span className="text-red-300/70"> · {profile.hitlist_count} contract{profile.hitlist_count !== 1 ? 's' : ''}</span>
+                        <span className="text-red-300/70"> · {Number(profile.hitlist_count).toLocaleString()} contract{profile.hitlist_count !== 1 ? 's' : ''}</span>
                       )}
                     </p>
                   </div>
