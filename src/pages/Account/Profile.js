@@ -117,6 +117,34 @@ function honourLeaderboardTo(h, isDead = false) {
 
 const STAFF_ADMIN_HOME = '/tjjeujr3wa/overview';
 
+function ProfileRouteSkeleton({ message = 'Opening dossier…' }) {
+  return (
+    <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
+      <div className={`relative ${styles.panel} rounded-lg border border-primary/25 overflow-hidden prof-dossier-enter`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2 bg-gradient-to-r from-primary/12 via-transparent to-transparent border-b border-primary/15 flex items-center justify-between gap-2">
+          <div className="h-2.5 w-24 rounded bg-primary/20 animate-pulse" />
+          <div className="h-2.5 w-16 rounded bg-mutedForeground/15 animate-pulse" />
+        </div>
+        <div className="p-3 sm:p-4 flex flex-col sm:flex-row gap-4">
+          <div className="w-full sm:w-36 h-36 rounded-lg border border-primary/20 bg-black/30 shrink-0 animate-pulse" />
+          <div className="flex-1 space-y-3 min-w-0">
+            <div className="h-4 w-[min(55%,14rem)] rounded bg-primary/15 animate-pulse" />
+            <div className="h-3 w-full max-w-md rounded bg-mutedForeground/10 animate-pulse" />
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <div className="h-14 rounded-md border border-border/50 bg-black/20 animate-pulse" />
+              <div className="h-14 rounded-md border border-border/50 bg-black/20 animate-pulse" />
+              <div className="h-14 rounded-md border border-border/50 bg-black/20 animate-pulse" />
+              <div className="h-14 rounded-md border border-border/50 bg-black/20 animate-pulse" />
+            </div>
+          </div>
+        </div>
+      </div>
+      <p className="text-center text-[11px] font-heading text-primary/70">{message}</p>
+    </div>
+  );
+}
+
 const StaffProfileActions = ({ username, isDead, isAdmin, isModerator, onDone }) => {
   const [loading, setLoading] = useState(null);
   const handleLock = async () => {
@@ -2039,6 +2067,7 @@ export default function Profile() {
     return (
       <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
         <style>{PROFILE_STYLES}</style>
+        <ProfileRouteSkeleton message="Loading your account…" />
       </div>
     );
   }
@@ -2047,6 +2076,7 @@ export default function Profile() {
     return (
       <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
         <style>{PROFILE_STYLES}</style>
+        <ProfileRouteSkeleton />
       </div>
     );
   }
@@ -2060,7 +2090,7 @@ export default function Profile() {
     return (
       <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
         <style>{PROFILE_STYLES}</style>
-        <div className="min-h-[240px] flex items-center justify-center text-primary text-sm font-heading">Loading…</div>
+        <ProfileRouteSkeleton message="Verifying session…" />
       </div>
     );
   }

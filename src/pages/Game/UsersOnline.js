@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Users, User, Target, Building2, Plane, Factory, Mail, Radio, Clock, CalendarDays, CalendarRange, Skull, Trophy, Crown, Sparkles } from 'lucide-react';
 import api from '../../utils/api';
+import { warmProfilePrefetchFromUsername } from '../../utils/profileNavPrefetch';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import { toast } from 'sonner';
 import { HoverCard, HoverCardTrigger, HoverCardPortal, HoverCardContent } from "@/components/ui/hover-card";
@@ -276,6 +277,7 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
     ? `/profile/${encodeURIComponent(user.username)}?view=public`
     : `/profile/${encodeURIComponent(user.username)}`;
   const linkClass = `relative z-10 text-[11px] font-heading font-bold transition-colors ${displayColor ? '' : 'text-foreground hover:text-primary'}`;
+  const prefetchFullProfile = () => warmProfilePrefetchFromUsername(user.username);
 
   const profileLink = (extra = {}) => (
     <Link
@@ -283,6 +285,9 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
       className={linkClass}
       style={displayColor ? { color: displayColor } : undefined}
       data-testid={`user-profile-link-${user.username}`}
+      onPointerDown={prefetchFullProfile}
+      onPointerEnter={prefetchFullProfile}
+      onFocus={prefetchFullProfile}
       {...extra}
     >
       {user.username}
@@ -299,12 +304,18 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
       openDelay={0}
       closeDelay={120}
       onOpenChange={(open) => {
-        if (open) ensureProfilePreview(user.username, user);
+        if (open) {
+          prefetchFullProfile();
+          ensureProfilePreview(user.username, user);
+        }
       }}
     >
       <HoverCardTrigger asChild>
         {profileLink({
-          onPointerEnter: () => ensureProfilePreview(user.username, user),
+          onPointerEnter: () => {
+            prefetchFullProfile();
+            ensureProfilePreview(user.username, user);
+          },
         })}
       </HoverCardTrigger>
       {user.prestige_level > 0 && (
