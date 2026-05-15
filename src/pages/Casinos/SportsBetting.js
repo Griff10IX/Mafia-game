@@ -650,7 +650,8 @@ export default function SportsBetting() {
       const d = res.data || {};
       const added = Number(d.added ?? 0);
       const skipped = Number(d.skipped_already_on_board ?? 0);
-      const candidates = Number(d.candidates ?? 0);
+      const sameDay = Number(d.candidates ?? 0);
+      const upcomingAny = Number(d.candidates_upcoming_total ?? sameDay);
       const pool = Number(d.templates_in_pool ?? 0);
       const remaining = d.remaining_today_after_run;
       const addedToday = Number(d.added_today_before_run ?? 0);
@@ -670,19 +671,24 @@ export default function SportsBetting() {
         } catch { /* ignore */ }
       }
       let tail = '';
-      if (capExhausted && candidates > 0) {
+      if (capExhausted) {
         tail = ` Daily auto-board cap hit for this UTC day (${addedToday}/${dailyLimit || '—'} used).${resetHint}`;
-      } else if (!capExhausted && added === 0 && candidates === 0 && pool > 0) {
+      } else if (added === 0 && sameDay === 0 && upcomingAny > 0) {
+        tail = ' No eligible fixtures with kickoff on this UTC calendar day (upcoming games exist on other days — next UTC day or manual add).';
+      } else if (added === 0 && sameDay === 0 && pool > 0) {
         tail = ' No eligible templates (kickoff may be in the past, or category/league is outside auto-board rules: Football allowlist, UFC, Boxing, F1).';
-      } else if (!capExhausted && added === 0 && candidates > 0 && skipped >= candidates) {
-        tail = ' Every eligible template already has a matching open board line.';
-      } else if (!capExhausted && added === 0 && Array.isArray(d.errors) && d.errors.length) {
+      } else if (added === 0 && sameDay > 0 && skipped >= sameDay) {
+        tail = ' Every eligible template for this UTC day already has a matching open board line.';
+      } else if (added === 0 && Array.isArray(d.errors) && d.errors.length) {
         const e0 = d.errors[0];
         const msg = typeof e0 === 'string' ? e0 : (e0?.detail || e0?.message || '');
         if (msg) tail = ` ${msg}`;
       }
+      const slateStr = upcomingAny !== sameDay
+        ? `${sameDay} on today's UTC slate (${upcomingAny} upcoming any day)`
+        : `${sameDay} on today's UTC slate`;
       toast.success(
-        `Auto-board: ${added} event(s) added · ${skipped} already on board · ${candidates} eligible · ${pool} in pool${remainingStr}.${tail}`,
+        `Auto-board: ${added} event(s) added · ${skipped} already on board · ${slateStr} · ${pool} in pool${remainingStr}.${tail}`,
       );
       await fetchAll();
       await fetchPendingPlayerRequests();
@@ -1233,8 +1239,7 @@ export default function SportsBetting() {
               <p className="text-[9px] text-zinc-600 font-heading leading-snug">
                 <span className="font-bold text-zinc-500">Check for events</span> — fetch from the API, save to DB, show list (uses quota).{' '}
                 <span className="font-bold text-zinc-500">Load saved (DB)</span> — reload the list from the database only (no API).{' '}
-                <span className="font-bold text-zinc-500">Run auto-board</span> — push eligible templates onto the live betting board now (same job as the server ticker/cron; daily cap still applies).{' '}
-                Games already on the open board are hidden here.
+                <span className="font-bold text-zinc-500">Run auto-board</span> — add all eligible fixtures whose kickoff is on the <span className="text-zinc-400">current UTC calendar day</span>, in start-time order, until the daily cap (45) or per-run limit; same window as the UTC day counter. Lines already on the open board are skipped and hidden in the template list below.
               </p>
               <p className="text-[9px] text-zinc-500 font-heading leading-snug border border-zinc-700/40 rounded px-2 py-1.5 bg-zinc-900/40">
                 <span className="font-bold text-amber-400/90">UTC day (auto-board daily cap)</span> — the server counts &quot;today&quot; from{' '}

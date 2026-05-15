@@ -125,6 +125,9 @@ _SPORTS_BET_STAKE_CAP_CEILING = 10**15
 SPORTS_BETTING_CLOSE_BEFORE_START_MINUTES = 10
 # Public board/sidebar: keep the visible board focused on the next 45 open events.
 SPORTS_BETTING_PUBLIC_EVENTS_LIMIT = 45
+# Oldest `open` rows sort first; filtering hides kickoff+3h past. Scan this many opens before giving up
+# so visible upcoming lines are not starved when many stale opens sit at the head of the sort.
+SPORTS_BETTING_PUBLIC_OPEN_SCAN_MAX = 3000
 # Auto-board should not flood the board if cron/admin runs multiple times in the same UTC day.
 SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT = 45
 # Player-submitted requests to add a template to the board (UTC calendar day).
@@ -345,6 +348,17 @@ def _template_auto_board_sort_key(t: dict) -> datetime:
     iso = _template_effective_start_iso(t)
     dt = _parse_start_time_utc(iso) if iso else None
     return dt if dt is not None else _FAR_FUTURE_AUTO_BOARD
+
+
+def _template_kickoff_utc_in_range(t: dict, day0: datetime, day1: datetime) -> bool:
+    """True if fixture kickoff (UTC) is in [day0, day1) — that UTC calendar matchday."""
+    iso = _template_effective_start_iso(t)
+    if not iso:
+        return False
+    dt = _parse_start_time_utc(iso)
+    if dt is None:
+        return False
+    return day0 <= dt < day1
 
 
 def _team_matches_option(team: str, opt_name: str) -> bool:
@@ -2230,7 +2244,12 @@ async def auto_populate_sports_board(
     max_n: Optional[int] = None,
     template_source: Optional[str] = None,
 ) -> dict:
-    """Promote templates to open sports_events (priority football + all UFC/Boxing), up to max_n / daily cap."""
+    """Promote eligible templates to open sports_events.
+
+    Only fixtures whose kickoff falls on the **current UTC calendar day** are considered
+    (same window as the daily auto-board counter). All such eligible games are added, in
+    kickoff order, until the per-run cap / daily remaining cap (default 45/day) is reached.
+    """
     raw_src = (template_source or _sports_auto_board_template_source() or "database").strip().lower()
     src = "merged" if raw_src in ("merged", "odds", "memory", "api", "all") else "database"
     cap = max_n if max_n is not None else _sports_auto_board_max()
@@ -2254,11 +2273,15 @@ async def auto_populate_sports_board(
     cap = min(cap, remaining_today)
     candidates = [t for t in merged if _is_auto_board_eligible_template(t, soccer_keys=soccer_keys, now=now)]
     candidates.sort(key=_template_auto_board_sort_key)
+    same_utc_day = [
+        t for t in candidates if _template_kickoff_utc_in_range(t, count_day_start, count_day_end_excl)
+    ]
+    board_queue = same_utc_day
     added = 0
     skipped_on_board = 0
     errors: list = []
     added_template_ids: list[str] = []
-    for t in candidates:
+    for t in board_queue:
         if added >= cap:
             break
         tid = (t.get("id") or "").strip()
@@ -2281,7 +2304,8 @@ async def auto_populate_sports_board(
     return {
         "added": added,
         "skipped_already_on_board": skipped_on_board,
-        "candidates": len(candidates),
+        "candidates": len(board_queue),
+        "candidates_upcoming_total": len(candidates),
         "templates_in_pool": len(merged),
         "max_n": cap,
         "daily_limit": SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT,
@@ -2330,59 +2354,62 @@ async def _notify_staff_sports_event_request(
 async def sports_betting_events(current_user: dict = Depends(get_current_user_verified)):
     await _sports_ensure_seed_events()
     now = datetime.now(timezone.utc)
-    cursor = db.sports_events.find(
-        {"status": "open"},
-        {
-            "_id": 0,
-            "id": 1,
-            "name": 1,
-            "category": 1,
-            "start_time": 1,
-            "options": 1,
-            "is_special": 1,
-            "external_sport_key": 1,
-            "betting_opens_at": 1,
-            "betting_closes_at": 1,
-        },
-    ).sort("start_time", 1)
-    events = await cursor.to_list(SPORTS_BETTING_PUBLIC_EVENTS_LIMIT)
+    projection = {
+        "_id": 0,
+        "id": 1,
+        "name": 1,
+        "category": 1,
+        "start_time": 1,
+        "options": 1,
+        "is_special": 1,
+        "external_sport_key": 1,
+        "betting_opens_at": 1,
+        "betting_closes_at": 1,
+    }
+    cursor = db.sports_events.find({"status": "open"}, projection).sort("start_time", 1)
     result = []
-    for e in events:
-        st = e.get("start_time")
+    scanned = 0
+    async for ev_doc in cursor:
+        scanned += 1
+        if scanned > SPORTS_BETTING_PUBLIC_OPEN_SCAN_MAX:
+            break
+        st = ev_doc.get("start_time")
         try:
             start_dt = datetime.fromisoformat(st.replace("Z", "+00:00")) if st else now
         except Exception:
             start_dt = now
         if st and start_dt + timedelta(hours=3) < now:
             continue
-        deadline_dt = _sports_event_effective_betting_deadline(e, start_dt)
-        betting_open = _sports_event_betting_is_open(e, now)
+        deadline_dt = _sports_event_effective_betting_deadline(ev_doc, start_dt)
+        betting_open = _sports_event_betting_is_open(ev_doc, now)
         if now < start_dt:
             status = "upcoming"
         elif now < start_dt + timedelta(hours=3):
             status = "in_play"
         else:
             status = "finished"
-        exk = (e.get("external_sport_key") or "").strip()
+        exk = (ev_doc.get("external_sport_key") or "").strip()
         league_label = None
-        if (e.get("category") or "") == "Football" and exk:
+        if (ev_doc.get("category") or "") == "Football" and exk:
             league_label = _soccer_league_display_name(exk)
         row = {
-            "id": e["id"],
-            "name": e.get("name", "?"),
-            "category": e.get("category", "—"),
+            "id": ev_doc["id"],
+            "name": ev_doc.get("name", "?"),
+            "category": ev_doc.get("category", "—"),
             "start_time": st,
-            "options": e.get("options") or [],
-            "is_special": bool(e.get("is_special")),
+            "options": ev_doc.get("options") or [],
+            "is_special": bool(ev_doc.get("is_special")),
             "betting_open": betting_open,
             "status": status,
             "betting_deadline_at": _sports_iso_z(deadline_dt),
-            "betting_opens_at": e.get("betting_opens_at") or None,
-            "betting_closes_at": e.get("betting_closes_at") or None,
+            "betting_opens_at": ev_doc.get("betting_opens_at") or None,
+            "betting_closes_at": ev_doc.get("betting_closes_at") or None,
         }
         if league_label:
             row["league_label"] = league_label
         result.append(row)
+        if len(result) >= SPORTS_BETTING_PUBLIC_EVENTS_LIMIT:
+            break
 
     event_ids = [r["id"] for r in result]
     stake_by_event_option: dict = {}
