@@ -2128,17 +2128,46 @@ async def _count_sports_event_requests_today(user_id: str) -> int:
 
 
 async def _count_auto_board_events_added_today(now: Optional[datetime] = None) -> int:
+    """Count auto_board promotions in the current UTC calendar day.
+
+    Uses parsed datetimes (aggregation) so mixed ISO suffixes (+00:00 vs Z) cannot break
+    the daily cap the way naive string range queries can.
+    """
     day0 = _utc_day_start(now)
     day1 = day0 + timedelta(days=1)
-    return await db.sports_events.count_documents(
-        {
-            "auto_board": True,
-            "auto_board_added_at": {
-                "$gte": day0.isoformat(),
-                "$lt": day1.isoformat(),
+    try:
+        pipeline = [
+            {
+                "$match": {
+                    "auto_board": True,
+                    "auto_board_added_at": {"$exists": True, "$nin": [None, ""]},
+                }
             },
-        }
-    )
+            {
+                "$addFields": {
+                    "_auto_added_dt": {
+                        "$dateFromString": {
+                            "dateString": "$auto_board_added_at",
+                            "onError": None,
+                        }
+                    }
+                }
+            },
+            {"$match": {"_auto_added_dt": {"$gte": day0, "$lt": day1}}},
+            {"$count": "c"},
+        ]
+        cur = db.sports_events.aggregate(pipeline)
+        rows = await cur.to_list(length=1)
+        return int(rows[0]["c"]) if rows else 0
+    except Exception:
+        lo = day0.isoformat()
+        hi = day1.isoformat()
+        return await db.sports_events.count_documents(
+            {
+                "auto_board": True,
+                "auto_board_added_at": {"$gte": lo, "$lt": hi},
+            },
+        )
 
 
 async def _open_board_template_ids() -> set:
@@ -2218,6 +2247,8 @@ async def auto_populate_sports_board(
         else await _merged_sports_templates_for_admin()
     )
     now = datetime.now(timezone.utc)
+    count_day_start = _utc_day_start(now)
+    count_day_end_excl = count_day_start + timedelta(days=1)
     added_today = await _count_auto_board_events_added_today(now)
     remaining_today = max(0, SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT - added_today)
     cap = min(cap, remaining_today)
@@ -2251,11 +2282,15 @@ async def auto_populate_sports_board(
         "added": added,
         "skipped_already_on_board": skipped_on_board,
         "candidates": len(candidates),
+        "templates_in_pool": len(merged),
         "max_n": cap,
         "daily_limit": SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT,
         "added_today_before_run": added_today,
         "remaining_today_before_run": remaining_today,
         "remaining_today_after_run": max(0, remaining_today - added),
+        "daily_cap_exhausted": remaining_today == 0,
+        "auto_board_count_day_utc_start": count_day_start.isoformat(),
+        "auto_board_count_day_utc_end_exclusive": count_day_end_excl.isoformat(),
         "template_source": src,
         "refresh_odds": refresh_applied,
         "added_template_ids": added_template_ids,

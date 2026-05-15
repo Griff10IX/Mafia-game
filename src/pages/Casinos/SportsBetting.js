@@ -651,12 +651,38 @@ export default function SportsBetting() {
       const added = Number(d.added ?? 0);
       const skipped = Number(d.skipped_already_on_board ?? 0);
       const candidates = Number(d.candidates ?? 0);
+      const pool = Number(d.templates_in_pool ?? 0);
       const remaining = d.remaining_today_after_run;
+      const addedToday = Number(d.added_today_before_run ?? 0);
+      const dailyLimit = Number(d.daily_limit ?? 0);
+      const capExhausted = d.daily_cap_exhausted === true;
       const remainingStr = remaining != null && Number.isFinite(Number(remaining))
-        ? ` · ${remaining} auto-board slot(s) left today`
+        ? ` · ${remaining} auto-board slot(s) left (UTC day)`
         : '';
+      const utcEnd = d.auto_board_count_day_utc_end_exclusive;
+      let resetHint = '';
+      if (utcEnd) {
+        try {
+          const t = Date.parse(utcEnd);
+          if (!Number.isNaN(t)) {
+            resetHint = ` Daily limit resets at ${new Date(t).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })} (next UTC midnight, your local time).`;
+          }
+        } catch { /* ignore */ }
+      }
+      let tail = '';
+      if (capExhausted && candidates > 0) {
+        tail = ` Daily auto-board cap hit for this UTC day (${addedToday}/${dailyLimit || '—'} used).${resetHint}`;
+      } else if (!capExhausted && added === 0 && candidates === 0 && pool > 0) {
+        tail = ' No eligible templates (kickoff may be in the past, or category/league is outside auto-board rules: Football allowlist, UFC, Boxing, F1).';
+      } else if (!capExhausted && added === 0 && candidates > 0 && skipped >= candidates) {
+        tail = ' Every eligible template already has a matching open board line.';
+      } else if (!capExhausted && added === 0 && Array.isArray(d.errors) && d.errors.length) {
+        const e0 = d.errors[0];
+        const msg = typeof e0 === 'string' ? e0 : (e0?.detail || e0?.message || '');
+        if (msg) tail = ` ${msg}`;
+      }
       toast.success(
-        `Auto-board: ${added} event(s) added · ${skipped} already on board · ${candidates} eligible${remainingStr}`,
+        `Auto-board: ${added} event(s) added · ${skipped} already on board · ${candidates} eligible · ${pool} in pool${remainingStr}.${tail}`,
       );
       await fetchAll();
       await fetchPendingPlayerRequests();
@@ -1209,6 +1235,11 @@ export default function SportsBetting() {
                 <span className="font-bold text-zinc-500">Load saved (DB)</span> — reload the list from the database only (no API).{' '}
                 <span className="font-bold text-zinc-500">Run auto-board</span> — push eligible templates onto the live betting board now (same job as the server ticker/cron; daily cap still applies).{' '}
                 Games already on the open board are hidden here.
+              </p>
+              <p className="text-[9px] text-zinc-500 font-heading leading-snug border border-zinc-700/40 rounded px-2 py-1.5 bg-zinc-900/40">
+                <span className="font-bold text-amber-400/90">UTC day (auto-board daily cap)</span> — the server counts &quot;today&quot; from{' '}
+                <span className="text-zinc-300">00:00 UTC → next 00:00 UTC</span>, not midnight in the UK. In British Summer Time (BST, UTC+1) that is{' '}
+                <span className="text-zinc-300">01:00 UK → next 01:00 UK</span>; in winter (GMT) it matches midnight UK. If the cap shows full right after UK midnight, wait until 01:00 UK (BST) or use manual add from Browse/Request.
               </p>
 
               {templates.odds_api_configured === false ? (
