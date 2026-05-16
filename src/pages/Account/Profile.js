@@ -390,7 +390,7 @@ const ProfileInfoCard = ({
       valueClass: 'text-primary font-heading font-bold' 
     },
     { 
-      label: 'Crew', 
+      label: 'Family', 
       value: profile.family_name || '—', 
       icon: UsersIcon,
       valueClass: 'text-foreground font-heading',
@@ -514,7 +514,7 @@ const ProfileInfoCard = ({
               {isWarRat && (
                 <span
                   className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] md:text-[9px] font-heading font-bold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/45 shrink-0"
-                  title="Left a crew during an active family war"
+                  title="Left a family during an active family war"
                 >
                   Rat
                 </span>
@@ -711,7 +711,7 @@ const ProfileInfoCard = ({
                       <span className="text-zinc-500">Alive (Offline)</span>
                     )}
                   </span>
-                ) : row.label === 'Crew' && profile.family_tag && profile.family_name ? (
+                ) : row.label === 'Family' && profile.family_tag && profile.family_name ? (
                   <div className="flex items-center justify-end gap-2 min-w-0">
                     <FamilyEmblem
                       emblemPresetId={profile.family_emblem_preset_id}
@@ -2136,7 +2136,7 @@ export default function Profile() {
       {isMe && !isPublicView ? (
         <p className="text-[9px] text-zinc-500 font-heading italic max-w-3xl mx-auto">Edit your profile text and settings.</p>
       ) : (
-        <p className="text-[9px] text-zinc-500 font-heading italic max-w-3xl mx-auto">Rank, crew, honours and property.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic max-w-3xl mx-auto">Rank, family, honours and property.</p>
       )}
 
       {isMe && (

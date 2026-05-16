@@ -1660,15 +1660,15 @@ export default function SportsBetting() {
                         key={row.key}
                         type="button"
                         onClick={() => setBoardLeagueKey(row.key)}
-                        className={`shrink-0 snap-start rounded-md border px-2 py-1 text-[8px] sm:text-[9px] font-heading font-bold uppercase tracking-wide transition-all max-w-[10rem] sm:max-w-[14rem] ${
+                        className={`shrink-0 snap-start inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[8px] sm:text-[9px] font-heading font-bold uppercase tracking-wide transition-all max-w-[min(100%,11rem)] sm:max-w-[15rem] ${
                           boardLeagueKey === row.key
                             ? 'border-sky-500/40 bg-sky-500/15 text-sky-300'
                             : 'border-zinc-700/50 bg-zinc-900/50 text-zinc-500 hover:border-primary/25 hover:text-zinc-300'
                         }`}
-                        title={row.label}
+                        title={`${row.label} (${row.count})`}
                       >
-                        <span className="truncate block">{row.label}</span>
-                        <span className="tabular-nums opacity-80"> ({row.count})</span>
+                        <span className="truncate min-w-0">{row.label}</span>
+                        <span className="tabular-nums opacity-80 shrink-0">({row.count})</span>
                       </button>
                     ))}
                   </div>
