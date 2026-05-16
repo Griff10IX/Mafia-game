@@ -2512,11 +2512,11 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             await release_redeem_slots_for_deceased_user(db, victim_id)
         except Exception:
             logger.exception("release_redeem_slots_for_deceased_user (attack victim)")
-        victim_money = int(death_claim.get("money", 0))
-        cash_loot = int(victim_money * KILL_CASH_PERCENT)
+        victim_money = max(0, int(death_claim.get("money", 0) or 0))
+        base_cash_loot = int(victim_money * KILL_CASH_PERCENT)
         rank_points = 25
         ev = await get_effective_event()
-        cash_loot = int(cash_loot * ev.get("kill_cash", 1.0))
+        cash_loot = min(victim_money, int(base_cash_loot * float(ev.get("kill_cash", 1.0) or 1.0)))
         rank_points = int(rank_points * ev.get("rank_points", 1.0))
         victim_cars = await db.user_cars.find({"user_id": victim_id}).to_list(500)
         victim_prop_rows = await db.user_properties.find({"user_id": victim_id}).to_list(100)
