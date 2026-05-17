@@ -1648,7 +1648,7 @@ async def _auto_settle_from_scores() -> dict:
             logger.warning("Fallback auto-settle TheSportsDB failed (no Odds key): %s", ex)
         try:
             await db.sports_events.update_many(
-                {"id": {"$in": list(due_open_event_ids)}, "status": "open", "auto_settle_attempted_at": {"$exists": False}},
+                {"id": {"$in": list(due_open_event_ids)}, "status": "open"},
                 {"$set": {"auto_settle_attempted_at": datetime.now(timezone.utc).isoformat()}},
             )
         except Exception as ex:
@@ -1747,7 +1747,7 @@ async def _auto_settle_from_scores() -> dict:
     try:
         if due_open_event_ids:
             await db.sports_events.update_many(
-                {"id": {"$in": list(due_open_event_ids)}, "status": "open", "auto_settle_attempted_at": {"$exists": False}},
+                {"id": {"$in": list(due_open_event_ids)}, "status": "open"},
                 {"$set": {"auto_settle_attempted_at": datetime.now(timezone.utc).isoformat()}},
             )
     except Exception as ex:
@@ -3533,12 +3533,22 @@ async def admin_sports_bets_list(
         udocs = await db.users.find({"id": {"$in": uids}}, {"_id": 0, "id": 1, "username": 1}).to_list(len(uids))
         for doc in udocs:
             users_by_id[doc["id"]] = doc.get("username") or "?"
+    event_ids = list({b.get("event_id") for b in bets if b.get("event_id") and b.get("status") == "open"})
+    events_by_id: dict = {}
+    if event_ids:
+        edocs = await db.sports_events.find(
+            {"id": {"$in": event_ids}},
+            {"_id": 0, "id": 1, "status": 1, "options": 1},
+        ).to_list(len(event_ids))
+        for doc in edocs:
+            events_by_id[doc["id"]] = doc
     out = []
     for b in bets:
         stake = int(b.get("stake") or 0)
         odds = float(b.get("odds") or 1)
         st = b.get("status")
         payout = int(stake * odds) if st == "won" else None
+        ev_doc = events_by_id.get(b.get("event_id")) if st == "open" else None
         out.append({
             "id": b.get("id"),
             "user_id": b.get("user_id"),
@@ -3553,6 +3563,12 @@ async def admin_sports_bets_list(
             "payout_if_won": payout,
             "created_at": b.get("created_at"),
             "settled_at": b.get("settled_at"),
+            "event_status": ev_doc.get("status") if ev_doc else None,
+            "event_options": [
+                {"id": o.get("id"), "name": o.get("name")}
+                for o in ((ev_doc or {}).get("options") or [])
+                if o.get("id") and o.get("name")
+            ],
         })
     return {"bets": out, "count": len(out)}
 
@@ -3782,6 +3798,14 @@ def _sports_auto_settle_minutes_after_start() -> int:
         return 122
 
 
+def _sports_auto_settle_retry_after_minutes() -> int:
+    try:
+        v = int(os.environ.get("SPORTS_AUTO_SETTLE_RETRY_AFTER_MINUTES", "30"))
+        return max(5, min(v, 24 * 60))
+    except ValueError:
+        return 30
+
+
 def _sports_auto_settle_ticker_idle_sec() -> int:
     try:
         return max(60, int(os.environ.get("SPORTS_AUTO_SETTLE_TICKER_IDLE_SEC", "600")))
@@ -3846,17 +3870,22 @@ async def _linkable_open_event_ids_with_open_bets() -> set[str]:
 
 
 async def _open_bet_due_once_event_ids() -> set[str]:
-    """Open events with open bets that reached delay and have not been auto-attempted yet."""
+    """Open events with open bets that reached delay and are due for an auto-settle retry."""
     bet_event_ids = await _linkable_open_event_ids_with_open_bets()
     if not bet_event_ids:
         return set()
     now = datetime.now(timezone.utc)
     delay = timedelta(minutes=_sports_auto_settle_minutes_after_start())
+    retry_cutoff = (now - timedelta(minutes=_sports_auto_settle_retry_after_minutes())).isoformat()
     cursor = db.sports_events.find(
         {
             "status": "open",
             "id": {"$in": list(bet_event_ids)},
-            "auto_settle_attempted_at": {"$exists": False},
+            "$or": [
+                {"auto_settle_attempted_at": {"$exists": False}},
+                {"auto_settle_attempted_at": None},
+                {"auto_settle_attempted_at": {"$lte": retry_cutoff}},
+            ],
         },
         {"_id": 0, "id": 1, "start_time": 1},
     ).limit(3000)
@@ -3872,7 +3901,7 @@ async def _open_bet_due_once_event_ids() -> set[str]:
 
 
 async def _linkable_due_once_event_ids_with_open_bets() -> set[str]:
-    """Open Odds-linked events with open bets that are due for their one auto-settle attempt."""
+    """Open Odds-linked events with open bets that are due for an auto-settle attempt."""
     bet_event_ids = await _open_bet_due_once_event_ids()
     if not bet_event_ids:
         return set()
@@ -3914,7 +3943,6 @@ async def _seconds_until_next_linkable_eligible_or_cap() -> float:
         {
             **_LINKABLE_OPEN_EVENT_FILTER,
             "id": {"$in": list(event_ids)},
-            "auto_settle_attempted_at": {"$exists": False},
         },
         {"_id": 0, "start_time": 1},
     ).limit(1000)
