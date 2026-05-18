@@ -368,7 +368,14 @@ def _template_kickoff_utc_in_range(t: dict, day0: datetime, day1: datetime) -> b
     dt = _parse_start_time_utc(iso)
     if dt is None:
         return False
-    return day0 <= dt < day1
+    return day0 <= dt.astimezone(timezone.utc) < day1
+
+
+def _start_time_utc_in_range(start_time_iso: Optional[str], day0: datetime, day1: datetime) -> bool:
+    dt = _parse_start_time_utc(start_time_iso) if start_time_iso else None
+    if dt is None:
+        return False
+    return day0 <= dt.astimezone(timezone.utc) < day1
 
 
 def _team_matches_option(team: str, opt_name: str) -> bool:
@@ -2416,6 +2423,9 @@ async def _create_sports_board_event_from_template(template: dict, *, auto_board
     start_time = template.get("start_time") or _parse_commence_time(template.get("commence_time"))
     if not start_time:
         start_time = (now + timedelta(hours=2)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    today0 = _utc_day_start(now)
+    if not _start_time_utc_in_range(start_time, today0, today0 + timedelta(days=1)):
+        raise HTTPException(status_code=400, detail="Only today's events can be added to the sports betting board")
     ev = {
         "id": str(uuid.uuid4()),
         "name": nm,
@@ -2552,6 +2562,8 @@ async def _notify_staff_sports_event_request(
 async def sports_betting_events(current_user: dict = Depends(get_current_user_verified)):
     await _sports_ensure_seed_events()
     now = datetime.now(timezone.utc)
+    today0 = _utc_day_start(now)
+    today1 = today0 + timedelta(days=1)
     projection = {
         "_id": 0,
         "id": 1,
@@ -2572,9 +2584,10 @@ async def sports_betting_events(current_user: dict = Depends(get_current_user_ve
         if scanned > SPORTS_BETTING_PUBLIC_OPEN_SCAN_MAX:
             break
         st = ev_doc.get("start_time")
-        try:
-            start_dt = datetime.fromisoformat(st.replace("Z", "+00:00")) if st else now
-        except Exception:
+        if st and not _start_time_utc_in_range(st, today0, today1):
+            continue
+        start_dt = _parse_start_time_utc(st) if st else now
+        if start_dt is None:
             start_dt = now
         if st and start_dt + timedelta(hours=3) < now:
             continue

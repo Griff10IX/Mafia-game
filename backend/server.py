@@ -2018,18 +2018,18 @@ CASINO_MIN_OWNER_MAX_BET = 50_000
 def effective_public_casino_max_bet(owner_id, stored_max_bet, *, default_when_owned_positive: int) -> int:
     """
     No owner: public play is capped at CASINO_MIN_OWNER_MAX_BET only (no one backs larger limits).
-    Owned: use stored max_bet when > 0, else default_when_owned_positive (claim / template defaults).
+    Owned: preserve explicit max_bet, including 0 after a buy-back; missing/invalid legacy rows use default.
     """
     oid = owner_id
     if oid is None or oid == "":
         return int(CASINO_MIN_OWNER_MAX_BET)
-    try:
-        raw = int(stored_max_bet) if stored_max_bet is not None else 0
-    except (TypeError, ValueError):
-        raw = 0
-    if raw <= 0:
+    if stored_max_bet is None:
         return int(default_when_owned_positive)
-    return int(raw)
+    try:
+        raw = int(stored_max_bet)
+    except (TypeError, ValueError):
+        return int(default_when_owned_positive)
+    return max(0, int(raw))
 
 
 async def maybe_auto_relinquish_below_capo(coll, filter_dict: dict, *, reset_casino_max_bet: bool = False):

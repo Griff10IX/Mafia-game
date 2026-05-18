@@ -789,10 +789,10 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
   );
 };
 
-// Topic row for desktop with hover preview. canStickyImportant = admin/mod (sticky, important, lock). canLock = admin/mod/hdo (lock only for HDO).
-const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updating, designerCompId, myEntryTopicIds, meUsername, onSubmitToComp, submittingTopicId, censorProfanity }) => {
+// Topic row for desktop with hover preview. Lock/unlock is handled inside the topic page.
+const TopicRowDesktop = ({ topic, canStickyImportant, onUpdate, updating, designerCompId, myEntryTopicIds, meUsername, onSubmitToComp, submittingTopicId, censorProfanity }) => {
   const [showPreview, setShowPreview] = useState(false);
-  const showFlagControls = canStickyImportant || canLock;
+  const showFlagControls = canStickyImportant;
   const isMyTopic = meUsername && topic.author_username === meUsername;
   const showDesignerSubmit = designerCompId && isMyTopic;
   const alreadySubmitted = showDesignerSubmit && (myEntryTopicIds || []).includes(topic.id);
@@ -883,11 +883,6 @@ const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updatin
                 </button>
               </>
             )}
-            {canLock && (
-              <button type="button" title={topic.is_locked ? 'Unlock' : 'Lock'} onClick={(e) => { e.preventDefault(); onUpdate(topic.id, { is_locked: !topic.is_locked }); }} disabled={updating} className={`p-0.5 rounded ${topic.is_locked ? 'text-red-400' : 'text-mutedForeground hover:text-red-400'}`}>
-                <Lock size={12} />
-              </button>
-            )}
           </div>
         )}
       </div>
@@ -907,9 +902,9 @@ const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updatin
   );
 };
 
-// Topic card for mobile. canStickyImportant = admin/mod, canLock = admin/mod/hdo.
-const TopicRowMobile = ({ topic, canStickyImportant, canLock, onUpdate, updating, designerCompId, myEntryTopicIds, meUsername, onSubmitToComp, submittingTopicId, censorProfanity }) => {
-  const showFlagControls = canStickyImportant || canLock;
+// Topic card for mobile. Lock/unlock is handled inside the topic page.
+const TopicRowMobile = ({ topic, canStickyImportant, onUpdate, updating, designerCompId, myEntryTopicIds, meUsername, onSubmitToComp, submittingTopicId, censorProfanity }) => {
+  const showFlagControls = canStickyImportant;
   const isMyTopic = meUsername && topic.author_username === meUsername;
   const showDesignerSubmit = designerCompId && isMyTopic;
   const alreadySubmitted = showDesignerSubmit && (myEntryTopicIds || []).includes(topic.id);
@@ -968,7 +963,7 @@ const TopicRowMobile = ({ topic, canStickyImportant, canLock, onUpdate, updating
       <ChevronRight size={16} className="text-mutedForeground shrink-0 mt-1" />
     </div>
 
-    {/* Staff controls on mobile: mod/admin = sticky, important, lock; HDO = lock only */}
+    {/* Staff controls on mobile: mod/admin = sticky and important. */}
     {showFlagControls && (
       <div className="flex items-center gap-2 mt-2 pt-2 border-t border-zinc-700/30" onClick={(e) => e.preventDefault()}>
         {canStickyImportant && (
@@ -980,11 +975,6 @@ const TopicRowMobile = ({ topic, canStickyImportant, canLock, onUpdate, updating
               <AlertCircle size={10} /> {topic.is_important ? 'Unmark' : 'Important'}
             </button>
           </>
-        )}
-        {canLock && (
-          <button type="button" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onUpdate(topic.id, { is_locked: !topic.is_locked }); }} disabled={updating} className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] ${topic.is_locked ? 'bg-red-500/20 text-red-400' : 'bg-zinc-800/50 text-mutedForeground'}`}>
-            <Lock size={10} /> {topic.is_locked ? 'Unlock' : 'Lock'}
-          </button>
         )}
       </div>
     )}
@@ -2588,7 +2578,6 @@ export default function Forum() {
                     <TopicRowDesktop
                       topic={t}
                       canStickyImportant={isAdmin || isModerator}
-                      canLock={isAdmin || isModerator || isHdo}
                       onUpdate={updateTopicFlags}
                       updating={updatingId === t.id}
                       designerCompId={null}
@@ -2601,7 +2590,6 @@ export default function Forum() {
                     <TopicRowMobile
                       topic={t}
                       canStickyImportant={isAdmin || isModerator}
-                      canLock={isAdmin || isModerator || isHdo}
                       onUpdate={updateTopicFlags}
                       updating={updatingId === t.id}
                       designerCompId={null}
@@ -2628,7 +2616,6 @@ export default function Forum() {
                 <TopicRowDesktop
                   topic={t}
                   canStickyImportant={isAdmin || isModerator}
-                  canLock={isAdmin || isModerator || isHdo}
                   onUpdate={updateTopicFlags}
                   updating={updatingId === t.id}
                   designerCompId={null}
@@ -2641,7 +2628,6 @@ export default function Forum() {
                 <TopicRowMobile
                   topic={t}
                   canStickyImportant={isAdmin || isModerator}
-                  canLock={isAdmin || isModerator || isHdo}
                   onUpdate={updateTopicFlags}
                   updating={updatingId === t.id}
                   designerCompId={null}

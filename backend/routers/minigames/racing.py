@@ -3014,6 +3014,7 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
     is_interactive = bool(race.get("interactive") or race.get("mode") == "interactive")
     total_laps = int(race.get("total_laps") or race.get("laps") or 3)
     current_lap = int(race.get("current_lap") or 0)
+    result_order_source = "server_stored" if race.get("result_order") else "server_recomputed"
 
     _rdebug(race_id, "COMPLETE_RACE_CALLED",
             is_interactive=is_interactive,
@@ -3044,15 +3045,45 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
                 current_lap=current_lap,
                 elapsed=elapsed,
             )
-        server_order = race.get("result_order")
-        if server_order and len(server_order) == len(expected_ids) and set(server_order) == expected_ids:
-            result_order = list(server_order)
-            dnf_ids = list(race.get("dnf_ids") or [])
-            _rdebug(race_id, "COMPLETE_RACE_INTERACTIVE_SERVER_AUTHORITY",
+        client_order = list(body.result_order or []) if isinstance(body.result_order, list) else []
+        client_dnf_ids = list(body.dnf_ids or []) if isinstance(body.dnf_ids, list) else []
+        client_order_valid = (
+            len(client_order) == len(expected_ids)
+            and len(set(client_order)) == len(client_order)
+            and set(client_order) == expected_ids
+        )
+        client_dnf_valid = set(client_dnf_ids).issubset(expected_ids)
+        if client_order_valid and client_dnf_valid:
+            dnf_ids = list(dict.fromkeys(client_dnf_ids))
+            dnf_set = set(dnf_ids)
+            # Interactive races settle by the live canvas classification so the
+            # final rewards match what players saw cross the line.
+            result_order = [eid for eid in client_order if eid not in dnf_set] + [eid for eid in client_order if eid in dnf_set]
+            lap_results = list(race.get("lap_results") or [])
+            if result_order:
+                if lap_results:
+                    lap_results[-1] = list(result_order)
+                else:
+                    lap_results = [list(result_order)]
+            result_order_source = "client_live"
+            _rdebug(race_id, "COMPLETE_RACE_INTERACTIVE_CLIENT_AUTHORITY",
                     result_order=result_order, dnf_ids=dnf_ids)
         else:
-            _rdebug(race_id, "COMPLETE_RACE_INTERACTIVE_NO_SERVER_ORDER_RECOMPUTING")
-            result_order = None
+            server_order = race.get("result_order")
+            if server_order and len(server_order) == len(expected_ids) and set(server_order) == expected_ids:
+                result_order = list(server_order)
+                dnf_ids = list(race.get("dnf_ids") or [])
+                _rdebug(race_id, "COMPLETE_RACE_INTERACTIVE_SERVER_AUTHORITY",
+                        result_order=result_order, dnf_ids=dnf_ids)
+            else:
+                _rdebug(
+                    race_id,
+                    "COMPLETE_RACE_INTERACTIVE_NO_VALID_ORDER_RECOMPUTING",
+                    client_order_valid=client_order_valid,
+                    client_dnf_valid=client_dnf_valid,
+                )
+                result_order = None
+                result_order_source = "server_recomputed"
     else:
         _rdebug(race_id, "COMPLETE_RACE_NON_INTERACTIVE_ORDER_CHECK",
                 has_server_result=bool(result_order))
@@ -3118,7 +3149,7 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
     _rdebug(race_id, "COMPLETE_RACE_FINAL_ORDER",
             result_order=result_order,
             dnf_ids=dnf_ids,
-            source="server_stored" if race.get("result_order") else "server_recomputed")
+            source=result_order_source)
 
     claim = await db.racing_races.update_one(
         {"id": race_id, "state": "running"},

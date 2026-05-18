@@ -21418,6 +21418,7 @@ export default function Admin() {
                       <th className="text-right p-2 text-mutedForeground uppercase whitespace-nowrap">Stake</th>
                       <th className="text-left p-2 text-mutedForeground uppercase whitespace-nowrap">Status</th>
                       <th className="text-right p-2 text-mutedForeground uppercase whitespace-nowrap">Payout</th>
+                          <th className="text-left p-2 text-mutedForeground uppercase whitespace-nowrap">Action</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -21438,6 +21439,30 @@ export default function Admin() {
                         <td className="p-2 align-top whitespace-nowrap capitalize">{b.status || '—'}</td>
                         <td className="p-2 text-right align-top whitespace-nowrap text-emerald-400/90">
                           {b.payout_if_won != null ? `$${Number(b.payout_if_won).toLocaleString()}` : '—'}
+                        </td>
+                        <td className="p-2 align-top min-w-[240px]">
+                          {b.status === 'open' && b.event_id && (b.event_options || []).length > 0 ? (
+                            <div className="flex items-center gap-1.5">
+                              <select
+                                value={sportsUnsettledWinnerByEvent[b.event_id] || ''}
+                                onChange={(e) => setSportsUnsettledWinnerByEvent((prev) => ({ ...prev, [b.event_id]: e.target.value }))}
+                                className="min-w-[140px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-[10px] text-foreground focus:border-primary/50 focus:outline-none"
+                              >
+                                <option value="">Winner</option>
+                                {(b.event_options || []).map((o) => (
+                                  <option key={`${b.event_id}-${o.id}`} value={o.id}>{o.name}</option>
+                                ))}
+                              </select>
+                              <BtnSecondary
+                                onClick={() => settleSportsUnpaidEvent(b.event_id)}
+                                disabled={sportsUnsettledSettlingEventId === b.event_id || !(sportsUnsettledWinnerByEvent[b.event_id] || '').trim()}
+                              >
+                                {sportsUnsettledSettlingEventId === b.event_id ? 'Settling...' : 'Settle'}
+                              </BtnSecondary>
+                            </div>
+                          ) : (
+                            <span className="text-mutedForeground">—</span>
+                          )}
                         </td>
                       </tr>
                     ))}
