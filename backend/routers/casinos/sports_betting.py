@@ -2389,6 +2389,19 @@ async def _count_auto_board_events_added_today(now: Optional[datetime] = None) -
         )
 
 
+async def _count_auto_board_events_scheduled_for_day(day0: datetime, day1: datetime) -> int:
+    """Count open auto-board rows whose fixture kickoff is inside the board day."""
+    count = 0
+    cursor = db.sports_events.find(
+        {"status": "open", "auto_board": True},
+        {"_id": 0, "start_time": 1},
+    ).limit(SPORTS_BETTING_PUBLIC_OPEN_SCAN_MAX)
+    async for doc in cursor:
+        if _start_time_utc_in_range(doc.get("start_time"), day0, day1):
+            count += 1
+    return count
+
+
 async def _open_board_template_ids() -> set:
     ids: set = set()
     cursor = db.sports_events.find(
@@ -2476,8 +2489,8 @@ async def auto_populate_sports_board(
     now = datetime.now(timezone.utc)
     count_day_start = _utc_day_start(now)
     count_day_end_excl = count_day_start + timedelta(days=1)
-    added_today = await _count_auto_board_events_added_today(now)
-    remaining_today = max(0, SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT - added_today)
+    scheduled_today_before = await _count_auto_board_events_scheduled_for_day(count_day_start, count_day_end_excl)
+    remaining_today = max(0, SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT - scheduled_today_before)
     cap = min(cap, remaining_today)
     candidates = [t for t in merged if _is_auto_board_eligible_template(t, soccer_keys=soccer_keys, now=now)]
     candidates.sort(key=_template_auto_board_sort_key)
@@ -2517,7 +2530,8 @@ async def auto_populate_sports_board(
         "templates_in_pool": len(merged),
         "max_n": cap,
         "daily_limit": SPORTS_AUTO_BOARD_DAILY_ADD_LIMIT,
-        "added_today_before_run": added_today,
+        "added_today_before_run": scheduled_today_before,
+        "scheduled_today_before_run": scheduled_today_before,
         "remaining_today_before_run": remaining_today,
         "remaining_today_after_run": max(0, remaining_today - added),
         "daily_cap_exhausted": remaining_today == 0,
