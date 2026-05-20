@@ -348,6 +348,29 @@ def register(router):
 
         risks = analyze_login_carrier_shifts(hist_chrono, geodata_by_ip)
 
+        from utils.proxy_detection import assess_user_proxy_profile
+
+        proxy_profile = await assess_user_proxy_profile(
+            db,
+            user,
+            max_ip_lookups=min(25, MAX_IP_GEO_LOOKUPS),
+            check_getipintel=True,
+            include_session_ips=True,
+        )
+        if proxy_profile.get("likely_proxy_farm"):
+            risks.insert(
+                0,
+                {
+                    "level": "warn",
+                    "code": "likely_proxy_farm",
+                    "detail": (
+                        f"Proxy farm score {proxy_profile.get('combined_risk_score')}/100 "
+                        f"(worst IP: {proxy_profile.get('worst_ip_verdict')}). "
+                        "Use Cheat Detection → Proxy farm investigation for full breakdown."
+                    ),
+                },
+            )
+
         ip_summary: List[Dict[str, Any]] = []
         for ip_one in sorted(all_ips):
             g = geodata_by_ip.get(ip_one)
@@ -410,6 +433,7 @@ def register(router):
             "sessions": sessions_out,
             "ip_summary": sorted(ip_summary, key=lambda x: x.get("ip") or ""),
             "risks": risks,
+            "proxy_farm_profile": proxy_profile,
         }
 
     ATTACK_CLIENT_AUDIT = "attack_client_audit"

@@ -21,7 +21,8 @@ from utils.login_user_agent import auth_client_headers_blocked
 from utils.staff_bot_client_alert import maybe_notify_staff_bot_client_blocked
 from utils.referral_ids import normalize_referred_by_ids, user_has_referrers
 from utils.login_turnstile_gate import login_turnstile_effective_config, require_turnstile_for_login
-from middleware.security import is_proxy_or_vpn, get_ip_info
+from middleware.security import is_proxy_or_vpn, get_ip_info, flag_user_suspicious
+from utils.proxy_detection import assess_ip_for_auth
 from utils.geo_country import country_code_from_request_headers
 from utils.game_pass_season import get_game_pass_season_public
 from utils.redeem_code_lifecycle import reconcile_stale_dead_redeemers_on_code
@@ -611,16 +612,28 @@ def register(router):
                     status_code=403,
                     detail="Registration must use the official game app or a normal web browser.",
                 )
-            if block_proxy_vpn_login and client_ip and await is_proxy_or_vpn(client_ip):
-                await _notify_admins_vpn_blocked(
-                    client_ip,
-                    "Registration blocked",
-                    f"Attempted email: {email_clean}, username: {user_data.username.strip()}",
-                )
-                raise HTTPException(
-                    status_code=400,
-                    detail="Registration from proxy or VPN is not allowed.",
-                )
+            reg_ip_rep: Dict[str, Any] = {}
+            if block_proxy_vpn_login and client_ip:
+                reg_ip_rep = await assess_ip_for_auth(db, client_ip, purpose="signup", check_getipintel=True)
+                if reg_ip_rep.get("block_auth"):
+                    kw = ", ".join(reg_ip_rep.get("provider_keywords") or []) or "—"
+                    await _notify_admins_vpn_blocked(
+                        client_ip,
+                        "Registration blocked (proxy/VPN)",
+                        (
+                            f"Attempted email: {email_clean}, username: {user_data.username.strip()}\n"
+                            f"Verdict: {reg_ip_rep.get('verdict')} · risk: {reg_ip_rep.get('risk_score')} · "
+                            f"subnet accounts: {reg_ip_rep.get('subnet_alive_accounts', 0)}\n"
+                            f"Keywords: {kw} · reasons: {', '.join(reg_ip_rep.get('reasons') or [])}"
+                        ),
+                    )
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            "Registration from a proxy, VPN, or paid proxy service (including services like ProxyRoyal) "
+                            "is not allowed. Use your normal home or mobile connection."
+                        ),
+                    )
             # Allow up to 2 accounts per device/network (e.g. family); block only if 2 already exist (admins + dupe-exempt exempt)
             if client_ip:
                 admin_emails_list = list(ADMIN_EMAILS) if ADMIN_EMAILS else []
@@ -729,6 +742,7 @@ def register(router):
                 "last_seen": datetime.now(timezone.utc).isoformat(),
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "registration_ip": client_ip,
+                "registration_ip_reputation": reg_ip_rep if reg_ip_rep else None,
                 "login_ips": [client_ip] if client_ip else [],
                 "login_history": (
                     [
@@ -869,6 +883,18 @@ def register(router):
             user_doc["swiss_limit"] = int(_bank_cfg["swiss_limit_start"])
 
             await db.users.insert_one(user_doc.copy())
+            if reg_ip_rep and reg_ip_rep.get("verdict") in ("suspicious", "likely_proxy_service"):
+                try:
+                    await flag_user_suspicious(
+                        db,
+                        user_id,
+                        user_data.username.strip(),
+                        "proxy_residential_suspected",
+                        f"Registration IP {client_ip}: {reg_ip_rep.get('verdict')}",
+                        {"ip_reputation": reg_ip_rep},
+                    )
+                except Exception:
+                    pass
 
             # Beta signup: grant Al Capone car (car20), loot-exclusive car (car21), and loot-exclusive weapon (weapon_loot)
             if beta_signup_gifts:
@@ -1219,17 +1245,29 @@ def register(router):
         ip = _client_ip(request)
         block_proxy_vpn_login = bool(settings.get("block_proxy_vpn_login", True)) if settings else True
 
-        # Block VPN/proxy on login (staff can bypass)
-        if not staff_route and block_proxy_vpn_login and ip and await is_proxy_or_vpn(ip):
-            await _notify_admins_vpn_blocked(
-                ip,
-                "Login blocked",
-                f"Attempted login: {login_input[:30]}",
-            )
-            raise HTTPException(
-                status_code=403,
-                detail="Login from proxy or VPN is not allowed. Please disconnect your VPN to use the game.",
-            )
+        # Block VPN/proxy / commercial proxy networks on login (staff can bypass)
+        login_ip_rep: Dict[str, Any] = {}
+        if not staff_route and block_proxy_vpn_login and ip:
+            login_ip_rep = await assess_ip_for_auth(db, ip, purpose="login", check_getipintel=True)
+            if login_ip_rep.get("block_auth"):
+                kw = ", ".join(login_ip_rep.get("provider_keywords") or []) or "—"
+                await _notify_admins_vpn_blocked(
+                    ip,
+                    "Login blocked (proxy/VPN)",
+                    (
+                        f"Attempted login: {login_input[:30]}\n"
+                        f"Verdict: {login_ip_rep.get('verdict')} · risk: {login_ip_rep.get('risk_score')} · "
+                        f"subnet accounts: {login_ip_rep.get('subnet_alive_accounts', 0)}\n"
+                        f"Keywords: {kw} · reasons: {', '.join(login_ip_rep.get('reasons') or [])}"
+                    ),
+                )
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        "Login from a proxy, VPN, or paid proxy service is not allowed. "
+                        "Disconnect the proxy/VPN and use your normal connection."
+                    ),
+                )
 
         # UA + Sec-Fetch heuristics (staff may use curl; toggle via main.block_script_user_agent_login)
         if not staff_route:
@@ -1429,6 +1467,8 @@ def register(router):
             await db.users.update_one({"id": user_id}, {"$set": {"sessions": []}})
         if ip:
             set_fields["last_login_ip"] = ip
+        if login_ip_rep:
+            set_fields["last_login_ip_reputation"] = login_ip_rep
         if ua:
             set_fields["last_user_agent"] = ua
         if device_type:

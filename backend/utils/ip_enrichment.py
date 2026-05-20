@@ -226,4 +226,28 @@ def analyze_login_carrier_shifts(
             }
         )
 
+    proxy_rows = [r for r in rows if r.get("_proxy")]
+    if proxy_rows:
+        risks.append(
+            {
+                "level": "warn",
+                "code": "ip_api_proxy_flag",
+                "detail": f"{len(proxy_rows)} login(s) used an IP flagged as proxy by ip-api — may be VPN or a paid proxy service (e.g. residential rotator).",
+            }
+        )
+    for r in rows[-8:]:
+        blob = (r.get("_network") or "").lower()
+        from utils.proxy_detection import match_proxy_provider_keywords
+
+        hits = match_proxy_provider_keywords(blob)
+        if hits:
+            risks.append(
+                {
+                    "level": "warn",
+                    "code": "commercial_proxy_isp",
+                    "detail": f"Recent login network matches commercial proxy keywords ({hits[0]}). Review Cheat Detection → Proxy farm report.",
+                }
+            )
+            break
+
     return risks

@@ -1,8 +1,14 @@
 # Stats: overview (game capital, user stats, vehicles, ranks, recent kills, top dead)
 # My Stats: per-user aggregated lifetime stats (combat, rank, bodyguards, gambling, casinos)
+import asyncio
+import time
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+_STATS_OVERVIEW_CACHE: Dict[str, Tuple[Dict[str, Any], float]] = {}
+_STATS_OVERVIEW_TTL_SEC = 55.0
+_STATS_RECENT_KILLS_SCAN_LIMIT = 800
 
 from fastapi import Depends, HTTPException
 
@@ -217,18 +223,19 @@ def register(router):
         users_only_kills: bool = False,
         current_user: dict = Depends(get_current_user),
     ):
+        cache_key = "true" if users_only_kills else "false"
+        now_mono = time.monotonic()
+        cached = _STATS_OVERVIEW_CACHE.get(cache_key)
+        if cached and (now_mono - cached[1]) < _STATS_OVERVIEW_TTL_SEC:
+            return cached[0]
+
         now = datetime.now(timezone.utc)
         staff_filter = _staff_exclude_user_filter()
         staff_ids = await _get_staff_user_ids()
         # Real users only: exclude NPCs and staff (admins + mods)
         real_user_match = {"is_npc": {"$ne": True}, **staff_filter}
         alive_real_match = srv.alive_real_player_wallet_match()
-
-        total_users = await db.users.count_documents(real_user_match)
-        alive_users = await db.users.count_documents(alive_real_match)
-        # "Dead" for public stats: in-game deaths only — exclude modkills / staff kills (death_by_staff),
-        # and legacy staff kills with no killer attribution (no killed_by_* on victim).
-        dead_users = await db.users.count_documents({
+        dead_user_match = {
             **real_user_match,
             "is_dead": True,
             "$nor": [{"death_by_staff": True}],
@@ -237,126 +244,14 @@ def register(router):
                 {"killed_by_username": {"$exists": True, "$nin": [None, ""]}},
                 {"death_by_staff": False},
             ],
-        })
-
-        # Totals only from real users; headline total_cash adds buy-offer escrow (see game_capital)
-        # Game Capital "booze" = one number: sum of every non-NPC user's stored booze_profit_total (alive + dead + staff).
-        totals = await db.users.aggregate([
-            {"$match": real_user_match},
-            {
-                "$group": {
-                    "_id": None,
-                    "swiss_total": {"$sum": {"$ifNull": ["$swiss_balance", 0]}},
-                    "bullets_total": {"$sum": {"$ifNull": ["$bullets", 0]}},
-                    "total_crimes": {"$sum": {"$ifNull": ["$total_crimes", 0]}},
-                    "total_gta": {"$sum": {"$ifNull": ["$total_gta", 0]}},
-                    "total_jail_busts": {"$sum": {"$ifNull": ["$jail_busts", 0]}},
-                    "total_oc_heists": {"$sum": {"$ifNull": ["$total_oc_heists", 0]}},
-                    "bullets_melted_total": {"$sum": {"$ifNull": ["$bullets_melted", 0]}},
-                    "token_store_points_spent_total": {"$sum": {"$ifNull": ["$token_points_spent", 0]}},
-                    "token_store_respect_spent_total": {"$sum": {"$ifNull": ["$token_respect_spent", 0]}},
-                    "token_store_cash_spent_total": {"$sum": {"$ifNull": ["$token_cash_spent", 0]}},
-                }
-            }
-        ]).to_list(1)
-        totals_doc = totals[0] if totals else {}
-
-        booze_sum_rows = await db.users.aggregate(
-            [
-                {"$match": {"is_npc": {"$ne": True}}},
-                {"$group": {"_id": None, "t": {"$sum": {"$ifNull": ["$booze_profit_total", 0]}}}},
-            ]
-        ).to_list(1)
-        booze_profit_grand_total = int(booze_sum_rows[0].get("t", 0) or 0) if booze_sum_rows else 0
-
-        # Family treasuries total
-        family_treasury_agg = await db.families.aggregate([
-            {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$treasury", 0]}}}}
-        ]).to_list(1)
-        family_treasury_total = int(family_treasury_agg[0].get("total", 0) or 0) if family_treasury_agg else 0
-        # Wallet cash: alive real users only (not dead, not NPCs). Public total_cash also adds quicktrade_cash.
-        cash_agg = await db.users.aggregate([
-            {"$match": alive_real_match},
-            {"$group": {"_id": None, "money_total": {"$sum": {"$ifNull": ["$money", 0]}}}}
-        ]).to_list(1)
-        total_cash_alive = int(cash_agg[0].get("money_total", 0) or 0) if cash_agg else 0
-
+        }
         bank_match = {"claimed_at": None}
         if staff_ids:
             bank_match["user_id"] = {"$nin": staff_ids}
-        interest_agg = await db.bank_deposits.aggregate([
-            {"$match": bank_match},
-            {"$group": {"_id": None, "total": {"$sum": {"$add": [{"$ifNull": ["$principal", 0]}, {"$ifNull": ["$interest_amount", 0]}]}}}}
-        ]).to_list(1)
-        interest_bank_total = int(interest_agg[0].get("total", 0) or 0) if interest_agg else 0
-
         qt_match = {"status": "active"}
         if staff_ids:
             qt_match["user_id"] = {"$nin": staff_ids}
-        quicktrade_agg = await db.trade_buy_offers.aggregate([
-            {"$match": qt_match},
-            {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$offer", 0]}}}}
-        ]).to_list(1)
-        quicktrade_cash = int(quicktrade_agg[0].get("total", 0) or 0) if quicktrade_agg else 0
-        total_cash = total_cash_alive + quicktrade_cash
-
         non_staff_car_filter = {"user_id": {"$nin": staff_ids}} if staff_ids else {}
-        total_vehicles = await db.user_cars.count_documents(non_staff_car_filter)
-        car_counts = await db.user_cars.aggregate([
-            {"$match": non_staff_car_filter},
-            {"$group": {"_id": "$car_id", "count": {"$sum": 1}}}
-        ]).to_list(100)
-        car_by_id = {c.get("id"): c for c in CARS}
-        rarity_counts = {"common": 0, "uncommon": 0, "rare": 0, "ultra_rare": 0, "legendary": 0, "custom": 0, "exclusive": 0, "loot_exclusive": 0}
-        total_vehicle_value = 0
-        for cc in car_counts:
-            car_id = cc.get("_id")
-            cnt = int(cc.get("count", 0) or 0)
-            info = car_by_id.get(car_id) or {}
-            rarity = info.get("rarity") or "common"
-            car_value = int(info.get("value") or 0)
-            total_vehicle_value += car_value * cnt
-            if rarity in rarity_counts:
-                rarity_counts[rarity] += cnt
-            else:
-                rarity_counts["common"] += cnt
-        
-        # Cars scrapped and melted totals
-        cars_scrapped_agg = await db.users.aggregate([
-            {"$match": real_user_match},
-            {
-                "$group": {
-                    "_id": None,
-                    "scrapped": {
-                        "$sum": {
-                            "$add": [
-                                {"$ifNull": ["$total_cars_scrapped", 0]},
-                                {"$ifNull": ["$auto_rank_total_cars_scrapped", 0]},
-                            ]
-                        }
-                    },
-                    "melted": {
-                        "$sum": {
-                            "$add": [
-                                {"$ifNull": ["$total_cars_melted", 0]},
-                                {"$ifNull": ["$auto_rank_total_cars_melted", 0]},
-                            ]
-                        }
-                    },
-                }
-            }
-        ]).to_list(1)
-        cars_scrapped_doc = cars_scrapped_agg[0] if cars_scrapped_agg else {}
-        
-        # Racing cars count
-        racing_cars_count = await db.user_racing_cars.count_documents(non_staff_car_filter)
-        
-        # GTA success rate (GTAs / attempts if we have attempts data)
-        gta_stats_agg = await db.users.aggregate([
-            {"$match": real_user_match},
-            {"$group": {"_id": None, "gta_total": {"$sum": {"$ifNull": ["$total_gta", 0]}}, "gta_fails": {"$sum": {"$ifNull": ["$total_gta_fails", 0]}}}}
-        ]).to_list(1)
-        gta_stats_doc = gta_stats_agg[0] if gta_stats_agg else {}
 
         rank_thresholds = sorted(
             [(r["id"], r["required_points"]) for r in RANKS],
@@ -372,18 +267,139 @@ def register(router):
                 })
             return {"$switch": {"branches": branches, "default": rank_thresholds[-1][0]}}
 
-        rank_agg = await db.users.aggregate([
-            {"$match": real_user_match},
-            {"$project": {
-                "_id": 0,
-                "rank_id": _build_rank_branch(None),
-                "is_dead": {"$ifNull": ["$is_dead", False]},
-            }},
-            {"$group": {
-                "_id": {"rank_id": "$rank_id", "is_dead": "$is_dead"},
-                "count": {"$sum": 1},
-            }},
-        ]).to_list(200)
+        (
+            total_users,
+            alive_users,
+            dead_users,
+            totals,
+            booze_sum_rows,
+            family_treasury_agg,
+            cash_agg,
+            interest_agg,
+            quicktrade_agg,
+            total_vehicles,
+            car_counts,
+            cars_scrapped_agg,
+            racing_cars_count,
+            gta_stats_agg,
+            rank_agg,
+            wiped_wars,
+        ) = await asyncio.gather(
+            db.users.count_documents(real_user_match),
+            db.users.count_documents(alive_real_match),
+            db.users.count_documents(dead_user_match),
+            db.users.aggregate([
+                {"$match": real_user_match},
+                {
+                    "$group": {
+                        "_id": None,
+                        "swiss_total": {"$sum": {"$ifNull": ["$swiss_balance", 0]}},
+                        "bullets_total": {"$sum": {"$ifNull": ["$bullets", 0]}},
+                        "total_crimes": {"$sum": {"$ifNull": ["$total_crimes", 0]}},
+                        "total_gta": {"$sum": {"$ifNull": ["$total_gta", 0]}},
+                        "total_jail_busts": {"$sum": {"$ifNull": ["$jail_busts", 0]}},
+                        "total_oc_heists": {"$sum": {"$ifNull": ["$total_oc_heists", 0]}},
+                        "bullets_melted_total": {"$sum": {"$ifNull": ["$bullets_melted", 0]}},
+                        "token_store_points_spent_total": {"$sum": {"$ifNull": ["$token_points_spent", 0]}},
+                        "token_store_respect_spent_total": {"$sum": {"$ifNull": ["$token_respect_spent", 0]}},
+                        "token_store_cash_spent_total": {"$sum": {"$ifNull": ["$token_cash_spent", 0]}},
+                    }
+                },
+            ]).to_list(1),
+            db.users.aggregate([
+                {"$match": {"is_npc": {"$ne": True}}},
+                {"$group": {"_id": None, "t": {"$sum": {"$ifNull": ["$booze_profit_total", 0]}}}},
+            ]).to_list(1),
+            db.families.aggregate([
+                {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$treasury", 0]}}}},
+            ]).to_list(1),
+            db.users.aggregate([
+                {"$match": alive_real_match},
+                {"$group": {"_id": None, "money_total": {"$sum": {"$ifNull": ["$money", 0]}}}},
+            ]).to_list(1),
+            db.bank_deposits.aggregate([
+                {"$match": bank_match},
+                {"$group": {"_id": None, "total": {"$sum": {"$add": [{"$ifNull": ["$principal", 0]}, {"$ifNull": ["$interest_amount", 0]}]}}}},
+            ]).to_list(1),
+            db.trade_buy_offers.aggregate([
+                {"$match": qt_match},
+                {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$offer", 0]}}}},
+            ]).to_list(1),
+            db.user_cars.count_documents(non_staff_car_filter),
+            db.user_cars.aggregate([
+                {"$match": non_staff_car_filter},
+                {"$group": {"_id": "$car_id", "count": {"$sum": 1}}},
+            ]).to_list(100),
+            db.users.aggregate([
+                {"$match": real_user_match},
+                {
+                    "$group": {
+                        "_id": None,
+                        "scrapped": {
+                            "$sum": {
+                                "$add": [
+                                    {"$ifNull": ["$total_cars_scrapped", 0]},
+                                    {"$ifNull": ["$auto_rank_total_cars_scrapped", 0]},
+                                ]
+                            }
+                        },
+                        "melted": {
+                            "$sum": {
+                                "$add": [
+                                    {"$ifNull": ["$total_cars_melted", 0]},
+                                    {"$ifNull": ["$auto_rank_total_cars_melted", 0]},
+                                ]
+                            }
+                        },
+                    }
+                },
+            ]).to_list(1),
+            db.user_racing_cars.count_documents(non_staff_car_filter),
+            db.users.aggregate([
+                {"$match": real_user_match},
+                {"$group": {"_id": None, "gta_total": {"$sum": {"$ifNull": ["$total_gta", 0]}}, "gta_fails": {"$sum": {"$ifNull": ["$total_gta_fails", 0]}}}},
+            ]).to_list(1),
+            db.users.aggregate([
+                {"$match": real_user_match},
+                {"$project": {
+                    "_id": 0,
+                    "rank_id": _build_rank_branch(None),
+                    "is_dead": {"$ifNull": ["$is_dead", False]},
+                }},
+                {"$group": {
+                    "_id": {"rank_id": "$rank_id", "is_dead": "$is_dead"},
+                    "count": {"$sum": 1},
+                }},
+            ]).to_list(200),
+            db.family_wars.find(
+                {"status": {"$in": ["family_a_wins", "family_b_wins"]}},
+                {"_id": 0, "id": 1, "winner_family_id": 1, "winner_family_name": 1, "loser_family_id": 1, "loser_family_name": 1, "ended_at": 1, "wiped_by_killer_id": 1, "wiped_by_killer_username": 1},
+            ).sort("ended_at", -1).limit(30).to_list(30),
+        )
+
+        totals_doc = totals[0] if totals else {}
+        booze_profit_grand_total = int(booze_sum_rows[0].get("t", 0) or 0) if booze_sum_rows else 0
+        family_treasury_total = int(family_treasury_agg[0].get("total", 0) or 0) if family_treasury_agg else 0
+        total_cash_alive = int(cash_agg[0].get("money_total", 0) or 0) if cash_agg else 0
+        interest_bank_total = int(interest_agg[0].get("total", 0) or 0) if interest_agg else 0
+        quicktrade_cash = int(quicktrade_agg[0].get("total", 0) or 0) if quicktrade_agg else 0
+        total_cash = total_cash_alive + quicktrade_cash
+        car_by_id = {c.get("id"): c for c in CARS}
+        rarity_counts = {"common": 0, "uncommon": 0, "rare": 0, "ultra_rare": 0, "legendary": 0, "custom": 0, "exclusive": 0, "loot_exclusive": 0}
+        total_vehicle_value = 0
+        for cc in car_counts:
+            car_id = cc.get("_id")
+            cnt = int(cc.get("count", 0) or 0)
+            info = car_by_id.get(car_id) or {}
+            rarity = info.get("rarity") or "common"
+            car_value = int(info.get("value") or 0)
+            total_vehicle_value += car_value * cnt
+            if rarity in rarity_counts:
+                rarity_counts[rarity] += cnt
+            else:
+                rarity_counts["common"] += cnt
+        cars_scrapped_doc = cars_scrapped_agg[0] if cars_scrapped_agg else {}
+        gta_stats_doc = gta_stats_agg[0] if gta_stats_agg else {}
 
         rank_stats_map: dict = {}
         for r in RANKS:
@@ -400,12 +416,26 @@ def register(router):
 
         rank_stats = [rank_stats_map[r["id"]] for r in RANKS]
 
-        # Pull enough recent attempts that we can still fill 15 slots after filters
-        # (hitlist/NPC victim exclusions, optional users_only_kills, dedup).
+        _kill_proj = {
+            "_id": 0,
+            "id": 1,
+            "attack_id": 1,
+            "attacker_id": 1,
+            "target_id": 1,
+            "attacker_username": 1,
+            "target_username": 1,
+            "created_at": 1,
+            "make_public": 1,
+            "target_rank_id": 1,
+            "is_bodyguard_kill": 1,
+            "bodyguard_owner_id": 1,
+            "target_is_npc": 1,
+            "is_npc_kill": 1,
+        }
         attempts = await db.attack_attempts.find(
             {"outcome": "killed"},
-            {"_id": 0}
-        ).sort("created_at", -1).to_list(3000)
+            _kill_proj,
+        ).sort("created_at", -1).to_list(_STATS_RECENT_KILLS_SCAN_LIMIT)
 
         all_user_ids = set()
         for a in attempts:
@@ -506,11 +536,26 @@ def register(router):
             if len(recent_kills) >= 15:
                 break
 
-        # Wiped families: wars that ended with one family wiped (all dead)
-        wiped_wars = await db.family_wars.find(
-            {"status": {"$in": ["family_a_wins", "family_b_wins"]}},
-            {"_id": 0, "id": 1, "winner_family_id": 1, "winner_family_name": 1, "loser_family_id": 1, "loser_family_name": 1, "ended_at": 1, "wiped_by_killer_id": 1, "wiped_by_killer_username": 1}
-        ).sort("ended_at", -1).limit(30).to_list(30)
+        war_ids = [w.get("id") for w in wiped_wars if w.get("id")]
+        war_stats_lookup: Dict[tuple, Dict[str, int]] = {}
+        if war_ids:
+            war_stats_rows = await db.family_war_stats.aggregate([
+                {"$match": {"war_id": {"$in": war_ids}}},
+                {
+                    "$group": {
+                        "_id": {"war_id": "$war_id", "family_id": "$family_id"},
+                        "kills": {"$sum": {"$ifNull": ["$kills", 0]}},
+                        "bodyguard_kills": {"$sum": {"$ifNull": ["$bodyguard_kills", 0]}},
+                    }
+                },
+            ]).to_list(500)
+            for row in war_stats_rows:
+                kid = row.get("_id") or {}
+                war_stats_lookup[(kid.get("war_id"), kid.get("family_id"))] = {
+                    "kills": int(row.get("kills") or 0),
+                    "bodyguard_kills": int(row.get("bodyguard_kills") or 0),
+                }
+
         wiped_families = []
         seen_loser_ids = set()
         for w in wiped_wars:
@@ -524,13 +569,9 @@ def register(router):
             loser_name = (w.get("loser_family_name") or "?").strip() or "?"
             wiped_by_killer_id = w.get("wiped_by_killer_id")
             wiped_by_killer_username = (w.get("wiped_by_killer_username") or "?").strip() or "?"
-            # Aggregate winner-side stats for this war (player kills, BG kills; whether winner was in a family)
-            stats_docs = await db.family_war_stats.find(
-                {"war_id": war_id, "family_id": winner_id},
-                {"_id": 0, "kills": 1, "bodyguard_kills": 1, "deaths": 1}
-            ).to_list(100) if winner_id else []
-            player_kills = sum(int(s.get("kills") or 0) for s in stats_docs)
-            bodyguard_kills = sum(int(s.get("bodyguard_kills") or 0) for s in stats_docs)
+            ws = war_stats_lookup.get((war_id, winner_id), {}) if winner_id else {}
+            player_kills = int(ws.get("kills") or 0)
+            bodyguard_kills = int(ws.get("bodyguard_kills") or 0)
             wiped_families.append({
                 "war_id": war_id,
                 "wiped_family_id": loser_id,
@@ -545,7 +586,7 @@ def register(router):
                 "bodyguard_kills": bodyguard_kills,
             })
 
-        return {
+        payload = {
             "generated_at": now.isoformat(),
             "game_capital": {
                 "total_cash": total_cash,
@@ -590,6 +631,8 @@ def register(router):
             "recent_kills": recent_kills,
             "wiped_families": wiped_families,
         }
+        _STATS_OVERVIEW_CACHE[cache_key] = (payload, now_mono)
+        return payload
 
     @router.get("/stats/me")
     async def get_my_stats(current_user: dict = Depends(get_current_user)):

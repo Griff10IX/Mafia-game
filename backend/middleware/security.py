@@ -72,6 +72,14 @@ user_failed_attacks = defaultdict(list)  # user_id -> [timestamp1, timestamp2, .
 # so mobile/carrier IPs are not blocked; only explicit proxy/VPN IPs get result 1.
 PROXY_CHECK_CONTACT_EMAIL = os.environ.get("GETIPINTEL_CONTACT_EMAIL", "").strip()
 PROXY_CHECK_THRESHOLD = 0.99  # When not using flags=m; with flags=m we block only when result == 1
+# Optional stricter signup/login check: dynamic GetIPIntel score (not ban-list-only). More false positives on mobile.
+PROXY_CHECK_AUTH_STRICT = os.environ.get("GETIPINTEL_AUTH_STRICT", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+    "on",
+)
+PROXY_CHECK_AUTH_STRICT_THRESHOLD = float(os.environ.get("GETIPINTEL_AUTH_STRICT_THRESHOLD", "0.97") or "0.97")
 
 # Telegram notification queue (async batch sending)
 pending_alerts = []
@@ -130,6 +138,35 @@ async def is_proxy_or_vpn(ip: str) -> bool:
     except Exception as e:
         logger.warning("Proxy check failed for %s: %s", ip, e)
         return False  # Fail open: don't block if API errors
+
+
+async def is_proxy_or_vpn_auth_strict(ip: str) -> bool:
+    """
+    Stricter auth-only GetIPIntel check (dynamic probability, not flags=m ban list).
+    Enabled when GETIPINTEL_AUTH_STRICT=true and GETIPINTEL_CONTACT_EMAIL is set.
+    Catches some residential rotators missed by ban-list-only mode; may false-positive on carrier NAT.
+    """
+    if not PROXY_CHECK_AUTH_STRICT or not ip or not PROXY_CHECK_CONTACT_EMAIL:
+        return False
+    if not HTTPX_AVAILABLE:
+        return False
+    try:
+        url = f"http://check.getipintel.net/check.php?ip={ip}&contact={PROXY_CHECK_CONTACT_EMAIL}&format=json"
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            r = await client.get(url)
+        if r.status_code != 200:
+            return False
+        data = r.json()
+        if isinstance(data, dict) and "result" in data:
+            try:
+                prob = float(data.get("result"))
+            except (TypeError, ValueError):
+                return False
+            return prob >= PROXY_CHECK_AUTH_STRICT_THRESHOLD
+        return False
+    except Exception as e:
+        logger.warning("GetIPIntel strict auth check failed for %s: %s", ip, e)
+        return False
 
 
 async def send_telegram_alert(message: str, alert_type: str = "warning", use_markdown: bool = True):

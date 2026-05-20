@@ -280,6 +280,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Cheat Detection', categoryId: 'admin-cheat', collapseKey: 'cheat', keywords: ['cheat', 'detection', 'suspicious'] },
   { label: 'Bot / script investigation', categoryId: 'admin-cheat', collapseKey: 'botInvestigation', keywords: ['bot', 'script', 'automation', 'investigation', 'cheat', 'suspicious', 'ip', 'network', 'mobile', 'isp', 'vpn', 'attack', 'execute_token', 'spoof', 'ua', 'kill'] },
   { label: 'Find Duplicates', categoryId: 'admin-cheat', collapseKey: 'duplicates', keywords: ['duplicate', 'multi', 'account'] },
+  { label: 'Proxy farm investigation', categoryId: 'admin-cheat', collapseKey: 'cheat', keywords: ['proxy', 'proxyroyal', 'iproyal', 'residential', 'vpn', 'multi', 'account', 'farm', 'rotator'] },
   { label: 'Cheater kill impact', categoryId: 'admin-cheat', collapseKey: 'cheaterKillImpact', keywords: ['cheater', 'kill', 'impact', 'bodyguard', 'refund', 'hire'] },
   // Analytics
   { label: 'Login page unique visitors', categoryId: 'admin-analytics', collapseKey: 'loginPageVisitors', keywords: ['login', 'visitors', 'unique', 'page', 'stats'] },
@@ -1218,6 +1219,9 @@ export default function Admin() {
   const [gamblingAnomalies, setGamblingAnomalies] = useState(null);
   const [gamblingAnomaliesLoading, setGamblingAnomaliesLoading] = useState(false);
   const [duplicateSuspectsUsername, setDuplicateSuspectsUsername] = useState('');
+  const [proxyFarmUsername, setProxyFarmUsername] = useState('');
+  const [proxyFarmReport, setProxyFarmReport] = useState(null);
+  const [proxyFarmLoading, setProxyFarmLoading] = useState(false);
   const [botInvestQuery, setBotInvestQuery] = useState('');
   const [botInvestProfile, setBotInvestProfile] = useState(null);
   const [botInvestActivity, setBotInvestActivity] = useState(null);
@@ -5754,6 +5758,49 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
       setCheatLoading(false);
+    }
+  };
+
+  const handleFetchProxyFarmUser = async () => {
+    const un = proxyFarmUsername.trim();
+    if (!un) {
+      toast.error('Enter a username or user id');
+      return;
+    }
+    setProxyFarmLoading(true);
+    setProxyFarmReport(null);
+    try {
+      const params = new URLSearchParams({ username: un });
+      const res = await api.get(`/admin/cheat-detection/proxy-farm?${params.toString()}`);
+      setProxyFarmReport(res.data);
+      const p = res.data || {};
+      const linked = p.linked_account_count ?? 0;
+      const countries = p.countries?.by_country?.length ?? 0;
+      const ptsIn = p.seed_points_summary?.points_received_in_cluster ?? 0;
+      toast.success(
+        p.likely_proxy_farm
+          ? `Likely proxy farm — ${linked} account(s), ${countries} countr${countries === 1 ? 'y' : 'ies'}, risk ${p.combined_risk_score ?? '?'}`
+          : `Profile loaded — ${linked} linked, ${countries} countr${countries === 1 ? 'y' : 'ies'}${ptsIn ? `, +${ptsIn.toLocaleString()} pts in cluster` : ''}`
+      );
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Proxy farm report failed');
+    } finally {
+      setProxyFarmLoading(false);
+    }
+  };
+
+  const handleFetchProxyFarmGlobal = async () => {
+    setProxyFarmLoading(true);
+    setProxyFarmReport(null);
+    try {
+      const params = new URLSearchParams({ global_scan: 'true', days: '30', min_accounts_per_subnet: '3' });
+      const res = await api.get(`/admin/cheat-detection/proxy-farm?${params.toString()}`);
+      setProxyFarmReport(res.data);
+      toast.success(`Found ${res.data?.total_hotspots ?? 0} suspicious /24 hotspot(s)`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Global proxy scan failed');
+    } finally {
+      setProxyFarmLoading(false);
     }
   };
 
@@ -16192,6 +16239,210 @@ export default function Admin() {
         />
         {!collapsed.cheat && (
           <div className="p-3 space-y-4">
+            <div>
+              <div className="text-[10px] font-heading text-purple-300 uppercase mb-2">Proxy farm investigation (ProxyRoyal / paid IPs)</div>
+              <p className="text-xs text-mutedForeground mb-2">
+                Detects commercial proxy keywords (ProxyRoyal, IPRoyal, etc.), GetIPIntel VPN lists, ip-api proxy/hosting flags, high IP churn, and multiple accounts on the same /24.
+                Signup/login blocking uses stricter rules when <strong className="text-foreground">Block proxy/VPN on login and signup</strong> is enabled — including seller keywords and /24 farm density even when the IP looks residential.
+                Set <code className="text-[9px]">GETIPINTEL_CONTACT_EMAIL</code> in server env for the ban list.
+              </p>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <input
+                  type="text"
+                  value={proxyFarmUsername}
+                  onChange={(e) => setProxyFarmUsername(e.target.value)}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs w-44"
+                  placeholder="Username or user id"
+                />
+                <BtnPrimary onClick={handleFetchProxyFarmUser} disabled={proxyFarmLoading}>
+                  {proxyFarmLoading ? 'Loading…' : 'Investigate user'}
+                </BtnPrimary>
+                <BtnSecondary type="button" onClick={handleFetchProxyFarmGlobal} disabled={proxyFarmLoading}>
+                  Global /24 hotspots (30d)
+                </BtnSecondary>
+              </div>
+              {proxyFarmReport?.mode === 'user' && (
+                <div className="mb-4 rounded border border-purple-500/25 bg-purple-500/5 p-2 space-y-3 text-[10px] font-heading">
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <span className="font-bold text-foreground">{proxyFarmReport.user?.username}</span>
+                    <span className={`px-1.5 py-0.5 rounded text-[9px] ${proxyFarmReport.likely_proxy_farm ? 'bg-red-500/20 text-red-300' : 'bg-zinc-600/40 text-zinc-300'}`}>
+                      {proxyFarmReport.likely_proxy_farm ? 'Likely proxy farm' : 'Review manually'}
+                    </span>
+                    <span className="text-mutedForeground">Risk: {proxyFarmReport.combined_risk_score ?? '—'}</span>
+                    <span className="text-mutedForeground">Linked: {proxyFarmReport.linked_account_count ?? 0}</span>
+                    {proxyFarmReport.seed_points_summary && (
+                      <span className="text-emerald-300/90">
+                        Pts in cluster: +{(proxyFarmReport.seed_points_summary.points_received_in_cluster || 0).toLocaleString()} / −
+                        {(proxyFarmReport.seed_points_summary.points_sent_in_cluster || 0).toLocaleString()}
+                      </span>
+                    )}
+                  </div>
+
+                  {(proxyFarmReport.countries?.by_ip?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-purple-300/90 uppercase text-[9px] mb-1">IPs, countries & accounts</div>
+                      <div className="max-h-36 overflow-y-auto space-y-1">
+                        {(proxyFarmReport.countries.by_ip || []).map((row, i) => (
+                          <div key={i} className="rounded border border-zinc-700/40 px-2 py-1 font-mono text-[9px]">
+                            <span className="text-foreground">{row.ip}</span>
+                            {row.country_code && <span className="text-sky-300/90 ml-1">{row.country_code}</span>}
+                            {row.verdict && (
+                              <span className={`ml-1 ${row.verdict === 'likely_proxy_service' ? 'text-red-400' : 'text-zinc-500'}`}>
+                                {row.verdict}
+                              </span>
+                            )}
+                            <div className="text-[8px] text-mutedForeground mt-0.5 font-heading">
+                              {(row.accounts || []).map((a) => `${a.username}${a.role_at_ip ? ` (${a.role_at_ip})` : ''}`).join(' · ')}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {(proxyFarmReport.countries?.by_country?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-purple-300/90 uppercase text-[9px] mb-1">By country (rollup)</div>
+                      <div className="max-h-36 overflow-y-auto space-y-1">
+                        {(proxyFarmReport.countries.by_country || []).map((c, i) => (
+                          <div key={i} className="rounded border border-zinc-700/40 px-2 py-1">
+                            <span className="font-bold text-foreground">{c.country_code || '?'}</span>
+                            <span className="text-mutedForeground">
+                              {' '}
+                              — {c.account_count} account(s), {c.ip_count} IP(s)
+                            </span>
+                            <div className="text-[9px] text-mutedForeground mt-0.5">
+                              {(c.accounts || []).map((a) => a.username).filter(Boolean).join(', ')}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {(proxyFarmReport.linked_accounts?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-purple-300/90 uppercase text-[9px] mb-1">
+                        All linked accounts ({proxyFarmReport.linked_account_count})
+                      </div>
+                      <div className="max-h-44 overflow-y-auto">
+                        <table className="w-full text-[9px]">
+                          <thead>
+                            <tr className="text-mutedForeground text-left border-b border-zinc-700/50">
+                              <th className="py-0.5 pr-2">User</th>
+                              <th className="py-0.5 pr-2">Reg country</th>
+                              <th className="py-0.5 pr-2">Pts</th>
+                              <th className="py-0.5 pr-2">Why linked</th>
+                              <th className="py-0.5" />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(proxyFarmReport.linked_accounts || []).map((a) => (
+                              <tr key={a.id} className={`border-b border-zinc-800/60 ${a.is_seed ? 'bg-primary/5' : ''}`}>
+                                <td className="py-0.5 pr-2 font-bold text-foreground">
+                                  {a.username}
+                                  {a.is_dead ? <span className="text-red-400/80"> (dead)</span> : null}
+                                </td>
+                                <td className="py-0.5 pr-2">{a.registration_country || a.last_seen_country || '—'}</td>
+                                <td className="py-0.5 pr-2 tabular-nums">{(a.points ?? 0).toLocaleString()}</td>
+                                <td className="py-0.5 pr-2 text-[8px] text-zinc-500 max-w-[200px] truncate" title={(a.link_reasons || []).join(', ')}>
+                                  {(a.link_reasons || []).slice(0, 2).join(', ')}
+                                </td>
+                                <td className="py-0.5">
+                                  {!a.is_seed && (
+                                    <button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="text-primary text-[9px]">
+                                      View
+                                    </button>
+                                  )}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {(proxyFarmReport.points_in_cluster?.transfers?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-purple-300/90 uppercase text-[9px] mb-1">
+                        Points transfers within cluster ({proxyFarmReport.points_in_cluster?.totals?.transfer_count ?? 0} moves,{' '}
+                        {(proxyFarmReport.points_in_cluster?.totals?.points_moved ?? 0).toLocaleString()} pts)
+                      </div>
+                      <div className="max-h-40 overflow-y-auto space-y-0.5">
+                        {(proxyFarmReport.points_in_cluster.transfers || []).map((t) => (
+                          <div key={t.id} className="text-[9px] font-mono border-b border-zinc-800/50 py-0.5">
+                            <span className="text-foreground">{t.from_username}</span>
+                            <span className="text-mutedForeground"> → </span>
+                            <span className="text-foreground">{t.to_username}</span>
+                            <span className="text-emerald-400"> {(t.amount ?? 0).toLocaleString()} pts</span>
+                            <span className="text-zinc-600 ml-2">{t.created_at ? String(t.created_at).slice(0, 16) : ''}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {(proxyFarmReport.points_in_cluster?.per_user?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-purple-300/90 uppercase text-[9px] mb-1">Points received (from linked accounts)</div>
+                      <div className="max-h-32 overflow-y-auto space-y-1">
+                        {(proxyFarmReport.points_in_cluster.per_user || [])
+                          .filter((p) => (p.points_received_in_cluster || 0) > 0)
+                          .map((p) => (
+                            <div key={p.user_id} className="text-[9px] pl-1">
+                              <span className="font-bold text-foreground">{p.username}</span>
+                              <span className="text-emerald-400"> +{(p.points_received_in_cluster || 0).toLocaleString()}</span>
+                              {(p.received_from || []).length > 0 && (
+                                <span className="text-zinc-500">
+                                  {' '}
+                                  from {(p.received_from || []).map((r) => `${r.from_username} (${(r.total_points || 0).toLocaleString()})`).join(', ')}
+                                </span>
+                              )}
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="max-h-32 overflow-y-auto space-y-1">
+                    <div className="text-purple-300/90 uppercase text-[9px]">IPs assessed</div>
+                    {(proxyFarmReport.ip_assessments || []).map((a, i) => (
+                      <div key={i} className="flex flex-wrap gap-x-2 text-[9px] font-mono border-b border-zinc-700/30 pb-0.5">
+                        <span className="text-foreground">{a.ip}</span>
+                        {a.country_code && <span className="text-sky-300/90">{a.country_code}</span>}
+                        <span className={a.verdict === 'likely_proxy_service' ? 'text-red-400' : a.verdict === 'suspicious' ? 'text-amber-400' : 'text-zinc-500'}>{a.verdict}</span>
+                        {a.isp && <span className="text-zinc-600 truncate max-w-[200px]">{a.isp}</span>}
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[9px] text-mutedForeground">{proxyFarmReport.note}</p>
+                </div>
+              )}
+              {proxyFarmReport?.mode === 'global' && (
+                <div className="mb-4 max-h-64 overflow-y-auto space-y-2">
+                  {(proxyFarmReport.hotspots || []).length === 0 ? (
+                    <p className="text-[10px] text-mutedForeground">No /24 subnets with {proxyFarmReport.min_accounts_per_subnet ?? 3}+ registrations in {proxyFarmReport.days}d.</p>
+                  ) : (
+                    (proxyFarmReport.hotspots || []).map((h, i) => (
+                      <div key={i} className="p-2 rounded border border-purple-500/20 bg-zinc-900/40 text-[10px]">
+                        <div className="text-purple-300 font-bold">{h.subnet24} — {h.account_count} accounts</div>
+                        <div className="text-[9px] font-mono text-zinc-500">
+                          Sample {h.sample_ip}
+                          {h.sample_assessment?.country_code ? (
+                            <span className="text-sky-300/90"> ({h.sample_assessment.country_code})</span>
+                          ) : null}
+                          : {h.sample_assessment?.verdict} ({(h.sample_assessment?.reasons || []).slice(0, 2).join(', ')})
+                        </div>
+                        <div className="mt-1 text-[9px] text-mutedForeground">
+                          {(h.accounts || []).map((a) => a.username).join(', ')}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
             <div>
               <div className="text-[10px] font-heading text-primary uppercase mb-2">Intelligent dupe check</div>
               <p className="text-xs text-mutedForeground mb-2">One report: shared IPs (full history + optional session IPs + VPN check), alive/dead IP overlap, suspicious-login hotspots, registration bursts, referral+IP, heavy transfers, plus domain/username/email signals.</p>

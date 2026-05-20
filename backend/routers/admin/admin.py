@@ -14057,6 +14057,67 @@ def register(router):
             "total_password_reset_heavy_users": len(password_reset_heavy_users),
         }
 
+    @router.get("/admin/cheat-detection/proxy-farm")
+    async def admin_cheat_proxy_farm_report(
+        username: Optional[str] = Query(None, description="Investigate one user (username or id)"),
+        global_scan: bool = Query(False, description="If true and no username, scan registration /24 hotspots"),
+        days: int = Query(30, ge=1, le=365),
+        min_accounts_per_subnet: int = Query(3, ge=2, le=20),
+        max_ip_lookups: int = Query(25, ge=1, le=40),
+        max_linked: int = Query(60, ge=1, le=100),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Detect paid proxy / residential rotator use (ProxyRoyal-style) per user or global subnet hotspots.
+        Per user: countries per IP, all linked accounts, points sent/received within cluster.
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.proxy_detection import assess_user_proxy_profile, find_proxy_farm_hotspots
+
+        key = (username or "").strip()
+        if key:
+            user = await _resolve_user_by_key(key)
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            proj = {
+                "_id": 0,
+                "id": 1,
+                "username": 1,
+                "email": 1,
+                "registration_ip": 1,
+                "login_ips": 1,
+                "last_login_ip": 1,
+                "last_request_ip": 1,
+                "sessions": 1,
+                "device_fingerprint": 1,
+                "registration_ip_reputation": 1,
+                "last_login_ip_reputation": 1,
+            }
+            full = await db.users.find_one({"id": user["id"]}, proj)
+            if not full:
+                raise HTTPException(status_code=404, detail="User not found")
+            profile = await assess_user_proxy_profile(
+                db,
+                full,
+                max_ip_lookups=max_ip_lookups,
+                check_getipintel=True,
+                include_session_ips=True,
+                max_linked=max_linked,
+            )
+            return {"mode": "user", "generated_at": datetime.now(timezone.utc).isoformat(), **profile}
+        if global_scan:
+            hotspots = await find_proxy_farm_hotspots(
+                db,
+                days=days,
+                min_accounts_per_subnet=min_accounts_per_subnet,
+            )
+            return {"mode": "global", "generated_at": datetime.now(timezone.utc).isoformat(), **hotspots}
+        raise HTTPException(
+            status_code=400,
+            detail="Provide username for a user report, or set global_scan=true for subnet hotspots.",
+        )
+
     def _normalize_user_agent(ua: str) -> str:
         """Strip version numbers (e.g. /121.0.0.0) so same browser different version groups together."""
         if not ua or not ua.strip():
