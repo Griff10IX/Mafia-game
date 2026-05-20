@@ -964,6 +964,34 @@ def _first_bodyguard_client_payload(
     }
 
 
+def _bodyguard_block_attempt_extra(
+    *,
+    target_id: str,
+    target_username: str,
+    display_name: str,
+    search_username: Optional[str],
+    bodyguard_user_id: Optional[str],
+    slot_number: Optional[int],
+) -> Dict[str, Any]:
+    """Top-level admin-query fields for outcome=bodyguard rows (plus first_bodyguard nested blob)."""
+    blocking = (search_username or display_name or "bodyguard").strip()
+    extra: Dict[str, Any] = {
+        "protected_user_id": target_id,
+        "protected_username": target_username,
+        "blocking_bodyguard_username": blocking,
+        "bodyguard_slot": slot_number,
+        "first_bodyguard": {
+            "display_name": display_name,
+            "search_username": search_username,
+            "slot_number": slot_number,
+            "target_username": target_username,
+        },
+    }
+    if bodyguard_user_id:
+        extra["blocking_bodyguard_user_id"] = bodyguard_user_id
+    return extra
+
+
 # Strip from attack_attempts when returning to players (timeline / future APIs).
 _PLAYER_ATTACK_ATTEMPT_META_KEYS = frozenset(
     {
@@ -2123,8 +2151,15 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     "outcome": "bodyguard",
                     "player_message": msg,
                     "bullets_used": 0,
-                    "first_bodyguard": {"display_name": display_name, "search_username": search_username, "slot_number": slot_n, "target_username": target_name},
                     "created_at": datetime.now(timezone.utc),
+                    **_bodyguard_block_attempt_extra(
+                        target_id=target["id"],
+                        target_username=target_name,
+                        display_name=display_name,
+                        search_username=search_username,
+                        bodyguard_user_id=first_bg.get("bodyguard_user_id"),
+                        slot_number=slot_n,
+                    ),
                     **meta,
                 }
                 _fire_and_forget(db.attack_attempts.insert_one(attempt_doc), label="bg_block_attempt_log")
@@ -2164,8 +2199,15 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 "outcome": "bodyguard",
                 "player_message": msg,
                 "bullets_used": 0,
-                "first_bodyguard": {"display_name": display_name or "bodyguard", "search_username": None, "slot_number": slot_n, "target_username": target_name},
                 "created_at": datetime.now(timezone.utc),
+                **_bodyguard_block_attempt_extra(
+                    target_id=target["id"],
+                    target_username=target_name,
+                    display_name=display_name or "bodyguard",
+                    search_username=None,
+                    bodyguard_user_id=first_bg.get("bodyguard_user_id"),
+                    slot_number=slot_n,
+                ),
                 **meta,
             }
             _fire_and_forget(db.attack_attempts.insert_one(attempt_doc), label="bg_block_attempt_log_anon")

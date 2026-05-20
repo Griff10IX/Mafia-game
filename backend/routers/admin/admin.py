@@ -10751,74 +10751,6 @@ def register(router):
             return non_npc
         return {"$and": [base, non_npc]}
 
-    @router.get("/admin/attacks/logs")
-    async def admin_attacks_logs(
-        username: Optional[str] = Query(
-            None,
-            description="If omitted or empty, return recent attempts for all players (newest first).",
-        ),
-        limit: int = Query(500, ge=1, le=1000),
-        since: Optional[str] = Query(None, description="ISO created_at; return only attempts after this (for live refresh)"),
-        exclude_target_npc: bool = Query(
-            False,
-            description="If true, exclude hitlist/NPC targets (target_is_npc, is_npc_kill, or '(NPC)' in target_username).",
-        ),
-        current_user: dict = Depends(get_current_user),
-    ):
-        """
-        Admin/moderator only. Return raw attack_attempts for a user (as attacker or target),
-        or the most recent attempts globally when username is omitted.
-        Full post data: who shot whom, outcome, bodyguard, bullets, location, etc.
-        Use since= to fetch only new entries (e.g. for live refresh).
-        """
-        if not _admin_or_mod(current_user):
-            raise HTTPException(status_code=403, detail="Admin or moderator access required")
-        key = (username or "").strip()
-        if not key or key.lower() in ("*", "all"):
-            q: Dict[str, Any] = {}
-            if since:
-                q["created_at"] = {"$gt": since}
-            if exclude_target_npc:
-                q = _attack_attempts_query_exclude_hitlist_npcs(q)
-            effective_limit = min(limit, 100) if since else limit
-            docs = (
-                await db.attack_attempts.find(q, {"_id": 0})
-                .sort("created_at", -1)
-                .to_list(effective_limit)
-            )
-            return {"username": None, "scope": "all", "logs": docs, "exclude_target_npc": exclude_target_npc}
-        user = await db.users.find_one(
-            {"id": key},
-            {"_id": 0, "id": 1, "username": 1},
-        )
-        if not user:
-            # Exact username first (uses index), then case-insensitive regex
-            user = await db.users.find_one(
-                {"username": key},
-                {"_id": 0, "id": 1, "username": 1},
-            )
-        if not user:
-            pattern = re.compile("^" + re.escape(key) + "$", re.IGNORECASE)
-            user = await db.users.find_one(
-                {"username": pattern},
-                {"_id": 0, "id": 1, "username": 1},
-            )
-        if not user:
-            raise HTTPException(status_code=404, detail="User not found")
-        uid = user["id"]
-        q = {"$or": [{"attacker_id": uid}, {"target_id": uid}]}
-        if since:
-            q["created_at"] = {"$gt": since}
-        if exclude_target_npc:
-            q = _attack_attempts_query_exclude_hitlist_npcs(q)
-        effective_limit = min(limit, 100) if since else limit
-        docs = (
-            await db.attack_attempts.find(q, {"_id": 0})
-            .sort("created_at", -1)
-            .to_list(effective_limit)
-        )
-        return {"username": user.get("username"), "scope": "user", "logs": docs, "exclude_target_npc": exclude_target_npc}
-
     def _audit_iso(val: Any) -> str:
         if val is None:
             return ""
@@ -10830,6 +10762,458 @@ def register(router):
             except Exception:
                 return str(val)
         return str(val)
+
+    _BG_BLOCK_MSG_RE = re.compile(
+        r" has a bodyguard called (.+?)\. You need to kill them first\.",
+        re.IGNORECASE,
+    )
+
+    def _enrich_attack_log_for_admin(doc: Dict[str, Any]) -> Dict[str, Any]:
+        """Fill top-level bodyguard block fields from nested first_bodyguard or player_message."""
+        if not doc or doc.get("outcome") != "bodyguard":
+            return doc
+        out = dict(doc)
+        fb = out.get("first_bodyguard") if isinstance(out.get("first_bodyguard"), dict) else {}
+        if not out.get("blocking_bodyguard_username"):
+            blocking = (fb.get("search_username") or fb.get("display_name") or "").strip()
+            if not blocking:
+                pm = out.get("player_message") or ""
+                m = _BG_BLOCK_MSG_RE.search(pm)
+                if m:
+                    blocking = m.group(1).strip()
+            if blocking:
+                out["blocking_bodyguard_username"] = blocking
+        if not out.get("protected_username") and out.get("target_username"):
+            out["protected_username"] = out["target_username"]
+        if not out.get("protected_user_id") and out.get("target_id"):
+            out["protected_user_id"] = out["target_id"]
+        if out.get("bodyguard_slot") is None and fb.get("slot_number") is not None:
+            out["bodyguard_slot"] = fb.get("slot_number")
+        return out
+
+    def _summarize_attack_logs(docs: List[Dict[str, Any]]) -> Dict[str, int]:
+        counts: Dict[str, int] = {
+            "total": len(docs),
+            "bodyguard_blocks": 0,
+            "bodyguard_kills": 0,
+            "kills": 0,
+            "failed": 0,
+            "errors": 0,
+            "travel": 0,
+            "other": 0,
+        }
+        for d in docs:
+            oc = d.get("outcome")
+            if oc == "bodyguard":
+                counts["bodyguard_blocks"] += 1
+            elif oc == "killed" and d.get("is_bodyguard_kill"):
+                counts["bodyguard_kills"] += 1
+                counts["kills"] += 1
+            elif oc == "killed":
+                counts["kills"] += 1
+            elif oc == "failed":
+                counts["failed"] += 1
+            elif oc == "error":
+                counts["errors"] += 1
+            elif oc == "travel":
+                counts["travel"] += 1
+            else:
+                counts["other"] += 1
+        return counts
+
+    async def _resolve_user_by_key(key: str) -> Optional[Dict[str, Any]]:
+        k = (key or "").strip()
+        if not k:
+            return None
+        user = await db.users.find_one({"id": k}, {"_id": 0, "id": 1, "username": 1})
+        if not user:
+            user = await db.users.find_one({"username": k}, {"_id": 0, "id": 1, "username": 1})
+        if not user:
+            pattern = re.compile("^" + re.escape(k) + "$", re.IGNORECASE)
+            user = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1, "username": 1})
+        return user
+
+    def _username_filter_clause(field: str, name: str) -> Dict[str, Any]:
+        pat = re.compile("^" + re.escape(name.strip()) + "$", re.IGNORECASE)
+        return {field: pat}
+
+    def _guard_username_match(guard_key: str) -> Dict[str, Any]:
+        pat = re.compile("^" + re.escape(guard_key.strip()) + "$", re.IGNORECASE)
+        return {
+            "$or": [
+                {"blocking_bodyguard_username": pat},
+                {"first_bodyguard.search_username": pat},
+                {"first_bodyguard.display_name": pat},
+            ]
+        }
+
+    def _apply_attack_logs_filters(
+        q: Dict[str, Any],
+        *,
+        outcome: Optional[str],
+        bodyguard_event: Optional[str],
+        role: Optional[str],
+        uid: Optional[str],
+        protectee: Optional[str],
+        guard_username: Optional[str],
+        attacker_username: Optional[str],
+        days: Optional[int],
+        since: Optional[str],
+        until: Optional[str],
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        filters_applied: Dict[str, Any] = {}
+        if days and not since:
+            since_dt = datetime.now(timezone.utc) - timedelta(days=int(days))
+            since_iso = since_dt.isoformat()
+            q = {"$and": [q, {"created_at": {"$gte": since_iso}}]} if q else {"created_at": {"$gte": since_iso}}
+            filters_applied["days"] = int(days)
+        if since:
+            clause = {"created_at": {"$gt": since}}
+            q = {"$and": [q, clause]} if q else clause
+            filters_applied["since"] = since
+        if until:
+            clause = {"created_at": {"$lte": until}}
+            q = {"$and": [q, clause]} if q else clause
+            filters_applied["until"] = until
+        if bodyguard_event == "block":
+            clause = {"outcome": "bodyguard"}
+            q = {"$and": [q, clause]} if q else clause
+            filters_applied["bodyguard_event"] = "block"
+        elif bodyguard_event == "kill":
+            clause = {"outcome": "killed", "is_bodyguard_kill": True}
+            q = {"$and": [q, clause]} if q else clause
+            filters_applied["bodyguard_event"] = "kill"
+        elif bodyguard_event == "any":
+            clause = {
+                "$or": [
+                    {"outcome": "bodyguard"},
+                    {"is_bodyguard_kill": True},
+                ]
+            }
+            q = {"$and": [q, clause]} if q else clause
+            filters_applied["bodyguard_event"] = "any"
+        if outcome:
+            parts = [p.strip() for p in outcome.split(",") if p.strip()]
+            if len(parts) == 1:
+                clause = {"outcome": parts[0]}
+            else:
+                clause = {"outcome": {"$in": parts}}
+            q = {"$and": [q, clause]} if q else clause
+            filters_applied["outcome"] = outcome
+        if uid and role == "attacker":
+            q = {"$and": [q, {"attacker_id": uid}]} if q else {"attacker_id": uid}
+            filters_applied["role"] = "attacker"
+        elif uid and role == "target":
+            q = {"$and": [q, {"target_id": uid}]} if q else {"target_id": uid}
+            filters_applied["role"] = "target"
+        if protectee:
+            prot = protectee.strip()
+            prot_clause = {
+                "$or": [
+                    _username_filter_clause("protected_username", prot),
+                    _username_filter_clause("target_username", prot),
+                ]
+            }
+            q = {"$and": [q, prot_clause]} if q else prot_clause
+            filters_applied["protectee"] = prot
+        if guard_username:
+            g_clause = _guard_username_match(guard_username)
+            q = {"$and": [q, g_clause]} if q else g_clause
+            filters_applied["guard_username"] = guard_username.strip()
+        if attacker_username:
+            a_clause = _username_filter_clause("attacker_username", attacker_username)
+            q = {"$and": [q, a_clause]} if q else a_clause
+            filters_applied["attacker_username"] = attacker_username.strip()
+        return q, filters_applied
+
+    @router.get("/admin/attacks/logs")
+    async def admin_attacks_logs(
+        username: Optional[str] = Query(
+            None,
+            description="If omitted or empty, return recent attempts for all players (newest first).",
+        ),
+        limit: int = Query(500, ge=1, le=1000),
+        since: Optional[str] = Query(None, description="ISO created_at; return only attempts after this (for live refresh)"),
+        until: Optional[str] = Query(None, description="ISO created_at upper bound"),
+        days: Optional[int] = Query(None, ge=1, le=365, description="When since omitted, only rows within last N days"),
+        exclude_target_npc: bool = Query(
+            False,
+            description="If true, exclude hitlist/NPC targets (target_is_npc, is_npc_kill, or '(NPC)' in target_username).",
+        ),
+        outcome: Optional[str] = Query(None, description="Filter by outcome (comma-separated allowed)"),
+        bodyguard_event: Optional[str] = Query(
+            None,
+            description="block | kill | any — bodyguard blocks or bodyguard victim kills",
+        ),
+        role: Optional[str] = Query(None, description="When username set: attacker | target | any (default any)"),
+        protectee: Optional[str] = Query(None, description="Filter protectee/victim username (bodyguard blocks)"),
+        guard_username: Optional[str] = Query(None, description="Filter blocking guard username"),
+        attacker_username: Optional[str] = Query(None, description="Filter attacker username (global mode)"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Admin/moderator only. Return raw attack_attempts for a user (as attacker or target),
+        or the most recent attempts globally when username is omitted.
+        Full post data: who shot whom, outcome, bodyguard, bullets, location, etc.
+        Use since= to fetch only new entries (e.g. for live refresh).
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        be = (bodyguard_event or "").strip().lower()
+        if be and be not in ("block", "kill", "any"):
+            raise HTTPException(status_code=400, detail="bodyguard_event must be block, kill, or any")
+        rl = (role or "").strip().lower()
+        if rl and rl not in ("attacker", "target", "any"):
+            raise HTTPException(status_code=400, detail="role must be attacker, target, or any")
+        key = (username or "").strip()
+        uid: Optional[str] = None
+        scope = "all"
+        resolved_username: Optional[str] = None
+        if key and key.lower() not in ("*", "all"):
+            user = await _resolve_user_by_key(key)
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            uid = user["id"]
+            resolved_username = user.get("username")
+            scope = "user"
+            if rl == "attacker":
+                q: Dict[str, Any] = {"attacker_id": uid}
+            elif rl == "target":
+                q = {"target_id": uid}
+            else:
+                q = {"$or": [{"attacker_id": uid}, {"target_id": uid}]}
+        else:
+            q = {}
+        q, filters_applied = _apply_attack_logs_filters(
+            q,
+            outcome=outcome,
+            bodyguard_event=be or None,
+            role=rl or None,
+            uid=uid,
+            protectee=protectee,
+            guard_username=guard_username,
+            attacker_username=attacker_username,
+            days=days,
+            since=since,
+            until=until,
+        )
+        if exclude_target_npc:
+            q = _attack_attempts_query_exclude_hitlist_npcs(q)
+            filters_applied["exclude_target_npc"] = True
+        effective_limit = min(limit, 100) if since else limit
+        docs = (
+            await db.attack_attempts.find(q, {"_id": 0})
+            .sort("created_at", -1)
+            .to_list(effective_limit)
+        )
+        logs = [_enrich_attack_log_for_admin(d) for d in docs]
+        summary = _summarize_attack_logs(logs)
+        return {
+            "username": resolved_username,
+            "scope": scope,
+            "logs": logs,
+            "exclude_target_npc": exclude_target_npc,
+            "filters_applied": filters_applied,
+            "summary": summary,
+        }
+
+    def _bg_intel_guard_key(doc: Dict[str, Any]) -> str:
+        d = _enrich_attack_log_for_admin(doc)
+        return (
+            (d.get("blocking_bodyguard_username") or "")
+            or ((d.get("first_bodyguard") or {}).get("search_username") if isinstance(d.get("first_bodyguard"), dict) else "")
+            or ((d.get("first_bodyguard") or {}).get("display_name") if isinstance(d.get("first_bodyguard"), dict) else "")
+            or "?"
+        ).strip()
+
+    @router.get("/admin/attacks/bodyguard-intel")
+    async def admin_attacks_bodyguard_intel(
+        username: str = Query(..., min_length=1),
+        perspective: str = Query("both", description="protectee | attacker | both"),
+        days: int = Query(30, ge=1, le=365),
+        limit: int = Query(50, ge=1, le=200),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Per-user bodyguard block aggregates: guards blocking for user, targets/guards user ran into."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        pers = (perspective or "both").strip().lower()
+        if pers not in ("protectee", "attacker", "both"):
+            raise HTTPException(status_code=400, detail="perspective must be protectee, attacker, or both")
+        user = await _resolve_user_by_key(username)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = user["id"]
+        since_dt = datetime.now(timezone.utc) - timedelta(days=int(days))
+        since_iso = since_dt.isoformat()
+        base_match = {"outcome": "bodyguard", "created_at": {"$gte": since_iso}}
+
+        async def _protectee_buckets() -> List[Dict[str, Any]]:
+            match = {**base_match, "target_id": uid}
+            pipeline = [
+                {"$match": match},
+                {"$sort": {"created_at": -1}},
+                {"$limit": 5000},
+                {
+                    "$group": {
+                        "_id": {
+                            "guard": {
+                                "$ifNull": [
+                                    "$blocking_bodyguard_username",
+                                    {"$ifNull": ["$first_bodyguard.search_username", "$first_bodyguard.display_name"]},
+                                ]
+                            }
+                        },
+                        "block_count": {"$sum": 1},
+                        "last_at": {"$max": "$created_at"},
+                        "attackers": {"$addToSet": "$attacker_username"},
+                        "protectee_username": {"$first": "$protected_username"},
+                        "sample_target": {"$first": "$target_username"},
+                    }
+                },
+                {"$sort": {"block_count": -1}},
+                {"$limit": int(limit)},
+            ]
+            rows = await db.attack_attempts.aggregate(pipeline).to_list(int(limit))
+            out = []
+            for r in rows:
+                gid = (r.get("_id") or {}).get("guard") or "?"
+                attackers = [a for a in (r.get("attackers") or []) if a]
+                out.append(
+                    {
+                        "guard_username": gid,
+                        "block_count": int(r.get("block_count") or 0),
+                        "last_at": _audit_iso(r.get("last_at")),
+                        "distinct_attackers": len(attackers),
+                        "top_attackers": attackers[:10],
+                        "protectee_username": r.get("protectee_username") or r.get("sample_target") or user.get("username"),
+                    }
+                )
+            return out
+
+        async def _attacker_buckets() -> List[Dict[str, Any]]:
+            match = {**base_match, "attacker_id": uid}
+            pipeline = [
+                {"$match": match},
+                {"$sort": {"created_at": -1}},
+                {"$limit": 5000},
+                {
+                    "$group": {
+                        "_id": {
+                            "protectee": {"$ifNull": ["$protected_username", "$target_username"]},
+                            "guard": {
+                                "$ifNull": [
+                                    "$blocking_bodyguard_username",
+                                    {"$ifNull": ["$first_bodyguard.search_username", "$first_bodyguard.display_name"]},
+                                ]
+                            },
+                        },
+                        "block_count": {"$sum": 1},
+                        "last_at": {"$max": "$created_at"},
+                    }
+                },
+                {"$sort": {"block_count": -1}},
+                {"$limit": int(limit)},
+            ]
+            rows = await db.attack_attempts.aggregate(pipeline).to_list(int(limit))
+            out = []
+            for r in rows:
+                kid = r.get("_id") or {}
+                out.append(
+                    {
+                        "protectee_username": kid.get("protectee") or "?",
+                        "guard_username": kid.get("guard") or "?",
+                        "block_count": int(r.get("block_count") or 0),
+                        "last_at": _audit_iso(r.get("last_at")),
+                        "attacker_username": user.get("username"),
+                    }
+                )
+            return out
+
+        result: Dict[str, Any] = {
+            "username": user.get("username"),
+            "user_id": uid,
+            "days": int(days),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        if pers in ("protectee", "both"):
+            result["protectee"] = await _protectee_buckets()
+        if pers in ("attacker", "both"):
+            result["attacker"] = await _attacker_buckets()
+        return result
+
+    @router.get("/admin/attacks/bodyguard-intel/global")
+    async def admin_attacks_bodyguard_intel_global(
+        days: int = Query(7, ge=1, le=90),
+        limit: int = Query(50, ge=1, le=100),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Top attackers by bodyguard-block count and top protectees by blocks received."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        since_dt = datetime.now(timezone.utc) - timedelta(days=int(days))
+        since_iso = since_dt.isoformat()
+        match = {"outcome": "bodyguard", "created_at": {"$gte": since_iso}}
+        cap = int(limit)
+        attacker_pipeline = [
+            {"$match": match},
+            {
+                "$group": {
+                    "_id": "$attacker_username",
+                    "block_count": {"$sum": 1},
+                    "last_at": {"$max": "$created_at"},
+                    "targets": {"$addToSet": "$target_username"},
+                }
+            },
+            {"$match": {"_id": {"$nin": [None, ""]}}},
+            {"$sort": {"block_count": -1}},
+            {"$limit": cap},
+        ]
+        protectee_pipeline = [
+            {"$match": match},
+            {
+                "$group": {
+                    "_id": {"$ifNull": ["$protected_username", "$target_username"]},
+                    "block_count": {"$sum": 1},
+                    "last_at": {"$max": "$created_at"},
+                    "guards_hit": {
+                        "$addToSet": {
+                            "$ifNull": [
+                                "$blocking_bodyguard_username",
+                                "$first_bodyguard.search_username",
+                            ]
+                        }
+                    },
+                }
+            },
+            {"$match": {"_id": {"$nin": [None, ""]}}},
+            {"$sort": {"block_count": -1}},
+            {"$limit": cap},
+        ]
+        top_attackers = await db.attack_attempts.aggregate(attacker_pipeline).to_list(cap)
+        top_protectees = await db.attack_attempts.aggregate(protectee_pipeline).to_list(cap)
+        return {
+            "days": int(days),
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "top_attackers_by_blocks": [
+                {
+                    "attacker_username": r.get("_id"),
+                    "block_count": int(r.get("block_count") or 0),
+                    "last_at": _audit_iso(r.get("last_at")),
+                    "distinct_targets": len([t for t in (r.get("targets") or []) if t]),
+                }
+                for r in top_attackers
+            ],
+            "top_protectees_by_blocks": [
+                {
+                    "protectee_username": r.get("_id"),
+                    "block_count": int(r.get("block_count") or 0),
+                    "last_at": _audit_iso(r.get("last_at")),
+                    "distinct_guards": len([g for g in (r.get("guards_hit") or []) if g]),
+                }
+                for r in top_protectees
+            ],
+        }
 
     def _sanitize_audit_doc(doc: Optional[dict]) -> Optional[dict]:
         if not doc:

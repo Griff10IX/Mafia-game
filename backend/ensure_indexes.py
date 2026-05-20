@@ -189,6 +189,8 @@ async def ensure_all_indexes(db):
         await db.attack_attempts.create_index([("attacker_id", 1), ("created_at", -1)])
         await db.attack_attempts.create_index([("target_id", 1), ("created_at", -1)])
         await db.attack_attempts.create_index([("outcome", 1), ("created_at", -1)])
+        await db.attack_attempts.create_index([("outcome", 1), ("target_id", 1), ("created_at", -1)])
+        await db.attack_attempts.create_index([("outcome", 1), ("attacker_id", 1), ("created_at", -1)])
         await db.attack_attempts.create_index(
             [("created_at", 1), ("outcome", 1), ("attacker_id", 1)],
         )

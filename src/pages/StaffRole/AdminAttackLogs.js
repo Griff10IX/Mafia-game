@@ -7,6 +7,29 @@ import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import AttackLogsPanel from '../../components/staff/AttackLogsPanel';
 
+function formatAuditTimelineRow(row) {
+  if (!row || typeof row !== 'object') return '—';
+  const at = row.at || row.data?.created_at || '—';
+  const kind = row.kind || row.data?.type || row.data?.action || '—';
+  const src = row.source || '—';
+  const d = row.data || {};
+  let detail = '';
+  if (src === 'attack_attempts' || kind === 'bodyguard_kill_attempt') {
+    detail = `${d.attacker_username || '?'} → ${d.target_username || '?'}`;
+    if (d.outcome) detail += ` (${d.outcome})`;
+    if (d.bodyguard_owner_username) detail += ` · owner ${d.bodyguard_owner_username}`;
+  } else if (kind === 'bodyguard_hire' || kind === 'bodyguard_drop') {
+    detail = d.details || d.message || kind;
+  } else if (d.guard_username || d.guard_id) {
+    detail = [d.guard_username, d.owner_username].filter(Boolean).join(' · ');
+  } else if (d.event_type) {
+    detail = d.event_type;
+  } else if (d.type) {
+    detail = String(d.type);
+  }
+  return { at, src, kind, detail: detail || '—' };
+}
+
 export default function AdminAttackLogs() {
   const navigate = useNavigate();
   const [accessChecked, setAccessChecked] = useState(false);
@@ -168,9 +191,10 @@ export default function AdminAttackLogs() {
         </div>
         <div className="p-3">
           <AttackLogsPanel
-            introText="Leave username empty for recent attempts from all players, or enter a username for that player only. Use Live to watch new attempts every 5 seconds."
+            introText="Filters: bodyguard blocks/kills, protectee, guard name, day range. Enter a username for intel (guards blocking for them vs targets they ran into). Empty username shows global top blockers."
             tableMaxHeightClass="max-h-[min(70vh,560px)]"
             onLogsLoaded={onAttackLogsLoaded}
+            showGlobalIntel
           />
         </div>
       </section>
@@ -228,18 +252,35 @@ export default function AdminAttackLogs() {
                     {timelineOpen ? 'Hide' : 'Show'} merged timeline (first 40)
                   </button>
                   {timelineOpen && (
-                    <div className="mt-2 max-h-[360px] overflow-y-auto space-y-2 border border-border rounded p-2 bg-muted/20">
+                    <div className="mt-2 max-h-[360px] overflow-y-auto border border-border rounded p-2 bg-muted/20">
                       {merged.length === 0 ? (
                         <p className="text-mutedForeground">No merged rows.</p>
                       ) : (
-                        merged.slice(0, 40).map((row, idx) => (
-                          <pre
-                            key={idx}
-                            className="text-[8px] font-mono whitespace-pre-wrap break-words border-b border-border/60 pb-2 text-foreground"
-                          >
-                            {JSON.stringify(row, null, 2)}
-                          </pre>
-                        ))
+                        <table className="w-full text-[9px] font-heading">
+                          <thead>
+                            <tr className="text-mutedForeground border-b border-border/60">
+                              <th className="text-left py-1 pr-2">Time</th>
+                              <th className="text-left py-1 pr-2">Source</th>
+                              <th className="text-left py-1 pr-2">Kind</th>
+                              <th className="text-left py-1">Detail</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {merged.slice(0, 40).map((row, idx) => {
+                              const f = formatAuditTimelineRow(row);
+                              return (
+                                <tr key={idx} className="border-b border-border/40">
+                                  <td className="py-1 pr-2 text-mutedForeground font-mono whitespace-nowrap">
+                                    {formatAdminDateTime(f.at)}
+                                  </td>
+                                  <td className="py-1 pr-2 text-mutedForeground">{f.src}</td>
+                                  <td className="py-1 pr-2">{f.kind}</td>
+                                  <td className="py-1 text-foreground break-words">{f.detail}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                       )}
                     </div>
                   )}
