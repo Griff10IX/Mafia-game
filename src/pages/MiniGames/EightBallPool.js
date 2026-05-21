@@ -11,6 +11,18 @@ import railOrnateAsset from '../../lib/pool_assets/rail-ornate.svg';
 import feltNoiseAsset from '../../lib/pool_assets/felt-noise.svg';
 import cueSkinAsset from '../../lib/pool_assets/cue-skin.svg';
 import { simulatePreview, pockets as physicsPockets } from '../../lib/pool_physics';
+import {
+  CONTROL_PRESETS,
+  loadControlPresetId,
+  saveControlPresetId,
+  getPreset as getControlPreset,
+  aimAngleFromPointer,
+  powerFromPullBack,
+  shouldEnterPullMode,
+  clampPower,
+  nudgeAngleDeg,
+  powerFromRailPosition,
+} from '../../lib/poolControls';
 
 const POOL_STYLES = `
   .pool-fade-in { animation: pool-fade-in 0.35s ease-out both; }
@@ -48,6 +60,38 @@ const POOL_STYLES = `
     .pool-table-wrap {
       max-width: 650px;
     }
+  }
+  .pool-power-rail {
+    position: relative;
+    border-radius: 10px;
+    background: linear-gradient(180deg, rgba(15,23,42,0.95), rgba(2,6,23,0.98));
+    border: 1px solid rgba(34,211,238,0.35);
+    touch-action: none;
+    user-select: none;
+    min-height: 120px;
+  }
+  .pool-power-rail-fill {
+    position: absolute;
+    left: 4px;
+    right: 4px;
+    bottom: 4px;
+    border-radius: 6px;
+    background: linear-gradient(0deg, #0ea5e9, #22d3ee, #fbbf24);
+    transition: height 0.05s ease-out;
+    pointer-events: none;
+  }
+  .pool-power-rail-thumb {
+    position: absolute;
+    left: 50%;
+    width: 22px;
+    height: 22px;
+    margin-left: -11px;
+    margin-bottom: -11px;
+    border-radius: 50%;
+    background: #f8fafc;
+    border: 2px solid #0ea5e9;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.45);
+    pointer-events: none;
   }
 `;
 
@@ -234,7 +278,9 @@ export default function EightBallPool() {
   const [pvpGame, setPvpGame] = useState(null);
   const [lobbies, setLobbies] = useState([]);
   const [buyIn, setBuyIn] = useState(0);
-  const [power, setPower] = useState(0.6);
+  const [controlPresetId, setControlPresetId] = useState(loadControlPresetId);
+  const controlPreset = useMemo(() => getControlPreset(controlPresetId), [controlPresetId]);
+  const [power, setPower] = useState(() => getControlPreset(loadControlPresetId()).defaultPower);
   const [angleDeg, setAngleDeg] = useState(-12);
   const [spinX, setSpinX] = useState(0);
   const [spinY, setSpinY] = useState(0);
@@ -251,6 +297,7 @@ export default function EightBallPool() {
   const [displayBalls, setDisplayBalls] = useState([]);
   const [isAiming, setIsAiming] = useState(false);
   const [aimPhase, setAimPhase] = useState('idle'); // idle | aiming | pulling
+  const [powerRailDragging, setPowerRailDragging] = useState(false);
   const [tableSkin, setTableSkin] = useState('miniclip_blue');
   const [renderTick, setRenderTick] = useState(0);
   const [replayActive, setReplayActive] = useState(false);
@@ -269,8 +316,10 @@ export default function EightBallPool() {
   const lastTargetBallsRef = useRef([]);
   const pocketedSetRef = useRef(new Set());
   const fxRef = useRef({ impacts: [], pockets: [], pocketDrops: [] });
-  const powerRef = useRef(0.6);
+  const powerRef = useRef(getControlPreset(loadControlPresetId()).defaultPower);
   const angleDegRef = useRef(-12);
+  const controlPresetRef = useRef(getControlPreset(loadControlPresetId()));
+  const powerRailRef = useRef(null);
 
   const activeGame = tab === 'ai' ? aiGame : pvpGame;
   const balls = useMemo(() => activeGame?.table_state?.balls || [], [activeGame?.table_state?.balls]);
@@ -324,7 +373,7 @@ export default function EightBallPool() {
 
   useEffect(() => { powerRef.current = Number(power || 0); }, [power]);
   useEffect(() => { angleDegRef.current = Number(angleDeg || 0); }, [angleDeg]);
-
+  useEffect(() => { controlPresetRef.current = controlPreset; }, [controlPreset]);
 
   useEffect(() => {
     const loadImg = (src, targetRef) => {
@@ -1371,7 +1420,18 @@ export default function EightBallPool() {
         ctx.stroke();
       }
 
-      const pullBack = Number(power || 0) * 60;
+      const pullBack = Number(power || 0) * (controlPresetRef.current?.maxPullPx || 130) * 0.48;
+      if (aimPhase === 'pulling' || powerRailDragging) {
+        ctx.save();
+        ctx.strokeStyle = 'rgba(34,211,238,0.55)';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(cx, cy, cueVisualR + 8 + pullBack * 0.15, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(34,211,238,0.12)';
+        ctx.fill();
+        ctx.restore();
+      }
       const tipDist = 14 + pullBack;
       const buttDist = tipDist + cueLen;
       const tipX = cx - ox * tipDist;
@@ -1458,7 +1518,7 @@ export default function EightBallPool() {
       ctx.lineWidth = 2;
       ctx.stroke();
     }
-  }, [ballsForRender, angleDeg, power, effPower, spinX, spinY, isAiming, currentSkin, renderTick, canAim, canRenderCue, aimPreview, awaitingBreak, activeGame?.table_state?.break_kitchen, inBreakPlacement]);
+  }, [ballsForRender, angleDeg, power, effPower, spinX, spinY, isAiming, aimPhase, powerRailDragging, currentSkin, renderTick, canAim, canRenderCue, aimPreview, awaitingBreak, activeGame?.table_state?.break_kitchen, inBreakPlacement]);
 
   const hasActiveAiSession = Boolean(
     aiGame?.id && (aiGame.status === 'in_progress' || aiGame.status === 'waiting'),
@@ -1665,14 +1725,15 @@ export default function EightBallPool() {
       }
       setSpinX(0);
       setSpinY(0);
+      setShotPower(controlPresetRef.current.defaultPower);
+      setAimPhase('idle');
+      setIsAiming(false);
     } catch (e) {
       toast.error(getApiErrorMessage(e) || 'Shot failed');
     } finally {
       setBusy(false);
     }
   };
-
-  const MAX_PULL_PX = 120;
 
   const getPointerOnCanvas = (event) => {
     const canvas = canvasRef.current;
@@ -1692,12 +1753,8 @@ export default function EightBallPool() {
     if (!cue) return;
     const cx = tableToCanvasX(cue.x, ptr.canvas.width);
     const cy = tableToCanvasY(cue.y, ptr.canvas.height);
-    const dx = ptr.sx - cx;
-    const dy = ptr.sy - cy;
-    const dist = Math.hypot(dx, dy);
-    if (dist < 1) return;
-    const targetDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
-    const next = Number(targetDeg.toFixed(2));
+    const next = aimAngleFromPointer(cx, cy, ptr.sx, ptr.sy);
+    if (next == null) return;
     angleDegRef.current = next;
     setAngleDeg(next);
   };
@@ -1709,15 +1766,22 @@ export default function EightBallPool() {
     if (!cue) return;
     const cx = tableToCanvasX(cue.x, ptr.canvas.width);
     const cy = tableToCanvasY(cue.y, ptr.canvas.height);
-    const a = (Number(angleDeg || 0) * Math.PI) / 180;
-    const behindX = ptr.sx - cx;
-    const behindY = ptr.sy - cy;
-    const pullDist = -(behindX * Math.cos(a) + behindY * Math.sin(a));
-    const normalized = Math.max(0.02, Math.min(1, pullDist / MAX_PULL_PX));
-    const nextPower = Number(Math.pow(normalized, 0.9).toFixed(3));
+    const preset = controlPresetRef.current;
+    const nextPower = powerFromPullBack(cx, cy, ptr.sx, ptr.sy, angleDegRef.current || angleDeg, preset);
     powerRef.current = nextPower;
     setPower(nextPower);
   };
+
+  const updatePowerFromRailEvent = useCallback((event) => {
+    const el = powerRailRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const y = event.clientY - rect.top;
+    const ratio = 1 - Math.max(0, Math.min(1, y / Math.max(1, rect.height)));
+    const p = powerFromRailPosition(ratio, controlPresetRef.current);
+    powerRef.current = p;
+    setPower(p);
+  }, []);
 
   const updateSpinFromPad = useCallback((event) => {
     const target = event.currentTarget;
@@ -1742,20 +1806,58 @@ export default function EightBallPool() {
 
   const nudgeAim = useCallback((delta) => {
     setAngleDeg((prev) => {
-      let next = Number(prev || 0) + delta;
-      while (next > 180) next -= 360;
-      while (next <= -180) next += 360;
-      const rounded = Number(next.toFixed(2));
+      const rounded = nudgeAngleDeg(prev, delta);
       angleDegRef.current = rounded;
       return rounded;
     });
   }, []);
 
   const setShotPower = useCallback((next) => {
-    const p = Math.max(0.02, Math.min(1, Number(next) || 0));
+    const p = clampPower(next, controlPresetRef.current);
     powerRef.current = p;
     setPower(p);
   }, []);
+
+  const setControlPreset = useCallback((id) => {
+    if (!CONTROL_PRESETS[id]) return;
+    setControlPresetId(id);
+    saveControlPresetId(id);
+    controlPresetRef.current = getControlPreset(id);
+    setShotPower(getControlPreset(id).defaultPower);
+  }, [setShotPower]);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (!activeGame || replayActive || !ballsSettled || inBreakPlacement) return;
+      if (!canAim) return;
+      const tag = (e.target?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'select' || tag === 'textarea') return;
+
+      const preset = controlPresetRef.current;
+      const fine = e.shiftKey ? preset.fineAimDeg : preset.coarseAimDeg;
+
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        if (!busy) void shoot();
+        return;
+      }
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        nudgeAim(-fine);
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        nudgeAim(fine);
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setShotPower(clampPower((powerRef.current || 0) + 0.04, preset));
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setShotPower(clampPower((powerRef.current || 0) - 0.04, preset));
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [activeGame, replayActive, ballsSettled, inBreakPlacement, canAim, busy, shoot, nudgeAim, setShotPower]);
 
   const buyCue = async (cueId) => {
     setCueBusy(true);
@@ -1956,7 +2058,46 @@ export default function EightBallPool() {
                 </div>
               </div>
               <div className="pool-table-wrap">
-                <div className="pool-canvas-shell rounded-xl p-1.5 xl:p-1">
+                <div className="flex gap-1.5 items-stretch w-full">
+                {canAim && !inBreakPlacement && (
+                  <div
+                    ref={powerRailRef}
+                    className="pool-power-rail flex flex-col justify-end w-10 sm:w-12 shrink-0 py-2 px-0.5 cursor-ns-resize"
+                    title="Drag up for more power"
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      e.currentTarget.setPointerCapture?.(e.pointerId);
+                      setPowerRailDragging(true);
+                      updatePowerFromRailEvent(e);
+                    }}
+                    onPointerMove={(e) => {
+                      if (powerRailDragging || e.currentTarget.hasPointerCapture?.(e.pointerId)) {
+                        updatePowerFromRailEvent(e);
+                      }
+                    }}
+                    onPointerUp={(e) => {
+                      setPowerRailDragging(false);
+                      e.currentTarget.releasePointerCapture?.(e.pointerId);
+                    }}
+                    onPointerCancel={() => setPowerRailDragging(false)}
+                  >
+                    <span className="text-[7px] font-heading text-cyan-300/80 uppercase tracking-wider text-center mb-1">Power</span>
+                    <div className="relative flex-1 min-h-[100px] rounded-md bg-zinc-950/80 border border-zinc-700/50 mx-0.5">
+                      <div
+                        className="pool-power-rail-fill"
+                        style={{ height: `${Math.max(4, Math.min(100, Number(power || 0) * 100))}%` }}
+                      />
+                      <div
+                        className="pool-power-rail-thumb"
+                        style={{ bottom: `${Math.max(4, Math.min(96, Number(power || 0) * 100))}%` }}
+                      />
+                    </div>
+                    <span className="text-[9px] font-bold text-foreground tabular-nums text-center mt-1">
+                      {Math.round(Number(power || 0) * 100)}%
+                    </span>
+                  </div>
+                )}
+                <div className="pool-canvas-shell rounded-xl p-1.5 xl:p-1 flex-1 min-w-0">
                 <canvas
                   ref={canvasRef}
                   width={900}
@@ -1994,9 +2135,7 @@ export default function EightBallPool() {
                         if (cb) {
                           const ccx = tableToCanvasX(cb.x, ptr.canvas.width);
                           const ccy = tableToCanvasY(cb.y, ptr.canvas.height);
-                          const ang = (Number(angleDegRef.current || angleDeg || 0) * Math.PI) / 180;
-                          const behind = -((ptr.sx - ccx) * Math.cos(ang) + (ptr.sy - ccy) * Math.sin(ang));
-                          if (behind > 10) {
+                          if (shouldEnterPullMode(ccx, ccy, ptr.sx, ptr.sy, angleDegRef.current || angleDeg, controlPresetRef.current)) {
                             setAimPhase('pulling');
                             updatePullPower(e);
                             return;
@@ -2023,8 +2162,14 @@ export default function EightBallPool() {
                       setAimPhase('idle');
                     }
                   }}
-                  onPointerLeave={() => { setIsAiming(false); setAimPhase('idle'); }}
+                  onPointerLeave={() => {
+                    if (!powerRailDragging) {
+                      setIsAiming(false);
+                      setAimPhase('idle');
+                    }
+                  }}
                 />
+                </div>
                 </div>
               </div>
               <div className="rounded-md border border-primary/20 bg-zinc-900/55 p-2 xl:p-1.5 space-y-2">
@@ -2032,17 +2177,42 @@ export default function EightBallPool() {
                   <span className="text-mutedForeground uppercase">Shot controls</span>
                   <span className="text-primary font-bold">Power {(Number(power || 0) * 100).toFixed(0)}%</span>
                 </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {Object.values(CONTROL_PRESETS).map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      disabled={!canAim || busy || replayActive}
+                      onClick={() => setControlPreset(p.id)}
+                      className={`px-2 py-1 rounded text-[9px] font-heading border ${
+                        controlPresetId === p.id
+                          ? 'border-primary/60 bg-primary/15 text-primary'
+                          : 'border-zinc-700/60 text-mutedForeground hover:border-primary/30'
+                      } disabled:opacity-40`}
+                      title={p.desc}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="text-[9px] text-mutedForeground leading-snug">{controlPreset.desc}</p>
                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2 items-center">
                   <div className="space-y-1">
                     <input
                       type="range"
-                      min="0.05"
+                      min={controlPreset.minPower}
                       max="1"
                       step="0.01"
                       value={Number(power || 0)}
                       onChange={(e) => setShotPower(e.target.value)}
+                      onWheel={(e) => {
+                        if (!canAim) return;
+                        e.preventDefault();
+                        const delta = e.deltaY < 0 ? 0.03 : -0.03;
+                        setShotPower(clampPower((powerRef.current || 0) + delta, controlPresetRef.current));
+                      }}
                       disabled={!canAim || busy || replayActive || !ballsSettled}
-                      className="w-full accent-cyan-300 disabled:opacity-40"
+                      className="w-full h-8 accent-cyan-300 disabled:opacity-40 touch-manipulation"
                       aria-label="Shot power"
                     />
                     <div className="h-2 rounded bg-zinc-800/70 border border-zinc-700/50 overflow-hidden">
@@ -2064,27 +2234,45 @@ export default function EightBallPool() {
                     Shoot
                   </button>
                 </div>
-                <div className="grid grid-cols-[auto_1fr_auto] gap-2 items-center text-[10px] font-heading">
+                <div className="grid grid-cols-4 sm:grid-cols-[auto_auto_1fr_auto_auto] gap-1.5 items-center text-[10px] font-heading">
                   <button
                     type="button"
-                    onClick={() => nudgeAim(-1)}
+                    onClick={() => nudgeAim(-controlPreset.coarseAimDeg)}
                     disabled={!canAim || replayActive || !ballsSettled}
-                    className="px-3 py-2 rounded border border-zinc-700 text-mutedForeground hover:text-foreground disabled:opacity-40"
+                    className="px-2 py-2 rounded border border-zinc-700 text-mutedForeground hover:text-foreground disabled:opacity-40 touch-manipulation min-h-[40px]"
                     title="Aim left"
                   >
-                    -1°
+                    ←
                   </button>
-                  <div className="text-center text-mutedForeground">
+                  <button
+                    type="button"
+                    onClick={() => nudgeAim(-controlPreset.fineAimDeg)}
+                    disabled={!canAim || replayActive || !ballsSettled}
+                    className="px-2 py-2 rounded border border-zinc-700/80 text-[9px] text-mutedForeground disabled:opacity-40 touch-manipulation min-h-[40px]"
+                    title="Fine aim left (Shift+← on PC)"
+                  >
+                    −{controlPreset.fineAimDeg}°
+                  </button>
+                  <div className="text-center text-mutedForeground col-span-4 sm:col-span-1 order-last sm:order-none">
                     Aim <span className="text-foreground font-bold tabular-nums">{Number(angleDeg || 0).toFixed(1)}°</span>
                   </div>
                   <button
                     type="button"
-                    onClick={() => nudgeAim(1)}
+                    onClick={() => nudgeAim(controlPreset.fineAimDeg)}
                     disabled={!canAim || replayActive || !ballsSettled}
-                    className="px-3 py-2 rounded border border-zinc-700 text-mutedForeground hover:text-foreground disabled:opacity-40"
+                    className="px-2 py-2 rounded border border-zinc-700/80 text-[9px] text-mutedForeground disabled:opacity-40 touch-manipulation min-h-[40px]"
+                    title="Fine aim right"
+                  >
+                    +{controlPreset.fineAimDeg}°
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => nudgeAim(controlPreset.coarseAimDeg)}
+                    disabled={!canAim || replayActive || !ballsSettled}
+                    className="px-2 py-2 rounded border border-zinc-700 text-mutedForeground hover:text-foreground disabled:opacity-40 touch-manipulation min-h-[40px]"
                     title="Aim right"
                   >
-                    +1°
+                    →
                   </button>
                 </div>
               </div>
@@ -2133,9 +2321,10 @@ export default function EightBallPool() {
                     ? 'Tap the kitchen area to place the cue ball'
                     : canAim
                       ? <>
-                          <span className="text-foreground font-bold">Aim:</span> Drag on felt or tap ±1°.{' '}
-                          <span className="text-foreground font-bold">Power:</span> use the slider.{' '}
-                          <span className="text-foreground font-bold">Shoot:</span> press Shoot, or pull back and release.
+                          <span className="text-foreground font-bold">Aim:</span> drag on the table toward your target.{' '}
+                          <span className="text-foreground font-bold">Power:</span> side bar (desktop), slider, or pull cue back on table.{' '}
+                          <span className="text-foreground font-bold">Shoot:</span> Shoot button, Space, or release after pull-back.
+                          <span className="block mt-1 text-zinc-500">PC: ←/→ aim · Shift+fine · ↑/↓ power · Space shoot</span>
                         </>
                       : (replayActive || !ballsSettled)
                         ? 'Balls rolling...'

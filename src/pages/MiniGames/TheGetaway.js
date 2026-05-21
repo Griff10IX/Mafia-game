@@ -29,6 +29,7 @@ import {
   addParticles,
   getPreset,
   saveHighScore,
+  freezeRunSpeed,
 } from "./theGetawayEngine";
 
 const RULES = [
@@ -80,6 +81,8 @@ export default function TheGetaway() {
     const preset = SPEED_PRESETS[id];
     if (s.state === "title" || s.state === "gameover") {
       s.speed = preset.base;
+      s.displayMphFrozen = mphDisplay(preset.base);
+      setDisplayMph(s.displayMphFrozen);
     }
   }, []);
 
@@ -90,7 +93,8 @@ export default function TheGetaway() {
     setDisplayScore(0);
     setDisplayCoins(0);
     setDisplayLives(3);
-    setDisplayMph(mphDisplay(s.speed));
+    s.displayMphFrozen = mphDisplay(s.speed);
+    setDisplayMph(s.displayMphFrozen);
     setSubmitted(false);
   }, [speedPresetId]);
 
@@ -540,8 +544,10 @@ export default function TheGetaway() {
     s.player.invincible = 85;
     setDisplayLives(s.lives);
     if (s.lives <= 0) {
+      freezeRunSpeed(s);
       s.state = "gameover";
       setGameState("gameover");
+      setDisplayMph(s.displayMphFrozen ?? mphDisplay(s.speed));
       if (s.score > s.highScore) {
         s.highScore = s.score;
         saveHighScore(s.highScore);
@@ -578,7 +584,11 @@ export default function TheGetaway() {
     if (s.state === "playing") {
       tickPlaying(s);
       setDisplayScore(Math.floor(s.score));
-      setDisplayMph(mphDisplay(s.speed));
+      const mph = mphDisplay(s.speed);
+      if (mph !== s._lastHudMph) {
+        s._lastHudMph = mph;
+        setDisplayMph(mph);
+      }
       checkCollisions(s, onLifeLost, onCoin);
     }
 
@@ -597,9 +607,10 @@ export default function TheGetaway() {
     }
 
     if (s.state === "gameover") {
+      if (s.displayMphFrozen == null) freezeRunSpeed(s);
       drawOverlay(ctx, "BUSTED!", [
         `${Math.floor(s.score)} m · $${(s.coins * 25).toLocaleString()} cash`,
-        `Speed was: ${getPreset(s).label}`,
+        `Top speed: ${s.displayMphFrozen ?? mphDisplay(s.speed)} mph · ${getPreset(s).label}`,
       ], "TAP TO PLAY AGAIN");
       s.frame++;
       ctx.restore();

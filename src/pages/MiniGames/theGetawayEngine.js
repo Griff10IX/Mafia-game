@@ -19,10 +19,17 @@ export const SPEED_PRESETS = {
     desc: 'Easier to read — good for learning',
     base: 2.1,
     max: 5.8,
-    rampDivisor: 720,
+    /** Frames until max speed (~3 min @ 60fps) — not tied to distance score */
+    rampFrames: 10800,
     scrollMult: 0.68,
     worldMult: 0.75,
-    spawnBase: 118,
+    /** Frames between hazard spawns (higher = more reaction time) */
+    spawnBase: 175,
+    spawnAhead: 155,
+    graceFrames: 150,
+    obstacleScrollMult: 0.7,
+    copScrollMult: 0.62,
+    maxObstacles: 4,
   },
   normal: {
     id: 'normal',
@@ -30,10 +37,15 @@ export const SPEED_PRESETS = {
     desc: 'Balanced Temple Run pace',
     base: 3.0,
     max: 8.2,
-    rampDivisor: 520,
+    rampFrames: 7200,
     scrollMult: 0.78,
     worldMult: 0.86,
-    spawnBase: 98,
+    spawnBase: 145,
+    spawnAhead: 140,
+    graceFrames: 120,
+    obstacleScrollMult: 0.76,
+    copScrollMult: 0.68,
+    maxObstacles: 5,
   },
   fast: {
     id: 'fast',
@@ -41,10 +53,15 @@ export const SPEED_PRESETS = {
     desc: 'High speed chase',
     base: 4.2,
     max: 11.5,
-    rampDivisor: 380,
+    rampFrames: 4800,
     scrollMult: 0.88,
     worldMult: 0.95,
-    spawnBase: 82,
+    spawnBase: 118,
+    spawnAhead: 125,
+    graceFrames: 90,
+    obstacleScrollMult: 0.82,
+    copScrollMult: 0.74,
+    maxObstacles: 6,
   },
 };
 
@@ -136,6 +153,8 @@ export function createGameState(presetId = 'normal') {
     shake: 0,
     gameStartTime: null,
     spawnCooldown: 0,
+    /** mph display frozen when run ends (title/gameover) */
+    displayMphFrozen: null,
   };
 }
 
@@ -146,7 +165,7 @@ export function resetWorldEntities(s) {
   s.lives = 3;
   s.frame = 0;
   s.speed = preset.base;
-  s.spawnCooldown = 0;
+  s.spawnCooldown = preset.graceFrames ?? 120;
   const p = s.player;
   p.lane = 1;
   p.targetLane = 1;
@@ -168,6 +187,7 @@ export function resetWorldEntities(s) {
   s.streaks = [];
   s.shake = 0;
   s.gameStartTime = Date.now();
+  s.displayMphFrozen = null;
 
   for (let i = 0; i < 14; i++) {
     s.pathTiles.push({ y: PLAYER_Y - 40 - i * TILE_H, stripe: i % 2 });
@@ -199,9 +219,19 @@ export function getPreset(s) {
 }
 
 export function applySpeedRamp(s) {
+  if (s.state !== 'playing') return;
   const preset = getPreset(s);
-  s.speed = preset.base + Math.min(preset.max - preset.base, s.score / preset.rampDivisor);
+  const rampFrames = Math.max(600, preset.rampFrames || 6000);
+  const t = Math.min(1, s.frame / rampFrames);
+  s.speed = preset.base + (preset.max - preset.base) * t;
   if (s.speed > preset.max) s.speed = preset.max;
+}
+
+/** Lock speed/mph when leaving active play (prevents HUD climbing on game over). */
+export function freezeRunSpeed(s) {
+  const preset = getPreset(s);
+  if (s.speed > preset.max) s.speed = preset.max;
+  s.displayMphFrozen = mphDisplay(s.speed);
 }
 
 export function mphDisplay(speed) {
@@ -250,7 +280,11 @@ export function updateWorld(s) {
 
   s.obstacles.forEach((o) => {
     const sc = perspScale(o.y);
-    o.y += worldScroll * (0.78 + sc * 0.14);
+    const scrollMult =
+      o.type === 'cop'
+        ? preset.copScrollMult ?? 0.65
+        : preset.obstacleScrollMult ?? 0.75;
+    o.y += worldScroll * scrollMult * (0.62 + sc * 0.1);
   });
 
   s.coinItems.forEach((c) => {
@@ -263,7 +297,7 @@ export function updateWorld(s) {
 export function updatePlayer(s) {
   const p = s.player;
   if (p.targetLane !== p.lane) {
-    p.laneT += 0.14;
+    p.laneT += 0.2;
     if (p.laneT >= 1) {
       p.lane = p.targetLane;
       p.laneT = 1;
@@ -274,7 +308,7 @@ export function updatePlayer(s) {
   const t = p.lane === p.targetLane ? 1 : Math.min(1, p.laneT);
   const lerpLane = p.lane + (p.targetLane - p.lane) * (1 - Math.pow(1 - t, 2));
   const targetX = laneScreenX(lerpLane, PLAYER_Y);
-  p.x += (targetX - p.x) * 0.24;
+  p.x += (targetX - p.x) * 0.3;
 
   if (p.jumping) {
     p.vy += 0.65;
@@ -296,32 +330,39 @@ export function updatePlayer(s) {
 function lanesBlocked(s, spawnY) {
   const blocked = new Set();
   for (const o of s.obstacles) {
-    if (Math.abs(o.y - spawnY) < 90 && !o.dead) blocked.add(o.lane);
+    if (Math.abs(o.y - spawnY) < 110 && !o.dead) blocked.add(o.lane);
   }
   return blocked;
 }
 
 export function spawnObstacle(s) {
-  const spawnY = HORIZON_Y - 55;
+  const preset = getPreset(s);
+  const alive = s.obstacles.filter((o) => !o.dead).length;
+  if (alive >= (preset.maxObstacles ?? 5)) return;
+
+  const ahead = preset.spawnAhead ?? 130;
+  const spawnY = HORIZON_Y - ahead;
   const blocked = lanesBlocked(s, spawnY);
   const free = [0, 1, 2].filter((l) => !blocked.has(l));
   if (free.length === 0) return;
 
   const roll = Math.random();
-  if (roll < 0.22 && free.length >= 2) {
+  if (roll < 0.1 && free.length >= 2 && s.frame > (preset.graceFrames ?? 90) * 2) {
     const l1 = free[Math.floor(Math.random() * free.length)];
     const rest = free.filter((l) => l !== l1);
     const l2 = rest[Math.floor(Math.random() * rest.length)];
-    s.obstacles.push({ lane: l1, y: spawnY, w: 48, h: 50, type: 'cop', dead: false });
-    s.obstacles.push({ lane: l2, y: spawnY, w: 52, h: 40, type: 'barrier', dead: false });
+    s.obstacles.push({ lane: l1, y: spawnY, w: 48, h: 50, type: 'barrier', dead: false });
+    s.obstacles.push({ lane: l2, y: spawnY, w: 52, h: 40, type: 'lowbar', dead: false });
     return;
   }
 
   const lane = free[Math.floor(Math.random() * free.length)];
   const t = Math.random();
-  if (t < 0.34) {
+  const grace = preset.graceFrames ?? 90;
+  const copRate = s.frame < grace * 2.5 ? 0.12 : 0.22;
+  if (t < copRate) {
     s.obstacles.push({ lane, y: spawnY, w: 48, h: 50, type: 'cop', dead: false });
-  } else if (t < 0.62) {
+  } else if (t < 0.55) {
     s.obstacles.push({ lane, y: spawnY, w: 52, h: 40, type: 'barrier', dead: false });
   } else {
     s.obstacles.push({ lane, y: spawnY, w: 64, h: 28, type: 'lowbar', dead: false });
@@ -409,13 +450,18 @@ export function checkCollisions(s, onLifeLost, onCoin) {
 }
 
 export function tickPlaying(s) {
+  if (s.state !== 'playing') return;
   const preset = getPreset(s);
   s.frame++;
-  s.score += s.speed * 0.032;
   applySpeedRamp(s);
+  const roadScroll = s.speed * preset.scrollMult;
+  s.score += roadScroll * 0.11;
 
   s.spawnCooldown--;
-  const spawnEvery = Math.max(42, preset.spawnBase - Math.floor(s.score / 120) * 2);
+  const spawnEvery = Math.max(
+    58,
+    preset.spawnBase - Math.floor(s.score / 350),
+  );
   if (s.spawnCooldown <= 0) {
     spawnObstacle(s);
     s.spawnCooldown = spawnEvery;

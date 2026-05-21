@@ -220,56 +220,166 @@
   background: var(--noir-primary);
 }
 
+.playsLine {
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  margin-top: 2px;
+  color: #b8960c;
+}
+
+.playsLineLimit {
+  color: #dc2626;
+  font-weight: 700;
+}
+
+.settingsHint {
+  font-size: 9px;
+  color: #888;
+  margin: 0.35rem 0 0;
+  line-height: 1.4;
+}
+
 .gameArea {
   position: relative;
-  max-width: 360px;
+  max-width: min(100%, 420px);
   margin: 0 auto;
-  min-height: 380px;
+  min-height: 340px;
+  background: radial-gradient(ellipse 90% 70% at 50% 40%, rgba(60, 45, 25, 0.35), transparent 70%);
+  border-radius: 16px;
+  padding: 4px;
+}
+
+.boardFrame {
+  background: linear-gradient(165deg, #3d2810 0%, #2a1a0c 40%, #1f1408 100%);
+  border: 3px solid #6b4a22;
+  border-radius: 14px;
+  box-shadow:
+    inset 0 2px 12px rgba(0, 0, 0, 0.45),
+    0 6px 20px rgba(0, 0, 0, 0.35);
+  padding: 6px;
 }
 
 .grid {
   display: grid;
-  gap: 8px;
-  padding: 8px;
+  gap: 10px;
+  padding: 10px;
   grid-template-columns: repeat(var(--cols, 3), 1fr);
-  grid-template-rows: repeat(var(--rows, 3), minmax(80px, 1fr));
+  grid-template-rows: repeat(var(--rows, 3), minmax(88px, 1fr));
+}
+
+@media (min-width: 400px) {
+  .grid {
+    gap: 12px;
+    grid-template-rows: repeat(var(--rows, 3), minmax(96px, 1fr));
+  }
 }
 
 .holeWrapper {
   position: relative;
   width: 100%;
-  min-height: 80px;
+  min-height: 88px;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.holeWrapperReady {
+  z-index: 1;
+}
+
+.hitPad {
+  position: absolute;
+  inset: -14px -10px -6px;
+  z-index: 5;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: default;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.hitPadReady {
+  cursor: crosshair;
+}
+
+.hitPad:active {
+  outline: none;
 }
 
 .hole {
   position: relative;
   width: 100%;
   height: 100%;
-  min-height: 80px;
+  min-height: 88px;
   border-radius: 50%;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .holeClip {
   position: relative;
   width: 100%;
   height: 100%;
+  min-height: 88px;
   border-radius: 50%;
   overflow: hidden;
-  cursor: pointer;
-  clip-path: ellipse(50% 45% at 50% 55%);
-  touch-action: manipulation;
+  clip-path: ellipse(52% 46% at 50% 54%);
   user-select: none;
   -webkit-user-select: none;
+  pointer-events: none;
 }
 
-.holeClipHit { animation: hit-flash 0.4s ease-out; }
+.holeClipReady {
+  filter: brightness(1.04);
+}
+
+.holeClipDuck {
+  animation: duck-sink 0.32s ease-in forwards;
+}
+
+@keyframes duck-sink {
+  0% { filter: brightness(1); }
+  100% { filter: brightness(0.85); }
+}
+
+.holeClipWarn {
+  animation: warn-pulse 0.45s ease-in-out infinite;
+}
+
+@keyframes warn-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.15) saturate(1.2); }
+}
+
+.warnRing {
+  position: absolute;
+  inset: 8%;
+  border-radius: 50%;
+  border: 3px solid rgba(220, 60, 60, 0.85);
+  box-shadow: 0 0 14px rgba(220, 50, 50, 0.5);
+  pointer-events: none;
+  animation: warn-ring 0.5s ease-in-out infinite;
+}
+
+@keyframes warn-ring {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.06); opacity: 1; }
+}
+
+.holeClipHit {
+  animation: hit-flash 0.42s ease-out;
+  overflow: visible;
+}
+
 .holeClipMiss { animation: miss-flash 0.5s ease-out; }
 
 @keyframes hit-flash {
-  0% { filter: brightness(1.5); }
-  100% { filter: brightness(1); }
+  0% { filter: brightness(1.8) saturate(1.3); transform: scale(1.03); }
+  40% { filter: brightness(1.4); }
+  100% { filter: brightness(1); transform: scale(1); }
 }
 
 @keyframes miss-flash {
@@ -287,20 +397,99 @@
   position: absolute;
   bottom: 0;
   left: 50%;
-  transform: translateX(-50%) translateY(100%);
-  transition: transform 0.15s ease-out;
+  transform: translateX(-50%) translateY(108%);
+  transition: transform 0.18s cubic-bezier(0.22, 1.15, 0.36, 1);
   display: flex;
   justify-content: center;
   pointer-events: none;
+  z-index: 2;
 }
 
 .copUp {
-  transform: translateX(-50%) translateY(0);
+  transform: translateX(-50%) translateY(-4%);
+}
+
+.copPeek {
+  animation: cop-bob 0.45s ease-in-out infinite;
+}
+
+@keyframes cop-bob {
+  0%, 100% { transform: translateX(-50%) translateY(-4%); }
+  50% { transform: translateX(-50%) translateY(-7%); }
 }
 
 .copBonked {
-  transform: translateX(-50%) translateY(-8px) scale(0.9);
-  opacity: 0.7;
+  animation: bonk-slam 0.38s cubic-bezier(0.34, 1.4, 0.5, 1) forwards;
+  opacity: 1;
+}
+
+@keyframes bonk-slam {
+  0% { transform: translateX(-50%) translateY(-4%) scale(1.08) rotate(0deg); }
+  25% { transform: translateX(-50%) translateY(-14%) scale(0.95) rotate(-14deg); }
+  55% { transform: translateX(-50%) translateY(6%) scale(0.9) rotate(10deg); }
+  100% { transform: translateX(-50%) translateY(28%) scale(0.72) rotate(0deg); opacity: 0.3; }
+}
+
+.bonkLabel {
+  position: absolute;
+  top: 18%;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #ffe566;
+  text-shadow: 0 1px 0 #5a4010, 0 2px 8px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  z-index: 4;
+  animation: bonk-label 0.4s ease-out forwards;
+}
+
+@keyframes bonk-label {
+  0% { opacity: 0; transform: translateX(-50%) scale(0.5); }
+  30% { opacity: 1; transform: translateX(-50%) scale(1.15); }
+  100% { opacity: 0; transform: translateX(-50%) translateY(-12px) scale(1); }
+}
+
+.whackBurst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.whackBurstStar {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  background: #ffe566;
+  clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%);
+  animation: burst-star 0.36s ease-out forwards;
+}
+
+.whackBurstStar:nth-child(1) {
+  top: 28%;
+  left: 22%;
+  animation-delay: 0ms;
+}
+
+.whackBurstStar:nth-child(2) {
+  top: 20%;
+  right: 20%;
+  animation-delay: 40ms;
+  transform: scale(1.2);
+}
+
+.whackBurstStar:nth-child(3) {
+  top: 38%;
+  left: 48%;
+  animation-delay: 80ms;
+  transform: scale(0.85);
+}
+
+@keyframes burst-star {
+  0% { opacity: 1; transform: scale(0.3) rotate(0deg); }
+  100% { opacity: 0; transform: scale(1.4) rotate(45deg); }
 }
 
 .holeDirt {
@@ -327,6 +516,16 @@
   animation: border-pulse 0.4s ease-out;
 }
 
+.holeBorderWarn {
+  border-color: #b83c3c;
+  box-shadow: 0 0 10px rgba(200, 50, 50, 0.45);
+}
+
+.holeBorderReady {
+  border-color: #8a6a30;
+  box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.4), 0 0 8px rgba(212, 175, 55, 0.25);
+}
+
 @keyframes border-pulse {
   0% { box-shadow: 0 0 12px rgba(212, 175, 55, 0.6); }
   100% { box-shadow: none; }
@@ -342,20 +541,18 @@
   padding-top: 10%;
 }
 
-.particlesOverlay {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  overflow: hidden;
-}
-
 .particleWrap {
   position: absolute;
+  top: 8%;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  animation: particle-rise 0.75s ease-out forwards;
+  pointer-events: none;
+  animation: particle-rise 0.72s ease-out forwards;
+  z-index: 4;
 }
 
 @keyframes particle-rise {
@@ -363,7 +560,14 @@
   100% { opacity: 0; transform: translateY(-40px) scale(1.2); }
 }
 
-.fxStar { font-size: 20px; }
+.fxStar { font-size: 22px; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5)); }
+.fxWhack {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #ffe566;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.6);
+}
 .fxPts { font-size: 12px; font-weight: 700; }
 
 .escapedTxt {
@@ -371,6 +575,32 @@
   color: #cc6666;
   font-weight: 700;
   animation: escaped-pop 0.5s ease-out;
+  margin-top: 2px;
+  pointer-events: none;
+}
+
+.countdownOverlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 20;
+  pointer-events: none;
+}
+
+.countdownNum {
+  font-size: 4rem;
+  font-weight: 700;
+  color: var(--noir-primary);
+  text-shadow: 0 4px 24px rgba(212, 175, 55, 0.5);
+  animation: count-pop 0.35s ease-out;
+}
+
+@keyframes count-pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 @keyframes escaped-pop {
@@ -411,6 +641,13 @@
   color: #bbb;
   margin-bottom: 0.75rem;
   line-height: 1.5;
+}
+
+.ovHint {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 9px;
+  color: #888;
 }
 
 .ovGrade {
