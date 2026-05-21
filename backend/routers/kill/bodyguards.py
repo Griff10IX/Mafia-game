@@ -62,15 +62,13 @@ BODYGUARD_ROBOT_KILLED_HIRE_COOLDOWN_SECONDS = 60
 BODYGUARD_INFLATION_HOURS = 3
 # First 4 levels: 2%, 5%, 7%, 12%; then +5% per level (17%, 22%, 27%, ...)
 BODYGUARD_INFLATION_PERCENTS_FIRST = [0.02, 0.05, 0.07, 0.12]
-BODYGUARD_INFLATION_EXTRA_PER_LEVEL = 0.05  # after level 4
-# Level 20 => 12% + 16*5% = 92% (needs 20 hires within one 3h window without reset)
-MAX_BODYGUARD_INFLATION_LEVEL = 24
+BODYGUARD_INFLATION_EXTRA_PER_LEVEL = 0.05  # after level 4; no cap on level (keeps +5% per hire in window)
 
 
 def _normalize_bodyguard_inflation_level(raw) -> int:
     """
     Stored counter = hires in current 3h window (0 = next hire has 0% markup tier).
-    Reject kill_inflation decimals (0.92) or absurd values (e.g. 92 mistaken for percent).
+    No upper cap. Reject kill_inflation decimals (0.0–1.0) accidentally stored here.
     """
     if raw is None or raw == "":
         return 0
@@ -81,16 +79,14 @@ def _normalize_bodyguard_inflation_level(raw) -> int:
         n = int(float(raw))
     except (TypeError, ValueError):
         return 0
-    if n < 0:
-        return 0
-    if n > MAX_BODYGUARD_INFLATION_LEVEL:
-        logger.warning(
-            "bodyguard_inflation_level=%s above max %s; clamping (check for bad data)",
-            n,
-            MAX_BODYGUARD_INFLATION_LEVEL,
-        )
-        return MAX_BODYGUARD_INFLATION_LEVEL
-    return n
+    return max(0, n)
+
+
+def _clear_bodyguard_hire_inflation_mongo_update() -> dict:
+    return {
+        "$set": {"bodyguard_inflation_level": 0},
+        "$unset": {"bodyguard_inflation_until": ""},
+    }
 
 
 def _bodyguard_inflation_percent_for_level(level: int) -> float:
@@ -1441,6 +1437,93 @@ async def admin_reset_bodyguard_cooldown(current_user: dict = Depends(get_curren
     return {"message": "Legacy drop timer field cleared."}
 
 
+async def admin_clear_bodyguard_hire_inflation(
+    target_username: Optional[str] = Query(
+        None,
+        description="Clear 3h hire markup counter for this user (uses Target Username field in admin).",
+    ),
+    all_users: bool = Query(
+        False,
+        description="If true, clear hire markup for every user with inflation fields set.",
+    ),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Reset bodyguard hire inflation (3h window counter), not kill/attack inflation.
+    Next robot hire starts at 0% window markup until they hire again within 3h.
+    """
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    if all_users and (target_username or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Use either target_username or all_users=true, not both.",
+        )
+    if not all_users and not (target_username or "").strip():
+        raise HTTPException(
+            status_code=400,
+            detail="Provide target_username or set all_users=true.",
+        )
+
+    update = _clear_bodyguard_hire_inflation_mongo_update()
+    admin_name = current_user.get("username") or "?"
+
+    if all_users:
+        filt = {
+            "$or": [
+                {"bodyguard_inflation_level": {"$gt": 0}},
+                {"bodyguard_inflation_until": {"$exists": True, "$nin": [None, ""]}},
+            ]
+        }
+        res = await db.users.update_many(filt, update)
+        _bodyguards_cache.clear()
+        await log_activity(
+            current_user["id"],
+            admin_name,
+            "admin_clear_bodyguard_hire_inflation_all",
+            {"matched": res.matched_count, "modified": res.modified_count},
+        )
+        return {
+            "scope": "all",
+            "message": f"Cleared 3h bodyguard hire inflation for {res.modified_count} user(s) ({res.matched_count} matched).",
+            "matched_count": res.matched_count,
+            "modified_count": res.modified_count,
+        }
+
+    key = (target_username or "").strip()
+    username_pattern = _username_pattern(key)
+    if not username_pattern:
+        raise HTTPException(status_code=404, detail="User not found")
+    target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    before = await db.users.find_one(
+        {"id": target["id"]},
+        {"_id": 0, "bodyguard_inflation_level": 1, "bodyguard_inflation_until": 1},
+    )
+    await db.users.update_one({"id": target["id"]}, update)
+    _invalidate_bodyguards_cache(target["id"])
+    await log_activity(
+        current_user["id"],
+        admin_name,
+        "admin_clear_bodyguard_hire_inflation",
+        {
+            "target_username": target.get("username"),
+            "target_id": target["id"],
+            "previous_level": (before or {}).get("bodyguard_inflation_level"),
+            "previous_until": (before or {}).get("bodyguard_inflation_until"),
+        },
+    )
+    un = target.get("username") or key
+    return {
+        "scope": "user",
+        "username": un,
+        "message": f"Cleared 3h bodyguard hire inflation for {un}. Next hire starts at 0% window markup.",
+        "previous_level": (before or {}).get("bodyguard_inflation_level"),
+        "previous_until": (before or {}).get("bodyguard_inflation_until"),
+    }
+
+
 async def admin_seed_human_bodyguards(current_user: dict = Depends(get_current_user)):
     """Admin-only: Clear all robots and create 4 human bodyguards for testing.
     Creates dummy human users as bodyguards if they don't exist."""
@@ -1808,4 +1891,5 @@ def register(router):
     router.add_api_route("/admin/bodyguards/seed-humans", admin_seed_human_bodyguards, methods=["POST"])
     router.add_api_route("/admin/bodyguards/seed-random", admin_seed_random_bodyguards, methods=["POST"])
     router.add_api_route("/admin/bodyguards/reset-cooldown", admin_reset_bodyguard_cooldown, methods=["POST"])
+    router.add_api_route("/admin/bodyguards/clear-hire-inflation", admin_clear_bodyguard_hire_inflation, methods=["POST"])
     router.add_api_route("/admin/bodyguards/hire-intervals", admin_get_bodyguard_hire_intervals, methods=["GET"])

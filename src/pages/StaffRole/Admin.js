@@ -334,7 +334,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Deleted messages', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-deleted-messages', keywords: ['deleted', 'messages', 'archive', 'forum', 'chat', 'dm', 'notification', 'history'], adminOnly: true },
   { label: 'Reset OC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'timer'] },
   { label: 'Reset Daily Rewards Timer', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['daily', 'rewards', 'timer', 'rps'] },
-  { label: 'Bodyguard Tools', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'robot', 'generate', 'sync', 'location', 'hacked', 'replace'] },
+  { label: 'Bodyguard Tools', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'robot', 'generate', 'sync', 'location', 'hacked', 'replace', 'hire inflation', 'clear inflation'] },
   { label: 'Generate Bodyguards', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'generate', 'robot'] },
   { label: 'Test Bodyguard Payout', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'payout', 'test'] },
   { label: 'GTA exclusive pool & dealer', categoryId: 'admin-world-systems', collapseKey: 'gtaPool', keywords: ['gta', 'exclusive', 'pool', 'dealer', 'cars', 'values'], adminOnly: true },
@@ -5537,6 +5537,54 @@ export default function Admin() {
       toast.success(res.data?.message ?? 'Cooldown reset', { duration: 5000 });
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed', { duration: 5000 });
+    }
+  };
+
+  const [clearBgInflationLoading, setClearBgInflationLoading] = useState(false);
+  const handleClearBodyguardHireInflationUser = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) {
+      toast.error('Enter target username above');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Clear 3h bodyguard hire inflation for "${username}"?\n\nResets the hire markup ladder (0%, 2%, 5%…) — not attack/kill inflation or game events.`,
+      )
+    ) {
+      return;
+    }
+    setClearBgInflationLoading(true);
+    try {
+      const res = await api.post('/admin/bodyguards/clear-hire-inflation', null, {
+        params: { target_username: username },
+      });
+      toast.success(res.data?.message || 'Cleared', { duration: 10000 });
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed', { duration: 8000 });
+    } finally {
+      setClearBgInflationLoading(false);
+    }
+  };
+
+  const handleClearBodyguardHireInflationAll = async () => {
+    if (
+      !window.confirm(
+        'Clear 3h bodyguard hire inflation for ALL users who have an active window or counter?\n\nEveryone’s next robot hire starts at 0% window markup until they hire again within 3h.',
+      )
+    ) {
+      return;
+    }
+    setClearBgInflationLoading(true);
+    try {
+      const res = await api.post('/admin/bodyguards/clear-hire-inflation', null, {
+        params: { all_users: true },
+      });
+      toast.success(res.data?.message || 'Cleared', { duration: 12000 });
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed', { duration: 8000 });
+    } finally {
+      setClearBgInflationLoading(false);
     }
   };
 
@@ -22291,6 +22339,28 @@ export default function Admin() {
 
               <ActionRow icon={Shield} label="Clear legacy BG drop field" description="Unset bodyguard_last_drop_at on your user (DB cleanup)" color="text-amber-400">
                 <BtnPrimary onClick={handleResetBgCooldown}>Reset</BtnPrimary>
+              </ActionRow>
+
+              <ActionRow
+                icon={Shield}
+                label="Clear 3h hire inflation (user)"
+                description="Reset hire markup ladder for target username (0% on next hire). Not kill inflation."
+                color="text-amber-400"
+              >
+                <BtnPrimary onClick={handleClearBodyguardHireInflationUser} disabled={clearBgInflationLoading || !(formData.targetUsername || '').trim()}>
+                  {clearBgInflationLoading ? '…' : 'Clear user'}
+                </BtnPrimary>
+              </ActionRow>
+
+              <ActionRow
+                icon={Shield}
+                label="Clear 3h hire inflation (all)"
+                description="Reset hire markup for every user with inflation fields set"
+                color="text-amber-400"
+              >
+                <BtnDanger onClick={handleClearBodyguardHireInflationAll} disabled={clearBgInflationLoading}>
+                  {clearBgInflationLoading ? '…' : 'Clear all'}
+                </BtnDanger>
               </ActionRow>
 
               <ActionRow icon={Bot} label="Sync robot locations" description="Set each robot BG’s city to owner’s current city (dry run first)" color="text-sky-400">
