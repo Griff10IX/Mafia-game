@@ -975,15 +975,21 @@ def _bodyguard_block_attempt_extra(
 ) -> Dict[str, Any]:
     """Top-level admin-query fields for outcome=bodyguard rows (plus first_bodyguard nested blob)."""
     blocking = (search_username or display_name or "bodyguard").strip()
+    slot_int: Optional[int] = None
+    if slot_number is not None:
+        try:
+            slot_int = int(slot_number)
+        except (TypeError, ValueError):
+            slot_int = None
     extra: Dict[str, Any] = {
         "protected_user_id": target_id,
         "protected_username": target_username,
         "blocking_bodyguard_username": blocking,
-        "bodyguard_slot": slot_number,
+        "bodyguard_slot": slot_int,
         "first_bodyguard": {
             "display_name": display_name,
             "search_username": search_username,
-            "slot_number": slot_number,
+            "slot_number": slot_int,
             "target_username": target_username,
         },
     }

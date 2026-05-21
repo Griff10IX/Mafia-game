@@ -38,7 +38,7 @@ const CopSVG = () => (
 
 const FX_EMOJIS = ["💥", "⭐", "👊", "💫", "✨"];
 
-const Hole = ({ isUp, isBonked, isWarning, isHittable, flashType, hitBurst, ducking, onWhack }) => {
+const Hole = ({ isUp, isBonked, isWarning, isHittable, flashType, hitBurst, ducking, whackEnabled, onWhack }) => {
   const handlePointerDown = useCallback(
     (e) => {
       if (e.button != null && e.button !== 0) return;
@@ -62,13 +62,15 @@ const Hole = ({ isUp, isBonked, isWarning, isHittable, flashType, hitBurst, duck
 
   return (
     <>
-      <div
-        className={`${styles.hitPad} ${isHittable ? styles.hitPadReady : ""}`}
-        onPointerDown={handlePointerDown}
-        role="button"
-        tabIndex={-1}
-        aria-label={isHittable ? "Whack copper" : "Hole"}
-      />
+      {whackEnabled && (
+        <div
+          className={`${styles.hitPad} ${isHittable ? styles.hitPadReady : ""}`}
+          onPointerDown={handlePointerDown}
+          role="button"
+          tabIndex={-1}
+          aria-label={isHittable ? "Whack copper" : "Hole"}
+        />
+      )}
       <div className={styles.hole}>
         <div className={clipClass}>
           <div className={styles.holeBg} />
@@ -459,7 +461,7 @@ export default function WhackACopper() {
       )}
 
       <div className={styles.gameArea} style={{ "--cols": cols, "--rows": rows }}>
-        <div className={styles.boardFrame}>
+        <div className={`${styles.boardFrame} ${phase === "playing" ? styles.boardFrameActive : ""}`}>
         <div className={styles.grid} style={{ gridTemplateColumns: `repeat(${cols}, 1fr)` }}>
           {Array.from({ length: gridSize }, (_, i) => {
             const hs = holeStates[i] || {};
@@ -474,6 +476,7 @@ export default function WhackACopper() {
                   flashType={hs.flash}
                   hitBurst={hs.hitBurst}
                   ducking={hs.ducking}
+                  whackEnabled={phase === "playing"}
                   onWhack={() => handleWhack(i)}
                 />
                 {hs.escaped && <div className={styles.escapedTxt}>ESCAPED!</div>}

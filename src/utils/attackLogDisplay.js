@@ -146,10 +146,31 @@ export function formatBlockingBodyguard(row) {
   return '—';
 }
 
+/** Hire API / legacy rows may store slot as number, string, or { slot, is_robot, cost, name }. */
+export function normalizeBodyguardSlotValue(raw) {
+  if (raw == null || raw === '') return null;
+  if (typeof raw === 'number' && !Number.isNaN(raw)) return raw;
+  if (typeof raw === 'string') {
+    const t = raw.trim();
+    if (!t) return null;
+    const n = parseInt(t, 10);
+    return Number.isNaN(n) ? t : n;
+  }
+  if (typeof raw === 'object') {
+    if (raw.slot != null) return normalizeBodyguardSlotValue(raw.slot);
+    if (raw.slot_number != null) return normalizeBodyguardSlotValue(raw.slot_number);
+  }
+  return null;
+}
+
 export function formatBodyguardSlot(row) {
   if (!row || typeof row !== 'object') return '—';
-  const slot = row.bodyguard_slot ?? row.first_bodyguard?.slot_number;
-  if (slot == null || slot === '') return '—';
+  const fb = row.first_bodyguard;
+  const slot =
+    normalizeBodyguardSlotValue(row.bodyguard_slot) ??
+    normalizeBodyguardSlotValue(fb?.slot_number) ??
+    normalizeBodyguardSlotValue(fb?.slot);
+  if (slot == null) return '—';
   return String(slot);
 }
 

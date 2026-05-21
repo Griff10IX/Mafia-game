@@ -12,6 +12,7 @@ import {
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import AttackLogsPanel from '../../components/staff/AttackLogsPanel';
+import { normalizeBodyguardSlotValue } from '../../utils/attackLogDisplay';
 import AdminSustainedRlEventsTable from './admin/AdminSustainedRlEventsTable';
 import styles from '../../styles/noir.module.css';
 import {
@@ -20802,7 +20803,12 @@ export default function Admin() {
                             return (
                               <tr key={key} className="border-b border-zinc-700/30 align-top">
                                 <td className="py-1 px-1 text-mutedForeground font-mono whitespace-nowrap">{h.at ? formatAdminDateTime(h.at) : '—'}</td>
-                                <td className="py-1 px-1 font-mono">{h.slot ?? '—'}</td>
+                                <td className="py-1 px-1 font-mono">
+                                  {(() => {
+                                    const s = normalizeBodyguardSlotValue(h.slot);
+                                    return s != null ? String(s) : '—';
+                                  })()}
+                                </td>
                                 <td className="py-1 px-1 max-w-[120px] truncate" title={h.bodyguard_username || ''}>{h.bodyguard_username || '—'}</td>
                                 <td className="py-1 px-1 font-mono text-[8px] break-all max-w-[140px]">{h.guard_user_id || '—'}</td>
                                 <td className="py-1 px-1 font-mono whitespace-nowrap">

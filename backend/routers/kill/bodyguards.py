@@ -63,6 +63,34 @@ BODYGUARD_INFLATION_HOURS = 3
 # First 4 levels: 2%, 5%, 7%, 12%; then +5% per level (17%, 22%, 27%, ...)
 BODYGUARD_INFLATION_PERCENTS_FIRST = [0.02, 0.05, 0.07, 0.12]
 BODYGUARD_INFLATION_EXTRA_PER_LEVEL = 0.05  # after level 4
+# Level 20 => 12% + 16*5% = 92% (needs 20 hires within one 3h window without reset)
+MAX_BODYGUARD_INFLATION_LEVEL = 24
+
+
+def _normalize_bodyguard_inflation_level(raw) -> int:
+    """
+    Stored counter = hires in current 3h window (0 = next hire has 0% markup tier).
+    Reject kill_inflation decimals (0.92) or absurd values (e.g. 92 mistaken for percent).
+    """
+    if raw is None or raw == "":
+        return 0
+    if isinstance(raw, float) and 0 < raw < 1:
+        logger.warning("bodyguard_inflation_level=%s looks like kill-inflation decimal; using 0", raw)
+        return 0
+    try:
+        n = int(float(raw))
+    except (TypeError, ValueError):
+        return 0
+    if n < 0:
+        return 0
+    if n > MAX_BODYGUARD_INFLATION_LEVEL:
+        logger.warning(
+            "bodyguard_inflation_level=%s above max %s; clamping (check for bad data)",
+            n,
+            MAX_BODYGUARD_INFLATION_LEVEL,
+        )
+        return MAX_BODYGUARD_INFLATION_LEVEL
+    return n
 
 
 def _bodyguard_inflation_percent_for_level(level: int) -> float:
@@ -82,7 +110,37 @@ def _bodyguard_inflation_level_now(user: dict) -> int:
     until = _parse_iso_datetime(until_iso)
     if until is None or datetime.now(timezone.utc) > until:
         return 0
-    return int(user.get("bodyguard_inflation_level") or 0)
+    return _normalize_bodyguard_inflation_level(user.get("bodyguard_inflation_level"))
+
+
+def _bodyguard_inflation_window_ends_at(user: dict) -> Optional[str]:
+    until_iso = user.get("bodyguard_inflation_until")
+    if not until_iso:
+        return None
+    until = _parse_iso_datetime(until_iso)
+    if until is None or until <= datetime.now(timezone.utc):
+        return None
+    return until_iso if isinstance(until_iso, str) else until.isoformat()
+
+
+async def _bodyguard_inflation_status(user: dict) -> dict:
+    """Hire-inflation counter only (separate from global event bodyguard_cost multiplier)."""
+    level = _bodyguard_inflation_level_now(user)
+    hire_pct = round(_bodyguard_inflation_percent_for_level(level) * 100)
+    next_pct = round(_bodyguard_inflation_percent_for_level(level + 1) * 100)
+    ev = await get_effective_event()
+    event_mult = float(ev.get("bodyguard_cost", 1.0) or 1.0)
+    event_markup_pct = round(max(0.0, event_mult - 1.0) * 100)
+    return {
+        "inflation_level": level,
+        "hire_inflation_pct": hire_pct,
+        "next_hire_inflation_pct": next_pct,
+        "inflation_window_ends_at": _bodyguard_inflation_window_ends_at(user),
+        "event_bodyguard_cost_mult": event_mult,
+        "event_markup_pct": event_markup_pct,
+        "window_hours": BODYGUARD_INFLATION_HOURS,
+        "tier_schedule": "0%, 2%, 5%, 7%, 12%, then +5% per extra hire in window",
+    }
 
 
 # Per-user cache for GET /bodyguards
@@ -220,21 +278,12 @@ async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str, str]
 
 # ----- Routes -----
 async def get_bodyguards_hire_inflation(current_user: dict = Depends(get_current_user)):
-    """Return current robot hire inflation % and when the 3h window resets, so the frontend can show cost and countdown."""
+    """Return hire-inflation tier (3h window) and event markup separately — not the same system."""
     user = await db.users.find_one(
         {"id": current_user["id"]},
         {"_id": 0, "bodyguard_inflation_until": 1, "bodyguard_inflation_level": 1},
     )
-    user = user or {}
-    level = _bodyguard_inflation_level_now(user)
-    pct = round(_bodyguard_inflation_percent_for_level(level) * 100)
-    until_iso = user.get("bodyguard_inflation_until")
-    window_ends_at = None
-    if until_iso:
-        until = _parse_iso_datetime(until_iso)
-        if until and until > datetime.now(timezone.utc):
-            window_ends_at = until_iso
-    return {"next_hire_inflation_pct": pct, "inflation_window_ends_at": window_ends_at}
+    return await _bodyguard_inflation_status(user or {})
 
 
 async def get_bodyguards(current_user: dict = Depends(get_current_user)):
@@ -650,13 +699,20 @@ async def _do_hire_bodyguard_reserved(
     await log_activity(current_user["id"], current_user.get("username", "?"), "bodyguard_hire", {
         "slot": slot, "is_robot": is_robot, "cost": total_cost, "name": robot_name,
     })
+    infl_after = await _bodyguard_inflation_status(
+        {
+            "bodyguard_inflation_until": window_end.isoformat(),
+            "bodyguard_inflation_level": inflation_level + 1,
+        }
+    )
     return {
         "message": f"{'Robot bodyguard ' + robot_name if is_robot else 'Human bodyguard slot'} hired for {total_cost} points",
         "bodyguard_name": robot_name,
         "slot": slot,
         "cost": total_cost,
-        "next_hire_inflation_pct": round(_bodyguard_inflation_percent_for_level(inflation_level + 1) * 100),
-        "inflation_window_ends_at": window_end.isoformat(),
+        "base_slot_cost": base_cost,
+        "hire_inflation_pct_applied": round(_bodyguard_inflation_percent_for_level(inflation_level) * 100),
+        **infl_after,
         "bodyguard": {
             "slot_number": slot,
             "is_robot": is_robot,

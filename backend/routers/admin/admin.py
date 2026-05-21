@@ -10768,12 +10768,44 @@ def register(router):
         re.IGNORECASE,
     )
 
+    def _normalize_bodyguard_slot_value(val: Any) -> Optional[int]:
+        """Coerce slot to int; hire payloads may use {slot, is_robot, cost, name}."""
+        if val is None or val == "":
+            return None
+        if isinstance(val, bool):
+            return None
+        if isinstance(val, int):
+            return val
+        if isinstance(val, float) and val == int(val):
+            return int(val)
+        if isinstance(val, str):
+            try:
+                return int(val.strip())
+            except (TypeError, ValueError):
+                return None
+        if isinstance(val, dict):
+            for key in ("slot", "slot_number"):
+                if val.get(key) is not None:
+                    return _normalize_bodyguard_slot_value(val.get(key))
+        return None
+
     def _enrich_attack_log_for_admin(doc: Dict[str, Any]) -> Dict[str, Any]:
         """Fill top-level bodyguard block fields from nested first_bodyguard or player_message."""
-        if not doc or doc.get("outcome") != "bodyguard":
+        if not doc:
             return doc
         out = dict(doc)
+        slot_norm = _normalize_bodyguard_slot_value(out.get("bodyguard_slot"))
         fb = out.get("first_bodyguard") if isinstance(out.get("first_bodyguard"), dict) else {}
+        if slot_norm is None and fb:
+            slot_norm = _normalize_bodyguard_slot_value(fb.get("slot_number"))
+            if slot_norm is None:
+                slot_norm = _normalize_bodyguard_slot_value(fb.get("slot"))
+        if slot_norm is not None:
+            out["bodyguard_slot"] = slot_norm
+        elif isinstance(out.get("bodyguard_slot"), dict):
+            out.pop("bodyguard_slot", None)
+        if out.get("outcome") != "bodyguard":
+            return out
         if not out.get("blocking_bodyguard_username"):
             blocking = (fb.get("search_username") or fb.get("display_name") or "").strip()
             if not blocking:
@@ -10787,8 +10819,10 @@ def register(router):
             out["protected_username"] = out["target_username"]
         if not out.get("protected_user_id") and out.get("target_id"):
             out["protected_user_id"] = out["target_id"]
-        if out.get("bodyguard_slot") is None and fb.get("slot_number") is not None:
-            out["bodyguard_slot"] = fb.get("slot_number")
+        if slot_norm is not None and fb.get("slot_number") is None:
+            fb = dict(fb)
+            fb["slot_number"] = slot_norm
+            out["first_bodyguard"] = fb
         return out
 
     def _summarize_attack_logs(docs: List[Dict[str, Any]]) -> Dict[str, int]:
@@ -10847,6 +10881,22 @@ def register(router):
             ]
         }
 
+    def _attack_created_at_bound(
+        bound: datetime,
+        *,
+        op: str = "$gte",
+    ) -> Dict[str, Any]:
+        """attack_attempts store created_at as BSON date; some legacy rows use ISO strings."""
+        iso = bound.isoformat()
+        z_iso = iso.replace("+00:00", "Z")
+        clauses: List[Dict[str, Any]] = [
+            {"created_at": {op: bound}},
+            {"created_at": {op: iso}},
+        ]
+        if z_iso != iso:
+            clauses.append({"created_at": {op: z_iso}})
+        return {"$or": clauses} if len(clauses) > 1 else clauses[0]
+
     def _apply_attack_logs_filters(
         q: Dict[str, Any],
         *,
@@ -10864,16 +10914,24 @@ def register(router):
         filters_applied: Dict[str, Any] = {}
         if days and not since:
             since_dt = datetime.now(timezone.utc) - timedelta(days=int(days))
-            since_iso = since_dt.isoformat()
-            q = {"$and": [q, {"created_at": {"$gte": since_iso}}]} if q else {"created_at": {"$gte": since_iso}}
+            time_clause = _attack_created_at_bound(since_dt, op="$gte")
+            q = {"$and": [q, time_clause]} if q else time_clause
             filters_applied["days"] = int(days)
         if since:
-            clause = {"created_at": {"$gt": since}}
-            q = {"$and": [q, clause]} if q else clause
+            since_dt = _spike_parse_created_at(since)
+            if since_dt:
+                time_clause = _attack_created_at_bound(since_dt, op="$gt")
+            else:
+                time_clause = {"created_at": {"$gt": since}}
+            q = {"$and": [q, time_clause]} if q else time_clause
             filters_applied["since"] = since
         if until:
-            clause = {"created_at": {"$lte": until}}
-            q = {"$and": [q, clause]} if q else clause
+            until_dt = _spike_parse_created_at(until)
+            if until_dt:
+                time_clause = _attack_created_at_bound(until_dt, op="$lte")
+            else:
+                time_clause = {"created_at": {"$lte": until}}
+            q = {"$and": [q, time_clause]} if q else time_clause
             filters_applied["until"] = until
         if bodyguard_event == "block":
             clause = {"outcome": "bodyguard"}
@@ -11045,8 +11103,12 @@ def register(router):
             raise HTTPException(status_code=404, detail="User not found")
         uid = user["id"]
         since_dt = datetime.now(timezone.utc) - timedelta(days=int(days))
-        since_iso = since_dt.isoformat()
-        base_match = {"outcome": "bodyguard", "created_at": {"$gte": since_iso}}
+        base_match = {
+            "$and": [
+                {"outcome": "bodyguard"},
+                _attack_created_at_bound(since_dt, op="$gte"),
+            ]
+        }
 
         async def _protectee_buckets() -> List[Dict[str, Any]]:
             match = {**base_match, "target_id": uid}
@@ -11152,8 +11214,12 @@ def register(router):
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin or moderator access required")
         since_dt = datetime.now(timezone.utc) - timedelta(days=int(days))
-        since_iso = since_dt.isoformat()
-        match = {"outcome": "bodyguard", "created_at": {"$gte": since_iso}}
+        match = {
+            "$and": [
+                {"outcome": "bodyguard"},
+                _attack_created_at_bound(since_dt, op="$gte"),
+            ]
+        }
         cap = int(limit)
         attacker_pipeline = [
             {"$match": match},

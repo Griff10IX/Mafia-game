@@ -59,6 +59,8 @@ export default function Bodyguards() {
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
   const [nextHireInflationPct, setNextHireInflationPct] = useState(0);
+  const [eventMarkupPct, setEventMarkupPct] = useState(0);
+  const [inflationLevel, setInflationLevel] = useState(0);
   const [inflationWindowEndsAt, setInflationWindowEndsAt] = useState(null);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [expandedSlot, setExpandedSlot] = useState(null);
@@ -102,6 +104,8 @@ export default function Bodyguards() {
     setEventsEnabled(!!w.eventsEnabled);
     const infl = w.inflation || {};
     setNextHireInflationPct(infl.next_hire_inflation_pct ?? 0);
+    setEventMarkupPct(infl.event_markup_pct ?? 0);
+    setInflationLevel(infl.inflation_level ?? 0);
     setInflationWindowEndsAt(infl.inflation_window_ends_at ?? null);
     setBgStats(w.stats ?? null);
     setInvites(w.invites ?? { sent: [], received: [] });
@@ -186,6 +190,8 @@ export default function Bodyguards() {
       setEvent(eventsRes.data?.event ?? null);
       setEventsEnabled(!!eventsRes.data?.events_enabled);
       setNextHireInflationPct(inflationRes.data?.next_hire_inflation_pct ?? 0);
+      setEventMarkupPct(inflationRes.data?.event_markup_pct ?? 0);
+      setInflationLevel(inflationRes.data?.inflation_level ?? 0);
       setInflationWindowEndsAt(inflationRes.data?.inflation_window_ends_at ?? null);
       setBgStats(statsRes.data ?? null);
       setInvites(invitesRes.data ?? { sent: [], received: [] });
@@ -294,6 +300,12 @@ export default function Bodyguards() {
       }
       if (typeof response?.data?.next_hire_inflation_pct === 'number') {
         setNextHireInflationPct(response.data.next_hire_inflation_pct);
+      }
+      if (typeof response?.data?.event_markup_pct === 'number') {
+        setEventMarkupPct(response.data.event_markup_pct);
+      }
+      if (typeof response?.data?.inflation_level === 'number') {
+        setInflationLevel(response.data.inflation_level);
       }
       if (response?.data?.inflation_window_ends_at) {
         setInflationWindowEndsAt(response.data.inflation_window_ends_at);
@@ -654,13 +666,27 @@ export default function Bodyguards() {
               {`🤖 Hire robot (${getHireCost(nextEmptySlot)} pts${nextHireInflationPct > 0 ? ` +${nextHireInflationPct}%` : ''})`}
             </button>
           )}
-          {(nextHireInflationPct > 0 || inflationCountdown) && (
-            <div className="flex items-center gap-1.5 text-amber-400/90">
+          {(nextHireInflationPct > 0 || eventMarkupPct > 0 || inflationCountdown) && (
+            <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-amber-400/90 text-[10px]">
               {nextHireInflationPct > 0 && (
-                <span>Next hire: <strong>+{nextHireInflationPct}%</strong></span>
+                <span>
+                  3h hire markup: <strong>+{nextHireInflationPct}%</strong>
+                  {inflationLevel > 0 ? (
+                    <span className="text-mutedForeground"> (hire #{inflationLevel + 1} in window)</span>
+                  ) : null}
+                </span>
+              )}
+              {eventMarkupPct > 0 && (
+                <span className="text-primary/90">
+                  {nextHireInflationPct > 0 ? '· ' : ''}
+                  Event on guards: <strong>+{eventMarkupPct}%</strong>
+                </span>
               )}
               {inflationCountdown && (
-                <span className="text-mutedForeground">· Resets in {inflationCountdown}</span>
+                <span className="text-mutedForeground">
+                  {(nextHireInflationPct > 0 || eventMarkupPct > 0) ? '· ' : ''}
+                  Hire markup resets in {inflationCountdown}
+                </span>
               )}
             </div>
           )}

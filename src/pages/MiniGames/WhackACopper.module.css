@@ -257,6 +257,11 @@
     inset 0 2px 12px rgba(0, 0, 0, 0.45),
     0 6px 20px rgba(0, 0, 0, 0.35);
   padding: 6px;
+  pointer-events: none;
+}
+
+.boardFrameActive {
+  pointer-events: auto;
 }
 
 .grid {
@@ -617,6 +622,8 @@
   align-items: center;
   justify-content: center;
   padding: 1rem;
+  z-index: 30;
+  pointer-events: auto;
 }
 
 .ovBox {
