@@ -1050,6 +1050,9 @@ export default function Admin() {
   const [bgInflationAuditAllUsers, setBgInflationAuditAllUsers] = useState(false);
   const [bgInflationAuditLoading, setBgInflationAuditLoading] = useState(false);
   const [bgInflationAuditData, setBgInflationAuditData] = useState(null);
+  const [bgInflationRefundBonus25, setBgInflationRefundBonus25] = useState(false);
+  const [bgInflationRefundLoading, setBgInflationRefundLoading] = useState(false);
+  const [bgInflationRefundResult, setBgInflationRefundResult] = useState(null);
   const [crimeLogsUsername, setCrimeLogsUsername] = useState('');
   const [crimeLogsLimit, setCrimeLogsLimit] = useState(500);
   const [crimeLogsData, setCrimeLogsData] = useState(null);
@@ -6738,6 +6741,44 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to load inflation overpay audit');
     } finally {
       setBgInflationAuditLoading(false);
+    }
+  };
+
+  const handleBodyguardInflationRefund = async (dryRun = false) => {
+    const un = (bodyguardAuditUsername || '').trim();
+    if (!bgInflationAuditAllUsers && !un) {
+      toast.error('Enter a username or check “All users in range”');
+      return;
+    }
+    const auditTotal = bgInflationAuditData?.totals?.overpaid_points;
+    const refundPreview = auditTotal != null
+      ? (bgInflationRefundBonus25 ? Math.floor(auditTotal * 1.25) : auditTotal)
+      : null;
+    const bonusLabel = bgInflationRefundBonus25 ? ' (+25% goodwill bonus)' : '';
+    if (!dryRun) {
+      const ok = window.confirm(
+        `Refund ${refundPreview != null ? refundPreview.toLocaleString() : 'calculated from audit'} pts total${bonusLabel} to users in this audit window? Each player gets an inbox breakdown. Re-runs skip already-refunded users.`,
+      );
+      if (!ok) return;
+    }
+    setBgInflationRefundLoading(true);
+    if (dryRun) setBgInflationRefundResult(null);
+    try {
+      const payload = {
+        robots_only: true,
+        bonus_25_percent: bgInflationRefundBonus25,
+        dry_run: dryRun,
+      };
+      if (bgInflationAuditSince.trim()) payload.since = bgInflationAuditSince.trim();
+      if (bgInflationAuditUntil.trim()) payload.until = bgInflationAuditUntil.trim();
+      if (!bgInflationAuditAllUsers && un) payload.target_username = un;
+      const res = await api.post('/admin/bodyguards/inflation-overpay-refund', payload);
+      setBgInflationRefundResult(res.data || null);
+      toast.success(res.data?.message || (dryRun ? 'Refund preview ready' : 'Refunds sent'));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Refund failed');
+    } finally {
+      setBgInflationRefundLoading(false);
     }
   };
 
@@ -20937,6 +20978,30 @@ export default function Admin() {
                 <BtnPrimary type="button" onClick={handleFetchBgInflationOverpayAudit} disabled={bgInflationAuditLoading}>
                   {bgInflationAuditLoading ? 'Loading…' : 'Inflation overpay audit'}
                 </BtnPrimary>
+                <label className="flex items-center gap-1.5 text-[10px] font-heading text-mutedForeground cursor-pointer pb-1">
+                  <input
+                    type="checkbox"
+                    checked={bgInflationRefundBonus25}
+                    onChange={(e) => setBgInflationRefundBonus25(e.target.checked)}
+                    className="rounded border-zinc-600"
+                  />
+                  +25% goodwill on refund
+                </label>
+                <BtnSecondary
+                  type="button"
+                  onClick={() => handleBodyguardInflationRefund(true)}
+                  disabled={bgInflationRefundLoading}
+                >
+                  {bgInflationRefundLoading ? '…' : 'Preview refund'}
+                </BtnSecondary>
+                <button
+                  type="button"
+                  onClick={() => handleBodyguardInflationRefund(false)}
+                  disabled={bgInflationRefundLoading}
+                  className="px-2 py-1 rounded border border-emerald-500/45 bg-emerald-500/10 text-[10px] font-heading font-bold text-emerald-300 hover:bg-emerald-500/20 disabled:opacity-50"
+                >
+                  {bgInflationRefundLoading ? '…' : 'Refund & notify all'}
+                </button>
               </div>
               {bgInflationAuditData && (
                 <div className="space-y-2 border border-amber-500/30 rounded-lg p-2 bg-black/20">
@@ -20983,6 +21048,44 @@ export default function Admin() {
                         {JSON.stringify(bgInflationAuditData.users[0].hires, null, 2)}
                       </pre>
                     </details>
+                  )}
+                </div>
+              )}
+              {bgInflationRefundResult && (
+                <div className="space-y-2 border border-emerald-500/30 rounded-lg p-2 bg-emerald-950/10">
+                  <p className="text-[10px] font-bold text-emerald-300 uppercase tracking-wide">
+                    {bgInflationRefundResult.summary?.dry_run ? 'Refund preview' : 'Refund result'}
+                  </p>
+                  <p className="text-[10px] font-heading text-foreground">{bgInflationRefundResult.message}</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-heading">
+                    <div>Eligible: <span className="font-mono">{bgInflationRefundResult.summary?.users_eligible ?? 0}</span></div>
+                    <div>Refunded: <span className="font-mono text-emerald-300">{bgInflationRefundResult.summary?.users_refunded ?? 0}</span></div>
+                    <div>Total pts: <span className="font-mono text-emerald-300 font-bold">{(bgInflationRefundResult.summary?.refund_points ?? 0).toLocaleString()}</span></div>
+                    <div>Already done: <span className="font-mono">{bgInflationRefundResult.summary?.users_skipped_already_refunded ?? 0}</span></div>
+                  </div>
+                  {Array.isArray(bgInflationRefundResult.results) && bgInflationRefundResult.results.length > 0 && (
+                    <div className="max-h-[200px] overflow-auto rounded border border-zinc-700/50">
+                      <table className="w-full text-left border-collapse text-[9px] font-heading min-w-[520px]">
+                        <thead className="sticky top-0 bg-zinc-900/95">
+                          <tr className="border-b border-zinc-700/50">
+                            <th className="py-1 px-1">User</th>
+                            <th className="py-1 px-1">Status</th>
+                            <th className="py-1 px-1">Overpaid</th>
+                            <th className="py-1 px-1">Refund</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {bgInflationRefundResult.results.map((r) => (
+                            <tr key={r.user_id || r.username} className="border-b border-zinc-700/30">
+                              <td className="py-1 px-1">{r.username}</td>
+                              <td className="py-1 px-1">{r.status}</td>
+                              <td className="py-1 px-1 font-mono">{(r.overpaid_points ?? 0).toLocaleString()}</td>
+                              <td className="py-1 px-1 font-mono text-emerald-300">{(r.refund_points ?? 0).toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
               )}

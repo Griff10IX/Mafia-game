@@ -404,6 +404,14 @@ def register(router):
 
         reviver_money = int(current_user.get("money") or 0)
         reviver_points_after = points_balance - REVIVE_COST
+        if dead_user.get("retrieval_used"):
+            dead_carry = max(
+                0,
+                int(dead_user.get("points") or 0) - int(dead_user.get("points_at_death") or 0),
+            )
+        else:
+            dead_carry = max(0, int(dead_user.get("points_at_death") or 0))
+        revived_points = reviver_points_after + dead_carry
         now_iso = datetime.now(timezone.utc).isoformat()
 
         # 1) Atomically claim the one-time revive slot for this email (insert-first gate)
@@ -437,7 +445,7 @@ def register(router):
                         "is_dead": False,
                         "dead_at": None,
                         "money": reviver_money,
-                        "points": reviver_points_after,
+                        "points": revived_points,
                         "health": DEFAULT_HEALTH,
                         "health_regen_last_at": now_iso,
                         "in_jail": False,
@@ -461,8 +469,8 @@ def register(router):
                 if locked_now:
                     raise HTTPException(status_code=403, detail=ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL)
                 raise HTTPException(status_code=400, detail="That account could not be revived.")
-            if reviver_points_after > 0:
-                await log_points_event(db, user_id=dead_user["id"], points=reviver_points_after, event_type="dead_alive_reviver_pay", event_ref=current_user["id"])
+            if revived_points > 0:
+                await log_points_event(db, user_id=dead_user["id"], points=revived_points, event_type="dead_alive_reviver_pay", event_ref=current_user["id"])
             # 4) Kill reviving account
             await db.users.update_one(
                 {"id": current_user["id"]},
@@ -488,7 +496,7 @@ def register(router):
             notification_body = (
                 f"This account was revived for {REVIVE_COST:,} points!\n\n"
                 f"Balance before revive: $0 cash, 0 points\n"
-                f"Balance after revive: ${reviver_money:,} cash, {reviver_points_after:,} points"
+                f"Balance after revive: ${reviver_money:,} cash, {revived_points:,} points"
             )
             await send_notification(
                 dead_user["id"],
@@ -510,5 +518,5 @@ def register(router):
             "message": f"{revived_username} has been revived with your money and points. This account is now dead; log in as {revived_username} to continue.",
             "revived_username": revived_username,
             "revived_balance_cash": reviver_money,
-            "revived_balance_points": reviver_points_after,
+            "revived_balance_points": revived_points,
         }

@@ -1788,52 +1788,242 @@ async def _fetch_ledger_hires_for_audit(
     return out
 
 
-async def admin_bodyguard_inflation_overpay_audit(
-    since: Optional[str] = Query(None, description="ISO datetime — report hires on/after this time."),
-    until: Optional[str] = Query(None, description="ISO datetime — report hires on/before this time (default now)."),
-    target_username: Optional[str] = Query(None, description="Single user (username). Omit for all users in range."),
-    robots_only: bool = Query(True, description="Only include robot hires in the report totals/rows."),
-    include_all_hires: bool = Query(
-        False,
-        description="If true with a single user, include non-overpaid hires in hires_in_range (can be large).",
-    ),
-    limit: int = Query(5000, ge=1, le=50000, description="Max ledger rows fetched per user (or overall cap)."),
-    current_user: dict = Depends(get_current_user),
-):
-    """
-    Admin/mod: estimate bodyguard hire overpayment from stale inflation counter after 3h window reset.
-    Uses point_ledger_events (bodyguard_hire) and replays correct window markup vs what was charged.
-    """
-    if not _admin_or_mod(current_user):
-        raise HTTPException(status_code=403, detail="Admin or moderator access required")
+def _fmt_audit_period_label(dt: Optional[datetime]) -> str:
+    if not dt:
+        return "—"
+    return dt.strftime("%d %b %Y %H:%M UTC")
 
-    since_dt = _parse_admin_datetime(since)
-    until_dt = _parse_admin_datetime(until) or datetime.now(timezone.utc)
-    if since_dt and since_dt > until_dt:
-        raise HTTPException(status_code=400, detail="since must be before until")
 
+def _bodyguard_inflation_refund_origin_ref(user_id: str, since_dt: Optional[datetime], until_dt: datetime) -> str:
+    since_key = since_dt.isoformat() if since_dt else "all"
+    until_key = until_dt.isoformat() if until_dt else "now"
+    return f"bodyguard_inflation_refund:{user_id}:{since_key}:{until_key}"
+
+
+async def _resolve_inflation_refund_credit(user_id: str) -> Dict[str, Any]:
+    """Where inflation refund points should land so Dead > Alive / revive can recover them."""
+    proj = {"_id": 0, "id": 1, "username": 1, "email": 1, "is_dead": 1, "retrieval_used": 1}
+    u = await db.users.find_one({"id": user_id}, proj)
+    if not u:
+        return {
+            "credit_user_id": user_id,
+            "credit_username": "?",
+            "original_user_id": user_id,
+            "original_username": "?",
+            "redirect_reason": "user_missing",
+            "bump_points_at_death": False,
+            "is_dead": False,
+        }
+    uname = (u.get("username") or "").strip() or "?"
+    if not u.get("is_dead"):
+        return {
+            "credit_user_id": user_id,
+            "credit_username": uname,
+            "original_user_id": user_id,
+            "original_username": uname,
+            "redirect_reason": None,
+            "bump_points_at_death": False,
+            "is_dead": False,
+        }
+    if not u.get("retrieval_used"):
+        notify_also_user_id: Optional[str] = None
+        em = (u.get("email") or "").strip().lower()
+        if em and not (em.startswith("dead_") and em.endswith("@deleted")) and "@" in em:
+            alive = await db.users.find_one(
+                {"email": em, "is_dead": {"$ne": True}, "id": {"$ne": user_id}},
+                {"_id": 0, "id": 1},
+            )
+            if alive and alive.get("id"):
+                notify_also_user_id = alive["id"]
+        return {
+            "credit_user_id": user_id,
+            "credit_username": uname,
+            "original_user_id": user_id,
+            "original_username": uname,
+            "redirect_reason": "dead_estate",
+            "bump_points_at_death": True,
+            "is_dead": True,
+            "retrieval_used": False,
+            "notify_also_user_id": notify_also_user_id,
+        }
+    em = (u.get("email") or "").strip().lower()
+    if em and not (em.startswith("dead_") and em.endswith("@deleted")) and "@" in em:
+        alive = await db.users.find_one(
+            {"email": em, "is_dead": {"$ne": True}, "id": {"$ne": user_id}},
+            {"_id": 0, "id": 1, "username": 1},
+        )
+        if alive and alive.get("id"):
+            return {
+                "credit_user_id": alive["id"],
+                "credit_username": (alive.get("username") or "").strip() or "?",
+                "original_user_id": user_id,
+                "original_username": uname,
+                "redirect_reason": "same_email_alive_after_retrieval",
+                "bump_points_at_death": False,
+                "is_dead": True,
+                "retrieval_used": True,
+            }
+    notify_also_user_id: Optional[str] = None
+    em = (u.get("email") or "").strip().lower()
+    if em and not (em.startswith("dead_") and em.endswith("@deleted")) and "@" in em:
+        alive = await db.users.find_one(
+            {"email": em, "is_dead": {"$ne": True}, "id": {"$ne": user_id}},
+            {"_id": 0, "id": 1},
+        )
+        if alive and alive.get("id"):
+            notify_also_user_id = alive["id"]
+    return {
+        "credit_user_id": user_id,
+        "credit_username": uname,
+        "original_user_id": user_id,
+        "original_username": uname,
+        "redirect_reason": "dead_post_retrieval_revive_only",
+        "bump_points_at_death": False,
+        "is_dead": True,
+        "retrieval_used": True,
+        "notify_also_user_id": notify_also_user_id,
+    }
+
+
+async def _credit_bodyguard_inflation_refund(
+    *,
+    credit_user_id: str,
+    original_user_id: str,
+    refund_points: int,
+    origin_ref: str,
+    meta: Dict[str, Any],
+    admin_user: dict,
+    bump_points_at_death: bool = False,
+) -> bool:
+    """Credit refund points (idempotent). Returns True if newly credited."""
+    if refund_points <= 0:
+        return False
+    existing = await db.point_ledger_events.find_one(
+        {"event_type": "bodyguard_inflation_refund", "origin_ref": origin_ref},
+        {"_id": 1},
+    )
+    if existing:
+        return False
+    now_iso = datetime.now(timezone.utc).isoformat()
+    lot_id = origin_ref
+    inc: Dict[str, int] = {"points": refund_points}
+    if bump_points_at_death:
+        inc["points_at_death"] = refund_points
+    await db.users.update_one({"id": credit_user_id}, {"$inc": inc})
+    await db.point_lots.insert_one(
+        {
+            "id": lot_id,
+            "owner_user_id": credit_user_id,
+            "origin_type": "bodyguard_inflation_refund",
+            "origin_ref": origin_ref,
+            "remaining_points": refund_points,
+            "root_purchase_ref": None,
+            "parent_lot_id": None,
+            "created_at": now_iso,
+            "updated_at": now_iso,
+        }
+    )
+    await db.point_ledger_events.insert_one(
+        {
+            "id": str(uuid.uuid4()),
+            "event_type": "bodyguard_inflation_refund",
+            "user_id": credit_user_id,
+            "points": refund_points,
+            "lot_id": lot_id,
+            "origin_ref": origin_ref,
+            "root_purchase_ref": None,
+            "meta": {
+                **meta,
+                "original_user_id": original_user_id,
+                "admin_user_id": admin_user.get("id"),
+                "admin_username": admin_user.get("username") or "?",
+            },
+            "created_at": now_iso,
+        }
+    )
+    return True
+
+
+def _bodyguard_inflation_refund_notification_message(
+    *,
+    username: str,
+    since_dt: Optional[datetime],
+    until_dt: datetime,
+    affected_hires: int,
+    paid_points: int,
+    correct_points: int,
+    overpaid_points: int,
+    bonus_points: int,
+    refund_total: int,
+    bonus_25_percent: bool,
+    credit_target: Optional[Dict[str, Any]] = None,
+) -> str:
+    period = f"{_fmt_audit_period_label(since_dt)} → {_fmt_audit_period_label(until_dt)}"
+    lines = [
+        f"Hi {username},",
+        "",
+        "We reviewed your robot bodyguard hires after a server bug that kept the hire inflation counter too high when a new 3-hour window started.",
+        "",
+        f"Period reviewed: {period}",
+        f"Robot hires affected: {affected_hires:,}",
+        f"Total you paid (those hires): {paid_points:,} pts",
+        f"Correct cost should have been: {correct_points:,} pts",
+        f"Overpaid: {overpaid_points:,} pts",
+    ]
+    if bonus_25_percent and bonus_points > 0:
+        lines.append(f"Goodwill bonus (+25% on overpay): {bonus_points:,} pts")
+    lines.append(f"Refund credited: {refund_total:,} pts")
+    ct = credit_target or {}
+    reason = ct.get("redirect_reason")
+    orig_un = (ct.get("original_username") or username).strip() or username
+    if reason == "dead_estate":
+        lines.extend(
+            [
+                "",
+                f"This refund was added to your dead account ({orig_un}) estate.",
+                "Use Dead > Alive on that username from your main (alive) account to retrieve it,",
+                "or revive that dead account — the points are included in the estate.",
+            ]
+        )
+    elif reason == "same_email_alive_after_retrieval":
+        credit_un = (ct.get("credit_username") or username).strip() or username
+        if credit_un.lower() != orig_un.lower():
+            lines.extend(
+                [
+                    "",
+                    f"Your dead account ({orig_un}) had already used Dead > Alive, so this refund was",
+                    f"credited to your alive account ({credit_un}) instead.",
+                ]
+            )
+    elif reason == "dead_post_retrieval_revive_only":
+        lines.extend(
+            [
+                "",
+                f"Your dead account ({orig_un}) had already used Dead > Alive.",
+                "This refund is on the dead account — use Revive (Dead > Alive page) to recover it.",
+            ]
+        )
+    else:
+        lines.append("Refund credited to your account.")
+    lines.extend(["", "Sorry for the hassle — thanks for playing."])
+    return "\n".join(lines)
+
+
+async def _run_bodyguard_inflation_overpay_audit(
+    *,
+    since_dt: Optional[datetime],
+    until_dt: datetime,
+    target_uid: Optional[str],
+    target_un: Optional[str],
+    robots_only: bool,
+    include_all_hires: bool,
+    limit: int,
+) -> Dict[str, Any]:
     context_since = (
         since_dt - timedelta(hours=BODYGUARD_INFLATION_HOURS)
         if since_dt
         else until_dt - timedelta(days=90)
     )
-
-    target_uid: Optional[str] = None
-    target_un: Optional[str] = None
-    key = (target_username or "").strip()
-    if key:
-        username_pattern = _username_pattern(key)
-        target = await db.users.find_one(
-            {"username": username_pattern} if username_pattern else {"id": key},
-            {"_id": 0, "id": 1, "username": 1},
-        )
-        if not target:
-            target = await db.users.find_one({"id": key}, {"_id": 0, "id": 1, "username": 1})
-        if not target:
-            raise HTTPException(status_code=404, detail="User not found")
-        target_uid = target["id"]
-        target_un = target.get("username")
-
     users_out: List[Dict[str, Any]] = []
     grand = {
         "users_with_overpay": 0,
@@ -1932,6 +2122,254 @@ async def admin_bodyguard_inflation_overpay_audit(
         "totals": grand,
         "users": users_out,
         "ledger_rows_scanned_cap": limit,
+    }
+
+
+async def admin_bodyguard_inflation_overpay_audit(
+    since: Optional[str] = Query(None, description="ISO datetime — report hires on/after this time."),
+    until: Optional[str] = Query(None, description="ISO datetime — report hires on/before this time (default now)."),
+    target_username: Optional[str] = Query(None, description="Single user (username). Omit for all users in range."),
+    robots_only: bool = Query(True, description="Only include robot hires in the report totals/rows."),
+    include_all_hires: bool = Query(
+        False,
+        description="If true with a single user, include non-overpaid hires in hires_in_range (can be large).",
+    ),
+    limit: int = Query(5000, ge=1, le=50000, description="Max ledger rows fetched per user (or overall cap)."),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Admin/mod: estimate bodyguard hire overpayment from stale inflation counter after 3h window reset.
+    Uses point_ledger_events (bodyguard_hire) and replays correct window markup vs what was charged.
+    """
+    if not _admin_or_mod(current_user):
+        raise HTTPException(status_code=403, detail="Admin or moderator access required")
+
+    since_dt = _parse_admin_datetime(since)
+    until_dt = _parse_admin_datetime(until) or datetime.now(timezone.utc)
+    if since_dt and since_dt > until_dt:
+        raise HTTPException(status_code=400, detail="since must be before until")
+
+    target_uid: Optional[str] = None
+    target_un: Optional[str] = None
+    key = (target_username or "").strip()
+    if key:
+        username_pattern = _username_pattern(key)
+        target = await db.users.find_one(
+            {"username": username_pattern} if username_pattern else {"id": key},
+            {"_id": 0, "id": 1, "username": 1},
+        )
+        if not target:
+            target = await db.users.find_one({"id": key}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        target_uid = target["id"]
+        target_un = target.get("username")
+
+    return await _run_bodyguard_inflation_overpay_audit(
+        since_dt=since_dt,
+        until_dt=until_dt,
+        target_uid=target_uid,
+        target_un=target_un,
+        robots_only=robots_only,
+        include_all_hires=include_all_hires,
+        limit=limit,
+    )
+
+
+class BodyguardInflationRefundRequest(BaseModel):
+    since: Optional[str] = None
+    until: Optional[str] = None
+    target_username: Optional[str] = None
+    robots_only: bool = True
+    bonus_25_percent: bool = False
+    dry_run: bool = False
+    limit: int = 5000
+
+
+async def admin_bodyguard_inflation_overpay_refund(
+    body: BodyguardInflationRefundRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Admin: refund bodyguard hire overpay from the inflation audit (same params as GET audit).
+    Idempotent per user + since/until window. Optionally adds 25% goodwill bonus on overpay.
+    Sends each player an inbox notification with a plain-language breakdown.
+    """
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    since_dt = _parse_admin_datetime(body.since)
+    until_dt = _parse_admin_datetime(body.until) or datetime.now(timezone.utc)
+    if since_dt and since_dt > until_dt:
+        raise HTTPException(status_code=400, detail="since must be before until")
+
+    target_uid: Optional[str] = None
+    target_un: Optional[str] = None
+    key = (body.target_username or "").strip()
+    if key:
+        username_pattern = _username_pattern(key)
+        target = await db.users.find_one(
+            {"username": username_pattern} if username_pattern else {"id": key},
+            {"_id": 0, "id": 1, "username": 1},
+        )
+        if not target:
+            target = await db.users.find_one({"id": key}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        target_uid = target["id"]
+        target_un = target.get("username")
+
+    audit = await _run_bodyguard_inflation_overpay_audit(
+        since_dt=since_dt,
+        until_dt=until_dt,
+        target_uid=target_uid,
+        target_un=target_un,
+        robots_only=body.robots_only,
+        include_all_hires=False,
+        limit=max(1, min(int(body.limit or 5000), 50000)),
+    )
+
+    results: List[Dict[str, Any]] = []
+    summary = {
+        "users_eligible": 0,
+        "users_refunded": 0,
+        "users_skipped_already_refunded": 0,
+        "users_skipped_zero": 0,
+        "overpaid_points": 0,
+        "bonus_points": 0,
+        "refund_points": 0,
+        "dry_run": body.dry_run,
+        "bonus_25_percent": body.bonus_25_percent,
+    }
+
+    for row in audit.get("users") or []:
+        uid = row.get("user_id")
+        uname = row.get("username") or "?"
+        overpaid = int(row.get("overpaid_points") or 0)
+        if overpaid <= 0:
+            summary["users_skipped_zero"] += 1
+            continue
+        summary["users_eligible"] += 1
+        summary["overpaid_points"] += overpaid
+        bonus = int(overpaid * 0.25) if body.bonus_25_percent else 0
+        refund_total = overpaid + bonus
+        summary["bonus_points"] += bonus
+        summary["refund_points"] += refund_total
+        origin_ref = _bodyguard_inflation_refund_origin_ref(uid, since_dt, until_dt)
+        credit_target = await _resolve_inflation_refund_credit(uid)
+
+        existing = await db.point_ledger_events.find_one(
+            {"event_type": "bodyguard_inflation_refund", "origin_ref": origin_ref},
+            {"_id": 1},
+        )
+        if existing:
+            summary["users_skipped_already_refunded"] += 1
+            results.append(
+                {
+                    "user_id": uid,
+                    "username": uname,
+                    "status": "already_refunded",
+                    "overpaid_points": overpaid,
+                    "refund_points": refund_total,
+                    "credit_user_id": credit_target.get("credit_user_id"),
+                    "credit_username": credit_target.get("credit_username"),
+                    "redirect_reason": credit_target.get("redirect_reason"),
+                    "is_dead": credit_target.get("is_dead"),
+                }
+            )
+            continue
+
+        entry = {
+            "user_id": uid,
+            "username": uname,
+            "status": "dry_run" if body.dry_run else "refunded",
+            "affected_hires": int(row.get("affected_hires") or 0),
+            "paid_points": int(row.get("paid_points") or 0),
+            "correct_points": int(row.get("correct_points") or 0),
+            "overpaid_points": overpaid,
+            "bonus_points": bonus,
+            "refund_points": refund_total,
+            "credit_user_id": credit_target.get("credit_user_id"),
+            "credit_username": credit_target.get("credit_username"),
+            "redirect_reason": credit_target.get("redirect_reason"),
+            "is_dead": credit_target.get("is_dead"),
+            "retrieval_used": credit_target.get("retrieval_used"),
+        }
+        results.append(entry)
+
+        if body.dry_run:
+            continue
+
+        meta = {
+            "since": audit.get("since"),
+            "until": audit.get("until"),
+            "affected_hires": entry["affected_hires"],
+            "paid_points": entry["paid_points"],
+            "correct_points": entry["correct_points"],
+            "overpaid_points": overpaid,
+            "bonus_points": bonus,
+            "bonus_25_percent": body.bonus_25_percent,
+            "robots_only": body.robots_only,
+            "redirect_reason": credit_target.get("redirect_reason"),
+            "original_username": credit_target.get("original_username"),
+            "credit_username": credit_target.get("credit_username"),
+        }
+        credited = await _credit_bodyguard_inflation_refund(
+            credit_user_id=credit_target["credit_user_id"],
+            original_user_id=credit_target["original_user_id"],
+            refund_points=refund_total,
+            origin_ref=origin_ref,
+            meta=meta,
+            admin_user=current_user,
+            bump_points_at_death=bool(credit_target.get("bump_points_at_death")),
+        )
+        if not credited:
+            entry["status"] = "already_refunded"
+            summary["users_skipped_already_refunded"] += 1
+            continue
+
+        summary["users_refunded"] += 1
+        msg = _bodyguard_inflation_refund_notification_message(
+            username=uname,
+            since_dt=since_dt,
+            until_dt=until_dt,
+            affected_hires=entry["affected_hires"],
+            paid_points=entry["paid_points"],
+            correct_points=entry["correct_points"],
+            overpaid_points=overpaid,
+            bonus_points=bonus,
+            refund_total=refund_total,
+            bonus_25_percent=body.bonus_25_percent,
+            credit_target=credit_target,
+        )
+        notify_ids = {credit_target["credit_user_id"]}
+        also = credit_target.get("notify_also_user_id")
+        if also:
+            notify_ids.add(also)
+        for notify_uid in notify_ids:
+            try:
+                await send_notification(
+                    notify_uid,
+                    "Bodyguard hire refund",
+                    msg,
+                    "reward",
+                    category="system",
+                    always_deliver=True,
+                )
+            except Exception as e:
+                logger.warning("bodyguard inflation refund notify %s: %s", notify_uid, e)
+
+    return {
+        "message": (
+            f"Dry run: would refund {summary['refund_points']:,} pts to {summary['users_eligible']} user(s)."
+            if body.dry_run
+            else f"Refunded {summary['refund_points']:,} pts to {summary['users_refunded']} user(s)."
+        ),
+        "summary": summary,
+        "audit_totals": audit.get("totals"),
+        "since": audit.get("since"),
+        "until": audit.get("until"),
+        "results": results,
     }
 
 
@@ -2304,4 +2742,5 @@ def register(router):
     router.add_api_route("/admin/bodyguards/reset-cooldown", admin_reset_bodyguard_cooldown, methods=["POST"])
     router.add_api_route("/admin/bodyguards/clear-hire-inflation", admin_clear_bodyguard_hire_inflation, methods=["POST"])
     router.add_api_route("/admin/bodyguards/inflation-overpay-audit", admin_bodyguard_inflation_overpay_audit, methods=["GET"])
+    router.add_api_route("/admin/bodyguards/inflation-overpay-refund", admin_bodyguard_inflation_overpay_refund, methods=["POST"])
     router.add_api_route("/admin/bodyguards/hire-intervals", admin_get_bodyguard_hire_intervals, methods=["GET"])
