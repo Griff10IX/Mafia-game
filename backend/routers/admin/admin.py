@@ -309,6 +309,16 @@ class GiveEveryoneExclusiveCarsRequest(BaseModel):
     al_capone: bool = False
 
 
+class AdminTransferExclusiveCarRequest(BaseModel):
+    from_username: str
+    to_username: Optional[str] = None
+    car_id: Optional[str] = None
+    user_car_id: Optional[str] = None
+    replace_recipient_duplicate: bool = True
+    dry_run: bool = False
+    notify: bool = True
+
+
 class AdminChangeEmailRequest(BaseModel):
     new_email: str
 
@@ -3840,8 +3850,20 @@ def register(router):
         if not rows:
             return {"cars": list(per_car.values())}
         user_ids = sorted({r.get("_id", {}).get("user_id") for r in rows if r.get("_id", {}).get("user_id")})
-        users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "username": 1}).to_list(60_000)
+        users = await db.users.find(
+            {"id": {"$in": user_ids}},
+            {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "killed_by_username": 1, "killed_by_user_id": 1},
+        ).to_list(60_000)
         usernames = {u.get("id"): u.get("username") or "?" for u in users}
+        user_meta = {u.get("id"): u for u in users}
+        garage_rows = await db.user_cars.find(
+            {"car_id": {"$in": car_ids}, "user_id": {"$in": user_ids}},
+            {"_id": 0, "id": 1, "user_id": 1, "car_id": 1, "listed_for_sale": 1},
+        ).to_list(500)
+        garage_by_user_car: Dict[str, List[dict]] = {}
+        for gr in garage_rows:
+            key = f"{gr.get('user_id')}:{gr.get('car_id')}"
+            garage_by_user_car.setdefault(key, []).append(gr)
         for r in rows:
             rid = r.get("_id") or {}
             cid = rid.get("car_id")
@@ -3849,8 +3871,18 @@ def register(router):
             if not cid or not uid or cid not in per_car:
                 continue
             owned_count = int(r.get("owned_count") or 0)
+            um = user_meta.get(uid) or {}
+            gkey = f"{uid}:{cid}"
             per_car[cid]["owners"].append(
-                {"user_id": uid, "username": usernames.get(uid, "?"), "owned_count": owned_count}
+                {
+                    "user_id": uid,
+                    "username": usernames.get(uid, "?"),
+                    "owned_count": owned_count,
+                    "is_dead": bool(um.get("is_dead")),
+                    "killed_by_username": um.get("killed_by_username"),
+                    "killed_by_user_id": um.get("killed_by_user_id"),
+                    "garage_rows": garage_by_user_car.get(gkey, []),
+                }
             )
             per_car[cid]["owners_count"] += 1
             per_car[cid]["owned_count_total"] += owned_count
@@ -3864,6 +3896,171 @@ def register(router):
             key=lambda x: (-int(x.get("owners_count") or 0), (x.get("name") or "").lower()),
         )
         return {"cars": cars_out}
+
+    @router.post("/admin/cars/transfer-exclusive")
+    async def admin_transfer_exclusive_car(
+        body: AdminTransferExclusiveCarRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Transfer an exclusive / loot-exclusive garage row to another user (e.g. dead owner → killer). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from_key = (body.from_username or "").strip()
+        if not from_key:
+            raise HTTPException(status_code=400, detail="from_username required")
+        from_pattern = _username_pattern(from_key)
+        from_user = await db.users.find_one(
+            {"username": from_pattern},
+            {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "killed_by_username": 1, "killed_by_user_id": 1},
+        )
+        if not from_user:
+            raise HTTPException(status_code=404, detail="From user not found")
+
+        uc_q: Dict[str, Any] = {"user_id": from_user["id"]}
+        if body.user_car_id:
+            uc_q["id"] = body.user_car_id.strip()
+        elif body.car_id:
+            uc_q["car_id"] = body.car_id.strip()
+        else:
+            ex_ids = [c["id"] for c in (CARS or []) if c.get("rarity") in ("exclusive", "loot_exclusive")]
+            uc_q["car_id"] = {"$in": ex_ids}
+        uc_rows = await db.user_cars.find(uc_q, {"_id": 1, "id": 1, "user_id": 1, "car_id": 1}).to_list(10)
+        if not uc_rows:
+            raise HTTPException(status_code=404, detail="No matching exclusive car on that user")
+        if len(uc_rows) > 1 and not body.user_car_id:
+            raise HTTPException(
+                status_code=400,
+                detail="User has multiple exclusive cars — specify car_id or user_car_id",
+            )
+        uc = uc_rows[0]
+        car_info = next((c for c in (CARS or []) if c.get("id") == uc.get("car_id")), None)
+        if not car_info or car_info.get("rarity") not in ("exclusive", "loot_exclusive"):
+            raise HTTPException(status_code=400, detail="Only exclusive and loot-exclusive cars can be transferred here")
+
+        to_user = None
+        to_reason = None
+        if (body.to_username or "").strip():
+            to_pattern = _username_pattern(body.to_username.strip())
+            to_user = await db.users.find_one({"username": to_pattern}, {"_id": 0, "id": 1, "username": 1, "is_dead": 1})
+            if not to_user:
+                raise HTTPException(status_code=404, detail="To user not found")
+            to_reason = "admin_target"
+        elif from_user.get("killed_by_user_id"):
+            to_user = await db.users.find_one(
+                {"id": from_user["killed_by_user_id"]},
+                {"_id": 0, "id": 1, "username": 1, "is_dead": 1},
+            )
+            to_reason = "recorded_killer"
+        if not to_user:
+            raise HTTPException(
+                status_code=400,
+                detail="No to_username and no killed_by_user_id on the from account — specify to_username",
+            )
+        if to_user.get("is_dead"):
+            raise HTTPException(status_code=400, detail="Recipient account is dead")
+        if to_user["id"] == from_user["id"]:
+            raise HTTPException(status_code=400, detail="From and to user are the same")
+
+        recipient_dup = None
+        if car_info.get("rarity") == "loot_exclusive":
+            recipient_dup = await db.user_cars.find_one(
+                {"user_id": to_user["id"], "car_id": uc.get("car_id")},
+                {"_id": 1, "id": 1},
+            )
+            if recipient_dup and str(recipient_dup.get("_id")) == str(uc.get("_id")):
+                recipient_dup = None
+
+        preview = {
+            "from_username": from_user.get("username"),
+            "from_is_dead": bool(from_user.get("is_dead")),
+            "killed_by_username": from_user.get("killed_by_username"),
+            "car_id": uc.get("car_id"),
+            "car_name": car_info.get("name"),
+            "user_car_id": uc.get("id"),
+            "to_username": to_user.get("username"),
+            "to_reason": to_reason,
+            "recipient_has_duplicate": bool(recipient_dup),
+            "will_replace_recipient_duplicate": bool(recipient_dup and body.replace_recipient_duplicate),
+            "dry_run": body.dry_run,
+        }
+        if recipient_dup and not body.replace_recipient_duplicate:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Recipient {to_user.get('username')} already has this loot-exclusive car — set replace_recipient_duplicate=true or remove theirs first",
+            )
+        if body.dry_run:
+            msg = (
+                f"Would transfer {car_info.get('name')} from {from_user.get('username')} "
+                f"to {to_user.get('username')}"
+            )
+            if to_reason == "recorded_killer":
+                msg += f" (recorded killer: {from_user.get('killed_by_username') or '?'})"
+            if preview["will_replace_recipient_duplicate"]:
+                msg += " — recipient's existing copy would be removed"
+            return {"message": msg, **preview}
+
+        from utils.exclusive_car_events import log_exclusive_car_event
+
+        if recipient_dup and body.replace_recipient_duplicate:
+            await db.user_cars.delete_one({"_id": recipient_dup["_id"]})
+            await log_exclusive_car_event(
+                db,
+                event_type="admin_remove",
+                car_id=uc.get("car_id"),
+                user_car_id=recipient_dup.get("id"),
+                from_user_id=to_user["id"],
+                from_username=to_user.get("username"),
+                car_name=car_info.get("name"),
+                extra={"reason": "replaced_for_admin_transfer", "admin_user_id": current_user.get("id")},
+            )
+
+        new_id = str(uuid.uuid4())
+        prev_id = uc.get("id")
+        await db.user_cars.update_one(
+            {"_id": uc["_id"]},
+            {
+                "$set": {"user_id": to_user["id"], "id": new_id},
+                "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""},
+            },
+        )
+        await log_exclusive_car_event(
+            db,
+            event_type="admin_transfer",
+            car_id=uc.get("car_id"),
+            user_car_id=new_id,
+            previous_user_car_id=prev_id,
+            from_user_id=from_user["id"],
+            from_username=from_user.get("username"),
+            to_user_id=to_user["id"],
+            to_username=to_user.get("username"),
+            car_name=car_info.get("name"),
+            extra={
+                "to_reason": to_reason,
+                "admin_user_id": current_user.get("id"),
+                "admin_username": current_user.get("username"),
+                "from_was_dead": bool(from_user.get("is_dead")),
+            },
+        )
+        try:
+            from utils.civilian_protection import maybe_revoke_civilian_protection
+
+            await maybe_revoke_civilian_protection(db, to_user["id"], "exclusive_car")
+        except Exception:
+            pass
+
+        msg = f"Transferred {car_info.get('name')} from {from_user.get('username')} to {to_user.get('username')}"
+        if body.notify:
+            try:
+                await send_notification(
+                    to_user["id"],
+                    "Exclusive car transferred",
+                    f"You received {car_info.get('name')} (staff transfer from {from_user.get('username')}).",
+                    "reward",
+                    category="system",
+                )
+            except Exception:
+                pass
+        return {"message": msg, **preview, "new_user_car_id": new_id}
 
     @router.get("/admin/cars/exclusive-intel")
     async def admin_exclusive_car_intel(

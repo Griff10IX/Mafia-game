@@ -1071,6 +1071,7 @@ export default function Admin() {
   const [exclusiveCarValuesLoading, setExclusiveCarValuesLoading] = useState(false);
   const [exclusiveCarOwners, setExclusiveCarOwners] = useState([]);
   const [exclusiveCarOwnersLoading, setExclusiveCarOwnersLoading] = useState(false);
+  const [exclusiveCarTransferLoading, setExclusiveCarTransferLoading] = useState(null);
   const [exclusiveCarIntelUsername, setExclusiveCarIntelUsername] = useState('');
   const [exclusiveCarIntelCarId, setExclusiveCarIntelCarId] = useState('all');
   const [exclusiveCarIntelUserCarId, setExclusiveCarIntelUserCarId] = useState('');
@@ -6929,6 +6930,32 @@ export default function Admin() {
       setExclusiveCarOwners([]);
     } finally {
       setExclusiveCarOwnersLoading(false);
+    }
+  };
+
+  const handleTransferExclusiveCar = async ({ fromUsername, carId, toUsername = null, userCarId = null }) => {
+    const key = `${fromUsername}:${carId}:${toUsername || 'killer'}`;
+    setExclusiveCarTransferLoading(key);
+    try {
+      const payload = {
+        from_username: fromUsername,
+        car_id: carId,
+        dry_run: true,
+        replace_recipient_duplicate: true,
+        notify: true,
+      };
+      if (toUsername) payload.to_username = toUsername;
+      if (userCarId) payload.user_car_id = userCarId;
+      const preview = await api.post('/admin/cars/transfer-exclusive', payload);
+      const ok = window.confirm(preview.data?.message || 'Transfer this exclusive car?');
+      if (!ok) return;
+      const res = await api.post('/admin/cars/transfer-exclusive', { ...payload, dry_run: false });
+      toast.success(res.data?.message || 'Transferred');
+      fetchExclusiveCarOwners();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Transfer failed');
+    } finally {
+      setExclusiveCarTransferLoading(null);
     }
   };
 
@@ -14966,13 +14993,39 @@ export default function Admin() {
                         {car.name} <span className="text-mutedForeground">({car.rarity})</span> - {Number(car.owners_count || 0)} owner(s), {Number(car.owned_count_total || 0)} total
                       </div>
                       {Array.isArray(car.owners) && car.owners.length > 0 ? (
-                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                        <motion.div layout className="mt-1 space-y-1">
                           {car.owners.map((o) => (
-                            <Link key={`${car.car_id}-${o.user_id}`} to={`/profile/${encodeURIComponent(o.username || '')}`} className="text-[9px] text-primary hover:underline font-heading">
-                              {o.username} x{Number(o.owned_count || 0)}
-                            </Link>
+                            <motion.div
+                              key={`${car.car_id}-${o.user_id}`}
+                              layout
+                              className="flex flex-wrap items-center gap-x-2 gap-y-1"
+                            >
+                              <Link to={`/profile/${encodeURIComponent(o.username || '')}`} className="text-[9px] text-primary hover:underline font-heading">
+                                {o.username} x{Number(o.owned_count || 0)}
+                                {o.is_dead ? <span className="text-red-400"> (dead)</span> : null}
+                              </Link>
+                              {o.is_dead && o.killed_by_username ? (
+                                <span className="text-[8px] text-mutedForeground font-heading">
+                                  killed by {o.killed_by_username}
+                                </span>
+                              ) : null}
+                              {o.is_dead && o.killed_by_username ? (
+                                <button
+                                  type="button"
+                                  disabled={exclusiveCarTransferLoading === `${o.username}:${car.car_id}:killer`}
+                                  onClick={() => handleTransferExclusiveCar({
+                                    fromUsername: o.username,
+                                    carId: car.car_id,
+                                    userCarId: o.garage_rows?.[0]?.id,
+                                  })}
+                                  className="px-1.5 py-0.5 rounded border border-amber-500/45 bg-amber-500/10 text-[8px] font-heading font-bold text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
+                                >
+                                  {exclusiveCarTransferLoading === `${o.username}:${car.car_id}:killer` ? '…' : `→ killer (${o.killed_by_username})`}
+                                </button>
+                              ) : null}
+                            </motion.div>
                           ))}
-                        </div>
+                        </motion.div>
                       ) : (
                         <div className="text-[9px] text-mutedForeground">No owners</div>
                       )}

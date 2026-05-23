@@ -21,6 +21,7 @@ EVENT_LABELS = {
     "loot_box": "Loot box reward",
     "admin_grant": "Admin grant",
     "admin_remove": "Admin remove",
+    "admin_transfer": "Admin transfer",
     "scraped": "Scrapped",
     "melted": "Melted",
 }
