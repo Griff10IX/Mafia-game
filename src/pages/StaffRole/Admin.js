@@ -14993,11 +14993,10 @@ export default function Admin() {
                         {car.name} <span className="text-mutedForeground">({car.rarity})</span> - {Number(car.owners_count || 0)} owner(s), {Number(car.owned_count_total || 0)} total
                       </div>
                       {Array.isArray(car.owners) && car.owners.length > 0 ? (
-                        <motion.div layout className="mt-1 space-y-1">
+                        <div className="mt-1 space-y-1">
                           {car.owners.map((o) => (
-                            <motion.div
+                            <div
                               key={`${car.car_id}-${o.user_id}`}
-                              layout
                               className="flex flex-wrap items-center gap-x-2 gap-y-1"
                             >
                               <Link to={`/profile/${encodeURIComponent(o.username || '')}`} className="text-[9px] text-primary hover:underline font-heading">
@@ -15023,9 +15022,9 @@ export default function Admin() {
                                   {exclusiveCarTransferLoading === `${o.username}:${car.car_id}:killer` ? '…' : `→ killer (${o.killed_by_username})`}
                                 </button>
                               ) : null}
-                            </motion.div>
+                            </div>
                           ))}
-                        </motion.div>
+                        </div>
                       ) : (
                         <div className="text-[9px] text-mutedForeground">No owners</div>
                       )}
