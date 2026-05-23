@@ -2573,7 +2573,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         exclusive_car_count = 0
         for uc in victim_cars:
             car_info = next((c for c in CARS if c["id"] == uc.get("car_id")), None)
-            if car_info and car_info.get("rarity") == "exclusive":
+            if car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive"):
                 exclusive_car_count += 1
         prop_id_list = list({up["property_id"] for up in victim_prop_rows if up.get("property_id")})
         prop_docs_by_id = {}
@@ -2612,6 +2612,14 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             await maybe_process_rank_up(killer_id, killer_rp_before, rank_points, (killer_doc or {}).get("username", ""), killer_pm)
         except Exception as e:
             logging.exception("Rank-up notification (kill): %s", e)
+        killer_fid_for_war = current_user.get("family_id") or await resolve_family_id(killer_id)
+        victim_fid_for_war = target.get("family_id") or await resolve_family_id(victim_id)
+        war_kill = bool(
+            killer_fid_for_war
+            and victim_fid_for_war
+            and killer_fid_for_war != victim_fid_for_war
+            and await _get_active_war_between(killer_fid_for_war, victim_fid_for_war)
+        )
         # Transfer cars to killer; exclusive + loot-exclusive get a new id so old view-car links are dead
         killer_has_loot_car = await db.user_cars.count_documents({"user_id": killer_id, "car_id": "car21"})
         car_transfer_ops: List[Any] = []
@@ -2622,12 +2630,16 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
             is_loot_exclusive = car_info and car_info.get("rarity") == "loot_exclusive"
             if is_loot_exclusive:
-                if killer_has_loot_car >= 1:
+                if killer_has_loot_car >= 1 and not war_kill:
                     car_transfer_ops.append(DeleteOne({"_id": uc["_id"]}))
                     exclusive_transfer_logs.append(
                         {"car_id": uc.get("car_id"), "car_name": car_info.get("name"), "destroyed": True, "previous_user_car_id": uc.get("id")}
                     )
                 else:
+                    if killer_has_loot_car >= 1 and war_kill:
+                        killer_loot_row = await db.user_cars.find_one({"user_id": killer_id, "car_id": "car21"}, {"_id": 1})
+                        if killer_loot_row:
+                            car_transfer_ops.append(DeleteOne({"_id": killer_loot_row["_id"]}))
                     new_id = str(uuid.uuid4())
                     car_transfer_ops.append(
                         UpdateOne(
@@ -2639,7 +2651,13 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                         )
                     )
                     exclusive_transfer_logs.append(
-                        {"car_id": uc.get("car_id"), "car_name": car_info.get("name"), "user_car_id": new_id, "previous_user_car_id": uc.get("id")}
+                        {
+                            "car_id": uc.get("car_id"),
+                            "car_name": car_info.get("name"),
+                            "user_car_id": new_id,
+                            "previous_user_car_id": uc.get("id"),
+                            "war_kill_replaced_duplicate": war_kill and killer_has_loot_car >= 1,
+                        }
                     )
                     killer_has_loot_car = 1
                 continue

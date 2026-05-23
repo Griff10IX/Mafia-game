@@ -1721,7 +1721,7 @@ async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_
                 {"$set": {"status": "family_a_wins" if winner_id == w["family_a_id"] else "family_b_wins", "ended_at": now, "winner_family_id": winner_id, "loser_family_id": loser_id, "winner_family_name": winner_family_name, "loser_family_name": loser_family_name}},
             )
         return
-    winner_boss_id = killer_id if solo_killer else winner_family.get("boss_id")
+    winner_boss_id = killer_id if (solo_killer or (killer_id and killer_is_side)) else winner_family.get("boss_id")
     loser_rackets = (loser_family or {}).get("rackets") or {}
     winner_rackets = (winner_family.get("rackets") or {}).copy()
     loser_treasury = int((loser_family or {}).get("treasury", 0) or 0)
@@ -1821,39 +1821,46 @@ async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_
                 {"$inc": {"compound_points": loser_compound_points, "compound_loot_pieces": loser_compound_loot_pieces}},
             )
 
-    # Transfer exclusive cars
+    # Transfer exclusive + loot-exclusive cars from wiped family to the killing blow player (or boss if unknown)
     loser_member_ids = [m["user_id"] for m in members]
     exclusive_cars = await db.user_cars.find({"user_id": {"$in": loser_member_ids}}).to_list(500)
     winner_boss = await db.users.find_one({"id": winner_boss_id}, {"_id": 0, "username": 1}) if winner_boss_id else None
     winner_boss_name = (winner_boss or {}).get("username") or "?"
+    prize_car_count = 0
     for uc in exclusive_cars:
         car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
-        if car_info and car_info.get("rarity") == "exclusive":
-            new_id = str(uuid.uuid4())
-            prev_owner = await db.users.find_one({"id": uc.get("user_id")}, {"_id": 0, "username": 1})
-            await db.user_cars.update_one(
-                {"_id": uc["_id"]},
-                {
-                    "$set": {"user_id": winner_boss_id, "id": new_id},
-                    "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""},
-                },
-            )
-            from utils.exclusive_car_events import log_exclusive_car_event
+        rarity = (car_info or {}).get("rarity")
+        if rarity not in ("exclusive", "loot_exclusive") or not winner_boss_id:
+            continue
+        if rarity == "loot_exclusive":
+            existing = await db.user_cars.find_one({"user_id": winner_boss_id, "car_id": "car21"}, {"_id": 1})
+            if existing and existing.get("_id") != uc.get("_id"):
+                await db.user_cars.delete_one({"_id": existing["_id"]})
+        new_id = str(uuid.uuid4())
+        prev_owner = await db.users.find_one({"id": uc.get("user_id")}, {"_id": 0, "username": 1})
+        await db.user_cars.update_one(
+            {"_id": uc["_id"]},
+            {
+                "$set": {"user_id": winner_boss_id, "id": new_id},
+                "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""},
+            },
+        )
+        from utils.exclusive_car_events import log_exclusive_car_event
 
-            await log_exclusive_car_event(
-                db,
-                event_type="war_family_wipe",
-                car_id=uc.get("car_id"),
-                user_car_id=new_id,
-                previous_user_car_id=uc.get("id"),
-                from_user_id=uc.get("user_id"),
-                from_username=(prev_owner or {}).get("username"),
-                to_user_id=winner_boss_id,
-                to_username=winner_boss_name,
-                car_name=car_info.get("name"),
-                extra={"loser_family_id": loser_id, "winner_family_id": winner_id},
-            )
-    prize_car_count = sum(1 for uc in exclusive_cars if next((c for c in CARS if c.get("id") == uc.get("car_id")), {}).get("rarity") == "exclusive")
+        await log_exclusive_car_event(
+            db,
+            event_type="war_family_wipe",
+            car_id=uc.get("car_id"),
+            user_car_id=new_id,
+            previous_user_car_id=uc.get("id"),
+            from_user_id=uc.get("user_id"),
+            from_username=(prev_owner or {}).get("username"),
+            to_user_id=winner_boss_id,
+            to_username=winner_boss_name,
+            car_name=car_info.get("name"),
+            extra={"loser_family_id": loser_id, "winner_family_id": winner_id, "rarity": rarity},
+        )
+        prize_car_count += 1
 
     # Transfer crew bank from loser members to winner's boss
     crew_profiles = await db.racing_profiles.find({"user_id": {"$in": loser_member_ids}}, {"_id": 0, "crew_bank": 1}).to_list(100)

@@ -1802,7 +1802,16 @@ def _bodyguard_inflation_refund_origin_ref(user_id: str, since_dt: Optional[date
 
 async def _resolve_inflation_refund_credit(user_id: str) -> Dict[str, Any]:
     """Where inflation refund points should land so Dead > Alive / revive can recover them."""
-    proj = {"_id": 0, "id": 1, "username": 1, "email": 1, "is_dead": 1, "retrieval_used": 1}
+    proj = {
+        "_id": 0,
+        "id": 1,
+        "username": 1,
+        "email": 1,
+        "is_dead": 1,
+        "retrieval_used": 1,
+        "registration_ip": 1,
+        "dead_at": 1,
+    }
     u = await db.users.find_one({"id": user_id}, proj)
     if not u:
         return {
@@ -1859,6 +1868,29 @@ async def _resolve_inflation_refund_credit(user_id: str) -> Dict[str, Any]:
                 "original_user_id": user_id,
                 "original_username": uname,
                 "redirect_reason": "same_email_alive_after_retrieval",
+                "bump_points_at_death": False,
+                "is_dead": True,
+                "retrieval_used": True,
+            }
+    rip = (u.get("registration_ip") or "").strip()
+    dead_at = u.get("dead_at")
+    if rip and dead_at:
+        qual = await db.users.find(
+            {
+                "registration_ip": rip,
+                "is_dead": {"$ne": True},
+                "id": {"$ne": user_id},
+                "created_at": {"$gte": dead_at},
+            },
+            {"_id": 0, "id": 1, "username": 1},
+        ).sort("created_at", 1).to_list(5)
+        if len(qual) == 1 and qual[0].get("id"):
+            return {
+                "credit_user_id": qual[0]["id"],
+                "credit_username": (qual[0].get("username") or "").strip() or "?",
+                "original_user_id": user_id,
+                "original_username": uname,
+                "redirect_reason": "registration_ip_alive_after_death",
                 "bump_points_at_death": False,
                 "is_dead": True,
                 "retrieval_used": True,
@@ -1985,7 +2017,7 @@ def _bodyguard_inflation_refund_notification_message(
                 "or revive that dead account — the points are included in the estate.",
             ]
         )
-    elif reason == "same_email_alive_after_retrieval":
+    elif reason in ("same_email_alive_after_retrieval", "registration_ip_alive_after_death"):
         credit_un = (ct.get("credit_username") or username).strip() or username
         if credit_un.lower() != orig_un.lower():
             lines.extend(
@@ -2000,7 +2032,8 @@ def _bodyguard_inflation_refund_notification_message(
             [
                 "",
                 f"Your dead account ({orig_un}) had already used Dead > Alive.",
-                "This refund is on the dead account — use Revive (Dead > Alive page) to recover it.",
+                "This refund is on the dead account — use Dead > Alive again (same dead username + password)",
+                "to retrieve the additional points, or Revive if you prefer to play that account.",
             ]
         )
     else:
