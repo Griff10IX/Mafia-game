@@ -1,6 +1,6 @@
 # Bodyguards: list, armour upgrade, slot buy, hire, invite/accept/decline; admin clear/generate
 from datetime import datetime, timezone, timedelta
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 import asyncio
 import logging
 import time
@@ -44,6 +44,7 @@ from server import (
     DEFAULT_HEALTH,
     DEFAULT_GARAGE_BATCH_LIMIT,
     _is_admin,
+    _admin_or_mod,
     _username_pattern,
 )
 
@@ -96,6 +97,26 @@ def _bodyguard_inflation_percent_for_level(level: int) -> float:
     if level <= len(BODYGUARD_INFLATION_PERCENTS_FIRST):
         return BODYGUARD_INFLATION_PERCENTS_FIRST[level - 1]
     return BODYGUARD_INFLATION_PERCENTS_FIRST[-1] + (level - len(BODYGUARD_INFLATION_PERCENTS_FIRST)) * BODYGUARD_INFLATION_EXTRA_PER_LEVEL
+
+
+def _bodyguard_inflation_window_expired(user: dict) -> bool:
+    until_iso = user.get("bodyguard_inflation_until")
+    if not until_iso:
+        return False
+    until = _parse_iso_datetime(until_iso)
+    if until is None:
+        return True
+    return datetime.now(timezone.utc) > until
+
+
+async def _persist_bodyguard_inflation_expiry_if_needed(user_id: str, user: dict) -> None:
+    """Clear stale DB counter when the 3h window has passed (display already treats level as 0)."""
+    if not user_id or not _bodyguard_inflation_window_expired(user):
+        return
+    stored_level = _normalize_bodyguard_inflation_level(user.get("bodyguard_inflation_level"))
+    if stored_level == 0 and not user.get("bodyguard_inflation_until"):
+        return
+    await db.users.update_one({"id": user_id}, _clear_bodyguard_hire_inflation_mongo_update())
 
 
 def _bodyguard_inflation_level_now(user: dict) -> int:
@@ -279,7 +300,11 @@ async def get_bodyguards_hire_inflation(current_user: dict = Depends(get_current
         {"id": current_user["id"]},
         {"_id": 0, "bodyguard_inflation_until": 1, "bodyguard_inflation_level": 1},
     )
-    return await _bodyguard_inflation_status(user or {})
+    user = user or {}
+    await _persist_bodyguard_inflation_expiry_if_needed(current_user["id"], user)
+    if _bodyguard_inflation_window_expired(user):
+        user = {}
+    return await _bodyguard_inflation_status(user)
 
 
 async def get_bodyguards(current_user: dict = Depends(get_current_user)):
@@ -603,7 +628,11 @@ async def _do_hire_bodyguard_reserved(
         {"_id": 0, "bodyguard_inflation_until": 1, "bodyguard_inflation_level": 1}
     )
     user_for_inflation = user_inflation or {}
+    await _persist_bodyguard_inflation_expiry_if_needed(current_user["id"], user_for_inflation)
+    if _bodyguard_inflation_window_expired(user_for_inflation):
+        user_for_inflation = {}
     inflation_level = _bodyguard_inflation_level_now(user_for_inflation)
+    new_inflation_level = inflation_level + 1
     inflation_mult = 1.0 + _bodyguard_inflation_percent_for_level(inflation_level)
     total_cost = int(base_cost * event_cost_mult * inflation_mult)
     now = datetime.now(timezone.utc)
@@ -618,12 +647,12 @@ async def _do_hire_bodyguard_reserved(
         "$inc": inc_doc,
         "$set": {
             "bodyguard_inflation_until": window_end.isoformat(),
+            "bodyguard_inflation_level": new_inflation_level,
         },
         "$unset": {"bodyguard_robot_loss_hire_allowed_after": ""},
     }
     if unlock_next_slot:
         update_op["$max"] = {"bodyguard_slots": slot}
-    update_op["$inc"]["bodyguard_inflation_level"] = 1
     hire_result = await db.users.update_one(
         {"id": current_user["id"], "points": {"$gte": total_cost}, reserve_field: reservation_id},
         update_op,
@@ -698,7 +727,7 @@ async def _do_hire_bodyguard_reserved(
     infl_after = await _bodyguard_inflation_status(
         {
             "bodyguard_inflation_until": window_end.isoformat(),
-            "bodyguard_inflation_level": inflation_level + 1,
+            "bodyguard_inflation_level": new_inflation_level,
         }
     )
     return {
@@ -866,6 +895,9 @@ async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
         {"_id": 0, "points": 1, "bodyguard_inflation_until": 1, "bodyguard_inflation_level": 1},
     )
     inviter_for_cost = inviter_inflation or {}
+    await _persist_bodyguard_inflation_expiry_if_needed(inviter["id"], inviter_for_cost)
+    if _bodyguard_inflation_window_expired(inviter_for_cost):
+        inviter_for_cost = {}
     inflation_level = _bodyguard_inflation_level_now(inviter_for_cost)
     inflation_mult = 1.0 + _bodyguard_inflation_percent_for_level(inflation_level)
     event_bodyguard_cost_mult = float(ev.get("bodyguard_cost", 1.0))
@@ -1524,6 +1556,385 @@ async def admin_clear_bodyguard_hire_inflation(
     }
 
 
+def _dt_query_bound(field: str, bound: datetime, *, op: str = "$gte") -> Dict[str, Any]:
+    """Match BSON datetimes and legacy ISO strings on a single datetime field."""
+    iso = bound.isoformat()
+    z_iso = iso.replace("+00:00", "Z")
+    clauses: List[Dict[str, Any]] = [
+        {field: {op: bound}},
+        {field: {op: iso}},
+    ]
+    if z_iso != iso:
+        clauses.append({field: {op: z_iso}})
+    return {"$or": clauses} if len(clauses) > 1 else clauses[0]
+
+
+def _parse_admin_datetime(raw: Optional[str]) -> Optional[datetime]:
+    if not raw or not str(raw).strip():
+        return None
+    return _parse_iso_datetime(str(raw).strip())
+
+
+def _infer_inflation_level_from_cost(
+    *,
+    hire_cost: int,
+    slot: Optional[int],
+    is_robot: bool,
+    event_mult: float,
+    base_slot_cost: Optional[int] = None,
+) -> Optional[int]:
+    """Best-effort level from charged points when inflation_level_before was not logged."""
+    if hire_cost <= 0 or not slot or slot < 1 or slot > len(BODYGUARD_SLOT_COSTS):
+        return None
+    base = int(base_slot_cost or BODYGUARD_SLOT_COSTS[slot - 1])
+    if base <= 0 or event_mult <= 0:
+        return None
+    target = int(hire_cost)
+    if not is_robot:
+        target = max(1, int(round(target / BODYGUARD_HUMAN_HIRE_DISCOUNT)))
+    for level in range(500):
+        mult = 1.0 + _bodyguard_inflation_percent_for_level(level)
+        if int(base * event_mult * mult) == target:
+            return level
+    return None
+
+
+def _ledger_hire_from_point_event(row: dict) -> Optional[Dict[str, Any]]:
+    at = _parse_iso_datetime(row.get("created_at"))
+    if at is None:
+        return None
+    meta = row.get("meta") if isinstance(row.get("meta"), dict) else {}
+    slot_raw = meta.get("slot")
+    try:
+        slot = int(slot_raw) if slot_raw is not None else None
+    except (TypeError, ValueError):
+        slot = None
+    is_robot = meta.get("is_robot")
+    if is_robot is None:
+        is_robot = True
+    hire_cost = int(meta.get("cost") or abs(int(row.get("points") or 0)))
+    level_before = meta.get("inflation_level_before")
+    try:
+        level_before = int(level_before) if level_before is not None else None
+    except (TypeError, ValueError):
+        level_before = None
+    infl_mult = meta.get("inflation_mult")
+    try:
+        infl_mult = float(infl_mult) if infl_mult is not None else None
+    except (TypeError, ValueError):
+        infl_mult = None
+    event_mult = meta.get("event_bodyguard_cost_mult")
+    try:
+        event_mult = float(event_mult) if event_mult is not None else 1.0
+    except (TypeError, ValueError):
+        event_mult = 1.0
+    base_slot = meta.get("base_slot_cost")
+    try:
+        base_slot = int(base_slot) if base_slot is not None else None
+    except (TypeError, ValueError):
+        base_slot = None
+    if level_before is None and infl_mult is not None and infl_mult >= 1.0:
+        pct = infl_mult - 1.0
+        for level in range(500):
+            if abs(_bodyguard_inflation_percent_for_level(level) - pct) < 0.0001:
+                level_before = level
+                break
+    if level_before is None:
+        level_before = _infer_inflation_level_from_cost(
+            hire_cost=hire_cost,
+            slot=slot,
+            is_robot=bool(is_robot),
+            event_mult=event_mult,
+            base_slot_cost=base_slot,
+        )
+    return {
+        "at": at,
+        "at_iso": at.isoformat(),
+        "user_id": row.get("user_id"),
+        "is_robot": bool(is_robot),
+        "slot": slot,
+        "hire_cost": hire_cost,
+        "inflation_level_before": level_before,
+        "inflation_mult": infl_mult,
+        "event_bodyguard_cost_mult": event_mult,
+        "base_slot_cost": base_slot,
+        "has_audit_fields": bool(meta.get("inflation_level_before") is not None),
+        "ledger_id": row.get("id"),
+    }
+
+
+def _replay_bodyguard_hire_inflation(
+    hires: List[Dict[str, Any]],
+    *,
+    report_since: Optional[datetime] = None,
+    report_until: Optional[datetime] = None,
+    robots_only: bool = True,
+) -> Dict[str, Any]:
+    """
+    Replay 3h hire windows and compare actual vs correct markup.
+    Stale-counter bug: after window expiry, robot hires $inc'd old level so later hires in the new window overpaid.
+    """
+    window = timedelta(hours=BODYGUARD_INFLATION_HOURS)
+    sorted_hires = sorted(hires, key=lambda h: h["at"])
+    window_level = 0
+    last_at: Optional[datetime] = None
+    analyzed: List[Dict[str, Any]] = []
+
+    for h in sorted_hires:
+        at = h["at"]
+        new_window = last_at is None or (at - last_at) >= window
+        correct_level = 0 if new_window else window_level
+
+        actual_level = h.get("inflation_level_before")
+        event_mult = float(h.get("event_bodyguard_cost_mult") or 1.0)
+        slot = h.get("slot")
+        base = h.get("base_slot_cost")
+        if slot and 1 <= int(slot) <= len(BODYGUARD_SLOT_COSTS):
+            base = int(base or BODYGUARD_SLOT_COSTS[int(slot) - 1])
+        else:
+            base = int(base or 0)
+
+        correct_mult = 1.0 + _bodyguard_inflation_percent_for_level(correct_level)
+        actual_mult = h.get("inflation_mult")
+        if actual_mult is None and actual_level is not None:
+            actual_mult = 1.0 + _bodyguard_inflation_percent_for_level(int(actual_level))
+
+        correct_robot_cost = int(base * event_mult * correct_mult) if base > 0 else None
+        actual_cost = int(h.get("hire_cost") or 0)
+        if h.get("is_robot"):
+            correct_cost = correct_robot_cost
+        else:
+            correct_cost = max(1, int((correct_robot_cost or 0) * BODYGUARD_HUMAN_HIRE_DISCOUNT)) if correct_robot_cost else None
+
+        overpaid = 0
+        if correct_cost is not None and actual_cost > correct_cost:
+            overpaid = actual_cost - correct_cost
+
+        level_mismatch = (
+            actual_level is not None
+            and int(actual_level) > int(correct_level)
+        )
+        likely_stale_counter = level_mismatch and overpaid > 0
+
+        in_report_range = True
+        if report_since and at < report_since:
+            in_report_range = False
+        if report_until and at > report_until:
+            in_report_range = False
+
+        row = {
+            **{k: v for k, v in h.items() if k != "at"},
+            "at": h.get("at_iso"),
+            "new_window": new_window,
+            "correct_level_before": correct_level,
+            "actual_level_before": actual_level,
+            "correct_hire_inflation_pct": round(_bodyguard_inflation_percent_for_level(correct_level) * 100),
+            "actual_hire_inflation_pct": round(_bodyguard_inflation_percent_for_level(int(actual_level)) * 100)
+            if actual_level is not None
+            else None,
+            "correct_cost": correct_cost,
+            "overpaid_points": overpaid,
+            "likely_stale_counter_bug": likely_stale_counter,
+            "in_report_range": in_report_range,
+        }
+        if in_report_range and (not robots_only or h.get("is_robot")):
+            analyzed.append(row)
+
+        last_at = at
+        window_level = correct_level + 1
+
+    affected = [r for r in analyzed if r.get("overpaid_points", 0) > 0]
+    return {
+        "hires_in_range": analyzed,
+        "affected_hires": affected,
+        "totals": {
+            "hires_in_range": len(analyzed),
+            "affected_hires": len(affected),
+            "paid_points": sum(int(r.get("hire_cost") or 0) for r in analyzed),
+            "correct_points": sum(int(r.get("correct_cost") or r.get("hire_cost") or 0) for r in analyzed),
+            "overpaid_points": sum(int(r.get("overpaid_points") or 0) for r in affected),
+        },
+    }
+
+
+async def _fetch_ledger_hires_for_audit(
+    *,
+    user_id: Optional[str],
+    fetch_since: Optional[datetime],
+    fetch_until: datetime,
+    limit: int,
+) -> List[Dict[str, Any]]:
+    q: Dict[str, Any] = {"event_type": "bodyguard_hire"}
+    if user_id:
+        q["user_id"] = user_id
+    bounds: List[Dict[str, Any]] = [_dt_query_bound("created_at", fetch_until, op="$lte")]
+    if fetch_since:
+        bounds.append(_dt_query_bound("created_at", fetch_since, op="$gte"))
+    if len(bounds) == 1:
+        q.update(bounds[0])
+    else:
+        q["$and"] = bounds
+    rows = (
+        await db.point_ledger_events.find(q, {"_id": 0})
+        .sort("created_at", 1)
+        .limit(limit)
+        .to_list(limit)
+    )
+    out: List[Dict[str, Any]] = []
+    for row in rows:
+        parsed = _ledger_hire_from_point_event(row)
+        if parsed:
+            out.append(parsed)
+    return out
+
+
+async def admin_bodyguard_inflation_overpay_audit(
+    since: Optional[str] = Query(None, description="ISO datetime — report hires on/after this time."),
+    until: Optional[str] = Query(None, description="ISO datetime — report hires on/before this time (default now)."),
+    target_username: Optional[str] = Query(None, description="Single user (username). Omit for all users in range."),
+    robots_only: bool = Query(True, description="Only include robot hires in the report totals/rows."),
+    include_all_hires: bool = Query(
+        False,
+        description="If true with a single user, include non-overpaid hires in hires_in_range (can be large).",
+    ),
+    limit: int = Query(5000, ge=1, le=50000, description="Max ledger rows fetched per user (or overall cap)."),
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Admin/mod: estimate bodyguard hire overpayment from stale inflation counter after 3h window reset.
+    Uses point_ledger_events (bodyguard_hire) and replays correct window markup vs what was charged.
+    """
+    if not _admin_or_mod(current_user):
+        raise HTTPException(status_code=403, detail="Admin or moderator access required")
+
+    since_dt = _parse_admin_datetime(since)
+    until_dt = _parse_admin_datetime(until) or datetime.now(timezone.utc)
+    if since_dt and since_dt > until_dt:
+        raise HTTPException(status_code=400, detail="since must be before until")
+
+    context_since = (
+        since_dt - timedelta(hours=BODYGUARD_INFLATION_HOURS)
+        if since_dt
+        else until_dt - timedelta(days=90)
+    )
+
+    target_uid: Optional[str] = None
+    target_un: Optional[str] = None
+    key = (target_username or "").strip()
+    if key:
+        username_pattern = _username_pattern(key)
+        target = await db.users.find_one(
+            {"username": username_pattern} if username_pattern else {"id": key},
+            {"_id": 0, "id": 1, "username": 1},
+        )
+        if not target:
+            target = await db.users.find_one({"id": key}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        target_uid = target["id"]
+        target_un = target.get("username")
+
+    users_out: List[Dict[str, Any]] = []
+    grand = {
+        "users_with_overpay": 0,
+        "affected_hires": 0,
+        "hires_in_range": 0,
+        "paid_points": 0,
+        "correct_points": 0,
+        "overpaid_points": 0,
+    }
+
+    if target_uid:
+        hires = await _fetch_ledger_hires_for_audit(
+            user_id=target_uid,
+            fetch_since=context_since,
+            fetch_until=until_dt,
+            limit=limit,
+        )
+        replay = _replay_bodyguard_hire_inflation(
+            hires,
+            report_since=since_dt,
+            report_until=until_dt,
+            robots_only=robots_only,
+        )
+        hire_rows = replay["affected_hires"] if not include_all_hires else replay["hires_in_range"]
+        if replay["totals"]["overpaid_points"] > 0:
+            grand["users_with_overpay"] = 1
+        for k in ("affected_hires", "hires_in_range", "paid_points", "correct_points", "overpaid_points"):
+            grand[k] += replay["totals"][k]
+        users_out.append(
+            {
+                "user_id": target_uid,
+                "username": target_un,
+                **replay["totals"],
+                "hires": hire_rows,
+            }
+        )
+    else:
+        q: Dict[str, Any] = {"event_type": "bodyguard_hire"}
+        bounds: List[Dict[str, Any]] = [
+            _dt_query_bound("created_at", until_dt, op="$lte"),
+        ]
+        if since_dt:
+            bounds.append(_dt_query_bound("created_at", since_dt, op="$gte"))
+        q["$and"] = bounds
+        rows = (
+            await db.point_ledger_events.find(q, {"_id": 0, "user_id": 1, "created_at": 1})
+            .sort("created_at", 1)
+            .limit(limit)
+            .to_list(limit)
+        )
+        user_ids = list(dict.fromkeys(str(r.get("user_id")) for r in rows if r.get("user_id")))
+        id_to_name: Dict[str, str] = {}
+        if user_ids:
+            async for u in db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "username": 1}):
+                id_to_name[u["id"]] = u.get("username") or "?"
+        for uid in user_ids:
+            hires = await _fetch_ledger_hires_for_audit(
+                user_id=uid,
+                fetch_since=context_since,
+                fetch_until=until_dt,
+                limit=min(limit, 2000),
+            )
+            replay = _replay_bodyguard_hire_inflation(
+                hires,
+                report_since=since_dt,
+                report_until=until_dt,
+                robots_only=robots_only,
+            )
+            if replay["totals"]["overpaid_points"] <= 0:
+                continue
+            grand["users_with_overpay"] += 1
+            for k in ("affected_hires", "hires_in_range", "paid_points", "correct_points", "overpaid_points"):
+                grand[k] += replay["totals"][k]
+            users_out.append(
+                {
+                    "user_id": uid,
+                    "username": id_to_name.get(uid, "?"),
+                    **replay["totals"],
+                }
+            )
+        users_out.sort(key=lambda u: u.get("overpaid_points") or 0, reverse=True)
+
+    return {
+        "since": since_dt.isoformat() if since_dt else None,
+        "until": until_dt.isoformat(),
+        "window_hours": BODYGUARD_INFLATION_HOURS,
+        "robots_only": robots_only,
+        "target_username": target_un,
+        "note": (
+            "Compares point_ledger bodyguard_hire rows to a replayed 3h hire window. "
+            "Overpay = charged cost minus correct cost at the proper ladder step. "
+            "Rows with inflation_level_before in ledger meta are most reliable; older hires use cost inference. "
+            "Human hires are excluded from robots_only totals but still advance the replay window. "
+            "Use since/until to bound the affected period (e.g. when stale $inc bug was live)."
+        ),
+        "totals": grand,
+        "users": users_out,
+        "ledger_rows_scanned_cap": limit,
+    }
+
+
 async def admin_seed_human_bodyguards(current_user: dict = Depends(get_current_user)):
     """Admin-only: Clear all robots and create 4 human bodyguards for testing.
     Creates dummy human users as bodyguards if they don't exist."""
@@ -1892,4 +2303,5 @@ def register(router):
     router.add_api_route("/admin/bodyguards/seed-random", admin_seed_random_bodyguards, methods=["POST"])
     router.add_api_route("/admin/bodyguards/reset-cooldown", admin_reset_bodyguard_cooldown, methods=["POST"])
     router.add_api_route("/admin/bodyguards/clear-hire-inflation", admin_clear_bodyguard_hire_inflation, methods=["POST"])
+    router.add_api_route("/admin/bodyguards/inflation-overpay-audit", admin_bodyguard_inflation_overpay_audit, methods=["GET"])
     router.add_api_route("/admin/bodyguards/hire-intervals", admin_get_bodyguard_hire_intervals, methods=["GET"])

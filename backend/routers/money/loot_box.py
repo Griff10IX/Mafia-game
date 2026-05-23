@@ -600,8 +600,9 @@ async def open_loot_box(
                     if typ == "car":
                         car_info = next((c for c in CARS if c.get("id") == LOOT_EXCLUSIVE_CAR_ID), None)
                         car_name = (car_info.get("name") if car_info else None) or "1930 Cadillac Series 452 V-16 Armored Sedan"
+                        loot_car_uc_id = str(uuid.uuid4())
                         await db.user_cars.insert_one({
-                            "id": str(uuid.uuid4()),
+                            "id": loot_car_uc_id,
                             "user_id": user_id,
                             "car_id": LOOT_EXCLUSIVE_CAR_ID,
                             "car_name": car_name,
@@ -614,6 +615,17 @@ async def open_loot_box(
                             "travel_bonus": int((car_info or {}).get("travel_bonus") or 0),
                             "image": str((car_info or {}).get("image") or ""),
                         })
+                        from utils.exclusive_car_events import log_exclusive_car_event
+
+                        await log_exclusive_car_event(
+                            db,
+                            event_type="loot_box",
+                            car_id=LOOT_EXCLUSIVE_CAR_ID,
+                            user_car_id=loot_car_uc_id,
+                            to_user_id=user_id,
+                            to_username=current_user.get("username") if current_user else "",
+                            car_name=car_name,
+                        )
                         await _increment_claimed_count("car")
                         new_claimed = await _get_claimed_counts()
                         if new_claimed["car"] >= _exclusive_cap("car"):

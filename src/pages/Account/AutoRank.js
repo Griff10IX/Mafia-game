@@ -209,11 +209,11 @@ const SetupCard = ({ canEnable, hasTelegram, telegramNotifyOn }) => (
           <div className="flex items-start gap-2">
             <Lock size={14} className="text-amber-400 shrink-0 mt-0.5 sm:w-4 sm:h-4" />
             <p className="text-[10px] sm:text-xs font-heading text-zinc-300 leading-relaxed">
-              Purchase Auto Rank in the{' '}
+              Activate an <strong>Auto Rank (2h)</strong> token from My Inventory, or purchase Auto Rank permanently in the{' '}
               <Link to="/game/store" className="text-primary underline font-bold hover:text-primary/80">
                 Store
-              </Link>{' '}
-              to enable automation
+              </Link>
+              , to enable automation
             </p>
           </div>
         </div>
@@ -248,6 +248,7 @@ const SetupCard = ({ canEnable, hasTelegram, telegramNotifyOn }) => (
    ═══════════════════════════════════════════════════════ */
 const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
   const p = prefs || {};
+  const masterDisabled = savingPrefs || (!p.auto_rank_enabled && !canEnable);
   return (
   <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel} mobile-panel`} style={{ animationDelay: '0.1s' }}>
     <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
@@ -262,7 +263,7 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
         label="Enable Auto Rank"
         description="Master switch for automation (Telegram alerts are separate below)"
         checked={p.auto_rank_enabled}
-        disabled={savingPrefs || (p.auto_rank_enabled ? false : !canEnable)}
+        disabled={masterDisabled}
         onToggle={() => onUpdatePref('auto_rank_enabled', !p.auto_rank_enabled)}
       />
 
@@ -1115,6 +1116,7 @@ export default function AutoRank() {
     auto_rank_melt: false,
     auto_rank_scrap: false,
     auto_rank_purchased: false,
+    auto_rank_has_access: false,
     auto_rank_trial: false,
     auto_rank_trial_until: null,
     auto_rank_trial_dismissed: false,
@@ -1207,7 +1209,10 @@ export default function AutoRank() {
   const prevJailSecondsRef = useRef(null);
 
   // Derived once per render, before any early return, so useEffects can read them
-  const canEnable = Boolean(prefs?.auto_rank_purchased);
+  const trialUntilMs = prefs?.auto_rank_trial_until ? new Date(prefs.auto_rank_trial_until).getTime() : null;
+  const trialActive = Boolean(prefs?.auto_rank_trial && trialUntilMs && trialUntilMs > Date.now());
+  const permanentPurchased = Boolean(prefs?.auto_rank_purchased && !prefs?.auto_rank_trial);
+  const canEnable = Boolean(prefs?.auto_rank_has_access) || permanentPurchased || trialActive;
   const hasTelegram = Boolean(prefs?.telegram_chat_id_set);
 
   // Refetch stats (used when jail countdown hits 0 so status updates immediately)
@@ -1347,6 +1352,7 @@ export default function AutoRank() {
             auto_rank_oc: !!meRes.data.auto_rank_oc,
             auto_rank_booze: !!meRes.data.auto_rank_booze,
             auto_rank_purchased: !!meRes.data.auto_rank_purchased,
+            auto_rank_has_access: meRes.data.auto_rank_has_access === true,
             auto_rank_trial: !!meRes.data.auto_rank_trial,
             auto_rank_trial_until: meRes.data.auto_rank_trial_until || null,
             auto_rank_trial_dismissed: !!meRes.data.auto_rank_trial_dismissed,
@@ -1361,7 +1367,7 @@ export default function AutoRank() {
             auto_rank_scrap_rarity_ids: meRes.data.auto_rank_scrap_rarity_ids ?? [],
           });
         }
-        const hasFeature = meRes?.data?.auto_rank_purchased || meRes?.data?.auto_rank_enabled;
+        const hasFeature = meRes?.data?.auto_rank_has_access || meRes?.data?.auto_rank_purchased || meRes?.data?.auto_rank_enabled;
         if (hasFeature) {
           api.get('/auto-rank/settings').then((res) => {
             const d = res.data || {};
@@ -1455,6 +1461,8 @@ export default function AutoRank() {
       setPrefs((p) => ({
         ...p,
         auto_rank_enabled: res.data?.auto_rank_enabled ?? p.auto_rank_enabled,
+        auto_rank_has_access: res.data?.auto_rank_has_access ?? p.auto_rank_has_access,
+        auto_rank_purchased: res.data?.auto_rank_purchased ?? p.auto_rank_purchased,
         auto_rank_crimes: res.data?.auto_rank_crimes ?? p.auto_rank_crimes,
         auto_rank_gta: res.data?.auto_rank_gta ?? p.auto_rank_gta,
         auto_rank_bust_every_5_sec: res.data?.auto_rank_bust_every_5_sec ?? p.auto_rank_bust_every_5_sec,

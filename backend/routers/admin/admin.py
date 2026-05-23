@@ -3595,9 +3595,10 @@ def register(router):
         if not car:
             raise HTTPException(status_code=404, detail="Car not found")
         now_iso = datetime.now(timezone.utc).isoformat()
+        new_uc_id = str(uuid.uuid4())
         await db.user_cars.insert_one(
             {
-                "id": str(uuid.uuid4()),
+                "id": new_uc_id,
                 "user_id": target["id"],
                 "car_id": car_id,
                 "car_name": car["name"],
@@ -3606,8 +3607,18 @@ def register(router):
         )
         if car.get("rarity") in ("exclusive", "loot_exclusive"):
             from utils.civilian_protection import maybe_revoke_civilian_protection
+            from utils.exclusive_car_events import log_exclusive_car_event
 
             await maybe_revoke_civilian_protection(db, target["id"], "exclusive_car")
+            await log_exclusive_car_event(
+                db,
+                event_type="admin_grant",
+                car_id=car_id,
+                user_car_id=new_uc_id,
+                to_user_id=target["id"],
+                to_username=target.get("username"),
+                car_name=car["name"],
+            )
         return {"message": f"Added {car['name']} to {target_username}'s garage"}
 
     @router.post("/admin/remove-car")
@@ -3623,6 +3634,18 @@ def register(router):
             raise HTTPException(status_code=404, detail="Car not found")
         result = await db.user_cars.delete_many({"user_id": target["id"], "car_id": car_id})
         removed = int(result.deleted_count or 0)
+        if removed > 0 and car.get("rarity") in ("exclusive", "loot_exclusive"):
+            from utils.exclusive_car_events import log_exclusive_car_event
+
+            await log_exclusive_car_event(
+                db,
+                event_type="admin_remove",
+                car_id=car_id,
+                from_user_id=target["id"],
+                from_username=target.get("username"),
+                car_name=car["name"],
+                extra={"removed_count": removed},
+            )
         return {
             "message": f"Removed {removed} {car['name']} from {target.get('username', target_username)}",
             "removed_count": removed,
@@ -3841,6 +3864,31 @@ def register(router):
             key=lambda x: (-int(x.get("owners_count") or 0), (x.get("name") or "").lower()),
         )
         return {"cars": cars_out}
+
+    @router.get("/admin/cars/exclusive-intel")
+    async def admin_exclusive_car_intel(
+        user_car_id: Optional[str] = Query(None, description="Garage row id (user_cars.id)"),
+        car_id: Optional[str] = Query(None, description="Catalog car id (car20, car21) or all"),
+        username: Optional[str] = Query(None, description="Filter by current/historical owner username"),
+        limit: int = Query(200, ge=1, le=500),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Reconstruct exclusive / loot-exclusive car timelines (sales, kills, wars, GTA, loot box). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.exclusive_car_events import build_exclusive_car_intel
+
+        try:
+            return await build_exclusive_car_intel(
+                db,
+                cars_catalog=CARS or [],
+                user_car_id=user_car_id,
+                car_id=car_id,
+                username=username,
+                limit=limit,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
 
     @router.post("/admin/cars/edit-value")
     async def admin_edit_car_value(body: EditCarValueRequest, current_user: dict = Depends(get_current_user)):

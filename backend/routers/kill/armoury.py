@@ -2487,10 +2487,8 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
                 "auto_rank_trial_until": new_until_iso,
                 "auto_rank_enabled": True,
                 "auto_rank_idle": False,
+                "auto_rank_trial": True,
             }
-            if not bool(current_user.get("auto_rank_purchased")):
-                set_updates["auto_rank_purchased"] = True
-                set_updates["auto_rank_trial"] = True
             result = await db.users.update_one(
                 {"id": current_user["id"], count_field: {"$gte": to_use}},
                 {
@@ -2531,15 +2529,14 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
         else:
             new_until = now + timedelta(hours=min(duration_hours, max_stack_hours))
         new_until_iso = new_until.isoformat()
+        permanent = bool(current_user.get("auto_rank_purchased")) and not bool(current_user.get("auto_rank_trial"))
         set_updates = {
             "auto_rank_trial_until": new_until_iso,
             "auto_rank_enabled": True,
             "auto_rank_idle": False,
         }
-        if not bool(current_user.get("auto_rank_purchased")):
-            set_updates["auto_rank_purchased"] = True
+        if not permanent:
             set_updates["auto_rank_trial"] = True
-
         result = await db.users.update_one(
             {"id": current_user["id"], count_field: {"$gte": 1}},
             {

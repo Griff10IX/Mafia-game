@@ -70,6 +70,7 @@ from server import (
     maybe_process_rank_up,
     user_prestige_rank_mult,
     set_state_head,
+    clear_or_transfer_state_head_on_wipe,
     get_head_family_id_for_state,
     _get_active_war_between,
     _get_active_war_for_family,
@@ -667,29 +668,7 @@ async def cleanup_dead_families():
                         "prize_compound_loot_pieces": compound_loot_pieces,
                     }}
                 )
-            head_state = (fam.get("head_of_state") or "").strip()
-            if head_state:
-                if winner_id:
-                    # Check if winner's family already heads a state
-                    winner_fam = await db.families.find_one({"id": winner_id}, {"_id": 0, "head_of_state": 1, "name": 1})
-                    winner_current_state = (winner_fam or {}).get("head_of_state") or ""
-                    if winner_current_state.strip():
-                        # Winner already heads a state - offer them a choice to takeover
-                        await db.families.update_one(
-                            {"id": winner_id},
-                            {"$set": {
-                                "pending_state_takeover": head_state,
-                                "pending_state_takeover_at": datetime.now(timezone.utc).isoformat(),
-                            }}
-                        )
-                        # Clear the conquered state for now (they can claim it if they accept)
-                        await set_state_head(head_state, None)
-                    else:
-                        # Winner doesn't head a state - give them this one directly
-                        await set_state_head(head_state, winner_id)
-                else:
-                    # No winner - just clear the state
-                    await set_state_head(head_state, None)
+            await clear_or_transfer_state_head_on_wipe(family_id, winner_id)
             # Keep family_members so wiped crew profile can show "In Memoriam" (all dead members)
             # Soft-delete: mark as wiped so crew profile still viewable (e.g. /game/family/:id)
             winner_name = (winner_fam_doc or {}).get("name") or (winner_fam_doc or {}).get("tag") or (winner_id or "?")
@@ -702,6 +681,7 @@ async def cleanup_dead_families():
                         "wiped_by_family_id": winner_id,
                         "wiped_by_family_name": winner_family_name,
                         "boss_id": None,
+                        "head_of_state": None,
                         "rackets": {},
                         "treasury": 0,
                         "treasury_bullets": 0,

@@ -2615,34 +2615,48 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         # Transfer cars to killer; exclusive + loot-exclusive get a new id so old view-car links are dead
         killer_has_loot_car = await db.user_cars.count_documents({"user_id": killer_id, "car_id": "car21"})
         car_transfer_ops: List[Any] = []
+        exclusive_transfer_logs: List[dict] = []
+        victim_name = target.get("username") or target_name
+        killer_name = current_user.get("username") or "?"
         for uc in victim_cars:
             car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
             is_loot_exclusive = car_info and car_info.get("rarity") == "loot_exclusive"
             if is_loot_exclusive:
                 if killer_has_loot_car >= 1:
                     car_transfer_ops.append(DeleteOne({"_id": uc["_id"]}))
+                    exclusive_transfer_logs.append(
+                        {"car_id": uc.get("car_id"), "car_name": car_info.get("name"), "destroyed": True, "previous_user_car_id": uc.get("id")}
+                    )
                 else:
+                    new_id = str(uuid.uuid4())
                     car_transfer_ops.append(
                         UpdateOne(
                             {"_id": uc["_id"]},
                             {
-                                "$set": {"user_id": killer_id, "id": str(uuid.uuid4())},
+                                "$set": {"user_id": killer_id, "id": new_id},
                                 "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""},
                             },
                         )
+                    )
+                    exclusive_transfer_logs.append(
+                        {"car_id": uc.get("car_id"), "car_name": car_info.get("name"), "user_car_id": new_id, "previous_user_car_id": uc.get("id")}
                     )
                     killer_has_loot_car = 1
                 continue
             is_exclusive = car_info and car_info.get("rarity") == "exclusive"
             if is_exclusive:
+                new_id = str(uuid.uuid4())
                 car_transfer_ops.append(
                     UpdateOne(
                         {"_id": uc["_id"]},
                         {
-                            "$set": {"user_id": killer_id, "id": str(uuid.uuid4())},
+                            "$set": {"user_id": killer_id, "id": new_id},
                             "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""},
                         },
                     )
+                )
+                exclusive_transfer_logs.append(
+                    {"car_id": uc.get("car_id"), "car_name": car_info.get("name"), "user_car_id": new_id, "previous_user_car_id": uc.get("id")}
                 )
             else:
                 car_transfer_ops.append(
@@ -2653,6 +2667,36 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 )
         if car_transfer_ops:
             await db.user_cars.bulk_write(car_transfer_ops, ordered=False)
+        if exclusive_transfer_logs:
+            from utils.exclusive_car_events import log_exclusive_car_event
+
+            for row in exclusive_transfer_logs:
+                if row.get("destroyed"):
+                    await log_exclusive_car_event(
+                        db,
+                        event_type="pvp_kill_transfer",
+                        car_id=row["car_id"],
+                        previous_user_car_id=row.get("previous_user_car_id"),
+                        from_user_id=victim_id,
+                        from_username=victim_name,
+                        to_user_id=killer_id,
+                        to_username=killer_name,
+                        car_name=row.get("car_name"),
+                        extra={"destroyed_duplicate_loot_exclusive": True},
+                    )
+                else:
+                    await log_exclusive_car_event(
+                        db,
+                        event_type="pvp_kill_transfer",
+                        car_id=row["car_id"],
+                        user_car_id=row.get("user_car_id"),
+                        previous_user_car_id=row.get("previous_user_car_id"),
+                        from_user_id=victim_id,
+                        from_username=victim_name,
+                        to_user_id=killer_id,
+                        to_username=killer_name,
+                        car_name=row.get("car_name"),
+                    )
         from routers.money.properties import process_portfolio_kill_rewards
         from routers.kill.armoury import TOKEN_CONFIG
 
@@ -2766,6 +2810,30 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 if res.modified_count:
                     transferred_airport = True
                 await db.airport_ownership.update_many(
+                    {"owner_id": victim_id},
+                    {"$set": {"owner_id": None, "owner_username": None}},
+                )
+        # Transfer victim's armoury / bullet factory (or release if killer already owns airport or armoury)
+        killer_owns_property_after_airport = await _user_owns_any_property(killer_id)
+        victim_bf = await db.bullet_factory.find_one({"owner_id": victim_id}, {"_id": 0, "state": 1})
+        transferred_armoury = False
+        if victim_bf:
+            if killer_owns_property_after_airport:
+                await db.bullet_factory.update_many(
+                    {"owner_id": victim_id},
+                    {"$set": {"owner_id": None, "owner_username": None}},
+                )
+            else:
+                bf_set = {"owner_id": killer_id, "owner_username": killer_username}
+                if attacker_rank_id < CAPO_RANK_ID:
+                    bf_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
+                res = await db.bullet_factory.update_one(
+                    {"owner_id": victim_id},
+                    {"$set": bf_set},
+                )
+                if res.modified_count:
+                    transferred_armoury = True
+                await db.bullet_factory.update_many(
                     {"owner_id": victim_id},
                     {"$set": {"owner_id": None, "owner_username": None}},
                 )
@@ -2937,6 +3005,9 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             extras.append(f"their casino table ({names.get(transferred_casino_type, transferred_casino_type)})")
         if transferred_airport:
             extras.append("their airport")
+        if transferred_armoury:
+            bf_state = (victim_bf or {}).get("state")
+            extras.append(f"their armoury ({bf_state})" if bf_state else "their armoury")
         if extras:
             success_message += ", " + ", ".join(extras) + "."
         else:

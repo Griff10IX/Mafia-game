@@ -44,6 +44,7 @@ export default function MyInventory() {
   const [data, setData] = useState(_cachedInventory);
   const [equipping, setEquipping] = useState({ weapon: null, armour: null });
   const [usingToken, setUsingToken] = useState(null);
+  const [autoRankRunning, setAutoRankRunning] = useState(null);
   const [collectingSpeakeasy, setCollectingSpeakeasy] = useState(false);
   const [exchangingAutoRank, setExchangingAutoRank] = useState(false);
   const [giftUsername, setGiftUsername] = useState('');
@@ -92,6 +93,35 @@ export default function MyInventory() {
       return cur;
     });
   }, [data?.tokens]);
+
+  useEffect(() => {
+    const until = data?.tokens?.auto_rank_2h?.active_until;
+    if (!until || new Date(until) <= new Date()) {
+      setAutoRankRunning(null);
+      return;
+    }
+    api.get('/auto-rank/me')
+      .then((res) => setAutoRankRunning(res.data?.auto_rank_enabled === true))
+      .catch(() => setAutoRankRunning(null));
+  }, [data?.tokens?.auto_rank_2h?.active_until, data?.tokens?.auto_rank_2h?.count]);
+
+  const setAutoRankMaster = async (enabled) => {
+    setUsingToken('auto_rank_pause');
+    try {
+      await api.patch('/auto-rank/me', { auto_rank_enabled: enabled });
+      setAutoRankRunning(enabled);
+      toast.success(
+        enabled
+          ? 'Auto Rank resumed'
+          : 'Auto Rank paused — your remaining trial time is unchanged',
+      );
+      refreshUser();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to update Auto Rank');
+    } finally {
+      setUsingToken(null);
+    }
+  };
 
   const equipWeapon = async (weaponId) => {
     setEquipping((e) => ({ ...e, weapon: weaponId }));
@@ -154,6 +184,7 @@ export default function MyInventory() {
     try {
       const res = await api.post('/inventory/tokens/use', { token_type: tokenType, use_all: useAll });
       if (res?.data?.tokens) setData((d) => (d ? { ...d, tokens: res.data.tokens } : d));
+      if (tokenType === 'auto_rank_2h') setAutoRankRunning(true);
       toast.success(res?.data?.message || 'Token used.');
       refreshUser();
       fetchInventory();
@@ -656,6 +687,16 @@ export default function MyInventory() {
                           className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-amber-500/45 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
                         >
                           Set max fee
+                        </button>
+                      )}
+                      {key === 'auto_rank_2h' && untilLive && (
+                        <button
+                          type="button"
+                          disabled={usingToken !== null || autoRankRunning === null}
+                          onClick={() => setAutoRankMaster(!autoRankRunning)}
+                          className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-amber-500/45 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
+                        >
+                          {usingToken === 'auto_rank_pause' ? '…' : autoRankRunning ? 'Pause' : 'Resume'}
                         </button>
                       )}
                       <button

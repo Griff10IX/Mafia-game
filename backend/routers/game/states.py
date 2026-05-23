@@ -282,8 +282,8 @@ async def get_states(current_user: dict = Depends(get_current_user)):
     state_heads = {}
     head_family_ids = [fid for fid in (heads_raw or {}).values() if fid]
     head_families = await db.families.find(
-        {"id": {"$in": head_family_ids}},
-        {"_id": 0, "id": 1, "name": 1, "tag": 1, "emblem_preset_id": 1, "avatar_url": 1},
+        {"id": {"$in": head_family_ids}, "wiped": {"$ne": True}},
+        {"_id": 0, "id": 1, "name": 1, "tag": 1, "emblem_preset_id": 1, "avatar_url": 1, "wiped": 1},
     ).to_list(len(head_family_ids) or 1)
     fam_map = {f["id"]: f for f in head_families}
     for st in (STATES or []):

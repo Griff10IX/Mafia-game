@@ -309,7 +309,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Minigame Payouts', categoryId: 'admin-logs', collapseKey: 'minigamePayouts', keywords: ['minigame', 'payout', 'reward', 'cash', 'mini', 'game'] },
   { label: 'Weekly Leaderboard Payouts', categoryId: 'admin-logs', collapseKey: 'weeklyLeaderboardPayouts', keywords: ['leaderboard', 'weekly', 'payout', 'respect', 'points', 'top 10', 'fix', 'deduction', 'negative points'] },
   { label: 'Attack Logs', categoryId: 'admin-logs', collapseKey: 'attackLogs', keywords: ['attack', 'log', 'kill'] },
-  { label: 'Bodyguard audit', categoryId: 'admin-logs', collapseKey: 'bodyguardAudit', keywords: ['bodyguard', 'guard', 'hire', 'drop', 'inflation', 'robot hire history', 'last 100 robot', 'searching time', 'find time'] },
+  { label: 'Bodyguard audit', categoryId: 'admin-logs', collapseKey: 'bodyguardAudit', keywords: ['bodyguard', 'guard', 'hire', 'drop', 'inflation', 'robot hire history', 'last 100 robot', 'searching time', 'find time', 'overpay', 'stale inflation'] },
   { label: 'Mod Action Logs', categoryId: 'admin-logs', collapseKey: 'modLogs', keywords: ['mod', 'action', 'log'] },
   { label: 'Crime logs', categoryId: 'admin-logs', collapseKey: 'crimeLogs', keywords: ['crime', 'log', 'heist'] },
   { label: 'GTA logs', categoryId: 'admin-logs', collapseKey: 'gtaLogs', keywords: ['gta', 'log', 'theft', 'car'] },
@@ -337,7 +337,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Bodyguard Tools', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'robot', 'generate', 'sync', 'location', 'hacked', 'replace', 'hire inflation', 'clear inflation'] },
   { label: 'Generate Bodyguards', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'generate', 'robot'] },
   { label: 'Test Bodyguard Payout', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'payout', 'test'] },
-  { label: 'GTA exclusive pool & dealer', categoryId: 'admin-world-systems', collapseKey: 'gtaPool', keywords: ['gta', 'exclusive', 'pool', 'dealer', 'cars', 'values'], adminOnly: true },
+  { label: 'GTA exclusive pool & dealer', categoryId: 'admin-world-systems', collapseKey: 'gtaPool', keywords: ['gta', 'exclusive', 'loot exclusive', 'car intel', 'timeline', 'war lock', 'marketplace', 'pool', 'dealer', 'cars', 'values'], adminOnly: true },
   { label: 'System health', categoryId: 'admin-operations', collapseKey: 'systemHealth', keywords: ['system', 'health', 'uptime', 'status', 'db'] },
   { label: 'Moderation related accounts', categoryId: 'admin-operations', collapseKey: 'moderationRelated', keywords: ['moderation', 'related', 'linked', 'accounts'] },
   { label: 'Page locks (admin)', categoryId: 'admin-world-systems', collapseKey: 'pageLocks', scrollToId: 'admin-page-locks', keywords: ['page', 'lock', 'route'] },
@@ -1045,6 +1045,11 @@ export default function Admin() {
   const [robotHiresLoading, setRobotHiresLoading] = useState(false);
   const [robotHiresData, setRobotHiresData] = useState(null);
   const [robotHiresExpandKey, setRobotHiresExpandKey] = useState(null);
+  const [bgInflationAuditSince, setBgInflationAuditSince] = useState('');
+  const [bgInflationAuditUntil, setBgInflationAuditUntil] = useState('');
+  const [bgInflationAuditAllUsers, setBgInflationAuditAllUsers] = useState(false);
+  const [bgInflationAuditLoading, setBgInflationAuditLoading] = useState(false);
+  const [bgInflationAuditData, setBgInflationAuditData] = useState(null);
   const [crimeLogsUsername, setCrimeLogsUsername] = useState('');
   const [crimeLogsLimit, setCrimeLogsLimit] = useState(500);
   const [crimeLogsData, setCrimeLogsData] = useState(null);
@@ -1063,6 +1068,11 @@ export default function Admin() {
   const [exclusiveCarValuesLoading, setExclusiveCarValuesLoading] = useState(false);
   const [exclusiveCarOwners, setExclusiveCarOwners] = useState([]);
   const [exclusiveCarOwnersLoading, setExclusiveCarOwnersLoading] = useState(false);
+  const [exclusiveCarIntelUsername, setExclusiveCarIntelUsername] = useState('');
+  const [exclusiveCarIntelCarId, setExclusiveCarIntelCarId] = useState('all');
+  const [exclusiveCarIntelUserCarId, setExclusiveCarIntelUserCarId] = useState('');
+  const [exclusiveCarIntelData, setExclusiveCarIntelData] = useState(null);
+  const [exclusiveCarIntelLoading, setExclusiveCarIntelLoading] = useState(false);
   const [editCarId, setEditCarId] = useState('');
   const [editCarValue, setEditCarValue] = useState('');
   const [editCarTravel, setEditCarTravel] = useState('');
@@ -6703,6 +6713,34 @@ export default function Admin() {
     }
   };
 
+  const handleFetchBgInflationOverpayAudit = async () => {
+    const un = (bodyguardAuditUsername || '').trim();
+    if (!bgInflationAuditAllUsers && !un) {
+      toast.error('Enter a username or check “All users in range”');
+      return;
+    }
+    setBgInflationAuditLoading(true);
+    setBgInflationAuditData(null);
+    try {
+      const params = {
+        robots_only: true,
+        include_all_hires: false,
+      };
+      if (bgInflationAuditSince.trim()) params.since = bgInflationAuditSince.trim();
+      if (bgInflationAuditUntil.trim()) params.until = bgInflationAuditUntil.trim();
+      if (!bgInflationAuditAllUsers && un) params.target_username = un;
+      const res = await api.get('/admin/bodyguards/inflation-overpay-audit', { params });
+      setBgInflationAuditData(res.data || null);
+      const op = res.data?.totals?.overpaid_points ?? 0;
+      const users = res.data?.totals?.users_with_overpay ?? 0;
+      toast.success(`Overpay audit: ${op.toLocaleString()} pts across ${users} user(s)`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load inflation overpay audit');
+    } finally {
+      setBgInflationAuditLoading(false);
+    }
+  };
+
   const handleFetchCrimeLogs = async () => {
     const un = (crimeLogsUsername || '').trim();
     if (!un) {
@@ -6850,6 +6888,28 @@ export default function Admin() {
       setExclusiveCarOwners([]);
     } finally {
       setExclusiveCarOwnersLoading(false);
+    }
+  };
+
+  const fetchExclusiveCarIntel = async (overrides = {}) => {
+    setExclusiveCarIntelLoading(true);
+    try {
+      const params = { limit: 200 };
+      const un = (overrides.username ?? exclusiveCarIntelUsername ?? '').trim();
+      const cid = overrides.car_id ?? exclusiveCarIntelCarId ?? 'all';
+      const ucid = (overrides.user_car_id ?? exclusiveCarIntelUserCarId ?? '').trim();
+      if (un) params.username = un;
+      if (cid && cid !== 'all') params.car_id = cid;
+      if (ucid) params.user_car_id = ucid;
+      const res = await api.get('/admin/cars/exclusive-intel', { params });
+      setExclusiveCarIntelData(res.data || null);
+      const n = (res.data?.timeline?.length ?? 0);
+      toast.success(`Loaded ${res.data?.instances?.length ?? 0} instance(s), ${n} timeline event(s)`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load exclusive car intel');
+      setExclusiveCarIntelData(null);
+    } finally {
+      setExclusiveCarIntelLoading(false);
     }
   };
 
@@ -14881,6 +14941,98 @@ export default function Admin() {
               </div>
 
               <div className="pt-3 border-t border-zinc-700/50 space-y-2">
+                <span className="text-[10px] font-heading text-mutedForeground block">Exclusive car intel (sales, kills, wars, GTA, loot box):</span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    value={exclusiveCarIntelUsername}
+                    onChange={(e) => setExclusiveCarIntelUsername(e.target.value)}
+                    placeholder="Username"
+                    className="w-28 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
+                  />
+                  <select
+                    value={exclusiveCarIntelCarId}
+                    onChange={(e) => setExclusiveCarIntelCarId(e.target.value)}
+                    className="px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
+                  >
+                    <option value="all">All exclusive types</option>
+                    <option value="car20">car20 (Al Capone)</option>
+                    <option value="car21">car21 (loot exclusive)</option>
+                  </select>
+                  <input
+                    type="text"
+                    value={exclusiveCarIntelUserCarId}
+                    onChange={(e) => setExclusiveCarIntelUserCarId(e.target.value)}
+                    placeholder="Garage row id (optional)"
+                    className="w-44 px-2 py-1 rounded border border-input bg-transparent text-[10px] font-mono"
+                  />
+                  <button
+                    type="button"
+                    disabled={exclusiveCarIntelLoading}
+                    onClick={() => fetchExclusiveCarIntel()}
+                    className="px-2 py-1 rounded border border-amber-500/45 bg-amber-500/10 text-[10px] font-heading font-bold text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
+                  >
+                    {exclusiveCarIntelLoading ? '…' : 'Load intel'}
+                  </button>
+                </div>
+                {exclusiveCarIntelData?.notes?.length > 0 && (
+                  <ul className="text-[9px] text-mutedForeground font-heading list-disc pl-4 space-y-0.5">
+                    {exclusiveCarIntelData.notes.map((n, i) => (
+                      <li key={i}>{n}</li>
+                    ))}
+                  </ul>
+                )}
+                {Array.isArray(exclusiveCarIntelData?.instances) && exclusiveCarIntelData.instances.length > 0 && (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {exclusiveCarIntelData.instances.map((inst) => (
+                      <div key={inst.user_car_id || inst.car_id} className="rounded border border-zinc-700/40 bg-zinc-900/40 p-2">
+                        <div className="text-[10px] font-heading text-foreground">
+                          {inst.car_name}{' '}
+                          <span className="text-mutedForeground">({inst.rarity})</span>
+                          {' — '}
+                          <Link to={`/profile/${encodeURIComponent(inst.owner_username || '')}`} className="text-primary hover:underline">{inst.owner_username}</Link>
+                          {inst.listed_for_sale && (
+                            <span className="text-emerald-400"> · listed ${Number(inst.sale_price || 0).toLocaleString()}</span>
+                          )}
+                          {inst.war_locked && (
+                            <span className="text-amber-400"> · war locked ({inst.family_name})</span>
+                          )}
+                        </div>
+                        <div className="text-[9px] text-mutedForeground font-mono">garage id: {inst.user_car_id}</div>
+                        {inst.timeline?.length > 0 && (
+                          <div className="mt-1 text-[9px] text-zinc-400">{inst.timeline.length} matched event(s) for this row</div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {Array.isArray(exclusiveCarIntelData?.timeline) && exclusiveCarIntelData.timeline.length > 0 && (
+                  <div className="max-h-64 overflow-y-auto rounded border border-zinc-700/30">
+                    <table className="w-full text-[9px] font-heading">
+                      <thead className="sticky top-0 bg-zinc-900/95">
+                        <tr className="text-mutedForeground border-b border-zinc-700/40">
+                          <th className="text-left p-1.5">When</th>
+                          <th className="text-left p-1.5">Event</th>
+                          <th className="text-left p-1.5">Summary</th>
+                          <th className="text-left p-1.5">Source</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {exclusiveCarIntelData.timeline.map((ev, idx) => (
+                          <tr key={`${ev.at}-${ev.event_type}-${idx}`} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
+                            <td className="p-1.5 text-mutedForeground whitespace-nowrap">{ev.at ? new Date(ev.at).toLocaleString() : '—'}</td>
+                            <td className="p-1.5 text-amber-300/90 whitespace-nowrap">{ev.event_label || ev.event_type}</td>
+                            <td className="p-1.5 text-foreground">{ev.summary}</td>
+                            <td className="p-1.5 text-mutedForeground whitespace-nowrap">{ev.source}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-3 border-t border-zinc-700/50 space-y-2">
                 <span className="text-[10px] font-heading text-mutedForeground block">Give every user an exclusive car (if they don&apos;t already have it):</span>
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -20747,6 +20899,93 @@ export default function Admin() {
                   {bodyguardSearchingLoading ? 'Loading…' : 'Bodyguards searching time'}
                 </BtnSecondary>
               </div>
+              <div className="flex flex-wrap items-end gap-2 border border-amber-500/25 rounded-lg p-2 bg-amber-950/10">
+                <p className="w-full text-[10px] text-amber-200/90 font-heading">
+                  Stale inflation counter audit — replays 3h hire windows vs point ledger. Finds robot hires where markup was too high after a window reset (pre-fix $inc bug). Leave username empty and check “All users” for a server-wide scan in the date range.
+                </p>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-heading text-mutedForeground uppercase">Since (ISO)</span>
+                  <input
+                    type="text"
+                    value={bgInflationAuditSince}
+                    onChange={(e) => setBgInflationAuditSince(e.target.value)}
+                    placeholder="2026-01-01"
+                    className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-[11px] w-36 font-mono"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[9px] font-heading text-mutedForeground uppercase">Until (ISO)</span>
+                  <input
+                    type="text"
+                    value={bgInflationAuditUntil}
+                    onChange={(e) => setBgInflationAuditUntil(e.target.value)}
+                    placeholder="optional"
+                    className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-[11px] w-36 font-mono"
+                    autoComplete="off"
+                  />
+                </div>
+                <label className="flex items-center gap-1.5 text-[10px] font-heading text-mutedForeground cursor-pointer pb-1">
+                  <input
+                    type="checkbox"
+                    checked={bgInflationAuditAllUsers}
+                    onChange={(e) => setBgInflationAuditAllUsers(e.target.checked)}
+                    className="rounded border-zinc-600"
+                  />
+                  All users in range
+                </label>
+                <BtnPrimary type="button" onClick={handleFetchBgInflationOverpayAudit} disabled={bgInflationAuditLoading}>
+                  {bgInflationAuditLoading ? 'Loading…' : 'Inflation overpay audit'}
+                </BtnPrimary>
+              </div>
+              {bgInflationAuditData && (
+                <div className="space-y-2 border border-amber-500/30 rounded-lg p-2 bg-black/20">
+                  <p className="text-[10px] font-bold text-amber-300 uppercase tracking-wide">Hire inflation overpay (stale counter)</p>
+                  {bgInflationAuditData.note && (
+                    <p className="text-[9px] text-mutedForeground font-heading border border-zinc-700/40 rounded px-2 py-1">{bgInflationAuditData.note}</p>
+                  )}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-heading">
+                    <div>Users w/ overpay: <span className="font-mono text-foreground">{bgInflationAuditData.totals?.users_with_overpay ?? 0}</span></div>
+                    <div>Affected hires: <span className="font-mono text-foreground">{bgInflationAuditData.totals?.affected_hires ?? 0}</span></div>
+                    <div>Paid: <span className="font-mono text-foreground">{(bgInflationAuditData.totals?.paid_points ?? 0).toLocaleString()}</span> pts</div>
+                    <div>Overpaid: <span className="font-mono text-amber-300 font-bold">{(bgInflationAuditData.totals?.overpaid_points ?? 0).toLocaleString()}</span> pts</div>
+                  </div>
+                  {Array.isArray(bgInflationAuditData.users) && bgInflationAuditData.users.length > 0 && (
+                    <div className="max-h-[280px] overflow-auto rounded border border-zinc-700/50">
+                      <table className="w-full text-left border-collapse text-[9px] font-heading min-w-[640px]">
+                        <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                          <tr className="border-b border-zinc-700/50">
+                            <th className="py-1 px-1 font-bold text-mutedForeground uppercase">User</th>
+                            <th className="py-1 px-1 font-bold text-mutedForeground uppercase">Affected</th>
+                            <th className="py-1 px-1 font-bold text-mutedForeground uppercase">Paid</th>
+                            <th className="py-1 px-1 font-bold text-mutedForeground uppercase">Correct</th>
+                            <th className="py-1 px-1 font-bold text-mutedForeground uppercase">Overpaid</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {bgInflationAuditData.users.map((u) => (
+                            <tr key={u.user_id || u.username} className="border-b border-zinc-700/30">
+                              <td className="py-1 px-1">{u.username ?? '—'}</td>
+                              <td className="py-1 px-1 font-mono">{u.affected_hires ?? 0}</td>
+                              <td className="py-1 px-1 font-mono">{(u.paid_points ?? 0).toLocaleString()}</td>
+                              <td className="py-1 px-1 font-mono">{(u.correct_points ?? 0).toLocaleString()}</td>
+                              <td className="py-1 px-1 font-mono text-amber-300">{(u.overpaid_points ?? 0).toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {bgInflationAuditData.users?.[0]?.hires?.length > 0 && (
+                    <details className="text-[9px] font-heading">
+                      <summary className="cursor-pointer text-primary">Per-hire detail ({bgInflationAuditData.users[0].username})</summary>
+                      <pre className="mt-1 max-h-[320px] overflow-auto rounded border border-zinc-700/50 p-2 font-mono text-[8px] whitespace-pre-wrap">
+                        {JSON.stringify(bgInflationAuditData.users[0].hires, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                </div>
+              )}
               {bodyguardSearchingData && (
                 <div className="space-y-2 border border-primary/25 rounded-lg p-2 bg-black/20">
                   <p className="text-[10px] font-bold text-primary uppercase tracking-wide">Bodyguard hunts currently searching</p>

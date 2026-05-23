@@ -275,6 +275,26 @@ async def get_state_heads() -> Dict[str, Optional[str]]:
     out = {}
     for s in (STATES or []):
         out[s] = (raw.get(s) or "").strip() or None
+    active_fids = [fid for fid in out.values() if fid]
+    if active_fids:
+        wiped_ids = {
+            f["id"]
+            async for f in db.families.find({"id": {"$in": active_fids}, "wiped": True}, {"_id": 0, "id": 1})
+        }
+        if wiped_ids:
+            repaired = False
+            for st in out:
+                if out[st] in wiped_ids:
+                    out[st] = None
+                    repaired = True
+            if repaired:
+                await db.game_settings.update_one(
+                    {"key": "state_heads"},
+                    {"$set": {"value": out}},
+                    upsert=True,
+                )
+                for wid in wiped_ids:
+                    await db.families.update_one({"id": wid}, {"$set": {"head_of_state": None}})
     return out
 
 
@@ -283,7 +303,13 @@ async def get_head_family_id_for_state(state: str) -> Optional[str]:
     if not (state or "").strip():
         return None
     heads = await get_state_heads()
-    return heads.get((state or "").strip())
+    fid = heads.get((state or "").strip())
+    if not fid:
+        return None
+    fam = await db.families.find_one({"id": fid}, {"_id": 0, "wiped": 1})
+    if not fam or fam.get("wiped"):
+        return None
+    return fid
 
 
 def state_head_casino_treasury_share(whole_edge_cash: int) -> int:
@@ -327,6 +353,45 @@ async def set_state_head(state: str, family_id: Optional[str], force: bool = Fal
     if fid:
         await db.families.update_one({"id": fid}, {"$set": {"head_of_state": state}})
     return ""
+
+
+async def clear_or_transfer_state_head_on_wipe(loser_family_id: str, winner_id: Optional[str] = None) -> None:
+    """Clear wiped family's state head, or transfer / offer takeover to the war winner."""
+    if not loser_family_id:
+        return
+    loser_fam = await db.families.find_one({"id": loser_family_id}, {"_id": 0, "head_of_state": 1})
+    head_state = ((loser_fam or {}).get("head_of_state") or "").strip()
+    if not head_state:
+        heads = await get_state_heads()
+        for st, fid in heads.items():
+            if fid == loser_family_id:
+                head_state = st
+                break
+    if not head_state:
+        return
+    winner_id = (winner_id or "").strip() or None
+    if winner_id:
+        winner_fam = await db.families.find_one({"id": winner_id}, {"_id": 0, "head_of_state": 1, "wiped": 1})
+        if not winner_fam or winner_fam.get("wiped"):
+            winner_id = None
+        else:
+            winner_current_state = ((winner_fam or {}).get("head_of_state") or "").strip()
+            if winner_current_state:
+                await db.families.update_one(
+                    {"id": winner_id},
+                    {
+                        "$set": {
+                            "pending_state_takeover": head_state,
+                            "pending_state_takeover_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    },
+                )
+                await set_state_head(head_state, None)
+                return
+    if winner_id:
+        await set_state_head(head_state, winner_id)
+    else:
+        await set_state_head(head_state, None)
 
 
 # Game-wide events. Positive-only random auto-rotation (1-2 events, 1-24h random duration).
@@ -1642,6 +1707,14 @@ async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_
     killer_user = await db.users.find_one({"id": killer_id}, {"_id": 0, "username": 1}) if solo_killer and killer_id else None
     killer_username = (killer_user or {}).get("username") or "?" if solo_killer else None
     if not winner_family:
+        await clear_or_transfer_state_head_on_wipe(loser_id, winner_id)
+        await db.families.update_one(
+            {"id": loser_id},
+            {
+                "$set": {"wiped": True, "wiped_at": now, "boss_id": None, "head_of_state": None},
+                "$unset": {"pending_state_takeover": "", "pending_state_takeover_at": ""},
+            },
+        )
         for w in active_wars:
             await db.family_wars.update_one(
                 {"id": w["id"]},
@@ -1751,15 +1824,34 @@ async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_
     # Transfer exclusive cars
     loser_member_ids = [m["user_id"] for m in members]
     exclusive_cars = await db.user_cars.find({"user_id": {"$in": loser_member_ids}}).to_list(500)
+    winner_boss = await db.users.find_one({"id": winner_boss_id}, {"_id": 0, "username": 1}) if winner_boss_id else None
+    winner_boss_name = (winner_boss or {}).get("username") or "?"
     for uc in exclusive_cars:
         car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
         if car_info and car_info.get("rarity") == "exclusive":
+            new_id = str(uuid.uuid4())
+            prev_owner = await db.users.find_one({"id": uc.get("user_id")}, {"_id": 0, "username": 1})
             await db.user_cars.update_one(
                 {"_id": uc["_id"]},
                 {
-                    "$set": {"user_id": winner_boss_id, "id": str(uuid.uuid4())},
+                    "$set": {"user_id": winner_boss_id, "id": new_id},
                     "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""},
                 },
+            )
+            from utils.exclusive_car_events import log_exclusive_car_event
+
+            await log_exclusive_car_event(
+                db,
+                event_type="war_family_wipe",
+                car_id=uc.get("car_id"),
+                user_car_id=new_id,
+                previous_user_car_id=uc.get("id"),
+                from_user_id=uc.get("user_id"),
+                from_username=(prev_owner or {}).get("username"),
+                to_user_id=winner_boss_id,
+                to_username=winner_boss_name,
+                car_name=car_info.get("name"),
+                extra={"loser_family_id": loser_id, "winner_family_id": winner_id},
             )
     prize_car_count = sum(1 for uc in exclusive_cars if next((c for c in CARS if c.get("id") == uc.get("car_id")), {}).get("rarity") == "exclusive")
 
@@ -1797,11 +1889,14 @@ async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_
             w_set["wiped_by_killer_username"] = killer_username or "?"
         await db.family_wars.update_one({"id": w["id"]}, {"$set": w_set})
 
+    await clear_or_transfer_state_head_on_wipe(loser_id, winner_id if not solo_killer else winner_id)
+
     # Mark victim family as wiped
     family_wiped_set = {
         "wiped": True,
         "wiped_at": now,
         "boss_id": None,
+        "head_of_state": None,
         "rackets": {},
         "treasury": 0,
         "treasury_points": 0,
@@ -1819,7 +1914,7 @@ async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_
     else:
         family_wiped_set["wiped_by_family_id"] = winner_id
         family_wiped_set["wiped_by_family_name"] = winner_family_name
-    await db.families.update_one({"id": loser_id}, {"$set": family_wiped_set})
+    await db.families.update_one({"id": loser_id}, {"$set": family_wiped_set, "$unset": {"pending_state_takeover": "", "pending_state_takeover_at": ""}})
 
     # Build notification message
     if solo_killer and killer_id:

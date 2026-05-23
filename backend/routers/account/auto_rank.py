@@ -138,14 +138,42 @@ def _parse_iso(s):
         return None
 
 
+def _auto_rank_trial_active(user: dict, now: Optional[datetime] = None) -> bool:
+    """True while a timed Auto Rank window (2h tokens, founding trial, etc.) is still running."""
+    until = _parse_iso(user.get("auto_rank_trial_until"))
+    if until is None:
+        return False
+    now = now or datetime.now(timezone.utc)
+    if until.tzinfo is None:
+        until = until.replace(tzinfo=timezone.utc)
+    return until > now
+
+
+def _user_has_auto_rank_access(user: dict) -> bool:
+    """May use Auto Rank (enable master switch). Permanent store purchase or active timed trial."""
+    if user.get("auto_rank_purchased") and not user.get("auto_rank_trial"):
+        return True
+    return _auto_rank_trial_active(user)
+
+
+def _mongo_auto_rank_subscriber_clause(now: Optional[datetime] = None) -> dict:
+    """MongoDB filter: permanent Auto Rank purchase or active timed trial (matches _user_has_auto_rank_access)."""
+    now = now or datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    return {
+        "$or": [
+            {"auto_rank_purchased": True, "auto_rank_trial": {"$ne": True}},
+            {"auto_rank_trial_until": {"$gt": now_iso}},
+        ]
+    }
+
+
 async def _expire_auto_rank_trials(db):
-    """Disable auto rank for users whose founding-member trial has expired."""
+    """Disable auto rank when a timed trial window ends (does not remove permanent store purchase)."""
     now_iso = datetime.now(timezone.utc).isoformat()
     _trial_off = {
-        "auto_rank_purchased": False,
         "auto_rank_enabled": False,
         "auto_rank_trial": False,
-        # Clear activity flags so booze/GTA/etc. cannot stay "on" in DB and block manual travel after trial ends
         "auto_rank_crimes": False,
         "auto_rank_gta": False,
         "auto_rank_bust_every_5_sec": False,
@@ -156,10 +184,19 @@ async def _expire_auto_rank_trials(db):
     }
     result = await db.users.update_many(
         {"auto_rank_trial": True, "auto_rank_trial_until": {"$lte": now_iso}},
-        {"$set": _trial_off},
+        {"$set": {**_trial_off, "auto_rank_purchased": False}, "$unset": {"auto_rank_trial_until": ""}},
     )
-    if result.modified_count:
-        logger.info("Auto rank: expired %d trial(s)", result.modified_count)
+    legacy = await db.users.update_many(
+        {
+            "auto_rank_trial_until": {"$lte": now_iso, "$exists": True, "$nin": [None, ""]},
+            "auto_rank_purchased": {"$ne": True},
+            "auto_rank_trial": {"$ne": True},
+        },
+        {"$set": _trial_off, "$unset": {"auto_rank_trial_until": ""}},
+    )
+    modified = int(result.modified_count or 0) + int(legacy.modified_count or 0)
+    if modified:
+        logger.info("Auto rank: expired %d timed trial(s)", modified)
 
 
 def _is_car_usable(uc: dict) -> bool:
@@ -1356,7 +1393,7 @@ async def run_booze_arrivals():
     now_iso = now.isoformat()
 
     stuck_jailed = db.users.find(
-        {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_booze": True, "in_jail": True, "travel_arrives_at": {"$lte": now_iso}, "traveling_to": {"$exists": True, "$ne": None}, "is_dead": {"$ne": True}},
+        {**_mongo_auto_rank_subscriber_clause(now), "auto_rank_enabled": True, "auto_rank_booze": True, "in_jail": True, "travel_arrives_at": {"$lte": now_iso}, "traveling_to": {"$exists": True, "$ne": None}, "is_dead": {"$ne": True}},
         {"_id": 0, "id": 1, "traveling_to": 1},
     )
     async for u in stuck_jailed:
@@ -1368,7 +1405,7 @@ async def run_booze_arrivals():
                 logger.warning("Auto rank booze cleanup: arrival update for jailed %s failed: %s", u.get("id"), e)
 
     cursor = db.users.find(
-        {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_booze": True, "travel_arrives_at": {"$lte": now_iso}, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}, "auto_rank_idle": {"$ne": True}},
+        {**_mongo_auto_rank_subscriber_clause(now), "auto_rank_enabled": True, "auto_rank_booze": True, "travel_arrives_at": {"$lte": now_iso}, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}, "auto_rank_idle": {"$ne": True}},
         {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_telegram_notify": 1, "last_seen": 1, "email": 1, "is_moderator": 1},
     )
     users = await cursor.to_list(200)
@@ -1416,15 +1453,19 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_
     cursor = (
         db.users.find(
             {
-                "auto_rank_purchased": True,
-                "auto_rank_enabled": True,
-                "in_jail": {"$ne": True},
-                "is_dead": {"$ne": True},
-                "auto_rank_idle": {"$ne": True},
-                "$or": [
-                    {"auto_rank_next_run_at": {"$exists": False}},
-                    {"auto_rank_next_run_at": None},
-                    {"auto_rank_next_run_at": {"$lte": now.isoformat()}},
+                "$and": [
+                    _mongo_auto_rank_subscriber_clause(now),
+                    {
+                        "auto_rank_enabled": True,
+                        "in_jail": {"$ne": True},
+                        "is_dead": {"$ne": True},
+                        "auto_rank_idle": {"$ne": True},
+                        "$or": [
+                            {"auto_rank_next_run_at": {"$exists": False}},
+                            {"auto_rank_next_run_at": None},
+                            {"auto_rank_next_run_at": {"$lte": now.isoformat()}},
+                        ],
+                    },
                 ],
             },
             {
@@ -1522,7 +1563,7 @@ async def run_bust_5sec_once():
         return
     try:
         cursor = db.users.find(
-            {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_bust_every_5_sec": True, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}, "auto_rank_idle": {"$ne": True}},
+            {**_mongo_auto_rank_subscriber_clause(now), "auto_rank_enabled": True, "auto_rank_bust_every_5_sec": True, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}, "auto_rank_idle": {"$ne": True}},
             {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1, "email": 1, "is_moderator": 1},
         )
         users = await cursor.to_list(500)
@@ -1591,7 +1632,7 @@ async def run_auto_rank_oc_once():
     now = datetime.now(timezone.utc)
     try:
         cursor = db.users.find(
-            {"auto_rank_purchased": True, "auto_rank_enabled": True, "auto_rank_oc": True, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}, "auto_rank_idle": {"$ne": True}},
+            {**_mongo_auto_rank_subscriber_clause(now), "auto_rank_enabled": True, "auto_rank_oc": True, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}, "auto_rank_idle": {"$ne": True}},
             {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_telegram_notify": 1, "auto_rank_oc_retry_at": 1, "last_seen": 1, "email": 1, "is_moderator": 1},
         )
         users = await cursor.to_list(500)
@@ -2040,19 +2081,22 @@ def register(router):
     async def get_my_preferences(current_user: dict = Depends(get_current_user)):
         try:
             user_id = (current_user or {}).get("id", "?")
-            chat_id = (current_user.get("telegram_chat_id") or "").strip()
-            prefs = _extract_preferences(current_user)
-            prefs["auto_rank_purchased"] = current_user.get("auto_rank_purchased", False) or current_user.get("auto_rank_enabled", False)
-            prefs["auto_rank_trial"] = bool(current_user.get("auto_rank_trial"))
-            prefs["auto_rank_trial_until"] = current_user.get("auto_rank_trial_until")
-            prefs["auto_rank_trial_dismissed"] = bool(current_user.get("auto_rank_trial_dismissed"))
+            await _expire_auto_rank_trials(db)
+            user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0}) or current_user
+            chat_id = (user.get("telegram_chat_id") or "").strip()
+            prefs = _extract_preferences(user)
+            prefs["auto_rank_purchased"] = bool(user.get("auto_rank_purchased"))
+            prefs["auto_rank_has_access"] = _user_has_auto_rank_access(user)
+            prefs["auto_rank_trial"] = bool(user.get("auto_rank_trial"))
+            prefs["auto_rank_trial_until"] = user.get("auto_rank_trial_until")
+            prefs["auto_rank_trial_dismissed"] = bool(user.get("auto_rank_trial_dismissed"))
             prefs["telegram_chat_id_set"] = bool(chat_id)
-            prefs["auto_rank_crime_ids"] = current_user.get("auto_rank_crime_ids") or []
-            prefs["auto_rank_gta_option_ids"] = current_user.get("auto_rank_gta_option_ids") or []
-            prefs["auto_rank_melt_action_ids"] = current_user.get("auto_rank_melt_action_ids") or []
-            prefs["auto_rank_melt_rarity_ids"] = current_user.get("auto_rank_melt_rarity_ids") or []
-            prefs["auto_rank_scrap"] = current_user.get("auto_rank_scrap", False)
-            prefs["auto_rank_scrap_rarity_ids"] = current_user.get("auto_rank_scrap_rarity_ids") or []
+            prefs["auto_rank_crime_ids"] = user.get("auto_rank_crime_ids") or []
+            prefs["auto_rank_gta_option_ids"] = user.get("auto_rank_gta_option_ids") or []
+            prefs["auto_rank_melt_action_ids"] = user.get("auto_rank_melt_action_ids") or []
+            prefs["auto_rank_melt_rarity_ids"] = user.get("auto_rank_melt_rarity_ids") or []
+            prefs["auto_rank_scrap"] = user.get("auto_rank_scrap", False)
+            prefs["auto_rank_scrap_rarity_ids"] = user.get("auto_rank_scrap_rarity_ids") or []
             logger.debug("Auto rank GET /me ok user_id=%s", user_id)
             return prefs
         except Exception as e:
@@ -2275,22 +2319,21 @@ def register(router):
     @router.patch("/auto-rank/me")
     async def patch_my_preferences(body: MePreferencesBody, current_user: dict = Depends(get_current_user)):
         user_id = current_user["id"]
+        await _expire_auto_rank_trials(db)
+        user_row = await db.users.find_one({"id": user_id}, {"_id": 0}) or current_user
         updates = {}
         if body.auto_rank_enabled is not None:
-            can_enable = current_user.get("auto_rank_purchased") or current_user.get("auto_rank_enabled")
-            if body.auto_rank_enabled and not can_enable:
-                raise HTTPException(status_code=400, detail="Buy Auto Rank from the Store first.")
+            if body.auto_rank_enabled and not _user_has_auto_rank_access(user_row):
+                raise HTTPException(status_code=400, detail="Buy Auto Rank from the Store or activate a token first.")
             updates["auto_rank_enabled"] = body.auto_rank_enabled
             if body.auto_rank_enabled:
                 # When enabling, clear idle state so auto-rank runs immediately
                 updates["auto_rank_idle"] = False
-            else:
-                # Disabling Auto Rank also turns off all activity toggles
-                for f in ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze", "auto_rank_melt", "auto_rank_scrap"]:
-                    updates[f] = False
         for field in ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze", "auto_rank_melt", "auto_rank_scrap"]:
             val = getattr(body, field, None)
             if val is not None:
+                if val and not user_row.get("auto_rank_enabled") and body.auto_rank_enabled is not True:
+                    raise HTTPException(status_code=400, detail="Turn on Enable Auto Rank first, or turn this off while Auto Rank is paused.")
                 updates[field] = val
         if body.auto_rank_telegram_notify is not None:
             updates["auto_rank_telegram_notify"] = bool(body.auto_rank_telegram_notify)
@@ -2327,6 +2370,8 @@ def register(router):
             {"_id": 0, **{f: 1 for f in _PREFERENCE_FIELDS}, "auto_rank_crime_ids": 1, "auto_rank_gta_option_ids": 1, "auto_rank_melt_action_ids": 1, "auto_rank_melt_rarity_ids": 1, "auto_rank_scrap_rarity_ids": 1},
         )
         out = {"message": "Preferences saved", **_extract_preferences(updated)}
+        out["auto_rank_has_access"] = _user_has_auto_rank_access(updated or {})
+        out["auto_rank_purchased"] = bool((updated or {}).get("auto_rank_purchased"))
         out["auto_rank_crime_ids"] = updated.get("auto_rank_crime_ids") if isinstance(updated.get("auto_rank_crime_ids"), list) else []
         out["auto_rank_gta_option_ids"] = updated.get("auto_rank_gta_option_ids") if isinstance(updated.get("auto_rank_gta_option_ids"), list) else []
         out["auto_rank_melt_action_ids"] = updated.get("auto_rank_melt_action_ids") if isinstance(updated.get("auto_rank_melt_action_ids"), list) else []

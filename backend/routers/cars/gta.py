@@ -639,9 +639,10 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         gta_rare_perk = int(current_user.get("gta_rare_drop_perk_attempts_remaining") or 0)
         if gta_rare_perk > 0:
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"gta_rare_drop_perk_attempts_remaining": -1}})
+        new_gta_uc_id = str(uuid.uuid4())
         await db.user_cars.insert_one(
             {
-                "id": str(uuid.uuid4()),
+                "id": new_gta_uc_id,
                 "user_id": current_user.get("id") or "",
                 "car_id": car["id"],
                 "car_name": car["name"],
@@ -658,6 +659,17 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
             )
         if (car.get("rarity") or "") in ("exclusive", "loot_exclusive"):
             await maybe_revoke_civilian_protection(db, current_user.get("id") or "", "exclusive_car")
+            from utils.exclusive_car_events import log_exclusive_car_event
+
+            await log_exclusive_car_event(
+                db,
+                event_type="gta_won",
+                car_id=car.get("id"),
+                user_car_id=new_gta_uc_id,
+                to_user_id=current_user.get("id"),
+                to_username=current_user.get("username"),
+                car_name=car.get("name"),
+            )
         _invalidate_travel_info_cache(current_user.get("id") or "")
         rp_before = int(current_user.get("rank_points") or 0)
         rp_granted = int(rank_points * _fm_gta)
@@ -1801,6 +1813,20 @@ async def list_car(
         "garage_list_car",
         {"user_car_id": request.user_car_id, "car_id": user_car.get("car_id"), "car_name": user_car.get("car_name"), "sale_price": request.price},
     )
+    car_info = next((c for c in CARS if c.get("id") == user_car.get("car_id")), None)
+    if car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive"):
+        from utils.exclusive_car_events import log_exclusive_car_event
+
+        await log_exclusive_car_event(
+            db,
+            event_type="market_listed",
+            car_id=user_car.get("car_id"),
+            user_car_id=user_car.get("id") or request.user_car_id,
+            from_user_id=current_user.get("id"),
+            from_username=current_user.get("username"),
+            price=request.price,
+            car_name=car_info.get("name"),
+        )
     return {"message": f"Listed for ${request.price:,}", "sale_price": request.price}
 
 
@@ -1827,7 +1853,20 @@ async def delist_car(
     else:
         q = {"user_id": current_user.get("id") or "", "id": user_car.get("id")}
     await db.user_cars.update_one(q, {"$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""}})
+    car_info = next((c for c in CARS if c.get("id") == user_car.get("car_id")), None)
     await log_activity(current_user.get("id", ""), current_user.get("username", "?"), "gta_delist", {"car_id": user_car.get("car_id")})
+    if car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive"):
+        from utils.exclusive_car_events import log_exclusive_car_event
+
+        await log_exclusive_car_event(
+            db,
+            event_type="market_delisted",
+            car_id=user_car.get("car_id"),
+            user_car_id=user_car.get("id") or request.user_car_id,
+            from_user_id=current_user.get("id"),
+            from_username=current_user.get("username"),
+            car_name=car_info.get("name"),
+        )
     return {"message": "Car delisted"}
 
 
@@ -1938,6 +1977,21 @@ async def buy_listed_car(
         "garage_buy_listed_car",
         {"car_id": user_car.get("car_id"), "car_name": car_name, "price": price, "seller_id": seller_id, "seller_username": (seller or {}).get("username", "?")},
     )
+    if car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive"):
+        from utils.exclusive_car_events import log_exclusive_car_event
+
+        await log_exclusive_car_event(
+            db,
+            event_type="market_sale",
+            car_id=user_car.get("car_id"),
+            user_car_id=user_car.get("id"),
+            from_user_id=seller_id,
+            from_username=(seller or {}).get("username"),
+            to_user_id=buyer_id,
+            to_username=current_user.get("username"),
+            price=price,
+            car_name=car_name,
+        )
     return {
         "message": f"Purchased {car_name} from seller for ${price:,}",
         "car_id": user_car.get("car_id"),
