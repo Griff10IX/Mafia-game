@@ -251,7 +251,7 @@ class AdminSettingsUpdate(BaseModel):
     preorder_points_release_date: Optional[str] = None  # ISO datetime - points held until this date
     store_points_auto_credit: Optional[bool] = None  # False = staff credits store points manually after payment
     store_points_manual_credit_eta: Optional[str] = None  # ISO datetime shown to users (informational)
-    store_points_event_enabled: Optional[bool] = None  # Random +25% store points sale event toggle
+    store_points_event_enabled: Optional[bool] = None  # Random store points sale event toggle (+35% bonus)
     store_points_event_force_today: Optional[bool] = None  # True = force sale until end of current UTC day; False = clear force
     casino_global_max_bet: Optional[int] = None  # Max bet cap for all casinos (default 1B)
     casino_buyback_max_points: Optional[int] = None  # Max points for buy-back reward (default 15000)

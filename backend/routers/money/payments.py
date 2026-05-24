@@ -3,7 +3,7 @@ import os
 import asyncio
 import logging
 import hashlib
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone, timedelta, date
 
 from typing import Any, Dict, Optional, Tuple
 
@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # GBP store points (Stripe): bonus loot box pieces — 50 pieces per whole £5 charged (currency must be GBP).
 STORE_POINTS_LOOT_GBP_MINOR_PER_BLOCK = 500
 STORE_POINTS_LOOT_PIECES_PER_BLOCK = 50
-STORE_POINTS_EVENT_BONUS_RATE = 0.25
+STORE_POINTS_EVENT_BONUS_RATE = 0.35
 
 RANK_XP_PASS_PACKAGE_ID = "rank_xp_pass_499"
 # No new Game Pass checkout while an active pass is within this many days of rank_xp_pass_token_expires_at.
@@ -228,34 +228,62 @@ def loot_box_pieces_for_gbp_stripe_minor(amount_minor: Optional[int], currency: 
     return (m // STORE_POINTS_LOOT_GBP_MINOR_PER_BLOCK) * STORE_POINTS_LOOT_PIECES_PER_BLOCK
 
 
+def _utc_epoch_day(dt: datetime) -> int:
+    n = dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    midnight = datetime(n.year, n.month, n.day, tzinfo=timezone.utc)
+    return int(midnight.timestamp() // 86400)
+
+
+def _store_points_event_base_active_on_epoch_day(epoch_day: int) -> bool:
+    seed = hashlib.sha256(f"store-points-event-day:{epoch_day}".encode("utf-8")).digest()
+    return (seed[0] % 3) != 0  # ~67% random on-days
+
+
+def _store_points_event_active_on_epoch_day(epoch_day: int) -> bool:
+    """Deterministic per UTC day; never two consecutive inactive days."""
+    if _store_points_event_base_active_on_epoch_day(epoch_day):
+        return True
+    if epoch_day > 0 and not _store_points_event_base_active_on_epoch_day(epoch_day - 1):
+        return True
+    return False
+
+
+def _store_points_event_active_weekdays_for_week(year: int, week: int) -> list[int]:
+    """ISO week weekdays (0=Mon … 6=Sun) when the sale is scheduled on."""
+    out: list[int] = []
+    for iso_wd in range(1, 8):
+        d = date.fromisocalendar(year, week, iso_wd)
+        ed = _utc_epoch_day(datetime(d.year, d.month, d.day, tzinfo=timezone.utc))
+        if _store_points_event_active_on_epoch_day(ed):
+            out.append(iso_wd - 1)
+    return out
+
+
 def _store_points_event_payload(
     now: Optional[datetime] = None,
     *,
     enabled: bool = True,
     force_until: Optional[str] = None,
 ) -> dict:
-    """Deterministic weekly random store points event: active 2 or 3 UTC days per week."""
+    """Deterministic store points sale: ~random daily schedule, never off two UTC days in a row."""
     n = now or datetime.now(timezone.utc)
     if n.tzinfo is None:
         n = n.replace(tzinfo=timezone.utc)
     n = n.astimezone(timezone.utc)
     iso = n.isocalendar()
     week_key = f"{iso.year}-W{iso.week:02d}"
-    seed = hashlib.sha256(f"store-points-event:{week_key}".encode("utf-8")).digest()
-    active_days_count = 2 + (seed[0] % 2)
-
-    def day_score(day: int) -> str:
-        return hashlib.sha256(f"{week_key}:{day}".encode("utf-8")).hexdigest()
-
-    active_weekdays = sorted(sorted(range(7), key=day_score)[:active_days_count])
+    epoch_day = _utc_epoch_day(n)
+    schedule_active = _store_points_event_active_on_epoch_day(epoch_day)
+    active_weekdays = _store_points_event_active_weekdays_for_week(iso.year, iso.week)
     forced_until_dt = _parse_utc(force_until)
     forced_active = bool(enabled) and bool(forced_until_dt and forced_until_dt > n)
-    active = bool(enabled) and (forced_active or n.weekday() in active_weekdays)
+    active = bool(enabled) and (forced_active or schedule_active)
     mult = 1.0 + STORE_POINTS_EVENT_BONUS_RATE
+    bonus_pct = int(round(STORE_POINTS_EVENT_BONUS_RATE * 100))
     return {
         "id": f"store_points_bonus_{week_key}",
         "name": "Store Points Bonus",
-        "message": "Store point purchases get +25% extra points today.",
+        "message": f"Store point purchases get +{bonus_pct}% extra points today.",
         "enabled": bool(enabled),
         "active": active,
         "forced_active": forced_active,
