@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { X } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
@@ -13,6 +13,7 @@ import {
   formatAttackLogProtecteeOrOwner,
   formatBodyguardBlockSummary,
   parseAttackLogUA,
+  groupAttackLogsByEncounter,
 } from '../../utils/attackLogDisplay';
 
 function BtnPrimary({ children, ...props }) {
@@ -65,11 +66,18 @@ export default function AttackLogsPanel({
   const [roleFilter, setRoleFilter] = useState('');
   const [protecteeFilter, setProtecteeFilter] = useState('');
   const [guardFilter, setGuardFilter] = useState('');
+  const [targetFilter, setTargetFilter] = useState('');
+  const [attackerFilter, setAttackerFilter] = useState('');
   const [daysFilter, setDaysFilter] = useState('30');
   const [bodyguardIntel, setBodyguardIntel] = useState(null);
+  const [targetIntel, setTargetIntel] = useState(null);
+  const [targetIntelLoading, setTargetIntelLoading] = useState(false);
+  const [multiAttackerTargets, setMultiAttackerTargets] = useState(null);
+  const [multiAttackerLoading, setMultiAttackerLoading] = useState(false);
   const [intelLoading, setIntelLoading] = useState(false);
   const [globalIntel, setGlobalIntel] = useState(null);
   const [globalIntelLoading, setGlobalIntelLoading] = useState(false);
+  const [groupDuplicates, setGroupDuplicates] = useState(true);
   const attackLogsDataRef = useRef(null);
   attackLogsDataRef.current = attackLogsData;
   const [attackLogViewRow, setAttackLogViewRow] = useState(null);
@@ -88,6 +96,10 @@ export default function AttackLogsPanel({
       if (prot) params.protectee = prot;
       const guard = (overrides.guardFilter !== undefined ? overrides.guardFilter : guardFilter || '').trim();
       if (guard) params.guard_username = guard;
+      const tgt = (overrides.targetFilter !== undefined ? overrides.targetFilter : targetFilter || '').trim();
+      if (tgt) params.target_username = tgt;
+      const atk = (overrides.attackerFilter !== undefined ? overrides.attackerFilter : attackerFilter || '').trim();
+      if (atk) params.attacker_username = atk;
       const ef = overrides.eventFilter !== undefined ? overrides.eventFilter : eventFilter;
       if (ef === 'block' || ef === 'kill' || ef === 'any') {
         params.bodyguard_event = ef;
@@ -96,8 +108,69 @@ export default function AttackLogsPanel({
       }
       return params;
     },
-    [attackLogsLimit, attackLogsUsername, attackLogsExcludeNpc, daysFilter, roleFilter, protecteeFilter, guardFilter, eventFilter],
+    [attackLogsLimit, attackLogsUsername, attackLogsExcludeNpc, daysFilter, roleFilter, protecteeFilter, guardFilter, targetFilter, attackerFilter, eventFilter],
   );
+
+  const resolveTargetIntelUsername = useCallback(
+    (overrides = {}) => {
+      const tgt = (overrides.targetFilter !== undefined ? overrides.targetFilter : targetFilter || '').trim();
+      if (tgt) return tgt;
+      const role = overrides.roleFilter !== undefined ? overrides.roleFilter : roleFilter;
+      const un = (overrides.username !== undefined ? overrides.username : attackLogsUsername || '').trim();
+      if (un && role === 'target') return un;
+      return '';
+    },
+    [targetFilter, roleFilter, attackLogsUsername],
+  );
+
+  const fetchTargetIntel = useCallback(
+    async (targetName) => {
+      const name = (targetName || resolveTargetIntelUsername() || '').trim();
+      if (!name) {
+        setTargetIntel(null);
+        return;
+      }
+      setTargetIntelLoading(true);
+      try {
+        const res = await api.get('/admin/attacks/target-intel', {
+          params: {
+            username: name,
+            days: daysFilter ? parseInt(daysFilter, 10) : 30,
+            exclude_target_npc: attackLogsExcludeNpc,
+          },
+        });
+        setTargetIntel(res.data || null);
+      } catch (e) {
+        setTargetIntel(null);
+        toast.error(e.response?.data?.detail || 'Failed to load target intel');
+      } finally {
+        setTargetIntelLoading(false);
+      }
+    },
+    [resolveTargetIntelUsername, daysFilter, attackLogsExcludeNpc],
+  );
+
+  const fetchMultiAttackerTargets = useCallback(async () => {
+    setMultiAttackerLoading(true);
+    setMultiAttackerTargets(null);
+    try {
+      const res = await api.get('/admin/attacks/multi-attacker-targets', {
+        params: {
+          days: daysFilter ? parseInt(daysFilter, 10) : 30,
+          min_attackers: 2,
+          limit: 50,
+          exclude_target_npc: attackLogsExcludeNpc,
+        },
+      });
+      setMultiAttackerTargets(res.data || null);
+      toast.success(`Found ${res.data?.target_count ?? 0} multi-attacker victims`);
+    } catch (e) {
+      setMultiAttackerTargets(null);
+      toast.error(e.response?.data?.detail || 'Failed to load multi-attacker targets');
+    } finally {
+      setMultiAttackerLoading(false);
+    }
+  }, [daysFilter, attackLogsExcludeNpc]);
 
   const fetchBodyguardIntel = useCallback(async (username) => {
     const un = (username || attackLogsUsername || '').trim();
@@ -156,6 +229,8 @@ export default function AttackLogsPanel({
     if (overrides.roleFilter !== undefined) setRoleFilter(overrides.roleFilter);
     if (overrides.protecteeFilter !== undefined) setProtecteeFilter(overrides.protecteeFilter);
     if (overrides.guardFilter !== undefined) setGuardFilter(overrides.guardFilter);
+    if (overrides.targetFilter !== undefined) setTargetFilter(overrides.targetFilter);
+    if (overrides.attackerFilter !== undefined) setAttackerFilter(overrides.attackerFilter);
     setAttackLogsLoading(true);
     setAttackLogsData(null);
     try {
@@ -164,6 +239,12 @@ export default function AttackLogsPanel({
       setAttackLogsData(payload);
       toast.success(`Loaded ${payload?.logs?.length ?? 0} attack log entries`);
       const un = (attackLogsUsername || '').trim();
+      const targetForIntel = resolveTargetIntelUsername(overrides);
+      if (targetForIntel) {
+        fetchTargetIntel(targetForIntel);
+      } else {
+        setTargetIntel(null);
+      }
       if (un) {
         onLogsLoaded?.(un);
         fetchBodyguardIntel(un);
@@ -185,6 +266,30 @@ export default function AttackLogsPanel({
 
   const filterByProtectee = (name) => {
     handleFetchAttackLogs({ protecteeFilter: name, eventFilter: 'block' });
+  };
+
+  const filterByTarget = (name) => {
+    setAttackLogsUsername('');
+    setRoleFilter('');
+    handleFetchAttackLogs({
+      username: '',
+      targetFilter: name,
+      eventFilter: '',
+      protecteeFilter: '',
+      guardFilter: '',
+    });
+  };
+
+  const filterByAttackerOnTarget = (attackerName, targetName) => {
+    handleFetchAttackLogs({
+      targetFilter: targetName,
+      attackerFilter: attackerName,
+      username: '',
+      roleFilter: '',
+      eventFilter: '',
+      protecteeFilter: '',
+      guardFilter: '',
+    });
   };
 
   useEffect(() => {
@@ -226,6 +331,128 @@ export default function AttackLogsPanel({
 
   const summary = attackLogsData?.summary;
   const intelUser = bodyguardIntel?.username || (attackLogsUsername || '').trim();
+  const targetIntelUser =
+    targetIntel?.target_username ||
+    attackLogsData?.target_username ||
+    (targetFilter || '').trim() ||
+    (roleFilter === 'target' && (attackLogsUsername || '').trim() ? attackLogsUsername.trim() : '');
+  const logGroups = useMemo(
+    () => (groupDuplicates && attackLogsData?.logs?.length ? groupAttackLogsByEncounter(attackLogsData.logs) : null),
+    [attackLogsData?.logs, groupDuplicates],
+  );
+  const displayRowCount = logGroups ? logGroups.length : attackLogsData?.logs?.length ?? 0;
+  const attackerSummary = bodyguardIntel?.attacker_summary;
+  const protecteeSummary = bodyguardIntel?.protectee_summary;
+
+  const renderLogRow = (row, idx, groupMeta = null) => {
+    const { device } = parseAttackLogUA(row.user_agent);
+    const botCell = formatAttackLogBotCell(row);
+    const integCell = formatAttackLogIntegrityCell(row);
+    const bgCell = formatAttackLogBodyguardCell(row);
+    const isBgBlock = row.outcome === 'bodyguard';
+    const risk =
+      row.client_risk_score != null && row.client_risk_score !== ''
+        ? Number(row.client_risk_score)
+        : null;
+    const dupCount = groupMeta?.count ?? 1;
+    return (
+      <tr
+        key={groupMeta?.key || row.id || idx}
+        className={`border-b border-zinc-700/30 ${isBgBlock ? 'bg-amber-500/5' : ''}`}
+      >
+        {groupDuplicates && logGroups ? (
+          <td className="py-1 pr-1 tabular-nums">
+            {dupCount > 1 ? (
+              <span className="px-1 py-0.5 rounded bg-amber-500/20 text-amber-200 font-bold" title={`${dupCount} identical encounters`}>
+                ×{dupCount.toLocaleString()}
+              </span>
+            ) : (
+              <span className="text-mutedForeground">1</span>
+            )}
+          </td>
+        ) : null}
+        <td className="py-1 pr-1 text-foreground">{row.attacker_username ?? '—'}</td>
+        <td className="py-1 pr-1 text-foreground">{row.target_username ?? '—'}</td>
+        <td className="py-1 pr-1">
+          {row.outcome === 'killed' && <span className="text-red-400">Killed</span>}
+          {row.outcome === 'failed' && <span className="text-amber-400">Failed</span>}
+          {row.outcome === 'bodyguard' && <span className="text-amber-500">Bodyguard</span>}
+          {row.outcome === 'error' && <span className="text-orange-400">Error</span>}
+          {row.outcome === 'travel' && <span className="text-sky-400">Travel</span>}
+          {!['killed', 'failed', 'bodyguard', 'error', 'travel'].includes(row.outcome) &&
+            (row.outcome ? <span className="text-mutedForeground">{row.outcome}</span> : '—')}
+        </td>
+        <td className="py-1 pr-1 text-amber-200/90 max-w-[100px] truncate" title={formatBodyguardBlockSummary(row)}>
+          {formatBlockingBodyguard(row)}
+        </td>
+        <td className="py-1 pr-1 text-mutedForeground tabular-nums">{formatBodyguardSlot(row)}</td>
+        <td className="py-1 pr-1 text-mutedForeground max-w-[90px] truncate">{formatAttackLogProtecteeOrOwner(row)}</td>
+        <td className="py-1 pr-1">
+          {bgCell.text === '—' ? (
+            '—'
+          ) : (
+            <span className={bgCell.className} title={bgCell.title || undefined}>
+              {bgCell.text}
+            </span>
+          )}
+        </td>
+        <td
+          className="py-1 pr-1 max-w-[180px] text-mutedForeground break-words line-clamp-2 leading-snug"
+          title={row.player_message ?? ''}
+        >
+          {row.player_message ?? '—'}
+        </td>
+        <td className="py-1 pr-1 text-mutedForeground font-mono text-[8px]">{row.client_ip ?? '—'}</td>
+        <td className="py-1 pr-1 text-mutedForeground">{device}</td>
+        <td className="py-1 pr-1">
+          {botCell.text === '—' ? (
+            '—'
+          ) : (
+            <span className={botCell.className} title={botCell.title || undefined}>
+              {botCell.text}
+            </span>
+          )}
+        </td>
+        <td className="py-1 pr-1">
+          {integCell.text === '—' ? (
+            '—'
+          ) : (
+            <span className={integCell.className} title={integCell.title || undefined}>
+              {integCell.text}
+            </span>
+          )}
+        </td>
+        <td className="py-1 pr-1 font-mono tabular-nums">
+          {risk != null && !Number.isNaN(risk) ? (
+            <span className={risk >= 35 ? 'text-amber-400' : 'text-mutedForeground'}>{risk}</span>
+          ) : (
+            '—'
+          )}
+        </td>
+        <td className="py-1 pr-1">{row.bullets_used != null ? Number(row.bullets_used).toLocaleString() : '—'}</td>
+        <td className="py-1 pr-1 text-mutedForeground">{row.location_state ?? row.state ?? '—'}</td>
+        <td className="py-1 pr-1 text-mutedForeground font-mono whitespace-nowrap">
+          {groupMeta && dupCount > 1 ? (
+            <span title={`First: ${formatAttackLogTime(groupMeta.first_at)}`}>
+              {formatAttackLogTime(groupMeta.last_at)}
+              <span className="text-[8px] text-mutedForeground block">…{formatAttackLogTime(groupMeta.first_at)}</span>
+            </span>
+          ) : (
+            formatAttackLogTime(row.created_at)
+          )}
+        </td>
+        <td className="py-1">
+          <button
+            type="button"
+            onClick={() => setAttackLogViewRow(row)}
+            className="px-1.5 py-0.5 rounded border border-primary/40 bg-primary/10 text-primary text-[9px] font-heading hover:bg-primary/20"
+          >
+            View
+          </button>
+        </td>
+      </tr>
+    );
+  };
 
   return (
     <div className="space-y-3">
@@ -288,7 +515,23 @@ export default function AttackLogsPanel({
           onChange={(e) => setProtecteeFilter(e.target.value)}
           placeholder="Protectee"
           className="w-28 px-2 py-1 rounded border border-input bg-transparent text-[10px] font-heading"
-          title="Victim whose guard blocked (e.g. Moey)"
+          title="Bodyguard protectee (blocks only)"
+        />
+        <input
+          type="text"
+          value={targetFilter}
+          onChange={(e) => setTargetFilter(e.target.value)}
+          placeholder="Target victim"
+          className="w-28 px-2 py-1 rounded border border-input bg-transparent text-[10px] font-heading"
+          title="Victim of any attack (kills, fails, blocks, etc.)"
+        />
+        <input
+          type="text"
+          value={attackerFilter}
+          onChange={(e) => setAttackerFilter(e.target.value)}
+          placeholder="Attacker"
+          className="w-28 px-2 py-1 rounded border border-input bg-transparent text-[10px] font-heading"
+          title="Filter to a specific attacker (combine with target victim)"
         />
         <input
           type="text"
@@ -322,6 +565,15 @@ export default function AttackLogsPanel({
           />
           Hide NPC / hitlist
         </label>
+        <label className="flex items-center gap-1.5 text-[10px] font-heading text-mutedForeground cursor-pointer" title="One row per attacker/target/guard combination">
+          <input
+            type="checkbox"
+            checked={groupDuplicates}
+            onChange={(e) => setGroupDuplicates(e.target.checked)}
+            className="rounded border border-input"
+          />
+          Group duplicate rows
+        </label>
         {attackLogsLive && <span className="text-[9px] text-primary font-heading">Refreshing every 5s</span>}
       </div>
       {(attackLogsUsername || '').trim() ? (
@@ -354,8 +606,35 @@ export default function AttackLogsPanel({
           >
             Blocks by this attacker
           </button>
+          <button
+            type="button"
+            onClick={() =>
+              handleFetchAttackLogs({
+                username: attackLogsUsername.trim(),
+                roleFilter: 'target',
+                eventFilter: '',
+                protecteeFilter: '',
+                guardFilter: '',
+                targetFilter: '',
+                attackerFilter: '',
+              })
+            }
+            className="text-[9px] uppercase tracking-wider text-sky-300 border border-sky-500/40 rounded px-2 py-0.5 hover:bg-sky-500/10 font-heading"
+          >
+            All attacks on this user
+          </button>
         </div>
       ) : null}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={fetchMultiAttackerTargets}
+          disabled={multiAttackerLoading}
+          className="text-[9px] uppercase tracking-wider text-red-300 border border-red-500/40 rounded px-2 py-0.5 hover:bg-red-500/10 font-heading disabled:opacity-50"
+        >
+          {multiAttackerLoading ? 'Scanning…' : 'Multi-attacker victims'}
+        </button>
+      </div>
       <p className="text-[9px] text-mutedForeground font-heading">
         Token-fail correlation: Admin → Cheat Detection → Kill / attack — execute_token failures → Load spoof report.
       </p>
@@ -363,6 +642,34 @@ export default function AttackLogsPanel({
       {(intelUser || showGlobalIntel) && (intelLoading || bodyguardIntel || globalIntelLoading || globalIntel) ? (
         <div className="rounded border border-amber-500/30 bg-amber-500/5 p-2 space-y-2">
           <div className="text-[10px] font-heading font-bold uppercase tracking-wider text-amber-200/90">Bodyguard intel</div>
+          {(attackerSummary || protecteeSummary) && bodyguardIntel && !intelLoading && (
+            <div className="text-[10px] text-zinc-200/95 space-y-1">
+              {attackerSummary && attackerSummary.total_blocks > 0 ? (
+                <p>
+                  <span className="text-foreground font-medium">{intelUser}</span> ran into{' '}
+                  <strong className="text-amber-200">{attackerSummary.distinct_protectees}</strong> protectee
+                  {attackerSummary.distinct_protectees === 1 ? '' : 's'} across{' '}
+                  <strong className="text-amber-200">{attackerSummary.distinct_guards}</strong> guard
+                  {attackerSummary.distinct_guards === 1 ? '' : 's'} ({attackerSummary.encounter_pairs} unique pair
+                  {attackerSummary.encounter_pairs === 1 ? '' : 's'}, {attackerSummary.total_blocks.toLocaleString()} total blocks in{' '}
+                  {bodyguardIntel.days}d).
+                  {attackerSummary.distinct_protectees > 1 || attackerSummary.distinct_guards > 1 ? (
+                    <span className="text-amber-300/90"> Multiple bodyguards / protectees — use grouped view below.</span>
+                  ) : null}
+                </p>
+              ) : null}
+              {protecteeSummary && protecteeSummary.total_blocks > 0 ? (
+                <p>
+                  Guards blocking for <span className="text-foreground font-medium">{intelUser}</span>:{' '}
+                  <strong className="text-amber-200">{protecteeSummary.distinct_guards}</strong> distinct guard
+                  {protecteeSummary.distinct_guards === 1 ? '' : 's'} from{' '}
+                  <strong className="text-amber-200">{protecteeSummary.distinct_attackers}</strong> attacker
+                  {protecteeSummary.distinct_attackers === 1 ? '' : 's'} ({protecteeSummary.total_blocks.toLocaleString()} blocks in{' '}
+                  {bodyguardIntel.days}d).
+                </p>
+              ) : null}
+            </div>
+          )}
           {intelLoading && <p className="text-[10px] text-mutedForeground">Loading intel…</p>}
           {bodyguardIntel && !intelLoading && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
@@ -500,6 +807,117 @@ export default function AttackLogsPanel({
         </div>
       ) : null}
 
+      {multiAttackerTargets && (
+        <div className="rounded border border-red-500/30 bg-red-500/5 p-2 space-y-2">
+          <div className="text-[10px] font-heading font-bold uppercase tracking-wider text-red-200/90">
+            Multi-attacker victims ({multiAttackerTargets.days}d, ≥{multiAttackerTargets.min_attackers} attackers)
+          </div>
+          <p className="text-[10px] text-zinc-200/95">
+            {multiAttackerTargets.target_count} target{multiAttackerTargets.target_count === 1 ? '' : 's'} hit by multiple
+            players — possible pile-ons or coordinated hits.
+          </p>
+          <div className="max-h-40 overflow-y-auto">
+            <table className="w-full text-[9px] font-heading">
+              <thead>
+                <tr className="text-mutedForeground">
+                  <th className="text-left pr-2">Target</th>
+                  <th className="text-right pr-2">Attackers</th>
+                  <th className="text-right pr-2">Attempts</th>
+                  <th className="text-right pr-2">Kills</th>
+                  <th className="text-left">Who</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(multiAttackerTargets.targets || []).map((row, i) => (
+                  <tr key={i} className="border-t border-zinc-700/30">
+                    <td className="py-0.5 pr-2">
+                      <button
+                        type="button"
+                        className="text-primary hover:underline font-medium"
+                        onClick={() => filterByTarget(row.target_username)}
+                      >
+                        {row.target_username}
+                      </button>
+                    </td>
+                    <td className="py-0.5 pr-2 text-right tabular-nums text-red-200">{row.distinct_attackers}</td>
+                    <td className="py-0.5 pr-2 text-right tabular-nums">{row.attempt_count}</td>
+                    <td className="py-0.5 pr-2 text-right tabular-nums">{row.killed}</td>
+                    <td className="py-0.5 text-mutedForeground truncate max-w-[280px]" title={(row.attackers || []).join(', ')}>
+                      {(row.attackers || []).slice(0, 6).join(', ')}
+                      {(row.attackers || []).length > 6 ? '…' : ''}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {(targetIntelUser || targetIntelLoading) && (
+        <div className="rounded border border-sky-500/30 bg-sky-500/5 p-2 space-y-2">
+          <div className="text-[10px] font-heading font-bold uppercase tracking-wider text-sky-200/90">Target intel</div>
+          {targetIntelLoading && <p className="text-[10px] text-mutedForeground">Loading target intel…</p>}
+          {targetIntel && !targetIntelLoading && (
+            <>
+              <p className="text-[10px] text-zinc-200/95">
+                <strong className="text-foreground">{targetIntel.target_username}</strong> —{' '}
+                <strong className={targetIntel.summary?.likely_coordinated ? 'text-red-300' : 'text-sky-200'}>
+                  {targetIntel.summary?.distinct_attackers ?? 0}
+                </strong>{' '}
+                distinct attacker{(targetIntel.summary?.distinct_attackers ?? 0) === 1 ? '' : 's'},{' '}
+                {targetIntel.summary?.total_attempts?.toLocaleString() ?? 0} attempts in {targetIntel.days}d.
+                {targetIntel.summary?.likely_coordinated ? (
+                  <span className="text-red-300/90"> Multiple people attacking this target.</span>
+                ) : null}
+              </p>
+              <div className="max-h-36 overflow-y-auto">
+                <table className="w-full text-[9px] font-heading">
+                  <thead>
+                    <tr className="text-mutedForeground">
+                      <th className="text-left pr-2">Attacker</th>
+                      <th className="text-right pr-2">Attempts</th>
+                      <th className="text-right pr-2">Kills</th>
+                      <th className="text-right pr-2">BG</th>
+                      <th className="text-right pr-2">Failed</th>
+                      <th className="text-left">Last</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(targetIntel.attackers || []).length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="text-mutedForeground">
+                          No attempts
+                        </td>
+                      </tr>
+                    ) : (
+                      (targetIntel.attackers || []).map((row, i) => (
+                        <tr key={i} className="border-t border-zinc-700/30">
+                          <td className="py-0.5 pr-2">
+                            <button
+                              type="button"
+                              className="text-primary hover:underline text-left"
+                              onClick={() => filterByAttackerOnTarget(row.attacker_username, targetIntel.target_username)}
+                            >
+                              {row.attacker_username}
+                            </button>
+                          </td>
+                          <td className="py-0.5 pr-2 text-right tabular-nums">{row.attempt_count}</td>
+                          <td className="py-0.5 pr-2 text-right tabular-nums">{row.killed}</td>
+                          <td className="py-0.5 pr-2 text-right tabular-nums">{row.bodyguard}</td>
+                          <td className="py-0.5 pr-2 text-right tabular-nums">{row.failed}</td>
+                          <td className="py-0.5 text-mutedForeground font-mono text-[8px]">{formatAttackLogTime(row.last_at)}</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
       {attackLogsData && (
         <div className={`overflow-x-auto overflow-y-auto ${tableMaxHeightClass}`}>
           <p className="text-[10px] font-heading text-primary mb-1">
@@ -507,16 +925,43 @@ export default function AttackLogsPanel({
               <>
                 Showing: <strong>All players</strong> (limit {attackLogsLimit}
                 {attackLogsData.exclude_target_npc ? ', NPC excluded' : ''})
+                {attackLogsData.target_username ? (
+                  <>
+                    {' '}
+                    · target <strong>{attackLogsData.target_username}</strong>
+                  </>
+                ) : null}
+                {attackerFilter ? (
+                  <>
+                    {' '}
+                    · attacker <strong>{attackerFilter}</strong>
+                  </>
+                ) : null}
               </>
             ) : (
               <>
                 Attack log for: <strong>{attackLogsData.username}</strong>
                 {attackLogsData.exclude_target_npc ? ' (NPC excluded)' : ''}
+                {attackLogsData.target_username ? (
+                  <>
+                    {' '}
+                    · target <strong>{attackLogsData.target_username}</strong>
+                  </>
+                ) : null}
+                {attackerFilter ? (
+                  <>
+                    {' '}
+                    · attacker <strong>{attackerFilter}</strong>
+                  </>
+                ) : null}
               </>
             )}
             {summary ? (
               <span className="text-mutedForeground ml-2">
                 — {summary.total} rows
+                {groupDuplicates && logGroups && summary.total > displayRowCount ? (
+                  <span> ({displayRowCount} grouped)</span>
+                ) : null}
                 {summary.bodyguard_blocks > 0 ? ` · ${summary.bodyguard_blocks} BG blocks` : ''}
                 {summary.bodyguard_kills > 0 ? ` · ${summary.bodyguard_kills} BG kills` : ''}
                 {summary.errors > 0 ? ` · ${summary.errors} errors` : ''}
@@ -529,6 +974,11 @@ export default function AttackLogsPanel({
             <table className="w-full text-left border-collapse text-[9px] font-heading">
               <thead className="sticky top-0 bg-zinc-900/95 z-10">
                 <tr className="border-b border-zinc-700/50">
+                  {groupDuplicates && logGroups ? (
+                    <th className="py-1 pr-1 font-bold text-mutedForeground uppercase" title="Identical encounters collapsed">
+                      ×
+                    </th>
+                  ) : null}
                   <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Attacker</th>
                   <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Target</th>
                   <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Outcome</th>
@@ -551,101 +1001,9 @@ export default function AttackLogsPanel({
                 </tr>
               </thead>
               <tbody>
-                {attackLogsData.logs.map((row, idx) => {
-                  const { device } = parseAttackLogUA(row.user_agent);
-                  const botCell = formatAttackLogBotCell(row);
-                  const integCell = formatAttackLogIntegrityCell(row);
-                  const bgCell = formatAttackLogBodyguardCell(row);
-                  const isBgBlock = row.outcome === 'bodyguard';
-                  const risk =
-                    row.client_risk_score != null && row.client_risk_score !== ''
-                      ? Number(row.client_risk_score)
-                      : null;
-                  return (
-                    <tr
-                      key={row.id || idx}
-                      className={`border-b border-zinc-700/30 ${isBgBlock ? 'bg-amber-500/5' : ''}`}
-                    >
-                      <td className="py-1 pr-1 text-foreground">{row.attacker_username ?? '—'}</td>
-                      <td className="py-1 pr-1 text-foreground">{row.target_username ?? '—'}</td>
-                      <td className="py-1 pr-1">
-                        {row.outcome === 'killed' && <span className="text-red-400">Killed</span>}
-                        {row.outcome === 'failed' && <span className="text-amber-400">Failed</span>}
-                        {row.outcome === 'bodyguard' && <span className="text-amber-500">Bodyguard</span>}
-                        {row.outcome === 'error' && <span className="text-orange-400">Error</span>}
-                        {row.outcome === 'travel' && <span className="text-sky-400">Travel</span>}
-                        {!['killed', 'failed', 'bodyguard', 'error', 'travel'].includes(row.outcome) &&
-                          (row.outcome ? <span className="text-mutedForeground">{row.outcome}</span> : '—')}
-                      </td>
-                      <td
-                        className="py-1 pr-1 text-amber-200/90 max-w-[100px] truncate"
-                        title={formatBodyguardBlockSummary(row)}
-                      >
-                        {formatBlockingBodyguard(row)}
-                      </td>
-                      <td className="py-1 pr-1 text-mutedForeground tabular-nums">{formatBodyguardSlot(row)}</td>
-                      <td className="py-1 pr-1 text-mutedForeground max-w-[90px] truncate">
-                        {formatAttackLogProtecteeOrOwner(row)}
-                      </td>
-                      <td className="py-1 pr-1">
-                        {bgCell.text === '—' ? (
-                          '—'
-                        ) : (
-                          <span className={bgCell.className} title={bgCell.title || undefined}>
-                            {bgCell.text}
-                          </span>
-                        )}
-                      </td>
-                      <td
-                        className="py-1 pr-1 max-w-[180px] text-mutedForeground break-words line-clamp-2 leading-snug"
-                        title={row.player_message ?? ''}
-                      >
-                        {row.player_message ?? '—'}
-                      </td>
-                      <td className="py-1 pr-1 text-mutedForeground font-mono text-[8px]">{row.client_ip ?? '—'}</td>
-                      <td className="py-1 pr-1 text-mutedForeground">{device}</td>
-                      <td className="py-1 pr-1">
-                        {botCell.text === '—' ? (
-                          '—'
-                        ) : (
-                          <span className={botCell.className} title={botCell.title || undefined}>
-                            {botCell.text}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-1 pr-1">
-                        {integCell.text === '—' ? (
-                          '—'
-                        ) : (
-                          <span className={integCell.className} title={integCell.title || undefined}>
-                            {integCell.text}
-                          </span>
-                        )}
-                      </td>
-                      <td className="py-1 pr-1 font-mono tabular-nums">
-                        {risk != null && !Number.isNaN(risk) ? (
-                          <span className={risk >= 35 ? 'text-amber-400' : 'text-mutedForeground'}>{risk}</span>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                      <td className="py-1 pr-1">{row.bullets_used != null ? Number(row.bullets_used).toLocaleString() : '—'}</td>
-                      <td className="py-1 pr-1 text-mutedForeground">{row.location_state ?? row.state ?? '—'}</td>
-                      <td className="py-1 pr-1 text-mutedForeground font-mono whitespace-nowrap">
-                        {formatAttackLogTime(row.created_at)}
-                      </td>
-                      <td className="py-1">
-                        <button
-                          type="button"
-                          onClick={() => setAttackLogViewRow(row)}
-                          className="px-1.5 py-0.5 rounded border border-primary/40 bg-primary/10 text-primary text-[9px] font-heading hover:bg-primary/20"
-                        >
-                          View
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
+                {logGroups
+                  ? logGroups.map((group, idx) => renderLogRow(group.representative, idx, group))
+                  : attackLogsData.logs.map((row, idx) => renderLogRow(row, idx))}
               </tbody>
             </table>
           )}

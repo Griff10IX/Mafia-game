@@ -585,3 +585,16 @@ def register(router):
             "attack_client_audit logs each successful /attack/search with client_header_snapshot. "
             "Attack Turnstile failures are also included when the attack gate is enabled.",
         }
+
+    @router.get("/admin/investigate/ip-lookup")
+    async def admin_investigate_ip_lookup(
+        ip: str = Query(..., description="IPv4/IPv6 to look up"),
+        current_user: dict = Depends(require_admin_or_mod),
+    ):
+        """Admin/mod: ip-api + GetIPIntel + ipapi.is + in-game proxy assessment for one IP."""
+        from utils.proxy_detection import build_admin_ip_lookup_report
+
+        try:
+            return await build_admin_ip_lookup_report(db, ip)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))

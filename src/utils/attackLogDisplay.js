@@ -213,3 +213,45 @@ export function formatAttackLogBodyguardCell(row) {
   }
   return { text: '—', className: 'text-mutedForeground', title: '' };
 }
+
+/** Stable key for collapsing repeated attack rows (same attacker/target/outcome/guard). */
+export function attackLogEncounterKey(row) {
+  if (!row || typeof row !== 'object') return '';
+  const guard = formatBlockingBodyguard(row);
+  const protectee = formatAttackLogProtecteeOrOwner(row);
+  return [
+    row.attacker_username ?? '',
+    row.target_username ?? '',
+    row.outcome ?? '',
+    guard !== '—' ? guard : '',
+    protectee !== '—' ? protectee : '',
+  ].join('\0');
+}
+
+/** Collapse duplicate log rows; newest row in each group is representative. */
+export function groupAttackLogsByEncounter(logs) {
+  const order = [];
+  const map = new Map();
+  for (const row of logs || []) {
+    const key = attackLogEncounterKey(row);
+    let group = map.get(key);
+    if (!group) {
+      group = { key, rows: [] };
+      map.set(key, group);
+      order.push(key);
+    }
+    group.rows.push(row);
+  }
+  return order.map((key) => {
+    const group = map.get(key);
+    const sorted = [...group.rows].sort((a, b) => (b.created_at || '').localeCompare(a.created_at || ''));
+    return {
+      key,
+      rows: sorted,
+      count: sorted.length,
+      representative: sorted[0],
+      first_at: sorted[sorted.length - 1]?.created_at ?? null,
+      last_at: sorted[0]?.created_at ?? null,
+    };
+  });
+}

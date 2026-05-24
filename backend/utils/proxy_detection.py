@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
+import os
 import re
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
@@ -82,6 +83,13 @@ PROXY_PROVIDER_KEYWORDS: Tuple[str, ...] = (
     "residential proxy",
     "rotating proxy",
     "mobile proxy network",
+    "locotorpi",
+    "loco torpi",
+)
+
+# ASN numbers (without "AS" prefix) tied to commercial proxy / leased residential IP sellers.
+PROXY_PROVIDER_ASN_NUMBERS: Tuple[str, ...] = (
+    "211439",  # LOCOTORPI — Jurgita Jurgaitiene trading as LOCOTORPI (IE LIR, global /24 leasing)
 )
 
 # AS/org hints that are often datacenter / proxy backbones (not home ISPs)
@@ -111,6 +119,12 @@ def _geo_text_blob(geo: Dict[str, Any]) -> str:
         geo.get("as_field") or "",
     ]
     return " ".join(str(p) for p in parts).lower()
+
+
+def _extract_asn_number(geo: Dict[str, Any]) -> Optional[str]:
+    as_field = str(geo.get("as_field") or geo.get("as") or "")
+    m = re.search(r"AS(\d+)", as_field, re.I)
+    return m.group(1) if m else None
 
 
 def match_proxy_provider_keywords(text: str) -> List[str]:
@@ -147,6 +161,10 @@ def classify_ip_reputation(
     if kw_hits:
         risk += 32
         reasons.append(f"commercial_proxy_keyword:{kw_hits[0]}")
+    asn_num = _extract_asn_number(geo)
+    if asn_num and asn_num in PROXY_PROVIDER_ASN_NUMBERS:
+        risk += 35
+        reasons.append(f"known_proxy_asn:AS{asn_num}")
     for hint in HOSTING_OR_PROXY_AS_HINTS:
         if hint in blob and "hosting" not in reasons:
             risk += 12
@@ -891,4 +909,126 @@ async def find_proxy_farm_hotspots(
         "hotspots": hotspots[:limit_subnets],
         "total_hotspots": len(hotspots),
         "users_scanned": len(users),
+    }
+
+
+async def _fetch_getipintel_scores(ip: str) -> Dict[str, Any]:
+    """Raw GetIPIntel ban-list (flags=m) and dynamic probability scores."""
+    out: Dict[str, Any] = {
+        "configured": bool(PROXY_CHECK_CONTACT_EMAIL),
+        "ban_list_score": None,
+        "ban_list_blocked": None,
+        "dynamic_score": None,
+        "dynamic_blocked": None,
+        "error": None,
+    }
+    if not PROXY_CHECK_CONTACT_EMAIL or not ip:
+        return out
+    try:
+        import httpx
+
+        contact = PROXY_CHECK_CONTACT_EMAIL
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            r_ban = await client.get(
+                f"http://check.getipintel.net/check.php?ip={ip}&contact={contact}&format=json&flags=m"
+            )
+            if r_ban.status_code == 200:
+                data = r_ban.json()
+                if isinstance(data, dict) and "result" in data:
+                    score = float(data["result"])
+                    out["ban_list_score"] = score
+                    out["ban_list_blocked"] = score >= 1.0
+            r_dyn = await client.get(
+                f"http://check.getipintel.net/check.php?ip={ip}&contact={contact}&format=json"
+            )
+            if r_dyn.status_code == 200:
+                data = r_dyn.json()
+                if isinstance(data, dict) and "result" in data:
+                    score = float(data["result"])
+                    out["dynamic_score"] = score
+                    out["dynamic_blocked"] = score >= 0.97
+    except Exception as e:
+        out["error"] = str(e)[:200]
+    return out
+
+
+async def _fetch_ipapi_is(ip: str) -> Dict[str, Any]:
+    """ipapi.is privacy/hosting signals (free tier; optional IPAPI_IS_API_KEY)."""
+    out: Dict[str, Any] = {"ok": False, "error": None}
+    if not ip:
+        out["error"] = "empty_ip"
+        return out
+    api_key = (os.environ.get("IPAPI_IS_API_KEY") or "").strip()
+    url = f"https://api.ipapi.is/?q={ip}"
+    if api_key:
+        url += f"&key={api_key}"
+    try:
+        import httpx
+
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            r = await client.get(url, headers={"User-Agent": "MafiaWarsAdminIPLookup/1.0"})
+        if r.status_code != 200:
+            out["error"] = f"http_{r.status_code}"
+            return out
+        j = r.json()
+        if not isinstance(j, dict):
+            out["error"] = "invalid_json"
+            return out
+        out["ok"] = True
+        out["is_proxy"] = bool(j.get("is_proxy"))
+        out["is_vpn"] = bool(j.get("is_vpn"))
+        out["is_tor"] = bool(j.get("is_tor"))
+        out["is_datacenter"] = bool(j.get("is_datacenter"))
+        out["is_abuser"] = bool(j.get("is_abuser"))
+        out["is_mobile"] = bool(j.get("is_mobile"))
+        out["is_satellite"] = bool(j.get("is_satellite"))
+        out["company"] = (j.get("company") or {}).get("name") if isinstance(j.get("company"), dict) else j.get("company")
+        asn = j.get("asn") if isinstance(j.get("asn"), dict) else {}
+        out["asn"] = asn.get("asn") if isinstance(asn, dict) else None
+        out["asn_org"] = asn.get("org") if isinstance(asn, dict) else None
+        loc = j.get("location") if isinstance(j.get("location"), dict) else {}
+        out["country"] = loc.get("country") if isinstance(loc, dict) else None
+        out["city"] = loc.get("city") if isinstance(loc, dict) else None
+    except Exception as e:
+        out["error"] = str(e)[:200]
+    return out
+
+
+async def build_admin_ip_lookup_report(db, ip: str) -> Dict[str, Any]:
+    """Combined staff IP lookup: ip-api cache, GetIPIntel, ipapi.is, game assessment."""
+    ipn = normalize_ip(ip)
+    if not ipn:
+        raise ValueError("Invalid or empty IP")
+    geo, getipintel, ipapi_is, subnet_n = await asyncio.gather(
+        get_or_fetch_ip_geodata(db, ipn),
+        _fetch_getipintel_scores(ipn),
+        _fetch_ipapi_is(ipn),
+        count_alive_accounts_on_subnet24(db, ipn),
+    )
+    assessment = await assess_ip_for_auth(db, ipn, purpose="signup", check_getipintel=True)
+    asn_num = _extract_asn_number(geo)
+    return {
+        "ip": ipn,
+        "subnet24_alive_accounts": subnet_n,
+        "ip_api": {
+            "ok": bool(geo.get("ok")),
+            "from_cache": bool(geo.get("from_cache")),
+            "country": geo.get("country"),
+            "countryCode": geo.get("countryCode"),
+            "city": geo.get("city"),
+            "isp": geo.get("isp"),
+            "org": geo.get("org"),
+            "as": geo.get("as_field"),
+            "asname": geo.get("asname"),
+            "mobile": geo.get("mobile"),
+            "proxy": geo.get("proxy"),
+            "hosting": geo.get("hosting"),
+            "error": geo.get("error"),
+        },
+        "getipintel": getipintel,
+        "ipapi_is": ipapi_is,
+        "game_assessment": assessment,
+        "asn_number": asn_num,
+        "known_proxy_asn": bool(asn_num and asn_num in PROXY_PROVIDER_ASN_NUMBERS),
+        "provider_keywords": assessment.get("provider_keywords") or [],
     }

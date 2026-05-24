@@ -259,7 +259,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Casino limits (global caps)', categoryId: 'admin-gameworld', collapseKey: 'casinoLimits', keywords: ['casino', 'limits', 'caps', 'max bet', 'buyback', 'poker', 'blind'] },
   { label: 'Claim costs (casino, airport, armoury)', categoryId: 'admin-gameworld', collapseKey: 'claimCosts', keywords: ['claim', 'cost', 'casino', 'airport', 'armoury', 'bullet', 'factory', 'dice', 'roulette'], adminOnly: true },
   { label: 'Casino per-game max bets', categoryId: 'admin-gameworld', collapseKey: 'casinoMaxBets', keywords: ['casino', 'max bet', 'per game', 'slots', 'blackjack', 'roulette'] },
-  { label: 'Casinos on dead owners', categoryId: 'admin-gameworld', collapseKey: 'casinosDeadOwners', keywords: ['dead', 'casino', 'ownership', 'stuck', 'invalid', 'takeover'] },
+  { label: 'Dead owner properties', categoryId: 'admin-gameworld', collapseKey: 'casinosDeadOwners', keywords: ['dead', 'casino', 'armoury', 'airport', 'ownership', 'stuck', 'invalid', 'takeover', 'killer'] },
   { label: 'Admin display & signup', categoryId: 'admin-gameworld', collapseKey: 'adminDisplay', keywords: ['admin', 'display', 'colour', 'color', 'online', 'email', 'verification', 'vpn', 'proxy', 'user agent', 'signup'], adminOnly: true },
   { label: 'Sustained page pacing (jail, forum, entertainer, kill)', categoryId: 'admin-gameworld', collapseKey: 'sustainedPageRl', keywords: ['sustained', 'pacing', 'rate', 'forum', 'entertainer', 'jail', 'kill', 'attack', '429', 'cooldown', 'bot', 'gap', 'sustain'], adminOnly: true },
   { label: 'Swiss & interest bank limits', categoryId: 'admin-gameworld', collapseKey: 'bankEconomy', keywords: ['swiss', 'interest', 'bank', 'limit', 'deposit', 'maturity', 'principal'], adminOnly: true },
@@ -1219,6 +1219,7 @@ export default function Admin() {
   const [casinoMaxBetsLoading, setCasinoMaxBetsLoading] = useState(false);
   const [casinosDeadOwners, setCasinosDeadOwners] = useState([]);
   const [casinosDeadOwnersLoading, setCasinosDeadOwnersLoading] = useState(false);
+  const [deadOwnerPropertyTransferLoading, setDeadOwnerPropertyTransferLoading] = useState(null);
   const [casinoMaxBetGameType, setCasinoMaxBetGameType] = useState('all');
   const [casinoMaxBetLocation, setCasinoMaxBetLocation] = useState('');
   const [casinoMaxBetValue, setCasinoMaxBetValue] = useState('');
@@ -1237,6 +1238,9 @@ export default function Admin() {
   const [proxyFarmUsername, setProxyFarmUsername] = useState('');
   const [proxyFarmReport, setProxyFarmReport] = useState(null);
   const [proxyFarmLoading, setProxyFarmLoading] = useState(false);
+  const [adminIpLookup, setAdminIpLookup] = useState('');
+  const [adminIpLookupResult, setAdminIpLookupResult] = useState(null);
+  const [adminIpLookupLoading, setAdminIpLookupLoading] = useState(false);
   const [botInvestQuery, setBotInvestQuery] = useState('');
   const [botInvestProfile, setBotInvestProfile] = useState(null);
   const [botInvestActivity, setBotInvestActivity] = useState(null);
@@ -3655,10 +3659,35 @@ export default function Admin() {
       const res = await api.get('/admin/casinos-on-dead-owners');
       setCasinosDeadOwners(Array.isArray(res.data?.entries) ? res.data.entries : []);
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to load casinos on dead owners');
+      toast.error(e.response?.data?.detail || 'Failed to load dead owner properties');
       setCasinosDeadOwners([]);
     } finally {
       setCasinosDeadOwnersLoading(false);
+    }
+  };
+
+  const handleTransferDeadOwnerProperty = async (row) => {
+    const assetKind = row.asset_kind || row.game_type;
+    const key = `${row.owner_id}:${assetKind}:${row.location}`;
+    setDeadOwnerPropertyTransferLoading(key);
+    try {
+      const payload = {
+        from_username: row.username || row.owner_username,
+        asset_kind: assetKind,
+        location: row.location,
+        dry_run: true,
+        allow_recipient_already_owns: true,
+        notify: true,
+      };
+      const preview = await api.post('/admin/transfer-dead-owner-property', payload);
+      if (!window.confirm(preview.data?.message || 'Transfer this property to the killer?')) return;
+      const res = await api.post('/admin/transfer-dead-owner-property', { ...payload, dry_run: false });
+      toast.success(res.data?.message || 'Transferred');
+      fetchCasinosDeadOwners();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Transfer failed');
+    } finally {
+      setDeadOwnerPropertyTransferLoading(null);
     }
   };
 
@@ -5864,6 +5893,26 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Global proxy scan failed');
     } finally {
       setProxyFarmLoading(false);
+    }
+  };
+
+  const handleAdminIpLookup = async () => {
+    const ip = adminIpLookup.trim();
+    if (!ip) {
+      toast.error('Enter an IP address');
+      return;
+    }
+    setAdminIpLookupLoading(true);
+    setAdminIpLookupResult(null);
+    try {
+      const res = await api.get('/admin/investigate/ip-lookup', { params: { ip } });
+      setAdminIpLookupResult(res.data);
+      const v = res.data?.game_assessment?.verdict || '?';
+      toast.success(`Lookup complete — verdict: ${v}`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'IP lookup failed');
+    } finally {
+      setAdminIpLookupLoading(false);
     }
   };
 
@@ -13256,7 +13305,7 @@ export default function Admin() {
         <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-400/35 to-transparent" />
         <SectionHeader
           icon={Skull}
-          title="Casinos on dead owners"
+          title="Dead owner properties"
           badge={casinosDeadOwners.length > 0 ? <span className="text-[10px] font-heading text-amber-400">{casinosDeadOwners.length}</span> : null}
           toolAnchor="casinosDeadOwners"
           isCollapsed={collapsed.casinosDeadOwners}
@@ -13268,7 +13317,7 @@ export default function Admin() {
         {!collapsed.casinosDeadOwners && (
           <div className="p-3 space-y-3">
             <p className="text-[10px] text-mutedForeground leading-snug">
-              Dead characters cannot receive casinos in-game. Rows here still point at a dead owner — use the user dossier to <strong className="text-foreground">Take over</strong> (admin) or <strong className="text-foreground">Drop</strong> (admin/mod) after clearing buy-back if needed.
+              Dead characters cannot hold casinos, armoury, or airports in-game. Rows here still point at a dead owner — use <strong className="text-foreground">→ killer</strong> to assign to their recorded killer, or open the dossier for manual takeover/drop.
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <BtnPrimary type="button" onClick={fetchCasinosDeadOwners} disabled={casinosDeadOwnersLoading}>
@@ -13279,42 +13328,57 @@ export default function Admin() {
               )}
             </div>
             {!casinosDeadOwnersLoading && casinosDeadOwners.length === 0 && (
-              <p className="text-[10px] text-mutedForeground">No owned casinos on dead accounts (or run scan).</p>
+              <p className="text-[10px] text-mutedForeground">No owned properties on dead accounts (or run scan).</p>
             )}
             {casinosDeadOwners.length > 0 && (
               <div className="overflow-x-auto border border-zinc-700/40 rounded">
                 <table className="w-full text-left text-[10px] font-heading">
                   <thead>
                     <tr className="border-b border-zinc-700/50 text-mutedForeground uppercase">
-                      <th className="p-2">Game</th>
+                      <th className="p-2">Asset</th>
                       <th className="p-2">Location</th>
                       <th className="p-2">Owner</th>
+                      <th className="p-2">Killer</th>
                       <th className="p-2">Buy-back</th>
                       <th className="p-2 text-right">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {casinosDeadOwners.map((row, idx) => (
-                      <tr key={`${row.owner_id}-${row.game_type}-${row.location}-${idx}`} className="border-b border-zinc-800/60">
-                        <td className="p-2 text-foreground capitalize">{row.game_type}</td>
-                        <td className="p-2 font-mono text-mutedForeground">{row.location || '—'}</td>
+                    {casinosDeadOwners.map((row, idx) => {
+                      const assetKind = row.asset_kind || row.game_type;
+                      const transferKey = `${row.owner_id}:${assetKind}:${row.location}`;
+                      return (
+                      <tr key={`${row.owner_id}-${assetKind}-${row.location}-${idx}`} className="border-b border-zinc-800/60">
+                        <td className="p-2 text-foreground capitalize">{assetKind || '—'}</td>
+                        <td className="p-2 font-mono text-mutedForeground">{row.location || '—'}{row.slot ? ` · slot ${row.slot}` : ''}</td>
                         <td className="p-2 text-primary">{row.username || row.owner_id}</td>
+                        <td className="p-2 text-mutedForeground">{row.killed_by_username || '—'}</td>
                         <td className="p-2 text-mutedForeground">
                           {(row.buy_back_reward > 0 || row.buy_back_points_held > 0)
                             ? `Reward ${Number(row.buy_back_reward || 0).toLocaleString()} pts · Held ${Number(row.buy_back_points_held || 0).toLocaleString()} pts`
                             : '—'}
                         </td>
-                        <td className="p-2 text-right whitespace-nowrap">
+                        <td className="p-2 text-right whitespace-nowrap space-x-1">
+                          {isAdmin && row.killed_by_username ? (
+                            <button
+                              type="button"
+                              disabled={deadOwnerPropertyTransferLoading === transferKey}
+                              onClick={() => handleTransferDeadOwnerProperty(row)}
+                              className="px-2 py-0.5 text-[9px] font-heading uppercase border border-amber-500/50 text-amber-200 hover:bg-amber-500/10 rounded disabled:opacity-50"
+                            >
+                              {deadOwnerPropertyTransferLoading === transferKey ? '…' : `→ killer (${row.killed_by_username})`}
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             onClick={() => openUserDetail({ id: row.owner_id })}
                             className="px-2 py-0.5 text-[9px] font-heading uppercase border border-primary/50 text-primary hover:bg-primary/10 rounded"
                           >
-                            Open dossier
+                            Dossier
                           </button>
                         </td>
                       </tr>
-                    ))}
+                    );})}
                   </tbody>
                 </table>
               </div>
@@ -16540,6 +16604,82 @@ export default function Admin() {
                 Signup/login blocking uses stricter rules when <strong className="text-foreground">Block proxy/VPN on login and signup</strong> is enabled — including seller keywords and /24 farm density even when the IP looks residential.
                 Set <code className="text-[9px]">GETIPINTEL_CONTACT_EMAIL</code> in server env for the ban list.
               </p>
+              <div className="mb-3 rounded border border-zinc-700/40 bg-zinc-900/40 p-2 space-y-2">
+                <div className="text-[9px] font-heading text-purple-300/90 uppercase">Single IP lookup (ip-api + GetIPIntel + ipapi.is)</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    value={adminIpLookup}
+                    onChange={(e) => setAdminIpLookup(e.target.value)}
+                    className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-mono w-44"
+                    placeholder="151.245.84.178"
+                  />
+                  <BtnSecondary type="button" onClick={handleAdminIpLookup} disabled={adminIpLookupLoading}>
+                    {adminIpLookupLoading ? 'Looking up…' : 'Lookup IP'}
+                  </BtnSecondary>
+                </div>
+                {adminIpLookupResult && (
+                  <div className="text-[10px] font-heading space-y-1.5 text-zinc-300">
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <span className="font-mono text-foreground">{adminIpLookupResult.ip}</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] ${
+                        adminIpLookupResult.game_assessment?.verdict === 'likely_proxy_service'
+                          ? 'bg-red-500/20 text-red-300'
+                          : adminIpLookupResult.game_assessment?.verdict === 'suspicious'
+                            ? 'bg-amber-500/20 text-amber-200'
+                            : 'bg-zinc-600/40 text-zinc-300'
+                      }`}>
+                        {adminIpLookupResult.game_assessment?.verdict || '—'} · risk {adminIpLookupResult.game_assessment?.risk_score ?? '—'}
+                      </span>
+                      {adminIpLookupResult.game_assessment?.block_auth ? (
+                        <span className="text-red-300 text-[9px]">Would block signup/login</span>
+                      ) : null}
+                      {adminIpLookupResult.known_proxy_asn ? (
+                        <span className="text-red-300 text-[9px]">Known proxy ASN (AS{adminIpLookupResult.asn_number})</span>
+                      ) : null}
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                      <div className="rounded border border-zinc-700/30 p-1.5">
+                        <div className="text-[9px] text-mutedForeground uppercase mb-0.5">ip-api.com</div>
+                        <div>{adminIpLookupResult.ip_api?.isp || '—'}</div>
+                        <div className="text-mutedForeground">{adminIpLookupResult.ip_api?.org || adminIpLookupResult.ip_api?.as || '—'}</div>
+                        <div className="text-[9px] mt-0.5">
+                          proxy {String(!!adminIpLookupResult.ip_api?.proxy)} · hosting {String(!!adminIpLookupResult.ip_api?.hosting)} · mobile {String(!!adminIpLookupResult.ip_api?.mobile)}
+                        </div>
+                      </div>
+                      <div className="rounded border border-zinc-700/30 p-1.5">
+                        <div className="text-[9px] text-mutedForeground uppercase mb-0.5">GetIPIntel</div>
+                        {adminIpLookupResult.getipintel?.configured ? (
+                          <>
+                            <div>ban list: {adminIpLookupResult.getipintel?.ban_list_score ?? '—'} {adminIpLookupResult.getipintel?.ban_list_blocked ? '(blocked)' : ''}</div>
+                            <div>dynamic: {adminIpLookupResult.getipintel?.dynamic_score ?? '—'} {adminIpLookupResult.getipintel?.dynamic_blocked ? '(blocked)' : ''}</div>
+                          </>
+                        ) : (
+                          <div className="text-mutedForeground">Not configured (set GETIPINTEL_CONTACT_EMAIL)</div>
+                        )}
+                      </div>
+                      <div className="rounded border border-zinc-700/30 p-1.5">
+                        <div className="text-[9px] text-mutedForeground uppercase mb-0.5">ipapi.is</div>
+                        {adminIpLookupResult.ipapi_is?.ok ? (
+                          <>
+                            <div>proxy {String(!!adminIpLookupResult.ipapi_is?.is_proxy)} · vpn {String(!!adminIpLookupResult.ipapi_is?.is_vpn)} · dc {String(!!adminIpLookupResult.ipapi_is?.is_datacenter)}</div>
+                            <div className="text-mutedForeground text-[9px]">{adminIpLookupResult.ipapi_is?.asn_org || adminIpLookupResult.ipapi_is?.company || '—'}</div>
+                          </>
+                        ) : (
+                          <div className="text-mutedForeground">{adminIpLookupResult.ipapi_is?.error || 'lookup failed'}</div>
+                        )}
+                      </div>
+                    </div>
+                    {(adminIpLookupResult.game_assessment?.reasons?.length > 0 || adminIpLookupResult.provider_keywords?.length > 0) && (
+                      <div className="text-[9px] text-mutedForeground">
+                        Reasons: {(adminIpLookupResult.game_assessment?.reasons || []).join(', ') || '—'}
+                        {adminIpLookupResult.provider_keywords?.length ? ` · keywords: ${adminIpLookupResult.provider_keywords.join(', ')}` : ''}
+                        {adminIpLookupResult.subnet24_alive_accounts > 0 ? ` · /24 alive accounts: ${adminIpLookupResult.subnet24_alive_accounts}` : ''}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 <input
                   type="text"

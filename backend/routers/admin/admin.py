@@ -352,6 +352,16 @@ class TakeoverUserCasinoRequest(BaseModel):
     to_username: Optional[str] = None  # if blank/None, new owner is current admin user
 
 
+class AdminTransferDeadOwnerPropertyRequest(BaseModel):
+    from_username: str
+    asset_kind: str  # armoury, airport, dice, roulette, blackjack, horseracing, videopoker, slots
+    location: Optional[str] = None  # state for armoury/airport/slots; city for casino tables
+    to_username: Optional[str] = None  # omit = recorded killer (killed_by_user_id)
+    dry_run: bool = False
+    allow_recipient_already_owns: bool = False  # admin override when killer already has another property/casino
+    notify: bool = True
+
+
 class DropUserCasinosPropertiesRequest(BaseModel):
     user_id: str
 
@@ -11152,6 +11162,8 @@ def register(router):
         protectee: Optional[str],
         guard_username: Optional[str],
         attacker_username: Optional[str],
+        target_username: Optional[str],
+        target_uid: Optional[str],
         days: Optional[int],
         since: Optional[str],
         until: Optional[str],
@@ -11227,6 +11239,16 @@ def register(router):
             a_clause = _username_filter_clause("attacker_username", attacker_username)
             q = {"$and": [q, a_clause]} if q else a_clause
             filters_applied["attacker_username"] = attacker_username.strip()
+        if target_uid or target_username:
+            target_clauses: List[Dict[str, Any]] = []
+            if target_uid:
+                target_clauses.append({"target_id": target_uid})
+            if target_username:
+                target_clauses.append(_username_filter_clause("target_username", target_username.strip()))
+            target_clause = target_clauses[0] if len(target_clauses) == 1 else {"$or": target_clauses}
+            q = {"$and": [q, target_clause]} if q else target_clause
+            if target_username:
+                filters_applied["target_username"] = target_username.strip()
         return q, filters_applied
 
     @router.get("/admin/attacks/logs")
@@ -11252,6 +11274,7 @@ def register(router):
         protectee: Optional[str] = Query(None, description="Filter protectee/victim username (bodyguard blocks)"),
         guard_username: Optional[str] = Query(None, description="Filter blocking guard username"),
         attacker_username: Optional[str] = Query(None, description="Filter attacker username (global mode)"),
+        target_username: Optional[str] = Query(None, description="Filter victim/target username (all outcomes)"),
         current_user: dict = Depends(get_current_user),
     ):
         """
@@ -11287,6 +11310,16 @@ def register(router):
                 q = {"$or": [{"attacker_id": uid}, {"target_id": uid}]}
         else:
             q = {}
+        target_key = (target_username or "").strip()
+        target_uid: Optional[str] = None
+        resolved_target_for_filter: Optional[str] = None
+        if target_key:
+            target_user = await _resolve_user_by_key(target_key)
+            if target_user:
+                target_uid = target_user["id"]
+                resolved_target_for_filter = target_user.get("username") or target_key
+            else:
+                resolved_target_for_filter = target_key
         q, filters_applied = _apply_attack_logs_filters(
             q,
             outcome=outcome,
@@ -11296,6 +11329,8 @@ def register(router):
             protectee=protectee,
             guard_username=guard_username,
             attacker_username=attacker_username,
+            target_username=resolved_target_for_filter,
+            target_uid=target_uid,
             days=days,
             since=since,
             until=until,
@@ -11313,6 +11348,7 @@ def register(router):
         summary = _summarize_attack_logs(logs)
         return {
             "username": resolved_username,
+            "target_username": resolved_target_for_filter,
             "scope": scope,
             "logs": logs,
             "exclude_target_npc": exclude_target_npc,
@@ -11417,6 +11453,7 @@ def register(router):
                         },
                         "block_count": {"$sum": 1},
                         "last_at": {"$max": "$created_at"},
+                        "first_at": {"$min": "$created_at"},
                     }
                 },
                 {"$sort": {"block_count": -1}},
@@ -11432,10 +11469,104 @@ def register(router):
                         "guard_username": kid.get("guard") or "?",
                         "block_count": int(r.get("block_count") or 0),
                         "last_at": _audit_iso(r.get("last_at")),
+                        "first_at": _audit_iso(r.get("first_at")),
                         "attacker_username": user.get("username"),
                     }
                 )
             return out
+
+        async def _attacker_encounter_summary() -> Dict[str, Any]:
+            match = {**base_match, "attacker_id": uid}
+            pipeline = [
+                {"$match": match},
+                {
+                    "$group": {
+                        "_id": {
+                            "protectee": {"$ifNull": ["$protected_username", "$target_username"]},
+                            "guard": {
+                                "$ifNull": [
+                                    "$blocking_bodyguard_username",
+                                    {"$ifNull": ["$first_bodyguard.search_username", "$first_bodyguard.display_name"]},
+                                ]
+                            },
+                        },
+                        "block_count": {"$sum": 1},
+                    }
+                },
+                {
+                    "$group": {
+                        "_id": None,
+                        "total_blocks": {"$sum": "$block_count"},
+                        "encounter_pairs": {"$sum": 1},
+                        "protectees": {"$addToSet": "$_id.protectee"},
+                        "guards": {"$addToSet": "$_id.guard"},
+                    }
+                },
+            ]
+            rows = await db.attack_attempts.aggregate(pipeline).to_list(1)
+            if not rows:
+                return {
+                    "total_blocks": 0,
+                    "encounter_pairs": 0,
+                    "distinct_protectees": 0,
+                    "distinct_guards": 0,
+                }
+            row = rows[0]
+            protectees = [p for p in (row.get("protectees") or []) if p and p != "?"]
+            guards = [g for g in (row.get("guards") or []) if g and g != "?"]
+            return {
+                "total_blocks": int(row.get("total_blocks") or 0),
+                "encounter_pairs": int(row.get("encounter_pairs") or 0),
+                "distinct_protectees": len(set(protectees)),
+                "distinct_guards": len(set(guards)),
+            }
+
+        async def _protectee_encounter_summary() -> Dict[str, Any]:
+            match = {**base_match, "target_id": uid}
+            pipeline = [
+                {"$match": match},
+                {
+                    "$group": {
+                        "_id": {
+                            "guard": {
+                                "$ifNull": [
+                                    "$blocking_bodyguard_username",
+                                    {"$ifNull": ["$first_bodyguard.search_username", "$first_bodyguard.display_name"]},
+                                ]
+                            }
+                        },
+                        "block_count": {"$sum": 1},
+                        "attackers": {"$addToSet": "$attacker_username"},
+                    }
+                },
+                {
+                    "$group": {
+                        "_id": None,
+                        "total_blocks": {"$sum": "$block_count"},
+                        "distinct_guards": {"$sum": 1},
+                        "attackers": {"$addToSet": "$attackers"},
+                    }
+                },
+            ]
+            rows = await db.attack_attempts.aggregate(pipeline).to_list(1)
+            if not rows:
+                return {
+                    "total_blocks": 0,
+                    "distinct_guards": 0,
+                    "distinct_attackers": 0,
+                }
+            row = rows[0]
+            flat_attackers: set = set()
+            for batch in row.get("attackers") or []:
+                if isinstance(batch, list):
+                    flat_attackers.update(a for a in batch if a)
+                elif batch:
+                    flat_attackers.add(batch)
+            return {
+                "total_blocks": int(row.get("total_blocks") or 0),
+                "distinct_guards": int(row.get("distinct_guards") or 0),
+                "distinct_attackers": len(flat_attackers),
+            }
 
         result: Dict[str, Any] = {
             "username": user.get("username"),
@@ -11445,8 +11576,10 @@ def register(router):
         }
         if pers in ("protectee", "both"):
             result["protectee"] = await _protectee_buckets()
+            result["protectee_summary"] = await _protectee_encounter_summary()
         if pers in ("attacker", "both"):
             result["attacker"] = await _attacker_buckets()
+            result["attacker_summary"] = await _attacker_encounter_summary()
         return result
 
     @router.get("/admin/attacks/bodyguard-intel/global")
@@ -11524,6 +11657,168 @@ def register(router):
                 }
                 for r in top_protectees
             ],
+        }
+
+    def _attack_target_match(uid: Optional[str], username: Optional[str]) -> Dict[str, Any]:
+        clauses: List[Dict[str, Any]] = []
+        if uid:
+            clauses.append({"target_id": uid})
+        if username:
+            clauses.append(_username_filter_clause("target_username", username))
+        if not clauses:
+            return {}
+        return clauses[0] if len(clauses) == 1 else {"$or": clauses}
+
+    @router.get("/admin/attacks/target-intel")
+    async def admin_attacks_target_intel(
+        username: str = Query(..., min_length=1),
+        days: int = Query(30, ge=1, le=365),
+        limit: int = Query(100, ge=1, le=200),
+        exclude_target_npc: bool = Query(True),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """All attack attempts against a target, grouped by attacker (coordination / pile-on view)."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        user = await _resolve_user_by_key(username)
+        uid = user["id"] if user else None
+        resolved = (user.get("username") if user else None) or username.strip()
+        since_dt = datetime.now(timezone.utc) - timedelta(days=int(days))
+        match: Dict[str, Any] = {
+            "$and": [
+                _attack_target_match(uid, resolved),
+                _attack_created_at_bound(since_dt, op="$gte"),
+            ]
+        }
+        if exclude_target_npc:
+            match = _attack_attempts_query_exclude_hitlist_npcs(match)
+        pipeline = [
+            {"$match": match},
+            {
+                "$group": {
+                    "_id": "$attacker_username",
+                    "attempt_count": {"$sum": 1},
+                    "killed": {"$sum": {"$cond": [{"$eq": ["$outcome", "killed"]}, 1, 0]}},
+                    "failed": {"$sum": {"$cond": [{"$eq": ["$outcome", "failed"]}, 1, 0]}},
+                    "bodyguard": {"$sum": {"$cond": [{"$eq": ["$outcome", "bodyguard"]}, 1, 0]}},
+                    "error": {"$sum": {"$cond": [{"$eq": ["$outcome", "error"]}, 1, 0]}},
+                    "travel": {"$sum": {"$cond": [{"$eq": ["$outcome", "travel"]}, 1, 0]}},
+                    "last_at": {"$max": "$created_at"},
+                    "first_at": {"$min": "$created_at"},
+                    "attacker_id": {"$first": "$attacker_id"},
+                    "client_ips": {"$addToSet": "$client_ip"},
+                }
+            },
+            {"$match": {"_id": {"$nin": [None, ""]}}},
+            {"$sort": {"attempt_count": -1}},
+            {"$limit": int(limit)},
+        ]
+        rows = await db.attack_attempts.aggregate(pipeline).to_list(int(limit))
+        attackers = []
+        for r in rows:
+            ips = [ip for ip in (r.get("client_ips") or []) if ip]
+            attackers.append(
+                {
+                    "attacker_username": r.get("_id"),
+                    "attacker_id": r.get("attacker_id"),
+                    "attempt_count": int(r.get("attempt_count") or 0),
+                    "killed": int(r.get("killed") or 0),
+                    "failed": int(r.get("failed") or 0),
+                    "bodyguard": int(r.get("bodyguard") or 0),
+                    "error": int(r.get("error") or 0),
+                    "travel": int(r.get("travel") or 0),
+                    "first_at": _audit_iso(r.get("first_at")),
+                    "last_at": _audit_iso(r.get("last_at")),
+                    "distinct_ips": len(set(ips)),
+                }
+            )
+        distinct_attackers = len(attackers)
+        total_attempts = sum(a["attempt_count"] for a in attackers)
+        return {
+            "target_username": resolved,
+            "target_user_id": uid,
+            "days": int(days),
+            "exclude_target_npc": exclude_target_npc,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "summary": {
+                "distinct_attackers": distinct_attackers,
+                "total_attempts": total_attempts,
+                "likely_coordinated": distinct_attackers >= 2,
+            },
+            "attackers": attackers,
+        }
+
+    @router.get("/admin/attacks/multi-attacker-targets")
+    async def admin_attacks_multi_attacker_targets(
+        days: int = Query(30, ge=1, le=365),
+        min_attackers: int = Query(2, ge=2, le=50),
+        limit: int = Query(50, ge=1, le=200),
+        exclude_target_npc: bool = Query(True),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Targets victimized by multiple distinct attackers in the window (pile-on / coordinated hits)."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        since_dt = datetime.now(timezone.utc) - timedelta(days=int(days))
+        match: Dict[str, Any] = {"$and": [_attack_created_at_bound(since_dt, op="$gte")]}
+        if exclude_target_npc:
+            match = _attack_attempts_query_exclude_hitlist_npcs(match)
+        pipeline = [
+            {"$match": match},
+            {
+                "$group": {
+                    "_id": {
+                        "target_id": "$target_id",
+                        "target_username": "$target_username",
+                    },
+                    "attempt_count": {"$sum": 1},
+                    "attackers": {"$addToSet": "$attacker_username"},
+                    "killed": {"$sum": {"$cond": [{"$eq": ["$outcome", "killed"]}, 1, 0]}},
+                    "bodyguard": {"$sum": {"$cond": [{"$eq": ["$outcome", "bodyguard"]}, 1, 0]}},
+                    "last_at": {"$max": "$created_at"},
+                }
+            },
+            {
+                "$addFields": {
+                    "distinct_attackers": {
+                        "$size": {
+                            "$filter": {
+                                "input": "$attackers",
+                                "as": "a",
+                                "cond": {"$and": [{"$ne": ["$$a", None]}, {"$ne": ["$$a", ""]}]},
+                            }
+                        }
+                    }
+                }
+            },
+            {"$match": {"distinct_attackers": {"$gte": int(min_attackers)}}},
+            {"$sort": {"distinct_attackers": -1, "attempt_count": -1}},
+            {"$limit": int(limit)},
+        ]
+        rows = await db.attack_attempts.aggregate(pipeline).to_list(int(limit))
+        targets = []
+        for r in rows:
+            kid = r.get("_id") or {}
+            atk = [a for a in (r.get("attackers") or []) if a]
+            targets.append(
+                {
+                    "target_username": kid.get("target_username") or "?",
+                    "target_id": kid.get("target_id"),
+                    "distinct_attackers": int(r.get("distinct_attackers") or 0),
+                    "attempt_count": int(r.get("attempt_count") or 0),
+                    "killed": int(r.get("killed") or 0),
+                    "bodyguard": int(r.get("bodyguard") or 0),
+                    "last_at": _audit_iso(r.get("last_at")),
+                    "attackers": sorted(atk)[:25],
+                }
+            )
+        return {
+            "days": int(days),
+            "min_attackers": int(min_attackers),
+            "exclude_target_npc": exclude_target_npc,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "target_count": len(targets),
+            "targets": targets,
         }
 
     def _sanitize_audit_doc(doc: Optional[dict]) -> Optional[dict]:
@@ -15013,7 +15308,7 @@ def register(router):
 
     @router.get("/admin/casinos-on-dead-owners")
     async def admin_casinos_on_dead_owners(current_user: dict = Depends(get_current_user)):
-        """List casino tables owned by dead characters (invalid; use takeover or drop in user dossier). Admin or moderator."""
+        """List casinos, armoury, and airports owned by dead characters. Admin or moderator."""
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         scan_specs = [
@@ -15023,10 +15318,17 @@ def register(router):
             ("horseracing", db.horseracing_ownership, "city"),
             ("videopoker", db.videopoker_ownership, "city"),
             ("slots", db.slots_ownership, "state"),
+            ("armoury", db.bullet_factory, "state"),
+            ("airport", db.airport_ownership, "state"),
         ]
         rows: List[Dict[str, Any]] = []
-        for game_type, coll, loc_key in scan_specs:
-            proj = {"_id": 0, "owner_id": 1, "owner_username": 1, loc_key: 1, "buy_back_reward": 1, "buy_back_points_held": 1}
+        for asset_kind, coll, loc_key in scan_specs:
+            proj = {"_id": 0, "owner_id": 1, "owner_username": 1, loc_key: 1}
+            if asset_kind not in ("armoury", "airport"):
+                proj["buy_back_reward"] = 1
+                proj["buy_back_points_held"] = 1
+            if asset_kind == "airport":
+                proj["slot"] = 1
             try:
                 chunk = await coll.find({"owner_id": {"$nin": [None, ""]}}, proj).to_list(400)
             except Exception:
@@ -15036,22 +15338,25 @@ def register(router):
                 if not oid:
                     continue
                 loc = doc.get(loc_key)
-                rows.append(
-                    {
-                        "game_type": game_type,
-                        "location": str(loc or "").strip(),
-                        "owner_id": oid,
-                        "owner_username": (doc.get("owner_username") or "").strip() or None,
-                        "buy_back_reward": int(doc.get("buy_back_reward") or 0),
-                        "buy_back_points_held": int(doc.get("buy_back_points_held") or 0),
-                    }
-                )
+                row = {
+                    "asset_kind": asset_kind,
+                    "game_type": asset_kind if asset_kind not in ("armoury", "airport") else None,
+                    "location": str(loc or "").strip(),
+                    "owner_id": oid,
+                    "owner_username": (doc.get("owner_username") or "").strip() or None,
+                }
+                if asset_kind == "airport" and doc.get("slot") is not None:
+                    row["slot"] = int(doc.get("slot") or 1)
+                if asset_kind not in ("armoury", "airport"):
+                    row["buy_back_reward"] = int(doc.get("buy_back_reward") or 0)
+                    row["buy_back_points_held"] = int(doc.get("buy_back_points_held") or 0)
+                rows.append(row)
         owner_ids = list({r["owner_id"] for r in rows})
         if not owner_ids:
             return {"entries": []}
         users = await db.users.find(
             {"id": {"$in": owner_ids}},
-            {"_id": 0, "id": 1, "username": 1, "is_dead": 1},
+            {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "killed_by_username": 1, "killed_by_user_id": 1},
         ).to_list(len(owner_ids))
         by_id = {str(u.get("id") or ""): u for u in users}
         entries: List[Dict[str, Any]] = []
@@ -15063,10 +15368,188 @@ def register(router):
                 {
                     **r,
                     "username": u.get("username") or r.get("owner_username") or "?",
+                    "killed_by_username": u.get("killed_by_username"),
+                    "killed_by_user_id": u.get("killed_by_user_id"),
                 }
             )
-        entries.sort(key=lambda x: (x.get("username") or "", x.get("game_type") or "", x.get("location") or ""))
+        entries.sort(key=lambda x: (x.get("username") or "", x.get("asset_kind") or x.get("game_type") or "", x.get("location") or ""))
         return {"entries": entries}
+
+    @router.post("/admin/transfer-dead-owner-property")
+    async def admin_transfer_dead_owner_property(
+        body: AdminTransferDeadOwnerPropertyRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Transfer armoury, airport, or casino from a dead owner to their killer or a named user. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from server import (
+            CAPO_RANK_ID,
+            _user_owns_any_casino,
+            _user_owns_any_property,
+            get_rank_info,
+            raise_if_dead_casino_transfer_target,
+            user_prestige_rank_mult,
+        )
+
+        asset_kind = (body.asset_kind or "").strip().lower()
+        casino_kinds = {"dice", "roulette", "blackjack", "horseracing", "videopoker", "slots"}
+        if asset_kind not in casino_kinds | {"armoury", "airport"}:
+            raise HTTPException(status_code=400, detail="Invalid asset_kind")
+
+        from_pattern = _username_pattern((body.from_username or "").strip())
+        from_user = await db.users.find_one(
+            {"username": from_pattern},
+            {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "killed_by_username": 1, "killed_by_user_id": 1},
+        )
+        if not from_user:
+            raise HTTPException(status_code=404, detail="From user not found")
+        if not from_user.get("is_dead"):
+            raise HTTPException(status_code=400, detail="From user is not dead — use normal takeover tools")
+
+        to_user = None
+        to_reason = None
+        if (body.to_username or "").strip():
+            to_pattern = _username_pattern(body.to_username.strip())
+            to_user = await db.users.find_one(
+                {"username": to_pattern},
+                {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "rank_points": 1, "prestige_level": 1},
+            )
+            if not to_user:
+                raise HTTPException(status_code=404, detail="To user not found")
+            to_reason = "admin_target"
+        elif from_user.get("killed_by_user_id"):
+            to_user = await db.users.find_one(
+                {"id": from_user["killed_by_user_id"]},
+                {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "rank_points": 1, "prestige_level": 1},
+            )
+            to_reason = "recorded_killer"
+        if not to_user:
+            raise HTTPException(status_code=400, detail="No to_username and no killed_by_user_id — specify to_username")
+        raise_if_dead_casino_transfer_target(to_user)
+        if to_user["id"] == from_user["id"]:
+            raise HTTPException(status_code=400, detail="From and to user are the same")
+
+        location = (body.location or "").strip()
+        from_uid = from_user["id"]
+        to_uid = to_user["id"]
+        to_un = (to_user.get("username") or "").strip() or "?"
+
+        coll = None
+        loc_key = None
+        if asset_kind == "armoury":
+            coll, loc_key = db.bullet_factory, "state"
+        elif asset_kind == "airport":
+            coll, loc_key = db.airport_ownership, "state"
+        else:
+            coll_map = {
+                "dice": (db.dice_ownership, "city"),
+                "roulette": (db.roulette_ownership, "city"),
+                "blackjack": (db.blackjack_ownership, "city"),
+                "horseracing": (db.horseracing_ownership, "city"),
+                "videopoker": (db.videopoker_ownership, "city"),
+                "slots": (db.slots_ownership, "state"),
+            }
+            coll, loc_key = coll_map[asset_kind]
+
+        doc_q: Dict[str, Any] = {"owner_id": from_uid}
+        if location:
+            doc_q[loc_key] = location
+        doc = await coll.find_one(doc_q, {"_id": 0})
+        if not doc:
+            raise HTTPException(status_code=404, detail="No matching property owned by that dead user")
+        if not location:
+            location = str(doc.get(loc_key) or "").strip()
+        if not location:
+            raise HTTPException(status_code=400, detail="Could not resolve property location")
+
+        conflict = None
+        if asset_kind in casino_kinds:
+            if int(doc.get("buy_back_reward") or 0) > 0 or int(doc.get("buy_back_points_held") or 0) > 0:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Casino has active buy-back — clear in-game or use dossier takeover after clearing",
+                )
+            owned_other = await _user_owns_any_casino(to_uid)
+            if owned_other and not body.allow_recipient_already_owns:
+                conflict = f"Recipient already owns {owned_other.get('type')} · {owned_other.get('city') or owned_other.get('state')}"
+        else:
+            owned_prop = await _user_owns_any_property(to_uid)
+            if owned_prop and not body.allow_recipient_already_owns:
+                conflict = f"Recipient already owns {owned_prop.get('type')} · {owned_prop.get('state')}"
+
+        preview = {
+            "asset_kind": asset_kind,
+            "location": location,
+            "from_username": from_user.get("username"),
+            "to_username": to_un,
+            "to_reason": to_reason,
+            "killed_by_username": from_user.get("killed_by_username"),
+            "recipient_conflict": conflict,
+            "dry_run": body.dry_run,
+        }
+        if conflict:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{conflict}. Set allow_recipient_already_owns=true to force transfer anyway.",
+            )
+        if body.dry_run:
+            label = asset_kind if asset_kind in ("armoury", "airport") else f"{asset_kind} ({location})"
+            msg = f"Would transfer {label} from {from_user.get('username')} to {to_un}"
+            if to_reason == "recorded_killer":
+                msg += f" (killer: {from_user.get('killed_by_username') or '?'})"
+            return {"message": msg, **preview}
+
+        rank_id, _ = get_rank_info(int(to_user.get("rank_points") or 0), user_prestige_rank_mult(to_user))
+        set_doc: Dict[str, Any] = {"owner_id": to_uid, "owner_username": to_un}
+        if rank_id < CAPO_RANK_ID:
+            set_doc["below_capo_acquired_at"] = datetime.now(timezone.utc)
+        update_op: Dict[str, Any] = {"$set": set_doc}
+        if rank_id >= CAPO_RANK_ID:
+            update_op["$unset"] = {"below_capo_acquired_at": ""}
+
+        res = await coll.update_one({loc_key: location, "owner_id": from_uid}, update_op)
+        if not res.modified_count:
+            raise HTTPException(status_code=500, detail="Transfer did not apply")
+        await coll.update_many(
+            {"owner_id": from_uid, loc_key: {"$ne": location}},
+            {"$set": {"owner_id": None, "owner_username": None}},
+        )
+
+        if asset_kind in casino_kinds:
+            from utils.admin_kill_asset_transfer import _invalidate_casino_caches_for
+
+            await _invalidate_casino_caches_for([from_uid, to_uid])
+            qt_type_map = {
+                "dice": "casino_dice",
+                "roulette": "casino_rlt",
+                "blackjack": "casino_blackjack",
+                "horseracing": "casino_horseracing",
+                "videopoker": "casino_videopoker",
+            }
+            qt = qt_type_map.get(asset_kind)
+            if qt:
+                try:
+                    from utils.quicktrade_casino_cleanup import cancel_quicktrade_casino_listings_by_locations
+
+                    await cancel_quicktrade_casino_listings_by_locations(qt, location, location)
+                except Exception:
+                    pass
+
+        label = asset_kind if asset_kind in ("armoury", "airport") else f"{asset_kind} · {location}"
+        msg = f"Transferred {label} from {from_user.get('username')} to {to_un}"
+        if body.notify:
+            try:
+                await send_notification(
+                    to_uid,
+                    "Property transferred",
+                    f"You received {label} (staff transfer from {from_user.get('username')}).",
+                    "reward",
+                    category="system",
+                )
+            except Exception:
+                pass
+        return {"message": msg, **preview}
 
     @router.post("/admin/drop-user-casino")
     async def admin_drop_user_casino(body: DropUserCasinoRequest, current_user: dict = Depends(get_current_user)):
