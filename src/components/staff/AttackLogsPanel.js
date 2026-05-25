@@ -10,6 +10,7 @@ import {
   formatAttackLogBodyguardCell,
   formatBlockingBodyguard,
   formatBodyguardSlot,
+  formatSlotDisplay,
   formatAttackLogProtecteeOrOwner,
   formatBodyguardBlockSummary,
   parseAttackLogUA,
@@ -72,6 +73,7 @@ export default function AttackLogsPanel({
   const [bodyguardIntel, setBodyguardIntel] = useState(null);
   const [targetIntel, setTargetIntel] = useState(null);
   const [targetIntelLoading, setTargetIntelLoading] = useState(false);
+  const [targetNarrative, setTargetNarrative] = useState(null);
   const [multiAttackerTargets, setMultiAttackerTargets] = useState(null);
   const [multiAttackerLoading, setMultiAttackerLoading] = useState(false);
   const [intelLoading, setIntelLoading] = useState(false);
@@ -128,20 +130,25 @@ export default function AttackLogsPanel({
       const name = (targetName || resolveTargetIntelUsername() || '').trim();
       if (!name) {
         setTargetIntel(null);
+        setTargetNarrative(null);
         return;
       }
       setTargetIntelLoading(true);
       try {
-        const res = await api.get('/admin/attacks/target-intel', {
-          params: {
-            username: name,
-            days: daysFilter ? parseInt(daysFilter, 10) : 30,
-            exclude_target_npc: attackLogsExcludeNpc,
-          },
-        });
-        setTargetIntel(res.data || null);
+        const params = {
+          username: name,
+          days: daysFilter ? parseInt(daysFilter, 10) : 30,
+          exclude_target_npc: attackLogsExcludeNpc,
+        };
+        const [intelRes, narrativeRes] = await Promise.all([
+          api.get('/admin/attacks/target-intel', { params }),
+          api.get('/admin/attacks/target-narrative', { params }),
+        ]);
+        setTargetIntel(intelRes.data || null);
+        setTargetNarrative(narrativeRes.data || null);
       } catch (e) {
         setTargetIntel(null);
+        setTargetNarrative(null);
         toast.error(e.response?.data?.detail || 'Failed to load target intel');
       } finally {
         setTargetIntelLoading(false);
@@ -244,6 +251,7 @@ export default function AttackLogsPanel({
         fetchTargetIntel(targetForIntel);
       } else {
         setTargetIntel(null);
+        setTargetNarrative(null);
       }
       if (un) {
         onLogsLoaded?.(un);
@@ -343,6 +351,14 @@ export default function AttackLogsPanel({
   const displayRowCount = logGroups ? logGroups.length : attackLogsData?.logs?.length ?? 0;
   const attackerSummary = bodyguardIntel?.attacker_summary;
   const protecteeSummary = bodyguardIntel?.protectee_summary;
+
+  const narrativeKindClass = (kind) => {
+    if (kind === 'guard_killed') return 'text-rose-300';
+    if (kind === 'guard_block') return 'text-amber-300';
+    if (kind === 'attack_failed') return 'text-amber-400/90';
+    if (kind === 'target_killed') return 'text-red-400 font-bold';
+    return 'text-mutedForeground';
+  };
 
   const renderLogRow = (row, idx, groupMeta = null) => {
     const { device } = parseAttackLogUA(row.user_agent);
@@ -915,6 +931,124 @@ export default function AttackLogsPanel({
               </div>
             </>
           )}
+        </div>
+      )}
+
+      {(targetIntelUser || targetIntelLoading) && targetNarrative?.summary && !targetIntelLoading && (
+        <div className="rounded border border-violet-500/35 bg-violet-500/5 p-2 space-y-2">
+          <div className="text-[10px] font-heading font-bold uppercase tracking-wider text-violet-200/90">
+            Attack narrative — {targetNarrative.target_username}
+          </div>
+          <p className="text-[10px] text-zinc-200/95 leading-relaxed">{targetNarrative.summary.story}</p>
+          {(targetNarrative.summary?.story_steps?.length ?? 0) > 0 && (
+            <ol className="list-decimal list-inside text-[10px] text-zinc-200/90 space-y-0.5 max-h-32 overflow-y-auto rounded border border-violet-500/20 bg-violet-500/5 px-2 py-1.5">
+              {(targetNarrative.summary.story_steps || []).map((step, i) => (
+                <li key={i} className="leading-snug">
+                  {step}
+                </li>
+              ))}
+            </ol>
+          )}
+          <div className="flex flex-wrap gap-2 text-[9px] font-heading">
+            <span className="rounded border border-zinc-700/50 px-1.5 py-0.5">
+              Attackers: <strong className="text-foreground">{targetNarrative.summary.distinct_attackers ?? 0}</strong>
+            </span>
+            <span className="rounded border border-violet-500/25 px-1.5 py-0.5 text-violet-200/80">
+              Timeline steps: <strong>{targetNarrative.summary.timeline_steps ?? (targetNarrative.timeline || []).length}</strong>
+            </span>
+            <span className="rounded border border-rose-500/30 px-1.5 py-0.5 text-rose-200/90">
+              Guard kills: <strong>{targetNarrative.summary.guards_killed_count ?? 0}</strong>
+            </span>
+            <span className="rounded border border-amber-500/30 px-1.5 py-0.5 text-amber-200/90">
+              Blocks: <strong>{(targetNarrative.summary.total_blocks ?? 0).toLocaleString()}</strong>
+            </span>
+            <span className="rounded border border-amber-500/20 px-1.5 py-0.5">
+              Failed on target: <strong>{(targetNarrative.summary.failed_on_target ?? 0).toLocaleString()}</strong>
+            </span>
+            <span className="rounded border border-red-500/30 px-1.5 py-0.5 text-red-200/90">
+              Target kills: <strong>{targetNarrative.summary.target_kills ?? 0}</strong>
+            </span>
+          </div>
+          {(targetNarrative.current_roster || []).length > 0 ? (
+            <p className="text-[9px] text-mutedForeground">
+              Current roster:{' '}
+              {(targetNarrative.current_roster || [])
+                .map((r) => {
+                  const slot = formatSlotDisplay(r.slot) || '—';
+                  return `slot ${slot}: ${r.guard_username || (r.is_robot ? 'Robot' : '—')}`;
+                })
+                .join(' · ')}
+            </p>
+          ) : null}
+          <div className="max-h-56 overflow-y-auto rounded border border-zinc-700/40">
+            <table className="w-full text-[9px] font-heading">
+              <thead className="sticky top-0 bg-zinc-900/95">
+                <tr className="text-mutedForeground border-b border-zinc-700/50">
+                  <th className="text-left py-1 px-1 w-6">#</th>
+                  <th className="text-left py-1 px-1">Time</th>
+                  <th className="text-left py-1 px-1">Event</th>
+                  <th className="text-left py-1 px-1">Attacker</th>
+                  <th className="text-left py-1 px-1">Guard / victim</th>
+                  <th className="text-right py-1 px-1">×</th>
+                  <th className="text-right py-1 px-1">Bullets</th>
+                </tr>
+              </thead>
+              <tbody>
+                {((targetNarrative.timeline || targetNarrative.phases) || []).length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="py-2 px-1 text-mutedForeground">
+                      No timeline in window.
+                    </td>
+                  </tr>
+                ) : (
+                  (targetNarrative.timeline || targetNarrative.phases || []).map((phase, i) => (
+                    <tr
+                      key={i}
+                      className={`border-b border-zinc-700/30 ${
+                        phase.kind === 'target_killed' ? 'bg-red-500/10' : phase.kind === 'guard_killed' ? 'bg-rose-500/8' : ''
+                      }`}
+                    >
+                      <td className="py-1 px-1 text-mutedForeground tabular-nums">{i + 1}</td>
+                      <td className="py-1 px-1 text-mutedForeground font-mono whitespace-nowrap">
+                        {formatAttackLogTime(phase.first_at)}
+                        {phase.last_at && phase.last_at !== phase.first_at ? (
+                          <span className="block text-[8px] text-mutedForeground">…{formatAttackLogTime(phase.last_at)}</span>
+                        ) : null}
+                      </td>
+                      <td className={`py-1 px-1 ${narrativeKindClass(phase.kind)}`}>{phase.label}</td>
+                      <td className="py-1 px-1">
+                        {phase.attacker_username && phase.attacker_username !== '?' ? (
+                          <button
+                            type="button"
+                            className="text-primary hover:underline font-medium"
+                            onClick={() =>
+                              filterByAttackerOnTarget(phase.attacker_username, targetNarrative.target_username)
+                            }
+                          >
+                            {phase.attacker_username}
+                          </button>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className="py-1 px-1 text-amber-200/80">
+                        {phase.guard_username || (phase.kind === 'target_killed' ? targetNarrative.target_username : '—')}
+                        {formatSlotDisplay(phase.slot) ? ` · slot ${formatSlotDisplay(phase.slot)}` : ''}
+                      </td>
+                      <td className="py-1 px-1 text-right tabular-nums">{(phase.count ?? 1).toLocaleString()}</td>
+                      <td className="py-1 px-1 text-right tabular-nums text-mutedForeground">
+                        {phase.bullets_total ? phase.bullets_total.toLocaleString() : '—'}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[9px] text-mutedForeground">
+            Steps in real time order (oldest first). Each guard kill and target kill is its own step — e.g. User1 kills a guard,
+            then User2 kills another, then User1 kills the target. Repeated blocks/fails from the same attacker are collapsed (×N).
+          </p>
         </div>
       )}
 

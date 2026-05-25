@@ -6,6 +6,7 @@ import { formatAdminDateTime } from '../../utils/adminDateTime';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import AttackLogsPanel from '../../components/staff/AttackLogsPanel';
+import { formatBodyguardHireDetail } from '../../utils/attackLogDisplay';
 
 function formatAuditTimelineRow(row) {
   if (!row || typeof row !== 'object') return '—';
@@ -19,7 +20,10 @@ function formatAuditTimelineRow(row) {
     if (d.outcome) detail += ` (${d.outcome})`;
     if (d.bodyguard_owner_username) detail += ` · owner ${d.bodyguard_owner_username}`;
   } else if (kind === 'bodyguard_hire' || kind === 'bodyguard_drop') {
-    detail = d.details || d.message || kind;
+    detail =
+      formatBodyguardHireDetail(d.details) ||
+      (typeof d.message === 'string' ? d.message : '') ||
+      kind;
   } else if (d.guard_username || d.guard_id) {
     detail = [d.guard_username, d.owner_username].filter(Boolean).join(' · ');
   } else if (d.event_type) {
@@ -191,7 +195,7 @@ export default function AdminAttackLogs() {
         </div>
         <div className="p-3">
           <AttackLogsPanel
-            introText="Filters: bodyguard blocks/kills, protectee, guard name, day range. Enter a username for intel (guards blocking for them vs targets they ran into). Empty username shows global top blockers."
+            introText="Filters: bodyguard blocks/kills, protectee, target victim, guard name, day range. Enter a username or target victim — Attack narrative shows guard kills, blocks, failed hits, then the kill (e.g. Moey). Group duplicate rows to collapse spam."
             tableMaxHeightClass="max-h-[min(70vh,560px)]"
             onLogsLoaded={onAttackLogsLoaded}
             showGlobalIntel

@@ -11669,6 +11669,280 @@ def register(router):
             return {}
         return clauses[0] if len(clauses) == 1 else {"$or": clauses}
 
+    async def _protectee_guard_user_ids(uid: str) -> Set[str]:
+        guard_ids: Set[str] = set()
+        for row in await db.bodyguards.find({"user_id": uid}, {"_id": 0, "bodyguard_user_id": 1}).to_list(10):
+            gid = row.get("bodyguard_user_id")
+            if gid:
+                guard_ids.add(str(gid))
+        async for r in db.users.find({"bodyguard_owner_id": uid, "is_npc": True}, {"_id": 0, "id": 1}):
+            if r.get("id"):
+                guard_ids.add(str(r["id"]))
+        return guard_ids
+
+    def _attacks_on_protectee_match(uid: str, username: str, guard_user_ids: Set[str]) -> Dict[str, Any]:
+        clauses: List[Dict[str, Any]] = [
+            {"target_id": uid},
+            _username_filter_clause("target_username", username),
+        ]
+        if guard_user_ids:
+            clauses.append({"target_id": {"$in": list(guard_user_ids)}})
+        clauses.append({"bodyguard_owner_id": uid})
+        if username:
+            clauses.append(_username_filter_clause("bodyguard_owner_username", username))
+        return {"$or": clauses}
+
+    def _narrative_kind_from_log(doc: Dict[str, Any]) -> str:
+        oc = (doc.get("outcome") or "").strip().lower()
+        if oc == "bodyguard":
+            return "guard_block"
+        if oc == "killed" and doc.get("is_bodyguard_kill"):
+            return "guard_killed"
+        if oc == "killed":
+            return "target_killed"
+        if oc == "failed":
+            return "attack_failed"
+        return "other"
+
+    def _narrative_step_key(doc: Dict[str, Any]) -> Tuple[str, str, str, Any]:
+        d = _enrich_attack_log_for_admin(doc)
+        kind = _narrative_kind_from_log(d)
+        attacker = (d.get("attacker_username") or "").strip()
+        slot = _normalize_bodyguard_slot_value(d.get("bodyguard_slot"))
+        if kind == "guard_killed":
+            guard = (d.get("target_username") or "").strip()
+        elif kind == "guard_block":
+            guard = (
+                (d.get("blocking_bodyguard_username") or "")
+                or (
+                    (d.get("first_bodyguard") or {}).get("search_username")
+                    if isinstance(d.get("first_bodyguard"), dict)
+                    else ""
+                )
+                or ""
+            ).strip()
+        else:
+            guard = ""
+        return (kind, attacker, guard, slot)
+
+    def _narrative_entry_from_key(
+        key: Tuple[str, str, str, Any],
+        *,
+        count: int = 1,
+        first_at: Optional[str] = None,
+        last_at: Optional[str] = None,
+        bullets_total: int = 0,
+        sample_message: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        kind, attacker, guard, slot = key
+        labels = {
+            "guard_killed": "Bodyguard killed",
+            "guard_block": "Blocked by bodyguard",
+            "attack_failed": "Failed hit on target",
+            "target_killed": "Target killed",
+            "other": "Other attempt",
+        }
+        slot_out = _normalize_bodyguard_slot_value(slot) if slot is not None else None
+        return {
+            "kind": kind,
+            "label": labels.get(kind, kind),
+            "attacker_username": attacker or "?",
+            "guard_username": guard or None,
+            "slot": slot_out,
+            "count": int(count),
+            "bullets_total": int(bullets_total),
+            "first_at": first_at,
+            "last_at": last_at,
+            "sample_message": sample_message,
+        }
+
+    def _narrative_timeline_sentence(entry: Dict[str, Any], target_username: str) -> str:
+        kind = entry.get("kind")
+        attacker = entry.get("attacker_username") or "?"
+        count = int(entry.get("count") or 1)
+        guard = entry.get("guard_username")
+        slot = entry.get("slot")
+        slot_s = f" (slot {slot})" if slot is not None else ""
+        if kind == "guard_killed":
+            return f"{attacker} killed bodyguard {guard or '?'}{slot_s}"
+        if kind == "target_killed":
+            bu = entry.get("bullets_total") or 0
+            extra = f" · {bu:,} bullets" if bu else ""
+            return f"{attacker} killed {target_username}{extra}"
+        if kind == "guard_block":
+            g = guard or "?"
+            return f"{attacker} blocked by {g}{slot_s}" + (f" (×{count:,})" if count > 1 else "")
+        if kind == "attack_failed":
+            return f"{attacker} failed on {target_username}" + (f" (×{count:,})" if count > 1 else "")
+        return f"{attacker}: {entry.get('label') or kind}"
+
+    def _build_target_attack_narrative(
+        docs: List[Dict[str, Any]],
+        *,
+        target_username: str,
+        current_roster: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """True chronological timeline: user1 kills guard → user2 kills guard → user1 kills target."""
+        enriched = [_enrich_attack_log_for_admin(d) for d in docs]
+        enriched.sort(key=lambda x: (_audit_iso(x.get("created_at")) or ""))
+
+        collapse_kinds = frozenset({"guard_block", "attack_failed"})
+        timeline: List[Dict[str, Any]] = []
+        open_run: Optional[Dict[str, Any]] = None
+        open_key: Optional[Tuple[str, str, str, Any]] = None
+
+        def flush_run() -> None:
+            nonlocal open_run, open_key
+            if open_run:
+                timeline.append(open_run)
+                open_run = None
+                open_key = None
+
+        for d in enriched:
+            key = _narrative_step_key(d)
+            kind = key[0]
+            at = _audit_iso(d.get("created_at"))
+            bu = 0
+            if d.get("bullets_used") is not None:
+                try:
+                    bu = int(d.get("bullets_used"))
+                except (TypeError, ValueError):
+                    pass
+            msg = (d.get("player_message") or "")[:240] or None
+
+            if kind in collapse_kinds:
+                if open_key == key and open_run:
+                    open_run["count"] = int(open_run.get("count") or 0) + 1
+                    open_run["bullets_total"] = int(open_run.get("bullets_total") or 0) + bu
+                    if at and (not open_run.get("last_at") or at > open_run["last_at"]):
+                        open_run["last_at"] = at
+                else:
+                    flush_run()
+                    open_key = key
+                    open_run = _narrative_entry_from_key(
+                        key, count=1, first_at=at, last_at=at, bullets_total=bu, sample_message=msg
+                    )
+                continue
+
+            flush_run()
+            timeline.append(
+                _narrative_entry_from_key(key, count=1, first_at=at, last_at=at, bullets_total=bu, sample_message=msg)
+            )
+        flush_run()
+
+        attackers: Set[str] = set()
+        guards_killed_entries = 0
+        total_blocks = 0
+        target_kills = 0
+        failed_on_target = 0
+        story_steps: List[str] = []
+        for entry in timeline:
+            a = (entry.get("attacker_username") or "").strip()
+            if a and a != "?":
+                attackers.add(a)
+            k = entry.get("kind")
+            c = int(entry.get("count") or 1)
+            if k == "guard_block":
+                total_blocks += c
+            elif k == "guard_killed":
+                guards_killed_entries += 1
+            elif k == "target_killed":
+                target_kills += c
+            elif k == "attack_failed":
+                failed_on_target += c
+            story_steps.append(_narrative_timeline_sentence(entry, target_username))
+
+        # Rollup phases (same as before) for quick stats table — optional duplicate of timeline groups
+        phase_groups: Dict[Tuple[str, str, str, Any], Dict[str, Any]] = {}
+        for entry in timeline:
+            pk = (
+                entry.get("kind"),
+                entry.get("attacker_username") or "",
+                entry.get("guard_username") or "",
+                entry.get("slot"),
+            )
+            g = phase_groups.get(pk)
+            if not g:
+                phase_groups[pk] = dict(entry)
+            else:
+                g["count"] = int(g.get("count") or 0) + int(entry.get("count") or 0)
+                g["bullets_total"] = int(g.get("bullets_total") or 0) + int(entry.get("bullets_total") or 0)
+                if entry.get("first_at") and (not g.get("first_at") or entry["first_at"] < g["first_at"]):
+                    g["first_at"] = entry["first_at"]
+                if entry.get("last_at") and (not g.get("last_at") or entry["last_at"] > g["last_at"]):
+                    g["last_at"] = entry["last_at"]
+
+        phases = sorted(phase_groups.values(), key=lambda p: (p.get("first_at") or ""))
+
+        return {
+            "summary": {
+                "distinct_attackers": len(attackers),
+                "guards_killed_count": guards_killed_entries,
+                "total_blocks": total_blocks,
+                "target_kills": target_kills,
+                "failed_on_target": failed_on_target,
+                "total_logged_attempts": len(enriched),
+                "timeline_steps": len(timeline),
+                "story": " → ".join(story_steps) if story_steps else f"No attack narrative in window for {target_username}.",
+                "story_steps": story_steps,
+            },
+            "current_roster": current_roster,
+            "timeline": timeline,
+            "phases": phases,
+        }
+
+    @router.get("/admin/attacks/target-narrative")
+    async def admin_attacks_target_narrative(
+        username: str = Query(..., min_length=1),
+        days: int = Query(30, ge=1, le=365),
+        limit: int = Query(3000, ge=1, le=5000),
+        exclude_target_npc: bool = Query(True),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Chronological story: blocks, bodyguard kills, failed hits, and kill on a protectee."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        user = await _resolve_user_by_key(username)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = user["id"]
+        resolved = user.get("username") or username.strip()
+        since_dt = datetime.now(timezone.utc) - timedelta(days=int(days))
+        guard_ids = await _protectee_guard_user_ids(uid)
+        match: Dict[str, Any] = {
+            "$and": [
+                _attacks_on_protectee_match(uid, resolved, guard_ids),
+                _attack_created_at_bound(since_dt, op="$gte"),
+            ]
+        }
+        if exclude_target_npc:
+            match = _attack_attempts_query_exclude_hitlist_npcs(match)
+        docs = (
+            await db.attack_attempts.find(match, {"_id": 0})
+            .sort("created_at", 1)
+            .to_list(int(limit))
+        )
+        owned = await db.bodyguards.find({"user_id": uid}, {"_id": 0, "slot_number": 1, "bodyguard_username": 1, "is_robot": 1}).sort(
+            "slot_number", 1
+        ).to_list(10)
+        roster = [
+            {
+                "slot": r.get("slot_number"),
+                "guard_username": r.get("bodyguard_username") or ("Robot" if r.get("is_robot") else None),
+                "is_robot": bool(r.get("is_robot")),
+            }
+            for r in owned
+        ]
+        narrative = _build_target_attack_narrative(docs, target_username=resolved, current_roster=roster)
+        return {
+            "target_username": resolved,
+            "target_user_id": uid,
+            "days": int(days),
+            "exclude_target_npc": exclude_target_npc,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            **narrative,
+        }
+
     @router.get("/admin/attacks/target-intel")
     async def admin_attacks_target_intel(
         username: str = Query(..., min_length=1),

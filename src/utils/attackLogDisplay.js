@@ -163,6 +163,31 @@ export function normalizeBodyguardSlotValue(raw) {
   return null;
 }
 
+/** Safe string for UI (never returns a raw hire payload object). */
+export function formatSlotDisplay(raw) {
+  const slot = normalizeBodyguardSlotValue(raw);
+  if (slot == null) return '';
+  return String(slot);
+}
+
+/** activity_log.details / legacy blobs from bodyguard hire. */
+export function formatBodyguardHireDetail(details) {
+  if (details == null || details === '') return '';
+  if (typeof details === 'string') return details;
+  if (typeof details !== 'object') return String(details);
+  const slot = normalizeBodyguardSlotValue(details);
+  const parts = [];
+  if (slot != null) parts.push(`slot ${slot}`);
+  if (details.is_robot === true) parts.push('robot');
+  else if (details.is_robot === false) parts.push('human');
+  if (details.name) parts.push(String(details.name));
+  if (details.cost != null && details.cost !== '') {
+    const c = Number(details.cost);
+    parts.push(`${Number.isNaN(c) ? details.cost : c.toLocaleString()} pts`);
+  }
+  return parts.length ? parts.join(' · ') : '';
+}
+
 export function formatBodyguardSlot(row) {
   if (!row || typeof row !== 'object') return '—';
   const fb = row.first_bodyguard;
