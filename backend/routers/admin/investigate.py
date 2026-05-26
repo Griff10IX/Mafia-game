@@ -228,16 +228,26 @@ def register(router):
 
     MAX_IP_GEO_LOOKUPS = 40
 
-    @router.get("/admin/investigate/user-ip-check")
-    async def admin_investigate_user_ip_check(
-        user_id: Optional[str] = Query(None, description="Exact user id"),
-        username: Optional[str] = Query(None, description="Exact username (case-insensitive)"),
-        current_user: dict = Depends(require_admin_or_mod),
-    ):
-        """
-        Admin/mod: unique sign-in IPs, per-IP ISP/mobile/hosting (ip-api.com, cached 7d), chronological login_history,
-        session IPs, and heuristics (e.g. shift between mobile carriers).
-        """
+    _USER_IP_PROJ = {
+        "_id": 0,
+        "id": 1,
+        "username": 1,
+        "email": 1,
+        "registration_ip": 1,
+        "last_login_ip": 1,
+        "last_request_ip": 1,
+        "login_ips": 1,
+        "login_history": 1,
+        "sessions": 1,
+        "last_user_agent": 1,
+        "last_device_type": 1,
+        "created_at": 1,
+    }
+
+    async def _resolve_investigate_user(
+        user_id: Optional[str],
+        username: Optional[str],
+    ) -> Dict[str, Any]:
         uid = (user_id or "").strip()
         uname = (username or "").strip()
         if not uid and not uname:
@@ -247,24 +257,12 @@ def register(router):
             q["id"] = uid
         else:
             q["username"] = re.compile("^" + re.escape(uname) + "$", re.IGNORECASE)
-        proj = {
-            "_id": 0,
-            "id": 1,
-            "username": 1,
-            "email": 1,
-            "registration_ip": 1,
-            "last_login_ip": 1,
-            "last_request_ip": 1,
-            "login_ips": 1,
-            "login_history": 1,
-            "sessions": 1,
-            "last_user_agent": 1,
-            "last_device_type": 1,
-        }
-        user = await db.users.find_one(q, proj)
+        user = await db.users.find_one(q, _USER_IP_PROJ)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
+        return user
 
+    async def _build_user_ip_check_payload(user: Dict[str, Any]) -> Dict[str, Any]:
         if srv.user_has_dupe_exempt_email(user):
             from utils.synthetic_user_ip_check import build_synthetic_user_ip_check
 
@@ -418,8 +416,20 @@ def register(router):
                 }
             )
 
+        session_ips: List[str] = []
+        for s in user.get("sessions") or []:
+            if isinstance(s, dict):
+                sip = normalize_ip(s.get("ip"))
+                if sip:
+                    session_ips.append(sip)
+
         return {
-            "user": {"id": uid, "username": uname},
+            "user": {
+                "id": uid,
+                "username": uname,
+                "email": user.get("email"),
+                "created_at": user.get("created_at"),
+            },
             "meta": {
                 "unique_ip_count": len(all_ips),
                 "looked_up_ips": len(lookup_ips),
@@ -434,6 +444,257 @@ def register(router):
             "ip_summary": sorted(ip_summary, key=lambda x: x.get("ip") or ""),
             "risks": risks,
             "proxy_farm_profile": proxy_profile,
+            "sources": {
+                "registration_ip": normalize_ip(user.get("registration_ip")) or None,
+                "last_login_ip": normalize_ip(user.get("last_login_ip")) or None,
+                "last_request_ip": normalize_ip(user.get("last_request_ip")) or None,
+                "login_ips": [
+                    normalize_ip(x) for x in (user.get("login_ips") or []) if normalize_ip(x)
+                ],
+                "session_ips": session_ips,
+                "login_history_entries": len(hist_chrono),
+            },
+        }
+
+    async def _attack_ips_for_user(uid: str, days: int, limit: int) -> Dict[str, Any]:
+        since = datetime.now(timezone.utc) - timedelta(days=int(days))
+        since_iso = since.isoformat()
+        time_or = {"$or": [{"created_at": {"$gte": since}}, {"created_at": {"$gte": since_iso}}]}
+        match_attacker = {"$and": [{"attacker_id": uid}, time_or, {"client_ip": {"$nin": [None, ""]}}]}
+        match_target = {"$and": [{"target_id": uid}, time_or, {"client_ip": {"$nin": [None, ""]}}]}
+
+        async def _agg(match: Dict[str, Any], role: str) -> List[Dict[str, Any]]:
+            rows = await db.attack_attempts.aggregate(
+                [
+                    {"$match": match},
+                    {
+                        "$group": {
+                            "_id": "$client_ip",
+                            "count": {"$sum": 1},
+                            "first_at": {"$min": "$created_at"},
+                            "last_at": {"$max": "$created_at"},
+                        }
+                    },
+                    {"$sort": {"count": -1}},
+                    {"$limit": int(limit)},
+                ]
+            ).to_list(int(limit))
+            out = []
+            for r in rows:
+                ipn = normalize_ip(r.get("_id"))
+                if not ipn:
+                    continue
+                out.append(
+                    {
+                        "ip": ipn,
+                        "role": role,
+                        "count": int(r.get("count") or 0),
+                        "first_at": r.get("first_at"),
+                        "last_at": r.get("last_at"),
+                    }
+                )
+            return out
+
+        as_attacker = await _agg(match_attacker, "attacker")
+        as_target = await _agg(match_target, "target")
+        samples = (
+            await db.attack_attempts.find(
+                {
+                    "$and": [
+                        {"$or": [{"attacker_id": uid}, {"target_id": uid}]},
+                        time_or,
+                        {"client_ip": {"$nin": [None, ""]}},
+                    ]
+                },
+                {
+                    "_id": 0,
+                    "created_at": 1,
+                    "client_ip": 1,
+                    "outcome": 1,
+                    "attacker_username": 1,
+                    "target_username": 1,
+                    "attacker_id": 1,
+                    "target_id": 1,
+                },
+            )
+            .sort("created_at", -1)
+            .limit(25)
+            .to_list(25)
+        )
+        recent = []
+        for s in samples:
+            ipn = normalize_ip(s.get("client_ip"))
+            recent.append(
+                {
+                    "at": s.get("created_at"),
+                    "ip": ipn,
+                    "outcome": s.get("outcome"),
+                    "role": "attacker" if s.get("attacker_id") == uid else "target",
+                    "attacker_username": s.get("attacker_username"),
+                    "target_username": s.get("target_username"),
+                }
+            )
+        return {
+            "days": int(days),
+            "as_attacker": as_attacker,
+            "as_target": as_target,
+            "recent_samples": recent,
+        }
+
+    @router.get("/admin/investigate/user-ip-check")
+    async def admin_investigate_user_ip_check(
+        user_id: Optional[str] = Query(None, description="Exact user id"),
+        username: Optional[str] = Query(None, description="Exact username (case-insensitive)"),
+        current_user: dict = Depends(require_admin_or_mod),
+    ):
+        """
+        Admin/mod: unique sign-in IPs, per-IP ISP/mobile/hosting (ip-api.com, cached 7d), chronological login_history,
+        session IPs, and heuristics (e.g. shift between mobile carriers).
+        """
+        user = await _resolve_investigate_user(user_id, username)
+        return await _build_user_ip_check_payload(user)
+
+    @router.get("/admin/investigate/user-ip-history")
+    async def admin_investigate_user_ip_history(
+        user_id: Optional[str] = Query(None, description="Exact user id"),
+        username: Optional[str] = Query(None, description="Exact username (case-insensitive)"),
+        attack_days: int = Query(90, ge=1, le=365, description="Window for attack_attempts client_ip aggregates"),
+        current_user: dict = Depends(require_admin_or_mod),
+    ):
+        """Full IP history for a player: sign-in timeline, stored IPs, sessions, attack IPs, proxy heuristics."""
+        user = await _resolve_investigate_user(user_id, username)
+        payload = await _build_user_ip_check_payload(user)
+        uid = payload["user"]["id"]
+        attack = await _attack_ips_for_user(uid, attack_days, 40)
+        payload["attack_activity"] = attack
+        payload["meta"]["attack_days"] = int(attack_days)
+        all_unique = {row.get("ip") for row in (payload.get("ip_summary") or []) if row.get("ip")}
+        for block in (attack.get("as_attacker") or []) + (attack.get("as_target") or []):
+            if block.get("ip"):
+                all_unique.add(block["ip"])
+        payload["meta"]["unique_ip_count_including_attacks"] = len(all_unique)
+        return payload
+
+    @router.get("/admin/investigate/accounts-by-ip")
+    async def admin_investigate_accounts_by_ip(
+        ip: str = Query(..., min_length=3, description="IPv4/IPv6 to search"),
+        limit: int = Query(50, ge=1, le=200),
+        attack_limit: int = Query(40, ge=1, le=100),
+        current_user: dict = Depends(require_admin_or_mod),
+    ):
+        """Find accounts linked to an IP (profile fields, login history, sessions) plus recent attack_attempts from that IP."""
+        ipn = normalize_ip(ip.strip())
+        if not ipn:
+            raise HTTPException(status_code=400, detail="Invalid or empty IP")
+
+        user_proj = {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "email": 1,
+            "created_at": 1,
+            "is_dead": 1,
+            "registration_ip": 1,
+            "last_login_ip": 1,
+            "last_request_ip": 1,
+        }
+        q = {
+            "$or": [
+                {"registration_ip": ipn},
+                {"last_login_ip": ipn},
+                {"last_request_ip": ipn},
+                {"login_ips": ipn},
+                {"login_history.ip": ipn},
+                {"sessions.ip": ipn},
+            ]
+        }
+        users_raw = await db.users.find(q, user_proj).limit(int(limit)).to_list(int(limit))
+
+        def _roles_for_user(u: Dict[str, Any]) -> List[str]:
+            roles: List[str] = []
+            if normalize_ip(u.get("registration_ip")) == ipn:
+                roles.append("registration")
+            if normalize_ip(u.get("last_login_ip")) == ipn:
+                roles.append("last_login")
+            if normalize_ip(u.get("last_request_ip")) == ipn:
+                roles.append("last_request")
+            return roles
+
+        accounts = []
+        seen_ids: set = set()
+        for u in users_raw:
+            uid = u.get("id")
+            if not uid or uid in seen_ids:
+                continue
+            seen_ids.add(uid)
+            accounts.append(
+                {
+                    "id": uid,
+                    "username": u.get("username"),
+                    "email": u.get("email"),
+                    "created_at": u.get("created_at"),
+                    "is_dead": u.get("is_dead"),
+                    "roles": _roles_for_user(u),
+                }
+            )
+
+        attack_rows = await db.attack_attempts.aggregate(
+            [
+                {"$match": {"client_ip": ipn}},
+                {
+                    "$group": {
+                        "_id": "$attacker_id",
+                        "username": {"$max": "$attacker_username"},
+                        "count": {"$sum": 1},
+                        "last_at": {"$max": "$created_at"},
+                    }
+                },
+                {"$sort": {"count": -1}},
+                {"$limit": int(attack_limit)},
+            ]
+        ).to_list(int(attack_limit))
+        attack_attackers = [
+            {
+                "attacker_id": r.get("_id"),
+                "username": r.get("username"),
+                "count": int(r.get("count") or 0),
+                "last_at": r.get("last_at"),
+            }
+            for r in attack_rows
+            if r.get("_id")
+        ]
+        for aa in attack_attackers:
+            aid = aa.get("attacker_id")
+            if aid and aid not in seen_ids:
+                seen_ids.add(aid)
+                accounts.append(
+                    {
+                        "id": aid,
+                        "username": aa.get("username"),
+                        "email": None,
+                        "created_at": None,
+                        "is_dead": None,
+                        "roles": ["attack_attempts"],
+                    }
+                )
+
+        g = await get_or_fetch_ip_geodata(db, ipn)
+        return {
+            "ip": ipn,
+            "account_count": len(accounts),
+            "accounts": accounts[: int(limit)],
+            "attack_attackers": attack_attackers,
+            "geo": {
+                "network": network_label(g) if g.get("ok") else None,
+                "countryCode": g.get("countryCode"),
+                "isp": g.get("isp"),
+                "org": g.get("org"),
+                "mobile": g.get("mobile"),
+                "hosting": g.get("hosting"),
+                "proxy": g.get("proxy"),
+                "geo_ok": g.get("ok"),
+                "geo_error": g.get("error"),
+            },
         }
 
     ATTACK_CLIENT_AUDIT = "attack_client_audit"

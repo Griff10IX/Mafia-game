@@ -1306,12 +1306,14 @@ export default function Layout({ children }) {
     { path: '/tjjeujr3wa/users-online', icon: Users, label: 'Users online (live)' },
     { path: '/tjjeujr3wa/witness-statements', icon: FileText, label: 'Witness statements' },
     { path: '/tjjeujr3wa/attack-logs', icon: Crosshair, label: 'Attack logs' },
+    { path: '/tjjeujr3wa/ip-history', icon: Globe, label: 'IP history' },
   ] : [];
   const moderatorNavItems = isModerator && !isAdmin && staffToolsNavVisible ? [
     { path: '/tjjeujr3wa/overview', icon: Shield, label: 'Moderator tools' },
     { path: '/tjjeujr3wa/users-online', icon: Users, label: 'Users online (live)' },
     { path: '/tjjeujr3wa/witness-statements', icon: FileText, label: 'Witness statements' },
     { path: '/tjjeujr3wa/attack-logs', icon: Crosshair, label: 'Attack logs' },
+    { path: '/tjjeujr3wa/ip-history', icon: Globe, label: 'IP history' },
   ] : [];
   const staffTopBarEntry = isAdmin && staffToolsNavVisible ? adminNavItems[0] : (isModerator && staffToolsNavVisible ? moderatorNavItems[0] : null);
   const StaffTopBarIcon = staffTopBarEntry?.icon;

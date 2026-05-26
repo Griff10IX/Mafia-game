@@ -65,6 +65,7 @@ export const ADMIN_ROUTE_GROUPS = [
   { id: 'engineering', label: 'Engineering', categoryId: 'admin-world-systems', anchorId: 'admin-database', icon: Wrench, description: 'Testing, DB utilities, and diagnostics.' },
   { id: 'users-online', label: 'Live online', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: Radio, description: 'Who is online now (IPs, last page, same-IP hints).' },
   { id: 'attack-logs', label: 'Attack logs', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: Crosshair, description: 'PVP attack log console and analytics.' },
+  { id: 'ip-history', label: 'IP history', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: History, description: 'Per-player IP timeline and reverse IP account lookup.' },
   { id: 'witness-statements', label: 'Witness', categoryId: 'admin-operations', anchorId: 'admin-moderation', icon: FileText, description: 'Witness statements review.' },
   { id: 'locked', label: 'Page locks', categoryId: 'admin-world-systems', anchorId: 'admin-page-locks', icon: LockKeyhole, description: 'Route / page locks (Lock page under World & Systems).' },
 ];
@@ -89,6 +90,7 @@ export const ADMIN_ROUTE_GROUP_MOBILE_SHORT = {
   engineering: 'Eng',
   'users-online': 'Live',
   'attack-logs': 'Attacks',
+  'ip-history': 'IPs',
   'witness-statements': 'Witness',
   locked: 'Locks',
 };
