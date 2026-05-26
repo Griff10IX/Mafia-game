@@ -1261,6 +1261,13 @@ export default function Admin() {
   const [cheaterImpactLoading, setCheaterImpactLoading] = useState(false);
   const [cheaterImpactRefundPct, setCheaterImpactRefundPct] = useState('50');
   const [cheaterImpactConfirmUser, setCheaterImpactConfirmUser] = useState('');
+  const [revivePreview, setRevivePreview] = useState(null);
+  const [revivePreviewLoading, setRevivePreviewLoading] = useState(false);
+  const [reviveRestoreBalances, setReviveRestoreBalances] = useState(true);
+  const [reviveTransferAltBalance, setReviveTransferAltBalance] = useState(true);
+  const [reviveRefundAltSpent, setReviveRefundAltSpent] = useState(true);
+  const [reviveLockAlts, setReviveLockAlts] = useState(false);
+  const [reviveConfirmUsername, setReviveConfirmUsername] = useState('');
   const [cheaterImpactRefundLoading, setCheaterImpactRefundLoading] = useState(false);
 
   const [adminOnlineColor, setAdminOnlineColor] = useState('#a78bfa');
@@ -4483,11 +4490,52 @@ export default function Admin() {
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
 
-  const handleRevivePlayer = async () => {
+  const loadRevivePreview = async () => {
+    const u = (formData.targetUsername || '').trim();
+    if (!u) {
+      toast.error('Enter target username');
+      return;
+    }
+    setRevivePreviewLoading(true);
+    setRevivePreview(null);
     try {
-      const response = await api.post(`/admin/revive-player?target_username=${formData.targetUsername}`);
+      const res = await api.get('/admin/revive-player/preview', { params: { target_username: u } });
+      setRevivePreview(res.data || null);
+      const alts = res.data?.linked_alive_accounts?.length ?? 0;
+      toast.success(alts ? `Preview loaded — ${alts} linked alt account(s)` : 'Preview loaded');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Preview failed');
+    } finally {
+      setRevivePreviewLoading(false);
+    }
+  };
+
+  const handleRevivePlayer = async () => {
+    const u = (formData.targetUsername || '').trim();
+    if (!u) {
+      toast.error('Enter target username');
+      return;
+    }
+    const needsConfirm =
+      (reviveTransferAltBalance || reviveRefundAltSpent) && (revivePreview?.linked_alive_accounts?.length ?? 0) > 0;
+    if (needsConfirm && (reviveConfirmUsername || '').trim().toLowerCase() !== u.toLowerCase()) {
+      toast.error('Type the victim username in Confirm to recover points from a linked alt');
+      return;
+    }
+    try {
+      const response = await api.post(`/admin/revive-player?target_username=${encodeURIComponent(u)}`, {
+        restore_death_balances: reviveRestoreBalances,
+        transfer_alt_balance: reviveTransferAltBalance,
+        refund_alt_points_spent: reviveRefundAltSpent,
+        lock_alt_accounts: reviveLockAlts,
+        confirm_username: needsConfirm ? reviveConfirmUsername.trim() : null,
+      });
       toast.success(response.data.message);
-    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+      setRevivePreview(null);
+      setReviveConfirmUsername('');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
   };
 
   const handleGiveAutoRank = async () => {
@@ -11163,9 +11211,78 @@ export default function Admin() {
               <ActionRow icon={Skull} label="Modkill" description="Permanently kill the target account. They cannot log in until revived." color="text-red-400">
                 <BtnDanger onClick={handleKillPlayer}>Kill</BtnDanger>
               </ActionRow>
-              <ActionRow icon={Zap} label="Revive" description="Restore a dead or modkilled account so they can log in again">
-                <BtnPrimary onClick={handleRevivePlayer}>Revive</BtnPrimary>
+              <ActionRow icon={Zap} label="Revive (fair)" description="Restore victim; optional alt point recovery if they remade on same email">
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  <BtnSecondary type="button" onClick={loadRevivePreview} disabled={revivePreviewLoading}>
+                    {revivePreviewLoading ? '…' : 'Preview'}
+                  </BtnSecondary>
+                  <BtnPrimary onClick={handleRevivePlayer}>Revive</BtnPrimary>
+                </div>
               </ActionRow>
+              <div className="pl-6 space-y-2 border-l-2 border-primary/25 text-[10px] font-heading">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={reviveRestoreBalances} onChange={(e) => setReviveRestoreBalances(e.target.checked)} />
+                  Restore points/money at death
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={reviveTransferAltBalance} onChange={(e) => setReviveTransferAltBalance(e.target.checked)} />
+                  Move remaining points from linked alt
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={reviveRefundAltSpent} onChange={(e) => setReviveRefundAltSpent(e.target.checked)} />
+                  Refund points spent on linked alt
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-amber-300/90">
+                  <input type="checkbox" checked={reviveLockAlts} onChange={(e) => setReviveLockAlts(e.target.checked)} />
+                  Staff-kill linked alt after transfer (admin discretion)
+                </label>
+                {(revivePreview?.linked_alive_accounts?.length ?? 0) > 0 && (reviveTransferAltBalance || reviveRefundAltSpent) ? (
+                  <input
+                    type="text"
+                    value={reviveConfirmUsername}
+                    onChange={(e) => setReviveConfirmUsername(e.target.value)}
+                    placeholder={`Confirm victim username (${formData.targetUsername || '…'})`}
+                    className="w-full max-w-xs px-2 py-1 rounded border border-amber-500/40 bg-transparent text-[10px]"
+                    autoComplete="off"
+                  />
+                ) : null}
+                {revivePreview && (
+                  <div className="rounded border border-zinc-700/50 bg-zinc-900/50 p-2 space-y-1.5 text-[9px]">
+                    <div>
+                      <span className="text-mutedForeground">Victim:</span>{' '}
+                      <strong className="text-foreground">{revivePreview.victim?.username}</strong>
+                      {revivePreview.victim?.is_dead ? (
+                        <span className="text-red-300"> · dead</span>
+                      ) : (
+                        <span className="text-amber-300"> · not dead</span>
+                      )}
+                      {revivePreview.victim?.killed_by_username ? (
+                        <span className="text-mutedForeground"> · killed by {revivePreview.victim.killed_by_username}</span>
+                      ) : null}
+                    </div>
+                    <div className="text-mutedForeground">
+                      At death: {Number(revivePreview.victim?.points_at_death ?? 0).toLocaleString()} pts · $
+                      {Number(revivePreview.victim?.money_at_death ?? 0).toLocaleString()}
+                    </div>
+                    {(revivePreview.linked_alive_accounts || []).length === 0 ? (
+                      <p className="text-mutedForeground">No linked alive alt on same email / post-death IP.</p>
+                    ) : (
+                      <ul className="space-y-1 font-mono">
+                        {revivePreview.linked_alive_accounts.map((a) => (
+                          <li key={a.user_id} className="border-t border-zinc-800/80 pt-1">
+                            <strong className="text-primary">{a.username}</strong>
+                            <span className="text-mutedForeground"> ({a.link_reason})</span>
+                            <div>
+                              {a.current_points?.toLocaleString()} pts now · refund ~{a.suggested_refund_spent?.toLocaleString()}{' '}
+                              spent
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
               {isAdmin && (
                 <ActionRow icon={Lock} label="Test lock (60s)" description="Lock yourself for 60 seconds to test the locked page">
                   <button type="button" onClick={handleTestLockSelf} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-amber-500/20 border-amber-500/40 text-amber-400 hover:bg-amber-500/30">

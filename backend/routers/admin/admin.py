@@ -139,6 +139,20 @@ class CheaterRefundBodyguardHireBody(BaseModel):
     )
 
 
+class AdminRevivePlayerBody(BaseModel):
+    """Fair revive for victims (e.g. killed by cheater/dupe): restore death snapshot and optional alt-account point recovery."""
+
+    restore_death_balances: bool = True
+    transfer_alt_balance: bool = True
+    refund_alt_points_spent: bool = True
+    lock_alt_accounts: bool = False
+    confirm_username: Optional[str] = Field(
+        default=None,
+        max_length=80,
+        description="Required when moving points from a linked alive alt (must match victim username).",
+    )
+
+
 class EventsToggleRequest(BaseModel):
     enabled: bool
 
@@ -6226,25 +6240,237 @@ def register(router):
         )
         return {"message": f"Auto rank removed from {target.get('username', target_username)}", "username": target.get("username")}
 
-    @router.post("/admin/revive-player")
-    async def admin_revive_player(target_username: str, current_user: dict = Depends(require_admin_or_mod)):
-        username_pattern = _username_pattern(target_username)
-        target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
-        if not target:
-            raise HTTPException(status_code=404, detail="User not found")
+    async def _alive_accounts_linked_to_dead(dead_user: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Alive accounts that may be the player's replacement signup (same email or post-death registration IP)."""
+        dead_id = dead_user["id"]
+        dead_at_s = str(dead_user.get("dead_at") or "")
+        ouname = (dead_user.get("username") or "").strip() or "?"
+        em = (dead_user.get("email") or "").strip().lower()
+        tomb = bool(em.startswith("dead_") and em.endswith("@deleted"))
+        linked: List[Dict[str, Any]] = []
+        seen: set[str] = set()
+
+        proj = {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "email": 1,
+            "points": 1,
+            "lifetime_points_spent": 1,
+            "created_at": 1,
+            "registration_ip": 1,
+        }
+
+        if not tomb and em and "@" in em:
+            for ar in await db.users.find(
+                {"email": em, "is_dead": {"$ne": True}, "id": {"$ne": dead_id}},
+                proj,
+            ).to_list(5):
+                aid = ar.get("id")
+                if aid and aid not in seen:
+                    seen.add(aid)
+                    linked.append(
+                        {
+                            **ar,
+                            "link_reason": "same_email_alive_account",
+                        }
+                    )
+
+        rip = (dead_user.get("registration_ip") or "").strip()
+        if rip and dead_at_s:
+            for c in await db.users.find(
+                {
+                    "registration_ip": rip,
+                    "is_dead": {"$ne": True},
+                    "id": {"$ne": dead_id},
+                    "created_at": {"$gte": dead_at_s},
+                },
+                proj,
+            ).to_list(20):
+                aid = c.get("id")
+                if aid and aid not in seen:
+                    seen.add(aid)
+                    linked.append(
+                        {
+                            **c,
+                            "link_reason": "registration_ip_match_after_death",
+                        }
+                    )
+        for row in linked:
+            row["original_dead_username"] = ouname
+        return linked
+
+    async def _points_spent_ledger_total(user_id: str, since_iso: Optional[str] = None) -> int:
+        match: Dict[str, Any] = {"user_id": user_id, "points": {"$lt": 0}}
+        if since_iso:
+            match["created_at"] = {"$gte": since_iso}
+        rows = await db.point_ledger_events.aggregate(
+            [
+                {"$match": match},
+                {"$group": {"_id": None, "total": {"$sum": {"$abs": "$points"}}}},
+            ]
+        ).to_list(1)
+        return int(rows[0]["total"]) if rows else 0
+
+    async def _admin_revive_preview_payload(target: Dict[str, Any]) -> Dict[str, Any]:
+        linked = await _alive_accounts_linked_to_dead(target)
+        dead_at_s = str(target.get("dead_at") or "") or None
+        alt_rows = []
+        for alt in linked:
+            ledger_spent = await _points_spent_ledger_total(alt["id"], dead_at_s)
+            lifetime = int(alt.get("lifetime_points_spent") or 0)
+            alt_rows.append(
+                {
+                    "user_id": alt["id"],
+                    "username": alt.get("username"),
+                    "link_reason": alt.get("link_reason"),
+                    "current_points": int(alt.get("points") or 0),
+                    "lifetime_points_spent": lifetime,
+                    "ledger_points_spent_since_death": ledger_spent,
+                    "suggested_refund_spent": ledger_spent if ledger_spent > 0 else lifetime,
+                }
+            )
+        return {
+            "victim": {
+                "id": target["id"],
+                "username": target.get("username"),
+                "is_dead": bool(target.get("is_dead")),
+                "dead_at": target.get("dead_at"),
+                "killed_by_username": target.get("killed_by_username"),
+                "points_at_death": target.get("points_at_death"),
+                "money_at_death": target.get("money_at_death"),
+                "current_points": int(target.get("points") or 0),
+                "current_money": int(target.get("money") or 0),
+            },
+            "linked_alive_accounts": alt_rows,
+            "note": (
+                "Revive restores death balances on the victim. Optional: move remaining points from a linked alt "
+                "and credit points they spent on that alt (ledger spend since victim death, else lifetime_points_spent)."
+            ),
+        }
+
+    async def _admin_revive_execute(
+        target: Dict[str, Any],
+        body: AdminRevivePlayerBody,
+        *,
+        staff_user: Dict[str, Any],
+    ) -> Dict[str, Any]:
         if not target.get("is_dead"):
             raise HTTPException(status_code=400, detail="That account is not dead")
+        victim_id = target["id"]
+        victim_uname = (target.get("username") or "").strip()
+        linked = await _alive_accounts_linked_to_dead(target)
+        will_move_from_alt = (body.transfer_alt_balance or body.refund_alt_points_spent) and len(linked) > 0
+        if will_move_from_alt:
+            conf = (body.confirm_username or "").strip()
+            if not conf or conf.lower() != victim_uname.lower():
+                raise HTTPException(
+                    status_code=400,
+                    detail="confirm_username must match the victim username when recovering points from a linked alt.",
+                )
+
+        pts = int(target.get("points") or 0)
+        money = int(target.get("money") or 0)
+        if body.restore_death_balances:
+            if target.get("points_at_death") is not None:
+                pts = max(pts, int(target.get("points_at_death") or 0))
+            if target.get("money_at_death") is not None:
+                money = max(money, int(target.get("money_at_death") or 0))
+        if money < 1000:
+            money = 1000
+
+        alt_transfers: List[Dict[str, Any]] = []
+        total_refund_spent = 0
+        total_balance_moved = 0
+        dead_at_s = str(target.get("dead_at") or "") or None
+        staff_uid = staff_user.get("id") or ""
+        staff_uname = staff_user.get("username") or "?"
+
+        for alt in linked:
+            alt_id = alt["id"]
+            alt_uname = (alt.get("username") or "").strip() or "?"
+            bal = int(alt.get("points") or 0)
+            moved = 0
+            refunded = 0
+            if body.transfer_alt_balance and bal > 0:
+                moved = bal
+                pts += bal
+                total_balance_moved += bal
+                await db.users.update_one({"id": alt_id}, {"$set": {"points": 0}})
+                await log_points_event(
+                    db,
+                    user_id=alt_id,
+                    points=-bal,
+                    event_type="admin_revive_alt_balance_transfer",
+                    event_ref=victim_id,
+                    meta={
+                        "admin_user_id": staff_uid,
+                        "revived_user_id": victim_id,
+                        "revived_username": victim_uname,
+                        "alt_username": alt_uname,
+                    },
+                )
+            if body.refund_alt_points_spent:
+                ledger_spent = await _points_spent_ledger_total(alt_id, dead_at_s)
+                lifetime = int(alt.get("lifetime_points_spent") or 0)
+                refunded = ledger_spent if ledger_spent > 0 else lifetime
+                if refunded > 0:
+                    pts += refunded
+                    total_refund_spent += refunded
+                    await log_points_event(
+                        db,
+                        user_id=victim_id,
+                        points=refunded,
+                        event_type="admin_revive_alt_spent_refund",
+                        event_ref=alt_id,
+                        meta={
+                            "admin_user_id": staff_uid,
+                            "alt_username": alt_uname,
+                            "link_reason": alt.get("link_reason"),
+                            "ledger_spent": ledger_spent,
+                            "lifetime_points_spent": lifetime,
+                        },
+                    )
+            if body.lock_alt_accounts and alt_id != victim_id:
+                now_iso = datetime.now(timezone.utc).isoformat()
+                await db.users.update_one(
+                    {"id": alt_id},
+                    {
+                        "$set": {
+                            "is_dead": True,
+                            "dead_at": now_iso,
+                            "health": 0,
+                            "money": 0,
+                            "points": 0,
+                            "death_by_staff": True,
+                            "killed_by_username": "Staff (alt closed after fair revive)",
+                        },
+                    },
+                )
+            if moved or refunded:
+                alt_transfers.append(
+                    {
+                        "alt_user_id": alt_id,
+                        "alt_username": alt_uname,
+                        "link_reason": alt.get("link_reason"),
+                        "balance_moved": moved,
+                        "spent_refunded": refunded,
+                        "locked": bool(body.lock_alt_accounts),
+                    }
+                )
+
         current_state = target.get("current_state")
         if not current_state or current_state not in STATES:
             current_state = STATES[0]
-        await db.users.update_one(
-            {"id": target["id"]},
+        revive_result = await db.users.update_one(
+            {"id": victim_id, "is_dead": True},
             {
                 "$set": {
                     "is_dead": False,
                     "dead_at": None,
                     "health": DEFAULT_HEALTH,
-                    "money": 1000,
+                    "money": money,
+                    "points": pts,
                     "current_state": current_state,
                     "in_jail": False,
                 },
@@ -6262,8 +6488,72 @@ def register(router):
                 },
             },
         )
-        await db.attacks.delete_many({"attacker_id": target["id"]})
-        return {"message": f"Revived {target_username}. They can log in again."}
+        if revive_result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Revive failed — account may already be alive or was changed concurrently.")
+        await ensure_user_legacy_seed_lot(db, victim_id, pts)
+        await db.attacks.delete_many({"attacker_id": victim_id})
+
+        parts = [f"Revived {victim_uname}."]
+        if body.restore_death_balances:
+            parts.append(f" Balances: ${money:,} cash, {pts:,} points.")
+        if total_balance_moved:
+            parts.append(f" Moved {total_balance_moved:,} points from linked alt(s).")
+        if total_refund_spent:
+            parts.append(f" Refunded {total_refund_spent:,} points spent on alt(s).")
+        if body.lock_alt_accounts and alt_transfers:
+            parts.append(" Linked alt account(s) closed (staff kill).")
+
+        try:
+            await send_notification(
+                victim_id,
+                "Account revived",
+                (
+                    f"Staff revived your account ({victim_uname}). You can log in again."
+                    + (
+                        f" You received {total_balance_moved + total_refund_spent:,} points from a replacement account recovery."
+                        if (total_balance_moved + total_refund_spent) > 0
+                        else ""
+                    )
+                ),
+                "system",
+                category="system",
+            )
+        except Exception:
+            logging.exception("admin revive notification failed user_id=%s", victim_id)
+
+        return {
+            "message": " ".join(parts),
+            "victim_username": victim_uname,
+            "final_points": pts,
+            "final_money": money,
+            "alt_transfers": alt_transfers,
+            "restore_death_balances": body.restore_death_balances,
+        }
+
+    @router.get("/admin/revive-player/preview")
+    async def admin_revive_player_preview(
+        target_username: str = Query(..., min_length=1),
+        current_user: dict = Depends(require_admin_or_mod),
+    ):
+        """Preview death balances and linked alive alt accounts before a fair revive."""
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        return await _admin_revive_preview_payload(target)
+
+    @router.post("/admin/revive-player")
+    async def admin_revive_player(
+        target_username: str,
+        body: AdminRevivePlayerBody = Body(default_factory=AdminRevivePlayerBody),
+        current_user: dict = Depends(require_admin_or_mod),
+    ):
+        """Revive a dead account; optionally restore death balances and recover points from a same-email / post-death alt."""
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        return await _admin_revive_execute(target, body, staff_user=current_user)
 
     @router.post("/admin/change-email")
     async def admin_change_email(
