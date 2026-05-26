@@ -9882,6 +9882,14 @@ export default function Admin() {
             <ActionRow icon={Gift} label="Who has exclusive loot" description="Cars (car20/car21), Colt Monitor, Steel Vest 1922, Speakeasy">
               <BtnPrimary onClick={handleFetchExclusiveLoot} disabled={exclusiveLootLoading}>{exclusiveLootLoading ? '...' : 'View'}</BtnPrimary>
             </ActionRow>
+            <ActionRow icon={Car} label="Exclusive car manager" description="Remove, transfer, or grant car20 / car21 (dedicated page)">
+              <Link
+                to="/tjjeujr3wa/exclusive-cars"
+                className="inline-block bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 font-heading touch-manipulation"
+              >
+                Open tool
+              </Link>
+            </ActionRow>
             {exclusiveLootOwners && (
               <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-1 max-h-64 overflow-y-auto">
                 <div className="font-bold text-primary mb-1">Exclusive loot owners ({exclusiveLootOwners.length})</div>

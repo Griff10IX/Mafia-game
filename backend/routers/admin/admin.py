@@ -370,10 +370,30 @@ class AdminTransferDeadOwnerPropertyRequest(BaseModel):
     from_username: str
     asset_kind: str  # armoury, airport, dice, roulette, blackjack, horseracing, videopoker, slots
     location: Optional[str] = None  # state for armoury/airport/slots; city for casino tables
+    slot: Optional[int] = None  # airport slot 1–N when multiple in one state
     to_username: Optional[str] = None  # omit = recorded killer (killed_by_user_id)
     dry_run: bool = False
     allow_recipient_already_owns: bool = False  # admin override when killer already has another property/casino
     notify: bool = True
+
+
+class AdminTransferArmouryAirportRequest(BaseModel):
+    """Transfer armoury or airport between any users (living or dead). Admin only."""
+    from_username: str
+    to_username: str
+    asset_kind: str  # armoury | airport
+    location: Optional[str] = None  # state; resolved from owner if omitted
+    slot: Optional[int] = None
+    dry_run: bool = False
+    allow_recipient_already_owns: bool = True
+    notify: bool = True
+
+
+class AdminReleaseArmouryAirportRequest(BaseModel):
+    username: str
+    asset_kind: str  # armoury | airport
+    location: Optional[str] = None
+    slot: Optional[int] = None
 
 
 class DropUserCasinosPropertiesRequest(BaseModel):
@@ -411,6 +431,30 @@ class AdminToolAccessSpaUnauthorizedRequest(BaseModel):
 
 class DeleteFamilyRequest(BaseModel):
     family_id: str
+
+
+class AdminReviveFamilyBody(BaseModel):
+    """Restore a wiped crew (family doc only — revive members separately)."""
+    family_id: Optional[str] = None
+    family_name: Optional[str] = None
+    boss_username: Optional[str] = None
+    treasury: Optional[int] = None
+    treasury_bullets: Optional[int] = None
+    rackets: Optional[Dict[str, Any]] = None
+    clear_wipe_metadata: bool = True
+    resync_member_user_docs: bool = True
+    dry_run: bool = False
+    confirm_family_name: Optional[str] = None
+
+
+class AdminRestoreIllegalBusinessBody(BaseModel):
+    """Restore a player's illegal business from a kill snapshot or pending reward on another account."""
+    target_username: str
+    holder_username: Optional[str] = None
+    business_snapshot: Optional[Dict[str, Any]] = None
+    guards_snapshot: Optional[List[Dict[str, Any]]] = None
+    remove_from_holder_pending: bool = True
+    dry_run: bool = False
 
 
 class AdminSetCasinoMaxBetRequest(BaseModel):
@@ -3628,6 +3672,28 @@ def register(router):
         car = next((c for c in CARS if c["id"] == car_id), None)
         if not car:
             raise HTTPException(status_code=404, detail="Car not found")
+        if car_id == LOOT_EXCLUSIVE_CAR_ID:
+            other = await db.user_cars.find_one(
+                {"car_id": LOOT_EXCLUSIVE_CAR_ID, "user_id": {"$ne": target["id"]}},
+                {"_id": 0, "user_id": 1},
+            )
+            if other:
+                ou = await db.users.find_one({"id": other["user_id"]}, {"_id": 0, "username": 1})
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Loot-exclusive car is already owned by {(ou or {}).get('username') or other.get('user_id')}",
+                )
+        if car_id == GTA_EXCLUSIVE_CAR_ID:
+            other = await db.user_cars.find_one(
+                {"car_id": GTA_EXCLUSIVE_CAR_ID, "user_id": {"$ne": target["id"]}},
+                {"_id": 0, "user_id": 1},
+            )
+            if other:
+                ou = await db.users.find_one({"id": other["user_id"]}, {"_id": 0, "username": 1})
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Al Capone exclusive is already owned by {(ou or {}).get('username') or other.get('user_id')}",
+                )
         now_iso = datetime.now(timezone.utc).isoformat()
         new_uc_id = str(uuid.uuid4())
         await db.user_cars.insert_one(
@@ -3653,7 +3719,11 @@ def register(router):
                 to_username=target.get("username"),
                 car_name=car["name"],
             )
-        return {"message": f"Added {car['name']} to {target_username}'s garage"}
+        if car_id == LOOT_EXCLUSIVE_CAR_ID:
+            await _sync_loot_exclusive_car_claimed_count()
+        if car_id == GTA_EXCLUSIVE_CAR_ID:
+            await _sync_gta_exclusive_pool_after_ownership_change()
+        return {"message": f"Added {car['name']} to {target_username}'s garage", "user_car_id": new_uc_id}
 
     @router.post("/admin/remove-car")
     async def admin_remove_car(target_username: str, car_id: str, current_user: dict = Depends(get_current_user)):
@@ -3680,6 +3750,11 @@ def register(router):
                 car_name=car["name"],
                 extra={"removed_count": removed},
             )
+        if removed > 0:
+            if car_id == LOOT_EXCLUSIVE_CAR_ID:
+                await _sync_loot_exclusive_car_claimed_count()
+            if car_id == GTA_EXCLUSIVE_CAR_ID:
+                await _sync_gta_exclusive_pool_after_ownership_change()
         return {
             "message": f"Removed {removed} {car['name']} from {target.get('username', target_username)}",
             "removed_count": removed,
@@ -3726,9 +3801,34 @@ def register(router):
         return {"message": f"Added {n:,} random car(s) to {target_username}'s garage", "count": n}
 
     GTA_EXCLUSIVE_POOL_CONFIG_ID = "gta_exclusive"
+    GTA_EXCLUSIVE_CAR_ID = "car20"
+    LOOT_EXCLUSIVE_CAR_ID = "car21"
+    GAME_SETTINGS_LOOT_COUNTS_KEY = "loot_exclusive_counts"
     GTA_EXCLUSIVE_DROP_WEIGHT_DEFAULT = 0.000006
     GTA_EXCLUSIVE_DROP_WEIGHT_MIN = 0.0000001
     GTA_EXCLUSIVE_DROP_WEIGHT_MAX = 0.05
+
+    async def _sync_loot_exclusive_car_claimed_count() -> int:
+        """Align loot box global car claim counter with car21 copies in garages."""
+        n = await db.user_cars.count_documents({"car_id": LOOT_EXCLUSIVE_CAR_ID})
+        claimed = 1 if n > 0 else 0
+        await db.game_settings.update_one(
+            {"key": GAME_SETTINGS_LOOT_COUNTS_KEY},
+            {"$set": {"value.car": claimed}},
+            upsert=True,
+        )
+        return claimed
+
+    async def _sync_gta_exclusive_pool_after_ownership_change() -> bool:
+        """Re-open Al Capone GTA pool when no car20 exists; close while one is owned."""
+        n = await db.user_cars.count_documents({"car_id": GTA_EXCLUSIVE_CAR_ID})
+        should_release = n == 0
+        await db.game_config.update_one(
+            {"id": GTA_EXCLUSIVE_POOL_CONFIG_ID},
+            {"$set": {"released": should_release}},
+            upsert=True,
+        )
+        return should_release
 
     @router.get("/admin/gta/exclusive-pool")
     async def admin_gta_exclusive_pool_get(current_user: dict = Depends(get_current_user)):
@@ -3921,6 +4021,77 @@ def register(router):
         )
         return {"cars": cars_out}
 
+    @router.get("/admin/cars/user-exclusive")
+    async def admin_user_exclusive_cars(
+        username: str = Query(..., min_length=1),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """List exclusive / loot-exclusive garage rows for one user (admin manage tool)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        pattern = _username_pattern(username)
+        user = await db.users.find_one(
+            {"username": pattern},
+            {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "killed_by_username": 1, "killed_by_user_id": 1},
+        )
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        ex_ids = [c["id"] for c in (CARS or []) if c.get("rarity") in ("exclusive", "loot_exclusive")]
+        catalog = {c["id"]: c for c in (CARS or []) if c.get("id") in ex_ids}
+        rows = await db.user_cars.find(
+            {"user_id": user["id"], "car_id": {"$in": ex_ids}},
+            {"_id": 0, "id": 1, "car_id": 1, "car_name": 1, "acquired_at": 1, "listed_for_sale": 1, "sale_price": 1},
+        ).to_list(20)
+        cars_out = []
+        for r in rows:
+            cid = r.get("car_id")
+            info = catalog.get(cid) or {}
+            cars_out.append(
+                {
+                    "user_car_id": r.get("id"),
+                    "car_id": cid,
+                    "car_name": r.get("car_name") or info.get("name") or cid,
+                    "rarity": info.get("rarity") or "",
+                    "acquired_at": r.get("acquired_at"),
+                    "listed_for_sale": bool(r.get("listed_for_sale")),
+                    "sale_price": int(r.get("sale_price") or 0),
+                }
+            )
+        cars_out.sort(key=lambda x: (x.get("rarity") or "", x.get("car_name") or ""))
+        global_owners = {}
+        for cid in ex_ids:
+            n = await db.user_cars.count_documents({"car_id": cid})
+            if n:
+                holder = await db.user_cars.find_one({"car_id": cid}, {"_id": 0, "user_id": 1})
+                if holder:
+                    hu = await db.users.find_one({"id": holder["user_id"]}, {"_id": 0, "username": 1})
+                    global_owners[cid] = {
+                        "count": n,
+                        "holder_username": (hu or {}).get("username"),
+                        "holder_user_id": holder.get("user_id"),
+                    }
+            else:
+                global_owners[cid] = {"count": 0, "holder_username": None, "holder_user_id": None}
+        loot_claimed = await db.game_settings.find_one(
+            {"key": GAME_SETTINGS_LOOT_COUNTS_KEY},
+            {"_id": 0, "value.car": 1},
+        )
+        gta_cfg = await db.game_config.find_one(
+            {"id": GTA_EXCLUSIVE_POOL_CONFIG_ID},
+            {"_id": 0, "released": 1},
+        )
+        return {
+            "username": user.get("username"),
+            "user_id": user["id"],
+            "is_dead": bool(user.get("is_dead")),
+            "killed_by_username": user.get("killed_by_username"),
+            "killed_by_user_id": user.get("killed_by_user_id"),
+            "cars": cars_out,
+            "global_owners": global_owners,
+            "loot_exclusive_car_claimed": int(((loot_claimed or {}).get("value") or {}).get("car") or 0),
+            "gta_exclusive_pool_released": bool((gta_cfg or {}).get("released")),
+        }
+
     @router.post("/admin/cars/transfer-exclusive")
     async def admin_transfer_exclusive_car(
         body: AdminTransferExclusiveCarRequest,
@@ -4071,6 +4242,10 @@ def register(router):
             await maybe_revoke_civilian_protection(db, to_user["id"], "exclusive_car")
         except Exception:
             pass
+        if uc.get("car_id") == LOOT_EXCLUSIVE_CAR_ID:
+            await _sync_loot_exclusive_car_claimed_count()
+        if uc.get("car_id") == GTA_EXCLUSIVE_CAR_ID:
+            await _sync_gta_exclusive_pool_after_ownership_change()
 
         msg = f"Transferred {car_info.get('name')} from {from_user.get('username')} to {to_user.get('username')}"
         if body.notify:
@@ -16088,6 +16263,245 @@ def register(router):
         entries.sort(key=lambda x: (x.get("username") or "", x.get("asset_kind") or x.get("game_type") or "", x.get("location") or ""))
         return {"entries": entries}
 
+    async def _admin_transfer_armoury_airport_impl(
+        *,
+        from_user: Dict[str, Any],
+        to_user: Dict[str, Any],
+        asset_kind: str,
+        location: Optional[str],
+        slot: Optional[int],
+        dry_run: bool,
+        allow_recipient_already_owns: bool,
+        notify: bool,
+        to_reason: str = "admin_target",
+    ) -> Dict[str, Any]:
+        from server import CAPO_RANK_ID, _user_owns_any_property, get_rank_info, user_prestige_rank_mult
+
+        kind = (asset_kind or "").strip().lower()
+        if kind not in ("armoury", "airport"):
+            raise HTTPException(status_code=400, detail="asset_kind must be armoury or airport")
+        if to_user["id"] == from_user["id"]:
+            raise HTTPException(status_code=400, detail="From and to user are the same")
+        if to_user.get("is_dead"):
+            raise HTTPException(status_code=400, detail="Recipient is dead")
+
+        coll = db.bullet_factory if kind == "armoury" else db.airport_ownership
+        loc_key = "state"
+        from_uid = from_user["id"]
+        to_uid = to_user["id"]
+        to_un = (to_user.get("username") or "").strip() or "?"
+
+        doc_q: Dict[str, Any] = {"owner_id": from_uid}
+        loc = (location or "").strip()
+        if loc:
+            doc_q[loc_key] = loc
+        if kind == "airport" and slot is not None:
+            doc_q["slot"] = int(slot)
+        doc = await coll.find_one(doc_q, {"_id": 0})
+        if not doc:
+            raise HTTPException(status_code=404, detail="No matching armoury/airport owned by from user")
+        if not loc:
+            loc = str(doc.get(loc_key) or "").strip()
+        if not loc:
+            raise HTTPException(status_code=400, detail="Could not resolve state/location")
+
+        conflict = None
+        owned_prop = await _user_owns_any_property(to_uid)
+        if owned_prop and not allow_recipient_already_owns:
+            conflict = f"Recipient already owns {owned_prop.get('type')} · {owned_prop.get('state')}"
+
+        preview = {
+            "asset_kind": kind,
+            "location": loc,
+            "slot": doc.get("slot") if kind == "airport" else None,
+            "from_username": from_user.get("username"),
+            "to_username": to_un,
+            "to_reason": to_reason,
+            "recipient_conflict": conflict,
+            "dry_run": dry_run,
+        }
+        if conflict:
+            raise HTTPException(
+                status_code=400,
+                detail=f"{conflict}. Set allow_recipient_already_owns=true to force transfer.",
+            )
+        if dry_run:
+            msg = f"Would transfer {kind} ({loc}) from {from_user.get('username')} to {to_un}"
+            return {"message": msg, **preview}
+
+        rank_id, _ = get_rank_info(int(to_user.get("rank_points") or 0), user_prestige_rank_mult(to_user))
+        set_doc: Dict[str, Any] = {"owner_id": to_uid, "owner_username": to_un}
+        if rank_id < CAPO_RANK_ID:
+            set_doc["below_capo_acquired_at"] = datetime.now(timezone.utc)
+        update_op: Dict[str, Any] = {"$set": set_doc}
+        if rank_id >= CAPO_RANK_ID:
+            update_op["$unset"] = {"below_capo_acquired_at": ""}
+
+        match_q: Dict[str, Any] = {loc_key: loc, "owner_id": from_uid}
+        if kind == "airport" and slot is not None:
+            match_q["slot"] = int(slot)
+        elif kind == "airport" and doc.get("slot") is not None:
+            match_q["slot"] = int(doc.get("slot"))
+
+        res = await coll.update_one(match_q, update_op)
+        if not res.modified_count:
+            raise HTTPException(status_code=500, detail="Transfer did not apply")
+        await coll.update_many(
+            {"owner_id": from_uid, loc_key: {"$ne": loc}},
+            {"$set": {"owner_id": None, "owner_username": None}},
+        )
+        if kind == "airport":
+            await coll.update_many(
+                {"owner_id": from_uid, loc_key: loc, "slot": {"$ne": match_q.get("slot")}},
+                {"$set": {"owner_id": None, "owner_username": None}},
+            )
+        try:
+            from routers.admin.airport import _invalidate_airports_list_cache
+
+            _invalidate_airports_list_cache()
+        except Exception:
+            pass
+
+        label = f"{kind} · {loc}"
+        msg = f"Transferred {label} from {from_user.get('username')} to {to_un}"
+        if notify:
+            try:
+                await send_notification(
+                    to_uid,
+                    "Property transferred",
+                    f"You received {label} (staff transfer from {from_user.get('username')}).",
+                    "reward",
+                    category="system",
+                )
+            except Exception:
+                pass
+        return {"message": msg, **preview}
+
+    @router.get("/admin/properties/armoury-airport")
+    async def admin_properties_armoury_airport_get(
+        username: str = Query(..., min_length=1),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """List armoury and airport slots owned by a user. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        pattern = _username_pattern(username)
+        user = await db.users.find_one(
+            {"username": pattern},
+            {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "killed_by_username": 1, "killed_by_user_id": 1},
+        )
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = user["id"]
+        armoury = await db.bullet_factory.find_one({"owner_id": uid}, {"_id": 0})
+        airports = await db.airport_ownership.find({"owner_id": uid}, {"_id": 0}).to_list(20)
+        return {
+            "username": user.get("username"),
+            "user_id": uid,
+            "is_dead": bool(user.get("is_dead")),
+            "killed_by_username": user.get("killed_by_username"),
+            "armoury": armoury,
+            "airports": airports,
+            "notes": [
+                "Each account may only hold one armoury and one airport (any state) for normal claim rules.",
+                "Use transfer with allow_recipient_already_owns to move from a cheater who already has one.",
+            ],
+        }
+
+    @router.post("/admin/properties/transfer-armoury-airport")
+    async def admin_properties_transfer_armoury_airport(
+        body: AdminTransferArmouryAirportRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Transfer armoury or airport from any user to another. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        to_un = (body.to_username or "").strip()
+        if not to_un:
+            raise HTTPException(status_code=400, detail="to_username required")
+        from_pattern = _username_pattern((body.from_username or "").strip())
+        from_user = await db.users.find_one(
+            {"username": from_pattern},
+            {"_id": 0, "id": 1, "username": 1, "is_dead": 1},
+        )
+        if not from_user:
+            raise HTTPException(status_code=404, detail="From user not found")
+        to_pattern = _username_pattern(to_un)
+        to_user = await db.users.find_one(
+            {"username": to_pattern},
+            {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "rank_points": 1, "prestige_level": 1},
+        )
+        if not to_user:
+            raise HTTPException(status_code=404, detail="To user not found")
+        result = await _admin_transfer_armoury_airport_impl(
+            from_user=from_user,
+            to_user=to_user,
+            asset_kind=body.asset_kind,
+            location=body.location,
+            slot=body.slot,
+            dry_run=body.dry_run,
+            allow_recipient_already_owns=body.allow_recipient_already_owns,
+            notify=body.notify,
+        )
+        if not body.dry_run:
+            try:
+                await srv.log_activity(
+                    current_user.get("id"),
+                    current_user.get("username") or "?",
+                    "admin_transfer_armoury_airport",
+                    {
+                        "from": from_user.get("username"),
+                        "to": to_user.get("username"),
+                        "asset_kind": body.asset_kind,
+                        "location": result.get("location"),
+                    },
+                )
+            except Exception:
+                pass
+        return result
+
+    @router.post("/admin/properties/release-armoury-airport")
+    async def admin_properties_release_armoury_airport(
+        body: AdminReleaseArmouryAirportRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Remove armoury or airport ownership (set unowned). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        pattern = _username_pattern((body.username or "").strip())
+        user = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        kind = (body.asset_kind or "").strip().lower()
+        if kind not in ("armoury", "airport"):
+            raise HTTPException(status_code=400, detail="asset_kind must be armoury or airport")
+        coll = db.bullet_factory if kind == "armoury" else db.airport_ownership
+        uid = user["id"]
+        loc = (body.location or "").strip()
+        q: Dict[str, Any] = {"owner_id": uid}
+        if loc:
+            q["state"] = loc
+        if kind == "airport" and body.slot is not None:
+            q["slot"] = int(body.slot)
+        if loc or body.slot is not None:
+            res = await coll.update_one(q, {"$set": {"owner_id": None, "owner_username": None}})
+            modified = int(res.modified_count or 0)
+        else:
+            res = await coll.update_many(q, {"$set": {"owner_id": None, "owner_username": None}})
+            modified = int(res.modified_count or 0)
+        if modified == 0:
+            raise HTTPException(status_code=404, detail="No matching ownership to release")
+        try:
+            from routers.admin.airport import _invalidate_airports_list_cache
+
+            _invalidate_airports_list_cache()
+        except Exception:
+            pass
+        return {
+            "message": f"Released {kind} from {user.get('username')} ({modified} row(s))",
+            "modified": modified,
+        }
+
     @router.post("/admin/transfer-dead-owner-property")
     async def admin_transfer_dead_owner_property(
         body: AdminTransferDeadOwnerPropertyRequest,
@@ -16142,6 +16556,19 @@ def register(router):
         raise_if_dead_casino_transfer_target(to_user)
         if to_user["id"] == from_user["id"]:
             raise HTTPException(status_code=400, detail="From and to user are the same")
+
+        if asset_kind in ("armoury", "airport"):
+            return await _admin_transfer_armoury_airport_impl(
+                from_user=from_user,
+                to_user=to_user,
+                asset_kind=asset_kind,
+                location=body.location,
+                slot=body.slot,
+                dry_run=body.dry_run,
+                allow_recipient_already_owns=body.allow_recipient_already_owns,
+                notify=body.notify,
+                to_reason=to_reason or "admin_target",
+            )
 
         location = (body.location or "").strip()
         from_uid = from_user["id"]
@@ -16623,6 +17050,416 @@ def register(router):
         deleted["family_war_stats"] = (await db.family_war_stats.delete_many({"user_id": resolved_id})).deleted_count
         total = sum(deleted.values())
         return {"message": f"Deleted user '{username}' and {total} related documents", "details": deleted}
+
+    async def _resolve_family_admin_key(
+        family_id: Optional[str] = None,
+        family_name: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        fid = (family_id or "").strip()
+        fname = (family_name or "").strip()
+        if fid:
+            fam = await db.families.find_one({"id": fid}, {"_id": 0})
+            if fam:
+                return fam
+            raise HTTPException(status_code=404, detail="Family not found")
+        if fname:
+            pattern = _username_pattern(fname)
+            fam = await db.families.find_one(
+                {"$or": [{"name": pattern}, {"tag": pattern}, {"name": fname}, {"tag": fname}]},
+                {"_id": 0},
+            )
+            if fam:
+                return fam
+            raise HTTPException(status_code=404, detail="Family not found")
+        raise HTTPException(status_code=400, detail="family_id or family_name required")
+
+    @router.get("/admin/families/revive-preview")
+    async def admin_families_revive_preview(
+        family_id: Optional[str] = Query(None),
+        family_name: Optional[str] = Query(None),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Preview wiped crew state and living members (for fair revive after cheater wipe). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        fam = await _resolve_family_admin_key(family_id, family_name)
+        fid = fam["id"]
+        members_raw = await db.family_members.find({"family_id": fid}, {"_id": 0, "user_id": 1, "role": 1}).to_list(200)
+        uids = [m["user_id"] for m in members_raw if m.get("user_id")]
+        users = await db.users.find(
+            {"id": {"$in": uids}},
+            {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "family_id": 1, "family_role": 1},
+        ).to_list(200)
+        users_by_id = {u["id"]: u for u in users}
+        living = []
+        fallen = []
+        boss_candidates = []
+        for m in members_raw:
+            uid = m.get("user_id")
+            u = users_by_id.get(uid) or {}
+            role = str(m.get("role") or "").strip().lower() or "associate"
+            row = {"user_id": uid, "username": u.get("username") or "?", "role": role, "is_dead": bool(u.get("is_dead"))}
+            if u.get("is_dead"):
+                fallen.append(row)
+            else:
+                living.append(row)
+                if role in ("boss", "don"):
+                    boss_candidates.insert(0, row)
+        last_war = await db.family_wars.find_one(
+            {
+                "$or": [{"family_a_id": fid}, {"family_b_id": fid}],
+                "status": {"$in": ["family_a_wins", "family_b_wins"]},
+            },
+            {
+                "_id": 0,
+                "ended_at": 1,
+                "winner_family_name": 1,
+                "loser_family_name": 1,
+                "prize_treasury": 1,
+                "prize_racket_cash": 1,
+                "prize_compound_cash": 1,
+                "wiped_by_killer_username": 1,
+            },
+            sort=[("ended_at", -1)],
+        )
+        return {
+            "family_id": fid,
+            "name": fam.get("name"),
+            "tag": fam.get("tag"),
+            "wiped": bool(fam.get("wiped")),
+            "wiped_at": fam.get("wiped_at"),
+            "wiped_by_family_name": fam.get("wiped_by_family_name"),
+            "wiped_by_killer_username": fam.get("wiped_by_killer_username"),
+            "boss_id": fam.get("boss_id"),
+            "treasury": int(fam.get("treasury") or 0),
+            "treasury_bullets": int(fam.get("treasury_bullets") or 0),
+            "rackets": fam.get("rackets") or {},
+            "living_members": living,
+            "fallen_members": fallen,
+            "suggested_boss_usernames": [c["username"] for c in boss_candidates[:5]]
+            or [x["username"] for x in living[:5]],
+            "last_ended_war": last_war,
+            "notes": [
+                "Revive clears wiped flag and sets boss_id; it does not auto-revive dead players.",
+                "Treasury/rackets are optional — wipe zeroed them; use war prizes or your records if restoring balances.",
+                "Rackets JSON example: {\"gambling\": {\"level\": 10, \"last_collected_at\": \"2026-05-20T12:00:00+00:00\"}}",
+            ],
+        }
+
+    @router.post("/admin/families/revive")
+    async def admin_families_revive(
+        body: AdminReviveFamilyBody,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Un-wipe a crew and optionally restore vault/rackets/boss. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        fam = await _resolve_family_admin_key(body.family_id, body.family_name)
+        fid = fam["id"]
+        fam_name = (fam.get("name") or fam.get("tag") or fid).strip()
+        if body.confirm_family_name and body.confirm_family_name.strip().lower() != fam_name.lower():
+            raise HTTPException(status_code=400, detail="confirm_family_name does not match family name")
+
+        boss_user = None
+        if (body.boss_username or "").strip():
+            bp = _username_pattern(body.boss_username.strip())
+            boss_user = await db.users.find_one({"username": bp}, {"_id": 0, "id": 1, "username": 1, "is_dead": 1})
+            if not boss_user:
+                raise HTTPException(status_code=404, detail="Boss user not found")
+            if boss_user.get("is_dead"):
+                raise HTTPException(status_code=400, detail="Boss user is dead — pick a living Don")
+            mem = await db.family_members.find_one({"family_id": fid, "user_id": boss_user["id"]}, {"_id": 1})
+            if not mem:
+                raise HTTPException(status_code=400, detail="That user is not on this family's roster")
+        else:
+            members_raw = await db.family_members.find({"family_id": fid}, {"_id": 0, "user_id": 1, "role": 1}).to_list(200)
+            for role_pref in ("boss", "don", "underboss", "consigliere", "caporegime"):
+                for m in members_raw:
+                    if str(m.get("role") or "").strip().lower() != role_pref:
+                        continue
+                    u = await db.users.find_one(
+                        {"id": m["user_id"], "is_dead": {"$ne": True}},
+                        {"_id": 0, "id": 1, "username": 1},
+                    )
+                    if u:
+                        boss_user = u
+                        break
+                if boss_user:
+                    break
+            if not boss_user:
+                for m in members_raw:
+                    u = await db.users.find_one(
+                        {"id": m["user_id"], "is_dead": {"$ne": True}},
+                        {"_id": 0, "id": 1, "username": 1},
+                    )
+                    if u:
+                        boss_user = u
+                        break
+        if not boss_user:
+            raise HTTPException(status_code=400, detail="No living member to set as boss — specify boss_username")
+
+        set_doc: Dict[str, Any] = {
+            "wiped": False,
+            "boss_id": boss_user["id"],
+        }
+        unset_doc: Dict[str, str] = {}
+        if body.clear_wipe_metadata:
+            unset_doc.update(
+                {
+                    "wiped_at": "",
+                    "wiped_by_family_id": "",
+                    "wiped_by_family_name": "",
+                    "wiped_by_killer_id": "",
+                    "wiped_by_killer_username": "",
+                }
+            )
+        if body.treasury is not None:
+            set_doc["treasury"] = max(0, int(body.treasury))
+        if body.treasury_bullets is not None:
+            set_doc["treasury_bullets"] = max(0, int(body.treasury_bullets))
+        if body.rackets is not None:
+            if not isinstance(body.rackets, dict):
+                raise HTTPException(status_code=400, detail="rackets must be a JSON object")
+            set_doc["rackets"] = body.rackets
+
+        preview = {
+            "family_id": fid,
+            "family_name": fam_name,
+            "boss_username": boss_user.get("username"),
+            "was_wiped": bool(fam.get("wiped")),
+            "set": {k: v for k, v in set_doc.items() if k != "rackets"},
+            "rackets_keys": list((body.rackets or {}).keys()) if body.rackets is not None else None,
+            "unset": list(unset_doc.keys()),
+            "dry_run": body.dry_run,
+        }
+        if body.dry_run:
+            return {"message": f"Would revive crew {fam_name} with Don {boss_user.get('username')}", **preview}
+
+        update: Dict[str, Any] = {"$set": set_doc}
+        if unset_doc:
+            update["$unset"] = unset_doc
+        await db.families.update_one({"id": fid}, update)
+
+        members_synced = 0
+        if body.resync_member_user_docs:
+            members_raw = await db.family_members.find({"family_id": fid}, {"_id": 0, "user_id": 1, "role": 1}).to_list(200)
+            for m in members_raw:
+                uid = m.get("user_id")
+                if not uid:
+                    continue
+                u = await db.users.find_one({"id": uid}, {"_id": 0, "is_dead": 1, "family_id": 1})
+                if not u or u.get("is_dead"):
+                    continue
+                role = str(m.get("role") or "").strip().lower() or "associate"
+                r = await db.users.update_one(
+                    {"id": uid},
+                    {"$set": {"family_id": fid, "family_role": role}},
+                )
+                if r.modified_count:
+                    members_synced += 1
+
+        try:
+            from routers.game.families import _invalidate_list_cache
+
+            _invalidate_list_cache()
+        except Exception:
+            pass
+
+        try:
+            await srv.log_activity(
+                current_user.get("id"),
+                current_user.get("username") or "?",
+                "admin_family_revive",
+                {"family_id": fid, "family_name": fam_name, "boss_username": boss_user.get("username")},
+            )
+        except Exception:
+            pass
+
+        return {
+            "message": f"Revived crew {fam_name}; Don set to {boss_user.get('username')}",
+            "members_synced": members_synced,
+            **preview,
+            "dry_run": False,
+        }
+
+    @router.get("/admin/illegal-business/recovery")
+    async def admin_illegal_business_recovery(
+        username: str = Query(..., min_length=1),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Current illegal business + kill snapshots still held on other accounts. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        pattern = _username_pattern(username)
+        user = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = user["id"]
+        biz = await db.illegal_businesses.find_one({"user_id": uid}, {"_id": 0})
+        guards = []
+        if biz:
+            guards = await db.illegal_business_guards.find(
+                {"business_id": biz["id"]}, {"_id": 0}
+            ).sort("slot_number", 1).to_list(50)
+
+        pending_holders = []
+        cursor = db.users.find(
+            {"pending_illegal_business_rewards.victim_id": uid},
+            {"_id": 0, "id": 1, "username": 1, "pending_illegal_business_rewards": 1},
+        )
+        async for holder in cursor:
+            for p in holder.get("pending_illegal_business_rewards") or []:
+                if p.get("victim_id") != uid:
+                    continue
+                snap = p.get("business_snapshot") or {}
+                pending_holders.append(
+                    {
+                        "holder_username": holder.get("username"),
+                        "holder_user_id": holder.get("id"),
+                        "at": p.get("at"),
+                        "total_spent": int(p.get("total_spent") or 0),
+                        "moderately_upgraded": bool(p.get("moderately_upgraded")),
+                        "has_snapshot": bool(snap),
+                        "snapshot_summary": {
+                            "name": snap.get("name"),
+                            "type_id": snap.get("type_id"),
+                            "level": snap.get("level"),
+                            "income_per_hour": snap.get("income_per_hour"),
+                            "vault": snap.get("vault"),
+                            "security_level": snap.get("security_level"),
+                            "guard_slots": snap.get("guard_slots"),
+                        }
+                        if snap
+                        else None,
+                        "guards_count": len(p.get("guards_snapshot") or []),
+                    }
+                )
+
+        return {
+            "username": user.get("username"),
+            "user_id": uid,
+            "has_business": bool(biz),
+            "business": biz,
+            "guards": guards,
+            "pending_on_other_accounts": pending_holders,
+            "notes": [
+                "If a cheater killed this player, the full business may be in pending_illegal_business_rewards on the killer's account.",
+                "Restore copies the snapshot back onto the victim without giving the killer a second claim.",
+            ],
+        }
+
+    @router.post("/admin/illegal-business/restore")
+    async def admin_illegal_business_restore(
+        body: AdminRestoreIllegalBusinessBody,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Restore illegal business from admin-provided snapshot or from another user's pending kill reward."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        pattern = _username_pattern(body.target_username.strip())
+        target = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1, "username": 1, "is_dead": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="Target user not found")
+        if target.get("is_dead"):
+            raise HTTPException(status_code=400, detail="Target is dead — revive the player first")
+        target_id = target["id"]
+
+        snap = dict(body.business_snapshot) if body.business_snapshot else None
+        guards_snap = list(body.guards_snapshot or []) if body.guards_snapshot else []
+
+        if not snap and (body.holder_username or "").strip():
+            hp = _username_pattern(body.holder_username.strip())
+            holder = await db.users.find_one(
+                {"username": hp},
+                {"_id": 0, "id": 1, "username": 1, "pending_illegal_business_rewards": 1},
+            )
+            if not holder:
+                raise HTTPException(status_code=404, detail="Holder user not found")
+            entry = next(
+                (
+                    p
+                    for p in (holder.get("pending_illegal_business_rewards") or [])
+                    if p.get("victim_id") == target_id
+                ),
+                None,
+            )
+            if not entry:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"No pending illegal business reward for {target.get('username')} on {holder.get('username')}",
+                )
+            snap = dict(entry.get("business_snapshot") or {})
+            if not snap:
+                raise HTTPException(status_code=400, detail="Pending entry has no business_snapshot (too old to restore)")
+            guards_snap = list(entry.get("guards_snapshot") or [])
+            holder_id = holder["id"]
+        else:
+            holder_id = None
+
+        if not snap:
+            raise HTTPException(
+                status_code=400,
+                detail="Provide business_snapshot JSON or holder_username with a pending snapshot",
+            )
+
+        preview = {
+            "target_username": target.get("username"),
+            "holder_username": body.holder_username,
+            "business_name": snap.get("name"),
+            "type_id": snap.get("type_id"),
+            "level": snap.get("level"),
+            "income_per_hour": snap.get("income_per_hour"),
+            "vault": snap.get("vault"),
+            "guards_count": len(guards_snap),
+            "dry_run": body.dry_run,
+        }
+        if body.dry_run:
+            return {"message": f"Would restore illegal business for {target.get('username')}", **preview}
+
+        existing = await db.illegal_businesses.find_one({"user_id": target_id}, {"_id": 0, "id": 1})
+        if existing:
+            await db.illegal_business_guards.delete_many({"business_id": existing["id"]})
+            await db.illegal_businesses.delete_one({"id": existing["id"]})
+
+        new_biz_id = str(uuid.uuid4())
+        biz_doc = dict(snap)
+        biz_doc.pop("_id", None)
+        biz_doc["id"] = new_biz_id
+        biz_doc["user_id"] = target_id
+        await db.illegal_businesses.insert_one(biz_doc)
+        for g in guards_snap:
+            gd = {k: v for k, v in dict(g).items() if k != "_id"}
+            gd["id"] = str(uuid.uuid4())
+            gd["business_id"] = new_biz_id
+            gd["user_id"] = target_id
+            await db.illegal_business_guards.insert_one(gd)
+
+        if body.remove_from_holder_pending and holder_id:
+            await db.users.update_one(
+                {"id": holder_id},
+                {"$pull": {"pending_illegal_business_rewards": {"victim_id": target_id}}},
+            )
+
+        try:
+            await srv.log_activity(
+                current_user.get("id"),
+                current_user.get("username") or "?",
+                "admin_illegal_business_restore",
+                {
+                    "target_username": target.get("username"),
+                    "holder_username": body.holder_username,
+                    "business_id": new_biz_id,
+                },
+            )
+        except Exception:
+            pass
+
+        return {
+            "message": f"Restored illegal business for {target.get('username')}",
+            "business_id": new_biz_id,
+            **preview,
+            "dry_run": False,
+        }
 
     @router.get("/admin/families-list")
     async def admin_families_list(current_user: dict = Depends(get_current_user)):

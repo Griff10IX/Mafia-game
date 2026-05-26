@@ -14,6 +14,9 @@ import Admin from './Admin';
 import AdminUsersOnline from './AdminUsersOnline';
 import AdminAttackLogs from './AdminAttackLogs';
 import AdminIpHistory from './AdminIpHistory';
+import AdminExclusiveCars from './AdminExclusiveCars';
+import AdminCrewRecovery from './AdminCrewRecovery';
+import AdminPropertyTransfer from './AdminPropertyTransfer';
 import AdminWitnessStatements from './AdminWitnessStatements';
 import AdminLocked from './AdminLocked';
 import {
@@ -28,7 +31,16 @@ function routeFor(groupId) {
 }
 
 /** Sections that render dedicated tools instead of the monolithic Admin page. */
-const STANDALONE_ADMIN_SECTIONS = new Set(['users-online', 'attack-logs', 'ip-history', 'witness-statements', 'locked']);
+const STANDALONE_ADMIN_SECTIONS = new Set([
+  'users-online',
+  'attack-logs',
+  'ip-history',
+  'exclusive-cars',
+  'crew-recovery',
+  'property-transfer',
+  'witness-statements',
+  'locked',
+]);
 
 /** Relative time from ISO last_seen_at (re-renders periodically while the panel is open). */
 function formatSeenAgo(iso, refreshKey = 0) {
@@ -967,6 +979,9 @@ export default function AdminShell() {
       {hubSection === 'users-online' && <AdminUsersOnline />}
       {hubSection === 'attack-logs' && <AdminAttackLogs />}
       {hubSection === 'ip-history' && <AdminIpHistory />}
+      {hubSection === 'exclusive-cars' && <AdminExclusiveCars />}
+      {hubSection === 'crew-recovery' && <AdminCrewRecovery />}
+      {hubSection === 'property-transfer' && <AdminPropertyTransfer />}
       {hubSection === 'witness-statements' && <AdminWitnessStatements />}
       {hubSection === 'locked' && <AdminLocked />}
       {!STANDALONE_ADMIN_SECTIONS.has(hubSection) && <Admin />}

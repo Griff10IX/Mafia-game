@@ -1307,6 +1307,9 @@ export default function Layout({ children }) {
     { path: '/tjjeujr3wa/witness-statements', icon: FileText, label: 'Witness statements' },
     { path: '/tjjeujr3wa/attack-logs', icon: Crosshair, label: 'Attack logs' },
     { path: '/tjjeujr3wa/ip-history', icon: Globe, label: 'IP history' },
+    { path: '/tjjeujr3wa/exclusive-cars', icon: Car, label: 'Exclusive cars' },
+    { path: '/tjjeujr3wa/crew-recovery', icon: Building2, label: 'Crew recovery' },
+    { path: '/tjjeujr3wa/property-transfer', icon: Landmark, label: 'Armoury / airport' },
   ] : [];
   const moderatorNavItems = isModerator && !isAdmin && staffToolsNavVisible ? [
     { path: '/tjjeujr3wa/overview', icon: Shield, label: 'Moderator tools' },

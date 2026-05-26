@@ -1,4 +1,4 @@
-import { Activity, BarChart3, Crosshair, FileText, Globe, History, Layers, Lock, LockKeyhole, Radio, Shield, UserCog, Users, Wrench, Coins, Zap } from 'lucide-react';
+import { Activity, BarChart3, Building2, Car, Crosshair, FileText, Globe, History, Landmark, Layers, Lock, LockKeyhole, Radio, Shield, UserCog, Users, Wrench, Coins, Zap } from 'lucide-react';
 
 export const ADMIN_CATEGORIES = [
   { id: 'admin-operations', label: 'Operations', icon: UserCog },
@@ -66,6 +66,9 @@ export const ADMIN_ROUTE_GROUPS = [
   { id: 'users-online', label: 'Live online', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: Radio, description: 'Who is online now (IPs, last page, same-IP hints).' },
   { id: 'attack-logs', label: 'Attack logs', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: Crosshair, description: 'PVP attack log console and analytics.' },
   { id: 'ip-history', label: 'IP history', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: History, description: 'Per-player IP timeline and reverse IP account lookup.' },
+  { id: 'exclusive-cars', label: 'Exclusive cars', categoryId: 'admin-world-systems', anchorId: 'admin-gameworld', icon: Car, description: 'Remove, transfer, or grant Al Capone / loot-exclusive cars.' },
+  { id: 'crew-recovery', label: 'Crew recovery', categoryId: 'admin-operations', anchorId: 'admin-moderation', icon: Building2, description: 'Revive wiped families and restore illegal businesses after cheater abuse.' },
+  { id: 'property-transfer', label: 'Armoury / airport', categoryId: 'admin-world-systems', anchorId: 'admin-gameworld', icon: Landmark, description: 'Transfer or release armoury and airport ownership between players.' },
   { id: 'witness-statements', label: 'Witness', categoryId: 'admin-operations', anchorId: 'admin-moderation', icon: FileText, description: 'Witness statements review.' },
   { id: 'locked', label: 'Page locks', categoryId: 'admin-world-systems', anchorId: 'admin-page-locks', icon: LockKeyhole, description: 'Route / page locks (Lock page under World & Systems).' },
 ];
@@ -91,6 +94,9 @@ export const ADMIN_ROUTE_GROUP_MOBILE_SHORT = {
   'users-online': 'Live',
   'attack-logs': 'Attacks',
   'ip-history': 'IPs',
+  'exclusive-cars': 'Cars',
+  'crew-recovery': 'Crew',
+  'property-transfer': 'Props',
   'witness-statements': 'Witness',
   locked: 'Locks',
 };
