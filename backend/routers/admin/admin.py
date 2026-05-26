@@ -11698,10 +11698,12 @@ def register(router):
                             }
                         },
                         "block_count": {"$sum": 1},
+                        "first_at": {"$min": "$created_at"},
                         "last_at": {"$max": "$created_at"},
                         "attackers": {"$addToSet": "$attacker_username"},
                         "protectee_username": {"$first": "$protected_username"},
                         "sample_target": {"$first": "$target_username"},
+                        "sample_slots": {"$addToSet": "$bodyguard_slot"},
                     }
                 },
                 {"$sort": {"block_count": -1}},
@@ -11712,17 +11714,163 @@ def register(router):
             for r in rows:
                 gid = (r.get("_id") or {}).get("guard") or "?"
                 attackers = [a for a in (r.get("attackers") or []) if a]
+                slots_raw = [s for s in (r.get("sample_slots") or []) if s is not None]
                 out.append(
                     {
                         "guard_username": gid,
                         "block_count": int(r.get("block_count") or 0),
+                        "first_at": _audit_iso(r.get("first_at")),
                         "last_at": _audit_iso(r.get("last_at")),
                         "distinct_attackers": len(attackers),
                         "top_attackers": attackers[:10],
                         "protectee_username": r.get("protectee_username") or r.get("sample_target") or user.get("username"),
+                        "slots": slots_raw[:8],
                     }
                 )
             return out
+
+        def _guard_group_id_field() -> Dict[str, Any]:
+            return {
+                "guard": {
+                    "$ifNull": [
+                        "$blocking_bodyguard_username",
+                        {"$ifNull": ["$first_bodyguard.search_username", "$first_bodyguard.display_name"]},
+                    ]
+                }
+            }
+
+        async def _protectee_guard_rotation() -> Dict[str, Any]:
+            """Chronological distinct guards that blocked for this protectee (mid-fight hire detection)."""
+            match = {**base_match, "target_id": uid}
+            since_iso = since_dt.isoformat()
+            pipeline = [
+                {"$match": match},
+                {
+                    "$group": {
+                        "_id": _guard_group_id_field(),
+                        "block_count": {"$sum": 1},
+                        "first_at": {"$min": "$created_at"},
+                        "last_at": {"$max": "$created_at"},
+                        "attackers": {"$addToSet": "$attacker_username"},
+                        "sample_slots": {"$addToSet": "$bodyguard_slot"},
+                    }
+                },
+                {"$sort": {"first_at": 1}},
+                {"$limit": int(limit)},
+            ]
+            guard_rows = await db.attack_attempts.aggregate(pipeline).to_list(int(limit))
+            timeline: List[Dict[str, Any]] = []
+            for r in guard_rows:
+                gid = (r.get("_id") or {}).get("guard") or "?"
+                if not gid or gid == "?":
+                    continue
+                attackers = [a for a in (r.get("attackers") or []) if a]
+                timeline.append(
+                    {
+                        "guard_username": gid,
+                        "block_count": int(r.get("block_count") or 0),
+                        "first_at": _audit_iso(r.get("first_at")),
+                        "last_at": _audit_iso(r.get("last_at")),
+                        "distinct_attackers": len(attackers),
+                        "top_attackers": attackers[:8],
+                        "slots": [s for s in (r.get("sample_slots") or []) if s is not None][:8],
+                    }
+                )
+
+            hire_time_or = {"$or": [{"at": {"$gte": since_dt}}, {"at": {"$gte": since_iso}}]}
+            hires_raw = (
+                await db.hitlist_bodyguard_events.find(
+                    {
+                        "owner_id": uid,
+                        "type": "bodyguard_hired",
+                        **hire_time_or,
+                    },
+                    {
+                        "_id": 0,
+                        "at": 1,
+                        "slot": 1,
+                        "is_robot": 1,
+                        "hire_cost": 1,
+                        "bodyguard_username": 1,
+                        "guard_user_id": 1,
+                    },
+                )
+                .sort("at", 1)
+                .limit(50)
+                .to_list(50)
+            )
+            hires: List[Dict[str, Any]] = []
+            for h in hires_raw:
+                hires.append(
+                    {
+                        "at": _audit_iso(h.get("at")),
+                        "slot": h.get("slot"),
+                        "is_robot": bool(h.get("is_robot")),
+                        "hire_cost": int(h.get("hire_cost") or 0),
+                        "guard_username": h.get("bodyguard_username"),
+                        "guard_user_id": h.get("guard_user_id"),
+                    }
+                )
+
+            guard_kills = (
+                await db.hitlist_bodyguard_events.find(
+                    {
+                        "owner_id": uid,
+                        "type": "bodyguard_killed",
+                        **hire_time_or,
+                    },
+                    {"_id": 0, "at": 1, "guard_username": 1, "killer_username": 1, "hire_cost": 1},
+                )
+                .sort("at", 1)
+                .limit(50)
+                .to_list(50)
+            )
+            kills_out = [
+                {
+                    "at": _audit_iso(k.get("at")),
+                    "guard_username": k.get("guard_username"),
+                    "killer_username": k.get("killer_username"),
+                    "hire_cost": int(k.get("hire_cost") or 0),
+                }
+                for k in guard_kills
+            ]
+
+            rotation_alert = None
+            if len(timeline) >= 2:
+                def _parse_iso(s: str) -> Optional[datetime]:
+                    if not s:
+                        return None
+                    try:
+                        return datetime.fromisoformat(s.replace("Z", "+00:00"))
+                    except (TypeError, ValueError):
+                        return None
+
+                first_times = [_parse_iso(g.get("first_at")) for g in timeline]
+                first_times = [t for t in first_times if t]
+                if len(first_times) >= 2:
+                    span_min = (max(first_times) - min(first_times)).total_seconds() / 60.0
+                    names = [g["guard_username"] for g in timeline[:12]]
+                    t0, t1 = min(first_times), max(first_times)
+                    rotation_alert = {
+                        "distinct_guards": len(timeline),
+                        "first_guard_at": _audit_iso(t0),
+                        "last_new_guard_at": _audit_iso(t1),
+                        "span_minutes": round(span_min, 1),
+                        "guard_names": names,
+                        "likely_mid_fight_hires": span_min <= 180 and len(timeline) >= 2,
+                        "detail": (
+                            f"{len(timeline)} different bodyguards blocked for {user.get('username')} "
+                            f"between {_audit_iso(t0)} and {_audit_iso(t1)} "
+                            f"({round(span_min, 1)} min). Compare hires below — often bought while under attack."
+                        ),
+                    }
+
+            return {
+                "guard_timeline": timeline,
+                "hires": hires,
+                "guard_kills": kills_out,
+                "rotation_alert": rotation_alert,
+            }
 
         async def _attacker_buckets() -> List[Dict[str, Any]]:
             match = {**base_match, "attacker_id": uid}
@@ -11867,6 +12015,7 @@ def register(router):
         if pers in ("protectee", "both"):
             result["protectee"] = await _protectee_buckets()
             result["protectee_summary"] = await _protectee_encounter_summary()
+            result["protectee_guard_rotation"] = await _protectee_guard_rotation()
         if pers in ("attacker", "both"):
             result["attacker"] = await _attacker_buckets()
             result["attacker_summary"] = await _attacker_encounter_summary()

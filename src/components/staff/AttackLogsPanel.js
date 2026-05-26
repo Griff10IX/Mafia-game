@@ -17,6 +17,47 @@ import {
   groupAttackLogsByEncounter,
 } from '../../utils/attackLogDisplay';
 
+function buildGuardRotationSteps(rotation) {
+  if (!rotation) return [];
+  const steps = [];
+  for (const h of rotation.hires || []) {
+    steps.push({
+      kind: 'hire',
+      at: h.at,
+      guard: h.guard_username || '—',
+      meta: [
+        h.is_robot ? 'robot' : 'human',
+        h.slot != null ? `slot ${formatSlotDisplay(h.slot) || h.slot}` : '',
+        h.hire_cost ? `${Number(h.hire_cost).toLocaleString()} pts` : '',
+      ]
+        .filter(Boolean)
+        .join(' · '),
+    });
+  }
+  for (const g of rotation.guard_timeline || []) {
+    steps.push({
+      kind: 'blocks',
+      at: g.first_at,
+      guard: g.guard_username,
+      meta: `${g.block_count} blocks · ${formatAttackLogTime(g.first_at)} → ${formatAttackLogTime(g.last_at)} · attackers: ${(g.top_attackers || []).slice(0, 3).join(', ') || '—'}`,
+    });
+  }
+  for (const k of rotation.guard_kills || []) {
+    steps.push({
+      kind: 'kill',
+      at: k.at,
+      guard: k.guard_username || '—',
+      meta: k.killer_username ? `killed by ${k.killer_username}` : '',
+    });
+  }
+  steps.sort((a, b) => {
+    const ta = a.at ? new Date(a.at).getTime() : 0;
+    const tb = b.at ? new Date(b.at).getTime() : 0;
+    return ta - tb;
+  });
+  return steps;
+}
+
 function BtnPrimary({ children, ...props }) {
   return (
     <button
@@ -246,16 +287,21 @@ export default function AttackLogsPanel({
       setAttackLogsData(payload);
       toast.success(`Loaded ${payload?.logs?.length ?? 0} attack log entries`);
       const un = (attackLogsUsername || '').trim();
-      const targetForIntel = resolveTargetIntelUsername(overrides);
+      const prot =
+        (overrides.protecteeFilter !== undefined ? overrides.protecteeFilter : protecteeFilter || '').trim();
+      const intelSubject = prot || un;
+      const targetForIntel = resolveTargetIntelUsername(overrides) || prot || (un && roleFilter === 'target' ? un : '');
       if (targetForIntel) {
         fetchTargetIntel(targetForIntel);
       } else {
         setTargetIntel(null);
         setTargetNarrative(null);
       }
-      if (un) {
+      if (intelSubject) {
+        onLogsLoaded?.(intelSubject);
+        fetchBodyguardIntel(intelSubject);
+      } else if (un) {
         onLogsLoaded?.(un);
-        fetchBodyguardIntel(un);
       } else {
         onLogsLoaded?.(null);
         setBodyguardIntel(null);
@@ -338,7 +384,10 @@ export default function AttackLogsPanel({
   }, [attackLogsData, attackLogViewRow?.id]);
 
   const summary = attackLogsData?.summary;
-  const intelUser = bodyguardIntel?.username || (attackLogsUsername || '').trim();
+  const intelUser =
+    bodyguardIntel?.username || (protecteeFilter || '').trim() || (attackLogsUsername || '').trim();
+  const guardRotation = bodyguardIntel?.protectee_guard_rotation;
+  const guardRotationSteps = useMemo(() => buildGuardRotationSteps(guardRotation), [guardRotation]);
   const targetIntelUser =
     targetIntel?.target_username ||
     attackLogsData?.target_username ||
@@ -682,6 +731,14 @@ export default function AttackLogsPanel({
                   <strong className="text-amber-200">{protecteeSummary.distinct_attackers}</strong> attacker
                   {protecteeSummary.distinct_attackers === 1 ? '' : 's'} ({protecteeSummary.total_blocks.toLocaleString()} blocks in{' '}
                   {bodyguardIntel.days}d).
+                  {protecteeSummary.distinct_guards > 1 ? (
+                    <span className="text-amber-300/90"> See guard rotation timeline below.</span>
+                  ) : null}
+                </p>
+              ) : null}
+              {guardRotation?.rotation_alert?.likely_mid_fight_hires ? (
+                <p className="text-amber-200/95 border border-amber-500/40 rounded px-2 py-1 bg-amber-500/10">
+                  {guardRotation.rotation_alert.detail}
                 </p>
               ) : null}
             </div>
@@ -699,13 +756,14 @@ export default function AttackLogsPanel({
                       <tr className="text-mutedForeground">
                         <th className="text-left pr-2">Guard</th>
                         <th className="text-right pr-2">Blocks</th>
+                        <th className="text-left">First seen</th>
                         <th className="text-left">Attackers</th>
                       </tr>
                     </thead>
                     <tbody>
                       {(bodyguardIntel.protectee || []).length === 0 ? (
                         <tr>
-                          <td colSpan={3} className="text-mutedForeground">
+                          <td colSpan={4} className="text-mutedForeground">
                             No blocks
                           </td>
                         </tr>
@@ -722,7 +780,10 @@ export default function AttackLogsPanel({
                               </button>
                             </td>
                             <td className="py-0.5 pr-2 text-right tabular-nums">{row.block_count}</td>
-                            <td className="py-0.5 text-mutedForeground truncate max-w-[200px]" title={(row.top_attackers || []).join(', ')}>
+                            <td className="py-0.5 pr-2 text-mutedForeground whitespace-nowrap">
+                              {formatAttackLogTime(row.first_at)}
+                            </td>
+                            <td className="py-0.5 text-mutedForeground truncate max-w-[160px]" title={(row.top_attackers || []).join(', ')}>
                               {(row.top_attackers || []).slice(0, 3).join(', ') || '—'}
                             </td>
                           </tr>
@@ -783,6 +844,97 @@ export default function AttackLogsPanel({
               </div>
             </div>
           )}
+          {bodyguardIntel && !intelLoading && guardRotation && (guardRotationSteps.length > 0 || guardRotation.rotation_alert) ? (
+            <div className="border-t border-amber-500/25 pt-2 space-y-2">
+              <p className="text-[9px] uppercase text-amber-200/80 font-bold tracking-wider">
+                Guard rotation — {intelUser} (chronological)
+              </p>
+              <p className="text-[9px] text-mutedForeground">
+                Hires from bodyguard ledger + first block time per guard name. Multiple robot names in a short window
+                usually means buying new guards while under attack (e.g. TonyTheRat… then another after the first was
+                killed).
+              </p>
+              {guardRotationSteps.length > 0 ? (
+                <ol className="text-[9px] space-y-1 max-h-40 overflow-y-auto list-decimal list-inside font-heading">
+                  {guardRotationSteps.map((step, i) => (
+                    <li key={i} className="text-zinc-200/95">
+                      <span className="text-mutedForeground tabular-nums">{formatAttackLogTime(step.at)}</span>
+                      {' — '}
+                      {step.kind === 'hire' ? (
+                        <span>
+                          <span className="text-emerald-300/90">Hired</span>{' '}
+                          <button
+                            type="button"
+                            className="text-primary hover:underline"
+                            onClick={() => filterByGuard(step.guard)}
+                          >
+                            {step.guard}
+                          </button>
+                          {step.meta ? <span className="text-mutedForeground"> ({step.meta})</span> : null}
+                        </span>
+                      ) : null}
+                      {step.kind === 'blocks' ? (
+                        <span>
+                          <span className="text-amber-200/90">Blocks</span>{' '}
+                          <button
+                            type="button"
+                            className="text-primary hover:underline"
+                            onClick={() => filterByGuard(step.guard)}
+                          >
+                            {step.guard}
+                          </button>
+                          <span className="text-mutedForeground"> — {step.meta}</span>
+                        </span>
+                      ) : null}
+                      {step.kind === 'kill' ? (
+                        <span>
+                          <span className="text-red-300/90">Guard killed</span>{' '}
+                          <span className="text-foreground">{step.guard}</span>
+                          {step.meta ? <span className="text-mutedForeground"> — {step.meta}</span> : null}
+                        </span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="text-[9px] text-mutedForeground">No hire/block events in range.</p>
+              )}
+              {(guardRotation.guard_timeline || []).length > 1 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[9px] font-heading">
+                    <thead>
+                      <tr className="text-mutedForeground">
+                        <th className="text-left pr-2">#</th>
+                        <th className="text-left pr-2">Guard (order first block)</th>
+                        <th className="text-right pr-2">Blocks</th>
+                        <th className="text-left pr-2">First</th>
+                        <th className="text-left">Last</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(guardRotation.guard_timeline || []).map((row, i) => (
+                        <tr key={i} className="border-t border-zinc-700/30">
+                          <td className="py-0.5 pr-2 text-mutedForeground">{i + 1}</td>
+                          <td className="py-0.5 pr-2">
+                            <button
+                              type="button"
+                              className="text-primary hover:underline"
+                              onClick={() => filterByGuard(row.guard_username)}
+                            >
+                              {row.guard_username}
+                            </button>
+                          </td>
+                          <td className="py-0.5 pr-2 text-right tabular-nums">{row.block_count}</td>
+                          <td className="py-0.5 pr-2 whitespace-nowrap">{formatAttackLogTime(row.first_at)}</td>
+                          <td className="py-0.5 whitespace-nowrap">{formatAttackLogTime(row.last_at)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {showGlobalIntel && !attackLogsUsername.trim() && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 border-t border-zinc-700/40 pt-2">
               {globalIntelLoading && <p className="text-[10px] text-mutedForeground col-span-2">Loading global intel…</p>}
