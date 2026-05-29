@@ -36,6 +36,10 @@ export default function AdminCrewRecovery() {
   const [ibData, setIbData] = useState(null);
   const [ibLoading, setIbLoading] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(null);
+  const [ibmData, setIbmData] = useState(null);
+  const [ibmLoading, setIbmLoading] = useState(false);
+  const [ibmSaving, setIbmSaving] = useState(false);
+  const [ibmNextDisplay, setIbmNextDisplay] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -153,6 +157,49 @@ export default function AdminCrewRecovery() {
       toast.error(e.response?.data?.detail || 'Revive failed');
     } finally {
       setReviveLoading(false);
+    }
+  };
+
+  const loadIbmMissions = useCallback(async (override) => {
+    const un = (override != null ? String(override) : ibUsername).trim();
+    if (!un) {
+      toast.error('Enter username');
+      return;
+    }
+    setIbmLoading(true);
+    setIbmData(null);
+    try {
+      const res = await api.get(`/admin/illegal-business/missions/user/${encodeURIComponent(un)}`);
+      setIbmData(res.data || null);
+      setIbmNextDisplay(String(res.data?.next_mission_display ?? ''));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load IBM missions');
+    } finally {
+      setIbmLoading(false);
+    }
+  }, [ibUsername]);
+
+  const handleSetIbmProgress = async () => {
+    const un = (ibmData?.username || ibUsername).trim();
+    const n = parseInt(String(ibmNextDisplay).trim(), 10);
+    const max = (ibmData?.missions_total || 100) + 1;
+    if (!un || Number.isNaN(n) || n < 1 || n > max) {
+      toast.error(`Enter next mission 1–${max} (${max} = all complete)`);
+      return;
+    }
+    if (!window.confirm(`Set ${un}'s next IBM mission to #${n}?`)) return;
+    setIbmSaving(true);
+    try {
+      const res = await api.patch(`/admin/illegal-business/missions/user/${encodeURIComponent(un)}`, {
+        next_mission_display: n,
+      });
+      setIbmData(res.data || null);
+      setIbmNextDisplay(String(res.data?.next_mission_display ?? n));
+      toast.success('IBM mission progress updated');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to set IBM progress');
+    } finally {
+      setIbmSaving(false);
     }
   };
 
@@ -411,6 +458,65 @@ export default function AdminCrewRecovery() {
             >
               <RefreshCw size={10} /> Refresh
             </button>
+          </div>
+        )}
+      </section>
+
+      <section className={`${styles.panel} rounded-lg border border-primary/25 p-4 space-y-3`}>
+        <h2 className="text-[11px] font-heading font-bold uppercase text-primary flex items-center gap-2">
+          <Wine size={14} /> Illegal business mission progress
+        </h2>
+        <p className="text-[9px] text-mutedForeground font-heading">
+          After revive or restore, set which IBM mission they should work on next (does not grant skipped rewards — restore business separately above).
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <input
+            type="text"
+            value={ibUsername}
+            onChange={(e) => setIbUsername(e.target.value)}
+            placeholder="Username"
+            className="flex-1 min-w-[140px] px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-heading"
+          />
+          <Btn onClick={() => loadIbmMissions()} disabled={ibmLoading} className="border-primary/40 bg-primary/10 text-primary">
+            {ibmLoading ? '…' : 'Load missions'}
+          </Btn>
+        </div>
+        {ibmData && (
+          <div className="text-[10px] font-heading space-y-2 border-t border-zinc-700/50 pt-3">
+            <p>
+              <span className="text-foreground font-bold">{ibmData.username}</span>
+              {' · '}
+              {ibmData.missions_completed_count}/{ibmData.missions_total} done
+              {!ibmData.has_business && (
+                <span className="text-amber-300/90 ml-1">· no business doc (restore above first)</span>
+              )}
+            </p>
+            {ibmData.active_mission && (
+              <p className="text-mutedForeground">
+                Active: #{ibmData.active_mission.display_index} {ibmData.active_mission.title}
+              </p>
+            )}
+            {ibmData.all_missions_complete && (
+              <p className="text-emerald-400">All IBM missions marked complete.</p>
+            )}
+            <label className="block">
+              <span className="text-[9px] uppercase text-mutedForeground">Next mission to complete (1–{ibmData.missions_total + 1})</span>
+              <input
+                type="number"
+                min={1}
+                max={ibmData.missions_total + 1}
+                value={ibmNextDisplay}
+                onChange={(e) => setIbmNextDisplay(e.target.value)}
+                className="w-full mt-0.5 px-2 py-1 rounded border border-input bg-transparent text-[11px] tabular-nums"
+              />
+            </label>
+            <Btn
+              onClick={handleSetIbmProgress}
+              disabled={ibmSaving}
+              className="border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+            >
+              {ibmSaving ? '…' : 'Apply mission progress'}
+            </Btn>
           </div>
         )}
       </section>

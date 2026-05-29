@@ -301,6 +301,13 @@ def register(router):
         )
         return new_access
 
+    def _profile_car_display_name(uc: dict, info: Optional[dict]) -> str:
+        if uc.get("car_id") == "car_custom":
+            custom = (uc.get("custom_name") or "").strip()
+            if custom:
+                return custom
+        return (info or {}).get("name") or "?"
+
     async def _top_cars_for_profile(user_id: str, limit: int = 5, show_cars: bool = False, profile_car_ids: Optional[list] = None):
         """Return only the explicitly chosen cars for the profile (up to 5). Preserves selection order."""
         if not show_cars or not profile_car_ids:
@@ -310,7 +317,10 @@ def register(router):
             return []
         cars_catalog = {c["id"]: c for c in (CARS or [])}
         owned_map = {}
-        cursor = db.user_cars.find({"user_id": user_id, "id": {"$in": car_ids}}, {"_id": 0, "id": 1, "car_id": 1})
+        cursor = db.user_cars.find(
+            {"user_id": user_id, "id": {"$in": car_ids}},
+            {"_id": 0, "id": 1, "car_id": 1, "custom_name": 1},
+        )
         async for uc in cursor:
             owned_map[uc["id"]] = uc
         result = []
@@ -323,7 +333,7 @@ def register(router):
                 continue
             result.append({
                 "id": uc.get("id"),
-                "name": info.get("name") or "?",
+                "name": _profile_car_display_name(uc, info),
                 "value": int(info.get("value") or 0),
                 "rarity": info.get("rarity") or "common",
             })
@@ -2024,7 +2034,7 @@ def register(router):
     async def get_profile_my_cars(current_user: dict = Depends(get_current_user)):
         """List current user's cars (id, name, rarity, value) for profile featured-car picker. Best cars first (by value desc)."""
         uid = current_user["id"]
-        cursor = db.user_cars.find({"user_id": uid}, {"_id": 0, "id": 1, "car_id": 1})
+        cursor = db.user_cars.find({"user_id": uid}, {"_id": 0, "id": 1, "car_id": 1, "custom_name": 1})
         owned = await cursor.to_list(500)
         cars_catalog = {c["id"]: c for c in (CARS or [])}
         out = []
@@ -2034,7 +2044,7 @@ def register(router):
                 continue
             out.append({
                 "id": uc.get("id"),
-                "name": info.get("name") or "?",
+                "name": _profile_car_display_name(uc, info),
                 "rarity": info.get("rarity") or "common",
                 "value": int(info.get("value") or 0),
             })

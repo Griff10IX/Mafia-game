@@ -434,7 +434,7 @@ export default function Leaderboard() {
           icon={Star}
           entries={boards?.respect_points}
           valueLabel="respect"
-          topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (${period === 'weekly' ? 'this week' : 'all-time'})`}
+          topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (${period === 'weekly' ? 'this week' : 'lifetime earned'})`}
           fetching={fetchingBoards}
         />
         <StatBoard

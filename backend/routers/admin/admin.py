@@ -283,6 +283,12 @@ class AdminMissionProgressSetRequest(BaseModel):
     grant_skipped_rewards: bool = True  # When advancing, grant normal completion rewards for each newly completed mission
 
 
+class AdminIbmProgressSetRequest(BaseModel):
+    """1-based IBM mission index (next to complete). N+1 = all IBM missions complete (N = total missions)."""
+
+    next_mission_display: int
+
+
 class AdminKenoSettingsPatch(BaseModel):
     """Live cap for state Keno max bet per round (stored in game_settings)."""
 
@@ -17460,6 +17466,63 @@ def register(router):
             **preview,
             "dry_run": False,
         }
+
+    @router.get("/admin/illegal-business/missions/user/{user_id_or_username}")
+    async def admin_get_ibm_missions_user(
+        user_id_or_username: str, current_user: dict = Depends(get_current_user)
+    ):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        raw = (user_id_or_username or "").strip()
+        if not raw:
+            raise HTTPException(status_code=400, detail="User id or username required")
+        u = await db.users.find_one({"id": raw}, {"_id": 0})
+        if not u:
+            username_pattern = _username_pattern(raw)
+            u = await db.users.find_one({"username": username_pattern}, {"_id": 0})
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        from routers.money import illegal_business as ib_mod
+
+        return await ib_mod.admin_ibm_payload_for_user(u)
+
+    @router.patch("/admin/illegal-business/missions/user/{user_id_or_username}")
+    async def admin_set_ibm_missions_user(
+        user_id_or_username: str,
+        body: AdminIbmProgressSetRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        raw = (user_id_or_username or "").strip()
+        if not raw:
+            raise HTTPException(status_code=400, detail="User id or username required")
+        u = await db.users.find_one({"id": raw}, {"_id": 0, "id": 1, "username": 1})
+        if not u:
+            username_pattern = _username_pattern(raw)
+            u = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        from routers.money import illegal_business as ib_mod
+
+        out = await ib_mod.admin_apply_ibm_mission_progress(
+            u["id"],
+            int(body.next_mission_display),
+        )
+        try:
+            await srv.log_activity(
+                current_user.get("id") or "",
+                current_user.get("username") or "?",
+                "admin_ibm_mission_progress_set",
+                {
+                    "target_user_id": u.get("id"),
+                    "target_username": u.get("username"),
+                    "next_mission_display": int(body.next_mission_display),
+                },
+            )
+        except Exception:
+            pass
+        return out
 
     @router.get("/admin/families-list")
     async def admin_families_list(current_user: dict = Depends(get_current_user)):

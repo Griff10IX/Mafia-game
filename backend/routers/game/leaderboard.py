@@ -377,6 +377,55 @@ async def _top_by_field_weekly_sum(
     ]
 
 
+async def _top_by_lifetime_respect_earned_alltime(
+    current_user_id: str, limit: int, dead: bool = False
+) -> List[StatLeaderboardEntry]:
+    """All-time respect earned without a week window (positive respect_events only)."""
+    limit = max(1, min(100, int(limit)))
+    cap = _weekly_agg_candidate_limit(limit)
+    pipeline = [
+        {"$match": {"amount": {"$gt": 0}}},
+        {"$group": {"_id": "$user_id", "value": {"$sum": {"$ifNull": ["$amount", 0]}}}},
+        {"$sort": {"value": -1}},
+        {"$limit": cap},
+    ]
+    cursor = db.respect_events.aggregate(pipeline)
+    docs = await cursor.to_list(cap)
+    if not docs:
+        return []
+    user_ids = [d["_id"] for d in docs if d.get("_id")]
+    id_list = _expand_user_ids_for_lookup(user_ids)
+    q = await _users_query_id_in_with_staff_filters(db, id_list)
+    users_map = await db.users.find(
+        q,
+        {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1},
+    ).to_list(len(id_list) + 1)
+    users_by_id = {u["id"]: u for u in users_map}
+    filtered = []
+    for d in docs:
+        uid = d.get("_id")
+        if not uid:
+            continue
+        u = _user_from_leaderboard_map(users_by_id, uid)
+        if not u:
+            continue
+        if bool(dead) != bool(u.get("is_dead")):
+            continue
+        if u.get("is_bodyguard") or u.get("is_npc"):
+            continue
+        filtered.append({"user_id": uid, "value": int(d.get("value") or 0), "username": u["username"]})
+    filtered = filtered[:limit]
+    return [
+        StatLeaderboardEntry(
+            rank=i + 1,
+            username=e["username"],
+            value=e["value"],
+            is_current_user=e["user_id"] == current_user_id,
+        )
+        for i, e in enumerate(filtered)
+    ]
+
+
 async def _top_by_field_for_week(
     database,
     collection: str,
@@ -791,7 +840,7 @@ async def _fetch_top_boards_raw(limit: int, dead: bool, period: str) -> dict:
             _top_by_field("jail_busts", dummy_uid, limit, dead=dead),
             _top_by_total_rank_points(dummy_uid, limit, dead=dead),
             _top_by_field("lifetime_points_spent", dummy_uid, limit, dead=dead),
-            _top_by_field("respect_points", dummy_uid, limit, dead=dead),
+            _top_by_lifetime_respect_earned_alltime(dummy_uid, limit, dead=dead),
             _top_by_field("bullets_melted", dummy_uid, limit, dead=dead),
             _top_by_field("stock_market_profit_total", dummy_uid, limit, dead=dead),
             _top_by_field("booze_run_profit_total", dummy_uid, limit, dead=dead),

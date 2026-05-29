@@ -3423,3 +3423,130 @@ from utils.ibm_missions_extended import EXTENDED_IBM_MISSIONS
 ILLEGAL_BUSINESS_MISSIONS.clear()
 ILLEGAL_BUSINESS_MISSIONS.extend(IBM_MISSIONS_CORE)
 ILLEGAL_BUSINESS_MISSIONS.extend(EXTENDED_IBM_MISSIONS)
+
+
+def _ibm_user_completed_ids(user: dict) -> set:
+    return {c.get("mission_id") for c in (user.get("illegal_business_mission_completions") or []) if c.get("mission_id")}
+
+
+def infer_next_ibm_mission_display_index(completed_ids: set) -> int:
+    """1-based index of next incomplete IBM mission, or len+1 when all are done."""
+    ordered = _ordered_ibm_missions()
+    for i, m in enumerate(ordered, start=1):
+        if m["id"] not in completed_ids:
+            return i
+    return len(ordered) + 1
+
+
+def display_index_for_ibm_mission_id(mid: str) -> Optional[int]:
+    for i, m in enumerate(_ordered_ibm_missions(), start=1):
+        if m["id"] == mid:
+            return i
+    return None
+
+
+async def admin_ibm_payload_for_user(user: dict) -> Dict[str, Any]:
+    """Read-only IBM mission ladder summary for staff tools."""
+    uid = user.get("id")
+    if not uid:
+        raise HTTPException(status_code=400, detail="User id required")
+    ordered = _ordered_ibm_missions()
+    max_display = len(ordered) + 1
+    business = await db.illegal_businesses.find_one({"user_id": uid}, {"_id": 0})
+    progress_user = await _ibm_load_user_with_mission_baselines(uid, user)
+    completed_ids = _ibm_user_completed_ids(progress_user)
+    next_idx = infer_next_ibm_mission_display_index(completed_ids)
+    completions_out = []
+    for row in progress_user.get("illegal_business_mission_completions") or []:
+        mid = row.get("mission_id")
+        if not mid:
+            continue
+        completions_out.append(
+            {
+                "mission_id": mid,
+                "display_index": display_index_for_ibm_mission_id(mid),
+                "title": next((m.get("title") for m in ordered if m["id"] == mid), mid),
+                "completed_at": row.get("completed_at"),
+            }
+        )
+    completions_out.sort(key=lambda x: (x["display_index"] is None, x["display_index"] or 0))
+    active = None
+    active_guards_count = 0
+    if business and business.get("id"):
+        active_guards_count = int(
+            await db.illegal_business_guards.count_documents({"business_id": business["id"]})
+        )
+    if 1 <= next_idx <= len(ordered):
+        m = ordered[next_idx - 1]
+        req = m.get("requirements") or {}
+        cur = {
+            key: _ibm_requirement_current(
+                progress_user,
+                business,
+                m,
+                key,
+                active_guards_count=active_guards_count,
+            )
+            for key in req
+        }
+        active = {
+            "display_index": next_idx,
+            "id": m["id"],
+            "title": m.get("title"),
+            "order": m.get("order"),
+            "current": cur,
+            "target": req,
+        }
+    return {
+        "user_id": uid,
+        "username": user.get("username"),
+        "has_business": bool(business),
+        "business_id": (business or {}).get("id"),
+        "business_name": (business or {}).get("name"),
+        "business_type_id": (business or {}).get("type_id"),
+        "missions_completed_count": len(completed_ids),
+        "missions_total": len(ordered),
+        "next_mission_display": next_idx,
+        "all_missions_complete": next_idx >= max_display,
+        "active_mission": active,
+        "completions": completions_out,
+    }
+
+
+async def admin_apply_ibm_mission_progress(
+    user_id: str,
+    next_mission_display: int,
+) -> Dict[str, Any]:
+    """
+    Set IBM ladder so the next mission to complete is `next_mission_display` (1..N),
+    or N+1 when all missions should be marked complete. Does not grant mission rewards
+    (use in-game completion or manual business edits after restore).
+    """
+    ordered = _ordered_ibm_missions()
+    max_display = len(ordered) + 1
+    if next_mission_display < 1 or next_mission_display > max_display:
+        raise HTTPException(
+            status_code=400,
+            detail=f"next_mission_display must be 1-{max_display} ({max_display} = all IBM missions complete)",
+        )
+    user_before = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user_before:
+        raise HTTPException(status_code=404, detail="User not found")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if next_mission_display <= len(ordered):
+        to_complete = ordered[: next_mission_display - 1]
+    else:
+        to_complete = ordered[:]
+    new_completions = [{"mission_id": m["id"], "completed_at": now_iso} for m in to_complete]
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"illegal_business_mission_completions": new_completions}},
+    )
+    fresh = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not fresh:
+        raise HTTPException(status_code=404, detail="User not found")
+    await _ibm_ensure_mission_baselines(user_id, fresh)
+    fresh = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not fresh:
+        raise HTTPException(status_code=404, detail="User not found")
+    return await admin_ibm_payload_for_user(fresh)
