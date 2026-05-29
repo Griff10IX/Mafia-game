@@ -21,7 +21,7 @@ from utils.login_user_agent import auth_client_headers_blocked
 from utils.staff_bot_client_alert import maybe_notify_staff_bot_client_blocked
 from utils.referral_ids import normalize_referred_by_ids, user_has_referrers
 from utils.login_turnstile_gate import login_turnstile_effective_config, require_turnstile_for_login
-from middleware.security import is_proxy_or_vpn, get_ip_info, flag_user_suspicious
+from middleware.security import is_proxy_or_vpn, get_ip_info as lookup_ip_info, flag_user_suspicious
 from utils.proxy_detection import assess_ip_for_auth
 from utils.geo_country import country_code_from_request_headers
 from utils.game_pass_season import get_game_pass_season_public
@@ -498,7 +498,7 @@ def register(router):
         if not admin_emails:
             return
         try:
-            ip_info = await get_ip_info(ip)
+            ip_info = await lookup_ip_info(ip)
             provider_parts = []
             if ip_info.get("isp"):
                 provider_parts.append(f"ISP: {ip_info['isp']}")
