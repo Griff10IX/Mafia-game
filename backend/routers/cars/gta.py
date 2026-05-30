@@ -234,14 +234,44 @@ GTA_MILESTONE_REWARDS = {
     500_000: 15_000, 1_000_000: 30_000, 2_000_000: 60_000, 5_000_000: 150_000,
 }
 
+# Al Capone (car20) exists at most once globally; nav polls were counting user_cars on every GTA page load.
+_CAR20_OWNED_COUNT_CACHE_SEC = 12.0
+_car20_owned_count_cache: Dict[str, Any] = {"t": 0.0, "n": None}
+
+
+def invalidate_car20_owned_count_cache() -> None:
+    _car20_owned_count_cache["n"] = None
+
+
+async def _count_car20_owned(*, refresh: bool = False) -> int:
+    """Cached global count of Al Capone copies (0 or 1 in normal operation)."""
+    now = time.monotonic()
+    if not refresh and _car20_owned_count_cache["n"] is not None:
+        if now - float(_car20_owned_count_cache["t"]) < _CAR20_OWNED_COUNT_CACHE_SEC:
+            return int(_car20_owned_count_cache["n"])
+    n = await db.user_cars.count_documents({"car_id": GTA_EXCLUSIVE_CAR_ID})
+    _car20_owned_count_cache["n"] = n
+    _car20_owned_count_cache["t"] = now
+    return n
+
+
+async def _gta_exclusive_pool_released_from_config() -> bool:
+    """Read pool flag only — no user_cars scan (for nav/badge polls)."""
+    doc = await db.game_config.find_one(
+        {"id": GTA_EXCLUSIVE_POOL_CONFIG_ID},
+        {"_id": 0, "released": 1},
+    )
+    return bool((doc or {}).get("released"))
+
 
 async def _sync_gta_exclusive_pool_release_state() -> bool:
     """
     Keep GTA exclusive pool release in sync with ownership.
     - If any copy exists: released=False.
     - If no copies exist: released=True (auto-reopen pool).
+    Call after ownership changes (melt/transfer/admin), not on every GTA attempt or nav poll.
     """
-    existing_count = await db.user_cars.count_documents({"car_id": GTA_EXCLUSIVE_CAR_ID})
+    existing_count = await _count_car20_owned(refresh=True)
     should_release = existing_count == 0
     await db.game_config.update_one(
         {"id": GTA_EXCLUSIVE_POOL_CONFIG_ID},
@@ -419,7 +449,7 @@ async def get_gta_playable_count(current_user: dict = Depends(get_current_user))
     now = datetime.now(timezone.utc)
     user_rank, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
     released, cooldown_doc = await asyncio.gather(
-        _sync_gta_exclusive_pool_release_state(),
+        _gta_exclusive_pool_released_from_config(),
         db.gta_cooldowns.find_one(
             {"user_id": current_user.get("id") or ""},
             {"_id": 0, "cooldown_until": 1},
@@ -547,8 +577,6 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         exclusive_drop_weight = GTA_EXCLUSIVE_DROP_WEIGHT_DEFAULT
         exclusive_in_roll = False
         if exclusive_car:
-            # Auto-sync pool state to ownership so exclusive reopens when last copy is gone.
-            await _sync_gta_exclusive_pool_release_state()
             config = await db.game_config.find_one(
                 {"id": GTA_EXCLUSIVE_POOL_CONFIG_ID},
                 {"_id": 0, "released": 1, "drop_weight": 1},
@@ -556,8 +584,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
             if config and config.get("released"):
                 exclusive_drop_weight = float((config or {}).get("drop_weight") or GTA_EXCLUSIVE_DROP_WEIGHT_DEFAULT)
                 exclusive_drop_weight = max(GTA_EXCLUSIVE_DROP_WEIGHT_MIN, min(GTA_EXCLUSIVE_DROP_WEIGHT_MAX, exclusive_drop_weight))
-                count = await db.user_cars.count_documents({"car_id": GTA_EXCLUSIVE_CAR_ID})
-                if count == 0:
+                if await _count_car20_owned() == 0:
                     exclusive_in_roll = True
         # Auto-rank attempts should only roll exclusive while user is actively online.
         # Manual GTA attempts are not affected.
@@ -652,6 +679,9 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         )
         # If the Al Capone exclusive was just won, auto-disable pool release.
         if (car.get("id") or "") == GTA_EXCLUSIVE_CAR_ID:
+            invalidate_car20_owned_count_cache()
+            _car20_owned_count_cache["n"] = 1
+            _car20_owned_count_cache["t"] = time.monotonic()
             await db.game_config.update_one(
                 {"id": GTA_EXCLUSIVE_POOL_CONFIG_ID},
                 {"$set": {"released": False}},
@@ -1151,6 +1181,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
     deleted_count = 0
     uncommon_count = 0
     processed = 0
+    melted_car20 = False
     for car_id in car_ids:
         if processed >= limit:
             break
@@ -1165,6 +1196,8 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
                 pass
         if deleted_car:
             model_id = deleted_car["car_id"]
+            if model_id == GTA_EXCLUSIVE_CAR_ID:
+                melted_car20 = True
             car_info = next((c for c in CARS if c["id"] == model_id), None)
             if car_info:
                 if car_info.get("rarity") == "uncommon":
@@ -1196,6 +1229,8 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
             else:
                 await db.user_cars.insert_one(deleted_car)
                 processed += 1
+    if melted_car20:
+        await _sync_gta_exclusive_pool_release_state()
     if deleted_count > 0:
         if action == "bullets":
             total_bullets = (int(total_bullets or 0) * MELT_BULLETS_TOTAL_PAYOUT_MULT_NUM) // MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN
@@ -2282,7 +2317,7 @@ async def run_dealer_replenish_loop():
 
 async def get_gta_exclusive_pool_status(current_user: dict = Depends(get_current_user)):
     """Return whether the Al Capone exclusive is currently in the GTA car pool (any authenticated user)."""
-    released = await _sync_gta_exclusive_pool_release_state()
+    released = await _gta_exclusive_pool_released_from_config()
     return {"exclusive_in_pool": bool(released)}
 
 
