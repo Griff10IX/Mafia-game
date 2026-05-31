@@ -4,6 +4,7 @@ import { Building2, RefreshCw, Search, Skull, Wine } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+import AdminDistilleryProgress from './AdminDistilleryProgress';
 
 function Btn({ children, className = '', ...props }) {
   return (
@@ -280,12 +281,15 @@ export default function AdminCrewRecovery() {
       setIbmData(res.data || null);
       setIbmNextDisplay(String(res.data?.next_mission_display ?? ''));
       setIbmPresetPreview(null);
+      if (res.data && !res.data.has_business) {
+        loadIllegalBusiness(un);
+      }
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load racket progress');
     } finally {
       setIbmLoading(false);
     }
-  }, [ibUsername]);
+  }, [ibUsername, loadIllegalBusiness]);
 
   const previewIbmPreset = async (pctOverride) => {
     const un = (ibmData?.username || ibUsername).trim();
@@ -365,15 +369,16 @@ export default function AdminCrewRecovery() {
     }
   };
 
-  const handleRestoreIb = async (holderUsername, dryRun) => {
+  const handleRestoreIb = async (holderUsername, dryRun, targetOverride) => {
+    const target = (targetOverride || ibData?.username || ibUsername).trim();
     const key = `${holderUsername || 'json'}:${dryRun}`;
     setRestoreLoading(key);
     try {
       const body = {
-        target_username: ibData?.username || ibUsername.trim(),
+        target_username: target,
         holder_username: holderUsername || undefined,
         remove_from_holder_pending: true,
-        dry_run: dryRun,
+        dry_run: true,
       };
       const preview = await api.post('/admin/illegal-business/restore', body);
       if (dryRun) {
@@ -383,7 +388,8 @@ export default function AdminCrewRecovery() {
       if (!window.confirm(preview.data?.message || 'Restore this illegal business?')) return;
       const res = await api.post('/admin/illegal-business/restore', { ...body, dry_run: false });
       toast.success(res.data?.message || 'Restored');
-      await loadIllegalBusiness(ibData?.username || ibUsername);
+      await loadIllegalBusiness(target);
+      await loadIbmMissions(target);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Restore failed');
     } finally {
@@ -654,9 +660,62 @@ export default function AdminCrewRecovery() {
               {' · '}
               {ibmData.missions_completed_count}/{ibmData.missions_total} done
               {!ibmData.has_business && (
-                <span className="text-amber-300/90 ml-1">· no business doc (restore above first)</span>
+                <span className="text-amber-300/90 ml-1">· no business doc</span>
               )}
             </p>
+            {!ibmData.has_business && (
+              <div className="rounded border border-amber-500/35 bg-amber-950/25 p-2 space-y-2">
+                <p className="text-[9px] font-heading font-bold uppercase text-amber-200">Restore racket</p>
+                {ibLoading ? (
+                  <p className="text-[9px] text-mutedForeground">Loading kill snapshots…</p>
+                ) : !ibData || String(ibData.username || '').toLowerCase() !== String(ibmData.username || '').toLowerCase() ? (
+                  <Btn
+                    onClick={() => loadIllegalBusiness(ibmData.username)}
+                    disabled={ibLoading}
+                    className="border-amber-500/40 bg-amber-500/10 text-amber-200"
+                  >
+                    Load snapshots
+                  </Btn>
+                ) : (ibData.pending_on_other_accounts || []).length === 0 ? (
+                  <p className="text-[9px] text-mutedForeground">No kill snapshots found on other accounts.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {ibData.pending_on_other_accounts.map((p, i) => (
+                      p.has_snapshot ? (
+                        <div key={i} className="rounded border border-zinc-700/40 bg-zinc-900/40 p-2">
+                          <p className="text-[9px]">
+                            From <span className="text-foreground font-bold">{p.holder_username}</span>
+                            {p.snapshot_summary ? (
+                              <span className="text-mutedForeground">
+                                {' '}
+                                · {p.snapshot_summary.name} · lvl {p.snapshot_summary.level} · vault $
+                                {Number(p.snapshot_summary.vault || 0).toLocaleString()}
+                              </span>
+                            ) : null}
+                          </p>
+                          <div className="flex gap-2 mt-2">
+                            <Btn
+                              onClick={() => handleRestoreIb(p.holder_username, true, ibmData.username)}
+                              disabled={!!restoreLoading}
+                              className="border-zinc-600/50 text-mutedForeground"
+                            >
+                              Preview
+                            </Btn>
+                            <Btn
+                              onClick={() => handleRestoreIb(p.holder_username, false, ibmData.username)}
+                              disabled={!!restoreLoading}
+                              className="border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                            >
+                              {restoreLoading === `${p.holder_username}:false` ? '…' : 'Restore racket'}
+                            </Btn>
+                          </div>
+                        </div>
+                      ) : null
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {ibmData.active_mission && (
               <p className="text-mutedForeground">
                 Active: #{ibmData.active_mission.display_index} {ibmData.active_mission.title}
@@ -740,6 +799,16 @@ export default function AdminCrewRecovery() {
             </Btn>
           </div>
         )}
+      </section>
+
+      <section className={`${styles.panel} rounded-lg border border-violet-500/25 p-4 space-y-3`}>
+        <h2 className="text-[11px] font-heading font-bold uppercase text-violet-300 flex items-center gap-2">
+          <Wine size={14} /> Distillery progress
+        </h2>
+        <p className="text-[9px] text-mutedForeground font-heading">
+          Set still upgrades and special track % for booze rackets. Restore the business above first if missing.
+        </p>
+        <AdminDistilleryProgress embedded initialUsername={ibUsername.trim()} />
       </section>
     </div>
   );

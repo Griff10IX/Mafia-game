@@ -155,6 +155,10 @@ export default function AdminRacketProgress({ embedded = false, initialUsername 
   const [nextStep, setNextStep] = useState('');
   const [stepSaving, setStepSaving] = useState(false);
 
+  const [recoveryData, setRecoveryData] = useState(null);
+  const [recoveryLoading, setRecoveryLoading] = useState(false);
+  const [restoreLoading, setRestoreLoading] = useState(null);
+
   useEffect(() => {
     if (embedded) return;
     let cancelled = false;
@@ -182,6 +186,21 @@ export default function AdminRacketProgress({ embedded = false, initialUsername 
     }
   }, [initialUsername, searchParams]);
 
+  const loadRecovery = useCallback(async (override) => {
+    const un = (override != null ? String(override) : username).trim();
+    if (!un) return;
+    setRecoveryLoading(true);
+    try {
+      const res = await api.get('/admin/illegal-business/recovery', { params: { username: un } });
+      setRecoveryData(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load restore snapshots');
+      setRecoveryData(null);
+    } finally {
+      setRecoveryLoading(false);
+    }
+  }, [username]);
+
   const loadProgress = useCallback(async (override) => {
     const un = (override != null ? String(override) : username).trim();
     if (!un) {
@@ -202,13 +221,46 @@ export default function AdminRacketProgress({ embedded = false, initialUsername 
           return next;
         });
       }
+      if (res.data && !res.data.has_business) {
+        loadRecovery(un);
+      } else {
+        setRecoveryData(null);
+      }
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load progress');
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, [username, setSearchParams, embedded]);
+  }, [username, setSearchParams, embedded, loadRecovery]);
+
+  const handleRestore = async (holderUsername, dryRun, targetOverride) => {
+    const target = (targetOverride || data?.username || username).trim();
+    const key = `${holderUsername}:${dryRun}`;
+    setRestoreLoading(key);
+    try {
+      const body = {
+        target_username: target,
+        holder_username: holderUsername,
+        remove_from_holder_pending: true,
+        dry_run: true,
+      };
+      const preview = await api.post('/admin/illegal-business/restore', body);
+      if (dryRun) {
+        toast.success(preview.data?.message || 'Preview OK');
+        return;
+      }
+      if (!window.confirm(preview.data?.message || 'Restore this illegal business?')) return;
+      const res = await api.post('/admin/illegal-business/restore', { ...body, dry_run: false });
+      toast.success(res.data?.message || 'Restored');
+      await loadRecovery(target);
+      await loadProgress(target);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Restore failed');
+    } finally {
+      setRestoreLoading(null);
+    }
+  };
 
   useEffect(() => {
     if (!accessChecked || embedded) return;
@@ -419,9 +471,62 @@ export default function AdminRacketProgress({ embedded = false, initialUsername 
               {' · '}
               {data.missions_completed_count}/{data.missions_total} steps complete
               {!data.has_business && (
-                <span className="text-amber-300/90 ml-1">· no racket — restore in Crew recovery first</span>
+                <span className="text-amber-300/90 ml-1">· no racket</span>
               )}
             </p>
+            {!data.has_business && (
+              <div className="rounded border border-amber-500/35 bg-amber-950/25 p-2 space-y-2">
+                <p className="text-[9px] font-heading font-bold uppercase text-amber-200">Restore racket</p>
+                {recoveryLoading ? (
+                  <p className="text-[9px] text-mutedForeground">Loading kill snapshots…</p>
+                ) : !recoveryData || String(recoveryData.username || '').toLowerCase() !== String(data.username || '').toLowerCase() ? (
+                  <Btn
+                    onClick={() => loadRecovery(data.username)}
+                    disabled={recoveryLoading}
+                    className="border-amber-500/40 bg-amber-500/10 text-amber-200"
+                  >
+                    Load snapshots
+                  </Btn>
+                ) : (recoveryData.pending_on_other_accounts || []).length === 0 ? (
+                  <p className="text-[9px] text-mutedForeground">No kill snapshots found on other accounts.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {recoveryData.pending_on_other_accounts.map((p, i) => (
+                      p.has_snapshot ? (
+                        <div key={i} className="rounded border border-zinc-700/40 bg-zinc-900/40 p-2">
+                          <p className="text-[9px]">
+                            From <span className="text-foreground font-bold">{p.holder_username}</span>
+                            {p.snapshot_summary ? (
+                              <span className="text-mutedForeground">
+                                {' '}
+                                · {p.snapshot_summary.name} · lvl {p.snapshot_summary.level} · vault $
+                                {Number(p.snapshot_summary.vault || 0).toLocaleString()}
+                              </span>
+                            ) : null}
+                          </p>
+                          <div className="flex gap-2 mt-2">
+                            <Btn
+                              onClick={() => handleRestore(p.holder_username, true, data.username)}
+                              disabled={!!restoreLoading}
+                              className="border-zinc-600/50 text-mutedForeground"
+                            >
+                              Preview
+                            </Btn>
+                            <Btn
+                              onClick={() => handleRestore(p.holder_username, false, data.username)}
+                              disabled={!!restoreLoading}
+                              className="border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+                            >
+                              {restoreLoading === `${p.holder_username}:false` ? '…' : 'Restore racket'}
+                            </Btn>
+                          </div>
+                        </div>
+                      ) : null
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {data.active_mission && (
               <p className="text-mutedForeground">
                 Active: #{data.active_mission.display_index}{' '}
