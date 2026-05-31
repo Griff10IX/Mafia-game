@@ -1326,6 +1326,7 @@ export default function Admin() {
   const [userRequestPaceLimit, setUserRequestPaceLimit] = useState('15');
   const [userRequestPaceSaving, setUserRequestPaceSaving] = useState(false);
   const [requestStormBundleSaving, setRequestStormBundleSaving] = useState(false);
+  const [sustainedJailRlSaving, setSustainedJailRlSaving] = useState(false);
   const [sustainedEntRlSaving, setSustainedEntRlSaving] = useState(false);
   const [sustainedForumRlSaving, setSustainedForumRlSaving] = useState(false);
   const [sustainedKillRlSaving, setSustainedKillRlSaving] = useState(false);
