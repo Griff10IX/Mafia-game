@@ -1351,6 +1351,7 @@ export default function Admin() {
   const [sustainedEventsRlSaving, setSustainedEventsRlSaving] = useState(false);
   const [sustainedAutoRankRlSaving, setSustainedAutoRankRlSaving] = useState(false);
   const [sustainedPresenceRlSaving, setSustainedPresenceRlSaving] = useState(false);
+  const [captchaFailModalOpen, setCaptchaFailModalOpen] = useState(false);
   const [captchaFailRows, setCaptchaFailRows] = useState([]);
   const [captchaFailTotal, setCaptchaFailTotal] = useState(0);
   const [captchaFailLoading, setCaptchaFailLoading] = useState(false);
