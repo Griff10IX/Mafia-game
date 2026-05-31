@@ -45,7 +45,7 @@ function IbmPresetPreviewPanel({ preview, onApply, onDismiss, applying }) {
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="text-[10px] font-heading font-bold text-amber-200">
           Preview · ~{preview.progress_percent}% ({preview.missions_completed_count}/{preview.missions_total}{' '}
-          missions done)
+          steps complete)
         </p>
         <button
           type="button"
@@ -57,13 +57,13 @@ function IbmPresetPreviewPanel({ preview, onApply, onDismiss, applying }) {
       </div>
       {preview.next_mission ? (
         <p className="text-[9px] text-mutedForeground">
-          Next mission:{' '}
+          Next step:{' '}
           <span className="text-foreground">
             #{preview.next_mission.display_index} {preview.next_mission.title}
           </span>
         </p>
       ) : preview.all_missions_complete ? (
-        <p className="text-[9px] text-emerald-400">All IBM missions will be marked complete.</p>
+        <p className="text-[9px] text-emerald-400">All business progress steps will be marked complete.</p>
       ) : null}
       {preview.last_completed_mission && (
         <p className="text-[9px] text-mutedForeground">
@@ -281,7 +281,7 @@ export default function AdminCrewRecovery() {
       setIbmNextDisplay(String(res.data?.next_mission_display ?? ''));
       setIbmPresetPreview(null);
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to load IBM missions');
+      toast.error(e.response?.data?.detail || 'Failed to load racket progress');
     } finally {
       setIbmLoading(false);
     }
@@ -349,7 +349,7 @@ export default function AdminCrewRecovery() {
       toast.error(`Enter next mission 1–${max} (${max} = all complete)`);
       return;
     }
-    if (!window.confirm(`Set ${un}'s next IBM mission to #${n}?`)) return;
+    if (!window.confirm(`Set ${un}'s next racket progress step to #${n}?`)) return;
     setIbmSaving(true);
     try {
       const res = await api.patch(`/admin/illegal-business/missions/user/${encodeURIComponent(un)}`, {
@@ -357,7 +357,7 @@ export default function AdminCrewRecovery() {
       });
       setIbmData(res.data || null);
       setIbmNextDisplay(String(res.data?.next_mission_display ?? n));
-      toast.success('IBM mission progress updated');
+      toast.success('Racket progress updated');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to set IBM progress');
     } finally {
@@ -626,10 +626,14 @@ export default function AdminCrewRecovery() {
 
       <section className={`${styles.panel} rounded-lg border border-primary/25 p-4 space-y-3`}>
         <h2 className="text-[11px] font-heading font-bold uppercase text-primary flex items-center gap-2">
-          <Wine size={14} /> Illegal business mission progress
+          <Wine size={14} /> Racket &amp; business progress
         </h2>
         <p className="text-[9px] text-mutedForeground font-heading">
-          Restore the business above first, then use a preset (missions + security, guards, income, vault) or set the exact next mission number.
+          Restore the business above first. To change progress, use{' '}
+          <Link to="/tjjeujr3wa/racket-progress" className="text-primary underline underline-offset-2">
+            Racket progress
+          </Link>
+          .
         </p>
         <div className="flex flex-wrap gap-2">
           <input
@@ -640,7 +644,7 @@ export default function AdminCrewRecovery() {
             className="flex-1 min-w-[140px] px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-heading"
           />
           <Btn onClick={() => loadIbmMissions()} disabled={ibmLoading} className="border-primary/40 bg-primary/10 text-primary">
-            {ibmLoading ? '…' : 'Load missions'}
+            {ibmLoading ? '…' : 'Load progress'}
           </Btn>
         </div>
         {ibmData && (
@@ -659,7 +663,7 @@ export default function AdminCrewRecovery() {
               </p>
             )}
             {ibmData.all_missions_complete && (
-              <p className="text-emerald-400">All IBM missions marked complete.</p>
+              <p className="text-emerald-400">All business progress complete.</p>
             )}
             {ibmData.business_summary && (
               <p className="text-[9px] text-mutedForeground">
@@ -717,7 +721,7 @@ export default function AdminCrewRecovery() {
               />
             </div>
             <label className="block">
-              <span className="text-[9px] uppercase text-mutedForeground">Next mission to complete (1–{ibmData.missions_total + 1})</span>
+              <span className="text-[9px] uppercase text-mutedForeground">Next progress step (1–{ibmData.missions_total + 1})</span>
               <input
                 type="number"
                 min={1}
@@ -732,7 +736,7 @@ export default function AdminCrewRecovery() {
               disabled={ibmSaving}
               className="border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
             >
-              {ibmSaving ? '…' : 'Apply mission progress'}
+              {ibmSaving ? '…' : 'Apply progress'}
             </Btn>
           </div>
         )}

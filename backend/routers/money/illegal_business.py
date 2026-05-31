@@ -2841,7 +2841,7 @@ async def complete_illegal_business_mission(mission_id: str, current_user: dict 
         biz_update["$inc"] = update_business_inc
     if biz_update:
         await db.illegal_businesses.update_one({"id": business["id"]}, biz_update)
-    return {"message": mission.get("story", "Mission complete.")}
+    return {"message": mission.get("story", "Progress step complete.")}
 
 
 async def get_illegal_business_guards(current_user: dict = Depends(get_current_user)):
@@ -3498,6 +3498,7 @@ async def admin_ibm_payload_for_user(user: dict) -> Dict[str, Any]:
             "target": req,
         }
     business_summary = None
+    distillery_summary = None
     if business:
         business_summary = {
             "level": business.get("level"),
@@ -3507,6 +3508,11 @@ async def admin_ibm_payload_for_user(user: dict) -> Dict[str, Any]:
             "security_level": len(business.get("security_upgrades") or []),
             "active_guards": active_guards_count,
         }
+        if business.get("type_id") == "booze_making" and business.get("distillery"):
+            distillery_summary = _distillery_progression_state(business["distillery"])
+    total_missions = len(ordered)
+    completed_count = len(completed_ids)
+    progress_percent = int(round(100 * completed_count / total_missions)) if total_missions else 0
     return {
         "user_id": uid,
         "username": user.get("username"),
@@ -3515,8 +3521,10 @@ async def admin_ibm_payload_for_user(user: dict) -> Dict[str, Any]:
         "business_name": (business or {}).get("name"),
         "business_type_id": (business or {}).get("type_id"),
         "business_summary": business_summary,
-        "missions_completed_count": len(completed_ids),
-        "missions_total": len(ordered),
+        "distillery": distillery_summary,
+        "progress_percent": progress_percent,
+        "missions_completed_count": completed_count,
+        "missions_total": total_missions,
         "next_mission_display": next_idx,
         "all_missions_complete": next_idx >= max_display,
         "active_mission": active,
@@ -3696,16 +3704,16 @@ def _distillery_preset_for_percent(distillery: Optional[dict], progress_percent:
     if pct <= 0:
         return distillery
     d = dict(distillery)
-    levels = dict(d.get("equipment_levels") or {})
+    equipment = dict(d.get("equipment") or {})
     target_lvl = max(1, int(DISTILLERY_EQUIPMENT_MAX_LEVEL * pct / 100))
     for eq in DISTILLERY_EQUIPMENT_ORDER:
-        levels[eq] = max(int(levels.get(eq) or 0), target_lvl)
-    d["equipment_levels"] = levels
+        equipment[eq] = max(int(equipment.get(eq) or 0), target_lvl)
+    d["equipment"] = equipment
     d["worker_cap"] = min(
         DISTILLERY_MAX_WORKER_CAP,
         DISTILLERY_BASE_WORKER_CAP + int((DISTILLERY_MAX_WORKER_CAP - DISTILLERY_BASE_WORKER_CAP) * pct / 100),
     )
-    workers = d.get("workers") or {}
+    workers = dict(d.get("workers") or {})
     per_role = max(1, int(d["worker_cap"] * pct / 100) // len(DISTILLERY_WORKER_ROLES))
     for role in DISTILLERY_WORKER_ROLES:
         workers[role] = max(int(workers.get(role) or 0), per_role)
@@ -3767,14 +3775,15 @@ def _after_preset_summary(
         "ibm_counters_boosted": True,
     }
     if distillery_after:
-        levels = distillery_after.get("equipment_levels") or {}
+        equipment = distillery_after.get("equipment") or {}
         out["distillery"] = {
             "equipment_avg_level": int(
-                sum(int(levels.get(k) or 0) for k in DISTILLERY_EQUIPMENT_ORDER)
+                sum(int(equipment.get(k) or 0) for k in DISTILLERY_EQUIPMENT_ORDER)
                 / max(1, len(DISTILLERY_EQUIPMENT_ORDER))
             ),
             "worker_cap": int(distillery_after.get("worker_cap") or 0),
             "maintenance": float(distillery_after.get("maintenance") or 0),
+            "progress_pct": _distillery_progression_state(distillery_after).get("progress_pct"),
         }
     return out
 
@@ -3791,18 +3800,25 @@ def build_illegal_business_progress_preset_preview(
     user_set: Dict[str, Any],
     guards_target: int,
     active_guards: int,
+    distillery_progress_percent: Optional[int] = None,
 ) -> Dict[str, Any]:
     ordered = _ordered_ibm_missions()
     pct = max(0, min(100, int(progress_percent)))
+    distillery_pct = max(0, min(100, int(distillery_progress_percent if distillery_progress_percent is not None else pct)))
     last_completed = completed_missions[-1] if completed_missions else None
     next_m = ordered[next_display - 1] if 1 <= next_display <= len(ordered) else None
     distillery_after = None
     if business.get("type_id") == "booze_making" and business.get("distillery"):
-        distillery_after = _distillery_preset_for_percent(business.get("distillery"), pct)
+        distillery_after = _distillery_preset_for_percent(business.get("distillery"), distillery_pct)
     user_set_copy = dict(user_set)
     user_set_copy["illegal_business_guards_hired"] = guards_target
+    current_snap = _business_summary_snapshot(business, active_guards=active_guards, user=user)
+    if business.get("type_id") == "booze_making" and business.get("distillery"):
+        current_snap = dict(current_snap or {})
+        current_snap["distillery"] = _distillery_progression_state(business["distillery"])
     return {
         "progress_percent": pct,
+        "distillery_progress_percent": distillery_pct if business.get("type_id") == "booze_making" else None,
         "missions_completed_count": completed_count,
         "missions_total": len(ordered),
         "next_mission_display": next_display,
@@ -3825,7 +3841,7 @@ def build_illegal_business_progress_preset_preview(
             else None
         ),
         "all_missions_complete": next_display > len(ordered),
-        "current": _business_summary_snapshot(business, active_guards=active_guards, user=user),
+        "current": current_snap,
         "after": _after_preset_summary(
             business_set,
             guards_to_place=guards_target,
@@ -3843,12 +3859,18 @@ async def admin_apply_illegal_business_progress_preset(
     progress_percent: int,
     *,
     dry_run: bool = False,
+    distillery_progress_percent: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Set IBM ladder + business upgrades to roughly ``progress_percent`` complete (0–100).
     Requires an existing illegal business document (use Crew recovery restore first).
     """
     pct = max(0, min(100, int(progress_percent)))
+    distillery_pct = (
+        max(0, min(100, int(distillery_progress_percent)))
+        if distillery_progress_percent is not None
+        else pct
+    )
     ordered = _ordered_ibm_missions()
     completed_count, next_display = _progress_percent_to_mission_indices(pct)
     completed_missions = ordered[:completed_count]
@@ -3884,6 +3906,7 @@ async def admin_apply_illegal_business_progress_preset(
         user_set={**user_set, "illegal_business_guards_hired": guards_target},
         guards_target=guards_target,
         active_guards=active_guards,
+        distillery_progress_percent=distillery_pct,
     )
     if dry_run:
         return {
@@ -3897,7 +3920,7 @@ async def admin_apply_illegal_business_progress_preset(
     await admin_apply_ibm_mission_progress(user_id, next_display)
     biz_update = dict(business_set)
     if business.get("type_id") == "booze_making" and business.get("distillery"):
-        biz_update["distillery"] = _distillery_preset_for_percent(business.get("distillery"), pct)
+        biz_update["distillery"] = _distillery_preset_for_percent(business.get("distillery"), distillery_pct)
     await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": biz_update})
     await db.users.update_one({"id": user_id}, {"$set": user_set})
     business_after = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
@@ -3910,4 +3933,49 @@ async def admin_apply_illegal_business_progress_preset(
     out = await admin_ibm_payload_for_user(fresh)
     out["progress_preset_applied"] = preview_body
     out["message"] = f"Set ~{pct}% illegal business progress for {user.get('username') or user_id}"
+    return out
+
+
+async def admin_apply_distillery_progress(
+    user_id: str,
+    progress_percent: int,
+    *,
+    dry_run: bool = False,
+) -> Dict[str, Any]:
+    """Set distillery equipment/workers to roughly ``progress_percent`` complete (0–100). Racket ladder unchanged."""
+    pct = max(0, min(100, int(progress_percent)))
+    user = await db.users.find_one({"id": user_id}, {"_id": 0, "username": 1})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    business = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
+    if not business:
+        raise HTTPException(status_code=400, detail="No illegal business on this account")
+    if business.get("type_id") != "booze_making":
+        raise HTTPException(status_code=400, detail="Distillery progress only applies to booze-making rackets")
+    distillery = business.get("distillery")
+    if not distillery:
+        raise HTTPException(status_code=400, detail="No distillery on this business")
+    before_prog = _distillery_progression_state(distillery)
+    updated = _distillery_preset_for_percent(distillery, pct)
+    after_prog = _distillery_progression_state(updated or distillery)
+    preview = {
+        "progress_percent": pct,
+        "before": before_prog,
+        "after": after_prog,
+    }
+    if dry_run:
+        return {
+            "dry_run": True,
+            "username": user.get("username"),
+            "user_id": user_id,
+            "preview": preview,
+            "message": f"Preview distillery ~{pct}% for {user.get('username') or user_id}",
+        }
+    await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": {"distillery": updated}})
+    fresh = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not fresh:
+        raise HTTPException(status_code=404, detail="User not found")
+    out = await admin_ibm_payload_for_user(fresh)
+    out["distillery_preset_applied"] = preview
+    out["message"] = f"Set distillery progress to ~{pct}% for {user.get('username') or user_id}"
     return out

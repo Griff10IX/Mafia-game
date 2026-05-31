@@ -1,4 +1,4 @@
-import { Activity, BarChart3, Building2, Car, Crosshair, FileText, Globe, History, Landmark, Layers, Lock, LockKeyhole, Radio, Shield, UserCog, Users, Wrench, Coins, Zap } from 'lucide-react';
+import { Activity, BarChart3, Building2, Car, Crosshair, FileText, Globe, History, Landmark, Layers, Lock, LockKeyhole, Radio, Shield, UserCog, Users, Wrench, Coins, Zap, Wine } from 'lucide-react';
 
 export const ADMIN_CATEGORIES = [
   { id: 'admin-operations', label: 'Operations', icon: UserCog },
@@ -67,7 +67,8 @@ export const ADMIN_ROUTE_GROUPS = [
   { id: 'attack-logs', label: 'Attack logs', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: Crosshair, description: 'PVP attack log console and analytics.' },
   { id: 'ip-history', label: 'IP history', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: History, description: 'Per-player IP timeline and reverse IP account lookup.' },
   { id: 'exclusive-cars', label: 'Exclusive cars', categoryId: 'admin-world-systems', anchorId: 'admin-gameworld', icon: Car, description: 'Remove, transfer, or grant Al Capone / loot-exclusive cars.' },
-  { id: 'crew-recovery', label: 'Crew recovery', categoryId: 'admin-operations', anchorId: 'admin-moderation', icon: Building2, description: 'Revive families, restore illegal businesses from kill snapshots, and set IBM mission ladder progress.' },
+  { id: 'crew-recovery', label: 'Crew recovery', categoryId: 'admin-operations', anchorId: 'admin-moderation', icon: Building2, description: 'Revive families and restore illegal businesses from kill snapshots.' },
+  { id: 'racket-progress', label: 'Racket progress', categoryId: 'admin-economy-progression', anchorId: 'admin-donations', icon: Wine, description: 'Set player racket and distillery business progress (ladder, vault, guards, still upgrades).' },
   { id: 'property-transfer', label: 'Armoury / airport', categoryId: 'admin-world-systems', anchorId: 'admin-gameworld', icon: Landmark, description: 'Transfer or release armoury and airport ownership between players.' },
   { id: 'witness-statements', label: 'Witness', categoryId: 'admin-operations', anchorId: 'admin-moderation', icon: FileText, description: 'Witness statements review.' },
   { id: 'locked', label: 'Page locks', categoryId: 'admin-world-systems', anchorId: 'admin-page-locks', icon: LockKeyhole, description: 'Route / page locks (Lock page under World & Systems).' },
@@ -96,6 +97,7 @@ export const ADMIN_ROUTE_GROUP_MOBILE_SHORT = {
   'ip-history': 'IPs',
   'exclusive-cars': 'Cars',
   'crew-recovery': 'Crew',
+  'racket-progress': 'Racket',
   'property-transfer': 'Props',
   'witness-statements': 'Witness',
   locked: 'Locks',

@@ -16,6 +16,7 @@ import AdminAttackLogs from './AdminAttackLogs';
 import AdminIpHistory from './AdminIpHistory';
 import AdminExclusiveCars from './AdminExclusiveCars';
 import AdminCrewRecovery from './AdminCrewRecovery';
+import AdminRacketProgress from './AdminRacketProgress';
 import AdminPropertyTransfer from './AdminPropertyTransfer';
 import AdminWitnessStatements from './AdminWitnessStatements';
 import AdminLocked from './AdminLocked';
@@ -37,6 +38,7 @@ const STANDALONE_ADMIN_SECTIONS = new Set([
   'ip-history',
   'exclusive-cars',
   'crew-recovery',
+  'racket-progress',
   'property-transfer',
   'witness-statements',
   'locked',
@@ -981,6 +983,7 @@ export default function AdminShell() {
       {hubSection === 'ip-history' && <AdminIpHistory />}
       {hubSection === 'exclusive-cars' && <AdminExclusiveCars />}
       {hubSection === 'crew-recovery' && <AdminCrewRecovery />}
+      {hubSection === 'racket-progress' && <AdminRacketProgress />}
       {hubSection === 'property-transfer' && <AdminPropertyTransfer />}
       {hubSection === 'witness-statements' && <AdminWitnessStatements />}
       {hubSection === 'locked' && <AdminLocked />}

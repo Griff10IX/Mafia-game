@@ -19,6 +19,9 @@ function bizSessionKey(userId) {
 const LOOT_BOX_PIECES_HINT =
   'Loot box pieces stack in your account. On the Loot Box page, open a vault tier (50–200 pieces: Common, Uncommon, Rare, or Ultra Rare) for random rewards.';
 
+/** Racket + distillery progression ladder (not city missions on /account/missions). */
+const BUSINESS_PROGRESS_LABEL = 'Business progress';
+
 const IBM_REQUIREMENT_LABELS = {
   crimes: 'Total crimes',
   rank_id: 'Rank',
@@ -524,7 +527,7 @@ export default function IllegalBusiness() {
   });
   const handleCompleteMission = withSave(async (missionId) => {
     const res = await api.post(`/illegal-business/missions/${missionId}/complete`);
-    toast.success(res.data?.message || 'Mission complete.');
+    toast.success(res.data?.message || 'Progress step complete.');
     fetchData();
   });
   const handleRaid = withSave(async () => {
@@ -622,7 +625,7 @@ export default function IllegalBusiness() {
         {/* ── Header ── */}
         <div className="flex flex-wrap items-end justify-between gap-3 pb-3 border-b border-primary/15">
           <div className="min-w-0">
-            <div className="text-[9px] font-heading tracking-[.28em] text-mutedForeground uppercase mb-1">Illegal Business</div>
+            <div className="text-[9px] font-heading tracking-[.28em] text-mutedForeground uppercase mb-1">Racket</div>
             <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider leading-none truncate">
               {business?.name || typeInfo?.name || 'Racket'}
             </h1>
@@ -755,7 +758,7 @@ export default function IllegalBusiness() {
           </div>
         </div>
 
-        {/* ── Current Mission ── */}
+        {/* ── Current progress step ── */}
         {activeMission && (() => {
           const { mission, current, target } = activeMission;
           const requirementsMet = target && Object.keys(target).every((k) => (Number(current?.[k]) ?? 0) >= (Number(target[k]) ?? 0));
@@ -771,7 +774,7 @@ export default function IllegalBusiness() {
           const hasSegmented = reqKeys.some((k) => IBM_SEGMENTED_KEYS.has(k));
           return (
             <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden mobile-panel`}>
-              <CardHead icon={ListChecks} title={`Mission ${mission.order ?? ''}/${missions.length}`}
+              <CardHead icon={ListChecks} title={`${BUSINESS_PROGRESS_LABEL} · ${mission.order ?? ''}/${missions.length}`}
                 right={(
                   <div className="flex items-center gap-2 shrink-0">
                     {reqKeys.length > 0 && (
@@ -802,7 +805,7 @@ export default function IllegalBusiness() {
                         <Link to="/kill/hitlist" className="text-primary underline underline-offset-2 hover:text-primary/90">Hitlist</Link>
                         , tap <span className="text-foreground">Add NPC</span> (up to your on-board cap), then kill that target from{' '}
                         <Link to="/kill/attack" className="text-primary underline underline-offset-2 hover:text-primary/90">Attack</Link>
-                        . Each successful kill adds one toward the bar above (only while this mission is active — see note under the bars).
+                        . Each successful kill adds one toward the bar above (only while this step is active — see note under the bars).
                       </p>
                     )}
 
@@ -832,7 +835,7 @@ export default function IllegalBusiness() {
                         })}
                         {hasSegmented && (
                           <p className="text-[9px] text-zinc-600 font-heading leading-snug pt-0.5">
-                            Counts for collections, state crimes, raids, hires, slots, withdrawals, and hitlist practice NPC kills start from when you began this mission.
+                            Counts for collections, state crimes, raids, hires, slots, withdrawals, and hitlist practice NPC kills start from when this progress step began.
                           </p>
                         )}
                       </div>
@@ -866,12 +869,12 @@ export default function IllegalBusiness() {
         {/* ── Ladder complete ── */}
         {!activeMission && missions.length > 0 && (
           <div className={`${styles.panel} r-card border border-emerald-500/25 rounded-md overflow-hidden mobile-panel`}>
-            <CardHead icon={Award} title="Mission ladder complete"
+            <CardHead icon={Award} title={`${BUSINESS_PROGRESS_LABEL} complete`}
               right={<span className="text-[9px] font-heading text-emerald-400/90">{missions.length} / {missions.length}</span>}
             />
             <div className="p-4">
               <p className="text-[11px] text-mutedForeground font-body">
-                Every racket mission is in the books. Your till, vault, guards, and raids keep running — keep collecting and defending the joint.
+                Your racket and distillery ladder is fully unlocked. Till, vault, guards, and raids keep running — keep collecting and defending the joint.
               </p>
             </div>
           </div>
@@ -980,7 +983,7 @@ export default function IllegalBusiness() {
               Raids today: <span className="text-primary font-bold">{raidsToday}</span>
               <span className="text-zinc-600"> / </span>
               <span className="text-foreground">{raidDailyLimit}</span>
-              <span className="text-zinc-600 ml-1">(complete racket missions to raise the cap up to 10)</span>
+              <span className="text-zinc-600 ml-1">(advance business progress to raise the cap up to 10)</span>
             </p>
             <div className="flex flex-wrap gap-2 items-end">
               <div className="flex-1 min-w-[120px]">
@@ -1024,7 +1027,7 @@ export default function IllegalBusiness() {
 
         {/* ── Collapsible sections ── */}
         {completedMissions.length > 0 && (
-          <Collapsible label="Mission Log" count={completedMissions.length}>
+          <Collapsible label="Progress history" count={completedMissions.length}>
             <div className="p-3 space-y-2">
               {missionLogRows.map(({ mission }) => (
                 <div key={mission.id} className="flex items-center gap-2.5 px-2 py-1.5">
