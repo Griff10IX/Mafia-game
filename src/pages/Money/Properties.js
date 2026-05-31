@@ -6,6 +6,7 @@ import styles from '../../styles/noir.module.css';
 import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 import { getPropertiesPrefetch, setPropertiesPrefetch } from '../../utils/prefetchCache';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import { useAuthUser } from '../../context/AuthContext';
 
 const PROP_STYLES = `
   @keyframes prop-fade-in { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -51,13 +52,11 @@ function isNoIncomeCollectMessage(msg) {
 }
 
 export default function Properties() {
+  const authUser = useAuthUser();
   const propertiesBoot = getPropertiesPrefetch() || readSessionJson('mafia_properties_v1') || {};
   const [properties, setProperties] = useState(() => propertiesBoot.properties ?? []);
   const [propertyIncomePerkUntil, setPropertyIncomePerkUntil] = useState(() => propertiesBoot.propertyIncomePerkUntil ?? null);
-  const [targets, setTargets] = useState(() => propertiesBoot.targets ?? []);
-  const [attackLoading, setAttackLoading] = useState(null); // property_id+username
   const [collectAllLoading, setCollectAllLoading] = useState(false);
-  const [user, setUser] = useState(() => propertiesBoot.user ?? null);
   const [propertyUpkeep, setPropertyUpkeep] = useState(() => propertiesBoot.propertyUpkeep ?? null);
   const [upkeepPayLoading, setUpkeepPayLoading] = useState(false);
   const [portfolioUpgrades, setPortfolioUpgrades] = useState(() => propertiesBoot.portfolioUpgrades ?? null);
@@ -75,8 +74,6 @@ export default function Properties() {
     if (!cached) return;
     setProperties(cached.properties ?? []);
     setPropertyIncomePerkUntil(cached.propertyIncomePerkUntil ?? null);
-    setTargets(cached.targets ?? []);
-    setUser(cached.user ?? null);
     setPropertyUpkeep(cached.propertyUpkeep ?? null);
     setPortfolioUpgrades(cached.portfolioUpgrades ?? null);
     setPropertiesHeat(cached.propertiesHeat ?? null);
@@ -87,32 +84,6 @@ export default function Properties() {
   useEffect(() => {
     const cached = getPropertiesPrefetch();
     fetchProperties({ silent: !!cached });
-    fetchTargets();
-    api.get('/auth/me').then((r) => {
-      setUser(r.data);
-      setPropertiesPrefetch({
-        properties,
-        propertyIncomePerkUntil,
-        targets,
-        user: r.data,
-        propertyUpkeep,
-        portfolioUpgrades,
-        propertiesHeat,
-        propertiesHeatQuote,
-        portfolioKillBoostPercent,
-      });
-      writeSessionJson('mafia_properties_v1', {
-        properties,
-        propertyIncomePerkUntil,
-        targets,
-        user: r.data,
-        propertyUpkeep,
-        portfolioUpgrades,
-        propertiesHeat,
-        propertiesHeatQuote,
-        portfolioKillBoostPercent,
-      });
-    }).catch(() => {});
   }, []);
 
   const fetchProperties = async ({ silent = false } = {}) => {
@@ -136,8 +107,6 @@ export default function Properties() {
       setPropertiesPrefetch({
         properties: nextProperties,
         propertyIncomePerkUntil: nextPropertyIncomePerkUntil,
-        targets,
-        user,
         propertyUpkeep: nextPropertyUpkeep,
         portfolioUpgrades: nextPortfolioUpgrades,
         propertiesHeat: nextPropertiesHeat,
@@ -147,8 +116,6 @@ export default function Properties() {
       writeSessionJson('mafia_properties_v1', {
         properties: nextProperties,
         propertyIncomePerkUntil: nextPropertyIncomePerkUntil,
-        targets,
-        user,
         propertyUpkeep: nextPropertyUpkeep,
         portfolioUpgrades: nextPortfolioUpgrades,
         propertiesHeat: nextPropertiesHeat,
@@ -202,59 +169,6 @@ export default function Properties() {
       toast.error(e.response?.data?.detail || 'Bribe failed');
     } finally {
       setBribing(false);
-    }
-  };
-
-  const fetchTargets = async () => {
-    try {
-      const res = await api.get('/racket/targets');
-      const nextTargets = res.data?.targets ?? [];
-      setTargets(nextTargets);
-      setPropertiesPrefetch({
-        properties,
-        propertyIncomePerkUntil,
-        targets: nextTargets,
-        user,
-        propertyUpkeep,
-        portfolioUpgrades,
-        propertiesHeat,
-        propertiesHeatQuote,
-        portfolioKillBoostPercent,
-      });
-      writeSessionJson('mafia_properties_v1', {
-        properties,
-        propertyIncomePerkUntil,
-        targets: nextTargets,
-        user,
-        propertyUpkeep,
-        portfolioUpgrades,
-        propertiesHeat,
-        propertiesHeatQuote,
-        portfolioKillBoostPercent,
-      });
-    } catch {
-      setTargets([]);
-    }
-  };
-
-  const attackProperty = async (targetUsername, propertyId) => {
-    const key = `${targetUsername}-${propertyId}`;
-    setAttackLoading(key);
-    try {
-      const res = await api.post('/racket/extort', { target_username: targetUsername, property_id: propertyId });
-      const data = res.data || {};
-      if (data.success) {
-        toast.success(data.message || `Took ${formatMoney(data.amount)}!`);
-        refreshUser();
-      } else {
-        toast.error(data.message || 'Raid failed.');
-      }
-      fetchTargets();
-      fetchProperties();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Attack failed');
-    } finally {
-      setAttackLoading(null);
     }
   };
 
@@ -343,7 +257,7 @@ export default function Properties() {
     setCollectAllLoading(false);
   };
 
-  if (!user && properties.length === 0) {
+  if (!authUser && properties.length === 0) {
     return (
       <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <style>{PROP_STYLES}</style>
@@ -472,8 +386,8 @@ export default function Properties() {
           <p className="text-[9px] text-primary/50 font-heading uppercase tracking-[0.25em]">Investments</p>
           <p className="text-[10px] text-zinc-500 font-heading italic">Passive income from businesses.</p>
         </div>
-        {user?.properties_until && (
-          <ActiveTokenBadge tokenType="properties" untilIso={user.properties_until} compact />
+        {authUser?.properties_until && (
+          <ActiveTokenBadge tokenType="properties" untilIso={authUser.properties_until} compact />
         )}
         {propertyIncomePerkUntil && (() => {
           try {

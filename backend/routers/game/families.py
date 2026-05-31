@@ -4874,6 +4874,27 @@ async def families_wars_history(current_user: dict = Depends(get_current_user)):
     return {"wars": out}
 
 
+async def families_dashboard(current_user: dict = Depends(get_current_user)):
+    """Single round-trip for family page wave-1 data (list, my crew, config, war history, events)."""
+    from routers.game.events import get_active_event
+
+    families, my_family, config, history, events = await asyncio.gather(
+        families_list(current_user),
+        families_my(current_user),
+        families_config(current_user),
+        families_wars_history(current_user),
+        get_active_event(current_user),
+    )
+    return {
+        "families": families,
+        "my_family": my_family,
+        "config": config,
+        "war_history": history.get("wars") or [],
+        "event": events.get("event"),
+        "events_enabled": bool(events.get("events_enabled")),
+    }
+
+
 async def admin_debug_war_stats(current_user: dict = Depends(get_current_user)):
     """Admin: return raw family_war_stats and family_wars for debugging vendetta BG kill issues."""
     from server import _is_admin
@@ -5243,6 +5264,7 @@ def register(router):
     router.add_api_route("/families", families_list, methods=["GET"], dependencies=_families_rl_u)
     router.add_api_route("/families/config", families_config, methods=["GET"], dependencies=_families_rl_u)
     router.add_api_route("/families/my", families_my, methods=["GET"], dependencies=_families_rl_u)
+    router.add_api_route("/families/dashboard", families_dashboard, methods=["GET"], dependencies=_families_rl_u)
     router.add_api_route("/families/lookup", families_lookup, methods=["GET"], dependencies=_families_rl_u)
     router.add_api_route("/families", families_create, methods=["POST"])
     router.add_api_route("/families/join", families_join, methods=["POST"])

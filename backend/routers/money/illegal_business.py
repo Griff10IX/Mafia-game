@@ -1,6 +1,7 @@
 # Illegal business (1920s–30s mafia): one per player, Capo+, raid formula, guards/security, missions, killer choice on death
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any, Tuple
+import copy
 import os
 import re
 import uuid
@@ -9,7 +10,7 @@ _rng = secrets.SystemRandom()
 import logging
 from pydantic import BaseModel
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query
 
 from server import (
     db,
@@ -1585,14 +1586,13 @@ async def get_illegal_business_types(current_user: dict = Depends(get_current_us
     return {"types": ILLEGAL_BUSINESS_TYPES}
 
 
-async def _distillery_business_for_user(current_user: dict) -> tuple[dict, dict]:
+async def _distillery_business_readonly(current_user: dict) -> tuple[dict, dict]:
     business = await db.illegal_businesses.find_one({"user_id": current_user["id"]}, {"_id": 0})
     if not business:
         raise HTTPException(status_code=404, detail="You don't have an illegal business.")
     now = _utc_now()
     dist, changed = _distillery_ensure_state(business, now)
-    set_updates = {}
-    # Distillery gameplay is available to any business type; bootstrap booze production fields if missing.
+    set_updates: Dict[str, Any] = {}
     if business.get("booze_per_hour") is None:
         business["booze_per_hour"] = BOOZE_PER_HOUR_BASE
         set_updates["booze_per_hour"] = BOOZE_PER_HOUR_BASE
@@ -1606,6 +1606,14 @@ async def _distillery_business_for_user(current_user: dict) -> tuple[dict, dict]
         set_updates["distillery"] = dist
     if set_updates:
         await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": set_updates})
+    return business, dist
+
+
+async def _distillery_business_for_user(current_user: dict) -> tuple[dict, dict]:
+    business, dist = await _distillery_business_readonly(current_user)
+    now = _utc_now()
+    _distillery_decay_and_status(dist, now)
+    await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": {"distillery": dist}})
     return business, dist
 
 
@@ -1655,7 +1663,65 @@ def _distillery_public_payload(distillery: dict, business: dict) -> dict:
     }
 
 
-async def get_illegal_business(current_user: dict = Depends(get_current_user)):
+_distillery_catalog_grouped_cache: Optional[Dict[str, List[Dict[str, Any]]]] = None
+
+
+def _distillery_catalog_grouped_static() -> Dict[str, List[Dict[str, Any]]]:
+    global _distillery_catalog_grouped_cache
+    if _distillery_catalog_grouped_cache is None:
+        grouped: Dict[str, List[Dict[str, Any]]] = {}
+        for row in DISTILLERY_SPECIAL_CATALOG:
+            grouped.setdefault(str(row["track"]), []).append(dict(row))
+        for track in grouped:
+            grouped[track] = sorted(grouped[track], key=lambda x: int(x["tier"]))
+        _distillery_catalog_grouped_cache = grouped
+    return _distillery_catalog_grouped_cache
+
+
+def _distillery_progression_catalog(vault: int, unlocked: Optional[dict]) -> dict:
+    unlocked = unlocked or {}
+    rows: List[Dict[str, Any]] = []
+    for _track, track_rows in _distillery_catalog_grouped_static().items():
+        for row in track_rows:
+            uid = row["id"]
+            purchased = bool(unlocked.get(uid))
+            prev_uid = f"{row['track']}_{row['tier'] - 1:02d}" if int(row["tier"]) > 1 else None
+            track_unlock_ok = True if not prev_uid else bool(unlocked.get(prev_uid))
+            rows.append(
+                {
+                    **row,
+                    "purchased": purchased,
+                    "available": (not purchased) and track_unlock_ok,
+                    "can_afford": vault >= int(row.get("cost") or 0),
+                }
+            )
+    grouped: Dict[str, List[Dict[str, Any]]] = {}
+    for row in rows:
+        grouped.setdefault(str(row["track"]), []).append(row)
+    for track in grouped:
+        grouped[track] = sorted(grouped[track], key=lambda x: int(x["tier"]))
+    return {
+        "tracks": grouped,
+        "totals": {
+            "special_total": DISTILLERY_SPECIAL_TOTAL,
+            "special_unlocked": sum(1 for x in rows if x.get("purchased")),
+            "progress_total_steps": DISTILLERY_PROGRESS_TOTAL_STEPS,
+        },
+    }
+
+
+def _distillery_decay_view(distillery: dict, now: datetime) -> dict:
+    view = copy.deepcopy(distillery)
+    _distillery_decay_and_status(view, now)
+    return view
+
+
+async def get_illegal_business(
+    current_user: dict = Depends(get_current_user),
+    missions: str = Query("all"),
+    guards: str = Query("full"),
+    include_distillery: bool = Query(True),
+):
     user_id = current_user["id"]
     business = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
     now = datetime.now(timezone.utc)
@@ -1689,35 +1755,64 @@ async def get_illegal_business(current_user: dict = Depends(get_current_user)):
             "raid_daily_limit": raid_lim,
             "raids_today": raid_count,
         }
+    missions_mode = (missions or "all").strip().lower()
+    guards_mode = (guards or "full").strip().lower()
+    slim_missions = missions_mode == "active"
+    slim_guards = guards_mode == "summary"
     distillery_payload = None
-    if business.get("type_id") == "booze_making":
-        now = _utc_now()
-        distillery, changed = _distillery_ensure_state(business, now)
+    if include_distillery and business.get("type_id") == "booze_making":
+        now_utc = _utc_now()
+        distillery, changed = _distillery_ensure_state(business, now_utc)
         if distillery:
-            _distillery_decay_and_status(distillery, now)
-            distillery_payload = _distillery_public_payload(distillery, business)
+            view = _distillery_decay_view(distillery, now_utc)
+            distillery_payload = _distillery_public_payload(view, business)
         if changed:
             await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": {"distillery": distillery}})
     slots = int(business.get("guard_slots") or GUARD_SLOTS_INITIAL)
-    g_limit = min(2000, max(slots + 100, 500))
-    guards_raw = await db.illegal_business_guards.find({"business_id": business["id"]}, {"_id": 0}).sort("slot_number", 1).to_list(g_limit)
-    guards = [_guard_doc_with_upgrade_costs(business, g) for g in guards_raw]
-    active_guards_count = len(guards_raw)
+    guards: List[dict] = []
+    active_guards_count = 0
+    if slim_guards:
+        if business.get("id"):
+            active_guards_count = int(
+                await db.illegal_business_guards.count_documents({"business_id": business["id"]})
+            )
+    else:
+        g_limit = min(2000, max(slots + 100, 500))
+        guards_raw = await db.illegal_business_guards.find({"business_id": business["id"]}, {"_id": 0}).sort("slot_number", 1).to_list(g_limit)
+        guards = [_guard_doc_with_upgrade_costs(business, g) for g in guards_raw]
+        active_guards_count = len(guards_raw)
     progress_user = await _ibm_load_user_with_mission_baselines(current_user["id"], current_user)
     completions = progress_user.get("illegal_business_mission_completions") or []
     completed_ids = {c.get("mission_id") for c in completions if c.get("mission_id")}
     pending_rewards = await _pending_kill_rewards_with_previews(pending_raw, current_user, business)
     type_info = next((t for t in ILLEGAL_BUSINESS_TYPES if t["id"] == business.get("type_id")), {})
-    missions_progress = [
-        _ibm_mission_progress_row(
-            progress_user,
-            business,
-            m,
-            completed_ids,
-            active_guards_count=active_guards_count,
-        )
-        for m in _ordered_ibm_missions()
-    ]
+    ordered_missions = _ordered_ibm_missions()
+    missions_total = len(ordered_missions)
+    missions_completed_count = len(completed_ids)
+    if slim_missions:
+        active_row = None
+        for m in ordered_missions:
+            if m["id"] not in completed_ids:
+                active_row = _ibm_mission_progress_row(
+                    progress_user,
+                    business,
+                    m,
+                    completed_ids,
+                    active_guards_count=active_guards_count,
+                )
+                break
+        missions_progress = [active_row] if active_row else []
+    else:
+        missions_progress = [
+            _ibm_mission_progress_row(
+                progress_user,
+                business,
+                m,
+                completed_ids,
+                active_guards_count=active_guards_count,
+            )
+            for m in ordered_missions
+        ]
     # Build security upgrades list (no mission locks; cost computed by index)
     security_upgrades_with_lock = []
     for i, u in enumerate(SECURITY_UPGRADES):
@@ -1739,9 +1834,13 @@ async def get_illegal_business(current_user: dict = Depends(get_current_user)):
         "pending_take": round(pending_take, 2),
         "racket_payout_mult": float(ev.get("racket_payout", 1.0)),
         "guards": guards,
+        "guards_count": active_guards_count,
+        "guard_slots": slots,
         "type_info": type_info,
         "missions_completed": list(completed_ids),
         "missions": missions_progress,
+        "missions_total": missions_total,
+        "missions_completed_count": missions_completed_count,
         "pending_kill_rewards": pending_rewards,
         "available_types": ILLEGAL_BUSINESS_TYPES,
         "security_upgrades_list": security_upgrades_with_lock,
@@ -2335,11 +2434,10 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
 
 
 async def get_distillery(current_user: dict = Depends(get_current_user)):
-    business, distillery = await _distillery_business_for_user(current_user)
-    _distillery_decay_and_status(distillery, _utc_now())
-    await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": {"distillery": distillery}})
-    payload = _distillery_public_payload(distillery, business)
-    # Units in inventory usable for aging (same bucket as start-aging-batch).
+    business, distillery = await _distillery_business_readonly(current_user)
+    now = _utc_now()
+    view = _distillery_decay_view(distillery, now)
+    payload = _distillery_public_payload(view, business)
     booze_id = _default_booze_type_id()
     udoc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "booze_carrying": 1})
     carrying = (udoc or {}).get("booze_carrying") or {}
@@ -2347,37 +2445,36 @@ async def get_distillery(current_user: dict = Depends(get_current_user)):
     return payload
 
 
+async def get_distillery_page(current_user: dict = Depends(get_current_user)):
+    business, distillery = await _distillery_business_readonly(current_user)
+    now = _utc_now()
+    view = _distillery_decay_view(distillery, now)
+    dist_payload = _distillery_public_payload(view, business)
+    booze_id = _default_booze_type_id()
+    udoc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "booze_carrying": 1})
+    carrying = (udoc or {}).get("booze_carrying") or {}
+    dist_payload["booze_units_carrying"] = int(carrying.get(booze_id) or 0)
+    vault = int(business.get("vault") or 0)
+    pending_take, _ = await _illegal_business_pending_take_and_hours(business, current_user, now)
+    return {
+        "business": {
+            "id": business.get("id"),
+            "name": business.get("name"),
+            "type_id": business.get("type_id"),
+            "vault": vault,
+            "state": business.get("state"),
+        },
+        "pending_take": round(pending_take, 2),
+        "distillery_state": dist_payload,
+        "catalog": _distillery_progression_catalog(vault, view.get("special_upgrades") or {}),
+    }
+
+
 async def get_distillery_progression_catalog(current_user: dict = Depends(get_current_user)):
-    business, distillery = await _distillery_business_for_user(current_user)
+    business, distillery = await _distillery_business_readonly(current_user)
     unlocked = distillery.get("special_upgrades") or {}
     vault = int(business.get("vault") or 0)
-    rows = []
-    for row in DISTILLERY_SPECIAL_CATALOG:
-        uid = row["id"]
-        purchased = bool(unlocked.get(uid))
-        prev_uid = f"{row['track']}_{row['tier'] - 1:02d}" if int(row["tier"]) > 1 else None
-        track_unlock_ok = True if not prev_uid else bool(unlocked.get(prev_uid))
-        rows.append(
-            {
-                **row,
-                "purchased": purchased,
-                "available": (not purchased) and track_unlock_ok,
-                "can_afford": vault >= int(row.get("cost") or 0),
-            }
-        )
-    grouped: Dict[str, List[Dict[str, Any]]] = {}
-    for row in rows:
-        grouped.setdefault(str(row["track"]), []).append(row)
-    for track in grouped:
-        grouped[track] = sorted(grouped[track], key=lambda x: int(x["tier"]))
-    return {
-        "tracks": grouped,
-        "totals": {
-            "special_total": DISTILLERY_SPECIAL_TOTAL,
-            "special_unlocked": sum(1 for x in rows if x.get("purchased")),
-            "progress_total_steps": DISTILLERY_PROGRESS_TOTAL_STEPS,
-        },
-    }
+    return _distillery_progression_catalog(vault, unlocked)
 
 
 async def distillery_collect(current_user: dict = Depends(get_current_user)):
@@ -3392,6 +3489,7 @@ def register(router):
     router.add_api_route("/illegal-business/start", start_illegal_business, methods=["POST"])
     router.add_api_route("/illegal-business/collect", collect_illegal_business, methods=["POST"])
     router.add_api_route("/illegal-business/distillery", get_distillery, methods=["GET"])
+    router.add_api_route("/illegal-business/distillery/page", get_distillery_page, methods=["GET"])
     router.add_api_route("/illegal-business/distillery/progression-catalog", get_distillery_progression_catalog, methods=["GET"])
     router.add_api_route("/illegal-business/distillery/collect", distillery_collect, methods=["POST"])
     router.add_api_route("/illegal-business/distillery/upgrade-equipment", distillery_upgrade_equipment, methods=["POST"])

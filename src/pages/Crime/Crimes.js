@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { HelpCircle, Clock, AlertCircle, Bot, Skull, Zap, Lock, Star } from 'lucide-react';
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
+import { useAuthUser } from '../../context/AuthContext';
 import { SAME_ROUTE_NAV_CLICK } from '../../constants/navigationEvents';
 import { getCrimesPrefetch, clearCrimesPrefetch } from '../../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -444,9 +445,9 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
 
 // Main component
 export default function Crimes() {
+  const authUser = useAuthUser();
   const [bootPrefetchedCrimes] = useState(() => getCrimesPrefetch());
   const [crimes, setCrimes] = useState(() => bootPrefetchedCrimes || []);
-  const [user, setUser] = useState(null);
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
   const [crimeStats, setCrimeStats] = useState({
@@ -460,14 +461,12 @@ export default function Crimes() {
   const fetchCrimes = useCallback(async (silent = false) => {
     try {
       const prefetched = getCrimesPrefetch();
-      const [crimesRes, meRes, autoRankRes] = await Promise.all([
+      const [crimesRes, autoRankRes] = await Promise.all([
         prefetched ? Promise.resolve({ data: prefetched }) : api.get('/crimes'),
-        api.get('/auth/me'),
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
       ]);
 
       setCrimes(crimesRes.data || []);
-      setUser(meRes.data || null);
       const ar = autoRankRes.data || {};
       setAutoRankCrimesDisabled(!!(ar.auto_rank_enabled && (ar.auto_rank_crimes || ar.auto_rank_bust_every_5_sec)));
 
@@ -493,7 +492,6 @@ export default function Crimes() {
         toast.error('Failed to load crimes');
         console.error('Error fetching crimes:', error);
         setCrimes([]);
-        setUser(null);
         setCrimeStats({ count_today: 0, count_week: 0, success_today: 0, success_week: 0, profit_today: 0, profit_24h: 0, profit_week: 0 });
         setAutoRankCrimesDisabled(false); // Allow manual play if we can't determine status
       }
@@ -604,7 +602,7 @@ export default function Crimes() {
   const crimeRows = useMemo(() => {
     void tick;
     
-    const inJail = !!user?.in_jail;
+    const inJail = !!authUser?.in_jail;
 
     return crimes.map((crime) => {
       const progress = Math.min(92, Math.max(25, Number(crime.progress) ?? 25));
@@ -633,11 +631,11 @@ export default function Crimes() {
         in_jail: inJail,
       };
     });
-  }, [crimes, tick, user?.in_jail]);
+  }, [crimes, tick, authUser?.in_jail]);
 
   const commitAll = async () => {
     const available = crimeRows.filter((c) => c.can_commit);
-    if (available.length === 0 || commitAllLoading || user?.in_jail) return;
+    if (available.length === 0 || commitAllLoading || authUser?.in_jail) return;
     setCommitAllLoading(true);
 
     try {
@@ -680,8 +678,8 @@ export default function Crimes() {
 
       <div className="relative cr-fade-in flex items-center gap-2 flex-wrap">
         <p className="text-[9px] text-zinc-500 font-heading italic">Commit crimes for cash and rank. Fail and you risk jail.</p>
-        {user?.xp_crimes_until && <ActiveTokenBadge tokenType="xp_crimes" untilIso={user.xp_crimes_until} symbol />}
-        <StatusIcons inJail={!!user?.in_jail} autoRankActive={autoRankCrimesDisabled === true} />
+        {authUser?.xp_crimes_until && <ActiveTokenBadge tokenType="xp_crimes" untilIso={authUser.xp_crimes_until} symbol />}
+        <StatusIcons inJail={!!authUser?.in_jail} autoRankActive={autoRankCrimesDisabled === true} />
       </div>
 
       {eventsEnabled && <EventBanner event={event} />}
@@ -716,7 +714,7 @@ export default function Crimes() {
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
             Available Crimes
           </span>
-          {!user?.in_jail && autoRankCrimesDisabled === false && commitAllCount > 0 && (
+          {!authUser?.in_jail && autoRankCrimesDisabled === false && commitAllCount > 0 && (
             <button
               type="button"
               onClick={commitAll}

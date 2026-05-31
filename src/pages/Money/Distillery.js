@@ -1,13 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Flame, Users, Wrench, BarChart3, Clock3, ShieldAlert, TrendingUp, Layers, AlertTriangle, ChevronLeft, ChevronRight, Zap, CircleHelp, X } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import { useAuthUser } from '../../context/AuthContext';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
 
 const REFRESH_MS = 30_000;
+const DIST_CACHE_PREFIX = 'mafia_distillery_v1:';
+
+function distSessionKey(userId) {
+  const id = (userId || '').trim();
+  return id ? `${DIST_CACHE_PREFIX}${id}` : '';
+}
 const EQUIPMENT_ORDER = ['stills', 'condensers', 'mash_tun', 'barrels', 'bottling', 'tunnel', 'bribe_office', 'fake_labels', 'quality_lab'];
 const TRACKS = ['production', 'aging', 'logistics', 'stealth', 'labor', 'black_market'];
 const TRACK_FLAVOR = {
@@ -206,6 +214,7 @@ function GhostBtn({ children, onClick, disabled, small }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function Distillery() {
+  const authUser = useAuthUser();
   const [saving, setSaving] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -227,50 +236,49 @@ export default function Distillery() {
   const [agingTier, setAgingTier] = useState('standard');
   const [agingQty, setAgingQty] = useState(50);
 
+  const applyPagePayload = useCallback((payload) => {
+    const biz = payload?.business || null;
+    setBusiness(biz);
+    setPendingTake(Number(payload?.pending_take || 0));
+    const next = payload?.distillery_state || null;
+    setState(next);
+    setCatalog(payload?.catalog || { tracks: {} });
+    setLoadError(false);
+    if (!biz) return;
+    const w = next?.distillery?.workers || {};
+    setWorkerDraft({
+      production: Number(w.production || 0),
+      quality: Number(w.quality || 0),
+      security: Number(w.security || 0),
+      sales: Number(w.sales || 0),
+    });
+    const a = next?.distillery?.auto_sell || {};
+    const m = String(a.mode || 'booze_run').toLowerCase();
+    setAutoSell({
+      enabled: a.enabled !== false,
+      mode: m === 'crew' ? 'crew' : 'booze_run',
+      min_inventory: Number(a.min_inventory || 0),
+      batch_size: Number(a.batch_size || 1),
+    });
+    const ag = next?.distillery?.auto_aging || {};
+    setAutoAging({
+      enabled: ag.enabled !== false,
+      tier: ['quick', 'standard', 'reserve', 'premium'].includes(String(ag.tier || '').toLowerCase())
+        ? String(ag.tier).toLowerCase()
+        : 'standard',
+      reserve_units: Number(ag.reserve_units || 0),
+      auto_collect_booze: ag.auto_collect_booze !== false,
+    });
+  }, []);
+
   const load = useCallback(async (silent = false) => {
+    const cacheKey = distSessionKey(authUser?.id);
     try {
-      const bizRes = await api.get('/illegal-business');
-      const biz = bizRes.data?.business || null;
-      setBusiness(biz);
-      setPendingTake(Number(bizRes.data?.pending_take || 0));
-      if (!biz) {
-        setState(null);
-        setCatalog({ tracks: {} });
-        setLoadError(false);
-        return;
+      const res = await api.get('/illegal-business/distillery/page');
+      applyPagePayload(res.data || {});
+      if (cacheKey) {
+        writeSessionJson(cacheKey, { payload: res.data, t: Date.now() });
       }
-      const [distRes, catRes] = await Promise.all([
-        api.get('/illegal-business/distillery'),
-        api.get('/illegal-business/distillery/progression-catalog'),
-      ]);
-      const next = distRes.data || null;
-      setState(next);
-      setCatalog(catRes.data || { tracks: {} });
-      setLoadError(false);
-      const w = next?.distillery?.workers || {};
-      setWorkerDraft({
-        production: Number(w.production || 0),
-        quality: Number(w.quality || 0),
-        security: Number(w.security || 0),
-        sales: Number(w.sales || 0),
-      });
-      const a = next?.distillery?.auto_sell || {};
-      const m = String(a.mode || 'booze_run').toLowerCase();
-      setAutoSell({
-        enabled: a.enabled !== false,
-        mode: m === 'crew' ? 'crew' : 'booze_run',
-        min_inventory: Number(a.min_inventory || 0),
-        batch_size: Number(a.batch_size || 1),
-      });
-      const ag = next?.distillery?.auto_aging || {};
-      setAutoAging({
-        enabled: ag.enabled !== false,
-        tier: ['quick', 'standard', 'reserve', 'premium'].includes(String(ag.tier || '').toLowerCase())
-          ? String(ag.tier).toLowerCase()
-          : 'standard',
-        reserve_units: Number(ag.reserve_units || 0),
-        auto_collect_booze: ag.auto_collect_booze !== false,
-      });
     } catch (e) {
       const status = e.response?.status;
       const detail = String(e.response?.data?.detail || '');
@@ -282,6 +290,7 @@ export default function Distillery() {
         setCatalog({ tracks: {} });
         setPendingTake(0);
         setLoadError(false);
+        if (cacheKey) writeSessionJson(cacheKey, { payload: { business: null }, t: Date.now() });
       } else {
         if (!silent) toast.error(getApiErrorMessage(e));
         if (!silent) {
@@ -294,13 +303,32 @@ export default function Distillery() {
     } finally {
       setHasLoaded(true);
     }
-  }, []);
+  }, [authUser?.id, applyPagePayload]);
 
+  const prevDistUserIdRef = useRef(null);
   useEffect(() => {
-    load(false);
+    const uid = authUser?.id;
+    if (!uid) return undefined;
+    if (prevDistUserIdRef.current && prevDistUserIdRef.current !== uid) {
+      setBusiness(null);
+      setState(null);
+      setCatalog({ tracks: {} });
+      setPendingTake(0);
+      setHasLoaded(false);
+    }
+    prevDistUserIdRef.current = uid;
+    const key = distSessionKey(uid);
+    const c = readSessionJson(key);
+    const stale = !c?.t || Date.now() - c.t > REFRESH_MS;
+    if (c?.payload != null) {
+      applyPagePayload(c.payload);
+      setHasLoaded(true);
+    }
+    if (c?.payload == null) load(false);
+    else if (stale) load(true);
     const id = setInterval(() => load(true), REFRESH_MS);
     return () => clearInterval(id);
-  }, [load]);
+  }, [authUser?.id, load, applyPagePayload]);
 
   const run = async (fn) => {
     if (saving) return;

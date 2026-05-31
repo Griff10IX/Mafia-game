@@ -13,6 +13,7 @@ import api, {
 import { clearStaffPortalSession, isStaffPortalTokenValid } from '../utils/staffPortalSession';
 import { getThemeUiPlatform } from '../utils/themePlatform';
 import { readDashboardSessionCache } from '../utils/dashboardSessionCache';
+import { AuthContext } from '../context/AuthContext';
 import { warmLeaderboardCaches } from '../utils/leaderboardTopCache';
 import { setCrimesPrefetch, getCrimesPrefetch, clearProfileSessionLastMeUsername, setProfileSessionLastMeUsername } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -1841,6 +1842,7 @@ export default function Layout({ children }) {
   }
 
   return (
+    <AuthContext.Provider value={user}>
     <div className={`min-h-screen ${styles.page} ${styles.themeGangsterModern} transition-colors`}>
       <style>{`
         @keyframes gtaExclusivePulse {
@@ -2972,5 +2974,6 @@ export default function Layout({ children }) {
         </div>
       )}
     </div>
+    </AuthContext.Provider>
   );
 }

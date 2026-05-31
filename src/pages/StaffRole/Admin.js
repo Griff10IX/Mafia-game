@@ -14,6 +14,7 @@ import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import AttackLogsPanel from '../../components/staff/AttackLogsPanel';
 import { normalizeBodyguardSlotValue } from '../../utils/attackLogDisplay';
 import AdminSustainedRlEventsTable from './admin/AdminSustainedRlEventsTable';
+import AdminRacketProgress from './AdminRacketProgress';
 import styles from '../../styles/noir.module.css';
 import {
   ADMIN_CATEGORIES,
@@ -242,6 +243,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Pre-order Settings', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['preorder', 'points', 'release', 'manual', 'store', 'credit'], adminOnly: true },
   { label: 'Release Preorder Points', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['release', 'preorder', 'points', 'credit'], adminOnly: true },
   { label: 'Quick Trade admin', categoryId: 'admin-economy-progression', collapseKey: 'quicktradeTool', keywords: ['quicktrade', 'trade', 'offers', 'escrow', 'cancel', 'listings', 'tokens', 'property'], adminOnly: true },
+  { label: 'Racket & Distillery progress', categoryId: 'admin-economy-progression', collapseKey: 'racketProgress', scrollToId: 'admin-racket-progress', keywords: ['racket', 'distillery', 'illegal business', 'progress', 'vault', 'guards', 'security', 'ladder', 'booze', 'ibm'], adminOnly: true },
   // Game World
   { label: 'Game Events', categoryId: 'admin-gameworld', collapseKey: 'events', keywords: ['events', 'toggle', 'enable', 'disable', 'random', 'bundle', 'daily', 'modifiers', 'roll'], adminOnly: true },
   { label: 'Booze Run rotation & global discount', categoryId: 'admin-gameworld', collapseKey: 'boozeRun', keywords: ['booze', 'run', 'rotation', 'prices', 'discount', 'listed', 'nudge', 'global', 'jail', 'bust', 'prohibition'], adminOnly: true },
@@ -376,8 +378,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true }; }
 }
 
 function saveCollapsed(state) {
@@ -11431,6 +11433,27 @@ export default function Admin() {
               and untick Economy &amp; Progression.
             </p>
           </div>
+        </div>
+      </section>
+      )}
+
+      {activeCategoryId === 'admin-economy-progression' && isAdmin && (
+      <section id="admin-racket-progress" className="admin-category-nav space-y-4 mb-4">
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-violet-500/35 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-violet-500/50 to-transparent" />
+          <SectionHeader
+            icon={Building2}
+            title="Racket & Distillery Progress"
+            color="text-violet-300"
+            toolAnchor="racketProgress"
+            isCollapsed={collapsed.racketProgress}
+            onToggle={() => toggleSection('racketProgress')}
+          />
+          {!collapsed.racketProgress && (
+            <div className="p-3">
+              <AdminRacketProgress embedded initialUsername={(formData.targetUsername || '').trim()} />
+            </div>
+          )}
         </div>
       </section>
       )}

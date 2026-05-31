@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Car, CheckSquare, Square } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
+import { useAuthUser } from '../../context/AuthContext';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
@@ -74,10 +75,10 @@ const RARITY_COLOR = {
 };
 
 export default function BuyCars() {
-  const [cars, setCars] = useState([]);
+  const authUser = useAuthUser();
   const [dealerCars, setDealerCars] = useState([]);
   const [marketplaceListings, setMarketplaceListings] = useState([]);
-  const [userMoney, setUserMoney] = useState(null);
+  const [userMoney, setUserMoney] = useState(() => (authUser?.money != null ? authUser.money : null));
   const [hasLoaded, setHasLoaded] = useState(false);
   const [selectedRarity, setSelectedRarity] = useState(null);
   const [sourceFilter, setSourceFilter] = useState('all'); // 'all' | 'dealer' | 'listing'
@@ -87,19 +88,20 @@ export default function BuyCars() {
 
   const fetchAll = async () => {
     try {
-      const [garageRes, saleRes, meRes, marketRes] = await Promise.all([
-        api.get('/gta/garage').catch(() => ({ data: { cars: [] } })),
+      const [saleRes, marketRes] = await Promise.all([
         api.get('/gta/cars-for-sale').catch(() => ({ data: { cars: [] } })),
-        api.get('/auth/me').catch(() => ({ data: {} })),
         api.get('/gta/marketplace').catch(() => ({ data: { listings: [] } })),
       ]);
-      setCars(Array.isArray(garageRes.data?.cars) ? garageRes.data.cars : []);
       setDealerCars(Array.isArray(saleRes.data?.cars) ? saleRes.data.cars : []);
-      setUserMoney(meRes.data?.money ?? null);
+      if (authUser?.money != null) setUserMoney(authUser.money);
       setMarketplaceListings(Array.isArray(marketRes.data?.listings) ? marketRes.data.listings : []);
     } catch (_) {}
     finally { setHasLoaded(true); }
   };
+
+  useEffect(() => {
+    if (authUser?.money != null) setUserMoney(authUser.money);
+  }, [authUser?.money]);
 
   useEffect(() => {
     fetchAll();

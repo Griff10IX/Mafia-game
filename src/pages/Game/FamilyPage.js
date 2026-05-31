@@ -2840,93 +2840,49 @@ export default function FamilyPage() {
   const readyRackets = rackets.filter((r) => r.level > 0 && isRacketReadyAt(r.next_collect_at)).length;
   const unlockedRackets = rackets.filter(r => r.level > 0).length;
 
+  const fetchVaultTransactions = useCallback(async () => {
+    if (!myFamily?.family) return;
+    try {
+      const vaultRes = await apiRequestWith429Retry(() => api.get('/families/vault-transactions', { params: { limit: 50 } }));
+      const txs = vaultRes.data?.transactions ?? [];
+      const total = vaultRes.data?.total ?? 0;
+      setVaultTransactions(txs);
+      setVaultTxTotal(total);
+      const prev = getFamiliesPrefetch() || {};
+      setFamiliesPrefetch({ ...prev, vaultTransactions: txs, vaultTxTotal: total });
+    } catch {
+      setVaultTransactions([]);
+      setVaultTxTotal(0);
+    }
+  }, [myFamily?.family]);
+
   const fetchData = useCallback(async () => {
     try {
-      let nextFamilies = [];
-      let nextMyFamily = null;
-      let nextConfig = null;
-      let nextWarHistory = [];
-      let nextEvent = null;
-      let nextEventsEnabled = false;
-      let nextWarStats = null;
-      let nextRacketAttackTargets = [];
-      let nextVaultTransactions = [];
-      let nextVaultTxTotal = 0;
+      const dashRes = await apiRequestWith429Retry(() => api.get('/families/dashboard'));
+      const dash = dashRes.data || {};
+      const nextFamilies = dash.families || [];
+      const nextMyFamily = dash.my_family ?? null;
+      const nextConfig = dash.config ?? null;
+      const nextWarHistory = dash.war_history || [];
+      const nextEvent = dash.event ?? null;
+      const nextEventsEnabled = !!dash.events_enabled;
 
-      const [listRes, myRes, configRes, historyRes, eventsRes] = await Promise.allSettled([
-        apiRequestWith429Retry(() => api.get('/families')),
-        apiRequestWith429Retry(() => api.get('/families/my')),
-        apiRequestWith429Retry(() => api.get('/families/config')).catch(() => ({ data: {} })),
-        apiRequestWith429Retry(() => api.get('/families/wars/history')).catch(() => ({ data: { wars: [] } })),
-        apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: { event: null, events_enabled: false } })),
-      ]);
-      if (listRes.status === 'fulfilled') {
-        nextFamilies = listRes.value?.data || [];
-        setFamilies(nextFamilies);
-      }
-      if (myRes.status === 'fulfilled' && myRes.value?.data) {
-        nextMyFamily = myRes.value.data;
-        setMyFamily(nextMyFamily);
-        if (myRes.value.data?.family) {
-          const [statsRes, targetsRes, vaultRes] = await Promise.allSettled([
-            apiRequestWith429Retry(() => api.get('/families/war/stats')),
-            apiRequestWith429Retry(() => api.get('/families/racket-attack-targets', { params: { _: Date.now() } })),
-            apiRequestWith429Retry(() => api.get('/families/vault-transactions', { params: { limit: 50 } })).catch(() => ({
-              data: { transactions: [], total: 0 },
-            })),
-          ]);
-          if (statsRes.status === 'fulfilled') {
-            nextWarStats = statsRes.value?.data;
-            setWarStats(nextWarStats);
-          }
-          nextRacketAttackTargets = targetsRes.status === 'fulfilled' ? targetsRes.value?.data?.targets ?? [] : [];
-          setRacketAttackTargets(nextRacketAttackTargets);
-          if (vaultRes.status === 'fulfilled') {
-            nextVaultTransactions = vaultRes.value?.data?.transactions ?? [];
-            nextVaultTxTotal = vaultRes.value?.data?.total ?? 0;
-            setVaultTransactions(nextVaultTransactions);
-            setVaultTxTotal(nextVaultTxTotal);
-          } else {
-            setVaultTransactions([]);
-            setVaultTxTotal(0);
-          }
-        } else {
-          nextWarStats = null;
-          nextRacketAttackTargets = [];
-          nextVaultTransactions = [];
-          nextVaultTxTotal = 0;
-          setWarStats(null);
-          setRacketAttackTargets([]);
-          setVaultTransactions([]);
-          setVaultTxTotal(0);
-        }
-      }
-      if (configRes.status === 'fulfilled') {
-        nextConfig = configRes.value?.data;
-        setConfig(nextConfig);
-      }
-      if (historyRes.status === 'fulfilled') {
-        nextWarHistory = historyRes.value?.data?.wars || [];
-        setWarHistory(nextWarHistory);
-      }
-      if (eventsRes.status === 'fulfilled') {
-        nextEvent = eventsRes.value?.data?.event ?? null;
-        nextEventsEnabled = !!eventsRes.value?.data?.events_enabled;
-        setEvent(nextEvent);
-        setEventsEnabled(nextEventsEnabled);
-      }
+      setFamilies(nextFamilies);
+      setMyFamily(nextMyFamily);
+      setConfig(nextConfig);
+      setWarHistory(nextWarHistory);
+      setEvent(nextEvent);
+      setEventsEnabled(nextEventsEnabled);
 
+      const prev = getFamiliesPrefetch() || {};
       setFamiliesPrefetch({
+        ...prev,
         families: nextFamilies,
         myFamily: nextMyFamily,
         config: nextConfig,
         warHistory: nextWarHistory,
         event: nextEvent,
         eventsEnabled: nextEventsEnabled,
-        warStats: nextWarStats,
-        racketAttackTargets: nextRacketAttackTargets,
-        vaultTransactions: nextVaultTransactions,
-        vaultTxTotal: nextVaultTxTotal,
       });
     } catch (e) { toast.error(apiDetail(e)); }
     finally { setFamilyMembershipResolved(true); }
@@ -2937,7 +2893,10 @@ export default function FamilyPage() {
     setTargetsRefreshing(true);
     try {
       const res = await apiRequestWith429Retry(() => api.get('/families/racket-attack-targets', { params: { _: Date.now() } }));
-      setRacketAttackTargets(res.data?.targets ?? []);
+      const targets = res.data?.targets ?? [];
+      setRacketAttackTargets(targets);
+      const prev = getFamiliesPrefetch() || {};
+      setFamiliesPrefetch({ ...prev, racketAttackTargets: targets });
     }
     catch { setRacketAttackTargets([]); } finally { setTargetsRefreshing(false); }
   }, [myFamily?.family]);
@@ -3281,8 +3240,18 @@ export default function FamilyPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { const id = setInterval(() => setTick((t) => t + 1), 1000); return () => clearInterval(id); }, []);
   useEffect(() => {
+    if (activeTab === 'treasury' && myFamily?.family) fetchVaultTransactions();
+  }, [activeTab, myFamily?.family, fetchVaultTransactions]);
+  useEffect(() => {
+    if (activeTab === 'raid' && myFamily?.family) fetchRacketAttackTargets();
+  }, [activeTab, myFamily?.family, fetchRacketAttackTargets]);
+  useEffect(() => {
     if (showWarModal && myFamily?.family) {
-      apiRequestWith429Retry(() => api.get('/families/war/stats')).then((res) => setWarStats(res.data)).catch(() => {});
+      apiRequestWith429Retry(() => api.get('/families/war/stats')).then((res) => {
+        setWarStats(res.data);
+        const prev = getFamiliesPrefetch() || {};
+        setFamiliesPrefetch({ ...prev, warStats: res.data });
+      }).catch(() => {});
     }
   }, [showWarModal, myFamily?.family]);
 

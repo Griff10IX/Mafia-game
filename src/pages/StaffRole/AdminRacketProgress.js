@@ -134,12 +134,12 @@ function DistilleryPreviewPanel({ preview, onApply, onDismiss, applying }) {
   );
 }
 
-export default function AdminRacketProgress() {
+export default function AdminRacketProgress({ embedded = false, initialUsername = '' }) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [accessChecked, setAccessChecked] = useState(false);
+  const [accessChecked, setAccessChecked] = useState(embedded);
 
-  const [username, setUsername] = useState(searchParams.get('user') || '');
+  const [username, setUsername] = useState(searchParams.get('user') || initialUsername || '');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -156,6 +156,7 @@ export default function AdminRacketProgress() {
   const [stepSaving, setStepSaving] = useState(false);
 
   useEffect(() => {
+    if (embedded) return;
     let cancelled = false;
     (async () => {
       try {
@@ -173,7 +174,13 @@ export default function AdminRacketProgress() {
     return () => {
       cancelled = true;
     };
-  }, [navigate]);
+  }, [navigate, embedded]);
+
+  useEffect(() => {
+    if (initialUsername && !searchParams.get('user')) {
+      setUsername(initialUsername);
+    }
+  }, [initialUsername, searchParams]);
 
   const loadProgress = useCallback(async (override) => {
     const un = (override != null ? String(override) : username).trim();
@@ -188,27 +195,29 @@ export default function AdminRacketProgress() {
       const res = await api.get(`/admin/illegal-business/missions/user/${encodeURIComponent(un)}`);
       setData(res.data || null);
       setNextStep(String(res.data?.next_mission_display ?? ''));
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        next.set('user', un);
-        return next;
-      });
+      if (!embedded) {
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.set('user', un);
+          return next;
+        });
+      }
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load progress');
       setData(null);
     } finally {
       setLoading(false);
     }
-  }, [username, setSearchParams]);
+  }, [username, setSearchParams, embedded]);
 
   useEffect(() => {
-    if (!accessChecked) return;
+    if (!accessChecked || embedded) return;
     const u = searchParams.get('user');
     if (u) {
       setUsername(u);
       loadProgress(u);
     }
-  }, [accessChecked, searchParams, loadProgress]);
+  }, [accessChecked, embedded, searchParams, loadProgress]);
 
   const previewPreset = async (pctOverride) => {
     const un = (data?.username || username).trim();
@@ -345,7 +354,7 @@ export default function AdminRacketProgress() {
   };
 
   if (!accessChecked) {
-    return (
+    return embedded ? null : (
       <div className={`${styles.pageContent} p-4 text-[11px] text-mutedForeground font-heading`}>
         Checking access…
       </div>
@@ -355,24 +364,33 @@ export default function AdminRacketProgress() {
   const biz = data?.business_summary;
   const dist = data?.distillery;
 
-  return (
-    <div className={`${styles.pageContent} space-y-4 max-w-3xl`}>
-      <div>
-        <h1 className="text-sm font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-2">
-          <Building2 size={16} /> Racket &amp; distillery progress
-        </h1>
-        <p className="text-[10px] text-mutedForeground font-heading mt-1 leading-snug">
-          Set how far a player has progressed on{' '}
-          <Link to="/money/racket" className="text-primary underline underline-offset-2">Racket</Link>
-          {' '}and{' '}
-          <Link to="/money/distillery" className="text-primary underline underline-offset-2">Distillery</Link>.
-          Requires an existing illegal business — restore via{' '}
-          <Link to="/tjjeujr3wa/crew-recovery" className="text-primary underline underline-offset-2">Crew recovery</Link>{' '}
-          if they lost it.
-        </p>
-      </div>
+  const inner = (
+    <>
+      {!embedded && (
+        <div>
+          <h1 className="text-sm font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-2">
+            <Building2 size={16} /> Racket &amp; distillery progress
+          </h1>
+          <p className="text-[10px] text-mutedForeground font-heading mt-1 leading-snug">
+            Set how far a player has progressed on{' '}
+            <Link to="/money/racket" className="text-primary underline underline-offset-2">Racket</Link>
+            {' '}and{' '}
+            <Link to="/money/distillery" className="text-primary underline underline-offset-2">Distillery</Link>.
+            Requires an existing illegal business — restore via{' '}
+            <Link to="/tjjeujr3wa/crew-recovery" className="text-primary underline underline-offset-2">Crew recovery</Link>{' '}
+            if they lost it.
+          </p>
+        </div>
+      )}
 
-      <section className={`${styles.panel} rounded-lg border border-primary/25 p-4 space-y-3`}>
+      {embedded && (
+        <p className="text-[10px] text-mutedForeground font-heading mb-3 leading-snug">
+          Set racket ladder % (vault, guards, security, income) and distillery % for booze rackets. Restore lost businesses in{' '}
+          <Link to="/tjjeujr3wa/crew-recovery" className="text-primary underline underline-offset-2">Crew recovery</Link>.
+        </p>
+      )}
+
+      <section className={`${embedded ? '' : styles.panel} ${embedded ? 'space-y-3' : 'rounded-lg border border-primary/25 p-4 space-y-3'}`}>
         <div className="flex flex-wrap gap-2">
           <input
             type="text"
@@ -431,7 +449,7 @@ export default function AdminRacketProgress() {
 
       {data?.has_business && (
         <>
-          <section className={`${styles.panel} rounded-lg border border-primary/25 p-4 space-y-3`}>
+          <section className={`${embedded ? 'rounded-lg border border-primary/25 p-3 mt-3' : `${styles.panel} rounded-lg border border-primary/25 p-4`} space-y-3`}>
             <h2 className="text-[11px] font-heading font-bold uppercase text-primary">Full preset (recommended)</h2>
             <p className="text-[9px] text-mutedForeground leading-snug">
               Sets progress ladder plus vault, income, guards, security, and counters to match. Booze rackets also update distillery unless you override below.
@@ -488,7 +506,7 @@ export default function AdminRacketProgress() {
           </section>
 
           {data.business_type_id === 'booze_making' && (
-            <section className={`${styles.panel} rounded-lg border border-violet-500/25 p-4 space-y-3`}>
+            <section className={`${embedded ? 'rounded-lg border border-violet-500/25 p-3 mt-3' : `${styles.panel} rounded-lg border border-violet-500/25 p-4`} space-y-3`}>
               <h2 className="text-[11px] font-heading font-bold uppercase text-violet-300 flex items-center gap-2">
                 <Wine size={12} /> Distillery only
               </h2>
@@ -530,7 +548,7 @@ export default function AdminRacketProgress() {
             </section>
           )}
 
-          <section className={`${styles.panel} rounded-lg border border-zinc-600/40 p-4 space-y-3`}>
+          <section className={`${embedded ? 'rounded-lg border border-zinc-600/40 p-3 mt-3' : `${styles.panel} rounded-lg border border-zinc-600/40 p-4`} space-y-3`}>
             <h2 className="text-[11px] font-heading font-bold uppercase text-zinc-400">Ladder step only</h2>
             <p className="text-[9px] text-mutedForeground leading-snug">
               Jump to a specific progress step number without changing vault, guards, or distillery. Does not grant step rewards.
@@ -554,6 +572,16 @@ export default function AdminRacketProgress() {
           </section>
         </>
       )}
+    </>
+  );
+
+  if (embedded) {
+    return <div className="space-y-0">{inner}</div>;
+  }
+
+  return (
+    <div className={`${styles.pageContent} space-y-4 max-w-3xl`}>
+      {inner}
     </div>
   );
 }

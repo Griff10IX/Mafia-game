@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Shield, ListChecks, Crosshair, TrendingUp, Lock, UserPlus, Star, AlertTriangle, ChevronRight, ChevronDown, Award } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import { useAuthUser } from '../../context/AuthContext';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -399,16 +400,21 @@ export default function IllegalBusiness() {
   const [raidTarget, setRaidTarget] = useState('');
   const [raidState, setRaidState] = useState('');
   const [raidResult, setRaidResult] = useState(null);
-  const [user, setUser] = useState(null);
   const [withdrawAmount, setWithdrawAmount] = useState('');
+  const authUser = useAuthUser();
   const [missionLogShowAll, setMissionLogShowAll] = useState(false);
+  const [missionsFullLoaded, setMissionsFullLoaded] = useState(false);
 
-  const fetchData = useCallback(async (silent = false) => {
-    const cacheKey = bizSessionKey(user?.id);
+  const fetchData = useCallback(async (silent = false, opts = {}) => {
+    const cacheKey = bizSessionKey(authUser?.id);
+    const slim = silent && !opts.full;
     try {
+      const params = slim
+        ? { missions: 'active', guards: 'summary', include_distillery: false }
+        : undefined;
       const [res, typesRes] = await Promise.all([
-        api.get('/illegal-business').catch((e) => ({ ...e, response: e.response })),
-        api.get('/illegal-business/types').catch(() => ({ data: { types: [] } })),
+        api.get('/illegal-business', params ? { params } : undefined).catch((e) => ({ ...e, response: e.response })),
+        slim ? Promise.resolve(null) : api.get('/illegal-business/types').catch(() => ({ data: { types: [] } })),
       ]);
       const prevSnap = cacheKey ? readSessionJson(cacheKey) || {} : {};
       let nextTypes = prevSnap.types ?? [];
@@ -420,8 +426,26 @@ export default function IllegalBusiness() {
       if (res.response?.status === 404) {
         nextData = { noBusiness: true };
         setData(nextData);
+        setMissionsFullLoaded(false);
       } else if (res.data) {
-        nextData = { ...res.data, noBusiness: Boolean(res.data.no_business) };
+        const incoming = res.data;
+        if (slim && prevSnap.data) {
+          const prevMissions = Array.isArray(prevSnap.data.missions) ? prevSnap.data.missions : [];
+          const prevGuards = Array.isArray(prevSnap.data.guards) ? prevSnap.data.guards : [];
+          const activeMission = (incoming.missions || []).find((m) => !m.completed);
+          const completed = prevMissions.filter((m) => m.completed);
+          const mergedMissions = activeMission ? [...completed, activeMission] : completed;
+          nextData = {
+            ...prevSnap.data,
+            ...incoming,
+            guards: (incoming.guards || []).length ? incoming.guards : prevGuards,
+            missions: mergedMissions.length ? mergedMissions : (incoming.missions || []),
+            noBusiness: Boolean(incoming.no_business),
+          };
+        } else {
+          nextData = { ...incoming, noBusiness: Boolean(incoming.no_business) };
+          setMissionsFullLoaded(true);
+        }
         setData(nextData);
       } else if (!silent) {
         toast.error(getApiErrorMessage(res));
@@ -433,25 +457,44 @@ export default function IllegalBusiness() {
       if (e.response?.status === 404) {
         const nextData = { noBusiness: true };
         setData(nextData);
+        setMissionsFullLoaded(false);
         if (cacheKey) {
           const prevSnap = readSessionJson(cacheKey) || {};
           writeSessionJson(cacheKey, { data: nextData, types: prevSnap.types ?? [], t: Date.now() });
         }
       } else if (!silent) toast.error(getApiErrorMessage(e));
     }
-  }, [user?.id]);
+  }, [authUser?.id]);
 
-  useEffect(() => {
-    api.get('/auth/me').then((r) => setUser(r.data)).catch(() => {});
-  }, []);
+  const loadFullMissions = useCallback(async () => {
+    if (missionsFullLoaded) return;
+    try {
+      const res = await api.get('/illegal-business/missions');
+      const missions = res.data?.missions || [];
+      setData((prev) => {
+        if (!prev) return prev;
+        const next = { ...prev, missions };
+        const cacheKey = bizSessionKey(authUser?.id);
+        if (cacheKey) {
+          const snap = readSessionJson(cacheKey) || {};
+          writeSessionJson(cacheKey, { ...snap, data: next, t: Date.now() });
+        }
+        return next;
+      });
+      setMissionsFullLoaded(true);
+    } catch (e) {
+      toast.error(getApiErrorMessage(e));
+    }
+  }, [authUser?.id, missionsFullLoaded]);
 
   const prevBizUserIdRef = useRef(null);
   useEffect(() => {
-    const uid = user?.id;
+    const uid = authUser?.id;
     if (!uid) return undefined;
     if (prevBizUserIdRef.current && prevBizUserIdRef.current !== uid) {
       setData(null);
       setTypes([]);
+      setMissionsFullLoaded(false);
     }
     prevBizUserIdRef.current = uid;
     const key = bizSessionKey(uid);
@@ -460,12 +503,13 @@ export default function IllegalBusiness() {
     if (c?.data != null) {
       setData((prev) => prev ?? c.data);
       if (c.types?.length) setTypes((prev) => (prev.length ? prev : c.types));
+      setMissionsFullLoaded(Array.isArray(c.data?.missions) && c.data.missions.length > 1);
     }
     if (c?.data == null) fetchData(false);
     else if (stale) fetchData(true);
     const id = setInterval(() => fetchData(true), BIZ_REFRESH);
     return () => clearInterval(id);
-  }, [user?.id, fetchData]);
+  }, [authUser?.id, fetchData]);
 
   const withSave = (fn) => async (...args) => {
     if (saving) return;
@@ -583,7 +627,8 @@ export default function IllegalBusiness() {
   const typeInfo = data?.type_info || {};
   const pendingRewards = data?.pending_kill_rewards || [];
   const securityList = data?.security_upgrades_list || [];
-  const guardSlots = business?.guard_slots ?? 2;
+  const guardSlots = business?.guard_slots ?? data?.guard_slots ?? 2;
+  const guardsCount = guards.length || Number(data?.guards_count) || 0;
   const nextGuardSlotCostCash = data?.next_guard_slot_cost_cash ?? null;
   const guardHireCost = data?.guard_hire_cost ?? 2500;
   const vault = parseInt(business?.vault ?? 0, 10);
@@ -599,6 +644,7 @@ export default function IllegalBusiness() {
   const nextUpgrade = nextUpgradeIdx < securityList.length ? securityList[nextUpgradeIdx] : null;
   const totalUpgrades = securityList.length;
   const missions = Array.isArray(data?.missions) ? data.missions : [];
+  const missionsTotal = Number(data?.missions_total) || missions.length;
   const completedMissions = missions.filter(m => m.completed);
   const MISSION_LOG_PREVIEW = 18;
   const completedMissionsSorted = [...completedMissions].sort(
@@ -637,7 +683,7 @@ export default function IllegalBusiness() {
               </Link>
             </div>
             <div className="text-[10px] text-zinc-500 mt-1 font-heading">
-              Level {business?.level ?? 1} · Security {nextUpgradeIdx}/{totalUpgrades} · {guards.length}/{guardSlots} guards
+              Level {business?.level ?? 1} · Security {nextUpgradeIdx}/{totalUpgrades} · {guardsCount}/{guardSlots} guards
             </div>
           </div>
           <div className="income-glow border border-primary/25 rounded-md px-4 py-2.5 text-right bg-primary/5 shrink-0 max-w-[200px]">
@@ -666,8 +712,8 @@ export default function IllegalBusiness() {
           </div>
         </div>
 
-        {user?.racket_until && (
-          <ActiveTokenBadge tokenType="racket" untilIso={user.racket_until} />
+        {authUser?.racket_until && (
+          <ActiveTokenBadge tokenType="racket" untilIso={authUser.racket_until} />
         )}
 
         <KillRewardsBlock pendingRewards={pendingRewards} saving={saving} onClaim={handleClaimKillReward} />
@@ -774,7 +820,7 @@ export default function IllegalBusiness() {
           const hasSegmented = reqKeys.some((k) => IBM_SEGMENTED_KEYS.has(k));
           return (
             <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden mobile-panel`}>
-              <CardHead icon={ListChecks} title={`${BUSINESS_PROGRESS_LABEL} · ${mission.order ?? ''}/${missions.length}`}
+              <CardHead icon={ListChecks} title={`${BUSINESS_PROGRESS_LABEL} · ${mission.order ?? ''}/${missionsTotal}`}
                 right={(
                   <div className="flex items-center gap-2 shrink-0">
                     {reqKeys.length > 0 && (
@@ -867,10 +913,10 @@ export default function IllegalBusiness() {
         })()}
 
         {/* ── Ladder complete ── */}
-        {!activeMission && missions.length > 0 && (
+        {!activeMission && missionsTotal > 0 && (
           <div className={`${styles.panel} r-card border border-emerald-500/25 rounded-md overflow-hidden mobile-panel`}>
             <CardHead icon={Award} title={`${BUSINESS_PROGRESS_LABEL} complete`}
-              right={<span className="text-[9px] font-heading text-emerald-400/90">{missions.length} / {missions.length}</span>}
+              right={<span className="text-[9px] font-heading text-emerald-400/90">{missionsTotal} / {missionsTotal}</span>}
             />
             <div className="p-4">
               <p className="text-[11px] text-mutedForeground font-body">
@@ -916,7 +962,7 @@ export default function IllegalBusiness() {
             <div>
               <div className="flex items-baseline justify-between mb-2">
                 <span className="text-[10px] font-heading uppercase tracking-widest text-mutedForeground">Muscle</span>
-                <span className="font-heading font-bold text-primary text-sm">{guards.length} / {guardSlots}</span>
+                <span className="font-heading font-bold text-primary text-sm">{guardsCount} / {guardSlots}</span>
               </div>
 
               {guards.length > 0 && (
@@ -955,13 +1001,13 @@ export default function IllegalBusiness() {
               )}
 
               <div className="flex flex-wrap gap-2">
-                {guards.length < guardSlots && (
-                  <button onClick={() => handleHireGuard(guards.length + 1)} disabled={saving}
+                {guardsCount < guardSlots && (
+                  <button onClick={() => handleHireGuard(guardsCount + 1)} disabled={saving}
                     className="flex items-center gap-1 text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/30 px-2.5 py-1.5 rounded hover:bg-primary/10 disabled:opacity-40 transition-all">
                     <UserPlus size={9} /> Hire Guard — {formatMoney(guardHireCost)}
                   </button>
                 )}
-                {guards.length >= guardSlots && nextGuardSlotCostCash != null && (
+                {guardsCount >= guardSlots && nextGuardSlotCostCash != null && (
                   <button onClick={handleBuyGuardSlot} disabled={saving}
                     className="flex items-center gap-1 text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/30 px-2.5 py-1.5 rounded hover:bg-primary/10 disabled:opacity-40 transition-all">
                     <UserPlus size={9} /> Add Slot — {formatMoney(nextGuardSlotCostCash)}
@@ -1043,7 +1089,13 @@ export default function IllegalBusiness() {
               {missionLogHasMore && (
                 <button
                   type="button"
-                  onClick={() => setMissionLogShowAll((v) => !v)}
+                  onClick={() => {
+                    setMissionLogShowAll((v) => {
+                      const next = !v;
+                      if (next) loadFullMissions();
+                      return next;
+                    });
+                  }}
                   className="w-full text-center text-[9px] font-heading font-bold uppercase tracking-wider text-primary/90 py-2 rounded border border-primary/20 hover:bg-primary/5"
                 >
                   {missionLogShowAll
