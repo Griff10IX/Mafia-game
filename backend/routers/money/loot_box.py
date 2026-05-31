@@ -108,7 +108,11 @@ BOX_TIER_PRIZE_COUNTS: Dict[str, Tuple[int, int]] = {
     "common": (1, 2),
     "uncommon": (1, 3),
     "rare": (2, 5),
-    "ultra_rare": (2, 5),
+    "ultra_rare": (3, 6),
+}
+# Standard prize types always included on paid tier opens (in addition to random slots).
+GUARANTEED_STANDARD_TYPES_BY_TIER: Dict[str, Tuple[str, ...]] = {
+    "ultra_rare": ("cash", "points"),
 }
 # Pass tokens are purchasable/entitled only; do not allow them as random loot box prizes.
 LOOT_BOX_TOKEN_TYPES = [t for t in TOKEN_TYPES if t != "rank_xp_pass"]
@@ -398,6 +402,20 @@ def _roll_effective_reward_tier(paid_tier: str, *, force_rare_plus: bool = False
     return paid
 
 
+def _guaranteed_standard_types(paid_tier: str) -> Tuple[str, ...]:
+    return GUARANTEED_STANDARD_TYPES_BY_TIER.get(_normalize_reward_tier(paid_tier), ())
+
+
+def _guaranteed_slot_types(num_prizes: int, paid_tier: str) -> Dict[int, str]:
+    """Reserve random slots for tier-guaranteed standard prize types (exclusives cannot occupy them)."""
+    guaranteed = _guaranteed_standard_types(paid_tier)
+    if not guaranteed:
+        return {}
+    indices = list(range(num_prizes))
+    _rng.shuffle(indices)
+    return {indices[i]: guaranteed[i] for i in range(len(guaranteed))}
+
+
 def _rare_plus_prize_indices(num_prizes: int, paid_tier: str) -> set:
     """Two prize slots must use rare or ultra_rare effective tier on rare/ultra paid opens."""
     paid = _normalize_reward_tier(paid_tier)
@@ -449,8 +467,10 @@ def _loot_public_reward_info() -> Dict[str, Any]:
         t_lo, t_hi = _loot_token_amount_range(q)
         excl = t.get("perk_exclude") or frozenset()
         perk_labels = [PERK_LABELS[p] for p in PERK_TYPES if p not in excl]
+        guaranteed = list(_guaranteed_standard_types(q))
         tiers[q] = {
             "prize_count": list(BOX_TIER_PRIZE_COUNTS[q]),
+            "guaranteed_standard_types": guaranteed,
             "cash": [int(c0), int(c1)],
             "points": [pts_lo, pts_hi],
             "rank_points": [int(r0), int(r1)],
@@ -674,6 +694,9 @@ async def open_loot_box(
         rarity_config = await _get_loot_rarity_config()
         box_quality = paid_tier
         num_prizes = _paid_tier_prize_count(paid_tier)
+        guaranteed = _guaranteed_standard_types(paid_tier)
+        num_prizes = max(num_prizes, len(guaranteed))
+        guaranteed_slot_types = _guaranteed_slot_types(num_prizes, paid_tier)
         rare_plus_slots = _rare_plus_prize_indices(num_prizes, paid_tier)
         rewards: List[Dict[str, Any]] = []
         merged_inc: Dict[str, int] = {}
@@ -687,153 +710,158 @@ async def open_loot_box(
         chosen_standard_types: set = set()
         for prize_idx in range(num_prizes):
             claimed = await _get_claimed_counts()
-            roll = _rng.random()
-            if roll < exclusive_chance:
-                available = []
-                if claimed["weapon"] < _exclusive_cap("weapon") and not await _user_has_loot_exclusive_weapon(user_id):
-                    available.append("weapon")
-                if claimed["car"] < _exclusive_cap("car") and not await _user_has_loot_exclusive_car(user_id):
-                    available.append("car")
-                if claimed["armour"] < _exclusive_cap("armour") and not await _user_has_armour_6(user_id):
-                    available.append("armour")
-                if claimed["property"] < _exclusive_cap("property") and not await _user_has_exclusive_property(user_id):
-                    available.append("property")
-                # Admin at 100% exclusive: if nothing available (cap or already have), still grant an exclusive for testing (skip property if user already has one to avoid duplicate key)
-                if is_admin_test and exclusive_chance >= 1.0 and not available:
-                    available = ["weapon", "car", "armour"]
-                    if not await _user_has_exclusive_property(user_id):
+            forced_standard = guaranteed_slot_types.get(prize_idx)
+            if forced_standard is None:
+                roll = _rng.random()
+                if roll < exclusive_chance:
+                    available = []
+                    if claimed["weapon"] < _exclusive_cap("weapon") and not await _user_has_loot_exclusive_weapon(user_id):
+                        available.append("weapon")
+                    if claimed["car"] < _exclusive_cap("car") and not await _user_has_loot_exclusive_car(user_id):
+                        available.append("car")
+                    if claimed["armour"] < _exclusive_cap("armour") and not await _user_has_armour_6(user_id):
+                        available.append("armour")
+                    if claimed["property"] < _exclusive_cap("property") and not await _user_has_exclusive_property(user_id):
                         available.append("property")
-                if available:
-                    typ = _rng.choice(available)
-                    if typ == "weapon":
-                        await db.user_weapons.update_one(
-                            {"user_id": user_id, "weapon_id": LOOT_EXCLUSIVE_WEAPON_ID},
-                            {"$inc": {"quantity": 1}, "$set": {"acquired_at": now.isoformat()}},
-                            upsert=True,
-                        )
-                        await _increment_claimed_count("weapon")
-                        _invalidate_weapons_cache(user_id)
-                        w = await db.weapons.find_one({"id": LOOT_EXCLUSIVE_WEAPON_ID}, {"_id": 0, "name": 1})
-                        name = (w or {}).get("name") or "Colt Monitor"
-                        new_claimed = await _get_claimed_counts()
-                        if new_claimed["weapon"] >= _exclusive_cap("weapon"):
-                            await send_notification(user_id, "Loot box", f"The last exclusive weapon ({name}) has been claimed!", "system")
-                        rewards.append({
-                            "type": "weapon",
-                            "name": name,
-                            "id": LOOT_EXCLUSIVE_WEAPON_ID,
-                            "rarity": "loot_exclusive",
-                            "reward_tier": "loot_exclusive",
-                        })
-                        continue
-                    if typ == "car":
-                        car_info = next((c for c in CARS if c.get("id") == LOOT_EXCLUSIVE_CAR_ID), None)
-                        car_name = (car_info.get("name") if car_info else None) or "1930 Cadillac Series 452 V-16 Armored Sedan"
-                        loot_car_uc_id = str(uuid.uuid4())
-                        await db.user_cars.insert_one({
-                            "id": loot_car_uc_id,
-                            "user_id": user_id,
-                            "car_id": LOOT_EXCLUSIVE_CAR_ID,
-                            "car_name": car_name,
-                            "acquired_at": now.isoformat(),
-                            "damage_percent": 0,
-                            "rarity": "loot_exclusive",
-                            "value": int((car_info or {}).get("value") or 0),
-                            "min_rank": int((car_info or {}).get("min_rank") or 1),
-                            "min_difficulty": int((car_info or {}).get("min_difficulty") or 1),
-                            "travel_bonus": int((car_info or {}).get("travel_bonus") or 0),
-                            "image": str((car_info or {}).get("image") or ""),
-                        })
-                        from utils.exclusive_car_events import log_exclusive_car_event
+                    # Admin at 100% exclusive: if nothing available (cap or already have), still grant an exclusive for testing (skip property if user already has one to avoid duplicate key)
+                    if is_admin_test and exclusive_chance >= 1.0 and not available:
+                        available = ["weapon", "car", "armour"]
+                        if not await _user_has_exclusive_property(user_id):
+                            available.append("property")
+                    if available:
+                        typ = _rng.choice(available)
+                        if typ == "weapon":
+                            await db.user_weapons.update_one(
+                                {"user_id": user_id, "weapon_id": LOOT_EXCLUSIVE_WEAPON_ID},
+                                {"$inc": {"quantity": 1}, "$set": {"acquired_at": now.isoformat()}},
+                                upsert=True,
+                            )
+                            await _increment_claimed_count("weapon")
+                            _invalidate_weapons_cache(user_id)
+                            w = await db.weapons.find_one({"id": LOOT_EXCLUSIVE_WEAPON_ID}, {"_id": 0, "name": 1})
+                            name = (w or {}).get("name") or "Colt Monitor"
+                            new_claimed = await _get_claimed_counts()
+                            if new_claimed["weapon"] >= _exclusive_cap("weapon"):
+                                await send_notification(user_id, "Loot box", f"The last exclusive weapon ({name}) has been claimed!", "system")
+                            rewards.append({
+                                "type": "weapon",
+                                "name": name,
+                                "id": LOOT_EXCLUSIVE_WEAPON_ID,
+                                "rarity": "loot_exclusive",
+                                "reward_tier": "loot_exclusive",
+                            })
+                            continue
+                        if typ == "car":
+                            car_info = next((c for c in CARS if c.get("id") == LOOT_EXCLUSIVE_CAR_ID), None)
+                            car_name = (car_info.get("name") if car_info else None) or "1930 Cadillac Series 452 V-16 Armored Sedan"
+                            loot_car_uc_id = str(uuid.uuid4())
+                            await db.user_cars.insert_one({
+                                "id": loot_car_uc_id,
+                                "user_id": user_id,
+                                "car_id": LOOT_EXCLUSIVE_CAR_ID,
+                                "car_name": car_name,
+                                "acquired_at": now.isoformat(),
+                                "damage_percent": 0,
+                                "rarity": "loot_exclusive",
+                                "value": int((car_info or {}).get("value") or 0),
+                                "min_rank": int((car_info or {}).get("min_rank") or 1),
+                                "min_difficulty": int((car_info or {}).get("min_difficulty") or 1),
+                                "travel_bonus": int((car_info or {}).get("travel_bonus") or 0),
+                                "image": str((car_info or {}).get("image") or ""),
+                            })
+                            from utils.exclusive_car_events import log_exclusive_car_event
 
-                        await log_exclusive_car_event(
-                            db,
-                            event_type="loot_box",
-                            car_id=LOOT_EXCLUSIVE_CAR_ID,
-                            user_car_id=loot_car_uc_id,
-                            to_user_id=user_id,
-                            to_username=current_user.get("username") if current_user else "",
-                            car_name=car_name,
-                        )
-                        await _increment_claimed_count("car")
-                        new_claimed = await _get_claimed_counts()
-                        if new_claimed["car"] >= _exclusive_cap("car"):
-                            await send_notification(user_id, "Loot box", f"The last exclusive car ({car_name}) has been claimed!", "system")
-                        cars_given_ids.add(LOOT_EXCLUSIVE_CAR_ID)
-                        cars_prize_granted = True
-                        rewards.append({
-                            "type": "car",
-                            "name": car_name,
-                            "id": LOOT_EXCLUSIVE_CAR_ID,
-                            "rarity": "loot_exclusive",
-                            "reward_tier": "loot_exclusive",
-                        })
-                        await maybe_revoke_civilian_protection(db, user_id, "exclusive_car")
-                        continue
-                    if typ == "armour":
-                        await db.users.update_one(
-                            {"id": user_id},
-                            {"$set": {"armour_level": 6, "armour_owned_level_max": 6}},
-                        )
-                        await _increment_claimed_count("armour")
-                        new_claimed = await _get_claimed_counts()
-                        if new_claimed["armour"] >= _exclusive_cap("armour"):
-                            await send_notification(user_id, "Loot box", f"The last exclusive armour ({ARMOUR_LEVEL_6_NAME}) has been claimed!", "system")
-                        rewards.append({
-                            "type": "armour",
-                            "name": ARMOUR_LEVEL_6_NAME,
-                            "level": 6,
-                            "rarity": "loot_exclusive",
-                            "reward_tier": "loot_exclusive",
-                        })
-                        continue
-                    if typ == "property":
-                        await db.exclusive_properties.insert_one({
-                            "id": str(uuid.uuid4()),
-                            "type": "speakeasy",
-                            "owner_id": user_id,
-                            "claimed_at": now.isoformat(),
-                        })
-                        await _increment_claimed_count("property")
-                        new_claimed = await _get_claimed_counts()
-                        if new_claimed["property"] >= _exclusive_cap("property"):
-                            await send_notification(user_id, "Loot box", "The last Speakeasy has been claimed!", "system")
-                        rewards.append({
-                            "type": "property",
-                            "name": "Speakeasy",
-                            "rarity": "loot_exclusive",
-                            "reward_tier": "loot_exclusive",
-                        })
-                        await maybe_revoke_civilian_protection(db, user_id, "received_property_transfer")
-                        continue
+                            await log_exclusive_car_event(
+                                db,
+                                event_type="loot_box",
+                                car_id=LOOT_EXCLUSIVE_CAR_ID,
+                                user_car_id=loot_car_uc_id,
+                                to_user_id=user_id,
+                                to_username=current_user.get("username") if current_user else "",
+                                car_name=car_name,
+                            )
+                            await _increment_claimed_count("car")
+                            new_claimed = await _get_claimed_counts()
+                            if new_claimed["car"] >= _exclusive_cap("car"):
+                                await send_notification(user_id, "Loot box", f"The last exclusive car ({car_name}) has been claimed!", "system")
+                            cars_given_ids.add(LOOT_EXCLUSIVE_CAR_ID)
+                            cars_prize_granted = True
+                            rewards.append({
+                                "type": "car",
+                                "name": car_name,
+                                "id": LOOT_EXCLUSIVE_CAR_ID,
+                                "rarity": "loot_exclusive",
+                                "reward_tier": "loot_exclusive",
+                            })
+                            await maybe_revoke_civilian_protection(db, user_id, "exclusive_car")
+                            continue
+                        if typ == "armour":
+                            await db.users.update_one(
+                                {"id": user_id},
+                                {"$set": {"armour_level": 6, "armour_owned_level_max": 6}},
+                            )
+                            await _increment_claimed_count("armour")
+                            new_claimed = await _get_claimed_counts()
+                            if new_claimed["armour"] >= _exclusive_cap("armour"):
+                                await send_notification(user_id, "Loot box", f"The last exclusive armour ({ARMOUR_LEVEL_6_NAME}) has been claimed!", "system")
+                            rewards.append({
+                                "type": "armour",
+                                "name": ARMOUR_LEVEL_6_NAME,
+                                "level": 6,
+                                "rarity": "loot_exclusive",
+                                "reward_tier": "loot_exclusive",
+                            })
+                            continue
+                        if typ == "property":
+                            await db.exclusive_properties.insert_one({
+                                "id": str(uuid.uuid4()),
+                                "type": "speakeasy",
+                                "owner_id": user_id,
+                                "claimed_at": now.isoformat(),
+                            })
+                            await _increment_claimed_count("property")
+                            new_claimed = await _get_claimed_counts()
+                            if new_claimed["property"] >= _exclusive_cap("property"):
+                                await send_notification(user_id, "Loot box", "The last Speakeasy has been claimed!", "system")
+                            rewards.append({
+                                "type": "property",
+                                "name": "Speakeasy",
+                                "rarity": "loot_exclusive",
+                                "reward_tier": "loot_exclusive",
+                            })
+                            await maybe_revoke_civilian_protection(db, user_id, "received_property_transfer")
+                            continue
 
             force_rare_plus = prize_idx in rare_plus_slots
             reward_tier = _roll_effective_reward_tier(paid_tier, force_rare_plus=force_rare_plus)
             tier = _loot_tier_profile(reward_tier)
 
-            available = [
-                (name, w)
-                for name, w in STANDARD_REWARD_WEIGHTS
-                if name not in chosen_standard_types and not (name == "cars" and cars_prize_granted)
-            ]
-            if not available:
+            if forced_standard is not None:
+                chosen = forced_standard
+            else:
                 available = [
                     (name, w)
                     for name, w in STANDARD_REWARD_WEIGHTS
-                    if not (name == "cars" and cars_prize_granted)
+                    if name not in chosen_standard_types and not (name == "cars" and cars_prize_granted)
                 ]
-            if not available:
-                available = list(STANDARD_REWARD_WEIGHTS)
-            weights = [w for _, w in available]
-            total_w = sum(weights)
-            r = _rng.random() * total_w
-            acc = 0
-            chosen = available[0][0]
-            for name, w in available:
-                acc += w
-                if r <= acc:
-                    chosen = name
-                    break
+                if not available:
+                    available = [
+                        (name, w)
+                        for name, w in STANDARD_REWARD_WEIGHTS
+                        if not (name == "cars" and cars_prize_granted)
+                    ]
+                if not available:
+                    available = list(STANDARD_REWARD_WEIGHTS)
+                weights = [w for _, w in available]
+                total_w = sum(weights)
+                r = _rng.random() * total_w
+                acc = 0
+                chosen = available[0][0]
+                for name, w in available:
+                    acc += w
+                    if r <= acc:
+                        chosen = name
+                        break
             chosen_standard_types.add(chosen)
 
             def _append_standard(payload: Dict[str, Any]) -> None:

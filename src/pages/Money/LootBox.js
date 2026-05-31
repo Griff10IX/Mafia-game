@@ -94,9 +94,9 @@ const LOOT_TIER_THEME = {
   },
   ultra_rare: {
     label: 'Ultra Rare',
-    tagline: 'Top vault — 2+ rare+ prizes',
+    tagline: 'Cash + points guaranteed — 2+ rare+ prizes',
     pieceCost: 200,
-    prizeHint: '2–5 prizes',
+    prizeHint: '3–6 prizes',
     accent: 'text-purple-300',
     accentMuted: 'text-purple-500/80',
     ring: 'ring-purple-500/55',
@@ -478,6 +478,14 @@ function LootRewardGuide({ rewardInfo, odds }) {
                 <div className="text-[7px] opacity-90 mb-1">{fmtInt(pLo)}–{fmtInt(pHi)} prizes · 1 car max/box</div>
                 {(key === 'rare' || key === 'ultra_rare') && rare_plus_minimum && (
                   <p className="text-[7px] text-amber-200/85 mb-1">≥{rare_plus_minimum} prizes from Rare / Ultra tables</p>
+                )}
+                {t.guaranteed_standard_types?.length > 0 && (
+                  <p className="text-[7px] text-emerald-200/90 mb-1">
+                    Always includes:{' '}
+                    {t.guaranteed_standard_types
+                      .map((id) => (standard_prize_types || []).find((p) => p.id === id)?.label || id)
+                      .join(', ')}
+                  </p>
                 )}
                 <ul className="list-none p-0 m-0 space-y-0.5 text-[7px] font-heading leading-tight opacity-95">
                   <li>Cash {formatCashRange(t.cash[0], t.cash[1])}</li>

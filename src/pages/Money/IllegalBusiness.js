@@ -727,7 +727,7 @@ export default function IllegalBusiness() {
               <Link to="/loot-box" className="text-primary underline underline-offset-2 hover:text-primary/90">
                 Loot Box
               </Link>
-              : {LOOT_BOX_PIECES_PER_OPEN} pieces = 1 open.
+              : 50–200 pieces per open (by tier).
             </p>
             {vault > 0 && !canWithdrawFromVault && (
               <p className="text-[10px] text-mutedForeground font-heading pt-2 border-t border-primary/10">
