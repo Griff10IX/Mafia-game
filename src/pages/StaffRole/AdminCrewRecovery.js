@@ -17,6 +17,110 @@ function Btn({ children, className = '', ...props }) {
   );
 }
 
+function fmtMoney(n) {
+  const v = Number(n);
+  return Number.isFinite(v) ? `$${v.toLocaleString()}` : '—';
+}
+
+function IbmPresetPreviewPanel({ preview, onApply, onDismiss, applying }) {
+  if (!preview) return null;
+  const cur = preview.current || {};
+  const after = preview.after || {};
+  const row = (label, before, afterVal, fmt = (x) => String(x ?? '—')) => {
+    const b = fmt(before);
+    const a = fmt(afterVal);
+    const changed = b !== a;
+    return (
+      <tr key={label} className={changed ? 'text-foreground' : 'text-mutedForeground'}>
+        <td className="py-0.5 pr-2 text-[9px] uppercase text-mutedForeground align-top">{label}</td>
+        <td className="py-0.5 pr-2 tabular-nums text-right align-top">{b}</td>
+        <td className={`py-0.5 tabular-nums text-right align-top font-semibold ${changed ? 'text-emerald-300' : ''}`}>
+          {a}
+        </td>
+      </tr>
+    );
+  };
+  return (
+    <div className="rounded border border-amber-500/35 bg-amber-950/25 p-3 space-y-2">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <p className="text-[10px] font-heading font-bold text-amber-200">
+          Preview · ~{preview.progress_percent}% ({preview.missions_completed_count}/{preview.missions_total}{' '}
+          missions done)
+        </p>
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="text-[9px] text-mutedForeground hover:text-foreground uppercase"
+        >
+          Dismiss
+        </button>
+      </div>
+      {preview.next_mission ? (
+        <p className="text-[9px] text-mutedForeground">
+          Next mission:{' '}
+          <span className="text-foreground">
+            #{preview.next_mission.display_index} {preview.next_mission.title}
+          </span>
+        </p>
+      ) : preview.all_missions_complete ? (
+        <p className="text-[9px] text-emerald-400">All IBM missions will be marked complete.</p>
+      ) : null}
+      {preview.last_completed_mission && (
+        <p className="text-[9px] text-mutedForeground">
+          Last completed: #{preview.last_completed_mission.display_index}{' '}
+          {preview.last_completed_mission.title}
+        </p>
+      )}
+      <table className="w-full text-[9px] font-heading border-collapse">
+        <thead>
+          <tr className="text-mutedForeground">
+            <th className="text-left font-normal pb-1">Stat</th>
+            <th className="text-right font-normal pb-1">Now</th>
+            <th className="text-right font-normal pb-1">After apply</th>
+          </tr>
+        </thead>
+        <tbody>
+          {row('Income / hr', cur.income_per_hour, after.income_per_hour, fmtMoney)}
+          {row('Vault', cur.vault, after.vault, fmtMoney)}
+          {row('Guard slots', cur.guard_slots, after.guard_slots)}
+          {row('Guards hired', cur.active_guards, after.guards_placed)}
+          {row('Security level', cur.security_level, after.security_level)}
+          {row('Income cap (hrs)', cur.income_cap_hours, after.income_cap_hours)}
+          {row('Defender bonus', cur.defender_strength_bonus, after.defender_strength_bonus)}
+          {row('Raid limit / day', cur.raid_daily_limit, after.raid_daily_limit)}
+        </tbody>
+      </table>
+      {after.security_upgrade_names?.length > 0 && (
+        <p className="text-[9px] text-mutedForeground">
+          Security upgrades ({after.security_level}):{' '}
+          <span className="text-foreground">{after.security_upgrade_names.join(', ')}</span>
+        </p>
+      )}
+      {after.distillery && (
+        <p className="text-[9px] text-mutedForeground">
+          Distillery: avg equip lvl {after.distillery.equipment_avg_level}, worker cap{' '}
+          {after.distillery.worker_cap}, maintenance {Math.round(after.distillery.maintenance)}%
+        </p>
+      )}
+      {after.ibm_counters_boosted && (
+        <p className="text-[9px] text-mutedForeground">
+          IBM activity counters (collections, raids, crimes-in-state, etc.) will be set high so the next mission is not
+          soft-locked.
+        </p>
+      )}
+      <div className="flex flex-wrap gap-2 pt-1">
+        <Btn
+          onClick={onApply}
+          disabled={applying}
+          className="border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+        >
+          {applying ? '…' : `Apply ${preview.progress_percent}%`}
+        </Btn>
+      </div>
+    </div>
+  );
+}
+
 export default function AdminCrewRecovery() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -40,6 +144,9 @@ export default function AdminCrewRecovery() {
   const [ibmLoading, setIbmLoading] = useState(false);
   const [ibmSaving, setIbmSaving] = useState(false);
   const [ibmNextDisplay, setIbmNextDisplay] = useState('');
+  const [ibmPresetPct, setIbmPresetPct] = useState('50');
+  const [ibmPresetLoading, setIbmPresetLoading] = useState(false);
+  const [ibmPresetPreview, setIbmPresetPreview] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -172,12 +279,67 @@ export default function AdminCrewRecovery() {
       const res = await api.get(`/admin/illegal-business/missions/user/${encodeURIComponent(un)}`);
       setIbmData(res.data || null);
       setIbmNextDisplay(String(res.data?.next_mission_display ?? ''));
+      setIbmPresetPreview(null);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load IBM missions');
     } finally {
       setIbmLoading(false);
     }
   }, [ibUsername]);
+
+  const previewIbmPreset = async (pctOverride) => {
+    const un = (ibmData?.username || ibUsername).trim();
+    const pct = pctOverride != null ? Number(pctOverride) : parseInt(String(ibmPresetPct).trim(), 10);
+    if (!un || Number.isNaN(pct) || pct < 0 || pct > 100) {
+      toast.error('Enter username and percent 0–100');
+      return;
+    }
+    if (!ibmData?.has_business) {
+      toast.error('Restore or create a business first');
+      return;
+    }
+    setIbmPresetLoading(true);
+    try {
+      const res = await api.post(
+        `/admin/illegal-business/apply-progress/${encodeURIComponent(un)}`,
+        { progress_percent: pct, dry_run: true },
+      );
+      const p = res.data?.preview;
+      if (!p) {
+        toast.error('No preview returned');
+        return;
+      }
+      setIbmPresetPreview(p);
+      setIbmPresetPct(String(pct));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load preview');
+      setIbmPresetPreview(null);
+    } finally {
+      setIbmPresetLoading(false);
+    }
+  };
+
+  const applyIbmPresetFromPreview = async () => {
+    if (!ibmPresetPreview) return;
+    const un = (ibmData?.username || ibUsername).trim();
+    const pct = ibmPresetPreview.progress_percent;
+    if (!window.confirm(`Apply ~${pct}% progress to ${un}?`)) return;
+    setIbmPresetLoading(true);
+    try {
+      const res = await api.post(
+        `/admin/illegal-business/apply-progress/${encodeURIComponent(un)}`,
+        { progress_percent: pct, dry_run: false },
+      );
+      setIbmData(res.data || null);
+      setIbmNextDisplay(String(res.data?.next_mission_display ?? ''));
+      setIbmPresetPreview(null);
+      toast.success(res.data?.message || 'Progress applied');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to apply preset');
+    } finally {
+      setIbmPresetLoading(false);
+    }
+  };
 
   const handleSetIbmProgress = async () => {
     const un = (ibmData?.username || ibUsername).trim();
@@ -467,7 +629,7 @@ export default function AdminCrewRecovery() {
           <Wine size={14} /> Illegal business mission progress
         </h2>
         <p className="text-[9px] text-mutedForeground font-heading">
-          After revive or restore, set which IBM mission they should work on next (does not grant skipped rewards — restore business separately above).
+          Restore the business above first, then use a preset (missions + security, guards, income, vault) or set the exact next mission number.
         </p>
         <div className="flex flex-wrap gap-2">
           <input
@@ -499,6 +661,61 @@ export default function AdminCrewRecovery() {
             {ibmData.all_missions_complete && (
               <p className="text-emerald-400">All IBM missions marked complete.</p>
             )}
+            {ibmData.business_summary && (
+              <p className="text-[9px] text-mutedForeground">
+                Business: ${Number(ibmData.business_summary.vault || 0).toLocaleString()} vault ·{' '}
+                {Number(ibmData.business_summary.income_per_hour || 0).toLocaleString()}/hr ·{' '}
+                {ibmData.business_summary.security_level} security ·{' '}
+                {ibmData.business_summary.active_guards}/{ibmData.business_summary.guard_slots} guards
+              </p>
+            )}
+            <div className="rounded border border-primary/20 bg-primary/5 p-2 space-y-2">
+              <p className="text-[9px] uppercase text-primary font-bold">Overall progress preset</p>
+              <p className="text-[9px] text-mutedForeground">
+                Pick a % to preview changes (now vs after). Nothing is saved until you click Apply in the preview box.
+              </p>
+              <div className="flex flex-wrap gap-1">
+                {[25, 50, 75, 100].map((p) => (
+                  <Btn
+                    key={p}
+                    onClick={() => previewIbmPreset(p)}
+                    disabled={ibmPresetLoading || !ibmData.has_business}
+                    className="border-primary/30 text-primary"
+                  >
+                    Preview {p}%
+                  </Btn>
+                ))}
+              </div>
+              <div className="flex flex-wrap gap-2 items-end">
+                <label className="flex-1 min-w-[80px]">
+                  <span className="text-[9px] uppercase text-mutedForeground">Custom %</span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={ibmPresetPct}
+                    onChange={(e) => {
+                      setIbmPresetPct(e.target.value);
+                      setIbmPresetPreview(null);
+                    }}
+                    className="w-full mt-0.5 px-2 py-1 rounded border border-input bg-transparent text-[11px] tabular-nums"
+                  />
+                </label>
+                <Btn
+                  onClick={() => previewIbmPreset(null)}
+                  disabled={ibmPresetLoading || !ibmData.has_business}
+                  className="border-primary/40 bg-primary/10 text-primary"
+                >
+                  {ibmPresetLoading ? '…' : 'Preview'}
+                </Btn>
+              </div>
+              <IbmPresetPreviewPanel
+                preview={ibmPresetPreview}
+                onApply={applyIbmPresetFromPreview}
+                onDismiss={() => setIbmPresetPreview(null)}
+                applying={ibmPresetLoading}
+              />
+            </div>
             <label className="block">
               <span className="text-[9px] uppercase text-mutedForeground">Next mission to complete (1–{ibmData.missions_total + 1})</span>
               <input

@@ -289,6 +289,13 @@ class AdminIbmProgressSetRequest(BaseModel):
     next_mission_display: int
 
 
+class AdminIllegalBusinessProgressPresetRequest(BaseModel):
+    """Set IBM missions + business upgrades to roughly this % complete (0–100)."""
+
+    progress_percent: int = Field(ge=0, le=100)
+    dry_run: bool = False
+
+
 class AdminKenoSettingsPatch(BaseModel):
     """Live cap for state Keno max bet per round (stored in game_settings)."""
 
@@ -17522,6 +17529,47 @@ def register(router):
             )
         except Exception:
             pass
+        return out
+
+    @router.post("/admin/illegal-business/apply-progress/{user_id_or_username}")
+    async def admin_apply_illegal_business_progress_preset(
+        user_id_or_username: str,
+        body: AdminIllegalBusinessProgressPresetRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Set mission ladder + security/guards/income/vault to ~progress_percent done. Requires a business doc."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        raw = (user_id_or_username or "").strip()
+        if not raw:
+            raise HTTPException(status_code=400, detail="User id or username required")
+        u = await db.users.find_one({"id": raw}, {"_id": 0, "id": 1, "username": 1})
+        if not u:
+            username_pattern = _username_pattern(raw)
+            u = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        from routers.money import illegal_business as ib_mod
+
+        out = await ib_mod.admin_apply_illegal_business_progress_preset(
+            u["id"],
+            int(body.progress_percent),
+            dry_run=bool(body.dry_run),
+        )
+        if not body.dry_run:
+            try:
+                await srv.log_activity(
+                    current_user.get("id") or "",
+                    current_user.get("username") or "?",
+                    "admin_illegal_business_progress_preset",
+                    {
+                        "target_user_id": u.get("id"),
+                        "target_username": u.get("username"),
+                        "progress_percent": int(body.progress_percent),
+                    },
+                )
+            except Exception:
+                pass
         return out
 
     @router.get("/admin/families-list")

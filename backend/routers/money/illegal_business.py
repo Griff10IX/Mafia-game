@@ -3497,6 +3497,16 @@ async def admin_ibm_payload_for_user(user: dict) -> Dict[str, Any]:
             "current": cur,
             "target": req,
         }
+    business_summary = None
+    if business:
+        business_summary = {
+            "level": business.get("level"),
+            "income_per_hour": int(business.get("income_per_hour") or 0),
+            "vault": int(business.get("vault") or 0),
+            "guard_slots": int(business.get("guard_slots") or 0),
+            "security_level": len(business.get("security_upgrades") or []),
+            "active_guards": active_guards_count,
+        }
     return {
         "user_id": uid,
         "username": user.get("username"),
@@ -3504,6 +3514,7 @@ async def admin_ibm_payload_for_user(user: dict) -> Dict[str, Any]:
         "business_id": (business or {}).get("id"),
         "business_name": (business or {}).get("name"),
         "business_type_id": (business or {}).get("type_id"),
+        "business_summary": business_summary,
         "missions_completed_count": len(completed_ids),
         "missions_total": len(ordered),
         "next_mission_display": next_idx,
@@ -3550,3 +3561,353 @@ async def admin_apply_ibm_mission_progress(
     if not fresh:
         raise HTTPException(status_code=404, detail="User not found")
     return await admin_ibm_payload_for_user(fresh)
+
+
+def _progress_percent_to_mission_indices(progress_percent: int) -> Tuple[int, int]:
+    """Return (completed_count, next_mission_display) for 0–100% overall IBM progress."""
+    ordered = _ordered_ibm_missions()
+    n = len(ordered)
+    pct = max(0, min(100, int(progress_percent)))
+    if pct >= 100:
+        return n, n + 1
+    completed = int(n * pct / 100)
+    return completed, completed + 1
+
+
+def _simulate_business_and_user_from_completed_missions(
+    completed_missions: List[Dict[str, Any]],
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """Approximate business + user fields as if those missions were completed in order (rewards only)."""
+    iph = int(INCOME_PER_HOUR_BASE)
+    slots = int(GUARD_SLOTS_INITIAL)
+    vault = 0
+    income_cap = int(INCOME_CAP_HOURS_BASE)
+    defender_bonus = 0
+    raid_incoming = 1.0
+    guard_weapon_unlock = 0
+    guard_armour_unlock = 0
+    raid_limit = int(RAID_DAILY_LIMIT_DEFAULT)
+    max_security_req = 0
+
+    for m in completed_missions:
+        req = m.get("requirements") or {}
+        if req.get("security_level"):
+            max_security_req = max(max_security_req, int(req["security_level"]))
+        rewards = m.get("rewards") or {}
+        if rewards.get("income_mult"):
+            iph = int(iph * float(rewards["income_mult"]))
+        if rewards.get("income_per_hour_add"):
+            iph += int(rewards["income_per_hour_add"])
+        if rewards.get("guard_slots"):
+            slots += int(rewards["guard_slots"])
+        if rewards.get("vault_cash"):
+            vault += int(rewards["vault_cash"])
+        if rewards.get("income_cap_hours_add"):
+            income_cap = min(INCOME_CAP_HOURS_MAX, income_cap + int(rewards["income_cap_hours_add"]))
+        if rewards.get("defender_strength_bonus_add"):
+            defender_bonus = min(
+                DEFENDER_STRENGTH_BONUS_CAP,
+                defender_bonus + int(rewards["defender_strength_bonus_add"]),
+            )
+        if rewards.get("raid_incoming_loot_mult_sub") is not None:
+            raid_incoming = max(
+                RAID_INCOMING_LOOT_MULT_MIN,
+                round(raid_incoming - float(rewards["raid_incoming_loot_mult_sub"]), 4),
+            )
+        if rewards.get("guard_weapon_max"):
+            guard_weapon_unlock += int(rewards["guard_weapon_max"])
+        if rewards.get("guard_armour_max"):
+            guard_armour_unlock += int(rewards["guard_armour_max"])
+        if rewards.get("raid_daily_limit_add"):
+            raid_limit = min(RAID_DAILY_LIMIT_MAX, raid_limit + int(rewards["raid_daily_limit_add"]))
+
+    sec_count = max_security_req
+    if completed_missions and sec_count == 0:
+        sec_count = min(len(SECURITY_UPGRADES), max(1, len(completed_missions) // 2))
+    sec_count = min(len(SECURITY_UPGRADES), max(0, sec_count))
+    upgrades = SECURITY_UPGRADE_IDS[:sec_count] if sec_count else []
+
+    slots = min(GUARD_SLOTS_MAX, max(GUARD_SLOTS_INITIAL, slots))
+    guards_hired_target = min(slots, max(2, int(slots * 0.65)))
+
+    business_set: Dict[str, Any] = {
+        "income_per_hour": max(int(INCOME_PER_HOUR_BASE), iph),
+        "guard_slots": slots,
+        "security_upgrades": upgrades,
+        "security_level": len(upgrades),
+        "vault": max(vault, int(vault * 0.15) + 10_000),
+        "income_cap_hours": income_cap,
+        "defender_strength_bonus": defender_bonus,
+        "raid_incoming_loot_mult": raid_incoming,
+        "guard_weapon_max_unlock": guard_weapon_unlock,
+        "guard_armour_max_unlock": guard_armour_unlock,
+    }
+    user_set: Dict[str, Any] = {
+        "illegal_business_raid_daily_limit": raid_limit,
+        "illegal_business_guard_slots_bought": max(0, slots - GUARD_SLOTS_INITIAL),
+        "illegal_business_guards_hired": guards_hired_target,
+        "illegal_business_collections": 50_000,
+        "illegal_business_crimes_in_state": 50_000,
+        "illegal_business_raids_won": 50_000,
+        "illegal_business_raids_attempted": 50_000,
+        "illegal_business_vault_withdrawals": 50_000,
+    }
+    return business_set, user_set
+
+
+async def _admin_replace_guards_for_business(
+    business: dict,
+    user_id: str,
+    guard_count: int,
+) -> int:
+    """Replace all guards with ``guard_count`` hires in slots 1..N. Returns guards created."""
+    biz_id = business.get("id")
+    if not biz_id:
+        return 0
+    slots = int(business.get("guard_slots") or GUARD_SLOTS_INITIAL)
+    guard_count = max(0, min(guard_count, slots))
+    await db.illegal_business_guards.delete_many({"business_id": biz_id})
+    if guard_count <= 0:
+        return 0
+    armour_max, weapon_max = _guard_level_caps(business)
+    mid_a = max(0, armour_max // 2)
+    mid_w = max(0, weapon_max // 2)
+    now = datetime.now(timezone.utc).isoformat()
+    for slot in range(1, guard_count + 1):
+        await db.illegal_business_guards.insert_one(
+            {
+                "id": str(uuid.uuid4()),
+                "business_id": biz_id,
+                "user_id": user_id,
+                "slot_number": slot,
+                "armour_level": mid_a,
+                "weapon_level": mid_w,
+                "hired_at": now,
+                "hire_cost": 0,
+            }
+        )
+    return guard_count
+
+
+def _distillery_preset_for_percent(distillery: Optional[dict], progress_percent: int) -> Optional[dict]:
+    if not distillery or not isinstance(distillery, dict):
+        return distillery
+    pct = max(0, min(100, int(progress_percent)))
+    if pct <= 0:
+        return distillery
+    d = dict(distillery)
+    levels = dict(d.get("equipment_levels") or {})
+    target_lvl = max(1, int(DISTILLERY_EQUIPMENT_MAX_LEVEL * pct / 100))
+    for eq in DISTILLERY_EQUIPMENT_ORDER:
+        levels[eq] = max(int(levels.get(eq) or 0), target_lvl)
+    d["equipment_levels"] = levels
+    d["worker_cap"] = min(
+        DISTILLERY_MAX_WORKER_CAP,
+        DISTILLERY_BASE_WORKER_CAP + int((DISTILLERY_MAX_WORKER_CAP - DISTILLERY_BASE_WORKER_CAP) * pct / 100),
+    )
+    workers = d.get("workers") or {}
+    per_role = max(1, int(d["worker_cap"] * pct / 100) // len(DISTILLERY_WORKER_ROLES))
+    for role in DISTILLERY_WORKER_ROLES:
+        workers[role] = max(int(workers.get(role) or 0), per_role)
+    d["workers"] = workers
+    d["maintenance"] = max(float(d.get("maintenance") or 0), 70.0)
+    d["heat"] = min(float(d.get("heat") or 0), 20.0)
+    return d
+
+
+def _business_summary_snapshot(
+    business: Optional[dict], *, active_guards: int = 0, user: Optional[dict] = None
+) -> Optional[Dict[str, Any]]:
+    if not business:
+        return None
+    upgrades = business.get("security_upgrades") or []
+    return {
+        "type_id": business.get("type_id"),
+        "name": business.get("name"),
+        "income_per_hour": int(business.get("income_per_hour") or 0),
+        "vault": int(business.get("vault") or 0),
+        "guard_slots": int(business.get("guard_slots") or GUARD_SLOTS_INITIAL),
+        "security_level": len(upgrades) if upgrades else int(business.get("security_level") or 0),
+        "active_guards": int(active_guards),
+        "income_cap_hours": int(business.get("income_cap_hours") or INCOME_CAP_HOURS_BASE),
+        "defender_strength_bonus": int(business.get("defender_strength_bonus") or 0),
+        "raid_daily_limit": int((user or {}).get("illegal_business_raid_daily_limit") or RAID_DAILY_LIMIT_DEFAULT),
+    }
+
+
+def _after_preset_summary(
+    business_set: Dict[str, Any],
+    *,
+    guards_to_place: int,
+    user_set: Dict[str, Any],
+    type_id: Optional[str],
+    distillery_after: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    upgrades = business_set.get("security_upgrades") or []
+    upgrade_names = [
+        next((u["name"] for u in SECURITY_UPGRADES if u["id"] == uid), uid)
+        for uid in upgrades[:5]
+    ]
+    if len(upgrades) > 5:
+        upgrade_names.append(f"… +{len(upgrades) - 5} more")
+    out: Dict[str, Any] = {
+        "type_id": type_id,
+        "income_per_hour": int(business_set.get("income_per_hour") or 0),
+        "vault": int(business_set.get("vault") or 0),
+        "guard_slots": int(business_set.get("guard_slots") or GUARD_SLOTS_INITIAL),
+        "guards_placed": int(guards_to_place),
+        "security_level": int(business_set.get("security_level") or 0),
+        "security_upgrade_names": upgrade_names,
+        "income_cap_hours": int(business_set.get("income_cap_hours") or INCOME_CAP_HOURS_BASE),
+        "defender_strength_bonus": int(business_set.get("defender_strength_bonus") or 0),
+        "guard_weapon_max_unlock": int(business_set.get("guard_weapon_max_unlock") or 0),
+        "guard_armour_max_unlock": int(business_set.get("guard_armour_max_unlock") or 0),
+        "raid_incoming_loot_mult": float(business_set.get("raid_incoming_loot_mult") or 1.0),
+        "raid_daily_limit": int(user_set.get("illegal_business_raid_daily_limit") or RAID_DAILY_LIMIT_DEFAULT),
+        "ibm_counters_boosted": True,
+    }
+    if distillery_after:
+        levels = distillery_after.get("equipment_levels") or {}
+        out["distillery"] = {
+            "equipment_avg_level": int(
+                sum(int(levels.get(k) or 0) for k in DISTILLERY_EQUIPMENT_ORDER)
+                / max(1, len(DISTILLERY_EQUIPMENT_ORDER))
+            ),
+            "worker_cap": int(distillery_after.get("worker_cap") or 0),
+            "maintenance": float(distillery_after.get("maintenance") or 0),
+        }
+    return out
+
+
+def build_illegal_business_progress_preset_preview(
+    *,
+    user: dict,
+    business: dict,
+    progress_percent: int,
+    completed_missions: List[Dict[str, Any]],
+    completed_count: int,
+    next_display: int,
+    business_set: Dict[str, Any],
+    user_set: Dict[str, Any],
+    guards_target: int,
+    active_guards: int,
+) -> Dict[str, Any]:
+    ordered = _ordered_ibm_missions()
+    pct = max(0, min(100, int(progress_percent)))
+    last_completed = completed_missions[-1] if completed_missions else None
+    next_m = ordered[next_display - 1] if 1 <= next_display <= len(ordered) else None
+    distillery_after = None
+    if business.get("type_id") == "booze_making" and business.get("distillery"):
+        distillery_after = _distillery_preset_for_percent(business.get("distillery"), pct)
+    user_set_copy = dict(user_set)
+    user_set_copy["illegal_business_guards_hired"] = guards_target
+    return {
+        "progress_percent": pct,
+        "missions_completed_count": completed_count,
+        "missions_total": len(ordered),
+        "next_mission_display": next_display,
+        "last_completed_mission": (
+            {
+                "display_index": display_index_for_ibm_mission_id(last_completed["id"]),
+                "id": last_completed.get("id"),
+                "title": last_completed.get("title"),
+            }
+            if last_completed
+            else None
+        ),
+        "next_mission": (
+            {
+                "display_index": next_display,
+                "id": next_m.get("id"),
+                "title": next_m.get("title"),
+            }
+            if next_m
+            else None
+        ),
+        "all_missions_complete": next_display > len(ordered),
+        "current": _business_summary_snapshot(business, active_guards=active_guards, user=user),
+        "after": _after_preset_summary(
+            business_set,
+            guards_to_place=guards_target,
+            user_set=user_set_copy,
+            type_id=business.get("type_id"),
+            distillery_after=distillery_after,
+        ),
+        "business_upgrades_raw": {**business_set, "guards_to_place": guards_target},
+        "user_counters_set": user_set_copy,
+    }
+
+
+async def admin_apply_illegal_business_progress_preset(
+    user_id: str,
+    progress_percent: int,
+    *,
+    dry_run: bool = False,
+) -> Dict[str, Any]:
+    """
+    Set IBM ladder + business upgrades to roughly ``progress_percent`` complete (0–100).
+    Requires an existing illegal business document (use Crew recovery restore first).
+    """
+    pct = max(0, min(100, int(progress_percent)))
+    ordered = _ordered_ibm_missions()
+    completed_count, next_display = _progress_percent_to_mission_indices(pct)
+    completed_missions = ordered[:completed_count]
+    business_set, user_set = _simulate_business_and_user_from_completed_missions(completed_missions)
+    guards_target = int(user_set.pop("illegal_business_guards_hired", 0))
+
+    user = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "username": 1, "illegal_business_raid_daily_limit": 1},
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    business = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
+    if not business:
+        raise HTTPException(
+            status_code=400,
+            detail="No illegal business on this account. Restore from snapshot in Crew recovery first.",
+        )
+
+    active_guards = 0
+    if business.get("id"):
+        active_guards = int(
+            await db.illegal_business_guards.count_documents({"business_id": business["id"]})
+        )
+    preview_body = build_illegal_business_progress_preset_preview(
+        user=user,
+        business=business,
+        progress_percent=pct,
+        completed_missions=completed_missions,
+        completed_count=completed_count,
+        next_display=next_display,
+        business_set=business_set,
+        user_set={**user_set, "illegal_business_guards_hired": guards_target},
+        guards_target=guards_target,
+        active_guards=active_guards,
+    )
+    if dry_run:
+        return {
+            "message": f"Preview ~{pct}% IBM progress for {user.get('username') or user_id}",
+            "username": user.get("username"),
+            "user_id": user_id,
+            "dry_run": True,
+            "preview": preview_body,
+        }
+
+    await admin_apply_ibm_mission_progress(user_id, next_display)
+    biz_update = dict(business_set)
+    if business.get("type_id") == "booze_making" and business.get("distillery"):
+        biz_update["distillery"] = _distillery_preset_for_percent(business.get("distillery"), pct)
+    await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": biz_update})
+    await db.users.update_one({"id": user_id}, {"$set": user_set})
+    business_after = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
+    if business_after:
+        await _admin_replace_guards_for_business(business_after, user_id, guards_target)
+
+    fresh = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not fresh:
+        raise HTTPException(status_code=404, detail="User not found")
+    out = await admin_ibm_payload_for_user(fresh)
+    out["progress_preset_applied"] = preview_body
+    out["message"] = f"Set ~{pct}% illegal business progress for {user.get('username') or user_id}"
+    return out
