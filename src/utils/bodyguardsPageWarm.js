@@ -2,6 +2,7 @@
  * Background warm for Kill → Bodyguards: same GET bundle as `Bodyguards.js` fetchData.
  */
 import api, { apiRequestWith429Retry } from './api';
+import { inFlightGet } from './inFlightGet';
 import { readSessionJson, writeSessionJson } from './sessionPageCache';
 
 export const BODYGUARDS_PAGE_WARM_KEY = 'mafia_bodyguards_page_w1';
@@ -58,17 +59,17 @@ export async function prefetchBodyguardsPageData(options = {}) {
   if (!force && now - lastPrefetchAt < 45_000) return;
   lastPrefetchAt = now;
   try {
-    const meRes = await api.get('/auth/me');
+    const meRes = await inFlightGet(api, '/auth/me');
     const uid = meRes.data?.id;
     if (!uid) return;
 
     const nc = noCacheGetConfig();
     const [bodyguardsRes, eventsRes, inflationRes, statsRes, invitesRes] = await Promise.all([
-      apiRequestWith429Retry(() => api.get('/bodyguards', nc)),
-      apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: { event: null, events_enabled: false } })),
-      apiRequestWith429Retry(() => api.get('/bodyguards/inflation', nc)).catch(() => ({ data: { next_hire_inflation_pct: 0 } })),
-      apiRequestWith429Retry(() => api.get('/bodyguards/stats')).catch(() => ({ data: null })),
-      apiRequestWith429Retry(() => api.get('/bodyguards/invites')).catch(() => ({ data: { sent: [], received: [] } })),
+      apiRequestWith429Retry(() => inFlightGet(api, '/bodyguards', nc)),
+      apiRequestWith429Retry(() => inFlightGet(api, '/events/active')).catch(() => ({ data: { event: null, events_enabled: false } })),
+      apiRequestWith429Retry(() => inFlightGet(api, '/bodyguards/inflation', nc)).catch(() => ({ data: { next_hire_inflation_pct: 0 } })),
+      apiRequestWith429Retry(() => inFlightGet(api, '/bodyguards/stats')).catch(() => ({ data: null })),
+      apiRequestWith429Retry(() => inFlightGet(api, '/bodyguards/invites')).catch(() => ({ data: { sent: [], received: [] } })),
     ]);
 
     if (bodyguardsRes.status >= 400 || meRes.status >= 400) return;

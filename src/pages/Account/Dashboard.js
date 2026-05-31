@@ -17,6 +17,8 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
+import { inFlightGet } from '../../utils/inFlightGet';
+import { useAuthUser } from '../../context/AuthContext';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import {
   DASHBOARD_SESSION_CACHE_KEY,
@@ -220,7 +222,7 @@ const STAT_OPTIONS = [
 ];
 
 export default function Dashboard() {
-  const [user, setUser] = useState(() => readDashboardSessionCache()?.user ?? null);
+  const authUser = useAuthUser();
   const [rankProgress, setRankProgress] = useState(() => readDashboardSessionCache()?.rankProgress ?? null);
   const [preferences, setPreferences] = useState(() => {
     const p = readDashboardSessionCache()?.preferences;
@@ -241,16 +243,16 @@ export default function Dashboard() {
   const [cpTerminating, setCpTerminating] = useState(false);
   const cpExpiredHandled = useRef(false);
 
+  const user = authUser ? sanitizeDashboardUser(authUser) : readDashboardSessionCache()?.user ?? null;
+
   const fetchData = useCallback(async ({ silentError = false } = {}) => {
     try {
-      const [userRes, progressRes, dashRes, civRes] = await Promise.all([
-        api.get('/auth/me'),
-        api.get('/user/rank-progress'),
-        api.get('/profile/dashboard').catch(() => ({ data: null })),
-        api.get('/account/civilian-protection').catch(() => ({ data: null })),
+      const [progressRes, dashRes, civRes] = await Promise.all([
+        inFlightGet(api, '/user/rank-progress'),
+        inFlightGet(api, '/profile/dashboard').catch(() => ({ data: null })),
+        inFlightGet(api, '/account/civilian-protection').catch(() => ({ data: null })),
       ]);
-      const safeUser = sanitizeDashboardUser(userRes.data);
-      setUser(safeUser);
+      const safeUser = authUser ? sanitizeDashboardUser(authUser) : readDashboardSessionCache()?.user ?? null;
       setRankProgress(progressRes.data);
       setCivilianProtection(civRes?.data ?? null);
       const prev = readDashboardSessionCache();
@@ -268,7 +270,7 @@ export default function Dashboard() {
       if (!silentError) toast.error(getApiErrorMessage(error) || 'Failed to load profile');
       console.error('Error fetching dashboard data:', error);
     }
-  }, []);
+  }, [authUser?.id]);
 
   useEffect(() => {
     fetchData({ silentError: false });
@@ -317,7 +319,7 @@ export default function Dashboard() {
   }, []);
 
   const handleWidgetRefresh = useCallback(() => {
-    api.get('/auth/me').then((r) => setUser(sanitizeDashboardUser(r.data))).catch(() => {});
+    window.dispatchEvent(new CustomEvent('app:refresh-user', { detail: {} }));
     api.get('/account/civilian-protection').then((r) => setCivilianProtection(r.data)).catch(() => {});
   }, []);
 

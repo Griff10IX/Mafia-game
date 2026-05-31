@@ -54,6 +54,8 @@ PAGE_KEY_BODYGUARDS = "bodyguards"
 PAGE_KEY_MISSIONS = "missions"
 PAGE_KEY_TRAVEL = "travel"
 PAGE_KEY_EVENTS = "events"
+PAGE_KEY_AUTO_RANK = "auto_rank"
+PAGE_KEY_PRESENCE = "presence"
 
 # Scopes that use JAIL_STYLE_MAX_GAP_MS / JAIL_STYLE_SUSTAIN_SEC (forum/entertainer aligned with jail per product).
 PAGE_KEYS_JAIL_STYLE_TUNING = frozenset(
@@ -81,6 +83,8 @@ PAGE_KEYS_JAIL_STYLE_TUNING = frozenset(
         PAGE_KEY_MISSIONS,
         PAGE_KEY_TRAVEL,
         PAGE_KEY_EVENTS,
+        PAGE_KEY_AUTO_RANK,
+        PAGE_KEY_PRESENCE,
     }
 )
 
@@ -168,6 +172,8 @@ _SETTINGS_FIELD_BY_PAGE = {
     PAGE_KEY_MISSIONS: "sustained_page_rl_missions_enabled",
     PAGE_KEY_TRAVEL: "sustained_page_rl_travel_enabled",
     PAGE_KEY_EVENTS: "sustained_page_rl_events_enabled",
+    PAGE_KEY_AUTO_RANK: "sustained_page_rl_auto_rank_enabled",
+    PAGE_KEY_PRESENCE: "sustained_page_rl_presence_enabled",
 }
 
 _COOLDOWN_MSG = {
@@ -195,6 +201,8 @@ _COOLDOWN_MSG = {
     PAGE_KEY_MISSIONS: "Too many mission requests too fast — try again in a few seconds.",
     PAGE_KEY_TRAVEL: "Too many travel requests too fast — try again in a few seconds.",
     PAGE_KEY_EVENTS: "Too many event / news requests too fast — try again in a few seconds.",
+    PAGE_KEY_AUTO_RANK: "Too many auto-rank requests too fast — try again in a few seconds.",
+    PAGE_KEY_PRESENCE: "Too many auth / presence requests too fast — try again in a few seconds.",
 }
 
 _SLOW_MSG = {
@@ -222,6 +230,8 @@ _SLOW_MSG = {
     PAGE_KEY_MISSIONS: "You're hitting missions too fast — slow down for a few seconds.",
     PAGE_KEY_TRAVEL: "You're hitting travel too fast — slow down for a few seconds.",
     PAGE_KEY_EVENTS: "You're loading events / news too fast — slow down for a few seconds.",
+    PAGE_KEY_AUTO_RANK: "You're hitting auto-rank too fast — slow down for a few seconds.",
+    PAGE_KEY_PRESENCE: "You're refreshing auth too fast — slow down for a few seconds.",
 }
 
 _PAGE_LABEL_ADMIN = {
@@ -249,6 +259,8 @@ _PAGE_LABEL_ADMIN = {
     PAGE_KEY_MISSIONS: "Missions",
     PAGE_KEY_TRAVEL: "Travel / airports",
     PAGE_KEY_EVENTS: "Events / flash news",
+    PAGE_KEY_AUTO_RANK: "Auto Rank prefs",
+    PAGE_KEY_PRESENCE: "Auth / presence",
 }
 
 

@@ -1320,7 +1320,12 @@ export default function Admin() {
   const [sustainedPageRlMissionsEnabled, setSustainedPageRlMissionsEnabled] = useState(false);
   const [sustainedPageRlTravelEnabled, setSustainedPageRlTravelEnabled] = useState(false);
   const [sustainedPageRlEventsEnabled, setSustainedPageRlEventsEnabled] = useState(false);
-  const [sustainedJailRlSaving, setSustainedJailRlSaving] = useState(false);
+  const [sustainedPageRlAutoRankEnabled, setSustainedPageRlAutoRankEnabled] = useState(false);
+  const [sustainedPageRlPresenceEnabled, setSustainedPageRlPresenceEnabled] = useState(false);
+  const [userRequestPaceEnabled, setUserRequestPaceEnabled] = useState(false);
+  const [userRequestPaceLimit, setUserRequestPaceLimit] = useState('15');
+  const [userRequestPaceSaving, setUserRequestPaceSaving] = useState(false);
+  const [requestStormBundleSaving, setRequestStormBundleSaving] = useState(false);
   const [sustainedEntRlSaving, setSustainedEntRlSaving] = useState(false);
   const [sustainedForumRlSaving, setSustainedForumRlSaving] = useState(false);
   const [sustainedKillRlSaving, setSustainedKillRlSaving] = useState(false);
@@ -1344,7 +1349,8 @@ export default function Admin() {
   const [sustainedMissionsRlSaving, setSustainedMissionsRlSaving] = useState(false);
   const [sustainedTravelRlSaving, setSustainedTravelRlSaving] = useState(false);
   const [sustainedEventsRlSaving, setSustainedEventsRlSaving] = useState(false);
-  const [captchaFailModalOpen, setCaptchaFailModalOpen] = useState(false);
+  const [sustainedAutoRankRlSaving, setSustainedAutoRankRlSaving] = useState(false);
+  const [sustainedPresenceRlSaving, setSustainedPresenceRlSaving] = useState(false);
   const [captchaFailRows, setCaptchaFailRows] = useState([]);
   const [captchaFailTotal, setCaptchaFailTotal] = useState(0);
   const [captchaFailLoading, setCaptchaFailLoading] = useState(false);
@@ -2219,6 +2225,10 @@ export default function Admin() {
       setSustainedPageRlMissionsEnabled(!!res.data?.sustained_page_rl_missions_enabled);
       setSustainedPageRlTravelEnabled(!!res.data?.sustained_page_rl_travel_enabled);
       setSustainedPageRlEventsEnabled(!!res.data?.sustained_page_rl_events_enabled);
+      setSustainedPageRlAutoRankEnabled(!!res.data?.sustained_page_rl_auto_rank_enabled);
+      setSustainedPageRlPresenceEnabled(!!res.data?.sustained_page_rl_presence_enabled);
+      setUserRequestPaceEnabled(!!res.data?.user_request_pace_enabled);
+      setUserRequestPaceLimit(String(Math.max(5, Math.min(100, parseInt(res.data?.user_request_pace_limit, 10) || 15))));
       setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       setLandingBannerMessage(res.data?.landing_banner_message ?? '');
@@ -2321,6 +2331,10 @@ export default function Admin() {
       setSustainedPageRlMissionsEnabled(false);
       setSustainedPageRlTravelEnabled(false);
       setSustainedPageRlEventsEnabled(false);
+      setSustainedPageRlAutoRankEnabled(false);
+      setSustainedPageRlPresenceEnabled(false);
+      setUserRequestPaceEnabled(false);
+      setUserRequestPaceLimit('15');
       setSpotifyFeatureEnabled(false);
       setLandingBannerMessage('');
       setStockMarketMaxPoints(3000);
@@ -2497,6 +2511,10 @@ export default function Admin() {
         sustained_page_rl_missions_enabled: sustainedPageRlMissionsEnabled,
         sustained_page_rl_travel_enabled: sustainedPageRlTravelEnabled,
         sustained_page_rl_events_enabled: sustainedPageRlEventsEnabled,
+        sustained_page_rl_auto_rank_enabled: sustainedPageRlAutoRankEnabled,
+        sustained_page_rl_presence_enabled: sustainedPageRlPresenceEnabled,
+        user_request_pace_enabled: userRequestPaceEnabled,
+        user_request_pace_limit: Math.max(5, Math.min(100, parseInt(userRequestPaceLimit, 10) || 15)),
         spotify_feature_enabled: spotifyFeatureEnabled,
         landing_banner_enabled: landingBannerEnabled,
         landing_banner_message: landingBannerMessage,
@@ -2622,6 +2640,18 @@ export default function Admin() {
       }
       if (res.data?.sustained_page_rl_events_enabled !== undefined) {
         setSustainedPageRlEventsEnabled(!!res.data.sustained_page_rl_events_enabled);
+      }
+      if (res.data?.sustained_page_rl_auto_rank_enabled !== undefined) {
+        setSustainedPageRlAutoRankEnabled(!!res.data.sustained_page_rl_auto_rank_enabled);
+      }
+      if (res.data?.sustained_page_rl_presence_enabled !== undefined) {
+        setSustainedPageRlPresenceEnabled(!!res.data.sustained_page_rl_presence_enabled);
+      }
+      if (res.data?.user_request_pace_enabled !== undefined) {
+        setUserRequestPaceEnabled(!!res.data.user_request_pace_enabled);
+      }
+      if (res.data?.user_request_pace_limit != null) {
+        setUserRequestPaceLimit(String(Math.max(5, Math.min(100, parseInt(res.data.user_request_pace_limit, 10) || 15))));
       }
       setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
@@ -3065,6 +3095,90 @@ export default function Admin() {
       toast.error(e.response?.data?.detail ?? 'Failed to update');
     } finally {
       setSustainedEventsRlSaving(false);
+    }
+  };
+
+  const applyUserRequestPace = async (enabled) => {
+    setUserRequestPaceSaving(true);
+    try {
+      const limit = Math.max(5, Math.min(100, parseInt(userRequestPaceLimit, 10) || 15));
+      const res = await api.patch('/admin/settings', {
+        user_request_pace_enabled: !!enabled,
+        user_request_pace_limit: limit,
+      });
+      if (res.data?.user_request_pace_enabled !== undefined) {
+        setUserRequestPaceEnabled(!!res.data.user_request_pace_enabled);
+      }
+      if (res.data?.user_request_pace_limit != null) {
+        setUserRequestPaceLimit(String(Math.max(5, Math.min(100, parseInt(res.data.user_request_pace_limit, 10) || 15))));
+      }
+      toast.success(enabled ? 'Global per-user request cap enabled' : 'Global per-user request cap disabled');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setUserRequestPaceSaving(false);
+    }
+  };
+
+  const applyRequestStormBundle = async () => {
+    setRequestStormBundleSaving(true);
+    try {
+      const limit = Math.max(5, Math.min(100, parseInt(userRequestPaceLimit, 10) || 15));
+      const res = await api.patch('/admin/settings', {
+        user_request_pace_enabled: true,
+        user_request_pace_limit: limit,
+        sustained_page_rl_entertainer_enabled: true,
+        sustained_page_rl_bodyguards_enabled: true,
+        sustained_page_rl_crimes_enabled: true,
+        sustained_page_rl_events_enabled: true,
+        sustained_page_rl_auto_rank_enabled: true,
+        sustained_page_rl_presence_enabled: true,
+      });
+      if (res.data?.user_request_pace_enabled !== undefined) setUserRequestPaceEnabled(!!res.data.user_request_pace_enabled);
+      if (res.data?.user_request_pace_limit != null) {
+        setUserRequestPaceLimit(String(Math.max(5, Math.min(100, parseInt(res.data.user_request_pace_limit, 10) || 15))));
+      }
+      if (res.data?.sustained_page_rl_entertainer_enabled !== undefined) setSustainedPageRlEntEnabled(!!res.data.sustained_page_rl_entertainer_enabled);
+      if (res.data?.sustained_page_rl_bodyguards_enabled !== undefined) setSustainedPageRlBodyguardsEnabled(!!res.data.sustained_page_rl_bodyguards_enabled);
+      if (res.data?.sustained_page_rl_crimes_enabled !== undefined) setSustainedPageRlCrimesEnabled(!!res.data.sustained_page_rl_crimes_enabled);
+      if (res.data?.sustained_page_rl_events_enabled !== undefined) setSustainedPageRlEventsEnabled(!!res.data.sustained_page_rl_events_enabled);
+      if (res.data?.sustained_page_rl_auto_rank_enabled !== undefined) setSustainedPageRlAutoRankEnabled(!!res.data.sustained_page_rl_auto_rank_enabled);
+      if (res.data?.sustained_page_rl_presence_enabled !== undefined) setSustainedPageRlPresenceEnabled(!!res.data.sustained_page_rl_presence_enabled);
+      toast.success('Anti request-storm bundle enabled (global cap + hot scopes)');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setRequestStormBundleSaving(false);
+    }
+  };
+
+  const applySustainedPageRlAutoRank = async (enabled) => {
+    setSustainedAutoRankRlSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', { sustained_page_rl_auto_rank_enabled: !!enabled });
+      if (res.data?.sustained_page_rl_auto_rank_enabled !== undefined) {
+        setSustainedPageRlAutoRankEnabled(!!res.data.sustained_page_rl_auto_rank_enabled);
+      }
+      toast.success(enabled ? 'Auto Rank prefs pacing limiter enabled' : 'Auto Rank prefs pacing limiter disabled');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setSustainedAutoRankRlSaving(false);
+    }
+  };
+
+  const applySustainedPageRlPresence = async (enabled) => {
+    setSustainedPresenceRlSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', { sustained_page_rl_presence_enabled: !!enabled });
+      if (res.data?.sustained_page_rl_presence_enabled !== undefined) {
+        setSustainedPageRlPresenceEnabled(!!res.data.sustained_page_rl_presence_enabled);
+      }
+      toast.success(enabled ? 'Auth / presence pacing limiter enabled' : 'Auth / presence pacing limiter disabled');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setSustainedPresenceRlSaving(false);
     }
   };
 
@@ -14165,6 +14279,56 @@ export default function Admin() {
             <p className="text-[10px] text-amber-400/90 font-heading leading-relaxed max-w-3xl rounded border border-amber-500/25 bg-amber-500/5 px-2 py-1.5">
               <span className="font-bold">Normal UI:</span> gaps above the threshold reset the chain, so typical polling (e.g. ~1Hz) and page loads usually <span className="italic">do not</span> trigger this. It targets scripted or click-spam bursts.
             </p>
+            <div className="space-y-2 rounded border border-primary/30 bg-primary/5 p-2">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-primary">Global per-user request cap</p>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed max-w-3xl">
+                Limits authenticated API spam across <span className="text-foreground/90">all routes</span> (~15 req/s default). Returns HTTP 429 with <code className="text-[9px] bg-muted px-1 rounded">Retry-After: 5</code>. Frontend dedupe still runs when this is off. Default <span className="text-foreground/90">off</span> until enabled.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-[10px] text-mutedForeground font-heading flex items-center gap-1">
+                  Limit
+                  <input
+                    type="number"
+                    min={5}
+                    max={100}
+                    value={userRequestPaceLimit}
+                    onChange={(e) => setUserRequestPaceLimit(e.target.value)}
+                    className="w-14 px-1.5 py-0.5 rounded border border-input bg-background text-foreground font-mono text-[10px]"
+                  />
+                  req/s
+                </label>
+                <button
+                  type="button"
+                  disabled={userRequestPaceSaving || userRequestPaceEnabled}
+                  onClick={() => applyUserRequestPace(true)}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {userRequestPaceSaving ? '…' : 'Enable cap'}
+                </button>
+                <button
+                  type="button"
+                  disabled={userRequestPaceSaving || !userRequestPaceEnabled}
+                  onClick={() => applyUserRequestPace(false)}
+                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {userRequestPaceSaving ? '…' : 'Disable cap'}
+                </button>
+                <span className="text-[10px] text-mutedForeground font-heading">Current: {userRequestPaceEnabled ? 'on' : 'off'}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-primary/15">
+                <button
+                  type="button"
+                  disabled={requestStormBundleSaving}
+                  onClick={() => applyRequestStormBundle()}
+                  className="px-2.5 py-1 rounded border border-amber-500/40 bg-amber-500/10 text-[11px] font-heading text-amber-300 hover:bg-amber-500/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {requestStormBundleSaving ? '…' : 'Enable anti request-storm bundle'}
+                </button>
+                <span className="text-[10px] text-mutedForeground font-heading">
+                  Turns on global cap + entertainer, bodyguards, crimes, events, auto-rank, auth/presence scopes.
+                </span>
+              </div>
+            </div>
             <div className="space-y-1 rounded border border-zinc-700/40 p-2">
               <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Jail</p>
               <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
@@ -14472,6 +14636,56 @@ export default function Admin() {
                   {sustainedRankingRlSaving ? '…' : 'Disable'}
                 </button>
                 <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlRankingEnabled ? 'on' : 'off'}</span>
+              </div>
+            </div>
+            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Auto Rank prefs</p>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                <code className="text-[9px] bg-muted px-1 rounded">GET /auto-rank/me</code>. Jail-style pacing.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={sustainedAutoRankRlSaving || sustainedPageRlAutoRankEnabled}
+                  onClick={() => applySustainedPageRlAutoRank(true)}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedAutoRankRlSaving ? '…' : 'Enable'}
+                </button>
+                <button
+                  type="button"
+                  disabled={sustainedAutoRankRlSaving || !sustainedPageRlAutoRankEnabled}
+                  onClick={() => applySustainedPageRlAutoRank(false)}
+                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedAutoRankRlSaving ? '…' : 'Disable'}
+                </button>
+                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlAutoRankEnabled ? 'on' : 'off'}</span>
+              </div>
+            </div>
+            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Auth / presence</p>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                <code className="text-[9px] bg-muted px-1 rounded">GET /auth/me</code>. Jail-style pacing on auth refresh spam.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={sustainedPresenceRlSaving || sustainedPageRlPresenceEnabled}
+                  onClick={() => applySustainedPageRlPresence(true)}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedPresenceRlSaving ? '…' : 'Enable'}
+                </button>
+                <button
+                  type="button"
+                  disabled={sustainedPresenceRlSaving || !sustainedPageRlPresenceEnabled}
+                  onClick={() => applySustainedPageRlPresence(false)}
+                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedPresenceRlSaving ? '…' : 'Disable'}
+                </button>
+                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlPresenceEnabled ? 'on' : 'off'}</span>
               </div>
             </div>
             <div className="space-y-1 rounded border border-zinc-700/40 p-2">

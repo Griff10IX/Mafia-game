@@ -7,6 +7,7 @@ import {
   isStaffPortalTokenValid,
 } from './staffPortalSession';
 import { clearProfileSessionLastMeUsername } from './prefetchCache';
+import { inFlightGet } from './inFlightGet';
 
 // Empty or unset = same origin (e.g. Linode: Nginx serves app and proxies /api)
 const raw = (process.env.REACT_APP_BACKEND_URL && process.env.REACT_APP_BACKEND_URL.trim())
@@ -134,7 +135,7 @@ export async function apiGetWithResumeRetries(path, config, maxAttempts = _RESUM
   let lastErr;
   for (let i = 0; i < maxAttempts; i++) {
     try {
-      return await apiRequestWith429Retry(() => api.get(path, config));
+      return await apiRequestWith429Retry(() => inFlightGet(api, path, config));
     } catch (e) {
       lastErr = e;
       if (isTransientResumeLoadError(e) && i < maxAttempts - 1) {

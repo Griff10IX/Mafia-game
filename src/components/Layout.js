@@ -13,6 +13,7 @@ import api, {
 import { clearStaffPortalSession, isStaffPortalTokenValid } from '../utils/staffPortalSession';
 import { getThemeUiPlatform } from '../utils/themePlatform';
 import { readDashboardSessionCache } from '../utils/dashboardSessionCache';
+import { inFlightGet } from '../utils/inFlightGet';
 import { AuthContext } from '../context/AuthContext';
 import { warmLeaderboardCaches } from '../utils/leaderboardTopCache';
 import { setCrimesPrefetch, getCrimesPrefetch, clearProfileSessionLastMeUsername, setProfileSessionLastMeUsername } from '../utils/prefetchCache';
@@ -723,7 +724,7 @@ export default function Layout({ children }) {
         setUser((prev) => (prev ? { ...prev, points: Number(prev.points || 0) + Number(detail.pointsDelta) } : null));
       }
       if (refreshUserDebounceRef.current) clearTimeout(refreshUserDebounceRef.current);
-      refreshUserDebounceRef.current = setTimeout(() => runRefresh(), 150);
+      refreshUserDebounceRef.current = setTimeout(() => runRefresh(), 500);
     };
     window.addEventListener('app:refresh-user', handler);
     return () => { window.removeEventListener('app:refresh-user', handler); if (refreshUserDebounceRef.current) clearTimeout(refreshUserDebounceRef.current); };
@@ -799,12 +800,12 @@ export default function Layout({ children }) {
   const fetchAutoRankPrefs = async () => {
     if (!user) return;
     try {
-      const res = await api.get('/auto-rank/me');
+      const res = await inFlightGet(api, '/auto-rank/me');
       setAutoRankPrefs({ auto_rank_enabled: !!res.data?.auto_rank_enabled, auto_rank_crimes: !!res.data?.auto_rank_crimes, auto_rank_gta: !!res.data?.auto_rank_gta, auto_rank_oc: !!res.data?.auto_rank_oc, auto_rank_bust_every_5_sec: !!res.data?.auto_rank_bust_every_5_sec, auto_rank_booze: !!res.data?.auto_rank_booze });
     } catch { setAutoRankPrefs({ auto_rank_enabled: false, auto_rank_crimes: false, auto_rank_gta: false, auto_rank_oc: false, auto_rank_bust_every_5_sec: false, auto_rank_booze: false }); }
   };
 
-  useEffect(() => { if (user) fetchAutoRankPrefs(); }, [user]); // eslint-disable-line
+  useEffect(() => { if (user?.id) fetchAutoRankPrefs(); }, [user?.id]); // eslint-disable-line
 
   const prefetchMainLeaderboard = useCallback(() => {
     warmLeaderboardCaches(api);
@@ -844,6 +845,7 @@ export default function Layout({ children }) {
   }, [showCasinoProfitLive, userId]); // eslint-disable-line
   // On pathname change: only refresh ranking counts (debounced); do not refetch user/rank (handled by mount, 60s interval, app:refresh-user)
   const rankingDebounceRef = useRef(null);
+  const rankingLastFetchAtRef = useRef(0);
   useEffect(() => {
     const path = location.pathname;
     // Match real routes: /crime/crimes, /crime/gta, /crime/jail, /game/ranking, etc. (old list used /gta, /crimes which never matched)
@@ -1104,6 +1106,9 @@ export default function Layout({ children }) {
   };
 
   const fetchRankingCounts = async () => {
+    const now = Date.now();
+    if (rankingLastFetchAtRef.current && now - rankingLastFetchAtRef.current < 5000) return;
+    rankingLastFetchAtRef.current = now;
     try {
       const crimesPrefetchData = getCrimesPrefetch();
       const crimesPromise = crimesPrefetchData != null

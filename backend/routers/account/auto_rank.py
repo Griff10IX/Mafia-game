@@ -2077,7 +2077,12 @@ def register(router):
         auto_rank_scrap_rarity_ids: Optional[list] = None
         auto_rank_trial_dismissed: Optional[bool] = None
 
-    @router.get("/auto-rank/me")
+    from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_AUTO_RANK
+
+    async def _auto_rank_me_rl_user(current_user: dict = Depends(get_current_user)):
+        await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_AUTO_RANK)
+
+    @router.get("/auto-rank/me", dependencies=[Depends(_auto_rank_me_rl_user)])
     async def get_my_preferences(current_user: dict = Depends(get_current_user)):
         try:
             user_id = (current_user or {}).get("id", "?")

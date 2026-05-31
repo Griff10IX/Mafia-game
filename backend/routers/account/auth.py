@@ -1848,30 +1848,53 @@ def register(router):
         except (TypeError, ValueError):
             return default
 
+    from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_PRESENCE
+
+    async def _presence_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+        await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_PRESENCE)
+
     @router.get(
         "/auth/me",
         response_model=UserResponse,
         response_model_exclude={"email", "theme_preferences", "dashboard_preferences"},
+        dependencies=[Depends(_presence_sustained_rl_user)],
     )
     async def get_me(request: Request, current_user: dict = Depends(get_current_user)):
         user_id = current_user.get("id") or "unknown"
         username = current_user.get("username") or user_id
         try:
-            now_iso = datetime.now(timezone.utc).isoformat()
+            now_dt = datetime.now(timezone.utc)
+            now_iso = now_dt.isoformat()
             path = (request.headers.get("x-current-path") or "").strip() or None
             client_ip = _client_ip(request) or None
-            update = {"last_seen": now_iso}
-            if path is not None:
-                update["last_path"] = path[:500]
-            if client_ip:
-                update["last_request_ip"] = client_ip
-            cc = country_code_from_request_headers(request)
-            if cc:
-                update["last_seen_country"] = cc
-            await db.users.update_one(
-                {"id": current_user["id"]},
-                {"$set": update}
-            )
+            stored_path = (current_user.get("last_path") or "").strip() or None
+            path_changed = path is not None and path != stored_path
+            should_write_presence = path_changed
+            if not should_write_presence:
+                last_seen_raw = current_user.get("last_seen")
+                if last_seen_raw:
+                    try:
+                        last_dt = datetime.fromisoformat(str(last_seen_raw).replace("Z", "+00:00"))
+                        if last_dt.tzinfo is None:
+                            last_dt = last_dt.replace(tzinfo=timezone.utc)
+                        should_write_presence = (now_dt - last_dt).total_seconds() >= 30
+                    except (TypeError, ValueError):
+                        should_write_presence = True
+                else:
+                    should_write_presence = True
+            if should_write_presence:
+                update = {"last_seen": now_iso}
+                if path is not None:
+                    update["last_path"] = path[:500]
+                if client_ip:
+                    update["last_request_ip"] = client_ip
+                cc = country_code_from_request_headers(request)
+                if cc:
+                    update["last_seen_country"] = cc
+                await db.users.update_one(
+                    {"id": current_user["id"]},
+                    {"$set": update}
+                )
             
             # Wake up auto-rank if user was idle (no activity for 3+ hours)
             if current_user.get("auto_rank_idle"):

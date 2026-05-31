@@ -252,6 +252,10 @@ class AdminSettingsUpdate(BaseModel):
     sustained_page_rl_missions_enabled: Optional[bool] = None  # Missions GETs (jail-style)
     sustained_page_rl_travel_enabled: Optional[bool] = None  # Travel / airports GETs (jail-style)
     sustained_page_rl_events_enabled: Optional[bool] = None  # Events / flash news GETs (jail-style)
+    sustained_page_rl_auto_rank_enabled: Optional[bool] = None  # GET /auto-rank/me (jail-style)
+    sustained_page_rl_presence_enabled: Optional[bool] = None  # GET /auth/me (jail-style)
+    user_request_pace_enabled: Optional[bool] = None  # Global per-user authenticated API cap (~15 req/s)
+    user_request_pace_limit: Optional[int] = None  # Max authenticated requests per user per second when cap enabled (5–100)
     spotify_feature_enabled: Optional[bool] = None
     stock_market_max_points: Optional[int] = None
     sports_bet_max_total_open_stake: Optional[int] = None  # Max $ in open sports bets per user (default 25M)
@@ -7971,6 +7975,14 @@ def register(router):
         sustained_page_rl_missions_enabled = bool(main_doc.get("sustained_page_rl_missions_enabled")) if main_doc else False
         sustained_page_rl_travel_enabled = bool(main_doc.get("sustained_page_rl_travel_enabled")) if main_doc else False
         sustained_page_rl_events_enabled = bool(main_doc.get("sustained_page_rl_events_enabled")) if main_doc else False
+        sustained_page_rl_auto_rank_enabled = bool(main_doc.get("sustained_page_rl_auto_rank_enabled")) if main_doc else False
+        sustained_page_rl_presence_enabled = bool(main_doc.get("sustained_page_rl_presence_enabled")) if main_doc else False
+        user_request_pace_enabled = bool(main_doc.get("user_request_pace_enabled")) if main_doc else False
+        try:
+            user_request_pace_limit = int(main_doc.get("user_request_pace_limit") or 15) if main_doc else 15
+        except (TypeError, ValueError):
+            user_request_pace_limit = 15
+        user_request_pace_limit = max(5, min(100, user_request_pace_limit))
         spotify_feature_enabled = bool(main_doc.get("spotify_feature_enabled", False)) if main_doc else False
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         store_points_auto_credit = main_doc.get("store_points_auto_credit") if main_doc else None
@@ -8034,6 +8046,10 @@ def register(router):
             "sustained_page_rl_missions_enabled": sustained_page_rl_missions_enabled,
             "sustained_page_rl_travel_enabled": sustained_page_rl_travel_enabled,
             "sustained_page_rl_events_enabled": sustained_page_rl_events_enabled,
+            "sustained_page_rl_auto_rank_enabled": sustained_page_rl_auto_rank_enabled,
+            "sustained_page_rl_presence_enabled": sustained_page_rl_presence_enabled,
+            "user_request_pace_enabled": user_request_pace_enabled,
+            "user_request_pace_limit": user_request_pace_limit,
             "spotify_feature_enabled": spotify_feature_enabled,
             "stock_market_max_points": stock_market_max_points,
             "sports_bet_max_total_open_stake": sports_bet_max_total_open_stake,
@@ -8331,6 +8347,34 @@ def register(router):
                 {"$set": {"sustained_page_rl_events_enabled": bool(body.sustained_page_rl_events_enabled)}},
                 upsert=True,
             )
+        if body.sustained_page_rl_auto_rank_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_auto_rank_enabled": bool(body.sustained_page_rl_auto_rank_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_presence_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_presence_enabled": bool(body.sustained_page_rl_presence_enabled)}},
+                upsert=True,
+            )
+        if body.user_request_pace_enabled is not None or body.user_request_pace_limit is not None:
+            pace_set: dict = {}
+            if body.user_request_pace_enabled is not None:
+                pace_set["user_request_pace_enabled"] = bool(body.user_request_pace_enabled)
+            if body.user_request_pace_limit is not None:
+                try:
+                    pace_set["user_request_pace_limit"] = max(5, min(100, int(body.user_request_pace_limit)))
+                except (TypeError, ValueError):
+                    pass
+            if pace_set:
+                await db.game_settings.update_one({"_id": "main"}, {"$set": pace_set}, upsert=True)
+                try:
+                    from middleware.user_request_pace import invalidate_user_request_pace_settings_cache
+                    invalidate_user_request_pace_settings_cache()
+                except ImportError:
+                    pass
         if body.spotify_feature_enabled is not None:
             await db.game_settings.update_one(
                 {"_id": "main"},
@@ -8572,6 +8616,14 @@ def register(router):
         sustained_page_rl_missions_enabled = bool(main_doc.get("sustained_page_rl_missions_enabled")) if main_doc else False
         sustained_page_rl_travel_enabled = bool(main_doc.get("sustained_page_rl_travel_enabled")) if main_doc else False
         sustained_page_rl_events_enabled = bool(main_doc.get("sustained_page_rl_events_enabled")) if main_doc else False
+        sustained_page_rl_auto_rank_enabled = bool(main_doc.get("sustained_page_rl_auto_rank_enabled")) if main_doc else False
+        sustained_page_rl_presence_enabled = bool(main_doc.get("sustained_page_rl_presence_enabled")) if main_doc else False
+        user_request_pace_enabled = bool(main_doc.get("user_request_pace_enabled")) if main_doc else False
+        try:
+            user_request_pace_limit = int(main_doc.get("user_request_pace_limit") or 15) if main_doc else 15
+        except (TypeError, ValueError):
+            user_request_pace_limit = 15
+        user_request_pace_limit = max(5, min(100, user_request_pace_limit))
         spotify_feature_enabled = bool(main_doc.get("spotify_feature_enabled", False)) if main_doc else False
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         store_points_auto_credit = main_doc.get("store_points_auto_credit") if main_doc else None
@@ -8629,6 +8681,10 @@ def register(router):
             "sustained_page_rl_missions_enabled": sustained_page_rl_missions_enabled,
             "sustained_page_rl_travel_enabled": sustained_page_rl_travel_enabled,
             "sustained_page_rl_events_enabled": sustained_page_rl_events_enabled,
+            "sustained_page_rl_auto_rank_enabled": sustained_page_rl_auto_rank_enabled,
+            "sustained_page_rl_presence_enabled": sustained_page_rl_presence_enabled,
+            "user_request_pace_enabled": user_request_pace_enabled,
+            "user_request_pace_limit": user_request_pace_limit,
             "spotify_feature_enabled": spotify_feature_enabled,
             "stock_market_max_points": stock_market_max_points,
             "sports_bet_max_total_open_stake": sports_bet_max_total_open_stake,
