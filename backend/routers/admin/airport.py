@@ -48,11 +48,28 @@ TRAVEL_TOKEN_CAR_TIME_FACTOR = 0.9
 TRAVEL_TOKEN_CAR_TIME_MIN = 3
 # Travel must account for large garages so fastest options/custom aren't skipped.
 USER_CARS_FETCH_LIMIT = 5000
+TRAVEL_CUSTOM_ROWS_MAX = 20
+TRAVEL_IMMUNE_ROWS_MAX = 50
 
 # Catalog ids for rarities that must always appear in /travel/info (bulk query is capped).
 _TRAVEL_ALWAYS_INCLUDE_CAR_IDS = frozenset(
     c["id"] for c in (CARS or []) if c.get("rarity") in ("exclusive", "loot_exclusive")
 )
+
+
+async def _fetch_travel_user_cars(user_id: str) -> tuple[list, list, list]:
+    """Bulk capped rows plus dedicated fetches for custom / exclusive cars (same idea as garage)."""
+    immune_ids = list(_TRAVEL_ALWAYS_INCLUDE_CAR_IDS)
+    exclude_ids = immune_ids + ["car_custom"]
+    main_coro = db.user_cars.find({"user_id": user_id, "car_id": {"$nin": exclude_ids}}).to_list(USER_CARS_FETCH_LIMIT)
+    custom_coro = db.user_cars.find({"user_id": user_id, "car_id": "car_custom"}).to_list(TRAVEL_CUSTOM_ROWS_MAX)
+    if immune_ids:
+        immune_coro = db.user_cars.find({"user_id": user_id, "car_id": {"$in": immune_ids}}).to_list(TRAVEL_IMMUNE_ROWS_MAX)
+        main_rows, custom_rows, immune_rows = await asyncio.gather(main_coro, custom_coro, immune_coro)
+    else:
+        main_rows, custom_rows = await asyncio.gather(main_coro, custom_coro)
+        immune_rows = []
+    return main_rows, custom_rows, immune_rows
 
 
 def _user_car_merge_key(uc: dict) -> str:
@@ -253,25 +270,17 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
     from routers.game.families import family_airport_crew_perk_context
 
     current_state_for_load = current_user.get("current_state", STATES[0] if STATES else "")
-    # Run the four independent reads (crew perks, all user cars, owner-airport check, current-state airport
-    # slots) concurrently. Previously these were sequential awaits across the function body.
-    crew_ctx, all_user_cars, user_owns_any_airport, _existing_airport_rows = await asyncio.gather(
+    crew_ctx, user_car_rows, user_owns_any_airport, _existing_airport_rows = await asyncio.gather(
         family_airport_crew_perk_context(current_user),
-        db.user_cars.find({"user_id": uid}).to_list(USER_CARS_FETCH_LIMIT),
+        _fetch_travel_user_cars(uid),
         db.airport_ownership.find_one({"owner_id": uid}, {"_id": 1}),
         db.airport_ownership.find({"state": current_state_for_load}, {"_id": 0}).to_list(AIRPORT_SLOTS_PER_STATE * 2),
     )
+    user_cars_bulk, custom_cars, immune_cars = user_car_rows
     family_crew_pts = bool(crew_ctx.get("family_airport_points_discount"))
     fam_time_red = int(crew_ctx.get("family_airport_travel_reduction_seconds") or 0)
     airport_time_effective = max(0, TRAVEL_TIMES["airport"] - fam_time_red)
-    # Partition the single user_cars find above: custom rows, non-custom bulk, always-include extras.
-    custom_cars = [uc for uc in all_user_cars if uc.get("car_id") == "car_custom"][:20]
-    user_cars_bulk = [uc for uc in all_user_cars if uc.get("car_id") != "car_custom"]
-    if _TRAVEL_ALWAYS_INCLUDE_CAR_IDS:
-        extra_cars = [uc for uc in all_user_cars if uc.get("car_id") in _TRAVEL_ALWAYS_INCLUDE_CAR_IDS][:200]
-    else:
-        extra_cars = []
-    user_cars = _merge_user_cars_for_travel(user_cars_bulk, extra_cars)
+    user_cars = _merge_user_cars_for_travel(user_cars_bulk, immune_cars)
     cars_with_travel_times = []
     for uc in user_cars:
         car_info = next((c for c in CARS if c["id"] == uc["car_id"]), None)
