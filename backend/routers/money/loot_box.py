@@ -1,6 +1,5 @@
-# Loot box: 100 pieces = 1 open. Rolls a *box tier* (common/uncommon/rare) → prize count + reward bands.
-# Standard rewards use that tier (cash/points/etc.); car line items keep their data rarity (common..ultra_rare).
-# Exclusives (weapon/car/armour/property) use separate loot_exclusive chance per prize.
+# Loot box: player-chosen paid tier (50–200 pieces). Per-prize effective reward tier (jackpots on common/uncommon).
+# Global caps per prize: 15k points, $250M cash. Max one car prize per open, unique car_id per open.
 import logging
 import secrets
 _rng = secrets.SystemRandom()
@@ -38,7 +37,22 @@ from utils.loot_perk_stack import stacked_perk_until as _stacked_perk_until, GTA
 
 logger = logging.getLogger(__name__)
 
-LOOT_BOX_PIECES_PER_OPEN = 100
+LOOT_BOX_PIECES_PER_OPEN = 100  # legacy default; opens use LOOT_BOX_OPEN_COST_BY_TIER
+LOOT_BOX_OPEN_COST_BY_TIER: Dict[str, int] = {
+    "common": 50,
+    "uncommon": 100,
+    "rare": 150,
+    "ultra_rare": 200,
+}
+LOOT_MAX_POINTS = 15_000
+LOOT_MAX_CASH = 250_000_000
+PAID_LOOT_TIERS = ("common", "uncommon", "rare", "ultra_rare")
+REWARD_TIER_RANK = {"common": 0, "uncommon": 1, "rare": 2, "ultra_rare": 3}
+# Per-prize effective tier weights when paid tier is common or uncommon (must sum ~1).
+LOOT_REWARD_TIER_WEIGHTS: Dict[str, Dict[str, float]] = {
+    "common": {"common": 0.78, "uncommon": 0.18, "rare": 0.035, "ultra_rare": 0.005},
+    "uncommon": {"common": 0.12, "uncommon": 0.72, "rare": 0.13, "ultra_rare": 0.03},
+}
 EXCLUSIVE_CHANCE = 0.1
 # Game-wide max loot-exclusive claims per type (car remains 1; weapon, armour, Speakeasy allow one extra each).
 EXCLUSIVE_CAP_BY_TYPE: Dict[str, int] = {
@@ -93,7 +107,8 @@ STANDARD_PRIZE_LABELS = {
 BOX_TIER_PRIZE_COUNTS: Dict[str, Tuple[int, int]] = {
     "common": (1, 2),
     "uncommon": (1, 3),
-    "rare": (1, 5),
+    "rare": (2, 5),
+    "ultra_rare": (2, 5),
 }
 # Pass tokens are purchasable/entitled only; do not allow them as random loot box prizes.
 LOOT_BOX_TOKEN_TYPES = [t for t in TOKEN_TYPES if t != "rank_xp_pass"]
@@ -200,7 +215,7 @@ async def _user_has_exclusive_property(user_id: str) -> bool:
 
 
 class LootBoxOpenRequest(BaseModel):
-    tier: Optional[str] = "standard"
+    tier: Optional[str] = None
 
 
 class LootBoxRarityAdminUpdate(BaseModel):
@@ -258,6 +273,7 @@ async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
     rarity = await _get_loot_rarity_config()
     return {
         "loot_box_pieces": pieces,
+        "open_cost_by_tier": dict(LOOT_BOX_OPEN_COST_BY_TIER),
         "claimed_counts": claimed,
         "exclusive_caps": {
             "weapon": _exclusive_cap("weapon"),
@@ -333,18 +349,77 @@ def _roll_box_quality_from_config(config: Dict[str, Any]) -> Tuple[str, int]:
     return ("rare", _rng.randint(1, 5))
 
 
-def _normalize_box_quality(name: Any) -> str:
+def _normalize_reward_tier(name: Any) -> str:
     q = str(name or "common").strip().lower()
-    if q not in ("common", "uncommon", "rare"):
+    if q not in PAID_LOOT_TIERS:
         return "common"
     return q
 
 
+def _normalize_box_quality(name: Any) -> str:
+    return _normalize_reward_tier(name)
+
+
+def _normalize_paid_tier(name: Any) -> Optional[str]:
+    raw = str(name or "").strip().lower()
+    if raw in ("", "standard"):
+        return None
+    if raw not in PAID_LOOT_TIERS:
+        return None
+    return raw
+
+
+def _clamp_loot_points(amount: int) -> int:
+    return max(1, min(int(amount), LOOT_MAX_POINTS))
+
+
+def _clamp_loot_cash(amount: int) -> int:
+    return max(1, min(int(amount), LOOT_MAX_CASH))
+
+
+def _tier_rank(tier: str) -> int:
+    return int(REWARD_TIER_RANK.get(_normalize_reward_tier(tier), 0))
+
+
+def _roll_effective_reward_tier(paid_tier: str, *, force_rare_plus: bool = False) -> str:
+    if force_rare_plus:
+        return "ultra_rare" if _rng.random() < 0.6 else "rare"
+    paid = _normalize_reward_tier(paid_tier)
+    if paid in ("rare", "ultra_rare"):
+        return paid
+    weights = LOOT_REWARD_TIER_WEIGHTS.get(paid) or LOOT_REWARD_TIER_WEIGHTS["common"]
+    roll = _rng.random()
+    acc = 0.0
+    for tier_name in PAID_LOOT_TIERS:
+        p = float(weights.get(tier_name) or 0)
+        acc += p
+        if roll <= acc:
+            return tier_name
+    return paid
+
+
+def _rare_plus_prize_indices(num_prizes: int, paid_tier: str) -> set:
+    """Two prize slots must use rare or ultra_rare effective tier on rare/ultra paid opens."""
+    paid = _normalize_reward_tier(paid_tier)
+    if paid not in ("rare", "ultra_rare") or num_prizes < 2:
+        return set()
+    indices = list(range(num_prizes))
+    _rng.shuffle(indices)
+    return {indices[0], indices[1]}
+
+
+def _paid_tier_prize_count(paid_tier: str) -> int:
+    lo, hi = BOX_TIER_PRIZE_COUNTS.get(_normalize_reward_tier(paid_tier), (1, 2))
+    return _rng.randint(int(lo), int(hi))
+
+
 def _loot_token_amount_range(box_quality: str) -> Tuple[int, int]:
     """Min/max token count rolled for a standard token prize (matches _loot_token_amount)."""
-    q = _normalize_box_quality(box_quality)
+    q = _normalize_reward_tier(box_quality)
     if q == "common":
         return (1, 1)
+    if q == "ultra_rare":
+        return (2, 2)
     return (1, 2)
 
 
@@ -361,7 +436,7 @@ def _loot_public_reward_info() -> Dict[str, Any]:
         {"id": "property", "label": "Speakeasy (exclusive property)", "cap_global": _exclusive_cap("property")},
     ]
     tiers: Dict[str, Any] = {}
-    for q in ("common", "uncommon", "rare"):
+    for q in PAID_LOOT_TIERS:
         t = _loot_tier_profile(q)
         mix = list(t["points_mix"])
         pts_lo = int(min(mix))
@@ -382,13 +457,26 @@ def _loot_public_reward_info() -> Dict[str, Any]:
             "bullets": [int(b0), int(b1)],
             "loot_pieces": [int(l0), int(l1)],
             "tokens": {"amount": [t_lo, t_hi], "types": token_types},
-            "cars": {"count": [int(cc_lo), int(cc_hi)], "rarities": [str(x).replace("_", " ") for x in t["car_rarities"]]},
+            "cars": {"count": [1, 1], "rarities": [str(x).replace("_", " ") for x in t["car_rarities"]]},
             "perks": perk_labels,
+        }
+    jackpot_tiers: Dict[str, Any] = {}
+    for paid in ("common", "uncommon"):
+        w = LOOT_REWARD_TIER_WEIGHTS.get(paid) or {}
+        jackpot_tiers[paid] = {
+            k: round(float(v) * 100, 2)
+            for k, v in w.items()
+            if k != paid and float(v) > 0
         }
     return {
         "pieces_per_open": LOOT_BOX_PIECES_PER_OPEN,
+        "open_cost_by_tier": dict(LOOT_BOX_OPEN_COST_BY_TIER),
+        "max_points_per_prize": LOOT_MAX_POINTS,
+        "max_cash_per_prize": LOOT_MAX_CASH,
+        "rare_plus_minimum": 2,
+        "jackpot_tier_weights_pct": jackpot_tiers,
         "standard_prize_types": standard_prizes,
-        "standard_note": "Each prize is one random type from the list (no duplicate type within the same open).",
+        "standard_note": "Each prize is one random type (no duplicate type in one open). At most one car per open.",
         "exclusives": exclusives,
         "exclusive_note": (
             f"Global caps (all players): weapon {_exclusive_cap('weapon')}, car {_exclusive_cap('car')}, "
@@ -426,14 +514,25 @@ def _loot_tier_profile(box_quality: str) -> Dict[str, Any]:
             "perk_exclude": frozenset(),
         },
         "rare": {
-            "cash": (10_000_000, 100_000_000),
+            "cash": (10_000_000, LOOT_MAX_CASH),
             "rank_points": (800, 5_000),
             "bullets": (15_000, 100_000),
             "loot_pieces": (20, 95),
             "car_rarities": ("uncommon", "rare", "ultra_rare"),
-            "car_count": (2, 5),
+            "car_count": (1, 1),
             "points_mix": (1_400, 2_800, 4_200),
-            "points_max": 5_000,
+            "points_max": LOOT_MAX_POINTS,
+            "perk_exclude": frozenset(),
+        },
+        "ultra_rare": {
+            "cash": (50_000_000, LOOT_MAX_CASH),
+            "rank_points": (2_000, 8_000),
+            "bullets": (40_000, 150_000),
+            "loot_pieces": (40, 120),
+            "car_rarities": ("ultra_rare",),
+            "car_count": (1, 1),
+            "points_mix": (3_500, 7_000, 10_500),
+            "points_max": LOOT_MAX_POINTS,
             "perk_exclude": frozenset(),
         },
     }
@@ -460,31 +559,42 @@ def _loot_car_pool(car_rarities: Tuple[str, ...]) -> List[Dict[str, Any]]:
     return _loot_build_car_pool(STANDARD_CAR_RARITIES)
 
 
-def _loot_pick_car(pool: List[Dict[str, Any]], box_quality: str) -> Dict[str, Any]:
-    if not pool:
-        raise ValueError("loot car pool empty")
-    if box_quality != "rare":
-        return _rng.choice(pool)
-    wmap = {"common": 1, "uncommon": 2, "rare": 5, "ultra_rare": 4}
-    weights = [wmap.get(str(c.get("rarity") or "common"), 1) for c in pool]
-    return _rng.choices(pool, weights=weights, k=1)[0]
+def _loot_pick_car(
+    pool: List[Dict[str, Any]],
+    effective_tier: str,
+    exclude_ids: Optional[set] = None,
+) -> Optional[Dict[str, Any]]:
+    exclude_ids = exclude_ids or set()
+    filtered = [c for c in pool if c.get("id") not in exclude_ids]
+    if not filtered:
+        return None
+    eff = _normalize_reward_tier(effective_tier)
+    if eff in ("rare", "ultra_rare"):
+        wmap = {"common": 1, "uncommon": 2, "rare": 5, "ultra_rare": 8}
+        weights = [wmap.get(str(c.get("rarity") or "common"), 1) for c in filtered]
+        return _rng.choices(filtered, weights=weights, k=1)[0]
+    return _rng.choice(filtered)
 
 
 def _loot_roll_points(tier: Dict[str, Any]) -> int:
     mix = list(tier["points_mix"])
     hi = int(tier["points_max"])
     if _rng.random() < 0.62:
-        return int(_rng.choice(mix))
-    lo = min(mix)
-    return int(_rng.randint(lo, hi))
+        amount = int(_rng.choice(mix))
+    else:
+        lo = min(mix)
+        amount = int(_rng.randint(lo, hi))
+    return _clamp_loot_points(amount)
 
 
 def _loot_token_amount(box_quality: str) -> int:
-    q = _normalize_box_quality(box_quality)
+    q = _normalize_reward_tier(box_quality)
     if q == "common":
         return 1
     if q == "uncommon":
         return 2 if _rng.random() < 0.38 else 1
+    if q == "ultra_rare":
+        return 2
     return 2 if _rng.random() < 0.58 else 1
 
 
@@ -492,12 +602,20 @@ async def open_loot_box(
     body: LootBoxOpenRequest = Body(default=LootBoxOpenRequest()),
     current_user: dict = Depends(get_current_user),
 ):
-    cost = LOOT_BOX_PIECES_PER_OPEN
+    paid_tier = _normalize_paid_tier(body.tier if body else None)
+    if not paid_tier:
+        raise HTTPException(
+            status_code=400,
+            detail="Choose a box tier: common (50 pieces), uncommon (100), rare (150), or ultra_rare (200).",
+        )
+    cost = int(LOOT_BOX_OPEN_COST_BY_TIER.get(paid_tier, LOOT_BOX_PIECES_PER_OPEN))
     user_id = current_user["id"]
     raw_pieces = current_user.get("loot_box_pieces")
     logger.info(
-        "Loot box open attempt user_id=%s loot_box_pieces=%s (type=%s)",
+        "Loot box open attempt user_id=%s tier=%s cost=%s loot_box_pieces=%s (type=%s)",
         user_id,
+        paid_tier,
+        cost,
         raw_pieces,
         type(raw_pieces).__name__,
     )
@@ -506,7 +624,6 @@ async def open_loot_box(
         res = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "loot_box_pieces": 1})
         new_pieces = int(res.get("loot_box_pieces") or 0) if res else 0
     else:
-        # Type-safe: match even when loot_box_pieces is stored as string (e.g. "1000001"); normalize and deduct atomically
         try:
             res = await db.users.find_one_and_update(
                 {
@@ -542,27 +659,33 @@ async def open_loot_box(
             logger.exception("Loot box open (find_one_and_update) user_id=%s: %s", user_id, e)
             raise HTTPException(
                 status_code=400,
-                detail="Not enough loot box pieces (need 100) or deduct failed.",
+                detail=f"Not enough loot box pieces (need {cost}) or deduct failed.",
             )
         if not res:
-            logger.warning("Loot box open: no document updated for user_id=%s (pieces may be < 100 or wrong type)", user_id)
-            raise HTTPException(status_code=400, detail="Not enough loot box pieces (need 100)")
+            logger.warning(
+                "Loot box open: no document updated for user_id=%s (pieces may be < %s or wrong type)",
+                user_id,
+                cost,
+            )
+            raise HTTPException(status_code=400, detail=f"Not enough loot box pieces (need {cost})")
         new_pieces = int(res.get("loot_box_pieces") or 0)
 
     try:
         rarity_config = await _get_loot_rarity_config()
-        box_quality, num_prizes = _roll_box_quality_from_config(rarity_config)
-        box_quality = _normalize_box_quality(box_quality)
-        tier = _loot_tier_profile(box_quality)
+        box_quality = paid_tier
+        num_prizes = _paid_tier_prize_count(paid_tier)
+        rare_plus_slots = _rare_plus_prize_indices(num_prizes, paid_tier)
         rewards: List[Dict[str, Any]] = []
         merged_inc: Dict[str, int] = {}
         merged_set: Dict[str, Any] = {}
         now = datetime.now(timezone.utc)
+        cars_given_ids: set = set()
+        cars_prize_granted = False
 
         exclusive_chance = float(rarity_config.get("exclusive_chance") or EXCLUSIVE_CHANCE)
         exclusive_chance = min(1.0, max(0.0, exclusive_chance))
-        chosen_standard_types: set = set()  # diversify: avoid same type twice in one open
-        for _ in range(num_prizes):
+        chosen_standard_types: set = set()
+        for prize_idx in range(num_prizes):
             claimed = await _get_claimed_counts()
             roll = _rng.random()
             if roll < exclusive_chance:
@@ -595,7 +718,13 @@ async def open_loot_box(
                         new_claimed = await _get_claimed_counts()
                         if new_claimed["weapon"] >= _exclusive_cap("weapon"):
                             await send_notification(user_id, "Loot box", f"The last exclusive weapon ({name}) has been claimed!", "system")
-                        rewards.append({"type": "weapon", "name": name, "id": LOOT_EXCLUSIVE_WEAPON_ID, "rarity": "loot_exclusive"})
+                        rewards.append({
+                            "type": "weapon",
+                            "name": name,
+                            "id": LOOT_EXCLUSIVE_WEAPON_ID,
+                            "rarity": "loot_exclusive",
+                            "reward_tier": "loot_exclusive",
+                        })
                         continue
                     if typ == "car":
                         car_info = next((c for c in CARS if c.get("id") == LOOT_EXCLUSIVE_CAR_ID), None)
@@ -630,11 +759,14 @@ async def open_loot_box(
                         new_claimed = await _get_claimed_counts()
                         if new_claimed["car"] >= _exclusive_cap("car"):
                             await send_notification(user_id, "Loot box", f"The last exclusive car ({car_name}) has been claimed!", "system")
+                        cars_given_ids.add(LOOT_EXCLUSIVE_CAR_ID)
+                        cars_prize_granted = True
                         rewards.append({
                             "type": "car",
                             "name": car_name,
                             "id": LOOT_EXCLUSIVE_CAR_ID,
                             "rarity": "loot_exclusive",
+                            "reward_tier": "loot_exclusive",
                         })
                         await maybe_revoke_civilian_protection(db, user_id, "exclusive_car")
                         continue
@@ -647,7 +779,13 @@ async def open_loot_box(
                         new_claimed = await _get_claimed_counts()
                         if new_claimed["armour"] >= _exclusive_cap("armour"):
                             await send_notification(user_id, "Loot box", f"The last exclusive armour ({ARMOUR_LEVEL_6_NAME}) has been claimed!", "system")
-                        rewards.append({"type": "armour", "name": ARMOUR_LEVEL_6_NAME, "level": 6, "rarity": "loot_exclusive"})
+                        rewards.append({
+                            "type": "armour",
+                            "name": ARMOUR_LEVEL_6_NAME,
+                            "level": 6,
+                            "rarity": "loot_exclusive",
+                            "reward_tier": "loot_exclusive",
+                        })
                         continue
                     if typ == "property":
                         await db.exclusive_properties.insert_one({
@@ -660,12 +798,30 @@ async def open_loot_box(
                         new_claimed = await _get_claimed_counts()
                         if new_claimed["property"] >= _exclusive_cap("property"):
                             await send_notification(user_id, "Loot box", "The last Speakeasy has been claimed!", "system")
-                        rewards.append({"type": "property", "name": "Speakeasy", "rarity": "loot_exclusive"})
+                        rewards.append({
+                            "type": "property",
+                            "name": "Speakeasy",
+                            "rarity": "loot_exclusive",
+                            "reward_tier": "loot_exclusive",
+                        })
                         await maybe_revoke_civilian_protection(db, user_id, "received_property_transfer")
                         continue
 
-            # Standard reward — diversify: prefer types not yet chosen this open
-            available = [(name, w) for name, w in STANDARD_REWARD_WEIGHTS if name not in chosen_standard_types]
+            force_rare_plus = prize_idx in rare_plus_slots
+            reward_tier = _roll_effective_reward_tier(paid_tier, force_rare_plus=force_rare_plus)
+            tier = _loot_tier_profile(reward_tier)
+
+            available = [
+                (name, w)
+                for name, w in STANDARD_REWARD_WEIGHTS
+                if name not in chosen_standard_types and not (name == "cars" and cars_prize_granted)
+            ]
+            if not available:
+                available = [
+                    (name, w)
+                    for name, w in STANDARD_REWARD_WEIGHTS
+                    if not (name == "cars" and cars_prize_granted)
+                ]
             if not available:
                 available = list(STANDARD_REWARD_WEIGHTS)
             weights = [w for _, w in available]
@@ -680,65 +836,68 @@ async def open_loot_box(
                     break
             chosen_standard_types.add(chosen)
 
+            def _append_standard(payload: Dict[str, Any]) -> None:
+                payload["rarity"] = reward_tier
+                payload["reward_tier"] = reward_tier
+                rewards.append(payload)
+
             if chosen == "points":
-                amount = max(1, _loot_roll_points(tier))
+                amount = _loot_roll_points(tier)
                 merged_inc["points"] = merged_inc.get("points", 0) + amount
-                rewards.append({"type": "points", "amount": amount, "rarity": box_quality})
+                _append_standard({"type": "points", "amount": amount})
             elif chosen == "rank_points":
                 rp_lo, rp_hi = tier["rank_points"]
                 amount = _rng.randint(int(rp_lo), int(rp_hi))
                 merged_inc["rank_points"] = merged_inc.get("rank_points", 0) + amount
-                rewards.append({"type": "rank_points", "amount": amount, "rarity": box_quality})
+                _append_standard({"type": "rank_points", "amount": amount})
             elif chosen == "cash":
                 c_lo, c_hi = tier["cash"]
-                amount = _rng.randint(int(c_lo), int(c_hi))
+                amount = _clamp_loot_cash(_rng.randint(int(c_lo), int(c_hi)))
                 merged_inc["money"] = merged_inc.get("money", 0) + amount
-                rewards.append({"type": "cash", "amount": amount, "rarity": box_quality})
+                _append_standard({"type": "cash", "amount": amount})
             elif chosen == "cars":
                 pool = _loot_car_pool(tuple(tier["car_rarities"]))
-                if not pool:
+                car = _loot_pick_car(pool, reward_tier, cars_given_ids) if pool else None
+                if not car:
                     c_lo, c_hi = tier["cash"]
-                    amount = _rng.randint(int(c_lo), int(c_hi))
+                    amount = _clamp_loot_cash(_rng.randint(int(c_lo), int(c_hi)))
                     merged_inc["money"] = merged_inc.get("money", 0) + amount
-                    rewards.append({"type": "cash", "amount": amount, "rarity": box_quality})
+                    _append_standard({"type": "cash", "amount": amount})
                 else:
-                    cc_lo, cc_hi = tier["car_count"]
-                    count = _rng.randint(int(cc_lo), int(cc_hi))
-                    items = []
-                    for _ in range(count):
-                        car = _loot_pick_car(pool, box_quality)
-                        await db.user_cars.insert_one({
-                            "id": str(uuid.uuid4()),
-                            "user_id": user_id,
-                            "car_id": car["id"],
-                            "car_name": car.get("name", car["id"]),
-                            "acquired_at": now.isoformat(),
-                            "damage_percent": _rng.randint(0, 30),
-                            "rarity": car.get("rarity") or "common",
-                            "value": int(car.get("value") or 0),
-                            "min_rank": int(car.get("min_rank") or 1),
-                            "min_difficulty": int(car.get("min_difficulty") or 1),
-                            "travel_bonus": int(car.get("travel_bonus") or 0),
-                            "image": str(car.get("image") or ""),
-                        })
-                        items.append({"name": car.get("name", car["id"]), "rarity": car.get("rarity", "common")})
-                    rewards.append({"type": "cars", "count": count, "items": items, "rarity": box_quality})
+                    cars_given_ids.add(car["id"])
+                    cars_prize_granted = True
+                    await db.user_cars.insert_one({
+                        "id": str(uuid.uuid4()),
+                        "user_id": user_id,
+                        "car_id": car["id"],
+                        "car_name": car.get("name", car["id"]),
+                        "acquired_at": now.isoformat(),
+                        "damage_percent": _rng.randint(0, 30),
+                        "rarity": car.get("rarity") or "common",
+                        "value": int(car.get("value") or 0),
+                        "min_rank": int(car.get("min_rank") or 1),
+                        "min_difficulty": int(car.get("min_difficulty") or 1),
+                        "travel_bonus": int(car.get("travel_bonus") or 0),
+                        "image": str(car.get("image") or ""),
+                    })
+                    items = [{"name": car.get("name", car["id"]), "rarity": car.get("rarity", "common"), "car_id": car["id"]}]
+                    _append_standard({"type": "cars", "count": 1, "items": items})
             elif chosen == "bullets":
                 b_lo, b_hi = tier["bullets"]
                 amount = _rng.randint(int(b_lo), int(b_hi))
                 merged_inc["bullets"] = merged_inc.get("bullets", 0) + amount
-                rewards.append({"type": "bullets", "amount": amount, "rarity": box_quality})
+                _append_standard({"type": "bullets", "amount": amount})
             elif chosen == "loot_pieces":
                 lp_lo, lp_hi = tier["loot_pieces"]
                 amount = _rng.randint(int(lp_lo), int(lp_hi))
                 merged_inc["loot_box_pieces"] = merged_inc.get("loot_box_pieces", 0) + amount
-                rewards.append({"type": "loot_pieces", "amount": amount, "rarity": box_quality})
+                _append_standard({"type": "loot_pieces", "amount": amount})
             elif chosen == "tokens":
-                amt = _loot_token_amount(box_quality)
+                amt = _loot_token_amount(reward_tier)
                 token_type = _rng.choice(LOOT_BOX_TOKEN_TYPES)
                 field = TOKEN_CONFIG[token_type]["count_field"]
                 merged_inc[field] = merged_inc.get(field, 0) + amt
-                rewards.append({"type": "token", "token_type": token_type, "amount": amt, "rarity": box_quality})
+                _append_standard({"type": "token", "token_type": token_type, "amount": amt})
             else:
                 excl = tier.get("perk_exclude") or frozenset()
                 perk_pool = [p for p in PERK_TYPES if p not in excl]
@@ -755,10 +914,9 @@ async def open_loot_box(
                     merged_set["airport_cost_perk_until"] = _stacked_perk_until(merged_set, current_user, "airport_cost_perk_until", now)
                 else:
                     merged_inc["gta_rare_drop_perk_attempts_remaining"] = merged_inc.get("gta_rare_drop_perk_attempts_remaining", 0) + GTA_RARE_DROP_PERK_ATTEMPTS
-                rewards.append({
+                _append_standard({
                     "type": "perk",
                     "name": PERK_LABELS.get(perk, perk),
-                    "rarity": box_quality,
                 })
 
         if merged_inc or merged_set:
@@ -801,6 +959,9 @@ async def open_loot_box(
         return {
             "rewards": rewards,
             "box_quality": box_quality,
+            "paid_tier": paid_tier,
+            "pieces_spent": cost,
+            "guaranteed_rare_plus": 2 if paid_tier in ("rare", "ultra_rare") else 0,
             "prizes_count": len(rewards),
             "new_pieces": new_pieces + piece_grant,
             "claimed_counts": await _get_claimed_counts(),

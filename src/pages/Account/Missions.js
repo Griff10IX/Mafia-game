@@ -39,9 +39,8 @@ const fmtInt = (n) => {
   return Math.trunc(x).toLocaleString();
 };
 
-// Must match backend `LOOT_BOX_PIECES_PER_OPEN` (routers/money/loot_box.py)
-const LOOT_BOX_PIECES_PER_OPEN = 100;
-const LOOT_BOX_PIECES_TOOLTIP = `Loot box pieces. Collect ${LOOT_BOX_PIECES_PER_OPEN} on the Loot Box page to open a box for random rewards (cash, points, bullets, respect, XP tokens, and more).`;
+const LOOT_BOX_PIECES_TOOLTIP =
+  'Loot box pieces. On the Loot Box page, choose a vault tier: Common (50), Uncommon (100), Rare (150), or Ultra Rare (200 pieces) for random rewards (cash, points, bullets, tokens, cars, and more).';
 const MISSIONS_CACHE_KEY = 'mafia_missions_v1';
 const TRIBUTE_BANK_TOKEN_TOOLTIP =
   'Tribute tokens stack here until you tap Collect. Each one becomes one random skill token (e.g. Crime XP, GTA XP, melt, travel — see token list in help).';
@@ -904,11 +903,11 @@ function TributeBanner({
           </div>
           {dailyTotalLoot > 0 && (
             <p className="text-[8px] text-violet-400/90 mt-1 leading-snug" title={LOOT_BOX_PIECES_TOOLTIP}>
-              Loot box pieces stack here; spend {LOOT_BOX_PIECES_PER_OPEN} on the{' '}
+              Loot box pieces stack here; spend them on the{' '}
               <Link to="/loot-box" className="text-violet-300 underline underline-offset-2 hover:text-violet-200">
                 Loot Box
               </Link>{' '}
-              page for a random drop.
+              page (50–200 pieces per vault tier) for random drops.
             </p>
           )}
         </div>

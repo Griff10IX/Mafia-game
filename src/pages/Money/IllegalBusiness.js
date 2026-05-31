@@ -16,9 +16,8 @@ function bizSessionKey(userId) {
   return id ? `${BIZ_CACHE_PREFIX}${id}` : '';
 }
 
-/** Matches backend LOOT_BOX_PIECES_PER_OPEN (routers/money/loot_box.py) */
-const LOOT_BOX_PIECES_PER_OPEN = 100;
-const LOOT_BOX_PIECES_HINT = `Loot box pieces stack in your account; ${LOOT_BOX_PIECES_PER_OPEN} pieces opens one box on the Loot Box page for random rewards.`;
+const LOOT_BOX_PIECES_HINT =
+  'Loot box pieces stack in your account. On the Loot Box page, open a vault tier (50–200 pieces: Common, Uncommon, Rare, or Ultra Rare) for random rewards.';
 
 const IBM_REQUIREMENT_LABELS = {
   crimes: 'Total crimes',

@@ -12,7 +12,164 @@ const LOOT_BOX_STYLES = `
   @keyframes lb-idle-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
   @keyframes lb-shimmer-band { 0% { background-position: -120% 0; } 100% { background-position: 220% 0; } }
   .lb-loot-ready-glow { animation: goldPulse 2.2s ease-in-out infinite; border-radius: 0.5rem; }
+  @keyframes lb-jackpot-flash {
+    0%, 100% { box-shadow: 0 0 0 rgba(234, 179, 8, 0); border-color: rgba(234, 179, 8, 0.25); }
+    50% { box-shadow: 0 0 18px rgba(234, 179, 8, 0.45); border-color: rgba(234, 179, 8, 0.65); }
+  }
+  @keyframes lb-reward-glow-3 { 0%, 100% { filter: brightness(1); } 50% { filter: brightness(1.15); } }
+  @keyframes lb-reward-glow-4 { 0%, 100% { box-shadow: 0 0 6px rgba(251, 191, 36, 0.2); } 50% { box-shadow: 0 0 20px rgba(251, 191, 36, 0.55); } }
+  @keyframes lb-reward-glow-5 { 0%, 100% { transform: scale(1); } 40% { transform: scale(1.03); } 100% { transform: scale(1); } }
+  @keyframes lb-vignette { from { opacity: 0; } 30% { opacity: 0.55; } to { opacity: 0; } }
+  .lb-jackpot-flash { animation: lb-jackpot-flash 0.65s ease-out 1; }
+  .lb-reward-glow-3 { animation: lb-reward-glow-3 0.8s ease-out 1; }
+  .lb-reward-glow-4 { animation: lb-reward-glow-4 0.9s ease-out 1; }
+  .lb-reward-glow-5 { animation: lb-reward-glow-5 0.55s ease-out 1; }
+  .lb-vignette-pulse { animation: lb-vignette 0.45s ease-out 1; pointer-events: none; }
+  @media (prefers-reduced-motion: reduce) {
+    .lb-fade-in, .lb-loot-ready-glow, .lb-jackpot-flash, .lb-reward-glow-3, .lb-reward-glow-4, .lb-reward-glow-5, .lb-vignette-pulse { animation: none !important; }
+  }
 `;
+
+const PAID_TIERS = ['common', 'uncommon', 'rare', 'ultra_rare'];
+const DEFAULT_OPEN_COST_BY_TIER = { common: 50, uncommon: 100, rare: 150, ultra_rare: 200 };
+const TIER_RANK = { common: 0, uncommon: 1, rare: 2, ultra_rare: 3, loot_exclusive: 4, exclusive: 4 };
+
+const LOOT_TIER_THEME = {
+  common: {
+    label: 'Common',
+    tagline: 'Starter vault — jackpots possible',
+    pieceCost: 50,
+    prizeHint: '1–2 prizes',
+    accent: 'text-zinc-300',
+    accentMuted: 'text-zinc-500',
+    ring: 'ring-zinc-500/50',
+    glow: 'shadow-[0_0_12px_rgba(113,113,122,0.25)]',
+    card: 'border-zinc-600/50 bg-zinc-900/50',
+    cardSelected: 'border-zinc-400/70 bg-zinc-800/60 ring-1 ring-zinc-400/40 scale-[1.02]',
+    particleColors: ['#71717a', '#a1a1aa', '#d4d4d8'],
+    chest: {
+      lidBorder: 'rgba(161, 161, 170, 0.85)',
+      bodyBorder: 'rgba(82, 82, 91, 0.9)',
+      shimmer: 'rgba(212, 212, 216, 0.75)',
+    },
+    shakeMul: 1,
+  },
+  uncommon: {
+    label: 'Uncommon',
+    tagline: 'Better odds — rare jackpots',
+    pieceCost: 100,
+    prizeHint: '1–3 prizes',
+    accent: 'text-green-300',
+    accentMuted: 'text-green-600/80',
+    ring: 'ring-green-500/45',
+    glow: 'shadow-[0_0_16px_rgba(34,197,94,0.22)]',
+    card: 'border-green-700/40 bg-green-950/25',
+    cardSelected: 'border-green-400/60 bg-green-950/40 ring-1 ring-green-400/35 scale-[1.02]',
+    particleColors: ['#22c55e', '#4ade80', '#86efac'],
+    chest: {
+      lidBorder: 'rgba(74, 222, 128, 0.75)',
+      bodyBorder: 'rgba(21, 128, 61, 0.85)',
+      shimmer: 'rgba(74, 222, 128, 0.8)',
+    },
+    shakeMul: 1.08,
+  },
+  rare: {
+    label: 'Rare',
+    tagline: '2+ rare-tier prizes guaranteed',
+    pieceCost: 150,
+    prizeHint: '2–5 prizes',
+    accent: 'text-blue-300',
+    accentMuted: 'text-blue-500/80',
+    ring: 'ring-blue-500/50',
+    glow: 'shadow-[0_0_20px_rgba(59,130,246,0.28)]',
+    card: 'border-blue-600/40 bg-blue-950/30',
+    cardSelected: 'border-blue-400/65 bg-blue-950/45 ring-1 ring-blue-400/40 scale-[1.02]',
+    particleColors: ['#3b82f6', '#60a5fa', '#93c5fd'],
+    chest: {
+      lidBorder: 'rgba(96, 165, 250, 0.9)',
+      bodyBorder: 'rgba(37, 99, 235, 0.85)',
+      shimmer: 'rgba(147, 197, 253, 0.9)',
+    },
+    shakeMul: 1.18,
+  },
+  ultra_rare: {
+    label: 'Ultra Rare',
+    tagline: 'Top vault — 2+ rare+ prizes',
+    pieceCost: 200,
+    prizeHint: '2–5 prizes',
+    accent: 'text-purple-300',
+    accentMuted: 'text-purple-500/80',
+    ring: 'ring-purple-500/55',
+    glow: 'shadow-[0_0_28px_rgba(168,85,247,0.35)]',
+    card: 'border-purple-600/45 bg-purple-950/35',
+    cardSelected: 'border-purple-300/70 bg-purple-950/50 ring-1 ring-purple-400/45 scale-[1.02]',
+    particleColors: ['#a855f7', '#c084fc', '#eab308', '#f5d0fe'],
+    chest: {
+      lidBorder: 'rgba(192, 132, 252, 0.95)',
+      bodyBorder: 'rgba(126, 34, 206, 0.9)',
+      shimmer: 'rgba(233, 213, 255, 0.95)',
+    },
+    shakeMul: 1.28,
+  },
+};
+
+function tierRank(tier) {
+  return TIER_RANK[tier] ?? TIER_RANK[String(tier || '').replace(/ /g, '_')] ?? 0;
+}
+
+function resolveOpenCost(status, tier) {
+  const fromApi = status?.open_cost_by_tier?.[tier];
+  if (fromApi != null) return Number(fromApi);
+  return LOOT_TIER_THEME[tier]?.pieceCost ?? DEFAULT_OPEN_COST_BY_TIER[tier] ?? 100;
+}
+
+function getRewardAnimLevel(reward, paidTier) {
+  if (!reward) return 0;
+  let level = 0;
+  const rt = reward.reward_tier || reward.rarity;
+  if (rt === 'loot_exclusive' || rt === 'exclusive' || ['weapon', 'car', 'armour', 'property'].includes(reward.type)) {
+    if (reward.type && ['weapon', 'car', 'armour', 'property'].includes(reward.type)) return 4;
+    if (rt === 'loot_exclusive') return 4;
+  }
+  if (reward.type === 'cars' && reward.items?.length) {
+    level = Math.max(level, tierRank(reward.items[0].rarity));
+  }
+  level = Math.max(level, tierRank(rt));
+  if (tierRank(rt) > tierRank(paidTier)) level = Math.max(level, 3);
+  const cash = Number(reward.amount ?? 0);
+  const pts = Number(reward.amount ?? reward.points ?? 0);
+  if (reward.type === 'cash' && cash >= 50_000_000) level = Math.min(5, level + 1);
+  if (reward.type === 'points' && pts >= 8000) level = Math.min(5, level + 1);
+  return Math.min(5, Math.max(0, level));
+}
+
+function computeOpenAnimLevel(rewards, paidTier) {
+  const floor = { common: 0, uncommon: 1, rare: 2, ultra_rare: 3 }[paidTier] ?? 0;
+  const best = (rewards || []).reduce((m, r) => Math.max(m, getRewardAnimLevel(r, paidTier)), 0);
+  return Math.min(5, Math.max(floor, best));
+}
+
+function explodeDurationMs(level) {
+  if (level >= 5) return 2000;
+  if (level >= 3) return 1600;
+  return 1200;
+}
+
+function sortRewardsForReveal(rewards, paidTier) {
+  return [...(rewards || [])].sort(
+    (a, b) => getRewardAnimLevel(a, paidTier) - getRewardAnimLevel(b, paidTier),
+  );
+}
+
+function rewardPopDelay(index, level) {
+  return 0.08 + index * (0.1 + level * 0.02);
+}
+
+function rewardPopDuration(level) {
+  if (level >= 5) return 0.65;
+  if (level >= 3) return 0.52;
+  return 0.42;
+}
 
 /* GTA-style rarity text colors for cars */
 const RARITY_COLORS = {
@@ -109,15 +266,16 @@ const globalStyles = `
 `;
 
 /* ─── Particle burst overlay ─── */
-function Particles({ active }) {
+function Particles({ active, colors, count = 20 }) {
   if (!active) return null;
-  const particles = Array.from({ length: 20 }, (_, i) => {
-    const angle = (i / 20) * 360;
+  const palette = colors?.length ? colors : ['#eab308', '#f59e0b', '#fcd34d'];
+  const n = Math.max(12, Math.min(36, count));
+  const particles = Array.from({ length: n }, (_, i) => {
+    const angle = (i / n) * 360;
     const dist = 60 + Math.random() * 80;
     const px = `${Math.cos((angle * Math.PI) / 180) * dist}px`;
     const py = `${Math.sin((angle * Math.PI) / 180) * dist}px`;
-    const colors = ['#eab308', '#f59e0b', '#fcd34d', '#fff7ed', '#dc2626'];
-    return { px, py, color: colors[i % colors.length], delay: Math.random() * 0.2 };
+    return { px, py, color: palette[i % palette.length], delay: Math.random() * 0.2 };
   });
   return (
     <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -142,7 +300,9 @@ function Particles({ active }) {
 }
 
 /* ─── Floating embers background ─── */
-function Embers() {
+function Embers({ colors }) {
+  const c0 = colors?.[0] || '#fbbf24';
+  const c1 = colors?.[1] || '#92400e';
   const embers = Array.from({ length: 10 }, (_, i) => ({
     left: `${8 + i * 9}%`,
     delay: `${i * 0.6}s`,
@@ -161,7 +321,7 @@ function Embers() {
             width: e.size,
             height: e.size,
             borderRadius: '50%',
-            background: 'radial-gradient(circle, #fbbf24, #92400e)',
+            background: `radial-gradient(circle, ${c0}, ${c1})`,
             animation: `emberFloat ${e.duration} ${e.delay} ease-in infinite`,
             opacity: 0.7,
           }}
@@ -172,9 +332,9 @@ function Embers() {
 }
 
 /* ─── Reward Icon ─── */
-function RewardIcon({ type, rarity }) {
-  const isExclusive = rarity === 'exclusive' || rarity === 'loot_exclusive' || rarity === 'ultra_rare';
-  const isBoxTier = rarity === 'common' || rarity === 'uncommon' || rarity === 'rare';
+function RewardIcon({ type, rarity, animLevel = 0 }) {
+  const isExclusive = rarity === 'exclusive' || rarity === 'loot_exclusive';
+  const rt = rarity === 'loot_exclusive' ? 'loot_exclusive' : rarity;
   const iconMap = {
     weapon: Swords, car: Car, armour: Shield,
     property: Building2, cash: Coins,
@@ -182,15 +342,24 @@ function RewardIcon({ type, rarity }) {
     bullets: Package, cars: Car, token: Gift, loot_pieces: Puzzle,
   };
   const Icon = iconMap[type] || Gift;
-  const wrap =
-    isExclusive
-      ? 'bg-primary/30 border-primary'
-      : isBoxTier && rarity === 'rare'
-        ? 'bg-blue-500/15 border-blue-400/35'
-        : 'bg-primary/10 border-primary/30';
+  let wrap = 'bg-primary/10 border-primary/30';
+  let iconCls = 'text-primary/90';
+  if (isExclusive || animLevel >= 4) {
+    wrap = 'bg-primary/30 border-primary';
+    iconCls = 'text-primary';
+  } else if (rt === 'ultra_rare' || animLevel >= 3) {
+    wrap = 'bg-purple-500/20 border-purple-400/40';
+    iconCls = 'text-purple-200';
+  } else if (rt === 'rare' || animLevel >= 2) {
+    wrap = 'bg-blue-500/15 border-blue-400/35';
+    iconCls = 'text-blue-200';
+  } else if (rt === 'uncommon' || animLevel >= 1) {
+    wrap = 'bg-green-500/15 border-green-400/35';
+    iconCls = 'text-green-200';
+  }
   return (
-    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border ${wrap}`}>
-      <Icon size={16} className={isExclusive ? 'text-primary' : isBoxTier && rarity === 'rare' ? 'text-blue-200' : 'text-primary/90'} />
+    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border ${wrap} ${animLevel >= 4 ? 'lb-reward-glow-4' : ''}`}>
+      <Icon size={16} className={iconCls} />
     </div>
   );
 }
@@ -241,12 +410,25 @@ function formatNumRange(lo, hi) {
 
 function LootRewardGuide({ rewardInfo, odds }) {
   if (!rewardInfo?.tiers) return null;
-  const { pieces_per_open, standard_prize_types, standard_note, exclusives, exclusive_note, tiers } = rewardInfo;
-  const tierOrder = [
-    { key: 'common', title: 'Common box', color: 'text-zinc-400 border-zinc-600/40 bg-zinc-900/30' },
-    { key: 'uncommon', title: 'Uncommon box', color: 'text-green-400 border-green-600/35 bg-green-950/20' },
-    { key: 'rare', title: 'Rare box', color: 'text-blue-300 border-blue-500/35 bg-blue-950/25' },
-  ];
+  const {
+    open_cost_by_tier,
+    max_points_per_prize,
+    max_cash_per_prize,
+    rare_plus_minimum,
+    jackpot_tier_weights_pct,
+    standard_prize_types,
+    standard_note,
+    exclusives,
+    exclusive_note,
+    tiers,
+  } = rewardInfo;
+  const costs = open_cost_by_tier || DEFAULT_OPEN_COST_BY_TIER;
+  const tierOrder = PAID_TIERS.map((key) => ({
+    key,
+    title: `${LOOT_TIER_THEME[key]?.label || key} box`,
+    color: LOOT_TIER_THEME[key]?.card || 'border-primary/20',
+    cost: costs[key] ?? LOOT_TIER_THEME[key]?.pieceCost,
+  }));
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in mobile-panel`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -255,17 +437,19 @@ function LootRewardGuide({ rewardInfo, odds }) {
       </div>
       <div className="p-2 space-y-2">
         <p className="text-[8px] text-mutedForeground font-heading leading-snug">
-          Opens cost <span className="text-primary font-bold">{fmtInt(pieces_per_open)}</span> pieces. Amounts below are min–max per prize when that category rolls for your box tier.
+          Choose a vault tier on open:{' '}
+          {PAID_TIERS.map((t, i) => (
+            <span key={t}>
+              {i > 0 ? ' · ' : ''}
+              <span className={LOOT_TIER_THEME[t]?.accent}>{LOOT_TIER_THEME[t]?.label} {fmtInt(costs[t])}</span>
+            </span>
+          ))}{' '}
+          pieces. Max <span className="text-primary">{fmtInt(max_points_per_prize ?? 15000)}</span> points and{' '}
+          <span className="text-primary">${fmtInt(max_cash_per_prize ?? 250000000)}</span> cash per prize.
         </p>
         {odds && (
           <p className="text-[8px] text-mutedForeground font-heading leading-snug border border-primary/15 rounded px-1.5 py-1 bg-primary/5">
             <span className="text-amber-200/90">~{Number(odds.exclusive_chance_pct).toFixed(1)}%</span> per prize for a loot exclusive (if still claimable).
-            {' '}Box tier:{' '}
-            <span className="text-zinc-400">Common {odds.common_box_pct}%</span>
-            {' · '}
-            <span className="text-green-400/90">Uncommon {odds.uncommon_box_pct}%</span>
-            {' · '}
-            <span className="text-blue-300/90">Rare {odds.rare_box_pct}%</span>
           </p>
         )}
         <div>
@@ -277,28 +461,39 @@ function LootRewardGuide({ rewardInfo, odds }) {
             ))}
           </ul>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
-          {tierOrder.map(({ key, title, color }) => {
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+          {tierOrder.map(({ key, title, color, cost }) => {
             const t = tiers[key];
             if (!t) return null;
             const [pLo, pHi] = t.prize_count || [1, 1];
             const tok = t.tokens || {};
             const [taLo, taHi] = tok.amount || [1, 1];
             const cars = t.cars || {};
-            const [cLo, cHi] = cars.count || [1, 1];
+            const jackpots = jackpot_tier_weights_pct?.[key];
             return (
               <div key={key} className={`rounded border px-1.5 py-1.5 ${color}`}>
-                <div className="text-[9px] font-heading font-bold uppercase tracking-wider mb-1">{title}</div>
-                <div className="text-[7px] opacity-90 mb-1">{fmtInt(pLo)}–{fmtInt(pHi)} prizes</div>
+                <div className={`text-[9px] font-heading font-bold uppercase tracking-wider mb-0.5 ${LOOT_TIER_THEME[key]?.accent}`}>
+                  {title} · {fmtInt(cost)} pcs
+                </div>
+                <div className="text-[7px] opacity-90 mb-1">{fmtInt(pLo)}–{fmtInt(pHi)} prizes · 1 car max/box</div>
+                {(key === 'rare' || key === 'ultra_rare') && rare_plus_minimum && (
+                  <p className="text-[7px] text-amber-200/85 mb-1">≥{rare_plus_minimum} prizes from Rare / Ultra tables</p>
+                )}
                 <ul className="list-none p-0 m-0 space-y-0.5 text-[7px] font-heading leading-tight opacity-95">
                   <li>Cash {formatCashRange(t.cash[0], t.cash[1])}</li>
                   <li>Points {formatNumRange(t.points[0], t.points[1])}</li>
                   <li>Rank pts {formatNumRange(t.rank_points[0], t.rank_points[1])}</li>
                   <li>Bullets {formatNumRange(t.bullets[0], t.bullets[1])}</li>
                   <li>Pieces {formatNumRange(t.loot_pieces[0], t.loot_pieces[1])}</li>
-                  <li>Tokens {formatNumRange(taLo, taHi)} (random type)</li>
-                  <li>Cars {formatNumRange(cLo, cHi)} · {(cars.rarities || []).join(', ')}</li>
+                  <li>Tokens {formatNumRange(taLo, taHi)}</li>
+                  <li>Car · {(cars.rarities || []).join(', ')}</li>
                 </ul>
+                {jackpots && Object.keys(jackpots).length > 0 && (
+                  <p className="text-[7px] font-heading mt-1 pt-1 border-t border-white/10 text-amber-200/80">
+                    Jackpot tiers:{' '}
+                    {Object.entries(jackpots).map(([jt, pct]) => `${jt.replace(/_/g, ' ')} ~${pct}%`).join(' · ')}
+                  </p>
+                )}
                 {t.perks?.length > 0 && (
                   <p className="text-[7px] font-heading mt-1 pt-1 border-t border-white/10 leading-tight opacity-90">
                     Perks: {t.perks.join('; ')}
@@ -357,8 +552,9 @@ function RarityBadge({ rarity }) {
 }
 
 /* ─── Progress bar ─── */
-function PiecesBar({ pieces }) {
-  const pct = Math.min((pieces / 100) * 100, 100);
+function PiecesBar({ pieces, cost }) {
+  const target = Math.max(1, Number(cost) || 100);
+  const pct = Math.min((pieces / target) * 100, 100);
   return (
     <div className="mt-2">
       <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden border border-primary/20">
@@ -369,16 +565,32 @@ function PiecesBar({ pieces }) {
 }
 
 /* ─── Chest icon (layered “proper” loot box) ─── */
-function ChestIcon({ shaking, exploding, ready }) {
-  const motion =
-    exploding ? 'boxExplode 0.6s ease-out forwards' : shaking ? 'boxShake 0.5s ease-in-out infinite' : 'lb-idle-float 3.2s ease-in-out infinite';
+function ChestIcon({ shaking, exploding, ready, tier = 'common', openAnimLevel = 0 }) {
+  const theme = LOOT_TIER_THEME[tier] || LOOT_TIER_THEME.common;
+  const chest = theme.chest;
+  const shakeDur = `${0.45 / (theme.shakeMul || 1)}s`;
+  const explodeDur = `${0.5 + openAnimLevel * 0.1}s`;
+  const motion = exploding
+    ? `boxExplode ${explodeDur} ease-out forwards`
+    : shaking
+      ? `boxShake ${shakeDur} ease-in-out infinite`
+      : 'lb-idle-float 3.2s ease-in-out infinite';
+  const particleCount = 16 + openAnimLevel * 4;
 
   return (
     <div
-      className={`relative mx-auto mb-4 flex flex-col items-center justify-end ${ready && !shaking && !exploding ? 'lb-loot-ready-glow p-1 -m-1' : ''}`}
+      className={`relative mx-auto mb-4 flex flex-col items-center justify-end ${ready && !shaking && !exploding ? `lb-loot-ready-glow p-1 -m-1 ${theme.glow}` : ''}`}
       style={{ width: '7.75rem', height: '9.25rem', animation: motion }}
     >
-      <Particles active={exploding} />
+      {exploding && openAnimLevel >= 3 && (
+        <div
+          className="lb-vignette-pulse absolute inset-0 z-[3] rounded-lg"
+          style={{
+            background: `radial-gradient(ellipse at center, ${theme.particleColors[0]}33 0%, transparent 70%)`,
+          }}
+        />
+      )}
+      <Particles active={exploding} colors={theme.particleColors} count={particleCount} />
       <div
         className="pointer-events-none absolute left-1/2 -translate-x-1/2 z-0"
         style={{
@@ -392,9 +604,15 @@ function ChestIcon({ shaking, exploding, ready }) {
         <div
           className="relative z-[2] w-[6.35rem] h-[2.85rem] rounded-t-[10px] border-2 border-b-0"
           style={{
-            borderColor: 'rgba(212, 165, 92, 0.95)',
+            borderColor: chest.lidBorder,
             boxShadow: 'inset 0 3px 10px rgba(255,255,255,0.18), inset 0 -14px 20px rgba(0,0,0,0.45), 0 -2px 0 rgba(0,0,0,0.25)',
-            background: 'linear-gradient(165deg, #e8c896 0%, #b8894a 28%, #7a4f24 62%, #4a2c12 100%)',
+            background: tier === 'ultra_rare'
+              ? 'linear-gradient(165deg, #e9d5ff 0%, #a855f7 35%, #6b21a8 70%, #3b0764 100%)'
+              : tier === 'rare'
+                ? 'linear-gradient(165deg, #bfdbfe 0%, #3b82f6 35%, #1e40af 70%, #1e3a8a 100%)'
+                : tier === 'uncommon'
+                  ? 'linear-gradient(165deg, #bbf7d0 0%, #22c55e 35%, #15803d 70%, #14532d 100%)'
+                  : 'linear-gradient(165deg, #d4d4d8 0%, #71717a 35%, #52525b 70%, #27272a 100%)',
             transformOrigin: 'center bottom',
             transformStyle: 'preserve-3d',
             animation: exploding ? 'chestLidOpen 0.48s 0.06s ease-out forwards' : undefined,
@@ -425,7 +643,7 @@ function ChestIcon({ shaking, exploding, ready }) {
         <div
           className="relative -mt-[2px] w-[6.75rem] h-[5.1rem] rounded-b-[12px] border-2 overflow-hidden"
           style={{
-            borderColor: 'rgba(180, 130, 70, 0.9)',
+            borderColor: chest.bodyBorder,
             background: `
               linear-gradient(105deg, rgba(255,255,255,0.07) 0%, transparent 42%),
               repeating-linear-gradient(88deg, #2f1f14 0px, #1a100a 3px, #352418 6px),
@@ -437,7 +655,7 @@ function ChestIcon({ shaking, exploding, ready }) {
           <div
             className="absolute top-[26%] left-0 right-0 h-[2px] opacity-90 pointer-events-none"
             style={{
-              background: 'linear-gradient(90deg, transparent, rgba(234,179,8,0.25) 12%, rgba(250,204,21,0.85) 50%, rgba(234,179,8,0.25) 88%, transparent)',
+              background: `linear-gradient(90deg, transparent, ${chest.shimmer}33 12%, ${chest.shimmer} 50%, ${chest.shimmer}33 88%, transparent)`,
               backgroundSize: '200% 100%',
               animation: ready && !shaking && !exploding ? 'lb-shimmer-band 2.8s linear infinite' : undefined,
             }}
@@ -445,7 +663,7 @@ function ChestIcon({ shaking, exploding, ready }) {
           <div
             className="absolute top-[58%] left-0 right-0 h-[2px] opacity-90 pointer-events-none"
             style={{
-              background: 'linear-gradient(90deg, transparent, rgba(234,179,8,0.2) 10%, rgba(212,175,55,0.75) 50%, rgba(234,179,8,0.2) 90%, transparent)',
+              background: `linear-gradient(90deg, transparent, ${chest.shimmer}33 10%, ${chest.shimmer}bb 50%, ${chest.shimmer}33 90%, transparent)`,
             }}
           />
           <div className="absolute left-1 top-2 bottom-2 w-[3px] rounded-full bg-gradient-to-b from-amber-600/50 via-amber-500/25 to-amber-900/40" />
@@ -502,9 +720,11 @@ function ScarcityRow({ icon: Icon, label, claimed, cap }) {
 }
 
 /* ─── Result modal ─── */
-function ResultModal({ result, onClose }) {
+function ResultModal({ result, onClose, openAnimLevel = 0 }) {
   const rewards = result.rewards || (result.reward ? [result.reward] : []);
-  const quality = result.box_quality;
+  const paidTier = result.paid_tier || result.box_quality || 'common';
+  const theme = LOOT_TIER_THEME[paidTier] || LOOT_TIER_THEME.common;
+  const sorted = sortRewardsForReveal(rewards, paidTier);
 
   return (
     <div
@@ -514,32 +734,51 @@ function ResultModal({ result, onClose }) {
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`${styles.panel} rounded-lg border border-primary/30 max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl`}
-        style={{ animation: 'modalIn 0.35s cubic-bezier(0.22,1,0.36,1)' }}
+        className={`${styles.panel} rounded-lg border max-w-md w-full max-h-[85vh] flex flex-col overflow-hidden shadow-2xl ${theme.ring} ${openAnimLevel >= 5 ? 'lb-reward-glow-5' : ''}`}
+        style={{ animation: 'modalIn 0.35s cubic-bezier(0.22,1,0.36,1)', borderColor: 'rgba(234,179,8,0.25)' }}
       >
         <div className="h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
-        <div className="px-4 pt-4 pb-2 flex justify-between items-start">
-          <div>
-            <h3 className="text-lg font-heading font-bold text-primary">The Envelope, Please</h3>
-            {quality && (
-              <p className="text-[11px] text-mutedForeground font-heading italic mt-0.5 capitalize">
-                {quality} box — {rewards.length} prize{rewards.length !== 1 ? 's' : ''}
-              </p>
-            )}
+        <div className="px-4 pt-4 pb-2 flex justify-between items-start relative">
+          {openAnimLevel >= 4 && (
+            <Particles active colors={theme.particleColors} count={12} />
+          )}
+          <div className="relative z-[1]">
+            <h3 className={`text-lg font-heading font-bold ${theme.accent} ${openAnimLevel >= 4 ? 'animate-[textGlow_1.2s_ease-in-out_1]' : ''}`}>
+              {theme.label} Vault Opened
+            </h3>
+            <p className="text-[11px] text-mutedForeground font-heading italic mt-0.5">
+              {rewards.length} prize{rewards.length !== 1 ? 's' : ''}
+              {result.pieces_spent ? ` · ${fmtInt(result.pieces_spent)} pieces spent` : ''}
+            </p>
           </div>
-          <button type="button" onClick={onClose} className="p-1.5 rounded border border-primary/20 bg-primary/5 text-mutedForeground hover:text-foreground transition-colors">
+          <button type="button" onClick={onClose} className="p-1.5 rounded border border-primary/20 bg-primary/5 text-mutedForeground hover:text-foreground transition-colors relative z-[1]">
             <X size={16} />
           </button>
         </div>
         <div className="h-px bg-primary/20 mx-4" />
         <ul className="list-none p-0 m-0 overflow-y-auto flex-1 flex flex-col gap-2 p-4">
-          {rewards.map((r, i) => (
+          {sorted.map((r, i) => {
+            const level = getRewardAnimLevel(r, paidTier);
+            const rt = r.reward_tier || r.rarity;
+            const isJackpot = rt && tierRank(rt) > tierRank(paidTier);
+            const glowCls = level >= 5 && i === sorted.length - 1
+              ? 'lb-reward-glow-5'
+              : level >= 4
+                ? 'lb-reward-glow-4'
+                : level >= 3
+                  ? 'lb-reward-glow-3'
+                  : isJackpot
+                    ? 'lb-jackpot-flash'
+                    : '';
+            return (
             <li
-              key={i}
-              className="flex items-center gap-2 p-2 rounded border border-primary/15 bg-primary/5"
-              style={{ animation: `rewardPop 0.45s ${i * 0.12}s cubic-bezier(0.22,1,0.36,1) both` }}
+              key={`${r.type}-${i}-${rt}`}
+              className={`flex items-center gap-2 p-2 rounded border border-primary/15 bg-primary/5 ${glowCls}`}
+              style={{
+                animation: `rewardPop ${rewardPopDuration(level)}s ${rewardPopDelay(i, level)}s cubic-bezier(0.22,1,0.36,1) both`,
+              }}
             >
-              <RewardIcon type={r.type} rarity={r.rarity} />
+              <RewardIcon type={r.type} rarity={rt || r.rarity} animLevel={level} />
               <div className="flex-1 min-w-0">
                 <div className="text-[11px] font-heading text-foreground leading-snug">
                   {r.type === 'cars' && r.items?.length ? (
@@ -551,7 +790,6 @@ function ResultModal({ result, onClose }) {
                           <span key={idx}>
                             {it.name}{' '}
                             <span className={`font-bold uppercase tracking-wider ${colorClass}`}>({rarity})</span>
-                            {idx < r.items.length - 1 ? ', ' : null}
                           </span>
                         );
                       })}
@@ -560,10 +798,18 @@ function ResultModal({ result, onClose }) {
                     rewardLabel(r)
                   )}
                 </div>
-                {r.rarity && <div className="mt-1"><RarityBadge rarity={r.rarity} /></div>}
+                <div className="mt-1 flex flex-wrap gap-1 items-center">
+                  {rt && <RarityBadge rarity={rt} />}
+                  {isJackpot && (
+                    <span className="text-[8px] font-heading uppercase tracking-wider text-amber-300 border border-amber-500/40 px-1 rounded">
+                      Jackpot
+                    </span>
+                  )}
+                </div>
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
         <div className="mt-auto pt-3 px-4 pb-4 border-t border-primary/20 flex justify-between items-center">
           <span className="text-[11px] text-mutedForeground font-heading italic">Pieces remaining</span>
@@ -581,7 +827,9 @@ const LOOT_REFRESH = 30_000;
 
 export default function LootBox() {
   const [status, setStatus] = useState(_cachedLootStatus);
+  const [selectedTier, setSelectedTier] = useState('common');
   const [phase, setPhase] = useState('idle'); // idle | shaking | exploding | done
+  const [openAnimLevel, setOpenAnimLevel] = useState(0);
   const [result, setResult] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [rarityConfig, setRarityConfig] = useState(null);
@@ -691,23 +939,30 @@ export default function LootBox() {
 
   const handleOpen = async () => {
     const pieces = status?.loot_box_pieces ?? 0;
-    if (pieces < 100) return;
+    const cost = resolveOpenCost(status, selectedTier);
+    if (pieces < cost) return;
     setResult(null);
+    setOpenAnimLevel(0);
     setPhase('shaking');
+    let apiData = null;
     try {
       const [res] = await Promise.all([
-        api.post('/loot-box/open', { tier: 'standard' }),
+        api.post('/loot-box/open', { tier: selectedTier }),
         new Promise((r) => setTimeout(r, 900)),
       ]);
+      apiData = res.data;
+      const level = computeOpenAnimLevel(apiData?.rewards, selectedTier);
+      setOpenAnimLevel(level);
       setPhase('exploding');
-      await new Promise((r) => setTimeout(r, 600));
+      await new Promise((r) => setTimeout(r, explodeDurationMs(level)));
       setPhase('done');
-      setResult(res.data);
+      setResult(apiData);
       await refreshUser();
       await loadStatus();
       toast.success('The don smiles upon you.');
     } catch (e) {
       setPhase('idle');
+      setOpenAnimLevel(0);
       const detail = e.response?.data?.detail ?? e.message ?? 'Failed to open loot box';
       if (process.env.NODE_ENV === 'development') {
         console.error('[Loot box open failed]', {
@@ -723,12 +978,14 @@ export default function LootBox() {
     }
   };
 
-  const closeModal = () => { setResult(null); setPhase('idle'); };
+  const closeModal = () => { setResult(null); setPhase('idle'); setOpenAnimLevel(0); };
 
   const pieces = status?.loot_box_pieces ?? 0;
+  const tierCost = resolveOpenCost(status, selectedTier);
+  const tierTheme = LOOT_TIER_THEME[selectedTier] || LOOT_TIER_THEME.common;
   const claimed = status?.claimed_counts ?? { weapon: 0, car: 0, armour: 0, property: 0 };
   const exclusiveCaps = status?.exclusive_caps ?? { weapon: 1, car: 1, armour: 1, property: 1 };
-  const canOpen = pieces >= 100 && phase === 'idle';
+  const canOpen = pieces >= tierCost && phase === 'idle';
 
   if (!status) {
     return (
@@ -749,40 +1006,87 @@ export default function LootBox() {
         <div className="w-full max-w-xl space-y-1.5">
             {/* Header */}
             <div className="relative lb-fade-in">
-              <p className="text-[9px] text-zinc-500 font-heading italic">Earn pieces from <Link to="/account/missions" className="text-primary underline">the Consigliere's Ledger</Link>. One hundred pieces open a box. Exclusives are scarce.</p>
+              <p className="text-[9px] text-zinc-500 font-heading italic">
+                Earn pieces from <Link to="/account/missions" className="text-primary underline">the Consigliere&apos;s Ledger</Link>.
+                Pick a vault tier below (50–200 pieces). Better tiers and jackpots mean bigger reveals.
+              </p>
             </div>
 
             <LootRewardGuide rewardInfo={status.reward_info} odds={status.loot_rarity_odds} />
 
+            {/* Tier picker */}
+            <div className={`grid grid-cols-2 gap-1.5 lb-fade-in min-h-[7.5rem]`} style={{ animationDelay: '0.02s' }}>
+              {PAID_TIERS.map((t) => {
+                const th = LOOT_TIER_THEME[t];
+                const cost = resolveOpenCost(status, t);
+                const afford = pieces >= cost;
+                const selected = selectedTier === t;
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => phase === 'idle' && setSelectedTier(t)}
+                    disabled={phase !== 'idle'}
+                    className={`text-left rounded-md border px-2 py-2 transition-all min-h-[44px] ${
+                      selected ? th.cardSelected : th.card
+                    } ${!afford && !selected ? 'opacity-75' : ''}`}
+                  >
+                    <div className={`text-[10px] font-heading font-bold uppercase tracking-wider ${th.accent}`}>
+                      {th.label}
+                    </div>
+                    <div className="text-[8px] text-mutedForeground font-heading">{fmtInt(cost)} pieces · {th.prizeHint}</div>
+                    <div className="text-[7px] text-mutedForeground/90 font-heading italic mt-0.5 leading-tight">{th.tagline}</div>
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Chest card */}
-            <div className={`relative ${styles.panel} rounded-md border border-primary/20 lb-fade-in mobile-panel ${phase === 'exploding' ? 'overflow-visible' : 'overflow-hidden'} ${canOpen ? 'ring-1 ring-primary/30' : ''}`} style={{ animationDelay: '0.03s' }}>
+            <div
+              className={`relative ${styles.panel} rounded-md border lb-fade-in mobile-panel ${phase === 'exploding' ? 'overflow-visible' : 'overflow-hidden'} ${tierTheme.card} ${canOpen ? `ring-1 ${tierTheme.ring}` : 'border-primary/20'}`}
+              style={{ animationDelay: '0.03s' }}
+            >
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
-                <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">The Vault</span>
+                <span className={`text-[9px] font-heading font-bold uppercase tracking-[0.12em] ${tierTheme.accent}`}>
+                  {tierTheme.label} Vault
+                </span>
               </div>
               <div className="p-3 relative">
-                <Embers />
-                <ChestIcon shaking={phase === 'shaking'} exploding={phase === 'exploding'} ready={canOpen} />
+                <Embers colors={tierTheme.particleColors} />
+                <ChestIcon
+                  tier={selectedTier}
+                  shaking={phase === 'shaking'}
+                  exploding={phase === 'exploding'}
+                  ready={canOpen}
+                  openAnimLevel={openAnimLevel}
+                />
                 <div className="text-center mb-2">
                   <div className="flex items-baseline justify-center gap-1.5">
-                    <span className="text-2xl font-heading font-bold text-primary">{fmtInt(pieces)}</span>
-                    <span className="text-[10px] text-mutedForeground font-heading">/100</span>
+                    <span className={`text-2xl font-heading font-bold ${tierTheme.accent}`}>{fmtInt(pieces)}</span>
+                    <span className="text-[10px] text-mutedForeground font-heading">/{fmtInt(tierCost)}</span>
                   </div>
-                  <p className="text-[9px] text-mutedForeground font-heading italic mt-0.5">pieces collected</p>
+                  <p className="text-[9px] text-mutedForeground font-heading italic mt-0.5">pieces for this tier</p>
                 </div>
-                <PiecesBar pieces={pieces} />
+                <PiecesBar pieces={pieces} cost={tierCost} />
                 <button
                   type="button"
                   onClick={handleOpen}
                   disabled={!canOpen}
-                  className={`w-full mt-2 py-1.5 px-2.5 rounded font-heading font-bold uppercase tracking-wider text-[10px] border flex items-center justify-center gap-2 transition-all ${
+                  className={`w-full mt-2 py-2 px-2.5 rounded font-heading font-bold uppercase tracking-wider text-[10px] border flex items-center justify-center gap-2 transition-all min-h-[44px] ${
                     canOpen
-                      ? 'bg-primary/20 text-primary border-primary/40 hover:bg-primary/30'
+                      ? `bg-primary/20 ${tierTheme.accent} border-primary/40 hover:bg-primary/30`
                       : 'bg-zinc-800/50 text-zinc-500 border-zinc-600/50 cursor-not-allowed'
                   }`}
                 >
                   <Package size={14} />
-                  {phase === 'shaking' ? 'RATTLING THE LOCK…' : phase === 'exploding' ? 'THE VAULT OPENS…' : canOpen ? 'CRACK THE VAULT' : `${fmtInt(Math.max(0, 100 - pieces))} PIECES NEEDED`}
+                  {phase === 'shaking'
+                    ? 'RATTLING THE LOCK…'
+                    : phase === 'exploding'
+                      ? 'THE VAULT OPENS…'
+                      : canOpen
+                        ? `OPEN ${tierTheme.label.toUpperCase()} — ${fmtInt(tierCost)} PIECES`
+                        : `${fmtInt(Math.max(0, tierCost - pieces))} PIECES NEEDED`}
                 </button>
               </div>
               <div className="lb-art-line text-primary mx-2.5" />
@@ -874,7 +1178,9 @@ export default function LootBox() {
                       />
                     </label>
                   </div>
-                  <p className="text-[8px] text-mutedForeground italic leading-tight">Exclusive % = chance per prize for a loot exclusive on that roll. Box quality: set one, other two auto-fill to 100.</p>
+                  <p className="text-[8px] text-mutedForeground italic leading-tight">
+                    Exclusive % = chance per prize for a loot exclusive. Box quality % no longer affects opens (players choose tier).
+                  </p>
                   <button
                     type="button"
                     onClick={saveRarity}
@@ -953,7 +1259,7 @@ export default function LootBox() {
             </div>
         </div>
 
-        {result && <ResultModal result={result} onClose={closeModal} />}
+        {result && <ResultModal result={result} onClose={closeModal} openAnimLevel={openAnimLevel} />}
       </div>
     </>
   );
