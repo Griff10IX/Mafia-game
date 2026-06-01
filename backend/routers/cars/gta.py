@@ -1109,9 +1109,13 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
         return {"success": False, "message": "Invalid action"}
     # Garage: honor full selection (capped). Auto Rank / internal: upgraded batch limit only.
     if manual_garage:
-        limit = min(len(car_ids), GARAGE_BATCH_LIMIT_MAX)
+        batch_cap = GARAGE_BATCH_LIMIT_MAX
     else:
-        limit = min(effective_garage_batch_limit(user), len(car_ids))
+        batch_cap = effective_garage_batch_limit(user)
+    car_ids = list(car_ids or [])[:batch_cap]
+    limit = len(car_ids)
+    if limit < 1:
+        return {"success": False, "message": "No cars selected"}
     owner = _user_car_owner_clause(user.get("id"))
     # Prefer DB-resolved crew (membership row) so melt rewards still apply if users.family_id is stale/missing.
     family_id = await resolve_family_id(user.get("id") or "") or (str(user.get("family_id") or "").strip() or None)
@@ -1562,6 +1566,19 @@ async def melt_cars(
         raise HTTPException(status_code=400, detail="No cars selected")
     if (body.action or "").strip().lower() not in ("bullets", "cash"):
         raise HTTPException(status_code=400, detail='action must be "bullets" or "cash"')
+    requested = len(body.car_ids)
+    if body.manual_garage:
+        max_in = GARAGE_BATCH_LIMIT_MAX
+    else:
+        max_in = effective_garage_batch_limit(current_user)
+    if requested > max_in:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Too many cars in one request ({requested:,}; max {max_in} per melt). "
+                "Select all still works — melt processes up to 100 cars per click."
+            ),
+        )
     result = await melt_cars_locked(
         current_user,
         body.car_ids,
@@ -1572,6 +1589,11 @@ async def melt_cars(
         raise HTTPException(status_code=403, detail=result.get("message") or EXCLUSIVE_CAR_WAR_LOCK_DETAIL)
     if result.get("cooldown"):
         raise HTTPException(status_code=400, detail=result.get("detail", "Melt on cooldown"))
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=400,
+            detail=result.get("message") or result.get("detail") or "No cars were processed",
+        )
     return result
 
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Car, Flame, DollarSign, CheckSquare, Square, Filter, Settings, Wrench } from 'lucide-react';
-import api, { refreshUser } from '../../utils/api';
+import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
@@ -22,6 +22,8 @@ const GARAGE_STYLES = `
 
 const RARITY_ORDER = { exclusive: 7, loot_exclusive: 6, custom: 5, legendary: 4, ultra_rare: 3, rare: 2, uncommon: 1, common: 0 };
 const DEFAULT_VISIBLE = 100;
+/** Keep in sync with backend `GARAGE_BATCH_LIMIT_MAX` (manual_garage melt/scrap cap). */
+const GARAGE_MELT_SCRAP_BATCH_MAX = 100;
 const MELT_SCRAP_RARITIES_KEY = 'garage_melt_scrap_rarities';
 /** Keep in sync with backend `server.py` + `routers/cars/gta.py` melt math. */
 const MELT_VALUE_PER_BULLET = 385;
@@ -803,6 +805,13 @@ export default function Garage() {
       return;
     }
     if (meltBulletsSecondsRemaining > 0) return;
+    const idsToSend = eligibleIds.slice(0, GARAGE_MELT_SCRAP_BATCH_MAX);
+    if (eligibleIds.length > GARAGE_MELT_SCRAP_BATCH_MAX) {
+      toast.info(
+        `Melting ${GARAGE_MELT_SCRAP_BATCH_MAX.toLocaleString()} of ${eligibleIds.length.toLocaleString()} selected cars this click (server max per melt). Melt again after cooldown for more.`,
+        { duration: 6000 },
+      );
+    }
     let captchaToken = null;
     try {
       captchaToken = await getCaptchaToken();
@@ -812,20 +821,24 @@ export default function Garage() {
     }
     try {
       const response = await api.post('/gta/melt', {
-        car_ids: eligibleIds,
+        car_ids: idsToSend,
         action: 'bullets',
         manual_garage: true,
         ...(captchaToken ? { captcha_token: captchaToken } : {}),
       });
+      if (response.data?.success === false) {
+        toast.error(response.data.message || response.data.detail || 'Failed to melt cars');
+        return;
+      }
       toast.success(response.data.message);
       if (response.data.melt_bullets_cooldown_until) {
         setMeltBulletsCooldownUntil(response.data.melt_bullets_cooldown_until);
       }
-      setSelectedCars([]);
+      setSelectedCars((prev) => prev.filter((id) => !idsToSend.includes(id)));
       refreshUser();
       fetchGarage();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to melt cars');
+      toast.error(getApiErrorMessage(error) || 'Failed to melt cars');
     }
   };
 
@@ -840,6 +853,13 @@ export default function Garage() {
       toast.error(meltScrapRarities.length === 0 ? 'Select rarities to melt or scrap (Melt/Scrap settings)' : 'No eligible cars selected');
       return;
     }
+    const idsToSend = eligibleIds.slice(0, GARAGE_MELT_SCRAP_BATCH_MAX);
+    if (eligibleIds.length > GARAGE_MELT_SCRAP_BATCH_MAX) {
+      toast.info(
+        `Scrapping ${GARAGE_MELT_SCRAP_BATCH_MAX.toLocaleString()} of ${eligibleIds.length.toLocaleString()} selected cars this click (server max per batch). Run again for more.`,
+        { duration: 6000 },
+      );
+    }
     let captchaToken = null;
     try {
       captchaToken = await getCaptchaToken();
@@ -849,17 +869,21 @@ export default function Garage() {
     }
     try {
       const response = await api.post('/gta/melt', {
-        car_ids: eligibleIds,
+        car_ids: idsToSend,
         action: 'cash',
         manual_garage: true,
         ...(captchaToken ? { captcha_token: captchaToken } : {}),
       });
+      if (response.data?.success === false) {
+        toast.error(response.data.message || response.data.detail || 'Failed to scrap cars');
+        return;
+      }
       toast.success(response.data.message);
-      setSelectedCars([]);
+      setSelectedCars((prev) => prev.filter((id) => !idsToSend.includes(id)));
       refreshUser();
       fetchGarage();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to scrap cars');
+      toast.error(getApiErrorMessage(error) || 'Failed to scrap cars');
     }
   };
 
@@ -888,13 +912,13 @@ export default function Garage() {
   const noBulkSelectable = bulkSelectCount === 0;
   const noMeltMatchInList = filterActive && bulkSelectCount === 0;
 
-  const batchLimit = user?.garage_batch_limit ?? 6;
+  const meltScrapBatchMax = GARAGE_MELT_SCRAP_BATCH_MAX;
   const selectedCarsForMelt = allFilteredCars.filter(
     (c) => selectedCars.includes(c.user_car_id) && !c.listed_for_sale && meltScrapRarities.length > 0 && meltScrapRarities.includes(c.rarity)
   );
   const predictedMeltBullets = Math.floor(
     (selectedCarsForMelt
-      .slice(0, batchLimit)
+      .slice(0, meltScrapBatchMax)
       .reduce((sum, c) => sum + previewBulletsForCarValue(c.value, c.rarity, c.damage_percent, c.car_id), 0) *
       MELT_BULLETS_TOTAL_PAYOUT_MULT_NUM) /
       MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN
