@@ -444,7 +444,7 @@ function LootRewardGuide({ rewardInfo, odds }) {
               <span className={LOOT_TIER_THEME[t]?.accent}>{LOOT_TIER_THEME[t]?.label} {fmtInt(costs[t])}</span>
             </span>
           ))}{' '}
-          pieces. Max <span className="text-primary">{fmtInt(max_points_per_prize ?? 15000)}</span> points and{' '}
+          pieces. Max <span className="text-primary">{fmtInt(max_points_per_prize ?? 10000)}</span> points and{' '}
           <span className="text-primary">${fmtInt(max_cash_per_prize ?? 250000000)}</span> cash per prize.
         </p>
         {odds && (
@@ -489,7 +489,15 @@ function LootRewardGuide({ rewardInfo, odds }) {
                 )}
                 <ul className="list-none p-0 m-0 space-y-0.5 text-[7px] font-heading leading-tight opacity-95">
                   <li>Cash {formatCashRange(t.cash[0], t.cash[1])}</li>
-                  <li>Points {formatNumRange(t.points[0], t.points[1])}</li>
+                  <li>
+                    Points {formatNumRange(t.points[0], t.points[1])}
+                    {t.points_high_roll_chance_pct != null && t.points_standard_max != null && (
+                      <span className="text-amber-200/85">
+                        {' '}
+                        (~{t.points_high_roll_chance_pct}% above {fmtInt(t.points_standard_max)})
+                      </span>
+                    )}
+                  </li>
                   <li>Rank pts {formatNumRange(t.rank_points[0], t.rank_points[1])}</li>
                   <li>Bullets {formatNumRange(t.bullets[0], t.bullets[1])}</li>
                   <li>Pieces {formatNumRange(t.loot_pieces[0], t.loot_pieces[1])}</li>

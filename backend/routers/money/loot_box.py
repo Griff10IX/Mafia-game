@@ -1,5 +1,5 @@
 # Loot box: player-chosen paid tier (50 / 100 / 500 / 1000 pieces). Per-prize effective reward tier (jackpots on common/uncommon).
-# Global caps per prize: 15k points, $250M cash. Max one car prize per open, unique car_id per open.
+# Global caps per prize: 10k points, $250M cash. Max one car prize per open, unique car_id per open.
 import logging
 import secrets
 _rng = secrets.SystemRandom()
@@ -44,7 +44,7 @@ LOOT_BOX_OPEN_COST_BY_TIER: Dict[str, int] = {
     "rare": 500,
     "ultra_rare": 1000,
 }
-LOOT_MAX_POINTS = 15_000
+LOOT_MAX_POINTS = 10_000
 LOOT_MAX_CASH = 250_000_000
 PAID_LOOT_TIERS = ("common", "uncommon", "rare", "ultra_rare")
 REWARD_TIER_RANK = {"common": 0, "uncommon": 1, "rare": 2, "ultra_rare": 3}
@@ -457,8 +457,9 @@ def _loot_public_reward_info() -> Dict[str, Any]:
     for q in PAID_LOOT_TIERS:
         t = _loot_tier_profile(q)
         mix = list(t["points_mix"])
-        pts_lo = int(min(mix))
+        pts_lo = int(t.get("points_min") or min(mix))
         pts_hi = int(t["points_max"])
+        pts_high_pct = float(t.get("points_high_roll_chance") or 0)
         c0, c1 = t["cash"]
         r0, r1 = t["rank_points"]
         b0, b1 = t["bullets"]
@@ -473,6 +474,8 @@ def _loot_public_reward_info() -> Dict[str, Any]:
             "guaranteed_standard_types": guaranteed,
             "cash": [int(c0), int(c1)],
             "points": [pts_lo, pts_hi],
+            "points_high_roll_chance_pct": round(pts_high_pct * 100, 1) if pts_high_pct > 0 else None,
+            "points_standard_max": int(t["points_standard_max"]) if t.get("points_standard_max") else None,
             "rank_points": [int(r0), int(r1)],
             "bullets": [int(b0), int(b1)],
             "loot_pieces": [int(l0), int(l1)],
@@ -518,8 +521,9 @@ def _loot_tier_profile(box_quality: str) -> Dict[str, Any]:
             "loot_pieces": (2, 30),
             "car_rarities": ("common",),
             "car_count": (1, 2),
-            "points_mix": (200, 400, 600),
-            "points_max": 600,
+            "points_min": 150,
+            "points_mix": (150, 300, 500),
+            "points_max": 500,
             "perk_exclude": frozenset({"gta_rare_100"}),
         },
         "uncommon": {
@@ -529,8 +533,9 @@ def _loot_tier_profile(box_quality: str) -> Dict[str, Any]:
             "loot_pieces": (8, 55),
             "car_rarities": ("common", "uncommon"),
             "car_count": (1, 3),
-            "points_mix": (600, 1_200, 1_800),
-            "points_max": 1_800,
+            "points_min": 400,
+            "points_mix": (400, 900, 1_400),
+            "points_max": 1_500,
             "perk_exclude": frozenset(),
         },
         "rare": {
@@ -540,8 +545,9 @@ def _loot_tier_profile(box_quality: str) -> Dict[str, Any]:
             "loot_pieces": (20, 95),
             "car_rarities": ("uncommon", "rare", "ultra_rare"),
             "car_count": (1, 1),
-            "points_mix": (1_400, 2_800, 4_200),
-            "points_max": LOOT_MAX_POINTS,
+            "points_min": 800,
+            "points_mix": (1_000, 2_000, 3_200),
+            "points_max": 5_000,
             "perk_exclude": frozenset(),
         },
         "ultra_rare": {
@@ -551,8 +557,12 @@ def _loot_tier_profile(box_quality: str) -> Dict[str, Any]:
             "loot_pieces": (40, 120),
             "car_rarities": ("ultra_rare",),
             "car_count": (1, 1),
-            "points_mix": (3_500, 7_000, 10_500),
+            "points_min": 2_500,
+            "points_mix": (2_500, 4_500, 6_500),
             "points_max": LOOT_MAX_POINTS,
+            "points_standard_max": 7_000,
+            "points_high_roll_chance": 0.15,
+            "points_high_floor": 7_001,
             "perk_exclude": frozenset(),
         },
     }
@@ -599,11 +609,21 @@ def _loot_pick_car(
 def _loot_roll_points(tier: Dict[str, Any]) -> int:
     mix = list(tier["points_mix"])
     hi = int(tier["points_max"])
-    if _rng.random() < 0.62:
+    lo = int(tier.get("points_min") or min(mix))
+    high_chance = float(tier.get("points_high_roll_chance") or 0)
+    high_floor = int(tier.get("points_high_floor") or (hi + 1))
+    standard_hi = int(tier.get("points_standard_max") or hi)
+    if high_chance > 0:
+        standard_hi = min(standard_hi, high_floor - 1)
+
+    if high_chance > 0 and _rng.random() < high_chance:
+        amount = int(_rng.randint(high_floor, hi))
+    elif _rng.random() < 0.62:
         amount = int(_rng.choice(mix))
+        if high_chance > 0:
+            amount = min(amount, standard_hi)
     else:
-        lo = min(mix)
-        amount = int(_rng.randint(lo, hi))
+        amount = int(_rng.randint(lo, standard_hi))
     return _clamp_loot_points(amount)
 
 
