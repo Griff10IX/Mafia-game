@@ -109,6 +109,8 @@ DISTILLERY_AUTO_SELL_MARGIN_CAP = 1.70
 DISTILLERY_BASE_BOOZE_UNIT_VALUE = 900
 DISTILLERY_COLLECT_ROI_SAFETY_FLOOR = 1.0
 DISTILLERY_MAX_ACTIVE_BATCHES = 8
+# Auto-aging won't start a batch below this (avoids spam when reserve is barely below carrying).
+DISTILLERY_AUTO_AGING_MIN_BATCH_UNITS = 25
 DISTILLERY_AUTO_SELL_MODES = frozenset({"crew", "booze_run"})
 try:
     DISTILLERY_AUTOMATION_TICKER_SECONDS = max(15, min(600, int(os.environ.get("DISTILLERY_AUTOMATION_TICKER_SECONDS", "60") or "60")))
@@ -2044,7 +2046,7 @@ async def _distillery_try_start_one_automation_batch(user_id: str, business_id: 
     carrying = (user or {}).get("booze_carrying") or {}
     have = int(carrying.get(booze_id) or 0)
     qty = have - reserve
-    if qty < 1:
+    if qty < DISTILLERY_AUTO_AGING_MIN_BATCH_UNITS:
         return False
     ok, _, _ = await _distillery_start_aging_batch_persist(business_id, user_id, distillery, tier, qty)
     return ok

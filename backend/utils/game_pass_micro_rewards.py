@@ -67,9 +67,9 @@ REWARD_KEY_LABELS = {
     "loot_box_pieces": "loot box pieces",
 }
 
-# Targets (your request)
-TARGET_CASH_TOTAL = 500_000_000
-TARGET_POINTS_TOTAL = 10_000
+# Targets (season VIP totals — keep in sync with src/pages/Game/GamePass.js)
+TARGET_CASH_TOTAL = 1_000_000_000
+TARGET_POINTS_TOTAL = 15_000
 TARGET_BULLETS_TOTAL = 250_000
 TARGET_AUTO_RANK_2H_TOTAL = 75
 

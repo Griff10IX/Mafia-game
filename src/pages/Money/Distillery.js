@@ -11,10 +11,16 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../
 
 const REFRESH_MS = 30_000;
 const DIST_CACHE_PREFIX = 'mafia_distillery_v1:';
+const FAILURES_DISMISS_PREFIX = 'mafia_distillery_failures_dismiss:';
 
 function distSessionKey(userId) {
   const id = (userId || '').trim();
   return id ? `${DIST_CACHE_PREFIX}${id}` : '';
+}
+
+function failuresDismissKey(userId) {
+  const id = (userId || '').trim();
+  return id ? `${FAILURES_DISMISS_PREFIX}${id}` : '';
 }
 const EQUIPMENT_ORDER = ['stills', 'condensers', 'mash_tun', 'barrels', 'bottling', 'tunnel', 'bribe_office', 'fake_labels', 'quality_lab'];
 const TRACKS = ['production', 'aging', 'logistics', 'stealth', 'labor', 'black_market'];
@@ -424,7 +430,25 @@ export default function Distillery() {
     () => recentFailures.map((f) => `${f.at}|${f.type}|${f.item}|${f.maintenance}`).join(';;'),
     [recentFailures]
   );
+  const failuresDismissStorageKey = failuresDismissKey(authUser?.id);
   const [dismissedFailuresSig, setDismissedFailuresSig] = useState(null);
+
+  useEffect(() => {
+    if (!failuresDismissStorageKey) {
+      setDismissedFailuresSig(null);
+      return;
+    }
+    const stored = readSessionJson(failuresDismissStorageKey);
+    setDismissedFailuresSig(stored?.sig ?? null);
+  }, [failuresDismissStorageKey]);
+
+  const dismissFailuresBanner = useCallback(() => {
+    setDismissedFailuresSig(failuresSig);
+    if (failuresDismissStorageKey) {
+      writeSessionJson(failuresDismissStorageKey, { sig: failuresSig, t: Date.now() });
+    }
+  }, [failuresSig, failuresDismissStorageKey]);
+
   const showFailuresBanner = recentFailures.length > 0 && failuresSig !== dismissedFailuresSig;
   const maintenanceWarn = maintenancePct < 35;
 
@@ -796,7 +820,7 @@ export default function Distillery() {
               <SectionHead icon={AlertTriangle} title="Maintenance Failures">
                 <button
                   type="button"
-                  onClick={() => setDismissedFailuresSig(failuresSig)}
+                  onClick={dismissFailuresBanner}
                   className="flex h-7 w-7 items-center justify-center rounded border border-red-500/35 bg-red-900/25 text-red-300/90 transition-colors hover:bg-red-900/45 hover:text-red-100"
                   aria-label="Dismiss maintenance failures"
                   title="Dismiss"
@@ -1275,6 +1299,10 @@ export default function Distillery() {
                       onChange={(e) => setAutoAging((p) => ({ ...p, reserve_units: Number(e.target.value || 0) }))}
                       className="dist-input"
                     />
+                    <p className="mt-1 text-[9px] leading-snug text-mutedForeground">
+                      Auto-aging only starts when spare booze (carrying minus reserve) is at least <strong className="text-foreground/85">25</strong> units.
+                      If reserve is almost your full stash, each collect can leave only 1 spare unit — that used to create many tiny &quot;1 unit&quot; batches.
+                    </p>
                   </div>
                 </div>
                 <div className="dist-autosell-row mt-2">
