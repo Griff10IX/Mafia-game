@@ -31,7 +31,7 @@ const LOOT_BOX_STYLES = `
 `;
 
 const PAID_TIERS = ['common', 'uncommon', 'rare', 'ultra_rare'];
-const DEFAULT_OPEN_COST_BY_TIER = { common: 50, uncommon: 100, rare: 150, ultra_rare: 200 };
+const DEFAULT_OPEN_COST_BY_TIER = { common: 50, uncommon: 100, rare: 500, ultra_rare: 1000 };
 const TIER_RANK = { common: 0, uncommon: 1, rare: 2, ultra_rare: 3, loot_exclusive: 4, exclusive: 4 };
 
 const LOOT_TIER_THEME = {
@@ -76,7 +76,7 @@ const LOOT_TIER_THEME = {
   rare: {
     label: 'Rare',
     tagline: '2+ rare-tier prizes guaranteed',
-    pieceCost: 150,
+    pieceCost: 500,
     prizeHint: '2–5 prizes',
     accent: 'text-blue-300',
     accentMuted: 'text-blue-500/80',
@@ -95,7 +95,7 @@ const LOOT_TIER_THEME = {
   ultra_rare: {
     label: 'Ultra Rare',
     tagline: 'Cash + points guaranteed — 2+ rare+ prizes',
-    pieceCost: 200,
+    pieceCost: 1000,
     prizeHint: '3–6 prizes',
     accent: 'text-purple-300',
     accentMuted: 'text-purple-500/80',
@@ -1016,7 +1016,7 @@ export default function LootBox() {
             <div className="relative lb-fade-in">
               <p className="text-[9px] text-zinc-500 font-heading italic">
                 Earn pieces from <Link to="/account/missions" className="text-primary underline">the Consigliere&apos;s Ledger</Link>.
-                Pick a vault tier below (50–200 pieces). Better tiers and jackpots mean bigger reveals.
+                Pick a vault tier below (50–1,000 pieces). Better tiers and jackpots mean bigger reveals.
               </p>
             </div>
 

@@ -40,7 +40,7 @@ const fmtInt = (n) => {
 };
 
 const LOOT_BOX_PIECES_TOOLTIP =
-  'Loot box pieces. On the Loot Box page, choose a vault tier: Common (50), Uncommon (100), Rare (150), or Ultra Rare (200 pieces) for random rewards (cash, points, bullets, tokens, cars, and more).';
+  'Loot box pieces. On the Loot Box page, choose a vault tier: Common (50), Uncommon (100), Rare (500), or Ultra Rare (1,000 pieces) for random rewards (cash, points, bullets, tokens, cars, and more).';
 const MISSIONS_CACHE_KEY = 'mafia_missions_v1';
 const TRIBUTE_BANK_TOKEN_TOOLTIP =
   'Tribute tokens stack here until you tap Collect. Each one becomes one random skill token (e.g. Crime XP, GTA XP, melt, travel — see token list in help).';

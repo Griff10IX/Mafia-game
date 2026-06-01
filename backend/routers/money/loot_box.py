@@ -1,4 +1,4 @@
-# Loot box: player-chosen paid tier (50–200 pieces). Per-prize effective reward tier (jackpots on common/uncommon).
+# Loot box: player-chosen paid tier (50 / 100 / 500 / 1000 pieces). Per-prize effective reward tier (jackpots on common/uncommon).
 # Global caps per prize: 15k points, $250M cash. Max one car prize per open, unique car_id per open.
 import logging
 import secrets
@@ -41,8 +41,8 @@ LOOT_BOX_PIECES_PER_OPEN = 100  # legacy default; opens use LOOT_BOX_OPEN_COST_B
 LOOT_BOX_OPEN_COST_BY_TIER: Dict[str, int] = {
     "common": 50,
     "uncommon": 100,
-    "rare": 150,
-    "ultra_rare": 200,
+    "rare": 500,
+    "ultra_rare": 1000,
 }
 LOOT_MAX_POINTS = 15_000
 LOOT_MAX_CASH = 250_000_000
@@ -626,7 +626,7 @@ async def open_loot_box(
     if not paid_tier:
         raise HTTPException(
             status_code=400,
-            detail="Choose a box tier: common (50 pieces), uncommon (100), rare (150), or ultra_rare (200).",
+            detail="Choose a box tier: common (50 pieces), uncommon (100), rare (500), or ultra_rare (1000).",
         )
     cost = int(LOOT_BOX_OPEN_COST_BY_TIER.get(paid_tier, LOOT_BOX_PIECES_PER_OPEN))
     user_id = current_user["id"]

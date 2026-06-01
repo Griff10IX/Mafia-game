@@ -18,7 +18,7 @@ function bizSessionKey(userId) {
 }
 
 const LOOT_BOX_PIECES_HINT =
-  'Loot box pieces stack in your account. On the Loot Box page, open a vault tier (50–200 pieces: Common, Uncommon, Rare, or Ultra Rare) for random rewards.';
+  'Loot box pieces stack in your account. On the Loot Box page, open a vault tier (50–1,000 pieces: Common, Uncommon, Rare, or Ultra Rare) for random rewards.';
 
 /** Racket + distillery progression ladder (not city missions on /account/missions). */
 const BUSINESS_PROGRESS_LABEL = 'Business progress';
