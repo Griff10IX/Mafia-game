@@ -72,6 +72,7 @@ from server import (
     set_state_head,
     clear_or_transfer_state_head_on_wipe,
     get_head_family_id_for_state,
+    canonical_state_name,
     _get_active_war_between,
     _get_active_war_for_family,
     _family_in_active_war,
@@ -213,9 +214,9 @@ async def count_families_toward_player_cap() -> int:
 
 async def _state_head_casino_week_stats(state_name: str):
     """Aggregate gambling_log for the current week (Monday 00:00 Europe/London) in the given state. Returns { game_type: { wins, losses } }."""
-    if not state_name or not state_name.strip():
+    state = canonical_state_name(state_name)
+    if not state:
         return {}
-    state = (state_name or "").strip()
     now = datetime.now(timezone.utc)
     week_start, week_end = game_week_range_utc(now)
     week_start_iso = week_start.isoformat().replace("+00:00", "Z")
@@ -238,9 +239,9 @@ async def _state_head_casino_week_stats(state_name: str):
         return False
 
     def _in_state(game_type: str, details: dict) -> bool:
-        city = (details.get("city") or "").strip()
-        st = (details.get("state") or "").strip()
-        return city.lower() == state.lower() or st.lower() == state.lower()
+        city = canonical_state_name(details.get("city") or "")
+        st = canonical_state_name(details.get("state") or "")
+        return city == state or st == state
 
     try:
         cursor = db.gambling_log.find(

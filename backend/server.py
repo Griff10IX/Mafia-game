@@ -267,14 +267,30 @@ KILL_CASH_PERCENT = 0.75  # killer gets 75% of victim's cash
 DEAD_ALIVE_PERCENT = 0.9995  # cash: 0.05% tax to state head — recipient gets 99.95% of money_at_death
 DEAD_ALIVE_POINTS_PERCENT = 1.0  # points: 100% of points_at_death to recipient (no points tax)
 
+def canonical_state_name(state: str) -> str:
+    """Map arbitrary casing/spacing to a STATES entry, or return stripped input."""
+    s = (state or "").strip()
+    if not s:
+        return ""
+    for st in (STATES or []):
+        if st and s.lower() == st.lower():
+            return st
+    return s
+
+
 # State heads: which family (if any) is head of each state. One family per state; at most 4 families.
 async def get_state_heads() -> Dict[str, Optional[str]]:
     """Return { state: family_id or None } for all STATES. Stored in game_settings key 'state_heads'."""
     doc = await db.game_settings.find_one({"key": "state_heads"}, {"_id": 0, "value": 1})
     raw = (doc or {}).get("value") or {}
+    raw_by_lower = {
+        str(k).strip().lower(): (v or "").strip() or None
+        for k, v in raw.items()
+        if str(k).strip()
+    }
     out = {}
     for s in (STATES or []):
-        out[s] = (raw.get(s) or "").strip() or None
+        out[s] = raw_by_lower.get(s.lower()) or None
     active_fids = [fid for fid in out.values() if fid]
     if active_fids:
         wiped_ids = {
@@ -300,15 +316,28 @@ async def get_state_heads() -> Dict[str, Optional[str]]:
 
 async def get_head_family_id_for_state(state: str) -> Optional[str]:
     """Return family_id that is head of the given state, or None."""
-    if not (state or "").strip():
+    key = canonical_state_name(state)
+    if not key or key not in (STATES or []):
         return None
     heads = await get_state_heads()
-    fid = heads.get((state or "").strip())
-    if not fid:
+    fid = heads.get(key)
+    if fid:
+        fam = await db.families.find_one({"id": fid}, {"_id": 0, "wiped": 1})
+        if fam and not fam.get("wiped"):
+            return fid
+    # state_heads map can desync from families.head_of_state (legacy rows / casing); repair on read.
+    fam = await db.families.find_one(
+        {
+            "head_of_state": {"$regex": f"^{re.escape(key)}$", "$options": "i"},
+            "wiped": {"$ne": True},
+        },
+        {"_id": 0, "id": 1},
+    )
+    if not fam:
         return None
-    fam = await db.families.find_one({"id": fid}, {"_id": 0, "wiped": 1})
-    if not fam or fam.get("wiped"):
-        return None
+    fid = fam["id"]
+    if heads.get(key) != fid:
+        await set_state_head(key, fid, force=True)
     return fid
 
 
@@ -329,7 +358,7 @@ async def set_state_head(state: str, family_id: Optional[str], force: bool = Fal
     A family can only be head of ONE state - blocks if they already head another (unless force=True for admin cleanup).
     Returns error message string if blocked, or empty string on success.
     """
-    state = (state or "").strip()
+    state = canonical_state_name(state)
     if state not in (STATES or []):
         return "Invalid state"
     heads = await get_state_heads()
