@@ -404,7 +404,7 @@ export default function Layout({ children }) {
   const [userSearchExpanded, setUserSearchExpanded] = useState(false);
   const [userSearchLoading, setUserSearchLoading] = useState(false);
   const [pageLocks, setPageLocks] = useState({});
-  const [worldCupPublic, setWorldCupPublic] = useState({ enabled: false, banner_text: '' });
+  const [worldCupEnabled, setWorldCupEnabled] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   /** Remount `{children}` after the tab was backgrounded long enough (mobile browsers often freeze or drop XHR; UI stays blank until refresh). */
   const [contentResumeKey, setContentResumeKey] = useState(0);
@@ -493,7 +493,7 @@ export default function Layout({ children }) {
     return isStaffPortalTokenValid();
   }, [isAdmin, isModerator, staffLoginSession, staffPortalEnabled, portalNavTick]);
   const mobileBottomNavItems = useMemo(() => {
-    let items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, !!user?.is_entertainer, !!user?.is_help_desk_operator, staffToolsNavVisible, !!worldCupPublic.enabled);
+    let items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, !!user?.is_entertainer, !!user?.is_help_desk_operator, staffToolsNavVisible, !!worldCupEnabled);
     if (hasAdminEmail && !isAdmin) {
       items = items.map((i) =>
         i.type === 'group' && i.id === 'you'
@@ -556,7 +556,7 @@ export default function Layout({ children }) {
       }
       return i;
     });
-  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, storePointsEventActive, worldCupPublic.enabled, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
+  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, storePointsEventActive, worldCupEnabled, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
 
   useEffect(() => onCooldownChange(setCooldownSeconds), []);
 
@@ -1103,12 +1103,8 @@ export default function Layout({ children }) {
       setPageLocks(typeof paths === 'object' && paths !== null ? paths : {});
     }).catch(() => setPageLocks({}));
     api.get('/world-cup/public-status').then((r) => {
-      setWorldCupPublic({
-        enabled: !!r.data?.enabled,
-        banner_text: (r.data?.banner_text || '').trim(),
-        ended_message: r.data?.ended_message || '',
-      });
-    }).catch(() => setWorldCupPublic({ enabled: false, banner_text: '' }));
+      setWorldCupEnabled(!!r.data?.enabled);
+    }).catch(() => setWorldCupEnabled(false));
   }, []);
 
   const promoteToAdmin = async () => {
@@ -1307,7 +1303,7 @@ export default function Layout({ children }) {
     { path: '/game/daily-rewards', icon: Gift, label: 'Daily Rewards' },
     ...(user?.is_entertainer ? [{ path: '/game/entertainer', icon: Mic2, label: 'Entertainer Hub' }] : []),
     ...(user?.is_help_desk_operator ? [{ path: '/game/help-desk-hub', icon: Headphones, label: 'Help Desk Hub' }] : []),
-    ...(worldCupPublic.enabled ? [{ path: '/game/world-cup', icon: Trophy, label: 'World Cup 2026' }] : []),
+    ...(worldCupEnabled ? [{ path: '/game/world-cup', icon: Trophy, label: 'World Cup 2026' }] : []),
     { path: '/game/leaderboard', icon: Trophy, label: 'Leaderboard' },
     { path: '/game/store', icon: ShoppingBag, label: 'Store', saleBadge: storePointsEventActive },
     { path: '/game-pass', icon: Package, label: 'Game Pass' },
@@ -1587,7 +1583,7 @@ export default function Layout({ children }) {
             { to: '/casino/mp-blackjack', label: 'MP Blackjack', testId: 'nav-mp-blackjack', matchPrefix: true, Icon: Users },
             { to: '/casino/mp-poker', label: 'Poker', testId: 'nav-mp-poker', matchPrefix: true, Icon: Crown },
             { to: '/sports-betting', label: 'Sports Betting', testId: 'nav-sports-betting', Icon: LineChart },
-            ...(worldCupPublic.enabled ? [{ to: '/game/world-cup', label: 'World Cup 2026', testId: 'nav-world-cup', Icon: Trophy }] : []),
+            ...(worldCupEnabled ? [{ to: '/game/world-cup', label: 'World Cup 2026', testId: 'nav-world-cup', Icon: Trophy }] : []),
             { to: '/my-properties', label: 'My Properties', testId: 'nav-my-properties', Icon: Building2 },
           ].map((item, idx) => {
             const isActive = item.matchPrefix ? (location.pathname === item.to || location.pathname.startsWith(item.to + '/')) : location.pathname === item.to;
@@ -2354,12 +2350,6 @@ export default function Layout({ children }) {
           return (
             <ErrorBoundary>
               <div className="relative">
-                {worldCupPublic.enabled ? (
-                  <div className="mx-2 sm:mx-0 mb-3 px-3 py-2 rounded-lg border border-emerald-500/30 bg-emerald-950/40 text-center text-xs sm:text-sm text-foreground font-heading">
-                    {worldCupPublic.banner_text || 'World Cup 2026 predictions are open — join the team draft and pick your winners!'}
-                    <SameRouteAwareLink to="/game/world-cup" className="ml-2 text-primary underline">Play now</SameRouteAwareLink>
-                  </div>
-                ) : null}
                 <Fragment key={contentResumeKey}>{children}</Fragment>
                 {user ? <FindWordHuntLayer /> : null}
               </div>

@@ -114,6 +114,22 @@ async def _award_points(db, send_notification, user_id: str, points: int, event_
     return True
 
 
+async def _is_ghost_user(db, user_id: str) -> bool:
+    if not user_id:
+        return False
+    entry = await db.world_cup_entries.find_one({"user_id": user_id}, {"ghost_entry": 1})
+    return bool(entry and entry.get("ghost_entry"))
+
+
+async def _ghost_user_ids(db) -> set:
+    ids = set()
+    async for entry in db.world_cup_entries.find({"ghost_entry": True}, {"user_id": 1}):
+        uid = entry.get("user_id")
+        if uid:
+            ids.add(uid)
+    return ids
+
+
 def _norm_name(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "").strip().lower())
 
@@ -177,15 +193,158 @@ async def _settle_prediction_doc(db, send_notification, pred: dict, points: int,
     pid = pred.get("id")
     if not pid:
         return False
+    pts = int(points or 0)
+    payout_status = "none"
+    if pts > 0:
+        uid = pred.get("user_id") or ""
+        if await _is_ghost_user(db, uid):
+            payout_status = "ghost"
+        else:
+            payout_status = "pending"
     res = await db.world_cup_predictions.update_one(
         {"id": pid, "settled": {"$ne": True}},
-        {"$set": {"settled": True, "points_awarded": int(points), "settled_at": _now_iso()}},
+        {
+            "$set": {
+                "settled": True,
+                "points_awarded": pts,
+                "settled_at": _now_iso(),
+                "settle_label": label,
+                "payout_status": payout_status,
+            }
+        },
+    )
+    return res.modified_count > 0
+
+
+async def _approve_prediction_payout(db, send_notification, prediction_id: str, approver_id: str) -> dict:
+    pred = await db.world_cup_predictions.find_one({"id": prediction_id}, {"_id": 0})
+    if not pred:
+        raise HTTPException(status_code=404, detail="Prediction not found")
+    if pred.get("payout_status") != "pending":
+        raise HTTPException(status_code=400, detail="Prediction payout is not pending approval")
+    pts = int(pred.get("points_awarded") or 0)
+    uid = pred.get("user_id") or ""
+    label = pred.get("settle_label") or "World Cup prediction"
+    res = await db.world_cup_predictions.update_one(
+        {"id": prediction_id, "payout_status": "pending"},
+        {"$set": {"payout_status": "paid", "payout_approved_at": _now_iso(), "payout_approved_by": approver_id}},
     )
     if res.modified_count == 0:
-        return False
-    if points > 0:
-        await _award_points(db, send_notification, pred.get("user_id") or "", points, pid, label)
-    return True
+        raise HTTPException(status_code=400, detail="Payout already processed")
+    if pts > 0 and uid:
+        await _award_points(db, send_notification, uid, pts, prediction_id, label)
+    return {"ok": True, "prediction_id": prediction_id, "points": pts}
+
+
+async def _approve_jackpot_payout(db, send_notification, user_id: str, approver_id: str) -> dict:
+    entry = await db.world_cup_entries.find_one({"user_id": user_id}, {"_id": 0})
+    if not entry or not entry.get("jackpot_pending"):
+        raise HTTPException(status_code=400, detail="No pending jackpot for this user")
+    pts = int(entry.get("jackpot_points_pending") or 0)
+    champion = entry.get("jackpot_champion_team_id") or ""
+    label = entry.get("jackpot_label") or "World Cup champion (draft)"
+    ref = f"jackpot:{user_id}:{champion}"
+    res = await db.world_cup_entries.update_one(
+        {"user_id": user_id, "jackpot_pending": True},
+        {
+            "$set": {
+                "jackpot_pending": False,
+                "jackpot_awarded": True,
+                "jackpot_awarded_at": _now_iso(),
+                "jackpot_payout_approved_by": approver_id,
+            }
+        },
+    )
+    if res.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Jackpot payout already processed")
+    if pts > 0:
+        await _award_points(db, send_notification, user_id, pts, ref, label)
+    return {"ok": True, "user_id": user_id, "points": pts}
+
+
+async def _approve_all_pending_payouts(db, send_notification, approver_id: str) -> dict:
+    preds = await db.world_cup_predictions.find({"payout_status": "pending"}, {"_id": 0, "id": 1}).to_list(5000)
+    pred_approved = 0
+    pred_points = 0
+    for pred in preds:
+        pid = pred.get("id")
+        if not pid:
+            continue
+        try:
+            result = await _approve_prediction_payout(db, send_notification, pid, approver_id)
+            pred_approved += 1
+            pred_points += int(result.get("points") or 0)
+        except HTTPException:
+            continue
+    jackpots = await db.world_cup_entries.find({"jackpot_pending": True}, {"_id": 0, "user_id": 1}).to_list(500)
+    jackpot_approved = 0
+    jackpot_points = 0
+    for entry in jackpots:
+        uid = entry.get("user_id")
+        if not uid:
+            continue
+        try:
+            result = await _approve_jackpot_payout(db, send_notification, uid, approver_id)
+            jackpot_approved += 1
+            jackpot_points += int(result.get("points") or 0)
+        except HTTPException:
+            continue
+    return {
+        "predictions_approved": pred_approved,
+        "jackpots_approved": jackpot_approved,
+        "total_points": pred_points + jackpot_points,
+    }
+
+
+async def _pending_payout_counts(db) -> dict:
+    pending_predictions = await db.world_cup_predictions.count_documents({"payout_status": "pending"})
+    pending_jackpots = await db.world_cup_entries.count_documents({"jackpot_pending": True})
+    return {
+        "pending_predictions": pending_predictions,
+        "pending_jackpots": pending_jackpots,
+        "pending_payouts": pending_predictions + pending_jackpots,
+    }
+
+
+async def _list_pending_payouts(db, limit: int = 100) -> dict:
+    lim = max(1, min(int(limit), 500))
+    preds = await db.world_cup_predictions.find(
+        {"payout_status": "pending"},
+        {"_id": 0},
+    ).sort("settled_at", -1).limit(lim).to_list(lim)
+    jackpots = await db.world_cup_entries.find(
+        {"jackpot_pending": True},
+        {"_id": 0},
+    ).sort("jackpot_pending_at", -1).limit(lim).to_list(lim)
+    user_ids = {p.get("user_id") for p in preds if p.get("user_id")}
+    user_ids.update(e.get("user_id") for e in jackpots if e.get("user_id"))
+    usernames = {}
+    if user_ids:
+        async for u in db.users.find({"id": {"$in": list(user_ids)}}, {"_id": 0, "id": 1, "username": 1}):
+            usernames[u["id"]] = u.get("username") or "?"
+    pred_rows = []
+    for p in preds:
+        pred_rows.append({
+            "id": p.get("id"),
+            "user_id": p.get("user_id"),
+            "username": usernames.get(p.get("user_id"), "?"),
+            "type": p.get("type"),
+            "target_id": p.get("target_id"),
+            "points": int(p.get("points_awarded") or 0),
+            "label": p.get("settle_label") or "",
+            "settled_at": p.get("settled_at"),
+        })
+    jackpot_rows = []
+    for e in jackpots:
+        jackpot_rows.append({
+            "user_id": e.get("user_id"),
+            "username": usernames.get(e.get("user_id"), "?"),
+            "points": int(e.get("jackpot_points_pending") or 0),
+            "label": e.get("jackpot_label") or "World Cup champion (draft)",
+            "pending_at": e.get("jackpot_pending_at"),
+        })
+    counts = await _pending_payout_counts(db)
+    return {**counts, "predictions": pred_rows, "jackpots": jackpot_rows}
 
 
 async def _settle_group_predictions(db, send_notification, cfg: dict, group_id: str, winner_team_id: str) -> int:
@@ -379,16 +538,33 @@ async def _maybe_settle_tournament_from_match(db, send_notification, cfg: dict, 
             pts_aw = pts2 if str(pick) == str(runner_up) else 0
             await _settle_prediction_doc(db, send_notification, pred, pts_aw, "2nd place")
         jackpot = _points_from_config(cfg)["jackpot_points"]
-        async for entry in db.world_cup_entries.find({"jackpot_awarded": {"$ne": True}}, {"_id": 0}):
+        now = _now_iso()
+        async for entry in db.world_cup_entries.find(
+            {
+                "jackpot_awarded": {"$ne": True},
+                "jackpot_pending": {"$ne": True},
+                "ghost_entry": {"$ne": True},
+            },
+            {"_id": 0},
+        ):
             drafted = entry.get("drafted_team_ids") or []
             if str(champion) not in [str(x) for x in drafted]:
                 continue
             uid = entry.get("user_id")
             if not uid:
                 continue
-            ref = f"jackpot:{entry.get('user_id')}:{champion}"
-            await _award_points(db, send_notification, uid, jackpot, ref, "World Cup champion (draft)")
-            await db.world_cup_entries.update_one({"user_id": uid}, {"$set": {"jackpot_awarded": True, "jackpot_awarded_at": _now_iso()}})
+            await db.world_cup_entries.update_one(
+                {"user_id": uid},
+                {
+                    "$set": {
+                        "jackpot_pending": True,
+                        "jackpot_points_pending": jackpot,
+                        "jackpot_pending_at": now,
+                        "jackpot_champion_team_id": champion,
+                        "jackpot_label": "World Cup champion (draft)",
+                    }
+                },
+            )
         out["tournament_settled"] = True
     return out
 
@@ -509,7 +685,7 @@ async def _run_draft(db) -> dict:
     cfg = await _load_config(db)
     if cfg.get("draft_run"):
         raise HTTPException(status_code=400, detail="Draft already run")
-    entries = await db.world_cup_entries.find({}, {"_id": 0, "user_id": 1}).to_list(5000)
+    entries = await db.world_cup_entries.find({}, {"_id": 0, "user_id": 1, "ghost_entry": 1}).to_list(5000)
     if not entries:
         raise HTTPException(status_code=400, detail="No entrants")
     teams = await db.world_cup_teams.find({}, {"_id": 0, "id": 1}).to_list(100)
@@ -520,13 +696,20 @@ async def _run_draft(db) -> dict:
     rng = random.Random(seed)
     shuffled = list(team_ids)
     rng.shuffle(shuffled)
-    n_users = len(entries)
+    n_all = len(entries)
+    real_entries = [e for e in entries if not e.get("ghost_entry")]
+    ghost_count = n_all - len(real_entries)
     assignments = {e["user_id"]: [] for e in entries}
-    idx = 0
-    for tid in shuffled:
-        uid = entries[idx % n_users]["user_id"]
-        assignments[uid].append(tid)
-        idx += 1
+    if real_entries:
+        n_real = len(real_entries)
+        for i, tid in enumerate(shuffled):
+            uid = real_entries[i % n_real]["user_id"]
+            assignments[uid].append(tid)
+    for i, entry in enumerate(entries):
+        if not entry.get("ghost_entry"):
+            continue
+        uid = entry["user_id"]
+        assignments[uid] = [shuffled[j] for j in range(i, len(shuffled), n_all)]
     now = _now_iso()
     for uid, tids in assignments.items():
         await db.world_cup_entries.update_one(
@@ -538,7 +721,13 @@ async def _run_draft(db) -> dict:
         {"$set": {"draft_run": True, "draft_seed": seed, "draft_run_at": now}},
         upsert=True,
     )
-    return {"entrants": n_users, "teams": len(team_ids), "draft_seed": seed}
+    return {
+        "entrants": n_all,
+        "real_entrants": len(real_entries),
+        "ghost_entrants": ghost_count,
+        "teams": len(team_ids),
+        "draft_seed": seed,
+    }
 
 
 async def _seed_2026(db) -> dict:
@@ -618,6 +807,7 @@ def register(router):
     get_current_user = srv.get_current_user
     send_notification = srv.send_notification
     _is_entertainer = srv._is_entertainer
+    _is_admin = srv._is_admin
     require_admin = srv.require_admin
 
     async def _wc_rl_user(current_user: dict = Depends(get_current_user)):
@@ -643,6 +833,11 @@ def register(router):
             return {"enabled": False, "ended_message": cfg.get("ended_message") or DEFAULT_ENDED_MESSAGE}
         entry = await db.world_cup_entries.find_one({"user_id": uid}, {"_id": 0}) if uid else None
         group_locks = await _group_lock_times(db)
+        pending_payouts = 0
+        if uid:
+            pending_payouts = await db.world_cup_predictions.count_documents({"user_id": uid, "payout_status": "pending"})
+            if entry and entry.get("jackpot_pending"):
+                pending_payouts += 1
         teams = await db.world_cup_teams.find({}, {"_id": 0}).sort([("group_id", 1), ("name", 1)]).to_list(100)
         drafted = []
         if entry and entry.get("drafted_team_ids"):
@@ -653,10 +848,18 @@ def register(router):
             "config": {k: cfg.get(k) for k in list(DEFAULT_POINTS.keys()) + ["entry_open", "draft_run", "phase", "banner_text"]},
             "points": _points_from_config(cfg),
             "entered": bool(entry),
+            "ghost_entry": bool(entry and entry.get("ghost_entry")),
+            "can_ghost_enter": bool(
+                _is_admin(current_user)
+                and not entry
+                and cfg.get("entry_open", True)
+                and not cfg.get("draft_run")
+            ),
             "entry": entry,
             "drafted_teams": drafted,
             "group_locks": group_locks,
             "teams_count": len(teams),
+            "pending_payouts": pending_payouts,
         }
 
     @router.get("/world-cup/teams", dependencies=_wc_rl)
@@ -702,17 +905,35 @@ def register(router):
         await _require_enabled(cfg)
         uid = current_user.get("id") or ""
         pipeline = [
-            {"$match": {"settled": True, "points_awarded": {"$gt": 0}}},
+            {
+                "$match": {
+                    "settled": True,
+                    "points_awarded": {"$gt": 0},
+                    "$or": [
+                        {"payout_status": "paid"},
+                        {"payout_status": {"$exists": False}},
+                    ],
+                }
+            },
             {"$group": {"_id": "$user_id", "total": {"$sum": "$points_awarded"}}},
             {"$sort": {"total": -1}},
             {"$limit": int(limit)},
         ]
         rows = await db.world_cup_predictions.aggregate(pipeline).to_list(int(limit))
-        jackpot_rows = await db.world_cup_entries.find({"jackpot_awarded": True}, {"_id": 0, "user_id": 1}).to_list(5000)
-        totals = {r["_id"]: int(r["total"]) for r in rows}
+        ghost_ids = await _ghost_user_ids(db)
+        jackpot_rows = await db.world_cup_entries.find(
+            {"jackpot_awarded": True, "jackpot_pending": {"$ne": True}, "ghost_entry": {"$ne": True}},
+            {"_id": 0, "user_id": 1},
+        ).to_list(5000)
+        totals = {}
+        for r in rows:
+            row_uid = r["_id"]
+            if row_uid in ghost_ids:
+                continue
+            totals[row_uid] = int(r["total"])
         for e in jackpot_rows:
             uid_j = e.get("user_id")
-            if uid_j:
+            if uid_j and uid_j not in ghost_ids:
                 totals[uid_j] = totals.get(uid_j, 0) + _points_from_config(cfg)["jackpot_points"]
         sorted_users = sorted(totals.items(), key=lambda x: x[1], reverse=True)[: int(limit)]
         usernames = {}
@@ -728,9 +949,12 @@ def register(router):
             if user_id == uid:
                 my_rank = rank
         my_total = totals.get(uid, 0)
-        if uid and my_rank is None and my_total > 0:
+        if uid in ghost_ids:
+            my_rank = None
+            my_total = 0
+        elif uid and my_rank is None and my_total > 0:
             my_rank = len(sorted_users) + 1
-        return {"leaderboard": board, "my_rank": my_rank, "my_points": my_total}
+        return {"leaderboard": board, "my_rank": my_rank, "my_points": my_total, "ghost_entry": uid in ghost_ids}
 
     @router.post("/world-cup/enter")
     async def world_cup_enter(current_user: dict = Depends(get_current_user)):
@@ -744,6 +968,30 @@ def register(router):
             return {"ok": True, "already_entered": True}
         await db.world_cup_entries.insert_one({"user_id": uid, "entered_at": _now_iso(), "drafted_team_ids": []})
         return {"ok": True}
+
+    @router.post("/world-cup/enter-ghost")
+    async def world_cup_enter_ghost(current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        cfg = await _load_config(db)
+        await _require_enabled(cfg)
+        if not cfg.get("entry_open", True):
+            raise HTTPException(status_code=400, detail="Entry is closed")
+        if cfg.get("draft_run"):
+            raise HTTPException(status_code=400, detail="Draft already run")
+        uid = current_user.get("id") or ""
+        existing = await db.world_cup_entries.find_one({"user_id": uid})
+        if existing:
+            if existing.get("ghost_entry"):
+                return {"ok": True, "already_entered": True, "ghost_entry": True}
+            raise HTTPException(status_code=400, detail="Already entered as a real player")
+        await db.world_cup_entries.insert_one({
+            "user_id": uid,
+            "entered_at": _now_iso(),
+            "drafted_team_ids": [],
+            "ghost_entry": True,
+        })
+        return {"ok": True, "ghost_entry": True}
 
     @router.post("/world-cup/predictions")
     async def world_cup_save_prediction(body: WorldCupPredictionBody, current_user: dict = Depends(get_current_user)):
@@ -831,19 +1079,29 @@ def register(router):
         if not _is_entertainer(current_user):
             raise HTTPException(status_code=403, detail="Entertainer access required")
 
+    def _require_staff(current_user: dict):
+        if not _is_entertainer(current_user) and not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Staff access required")
+
     @router.get("/world-cup/staff/dashboard")
     async def wc_staff_dashboard(current_user: dict = Depends(get_current_user)):
-        _require_ent(current_user)
+        _require_staff(current_user)
         cfg = await _load_config(db)
         await _require_enabled_staff(cfg)
         entrants = await db.world_cup_entries.count_documents({})
+        real_entrants = await db.world_cup_entries.count_documents({"ghost_entry": {"$ne": True}})
+        ghost_entrants = await db.world_cup_entries.count_documents({"ghost_entry": True})
         unsettled = await db.world_cup_matches.count_documents({"status": {"$ne": "settled"}})
+        pending = await _pending_payout_counts(db)
         return {
             "entrants": entrants,
+            "real_entrants": real_entrants,
+            "ghost_entrants": ghost_entrants,
             "unsettled_matches": unsettled,
             "draft_run": bool(cfg.get("draft_run")),
             "last_fixture_sync_at": cfg.get("last_fixture_sync_at"),
             "last_auto_settle_at": cfg.get("last_auto_settle_at"),
+            **pending,
         }
 
     @router.post("/world-cup/staff/run-draft")
@@ -911,6 +1169,34 @@ def register(router):
         preds = await db.world_cup_predictions.find({}, {"_id": 0}).sort("created_at", -1).limit(int(limit)).to_list(int(limit))
         return {"predictions": preds}
 
+    @router.get("/world-cup/staff/pending-payouts")
+    async def wc_staff_pending_payouts(limit: int = Query(100, ge=1, le=500), current_user: dict = Depends(get_current_user)):
+        _require_staff(current_user)
+        cfg = await _load_config(db)
+        await _require_enabled_staff(cfg)
+        return await _list_pending_payouts(db, limit)
+
+    @router.post("/world-cup/staff/approve-payout/{prediction_id}")
+    async def wc_staff_approve_payout(prediction_id: str, current_user: dict = Depends(get_current_user)):
+        _require_staff(current_user)
+        cfg = await _load_config(db)
+        await _require_enabled_staff(cfg)
+        return await _approve_prediction_payout(db, send_notification, prediction_id, current_user.get("id") or "")
+
+    @router.post("/world-cup/staff/approve-jackpot/{user_id}")
+    async def wc_staff_approve_jackpot(user_id: str, current_user: dict = Depends(get_current_user)):
+        _require_staff(current_user)
+        cfg = await _load_config(db)
+        await _require_enabled_staff(cfg)
+        return await _approve_jackpot_payout(db, send_notification, user_id, current_user.get("id") or "")
+
+    @router.post("/world-cup/staff/approve-all-payouts")
+    async def wc_staff_approve_all_payouts(current_user: dict = Depends(get_current_user)):
+        _require_staff(current_user)
+        cfg = await _load_config(db)
+        await _require_enabled_staff(cfg)
+        return await _approve_all_pending_payouts(db, send_notification, current_user.get("id") or "")
+
     # --- Admin ---
     @router.post("/admin/world-cup/seed-2026")
     async def admin_wc_seed(current_user: dict = Depends(require_admin)):
@@ -950,6 +1236,9 @@ def register(router):
         cfg = await _load_config(db)
         unsettled = await db.world_cup_matches.count_documents({"status": {"$ne": "settled"}})
         entrants = await db.world_cup_entries.count_documents({})
+        real_entrants = await db.world_cup_entries.count_documents({"ghost_entry": {"$ne": True}})
+        ghost_entrants = await db.world_cup_entries.count_documents({"ghost_entry": True})
+        pending = await _pending_payout_counts(db)
         return {
             "enabled": bool(cfg.get("enabled")),
             "auto_sync_enabled": bool(cfg.get("auto_sync_enabled", True)),
@@ -957,9 +1246,28 @@ def register(router):
             "last_auto_settle_at": cfg.get("last_auto_settle_at"),
             "unsettled_matches": unsettled,
             "entrants": entrants,
+            "real_entrants": real_entrants,
+            "ghost_entrants": ghost_entrants,
             "draft_run": bool(cfg.get("draft_run")),
             "odds_api_configured": bool(sb._odds_api_key()),
+            **pending,
         }
+
+    @router.get("/admin/world-cup/pending-payouts")
+    async def admin_wc_pending_payouts(limit: int = Query(100, ge=1, le=500), current_user: dict = Depends(require_admin)):
+        return await _list_pending_payouts(db, limit)
+
+    @router.post("/admin/world-cup/approve-payout/{prediction_id}")
+    async def admin_wc_approve_payout(prediction_id: str, current_user: dict = Depends(require_admin)):
+        return await _approve_prediction_payout(db, send_notification, prediction_id, current_user.get("id") or "")
+
+    @router.post("/admin/world-cup/approve-jackpot/{user_id}")
+    async def admin_wc_approve_jackpot(user_id: str, current_user: dict = Depends(require_admin)):
+        return await _approve_jackpot_payout(db, send_notification, user_id, current_user.get("id") or "")
+
+    @router.post("/admin/world-cup/approve-all-payouts")
+    async def admin_wc_approve_all_payouts(current_user: dict = Depends(require_admin)):
+        return await _approve_all_pending_payouts(db, send_notification, current_user.get("id") or "")
 
     @router.post("/admin/world-cup/matches/bulk")
     async def admin_wc_bulk_matches(body: BulkMatchImport, current_user: dict = Depends(require_admin)):

@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Trophy, Users, Grid3X3, Swords, Medal, BarChart3, Info, Minus, Plus } from 'lucide-react';
+import { Trophy, Users, Grid3X3, Swords, Medal, BarChart3, Info, Minus, Plus, Globe } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { getApiErrorMessage } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 import { formatGameDateTime } from '../../utils/gameDateTime';
+import { getWcFlagIso } from '../../utils/worldCupFlags';
 
 const WC_STYLES = `
   .wc-page { --wc-green: #1a4d2e; --wc-green-dark: #0d2818; }
@@ -17,6 +18,17 @@ const WC_STYLES = `
     border: 1px solid rgba(212, 175, 55, 0.25);
   }
   .wc-tab-active { border-bottom: 2px solid var(--noir-primary, #d4af37); background: rgba(212, 175, 55, 0.08); }
+  .wc-group-card {
+    background: linear-gradient(165deg, rgba(26, 77, 46, 0.22) 0%, rgba(13, 40, 24, 0.08) 42%, transparent 100%);
+  }
+  .wc-group-head {
+    border-bottom: 1px solid rgba(212, 175, 55, 0.14);
+    padding-bottom: 0.5rem;
+    margin-bottom: 0.35rem;
+  }
+  .wc-team-chip {
+    background: linear-gradient(135deg, rgba(26, 77, 46, 0.35) 0%, rgba(13, 40, 24, 0.2) 100%);
+  }
 `;
 
 const TABS = [
@@ -44,6 +56,39 @@ function WcPanel({ children, className = '', accent = false }) {
   );
 }
 
+function WcFlag({ team, size = 'md', className = '' }) {
+  const iso = getWcFlagIso(team);
+  const sizes = {
+    sm: { w: 20, h: 15, img: 40 },
+    md: { w: 28, h: 21, img: 56 },
+    lg: { w: 36, h: 27, img: 72 },
+  };
+  const { w, h, img } = sizes[size] || sizes.md;
+  if (!iso) {
+    return (
+      <span
+        className={`inline-flex shrink-0 items-center justify-center rounded-[3px] border border-primary/25 bg-primary/5 text-mutedForeground ${className}`}
+        style={{ width: w, height: h }}
+        aria-hidden
+      >
+        <Globe size={Math.max(11, Math.round(w * 0.45))} strokeWidth={2} />
+      </span>
+    );
+  }
+  return (
+    <img
+      alt=""
+      src={`https://flagcdn.com/w${img}/${iso}.png`}
+      width={w}
+      height={h}
+      loading="lazy"
+      decoding="async"
+      className={`shrink-0 rounded-[3px] object-cover border border-black/25 shadow-sm ${className}`}
+      style={{ width: w, height: h }}
+    />
+  );
+}
+
 function WcTeamRow({ team, selected, onSelect, disabled }) {
   if (!team) return null;
   return (
@@ -51,13 +96,17 @@ function WcTeamRow({ team, selected, onSelect, disabled }) {
       type="button"
       disabled={disabled}
       onClick={() => onSelect?.(team.id)}
-      className={`w-full flex items-center gap-3 min-h-[44px] px-3 py-2 rounded-md text-left transition-colors ${
-        selected ? 'bg-primary/8 border-l-2 border-primary' : 'hover:bg-primary/5 border-l-2 border-transparent'
+      className={`w-full flex items-center gap-3 min-h-[44px] px-2.5 py-2 rounded-md text-left transition-all ${
+        selected
+          ? 'bg-primary/12 border border-primary/35'
+          : 'hover:bg-primary/6 border border-transparent'
       } ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}
     >
-      <span className="text-lg shrink-0">{team.flag_emoji || '🏳️'}</span>
+      <WcFlag team={team} size="md" className={selected ? 'ring-2 ring-primary/45 ring-offset-1 ring-offset-transparent' : ''} />
       <span className="text-sm text-foreground flex-1 truncate">{team.name}</span>
-      <span className="text-[10px] text-mutedForeground font-heading">{team.short_code}</span>
+      {selected ? (
+        <span className="text-[9px] text-primary font-heading uppercase tracking-wider shrink-0">Your pick</span>
+      ) : null}
     </button>
   );
 }
@@ -77,6 +126,7 @@ export default function WorldCup() {
   const [saving, setSaving] = useState(false);
 
   const points = status?.points || {};
+  const pendingPayouts = status?.pending_payouts ?? predictions.filter((p) => p.payout_status === 'pending').length;
   const predsByKey = useMemo(() => {
     const m = {};
     for (const p of predictions) {
@@ -158,6 +208,19 @@ export default function WorldCup() {
     }
   };
 
+  const enterGhostEvent = async () => {
+    setEntering(true);
+    try {
+      await api.post('/world-cup/enter-ghost');
+      toast.success('Ghost entry active — test the event without affecting the real raffle pool.');
+      await load();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e));
+    } finally {
+      setEntering(false);
+    }
+  };
+
   const savePrediction = async (type, target_id, value) => {
     setSaving(true);
     try {
@@ -210,10 +273,23 @@ export default function WorldCup() {
           <div className="min-w-0 flex-1">
             <h1 className="text-lg sm:text-xl font-heading font-bold text-white uppercase tracking-[0.12em]">World Cup 2026</h1>
             <p className="text-[10px] sm:text-xs text-white/70 uppercase tracking-wider mt-1">USA · Canada · Mexico</p>
-            <div className="flex flex-wrap gap-2 mt-3 text-[10px] text-white/80">
-              <span>🇺🇸 USA</span>
-              <span>🇨🇦 Canada</span>
-              <span>🇲🇽 Mexico</span>
+            <div className="flex flex-wrap gap-3 mt-3">
+              {[
+                { iso: 'us', label: 'USA' },
+                { iso: 'ca', label: 'Canada' },
+                { iso: 'mx', label: 'Mexico' },
+              ].map(({ iso, label }) => (
+                <span key={iso} className="inline-flex items-center gap-1.5 text-[10px] text-white/90 font-heading uppercase tracking-wider">
+                  <img
+                    alt=""
+                    src={`https://flagcdn.com/w40/${iso}.png`}
+                    width={20}
+                    height={15}
+                    className="rounded-[2px] border border-white/20 object-cover"
+                  />
+                  {label}
+                </span>
+              ))}
             </div>
           </div>
         </div>
@@ -247,16 +323,42 @@ export default function WorldCup() {
               <li className="flex gap-2"><span className="text-primary">4.</span> Predict match scores, scorers, 2nd &amp; 3rd place for more points.</li>
             </ul>
             {!status?.entered ? (
-              <button
-                type="button"
-                disabled={entering}
-                onClick={enterEvent}
-                className="w-full min-h-[44px] rounded-md bg-primary text-primary-foreground font-heading uppercase text-sm tracking-wider hover:opacity-90 disabled:opacity-50"
-              >
-                {entering ? 'Joining…' : 'Enter World Cup Event'}
-              </button>
+              <div className="space-y-2">
+                <button
+                  type="button"
+                  disabled={entering}
+                  onClick={enterEvent}
+                  className="w-full min-h-[44px] rounded-md bg-primary text-primary-foreground font-heading uppercase text-sm tracking-wider hover:opacity-90 disabled:opacity-50"
+                >
+                  {entering ? 'Joining…' : 'Enter World Cup Event'}
+                </button>
+                {status?.can_ghost_enter ? (
+                  <button
+                    type="button"
+                    disabled={entering}
+                    onClick={enterGhostEvent}
+                    className="w-full min-h-[44px] rounded-md border border-amber-500/40 bg-amber-950/30 text-amber-200 font-heading uppercase text-xs tracking-wider hover:opacity-90 disabled:opacity-50"
+                  >
+                    {entering ? 'Joining…' : 'Ghost enter (admin test)'}
+                  </button>
+                ) : null}
+              </div>
             ) : (
-              <p className="text-sm text-emerald-400 font-heading">✓ You&apos;re entered{status?.config?.draft_run ? ' — draft complete' : ' — awaiting team draft'}.</p>
+              <div className="space-y-1">
+                <p className="text-sm text-emerald-400 font-heading">
+                  ✓ You&apos;re entered{status?.config?.draft_run ? ' — draft complete' : ' — awaiting team draft'}.
+                </p>
+                {status?.ghost_entry ? (
+                  <p className="text-[10px] text-amber-300/90 font-heading uppercase tracking-wider">
+                    Ghost entry — your teams don&apos;t affect the real raffle; no points are awarded.
+                  </p>
+                ) : null}
+                {!status?.ghost_entry && pendingPayouts > 0 ? (
+                  <p className="text-[10px] text-amber-300/90 font-heading uppercase tracking-wider">
+                    {pendingPayouts} correct prediction{pendingPayouts === 1 ? '' : 's'} awaiting staff approval before points are sent.
+                  </p>
+                ) : null}
+              </div>
             )}
           </WcPanel>
         </div>
@@ -273,14 +375,18 @@ export default function WorldCup() {
             ) : (
               <div className="flex flex-wrap gap-2">
                 {(status.drafted_teams || []).map((t) => (
-                  <div key={t.id} className="flex items-center gap-2 px-3 py-2 rounded-lg border border-primary/20 bg-primary/5 min-h-[44px]">
-                    <span className="text-xl">{t.flag_emoji}</span>
+                  <div key={t.id} className="wc-team-chip flex items-center gap-2.5 px-3 py-2 rounded-lg border border-primary/25 min-h-[44px]">
+                    <WcFlag team={t} size="md" />
                     <span className="text-sm font-heading text-foreground">{t.name}</span>
                   </div>
                 ))}
               </div>
             )}
-            <p className="text-[10px] text-mutedForeground mt-3">If any assigned team wins the tournament, you receive the jackpot.</p>
+            <p className="text-[10px] text-mutedForeground mt-3">
+              {status?.ghost_entry
+                ? 'Ghost test mode — assigned teams mirror the raffle but do not remove nations from real players.'
+                : 'If any assigned team wins the tournament, you receive the jackpot.'}
+            </p>
           </WcPanel>
         </div>
       )}
@@ -292,9 +398,9 @@ export default function WorldCup() {
             const pred = predsByKey[`group_winner:${gid}`];
             const pickId = pred?.value?.team_id || pred?.value;
             return (
-              <WcPanel key={gid} className="p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="font-heading font-bold text-primary">Group {gid}</span>
+              <WcPanel key={gid} className="p-3 wc-group-card">
+                <div className="wc-group-head flex items-center justify-between">
+                  <span className="font-heading font-bold text-primary text-base tracking-wide">Group {gid}</span>
                   <WcPointsBadge pts={points.group_winner_points} />
                 </div>
                 {locked && <p className="text-[10px] text-amber-400 mb-2 uppercase font-heading">Locked</p>}
@@ -332,14 +438,18 @@ export default function WorldCup() {
 
       {tab === 'leaderboard' && (
         <div className="space-y-3 wc-fade-in">
-          {leaderboard?.my_points != null && (
+          {status?.ghost_entry ? (
+            <WcPanel className="p-3 text-[10px] text-amber-300/90 font-heading uppercase tracking-wider">
+              Ghost entry — leaderboard and points are for real players only. Predictions still settle for testing.
+            </WcPanel>
+          ) : leaderboard?.my_points != null ? (
             <WcPanel accent className="p-3 flex justify-between items-center sticky top-0 z-10">
               <span className="text-sm font-heading text-foreground">Your rank</span>
               <span className="text-sm text-primary font-heading tabular-nums">
                 #{leaderboard.my_rank || '—'} · {Number(leaderboard.my_points || 0).toLocaleString()} pts
               </span>
             </WcPanel>
-          )}
+          ) : null}
           <WcPanel className="divide-y divide-primary/10">
             {(leaderboard?.leaderboard || []).map((row) => (
               <div key={row.user_id} className="flex items-center gap-3 px-3 py-2.5 min-h-[44px]">
@@ -423,25 +533,31 @@ function MatchCard({ match, predsByKey, points, entered, saving, onSave }) {
 
   return (
     <WcPanel className="p-3 space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="text-sm font-heading text-foreground min-w-0">
-          <span>{homeTeam?.flag_emoji} {homeTeam?.short_code || '?'}</span>
-          <span className="text-mutedForeground mx-2">vs</span>
-          <span>{awayTeam?.flag_emoji} {awayTeam?.short_code || '?'}</span>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <WcFlag team={homeTeam} size="md" />
+            <span className="text-sm font-heading text-foreground truncate">{homeTeam?.name || 'TBD'}</span>
+          </div>
+          <span className="text-[10px] text-mutedForeground font-heading uppercase shrink-0 px-1">vs</span>
+          <div className="flex items-center gap-2 min-w-0 flex-1 justify-end">
+            <span className="text-sm font-heading text-foreground truncate text-right">{awayTeam?.name || 'TBD'}</span>
+            <WcFlag team={awayTeam} size="md" />
+          </div>
         </div>
-        <span className="text-[10px] text-mutedForeground">{formatGameDateTime(match.kickoff)}</span>
+        <span className="text-[10px] text-mutedForeground shrink-0">{formatGameDateTime(match.kickoff)}</span>
       </div>
       {locked ? (
         <p className="text-[10px] text-amber-400 uppercase font-heading">Locked</p>
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-xs w-12 truncate">{homeTeam?.short_code}</span>
+          <div className="flex flex-wrap items-center gap-6">
+            <div className="flex items-center gap-2.5">
+              <WcFlag team={homeTeam} size="sm" />
               <ScoreStepper value={home} onChange={setHome} disabled={!entered || saving} />
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs w-12 truncate">{awayTeam?.short_code}</span>
+            <div className="flex items-center gap-2.5">
+              <WcFlag team={awayTeam} size="sm" />
               <ScoreStepper value={away} onChange={setAway} disabled={!entered || saving} />
             </div>
           </div>

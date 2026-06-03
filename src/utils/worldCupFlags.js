@@ -1,0 +1,53 @@
+/** Map World Cup short_code → flagcdn ISO code (lowercase). */
+export const WC_SHORT_TO_ISO = {
+  MEX: 'mx',
+  RSA: 'za',
+  KOR: 'kr',
+  CAN: 'ca',
+  QAT: 'qa',
+  SUI: 'ch',
+  BRA: 'br',
+  MAR: 'ma',
+  HAI: 'ht',
+  SCO: 'gb-sct',
+  USA: 'us',
+  PAR: 'py',
+  AUS: 'au',
+  GER: 'de',
+  CUW: 'cw',
+  CIV: 'ci',
+  ECU: 'ec',
+  NED: 'nl',
+  JPN: 'jp',
+  UKR: 'ua',
+  TUN: 'tn',
+  BEL: 'be',
+  EGY: 'eg',
+  IRN: 'ir',
+  NZL: 'nz',
+  ESP: 'es',
+  CPV: 'cv',
+  KSA: 'sa',
+  URU: 'uy',
+  FRA: 'fr',
+  SEN: 'sn',
+  NOR: 'no',
+  ARG: 'ar',
+  ALG: 'dz',
+  AUT: 'at',
+  JOR: 'jo',
+  POR: 'pt',
+  COL: 'co',
+  UZB: 'uz',
+  ENG: 'gb-eng',
+  CRO: 'hr',
+  GHA: 'gh',
+  PAN: 'pa',
+};
+
+export function getWcFlagIso(team) {
+  if (!team) return null;
+  const sc = String(team.short_code || '').trim().toUpperCase();
+  if (!sc || sc.startsWith('PO-')) return null;
+  return WC_SHORT_TO_ISO[sc] || null;
+}

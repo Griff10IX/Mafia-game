@@ -491,6 +491,8 @@ async def ensure_all_indexes(db):
         await db.world_cup_predictions.create_index([("user_id", 1), ("type", 1), ("target_id", 1)], unique=True)
         await db.world_cup_predictions.create_index([("user_id", 1), ("settled", 1)])
         await db.world_cup_predictions.create_index([("type", 1), ("target_id", 1), ("settled", 1)])
+        await db.world_cup_predictions.create_index([("payout_status", 1), ("settled_at", -1)])
+        await db.world_cup_entries.create_index([("jackpot_pending", 1)])
 
         # --- Flappy Gangster (Gauntlet) ---
         await db.minigame_run_sessions.create_index("id", unique=True)

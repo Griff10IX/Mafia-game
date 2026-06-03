@@ -11959,7 +11959,7 @@ export default function Admin() {
         />
         {!collapsed.worldCup && (
           <div className="p-3 space-y-3">
-            <p className="text-[10px] text-mutedForeground">Predictions event — toggle visibility, seed teams, sync fixtures, auto-settle.</p>
+            <p className="text-[10px] text-mutedForeground">Predictions event — toggle visibility, seed teams, sync fixtures, auto-settle. Correct predictions queue for staff approval before points send.</p>
             <div className="flex flex-wrap gap-2">
               <BtnPrimary
                 onClick={() => patchWorldCupConfig({ enabled: !wcConfig?.enabled, ended_message: wcEndedMessage, banner_text: wcBannerText })}
@@ -11976,6 +11976,12 @@ export default function Admin() {
               <BtnSecondary onClick={() => api.post('/admin/world-cup/auto-settle-run').then((r) => toast.success(`Settled ${r.data?.settled || 0} matches`)).catch((e) => toast.error(e.response?.data?.detail || 'Settle failed'))} disabled={wcLoading || !wcConfig?.enabled}>
                 Auto-settle run
               </BtnSecondary>
+              <BtnSecondary
+                onClick={() => api.post('/admin/world-cup/approve-all-payouts').then((r) => toast.success(`Approved ${r.data?.predictions_approved || 0} predictions, ${r.data?.jackpots_approved || 0} jackpots (${Number(r.data?.total_points || 0).toLocaleString()} pts)`)).catch((e) => toast.error(e.response?.data?.detail || 'Approve failed')).then(() => fetchWorldCupAdmin())}
+                disabled={wcLoading || !wcHealth?.pending_payouts}
+              >
+                Approve all payouts{wcHealth?.pending_payouts ? ` (${wcHealth.pending_payouts})` : ''}
+              </BtnSecondary>
               <BtnSecondary onClick={fetchWorldCupAdmin} disabled={wcLoading}>Refresh</BtnSecondary>
             </div>
             <div>
@@ -11991,7 +11997,7 @@ export default function Admin() {
             </BtnSecondary>
             {wcHealth && (
               <div className="text-[10px] text-mutedForeground font-heading space-y-1 pt-2 border-t border-primary/10">
-                <p>Entrants: {wcHealth.entrants} · Unsettled matches: {wcHealth.unsettled_matches}</p>
+                <p>Entrants: {wcHealth.entrants} ({wcHealth.real_entrants ?? wcHealth.entrants} real · {wcHealth.ghost_entrants ?? 0} ghost) · Pending payouts: {wcHealth.pending_payouts ?? 0} · Unsettled matches: {wcHealth.unsettled_matches}</p>
                 <p>Last sync: {wcHealth.last_fixture_sync_at || '—'}</p>
                 <p>Last auto-settle: {wcHealth.last_auto_settle_at || '—'}</p>
                 <p>Odds API: {wcHealth.odds_api_configured ? 'configured' : 'not set'}</p>
