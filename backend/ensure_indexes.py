@@ -478,6 +478,20 @@ async def ensure_all_indexes(db):
         await db.sports_event_requests.create_index([("status", 1), ("created_at", 1)])
         await db.sports_event_requests.create_index([("user_id", 1), ("template_id", 1), ("status", 1)])
 
+        # --- World Cup predictions event ---
+        await db.world_cup_teams.create_index("id", unique=True)
+        await db.world_cup_teams.create_index([("group_id", 1), ("name", 1)])
+        await db.world_cup_groups.create_index("group_id", unique=True)
+        await db.world_cup_matches.create_index("id", unique=True)
+        await db.world_cup_matches.create_index("external_event_id", unique=True, sparse=True)
+        await db.world_cup_matches.create_index([("status", 1), ("kickoff", 1)])
+        await db.world_cup_matches.create_index([("group_id", 1), ("stage", 1)])
+        await db.world_cup_entries.create_index("user_id", unique=True)
+        await db.world_cup_predictions.create_index("id", unique=True)
+        await db.world_cup_predictions.create_index([("user_id", 1), ("type", 1), ("target_id", 1)], unique=True)
+        await db.world_cup_predictions.create_index([("user_id", 1), ("settled", 1)])
+        await db.world_cup_predictions.create_index([("type", 1), ("target_id", 1), ("settled", 1)])
+
         # --- Flappy Gangster (Gauntlet) ---
         await db.minigame_run_sessions.create_index("id", unique=True)
         await db.minigame_run_sessions.create_index([("game", 1), ("user_id", 1)])

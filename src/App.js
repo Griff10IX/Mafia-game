@@ -141,6 +141,8 @@ const MPBlackjackGame = lazy(() => import("./pages/Casinos/MPBlackjackGamePage")
 const MPPoker = lazy(() => import("./pages/Casinos/MPPokerPage"));
 const MPPokerGame = lazy(() => import("./pages/Casinos/MPPokerGamePage"));
 const SportsBetting = lazy(() => import("./pages/Casinos/SportsBetting"));
+const WorldCup = lazy(() => import("./pages/Game/WorldCup"));
+const WorldCupStaff = lazy(() => import("./pages/Game/WorldCupStaff"));
 
 const PageLoader = () => (
   <div className="min-h-[200px] flex items-center justify-center text-primary text-sm font-heading">Loading...</div>
@@ -967,6 +969,30 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <HelpDeskHub />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/game/world-cup/staff"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <WorldCupStaff />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/game/world-cup"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <WorldCup />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

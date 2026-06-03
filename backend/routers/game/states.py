@@ -30,6 +30,7 @@ from routers.admin.airport import AIRPORT_COST, AIRPORT_PRICE_MIN, AIRPORT_PRICE
 from routers.kill.armoury import _accumulated_bullets
 from utils.claim_costs import load_claim_costs
 from utils.location_climate import get_location_climate
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_STATES
 
 CASINO_GAMES = [
     {"id": "blackjack", "name": "Blackjack", "max_bet": BLACKJACK_MAX_BET},
@@ -357,6 +358,13 @@ async def states_claim(
     return {"ok": True, "state": state, "message": f"Your family is now head of {state}."}
 
 
+async def _states_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_STATES)
+
+
+_states_rl_u = [Depends(_states_sustained_rl_user)]
+
+
 def register(router):
-    router.add_api_route("/states", get_states, methods=["GET"])
+    router.add_api_route("/states", get_states, methods=["GET"], dependencies=_states_rl_u)
     router.add_api_route("/states/claim", states_claim, methods=["POST"])

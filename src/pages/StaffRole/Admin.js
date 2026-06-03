@@ -248,6 +248,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Distillery progress', categoryId: 'admin-economy-progression', collapseKey: 'distilleryProgress', scrollToId: 'admin-distillery-progress', keywords: ['distillery', 'still', 'booze', 'heat', 'equipment', 'special upgrades'], adminOnly: true },
   // Game World
   { label: 'Game Events', categoryId: 'admin-gameworld', collapseKey: 'events', keywords: ['events', 'toggle', 'enable', 'disable', 'random', 'bundle', 'daily', 'modifiers', 'roll'], adminOnly: true },
+  { label: 'World Cup 2026', categoryId: 'admin-gameworld', collapseKey: 'worldCup', keywords: ['world cup', '2026', 'predictions', 'fifa', 'draft', 'fixtures', 'sync'], adminOnly: true },
   { label: 'Booze Run rotation & global discount', categoryId: 'admin-gameworld', collapseKey: 'boozeRun', keywords: ['booze', 'run', 'rotation', 'prices', 'discount', 'listed', 'nudge', 'global', 'jail', 'bust', 'prohibition'], adminOnly: true },
   { label: 'Booze Run analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'boozeRunAnalytics', keywords: ['booze', 'analytics', 'economy', 'events', 'profit', 'revenue', 'jail', 'leaderboard'] },
   { label: 'Coin Flip economy', categoryId: 'admin-analytics-monitoring', collapseKey: 'coinFlipEconomy', keywords: ['coin', 'flip', 'casino', 'economy', 'heads', 'tails', 'bets', 'winners', 'house'] },
@@ -380,8 +381,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true }; }
 }
 
 function saveCollapsed(state) {
@@ -568,6 +569,88 @@ function BtnSecondary({ children, ...props }) {
     <button {...props} className="bg-zinc-700/50 hover:bg-zinc-600/50 text-foreground rounded px-3 py-1 text-[10px] font-bold uppercase border border-zinc-600/50 transition-all disabled:opacity-50 touch-manipulation">
       {children}
     </button>
+  );
+}
+
+const SUSTAINED_RL_SCOPES = [
+  { id: 'jail', label: 'Jail', settingField: 'sustained_page_rl_jail_enabled', toastLabel: 'Jail pacing limiter', description: 'Player jail routes (list, status, bust, snitch, private cell, etc.). Jail-style pacing (~750ms / ~22s) as above.' },
+  { id: 'forum', label: 'Forum', settingField: 'sustained_page_rl_forum_enabled', toastLabel: 'Forum pacing limiter', description: 'All /forum/topics… routes (topics, comments, likes, reactions). Same jail-style math (~750ms / ~22s).' },
+  { id: 'entertainer', label: 'Entertainer', settingField: 'sustained_page_rl_entertainer_enabled', toastLabel: 'Entertainer pacing limiter', description: 'Player entertainer forum APIs (games, find-word, prizes, history). Staff /forum/entertainer/admin/* and manual roll are not throttled here. Same jail-style math (~750ms / ~22s).' },
+  { id: 'gta', label: 'GTA', settingField: 'sustained_page_rl_gta_enabled', toastLabel: 'GTA pacing limiter', description: 'Hot GTA GETs (options, garage, stats, marketplace, etc.). Jail-style pacing.' },
+  { id: 'crimes', label: 'Crimes', settingField: 'sustained_page_rl_crimes_enabled', toastLabel: 'Crimes pacing limiter', description: 'GET /crimes, stats, logs. Jail-style pacing.' },
+  { id: 'oc', label: 'Organised crime', settingField: 'sustained_page_rl_oc_enabled', toastLabel: 'OC pacing limiter', description: 'GET /oc/config and /oc/status. Jail-style pacing.' },
+  { id: 'booze', label: 'Booze run', settingField: 'sustained_page_rl_booze_enabled', toastLabel: 'Booze run pacing limiter', description: 'GET /booze-run/config. Jail-style pacing.' },
+  { id: 'game_chat', label: 'Game chat', settingField: 'sustained_page_rl_game_chat_enabled', toastLabel: 'Game chat pacing limiter', description: 'GET /game-chat/messages and prefs. Jail-style pacing.' },
+  { id: 'store', label: 'Store / points', settingField: 'sustained_page_rl_store_enabled', toastLabel: 'Store pacing limiter', description: 'GET /payments/pending-points and GET /store/points-transfers (shared counter). Jail-style pacing.' },
+  { id: 'ranking', label: 'Rank progress', settingField: 'sustained_page_rl_ranking_enabled', toastLabel: 'Rank progress pacing limiter', description: 'GET /user/rank-progress. Jail-style pacing.' },
+  { id: 'auto_rank', label: 'Auto Rank prefs', settingField: 'sustained_page_rl_auto_rank_enabled', toastLabel: 'Auto Rank prefs pacing limiter', description: 'GET /auto-rank/me. Jail-style pacing.' },
+  { id: 'presence', label: 'Auth / presence', settingField: 'sustained_page_rl_presence_enabled', toastLabel: 'Auth / presence pacing limiter', description: 'GET /auth/me. Jail-style pacing on auth refresh spam.' },
+  { id: 'casino_property', label: 'Casino / property sidebar', settingField: 'sustained_page_rl_casino_property_enabled', toastLabel: 'Casino / property sidebar pacing limiter', description: 'GET /user/casino-property (Layout polls every ~10s when user owns casino/property). Jail-style pacing.' },
+  { id: 'notifications', label: 'Notifications / inbox', settingField: 'sustained_page_rl_notifications_enabled', toastLabel: 'Notifications pacing limiter', description: 'GET /notifications, sent, thread. Same jail-style pacing as jail when enabled.' },
+  { id: 'hitlist', label: 'Hitlist', settingField: 'sustained_page_rl_hitlist_enabled', toastLabel: 'Hitlist pacing limiter', description: 'GET /hitlist/list, /hitlist/me, /hitlist/npc-status. Jail-style pacing.' },
+  { id: 'bank', label: 'Bank', settingField: 'sustained_page_rl_bank_enabled', toastLabel: 'Bank pacing limiter', description: 'GET /bank/meta and /bank/overview. Jail-style pacing.' },
+  { id: 'leaderboard', label: 'Leaderboard', settingField: 'sustained_page_rl_leaderboard_enabled', toastLabel: 'Leaderboard pacing limiter', description: 'GET /leaderboard and /leaderboards/top. Jail-style pacing.' },
+  { id: 'families', label: 'Families / crew', settingField: 'sustained_page_rl_families_enabled', toastLabel: 'Families pacing limiter', description: 'GET /families/* (player crew reads). Jail-style pacing.' },
+  { id: 'stock_market', label: 'Stock market', settingField: 'sustained_page_rl_stock_market_enabled', toastLabel: 'Stock market pacing limiter', description: 'GET /stock-market/* list, positions, history, summary. Jail-style pacing.' },
+  { id: 'quicktrade', label: 'Quick trade', settingField: 'sustained_page_rl_quicktrade_enabled', toastLabel: 'Quick trade pacing limiter', description: 'GET /trade/* listing endpoints. Jail-style pacing.' },
+  { id: 'properties', label: 'Properties', settingField: 'sustained_page_rl_properties_enabled', toastLabel: 'Properties pacing limiter', description: 'GET /properties, /my-properties. Jail-style pacing.' },
+  { id: 'armoury', label: 'Armoury', settingField: 'sustained_page_rl_armoury_enabled', toastLabel: 'Armoury pacing limiter', description: 'Bullet factory, weapons, armour, shooting range, inventory GETs. Jail-style pacing.' },
+  { id: 'bodyguards', label: 'Bodyguards', settingField: 'sustained_page_rl_bodyguards_enabled', toastLabel: 'Bodyguards pacing limiter', description: 'GET /bodyguards* (player). Jail-style pacing.' },
+  { id: 'missions', label: 'Missions', settingField: 'sustained_page_rl_missions_enabled', toastLabel: 'Missions pacing limiter', description: 'GET /missions, map, characters. Jail-style pacing.' },
+  { id: 'travel', label: 'Travel / airports', settingField: 'sustained_page_rl_travel_enabled', toastLabel: 'Travel pacing limiter', description: 'GET /travel/status, /travel/info, /airports. Jail-style pacing.' },
+  { id: 'events', label: 'Events / flash news', settingField: 'sustained_page_rl_events_enabled', toastLabel: 'Events pacing limiter', description: 'GET /events/active, /news/flash. Jail-style pacing.' },
+  { id: 'states', label: 'States map', settingField: 'sustained_page_rl_states_enabled', toastLabel: 'States map pacing limiter', description: 'GET /states (casino map, owners, state heads). Jail-style pacing.' },
+  { id: 'illegal_business', label: 'Illegal business', settingField: 'sustained_page_rl_illegal_business_enabled', toastLabel: 'Illegal business pacing limiter', description: 'GET /illegal-business/* and distillery page reads. Jail-style pacing.' },
+  { id: 'loot_box', label: 'Loot box', settingField: 'sustained_page_rl_loot_box_enabled', toastLabel: 'Loot box pacing limiter', description: 'GET /loot-box/status. Jail-style pacing.' },
+  { id: 'help_desk', label: 'Help desk', settingField: 'sustained_page_rl_help_desk_enabled', toastLabel: 'Help desk pacing limiter', description: 'Player GET /help-desk/open-count, tickets, check, my-admin-message-status. Staff routes not paced here.' },
+  { id: 'sports_betting', label: 'Sports betting', settingField: 'sustained_page_rl_sports_betting_enabled', toastLabel: 'Sports betting pacing limiter', description: 'Player GET /sports-betting/* (events, my-bets, stats, etc.). Jail-style pacing.' },
+  { id: 'world_cup', label: 'World Cup', settingField: 'sustained_page_rl_world_cup_enabled', toastLabel: 'World Cup pacing limiter', description: 'Player GET /world-cup/* (status, teams, matches, leaderboard). Jail-style pacing.' },
+  { id: 'casinos', label: 'Casinos (ownership GETs)', settingField: 'sustained_page_rl_casinos_enabled', toastLabel: 'Casinos pacing limiter', description: 'Single-player casino config/ownership/history GETs (dice, blackjack, roulette, slots, videopoker, horseracing, keno). POST spins not paced.' },
+];
+
+function mergeSustainedRlScopesFromSettings(prev, data) {
+  if (!data) return prev;
+  const next = { ...prev };
+  SUSTAINED_RL_SCOPES.forEach((s) => {
+    const v = data[s.settingField];
+    if (v !== undefined) next[s.settingField] = !!v;
+  });
+  return next;
+}
+
+function sustainedRlScopesPayload(scopes) {
+  const out = {};
+  SUSTAINED_RL_SCOPES.forEach((s) => {
+    out[s.settingField] = !!scopes[s.settingField];
+  });
+  return out;
+}
+
+function SustainedRlScopeCard({ scope, enabled, saving, onToggle }) {
+  return (
+    <div className="space-y-1 rounded border border-zinc-700/40 p-2">
+      <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">{scope.label}</p>
+      <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">{scope.description}</p>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          disabled={saving || enabled}
+          onClick={() => onToggle(true)}
+          className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {saving ? '…' : 'Enable'}
+        </button>
+        <button
+          type="button"
+          disabled={saving || !enabled}
+          onClick={() => onToggle(false)}
+          className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+        >
+          {saving ? '…' : 'Disable'}
+        </button>
+        <span className="text-[10px] text-mutedForeground font-heading">Current: {enabled ? 'on' : 'off'}</span>
+      </div>
+    </div>
   );
 }
 
@@ -1292,66 +1375,18 @@ export default function Admin() {
   const [minigameTurnstileEnabled, setMinigameTurnstileEnabled] = useState(false);
   const [minigameTurnstileSiteKey, setMinigameTurnstileSiteKey] = useState('');
   const [loginTurnstileEnabled, setLoginTurnstileEnabled] = useState(false);
-  const [sustainedPageRlJailEnabled, setSustainedPageRlJailEnabled] = useState(false);
-  const [sustainedPageRlEntEnabled, setSustainedPageRlEntEnabled] = useState(false);
-  const [sustainedPageRlForumEnabled, setSustainedPageRlForumEnabled] = useState(false);
+  const [sustainedRlScopes, setSustainedRlScopes] = useState({});
+  const [sustainedRlScopeSaving, setSustainedRlScopeSaving] = useState(null);
   // Match server: kill/attack sustained RL defaults ON when unset in game_settings.main
   const [sustainedPageRlKillEnabled, setSustainedPageRlKillEnabled] = useState(true);
   const [sustainedPageRlKillMaxGapMs, setSustainedPageRlKillMaxGapMs] = useState('300');
   const [sustainedPageRlKillSustainSec, setSustainedPageRlKillSustainSec] = useState('12');
   const [sustainedKillRlTuningSaving, setSustainedKillRlTuningSaving] = useState(false);
-  const [sustainedPageRlGtaEnabled, setSustainedPageRlGtaEnabled] = useState(false);
-  const [sustainedPageRlCrimesEnabled, setSustainedPageRlCrimesEnabled] = useState(false);
-  const [sustainedPageRlOcEnabled, setSustainedPageRlOcEnabled] = useState(false);
-  const [sustainedPageRlBoozeEnabled, setSustainedPageRlBoozeEnabled] = useState(false);
-  const [sustainedPageRlGameChatEnabled, setSustainedPageRlGameChatEnabled] = useState(false);
-  const [sustainedPageRlStoreEnabled, setSustainedPageRlStoreEnabled] = useState(false);
-  const [sustainedPageRlRankingEnabled, setSustainedPageRlRankingEnabled] = useState(false);
-  const [sustainedPageRlNotificationsEnabled, setSustainedPageRlNotificationsEnabled] = useState(false);
-  const [sustainedPageRlHitlistEnabled, setSustainedPageRlHitlistEnabled] = useState(false);
-  const [sustainedPageRlBankEnabled, setSustainedPageRlBankEnabled] = useState(false);
-  const [sustainedPageRlLeaderboardEnabled, setSustainedPageRlLeaderboardEnabled] = useState(false);
-  const [sustainedPageRlFamiliesEnabled, setSustainedPageRlFamiliesEnabled] = useState(false);
-  const [sustainedPageRlStockMarketEnabled, setSustainedPageRlStockMarketEnabled] = useState(false);
-  const [sustainedPageRlQuicktradeEnabled, setSustainedPageRlQuicktradeEnabled] = useState(false);
-  const [sustainedPageRlPropertiesEnabled, setSustainedPageRlPropertiesEnabled] = useState(false);
-  const [sustainedPageRlArmouryEnabled, setSustainedPageRlArmouryEnabled] = useState(false);
-  const [sustainedPageRlBodyguardsEnabled, setSustainedPageRlBodyguardsEnabled] = useState(false);
-  const [sustainedPageRlMissionsEnabled, setSustainedPageRlMissionsEnabled] = useState(false);
-  const [sustainedPageRlTravelEnabled, setSustainedPageRlTravelEnabled] = useState(false);
-  const [sustainedPageRlEventsEnabled, setSustainedPageRlEventsEnabled] = useState(false);
-  const [sustainedPageRlAutoRankEnabled, setSustainedPageRlAutoRankEnabled] = useState(false);
-  const [sustainedPageRlPresenceEnabled, setSustainedPageRlPresenceEnabled] = useState(false);
+  const [sustainedKillRlSaving, setSustainedKillRlSaving] = useState(false);
   const [userRequestPaceEnabled, setUserRequestPaceEnabled] = useState(false);
   const [userRequestPaceLimit, setUserRequestPaceLimit] = useState('15');
   const [userRequestPaceSaving, setUserRequestPaceSaving] = useState(false);
   const [requestStormBundleSaving, setRequestStormBundleSaving] = useState(false);
-  const [sustainedJailRlSaving, setSustainedJailRlSaving] = useState(false);
-  const [sustainedEntRlSaving, setSustainedEntRlSaving] = useState(false);
-  const [sustainedForumRlSaving, setSustainedForumRlSaving] = useState(false);
-  const [sustainedKillRlSaving, setSustainedKillRlSaving] = useState(false);
-  const [sustainedGtaRlSaving, setSustainedGtaRlSaving] = useState(false);
-  const [sustainedCrimesRlSaving, setSustainedCrimesRlSaving] = useState(false);
-  const [sustainedOcRlSaving, setSustainedOcRlSaving] = useState(false);
-  const [sustainedBoozeRlSaving, setSustainedBoozeRlSaving] = useState(false);
-  const [sustainedGameChatRlSaving, setSustainedGameChatRlSaving] = useState(false);
-  const [sustainedStoreRlSaving, setSustainedStoreRlSaving] = useState(false);
-  const [sustainedRankingRlSaving, setSustainedRankingRlSaving] = useState(false);
-  const [sustainedNotificationsRlSaving, setSustainedNotificationsRlSaving] = useState(false);
-  const [sustainedHitlistRlSaving, setSustainedHitlistRlSaving] = useState(false);
-  const [sustainedBankRlSaving, setSustainedBankRlSaving] = useState(false);
-  const [sustainedLeaderboardRlSaving, setSustainedLeaderboardRlSaving] = useState(false);
-  const [sustainedFamiliesRlSaving, setSustainedFamiliesRlSaving] = useState(false);
-  const [sustainedStockMarketRlSaving, setSustainedStockMarketRlSaving] = useState(false);
-  const [sustainedQuicktradeRlSaving, setSustainedQuicktradeRlSaving] = useState(false);
-  const [sustainedPropertiesRlSaving, setSustainedPropertiesRlSaving] = useState(false);
-  const [sustainedArmouryRlSaving, setSustainedArmouryRlSaving] = useState(false);
-  const [sustainedBodyguardsRlSaving, setSustainedBodyguardsRlSaving] = useState(false);
-  const [sustainedMissionsRlSaving, setSustainedMissionsRlSaving] = useState(false);
-  const [sustainedTravelRlSaving, setSustainedTravelRlSaving] = useState(false);
-  const [sustainedEventsRlSaving, setSustainedEventsRlSaving] = useState(false);
-  const [sustainedAutoRankRlSaving, setSustainedAutoRankRlSaving] = useState(false);
-  const [sustainedPresenceRlSaving, setSustainedPresenceRlSaving] = useState(false);
   const [captchaFailModalOpen, setCaptchaFailModalOpen] = useState(false);
   const [captchaFailRows, setCaptchaFailRows] = useState([]);
   const [captchaFailTotal, setCaptchaFailTotal] = useState(0);
@@ -1486,6 +1521,11 @@ export default function Admin() {
   const [gamePassSeasonLoading, setGamePassSeasonLoading] = useState(false);
   const [gamePassSeasonAdmin, setGamePassSeasonAdmin] = useState(null);
   const [gamePassSeasonEndAt, setGamePassSeasonEndAt] = useState('2026-05-01T14:00:00+00:00');
+  const [wcConfig, setWcConfig] = useState(null);
+  const [wcHealth, setWcHealth] = useState(null);
+  const [wcLoading, setWcLoading] = useState(false);
+  const [wcEndedMessage, setWcEndedMessage] = useState('');
+  const [wcBannerText, setWcBannerText] = useState('');
   const [maintenanceMsg, setMaintenanceMsg] = useState('');
   const [maintenanceDuration, setMaintenanceDuration] = useState(60);
   const [bulkUsernames, setBulkUsernames] = useState('');
@@ -2195,9 +2235,7 @@ export default function Admin() {
       setMinigameTurnstileEnabled(!!res.data?.minigame_turnstile_enabled);
       setMinigameTurnstileSiteKey((res.data?.minigame_turnstile_site_key ?? '').trim());
       setLoginTurnstileEnabled(!!res.data?.login_turnstile_enabled);
-      setSustainedPageRlJailEnabled(!!res.data?.sustained_page_rl_jail_enabled);
-      setSustainedPageRlEntEnabled(!!res.data?.sustained_page_rl_entertainer_enabled);
-      setSustainedPageRlForumEnabled(!!res.data?.sustained_page_rl_forum_enabled);
+      setSustainedRlScopes((prev) => mergeSustainedRlScopesFromSettings(prev, res.data));
       setSustainedPageRlKillEnabled(res.data?.sustained_page_rl_kill_enabled !== false);
       {
         const g = res.data?.sustained_page_rl_kill_max_gap_ms;
@@ -2207,28 +2245,6 @@ export default function Admin() {
         setSustainedPageRlKillMaxGapMs(Number.isFinite(gn) ? String(gn) : '300');
         setSustainedPageRlKillSustainSec(Number.isFinite(sn) ? String(sn) : '12');
       }
-      setSustainedPageRlGtaEnabled(!!res.data?.sustained_page_rl_gta_enabled);
-      setSustainedPageRlCrimesEnabled(!!res.data?.sustained_page_rl_crimes_enabled);
-      setSustainedPageRlOcEnabled(!!res.data?.sustained_page_rl_oc_enabled);
-      setSustainedPageRlBoozeEnabled(!!res.data?.sustained_page_rl_booze_enabled);
-      setSustainedPageRlGameChatEnabled(!!res.data?.sustained_page_rl_game_chat_enabled);
-      setSustainedPageRlStoreEnabled(!!res.data?.sustained_page_rl_store_enabled);
-      setSustainedPageRlRankingEnabled(!!res.data?.sustained_page_rl_ranking_enabled);
-      setSustainedPageRlNotificationsEnabled(!!res.data?.sustained_page_rl_notifications_enabled);
-      setSustainedPageRlHitlistEnabled(!!res.data?.sustained_page_rl_hitlist_enabled);
-      setSustainedPageRlBankEnabled(!!res.data?.sustained_page_rl_bank_enabled);
-      setSustainedPageRlLeaderboardEnabled(!!res.data?.sustained_page_rl_leaderboard_enabled);
-      setSustainedPageRlFamiliesEnabled(!!res.data?.sustained_page_rl_families_enabled);
-      setSustainedPageRlStockMarketEnabled(!!res.data?.sustained_page_rl_stock_market_enabled);
-      setSustainedPageRlQuicktradeEnabled(!!res.data?.sustained_page_rl_quicktrade_enabled);
-      setSustainedPageRlPropertiesEnabled(!!res.data?.sustained_page_rl_properties_enabled);
-      setSustainedPageRlArmouryEnabled(!!res.data?.sustained_page_rl_armoury_enabled);
-      setSustainedPageRlBodyguardsEnabled(!!res.data?.sustained_page_rl_bodyguards_enabled);
-      setSustainedPageRlMissionsEnabled(!!res.data?.sustained_page_rl_missions_enabled);
-      setSustainedPageRlTravelEnabled(!!res.data?.sustained_page_rl_travel_enabled);
-      setSustainedPageRlEventsEnabled(!!res.data?.sustained_page_rl_events_enabled);
-      setSustainedPageRlAutoRankEnabled(!!res.data?.sustained_page_rl_auto_rank_enabled);
-      setSustainedPageRlPresenceEnabled(!!res.data?.sustained_page_rl_presence_enabled);
       setUserRequestPaceEnabled(!!res.data?.user_request_pace_enabled);
       setUserRequestPaceLimit(String(Math.max(5, Math.min(100, parseInt(res.data?.user_request_pace_limit, 10) || 15))));
       setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
@@ -2307,34 +2323,10 @@ export default function Admin() {
       setMinigameTurnstileEnabled(false);
       setMinigameTurnstileSiteKey('');
       setLoginTurnstileEnabled(false);
-      setSustainedPageRlJailEnabled(false);
-      setSustainedPageRlEntEnabled(false);
-      setSustainedPageRlForumEnabled(false);
+      setSustainedRlScopes(sustainedRlScopesPayload({}));
       setSustainedPageRlKillEnabled(true);
       setSustainedPageRlKillMaxGapMs('300');
       setSustainedPageRlKillSustainSec('12');
-      setSustainedPageRlGtaEnabled(false);
-      setSustainedPageRlCrimesEnabled(false);
-      setSustainedPageRlOcEnabled(false);
-      setSustainedPageRlBoozeEnabled(false);
-      setSustainedPageRlGameChatEnabled(false);
-      setSustainedPageRlStoreEnabled(false);
-      setSustainedPageRlRankingEnabled(false);
-      setSustainedPageRlNotificationsEnabled(false);
-      setSustainedPageRlHitlistEnabled(false);
-      setSustainedPageRlBankEnabled(false);
-      setSustainedPageRlLeaderboardEnabled(false);
-      setSustainedPageRlFamiliesEnabled(false);
-      setSustainedPageRlStockMarketEnabled(false);
-      setSustainedPageRlQuicktradeEnabled(false);
-      setSustainedPageRlPropertiesEnabled(false);
-      setSustainedPageRlArmouryEnabled(false);
-      setSustainedPageRlBodyguardsEnabled(false);
-      setSustainedPageRlMissionsEnabled(false);
-      setSustainedPageRlTravelEnabled(false);
-      setSustainedPageRlEventsEnabled(false);
-      setSustainedPageRlAutoRankEnabled(false);
-      setSustainedPageRlPresenceEnabled(false);
       setUserRequestPaceEnabled(false);
       setUserRequestPaceLimit('15');
       setSpotifyFeatureEnabled(false);
@@ -2487,34 +2479,10 @@ export default function Admin() {
         minigame_turnstile_enabled: minigameTurnstileEnabled,
         minigame_turnstile_site_key: minigameTurnstileSiteKey.trim(),
         login_turnstile_enabled: loginTurnstileEnabled,
-        sustained_page_rl_jail_enabled: sustainedPageRlJailEnabled,
-        sustained_page_rl_entertainer_enabled: sustainedPageRlEntEnabled,
-        sustained_page_rl_forum_enabled: sustainedPageRlForumEnabled,
+        ...sustainedRlScopesPayload(sustainedRlScopes),
         sustained_page_rl_kill_enabled: sustainedPageRlKillEnabled,
         sustained_page_rl_kill_max_gap_ms: Math.min(2000, Math.max(50, parseFloat(String(sustainedPageRlKillMaxGapMs).replace(/,/g, '.')) || 300)),
         sustained_page_rl_kill_sustain_sec: Math.min(120, Math.max(3, parseFloat(String(sustainedPageRlKillSustainSec).replace(/,/g, '.')) || 12)),
-        sustained_page_rl_gta_enabled: sustainedPageRlGtaEnabled,
-        sustained_page_rl_crimes_enabled: sustainedPageRlCrimesEnabled,
-        sustained_page_rl_oc_enabled: sustainedPageRlOcEnabled,
-        sustained_page_rl_booze_enabled: sustainedPageRlBoozeEnabled,
-        sustained_page_rl_game_chat_enabled: sustainedPageRlGameChatEnabled,
-        sustained_page_rl_store_enabled: sustainedPageRlStoreEnabled,
-        sustained_page_rl_ranking_enabled: sustainedPageRlRankingEnabled,
-        sustained_page_rl_notifications_enabled: sustainedPageRlNotificationsEnabled,
-        sustained_page_rl_hitlist_enabled: sustainedPageRlHitlistEnabled,
-        sustained_page_rl_bank_enabled: sustainedPageRlBankEnabled,
-        sustained_page_rl_leaderboard_enabled: sustainedPageRlLeaderboardEnabled,
-        sustained_page_rl_families_enabled: sustainedPageRlFamiliesEnabled,
-        sustained_page_rl_stock_market_enabled: sustainedPageRlStockMarketEnabled,
-        sustained_page_rl_quicktrade_enabled: sustainedPageRlQuicktradeEnabled,
-        sustained_page_rl_properties_enabled: sustainedPageRlPropertiesEnabled,
-        sustained_page_rl_armoury_enabled: sustainedPageRlArmouryEnabled,
-        sustained_page_rl_bodyguards_enabled: sustainedPageRlBodyguardsEnabled,
-        sustained_page_rl_missions_enabled: sustainedPageRlMissionsEnabled,
-        sustained_page_rl_travel_enabled: sustainedPageRlTravelEnabled,
-        sustained_page_rl_events_enabled: sustainedPageRlEventsEnabled,
-        sustained_page_rl_auto_rank_enabled: sustainedPageRlAutoRankEnabled,
-        sustained_page_rl_presence_enabled: sustainedPageRlPresenceEnabled,
         user_request_pace_enabled: userRequestPaceEnabled,
         user_request_pace_limit: Math.max(5, Math.min(100, parseInt(userRequestPaceLimit, 10) || 15)),
         spotify_feature_enabled: spotifyFeatureEnabled,
@@ -2563,15 +2531,7 @@ export default function Admin() {
         setMinigameTurnstileSiteKey((res.data.minigame_turnstile_site_key ?? '').trim());
       }
       setLoginTurnstileEnabled(!!res.data?.login_turnstile_enabled);
-      if (res.data?.sustained_page_rl_jail_enabled !== undefined) {
-        setSustainedPageRlJailEnabled(!!res.data.sustained_page_rl_jail_enabled);
-      }
-      if (res.data?.sustained_page_rl_entertainer_enabled !== undefined) {
-        setSustainedPageRlEntEnabled(!!res.data.sustained_page_rl_entertainer_enabled);
-      }
-      if (res.data?.sustained_page_rl_forum_enabled !== undefined) {
-        setSustainedPageRlForumEnabled(!!res.data.sustained_page_rl_forum_enabled);
-      }
+      setSustainedRlScopes((prev) => mergeSustainedRlScopesFromSettings(prev, res.data));
       if (res.data?.sustained_page_rl_kill_enabled !== undefined) {
         setSustainedPageRlKillEnabled(res.data.sustained_page_rl_kill_enabled !== false);
       }
@@ -2582,72 +2542,6 @@ export default function Admin() {
       if (res.data?.sustained_page_rl_kill_sustain_sec != null) {
         const sn = Number(res.data.sustained_page_rl_kill_sustain_sec);
         if (Number.isFinite(sn)) setSustainedPageRlKillSustainSec(String(sn));
-      }
-      if (res.data?.sustained_page_rl_gta_enabled !== undefined) {
-        setSustainedPageRlGtaEnabled(!!res.data.sustained_page_rl_gta_enabled);
-      }
-      if (res.data?.sustained_page_rl_crimes_enabled !== undefined) {
-        setSustainedPageRlCrimesEnabled(!!res.data.sustained_page_rl_crimes_enabled);
-      }
-      if (res.data?.sustained_page_rl_oc_enabled !== undefined) {
-        setSustainedPageRlOcEnabled(!!res.data.sustained_page_rl_oc_enabled);
-      }
-      if (res.data?.sustained_page_rl_booze_enabled !== undefined) {
-        setSustainedPageRlBoozeEnabled(!!res.data.sustained_page_rl_booze_enabled);
-      }
-      if (res.data?.sustained_page_rl_game_chat_enabled !== undefined) {
-        setSustainedPageRlGameChatEnabled(!!res.data.sustained_page_rl_game_chat_enabled);
-      }
-      if (res.data?.sustained_page_rl_store_enabled !== undefined) {
-        setSustainedPageRlStoreEnabled(!!res.data.sustained_page_rl_store_enabled);
-      }
-      if (res.data?.sustained_page_rl_ranking_enabled !== undefined) {
-        setSustainedPageRlRankingEnabled(!!res.data.sustained_page_rl_ranking_enabled);
-      }
-      if (res.data?.sustained_page_rl_notifications_enabled !== undefined) {
-        setSustainedPageRlNotificationsEnabled(!!res.data.sustained_page_rl_notifications_enabled);
-      }
-      if (res.data?.sustained_page_rl_hitlist_enabled !== undefined) {
-        setSustainedPageRlHitlistEnabled(!!res.data.sustained_page_rl_hitlist_enabled);
-      }
-      if (res.data?.sustained_page_rl_bank_enabled !== undefined) {
-        setSustainedPageRlBankEnabled(!!res.data.sustained_page_rl_bank_enabled);
-      }
-      if (res.data?.sustained_page_rl_leaderboard_enabled !== undefined) {
-        setSustainedPageRlLeaderboardEnabled(!!res.data.sustained_page_rl_leaderboard_enabled);
-      }
-      if (res.data?.sustained_page_rl_families_enabled !== undefined) {
-        setSustainedPageRlFamiliesEnabled(!!res.data.sustained_page_rl_families_enabled);
-      }
-      if (res.data?.sustained_page_rl_stock_market_enabled !== undefined) {
-        setSustainedPageRlStockMarketEnabled(!!res.data.sustained_page_rl_stock_market_enabled);
-      }
-      if (res.data?.sustained_page_rl_quicktrade_enabled !== undefined) {
-        setSustainedPageRlQuicktradeEnabled(!!res.data.sustained_page_rl_quicktrade_enabled);
-      }
-      if (res.data?.sustained_page_rl_properties_enabled !== undefined) {
-        setSustainedPageRlPropertiesEnabled(!!res.data.sustained_page_rl_properties_enabled);
-      }
-      if (res.data?.sustained_page_rl_armoury_enabled !== undefined) {
-        setSustainedPageRlArmouryEnabled(!!res.data.sustained_page_rl_armoury_enabled);
-      }
-      if (res.data?.sustained_page_rl_bodyguards_enabled !== undefined) {
-        setSustainedPageRlBodyguardsEnabled(!!res.data.sustained_page_rl_bodyguards_enabled);
-      }
-      if (res.data?.sustained_page_rl_missions_enabled !== undefined) {
-        setSustainedPageRlMissionsEnabled(!!res.data.sustained_page_rl_missions_enabled);
-      }
-      if (res.data?.sustained_page_rl_travel_enabled !== undefined) {
-        setSustainedPageRlTravelEnabled(!!res.data.sustained_page_rl_travel_enabled);
-      }
-      if (res.data?.sustained_page_rl_events_enabled !== undefined) {
-        setSustainedPageRlEventsEnabled(!!res.data.sustained_page_rl_events_enabled);
-      }
-      if (res.data?.sustained_page_rl_auto_rank_enabled !== undefined) {
-        setSustainedPageRlAutoRankEnabled(!!res.data.sustained_page_rl_auto_rank_enabled);
-      }
-      if (res.data?.sustained_page_rl_presence_enabled !== undefined) {
-        setSustainedPageRlPresenceEnabled(!!res.data.sustained_page_rl_presence_enabled);
       }
       if (res.data?.user_request_pace_enabled !== undefined) {
         setUserRequestPaceEnabled(!!res.data.user_request_pace_enabled);
@@ -2715,48 +2609,16 @@ export default function Admin() {
     }
   };
 
-  const applySustainedPageRlJail = async (enabled) => {
-    setSustainedJailRlSaving(true);
+  const applySustainedPageRlScope = async (scope, enabled) => {
+    setSustainedRlScopeSaving(scope.settingField);
     try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_jail_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_jail_enabled !== undefined) {
-        setSustainedPageRlJailEnabled(!!res.data.sustained_page_rl_jail_enabled);
-      }
-      toast.success(enabled ? 'Jail pacing limiter enabled' : 'Jail pacing limiter disabled');
+      const res = await api.patch('/admin/settings', { [scope.settingField]: !!enabled });
+      setSustainedRlScopes((prev) => mergeSustainedRlScopesFromSettings(prev, res.data));
+      toast.success(enabled ? `${scope.toastLabel} enabled` : `${scope.toastLabel} disabled`);
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Failed to update');
     } finally {
-      setSustainedJailRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlEnt = async (enabled) => {
-    setSustainedEntRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_entertainer_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_entertainer_enabled !== undefined) {
-        setSustainedPageRlEntEnabled(!!res.data.sustained_page_rl_entertainer_enabled);
-      }
-      toast.success(enabled ? 'Entertainer pacing limiter enabled' : 'Entertainer pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedEntRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlForum = async (enabled) => {
-    setSustainedForumRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_forum_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_forum_enabled !== undefined) {
-        setSustainedPageRlForumEnabled(!!res.data.sustained_page_rl_forum_enabled);
-      }
-      toast.success(enabled ? 'Forum pacing limiter enabled' : 'Forum pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedForumRlSaving(false);
+      setSustainedRlScopeSaving(null);
     }
   };
 
@@ -2800,306 +2662,6 @@ export default function Admin() {
     }
   };
 
-  const applySustainedPageRlGta = async (enabled) => {
-    setSustainedGtaRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_gta_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_gta_enabled !== undefined) {
-        setSustainedPageRlGtaEnabled(!!res.data.sustained_page_rl_gta_enabled);
-      }
-      toast.success(enabled ? 'GTA pacing limiter enabled' : 'GTA pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedGtaRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlCrimes = async (enabled) => {
-    setSustainedCrimesRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_crimes_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_crimes_enabled !== undefined) {
-        setSustainedPageRlCrimesEnabled(!!res.data.sustained_page_rl_crimes_enabled);
-      }
-      toast.success(enabled ? 'Crimes pacing limiter enabled' : 'Crimes pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedCrimesRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlOc = async (enabled) => {
-    setSustainedOcRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_oc_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_oc_enabled !== undefined) {
-        setSustainedPageRlOcEnabled(!!res.data.sustained_page_rl_oc_enabled);
-      }
-      toast.success(enabled ? 'OC pacing limiter enabled' : 'OC pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedOcRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlBooze = async (enabled) => {
-    setSustainedBoozeRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_booze_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_booze_enabled !== undefined) {
-        setSustainedPageRlBoozeEnabled(!!res.data.sustained_page_rl_booze_enabled);
-      }
-      toast.success(enabled ? 'Booze run pacing limiter enabled' : 'Booze run pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedBoozeRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlGameChat = async (enabled) => {
-    setSustainedGameChatRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_game_chat_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_game_chat_enabled !== undefined) {
-        setSustainedPageRlGameChatEnabled(!!res.data.sustained_page_rl_game_chat_enabled);
-      }
-      toast.success(enabled ? 'Game chat pacing limiter enabled' : 'Game chat pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedGameChatRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlStore = async (enabled) => {
-    setSustainedStoreRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_store_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_store_enabled !== undefined) {
-        setSustainedPageRlStoreEnabled(!!res.data.sustained_page_rl_store_enabled);
-      }
-      toast.success(enabled ? 'Store / points pacing limiter enabled' : 'Store / points pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedStoreRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlRanking = async (enabled) => {
-    setSustainedRankingRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_ranking_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_ranking_enabled !== undefined) {
-        setSustainedPageRlRankingEnabled(!!res.data.sustained_page_rl_ranking_enabled);
-      }
-      toast.success(enabled ? 'Rank progress pacing limiter enabled' : 'Rank progress pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedRankingRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlNotifications = async (enabled) => {
-    setSustainedNotificationsRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_notifications_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_notifications_enabled !== undefined) {
-        setSustainedPageRlNotificationsEnabled(!!res.data.sustained_page_rl_notifications_enabled);
-      }
-      toast.success(enabled ? 'Notifications pacing limiter enabled' : 'Notifications pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedNotificationsRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlHitlist = async (enabled) => {
-    setSustainedHitlistRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_hitlist_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_hitlist_enabled !== undefined) {
-        setSustainedPageRlHitlistEnabled(!!res.data.sustained_page_rl_hitlist_enabled);
-      }
-      toast.success(enabled ? 'Hitlist pacing limiter enabled' : 'Hitlist pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedHitlistRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlBank = async (enabled) => {
-    setSustainedBankRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_bank_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_bank_enabled !== undefined) {
-        setSustainedPageRlBankEnabled(!!res.data.sustained_page_rl_bank_enabled);
-      }
-      toast.success(enabled ? 'Bank pacing limiter enabled' : 'Bank pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedBankRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlLeaderboard = async (enabled) => {
-    setSustainedLeaderboardRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_leaderboard_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_leaderboard_enabled !== undefined) {
-        setSustainedPageRlLeaderboardEnabled(!!res.data.sustained_page_rl_leaderboard_enabled);
-      }
-      toast.success(enabled ? 'Leaderboard pacing limiter enabled' : 'Leaderboard pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedLeaderboardRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlFamilies = async (enabled) => {
-    setSustainedFamiliesRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_families_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_families_enabled !== undefined) {
-        setSustainedPageRlFamiliesEnabled(!!res.data.sustained_page_rl_families_enabled);
-      }
-      toast.success(enabled ? 'Families pacing limiter enabled' : 'Families pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedFamiliesRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlStockMarket = async (enabled) => {
-    setSustainedStockMarketRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_stock_market_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_stock_market_enabled !== undefined) {
-        setSustainedPageRlStockMarketEnabled(!!res.data.sustained_page_rl_stock_market_enabled);
-      }
-      toast.success(enabled ? 'Stock market pacing limiter enabled' : 'Stock market pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedStockMarketRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlQuicktrade = async (enabled) => {
-    setSustainedQuicktradeRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_quicktrade_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_quicktrade_enabled !== undefined) {
-        setSustainedPageRlQuicktradeEnabled(!!res.data.sustained_page_rl_quicktrade_enabled);
-      }
-      toast.success(enabled ? 'Quick trade pacing limiter enabled' : 'Quick trade pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedQuicktradeRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlProperties = async (enabled) => {
-    setSustainedPropertiesRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_properties_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_properties_enabled !== undefined) {
-        setSustainedPageRlPropertiesEnabled(!!res.data.sustained_page_rl_properties_enabled);
-      }
-      toast.success(enabled ? 'Properties pacing limiter enabled' : 'Properties pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedPropertiesRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlArmoury = async (enabled) => {
-    setSustainedArmouryRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_armoury_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_armoury_enabled !== undefined) {
-        setSustainedPageRlArmouryEnabled(!!res.data.sustained_page_rl_armoury_enabled);
-      }
-      toast.success(enabled ? 'Armoury pacing limiter enabled' : 'Armoury pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedArmouryRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlBodyguards = async (enabled) => {
-    setSustainedBodyguardsRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_bodyguards_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_bodyguards_enabled !== undefined) {
-        setSustainedPageRlBodyguardsEnabled(!!res.data.sustained_page_rl_bodyguards_enabled);
-      }
-      toast.success(enabled ? 'Bodyguards pacing limiter enabled' : 'Bodyguards pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedBodyguardsRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlMissions = async (enabled) => {
-    setSustainedMissionsRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_missions_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_missions_enabled !== undefined) {
-        setSustainedPageRlMissionsEnabled(!!res.data.sustained_page_rl_missions_enabled);
-      }
-      toast.success(enabled ? 'Missions pacing limiter enabled' : 'Missions pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedMissionsRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlTravel = async (enabled) => {
-    setSustainedTravelRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_travel_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_travel_enabled !== undefined) {
-        setSustainedPageRlTravelEnabled(!!res.data.sustained_page_rl_travel_enabled);
-      }
-      toast.success(enabled ? 'Travel / airports pacing limiter enabled' : 'Travel / airports pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedTravelRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlEvents = async (enabled) => {
-    setSustainedEventsRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_events_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_events_enabled !== undefined) {
-        setSustainedPageRlEventsEnabled(!!res.data.sustained_page_rl_events_enabled);
-      }
-      toast.success(enabled ? 'Events / flash news pacing limiter enabled' : 'Events / flash news pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedEventsRlSaving(false);
-    }
-  };
-
   const applyUserRequestPace = async (enabled) => {
     setUserRequestPaceSaving(true);
     try {
@@ -3135,52 +2697,20 @@ export default function Admin() {
         sustained_page_rl_events_enabled: true,
         sustained_page_rl_auto_rank_enabled: true,
         sustained_page_rl_presence_enabled: true,
+        sustained_page_rl_casino_property_enabled: true,
+        sustained_page_rl_states_enabled: true,
+        sustained_page_rl_illegal_business_enabled: true,
       });
       if (res.data?.user_request_pace_enabled !== undefined) setUserRequestPaceEnabled(!!res.data.user_request_pace_enabled);
       if (res.data?.user_request_pace_limit != null) {
         setUserRequestPaceLimit(String(Math.max(5, Math.min(100, parseInt(res.data.user_request_pace_limit, 10) || 15))));
       }
-      if (res.data?.sustained_page_rl_entertainer_enabled !== undefined) setSustainedPageRlEntEnabled(!!res.data.sustained_page_rl_entertainer_enabled);
-      if (res.data?.sustained_page_rl_bodyguards_enabled !== undefined) setSustainedPageRlBodyguardsEnabled(!!res.data.sustained_page_rl_bodyguards_enabled);
-      if (res.data?.sustained_page_rl_crimes_enabled !== undefined) setSustainedPageRlCrimesEnabled(!!res.data.sustained_page_rl_crimes_enabled);
-      if (res.data?.sustained_page_rl_events_enabled !== undefined) setSustainedPageRlEventsEnabled(!!res.data.sustained_page_rl_events_enabled);
-      if (res.data?.sustained_page_rl_auto_rank_enabled !== undefined) setSustainedPageRlAutoRankEnabled(!!res.data.sustained_page_rl_auto_rank_enabled);
-      if (res.data?.sustained_page_rl_presence_enabled !== undefined) setSustainedPageRlPresenceEnabled(!!res.data.sustained_page_rl_presence_enabled);
+      setSustainedRlScopes((prev) => mergeSustainedRlScopesFromSettings(prev, res.data));
       toast.success('Anti request-storm bundle enabled (global cap + hot scopes)');
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Failed to update');
     } finally {
       setRequestStormBundleSaving(false);
-    }
-  };
-
-  const applySustainedPageRlAutoRank = async (enabled) => {
-    setSustainedAutoRankRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_auto_rank_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_auto_rank_enabled !== undefined) {
-        setSustainedPageRlAutoRankEnabled(!!res.data.sustained_page_rl_auto_rank_enabled);
-      }
-      toast.success(enabled ? 'Auto Rank prefs pacing limiter enabled' : 'Auto Rank prefs pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedAutoRankRlSaving(false);
-    }
-  };
-
-  const applySustainedPageRlPresence = async (enabled) => {
-    setSustainedPresenceRlSaving(true);
-    try {
-      const res = await api.patch('/admin/settings', { sustained_page_rl_presence_enabled: !!enabled });
-      if (res.data?.sustained_page_rl_presence_enabled !== undefined) {
-        setSustainedPageRlPresenceEnabled(!!res.data.sustained_page_rl_presence_enabled);
-      }
-      toast.success(enabled ? 'Auth / presence pacing limiter enabled' : 'Auth / presence pacing limiter disabled');
-    } catch (e) {
-      toast.error(e.response?.data?.detail ?? 'Failed to update');
-    } finally {
-      setSustainedPresenceRlSaving(false);
     }
   };
 
@@ -8274,6 +7804,32 @@ export default function Admin() {
     finally { setGamePassSeasonLoading(false); }
   };
 
+  const fetchWorldCupAdmin = async () => {
+    setWcLoading(true);
+    try {
+      const [cfg, health] = await Promise.all([
+        api.get('/admin/world-cup/config'),
+        api.get('/admin/world-cup/auto-sync-health'),
+      ]);
+      setWcConfig(cfg.data);
+      setWcHealth(health.data);
+      setWcEndedMessage(cfg.data?.ended_message || '');
+      setWcBannerText(cfg.data?.banner_text || '');
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to load World Cup config'); }
+    finally { setWcLoading(false); }
+  };
+
+  const patchWorldCupConfig = async (patch) => {
+    setWcLoading(true);
+    try {
+      const res = await api.patch('/admin/world-cup/config', patch);
+      setWcConfig(res.data);
+      toast.success('World Cup settings saved');
+      await fetchWorldCupAdmin();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to save'); }
+    finally { setWcLoading(false); }
+  };
+
   const handleBulkAction = async () => {
     const names = bulkUsernames.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
     if (!names.length) { toast.error('Enter at least one username'); return; }
@@ -12383,6 +11939,72 @@ export default function Admin() {
         </div>
         )}
 
+        </div>
+        )}
+
+        {isAdmin && (
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-emerald-500/30 mobile-panel`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
+        <SectionHeader
+          icon={Trophy}
+          title="World Cup 2026"
+          badge={
+            <span className={`text-[10px] font-heading ${wcConfig?.enabled ? 'text-emerald-400' : 'text-red-400'}`}>
+              {wcConfig?.enabled ? 'Active' : 'Hidden'}
+            </span>
+          }
+          toolAnchor="worldCup"
+          isCollapsed={collapsed.worldCup}
+          onToggle={() => {
+            toggleSection('worldCup');
+            if (collapsed.worldCup && !wcConfig) fetchWorldCupAdmin();
+          }}
+        />
+        {!collapsed.worldCup && (
+          <div className="p-3 space-y-3">
+            <p className="text-[10px] text-mutedForeground">Predictions event — toggle visibility, seed teams, sync fixtures, auto-settle.</p>
+            <div className="flex flex-wrap gap-2">
+              <BtnPrimary
+                onClick={() => patchWorldCupConfig({ enabled: !wcConfig?.enabled, ended_message: wcEndedMessage, banner_text: wcBannerText })}
+                disabled={wcLoading}
+              >
+                {wcConfig?.enabled ? 'Hide event' : 'Enable event'}
+              </BtnPrimary>
+              <BtnSecondary onClick={() => api.post('/admin/world-cup/seed-2026').then((r) => toast.success(`Seeded ${r.data?.teams} teams`)).catch((e) => toast.error(e.response?.data?.detail || 'Seed failed'))} disabled={wcLoading}>
+                Seed 2026 teams
+              </BtnSecondary>
+              <BtnSecondary onClick={() => api.post('/admin/world-cup/sync-fixtures').then((r) => toast.success(`Synced ${r.data?.synced || 0} fixtures`)).catch((e) => toast.error(e.response?.data?.detail || 'Sync failed'))} disabled={wcLoading || !wcConfig?.enabled}>
+                Sync fixtures
+              </BtnSecondary>
+              <BtnSecondary onClick={() => api.post('/admin/world-cup/auto-settle-run').then((r) => toast.success(`Settled ${r.data?.settled || 0} matches`)).catch((e) => toast.error(e.response?.data?.detail || 'Settle failed'))} disabled={wcLoading || !wcConfig?.enabled}>
+                Auto-settle run
+              </BtnSecondary>
+              <BtnSecondary onClick={fetchWorldCupAdmin} disabled={wcLoading}>Refresh</BtnSecondary>
+            </div>
+            <div>
+              <label className="block text-[10px] font-heading uppercase text-mutedForeground mb-1">Ended message (when hidden)</label>
+              <input type="text" value={wcEndedMessage} onChange={(e) => setWcEndedMessage(e.target.value)} className="w-full px-2 py-1.5 rounded border border-input bg-transparent text-xs" />
+            </div>
+            <div>
+              <label className="block text-[10px] font-heading uppercase text-mutedForeground mb-1">Banner text (when active)</label>
+              <input type="text" value={wcBannerText} onChange={(e) => setWcBannerText(e.target.value)} className="w-full px-2 py-1.5 rounded border border-input bg-transparent text-xs" />
+            </div>
+            <BtnSecondary onClick={() => patchWorldCupConfig({ ended_message: wcEndedMessage, banner_text: wcBannerText })} disabled={wcLoading}>
+              Save messages
+            </BtnSecondary>
+            {wcHealth && (
+              <div className="text-[10px] text-mutedForeground font-heading space-y-1 pt-2 border-t border-primary/10">
+                <p>Entrants: {wcHealth.entrants} · Unsettled matches: {wcHealth.unsettled_matches}</p>
+                <p>Last sync: {wcHealth.last_fixture_sync_at || '—'}</p>
+                <p>Last auto-settle: {wcHealth.last_auto_settle_at || '—'}</p>
+                <p>Odds API: {wcHealth.odds_api_configured ? 'configured' : 'not set'}</p>
+              </div>
+            )}
+          </div>
+        )}
+        </div>
+        )}
+
         {/* Launch Settings — admin only */}
         {isAdmin && (
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-amber-500/30 mobile-panel`}>
@@ -14327,83 +13949,8 @@ export default function Admin() {
                   {requestStormBundleSaving ? '…' : 'Enable anti request-storm bundle'}
                 </button>
                 <span className="text-[10px] text-mutedForeground font-heading">
-                  Turns on global cap + entertainer, bodyguards, crimes, events, auto-rank, auth/presence scopes.
+                  Turns on global cap + entertainer, bodyguards, crimes, events, auto-rank, auth/presence, casino/property sidebar, states map, illegal business.
                 </span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Jail</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                Player jail routes (list, status, bust, snitch, private cell, etc.). Jail-style pacing (~750ms / ~22s) as above.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedJailRlSaving || sustainedPageRlJailEnabled}
-                  onClick={() => applySustainedPageRlJail(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedJailRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedJailRlSaving || !sustainedPageRlJailEnabled}
-                  onClick={() => applySustainedPageRlJail(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedJailRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlJailEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Forum</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                All <code className="text-[9px] bg-muted px-1 rounded">/forum/topics…</code> routes (topics, comments, likes, reactions). Same jail-style math (~750ms / ~22s).
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedForumRlSaving || sustainedPageRlForumEnabled}
-                  onClick={() => applySustainedPageRlForum(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedForumRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedForumRlSaving || !sustainedPageRlForumEnabled}
-                  onClick={() => applySustainedPageRlForum(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedForumRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlForumEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Entertainer</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                Player entertainer forum APIs (games, find-word, prizes, history). Staff <code className="text-[9px] bg-muted px-1 rounded">/forum/entertainer/admin/*</code> and manual roll are not throttled here. Same jail-style math (~750ms / ~22s).
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedEntRlSaving || sustainedPageRlEntEnabled}
-                  onClick={() => applySustainedPageRlEnt(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedEntRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedEntRlSaving || !sustainedPageRlEntEnabled}
-                  onClick={() => applySustainedPageRlEnt(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedEntRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlEntEnabled ? 'on' : 'off'}</span>
               </div>
             </div>
             <div className="space-y-1 rounded border border-zinc-700/40 p-2">
@@ -14465,556 +14012,15 @@ export default function Admin() {
                 </button>
               </div>
             </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">GTA</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                Hot GTA GETs (options, garage, stats, marketplace, etc.). Jail-style pacing.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedGtaRlSaving || sustainedPageRlGtaEnabled}
-                  onClick={() => applySustainedPageRlGta(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedGtaRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedGtaRlSaving || !sustainedPageRlGtaEnabled}
-                  onClick={() => applySustainedPageRlGta(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedGtaRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlGtaEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Crimes</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                <code className="text-[9px] bg-muted px-1 rounded">GET /crimes</code>, stats, logs. Jail-style pacing.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedCrimesRlSaving || sustainedPageRlCrimesEnabled}
-                  onClick={() => applySustainedPageRlCrimes(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedCrimesRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedCrimesRlSaving || !sustainedPageRlCrimesEnabled}
-                  onClick={() => applySustainedPageRlCrimes(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedCrimesRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlCrimesEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Organised crime</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                <code className="text-[9px] bg-muted px-1 rounded">GET /oc/config</code> and <code className="text-[9px] bg-muted px-1 rounded">/oc/status</code>. Jail-style pacing.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedOcRlSaving || sustainedPageRlOcEnabled}
-                  onClick={() => applySustainedPageRlOc(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedOcRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedOcRlSaving || !sustainedPageRlOcEnabled}
-                  onClick={() => applySustainedPageRlOc(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedOcRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlOcEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Booze run</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                <code className="text-[9px] bg-muted px-1 rounded">GET /booze-run/config</code>. Jail-style pacing.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedBoozeRlSaving || sustainedPageRlBoozeEnabled}
-                  onClick={() => applySustainedPageRlBooze(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedBoozeRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedBoozeRlSaving || !sustainedPageRlBoozeEnabled}
-                  onClick={() => applySustainedPageRlBooze(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedBoozeRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlBoozeEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Game chat</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                <code className="text-[9px] bg-muted px-1 rounded">GET /game-chat/messages</code> and prefs. Jail-style pacing.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedGameChatRlSaving || sustainedPageRlGameChatEnabled}
-                  onClick={() => applySustainedPageRlGameChat(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedGameChatRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedGameChatRlSaving || !sustainedPageRlGameChatEnabled}
-                  onClick={() => applySustainedPageRlGameChat(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedGameChatRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlGameChatEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Store / points</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                <code className="text-[9px] bg-muted px-1 rounded">GET /payments/pending-points</code> and <code className="text-[9px] bg-muted px-1 rounded">GET /store/points-transfers</code> (shared counter). Jail-style pacing.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedStoreRlSaving || sustainedPageRlStoreEnabled}
-                  onClick={() => applySustainedPageRlStore(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedStoreRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedStoreRlSaving || !sustainedPageRlStoreEnabled}
-                  onClick={() => applySustainedPageRlStore(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedStoreRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlStoreEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Rank progress</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                <code className="text-[9px] bg-muted px-1 rounded">GET /user/rank-progress</code>. Jail-style pacing.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedRankingRlSaving || sustainedPageRlRankingEnabled}
-                  onClick={() => applySustainedPageRlRanking(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedRankingRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedRankingRlSaving || !sustainedPageRlRankingEnabled}
-                  onClick={() => applySustainedPageRlRanking(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedRankingRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlRankingEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Auto Rank prefs</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                <code className="text-[9px] bg-muted px-1 rounded">GET /auto-rank/me</code>. Jail-style pacing.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedAutoRankRlSaving || sustainedPageRlAutoRankEnabled}
-                  onClick={() => applySustainedPageRlAutoRank(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedAutoRankRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedAutoRankRlSaving || !sustainedPageRlAutoRankEnabled}
-                  onClick={() => applySustainedPageRlAutoRank(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedAutoRankRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlAutoRankEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Auth / presence</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                <code className="text-[9px] bg-muted px-1 rounded">GET /auth/me</code>. Jail-style pacing on auth refresh spam.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedPresenceRlSaving || sustainedPageRlPresenceEnabled}
-                  onClick={() => applySustainedPageRlPresence(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedPresenceRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedPresenceRlSaving || !sustainedPageRlPresenceEnabled}
-                  onClick={() => applySustainedPageRlPresence(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedPresenceRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlPresenceEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Notifications / inbox</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                <code className="text-[9px] bg-muted px-1 rounded">GET /notifications</code>, sent, thread. Same jail-style pacing as jail when enabled.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedNotificationsRlSaving || sustainedPageRlNotificationsEnabled}
-                  onClick={() => applySustainedPageRlNotifications(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedNotificationsRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedNotificationsRlSaving || !sustainedPageRlNotificationsEnabled}
-                  onClick={() => applySustainedPageRlNotifications(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedNotificationsRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlNotificationsEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Hitlist</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                <code className="text-[9px] bg-muted px-1 rounded">GET /hitlist/list</code>, <code className="text-[9px] bg-muted px-1 rounded">/hitlist/me</code>, <code className="text-[9px] bg-muted px-1 rounded">/hitlist/npc-status</code>. Jail-style pacing.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedHitlistRlSaving || sustainedPageRlHitlistEnabled}
-                  onClick={() => applySustainedPageRlHitlist(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedHitlistRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedHitlistRlSaving || !sustainedPageRlHitlistEnabled}
-                  onClick={() => applySustainedPageRlHitlist(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedHitlistRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlHitlistEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Bank</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                <code className="text-[9px] bg-muted px-1 rounded">GET /bank/meta</code> and <code className="text-[9px] bg-muted px-1 rounded">/bank/overview</code>. Jail-style pacing.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedBankRlSaving || sustainedPageRlBankEnabled}
-                  onClick={() => applySustainedPageRlBank(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedBankRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedBankRlSaving || !sustainedPageRlBankEnabled}
-                  onClick={() => applySustainedPageRlBank(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedBankRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlBankEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Leaderboard</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                <code className="text-[9px] bg-muted px-1 rounded">GET /leaderboard</code> and <code className="text-[9px] bg-muted px-1 rounded">/leaderboards/top</code>. Jail-style pacing.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedLeaderboardRlSaving || sustainedPageRlLeaderboardEnabled}
-                  onClick={() => applySustainedPageRlLeaderboard(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedLeaderboardRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedLeaderboardRlSaving || !sustainedPageRlLeaderboardEnabled}
-                  onClick={() => applySustainedPageRlLeaderboard(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedLeaderboardRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlLeaderboardEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Families / crew</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                <code className="text-[9px] bg-muted px-1 rounded">GET /families/*</code> (player crew reads). Jail-style pacing.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedFamiliesRlSaving || sustainedPageRlFamiliesEnabled}
-                  onClick={() => applySustainedPageRlFamilies(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedFamiliesRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedFamiliesRlSaving || !sustainedPageRlFamiliesEnabled}
-                  onClick={() => applySustainedPageRlFamilies(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedFamiliesRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlFamiliesEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Stock market</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                <code className="text-[9px] bg-muted px-1 rounded">GET /stock-market/*</code> list, positions, history, summary. Jail-style pacing.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedStockMarketRlSaving || sustainedPageRlStockMarketEnabled}
-                  onClick={() => applySustainedPageRlStockMarket(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedStockMarketRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedStockMarketRlSaving || !sustainedPageRlStockMarketEnabled}
-                  onClick={() => applySustainedPageRlStockMarket(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedStockMarketRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlStockMarketEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Quick trade</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                <code className="text-[9px] bg-muted px-1 rounded">GET /trade/*</code> listing endpoints. Jail-style pacing.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedQuicktradeRlSaving || sustainedPageRlQuicktradeEnabled}
-                  onClick={() => applySustainedPageRlQuicktrade(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedQuicktradeRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedQuicktradeRlSaving || !sustainedPageRlQuicktradeEnabled}
-                  onClick={() => applySustainedPageRlQuicktrade(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedQuicktradeRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlQuicktradeEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Properties</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                <code className="text-[9px] bg-muted px-1 rounded">GET /properties</code>, <code className="text-[9px] bg-muted px-1 rounded">/my-properties</code>. Jail-style pacing.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedPropertiesRlSaving || sustainedPageRlPropertiesEnabled}
-                  onClick={() => applySustainedPageRlProperties(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedPropertiesRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedPropertiesRlSaving || !sustainedPageRlPropertiesEnabled}
-                  onClick={() => applySustainedPageRlProperties(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedPropertiesRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlPropertiesEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Armoury</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                Bullet factory, weapons, armour, shooting range, inventory GETs. Jail-style pacing.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedArmouryRlSaving || sustainedPageRlArmouryEnabled}
-                  onClick={() => applySustainedPageRlArmoury(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedArmouryRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedArmouryRlSaving || !sustainedPageRlArmouryEnabled}
-                  onClick={() => applySustainedPageRlArmoury(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedArmouryRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlArmouryEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Bodyguards</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                <code className="text-[9px] bg-muted px-1 rounded">GET /bodyguards*</code> (player). Jail-style pacing.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedBodyguardsRlSaving || sustainedPageRlBodyguardsEnabled}
-                  onClick={() => applySustainedPageRlBodyguards(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedBodyguardsRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedBodyguardsRlSaving || !sustainedPageRlBodyguardsEnabled}
-                  onClick={() => applySustainedPageRlBodyguards(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedBodyguardsRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlBodyguardsEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Missions</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                <code className="text-[9px] bg-muted px-1 rounded">GET /missions</code>, map, characters. Jail-style pacing.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedMissionsRlSaving || sustainedPageRlMissionsEnabled}
-                  onClick={() => applySustainedPageRlMissions(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedMissionsRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedMissionsRlSaving || !sustainedPageRlMissionsEnabled}
-                  onClick={() => applySustainedPageRlMissions(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedMissionsRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlMissionsEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Travel / airports</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                <code className="text-[9px] bg-muted px-1 rounded">GET /travel/status</code>, <code className="text-[9px] bg-muted px-1 rounded">/travel/info</code>, <code className="text-[9px] bg-muted px-1 rounded">/airports</code>. Jail-style pacing.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedTravelRlSaving || sustainedPageRlTravelEnabled}
-                  onClick={() => applySustainedPageRlTravel(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedTravelRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedTravelRlSaving || !sustainedPageRlTravelEnabled}
-                  onClick={() => applySustainedPageRlTravel(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedTravelRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlTravelEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
-            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
-              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Events / flash news</p>
-              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                <code className="text-[9px] bg-muted px-1 rounded">GET /events/active</code>, <code className="text-[9px] bg-muted px-1 rounded">/news/flash</code>. Jail-style pacing.
-              </p>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  disabled={sustainedEventsRlSaving || sustainedPageRlEventsEnabled}
-                  onClick={() => applySustainedPageRlEvents(true)}
-                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedEventsRlSaving ? '…' : 'Enable'}
-                </button>
-                <button
-                  type="button"
-                  disabled={sustainedEventsRlSaving || !sustainedPageRlEventsEnabled}
-                  onClick={() => applySustainedPageRlEvents(false)}
-                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {sustainedEventsRlSaving ? '…' : 'Disable'}
-                </button>
-                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlEventsEnabled ? 'on' : 'off'}</span>
-              </div>
-            </div>
+            {SUSTAINED_RL_SCOPES.map((scope) => (
+              <SustainedRlScopeCard
+                key={scope.id}
+                scope={scope}
+                enabled={!!sustainedRlScopes[scope.settingField]}
+                saving={sustainedRlScopeSaving === scope.settingField}
+                onToggle={(enabled) => applySustainedPageRlScope(scope, enabled)}
+              />
+            ))}
           </div>
         )}
         </div>

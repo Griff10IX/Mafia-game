@@ -54,6 +54,9 @@ from utils.quicktrade_casino_cleanup import (
     cancel_quicktrade_casino_listings_by_locations,
     ensure_no_duplicate_casino_quicktrade_listing,
 )
+from utils.casino_page_rl import casinos_sustained_rl_dependencies
+
+_casinos_rl_u = casinos_sustained_rl_dependencies(db, get_current_user)
 from utils.user_mid_travel import raise_if_user_mid_travel
 
 # ----- Constants -----
@@ -396,7 +399,7 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
 
 
 def register(router):
-    @router.get("/casino/blackjack/config")
+    @router.get("/casino/blackjack/config", dependencies=_casinos_rl_u)
     async def casino_blackjack_config(current_user: dict = Depends(get_current_user_verified)):
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         city = _normalize_city_for_blackjack(raw) if raw else (STATES[0] if STATES else "")
@@ -411,7 +414,7 @@ def register(router):
         cc = await load_claim_costs(db)
         return {"max_bet": max_bet, "claim_cost": cc["blackjack"], "house_edge": BLACKJACK_HOUSE_EDGE}
 
-    @router.get("/casino/blackjack/current-game")
+    @router.get("/casino/blackjack/current-game", dependencies=_casinos_rl_u)
     async def casino_blackjack_current_game(current_user: dict = Depends(get_current_user_verified)):
         """Return in-progress game so the UI can show it; if game is older than timeout, auto-stand and return hasGame: false."""
         uid = current_user.get("id") or ""
@@ -450,7 +453,7 @@ def register(router):
             "timeout_seconds": BLACKJACK_GAME_TIMEOUT_SECONDS,
         }
 
-    @router.get("/casino/blackjack/ownership")
+    @router.get("/casino/blackjack/ownership", dependencies=_casinos_rl_u)
     async def casino_blackjack_ownership(current_user: dict = Depends(get_current_user_verified)):
         """Current city's blackjack ownership. Expired buy-back offers are auto-REJECTED."""
         user_id = current_user.get("id") or ""
@@ -1315,7 +1318,7 @@ def register(router):
             "ownership_transferred": ownership_transferred,
         }
 
-    @router.get("/casino/blackjack/history")
+    @router.get("/casino/blackjack/history", dependencies=_casinos_rl_u)
     async def casino_blackjack_history(current_user: dict = Depends(get_current_user_verified)):
         user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "blackjack_history": 1})
         history = (user.get("blackjack_history") or [])[:BLACKJACK_HISTORY_MAX]

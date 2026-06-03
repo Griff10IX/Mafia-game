@@ -56,6 +56,14 @@ PAGE_KEY_TRAVEL = "travel"
 PAGE_KEY_EVENTS = "events"
 PAGE_KEY_AUTO_RANK = "auto_rank"
 PAGE_KEY_PRESENCE = "presence"
+PAGE_KEY_CASINO_PROPERTY = "casino_property"
+PAGE_KEY_STATES = "states"
+PAGE_KEY_ILLEGAL_BUSINESS = "illegal_business"
+PAGE_KEY_LOOT_BOX = "loot_box"
+PAGE_KEY_HELP_DESK = "help_desk"
+PAGE_KEY_SPORTS_BETTING = "sports_betting"
+PAGE_KEY_WORLD_CUP = "world_cup"
+PAGE_KEY_CASINOS = "casinos"
 
 # Scopes that use JAIL_STYLE_MAX_GAP_MS / JAIL_STYLE_SUSTAIN_SEC (forum/entertainer aligned with jail per product).
 PAGE_KEYS_JAIL_STYLE_TUNING = frozenset(
@@ -85,6 +93,14 @@ PAGE_KEYS_JAIL_STYLE_TUNING = frozenset(
         PAGE_KEY_EVENTS,
         PAGE_KEY_AUTO_RANK,
         PAGE_KEY_PRESENCE,
+        PAGE_KEY_CASINO_PROPERTY,
+        PAGE_KEY_STATES,
+        PAGE_KEY_ILLEGAL_BUSINESS,
+        PAGE_KEY_LOOT_BOX,
+        PAGE_KEY_HELP_DESK,
+        PAGE_KEY_SPORTS_BETTING,
+        PAGE_KEY_WORLD_CUP,
+        PAGE_KEY_CASINOS,
     }
 )
 
@@ -174,6 +190,14 @@ _SETTINGS_FIELD_BY_PAGE = {
     PAGE_KEY_EVENTS: "sustained_page_rl_events_enabled",
     PAGE_KEY_AUTO_RANK: "sustained_page_rl_auto_rank_enabled",
     PAGE_KEY_PRESENCE: "sustained_page_rl_presence_enabled",
+    PAGE_KEY_CASINO_PROPERTY: "sustained_page_rl_casino_property_enabled",
+    PAGE_KEY_STATES: "sustained_page_rl_states_enabled",
+    PAGE_KEY_ILLEGAL_BUSINESS: "sustained_page_rl_illegal_business_enabled",
+    PAGE_KEY_LOOT_BOX: "sustained_page_rl_loot_box_enabled",
+    PAGE_KEY_HELP_DESK: "sustained_page_rl_help_desk_enabled",
+    PAGE_KEY_SPORTS_BETTING: "sustained_page_rl_sports_betting_enabled",
+    PAGE_KEY_WORLD_CUP: "sustained_page_rl_world_cup_enabled",
+    PAGE_KEY_CASINOS: "sustained_page_rl_casinos_enabled",
 }
 
 _COOLDOWN_MSG = {
@@ -203,6 +227,14 @@ _COOLDOWN_MSG = {
     PAGE_KEY_EVENTS: "Too many event / news requests too fast — try again in a few seconds.",
     PAGE_KEY_AUTO_RANK: "Too many auto-rank requests too fast — try again in a few seconds.",
     PAGE_KEY_PRESENCE: "Too many auth / presence requests too fast — try again in a few seconds.",
+    PAGE_KEY_CASINO_PROPERTY: "Too many casino/property sidebar requests too fast — try again in a few seconds.",
+    PAGE_KEY_STATES: "Too many states map requests too fast — try again in a few seconds.",
+    PAGE_KEY_ILLEGAL_BUSINESS: "Too many illegal business requests too fast — try again in a few seconds.",
+    PAGE_KEY_LOOT_BOX: "Too many loot box requests too fast — try again in a few seconds.",
+    PAGE_KEY_HELP_DESK: "Too many help desk requests too fast — try again in a few seconds.",
+    PAGE_KEY_SPORTS_BETTING: "Too many sports betting requests too fast — try again in a few seconds.",
+    PAGE_KEY_WORLD_CUP: "Too many World Cup requests too fast — try again in a few seconds.",
+    PAGE_KEY_CASINOS: "Too many casino requests too fast — try again in a few seconds.",
 }
 
 _SLOW_MSG = {
@@ -232,6 +264,14 @@ _SLOW_MSG = {
     PAGE_KEY_EVENTS: "You're loading events / news too fast — slow down for a few seconds.",
     PAGE_KEY_AUTO_RANK: "You're hitting auto-rank too fast — slow down for a few seconds.",
     PAGE_KEY_PRESENCE: "You're refreshing auth too fast — slow down for a few seconds.",
+    PAGE_KEY_CASINO_PROPERTY: "You're refreshing casino/property sidebar too fast — slow down for a few seconds.",
+    PAGE_KEY_STATES: "You're loading the states map too fast — slow down for a few seconds.",
+    PAGE_KEY_ILLEGAL_BUSINESS: "You're hitting illegal business too fast — slow down for a few seconds.",
+    PAGE_KEY_LOOT_BOX: "You're hitting loot box too fast — slow down for a few seconds.",
+    PAGE_KEY_HELP_DESK: "You're hitting help desk too fast — slow down for a few seconds.",
+    PAGE_KEY_SPORTS_BETTING: "You're hitting sports betting too fast — slow down for a few seconds.",
+    PAGE_KEY_WORLD_CUP: "You're hitting World Cup too fast — slow down for a few seconds.",
+    PAGE_KEY_CASINOS: "You're hitting casino pages too fast — slow down for a few seconds.",
 }
 
 _PAGE_LABEL_ADMIN = {
@@ -261,6 +301,14 @@ _PAGE_LABEL_ADMIN = {
     PAGE_KEY_EVENTS: "Events / flash news",
     PAGE_KEY_AUTO_RANK: "Auto Rank prefs",
     PAGE_KEY_PRESENCE: "Auth / presence",
+    PAGE_KEY_CASINO_PROPERTY: "Casino / property sidebar",
+    PAGE_KEY_STATES: "States map",
+    PAGE_KEY_ILLEGAL_BUSINESS: "Illegal business",
+    PAGE_KEY_LOOT_BOX: "Loot box",
+    PAGE_KEY_HELP_DESK: "Help desk",
+    PAGE_KEY_SPORTS_BETTING: "Sports betting",
+    PAGE_KEY_WORLD_CUP: "World Cup",
+    PAGE_KEY_CASINOS: "Casinos (ownership GETs)",
 }
 
 

@@ -35,6 +35,7 @@ from server import (
     send_notification,
     _get_staff_user_ids,
 )
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_SPORTS_BETTING
 
 logger = logging.getLogger(__name__)
 
@@ -4092,15 +4093,20 @@ def register(router):
             "Sports betting: THE_ODDS_API_KEY is not set — Football/UFC/Boxing/F1 use fallback sources where applicable; Basketball/Tennis/Golf feeds disabled; auto-settle limited; Snooker is manual-only.",
         )
 
-    router.add_api_route("/sports-betting/events", sports_betting_events, methods=["GET"])
+    async def _sports_betting_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+        await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_SPORTS_BETTING)
+
+    _sports_betting_rl_u = [Depends(_sports_betting_sustained_rl_user)]
+
+    router.add_api_route("/sports-betting/events", sports_betting_events, methods=["GET"], dependencies=_sports_betting_rl_u)
     router.add_api_route("/sports-betting/bet", sports_betting_place, methods=["POST"])
-    router.add_api_route("/sports-betting/my-bets", sports_betting_my_bets, methods=["GET"])
+    router.add_api_route("/sports-betting/my-bets", sports_betting_my_bets, methods=["GET"], dependencies=_sports_betting_rl_u)
     router.add_api_route("/sports-betting/cancel-bet", sports_betting_cancel_bet, methods=["POST"])
     router.add_api_route("/sports-betting/cancel-all-bets", sports_betting_cancel_all_bets, methods=["POST"])
-    router.add_api_route("/sports-betting/stats", sports_betting_stats, methods=["GET"])
-    router.add_api_route("/sports-betting/recent-results", sports_betting_recent_results, methods=["GET"])
-    router.add_api_route("/sports-betting/template-library", sports_template_library, methods=["GET"])
-    router.add_api_route("/sports-betting/my-event-requests", sports_my_event_requests, methods=["GET"])
+    router.add_api_route("/sports-betting/stats", sports_betting_stats, methods=["GET"], dependencies=_sports_betting_rl_u)
+    router.add_api_route("/sports-betting/recent-results", sports_betting_recent_results, methods=["GET"], dependencies=_sports_betting_rl_u)
+    router.add_api_route("/sports-betting/template-library", sports_template_library, methods=["GET"], dependencies=_sports_betting_rl_u)
+    router.add_api_route("/sports-betting/my-event-requests", sports_my_event_requests, methods=["GET"], dependencies=_sports_betting_rl_u)
     router.add_api_route("/sports-betting/request-event", sports_request_event, methods=["POST"])
     router.add_api_route("/admin/sports-betting/templates", admin_sports_templates, methods=["GET"])
     router.add_api_route("/admin/sports-betting/templates/load-db", admin_sports_templates_load_db, methods=["POST"])

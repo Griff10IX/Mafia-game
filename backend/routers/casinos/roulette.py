@@ -53,6 +53,9 @@ from utils.quicktrade_casino_cleanup import (
     cancel_quicktrade_casino_listings_by_locations,
     ensure_no_duplicate_casino_quicktrade_listing,
 )
+from utils.casino_page_rl import casinos_sustained_rl_dependencies
+
+_casinos_rl_u = casinos_sustained_rl_dependencies(db, get_current_user)
 
 # ----- Constants -----
 ROULETTE_RED = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
@@ -192,7 +195,7 @@ def _roulette_spin_result(has_zero_straight_bet: bool = False) -> int:
 
 
 def register(router):
-    @router.get("/casino/roulette/config")
+    @router.get("/casino/roulette/config", dependencies=_casinos_rl_u)
     async def casino_roulette_config(current_user: dict = Depends(get_current_user_verified)):
         """Return roulette configuration (max bet)."""
         cc = await load_claim_costs(db)
@@ -202,7 +205,7 @@ def register(router):
             "house_edge_percent": ROULETTE_HOUSE_EDGE * 100
         }
 
-    @router.get("/casino/roulette/ownership")
+    @router.get("/casino/roulette/ownership", dependencies=_casinos_rl_u)
     async def casino_roulette_ownership(current_user: dict = Depends(get_current_user_verified)):
         """Get roulette ownership for player's current city."""
         user_id = current_user.get("id") or ""

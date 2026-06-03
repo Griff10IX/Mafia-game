@@ -53,6 +53,9 @@ from utils.quicktrade_casino_cleanup import (
     cancel_quicktrade_casino_listings_by_locations,
     ensure_no_duplicate_casino_quicktrade_listing,
 )
+from utils.casino_page_rl import casinos_sustained_rl_dependencies
+
+_casinos_rl_u = casinos_sustained_rl_dependencies(db, get_current_user)
 
 # ----- Constants -----
 DICE_SIDES_MIN = 2
@@ -153,7 +156,7 @@ async def _get_dice_ownership_doc(city: str):
 
 
 def register(router):
-    @router.get("/casino/dice/config")
+    @router.get("/casino/dice/config", dependencies=_casinos_rl_u)
     async def casino_dice_config(current_user: dict = Depends(get_current_user_verified)):
         """Dice game config: sides range, default max bet, house edge (state head tax)."""
         cc = await load_claim_costs(db)
@@ -168,7 +171,7 @@ def register(router):
             "claim_cost_points": cc["dice_points"],
         }
 
-    @router.get("/casino/dice/ownership")
+    @router.get("/casino/dice/ownership", dependencies=_casinos_rl_u)
     async def casino_dice_ownership(current_user: dict = Depends(get_current_user_verified)):
         """Current city's dice ownership and effective max_bet (owner's or default).
         Expired buy-back offers are auto-REJECTED (winner keeps ownership).

@@ -39,7 +39,7 @@ function readLayoutBootFromDashboardCache() {
 }
 
 /** Bottom bar: 6 icons. Rank = crimes/rank; Misc = everything that doesn't fit elsewhere. */
-function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEntertainer, isHelpDeskOperator, staffToolsNavVisible) {
+function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEntertainer, isHelpDeskOperator, staffToolsNavVisible, worldCupEnabled) {
   const goItems = [
     { path: '/game/travel', label: 'Travel' },
     { path: '/game/states', label: 'States' },
@@ -190,6 +190,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
         { path: '/game/users-online', label: 'Users Online' },
         { path: '/game/family/list', label: 'Families' },
         { path: '/game/leaderboard', label: 'Leaderboard' },
+        ...(worldCupEnabled ? [{ path: '/game/world-cup', label: 'World Cup 2026' }] : []),
       ],
     },
   ];
@@ -402,6 +403,7 @@ export default function Layout({ children }) {
   const [userSearchExpanded, setUserSearchExpanded] = useState(false);
   const [userSearchLoading, setUserSearchLoading] = useState(false);
   const [pageLocks, setPageLocks] = useState({});
+  const [worldCupPublic, setWorldCupPublic] = useState({ enabled: false, banner_text: '' });
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   /** Remount `{children}` after the tab was backgrounded long enough (mobile browsers often freeze or drop XHR; UI stays blank until refresh). */
   const [contentResumeKey, setContentResumeKey] = useState(0);
@@ -490,7 +492,7 @@ export default function Layout({ children }) {
     return isStaffPortalTokenValid();
   }, [isAdmin, isModerator, staffLoginSession, staffPortalEnabled, portalNavTick]);
   const mobileBottomNavItems = useMemo(() => {
-    let items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, !!user?.is_entertainer, !!user?.is_help_desk_operator, staffToolsNavVisible);
+    let items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, !!user?.is_entertainer, !!user?.is_help_desk_operator, staffToolsNavVisible, !!worldCupPublic.enabled);
     if (hasAdminEmail && !isAdmin) {
       items = items.map((i) =>
         i.type === 'group' && i.id === 'you'
@@ -553,7 +555,7 @@ export default function Layout({ children }) {
       }
       return i;
     });
-  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, storePointsEventActive, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
+  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, storePointsEventActive, worldCupPublic.enabled, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
 
   useEffect(() => onCooldownChange(setCooldownSeconds), []);
 
@@ -1099,6 +1101,13 @@ export default function Layout({ children }) {
       const paths = r.data?.paths;
       setPageLocks(typeof paths === 'object' && paths !== null ? paths : {});
     }).catch(() => setPageLocks({}));
+    api.get('/world-cup/public-status').then((r) => {
+      setWorldCupPublic({
+        enabled: !!r.data?.enabled,
+        banner_text: (r.data?.banner_text || '').trim(),
+        ended_message: r.data?.ended_message || '',
+      });
+    }).catch(() => setWorldCupPublic({ enabled: false, banner_text: '' }));
   }, []);
 
   const promoteToAdmin = async () => {
@@ -2342,6 +2351,12 @@ export default function Layout({ children }) {
           return (
             <ErrorBoundary>
               <div className="relative">
+                {worldCupPublic.enabled && worldCupPublic.banner_text ? (
+                  <div className="mx-2 sm:mx-0 mb-3 px-3 py-2 rounded-lg border border-emerald-500/30 bg-emerald-950/40 text-center text-xs sm:text-sm text-foreground font-heading">
+                    {worldCupPublic.banner_text}
+                    <SameRouteAwareLink to="/game/world-cup" className="ml-2 text-primary underline">Play now</SameRouteAwareLink>
+                  </div>
+                ) : null}
                 <Fragment key={contentResumeKey}>{children}</Fragment>
                 {user ? <FindWordHuntLayer /> : null}
               </div>

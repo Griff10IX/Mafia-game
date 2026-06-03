@@ -254,6 +254,13 @@ class AdminSettingsUpdate(BaseModel):
     sustained_page_rl_events_enabled: Optional[bool] = None  # Events / flash news GETs (jail-style)
     sustained_page_rl_auto_rank_enabled: Optional[bool] = None  # GET /auto-rank/me (jail-style)
     sustained_page_rl_presence_enabled: Optional[bool] = None  # GET /auth/me (jail-style)
+    sustained_page_rl_casino_property_enabled: Optional[bool] = None  # GET /user/casino-property (jail-style)
+    sustained_page_rl_states_enabled: Optional[bool] = None  # GET /states (jail-style)
+    sustained_page_rl_illegal_business_enabled: Optional[bool] = None  # Illegal business GETs (jail-style)
+    sustained_page_rl_loot_box_enabled: Optional[bool] = None  # GET /loot-box/status (jail-style)
+    sustained_page_rl_help_desk_enabled: Optional[bool] = None  # Player help desk GETs (jail-style)
+    sustained_page_rl_sports_betting_enabled: Optional[bool] = None  # Player sports betting GETs (jail-style)
+    sustained_page_rl_casinos_enabled: Optional[bool] = None  # Casino config/ownership GETs (jail-style)
     user_request_pace_enabled: Optional[bool] = None  # Global per-user authenticated API cap (~15 req/s)
     user_request_pace_limit: Optional[int] = None  # Max authenticated requests per user per second when cap enabled (5–100)
     spotify_feature_enabled: Optional[bool] = None
@@ -7977,6 +7984,13 @@ def register(router):
         sustained_page_rl_events_enabled = bool(main_doc.get("sustained_page_rl_events_enabled")) if main_doc else False
         sustained_page_rl_auto_rank_enabled = bool(main_doc.get("sustained_page_rl_auto_rank_enabled")) if main_doc else False
         sustained_page_rl_presence_enabled = bool(main_doc.get("sustained_page_rl_presence_enabled")) if main_doc else False
+        sustained_page_rl_casino_property_enabled = bool(main_doc.get("sustained_page_rl_casino_property_enabled")) if main_doc else False
+        sustained_page_rl_states_enabled = bool(main_doc.get("sustained_page_rl_states_enabled")) if main_doc else False
+        sustained_page_rl_illegal_business_enabled = bool(main_doc.get("sustained_page_rl_illegal_business_enabled")) if main_doc else False
+        sustained_page_rl_loot_box_enabled = bool(main_doc.get("sustained_page_rl_loot_box_enabled")) if main_doc else False
+        sustained_page_rl_help_desk_enabled = bool(main_doc.get("sustained_page_rl_help_desk_enabled")) if main_doc else False
+        sustained_page_rl_sports_betting_enabled = bool(main_doc.get("sustained_page_rl_sports_betting_enabled")) if main_doc else False
+        sustained_page_rl_casinos_enabled = bool(main_doc.get("sustained_page_rl_casinos_enabled")) if main_doc else False
         user_request_pace_enabled = bool(main_doc.get("user_request_pace_enabled")) if main_doc else False
         try:
             user_request_pace_limit = int(main_doc.get("user_request_pace_limit") or 15) if main_doc else 15
@@ -8048,6 +8062,13 @@ def register(router):
             "sustained_page_rl_events_enabled": sustained_page_rl_events_enabled,
             "sustained_page_rl_auto_rank_enabled": sustained_page_rl_auto_rank_enabled,
             "sustained_page_rl_presence_enabled": sustained_page_rl_presence_enabled,
+            "sustained_page_rl_casino_property_enabled": sustained_page_rl_casino_property_enabled,
+            "sustained_page_rl_states_enabled": sustained_page_rl_states_enabled,
+            "sustained_page_rl_illegal_business_enabled": sustained_page_rl_illegal_business_enabled,
+            "sustained_page_rl_loot_box_enabled": sustained_page_rl_loot_box_enabled,
+            "sustained_page_rl_help_desk_enabled": sustained_page_rl_help_desk_enabled,
+            "sustained_page_rl_sports_betting_enabled": sustained_page_rl_sports_betting_enabled,
+            "sustained_page_rl_casinos_enabled": sustained_page_rl_casinos_enabled,
             "user_request_pace_enabled": user_request_pace_enabled,
             "user_request_pace_limit": user_request_pace_limit,
             "spotify_feature_enabled": spotify_feature_enabled,
@@ -8359,6 +8380,48 @@ def register(router):
                 {"$set": {"sustained_page_rl_presence_enabled": bool(body.sustained_page_rl_presence_enabled)}},
                 upsert=True,
             )
+        if body.sustained_page_rl_casino_property_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_casino_property_enabled": bool(body.sustained_page_rl_casino_property_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_states_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_states_enabled": bool(body.sustained_page_rl_states_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_illegal_business_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_illegal_business_enabled": bool(body.sustained_page_rl_illegal_business_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_loot_box_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_loot_box_enabled": bool(body.sustained_page_rl_loot_box_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_help_desk_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_help_desk_enabled": bool(body.sustained_page_rl_help_desk_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_sports_betting_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_sports_betting_enabled": bool(body.sustained_page_rl_sports_betting_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_casinos_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_casinos_enabled": bool(body.sustained_page_rl_casinos_enabled)}},
+                upsert=True,
+            )
         if body.user_request_pace_enabled is not None or body.user_request_pace_limit is not None:
             pace_set: dict = {}
             if body.user_request_pace_enabled is not None:
@@ -8618,6 +8681,13 @@ def register(router):
         sustained_page_rl_events_enabled = bool(main_doc.get("sustained_page_rl_events_enabled")) if main_doc else False
         sustained_page_rl_auto_rank_enabled = bool(main_doc.get("sustained_page_rl_auto_rank_enabled")) if main_doc else False
         sustained_page_rl_presence_enabled = bool(main_doc.get("sustained_page_rl_presence_enabled")) if main_doc else False
+        sustained_page_rl_casino_property_enabled = bool(main_doc.get("sustained_page_rl_casino_property_enabled")) if main_doc else False
+        sustained_page_rl_states_enabled = bool(main_doc.get("sustained_page_rl_states_enabled")) if main_doc else False
+        sustained_page_rl_illegal_business_enabled = bool(main_doc.get("sustained_page_rl_illegal_business_enabled")) if main_doc else False
+        sustained_page_rl_loot_box_enabled = bool(main_doc.get("sustained_page_rl_loot_box_enabled")) if main_doc else False
+        sustained_page_rl_help_desk_enabled = bool(main_doc.get("sustained_page_rl_help_desk_enabled")) if main_doc else False
+        sustained_page_rl_sports_betting_enabled = bool(main_doc.get("sustained_page_rl_sports_betting_enabled")) if main_doc else False
+        sustained_page_rl_casinos_enabled = bool(main_doc.get("sustained_page_rl_casinos_enabled")) if main_doc else False
         user_request_pace_enabled = bool(main_doc.get("user_request_pace_enabled")) if main_doc else False
         try:
             user_request_pace_limit = int(main_doc.get("user_request_pace_limit") or 15) if main_doc else 15
@@ -8683,6 +8753,13 @@ def register(router):
             "sustained_page_rl_events_enabled": sustained_page_rl_events_enabled,
             "sustained_page_rl_auto_rank_enabled": sustained_page_rl_auto_rank_enabled,
             "sustained_page_rl_presence_enabled": sustained_page_rl_presence_enabled,
+            "sustained_page_rl_casino_property_enabled": sustained_page_rl_casino_property_enabled,
+            "sustained_page_rl_states_enabled": sustained_page_rl_states_enabled,
+            "sustained_page_rl_illegal_business_enabled": sustained_page_rl_illegal_business_enabled,
+            "sustained_page_rl_loot_box_enabled": sustained_page_rl_loot_box_enabled,
+            "sustained_page_rl_help_desk_enabled": sustained_page_rl_help_desk_enabled,
+            "sustained_page_rl_sports_betting_enabled": sustained_page_rl_sports_betting_enabled,
+            "sustained_page_rl_casinos_enabled": sustained_page_rl_casinos_enabled,
             "user_request_pace_enabled": user_request_pace_enabled,
             "user_request_pace_limit": user_request_pace_limit,
             "spotify_feature_enabled": spotify_feature_enabled,

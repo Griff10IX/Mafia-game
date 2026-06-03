@@ -35,6 +35,7 @@ from routers.kill.armoury import (
 )
 from utils.game_timezone import game_today_date_str
 from utils.point_provenance import log_points_event
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_ILLEGAL_BUSINESS
 
 logger = logging.getLogger(__name__)
 
@@ -3485,14 +3486,21 @@ async def claim_kill_reward(req: ClaimKillRewardRequest, current_user: dict = De
     }
 
 
+async def _illegal_business_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_ILLEGAL_BUSINESS)
+
+
+_illegal_business_rl_u = [Depends(_illegal_business_sustained_rl_user)]
+
+
 def register(router):
-    router.add_api_route("/illegal-business/types", get_illegal_business_types, methods=["GET"])
-    router.add_api_route("/illegal-business", get_illegal_business, methods=["GET"])
+    router.add_api_route("/illegal-business/types", get_illegal_business_types, methods=["GET"], dependencies=_illegal_business_rl_u)
+    router.add_api_route("/illegal-business", get_illegal_business, methods=["GET"], dependencies=_illegal_business_rl_u)
     router.add_api_route("/illegal-business/start", start_illegal_business, methods=["POST"])
     router.add_api_route("/illegal-business/collect", collect_illegal_business, methods=["POST"])
-    router.add_api_route("/illegal-business/distillery", get_distillery, methods=["GET"])
-    router.add_api_route("/illegal-business/distillery/page", get_distillery_page, methods=["GET"])
-    router.add_api_route("/illegal-business/distillery/progression-catalog", get_distillery_progression_catalog, methods=["GET"])
+    router.add_api_route("/illegal-business/distillery", get_distillery, methods=["GET"], dependencies=_illegal_business_rl_u)
+    router.add_api_route("/illegal-business/distillery/page", get_distillery_page, methods=["GET"], dependencies=_illegal_business_rl_u)
+    router.add_api_route("/illegal-business/distillery/progression-catalog", get_distillery_progression_catalog, methods=["GET"], dependencies=_illegal_business_rl_u)
     router.add_api_route("/illegal-business/distillery/collect", distillery_collect, methods=["POST"])
     router.add_api_route("/illegal-business/distillery/upgrade-equipment", distillery_upgrade_equipment, methods=["POST"])
     router.add_api_route("/illegal-business/distillery/buy-special-upgrade", distillery_buy_special_upgrade, methods=["POST"])

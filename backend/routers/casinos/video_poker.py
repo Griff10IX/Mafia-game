@@ -56,6 +56,9 @@ from utils.quicktrade_casino_cleanup import (
     cancel_quicktrade_casino_listings_by_locations,
     ensure_no_duplicate_casino_quicktrade_listing,
 )
+from utils.casino_page_rl import casinos_sustained_rl_dependencies
+
+_casinos_rl_u = casinos_sustained_rl_dependencies(db, get_current_user)
 
 logger = logging.getLogger(__name__)
 
@@ -487,7 +490,7 @@ async def user_has_active_video_poker_game(user_id) -> bool:
 
 
 def register(router):
-    @router.get("/casino/videopoker/config")
+    @router.get("/casino/videopoker/config", dependencies=_casinos_rl_u)
     async def casino_videopoker_config(current_user: dict = Depends(get_current_user_verified)):
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         city = _normalize_city(raw) if raw else (STATES[0] if STATES else "")
@@ -513,7 +516,7 @@ def register(router):
             "hand_names": HAND_NAMES,
         }
 
-    @router.get("/casino/videopoker/ownership")
+    @router.get("/casino/videopoker/ownership", dependencies=_casinos_rl_u)
     async def casino_videopoker_ownership(current_user: dict = Depends(get_current_user_verified)):
         """Current city's video poker ownership: owner, is_owner, claim_cost, max_bet, buy_back_reward, buy_back_offer."""
         user_id = current_user.get("id") or ""
@@ -925,7 +928,7 @@ def register(router):
         await db.properties.insert_one(casino_property)
         return {"message": f"Video Poker table listed for {request.points:,} points on Quick Trade"}
 
-    @router.get("/casino/videopoker/game")
+    @router.get("/casino/videopoker/game", dependencies=_casinos_rl_u)
     async def casino_videopoker_game(current_user: dict = Depends(get_current_user_verified)):
         """Get the current active game (if any) for page refresh."""
         game = await db.videopoker_games.find_one({"user_id": current_user.get("id") or ""}, {"_id": 0, "deck": 0})
@@ -1240,7 +1243,7 @@ def register(router):
             result["buy_back_offer"] = buy_back_offer
         return result
 
-    @router.get("/casino/videopoker/history")
+    @router.get("/casino/videopoker/history", dependencies=_casinos_rl_u)
     async def casino_videopoker_history(current_user: dict = Depends(get_current_user_verified)):
         user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "videopoker_history": 1})
         history = (user.get("videopoker_history") or [])[:VIDEO_POKER_HISTORY_MAX]

@@ -8,7 +8,7 @@ import {
   formatFromEntertainerFund,
   fundedGameHref,
 } from '../../utils/entertainerFundedGameDisplay';
-import { Gift, Mic2, RefreshCw } from 'lucide-react';
+import { Gift, Mic2, RefreshCw, Trophy } from 'lucide-react';
 
 const PERK_LABELS = {
   xp_crimes: 'Crime XP',
@@ -33,6 +33,7 @@ export default function EntertainerHub() {
   const [perkAmt, setPerkAmt] = useState(1);
   const [perkSubmitting, setPerkSubmitting] = useState(false);
   const [collecting, setCollecting] = useState(false);
+  const [worldCupEnabled, setWorldCupEnabled] = useState(false);
   const collectInFlightRef = useRef(false);
 
   const load = useCallback(async () => {
@@ -51,6 +52,7 @@ export default function EntertainerHub() {
 
   useEffect(() => {
     load();
+    api.get('/world-cup/public-status').then((r) => setWorldCupEnabled(!!r.data?.enabled)).catch(() => setWorldCupEnabled(false));
   }, [load]);
 
   useEffect(() => {
@@ -174,10 +176,18 @@ export default function EntertainerHub() {
 
   return (
     <div className="p-3 md:p-6 max-w-3xl mx-auto space-y-6">
-      <div className="flex items-center gap-2 border-b border-primary/20 pb-3">
+      <div className="flex items-center gap-2 border-b border-primary/20 pb-3 flex-wrap">
         <Mic2 className="text-primary shrink-0" size={22} />
         <h1 className="text-lg md:text-xl font-heading font-bold text-primary tracking-wide uppercase">Entertainer Hub</h1>
-        <button type="button" onClick={() => load()} className="ml-auto flex items-center gap-1 text-[11px] font-heading text-mutedForeground hover:text-primary">
+        {worldCupEnabled && (
+          <Link
+            to="/game/world-cup/staff"
+            className="flex items-center gap-1.5 min-h-[44px] px-3 rounded border border-emerald-500/30 text-emerald-400 text-xs font-heading uppercase"
+          >
+            <Trophy size={14} /> World Cup
+          </Link>
+        )}
+        <button type="button" onClick={() => load()} className="ml-auto flex items-center gap-1 text-[11px] font-heading text-mutedForeground hover:text-primary min-h-[44px]">
           <RefreshCw size={14} /> Refresh
         </button>
       </div>

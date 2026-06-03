@@ -39,6 +39,9 @@ from server import (
     bump_user_biggest_casino_payout,
     notify_casino_seizure,
 )
+from utils.casino_page_rl import casinos_sustained_rl_dependencies
+
+_casinos_rl_u = casinos_sustained_rl_dependencies(db, get_current_user)
 
 # ----- Constants -----
 SLOTS_MAX_BET = 5_000_000
@@ -343,7 +346,7 @@ def _slots_payout(reels: tuple, bet: int) -> int:
 
 
 def register(router):
-    @router.get("/casino/slots/config")
+    @router.get("/casino/slots/config", dependencies=_casinos_rl_u)
     async def casino_slots_config(current_user: dict = Depends(get_current_user_verified)):
         """Slots config: max_bet (owner or default), symbols, current_state, states. May be state-owned or player-owned."""
         # Log so we can confirm this endpoint is hit (check server console or backend/logs/server.log)
@@ -382,7 +385,7 @@ def register(router):
             "draw_interval_minutes": 180,  # 3h on the hour (for UI label; draws at 00:00, 03:00, ..., 21:00 UTC)
         }
 
-    @router.get("/casino/slots/ownership")
+    @router.get("/casino/slots/ownership", dependencies=_casinos_rl_u)
     async def casino_slots_ownership(current_user: dict = Depends(get_current_user_verified)):
         """Current state's slots: owner (if any), is_owner, max_bet, buy_back_reward, expires_at, can_enter, entries count."""
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
@@ -938,7 +941,7 @@ def register(router):
             "buy_back_offer": buy_back_offer,
         }
 
-    @router.get("/casino/slots/history")
+    @router.get("/casino/slots/history", dependencies=_casinos_rl_u)
     async def casino_slots_history(current_user: dict = Depends(get_current_user_verified)):
         user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "slots_history": 1})
         history = (user.get("slots_history") or [])[:SLOTS_HISTORY_MAX]

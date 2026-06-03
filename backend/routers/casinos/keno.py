@@ -16,6 +16,9 @@ from server import (
     state_head_casino_treasury_share,
 )
 from utils.keno_settings import DEFAULT_KENO_MAX_BET, load_keno_max_bet
+from utils.casino_page_rl import casinos_sustained_rl_dependencies
+
+_casinos_rl_u = casinos_sustained_rl_dependencies(db, get_current_user_verified)
 
 _rng = secrets.SystemRandom()
 
@@ -84,7 +87,7 @@ class KenoPlayRequest(BaseModel):
 
 
 def register(router):
-    @router.get("/casino/keno/config")
+    @router.get("/casino/keno/config", dependencies=_casinos_rl_u)
     async def casino_keno_config(current_user: dict = Depends(get_current_user_verified)):
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         current_state = _normalize_state(raw) if raw else (STATES[0] if STATES else "")

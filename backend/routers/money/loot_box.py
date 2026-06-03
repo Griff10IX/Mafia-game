@@ -34,6 +34,7 @@ from utils.speakeasy_rewards import (
 )
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
 from utils.loot_perk_stack import stacked_perk_until as _stacked_perk_until, GTA_RARE_DROP_PERK_ATTEMPTS
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_LOOT_BOX
 
 logger = logging.getLogger(__name__)
 
@@ -1131,8 +1132,15 @@ async def admin_loot_box_opens_list(
     return {"opens": opens, "total": total, "limit": limit, "skip": skip}
 
 
+async def _loot_box_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_LOOT_BOX)
+
+
+_loot_box_rl_u = [Depends(_loot_box_sustained_rl_user)]
+
+
 def register(router):
-    router.add_api_route("/loot-box/status", get_loot_box_status, methods=["GET"])
+    router.add_api_route("/loot-box/status", get_loot_box_status, methods=["GET"], dependencies=_loot_box_rl_u)
     router.add_api_route("/loot-box/open", open_loot_box, methods=["POST"])
     router.add_api_route("/loot-box/speakeasy/collect", collect_speakeasy, methods=["POST"])
     router.add_api_route("/loot-box/speakeasy/gift", gift_speakeasy, methods=["POST"])

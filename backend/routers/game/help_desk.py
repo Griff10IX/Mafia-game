@@ -58,6 +58,13 @@ def register(router):
     _is_hdo = srv._is_hdo
     require_staff_issued_if_staff_capable = srv.require_staff_issued_if_staff_capable
 
+    from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_HELP_DESK
+
+    async def _help_desk_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+        await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_HELP_DESK)
+
+    _help_desk_rl_u = [Depends(_help_desk_sustained_rl_user)]
+
     async def _ensure_hdo_point_request_indexes():
         coll = db.help_desk_hdo_point_requests
         await coll.create_index([("status", 1), ("created_at", -1)])
@@ -179,7 +186,7 @@ def register(router):
         await db.help_desk_tickets.insert_one(doc)
         return {"id": ticket_id, "message": "Error report submitted", "ticket": _ticket_to_response(doc)}
 
-    @router.get("/help-desk/tickets")
+    @router.get("/help-desk/tickets", dependencies=_help_desk_rl_u)
     async def list_tickets(
         status_filter: str | None = None,  # open, closed, or None for all
         current_user: dict = Depends(get_current_user),
@@ -248,7 +255,7 @@ def register(router):
         }
         return out
 
-    @router.get("/help-desk/tickets/{ticket_id}")
+    @router.get("/help-desk/tickets/{ticket_id}", dependencies=_help_desk_rl_u)
     async def get_ticket(ticket_id: str, current_user: dict = Depends(get_current_user)):
         """Get one ticket. Author or staff only. Error reports: only admin or author."""
         ticket = await db.help_desk_tickets.find_one({"id": ticket_id}, {"_id": 0})
@@ -388,7 +395,7 @@ def register(router):
         updated = await db.help_desk_tickets.find_one({"id": ticket_id}, {"_id": 0})
         return {"message": f"Rewarded ${body.amount:,}", "ticket": _ticket_to_response(updated)}
 
-    @router.get("/help-desk/check")
+    @router.get("/help-desk/check", dependencies=_help_desk_rl_u)
     async def help_desk_check(current_user: dict = Depends(get_current_user)):
         """Whether current user can manage tickets (admin, mod, or HDO). can_approve_mute = admin or mod only. is_admin for blacklist remove."""
         return {
@@ -498,7 +505,7 @@ def register(router):
             raise HTTPException(status_code=404, detail="Word not found in blacklist")
         return {"message": f"Removed from blacklist: {w}"}
 
-    @router.get("/help-desk/open-count")
+    @router.get("/help-desk/open-count", dependencies=_help_desk_rl_u)
     async def help_desk_open_count(current_user: dict = Depends(get_current_user)):
         """Count of open tickets: for staff (admin/mod/hdo) = all open; for others = their open tickets. Used for nav badge."""
         if _can_manage_tickets(current_user):
@@ -740,7 +747,7 @@ def register(router):
         permissions = await db.admin_message_permissions.find({}, {"_id": 0}).to_list(500)
         return {"permissions": permissions}
 
-    @router.get("/help-desk/my-admin-message-status")
+    @router.get("/help-desk/my-admin-message-status", dependencies=_help_desk_rl_u)
     async def get_my_admin_message_status(current_user: dict = Depends(get_current_user)):
         """Check if current user can message staff and their request status."""
         has_permission = await db.admin_message_permissions.find_one({"user_id": current_user["id"]})

@@ -1848,10 +1848,15 @@ def register(router):
         except (TypeError, ValueError):
             return default
 
-    from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_PRESENCE
+    from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_PRESENCE, PAGE_KEY_CASINO_PROPERTY
 
     async def _presence_sustained_rl_user(current_user: dict = Depends(get_current_user)):
         await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_PRESENCE)
+
+    async def _casino_property_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+        await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_CASINO_PROPERTY)
+
+    _casino_property_rl_u = [Depends(_casino_property_sustained_rl_user)]
 
     @router.get(
         "/auth/me",
@@ -2368,7 +2373,7 @@ def register(router):
                 granted.append(car_info.get("name", car_id))
         return {"message": "Code redeemed successfully", "granted": granted}
 
-    @router.get("/user/casino-property")
+    @router.get("/user/casino-property", dependencies=_casino_property_rl_u)
     async def get_casino_property(current_user: dict = Depends(get_current_user)):
         """Lightweight endpoint for casino/property profit and menu flag. Called after first paint so auth/me stays fast."""
         casino_cash, property_pts, has_casino, has_property, _lifetime = await _get_casino_property_profit(current_user["id"])

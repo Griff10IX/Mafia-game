@@ -53,6 +53,9 @@ from utils.quicktrade_casino_cleanup import (
     cancel_quicktrade_casino_listings_by_locations,
     ensure_no_duplicate_casino_quicktrade_listing,
 )
+from utils.casino_page_rl import casinos_sustained_rl_dependencies
+
+_casinos_rl_u = casinos_sustained_rl_dependencies(db, get_current_user)
 
 # ----- Constants -----
 HORSERACING_MAX_BET = 10_000_000
@@ -183,7 +186,7 @@ def _horseracing_finish_order(winner_id: int):
 
 
 def register(router):
-    @router.get("/casino/horseracing/config")
+    @router.get("/casino/horseracing/config", dependencies=_casinos_rl_u)
     async def casino_horseracing_config(current_user: dict = Depends(get_current_user_verified)):
         """Horse racing config: horses, max_bet (from ownership or default), claim_cost, house_edge."""
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
@@ -204,7 +207,7 @@ def register(router):
             "claim_cost": cc["horseracing"],
         }
 
-    @router.get("/casino/horseracing/ownership")
+    @router.get("/casino/horseracing/ownership", dependencies=_casinos_rl_u)
     async def casino_horseracing_ownership(current_user: dict = Depends(get_current_user_verified)):
         """Current city's track ownership: owner, is_owner, claim_cost, max_bet, buy_back_reward, buy_back_offer."""
         user_id = current_user.get("id") or ""
@@ -823,7 +826,7 @@ def register(router):
             result["buy_back_offer"] = buy_back_offer
         return result
 
-    @router.get("/casino/horseracing/history")
+    @router.get("/casino/horseracing/history", dependencies=_casinos_rl_u)
     async def casino_horseracing_history(current_user: dict = Depends(get_current_user_verified)):
         user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "horseracing_history": 1})
         history = (user.get("horseracing_history") or [])[:HORSERACING_HISTORY_MAX]

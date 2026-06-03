@@ -3285,6 +3285,8 @@ events.register(api_router)
 security_admin.register(api_router)
 investigate.register(api_router)
 sports_betting.register(api_router)
+from routers.game import world_cup
+world_cup.register(api_router)
 auth.register(api_router)
 profile.register(api_router)
 admin.register(api_router)
@@ -3586,6 +3588,31 @@ async def startup_db():
         logging.getLogger(__name__).info(
             "Sports auto-board: in-process ticker enabled (default ON; set SPORTS_AUTO_BOARD_TICKER=0 to disable). Default: DB templates every 2h, no Odds refresh on that path. Multi-worker: prefer cron-only."
         )
+    # World Cup: auto-settle + fixture sync tickers (optional; cron recommended for production)
+    wc_settle_use_cron = (os.environ.get("WORLD_CUP_AUTO_SETTLE_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
+    _wc_settle_ticker_raw = (os.environ.get("WORLD_CUP_AUTO_SETTLE_TICKER") or "").strip().lower()
+    wc_settle_ticker = _wc_settle_ticker_raw in ("1", "true", "yes")
+    if wc_settle_use_cron:
+        logging.getLogger(__name__).info(
+            "World Cup auto-settle: ticker disabled (WORLD_CUP_AUTO_SETTLE_USE_CRON=1). Use POST /api/world-cup/cron/auto-settle on a schedule."
+        )
+    elif wc_settle_ticker:
+        from routers.game import world_cup as world_cup_mod
+
+        asyncio.create_task(world_cup_mod.run_world_cup_auto_settle_ticker())
+        logging.getLogger(__name__).info("World Cup auto-settle: in-process ticker enabled.")
+    wc_sync_use_cron = (os.environ.get("WORLD_CUP_SYNC_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
+    _wc_sync_ticker_raw = (os.environ.get("WORLD_CUP_SYNC_TICKER") or "").strip().lower()
+    wc_sync_ticker = _wc_sync_ticker_raw in ("1", "true", "yes")
+    if wc_sync_use_cron:
+        logging.getLogger(__name__).info(
+            "World Cup fixture sync: ticker disabled (WORLD_CUP_SYNC_USE_CRON=1). Use POST /api/world-cup/cron/sync-fixtures daily."
+        )
+    elif wc_sync_ticker:
+        from routers.game import world_cup as world_cup_mod
+
+        asyncio.create_task(world_cup_mod.run_world_cup_sync_ticker())
+        logging.getLogger(__name__).info("World Cup fixture sync: in-process ticker enabled.")
     # Crew OC store-token auto-apply: bounded ticker vs cron-only (multi-worker safe)
     crew_oc_auto_apply_use_cron = (os.environ.get("CREW_OC_AUTO_APPLY_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
     _crew_oc_auto_apply_ticker_raw = (os.environ.get("CREW_OC_AUTO_APPLY_TICKER") or "").strip().lower()
