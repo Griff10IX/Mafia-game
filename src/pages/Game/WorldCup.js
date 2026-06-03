@@ -57,14 +57,20 @@ function WcPanel({ children, className = '', accent = false }) {
 }
 
 function WcFlag({ team, size = 'md', className = '' }) {
+  const [failed, setFailed] = useState(false);
   const iso = getWcFlagIso(team);
   const sizes = {
-    sm: { w: 20, h: 15, img: 40 },
-    md: { w: 28, h: 21, img: 56 },
-    lg: { w: 36, h: 27, img: 72 },
+    sm: { w: 20, h: 15, src: '16x12', src2x: '32x24' },
+    md: { w: 28, h: 21, src: '32x24', src2x: '64x48' },
+    lg: { w: 40, h: 30, src: '48x36', src2x: '96x72' },
   };
-  const { w, h, img } = sizes[size] || sizes.md;
-  if (!iso) {
+  const { w, h, src, src2x } = sizes[size] || sizes.md;
+
+  useEffect(() => {
+    setFailed(false);
+  }, [iso]);
+
+  if (!iso || failed) {
     return (
       <span
         className={`inline-flex shrink-0 items-center justify-center rounded-[3px] border border-primary/25 bg-primary/5 text-mutedForeground ${className}`}
@@ -78,11 +84,13 @@ function WcFlag({ team, size = 'md', className = '' }) {
   return (
     <img
       alt=""
-      src={`https://flagcdn.com/w${img}/${iso}.png`}
+      src={`https://flagcdn.com/${src}/${iso}.png`}
+      srcSet={`https://flagcdn.com/${src2x}/${iso}.png 2x`}
       width={w}
       height={h}
       loading="lazy"
       decoding="async"
+      onError={() => setFailed(true)}
       className={`shrink-0 rounded-[3px] object-cover border border-black/25 shadow-sm ${className}`}
       style={{ width: w, height: h }}
     />
@@ -282,7 +290,8 @@ export default function WorldCup() {
                 <span key={iso} className="inline-flex items-center gap-1.5 text-[10px] text-white/90 font-heading uppercase tracking-wider">
                   <img
                     alt=""
-                    src={`https://flagcdn.com/w40/${iso}.png`}
+                    src={`https://flagcdn.com/32x24/${iso}.png`}
+                    srcSet={`https://flagcdn.com/64x48/${iso}.png 2x`}
                     width={20}
                     height={15}
                     className="rounded-[2px] border border-white/20 object-cover"
