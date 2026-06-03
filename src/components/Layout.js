@@ -124,6 +124,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
         { path: '/casino/mp-blackjack', label: 'MP Blackjack' },
         { path: '/casino/mp-poker', label: 'Poker' },
         { path: '/sports-betting', label: 'Sports Betting' },
+        ...(worldCupEnabled ? [{ path: '/game/world-cup', label: 'World Cup 2026' }] : []),
         { path: '/my-properties', label: 'My Properties' },
       ],
     },
@@ -1239,7 +1240,7 @@ export default function Layout({ children }) {
         '__messaging__': 'messaging',
         '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/game/entertainer': 'casino', '/money/distillery': 'money',
         '/cars/garage': 'money', '/cars/buy': 'money', '/cars/sell': 'money', '/money/crack-safe': 'money', '/money/grave-robber': 'money', '/money/lottery': 'money', '/money/loot-box': 'money',
-        '/casino': 'casino',
+        '/casino': 'casino', '/game/world-cup': 'casino',
         '/game/family/list': 'other', '/game/dead-alive': 'other', '/account/autorank': 'other',
         '/mini-games': 'minigames',
       }
@@ -1253,7 +1254,7 @@ export default function Layout({ children }) {
         '__messaging__': 'messaging',
         '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/game/entertainer': 'casino', '/casino/mini-games/flappy': 'money', '/money/distillery': 'money',
         '/cars/garage': 'money', '/cars/buy': 'money', '/cars/sell': 'money', '/money/crack-safe': 'money', '/money/grave-robber': 'money', '/money/lottery': 'money', '/money/loot-box': 'money', '/game/leaderboard': 'money',
-        '/casino': 'casino',
+        '/casino': 'casino', '/game/world-cup': 'casino',
         '/game/family/list': 'other', '/game/dead-alive': 'other', '/account/autorank': 'other',
         '/mini-games': 'minigames',
       };
@@ -1306,6 +1307,7 @@ export default function Layout({ children }) {
     { path: '/game/daily-rewards', icon: Gift, label: 'Daily Rewards' },
     ...(user?.is_entertainer ? [{ path: '/game/entertainer', icon: Mic2, label: 'Entertainer Hub' }] : []),
     ...(user?.is_help_desk_operator ? [{ path: '/game/help-desk-hub', icon: Headphones, label: 'Help Desk Hub' }] : []),
+    ...(worldCupPublic.enabled ? [{ path: '/game/world-cup', icon: Trophy, label: 'World Cup 2026' }] : []),
     { path: '/game/leaderboard', icon: Trophy, label: 'Leaderboard' },
     { path: '/game/store', icon: ShoppingBag, label: 'Store', saleBadge: storePointsEventActive },
     { path: '/game-pass', icon: Package, label: 'Game Pass' },
@@ -1559,7 +1561,7 @@ export default function Layout({ children }) {
     );
   })();
 
-  const isCasinoPath = (p) => p === '/casino' || (p && (p.startsWith('/casino/') || p === '/sports-betting' || p === '/my-properties'));
+  const isCasinoPath = (p) => p === '/casino' || (p && (p.startsWith('/casino/') || p === '/sports-betting' || p === '/game/world-cup' || p === '/my-properties'));
   const casinoNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-casino-group" onClick={() => setCasinoOpen((v) => { const next = !v; setNavSectionOpen('casino', next); return next; })}
@@ -1585,6 +1587,7 @@ export default function Layout({ children }) {
             { to: '/casino/mp-blackjack', label: 'MP Blackjack', testId: 'nav-mp-blackjack', matchPrefix: true, Icon: Users },
             { to: '/casino/mp-poker', label: 'Poker', testId: 'nav-mp-poker', matchPrefix: true, Icon: Crown },
             { to: '/sports-betting', label: 'Sports Betting', testId: 'nav-sports-betting', Icon: LineChart },
+            ...(worldCupPublic.enabled ? [{ to: '/game/world-cup', label: 'World Cup 2026', testId: 'nav-world-cup', Icon: Trophy }] : []),
             { to: '/my-properties', label: 'My Properties', testId: 'nav-my-properties', Icon: Building2 },
           ].map((item, idx) => {
             const isActive = item.matchPrefix ? (location.pathname === item.to || location.pathname.startsWith(item.to + '/')) : location.pathname === item.to;
@@ -2351,9 +2354,9 @@ export default function Layout({ children }) {
           return (
             <ErrorBoundary>
               <div className="relative">
-                {worldCupPublic.enabled && worldCupPublic.banner_text ? (
+                {worldCupPublic.enabled ? (
                   <div className="mx-2 sm:mx-0 mb-3 px-3 py-2 rounded-lg border border-emerald-500/30 bg-emerald-950/40 text-center text-xs sm:text-sm text-foreground font-heading">
-                    {worldCupPublic.banner_text}
+                    {worldCupPublic.banner_text || 'World Cup 2026 predictions are open — join the team draft and pick your winners!'}
                     <SameRouteAwareLink to="/game/world-cup" className="ml-2 text-primary underline">Play now</SameRouteAwareLink>
                   </div>
                 ) : null}
