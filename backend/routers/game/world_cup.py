@@ -20,6 +20,7 @@ from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_WOR
 logger = logging.getLogger(__name__)
 
 CONFIG_ID = "world_cup_event"
+WC_TEAMS_SEED_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "world_cup_2026_teams.json"
 WC_SPORT_KEY = "soccer_fifa_world_cup"
 LOCK_MINUTES_BEFORE = 10
 SETTLE_MINUTES_AFTER = 122
@@ -541,7 +542,9 @@ async def _run_draft(db) -> dict:
 
 
 async def _seed_2026(db) -> dict:
-    path = Path(__file__).resolve().parent.parent / "data" / "world_cup_2026_teams.json"
+    path = WC_TEAMS_SEED_PATH
+    if not path.is_file():
+        raise HTTPException(status_code=500, detail=f"Seed file not found: {path}")
     with open(path, encoding="utf-8") as f:
         data = json.load(f)
     await db.world_cup_teams.delete_many({})
