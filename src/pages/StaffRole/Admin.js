@@ -11939,9 +11939,6 @@ export default function Admin() {
         </div>
         )}
 
-        </div>
-        )}
-
         {isAdmin && (
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-emerald-500/30 mobile-panel`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
