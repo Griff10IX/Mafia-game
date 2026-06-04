@@ -170,15 +170,80 @@ def _lock_at_from_kickoff(kickoff_iso: str) -> str:
 async def _group_lock_times(db) -> dict:
     """Earliest kickoff per group → lock time."""
     locks = {}
-    for gid in GROUP_IDS:
-        cursor = db.world_cup_matches.find(
-            {"group_id": gid, "stage": "group"},
-            {"_id": 0, "kickoff": 1},
-        ).sort("kickoff", 1).limit(1)
-        docs = await cursor.to_list(1)
-        if docs and docs[0].get("kickoff"):
-            locks[gid] = _lock_at_from_kickoff(docs[0]["kickoff"])
+    pipeline = [
+        {
+            "$match": {
+                "stage": "group",
+                "group_id": {"$in": list(GROUP_IDS)},
+                "kickoff": {"$exists": True, "$nin": [None, ""]},
+            }
+        },
+        {"$sort": {"kickoff": 1}},
+        {"$group": {"_id": "$group_id", "kickoff": {"$first": "$kickoff"}}},
+    ]
+    async for doc in db.world_cup_matches.aggregate(pipeline):
+        gid = doc.get("_id")
+        kickoff = doc.get("kickoff")
+        if gid and kickoff:
+            locks[gid] = _lock_at_from_kickoff(kickoff)
     return locks
+
+
+async def _prediction_target_counts(db, types: list) -> dict:
+    counts = {}
+    if not types:
+        return counts
+    pipeline = [
+        {"$match": {"type": {"$in": types}}},
+        {"$group": {"_id": "$target_id", "n": {"$sum": 1}}},
+    ]
+    async for doc in db.world_cup_predictions.aggregate(pipeline):
+        tid = doc.get("_id")
+        if tid:
+            counts[tid] = int(doc["n"])
+    return counts
+
+
+async def _prediction_global_stats(db) -> dict:
+    pipeline = [
+        {
+            "$facet": {
+                "open": [{"$match": {"settled": {"$ne": True}}}, {"$count": "n"}],
+                "won": [{"$match": {"settled": True, "points_awarded": {"$gt": 0}}}, {"$count": "n"}],
+                "lost": [{"$match": {"settled": True, "points_awarded": 0}}, {"$count": "n"}],
+                "pending": [{"$match": {"payout_status": "pending"}}, {"$count": "n"}],
+            }
+        }
+    ]
+    rows = await db.world_cup_predictions.aggregate(pipeline).to_list(1)
+    facet = rows[0] if rows else {}
+    def _fc(key):
+        arr = facet.get(key) or []
+        return int(arr[0]["n"]) if arr else 0
+    return {
+        "predictions_open": _fc("open"),
+        "predictions_won": _fc("won"),
+        "predictions_lost": _fc("lost"),
+        "predictions_pending_payout": _fc("pending"),
+    }
+
+
+async def _entry_counts(db) -> dict:
+    pipeline = [
+        {
+            "$facet": {
+                "total": [{"$count": "n"}],
+                "real": [{"$match": {"ghost_entry": {"$ne": True}}}, {"$count": "n"}],
+                "ghost": [{"$match": {"ghost_entry": True}}, {"$count": "n"}],
+            }
+        }
+    ]
+    rows = await db.world_cup_entries.aggregate(pipeline).to_list(1)
+    facet = rows[0] if rows else {}
+    def _fc(key):
+        arr = facet.get(key) or []
+        return int(arr[0]["n"]) if arr else 0
+    return {"entrants": _fc("total"), "real_entrants": _fc("real"), "ghost_entrants": _fc("ghost")}
 
 
 def _is_locked(lock_iso: Optional[str]) -> bool:
@@ -652,14 +717,11 @@ async def _build_staff_predictions_feed(
     counts = {}
     async for doc in db.world_cup_predictions.aggregate([{"$group": {"_id": "$type", "n": {"$sum": 1}}}]):
         counts[doc["_id"]] = int(doc["n"])
+    match_pred_counts = await _prediction_target_counts(db, [PRED_MATCH_SCORE, PRED_MATCH_SCORER])
+    group_pred_counts = await _prediction_target_counts(db, [PRED_GROUP_WINNER])
     match_options = []
     for mid, m in matches_by_id.items():
-        ht = teams_by_id.get(m.get("home_team_id")) or {}
-        at = teams_by_id.get(m.get("away_team_id")) or {}
         snap = _match_snapshot(m, teams_by_id)
-        n = await db.world_cup_predictions.count_documents(
-            {"target_id": mid, "type": {"$in": [PRED_MATCH_SCORE, PRED_MATCH_SCORER]}}
-        )
         match_options.append({
             "id": mid,
             "label": snap.get("label") if snap else f"{mid}",
@@ -667,19 +729,18 @@ async def _build_staff_predictions_feed(
             "stage": m.get("stage"),
             "status": m.get("status"),
             "result": (snap or {}).get("result"),
-            "prediction_count": n,
+            "prediction_count": match_pred_counts.get(mid, 0),
         })
     match_options.sort(key=lambda x: x.get("kickoff") or "")
     group_options = []
     for gid in GROUP_IDS:
         grp = groups_by_id.get(gid) or {}
         winner = teams_by_id.get(grp.get("winner_team_id") or "") or {}
-        n = await db.world_cup_predictions.count_documents({"target_id": gid, "type": PRED_GROUP_WINNER})
         group_options.append({
             "group_id": gid,
             "winner_team": _team_brief(winner),
             "settled": bool(grp.get("winner_team_id")),
-            "prediction_count": n,
+            "prediction_count": group_pred_counts.get(gid, 0),
         })
     return {
         "predictions": enriched,
@@ -1329,21 +1390,37 @@ def _summarize_user_predictions(preds: list, teams_by_id: dict) -> dict:
 async def _build_admin_leaderboard(db, cfg: dict, ghost_ids: set, limit: int = 100) -> list:
     pts_cfg = _points_from_config(cfg)
     jackpot_pts = pts_cfg["jackpot_points"]
+    ghost_list = list(ghost_ids) if ghost_ids else []
+    match_filter = {"settled": True, "points_awarded": {"$gt": 0}}
+    if ghost_list:
+        match_filter["user_id"] = {"$nin": ghost_list}
+    pipeline = [
+        {"$match": match_filter},
+        {
+            "$group": {
+                "_id": "$user_id",
+                "points_paid": {
+                    "$sum": {"$cond": [{"$ne": ["$payout_status", "pending"]}, "$points_awarded", 0]}
+                },
+                "points_pending": {
+                    "$sum": {"$cond": [{"$eq": ["$payout_status", "pending"]}, "$points_awarded", 0]}
+                },
+                "wins": {"$sum": 1},
+            }
+        },
+        {"$sort": {"points_paid": -1, "points_pending": -1}},
+        {"$limit": int(limit) * 2},
+    ]
     totals: Dict[str, dict] = {}
-    async for p in db.world_cup_predictions.find(
-        {"settled": True, "points_awarded": {"$gt": 0}},
-        {"_id": 0, "user_id": 1, "points_awarded": 1, "payout_status": 1},
-    ):
-        uid = p.get("user_id")
-        if not uid or uid in ghost_ids:
+    async for doc in db.world_cup_predictions.aggregate(pipeline):
+        uid = doc.get("_id")
+        if not uid:
             continue
-        row = totals.setdefault(uid, {"points_paid": 0, "points_pending": 0, "wins": 0})
-        pts = int(p.get("points_awarded") or 0)
-        row["wins"] += 1
-        if p.get("payout_status") == "pending":
-            row["points_pending"] += pts
-        else:
-            row["points_paid"] += pts
+        totals[uid] = {
+            "points_paid": int(doc.get("points_paid") or 0),
+            "points_pending": int(doc.get("points_pending") or 0),
+            "wins": int(doc.get("wins") or 0),
+        }
     async for e in db.world_cup_entries.find(
         {"ghost_entry": {"$ne": True}, "$or": [{"jackpot_awarded": True}, {"jackpot_pending": True}]},
         {"_id": 0, "user_id": 1, "jackpot_pending": 1, "jackpot_awarded": 1},
@@ -1420,10 +1497,8 @@ async def _build_admin_overview(db, username: Optional[str] = None, limit: int =
             uid = p.get("user_id")
             if uid in preds_by_user:
                 preds_by_user[uid].append(p)
-    global_open = await db.world_cup_predictions.count_documents({"settled": {"$ne": True}})
-    global_won = await db.world_cup_predictions.count_documents({"settled": True, "points_awarded": {"$gt": 0}})
-    global_lost = await db.world_cup_predictions.count_documents({"settled": True, "points_awarded": 0})
-    global_pending = await db.world_cup_predictions.count_documents({"payout_status": "pending"})
+    global_stats = await _prediction_global_stats(db)
+    entry_stats = await _entry_counts(db)
     pending_counts = await _pending_payout_counts(db)
     entrants_out = []
     for e in entries:
@@ -1456,16 +1531,15 @@ async def _build_admin_overview(db, username: Optional[str] = None, limit: int =
     third_id = cfg.get("third_place_team_id")
     return {
         "summary": {
-            "entrants": await db.world_cup_entries.count_documents({}),
-            "real_entrants": await db.world_cup_entries.count_documents({"ghost_entry": {"$ne": True}}),
-            "ghost_entrants": await db.world_cup_entries.count_documents({"ghost_entry": True}),
+            **entry_stats,
             "draft_run": bool(cfg.get("draft_run")),
             "tournament_started": tournament_started,
-            "predictions_total": global_open + global_won + global_lost,
-            "predictions_open": global_open,
-            "predictions_won": global_won,
-            "predictions_lost": global_lost,
-            "predictions_pending_payout": global_pending,
+            "predictions_total": (
+                global_stats["predictions_open"]
+                + global_stats["predictions_won"]
+                + global_stats["predictions_lost"]
+            ),
+            **global_stats,
             **pending_counts,
         },
         "tournament": {
@@ -1594,11 +1668,14 @@ def register(router):
             pending_payouts = await db.world_cup_predictions.count_documents({"user_id": uid, "payout_status": "pending"})
             if entry and entry.get("jackpot_pending"):
                 pending_payouts += 1
-        teams = await db.world_cup_teams.find({}, {"_id": 0}).sort([("group_id", 1), ("name", 1)]).to_list(100)
         drafted = []
         if entry and entry.get("drafted_team_ids"):
-            tmap = {t["id"]: t for t in teams}
-            drafted = [tmap[tid] for tid in entry["drafted_team_ids"] if tid in tmap]
+            tids = [t for t in entry["drafted_team_ids"] if t]
+            if tids:
+                drafted = await db.world_cup_teams.find(
+                    {"id": {"$in": tids}},
+                    {"_id": 0},
+                ).to_list(len(tids))
         start = await _get_tournament_start_at(db, cfg)
         draft_timing = _draft_timing_payload(cfg, start)
         tournament_started = _is_tournament_started_at(start)
@@ -1619,7 +1696,7 @@ def register(router):
             "group_locks": group_locks,
             "tournament_started": tournament_started,
             "tournament_picks_locked": tournament_started,
-            "teams_count": len(teams),
+            "teams_count": await db.world_cup_teams.count_documents({}),
             "pending_payouts": pending_payouts,
             **draft_timing,
         }

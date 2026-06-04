@@ -85,7 +85,7 @@ export default function WorldCupStaff() {
 
   const loadPredictions = useCallback(async (filters) => {
     try {
-      const params = { limit: 1000 };
+      const params = { limit: 200 };
       const { filter, matchId, groupId, username, verdict, settled, payoutStatus } = filters;
       if (filter && filter !== 'all') params.type = filter;
       if (matchId && (filter === 'match_score' || filter === 'match_scorer' || filter === 'all')) params.match_id = matchId;
@@ -231,8 +231,12 @@ export default function WorldCupStaff() {
   };
 
   useEffect(() => {
-    loadPredictions(predFilters);
-  }, [predFilter, matchFilter, groupFilter, usernameFilter, verdictFilter, settledFilter, payoutFilter, loadPredictions]);
+    if (loading) return undefined;
+    const t = setTimeout(() => {
+      loadPredictions(predFilters);
+    }, 150);
+    return () => clearTimeout(t);
+  }, [loading, predFilter, matchFilter, groupFilter, usernameFilter, verdictFilter, settledFilter, payoutFilter, loadPredictions]);
 
   const applyPredFilter = (id) => {
     setPredFilter(id);

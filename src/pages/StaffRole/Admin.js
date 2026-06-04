@@ -7848,7 +7848,6 @@ export default function Admin() {
       setWcHealth(health.data);
       setWcEndedMessage(cfg.data?.ended_message || '');
       setWcBannerText(cfg.data?.banner_text || '');
-      await fetchWorldCupOverview(wcUserFilter);
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed to load World Cup config'); }
     finally { setWcLoading(false); }
   };

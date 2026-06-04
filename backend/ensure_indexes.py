@@ -486,6 +486,7 @@ async def ensure_all_indexes(db):
         await db.world_cup_matches.create_index("external_event_id", unique=True, sparse=True)
         await db.world_cup_matches.create_index([("status", 1), ("kickoff", 1)])
         await db.world_cup_matches.create_index([("group_id", 1), ("stage", 1)])
+        await db.world_cup_matches.create_index([("stage", 1), ("group_id", 1), ("kickoff", 1)])
         await db.world_cup_entries.create_index("user_id", unique=True)
         await db.world_cup_predictions.create_index("id", unique=True)
         await db.world_cup_predictions.create_index([("user_id", 1), ("type", 1), ("target_id", 1)], unique=True)

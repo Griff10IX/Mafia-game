@@ -157,7 +157,12 @@ export default function WorldCup() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const st = await api.get('/world-cup/status');
+      const [st, tRes, mRes, pRes] = await Promise.all([
+        api.get('/world-cup/status'),
+        api.get('/world-cup/teams'),
+        api.get('/world-cup/matches'),
+        api.get('/world-cup/my-predictions'),
+      ]);
       if (st.data?.enabled === false) {
         setDisabled(true);
         setEndedMessage(st.data.ended_message || 'World Cup 2026 has ended.');
@@ -166,11 +171,6 @@ export default function WorldCup() {
       }
       setDisabled(false);
       setStatus(st.data);
-      const [tRes, mRes, pRes] = await Promise.all([
-        api.get('/world-cup/teams'),
-        api.get('/world-cup/matches'),
-        api.get('/world-cup/my-predictions'),
-      ]);
       setTeams(tRes.data?.teams || []);
       setGroups(tRes.data?.groups || []);
       setMatches(mRes.data?.matches || []);
