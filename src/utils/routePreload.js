@@ -1,5 +1,5 @@
 /**
- * Preload lazy route chunks on nav hover/focus so Suspense "Loading..." is brief.
+ * Preload lazy route chunks on nav hover/focus and on route change so Suspense "Loading..." is brief.
  * Keys must match pathname (no trailing slash).
  */
 const ROUTE_PRELOADERS = {
@@ -9,9 +9,11 @@ const ROUTE_PRELOADERS = {
   '/account/stats': () => import('../pages/Account/MyStats'),
   '/account/inventory': () => import('../pages/Account/MyInventory'),
   '/account/profile': () => import('../pages/Account/Profile'),
+  '/account/objectives': () => import('../pages/Account/Objectives'),
   '/kill/armour-weapons': () => import('../pages/Kill/ArmourWeapons'),
   '/kill/bodyguards': () => import('../pages/Kill/Bodyguards'),
   '/kill/attack': () => import('../pages/Kill/Attack'),
+  '/kill/hitlist': () => import('../pages/Kill/HitlistPage'),
   '/organised-crime': () => import('../pages/Crime/OrganisedCrime'),
   '/crime/crimes': () => import('../pages/Crime/Crimes'),
   '/crime/gta': () => import('../pages/Crime/GTA'),
@@ -20,8 +22,15 @@ const ROUTE_PRELOADERS = {
   '/social/inbox': () => import('../pages/Social/Inbox'),
   '/social/forum': () => import('../pages/Social/Forum'),
   '/game/store': () => import('../pages/Game/Store'),
+  '/game/states': () => import('../pages/Game/States'),
+  '/game/travel': () => import('../pages/Game/Travel'),
+  '/game/ranking': () => import('../pages/Game/Ranking'),
+  '/game/leaderboard': () => import('../pages/Game/Leaderboard'),
+  '/game/family/list': () => import('../pages/Game/FamilyPage'),
   '/game/world-cup': () => import('../pages/Game/WorldCup'),
   '/money/bank': () => import('../pages/Money/Bank'),
+  '/money/racket': () => import('../pages/Money/IllegalBusiness'),
+  '/my-properties': () => import('../pages/Money/MyProperties'),
   '/casino': () => import('../pages/Casinos/Casino'),
   '/sports-betting': () => import('../pages/Casinos/SportsBetting'),
 };

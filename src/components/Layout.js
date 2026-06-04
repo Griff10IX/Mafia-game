@@ -652,6 +652,11 @@ export default function Layout({ children }) {
 
   useEffect(() => { setMobileBottomMenuOpen(null); }, [location.pathname]);
 
+  // Priority: load the current page's JS chunk before background polls compete for connections.
+  useEffect(() => {
+    preloadRoute(location.pathname);
+  }, [location.pathname]);
+
   useEffect(() => {
     if (!mobileBottomMenuOpen) return;
     const handleClickOutside = (e) => {
@@ -711,10 +716,11 @@ export default function Layout({ children }) {
   }, [userSearchQuery]);
 
   useEffect(() => {
-    fetchData();
     const tAdmin = setTimeout(() => checkAdmin(), 400);
+    const tData = setTimeout(() => fetchData(), 150);
     return () => {
       clearTimeout(tAdmin);
+      clearTimeout(tData);
     };
   }, []); // eslint-disable-line
 

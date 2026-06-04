@@ -22,6 +22,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { initToastObservability } from "./components/ui/sonner";
 import "@/App.css";
 import { prefetchDashboardData } from "./utils/dashboardSessionCache";
+import { preloadRoute } from "./utils/routePreload";
 
 // Lazy-load authenticated pages to shrink initial bundle
 // Account pages
@@ -194,33 +195,26 @@ function readIsAuthenticatedFromStorage() {
   }
 }
 
-/** Don't warm dashboard while on auth/staff routes — those pages need connection slots for login POSTs. */
-function shouldSkipDashboardPrefetch(pathname) {
+/** Only warm dashboard cache on the dashboard route — not every authenticated page (that starves lazy route chunks). */
+function shouldPrefetchDashboard(pathname) {
   const p = pathname || '';
-  if (!p || p === '/') return true;
-  if (p.startsWith('/tjjeujr3wa')) return true;
-  const skipExact = new Set([
-    '/staff-entrance',
-    '/login',
-    '/register',
-    '/forgot-password',
-    '/reset-password',
-    '/verify-email',
-    '/verify-complete',
-    '/preregister',
-    '/locked',
-    '/account/rules-acceptance',
-  ]);
-  return skipExact.has(p);
+  return p === '/account/dashboard' || p === '/dashboard';
 }
 
 function DashboardPrefetchGate({ isAuthenticated }) {
   const location = useLocation();
   useEffect(() => {
-    if (!isAuthenticated || shouldSkipDashboardPrefetch(location.pathname)) return undefined;
+    if (!isAuthenticated || !shouldPrefetchDashboard(location.pathname)) return undefined;
     const t = setTimeout(() => prefetchDashboardData({ force: true }), 400);
     return () => clearTimeout(t);
   }, [isAuthenticated, location.pathname]);
+  return null;
+}
+
+/** Start lazy chunk download as soon as the route is known (before Suspense children render). */
+function RouteChunkPreloadGate() {
+  const location = useLocation();
+  preloadRoute(location.pathname);
   return null;
 }
 
@@ -243,6 +237,7 @@ function App() {
       <BrowserRouter>
         <ThemeProvider>
         <DashboardPrefetchGate isAuthenticated={isAuthenticated} />
+        <RouteChunkPreloadGate />
         <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route
