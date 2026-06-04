@@ -145,10 +145,7 @@ const WorldCup = lazy(() => import("./pages/Game/WorldCup"));
 const WorldCupStaff = lazy(() => import("./pages/Game/WorldCupStaff"));
 
 const PageLoader = () => (
-  <div className="min-h-[50vh] flex flex-col items-center justify-center gap-2 text-primary text-sm font-heading px-4">
-    <span>Loading...</span>
-    <span className="text-[10px] text-mutedForeground font-normal normal-case">If this stays more than a few seconds, try refresh — the server may be catching up.</span>
-  </div>
+  <div className="min-h-[200px] flex items-center justify-center text-primary text-sm font-heading">Loading...</div>
 );
 
 // Redirect helpers for parameterized routes
