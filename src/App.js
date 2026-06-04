@@ -194,19 +194,42 @@ function readIsAuthenticatedFromStorage() {
   }
 }
 
+/** Don't warm dashboard while on auth/staff routes — those pages need connection slots for login POSTs. */
+function shouldSkipDashboardPrefetch(pathname) {
+  const p = pathname || '';
+  if (!p || p === '/') return true;
+  if (p.startsWith('/tjjeujr3wa')) return true;
+  const skipExact = new Set([
+    '/staff-entrance',
+    '/login',
+    '/register',
+    '/forgot-password',
+    '/reset-password',
+    '/verify-email',
+    '/verify-complete',
+    '/preregister',
+    '/locked',
+    '/account/rules-acceptance',
+  ]);
+  return skipExact.has(p);
+}
+
+function DashboardPrefetchGate({ isAuthenticated }) {
+  const location = useLocation();
+  useEffect(() => {
+    if (!isAuthenticated || shouldSkipDashboardPrefetch(location.pathname)) return undefined;
+    const t = setTimeout(() => prefetchDashboardData({ force: true }), 400);
+    return () => clearTimeout(t);
+  }, [isAuthenticated, location.pathname]);
+  return null;
+}
+
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(readIsAuthenticatedFromStorage);
 
   useEffect(() => {
     initToastObservability();
   }, []);
-
-  // Warm dashboard cache after login only — other pages load on demand (nav hover preloads chunks).
-  useEffect(() => {
-    if (!isAuthenticated) return undefined;
-    prefetchDashboardData({ force: true });
-    return undefined;
-  }, [isAuthenticated]);
 
   useEffect(() => {
     try {
@@ -219,6 +242,7 @@ function App() {
       <ServerUnavailableOverlay />
       <BrowserRouter>
         <ThemeProvider>
+        <DashboardPrefetchGate isAuthenticated={isAuthenticated} />
         <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route

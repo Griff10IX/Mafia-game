@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import api from '../../utils/api';
+import api, { invalidateApiCache, getApiErrorMessage } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 
 export default function StaffLogin({ setIsAuthenticated }) {
@@ -13,7 +13,12 @@ export default function StaffLogin({ setIsAuthenticated }) {
     e.preventDefault();
     setLoading(true);
     try {
-      const response = await api.post('/auth/login-staff', { email: formData.email, password: formData.password });
+      invalidateApiCache();
+      const response = await api.post(
+        '/auth/login-staff',
+        { email: formData.email, password: formData.password },
+        { timeout: 120000 },
+      );
       if (response.data.verify_required) {
         if (response.data.token) {
           localStorage.setItem('token', response.data.token);
@@ -33,13 +38,13 @@ export default function StaffLogin({ setIsAuthenticated }) {
         return;
       }
       window.dispatchEvent(new CustomEvent('app:admin-changed'));
-      window.dispatchEvent(new CustomEvent('app:refresh-user'));
       toast.success('Welcome back.');
       navigate('/tjjeujr3wa/overview', { replace: true });
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('app:refresh-user'));
+      }, 0);
     } catch (error) {
-      const detail = error.response?.data?.detail;
-      const msg = typeof detail === 'string' ? detail : 'Invalid email or password.';
-      toast.error(msg);
+      toast.error(getApiErrorMessage(error) || 'Invalid email or password.');
     } finally {
       setLoading(false);
     }

@@ -1609,7 +1609,12 @@ export default function Profile() {
     // Keep any previously rendered profile on screen while revalidating this target in background.
     setProfileLoading(true);
     refetchProfile({ silent: false, usernameOverride: username }).catch((e) => {
-      toast.error(e.response?.data?.detail || 'Failed to load profile');
+      const st = e.response?.status;
+      if (st === 404) {
+        toast.error(e.response?.data?.detail || 'Profile not found');
+      } else if (st !== 0 && !isTransientResumeLoadError(e)) {
+        toast.error(getApiErrorMessage(e) || 'Failed to load profile');
+      }
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch by username only; profile is the result, not a trigger
   }, [username]);
