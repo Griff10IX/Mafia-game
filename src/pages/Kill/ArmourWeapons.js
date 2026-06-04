@@ -603,7 +603,8 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
 
   if (!data && !me) {
     return (
-      <div className={`space-y-3 sm:space-y-4 relative ${styles.pageContent} mobile-page-root`} data-page="armoury">
+      <div className={`space-y-3 sm:space-y-4 relative ${styles.pageContent} mobile-page-root flex items-center justify-center min-h-[40vh]`} data-page="armoury">
+        <span className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Loading armoury…</span>
       </div>
     );
   }

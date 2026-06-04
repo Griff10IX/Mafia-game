@@ -150,7 +150,13 @@ export default function Prestige() {
     }
   };
 
-  if (!hasLoaded) return <div className={`space-y-3 md:space-y-4 ${styles.pageContent} mobile-page-root`} />;
+  if (!hasLoaded) {
+    return (
+      <div className={`space-y-3 md:space-y-4 ${styles.pageContent} mobile-page-root flex items-center justify-center min-h-[40vh]`}>
+        <span className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Loading prestige…</span>
+      </div>
+    );
+  }
 
   if (!info) return (
     <div className="text-center py-20 text-zinc-600 text-xs font-heading">Failed to load prestige data.</div>

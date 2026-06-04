@@ -145,7 +145,10 @@ const WorldCup = lazy(() => import("./pages/Game/WorldCup"));
 const WorldCupStaff = lazy(() => import("./pages/Game/WorldCupStaff"));
 
 const PageLoader = () => (
-  <div className="min-h-[200px] flex items-center justify-center text-primary text-sm font-heading">Loading...</div>
+  <div className="min-h-[50vh] flex flex-col items-center justify-center gap-2 text-primary text-sm font-heading px-4">
+    <span>Loading...</span>
+    <span className="text-[10px] text-mutedForeground font-normal normal-case">If this stays more than a few seconds, try refresh — the server may be catching up.</span>
+  </div>
 );
 
 // Redirect helpers for parameterized routes
@@ -210,20 +213,37 @@ function App() {
   useEffect(() => {
     if (!isAuthenticated) return undefined;
     import("./pages/Account/Dashboard");
-    import("./pages/Account/Profile");
-    import("./pages/Account/MyStats");
-    import("./pages/Account/Objectives");
-    import("./pages/Kill/Bodyguards");
-    import("./pages/Crime/GTA");
-    import("./pages/Social/Forum");
-    import("./pages/Casinos/KenoPage");
     prefetchDashboardData({ force: true });
-    prefetchProfilePageData({ force: true });
-    prefetchForumSpecialTabsData({ force: true });
-    prefetchStatsAndObjectivesData({ force: true });
-    prefetchBodyguardsPageData({ force: true });
-    prefetchGtaPageData({ force: true });
-    return undefined;
+    const t1 = setTimeout(() => {
+      import("./pages/Account/Profile");
+      prefetchProfilePageData({ force: true });
+    }, 500);
+    const t2 = setTimeout(() => {
+      import("./pages/Account/MyStats");
+      import("./pages/Account/Objectives");
+      prefetchStatsAndObjectivesData({ force: true });
+    }, 1000);
+    const t3 = setTimeout(() => {
+      import("./pages/Kill/Bodyguards");
+      prefetchBodyguardsPageData({ force: true });
+    }, 1500);
+    const t4 = setTimeout(() => {
+      import("./pages/Crime/GTA");
+      prefetchGtaPageData({ force: true });
+    }, 2000);
+    const t5 = setTimeout(() => {
+      import("./pages/Social/Forum");
+      prefetchForumSpecialTabsData({ force: true });
+    }, 2500);
+    const t6 = setTimeout(() => import("./pages/Casinos/KenoPage"), 3000);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+      clearTimeout(t4);
+      clearTimeout(t5);
+      clearTimeout(t6);
+    };
   }, [isAuthenticated]);
 
   useEffect(() => {

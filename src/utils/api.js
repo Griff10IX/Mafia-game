@@ -18,6 +18,7 @@ const API = API_URL ? `${API_URL}/api` : '/api';
 
 const api = axios.create({
   baseURL: API,
+  timeout: 30000,
 });
 
 /** Fired when an /admin/* request returns 403: re-fetch staff flags so UI cannot stay spoofed via devtools. */
