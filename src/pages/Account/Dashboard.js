@@ -17,7 +17,6 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
-import { inFlightGet } from '../../utils/inFlightGet';
 import { useAuthUser } from '../../context/AuthContext';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import {
@@ -248,9 +247,9 @@ export default function Dashboard() {
   const fetchData = useCallback(async ({ silentError = false } = {}) => {
     try {
       const [progressRes, dashRes, civRes] = await Promise.all([
-        inFlightGet(api, '/user/rank-progress'),
-        inFlightGet(api, '/profile/dashboard').catch(() => ({ data: null })),
-        inFlightGet(api, '/account/civilian-protection').catch(() => ({ data: null })),
+        api.get('/user/rank-progress'),
+        api.get('/profile/dashboard').catch(() => ({ data: null })),
+        api.get('/account/civilian-protection').catch(() => ({ data: null })),
       ]);
       const safeUser = authUser ? sanitizeDashboardUser(authUser) : readDashboardSessionCache()?.user ?? null;
       setRankProgress(progressRes.data);

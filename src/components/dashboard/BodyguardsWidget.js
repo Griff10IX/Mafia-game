@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Shield, ChevronRight } from 'lucide-react';
 import api, { apiRequestWith429Retry } from '../../utils/api';
-import { inFlightGet } from '../../utils/inFlightGet';
 import { getDashboardWidget, setDashboardWidget } from '../../utils/dashboardWidgetCache';
 import styles from '../../styles/noir.module.css';
 
@@ -15,7 +14,7 @@ export default function BodyguardsWidget({ userId }) {
   const fetchBodyguards = useCallback(async () => {
     if (!userId) return;
     try {
-      const res = await apiRequestWith429Retry(() => inFlightGet(api, '/bodyguards'));
+      const res = await apiRequestWith429Retry(() => api.get('/bodyguards'));
       const d = res.data;
       setData(d);
       if (d) setDashboardWidget(userId, WIDGET_KEY, d);

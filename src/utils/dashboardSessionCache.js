@@ -1,7 +1,7 @@
 /**
  * Session cache for /account/dashboard first paint + background prefetch after login.
  */
-import api from './api';
+import api, { apiGetWithResumeRetries, apiRequestWith429Retry } from './api';
 import { readSessionJson, writeSessionJson } from './sessionPageCache';
 
 export const DASHBOARD_SESSION_CACHE_KEY = 'mafia_dashboard_v1';
@@ -65,12 +65,12 @@ export async function prefetchDashboardData(options = {}) {
   if (!force && now - lastDashboardPrefetchAt < 45_000) return;
   lastDashboardPrefetchAt = now;
   try {
-    const [userRes, progressRes, dashRes, civRes] = await Promise.all([
-      api.get('/auth/me'),
-      api.get('/user/rank-progress'),
-      api.get('/profile/dashboard').catch(() => ({ data: null })),
-      api.get('/account/civilian-protection').catch(() => ({ data: null })),
+    const [userRes, progressRes] = await Promise.all([
+      apiGetWithResumeRetries('/auth/me'),
+      apiRequestWith429Retry(() => api.get('/user/rank-progress')),
     ]);
+    const dashRes = await api.get('/profile/dashboard').catch(() => ({ data: null }));
+    const civRes = await api.get('/account/civilian-protection').catch(() => ({ data: null }));
     const prev = readSessionJson(DASHBOARD_SESSION_CACHE_KEY);
     const storedPrefs = mergeDashboardPreferences(dashRes?.data ?? null, prev);
     writeSessionJson(DASHBOARD_SESSION_CACHE_KEY, {

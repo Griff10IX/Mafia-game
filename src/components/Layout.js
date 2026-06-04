@@ -13,8 +13,7 @@ import api, {
 import { clearStaffPortalSession, isStaffPortalTokenValid } from '../utils/staffPortalSession';
 import { getThemeUiPlatform } from '../utils/themePlatform';
 import { readDashboardSessionCache } from '../utils/dashboardSessionCache';
-import { preloadRouteHandlers } from '../utils/routePreload';
-import { inFlightGet } from '../utils/inFlightGet';
+import { preloadRoute, preloadRouteHandlers } from '../utils/routePreload';
 import { AuthContext } from '../context/AuthContext';
 import { warmLeaderboardCaches } from '../utils/leaderboardTopCache';
 import { setCrimesPrefetch, getCrimesPrefetch, clearProfileSessionLastMeUsername, setProfileSessionLastMeUsername } from '../utils/prefetchCache';
@@ -316,13 +315,13 @@ function SidebarCatHeader({ label, classic }) {
   );
 }
 
-function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, onTouchStart, ...rest }) {
+function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, ...rest }) {
   const location = useLocation();
   const path = typeof to === 'string' ? to : (to.pathname || '/');
   const preload = preloadRouteHandlers(path);
   const mergeClick = (e) => {
     const search = typeof to === 'string' ? '' : (to.search || '');
-    preload.onMouseEnter();
+    preloadRoute(path);
     if (location.pathname === path && (location.search || '') === search) {
       e.preventDefault();
       window.dispatchEvent(new CustomEvent(SAME_ROUTE_NAV_CLICK, { detail: { pathname: path, search } }));
@@ -336,7 +335,6 @@ function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, onTouchStart, 
       onClick={mergeClick}
       onMouseEnter={(e) => { preload.onMouseEnter(); if (onMouseEnter) onMouseEnter(e); }}
       onFocus={(e) => { preload.onFocus(); if (onFocus) onFocus(e); }}
-      onTouchStart={(e) => { preload.onTouchStart(); if (onTouchStart) onTouchStart(e); }}
     />
   );
 }
@@ -714,11 +712,9 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     fetchData();
-    const tAdmin = setTimeout(() => checkAdmin(), 350);
-    const tUnread = setTimeout(() => fetchUnreadCount(), 150);
+    const tAdmin = setTimeout(() => checkAdmin(), 400);
     return () => {
       clearTimeout(tAdmin);
-      clearTimeout(tUnread);
     };
   }, []); // eslint-disable-line
 
@@ -823,7 +819,7 @@ export default function Layout({ children }) {
   const fetchAutoRankPrefs = async () => {
     if (!user) return;
     try {
-      const res = await inFlightGet(api, '/auto-rank/me');
+      const res = await api.get('/auto-rank/me');
       setAutoRankPrefs({ auto_rank_enabled: !!res.data?.auto_rank_enabled, auto_rank_crimes: !!res.data?.auto_rank_crimes, auto_rank_gta: !!res.data?.auto_rank_gta, auto_rank_oc: !!res.data?.auto_rank_oc, auto_rank_bust_every_5_sec: !!res.data?.auto_rank_bust_every_5_sec, auto_rank_booze: !!res.data?.auto_rank_booze });
     } catch { setAutoRankPrefs({ auto_rank_enabled: false, auto_rank_crimes: false, auto_rank_gta: false, auto_rank_oc: false, auto_rank_bust_every_5_sec: false, auto_rank_booze: false }); }
   };
@@ -841,7 +837,7 @@ export default function Layout({ children }) {
     const run = () => {
       if (!cancelled) warmLeaderboardCaches(api);
     };
-    const t0 = setTimeout(run, 0);
+    const t0 = setTimeout(run, 12_000);
     const interval = setInterval(run, 60_000);
     return () => {
       cancelled = true;
@@ -896,7 +892,7 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     let intervalId;
-    const deferred = setTimeout(() => { fetchWarStatus(); intervalId = setInterval(fetchWarStatus, 45000); }, 150);
+    const deferred = setTimeout(() => { fetchWarStatus(); intervalId = setInterval(fetchWarStatus, 45000); }, 1200);
     return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
   }, []); // eslint-disable-line
 
@@ -910,8 +906,9 @@ export default function Layout({ children }) {
     };
     let intervalId;
     const deferred = setTimeout(() => {
+      pollNotifications();
       intervalId = setInterval(pollNotifications, 30000);
-    }, 30000);
+    }, 2000);
     return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
   }, []); // eslint-disable-line
 
@@ -957,10 +954,18 @@ export default function Layout({ children }) {
     }
   };
 
-  useEffect(() => { const t = setTimeout(() => { api.get('/objectives').catch(() => {}); }, 500); return () => clearTimeout(t); }, []);
+  useEffect(() => { const t = setTimeout(() => { api.get('/objectives').catch(() => {}); }, 3500); return () => clearTimeout(t); }, []);
 
-  useEffect(() => { fetchFlashNews(); const id = setInterval(fetchFlashNews, 60000); return () => clearInterval(id); }, []); // eslint-disable-line
-  useEffect(() => { fetchStorePointsEvent(); const id = setInterval(fetchStorePointsEvent, 60000); return () => clearInterval(id); }, []); // eslint-disable-line
+  useEffect(() => {
+    const t = setTimeout(() => fetchFlashNews(), 4000);
+    const id = setInterval(fetchFlashNews, 60000);
+    return () => { clearTimeout(t); clearInterval(id); };
+  }, []); // eslint-disable-line
+  useEffect(() => {
+    const t = setTimeout(() => fetchStorePointsEvent(), 4500);
+    const id = setInterval(fetchStorePointsEvent, 60000);
+    return () => { clearTimeout(t); clearInterval(id); };
+  }, []); // eslint-disable-line
 
   useEffect(() => {
     const onSameRoute = () => {
@@ -1120,16 +1125,21 @@ export default function Layout({ children }) {
   };
 
   useEffect(() => {
-    api.get('/page-locks').then((r) => {
-      const paths = r.data?.paths;
-      setPageLocks(typeof paths === 'object' && paths !== null ? paths : {});
-    }).catch(() => setPageLocks({}));
     const t = setTimeout(() => {
+      api.get('/page-locks').then((r) => {
+        const paths = r.data?.paths;
+        setPageLocks(typeof paths === 'object' && paths !== null ? paths : {});
+      }).catch(() => setPageLocks({}));
+    }, 1500);
+    const tWc = setTimeout(() => {
       api.get('/world-cup/public-status').then((r) => {
         setWorldCupEnabled(!!r.data?.enabled);
       }).catch(() => setWorldCupEnabled(false));
-    }, 800);
-    return () => clearTimeout(t);
+    }, 5000);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(tWc);
+    };
   }, []);
 
   const promoteToAdmin = async () => {
@@ -1184,7 +1194,7 @@ export default function Layout({ children }) {
       setSportsBettingEventCount(0);
       return undefined;
     }
-    const t = setTimeout(() => fetchRankingCounts(), 700);
+    const t = setTimeout(() => fetchRankingCounts(), 2500);
     return () => clearTimeout(t);
   }, [userId]); // eslint-disable-line
 

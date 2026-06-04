@@ -22,11 +22,6 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { initToastObservability } from "./components/ui/sonner";
 import "@/App.css";
 import { prefetchDashboardData } from "./utils/dashboardSessionCache";
-import { prefetchProfilePageData } from "./utils/profilePageWarm";
-import { prefetchForumSpecialTabsData } from "./utils/forumSpecialTabsWarm";
-import { prefetchStatsAndObjectivesData } from "./utils/statsObjectivesWarm";
-import { prefetchBodyguardsPageData } from "./utils/bodyguardsPageWarm";
-import { prefetchGtaPageData } from "./utils/gtaPageWarm";
 
 // Lazy-load authenticated pages to shrink initial bundle
 // Account pages
@@ -206,41 +201,11 @@ function App() {
     initToastObservability();
   }, []);
 
-  // Preload dashboard, profile, stats, objectives, bodyguards, GTA, forum chunks and warm their API/session caches after login.
+  // Warm dashboard cache after login only — other pages load on demand (nav hover preloads chunks).
   useEffect(() => {
     if (!isAuthenticated) return undefined;
-    import("./pages/Account/Dashboard");
     prefetchDashboardData({ force: true });
-    const t1 = setTimeout(() => {
-      import("./pages/Account/Profile");
-      prefetchProfilePageData({ force: true });
-    }, 500);
-    const t2 = setTimeout(() => {
-      import("./pages/Account/MyStats");
-      import("./pages/Account/Objectives");
-      prefetchStatsAndObjectivesData({ force: true });
-    }, 1000);
-    const t3 = setTimeout(() => {
-      import("./pages/Kill/Bodyguards");
-      prefetchBodyguardsPageData({ force: true });
-    }, 1500);
-    const t4 = setTimeout(() => {
-      import("./pages/Crime/GTA");
-      prefetchGtaPageData({ force: true });
-    }, 2000);
-    const t5 = setTimeout(() => {
-      import("./pages/Social/Forum");
-      prefetchForumSpecialTabsData({ force: true });
-    }, 2500);
-    const t6 = setTimeout(() => import("./pages/Casinos/KenoPage"), 3000);
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(t3);
-      clearTimeout(t4);
-      clearTimeout(t5);
-      clearTimeout(t6);
-    };
+    return undefined;
   }, [isAuthenticated]);
 
   useEffect(() => {

@@ -8,6 +8,7 @@ const ROUTE_PRELOADERS = {
   '/account/prestige': () => import('../pages/Account/Prestige'),
   '/account/stats': () => import('../pages/Account/MyStats'),
   '/account/inventory': () => import('../pages/Account/MyInventory'),
+  '/account/profile': () => import('../pages/Account/Profile'),
   '/kill/armour-weapons': () => import('../pages/Kill/ArmourWeapons'),
   '/kill/bodyguards': () => import('../pages/Kill/Bodyguards'),
   '/kill/attack': () => import('../pages/Kill/Attack'),
@@ -26,6 +27,7 @@ const ROUTE_PRELOADERS = {
 };
 
 const started = new Set();
+const debounceTimers = new Map();
 
 function normalizePath(path) {
   if (!path || typeof path !== 'string') return '';
@@ -45,11 +47,24 @@ export function preloadRoute(pathOrTo) {
   });
 }
 
+export function preloadRouteDebounced(pathOrTo, ms = 120) {
+  const path = normalizePath(pathOrTo);
+  if (!path) return;
+  const existing = debounceTimers.get(path);
+  if (existing) clearTimeout(existing);
+  debounceTimers.set(
+    path,
+    setTimeout(() => {
+      debounceTimers.delete(path);
+      preloadRoute(path);
+    }, ms),
+  );
+}
+
 export function preloadRouteHandlers(pathOrTo) {
   const path = normalizePath(pathOrTo);
   return {
-    onMouseEnter: () => preloadRoute(path),
-    onFocus: () => preloadRoute(path),
-    onTouchStart: () => preloadRoute(path),
+    onMouseEnter: () => preloadRouteDebounced(path),
+    onFocus: () => preloadRouteDebounced(path),
   };
 }

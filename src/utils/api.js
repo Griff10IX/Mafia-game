@@ -7,7 +7,7 @@ import {
   isStaffPortalTokenValid,
 } from './staffPortalSession';
 import { clearProfileSessionLastMeUsername } from './prefetchCache';
-import { inFlightGet } from './inFlightGet';
+import { inFlightGet, clearInFlightGets } from './inFlightGet';
 
 // Empty or unset = same origin (e.g. Linode: Nginx serves app and proxies /api)
 const raw = (process.env.REACT_APP_BACKEND_URL && process.env.REACT_APP_BACKEND_URL.trim())
@@ -18,7 +18,6 @@ const API = API_URL ? `${API_URL}/api` : '/api';
 
 const api = axios.create({
   baseURL: API,
-  timeout: 30000,
 });
 
 /** Fired when an /admin/* request returns 403: re-fetch staff flags so UI cannot stay spoofed via devtools. */
@@ -28,43 +27,13 @@ let _staffAdminForbiddenDispatchAt = 0;
 
 const _rawGet = api.get.bind(api);
 
-/** Merge concurrent GET /auth/me (same session token) so refresh/login prefetch storms hit the server once. */
-function _isBareAuthMeGet(url, config) {
-  if (typeof url !== 'string') return false;
-  const path = url.split('?')[0].replace(/^\/+/, '');
-  if (path !== 'auth/me') return false;
-  const p = config?.params;
-  if (p && typeof p === 'object' && Object.keys(p).length > 0) return false;
-  return true;
-}
-
-let _authMeInflight = null;
-let _authMeInflightForToken = null;
-
 api.get = function dedupingGet(url, config) {
-  if (!_isBareAuthMeGet(url, config)) {
-    return _rawGet(url, config);
-  }
-  const token = typeof localStorage !== 'undefined' ? (localStorage.getItem('token') || '') : '';
-  if (_authMeInflight && _authMeInflightForToken === token) {
-    return _authMeInflight;
-  }
-  const p = _rawGet(url, config);
-  _authMeInflight = p;
-  _authMeInflightForToken = token;
-  p.finally(() => {
-    if (_authMeInflight === p) {
-      _authMeInflight = null;
-      _authMeInflightForToken = null;
-    }
-  });
-  return p;
+  return inFlightGet(_rawGet, url, config);
 };
 
-/** Clear in-flight /auth/me merge so the next profile fetch is not tied to a stale promise. */
+/** Clear in-flight GET dedupe so the next fetch is not tied to a stale promise (logout, token change). */
 export function invalidateApiCache() {
-  _authMeInflight = null;
-  _authMeInflightForToken = null;
+  clearInFlightGets();
 }
 
 function _sleep429Retry(ms) {
@@ -136,7 +105,7 @@ export async function apiGetWithResumeRetries(path, config, maxAttempts = _RESUM
   let lastErr;
   for (let i = 0; i < maxAttempts; i++) {
     try {
-      return await apiRequestWith429Retry(() => inFlightGet(api, path, config));
+      return await apiRequestWith429Retry(() => inFlightGet(_rawGet, path, config));
     } catch (e) {
       lastErr = e;
       if (isTransientResumeLoadError(e) && i < maxAttempts - 1) {

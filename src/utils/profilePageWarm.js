@@ -35,33 +35,14 @@ export async function prefetchProfilePageData(options = {}) {
 
     setProfileSessionLastMeUsername(u);
 
-    const [profRes, honRes, prefRes, telRes, spotRes, censRes] = await Promise.all([
+    const [profRes, honRes] = await Promise.all([
       api.get(`/users/${encodeURIComponent(u)}/profile`, { params: { include_honours: false } }),
       api.get(`/users/${encodeURIComponent(u)}/profile/honours`).catch(() => ({ data: { honours: [] } })),
-      api.get('/profile/preferences').catch(() => ({ data: null })),
-      api.get('/profile/telegram').catch(() => ({ data: null })),
-      api.get('/profile/spotify/status').catch(() => ({ data: null })),
-      api.get('/profile/censor-profanity').catch(() => ({ data: null })),
     ]);
 
     setProfilePrefetch(u, {
       ...profRes.data,
       honours: honRes.data?.honours ?? [],
-    });
-
-    writeSessionJson(PROFILE_EDIT_WARM_KEY, {
-      userId: uid,
-      ts: Date.now(),
-      notification_preferences: prefRes.data?.notification_preferences ?? null,
-      telegram_chat_id: telRes.data?.telegram_chat_id ?? '',
-      telegram_bot_token: telRes.data?.telegram_bot_token ?? '',
-      spotifyStatus: spotRes.data || null,
-      spotify_url: spotRes.data?.spotify_url || '',
-      censor_profanity: censRes.data?.censor_profanity === true,
-      profile_autoplay_video: meRes.data?.profile_autoplay_video !== false,
-      hide_kills_on_profile: profRes.data?.hide_kills_on_profile === true,
-      hide_jailbusts_on_profile: profRes.data?.hide_jailbusts_on_profile === true,
-      show_country_flag_on_profile: profRes.data?.show_country_flag_on_profile === true,
     });
   } catch {
     /* Profile page loads normally */

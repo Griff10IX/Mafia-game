@@ -2,7 +2,6 @@ import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Shield, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api, { refreshUser } from '../../utils/api';
-import { inFlightGet } from '../../utils/inFlightGet';
 import { readBodyguardsPageWarm, writeBodyguardsPageWarm } from '../../utils/bodyguardsPageWarm';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -139,27 +138,27 @@ export default function Bodyguards() {
     try {
       const nc = noCacheGetConfig();
       const [bodyguardsRes, userRes, eventsRes, inflationRes, statsRes, invitesRes] = await Promise.all([
-        inFlightGet(api, '/bodyguards', nc),
-        inFlightGet(api, '/auth/me'),
-        inFlightGet(api, '/events/active').catch((e) => {
+        api.get('/bodyguards', nc),
+        api.get('/auth/me'),
+        api.get('/events/active').catch((e) => {
           if (process.env.NODE_ENV === 'development') {
             console.warn('[Bodyguards] events/active failed', e?.response?.status, e?.response?.data);
           }
           return { data: { event: null, events_enabled: false } };
         }),
-        inFlightGet(api, '/bodyguards/inflation', nc).catch((e) => {
+        api.get('/bodyguards/inflation', nc).catch((e) => {
           if (process.env.NODE_ENV === 'development') {
             console.warn('[Bodyguards] inflation failed', e?.response?.status, e?.response?.data);
           }
           return { data: { next_hire_inflation_pct: 0 } };
         }),
-        inFlightGet(api, '/bodyguards/stats').catch((e) => {
+        api.get('/bodyguards/stats').catch((e) => {
           if (process.env.NODE_ENV === 'development') {
             console.warn('[Bodyguards] stats failed', e?.response?.status, e?.response?.data);
           }
           return { data: null };
         }),
-        inFlightGet(api, '/bodyguards/invites').catch((e) => {
+        api.get('/bodyguards/invites').catch((e) => {
           if (process.env.NODE_ENV === 'development') {
             console.warn('[Bodyguards] invites failed', e?.response?.status, e?.response?.data);
           }

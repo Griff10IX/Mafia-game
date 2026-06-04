@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink, X, Crown } from 'lucide-react';
-import api, { getApiErrorMessage } from '../../utils/api';
+import api, { apiGetWithResumeRetries, getApiErrorMessage, isTransientResumeLoadError } from '../../utils/api';
 import {
   getOrCreateStaffPortalDeviceId,
   isStaffPortalTokenValid,
@@ -1425,9 +1425,10 @@ export default function Profile() {
     setProfileLoadError('');
     let mainPaintDone = false;
     try {
-      const profileRes = await api.get(`/users/${encodeURIComponent(targetUsername)}/profile`, {
-        params: { include_honours: false },
-      });
+      const profileRes = await apiGetWithResumeRetries(
+        `/users/${encodeURIComponent(targetUsername)}/profile`,
+        { params: { include_honours: false } },
+      );
       if (reqId !== profileRequestIdRef.current) return null;
       const base = { ...profileRes.data, honours: profileRes.data?.honours ?? [] };
       setProfile(base);
@@ -1459,7 +1460,14 @@ export default function Profile() {
       return base;
     } catch (e) {
       if (reqId === profileRequestIdRef.current && !silent) {
-        setProfileLoadError(e.response?.data?.detail || 'Failed to load profile');
+        const st = e.response?.status;
+        if (st === 404) {
+          setProfileLoadError("This user doesn't exist or has been deleted");
+        } else if (st === 0 || isTransientResumeLoadError(e)) {
+          setProfileLoadError('Still loading — the server is busy. Wait a moment or refresh the page.');
+        } else {
+          setProfileLoadError(e.response?.data?.detail || 'Failed to load profile');
+        }
       }
       if (!silent) throw e;
       return null;
@@ -1670,11 +1678,18 @@ export default function Profile() {
         setShowCountryFlagOnProfile(profile?.show_country_flag_on_profile === true);
       }
       fetchPrefs();
-      fetchTelegram();
-      fetchSpotifyStatus();
-      api.get('/profile/censor-profanity').then((res) => {
-        setCensorProfanity(res.data?.censor_profanity === true);
-      }).catch(() => {});
+      const tTelegram = setTimeout(fetchTelegram, 400);
+      const tSpotify = setTimeout(fetchSpotifyStatus, 800);
+      const tCensor = setTimeout(() => {
+        api.get('/profile/censor-profanity').then((res) => {
+          setCensorProfanity(res.data?.censor_profanity === true);
+        }).catch(() => {});
+      }, 1200);
+      return () => {
+        clearTimeout(tTelegram);
+        clearTimeout(tSpotify);
+        clearTimeout(tCensor);
+      };
     }
   }, [isMe, viewPublic, profile, profile?.hide_kills_on_profile, profile?.hide_jailbusts_on_profile, profile?.show_country_flag_on_profile, me?.profile_autoplay_video, me?.id]);
 
@@ -2104,6 +2119,7 @@ export default function Profile() {
   }
 
   if (!profile) {
+    const isTransient = profileLoadError && !profileLoadError.includes("doesn't exist");
     return (
       <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <style>{PROFILE_STYLES}</style>
@@ -2115,11 +2131,20 @@ export default function Profile() {
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <UserIcon size={64} className="mx-auto text-primary/30 mb-4" />
           <p className="text-base text-foreground font-heading font-bold mb-1">
-            Profile not found
+            {isTransient ? 'Loading profile…' : 'Profile not found'}
           </p>
           <p className="text-sm text-mutedForeground font-heading">
             {profileLoadError || "This user doesn't exist or has been deleted"}
           </p>
+          {isTransient && username && (
+            <button
+              type="button"
+              className="mt-4 text-xs font-heading uppercase tracking-wider text-primary hover:underline"
+              onClick={() => refetchProfile({ silent: false, forceLoading: true, usernameOverride: username })}
+            >
+              Try again
+            </button>
+          )}
         </div>
       </div>
     );
