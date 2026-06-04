@@ -24,6 +24,7 @@ WC_TEAMS_SEED_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "w
 WC_SPORT_KEY = "soccer_fifa_world_cup"
 LOCK_MINUTES_BEFORE = 10
 SETTLE_MINUTES_AFTER = 122
+DRAFT_HOURS_BEFORE_START = 24
 DEFAULT_ENDED_MESSAGE = "World Cup 2026 has ended. Thanks for playing!"
 GROUP_IDS = tuple(chr(ord("A") + i) for i in range(12))
 
@@ -347,6 +348,354 @@ async def _list_pending_payouts(db, limit: int = 100) -> dict:
     return {**counts, "predictions": pred_rows, "jackpots": jackpot_rows}
 
 
+def _prediction_type_label(ptype: str) -> str:
+    return {
+        PRED_GROUP_WINNER: "Group winner",
+        PRED_MATCH_SCORE: "Match score",
+        PRED_MATCH_SCORER: "Goal scorer",
+        PRED_SECOND_PLACE: "2nd place",
+        PRED_THIRD_PLACE: "3rd place",
+    }.get(ptype or "", ptype or "?")
+
+
+def _team_brief(team: dict) -> dict:
+    if not team:
+        return {}
+    return {k: team.get(k) for k in ("id", "name", "short_code", "group_id") if team.get(k)}
+
+
+def _match_snapshot(match: Optional[dict], teams_by_id: dict) -> Optional[dict]:
+    if not match:
+        return None
+    ht = teams_by_id.get(match.get("home_team_id")) or {}
+    at = teams_by_id.get(match.get("away_team_id")) or {}
+    res = match.get("result") or {}
+    has_score = res.get("home_score") is not None and res.get("away_score") is not None
+    return {
+        "id": match.get("id"),
+        "external_event_id": match.get("external_event_id"),
+        "kickoff": match.get("kickoff"),
+        "lock_at": match.get("lock_at"),
+        "stage": match.get("stage"),
+        "group_id": match.get("group_id"),
+        "status": match.get("status"),
+        "home_team": _team_brief(ht),
+        "away_team": _team_brief(at),
+        "label": f"{ht.get('name') or '?'} vs {at.get('name') or '?'}",
+        "locked": _is_locked(match.get("lock_at")),
+        "result": {
+            "home_score": res.get("home_score"),
+            "away_score": res.get("away_score"),
+            "scorers": list(res.get("scorers") or []),
+            "display": f"{res.get('home_score')}-{res.get('away_score')}" if has_score else None,
+        } if has_score else None,
+    }
+
+
+def _points_for_type(cfg: dict, ptype: str, *, exact_score: bool = False) -> int:
+    pts = _points_from_config(cfg)
+    if ptype == PRED_GROUP_WINNER:
+        return pts["group_winner_points"]
+    if ptype == PRED_MATCH_SCORE:
+        return pts["match_score_exact_points"] if exact_score else pts["match_score_result_points"]
+    if ptype == PRED_MATCH_SCORER:
+        return pts["match_scorer_points"]
+    if ptype == PRED_SECOND_PLACE:
+        return pts["second_place_points"]
+    if ptype == PRED_THIRD_PLACE:
+        return pts["third_place_points"]
+    return 0
+
+
+def _verification_for_prediction(
+    pred: dict,
+    ptype: str,
+    target: str,
+    val: dict,
+    cfg: dict,
+    teams_by_id: dict,
+    matches_by_id: dict,
+    groups_by_id: dict,
+) -> dict:
+    pick_display = ""
+    actual_display = ""
+    verdict = "pending"
+    expected_points = 0
+
+    if ptype == PRED_GROUP_WINNER:
+        tid = val.get("team_id") if isinstance(val, dict) else val
+        team = teams_by_id.get(tid) or {}
+        pick_display = team.get("name") or str(tid or "?")
+        grp = groups_by_id.get(target) or {}
+        winner_id = grp.get("winner_team_id")
+        if winner_id:
+            winner = teams_by_id.get(winner_id) or {}
+            actual_display = winner.get("name") or str(winner_id)
+            verdict = "correct" if str(tid) == str(winner_id) else "incorrect"
+            expected_points = _points_for_type(cfg, ptype) if verdict == "correct" else 0
+        else:
+            actual_display = "—"
+    elif ptype == PRED_MATCH_SCORE:
+        match = matches_by_id.get(target) or {}
+        ht = teams_by_id.get(match.get("home_team_id")) or {}
+        at = teams_by_id.get(match.get("away_team_id")) or {}
+        ph = val.get("home") if isinstance(val, dict) else None
+        pa = val.get("away") if isinstance(val, dict) else None
+        pick_display = f"{ph}-{pa}" if ph is not None and pa is not None else "?"
+        res = match.get("result") or {}
+        if res.get("home_score") is not None and res.get("away_score") is not None:
+            ah, aa = int(res["home_score"]), int(res["away_score"])
+            actual_display = f"{ah}-{aa}"
+            if ph == ah and pa == aa:
+                verdict = "correct"
+                expected_points = _points_for_type(cfg, ptype, exact_score=True)
+            elif _match_result_outcome(int(ph), int(pa)) == _match_result_outcome(ah, aa):
+                verdict = "result_correct"
+                expected_points = _points_for_type(cfg, ptype, exact_score=False)
+            else:
+                verdict = "incorrect"
+        else:
+            actual_display = "—"
+    elif ptype == PRED_MATCH_SCORER:
+        match = matches_by_id.get(target) or {}
+        pick_name = _norm_name(val.get("name") if isinstance(val, dict) else str(val or ""))
+        pick_display = (val.get("name") if isinstance(val, dict) else str(val or "")) or "?"
+        res = match.get("result") or {}
+        scorers = [_norm_name(x) for x in (res.get("scorers") or []) if x]
+        if scorers:
+            actual_display = ", ".join(res.get("scorers") or [])
+            verdict = "correct" if pick_name and pick_name in scorers else "incorrect"
+            expected_points = _points_for_type(cfg, ptype) if verdict == "correct" else 0
+        else:
+            actual_display = "—"
+    elif ptype == PRED_SECOND_PLACE:
+        tid = val.get("team_id") if isinstance(val, dict) else val
+        team = teams_by_id.get(tid) or {}
+        pick_display = team.get("name") or "?"
+        actual_id = cfg.get("runner_up_team_id")
+        if actual_id:
+            actual_display = (teams_by_id.get(actual_id) or {}).get("name") or str(actual_id)
+            verdict = "correct" if str(tid) == str(actual_id) else "incorrect"
+            expected_points = _points_for_type(cfg, ptype) if verdict == "correct" else 0
+        else:
+            actual_display = "—"
+    elif ptype == PRED_THIRD_PLACE:
+        tid = val.get("team_id") if isinstance(val, dict) else val
+        team = teams_by_id.get(tid) or {}
+        pick_display = team.get("name") or "?"
+        actual_id = cfg.get("third_place_team_id")
+        if actual_id:
+            actual_display = (teams_by_id.get(actual_id) or {}).get("name") or str(actual_id)
+            verdict = "correct" if str(tid) == str(actual_id) else "incorrect"
+            expected_points = _points_for_type(cfg, ptype) if verdict == "correct" else 0
+        else:
+            actual_display = "—"
+
+    return {
+        "pick": pick_display,
+        "actual": actual_display,
+        "verdict": verdict,
+        "expected_points": expected_points,
+    }
+
+
+def _enrich_prediction_for_staff(
+    pred: dict,
+    teams_by_id: dict,
+    matches_by_id: dict,
+    groups_by_id: dict,
+    usernames: dict,
+    entries_by_user: dict,
+    cfg: dict,
+) -> dict:
+    ptype = pred.get("type")
+    target = pred.get("target_id")
+    val = pred.get("value") or {}
+    uid = pred.get("user_id")
+    entry = entries_by_user.get(uid) or {}
+    verification = _verification_for_prediction(pred, ptype, target, val, cfg, teams_by_id, matches_by_id, groups_by_id)
+    row = {
+        "id": pred.get("id"),
+        "user_id": uid,
+        "username": usernames.get(uid, "?"),
+        "type": ptype,
+        "type_label": _prediction_type_label(ptype),
+        "target_id": target,
+        "value": val,
+        "settled": bool(pred.get("settled")),
+        "settled_at": pred.get("settled_at"),
+        "payout_status": pred.get("payout_status"),
+        "payout_approved_at": pred.get("payout_approved_at"),
+        "points_awarded": int(pred.get("points_awarded") or 0),
+        "settle_label": pred.get("settle_label") or "",
+        "created_at": pred.get("created_at"),
+        "updated_at": pred.get("updated_at"),
+        "summary": "",
+        "pick": verification["pick"],
+        "actual": verification["actual"],
+        "verdict": verification["verdict"],
+        "expected_points": verification["expected_points"],
+        "entrant": {
+            "entered": bool(entry),
+            "ghost_entry": bool(entry.get("ghost_entry")),
+            "entered_at": entry.get("entered_at"),
+            "drafted_team_count": len(entry.get("drafted_team_ids") or []),
+        },
+    }
+    if ptype == PRED_GROUP_WINNER:
+        tid = val.get("team_id") if isinstance(val, dict) else val
+        team = teams_by_id.get(tid) or {}
+        grp = groups_by_id.get(target) or {}
+        row["summary"] = f"Group {target}: {team.get('name') or tid or '?'}"
+        row["team"] = _team_brief(team)
+        row["group"] = {
+            "group_id": target,
+            "winner_team_id": grp.get("winner_team_id"),
+            "winner_team": _team_brief(teams_by_id.get(grp.get("winner_team_id") or "")),
+            "settled_at": grp.get("settled_at"),
+        }
+        row["target_label"] = f"Group {target}"
+    elif ptype in (PRED_MATCH_SCORE, PRED_MATCH_SCORER):
+        match = matches_by_id.get(target) or {}
+        snap = _match_snapshot(match, teams_by_id)
+        row["match"] = snap
+        row["target_label"] = snap.get("label") if snap else target
+        if ptype == PRED_MATCH_SCORE:
+            h, a = val.get("home"), val.get("away")
+            row["summary"] = f"{row['target_label']} → pick {h}-{a}"
+        else:
+            scorer = val.get("name") if isinstance(val, dict) else str(val or "")
+            row["summary"] = f"{row['target_label']} → scorer: {scorer or '?'}"
+    elif ptype in (PRED_SECOND_PLACE, PRED_THIRD_PLACE):
+        tid = val.get("team_id") if isinstance(val, dict) else val
+        team = teams_by_id.get(tid) or {}
+        place = "2nd" if ptype == PRED_SECOND_PLACE else "3rd"
+        row["summary"] = f"{place} place: {team.get('name') or '?'}"
+        row["team"] = _team_brief(team)
+        row["target_label"] = "Tournament"
+        row["tournament"] = {
+            "runner_up_team_id": cfg.get("runner_up_team_id"),
+            "third_place_team_id": cfg.get("third_place_team_id"),
+            "champion_team_id": cfg.get("champion_team_id"),
+        }
+    else:
+        row["summary"] = str(val)[:120]
+        row["target_label"] = target
+    return row
+
+
+async def _build_staff_predictions_feed(
+    db,
+    limit: int = 500,
+    pred_type: Optional[str] = None,
+    match_id: Optional[str] = None,
+    group_id: Optional[str] = None,
+    username: Optional[str] = None,
+    settled: Optional[bool] = None,
+    payout_status: Optional[str] = None,
+    verdict: Optional[str] = None,
+) -> dict:
+    cfg = await _load_config(db)
+    q: dict = {}
+    if pred_type:
+        q["type"] = pred_type
+    if match_id:
+        q["target_id"] = match_id
+        q["type"] = {"$in": [PRED_MATCH_SCORE, PRED_MATCH_SCORER]}
+    elif group_id:
+        q["target_id"] = group_id.upper()
+        q["type"] = PRED_GROUP_WINNER
+    if settled is not None:
+        q["settled"] = bool(settled)
+    if payout_status:
+        q["payout_status"] = payout_status
+    if username and username.strip():
+        uname = username.strip()
+        user_ids = []
+        async for u in db.users.find(
+            {"username": {"$regex": re.escape(uname), "$options": "i"}},
+            {"_id": 0, "id": 1},
+        ).limit(50):
+            if u.get("id"):
+                user_ids.append(u["id"])
+        if not user_ids:
+            return {"predictions": [], "counts": {}, "total_shown": 0, "matches": [], "points_reference": _points_from_config(cfg)}
+        q["user_id"] = {"$in": user_ids}
+    lim = max(1, min(int(limit), 2000))
+    preds = await db.world_cup_predictions.find(q, {"_id": 0}).sort("updated_at", -1).limit(lim).to_list(lim)
+    teams_by_id = await _teams_by_id(db)
+    matches_by_id = {}
+    async for m in db.world_cup_matches.find({}, {"_id": 0}):
+        mid = m.get("id")
+        if mid:
+            matches_by_id[mid] = m
+    groups_by_id = {}
+    async for g in db.world_cup_groups.find({}, {"_id": 0}):
+        gid = g.get("group_id")
+        if gid:
+            groups_by_id[gid] = g
+    user_ids = list({p.get("user_id") for p in preds if p.get("user_id")})
+    usernames = {}
+    if user_ids:
+        async for u in db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "username": 1}):
+            usernames[u["id"]] = u.get("username") or "?"
+    entries_by_user = {}
+    if user_ids:
+        async for e in db.world_cup_entries.find({"user_id": {"$in": user_ids}}, {"_id": 0}):
+            entries_by_user[e.get("user_id")] = e
+    enriched = [
+        _enrich_prediction_for_staff(p, teams_by_id, matches_by_id, groups_by_id, usernames, entries_by_user, cfg)
+        for p in preds
+    ]
+    if verdict:
+        enriched = [r for r in enriched if r.get("verdict") == verdict]
+    counts = {}
+    async for doc in db.world_cup_predictions.aggregate([{"$group": {"_id": "$type", "n": {"$sum": 1}}}]):
+        counts[doc["_id"]] = int(doc["n"])
+    match_options = []
+    for mid, m in matches_by_id.items():
+        ht = teams_by_id.get(m.get("home_team_id")) or {}
+        at = teams_by_id.get(m.get("away_team_id")) or {}
+        snap = _match_snapshot(m, teams_by_id)
+        n = await db.world_cup_predictions.count_documents(
+            {"target_id": mid, "type": {"$in": [PRED_MATCH_SCORE, PRED_MATCH_SCORER]}}
+        )
+        match_options.append({
+            "id": mid,
+            "label": snap.get("label") if snap else f"{mid}",
+            "kickoff": m.get("kickoff"),
+            "stage": m.get("stage"),
+            "status": m.get("status"),
+            "result": (snap or {}).get("result"),
+            "prediction_count": n,
+        })
+    match_options.sort(key=lambda x: x.get("kickoff") or "")
+    group_options = []
+    for gid in GROUP_IDS:
+        grp = groups_by_id.get(gid) or {}
+        winner = teams_by_id.get(grp.get("winner_team_id") or "") or {}
+        n = await db.world_cup_predictions.count_documents({"target_id": gid, "type": PRED_GROUP_WINNER})
+        group_options.append({
+            "group_id": gid,
+            "winner_team": _team_brief(winner),
+            "settled": bool(grp.get("winner_team_id")),
+            "prediction_count": n,
+        })
+    return {
+        "predictions": enriched,
+        "counts": counts,
+        "total_shown": len(enriched),
+        "matches": match_options,
+        "groups": group_options,
+        "points_reference": _points_from_config(cfg),
+        "tournament": {
+            "champion_team_id": cfg.get("champion_team_id"),
+            "runner_up_team_id": cfg.get("runner_up_team_id"),
+            "third_place_team_id": cfg.get("third_place_team_id"),
+        },
+    }
+
+
 async def _settle_group_predictions(db, send_notification, cfg: dict, group_id: str, winner_team_id: str) -> int:
     pts_cfg = _points_from_config(cfg)
     pts = pts_cfg["group_winner_points"]
@@ -621,7 +970,62 @@ async def _sync_fixtures_from_odds(db) -> dict:
             await db.world_cup_matches.insert_one(doc)
         synced += 1
     await db.game_config.update_one({"id": CONFIG_ID}, {"$set": {"last_fixture_sync_at": now}}, upsert=True)
+    await _refresh_tournament_start_in_config(db)
     return {"synced": synced, "skipped": skipped, "source_events": len(events or [])}
+
+
+async def _get_tournament_start_at(db, cfg: dict) -> Optional[datetime]:
+    explicit = _parse_iso(cfg.get("tournament_start_at"))
+    if explicit:
+        return explicit
+    cursor = db.world_cup_matches.find(
+        {"kickoff": {"$exists": True, "$nin": [None, ""]}},
+        {"kickoff": 1},
+    ).sort("kickoff", 1).limit(1)
+    docs = await cursor.to_list(1)
+    if docs and docs[0].get("kickoff"):
+        return _parse_iso(docs[0]["kickoff"])
+    return None
+
+
+def _is_tournament_started_at(start: Optional[datetime]) -> bool:
+    if not start:
+        return False
+    return datetime.now(timezone.utc) >= start
+
+
+async def _is_tournament_started(db, cfg: dict) -> bool:
+    start = await _get_tournament_start_at(db, cfg)
+    return _is_tournament_started_at(start)
+
+
+async def _refresh_tournament_start_in_config(db) -> Optional[str]:
+    cursor = db.world_cup_matches.find(
+        {"kickoff": {"$exists": True, "$nin": [None, ""]}},
+        {"kickoff": 1},
+    ).sort("kickoff", 1).limit(1)
+    docs = await cursor.to_list(1)
+    if not docs or not docs[0].get("kickoff"):
+        return None
+    kickoff = docs[0]["kickoff"]
+    await db.game_config.update_one(
+        {"id": CONFIG_ID},
+        {"$set": {"tournament_start_at": kickoff, "tournament_start_updated_at": _now_iso()}},
+        upsert=True,
+    )
+    return kickoff
+
+
+def _draft_timing_payload(cfg: dict, tournament_start: Optional[datetime]) -> dict:
+    draft_at = None
+    if tournament_start:
+        draft_at = tournament_start - timedelta(hours=DRAFT_HOURS_BEFORE_START)
+    return {
+        "tournament_start_at": tournament_start.isoformat() if tournament_start else cfg.get("tournament_start_at"),
+        "draft_scheduled_at": draft_at.isoformat() if draft_at else None,
+        "draft_run_at": cfg.get("draft_run_at"),
+        "draft_hours_before_start": DRAFT_HOURS_BEFORE_START,
+    }
 
 
 def _scores_from_api_event(api_ev: dict) -> tuple:
@@ -681,30 +1085,31 @@ async def _auto_settle_from_scores(db, send_notification) -> dict:
     return {"settled": settled}
 
 
-async def _run_draft(db) -> dict:
+async def _run_draft_internal(db, send_notification=None) -> dict:
     cfg = await _load_config(db)
     if cfg.get("draft_run"):
-        raise HTTPException(status_code=400, detail="Draft already run")
+        return {"ok": False, "error": "Draft already run"}
     entries = await db.world_cup_entries.find({}, {"_id": 0, "user_id": 1, "ghost_entry": 1}).to_list(5000)
     if not entries:
-        raise HTTPException(status_code=400, detail="No entrants")
+        return {"ok": False, "error": "No entrants"}
+    real_entries = [e for e in entries if not e.get("ghost_entry")]
+    if not real_entries:
+        return {"ok": False, "error": "No real entrants (ghost-only)"}
     teams = await db.world_cup_teams.find({}, {"_id": 0, "id": 1}).to_list(100)
     team_ids = [t["id"] for t in teams if t.get("id")]
     if not team_ids:
-        raise HTTPException(status_code=400, detail="No teams seeded")
+        return {"ok": False, "error": "No teams seeded"}
     seed = random.randint(0, 2**31 - 1)
     rng = random.Random(seed)
     shuffled = list(team_ids)
     rng.shuffle(shuffled)
     n_all = len(entries)
-    real_entries = [e for e in entries if not e.get("ghost_entry")]
     ghost_count = n_all - len(real_entries)
     assignments = {e["user_id"]: [] for e in entries}
-    if real_entries:
-        n_real = len(real_entries)
-        for i, tid in enumerate(shuffled):
-            uid = real_entries[i % n_real]["user_id"]
-            assignments[uid].append(tid)
+    n_real = len(real_entries)
+    for i, tid in enumerate(shuffled):
+        uid = real_entries[i % n_real]["user_id"]
+        assignments[uid].append(tid)
     for i, entry in enumerate(entries):
         if not entry.get("ghost_entry"):
             continue
@@ -718,15 +1123,122 @@ async def _run_draft(db) -> dict:
         )
     await db.game_config.update_one(
         {"id": CONFIG_ID},
-        {"$set": {"draft_run": True, "draft_seed": seed, "draft_run_at": now}},
+        {"$set": {"draft_run": True, "draft_seed": seed, "draft_run_at": now, "entry_open": False}},
         upsert=True,
     )
+    if send_notification:
+        await _notify_draft_assignments(db, send_notification, assignments, entries)
+    real_counts = [len(assignments[e["user_id"]]) for e in real_entries]
     return {
+        "ok": True,
         "entrants": n_all,
         "real_entrants": len(real_entries),
         "ghost_entrants": ghost_count,
         "teams": len(team_ids),
         "draft_seed": seed,
+        "teams_per_user_min": min(real_counts) if real_counts else 0,
+        "teams_per_user_max": max(real_counts) if real_counts else 0,
+    }
+
+
+async def _notify_draft_assignments(db, send_notification, assignments: dict, entries: list) -> None:
+    ghost_ids = {e["user_id"] for e in entries if e.get("ghost_entry")}
+    teams = await _teams_by_id(db)
+    for uid, tids in assignments.items():
+        if uid in ghost_ids or not tids:
+            continue
+        names = [teams[tid].get("name") or "?" for tid in tids if tid in teams]
+        if not names:
+            continue
+        n = len(names)
+        preview = ", ".join(names[:5])
+        if n > 5:
+            preview += f" (+{n - 5} more)"
+        try:
+            await send_notification(
+                uid,
+                "World Cup draft",
+                f"Team draft complete — you were assigned {n} nation(s): {preview}.",
+                "info",
+                category="world_cup",
+            )
+        except Exception:
+            pass
+
+
+async def _run_draft(db, send_notification=None) -> dict:
+    result = await _run_draft_internal(db, send_notification)
+    if not result.get("ok"):
+        raise HTTPException(status_code=400, detail=result.get("error") or "Draft failed")
+    return {k: v for k, v in result.items() if k != "ok"}
+
+
+async def _auto_run_draft_if_due(db, send_notification=None) -> dict:
+    cfg = await _load_config(db)
+    if not cfg.get("enabled"):
+        return {"skipped": True, "reason": "disabled"}
+    if cfg.get("draft_run"):
+        return {"skipped": True, "reason": "already_run"}
+    start = await _get_tournament_start_at(db, cfg)
+    if not start:
+        return {"skipped": True, "reason": "no_tournament_start"}
+    draft_at = start - timedelta(hours=DRAFT_HOURS_BEFORE_START)
+    now = datetime.now(timezone.utc)
+    timing = _draft_timing_payload(cfg, start)
+    if now < draft_at:
+        return {"skipped": True, "reason": "not_due", **timing}
+    result = await _run_draft_internal(db, send_notification)
+    if not result.get("ok"):
+        return {"skipped": True, "reason": result.get("error", "failed"), **timing, **result}
+    await db.game_config.update_one(
+        {"id": CONFIG_ID},
+        {"$set": {"auto_draft_ran_at": _now_iso()}},
+        upsert=True,
+    )
+    return {"ok": True, "auto": True, **timing, **{k: v for k, v in result.items() if k != "ok"}}
+
+
+async def _build_draft_results(db) -> dict:
+    cfg = await _load_config(db)
+    start = await _get_tournament_start_at(db, cfg)
+    timing = _draft_timing_payload(cfg, start)
+    if not cfg.get("draft_run"):
+        return {"draft_run": False, **timing, "assignments": []}
+    teams = await _teams_by_id(db)
+    entries = await db.world_cup_entries.find(
+        {"ghost_entry": {"$ne": True}},
+        {"_id": 0, "user_id": 1, "drafted_team_ids": 1, "entered_at": 1},
+    ).sort("entered_at", 1).to_list(5000)
+    user_ids = [e["user_id"] for e in entries if e.get("user_id")]
+    usernames = {}
+    if user_ids:
+        async for u in db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "username": 1}):
+            usernames[u["id"]] = u.get("username") or "?"
+    assignments = []
+    team_total = 0
+    for e in entries:
+        uid = e.get("user_id")
+        tids = e.get("drafted_team_ids") or []
+        team_objs = [teams[tid] for tid in tids if tid in teams]
+        team_total += len(team_objs)
+        assignments.append({
+            "user_id": uid,
+            "username": usernames.get(uid, "?"),
+            "teams": team_objs,
+            "team_count": len(team_objs),
+        })
+    assignments.sort(key=lambda x: (-x["team_count"], (x.get("username") or "").lower()))
+    all_teams = await db.world_cup_teams.count_documents({})
+    counts = [a["team_count"] for a in assignments]
+    return {
+        "draft_run": True,
+        **timing,
+        "real_entrants": len(assignments),
+        "total_teams_distributed": team_total,
+        "total_teams": all_teams,
+        "teams_per_user_min": min(counts) if counts else 0,
+        "teams_per_user_max": max(counts) if counts else 0,
+        "assignments": assignments,
     }
 
 
@@ -767,6 +1279,249 @@ async def _seed_2026(db) -> dict:
     return {"teams": teams_inserted, "groups": len(data.get("groups") or [])}
 
 
+def _summarize_user_predictions(preds: list, teams_by_id: dict) -> dict:
+    stats = {
+        "total": len(preds),
+        "open": 0,
+        "won": 0,
+        "lost": 0,
+        "pending_payout": 0,
+        "points_paid": 0,
+        "points_pending": 0,
+    }
+    group_picks = {}
+    second_place = None
+    third_place = None
+    for p in preds:
+        pts = int(p.get("points_awarded") or 0)
+        if not p.get("settled"):
+            stats["open"] += 1
+        elif pts > 0:
+            stats["won"] += 1
+            if p.get("payout_status") == "pending":
+                stats["pending_payout"] += 1
+                stats["points_pending"] += pts
+            elif p.get("payout_status") == "paid":
+                stats["points_paid"] += pts
+            elif p.get("payout_status") != "ghost":
+                stats["points_paid"] += pts
+        else:
+            stats["lost"] += 1
+        ptype = p.get("type")
+        val = p.get("value") or {}
+        if ptype == PRED_GROUP_WINNER:
+            tid = val.get("team_id") if isinstance(val, dict) else val
+            group_picks[p.get("target_id") or "?"] = (teams_by_id.get(tid) or {}).get("name") or "?"
+        elif ptype == PRED_SECOND_PLACE:
+            tid = val.get("team_id") if isinstance(val, dict) else val
+            second_place = (teams_by_id.get(tid) or {}).get("name") or "?"
+        elif ptype == PRED_THIRD_PLACE:
+            tid = val.get("team_id") if isinstance(val, dict) else val
+            third_place = (teams_by_id.get(tid) or {}).get("name") or "?"
+    return {
+        **stats,
+        "group_picks": group_picks,
+        "second_place": second_place,
+        "third_place": third_place,
+    }
+
+
+async def _build_admin_leaderboard(db, cfg: dict, ghost_ids: set, limit: int = 100) -> list:
+    pts_cfg = _points_from_config(cfg)
+    jackpot_pts = pts_cfg["jackpot_points"]
+    totals: Dict[str, dict] = {}
+    async for p in db.world_cup_predictions.find(
+        {"settled": True, "points_awarded": {"$gt": 0}},
+        {"_id": 0, "user_id": 1, "points_awarded": 1, "payout_status": 1},
+    ):
+        uid = p.get("user_id")
+        if not uid or uid in ghost_ids:
+            continue
+        row = totals.setdefault(uid, {"points_paid": 0, "points_pending": 0, "wins": 0})
+        pts = int(p.get("points_awarded") or 0)
+        row["wins"] += 1
+        if p.get("payout_status") == "pending":
+            row["points_pending"] += pts
+        else:
+            row["points_paid"] += pts
+    async for e in db.world_cup_entries.find(
+        {"ghost_entry": {"$ne": True}, "$or": [{"jackpot_awarded": True}, {"jackpot_pending": True}]},
+        {"_id": 0, "user_id": 1, "jackpot_pending": 1, "jackpot_awarded": 1},
+    ):
+        uid = e.get("user_id")
+        if not uid:
+            continue
+        row = totals.setdefault(uid, {"points_paid": 0, "points_pending": 0, "wins": 0})
+        if e.get("jackpot_pending"):
+            row["points_pending"] += jackpot_pts
+            row["wins"] += 1
+        elif e.get("jackpot_awarded"):
+            row["points_paid"] += jackpot_pts
+            row["wins"] += 1
+    if not totals:
+        return []
+    user_ids = list(totals.keys())
+    usernames = {}
+    async for u in db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "username": 1}):
+        usernames[u["id"]] = u.get("username") or "?"
+    rows = []
+    for uid, t in totals.items():
+        paid = int(t["points_paid"])
+        pending = int(t["points_pending"])
+        rows.append({
+            "user_id": uid,
+            "username": usernames.get(uid, "?"),
+            "points_paid": paid,
+            "points_pending": pending,
+            "points_total": paid + pending,
+            "wins": int(t["wins"]),
+        })
+    rows.sort(key=lambda x: (-x["points_total"], -x["points_paid"], x["username"].lower()))
+    for i, row in enumerate(rows[:limit]):
+        row["rank"] = i + 1
+    return rows[:limit]
+
+
+async def _build_admin_overview(db, username: Optional[str] = None, limit: int = 500) -> dict:
+    cfg = await _load_config(db)
+    teams_by_id = await _teams_by_id(db)
+    ghost_ids = await _ghost_user_ids(db)
+    start = await _get_tournament_start_at(db, cfg)
+    tournament_started = _is_tournament_started_at(start)
+    q: dict = {}
+    if username and username.strip():
+        uname = username.strip()
+        user_ids = []
+        async for u in db.users.find(
+            {"username": {"$regex": re.escape(uname), "$options": "i"}},
+            {"_id": 0, "id": 1},
+        ).limit(50):
+            if u.get("id"):
+                user_ids.append(u["id"])
+        if not user_ids:
+            return {
+                "summary": {},
+                "entrants": [],
+                "leaderboard": [],
+                "tournament": {},
+                "total_shown": 0,
+            }
+        q["user_id"] = {"$in": user_ids}
+    lim = max(1, min(int(limit), 2000))
+    entries = await db.world_cup_entries.find(q, {"_id": 0}).sort("entered_at", 1).limit(lim).to_list(lim)
+    user_ids = [e.get("user_id") for e in entries if e.get("user_id")]
+    usernames = {}
+    if user_ids:
+        async for u in db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "username": 1}):
+            usernames[u["id"]] = u.get("username") or "?"
+    preds_by_user: Dict[str, list] = {uid: [] for uid in user_ids}
+    if user_ids:
+        async for p in db.world_cup_predictions.find({"user_id": {"$in": user_ids}}, {"_id": 0}):
+            uid = p.get("user_id")
+            if uid in preds_by_user:
+                preds_by_user[uid].append(p)
+    global_open = await db.world_cup_predictions.count_documents({"settled": {"$ne": True}})
+    global_won = await db.world_cup_predictions.count_documents({"settled": True, "points_awarded": {"$gt": 0}})
+    global_lost = await db.world_cup_predictions.count_documents({"settled": True, "points_awarded": 0})
+    global_pending = await db.world_cup_predictions.count_documents({"payout_status": "pending"})
+    pending_counts = await _pending_payout_counts(db)
+    entrants_out = []
+    for e in entries:
+        uid = e.get("user_id")
+        tids = e.get("drafted_team_ids") or []
+        drafted = [_team_brief(teams_by_id[tid]) for tid in tids if tid in teams_by_id]
+        pred_summary = _summarize_user_predictions(preds_by_user.get(uid) or [], teams_by_id)
+        jackpot_pts = _points_from_config(cfg)["jackpot_points"]
+        if e.get("jackpot_pending"):
+            pred_summary["pending_payout"] += 1
+            pred_summary["points_pending"] += jackpot_pts
+        elif e.get("jackpot_awarded"):
+            pred_summary["points_paid"] += jackpot_pts
+            pred_summary["won"] += 1
+        entrants_out.append({
+            "user_id": uid,
+            "username": usernames.get(uid, "?"),
+            "ghost_entry": bool(e.get("ghost_entry")),
+            "entered_at": e.get("entered_at"),
+            "drafted_teams": drafted,
+            "drafted_team_names": [t.get("name") for t in drafted if t.get("name")],
+            "drafted_team_count": len(drafted),
+            "jackpot_pending": bool(e.get("jackpot_pending")),
+            "jackpot_awarded": bool(e.get("jackpot_awarded")),
+            "predictions": pred_summary,
+        })
+    entrants_out.sort(key=lambda x: (-(x["predictions"].get("points_paid", 0) + x["predictions"].get("points_pending", 0)), x.get("username") or ""))
+    champion_id = cfg.get("champion_team_id")
+    runner_id = cfg.get("runner_up_team_id")
+    third_id = cfg.get("third_place_team_id")
+    return {
+        "summary": {
+            "entrants": await db.world_cup_entries.count_documents({}),
+            "real_entrants": await db.world_cup_entries.count_documents({"ghost_entry": {"$ne": True}}),
+            "ghost_entrants": await db.world_cup_entries.count_documents({"ghost_entry": True}),
+            "draft_run": bool(cfg.get("draft_run")),
+            "tournament_started": tournament_started,
+            "predictions_total": global_open + global_won + global_lost,
+            "predictions_open": global_open,
+            "predictions_won": global_won,
+            "predictions_lost": global_lost,
+            "predictions_pending_payout": global_pending,
+            **pending_counts,
+        },
+        "tournament": {
+            "tournament_start_at": start.isoformat() if start else cfg.get("tournament_start_at"),
+            "tournament_started": tournament_started,
+            "champion": _team_brief(teams_by_id.get(champion_id or "")),
+            "runner_up": _team_brief(teams_by_id.get(runner_id or "")),
+            "third_place": _team_brief(teams_by_id.get(third_id or "")),
+            "phase": cfg.get("phase") or "upcoming",
+        },
+        "leaderboard": await _build_admin_leaderboard(db, cfg, ghost_ids, 100),
+        "entrants": entrants_out,
+        "total_shown": len(entrants_out),
+    }
+
+
+async def _build_admin_user_detail(db, user_id: str) -> dict:
+    cfg = await _load_config(db)
+    entry = await db.world_cup_entries.find_one({"user_id": user_id}, {"_id": 0})
+    if not entry:
+        raise HTTPException(status_code=404, detail="User not entered")
+    teams_by_id = await _teams_by_id(db)
+    matches_by_id = {}
+    async for m in db.world_cup_matches.find({}, {"_id": 0}):
+        mid = m.get("id")
+        if mid:
+            matches_by_id[mid] = m
+    groups_by_id = {}
+    async for g in db.world_cup_groups.find({}, {"_id": 0}):
+        gid = g.get("group_id")
+        if gid:
+            groups_by_id[gid] = g
+    u = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "username": 1})
+    usernames = {user_id: (u or {}).get("username") or "?"}
+    entries_by_user = {user_id: entry}
+    preds = await db.world_cup_predictions.find({"user_id": user_id}, {"_id": 0}).sort("updated_at", -1).to_list(500)
+    enriched = [
+        _enrich_prediction_for_staff(p, teams_by_id, matches_by_id, groups_by_id, usernames, entries_by_user, cfg)
+        for p in preds
+    ]
+    tids = entry.get("drafted_team_ids") or []
+    drafted = [_team_brief(teams_by_id[tid]) for tid in tids if tid in teams_by_id]
+    summary = _summarize_user_predictions(preds, teams_by_id)
+    return {
+        "user_id": user_id,
+        "username": usernames.get(user_id, "?"),
+        "ghost_entry": bool(entry.get("ghost_entry")),
+        "entered_at": entry.get("entered_at"),
+        "drafted_teams": drafted,
+        "jackpot_pending": bool(entry.get("jackpot_pending")),
+        "jackpot_awarded": bool(entry.get("jackpot_awarded")),
+        "predictions_summary": summary,
+        "predictions": enriched,
+    }
+
+
 class WorldCupPredictionBody(BaseModel):
     type: str = Field(..., min_length=2)
     target_id: str = Field(..., min_length=1)
@@ -780,6 +1535,7 @@ class WorldCupConfigPatch(BaseModel):
     auto_sync_enabled: Optional[bool] = None
     banner_text: Optional[str] = None
     phase: Optional[str] = None
+    tournament_start_at: Optional[str] = None
     group_winner_points: Optional[int] = None
     jackpot_points: Optional[int] = None
     second_place_points: Optional[int] = None
@@ -843,6 +1599,9 @@ def register(router):
         if entry and entry.get("drafted_team_ids"):
             tmap = {t["id"]: t for t in teams}
             drafted = [tmap[tid] for tid in entry["drafted_team_ids"] if tid in tmap]
+        start = await _get_tournament_start_at(db, cfg)
+        draft_timing = _draft_timing_payload(cfg, start)
+        tournament_started = _is_tournament_started_at(start)
         return {
             "enabled": True,
             "config": {k: cfg.get(k) for k in list(DEFAULT_POINTS.keys()) + ["entry_open", "draft_run", "phase", "banner_text"]},
@@ -858,9 +1617,18 @@ def register(router):
             "entry": entry,
             "drafted_teams": drafted,
             "group_locks": group_locks,
+            "tournament_started": tournament_started,
+            "tournament_picks_locked": tournament_started,
             "teams_count": len(teams),
             "pending_payouts": pending_payouts,
+            **draft_timing,
         }
+
+    @router.get("/world-cup/draft-results", dependencies=_wc_rl)
+    async def world_cup_draft_results(current_user: dict = Depends(get_current_user)):
+        cfg = await _load_config(db)
+        await _require_enabled(cfg)
+        return await _build_draft_results(db)
 
     @router.get("/world-cup/teams", dependencies=_wc_rl)
     async def world_cup_teams(current_user: dict = Depends(get_current_user)):
@@ -1008,6 +1776,8 @@ def register(router):
         if ptype == PRED_GROUP_WINNER:
             if target not in GROUP_IDS:
                 raise HTTPException(status_code=400, detail="Invalid group")
+            if await _is_tournament_started(db, cfg):
+                raise HTTPException(status_code=400, detail="Tournament has started — group picks are locked")
             locks = await _group_lock_times(db)
             if _is_locked(locks.get(target)):
                 raise HTTPException(status_code=400, detail=f"Group {target} is locked")
@@ -1018,8 +1788,8 @@ def register(router):
             if not t:
                 raise HTTPException(status_code=400, detail="Team not in group")
         elif ptype in (PRED_SECOND_PLACE, PRED_THIRD_PLACE):
-            if cfg.get("draft_run") and ptype == PRED_SECOND_PLACE:
-                pass
+            if await _is_tournament_started(db, cfg):
+                raise HTTPException(status_code=400, detail="Tournament has started — picks are locked")
             team_id = body.value.get("team_id") if isinstance(body.value, dict) else body.value
             if not team_id or not await db.world_cup_teams.find_one({"id": team_id}):
                 raise HTTPException(status_code=400, detail="Invalid team")
@@ -1093,6 +1863,8 @@ def register(router):
         ghost_entrants = await db.world_cup_entries.count_documents({"ghost_entry": True})
         unsettled = await db.world_cup_matches.count_documents({"status": {"$ne": "settled"}})
         pending = await _pending_payout_counts(db)
+        start = await _get_tournament_start_at(db, cfg)
+        draft_timing = _draft_timing_payload(cfg, start)
         return {
             "entrants": entrants,
             "real_entrants": real_entrants,
@@ -1102,6 +1874,7 @@ def register(router):
             "last_fixture_sync_at": cfg.get("last_fixture_sync_at"),
             "last_auto_settle_at": cfg.get("last_auto_settle_at"),
             **pending,
+            **draft_timing,
         }
 
     @router.post("/world-cup/staff/run-draft")
@@ -1109,7 +1882,7 @@ def register(router):
         _require_ent(current_user)
         cfg = await _load_config(db)
         await _require_enabled_staff(cfg)
-        return await _run_draft(db)
+        return await _run_draft(db, send_notification)
 
     @router.patch("/world-cup/staff/match/{match_id}/result")
     async def wc_staff_patch_result(match_id: str, body: MatchResultPatch, current_user: dict = Depends(get_current_user)):
@@ -1159,15 +1932,37 @@ def register(router):
         cfg = await _load_config(db)
         await _require_enabled_staff(cfg)
         entries = await db.world_cup_entries.find({}, {"_id": 0}).limit(int(limit)).to_list(int(limit))
+        user_ids = [e.get("user_id") for e in entries if e.get("user_id")]
+        usernames = {}
+        if user_ids:
+            async for u in db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "username": 1}):
+                usernames[u["id"]] = u.get("username") or "?"
+        for e in entries:
+            e["username"] = usernames.get(e.get("user_id"), "?")
         return {"entries": entries}
 
     @router.get("/world-cup/staff/predictions")
-    async def wc_staff_predictions(limit: int = Query(100, ge=1, le=500), current_user: dict = Depends(get_current_user)):
-        _require_ent(current_user)
+    async def wc_staff_predictions(
+        limit: int = Query(500, ge=1, le=2000),
+        type: Optional[str] = Query(None, alias="type"),
+        match_id: Optional[str] = Query(None),
+        group_id: Optional[str] = Query(None),
+        username: Optional[str] = Query(None),
+        settled: Optional[bool] = Query(None),
+        payout_status: Optional[str] = Query(None),
+        verdict: Optional[str] = Query(None),
+        current_user: dict = Depends(get_current_user),
+    ):
+        _require_staff(current_user)
         cfg = await _load_config(db)
         await _require_enabled_staff(cfg)
-        preds = await db.world_cup_predictions.find({}, {"_id": 0}).sort("created_at", -1).limit(int(limit)).to_list(int(limit))
-        return {"predictions": preds}
+        if type and type not in (PRED_GROUP_WINNER, PRED_MATCH_SCORE, PRED_MATCH_SCORER, PRED_SECOND_PLACE, PRED_THIRD_PLACE):
+            raise HTTPException(status_code=400, detail="Invalid prediction type filter")
+        if verdict and verdict not in ("pending", "correct", "result_correct", "incorrect"):
+            raise HTTPException(status_code=400, detail="Invalid verdict filter")
+        return await _build_staff_predictions_feed(
+            db, limit, type, match_id, group_id, username, settled, payout_status, verdict
+        )
 
     @router.get("/world-cup/staff/pending-payouts")
     async def wc_staff_pending_payouts(limit: int = Query(100, ge=1, le=500), current_user: dict = Depends(get_current_user)):
@@ -1217,12 +2012,26 @@ def register(router):
     async def admin_wc_get_config(current_user: dict = Depends(require_admin)):
         return await _load_config(db)
 
+    @router.get("/admin/world-cup/overview")
+    async def admin_wc_overview(
+        username: Optional[str] = Query(None),
+        limit: int = Query(500, ge=1, le=2000),
+        current_user: dict = Depends(require_admin),
+    ):
+        return await _build_admin_overview(db, username, limit)
+
+    @router.get("/admin/world-cup/user/{user_id}")
+    async def admin_wc_user_detail(user_id: str, current_user: dict = Depends(require_admin)):
+        return await _build_admin_user_detail(db, user_id)
+
     @router.post("/admin/world-cup/sync-fixtures")
     async def admin_wc_sync(current_user: dict = Depends(require_admin)):
         cfg = await _load_config(db)
         if not cfg.get("enabled"):
             raise HTTPException(status_code=400, detail="Enable event first")
-        return await _sync_fixtures_from_odds(db)
+        synced = await _sync_fixtures_from_odds(db)
+        draft = await _auto_run_draft_if_due(db, send_notification)
+        return {**synced, "auto_draft": draft}
 
     @router.post("/admin/world-cup/auto-settle-run")
     async def admin_wc_auto_settle(current_user: dict = Depends(require_admin)):
@@ -1239,6 +2048,8 @@ def register(router):
         real_entrants = await db.world_cup_entries.count_documents({"ghost_entry": {"$ne": True}})
         ghost_entrants = await db.world_cup_entries.count_documents({"ghost_entry": True})
         pending = await _pending_payout_counts(db)
+        start = await _get_tournament_start_at(db, cfg)
+        draft_timing = _draft_timing_payload(cfg, start)
         return {
             "enabled": bool(cfg.get("enabled")),
             "auto_sync_enabled": bool(cfg.get("auto_sync_enabled", True)),
@@ -1250,7 +2061,9 @@ def register(router):
             "ghost_entrants": ghost_entrants,
             "draft_run": bool(cfg.get("draft_run")),
             "odds_api_configured": bool(sb._odds_api_key()),
+            "auto_draft_ran_at": cfg.get("auto_draft_ran_at"),
             **pending,
+            **draft_timing,
         }
 
     @router.get("/admin/world-cup/pending-payouts")
@@ -1311,7 +2124,9 @@ def register(router):
         disabled = await _cron_guard()
         if disabled:
             return disabled
-        return await _sync_fixtures_from_odds(db)
+        synced = await _sync_fixtures_from_odds(db)
+        draft = await _auto_run_draft_if_due(db, send_notification)
+        return {**synced, "auto_draft": draft}
 
     @router.post("/world-cup/cron/auto-settle")
     async def wc_cron_settle(_: None = Depends(verify_wc_cron)):
@@ -1319,6 +2134,30 @@ def register(router):
         if disabled:
             return disabled
         return await _auto_settle_from_scores(db, send_notification)
+
+    @router.post("/world-cup/cron/auto-draft")
+    async def wc_cron_auto_draft(_: None = Depends(verify_wc_cron)):
+        cfg = await _load_config(db)
+        if not cfg.get("enabled"):
+            return {"skipped": True, "reason": "disabled"}
+        return await _auto_run_draft_if_due(db, send_notification)
+
+
+async def run_world_cup_auto_draft_ticker():
+    """Background ticker: run team draft 24h before tournament start."""
+    import server as srv
+
+    interval = max(300, int(os.environ.get("WORLD_CUP_AUTO_DRAFT_INTERVAL_SEC", "900")))
+    while True:
+        try:
+            cfg = await _load_config(srv.db)
+            if cfg.get("enabled"):
+                result = await _auto_run_draft_if_due(srv.db, srv.send_notification)
+                if result.get("ok"):
+                    logger.info("World Cup auto-draft ran: %s", result)
+        except Exception as ex:
+            logger.warning("World Cup auto-draft ticker: %s", ex)
+        await asyncio.sleep(interval)
 
 
 async def run_world_cup_auto_settle_ticker():

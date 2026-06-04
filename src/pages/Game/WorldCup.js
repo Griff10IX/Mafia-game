@@ -129,6 +129,7 @@ export default function WorldCup() {
   const [matches, setMatches] = useState([]);
   const [predictions, setPredictions] = useState([]);
   const [leaderboard, setLeaderboard] = useState(null);
+  const [draftResults, setDraftResults] = useState(null);
   const [tab, setTab] = useState('overview');
   const [entering, setEntering] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -195,6 +196,15 @@ export default function WorldCup() {
     }
   }, []);
 
+  const loadDraftResults = useCallback(async () => {
+    try {
+      const r = await api.get('/world-cup/draft-results');
+      setDraftResults(r.data);
+    } catch (e) {
+      toast.error(getApiErrorMessage(e));
+    }
+  }, []);
+
   useEffect(() => {
     load();
   }, [load]);
@@ -202,6 +212,10 @@ export default function WorldCup() {
   useEffect(() => {
     if (tab === 'leaderboard' && !disabled) loadLeaderboard();
   }, [tab, disabled, loadLeaderboard]);
+
+  useEffect(() => {
+    if (tab === 'teams' && !disabled) loadDraftResults();
+  }, [tab, disabled, loadDraftResults, status?.config?.draft_run]);
 
   const enterEvent = async () => {
     setEntering(true);
@@ -229,7 +243,16 @@ export default function WorldCup() {
     }
   };
 
+  const tournamentPicksLocked = status?.tournament_picks_locked === true
+    || status?.tournament_started === true
+    || (status?.tournament_start_at ? new Date(status.tournament_start_at).getTime() <= Date.now() : false);
+
   const savePrediction = async (type, target_id, value) => {
+    const lockEarlyTypes = ['group_winner', 'second_place', 'third_place'];
+    if (tournamentPicksLocked && lockEarlyTypes.includes(type)) {
+      toast.error('Tournament has started — these picks are locked');
+      return;
+    }
     setSaving(true);
     try {
       await api.post('/world-cup/predictions', { type, target_id, value });
@@ -244,6 +267,7 @@ export default function WorldCup() {
   };
 
   const groupLocked = (gid) => {
+    if (tournamentPicksLocked) return true;
     const lock = status?.group_locks?.[gid];
     if (!lock) return false;
     return new Date(lock).getTime() <= Date.now();
@@ -326,10 +350,11 @@ export default function WorldCup() {
           <WcPanel accent className="p-4 space-y-3">
             <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-wider">How it works</h2>
             <ul className="space-y-2 text-sm text-mutedForeground">
-              <li className="flex gap-2"><span className="text-primary">1.</span> Join free — enter the event to join the team draft raffle.</li>
-              <li className="flex gap-2"><span className="text-primary">2.</span> Get assigned nation(s) — if your team wins the World Cup, earn <WcPointsBadge pts={points.jackpot_points} />.</li>
-              <li className="flex gap-2"><span className="text-primary">3.</span> Predict group winners — <WcPointsBadge pts={points.group_winner_points} /> each.</li>
-              <li className="flex gap-2"><span className="text-primary">4.</span> Predict match scores, scorers, 2nd &amp; 3rd place for more points.</li>
+              <li className="flex gap-2"><span className="text-primary">1.</span> Join free — enter before the team draft (auto-runs 24 hours before kickoff).</li>
+              <li className="flex gap-2"><span className="text-primary">2.</span> Every entrant gets assigned nation(s) — all 48 teams are distributed (more teams per player if fewer entrants).</li>
+              <li className="flex gap-2"><span className="text-primary">3.</span> If any assigned nation wins the World Cup, earn <WcPointsBadge pts={points.jackpot_points} />.</li>
+              <li className="flex gap-2"><span className="text-primary">4.</span> Predict group winners — <WcPointsBadge pts={points.group_winner_points} /> each.</li>
+              <li className="flex gap-2"><span className="text-primary">5.</span> Predict match scores, scorers, 2nd &amp; 3rd place for more points.</li>
             </ul>
             {!status?.entered ? (
               <div className="space-y-2">
@@ -355,7 +380,7 @@ export default function WorldCup() {
             ) : (
               <div className="space-y-1">
                 <p className="text-sm text-emerald-400 font-heading">
-                  ✓ You&apos;re entered{status?.config?.draft_run ? ' — draft complete' : ' — awaiting team draft'}.
+                  ✓ You&apos;re entered{status?.config?.draft_run ? ' — draft complete' : status?.draft_scheduled_at ? ' — draft auto-runs 24h before kickoff' : ' — awaiting fixtures for draft schedule'}.
                 </p>
                 {status?.ghost_entry ? (
                   <p className="text-[10px] text-amber-300/90 font-heading uppercase tracking-wider">
@@ -378,9 +403,23 @@ export default function WorldCup() {
           <WcPanel className="p-4">
             <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-wider mb-2">Your drafted teams</h2>
             {!status?.config?.draft_run ? (
-              <p className="text-sm text-mutedForeground">Team draft has not run yet. Enter the event and wait for entertainers to run the raffle.</p>
+              <div className="space-y-2">
+                <p className="text-sm text-mutedForeground">
+                  The team draft runs automatically <strong className="text-foreground">24 hours before</strong> the first World Cup match.
+                  {status?.draft_scheduled_at ? (
+                    <> Scheduled: {formatGameDateTime(status.draft_scheduled_at)}.</>
+                  ) : (
+                    <> Sync fixtures in admin to set the kickoff time.</>
+                  )}
+                </p>
+                {status?.draft_scheduled_at && (
+                  <p className="text-[10px] text-amber-300/90 font-heading uppercase tracking-wider">
+                    {formatDraftCountdown(status.draft_scheduled_at)}
+                  </p>
+                )}
+              </div>
             ) : (status?.drafted_teams || []).length === 0 ? (
-              <p className="text-sm text-mutedForeground">No teams assigned.</p>
+              <p className="text-sm text-mutedForeground">You did not enter before the draft — no teams assigned.</p>
             ) : (
               <div className="flex flex-wrap gap-2">
                 {(status.drafted_teams || []).map((t) => (
@@ -394,14 +433,63 @@ export default function WorldCup() {
             <p className="text-[10px] text-mutedForeground mt-3">
               {status?.ghost_entry
                 ? 'Ghost test mode — assigned teams mirror the raffle but do not remove nations from real players.'
-                : 'If any assigned team wins the tournament, you receive the jackpot.'}
+                : 'All 48 nations are assigned across entrants — fewer players means more teams each. Jackpot if any of yours wins the tournament.'}
             </p>
           </WcPanel>
+
+          {draftResults?.draft_run && (draftResults.assignments || []).length > 0 && (
+            <WcPanel className="p-4 overflow-x-auto">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-wider">Everyone&apos;s draft</h2>
+                <span className="text-[10px] text-mutedForeground font-heading">
+                  {draftResults.real_entrants} players · {draftResults.total_teams_distributed}/{draftResults.total_teams} teams ·{' '}
+                  {draftResults.teams_per_user_min}–{draftResults.teams_per_user_max} each
+                </span>
+              </div>
+              <table className="w-full text-xs min-w-[280px]">
+                <thead>
+                  <tr className="border-b border-primary/10 text-left text-mutedForeground font-heading uppercase">
+                    <th className="p-2">Player</th>
+                    <th className="p-2 w-10 text-center">#</th>
+                    <th className="p-2">Nations</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(draftResults.assignments || []).map((row) => (
+                    <tr key={row.user_id} className="border-b border-primary/5 align-top">
+                      <td className="p-2 text-sm text-foreground font-heading">{row.username}</td>
+                      <td className="p-2 text-center tabular-nums text-primary">{row.team_count}</td>
+                      <td className="p-2">
+                        <div className="flex flex-wrap gap-1.5">
+                          {(row.teams || []).map((t) => (
+                            <span
+                              key={t.id}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border border-primary/15 bg-primary/5"
+                              title={t.name}
+                            >
+                              <WcFlag team={t} size="sm" />
+                              <span className="text-[10px] truncate max-w-[72px]">{t.name}</span>
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </WcPanel>
+          )}
         </div>
       )}
 
       {tab === 'groups' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 wc-fade-in">
+        <div className="space-y-3 wc-fade-in">
+          {tournamentPicksLocked && (
+            <WcPanel className="p-3 text-[10px] text-amber-300/90 font-heading uppercase tracking-wider">
+              Tournament has started — group winner picks are locked and cannot be changed.
+            </WcPanel>
+          )}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L'].map((gid) => {
             const locked = groupLocked(gid);
             const pred = predsByKey[`group_winner:${gid}`];
@@ -412,7 +500,7 @@ export default function WorldCup() {
                   <span className="font-heading font-bold text-primary text-base tracking-wide">Group {gid}</span>
                   <WcPointsBadge pts={points.group_winner_points} />
                 </div>
-                {locked && <p className="text-[10px] text-amber-400 mb-2 uppercase font-heading">Locked</p>}
+                {locked && !tournamentPicksLocked && <p className="text-[10px] text-amber-400 mb-2 uppercase font-heading">Locked</p>}
                 <div className="space-y-1">
                   {(teamsByGroup[gid] || []).map((t) => (
                     <WcTeamRow
@@ -427,6 +515,7 @@ export default function WorldCup() {
               </WcPanel>
             );
           })}
+          </div>
         </div>
       )}
 
@@ -442,7 +531,15 @@ export default function WorldCup() {
       )}
 
       {tab === 'knockout' && (
-        <KnockoutTab teams={teams} predsByKey={predsByKey} points={points} entered={status?.entered} saving={saving} onSave={savePrediction} />
+        <KnockoutTab
+          teams={teams}
+          predsByKey={predsByKey}
+          points={points}
+          entered={status?.entered}
+          saving={saving}
+          picksLocked={tournamentPicksLocked}
+          onSave={savePrediction}
+        />
       )}
 
       {tab === 'leaderboard' && (
@@ -473,6 +570,19 @@ export default function WorldCup() {
       )}
     </div>
   );
+}
+
+function formatDraftCountdown(draftScheduledAt) {
+  if (!draftScheduledAt) return null;
+  const ms = new Date(draftScheduledAt).getTime() - Date.now();
+  if (ms <= 0) return 'Team draft is due — running automatically soon';
+  const hours = Math.floor(ms / 3600000);
+  const mins = Math.floor((ms % 3600000) / 60000);
+  if (hours >= 48) {
+    const days = Math.floor(hours / 24);
+    return `${days}d ${hours % 24}h until team draft`;
+  }
+  return `${hours}h ${mins}m until team draft`;
 }
 
 function ScoreStepper({ value, onChange, disabled }) {
@@ -607,12 +717,18 @@ function MatchCard({ match, predsByKey, points, entered, saving, onSave }) {
   );
 }
 
-function KnockoutTab({ teams, predsByKey, points, entered, saving, onSave }) {
+function KnockoutTab({ teams, predsByKey, points, entered, saving, picksLocked, onSave }) {
   const second = predsByKey['second_place:tournament']?.value?.team_id || predsByKey['second_place:tournament']?.value;
   const third = predsByKey['third_place:tournament']?.value?.team_id || predsByKey['third_place:tournament']?.value;
+  const disabled = !entered || saving || picksLocked;
 
   return (
     <div className="space-y-3 wc-fade-in">
+      {picksLocked && (
+        <WcPanel className="p-3 text-[10px] text-amber-300/90 font-heading uppercase tracking-wider">
+          Tournament has started — 2nd and 3rd place picks are locked and cannot be changed.
+        </WcPanel>
+      )}
       <WcPanel className="p-4 space-y-2">
         <div className="flex justify-between items-center">
           <h3 className="text-sm font-heading text-primary uppercase">2nd place</h3>
@@ -624,7 +740,7 @@ function KnockoutTab({ teams, predsByKey, points, entered, saving, onSave }) {
               key={`2-${t.id}`}
               team={t}
               selected={second === t.id}
-              disabled={!entered || saving}
+              disabled={disabled}
               onSelect={(id) => onSave('second_place', 'tournament', { team_id: id })}
             />
           ))}
@@ -641,7 +757,7 @@ function KnockoutTab({ teams, predsByKey, points, entered, saving, onSave }) {
               key={`3-${t.id}`}
               team={t}
               selected={third === t.id}
-              disabled={!entered || saving}
+              disabled={disabled}
               onSelect={(id) => onSave('third_place', 'tournament', { team_id: id })}
             />
           ))}

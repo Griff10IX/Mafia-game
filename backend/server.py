@@ -3613,6 +3613,18 @@ async def startup_db():
 
         asyncio.create_task(world_cup_mod.run_world_cup_sync_ticker())
         logging.getLogger(__name__).info("World Cup fixture sync: in-process ticker enabled.")
+    wc_draft_use_cron = (os.environ.get("WORLD_CUP_AUTO_DRAFT_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
+    _wc_draft_ticker_raw = (os.environ.get("WORLD_CUP_AUTO_DRAFT_TICKER") or "").strip().lower()
+    wc_draft_ticker = _wc_draft_ticker_raw in ("1", "true", "yes")
+    if wc_draft_use_cron:
+        logging.getLogger(__name__).info(
+            "World Cup auto-draft: ticker disabled (WORLD_CUP_AUTO_DRAFT_USE_CRON=1). Use POST /api/world-cup/cron/auto-draft every ~15 min."
+        )
+    elif wc_draft_ticker:
+        from routers.game import world_cup as world_cup_mod
+
+        asyncio.create_task(world_cup_mod.run_world_cup_auto_draft_ticker())
+        logging.getLogger(__name__).info("World Cup auto-draft: in-process ticker enabled (24h before first match).")
     # Crew OC store-token auto-apply: bounded ticker vs cron-only (multi-worker safe)
     crew_oc_auto_apply_use_cron = (os.environ.get("CREW_OC_AUTO_APPLY_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
     _crew_oc_auto_apply_ticker_raw = (os.environ.get("CREW_OC_AUTO_APPLY_TICKER") or "").strip().lower()
