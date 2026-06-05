@@ -1785,6 +1785,176 @@ def _extract_preferences(user: dict) -> dict:
     return {k: user.get(k, _PREFERENCE_DEFAULTS[k]) for k in _PREFERENCE_FIELDS}
 
 
+def _format_duration_hms(seconds: Optional[int]) -> Optional[str]:
+    if seconds is None or seconds < 0:
+        return None
+    h, rem = divmod(int(seconds), 3600)
+    m, s = divmod(rem, 60)
+    parts: List[str] = []
+    if h:
+        parts.append(f"{h}h")
+    if m:
+        parts.append(f"{m}m")
+    if s or not parts:
+        parts.append(f"{s}s")
+    return " ".join(parts)
+
+
+def _build_auto_rank_diagnostics(doc: dict, *, global_enabled: bool) -> Dict[str, Any]:
+    """Human-readable blockers and cron eligibility for admin inspect."""
+    now = datetime.now(timezone.utc)
+    blockers: List[str] = []
+    warnings: List[str] = []
+    notes: List[str] = []
+
+    has_access = _user_has_auto_rank_access(doc)
+    purchased = bool(doc.get("auto_rank_purchased"))
+    trial_flag = bool(doc.get("auto_rank_trial"))
+    trial_active = _auto_rank_trial_active(doc, now)
+    trial_until = _parse_iso(doc.get("auto_rank_trial_until"))
+
+    if purchased and not trial_flag:
+        access_type = "permanent"
+    elif trial_active:
+        access_type = "trial_active"
+    elif trial_flag or trial_until:
+        access_type = "trial_expired"
+    else:
+        access_type = "none"
+
+    trial_seconds_remaining = None
+    if trial_until and trial_until > now:
+        trial_seconds_remaining = int((trial_until - now).total_seconds())
+
+    auto_rank_2h_tokens = int(doc.get("auto_rank_2h_tokens") or 0)
+    staff = _is_staff(doc)
+    last_seen = doc.get("last_seen")
+    last_seen_hours_ago = None
+    hours_until_idle = None
+    would_go_idle_now = False
+    if last_seen:
+        ls = _parse_iso(last_seen)
+        if ls:
+            elapsed_h = (now - ls).total_seconds() / 3600
+            last_seen_hours_ago = round(elapsed_h, 2)
+            remaining_s = AUTO_RANK_IDLE_TIMEOUT_SECONDS - (now - ls).total_seconds()
+            hours_until_idle = round(max(0, remaining_s) / 3600, 2) if remaining_s > 0 else 0
+            would_go_idle_now = _is_user_idle(doc, now) and not staff
+
+    if not has_access:
+        if access_type == "trial_expired":
+            blockers.append("Trial expired — auto rank access removed")
+        else:
+            blockers.append("No Auto Rank purchase or active trial")
+
+    if not doc.get("auto_rank_enabled"):
+        blockers.append("Master switch off (auto_rank_enabled=false)")
+    elif doc.get("auto_rank_idle"):
+        blockers.append("Auto Rank idle — no site activity for 24h+ (visit any page to wake)")
+
+    if not global_enabled:
+        blockers.append("Global Auto Rank loop disabled (admin must Start loop)")
+
+    if doc.get("is_dead"):
+        blockers.append("Account is dead")
+
+    in_jail = bool(doc.get("in_jail"))
+    jail_until_dt = _parse_iso(doc.get("jail_until"))
+    jail_active = in_jail and jail_until_dt and jail_until_dt > now
+    if jail_active:
+        blockers.append("In jail — main crime/GTA/OC/booze cycles paused")
+
+    active_tasks = [k for k in _IDLE_SAVE_FIELDS if doc.get(k)]
+    if doc.get("auto_rank_enabled") and not doc.get("auto_rank_idle") and not active_tasks:
+        warnings.append("Enabled but all task toggles are off — nothing to run")
+
+    if staff:
+        notes.append("Staff account — exempt from 24h idle pause")
+    elif last_seen_hours_ago is not None and not doc.get("auto_rank_idle") and hours_until_idle is not None and hours_until_idle < 6:
+        warnings.append(
+            f"Will go idle in ~{hours_until_idle}h if user does not visit the site (last seen {last_seen_hours_ago}h ago)"
+        )
+
+    base_cron_ok = (
+        has_access
+        and doc.get("auto_rank_enabled")
+        and not doc.get("is_dead")
+        and not doc.get("auto_rank_idle")
+        and not jail_active
+        and global_enabled
+    )
+
+    next_run_dt = _parse_iso(doc.get("auto_rank_next_run_at"))
+    main_cycle_due = base_cron_ok and (not next_run_dt or next_run_dt <= now)
+    bust_loop_ok = base_cron_ok and doc.get("auto_rank_bust_every_5_sec")
+    oc_loop_ok = base_cron_ok and doc.get("auto_rank_oc")
+    oc_retry_dt = _parse_iso(doc.get("auto_rank_oc_retry_at"))
+    oc_retry_waiting = bool(oc_retry_dt and oc_retry_dt > now)
+    if oc_loop_ok and oc_retry_waiting:
+        warnings.append(f"OC enabled but retry backoff until {doc.get('auto_rank_oc_retry_at')}")
+
+    next_run_in_seconds = None
+    if next_run_dt and next_run_dt > now:
+        next_run_in_seconds = int((next_run_dt - now).total_seconds())
+        if base_cron_ok and active_tasks:
+            notes.append(f"Main cycle scheduled in {_format_duration_hms(next_run_in_seconds)}")
+
+    if blockers:
+        status = "blocked"
+        summary = blockers[0]
+    elif not active_tasks and doc.get("auto_rank_enabled"):
+        status = "idle_tasks"
+        summary = "Enabled but no tasks selected"
+    elif main_cycle_due or bust_loop_ok or (oc_loop_ok and not oc_retry_waiting):
+        status = "running"
+        summary = "Should be running in cron loops"
+    elif base_cron_ok and next_run_in_seconds:
+        status = "waiting"
+        summary = f"Waiting for next cycle ({_format_duration_hms(next_run_in_seconds)})"
+    else:
+        status = "inactive"
+        summary = "Not actively cycling"
+
+    recommendations: List[str] = []
+    if doc.get("auto_rank_idle"):
+        recommendations.append("User should visit any game page once to restore saved task toggles")
+    if access_type == "trial_expired":
+        recommendations.append("Grant permanent AR from Admin or user redeems a 2h token from Store")
+    if not global_enabled:
+        recommendations.append("Start global loop from Auto Rank admin section")
+    if auto_rank_2h_tokens > 0 and access_type in ("none", "trial_expired"):
+        recommendations.append(f"User has {auto_rank_2h_tokens} unused 2h token(s) — redeem from Store")
+
+    return {
+        "status": status,
+        "summary": summary,
+        "access_type": access_type,
+        "auto_rank_has_access": has_access,
+        "trial_active": trial_active,
+        "trial_seconds_remaining": trial_seconds_remaining,
+        "trial_until": doc.get("auto_rank_trial_until"),
+        "auto_rank_2h_tokens": auto_rank_2h_tokens,
+        "staff_exempt_from_idle": staff,
+        "last_seen_hours_ago": last_seen_hours_ago,
+        "idle_threshold_hours": AUTO_RANK_IDLE_TIMEOUT_SECONDS / 3600,
+        "hours_until_idle": hours_until_idle,
+        "would_go_idle_without_visit": would_go_idle_now,
+        "global_loop_enabled": global_enabled,
+        "active_task_toggles": active_tasks,
+        "cron": {
+            "main_cycle_due": main_cycle_due,
+            "bust_loop_eligible": bust_loop_ok,
+            "oc_loop_eligible": oc_loop_ok and not oc_retry_waiting,
+            "oc_retry_at": doc.get("auto_rank_oc_retry_at") if oc_retry_waiting else None,
+            "next_run_in_seconds": next_run_in_seconds,
+        },
+        "blockers": blockers,
+        "warnings": warnings,
+        "notes": notes,
+        "recommendations": recommendations,
+    }
+
+
 async def _auto_rank_selection_labels_for_inspect(db, u: dict) -> dict:
     """Resolve crime/GTA/melt/scrap selection IDs to human-readable labels for admin inspect."""
     crime_ids = u.get("auto_rank_crime_ids") if isinstance(u.get("auto_rank_crime_ids"), list) else []
@@ -2484,7 +2654,7 @@ def register(router):
         uid = (user_id or "").strip()
         uname = (username or "").strip()
         if not uid and not uname:
-            raise HTTPException(status_code=400, detail="Provide user_id or username")
+            uid = current_user["id"]
         q: Dict[str, Any] = {}
         if uid:
             q["id"] = uid
@@ -2496,13 +2666,22 @@ def register(router):
             "_id": 0,
             "id": 1,
             "username": 1,
+            "email": 1,
+            "is_moderator": 1,
             "last_seen": 1,
+            "forced_online_until": 1,
             "is_dead": 1,
             "in_jail": 1,
+            "jail_until": 1,
             "auto_rank_purchased": 1,
             "auto_rank_trial": 1,
             "auto_rank_trial_until": 1,
             "auto_rank_trial_dismissed": 1,
+            "auto_rank_2h_tokens": 1,
+            "auto_rank_next_run_at": 1,
+            "auto_rank_oc_retry_at": 1,
+            "auto_rank_last_activity": 1,
+            "auto_rank_last_activity_at": 1,
             **{f: 1 for f in _PREFERENCE_FIELDS},
             "auto_rank_crime_ids": 1,
             "auto_rank_gta_option_ids": 1,
@@ -2526,6 +2705,8 @@ def register(router):
 
         stats = await _get_auto_rank_stats_impl(db, doc)
         selection_labels = await _auto_rank_selection_labels_for_inspect(db, doc)
+        global_enabled = await get_auto_rank_enabled(db)
+        diagnostics = _build_auto_rank_diagnostics(doc, global_enabled=global_enabled)
 
         saved_on_idle: Dict[str, Any] = {}
         for k in _IDLE_SAVE_FIELDS:
@@ -2544,15 +2725,20 @@ def register(router):
                 "id": doc.get("id"),
                 "username": doc.get("username"),
                 "last_seen": doc.get("last_seen"),
+                "forced_online_until": doc.get("forced_online_until"),
                 "is_dead": doc.get("is_dead"),
                 "in_jail": doc.get("in_jail"),
+                "jail_until": doc.get("jail_until"),
+                "staff_exempt_from_idle": diagnostics.get("staff_exempt_from_idle"),
             },
             "purchase": {
                 "auto_rank_purchased": bool(doc.get("auto_rank_purchased")),
                 "auto_rank_trial": bool(doc.get("auto_rank_trial")),
                 "auto_rank_trial_until": doc.get("auto_rank_trial_until"),
                 "auto_rank_trial_dismissed": bool(doc.get("auto_rank_trial_dismissed")),
+                "auto_rank_2h_tokens": int(doc.get("auto_rank_2h_tokens") or 0),
             },
+            "diagnostics": diagnostics,
             "preferences": _extract_preferences(doc),
             "selection_ids": {
                 "auto_rank_crime_ids": doc.get("auto_rank_crime_ids") if isinstance(doc.get("auto_rank_crime_ids"), list) else [],

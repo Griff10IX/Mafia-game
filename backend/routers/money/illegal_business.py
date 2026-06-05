@@ -3831,6 +3831,70 @@ def _distillery_preset_for_percent(distillery: Optional[dict], progress_percent:
     return d
 
 
+def _admin_racket_snapshot(business: Optional[dict]) -> Optional[Dict[str, Any]]:
+    if not business:
+        return None
+    upgrades = business.get("security_upgrades") or []
+    is_booze = business.get("type_id") == "booze_making"
+    return {
+        "name": business.get("name"),
+        "type_id": business.get("type_id"),
+        "state": business.get("state"),
+        "level": int(business.get("level") or 1),
+        "income_per_hour": int(business.get("income_per_hour") or 0),
+        "income_cap_hours": int(business.get("income_cap_hours") or INCOME_CAP_HOURS_BASE),
+        "booze_per_hour": int(business.get("booze_per_hour") or BOOZE_PER_HOUR_BASE) if is_booze else None,
+        "booze_cap_hours": int(business.get("booze_cap_hours") or BOOZE_CAP_HOURS_BASE) if is_booze else None,
+        "guard_slots": int(business.get("guard_slots") or GUARD_SLOTS_INITIAL),
+        "vault": int(business.get("vault") or 0),
+        "security_level": len(upgrades) if upgrades else int(business.get("security_level") or 0),
+        "has_distillery": bool(business.get("distillery")) if is_booze else False,
+    }
+
+
+def _admin_distillery_detail(distillery: Optional[dict]) -> Optional[Dict[str, Any]]:
+    if not distillery or not isinstance(distillery, dict):
+        return None
+    equipment = distillery.get("equipment") or {}
+    workers = distillery.get("workers") or {}
+    prog = _distillery_progression_state(distillery)
+    special = distillery.get("special_upgrades") or {}
+    special_count = sum(1 for uid, enabled in special.items() if enabled and uid in DISTILLERY_SPECIAL_MAP)
+    equipment_levels = {lane: int(equipment.get(lane) or 0) for lane in DISTILLERY_EQUIPMENT_ORDER}
+    worker_levels = {role: int(workers.get(role) or 0) for role in DISTILLERY_WORKER_ROLES}
+    auto_sell = distillery.get("auto_sell") or {}
+    auto_aging = distillery.get("auto_aging") or {}
+    return {
+        **prog,
+        "equipment": equipment_levels,
+        "equipment_avg_level": round(
+            sum(equipment_levels.values()) / max(1, len(DISTILLERY_EQUIPMENT_ORDER)),
+            2,
+        ),
+        "workers": worker_levels,
+        "workers_total": sum(worker_levels.values()),
+        "worker_cap": int(distillery.get("worker_cap") or DISTILLERY_BASE_WORKER_CAP),
+        "maintenance": round(float(distillery.get("maintenance") or 0), 1),
+        "heat": round(float(distillery.get("heat") or 0), 1),
+        "auto_sell_enabled": bool(auto_sell.get("enabled")),
+        "auto_sell_mode": str(auto_sell.get("mode") or ""),
+        "auto_aging_enabled": bool(auto_aging.get("enabled")),
+        "special_upgrades_unlocked": special_count,
+    }
+
+
+def _admin_distillery_equipment_diff(before: Optional[dict], after: Optional[dict]) -> List[Dict[str, Any]]:
+    b_eq = (before or {}).get("equipment") or {}
+    a_eq = (after or {}).get("equipment") or {}
+    rows = []
+    for lane in DISTILLERY_EQUIPMENT_ORDER:
+        b_lvl = int(b_eq.get(lane) or 0)
+        a_lvl = int(a_eq.get(lane) or 0)
+        if b_lvl != a_lvl:
+            rows.append({"lane": lane, "before": b_lvl, "after": a_lvl})
+    return rows
+
+
 def _business_summary_snapshot(
     business: Optional[dict], *, active_guards: int = 0, user: Optional[dict] = None
 ) -> Optional[Dict[str, Any]]:
@@ -4044,32 +4108,174 @@ async def admin_apply_illegal_business_progress_preset(
     return out
 
 
+async def admin_ensure_booze_illegal_business(
+    user_id: str,
+    *,
+    dry_run: bool = False,
+) -> Dict[str, Any]:
+    """Staff: create booze-making racket + default distillery if missing (no cost to player)."""
+    user = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "id": 1, "username": 1, "current_state": 1, "is_dead": 1},
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.get("is_dead"):
+        raise HTTPException(status_code=400, detail="Player is dead — revive first")
+
+    business = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
+    now = datetime.now(timezone.utc)
+    base = {
+        "username": user.get("username"),
+        "user_id": user_id,
+        "created_business": False,
+        "added_distillery": False,
+        "dry_run": dry_run,
+    }
+
+    if business and business.get("type_id") != "booze_making":
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Player has a {business.get('type_id') or 'non-booze'} racket — "
+                "distillery only applies to booze_making"
+            ),
+        )
+
+    if business and business.get("distillery"):
+        return {**base, "message": "Booze racket and distillery already exist"}
+
+    if not business:
+        state = (user.get("current_state") or STATES[0]).strip()
+        if state not in STATES:
+            state = STATES[0]
+        business_id = str(uuid.uuid4())
+        doc = {
+            "id": business_id,
+            "user_id": user_id,
+            "name": "Booze making",
+            "type_id": "booze_making",
+            "state": state,
+            "level": 1,
+            "income_per_hour": INCOME_PER_HOUR_BASE,
+            "income_cap_hours": INCOME_CAP_HOURS_BASE,
+            "last_collected_at": now.isoformat(),
+            "guard_slots": GUARD_SLOTS_INITIAL,
+            "security_level": 0,
+            "security_upgrades": [],
+            "total_spent": 0,
+            "vault": 0,
+            "vault_lifetime_earned": 0,
+            "created_at": now.isoformat(),
+            "customizations": {},
+            "booze_per_hour": BOOZE_PER_HOUR_BASE,
+            "booze_cap_hours": BOOZE_CAP_HOURS_BASE,
+            "last_collected_booze_at": now.isoformat(),
+            "distillery": _distillery_default(now),
+        }
+        if dry_run:
+            return {
+                **base,
+                "would_create_business": True,
+                "business_preview": doc,
+                "message": f"Would create booze racket + distillery for {user.get('username') or user_id}",
+            }
+        await db.illegal_businesses.insert_one(doc)
+        return {
+            **base,
+            "created_business": True,
+            "business_id": business_id,
+            "message": f"Created booze racket + distillery for {user.get('username') or user_id}",
+        }
+
+    # booze racket exists but distillery missing
+    distillery = _distillery_default(now)
+    if dry_run:
+        preview = dict(business)
+        preview["distillery"] = distillery
+        return {
+            **base,
+            "would_add_distillery": True,
+            "business_preview": preview,
+            "message": f"Would add distillery to {user.get('username') or user_id}'s booze racket",
+        }
+    await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": {"distillery": distillery}})
+    return {
+        **base,
+        "added_distillery": True,
+        "business_id": business.get("id"),
+        "message": f"Added distillery to {user.get('username') or user_id}'s booze racket",
+    }
+
+
 async def admin_apply_distillery_progress(
     user_id: str,
     progress_percent: int,
     *,
     dry_run: bool = False,
+    ensure_booze_racket: bool = False,
 ) -> Dict[str, Any]:
     """Set distillery equipment/workers to roughly ``progress_percent`` complete (0–100). Racket ladder unchanged."""
     pct = max(0, min(100, int(progress_percent)))
     user = await db.users.find_one({"id": user_id}, {"_id": 0, "username": 1})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    business = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
+
+    provision = None
+    business_preview = None
+    business_before_doc = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
+    if ensure_booze_racket:
+        provision = await admin_ensure_booze_illegal_business(user_id, dry_run=dry_run)
+        business_preview = provision.get("business_preview")
+        if not dry_run:
+            business_before_doc = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
+
+    business = business_before_doc
     if not business:
-        raise HTTPException(status_code=400, detail="No illegal business on this account")
+        if ensure_booze_racket and dry_run and business_preview:
+            business = business_preview
+        else:
+            raise HTTPException(status_code=400, detail="No illegal business on this account")
     if business.get("type_id") != "booze_making":
         raise HTTPException(status_code=400, detail="Distillery progress only applies to booze-making rackets")
     distillery = business.get("distillery")
     if not distillery:
-        raise HTTPException(status_code=400, detail="No distillery on this business")
-    before_prog = _distillery_progression_state(distillery)
-    updated = _distillery_preset_for_percent(distillery, pct)
+        if ensure_booze_racket and dry_run and business_preview:
+            distillery = business_preview.get("distillery")
+        if not distillery:
+            raise HTTPException(status_code=400, detail="No distillery on this business")
+    distillery_before_doc = copy.deepcopy(distillery)
+    before_prog = _distillery_progression_state(distillery_before_doc)
+    before_detail = _admin_distillery_detail(distillery_before_doc)
+    updated = _distillery_preset_for_percent(copy.deepcopy(distillery), pct)
     after_prog = _distillery_progression_state(updated or distillery)
+    after_detail = _admin_distillery_detail(updated)
+    business_after_doc = copy.deepcopy(business)
+    business_after_doc["distillery"] = updated
     preview = {
         "progress_percent": pct,
         "before": before_prog,
         "after": after_prog,
+        "racket": {
+            "before": _admin_racket_snapshot(business_before_doc),
+            "after": _admin_racket_snapshot(business_after_doc),
+        },
+        "distillery_detail": {
+            "before": before_detail,
+            "after": after_detail,
+        },
+        "equipment_changes": _admin_distillery_equipment_diff(before_detail, after_detail),
+        "provision": (
+            {
+                "message": provision.get("message"),
+                "would_create_business": provision.get("would_create_business"),
+                "would_add_distillery": provision.get("would_add_distillery"),
+                "created_business": provision.get("created_business"),
+                "added_distillery": provision.get("added_distillery"),
+            }
+            if provision
+            else None
+        ),
     }
     if dry_run:
         return {

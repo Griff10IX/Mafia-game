@@ -10738,6 +10738,38 @@ export default function Admin() {
                 {autoRankInspectData ? (
                   <div className="space-y-3 text-[10px] font-heading text-foreground">
                     <div className="text-[9px] font-bold uppercase tracking-wider text-mutedForeground">Auto Rank inspector</div>
+                    {autoRankInspectData.diagnostics ? (
+                      <div className={`rounded border p-2 space-y-2 ${
+                        autoRankInspectData.diagnostics.status === 'running'
+                          ? 'border-emerald-500/40 bg-emerald-950/25'
+                          : autoRankInspectData.diagnostics.status === 'blocked'
+                            ? 'border-red-500/40 bg-red-950/25'
+                            : 'border-amber-500/40 bg-amber-950/20'
+                      }`}>
+                        <div className="text-[9px] font-bold uppercase tracking-wider text-primary">Diagnosis</div>
+                        <div className="font-bold">{autoRankInspectData.diagnostics.summary}</div>
+                        <div><span className="text-mutedForeground">Access:</span> {autoRankInspectData.diagnostics.access_type} · <span className="text-mutedForeground">2h tokens:</span> {autoRankInspectData.diagnostics.auto_rank_2h_tokens ?? 0}</div>
+                        {autoRankInspectData.diagnostics.last_seen_hours_ago != null ? (
+                          <div><span className="text-mutedForeground">Last seen:</span> {autoRankInspectData.diagnostics.last_seen_hours_ago}h ago{autoRankInspectData.diagnostics.hours_until_idle != null ? <span className="text-mutedForeground"> · idle in {autoRankInspectData.diagnostics.hours_until_idle}h</span> : null}</div>
+                        ) : null}
+                        <div><span className="text-mutedForeground">Cron:</span> main {autoRankInspectData.diagnostics.cron?.main_cycle_due ? 'due' : 'waiting'} · bust {autoRankInspectData.diagnostics.cron?.bust_loop_eligible ? 'yes' : 'no'} · OC {autoRankInspectData.diagnostics.cron?.oc_loop_eligible ? 'yes' : 'no'}</div>
+                        {(autoRankInspectData.diagnostics.blockers || []).length > 0 ? (
+                          <div className="text-red-300 space-y-0.5">
+                            {(autoRankInspectData.diagnostics.blockers || []).map((b) => <div key={b}>• {b}</div>)}
+                          </div>
+                        ) : null}
+                        {(autoRankInspectData.diagnostics.warnings || []).length > 0 ? (
+                          <div className="text-amber-300 space-y-0.5">
+                            {(autoRankInspectData.diagnostics.warnings || []).map((w) => <div key={w}>• {w}</div>)}
+                          </div>
+                        ) : null}
+                        {(autoRankInspectData.diagnostics.recommendations || []).length > 0 ? (
+                          <div className="text-primary/90 space-y-0.5">
+                            {(autoRankInspectData.diagnostics.recommendations || []).map((r) => <div key={r}>→ {r}</div>)}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <div className="rounded border border-zinc-700/50 bg-zinc-900/40 p-2 space-y-1">
                       <div><span className="text-mutedForeground">User:</span> {autoRankInspectData.user?.username || '—'} <span className="text-mutedForeground">· id</span> {autoRankInspectData.user?.id || '—'}</div>
                       <div><span className="text-mutedForeground">Last seen:</span> {autoRankInspectData.user?.last_seen ? formatAdminDateTime(autoRankInspectData.user.last_seen) : '—'}</div>
@@ -10748,6 +10780,7 @@ export default function Admin() {
                       <div><span className="text-mutedForeground">Purchased:</span> {autoRankInspectData.purchase?.auto_rank_purchased ? 'yes' : 'no'}</div>
                       <div><span className="text-mutedForeground">Trial:</span> {autoRankInspectData.purchase?.auto_rank_trial ? 'yes' : 'no'} {autoRankInspectData.purchase?.auto_rank_trial_until ? <span className="text-mutedForeground"> until </span> : null}{autoRankInspectData.purchase?.auto_rank_trial_until ? formatAdminDateTime(autoRankInspectData.purchase.auto_rank_trial_until) : null}</div>
                       <div><span className="text-mutedForeground">Trial dismissed:</span> {autoRankInspectData.purchase?.auto_rank_trial_dismissed ? 'yes' : 'no'}</div>
+                      <div><span className="text-mutedForeground">2h tokens:</span> {autoRankInspectData.purchase?.auto_rank_2h_tokens ?? autoRankInspectData.diagnostics?.auto_rank_2h_tokens ?? 0}</div>
                     </div>
                     <div className="rounded border border-zinc-700/50 bg-zinc-900/40 p-2 space-y-1">
                       <div className="text-[9px] font-bold text-primary uppercase tracking-wider mb-1">Toggles</div>

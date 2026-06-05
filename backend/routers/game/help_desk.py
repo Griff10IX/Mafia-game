@@ -275,14 +275,16 @@ def register(router):
 
     @router.post("/help-desk/tickets/{ticket_id}/reply")
     async def reply_ticket(ticket_id: str, body: TicketReply, current_user: dict = Depends(get_current_user)):
-        """Add a reply. Author or staff (admin/mod/hdo). Closed tickets cannot be replied to."""
+        """Add a reply. Author or staff (admin/mod/hdo). Closed tickets: staff follow-up comments only."""
         ticket = await db.help_desk_tickets.find_one({"id": ticket_id}, {"_id": 0})
         if not ticket:
             raise HTTPException(status_code=404, detail="Ticket not found")
-        if ticket["status"] == "closed":
-            raise HTTPException(status_code=400, detail="Ticket is closed")
         is_author = ticket["user_id"] == current_user["id"]
-        if not is_author and not _can_manage_tickets(current_user):
+        is_staff = _can_manage_tickets(current_user)
+        if ticket["status"] == "closed":
+            if not is_staff:
+                raise HTTPException(status_code=400, detail="Ticket is closed")
+        if not is_author and not is_staff:
             raise HTTPException(status_code=403, detail="Not allowed to reply to this ticket")
         if not is_author:
             require_staff_issued_if_staff_capable(current_user)

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity, Settings2, Flame, CircleDot } from 'lucide-react';
+import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity, Settings2, Flame, CircleDot, Search, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -71,6 +71,168 @@ const formatCountdown = (seconds) => {
   if (m > 0 || parts.length > 0) parts.push(`${m}m`);
   parts.push(`${s}s`);
   return parts.join(' ');
+};
+
+const formatAdminDateTime = (iso) => {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return String(iso);
+    return d.toLocaleString();
+  } catch {
+    return String(iso);
+  }
+};
+
+const ACCESS_TYPE_LABELS = {
+  permanent: 'Permanent purchase',
+  trial_active: 'Trial active',
+  trial_expired: 'Trial expired',
+  none: 'No access',
+};
+
+const DIAG_STATUS_STYLES = {
+  running: 'border-emerald-500/40 bg-emerald-950/30 text-emerald-300',
+  waiting: 'border-amber-500/40 bg-amber-950/30 text-amber-300',
+  idle_tasks: 'border-amber-500/40 bg-amber-950/30 text-amber-300',
+  blocked: 'border-red-500/40 bg-red-950/30 text-red-300',
+  inactive: 'border-zinc-600/50 bg-zinc-900/50 text-zinc-400',
+};
+
+const DiagList = ({ title, items, tone }) => {
+  if (!items?.length) return null;
+  const toneClass = tone === 'blocker' ? 'text-red-300' : tone === 'warn' ? 'text-amber-300' : tone === 'rec' ? 'text-primary' : 'text-zinc-400';
+  return (
+    <div>
+      <div className={`text-[9px] font-heading font-bold uppercase tracking-wider mb-1 ${toneClass}`}>{title}</div>
+      <ul className="space-y-0.5">
+        {items.map((line) => (
+          <li key={line} className={`text-[9px] sm:text-[10px] font-heading ${toneClass}`}>• {line}</li>
+        ))}
+      </ul>
+    </div>
+  );
+};
+
+const AdminDiagnosticsPanel = ({ inspectData, inspectLoading, inspectError, inspectUsername, setInspectUsername, onLoad, onRefresh }) => {
+  const d = inspectData?.diagnostics;
+  const statusClass = DIAG_STATUS_STYLES[d?.status] || DIAG_STATUS_STYLES.inactive;
+  return (
+    <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel} mobile-panel`} style={{ animationDelay: '0.35s' }}>
+      <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader} flex items-center justify-between gap-2 flex-wrap`}>
+        <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
+          <Activity size={14} className="sm:w-4 sm:h-4" />
+          Staff diagnostics
+        </h2>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={inspectLoading}
+          className="p-1 sm:p-1.5 rounded bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30 disabled:opacity-50 transition-all active:scale-95"
+          title="Refresh diagnostics"
+        >
+          <RefreshCw size={12} className={`sm:w-3.5 sm:h-3.5 ${inspectLoading ? 'animate-spin' : ''}`} />
+        </button>
+      </div>
+      <div className="p-2.5 sm:p-3 space-y-3">
+        <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading">
+          Admin-only: why Auto Rank is running or stopped — access, idle, jail, global loop, cron eligibility.
+        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 flex-1 min-w-[140px]">
+            <Search size={12} className="text-zinc-500 shrink-0" />
+            <input
+              type="text"
+              value={inspectUsername}
+              onChange={(e) => setInspectUsername(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') onLoad(); }}
+              placeholder="Username (blank = you)"
+              className="flex-1 min-w-0 px-2 py-1 rounded bg-zinc-800 border border-zinc-700 text-foreground text-[10px] font-heading"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={onLoad}
+            disabled={inspectLoading}
+            className="px-2.5 py-1 rounded bg-primary/20 border border-primary/50 text-primary font-heading text-[9px] sm:text-[10px] font-bold hover:bg-primary/30 disabled:opacity-50"
+          >
+            {inspectLoading ? 'Loading…' : 'Inspect'}
+          </button>
+        </div>
+        {inspectError ? (
+          <div className="text-[10px] font-heading text-red-400">{inspectError}</div>
+        ) : null}
+        {inspectData && d ? (
+          <div className="space-y-3">
+            <div className={`rounded-lg border px-3 py-2 ${statusClass}`}>
+              <div className="flex items-start gap-2">
+                {d.status === 'running' ? <CheckCircle2 size={14} className="shrink-0 mt-0.5" /> : d.status === 'blocked' ? <AlertTriangle size={14} className="shrink-0 mt-0.5" /> : <Info size={14} className="shrink-0 mt-0.5" />}
+                <div>
+                  <div className="text-[10px] sm:text-xs font-heading font-bold uppercase tracking-wide">{d.status?.replace('_', ' ')}</div>
+                  <div className="text-[9px] sm:text-[10px] font-heading mt-0.5 opacity-90">{d.summary}</div>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[9px] sm:text-[10px] font-heading">
+              <div className="rounded border border-zinc-700/50 bg-zinc-900/40 p-2 space-y-1">
+                <div className="text-[9px] font-bold text-primary uppercase tracking-wider mb-1">Account</div>
+                <div><span className="text-zinc-500">User:</span> {inspectData.user?.username || '—'}</div>
+                <div><span className="text-zinc-500">Last seen:</span> {inspectData.user?.last_seen ? formatAdminDateTime(inspectData.user.last_seen) : '—'}{d.last_seen_hours_ago != null ? <span className="text-zinc-500"> ({d.last_seen_hours_ago}h ago)</span> : null}</div>
+                <div><span className="text-zinc-500">Idle in:</span> {d.hours_until_idle != null ? `${d.hours_until_idle}h` : '—'} <span className="text-zinc-500">(limit {d.idle_threshold_hours}h)</span></div>
+                <div><span className="text-zinc-500">Dead / jail:</span> {inspectData.user?.is_dead ? 'dead' : 'alive'} / {inspectData.stats?.in_jail ? `jail until ${inspectData.stats.jail_until ? formatAdminDateTime(inspectData.stats.jail_until) : '?'}` : 'free'}</div>
+                {d.staff_exempt_from_idle ? <div className="text-amber-400/90">Staff — idle exempt</div> : null}
+              </div>
+              <div className="rounded border border-zinc-700/50 bg-zinc-900/40 p-2 space-y-1">
+                <div className="text-[9px] font-bold text-primary uppercase tracking-wider mb-1">Access</div>
+                <div><span className="text-zinc-500">Type:</span> {ACCESS_TYPE_LABELS[d.access_type] || d.access_type}</div>
+                <div><span className="text-zinc-500">Has access:</span> {d.auto_rank_has_access ? 'yes' : 'no'}</div>
+                <div><span className="text-zinc-500">2h tokens:</span> {d.auto_rank_2h_tokens ?? 0}</div>
+                {d.trial_seconds_remaining != null ? (
+                  <div><span className="text-zinc-500">Trial left:</span> {formatCountdown(d.trial_seconds_remaining)}</div>
+                ) : null}
+                <div><span className="text-zinc-500">Master on:</span> {inspectData.preferences?.auto_rank_enabled ? 'yes' : 'no'}</div>
+                <div><span className="text-zinc-500">auto_rank_idle:</span> {inspectData.idle?.auto_rank_idle ? 'yes' : 'no'}</div>
+              </div>
+              <div className="rounded border border-zinc-700/50 bg-zinc-900/40 p-2 space-y-1">
+                <div className="text-[9px] font-bold text-primary uppercase tracking-wider mb-1">Cron loops</div>
+                <div><span className="text-zinc-500">Global loop:</span> {d.global_loop_enabled ? 'on' : 'off'}</div>
+                <div><span className="text-zinc-500">Main cycle due:</span> {d.cron?.main_cycle_due ? 'yes' : 'no'}{d.cron?.next_run_in_seconds != null ? <span className="text-zinc-500"> (in {formatCountdown(d.cron.next_run_in_seconds)})</span> : null}</div>
+                <div><span className="text-zinc-500">Bust 5s loop:</span> {d.cron?.bust_loop_eligible ? 'eligible' : 'no'}</div>
+                <div><span className="text-zinc-500">OC loop:</span> {d.cron?.oc_loop_eligible ? 'eligible' : 'no'}{d.cron?.oc_retry_at ? <span className="text-zinc-500"> (retry {formatAdminDateTime(d.cron.oc_retry_at)})</span> : null}</div>
+                <div><span className="text-zinc-500">Tasks on:</span> {(d.active_task_toggles || []).length ? d.active_task_toggles.join(', ') : 'none'}</div>
+              </div>
+              <div className="rounded border border-zinc-700/50 bg-zinc-900/40 p-2 space-y-1">
+                <div className="text-[9px] font-bold text-primary uppercase tracking-wider mb-1">Live activity</div>
+                <div><span className="text-zinc-500">Detail:</span> {inspectData.stats?.activity_detail || '—'}</div>
+                <div><span className="text-zinc-500">Last AR action:</span> {inspectData.stats?.last_activity || '—'}{inspectData.stats?.last_activity_at ? <span className="text-zinc-500"> @ {formatAdminDateTime(inspectData.stats.last_activity_at)}</span> : null}</div>
+                <div><span className="text-zinc-500">Next cycle:</span> {inspectData.stats?.auto_rank_next_run_at ? formatAdminDateTime(inspectData.stats.auto_rank_next_run_at) : 'now / —'}</div>
+                <div><span className="text-zinc-500">Next OC:</span> {inspectData.stats?.next_oc_at ? formatAdminDateTime(inspectData.stats.next_oc_at) : 'ready'}</div>
+              </div>
+            </div>
+            <div className="rounded border border-zinc-700/50 bg-zinc-900/40 p-2 space-y-2">
+              <DiagList title="Blockers" items={d.blockers} tone="blocker" />
+              <DiagList title="Warnings" items={d.warnings} tone="warn" />
+              <DiagList title="Notes" items={d.notes} tone="note" />
+              <DiagList title="Recommendations" items={d.recommendations} tone="rec" />
+              {!d.blockers?.length && !d.warnings?.length && !d.notes?.length && !d.recommendations?.length ? (
+                <div className="text-[9px] text-zinc-500 font-heading">No issues flagged.</div>
+              ) : null}
+            </div>
+            {inspectData.idle?.saved_on_idle && Object.keys(inspectData.idle.saved_on_idle).length > 0 ? (
+              <div className="rounded border border-amber-700/30 bg-amber-950/20 p-2 text-[9px] font-heading text-amber-200/90">
+                <div className="font-bold uppercase tracking-wider mb-1">Saved prefs (will restore on wake)</div>
+                {Object.entries(inspectData.idle.saved_on_idle).map(([k, v]) => (
+                  <div key={k}><span className="text-amber-200/60">{k}:</span> {v ? 'on' : 'off'}</div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : inspectLoading ? (
+          <p className="text-xs text-zinc-400 font-heading">Loading diagnostics…</p>
+        ) : null}
+      </div>
+    </div>
+  );
 };
 
 /* ═══════════════════════════════════════════════════════
@@ -1158,6 +1320,11 @@ export default function AutoRank() {
   const [editingToken, setEditingToken] = useState({});
   const [savingUser, setSavingUser] = useState(null);
   const [wipingStats, setWipingStats] = useState(false);
+  const [inspectUsername, setInspectUsername] = useState('');
+  const [inspectData, setInspectData] = useState(null);
+  const [inspectLoading, setInspectLoading] = useState(false);
+  const [inspectError, setInspectError] = useState('');
+  const adminDiagRef = useRef(null);
   const [stats, setStats] = useState({
     total_busts: 0,
     total_crimes: 0,
@@ -1674,6 +1841,29 @@ export default function AutoRank() {
     }
   };
 
+  const fetchInspect = async (username) => {
+    if (!isAdmin) return;
+    setInspectLoading(true);
+    setInspectError('');
+    try {
+      const params = {};
+      const uname = (username !== undefined ? username : inspectUsername).trim();
+      if (uname) params.username = uname;
+      const res = await api.get('/admin/auto-rank/user-inspect', { params });
+      setInspectData(res.data || null);
+      if (res.data?.user?.username) setInspectUsername(res.data.user.username);
+    } catch (err) {
+      setInspectData(null);
+      setInspectError(err?.response?.data?.detail || err?.message || 'Inspect failed');
+    } finally {
+      setInspectLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdmin) fetchInspect('');
+  }, [isAdmin]);
+
   const fetchAdminUsers = (nextFilter) => {
     if (!isAdmin) return;
     const filter = nextFilter !== undefined ? nextFilter : adminUsersFilter;
@@ -1855,6 +2045,18 @@ export default function AutoRank() {
               Admin
             </h2>
           </div>
+          <div ref={adminDiagRef}>
+          <AdminDiagnosticsPanel
+            inspectData={inspectData}
+            inspectLoading={inspectLoading}
+            inspectError={inspectError}
+            inspectUsername={inspectUsername}
+            setInspectUsername={setInspectUsername}
+            onLoad={() => fetchInspect()}
+            onRefresh={() => fetchInspect(inspectData?.user?.username || inspectUsername)}
+          />
+          </div>
+
           <AdminGlobalLoopCard
             globalEnabled={globalEnabled}
             intervalSeconds={intervalSeconds}
@@ -1968,6 +2170,7 @@ export default function AutoRank() {
                         <th className="py-2 pr-2 font-bold text-zinc-400 uppercase text-[8px] sm:text-[9px]">Bz</th>
                         <th className="py-2 pr-2 font-bold text-zinc-400 uppercase text-[8px] sm:text-[9px]">Chat</th>
                         <th className="py-2 pr-2 font-bold text-zinc-400 uppercase text-[8px] sm:text-[9px]">Token</th>
+                        <th className="py-2 pr-2 font-bold text-zinc-400 uppercase text-[8px] sm:text-[9px]">Diag</th>
                         <th className="py-2 font-bold text-zinc-400 uppercase text-[8px] sm:text-[9px]">Act</th>
                       </tr>
                     </thead>
@@ -2073,6 +2276,20 @@ export default function AutoRank() {
                                 </button>
                               </div>
                             )}
+                          </td>
+                          <td className="py-2 pr-2">
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                setInspectUsername(u.username);
+                                await fetchInspect(u.username);
+                                adminDiagRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                              }}
+                              className="px-1.5 py-0.5 rounded bg-primary/15 border border-primary/40 text-primary text-[8px] font-bold hover:bg-primary/25"
+                              title="Load staff diagnostics for this user"
+                            >
+                              View
+                            </button>
                           </td>
                           <td className="py-2">
                             <div className="flex flex-wrap items-center gap-1">

@@ -547,19 +547,24 @@ export default function HelpDesk() {
                   ))}
                 </div>
               )}
-              {ticketDetail.status === 'open' && (
+              {(ticketDetail.status === 'open' || (canManage && ticketDetail.status === 'closed')) && (
                 <form onSubmit={handleReply} className="space-y-2 pt-2 border-t border-primary/10">
+                  {ticketDetail.status === 'closed' && canManage && (
+                    <p className="text-[9px] text-mutedForeground font-heading">
+                      Ticket is closed — staff can still add a follow-up comment for the player.
+                    </p>
+                  )}
                   <textarea
                     value={replyBody}
                     onChange={(e) => setReplyBody(e.target.value)}
-                    placeholder="Your reply..."
+                    placeholder={ticketDetail.status === 'closed' ? 'Staff follow-up comment…' : 'Your reply…'}
                     rows={3}
                     maxLength={10000}
                     className="w-full px-2 py-1.5 bg-secondary border border-primary/20 rounded text-[11px] font-heading resize-y"
                   />
                   <button type="submit" disabled={replying || !replyBody.trim()} className="px-2.5 py-1 rounded text-[9px] font-heading font-bold uppercase border border-primary/50 bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-50 inline-flex items-center gap-1">
                     <Send size={12} />
-                    {replying ? 'Sending…' : 'Send reply'}
+                    {replying ? 'Sending…' : ticketDetail.status === 'closed' ? 'Add comment' : 'Send reply'}
                   </button>
                 </form>
               )}

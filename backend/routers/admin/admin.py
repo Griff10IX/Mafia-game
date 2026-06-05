@@ -313,6 +313,7 @@ class AdminDistilleryProgressSetRequest(BaseModel):
 
     progress_percent: int = Field(ge=0, le=100)
     dry_run: bool = False
+    ensure_booze_racket: bool = False
 
 
 class AdminKenoSettingsPatch(BaseModel):
@@ -17742,6 +17743,7 @@ def register(router):
             u["id"],
             int(body.progress_percent),
             dry_run=bool(body.dry_run),
+            ensure_booze_racket=bool(body.ensure_booze_racket),
         )
         if not body.dry_run:
             try:

@@ -17,24 +17,100 @@ function Btn({ children, className = '', ...props }) {
   );
 }
 
+function fmtMoney(n) {
+  const v = Number(n);
+  return Number.isFinite(v) ? `$${v.toLocaleString()}` : '—';
+}
+
+function fmtLane(lane) {
+  return String(lane || '')
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function PreviewCompareTable({ rows }) {
+  if (!rows.length) return null;
+  return (
+    <table className="w-full text-[9px] font-heading border-collapse">
+      <thead>
+        <tr className="text-mutedForeground">
+          <th className="text-left font-normal pb-1">Stat</th>
+          <th className="text-right font-normal pb-1">Now</th>
+          <th className="text-right font-normal pb-1">After</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(({ label, before, after, fmt = (x) => String(x ?? '—') }) => {
+          const b = fmt(before);
+          const a = fmt(after);
+          const changed = b !== a;
+          return (
+            <tr key={label} className={changed ? 'text-foreground' : 'text-mutedForeground'}>
+              <td className="py-0.5 pr-2 text-[9px] uppercase text-mutedForeground align-top">{label}</td>
+              <td className="py-0.5 pr-2 tabular-nums text-right align-top">{b}</td>
+              <td className={`py-0.5 tabular-nums text-right align-top font-semibold ${changed ? 'text-violet-200' : ''}`}>
+                {a}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
 function DistilleryPreviewPanel({ preview, onApply, onDismiss, applying }) {
   if (!preview) return null;
   const before = preview.before || {};
   const after = preview.after || {};
-  const row = (label, b, a) => {
-    const changed = String(b ?? '—') !== String(a ?? '—');
-    return (
-      <tr key={label} className={changed ? 'text-foreground' : 'text-mutedForeground'}>
-        <td className="py-0.5 pr-2 text-[9px] uppercase text-mutedForeground align-top">{label}</td>
-        <td className="py-0.5 pr-2 tabular-nums text-right align-top">{b ?? '—'}</td>
-        <td className={`py-0.5 tabular-nums text-right align-top font-semibold ${changed ? 'text-violet-200' : ''}`}>
-          {a ?? '—'}
-        </td>
-      </tr>
+  const provision = preview.provision;
+  const racket = preview.racket || {};
+  const racketBefore = racket.before;
+  const racketAfter = racket.after;
+  const distBefore = preview.distillery_detail?.before || {};
+  const distAfter = preview.distillery_detail?.after || {};
+  const equipmentChanges = preview.equipment_changes || [];
+  const isNewRacket = provision?.would_create_business || provision?.created_business;
+  const isNewDistillery = provision?.would_add_distillery || provision?.added_distillery;
+
+  const summaryRows = [
+    { label: 'Progress %', before: before.progress_pct, after: after.progress_pct, fmt: (x) => (x != null ? `${x}%` : '—') },
+    { label: 'Total steps', before: `${before.total_steps ?? 0}/${before.max_steps ?? 0}`, after: `${after.total_steps ?? 0}/${after.max_steps ?? 0}` },
+    { label: 'Equipment steps', before: before.equipment_steps, after: after.equipment_steps },
+    { label: 'Special upgrades', before: before.special_steps, after: after.special_steps },
+  ];
+
+  const racketRows = [];
+  if (racketAfter) {
+    racketRows.push(
+      { label: 'Racket name', before: racketBefore?.name, after: racketAfter?.name },
+      { label: 'Type', before: racketBefore?.type_id, after: racketAfter?.type_id },
+      { label: 'City', before: racketBefore?.state, after: racketAfter?.state },
+      { label: 'Level', before: racketBefore?.level, after: racketAfter?.level },
+      { label: 'Income/hr', before: racketBefore?.income_per_hour, after: racketAfter?.income_per_hour, fmt: fmtMoney },
+      { label: 'Booze/hr', before: racketBefore?.booze_per_hour, after: racketAfter?.booze_per_hour },
+      { label: 'Guard slots', before: racketBefore?.guard_slots, after: racketAfter?.guard_slots },
+      { label: 'Vault', before: racketBefore?.vault, after: racketAfter?.vault, fmt: fmtMoney },
     );
-  };
+  }
+
+  const distilleryRows = [
+    { label: 'Avg equip level', before: distBefore.equipment_avg_level, after: distAfter.equipment_avg_level },
+    { label: 'Workers', before: distBefore.workers_total, after: distAfter.workers_total },
+    { label: 'Worker cap', before: distBefore.worker_cap, after: distAfter.worker_cap },
+    { label: 'Maintenance', before: distBefore.maintenance, after: distAfter.maintenance, fmt: (x) => (x != null ? `${x}%` : '—') },
+    { label: 'Heat', before: distBefore.heat, after: distAfter.heat },
+    { label: 'Auto-sell', before: distBefore.auto_sell_enabled ? 'On' : 'Off', after: distAfter.auto_sell_enabled ? 'On' : 'Off' },
+    { label: 'Auto-aging', before: distBefore.auto_aging_enabled ? 'On' : 'Off', after: distAfter.auto_aging_enabled ? 'On' : 'Off' },
+  ];
+
+  const allEquipment = distAfter.equipment || distBefore.equipment || {};
+  const equipmentLanes = Object.keys(allEquipment).length
+    ? Object.keys(allEquipment)
+    : equipmentChanges.map((c) => c.lane);
+
   return (
-    <div className="rounded border border-violet-500/35 bg-violet-950/25 p-3 space-y-2">
+    <div className="rounded border border-violet-500/35 bg-violet-950/25 p-3 space-y-3">
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="text-[10px] font-heading font-bold text-violet-200">
           Preview · target ~{preview.progress_percent}%
@@ -43,21 +119,75 @@ function DistilleryPreviewPanel({ preview, onApply, onDismiss, applying }) {
           Dismiss
         </button>
       </div>
-      <table className="w-full text-[9px] font-heading border-collapse">
-        <thead>
-          <tr className="text-mutedForeground">
-            <th className="text-left font-normal pb-1">Stat</th>
-            <th className="text-right font-normal pb-1">Now</th>
-            <th className="text-right font-normal pb-1">After</th>
-          </tr>
-        </thead>
-        <tbody>
-          {row('Progress %', before.progress_pct, after.progress_pct)}
-          {row('Total steps', `${before.total_steps ?? 0}/${before.max_steps ?? 0}`, `${after.total_steps ?? 0}/${after.max_steps ?? 0}`)}
-          {row('Equipment steps', before.equipment_steps, after.equipment_steps)}
-          {row('Special upgrades', before.special_steps, after.special_steps)}
-        </tbody>
-      </table>
+      {provision?.message && (
+        <p className="text-[9px] text-amber-200/90 leading-snug">{provision.message}</p>
+      )}
+      {(isNewRacket || isNewDistillery) && (
+        <p className="text-[9px] text-emerald-300/90 leading-snug">
+          {isNewRacket && 'Player will receive a new booze-making racket (no cost). '}
+          {isNewDistillery && 'Distillery doc will be created. '}
+          IBM mission ladder is unchanged.
+        </p>
+      )}
+
+      {racketRows.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[9px] font-heading font-bold uppercase text-violet-300/90">Racket</p>
+          <PreviewCompareTable rows={racketRows} />
+        </div>
+      )}
+
+      <div className="space-y-1">
+        <p className="text-[9px] font-heading font-bold uppercase text-violet-300/90">Distillery summary</p>
+        <PreviewCompareTable rows={summaryRows} />
+      </div>
+
+      <div className="space-y-1">
+        <p className="text-[9px] font-heading font-bold uppercase text-violet-300/90">Distillery stats</p>
+        <PreviewCompareTable rows={distilleryRows} />
+      </div>
+
+      {equipmentLanes.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-[9px] font-heading font-bold uppercase text-violet-300/90">Equipment levels</p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-0.5 text-[9px] font-heading">
+            {equipmentLanes.map((lane) => {
+              const b = distBefore.equipment?.[lane] ?? 0;
+              const a = distAfter.equipment?.[lane] ?? 0;
+              const changed = b !== a;
+              return (
+                <div key={lane} className={changed ? 'text-foreground' : 'text-mutedForeground'}>
+                  <span className="text-mutedForeground">{fmtLane(lane)}:</span>{' '}
+                  <span className="tabular-nums">{b}</span>
+                  <span className="text-mutedForeground"> → </span>
+                  <span className={`tabular-nums font-semibold ${changed ? 'text-violet-200' : ''}`}>{a}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {(distAfter.workers || distBefore.workers) && (
+        <div className="space-y-1">
+          <p className="text-[9px] font-heading font-bold uppercase text-violet-300/90">Workers by role</p>
+          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[9px] font-heading">
+            {Object.keys({ ...distBefore.workers, ...distAfter.workers }).map((role) => {
+              const b = distBefore.workers?.[role] ?? 0;
+              const a = distAfter.workers?.[role] ?? 0;
+              const changed = b !== a;
+              return (
+                <span key={role} className={changed ? 'text-foreground' : 'text-mutedForeground'}>
+                  {fmtLane(role)}: <span className="tabular-nums">{b}</span>
+                  <span className="text-mutedForeground"> → </span>
+                  <span className={`tabular-nums font-semibold ${changed ? 'text-violet-200' : ''}`}>{a}</span>
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <Btn
         onClick={onApply}
         disabled={applying}
@@ -65,6 +195,50 @@ function DistilleryPreviewPanel({ preview, onApply, onDismiss, applying }) {
       >
         {applying ? '…' : 'Apply distillery progress'}
       </Btn>
+    </div>
+  );
+}
+
+function ProvisionBoozePanel({ distilleryPct, setDistilleryPct, distilleryLoading, onPreview, onApply, distilleryPreview, onDismiss }) {
+  return (
+    <div className="rounded border border-violet-500/35 bg-violet-950/25 p-2 space-y-2">
+      <p className="text-[9px] font-heading font-bold uppercase text-violet-200">Create booze racket + set distillery</p>
+      <p className="text-[9px] text-mutedForeground leading-snug">
+        No kill snapshot needed. Creates a minimal booze-making racket with distillery (free to the player), then sets progress.
+        Racket mission ladder is unchanged — use Racket progress for that.
+      </p>
+      <div className="flex flex-wrap gap-1">
+        {[1, 25, 50, 75, 100].map((p) => (
+          <Btn key={p} onClick={() => onPreview(p)} disabled={distilleryLoading} className="border-violet-500/30 text-violet-300">
+            Preview {p}%
+          </Btn>
+        ))}
+      </div>
+      <div className="flex flex-wrap gap-2 items-end">
+        <label className="flex-1 min-w-[80px]">
+          <span className="text-[9px] uppercase text-mutedForeground">Custom %</span>
+          <input
+            type="number"
+            min={0}
+            max={100}
+            value={distilleryPct}
+            onChange={(e) => {
+              setDistilleryPct(e.target.value);
+              onDismiss();
+            }}
+            className="w-full mt-0.5 px-2 py-1 rounded border border-input bg-transparent text-[11px] tabular-nums"
+          />
+        </label>
+        <Btn onClick={() => onPreview(null)} disabled={distilleryLoading} className="border-violet-400/40 bg-violet-500/10 text-violet-200">
+          {distilleryLoading ? '…' : 'Preview'}
+        </Btn>
+      </div>
+      <DistilleryPreviewPanel
+        preview={distilleryPreview}
+        onApply={onApply}
+        onDismiss={onDismiss}
+        applying={distilleryLoading}
+      />
     </div>
   );
 }
@@ -144,7 +318,7 @@ export default function AdminDistilleryProgress({ embedded = false, initialUsern
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const [distilleryPct, setDistilleryPct] = useState('50');
+  const [distilleryPct, setDistilleryPct] = useState('1');
   const [distilleryPreview, setDistilleryPreview] = useState(null);
   const [distilleryLoading, setDistilleryLoading] = useState(false);
 
@@ -262,14 +436,17 @@ export default function AdminDistilleryProgress({ embedded = false, initialUsern
     }
   }, [accessChecked, embedded, searchParams, loadProgress]);
 
-  const previewDistillery = async (pctOverride) => {
+  const previewDistillery = async (pctOverride, { ensureBooze = false } = {}) => {
     const un = (data?.username || username).trim();
     const pct = pctOverride != null ? Number(pctOverride) : parseInt(String(distilleryPct).trim(), 10);
     if (!un || Number.isNaN(pct) || pct < 0 || pct > 100) {
       toast.error('Enter username and percent 0–100');
       return;
     }
-    if (!data?.has_business || data?.business_type_id !== 'booze_making') {
+    const needsProvision =
+      data && (!data.has_business || (data.has_business && data.business_type_id === 'booze_making' && !data.distillery));
+    const ensure = ensureBooze || needsProvision;
+    if (!ensure && (!data?.has_business || data?.business_type_id !== 'booze_making')) {
       toast.error('Player needs a booze-making racket with a distillery');
       return;
     }
@@ -278,6 +455,7 @@ export default function AdminDistilleryProgress({ embedded = false, initialUsern
       const res = await api.post(`/admin/illegal-business/distillery-progress/${encodeURIComponent(un)}`, {
         progress_percent: pct,
         dry_run: true,
+        ensure_booze_racket: !!ensure,
       });
       setDistilleryPreview(res.data?.preview || null);
       setDistilleryPct(String(pct));
@@ -293,15 +471,25 @@ export default function AdminDistilleryProgress({ embedded = false, initialUsern
     if (!distilleryPreview) return;
     const un = (data?.username || username).trim();
     const pct = distilleryPreview.progress_percent;
-    if (!window.confirm(`Set ${un}'s distillery to ~${pct}%? Equipment and special upgrades only — racket ladder unchanged.`)) return;
+    const prov = distilleryPreview.provision;
+    const createNote = prov?.would_create_business || prov?.created_business
+      ? ' This will also create a booze racket.'
+      : prov?.would_add_distillery || prov?.added_distillery
+        ? ' This will also add a distillery doc.'
+        : '';
+    if (!window.confirm(`Set ${un}'s distillery to ~${pct}%?${createNote} Equipment and special upgrades only — racket ladder unchanged.`)) return;
     setDistilleryLoading(true);
     try {
+      const needsProvision =
+        data && (!data.has_business || (data.has_business && data.business_type_id === 'booze_making' && !data.distillery));
       const res = await api.post(`/admin/illegal-business/distillery-progress/${encodeURIComponent(un)}`, {
         progress_percent: pct,
         dry_run: false,
+        ensure_booze_racket: !!needsProvision || !!(prov?.would_create_business || prov?.would_add_distillery),
       });
       setData(res.data || null);
       setDistilleryPreview(null);
+      setRecoveryData(null);
       toast.success(res.data?.message || 'Distillery updated');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Apply failed');
@@ -372,14 +560,25 @@ export default function AdminDistilleryProgress({ embedded = false, initialUsern
               ) : null}
             </p>
             {!data.has_business && (
-              <RestoreRacketPanel
-                username={data.username}
-                recoveryData={recoveryData}
-                recoveryLoading={recoveryLoading}
-                restoreLoading={restoreLoading}
-                onLoadRecovery={loadRecovery}
-                onRestore={handleRestore}
-              />
+              <>
+                <ProvisionBoozePanel
+                  distilleryPct={distilleryPct}
+                  setDistilleryPct={setDistilleryPct}
+                  distilleryLoading={distilleryLoading}
+                  onPreview={(p) => previewDistillery(p, { ensureBooze: true })}
+                  onApply={applyDistillery}
+                  distilleryPreview={distilleryPreview}
+                  onDismiss={() => setDistilleryPreview(null)}
+                />
+                <RestoreRacketPanel
+                  username={data.username}
+                  recoveryData={recoveryData}
+                  recoveryLoading={recoveryLoading}
+                  restoreLoading={restoreLoading}
+                  onLoadRecovery={loadRecovery}
+                  onRestore={handleRestore}
+                />
+              </>
             )}
             {data.has_business && data.business_type_id !== 'booze_making' && (
               <p className="text-amber-300/90 text-[9px]">
@@ -388,7 +587,15 @@ export default function AdminDistilleryProgress({ embedded = false, initialUsern
               </p>
             )}
             {data.has_business && data.business_type_id === 'booze_making' && !dist && (
-              <p className="text-amber-300/90 text-[9px]">Booze racket exists but no distillery doc — player may need to open Distillery once, or restore a booze snapshot.</p>
+              <ProvisionBoozePanel
+                distilleryPct={distilleryPct}
+                setDistilleryPct={setDistilleryPct}
+                distilleryLoading={distilleryLoading}
+                onPreview={(p) => previewDistillery(p, { ensureBooze: true })}
+                onApply={applyDistillery}
+                distilleryPreview={distilleryPreview}
+                onDismiss={() => setDistilleryPreview(null)}
+              />
             )}
             {dist && (
               <p className="text-violet-300/90 flex items-center gap-1">
