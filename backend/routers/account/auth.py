@@ -2035,6 +2035,7 @@ def register(router):
                 gang_name=gang_name,
                 anti_snitch=bool(u.get("anti_snitch", False)),
                 auto_rank_purchased=bool(u.get("auto_rank_purchased", False)),
+                auto_rank_permanent=bool(u.get("auto_rank_permanent", False)),
                 auto_rank_trial=bool(u.get("auto_rank_trial", False)),
                 auto_rank_enabled=bool(u.get("auto_rank_enabled", False)),
                 custom_car_name=u.get("custom_car_name"),

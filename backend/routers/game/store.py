@@ -507,14 +507,14 @@ async def buy_auto_rank(
     current_user: dict = Depends(get_current_user),
 ):
     """Purchase Auto Rank; user enables it themselves on the Auto Rank page. Telegram is optional (for notifications)."""
-    if current_user.get("auto_rank_purchased", False) and not current_user.get("auto_rank_trial"):
+    if current_user.get("auto_rank_permanent") or (current_user.get("auto_rank_purchased", False) and not current_user.get("auto_rank_trial")):
         raise HTTPException(status_code=400, detail="You already purchased Auto Rank")
     cost_used, inc, gte_filter = _store_cost_inc(current_user, AUTO_RANK_COST_POINTS, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
     result = await db.users.update_one(
         {"id": current_user["id"], **gte_filter},
-        {"$inc": inc, "$set": {"auto_rank_purchased": True, "auto_rank_trial": False}, "$unset": {"auto_rank_trial_until": ""}}
+        {"$inc": inc, "$set": {"auto_rank_purchased": True, "auto_rank_permanent": True, "auto_rank_trial": False}, "$unset": {"auto_rank_trial_until": ""}}
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")

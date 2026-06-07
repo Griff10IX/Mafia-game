@@ -2465,6 +2465,15 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
 
     # Special case: auto_rank_2h grants temporary Auto Rank access (stackable up to TOKEN_MAX_STACK_HOURS).
     if req.token_type == "auto_rank_2h":
+        from routers.account.auto_rank import _resolve_permanent_auto_rank
+
+        is_perm, current_user = await _resolve_permanent_auto_rank(db, current_user, heal=True)
+        if is_perm:
+            raise HTTPException(
+                status_code=400,
+                detail="You already have permanent Auto Rank. 2h tokens are not needed — trade or gift them instead.",
+            )
+
         # Parse current temporary Auto Rank window.
         now = datetime.now(timezone.utc)
         existing_until = _parse_until(current_user.get("auto_rank_trial_until"))

@@ -86,7 +86,7 @@ const formatAdminDateTime = (iso) => {
 
 const ACCESS_TYPE_LABELS = {
   permanent: 'Permanent purchase',
-  trial_active: 'Trial active',
+  trial_active: 'Timed access (trial / 2h tokens)',
   trial_expired: 'Trial expired',
   none: 'No access',
 };
@@ -187,8 +187,8 @@ const AdminDiagnosticsPanel = ({ inspectData, inspectLoading, inspectError, insp
                 <div><span className="text-zinc-500">Type:</span> {ACCESS_TYPE_LABELS[d.access_type] || d.access_type}</div>
                 <div><span className="text-zinc-500">Has access:</span> {d.auto_rank_has_access ? 'yes' : 'no'}</div>
                 <div><span className="text-zinc-500">2h tokens:</span> {d.auto_rank_2h_tokens ?? 0}</div>
-                {d.trial_seconds_remaining != null ? (
-                  <div><span className="text-zinc-500">Trial left:</span> {formatCountdown(d.trial_seconds_remaining)}</div>
+                {d.trial_seconds_remaining != null && !d.auto_rank_permanent ? (
+                  <div><span className="text-zinc-500">Timed access left:</span> {formatCountdown(d.trial_seconds_remaining)}</div>
                 ) : null}
                 <div><span className="text-zinc-500">Master on:</span> {inspectData.preferences?.auto_rank_enabled ? 'yes' : 'no'}</div>
                 <div><span className="text-zinc-500">auto_rank_idle:</span> {inspectData.idle?.auto_rank_idle ? 'yes' : 'no'}</div>
@@ -1278,6 +1278,7 @@ export default function AutoRank() {
     auto_rank_melt: false,
     auto_rank_scrap: false,
     auto_rank_purchased: false,
+    auto_rank_permanent: false,
     auto_rank_has_access: false,
     auto_rank_trial: false,
     auto_rank_trial_until: null,
@@ -1377,8 +1378,8 @@ export default function AutoRank() {
 
   // Derived once per render, before any early return, so useEffects can read them
   const trialUntilMs = prefs?.auto_rank_trial_until ? new Date(prefs.auto_rank_trial_until).getTime() : null;
-  const trialActive = Boolean(prefs?.auto_rank_trial && trialUntilMs && trialUntilMs > Date.now());
-  const permanentPurchased = Boolean(prefs?.auto_rank_purchased && !prefs?.auto_rank_trial);
+  const trialActive = Boolean(!prefs?.auto_rank_permanent && prefs?.auto_rank_trial && trialUntilMs && trialUntilMs > Date.now());
+  const permanentPurchased = Boolean(prefs?.auto_rank_permanent || (prefs?.auto_rank_purchased && !prefs?.auto_rank_trial));
   const canEnable = Boolean(prefs?.auto_rank_has_access) || permanentPurchased || trialActive;
   const hasTelegram = Boolean(prefs?.telegram_chat_id_set);
 
@@ -1519,6 +1520,7 @@ export default function AutoRank() {
             auto_rank_oc: !!meRes.data.auto_rank_oc,
             auto_rank_booze: !!meRes.data.auto_rank_booze,
             auto_rank_purchased: !!meRes.data.auto_rank_purchased,
+            auto_rank_permanent: !!meRes.data.auto_rank_permanent,
             auto_rank_has_access: meRes.data.auto_rank_has_access === true,
             auto_rank_trial: !!meRes.data.auto_rank_trial,
             auto_rank_trial_until: meRes.data.auto_rank_trial_until || null,
@@ -1969,7 +1971,7 @@ export default function AutoRank() {
 
       <SetupCard canEnable={canEnable} hasTelegram={hasTelegram} telegramNotifyOn={prefs?.auto_rank_telegram_notify !== false} />
 
-      {prefs?.auto_rank_trial && prefs?.auto_rank_trial_until && (
+      {prefs?.auto_rank_trial && prefs?.auto_rank_trial_until && !prefs?.auto_rank_permanent && (
         <TrialBanner
           trialUntil={prefs.auto_rank_trial_until}
           dismissed={prefs.auto_rank_trial_dismissed}

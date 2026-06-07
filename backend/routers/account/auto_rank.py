@@ -140,6 +140,8 @@ def _parse_iso(s):
 
 def _auto_rank_trial_active(user: dict, now: Optional[datetime] = None) -> bool:
     """True while a timed Auto Rank window (2h tokens, founding trial, etc.) is still running."""
+    if _user_has_permanent_auto_rank(user):
+        return False
     until = _parse_iso(user.get("auto_rank_trial_until"))
     if until is None:
         return False
@@ -149,9 +151,65 @@ def _auto_rank_trial_active(user: dict, now: Optional[datetime] = None) -> bool:
     return until > now
 
 
+def _user_has_permanent_auto_rank(user: dict) -> bool:
+    """Store/admin permanent unlock (not founding trial or 2h token window)."""
+    if not user:
+        return False
+    if user.get("auto_rank_permanent"):
+        return True
+    return bool(user.get("auto_rank_purchased")) and not bool(user.get("auto_rank_trial"))
+
+
+async def _detect_store_permanent_auto_rank(db, user_id: str) -> bool:
+    if not user_id:
+        return False
+    try:
+        ev = await db.point_ledger_events.find_one(
+            {"user_id": user_id, "event_type": "spend_store", "origin_ref": "buy-auto-rank", "points": {"$lt": 0}},
+            {"_id": 1},
+        )
+        return ev is not None
+    except Exception:
+        return False
+
+
+async def _resolve_permanent_auto_rank(db, user: dict, *, heal: bool = False) -> tuple:
+    """Return (is_permanent, user_doc). heal=True fixes trial flags on confirmed store buyers."""
+    if not user:
+        return False, user
+    uid = user.get("id")
+    if _user_has_permanent_auto_rank(user):
+        if heal and uid and (user.get("auto_rank_trial") or user.get("auto_rank_trial_until")):
+            await db.users.update_one(
+                {"id": uid},
+                {
+                    "$set": {"auto_rank_permanent": True, "auto_rank_trial": False, "auto_rank_purchased": True},
+                    "$unset": {"auto_rank_trial_until": ""},
+                },
+            )
+            user = {**user, "auto_rank_permanent": True, "auto_rank_trial": False, "auto_rank_trial_until": None}
+        elif heal and uid and not user.get("auto_rank_permanent"):
+            await db.users.update_one({"id": uid}, {"$set": {"auto_rank_permanent": True}})
+            user = {**user, "auto_rank_permanent": True}
+        return True, user
+    if user.get("auto_rank_purchased") and user.get("auto_rank_trial") and uid:
+        if await _detect_store_permanent_auto_rank(db, uid):
+            if heal:
+                await db.users.update_one(
+                    {"id": uid},
+                    {
+                        "$set": {"auto_rank_permanent": True, "auto_rank_trial": False, "auto_rank_purchased": True},
+                        "$unset": {"auto_rank_trial_until": ""},
+                    },
+                )
+                user = {**user, "auto_rank_permanent": True, "auto_rank_trial": False, "auto_rank_trial_until": None}
+            return True, user
+    return False, user
+
+
 def _user_has_auto_rank_access(user: dict) -> bool:
     """May use Auto Rank (enable master switch). Permanent store purchase or active timed trial."""
-    if user.get("auto_rank_purchased") and not user.get("auto_rank_trial"):
+    if _user_has_permanent_auto_rank(user):
         return True
     return _auto_rank_trial_active(user)
 
@@ -162,6 +220,7 @@ def _mongo_auto_rank_subscriber_clause(now: Optional[datetime] = None) -> dict:
     now_iso = now.isoformat()
     return {
         "$or": [
+            {"auto_rank_permanent": True},
             {"auto_rank_purchased": True, "auto_rank_trial": {"$ne": True}},
             {"auto_rank_trial_until": {"$gt": now_iso}},
         ]
@@ -183,7 +242,7 @@ async def _expire_auto_rank_trials(db):
         "auto_rank_scrap": False,
     }
     result = await db.users.update_many(
-        {"auto_rank_trial": True, "auto_rank_trial_until": {"$lte": now_iso}},
+        {"auto_rank_trial": True, "auto_rank_trial_until": {"$lte": now_iso}, "auto_rank_permanent": {"$ne": True}},
         {"$set": {**_trial_off, "auto_rank_purchased": False}, "$unset": {"auto_rank_trial_until": ""}},
     )
     legacy = await db.users.update_many(
@@ -1810,20 +1869,23 @@ def _build_auto_rank_diagnostics(doc: dict, *, global_enabled: bool) -> Dict[str
     has_access = _user_has_auto_rank_access(doc)
     purchased = bool(doc.get("auto_rank_purchased"))
     trial_flag = bool(doc.get("auto_rank_trial"))
+    is_permanent = _user_has_permanent_auto_rank(doc)
     trial_active = _auto_rank_trial_active(doc, now)
     trial_until = _parse_iso(doc.get("auto_rank_trial_until"))
 
-    if purchased and not trial_flag:
+    if is_permanent:
         access_type = "permanent"
     elif trial_active:
         access_type = "trial_active"
     elif trial_flag or trial_until:
         access_type = "trial_expired"
+    elif purchased:
+        access_type = "purchased_legacy"
     else:
         access_type = "none"
 
     trial_seconds_remaining = None
-    if trial_until and trial_until > now:
+    if not is_permanent and trial_until and trial_until > now:
         trial_seconds_remaining = int((trial_until - now).total_seconds())
 
     auto_rank_2h_tokens = int(doc.get("auto_rank_2h_tokens") or 0)
@@ -1930,6 +1992,7 @@ def _build_auto_rank_diagnostics(doc: dict, *, global_enabled: bool) -> Dict[str
         "summary": summary,
         "access_type": access_type,
         "auto_rank_has_access": has_access,
+        "auto_rank_permanent": is_permanent,
         "trial_active": trial_active,
         "trial_seconds_remaining": trial_seconds_remaining,
         "trial_until": doc.get("auto_rank_trial_until"),
@@ -2258,9 +2321,11 @@ def register(router):
             user_id = (current_user or {}).get("id", "?")
             await _expire_auto_rank_trials(db)
             user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0}) or current_user
+            _, user = await _resolve_permanent_auto_rank(db, user, heal=True)
             chat_id = (user.get("telegram_chat_id") or "").strip()
             prefs = _extract_preferences(user)
             prefs["auto_rank_purchased"] = bool(user.get("auto_rank_purchased"))
+            prefs["auto_rank_permanent"] = _user_has_permanent_auto_rank(user)
             prefs["auto_rank_has_access"] = _user_has_auto_rank_access(user)
             prefs["auto_rank_trial"] = bool(user.get("auto_rank_trial"))
             prefs["auto_rank_trial_until"] = user.get("auto_rank_trial_until")
@@ -2674,6 +2739,7 @@ def register(router):
             "in_jail": 1,
             "jail_until": 1,
             "auto_rank_purchased": 1,
+            "auto_rank_permanent": 1,
             "auto_rank_trial": 1,
             "auto_rank_trial_until": 1,
             "auto_rank_trial_dismissed": 1,
@@ -2702,6 +2768,8 @@ def register(router):
         doc = await db.users.find_one(q, proj)
         if not doc:
             raise HTTPException(status_code=404, detail="User not found")
+
+        _, doc = await _resolve_permanent_auto_rank(db, doc, heal=True)
 
         stats = await _get_auto_rank_stats_impl(db, doc)
         selection_labels = await _auto_rank_selection_labels_for_inspect(db, doc)

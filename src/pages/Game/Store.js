@@ -1076,8 +1076,7 @@ export default function Store() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
           {UPGRADES.filter((u) => {
             if (u.id === 'auto-rank') {
-              // Founding/trial sets auto_rank_purchased=true; only hide after permanent unlock (trial cleared).
-              if (user?.auto_rank_purchased && !user?.auto_rank_trial) return false;
+              if (user?.auto_rank_permanent || (user?.auto_rank_purchased && !user?.auto_rank_trial)) return false;
             } else {
               const owned = u.ownedKey && user?.[u.ownedKey];
               if (owned) return false;

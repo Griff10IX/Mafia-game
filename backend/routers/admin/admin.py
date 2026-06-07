@@ -2297,6 +2297,7 @@ def register(router):
                 set_updates["crew_oc_timer_reduced"] = False
             elif store_event_ref == "buy-auto-rank":
                 set_updates["auto_rank_purchased"] = False
+                set_updates["auto_rank_permanent"] = False
                 set_updates["auto_rank_trial"] = False
                 set_updates["auto_rank_enabled"] = False
                 unset_updates["auto_rank_trial_until"] = ""
@@ -6403,6 +6404,8 @@ def register(router):
             raise HTTPException(status_code=404, detail="User not found")
         updates = {
             "auto_rank_purchased": True,
+            "auto_rank_permanent": True,
+            "auto_rank_trial": False,
             "auto_rank_enabled": True,
             "auto_rank_crimes": True,
             "auto_rank_gta": True,
@@ -6411,7 +6414,7 @@ def register(router):
             "auto_rank_booze": False,
             "auto_rank_telegram_notify": True,
         }
-        await db.users.update_one({"id": target["id"]}, {"$set": updates})
+        await db.users.update_one({"id": target["id"]}, {"$set": updates, "$unset": {"auto_rank_trial_until": ""}})
         return {"message": f"Auto rank given to {target.get('username', target_username)}", "username": target.get("username")}
 
     @router.post("/admin/remove-auto-rank")
@@ -6436,6 +6439,8 @@ def register(router):
             {
                 "$set": {
                     "auto_rank_purchased": False,
+                    "auto_rank_permanent": False,
+                    "auto_rank_trial": False,
                     "auto_rank_enabled": False,
                     "auto_rank_crimes": False,
                     "auto_rank_gta": False,
@@ -6443,7 +6448,7 @@ def register(router):
                     "auto_rank_oc": False,
                     "auto_rank_booze": False,
                 },
-                "$unset": unset,
+                "$unset": {**unset, "auto_rank_trial_until": ""},
             },
         )
         return {"message": f"Auto rank removed from {target.get('username', target_username)}", "username": target.get("username")}
