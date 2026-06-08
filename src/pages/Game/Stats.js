@@ -118,6 +118,9 @@ const KillsListView = ({ kills }) => {
       <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
         Last 15 Kills
       </h2>
+      <p className="text-[8px] text-zinc-500 font-heading normal-case tracking-normal">
+        Killer hidden unless the victim reveals (1,000 pts while dead) or you are staff.
+      </p>
     </div>
 
     {/* Desktop view */}
@@ -150,7 +153,7 @@ const KillsListView = ({ kills }) => {
                 {k.killer_username ? (
                   <Link to={`/profile/${encodeURIComponent(k.killer_username)}`} className="text-primary hover:underline truncate block">{k.killer_username}</Link>
                 ) : (
-                  '(private)'
+                  'Hidden'
                 )}
               </div>
               <div className="col-span-2 text-right text-mutedForeground tabular-nums">
@@ -191,7 +194,7 @@ const KillsListView = ({ kills }) => {
               Killed by {k.killer_username ? (
                 <Link to={`/profile/${encodeURIComponent(k.killer_username)}`} className="text-primary hover:underline">{k.killer_username}</Link>
               ) : (
-                '(private)'
+                'Hidden'
               )}
             </div>
           </div>

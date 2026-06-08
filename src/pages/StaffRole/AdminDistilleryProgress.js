@@ -28,6 +28,187 @@ function fmtLane(lane) {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+const EQUIPMENT_LANES = ['stills', 'condensers', 'mash_tun', 'barrels', 'bottling', 'tunnel', 'bribe_office', 'fake_labels', 'quality_lab'];
+const SPECIAL_TRACKS = ['production', 'aging', 'logistics', 'stealth', 'labor', 'black_market'];
+const EQUIPMENT_MAX = 20;
+const SPECIAL_MAX_TIER = 30;
+
+function UpgradesPreviewPanel({ preview, onApply, onDismiss, applying }) {
+  if (!preview) return null;
+  const before = preview.before || {};
+  const after = preview.after || {};
+  const changes = preview.changes || [];
+  return (
+    <div className="rounded border border-emerald-500/35 bg-emerald-950/20 p-3 space-y-2">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <p className="text-[10px] font-heading font-bold text-emerald-200">
+          Upgrade preview · {changes.length} change{changes.length === 1 ? '' : 's'}
+        </p>
+        <button type="button" onClick={onDismiss} className="text-[9px] text-mutedForeground hover:text-foreground uppercase">
+          Dismiss
+        </button>
+      </div>
+      {preview.provision?.message ? (
+        <p className="text-[9px] text-amber-200/90">{preview.provision.message}</p>
+      ) : null}
+      {changes.length > 0 ? (
+        <ul className="text-[9px] font-heading text-emerald-100/90 space-y-0.5 max-h-32 overflow-y-auto">
+          {changes.map((line) => (
+            <li key={line}>• {line}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="text-[9px] text-mutedForeground">No changes.</p>
+      )}
+      <div className="grid grid-cols-2 gap-2 text-[9px] font-heading">
+        <div>
+          <span className="text-mutedForeground">Progress:</span>{' '}
+          {before.progress_pct ?? '—'}% → <span className="text-emerald-200 font-semibold">{after.progress_pct ?? '—'}%</span>
+        </div>
+        <div>
+          <span className="text-mutedForeground">Specials:</span>{' '}
+          {before.special_steps ?? 0} → <span className="text-emerald-200 font-semibold">{after.special_steps ?? 0}</span>
+        </div>
+      </div>
+      {(preview.equipment_changes || []).length > 0 ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-2 gap-y-0.5 text-[9px] font-heading">
+          {preview.equipment_changes.map(({ lane, before: b, after: a }) => (
+            <div key={lane}>
+              <span className="text-mutedForeground">{fmtLane(lane)}:</span>{' '}
+              <span className="tabular-nums">{b}</span>
+              <span className="text-mutedForeground"> → </span>
+              <span className="tabular-nums text-emerald-200 font-semibold">{a}</span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <Btn
+        onClick={onApply}
+        disabled={applying || changes.length === 0}
+        className="w-full border-emerald-400/45 bg-emerald-500/15 text-emerald-200"
+      >
+        {applying ? '…' : 'Apply upgrades'}
+      </Btn>
+    </div>
+  );
+}
+
+function AdminDistilleryUpgradesPanel({
+  data,
+  username,
+  upgradesLoading,
+  upgradesPreview,
+  trackTiers,
+  setTrackTiers,
+  onPreview,
+  onApply,
+  onDismiss,
+}) {
+  const detail = data?.distillery_detail;
+  if (!detail) return null;
+
+  return (
+    <section className="rounded-lg border border-emerald-500/25 p-3 space-y-3 mt-3">
+      <h2 className="text-[11px] font-heading font-bold uppercase text-emerald-300">Add distillery upgrades</h2>
+      <p className="text-[9px] text-mutedForeground leading-snug">
+        Grant equipment levels and special track unlocks free (no vault cost). Preview before applying.
+      </p>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-3 gap-y-1 text-[9px] font-heading">
+        {EQUIPMENT_LANES.map((lane) => {
+          const lvl = detail.equipment?.[lane] ?? 0;
+          return (
+            <div key={lane} className="flex items-center justify-between gap-1">
+              <span className="text-mutedForeground truncate">{fmtLane(lane)}</span>
+              <span className="tabular-nums text-foreground font-semibold">{lvl}/{EQUIPMENT_MAX}</span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="text-[9px] text-mutedForeground">
+        Special upgrades unlocked: <span className="text-emerald-300 font-semibold">{detail.special_steps ?? 0}</span>
+        {' · '}
+        Workers: {detail.workers_total ?? 0}/{detail.worker_cap ?? '—'}
+      </p>
+
+      <div className="space-y-2 border-t border-zinc-700/40 pt-2">
+        <p className="text-[9px] font-heading font-bold uppercase text-emerald-300/90">Equipment</p>
+        <div className="flex flex-wrap gap-1">
+          <Btn onClick={() => onPreview({ add_all_equipment: 1 })} disabled={upgradesLoading} className="border-emerald-500/30 text-emerald-300">
+            +1 all lanes
+          </Btn>
+          <Btn onClick={() => onPreview({ add_all_equipment: 5 })} disabled={upgradesLoading} className="border-emerald-500/30 text-emerald-300">
+            +5 all lanes
+          </Btn>
+          {EQUIPMENT_LANES.map((lane) => (
+            <Btn
+              key={lane}
+              onClick={() => onPreview({ equipment_add: { [lane]: 1 } })}
+              disabled={upgradesLoading}
+              className="border-zinc-600/50 text-zinc-300"
+              title={fmtLane(lane)}
+            >
+              +1 {fmtLane(lane).split(' ')[0]}
+            </Btn>
+          ))}
+        </div>
+      </div>
+
+      <div className="space-y-2 border-t border-zinc-700/40 pt-2">
+        <p className="text-[9px] font-heading font-bold uppercase text-emerald-300/90">Special tracks</p>
+        <div className="flex flex-wrap gap-1 mb-2">
+          {[1, 5, 10, 15, 30].map((t) => (
+            <Btn
+              key={t}
+              onClick={() => onPreview({ unlock_all_special_tier: t })}
+              disabled={upgradesLoading}
+              className="border-emerald-500/30 text-emerald-300"
+            >
+              All tracks → tier {t}
+            </Btn>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {SPECIAL_TRACKS.map((track) => (
+            <div key={track} className="flex flex-wrap items-center gap-1">
+              <span className="text-[9px] text-mutedForeground w-20 shrink-0">{fmtLane(track)}</span>
+              <input
+                type="number"
+                min={0}
+                max={SPECIAL_MAX_TIER}
+                value={trackTiers[track] ?? 1}
+                onChange={(e) => setTrackTiers((p) => ({ ...p, [track]: e.target.value }))}
+                className="w-14 px-1.5 py-0.5 rounded border border-input bg-transparent text-[10px] tabular-nums"
+              />
+              <Btn
+                onClick={() => {
+                  const tier = parseInt(String(trackTiers[track] ?? 1), 10);
+                  if (Number.isNaN(tier) || tier < 0 || tier > SPECIAL_MAX_TIER) {
+                    toast.error('Tier 0–30');
+                    return;
+                  }
+                  onPreview({ unlock_special_tracks: { [track]: tier } });
+                }}
+                disabled={upgradesLoading}
+                className="border-emerald-500/30 text-emerald-300 text-[9px]"
+              >
+                Unlock
+              </Btn>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <UpgradesPreviewPanel
+        preview={upgradesPreview}
+        onApply={onApply}
+        onDismiss={onDismiss}
+        applying={upgradesLoading}
+      />
+    </section>
+  );
+}
+
 function PreviewCompareTable({ rows }) {
   if (!rows.length) return null;
   return (
@@ -322,6 +503,13 @@ export default function AdminDistilleryProgress({ embedded = false, initialUsern
   const [distilleryPreview, setDistilleryPreview] = useState(null);
   const [distilleryLoading, setDistilleryLoading] = useState(false);
 
+  const [upgradesPreview, setUpgradesPreview] = useState(null);
+  const [upgradesLoading, setUpgradesLoading] = useState(false);
+  const [upgradesBody, setUpgradesBody] = useState(null);
+  const [trackTiers, setTrackTiers] = useState(() =>
+    Object.fromEntries(SPECIAL_TRACKS.map((t) => [t, '1']))
+  );
+
   const [recoveryData, setRecoveryData] = useState(null);
   const [recoveryLoading, setRecoveryLoading] = useState(false);
   const [restoreLoading, setRestoreLoading] = useState(null);
@@ -376,6 +564,8 @@ export default function AdminDistilleryProgress({ embedded = false, initialUsern
     }
     setLoading(true);
     setDistilleryPreview(null);
+    setUpgradesPreview(null);
+    setUpgradesBody(null);
     try {
       const res = await api.get(`/admin/illegal-business/missions/user/${encodeURIComponent(un)}`);
       setData(res.data || null);
@@ -495,6 +685,48 @@ export default function AdminDistilleryProgress({ embedded = false, initialUsern
       toast.error(e.response?.data?.detail || 'Apply failed');
     } finally {
       setDistilleryLoading(false);
+    }
+  };
+
+  const previewUpgrades = async (bodyPartial) => {
+    const un = (data?.username || username).trim();
+    if (!un) {
+      toast.error('Enter username');
+      return;
+    }
+    const body = { dry_run: true, ...bodyPartial };
+    setUpgradesLoading(true);
+    try {
+      const res = await api.post(`/admin/illegal-business/distillery-upgrades/${encodeURIComponent(un)}`, body);
+      setUpgradesPreview(res.data?.preview || null);
+      setUpgradesBody(bodyPartial);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Upgrade preview failed');
+      setUpgradesPreview(null);
+      setUpgradesBody(null);
+    } finally {
+      setUpgradesLoading(false);
+    }
+  };
+
+  const applyUpgrades = async () => {
+    if (!upgradesBody) return;
+    const un = (data?.username || username).trim();
+    if (!window.confirm(`Apply distillery upgrades for ${un}?`)) return;
+    setUpgradesLoading(true);
+    try {
+      const res = await api.post(`/admin/illegal-business/distillery-upgrades/${encodeURIComponent(un)}`, {
+        dry_run: false,
+        ...upgradesBody,
+      });
+      setData(res.data || null);
+      setUpgradesPreview(null);
+      setUpgradesBody(null);
+      toast.success(res.data?.message || 'Upgrades applied');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Apply failed');
+    } finally {
+      setUpgradesLoading(false);
     }
   };
 
@@ -646,6 +878,20 @@ export default function AdminDistilleryProgress({ embedded = false, initialUsern
             onApply={applyDistillery}
             onDismiss={() => setDistilleryPreview(null)}
             applying={distilleryLoading}
+          />
+          <AdminDistilleryUpgradesPanel
+            data={data}
+            username={username}
+            upgradesLoading={upgradesLoading}
+            upgradesPreview={upgradesPreview}
+            trackTiers={trackTiers}
+            setTrackTiers={setTrackTiers}
+            onPreview={previewUpgrades}
+            onApply={applyUpgrades}
+            onDismiss={() => {
+              setUpgradesPreview(null);
+              setUpgradesBody(null);
+            }}
           />
         </section>
       )}

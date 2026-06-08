@@ -2550,6 +2550,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 "killed_by_username": current_user.get("username"),
                 "killed_by_user_id": current_user["id"],
                 "killed_by_family_name": (killer_family_doc or {}).get("name"),
+                "killer_revealed": False,
             }, "$inc": {"total_deaths": 1}},
         )
         if not death_claim:

@@ -316,6 +316,22 @@ class AdminDistilleryProgressSetRequest(BaseModel):
     ensure_booze_racket: bool = False
 
 
+class AdminDistilleryUpgradesRequest(BaseModel):
+    """Grant specific distillery equipment levels and/or special track unlocks (no vault cost)."""
+
+    dry_run: bool = False
+    ensure_booze_racket: bool = False
+    equipment_add: Optional[Dict[str, int]] = None
+    equipment_levels: Optional[Dict[str, int]] = None
+    add_all_equipment: Optional[int] = Field(None, ge=0, le=20)
+    unlock_special_ids: Optional[List[str]] = None
+    unlock_special_tracks: Optional[Dict[str, int]] = None
+    unlock_all_special_tier: Optional[int] = Field(None, ge=0, le=30)
+    workers: Optional[Dict[str, int]] = None
+    maintenance: Optional[float] = Field(None, ge=0, le=100)
+    heat: Optional[float] = Field(None, ge=0, le=100)
+
+
 class AdminKenoSettingsPatch(BaseModel):
     """Live cap for state Keno max bet per round (stored in game_settings)."""
 
@@ -17760,6 +17776,56 @@ def register(router):
                         "target_user_id": u.get("id"),
                         "target_username": u.get("username"),
                         "progress_percent": int(body.progress_percent),
+                    },
+                )
+            except Exception:
+                pass
+        return out
+
+    @router.post("/admin/illegal-business/distillery-upgrades/{user_id_or_username}")
+    async def admin_apply_distillery_upgrades(
+        user_id_or_username: str,
+        body: AdminDistilleryUpgradesRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Add distillery equipment levels and/or unlock special track upgrades (free). Requires booze-making racket."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        raw = (user_id_or_username or "").strip()
+        if not raw:
+            raise HTTPException(status_code=400, detail="User id or username required")
+        u = await db.users.find_one({"id": raw}, {"_id": 0, "id": 1, "username": 1})
+        if not u:
+            username_pattern = _username_pattern(raw)
+            u = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        from routers.money import illegal_business as ib_mod
+
+        out = await ib_mod.admin_apply_distillery_upgrades(
+            u["id"],
+            dry_run=bool(body.dry_run),
+            ensure_booze_racket=bool(body.ensure_booze_racket),
+            equipment_add=body.equipment_add,
+            equipment_levels=body.equipment_levels,
+            add_all_equipment=body.add_all_equipment,
+            unlock_special_ids=body.unlock_special_ids,
+            unlock_special_tracks=body.unlock_special_tracks,
+            unlock_all_special_tier=body.unlock_all_special_tier,
+            workers=body.workers,
+            maintenance=body.maintenance,
+            heat=body.heat,
+        )
+        if not body.dry_run and out.get("distillery_upgrades_applied"):
+            try:
+                await srv.log_activity(
+                    current_user.get("id") or "",
+                    current_user.get("username") or "?",
+                    "admin_distillery_upgrades",
+                    {
+                        "target_user_id": u.get("id"),
+                        "target_username": u.get("username"),
+                        "changes": (out.get("distillery_upgrades_applied") or {}).get("changes") or [],
                     },
                 )
             except Exception:

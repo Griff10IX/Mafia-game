@@ -81,6 +81,7 @@ function PresetPreviewPanel({ preview, onApply, onDismiss, applying, applyLabel 
         </thead>
         <tbody>
           {row('Income/hr', cur.income_per_hour, after.income_per_hour, fmtMoney)}
+          {row('Till pending', cur.pending_take, preview.till?.preserved_on_apply ? cur.pending_take : null, fmtMoney)}
           {row('Vault', cur.vault, after.vault, fmtMoney)}
           {row('Security', cur.security_level, after.security_level)}
           {row('Guards', cur.active_guards, after.guards_placed)}
@@ -538,8 +539,9 @@ export default function AdminRacketProgress({ embedded = false, initialUsername 
             )}
             {biz && (
               <p className="text-[9px] text-mutedForeground">
-                Racket: {fmtMoney(biz.vault)} vault · {Number(biz.income_per_hour || 0).toLocaleString()}/hr ·{' '}
-                {biz.security_level} security · {biz.active_guards}/{biz.guard_slots} guards
+                Racket: {fmtMoney(biz.vault)} vault · till {fmtMoney(biz.pending_take)} ·{' '}
+                {Number(biz.income_per_hour || 0).toLocaleString()}/hr · {biz.security_level} security ·{' '}
+                {biz.active_guards}/{biz.guard_slots} guards
               </p>
             )}
             {dist && (

@@ -69,7 +69,7 @@ export const ADMIN_ROUTE_GROUPS = [
   { id: 'exclusive-cars', label: 'Exclusive cars', categoryId: 'admin-world-systems', anchorId: 'admin-gameworld', icon: Car, description: 'Remove, transfer, or grant Al Capone / loot-exclusive cars.' },
   { id: 'crew-recovery', label: 'Crew recovery', categoryId: 'admin-operations', anchorId: 'admin-moderation', icon: Building2, description: 'Revive families and restore illegal businesses from kill snapshots.' },
   { id: 'racket-progress', label: 'Racket progress', categoryId: 'admin-economy-progression', anchorId: 'admin-donations', icon: Wine, description: 'Set player racket business progress (ladder, vault, guards, security).' },
-  { id: 'distillery-progress', label: 'Distillery progress', categoryId: 'admin-economy-progression', anchorId: 'admin-donations', icon: Wine, description: 'Set player distillery still upgrades and special track progress (booze rackets).' },
+  { id: 'distillery-progress', label: 'Distillery progress', categoryId: 'admin-economy-progression', anchorId: 'admin-donations', icon: Wine, description: 'Set distillery progress % or grant equipment levels and special track unlocks (booze rackets).' },
   { id: 'property-transfer', label: 'Armoury / airport', categoryId: 'admin-world-systems', anchorId: 'admin-gameworld', icon: Landmark, description: 'Transfer or release armoury and airport ownership between players.' },
   { id: 'witness-statements', label: 'Witness', categoryId: 'admin-operations', anchorId: 'admin-moderation', icon: FileText, description: 'Witness statements review.' },
   { id: 'locked', label: 'Page locks', categoryId: 'admin-world-systems', anchorId: 'admin-page-locks', icon: LockKeyhole, description: 'Route / page locks (Lock page under World & Systems).' },

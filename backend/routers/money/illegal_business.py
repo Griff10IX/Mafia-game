@@ -1910,31 +1910,85 @@ async def start_illegal_business(req: StartBusinessRequest, current_user: dict =
     return {"message": f"You've taken over a joint in {state}.", "business_id": business_id}
 
 
-async def _illegal_business_pending_take_and_hours(
-    business: dict, current_user: dict, now: datetime
-) -> tuple[float, float]:
-    """Uncollected till (cash) and hours since last collect, from a business document."""
-    last_raw = business.get("last_collected_at")
-    try:
-        last = datetime.fromisoformat(last_raw.replace("Z", "+00:00")) if last_raw else now
-    except Exception:
-        last = now
-    if last.tzinfo is None:
-        last = last.replace(tzinfo=timezone.utc)
-    hours = max(0.0, (now - last).total_seconds() / 3600)
+_TILL_AFFECTING_BUSINESS_FIELDS = frozenset({"income_per_hour", "income_cap_hours", "level"})
+
+
+def _illegal_business_effective_income_per_hour(business: dict, user: dict) -> tuple[float, int]:
     income_per_hour = int(business.get("income_per_hour") or INCOME_PER_HOUR_BASE)
     cap_hours = int(business.get("income_cap_hours") or INCOME_CAP_HOURS_BASE)
     level = int(business.get("level") or 1)
     level_mult = 1.0 + 0.04 * max(0, level - 1)
-    boost_pct = int(current_user.get("illegal_business_income_boost_percent") or 0)
-    income_per_hour_eff = income_per_hour * level_mult * (1.0 + boost_pct / 100.0)
-    income = min(hours * income_per_hour_eff, income_per_hour_eff * cap_hours)
-    income = round(income, 2)
-    # Prestige only here — global event racket_payout is applied at collect so the till
-    # does not jump down when the server event rotates (same hours, different multiplier).
-    prestige = get_prestige_bonus(current_user)
+    boost_pct = int(user.get("illegal_business_income_boost_percent") or 0)
+    iph_eff = income_per_hour * level_mult * (1.0 + boost_pct / 100.0)
+    return iph_eff, cap_hours
+
+
+def _illegal_business_hours_since_last_collect(business: dict, now: datetime) -> float:
+    last_raw = business.get("last_collected_at")
+    last = _parse_iso_utc(last_raw, now) if last_raw else now
+    return max(0.0, (now - last).total_seconds() / 3600)
+
+
+def _illegal_business_base_pending_take(business: dict, user: dict, now: datetime) -> float:
+    hours = _illegal_business_hours_since_last_collect(business, now)
+    iph_eff, cap_hours = _illegal_business_effective_income_per_hour(business, user)
+    return min(hours * iph_eff, iph_eff * cap_hours)
+
+
+def _business_till_fields_changed(business_before: dict, field_updates: dict) -> bool:
+    defaults = {
+        "income_per_hour": INCOME_PER_HOUR_BASE,
+        "income_cap_hours": INCOME_CAP_HOURS_BASE,
+        "level": 1,
+    }
+    for key in _TILL_AFFECTING_BUSINESS_FIELDS:
+        if key not in field_updates:
+            continue
+        before_val = int(business_before.get(key) or defaults[key])
+        after_val = int(field_updates.get(key) or defaults[key])
+        if before_val != after_val:
+            return True
+    return False
+
+
+def _last_collected_at_preserve_base_pending(
+    business_after: dict,
+    user: dict,
+    target_base: float,
+    now: datetime,
+) -> str:
+    iph_eff, cap_hours = _illegal_business_effective_income_per_hour(business_after, user)
+    if iph_eff <= 0 or target_base <= 0:
+        return now.isoformat()
+    max_base = iph_eff * cap_hours
+    preserved = min(target_base, max_base)
+    accrual_hours = min(preserved / iph_eff, float(cap_hours))
+    return (now - timedelta(hours=accrual_hours)).isoformat()
+
+
+def _reconcile_till_last_collected_after_stat_change(
+    business_before: dict,
+    field_updates: dict,
+    user: dict,
+    now: Optional[datetime] = None,
+) -> Optional[str]:
+    """Adjust last_collected_at so till pending is unchanged after income/cap/level edits."""
+    if not _business_till_fields_changed(business_before, field_updates):
+        return None
+    now = now or datetime.now(timezone.utc)
+    target_base = _illegal_business_base_pending_take(business_before, user, now)
+    merged_after = {**business_before, **field_updates}
+    return _last_collected_at_preserve_base_pending(merged_after, user, target_base, now)
+
+
+def _illegal_business_pending_take_and_hours_sync(
+    business: dict, user: dict, now: datetime
+) -> tuple[float, float]:
+    hours = _illegal_business_hours_since_last_collect(business, now)
+    income = round(_illegal_business_base_pending_take(business, user, now), 2)
+    prestige = get_prestige_bonus(user)
     income = round(income * float(prestige.get("illegal_business_mult", 1.0)), 2)
-    racket_until = current_user.get("racket_until")
+    racket_until = user.get("racket_until")
     if racket_until:
         try:
             until = datetime.fromisoformat(racket_until.replace("Z", "+00:00"))
@@ -1945,6 +1999,13 @@ async def _illegal_business_pending_take_and_hours(
         except Exception:
             pass
     return income, hours
+
+
+async def _illegal_business_pending_take_and_hours(
+    business: dict, current_user: dict, now: datetime
+) -> tuple[float, float]:
+    """Uncollected till (cash) and hours since last collect, from a business document."""
+    return _illegal_business_pending_take_and_hours_sync(business, current_user, now)
 
 
 async def _restore_illegal_business_collect_time(business_id: str, previous_last_collected_at: Optional[str]) -> None:
@@ -2936,6 +2997,11 @@ async def complete_illegal_business_mission(mission_id: str, current_user: dict 
         update_business_inc["vault_lifetime_earned"] = int(rewards["vault_cash"])
     biz_update = {}
     if update_business_set:
+        reconciled_last = _reconcile_till_last_collected_after_stat_change(
+            business, update_business_set, current_user, now=datetime.now(timezone.utc)
+        )
+        if reconciled_last is not None:
+            update_business_set["last_collected_at"] = reconciled_last
         biz_update["$set"] = update_business_set
     if update_business_inc:
         biz_update["$inc"] = update_business_inc
@@ -3607,10 +3673,15 @@ async def admin_ibm_payload_for_user(user: dict) -> Dict[str, Any]:
         }
     business_summary = None
     distillery_summary = None
+    now = datetime.now(timezone.utc)
     if business:
+        pending_take, till_hours = await _illegal_business_pending_take_and_hours(business, user, now)
         business_summary = {
             "level": business.get("level"),
             "income_per_hour": int(business.get("income_per_hour") or 0),
+            "income_cap_hours": int(business.get("income_cap_hours") or INCOME_CAP_HOURS_BASE),
+            "pending_take": round(pending_take, 2),
+            "till_hours_accrued": round(till_hours, 2),
             "vault": int(business.get("vault") or 0),
             "guard_slots": int(business.get("guard_slots") or 0),
             "security_level": len(business.get("security_upgrades") or []),
@@ -3618,6 +3689,9 @@ async def admin_ibm_payload_for_user(user: dict) -> Dict[str, Any]:
         }
         if business.get("type_id") == "booze_making" and business.get("distillery"):
             distillery_summary = _distillery_progression_state(business["distillery"])
+    distillery_detail = None
+    if business and business.get("type_id") == "booze_making" and business.get("distillery"):
+        distillery_detail = _admin_distillery_detail(business["distillery"])
     total_missions = len(ordered)
     completed_count = len(completed_ids)
     progress_percent = int(round(100 * completed_count / total_missions)) if total_missions else 0
@@ -3630,6 +3704,7 @@ async def admin_ibm_payload_for_user(user: dict) -> Dict[str, Any]:
         "business_type_id": (business or {}).get("type_id"),
         "business_summary": business_summary,
         "distillery": distillery_summary,
+        "distillery_detail": distillery_detail,
         "progress_percent": progress_percent,
         "missions_completed_count": completed_count,
         "missions_total": total_missions,
@@ -3896,12 +3971,12 @@ def _admin_distillery_equipment_diff(before: Optional[dict], after: Optional[dic
 
 
 def _business_summary_snapshot(
-    business: Optional[dict], *, active_guards: int = 0, user: Optional[dict] = None
+    business: Optional[dict], *, active_guards: int = 0, user: Optional[dict] = None, now: Optional[datetime] = None
 ) -> Optional[Dict[str, Any]]:
     if not business:
         return None
     upgrades = business.get("security_upgrades") or []
-    return {
+    out: Dict[str, Any] = {
         "type_id": business.get("type_id"),
         "name": business.get("name"),
         "income_per_hour": int(business.get("income_per_hour") or 0),
@@ -3913,6 +3988,12 @@ def _business_summary_snapshot(
         "defender_strength_bonus": int(business.get("defender_strength_bonus") or 0),
         "raid_daily_limit": int((user or {}).get("illegal_business_raid_daily_limit") or RAID_DAILY_LIMIT_DEFAULT),
     }
+    if user:
+        now_dt = now or datetime.now(timezone.utc)
+        pending_take, till_hours = _illegal_business_pending_take_and_hours_sync(business, user, now_dt)
+        out["pending_take"] = round(pending_take, 2)
+        out["till_hours_accrued"] = round(till_hours, 2)
+    return out
 
 
 def _after_preset_summary(
@@ -4049,10 +4130,7 @@ async def admin_apply_illegal_business_progress_preset(
     business_set, user_set = _simulate_business_and_user_from_completed_missions(completed_missions)
     guards_target = int(user_set.pop("illegal_business_guards_hired", 0))
 
-    user = await db.users.find_one(
-        {"id": user_id},
-        {"_id": 0, "username": 1, "illegal_business_raid_daily_limit": 1},
-    )
+    user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     business = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
@@ -4067,6 +4145,8 @@ async def admin_apply_illegal_business_progress_preset(
         active_guards = int(
             await db.illegal_business_guards.count_documents({"business_id": business["id"]})
         )
+    now = datetime.now(timezone.utc)
+    pending_take, till_hours = await _illegal_business_pending_take_and_hours(business, user, now)
     preview_body = build_illegal_business_progress_preset_preview(
         user=user,
         business=business,
@@ -4080,6 +4160,11 @@ async def admin_apply_illegal_business_progress_preset(
         active_guards=active_guards,
         distillery_progress_percent=distillery_pct,
     )
+    preview_body["till"] = {
+        "pending_take": round(pending_take, 2),
+        "hours_accrued": round(till_hours, 2),
+        "preserved_on_apply": _business_till_fields_changed(business, business_set),
+    }
     if dry_run:
         return {
             "message": f"Preview ~{pct}% IBM progress for {user.get('username') or user_id}",
@@ -4093,6 +4178,9 @@ async def admin_apply_illegal_business_progress_preset(
     biz_update = dict(business_set)
     if business.get("type_id") == "booze_making" and business.get("distillery"):
         biz_update["distillery"] = _distillery_preset_for_percent(business.get("distillery"), distillery_pct)
+    reconciled_last = _reconcile_till_last_collected_after_stat_change(business, biz_update, user, now)
+    if reconciled_last is not None:
+        biz_update["last_collected_at"] = reconciled_last
     await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": biz_update})
     await db.users.update_one({"id": user_id}, {"$set": user_set})
     business_after = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
@@ -4292,4 +4380,219 @@ async def admin_apply_distillery_progress(
     out = await admin_ibm_payload_for_user(fresh)
     out["distillery_preset_applied"] = preview
     out["message"] = f"Set distillery progress to ~{pct}% for {user.get('username') or user_id}"
+    return out
+
+
+def _admin_finalize_distillery_after_edit(distillery: dict) -> dict:
+    equipment = distillery.get("equipment") or {}
+    distillery["worker_capacity"] = _distillery_worker_capacity(equipment)
+    progression = _distillery_progression_state(distillery)
+    distillery["mastery_tier"] = int(progression["total_steps"] // 30)
+    return distillery
+
+
+def _admin_apply_distillery_upgrades_to_doc(
+    distillery: dict,
+    *,
+    equipment_add: Optional[Dict[str, int]] = None,
+    equipment_levels: Optional[Dict[str, int]] = None,
+    add_all_equipment: Optional[int] = None,
+    unlock_special_ids: Optional[List[str]] = None,
+    unlock_special_tracks: Optional[Dict[str, int]] = None,
+    unlock_all_special_tier: Optional[int] = None,
+    workers: Optional[Dict[str, int]] = None,
+    maintenance: Optional[float] = None,
+    heat: Optional[float] = None,
+) -> tuple:
+    """Apply admin upgrade edits. Returns (updated_distillery, change_lines)."""
+    changes: List[str] = []
+    d = copy.deepcopy(distillery)
+    equipment = dict(d.get("equipment") or {lane: 0 for lane in DISTILLERY_EQUIPMENT_ORDER})
+
+    if add_all_equipment is not None:
+        n = max(0, int(add_all_equipment))
+        if n > 0:
+            for lane in DISTILLERY_EQUIPMENT_ORDER:
+                old = int(equipment.get(lane) or 0)
+                new = int(_clamp(old + n, 0, DISTILLERY_EQUIPMENT_MAX_LEVEL))
+                if new != old:
+                    equipment[lane] = new
+                    changes.append(f"{lane}: {old} → {new}")
+
+    if equipment_add:
+        for lane, delta in equipment_add.items():
+            lane_key = (lane or "").strip().lower()
+            if lane_key not in DISTILLERY_EQUIPMENT_ORDER:
+                continue
+            old = int(equipment.get(lane_key) or 0)
+            new = int(_clamp(old + int(delta), 0, DISTILLERY_EQUIPMENT_MAX_LEVEL))
+            if new != old:
+                equipment[lane_key] = new
+                changes.append(f"{lane_key}: {old} → {new}")
+
+    if equipment_levels:
+        for lane, lvl in equipment_levels.items():
+            lane_key = (lane or "").strip().lower()
+            if lane_key not in DISTILLERY_EQUIPMENT_ORDER:
+                continue
+            old = int(equipment.get(lane_key) or 0)
+            new = int(_clamp(int(lvl), 0, DISTILLERY_EQUIPMENT_MAX_LEVEL))
+            if new != old:
+                equipment[lane_key] = new
+                changes.append(f"{lane_key}: {old} → {new}")
+
+    d["equipment"] = equipment
+
+    unlocked = dict(d.get("special_upgrades") or {})
+
+    def _unlock_special_uid(uid: str) -> None:
+        row = DISTILLERY_SPECIAL_MAP.get(uid)
+        if not row:
+            return
+        track = row["track"]
+        tier = int(row.get("tier") or 0)
+        for t in range(1, tier + 1):
+            pre = f"{track}_{t:02d}"
+            if not unlocked.get(pre):
+                unlocked[pre] = True
+                changes.append(f"special {pre}")
+
+    if unlock_special_ids:
+        for uid in unlock_special_ids:
+            _unlock_special_uid((uid or "").strip())
+
+    if unlock_special_tracks:
+        for track, max_tier in unlock_special_tracks.items():
+            track_key = (track or "").strip().lower()
+            if track_key not in DISTILLERY_SPECIAL_TRACKS:
+                continue
+            max_t = int(_clamp(int(max_tier), 0, DISTILLERY_SPECIAL_PER_TRACK))
+            for t in range(1, max_t + 1):
+                _unlock_special_uid(f"{track_key}_{t:02d}")
+
+    if unlock_all_special_tier is not None:
+        max_t = int(_clamp(int(unlock_all_special_tier), 0, DISTILLERY_SPECIAL_PER_TRACK))
+        for track in DISTILLERY_SPECIAL_TRACKS:
+            for t in range(1, max_t + 1):
+                _unlock_special_uid(f"{track}_{t:02d}")
+
+    d["special_upgrades"] = unlocked
+
+    if workers:
+        w = dict(d.get("workers") or {})
+        for role in DISTILLERY_WORKER_ROLES:
+            if role in workers:
+                w[role] = max(0, int(workers[role]))
+        d["workers"] = w
+        changes.append("workers updated")
+
+    if maintenance is not None:
+        d["maintenance"] = float(_clamp(float(maintenance), 0.0, 100.0))
+        changes.append(f"maintenance → {d['maintenance']:.1f}")
+
+    if heat is not None:
+        d["heat"] = float(_clamp(float(heat), 0.0, 100.0))
+        changes.append(f"heat → {d['heat']:.1f}")
+
+    if changes:
+        d = _admin_finalize_distillery_after_edit(d)
+    return d, changes
+
+
+async def admin_apply_distillery_upgrades(
+    user_id: str,
+    *,
+    dry_run: bool = False,
+    ensure_booze_racket: bool = False,
+    equipment_add: Optional[Dict[str, int]] = None,
+    equipment_levels: Optional[Dict[str, int]] = None,
+    add_all_equipment: Optional[int] = None,
+    unlock_special_ids: Optional[List[str]] = None,
+    unlock_special_tracks: Optional[Dict[str, int]] = None,
+    unlock_all_special_tier: Optional[int] = None,
+    workers: Optional[Dict[str, int]] = None,
+    maintenance: Optional[float] = None,
+    heat: Optional[float] = None,
+) -> Dict[str, Any]:
+    """Grant distillery equipment levels and/or special track unlocks (free — no vault cost)."""
+    user = await db.users.find_one({"id": user_id}, {"_id": 0, "username": 1})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    provision = None
+    business_before_doc = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
+    if ensure_booze_racket:
+        provision = await admin_ensure_booze_illegal_business(user_id, dry_run=dry_run)
+        if not dry_run:
+            business_before_doc = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
+
+    business = business_before_doc
+    if not business:
+        if ensure_booze_racket and dry_run and provision and provision.get("business_preview"):
+            business = provision["business_preview"]
+        else:
+            raise HTTPException(status_code=400, detail="No illegal business on this account")
+    if business.get("type_id") != "booze_making":
+        raise HTTPException(status_code=400, detail="Distillery upgrades only apply to booze-making rackets")
+    distillery = business.get("distillery")
+    if not distillery:
+        if ensure_booze_racket and dry_run and provision and provision.get("business_preview"):
+            distillery = provision["business_preview"].get("distillery")
+        if not distillery:
+            raise HTTPException(status_code=400, detail="No distillery on this business")
+
+    before_detail = _admin_distillery_detail(copy.deepcopy(distillery))
+    updated, change_lines = _admin_apply_distillery_upgrades_to_doc(
+        distillery,
+        equipment_add=equipment_add,
+        equipment_levels=equipment_levels,
+        add_all_equipment=add_all_equipment,
+        unlock_special_ids=unlock_special_ids,
+        unlock_special_tracks=unlock_special_tracks,
+        unlock_all_special_tier=unlock_all_special_tier,
+        workers=workers,
+        maintenance=maintenance,
+        heat=heat,
+    )
+    after_detail = _admin_distillery_detail(updated)
+    after_prog = _distillery_progression_state(updated)
+    preview = {
+        "before": before_detail,
+        "after": after_detail,
+        "after_progress": after_prog,
+        "equipment_changes": _admin_distillery_equipment_diff(before_detail, after_detail),
+        "changes": change_lines,
+        "provision": (
+            {
+                "message": provision.get("message"),
+                "would_create_business": provision.get("would_create_business"),
+                "would_add_distillery": provision.get("would_add_distillery"),
+            }
+            if provision
+            else None
+        ),
+    }
+    if not change_lines:
+        return {
+            "dry_run": dry_run,
+            "username": user.get("username"),
+            "user_id": user_id,
+            "preview": preview,
+            "message": "No distillery changes requested",
+        }
+    if dry_run:
+        return {
+            "dry_run": True,
+            "username": user.get("username"),
+            "user_id": user_id,
+            "preview": preview,
+            "message": f"Preview {len(change_lines)} distillery upgrade change(s) for {user.get('username') or user_id}",
+        }
+    await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": {"distillery": updated}})
+    fresh = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not fresh:
+        raise HTTPException(status_code=404, detail="User not found")
+    out = await admin_ibm_payload_for_user(fresh)
+    out["distillery_upgrades_applied"] = preview
+    out["message"] = f"Applied {len(change_lines)} distillery upgrade change(s) for {user.get('username') or user_id}"
     return out

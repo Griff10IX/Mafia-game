@@ -12,7 +12,10 @@ _STATS_RECENT_KILLS_SCAN_LIMIT = 800
 
 from fastapi import Depends, HTTPException
 
-from utils.attack_attempt_display import is_hitlist_npc_kill_excluded_from_stats
+from utils.attack_attempt_display import (
+    is_hitlist_npc_kill_excluded_from_stats,
+    stats_kill_shows_killer_username,
+)
 
 
 def _gambling_profit_from_details(game_type: str, details: dict) -> int:
@@ -449,7 +452,7 @@ def register(router):
         if all_user_ids:
             users_list = await db.users.find(
                 {"id": {"$in": list(all_user_ids)}},
-                {"_id": 0, "id": 1, "is_npc": 1, "rank_points": 1, "username": 1, "is_bodyguard": 1, "bodyguard_owner_id": 1},
+                {"_id": 0, "id": 1, "is_npc": 1, "rank_points": 1, "username": 1, "is_bodyguard": 1, "bodyguard_owner_id": 1, "killer_revealed": 1},
             ).to_list(None)
             users_batch = {u["id"]: u for u in users_list}
 
@@ -499,8 +502,13 @@ def register(router):
             if victim_rank_name is None and victim:
                 _, victim_rank_name = get_rank_info(int(victim.get("rank_points", 0) or 0), user_prestige_rank_mult(victim))
 
-            is_public = bool(a.get("make_public"))
-            killer_username = a.get("attacker_username") if (is_public or staff_can_see) else None
+            is_public = stats_kill_shows_killer_username(
+                a,
+                viewer_id=viewer_id,
+                victim_user=victim,
+                staff_can_see=staff_can_see,
+            )
+            killer_username = a.get("attacker_username") if is_public else None
             victim_username = a.get("target_username")
             if not victim_username:
                 continue
@@ -529,6 +537,7 @@ def register(router):
                 "victim_is_npc": victim_is_npc,
                 "victim_is_your_bodyguard": victim_is_your_bodyguard,
                 "killer_username": killer_username,
+                "killer_hidden": not is_public,
                 "is_public": is_public,
                 "created_at": a.get("created_at"),
             })
