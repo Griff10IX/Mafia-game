@@ -4,7 +4,7 @@
  */
 
 const cache = new Map();
-const STORAGE_KEY = 'mafia_stats_overview_v1';
+const STORAGE_KEY = 'mafia_stats_overview_v2';
 
 /** @param {boolean} usersOnlyKills */
 function key(usersOnlyKills) {

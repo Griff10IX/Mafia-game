@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 _STATS_OVERVIEW_CACHE: Dict[str, Tuple[Dict[str, Any], float]] = {}
+_STATS_KILL_FEED_CACHE: Dict[str, Tuple[Dict[str, Any], float]] = {}
 _STATS_OVERVIEW_TTL_SEC = 55.0
 _STATS_RECENT_KILLS_SCAN_LIMIT = 800
 
@@ -16,6 +17,92 @@ from utils.attack_attempt_display import (
     is_hitlist_npc_kill_excluded_from_stats,
     stats_kill_shows_killer_username,
 )
+
+
+def _build_recent_kills_for_viewer(
+    *,
+    attempts: List[dict],
+    users_batch: Dict[str, dict],
+    bodyguard_owner_by_target: Dict[str, str],
+    current_user: dict,
+    users_only_kills: bool,
+    staff_can_see: bool,
+    get_rank_info,
+    user_prestige_rank_mult,
+    RANKS,
+) -> List[dict]:
+    viewer_id = str(current_user.get("id") or "")
+    recent_kills: List[dict] = []
+    seen_kills = set()
+    for a in attempts:
+        dedup_key = (a.get("target_username"), a.get("attacker_username"), a.get("created_at"))
+        if dedup_key in seen_kills:
+            continue
+        seen_kills.add(dedup_key)
+
+        killer = users_batch.get(a.get("attacker_id"))
+        victim = users_batch.get(a.get("target_id"))
+
+        killer_is_npc = bool(killer and killer.get("is_npc"))
+        victim_is_npc = bool(victim and victim.get("is_npc"))
+        if is_hitlist_npc_kill_excluded_from_stats(a, victim):
+            continue
+        if users_only_kills and killer_is_npc:
+            continue
+
+        victim_rank_name = None
+        tr_id = a.get("target_rank_id")
+        if tr_id is not None:
+            try:
+                tr_id_int = int(tr_id)
+                victim_rank_name = next((r.get("name") for r in RANKS if int(r.get("id", 0) or 0) == tr_id_int), None)
+            except Exception:
+                victim_rank_name = None
+        if victim_rank_name is None and victim:
+            _, victim_rank_name = get_rank_info(int(victim.get("rank_points", 0) or 0), user_prestige_rank_mult(victim))
+
+        is_public = stats_kill_shows_killer_username(
+            a,
+            viewer_id=viewer_id,
+            victim_user=victim,
+            staff_can_see=staff_can_see,
+        )
+        killer_username = a.get("attacker_username") if is_public else None
+        victim_username = a.get("target_username")
+        if not victim_username:
+            continue
+
+        tid = a.get("target_id")
+        owner_raw = bodyguard_owner_by_target.get(str(tid)) if tid is not None else None
+        if owner_raw is None:
+            owner_raw = a.get("bodyguard_owner_id")
+        if owner_raw is None and victim:
+            owner_raw = victim.get("bodyguard_owner_id")
+        victim_was_bodyguard = bool(
+            (victim and victim.get("is_bodyguard"))
+            or a.get("is_bodyguard_kill")
+        )
+        victim_is_your_bodyguard = bool(
+            owner_raw is not None
+            and str(owner_raw) == viewer_id
+            and victim_was_bodyguard
+        )
+
+        recent_kills.append({
+            "id": a.get("id") or a.get("attack_id") or str(uuid.uuid4()),
+            "victim_username": victim_username,
+            "victim_rank_name": victim_rank_name,
+            "victim_is_npc": victim_is_npc,
+            "victim_is_your_bodyguard": victim_is_your_bodyguard,
+            "killer_username": killer_username,
+            "killer_hidden": not is_public,
+            "is_public": is_public,
+            "created_at": a.get("created_at"),
+        })
+
+        if len(recent_kills) >= 15:
+            break
+    return recent_kills
 
 
 def _gambling_profit_from_details(game_type: str, details: dict) -> int:
@@ -228,9 +315,28 @@ def register(router):
     ):
         cache_key = "true" if users_only_kills else "false"
         now_mono = time.monotonic()
+        staff_can_see = current_user and (_is_admin(current_user) or _is_moderator(current_user))
         cached = _STATS_OVERVIEW_CACHE.get(cache_key)
-        if cached and (now_mono - cached[1]) < _STATS_OVERVIEW_TTL_SEC:
-            return cached[0]
+        kill_cached = _STATS_KILL_FEED_CACHE.get(cache_key)
+        if (
+            cached
+            and kill_cached
+            and (now_mono - cached[1]) < _STATS_OVERVIEW_TTL_SEC
+            and (now_mono - kill_cached[1]) < _STATS_OVERVIEW_TTL_SEC
+        ):
+            kill_feed = kill_cached[0]
+            recent_kills = _build_recent_kills_for_viewer(
+                attempts=kill_feed["attempts"],
+                users_batch=kill_feed["users_batch"],
+                bodyguard_owner_by_target=kill_feed["bodyguard_owner_by_target"],
+                current_user=current_user,
+                users_only_kills=users_only_kills,
+                staff_can_see=staff_can_see,
+                get_rank_info=get_rank_info,
+                user_prestige_rank_mult=user_prestige_rank_mult,
+                RANKS=RANKS,
+            )
+            return {**cached[0], "recent_kills": recent_kills}
 
         now = datetime.now(timezone.utc)
         staff_filter = _staff_exclude_user_filter()
@@ -470,80 +576,17 @@ def register(router):
                 if k not in bodyguard_owner_by_target:
                     bodyguard_owner_by_target[k] = bg.get("user_id")
 
-        viewer_id = str(current_user.get("id") or "")
-
-        recent_kills = []
-        seen_kills = set()
-        staff_can_see = current_user and (_is_admin(current_user) or _is_moderator(current_user))
-        for a in attempts:
-            dedup_key = (a.get("target_username"), a.get("attacker_username"), a.get("created_at"))
-            if dedup_key in seen_kills:
-                continue
-            seen_kills.add(dedup_key)
-
-            killer = users_batch.get(a.get("attacker_id"))
-            victim = users_batch.get(a.get("target_id"))
-
-            killer_is_npc = bool(killer and killer.get("is_npc"))
-            victim_is_npc = bool(victim and victim.get("is_npc"))
-            if is_hitlist_npc_kill_excluded_from_stats(a, victim):
-                continue
-            if users_only_kills and killer_is_npc:
-                continue
-
-            victim_rank_name = None
-            tr_id = a.get("target_rank_id")
-            if tr_id is not None:
-                try:
-                    tr_id_int = int(tr_id)
-                    victim_rank_name = next((r.get("name") for r in RANKS if int(r.get("id", 0) or 0) == tr_id_int), None)
-                except Exception:
-                    victim_rank_name = None
-            if victim_rank_name is None and victim:
-                _, victim_rank_name = get_rank_info(int(victim.get("rank_points", 0) or 0), user_prestige_rank_mult(victim))
-
-            is_public = stats_kill_shows_killer_username(
-                a,
-                viewer_id=viewer_id,
-                victim_user=victim,
-                staff_can_see=staff_can_see,
-            )
-            killer_username = a.get("attacker_username") if is_public else None
-            victim_username = a.get("target_username")
-            if not victim_username:
-                continue
-
-            tid = a.get("target_id")
-            # Slot row in `bodyguards` is deleted when a guard dies; use attempt snapshot + user doc fallbacks.
-            owner_raw = bodyguard_owner_by_target.get(str(tid)) if tid is not None else None
-            if owner_raw is None:
-                owner_raw = a.get("bodyguard_owner_id")
-            if owner_raw is None and victim:
-                owner_raw = victim.get("bodyguard_owner_id")
-            victim_was_bodyguard = bool(
-                (victim and victim.get("is_bodyguard"))
-                or a.get("is_bodyguard_kill")
-            )
-            victim_is_your_bodyguard = bool(
-                owner_raw is not None
-                and str(owner_raw) == viewer_id
-                and victim_was_bodyguard
-            )
-
-            recent_kills.append({
-                "id": a.get("id") or a.get("attack_id") or str(uuid.uuid4()),
-                "victim_username": victim_username,
-                "victim_rank_name": victim_rank_name,
-                "victim_is_npc": victim_is_npc,
-                "victim_is_your_bodyguard": victim_is_your_bodyguard,
-                "killer_username": killer_username,
-                "killer_hidden": not is_public,
-                "is_public": is_public,
-                "created_at": a.get("created_at"),
-            })
-
-            if len(recent_kills) >= 15:
-                break
+        recent_kills = _build_recent_kills_for_viewer(
+            attempts=attempts,
+            users_batch=users_batch,
+            bodyguard_owner_by_target=bodyguard_owner_by_target,
+            current_user=current_user,
+            users_only_kills=users_only_kills,
+            staff_can_see=staff_can_see,
+            get_rank_info=get_rank_info,
+            user_prestige_rank_mult=user_prestige_rank_mult,
+            RANKS=RANKS,
+        )
 
         war_ids = [w.get("id") for w in wiped_wars if w.get("id")]
         war_stats_lookup: Dict[tuple, Dict[str, int]] = {}
@@ -637,11 +680,18 @@ def register(router):
                 "gta_fails": int(gta_stats_doc.get("gta_fails", 0) or 0),
             },
             "rank_stats": rank_stats,
-            "recent_kills": recent_kills,
             "wiped_families": wiped_families,
         }
         _STATS_OVERVIEW_CACHE[cache_key] = (payload, now_mono)
-        return payload
+        _STATS_KILL_FEED_CACHE[cache_key] = (
+            {
+                "attempts": attempts,
+                "users_batch": users_batch,
+                "bodyguard_owner_by_target": bodyguard_owner_by_target,
+            },
+            now_mono,
+        )
+        return {**payload, "recent_kills": recent_kills}
 
     @router.get("/stats/me")
     async def get_my_stats(current_user: dict = Depends(get_current_user)):

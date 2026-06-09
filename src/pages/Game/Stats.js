@@ -119,7 +119,7 @@ const KillsListView = ({ kills }) => {
         Last 15 Kills
       </h2>
       <p className="text-[8px] text-zinc-500 font-heading normal-case tracking-normal">
-        Killer hidden unless the victim reveals (1,000 pts while dead) or you are staff.
+        Killer hidden unless the attacker made it public, the victim reveals (1,000 pts while dead), or you are staff.
       </p>
     </div>
 

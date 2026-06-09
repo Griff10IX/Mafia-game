@@ -39,8 +39,10 @@ def stats_kill_shows_killer_username(
     victim_user: Optional[dict],
     staff_can_see: bool,
 ) -> bool:
-    """Public stats feed: hide killer unless victim revealed, viewer is killer, or staff."""
+    """Public stats feed: hide killer unless staff, attacker opted in, victim revealed, or viewer is killer."""
     if staff_can_see:
+        return True
+    if attempt_make_public(attempt):
         return True
     attacker_id = str(attempt.get("attacker_id") or "")
     if viewer_id and attacker_id and viewer_id == attacker_id:
