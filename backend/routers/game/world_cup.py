@@ -28,6 +28,52 @@ DRAFT_HOURS_BEFORE_START = 24
 DEFAULT_ENDED_MESSAGE = "World Cup 2026 has ended. Thanks for playing!"
 GROUP_IDS = tuple(chr(ord("A") + i) for i in range(12))
 
+WC_PLAYOFF_PLACEHOLDER_NAMES = {
+    "PO-A": "Winner Playoff A",
+    "PO-B": "Winner Playoff B",
+    "PO-C": "Winner Playoff C",
+    "PO-D": "Winner Playoff D",
+    "PO-E": "Winner Playoff E",
+}
+
+WC_PLAYOFF_RESOLUTIONS: Dict[str, Dict[str, Any]] = {
+    "PO-A": {
+        "name": "Bosnia and Herzegovina",
+        "short_code": "BIH",
+        "flag_emoji": "🇧🇦",
+        "odds_api_names": ["Bosnia and Herzegovina", "Bosnia"],
+        "group_id": "B",
+    },
+    "PO-B": {
+        "name": "Iraq",
+        "short_code": "IRQ",
+        "flag_emoji": "🇮🇶",
+        "odds_api_names": ["Iraq"],
+        "group_id": "I",
+    },
+    "PO-C": {
+        "name": "Türkiye",
+        "short_code": "TUR",
+        "flag_emoji": "🇹🇷",
+        "odds_api_names": ["Turkey", "Türkiye"],
+        "group_id": "D",
+    },
+    "PO-D": {
+        "name": "Czechia",
+        "short_code": "CZE",
+        "flag_emoji": "🇨🇿",
+        "odds_api_names": ["Czechia", "Czech Republic"],
+        "group_id": "A",
+    },
+    "PO-E": {
+        "name": "DR Congo",
+        "short_code": "COD",
+        "flag_emoji": "🇨🇩",
+        "odds_api_names": ["DR Congo", "Congo DR", "Democratic Republic of the Congo"],
+        "group_id": "K",
+    },
+}
+
 PRED_GROUP_WINNER = "group_winner"
 PRED_MATCH_SCORE = "match_score"
 PRED_MATCH_SCORER = "match_scorer"
@@ -1303,6 +1349,146 @@ async def _build_draft_results(db) -> dict:
     }
 
 
+def _playoff_slot_resolved(team: Optional[dict], resolution: dict) -> bool:
+    if not team:
+        return False
+    return (
+        (team.get("name") or "").strip() == resolution["name"]
+        and (team.get("short_code") or "").strip().upper() == resolution["short_code"]
+    )
+
+
+async def _find_playoff_placeholder_team(db, placeholder_code: str) -> Optional[dict]:
+    code = (placeholder_code or "").strip().upper()
+    if code not in WC_PLAYOFF_RESOLUTIONS:
+        return None
+    resolution = WC_PLAYOFF_RESOLUTIONS[code]
+    team = await db.world_cup_teams.find_one({"short_code": code}, {"_id": 0})
+    if team:
+        return team
+    placeholder_name = WC_PLAYOFF_PLACEHOLDER_NAMES.get(code)
+    if placeholder_name:
+        team = await db.world_cup_teams.find_one({"name": placeholder_name}, {"_id": 0})
+        if team:
+            return team
+    team = await db.world_cup_teams.find_one(
+        {"group_id": resolution["group_id"], "short_code": resolution["short_code"]},
+        {"_id": 0},
+    )
+    if team:
+        return team
+    async for row in db.world_cup_teams.find({"group_id": resolution["group_id"]}, {"_id": 0}):
+        sc = (row.get("short_code") or "").strip().upper()
+        if sc.startswith("PO-"):
+            return row
+    return None
+
+
+async def _build_playoff_slots_status(db) -> List[dict]:
+    rows = []
+    for code in ("PO-A", "PO-B", "PO-C", "PO-D", "PO-E"):
+        resolution = WC_PLAYOFF_RESOLUTIONS[code]
+        team = await _find_playoff_placeholder_team(db, code)
+        resolved = _playoff_slot_resolved(team, resolution) if team else False
+        rows.append({
+            "placeholder_code": code,
+            "placeholder_name": WC_PLAYOFF_PLACEHOLDER_NAMES[code],
+            "group_id": resolution["group_id"],
+            "expected": {
+                "name": resolution["name"],
+                "short_code": resolution["short_code"],
+            },
+            "current": _team_brief(team) if team else None,
+            "resolved": resolved,
+            "missing": team is None,
+        })
+    return rows
+
+
+async def _apply_playoff_resolution(db, placeholder_code: str, *, dry_run: bool = False) -> dict:
+    code = (placeholder_code or "").strip().upper()
+    if code not in WC_PLAYOFF_RESOLUTIONS:
+        raise HTTPException(status_code=400, detail=f"Unknown playoff slot {code!r}")
+    resolution = WC_PLAYOFF_RESOLUTIONS[code]
+    team = await _find_playoff_placeholder_team(db, code)
+    if not team:
+        return {
+            "ok": False,
+            "placeholder_code": code,
+            "error": "placeholder_not_found",
+            "message": f"No team row found for {WC_PLAYOFF_PLACEHOLDER_NAMES[code]} (group {resolution['group_id']})",
+        }
+    if _playoff_slot_resolved(team, resolution):
+        return {
+            "ok": True,
+            "placeholder_code": code,
+            "skipped": True,
+            "team_id": team.get("id"),
+            "before": _team_brief(team),
+            "after": _team_brief(team),
+            "message": f"{resolution['name']} already set",
+        }
+    before = _team_brief(team)
+    update = {
+        "name": resolution["name"],
+        "short_code": resolution["short_code"],
+        "flag_emoji": resolution.get("flag_emoji") or "",
+        "odds_api_names": resolution.get("odds_api_names") or [],
+        "playoff_resolved_at": _now_iso(),
+        "playoff_placeholder_code": code,
+    }
+    if dry_run:
+        after = {**team, **update}
+        return {
+            "ok": True,
+            "dry_run": True,
+            "placeholder_code": code,
+            "team_id": team.get("id"),
+            "before": before,
+            "after": _team_brief(after),
+            "message": f"Would set {before.get('name')} → {resolution['name']}",
+        }
+    await db.world_cup_teams.update_one({"id": team["id"]}, {"$set": update})
+    after_doc = {**team, **update}
+    return {
+        "ok": True,
+        "placeholder_code": code,
+        "team_id": team.get("id"),
+        "before": before,
+        "after": _team_brief(after_doc),
+        "message": f"Updated {before.get('name')} → {resolution['name']}",
+    }
+
+
+async def _apply_all_playoff_resolutions(db, *, dry_run: bool = False) -> dict:
+    results = []
+    updated = 0
+    skipped = 0
+    missing = 0
+    for code in WC_PLAYOFF_RESOLUTIONS:
+        row = await _apply_playoff_resolution(db, code, dry_run=dry_run)
+        results.append(row)
+        if not row.get("ok"):
+            missing += 1
+        elif row.get("skipped"):
+            skipped += 1
+        else:
+            updated += 1
+    return {
+        "dry_run": dry_run,
+        "updated": updated,
+        "skipped": skipped,
+        "missing": missing,
+        "all_resolved": missing == 0 and updated == 0 and skipped == len(WC_PLAYOFF_RESOLUTIONS),
+        "results": results,
+        "message": (
+            f"Resolved {updated} playoff slot(s)"
+            if not dry_run
+            else f"Would resolve {sum(1 for r in results if r.get('ok') and not r.get('skipped'))} slot(s)"
+        ),
+    }
+
+
 async def _seed_2026(db) -> dict:
     path = WC_TEAMS_SEED_PATH
     if not path.is_file():
@@ -1628,6 +1814,10 @@ class MatchResultPatch(BaseModel):
 
 class BulkMatchImport(BaseModel):
     matches: List[dict] = Field(default_factory=list)
+
+
+class WorldCupPlayoffResolveBody(BaseModel):
+    dry_run: bool = False
 
 
 def register(router):
@@ -2073,6 +2263,31 @@ def register(router):
     @router.post("/admin/world-cup/seed-2026")
     async def admin_wc_seed(current_user: dict = Depends(require_admin)):
         return await _seed_2026(db)
+
+    @router.get("/admin/world-cup/playoff-slots")
+    async def admin_wc_playoff_slots(current_user: dict = Depends(require_admin)):
+        slots = await _build_playoff_slots_status(db)
+        pending = [s for s in slots if not s.get("resolved")]
+        return {
+            "slots": slots,
+            "pending_count": len(pending),
+            "all_resolved": len(pending) == 0,
+        }
+
+    @router.post("/admin/world-cup/resolve-playoffs")
+    async def admin_wc_resolve_all_playoffs(
+        body: WorldCupPlayoffResolveBody,
+        current_user: dict = Depends(require_admin),
+    ):
+        return await _apply_all_playoff_resolutions(db, dry_run=bool(body.dry_run))
+
+    @router.post("/admin/world-cup/resolve-playoff/{placeholder_code}")
+    async def admin_wc_resolve_playoff_slot(
+        placeholder_code: str,
+        body: WorldCupPlayoffResolveBody,
+        current_user: dict = Depends(require_admin),
+    ):
+        return await _apply_playoff_resolution(db, placeholder_code, dry_run=bool(body.dry_run))
 
     @router.patch("/admin/world-cup/config")
     async def admin_wc_config(body: WorldCupConfigPatch, current_user: dict = Depends(require_admin)):

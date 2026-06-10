@@ -6,7 +6,7 @@
         { "name": "Mexico", "short_code": "MEX", "flag_emoji": "🇲🇽", "odds_api_names": ["Mexico"] },
         { "name": "South Africa", "short_code": "RSA", "flag_emoji": "🇿🇦", "odds_api_names": ["South Africa"] },
         { "name": "South Korea", "short_code": "KOR", "flag_emoji": "🇰🇷", "odds_api_names": ["South Korea", "Korea Republic"] },
-        { "name": "Winner Playoff D", "short_code": "PO-D", "flag_emoji": "🏳️", "odds_api_names": [] }
+        { "name": "Czechia", "short_code": "CZE", "flag_emoji": "🇨🇿", "odds_api_names": ["Czechia", "Czech Republic"] }
       ]
     },
     {
@@ -15,7 +15,7 @@
         { "name": "Canada", "short_code": "CAN", "flag_emoji": "🇨🇦", "odds_api_names": ["Canada"] },
         { "name": "Qatar", "short_code": "QAT", "flag_emoji": "🇶🇦", "odds_api_names": ["Qatar"] },
         { "name": "Switzerland", "short_code": "SUI", "flag_emoji": "🇨🇭", "odds_api_names": ["Switzerland"] },
-        { "name": "Winner Playoff A", "short_code": "PO-A", "flag_emoji": "🏳️", "odds_api_names": [] }
+        { "name": "Bosnia and Herzegovina", "short_code": "BIH", "flag_emoji": "🇧🇦", "odds_api_names": ["Bosnia and Herzegovina", "Bosnia"] }
       ]
     },
     {
@@ -33,7 +33,7 @@
         { "name": "United States", "short_code": "USA", "flag_emoji": "🇺🇸", "odds_api_names": ["United States", "USA"] },
         { "name": "Paraguay", "short_code": "PAR", "flag_emoji": "🇵🇾", "odds_api_names": ["Paraguay"] },
         { "name": "Australia", "short_code": "AUS", "flag_emoji": "🇦🇺", "odds_api_names": ["Australia"] },
-        { "name": "Winner Playoff C", "short_code": "PO-C", "flag_emoji": "🏳️", "odds_api_names": [] }
+        { "name": "Türkiye", "short_code": "TUR", "flag_emoji": "🇹🇷", "odds_api_names": ["Turkey", "Türkiye"] }
       ]
     },
     {
@@ -96,7 +96,7 @@
         { "name": "Portugal", "short_code": "POR", "flag_emoji": "🇵🇹", "odds_api_names": ["Portugal"] },
         { "name": "Colombia", "short_code": "COL", "flag_emoji": "🇨🇴", "odds_api_names": ["Colombia"] },
         { "name": "Uzbekistan", "short_code": "UZB", "flag_emoji": "🇺🇿", "odds_api_names": ["Uzbekistan"] },
-        { "name": "Winner Playoff E", "short_code": "PO-E", "flag_emoji": "🏳️", "odds_api_names": [] }
+        { "name": "DR Congo", "short_code": "COD", "flag_emoji": "🇨🇩", "odds_api_names": ["DR Congo", "Congo DR", "Democratic Republic of the Congo"] }
       ]
     },
     {

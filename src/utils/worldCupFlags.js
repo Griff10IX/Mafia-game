@@ -43,6 +43,11 @@ export const WC_SHORT_TO_ISO = {
   CRO: 'hr',
   GHA: 'gh',
   PAN: 'pa',
+  BIH: 'ba',
+  IRQ: 'iq',
+  TUR: 'tr',
+  CZE: 'cz',
+  COD: 'cd',
 };
 
 export function getWcFlagIso(team) {

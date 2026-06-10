@@ -1522,6 +1522,7 @@ export default function Admin() {
   const [gamePassSeasonAdmin, setGamePassSeasonAdmin] = useState(null);
   const [gamePassSeasonEndAt, setGamePassSeasonEndAt] = useState('2026-05-01T14:00:00+00:00');
   const [wcConfig, setWcConfig] = useState(null);
+  const [wcPlayoffSlots, setWcPlayoffSlots] = useState(null);
   const [wcHealth, setWcHealth] = useState(null);
   const [wcOverview, setWcOverview] = useState(null);
   const [wcAdminTab, setWcAdminTab] = useState('setup');
@@ -7840,16 +7841,36 @@ export default function Admin() {
   const fetchWorldCupAdmin = async () => {
     setWcLoading(true);
     try {
-      const [cfg, health] = await Promise.all([
+      const [cfg, health, playoffs] = await Promise.all([
         api.get('/admin/world-cup/config'),
         api.get('/admin/world-cup/auto-sync-health'),
+        api.get('/admin/world-cup/playoff-slots').catch(() => ({ data: null })),
       ]);
       setWcConfig(cfg.data);
       setWcHealth(health.data);
+      setWcPlayoffSlots(playoffs.data);
       setWcEndedMessage(cfg.data?.ended_message || '');
       setWcBannerText(cfg.data?.banner_text || '');
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed to load World Cup config'); }
     finally { setWcLoading(false); }
+  };
+
+  const resolveWorldCupPlayoffs = async ({ dryRun = false } = {}) => {
+    if (!dryRun && !window.confirm('Replace all Winner Playoff placeholders with qualified teams? Existing predictions keep the same team IDs.')) return;
+    setWcLoading(true);
+    try {
+      const res = await api.post('/admin/world-cup/resolve-playoffs', { dry_run: dryRun });
+      if (dryRun) {
+        toast.success(res.data?.message || 'Preview ready');
+      } else {
+        toast.success(`${res.data?.message || 'Playoffs resolved'} — run Sync fixtures next`);
+      }
+      await fetchWorldCupAdmin();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Resolve failed');
+    } finally {
+      setWcLoading(false);
+    }
   };
 
   const toggleWcUserExpand = async (userId) => {
@@ -12071,6 +12092,12 @@ export default function Admin() {
               <BtnSecondary onClick={() => api.post('/admin/world-cup/seed-2026').then((r) => toast.success(`Seeded ${r.data?.teams} teams`)).catch((e) => toast.error(e.response?.data?.detail || 'Seed failed'))} disabled={wcLoading}>
                 Seed 2026 teams
               </BtnSecondary>
+              <BtnSecondary onClick={() => resolveWorldCupPlayoffs({ dryRun: true })} disabled={wcLoading}>
+                Preview playoffs
+              </BtnSecondary>
+              <BtnSecondary onClick={() => resolveWorldCupPlayoffs()} disabled={wcLoading || wcPlayoffSlots?.all_resolved}>
+                Resolve playoffs
+              </BtnSecondary>
               <BtnSecondary onClick={() => api.post('/admin/world-cup/sync-fixtures').then((r) => toast.success(`Synced ${r.data?.synced || 0} fixtures`)).catch((e) => toast.error(e.response?.data?.detail || 'Sync failed')).then(() => fetchWorldCupAdmin())} disabled={wcLoading || !wcConfig?.enabled}>
                 Sync fixtures
               </BtnSecondary>
@@ -12096,6 +12123,24 @@ export default function Admin() {
             <BtnSecondary onClick={() => patchWorldCupConfig({ ended_message: wcEndedMessage, banner_text: wcBannerText })} disabled={wcLoading}>
               Save messages
             </BtnSecondary>
+            {wcPlayoffSlots?.slots?.length > 0 && (
+              <div className="text-[10px] font-heading space-y-1 p-2 rounded border border-primary/15 bg-primary/5">
+                <p className="text-mutedForeground uppercase tracking-wide">
+                  Playoff slots {wcPlayoffSlots.all_resolved ? '· all resolved' : `· ${wcPlayoffSlots.pending_count} pending`}
+                </p>
+                <ul className="space-y-0.5 text-foreground/90">
+                  {wcPlayoffSlots.slots.map((slot) => (
+                    <li key={slot.placeholder_code}>
+                      Group {slot.group_id}: {slot.current?.name || slot.placeholder_name}
+                      {!slot.resolved && slot.expected?.name ? (
+                        <span className="text-amber-300"> → {slot.expected.name}</span>
+                      ) : null}
+                      {slot.resolved ? <span className="text-emerald-400"> ✓</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             {wcHealth && (
               <div className="text-[10px] text-mutedForeground font-heading space-y-1 pt-2 border-t border-primary/10">
                 <p>Entrants: {wcHealth.entrants} ({wcHealth.real_entrants ?? wcHealth.entrants} real · {wcHealth.ghost_entrants ?? 0} ghost) · Pending payouts: {wcHealth.pending_payouts ?? 0} · Unsettled matches: {wcHealth.unsettled_matches}</p>
