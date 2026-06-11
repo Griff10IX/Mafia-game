@@ -2308,6 +2308,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         death_message = (request.death_message or "").strip()
         make_public = bool(request.make_public)
         await _increase_kill_inflation_on_kill(current_user["id"])
+        _kill_inflation_cache.pop(current_user["id"], None)
         killer_id = current_user["id"]
         victim_id = target["id"]
         if target.get("is_npc"):

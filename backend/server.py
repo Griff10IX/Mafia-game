@@ -2753,11 +2753,27 @@ def _username_pattern(username: str):
     return re.compile("^" + re.escape(username.strip()) + "$", re.IGNORECASE)
 
 
+def _parse_kill_inflation_updated_at(val, *, now: datetime) -> Optional[datetime]:
+    """Parse kill_inflation_updated_at from ISO string or BSON datetime."""
+    if val is None or val == "":
+        return None
+    if hasattr(val, "year"):
+        dt = val
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+    try:
+        s = str(val).strip().replace("Z", "+00:00")
+        dt = datetime.fromisoformat(s)
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+    except (ValueError, TypeError):
+        return None
+
+
 async def _apply_kill_inflation_decay(user_id: str) -> float:
     """
     Inflation system:
     - Each kill increases inflation by ~2–4% (handled elsewhere).
     - If no kills happen, inflation decays by ~3–6% per hour.
+    - Decay is applied lazily when attack endpoints (or /auth/me) run.
     - No upper limit.
     """
     now = datetime.now(timezone.utc)
@@ -2766,31 +2782,32 @@ async def _apply_kill_inflation_decay(user_id: str) -> float:
         return 0.0
 
     inflation = float(user.get("kill_inflation", 0.0) or 0.0)
-    updated_at_iso = user.get("kill_inflation_updated_at")
-    if not updated_at_iso:
-        await db.users.update_one({"id": user_id}, {"$set": {"kill_inflation_updated_at": now.isoformat()}})
-        return inflation
+    if inflation <= 0:
+        if user.get("kill_inflation_updated_at") is None:
+            await db.users.update_one(
+                {"id": user_id},
+                {"$set": {"kill_inflation": 0.0, "kill_inflation_updated_at": now.isoformat()}},
+            )
+        return 0.0
 
-    try:
-        updated_at = datetime.fromisoformat(updated_at_iso)
-        if updated_at.tzinfo is None:
-            updated_at = updated_at.replace(tzinfo=timezone.utc)
-    except Exception:
-        await db.users.update_one({"id": user_id}, {"$set": {"kill_inflation_updated_at": now.isoformat()}})
-        return inflation
+    updated_at = _parse_kill_inflation_updated_at(user.get("kill_inflation_updated_at"), now=now)
+    if updated_at is None:
+        # Missing/invalid timestamp with active inflation — allow catch-up decay instead of freezing.
+        updated_at = now - timedelta(days=30)
 
     hours = int((now - updated_at).total_seconds() // 3600)
-    if hours <= 0 or inflation <= 0:
+    if hours <= 0:
         return inflation
 
     new_inflation = inflation
     for _ in range(hours):
         new_inflation = max(0.0, new_inflation - random.uniform(0.03, 0.06))
 
-    if abs(new_inflation - inflation) > 1e-9:
+    new_ts = (updated_at + timedelta(hours=hours)).isoformat()
+    if abs(new_inflation - inflation) > 1e-9 or user.get("kill_inflation_updated_at") != new_ts:
         await db.users.update_one(
             {"id": user_id},
-            {"$set": {"kill_inflation": new_inflation, "kill_inflation_updated_at": (updated_at + timedelta(hours=hours)).isoformat()}}
+            {"$set": {"kill_inflation": new_inflation, "kill_inflation_updated_at": new_ts}},
         )
     return new_inflation
 
