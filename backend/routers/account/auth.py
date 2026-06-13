@@ -1927,6 +1927,13 @@ def register(router):
                 except Exception:
                     pass
 
+            ar_flags = await db.users.find_one(
+                {"id": current_user["id"]},
+                {"_id": 0, "auto_rank_email_entitlement": 1, "auto_rank_permanent": 1, "auto_rank_purchased": 1, "auto_rank_trial": 1},
+            )
+            if ar_flags:
+                current_user = {**current_user, **ar_flags}
+
             _rp = _safe_int(current_user.get("rank_points"), 0)
             _prestige_m = float(current_user.get("prestige_rank_multiplier") or 1.0)
             rank_id, rank_name = get_rank_info(_rp, _prestige_m)
@@ -2057,6 +2064,7 @@ def register(router):
                 anti_snitch=bool(u.get("anti_snitch", False)),
                 auto_rank_purchased=bool(u.get("auto_rank_purchased", False)),
                 auto_rank_permanent=bool(u.get("auto_rank_permanent", False)),
+                auto_rank_email_entitlement=bool(u.get("auto_rank_email_entitlement", False)),
                 auto_rank_trial=bool(u.get("auto_rank_trial", False)),
                 auto_rank_enabled=bool(u.get("auto_rank_enabled", False)),
                 custom_car_name=u.get("custom_car_name"),

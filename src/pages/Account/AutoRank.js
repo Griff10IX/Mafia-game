@@ -415,6 +415,22 @@ const SetupCard = ({
           </p>
         </div>
       ) : null}
+
+      {canEnable && !emailEntitled && stripePurchasable ? (
+        <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-2 sm:p-2.5 space-y-2">
+          <p className="text-[10px] sm:text-xs font-heading text-zinc-300 leading-relaxed">
+            You have account-only Auto Rank. Upgrade to email-tied permanent so it survives death / a new account on the same email.
+          </p>
+          <button
+            type="button"
+            onClick={onBuyStripe}
+            disabled={stripeLoading}
+            className="w-full min-h-[44px] py-2 text-[10px] font-heading font-bold uppercase rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/25 disabled:opacity-50 touch-manipulation"
+          >
+            {stripeLoading ? '…' : `Upgrade to email — £${AUTO_RANK_STRIPE_PRICE_GBP}`}
+          </button>
+        </div>
+      ) : null}
       
       {canEnable && hasTelegram && telegramNotifyOn && (
         <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-2 sm:p-2.5">

@@ -1307,10 +1307,6 @@ def register(router):
                 raise HTTPException(status_code=400, detail="Verify your email before purchasing permanent Auto Rank.")
             if await email_has_auto_rank_entitlement(db, buyer_email):
                 raise HTTPException(status_code=400, detail="Permanent Auto Rank is already entitled for this email.")
-            if current_user.get("auto_rank_permanent") or (
-                current_user.get("auto_rank_purchased") and not current_user.get("auto_rank_trial")
-            ):
-                raise HTTPException(status_code=400, detail="You already have permanent Auto Rank on this account.")
         # success_url: frontend sends origin_url like http://localhost:3000/store
         origin = (request.origin_url or "").rstrip("/")
         success_url = f"{origin}?session_id={{CHECKOUT_SESSION_ID}}"

@@ -1099,12 +1099,12 @@ export default function Store() {
               Includes <span className="text-primary font-bold">Auto Rank</span> for{' '}
               <span className="text-foreground font-semibold">£{AUTO_RANK_STRIPE_PRICE_GBP}</span> (email-tied, permanent) or{' '}
               <span className="text-foreground font-semibold">5,000 pts</span> (account-only).
-              {' '}Bought upgrades are removed from this list once owned permanently.
+              {' '}The email-tied card option hides once that email owns permanent Auto Rank.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
           {UPGRADES.filter((u) => {
             if (u.id === 'auto-rank') {
-              if (user?.auto_rank_permanent || (user?.auto_rank_purchased && !user?.auto_rank_trial)) return false;
+              if (user?.auto_rank_email_entitlement) return false;
             } else {
               const owned = u.ownedKey && user?.[u.ownedKey];
               if (owned) return false;
@@ -1119,6 +1119,9 @@ export default function Store() {
           }).map((u) => {
             const extra = u.extra?.(user, boozeConfig);
             const priceVal = typeof u.price === 'function' ? Number(u.price(user, boozeConfig)) : Number(u.price);
+            const hasAccountOnlyAutoRank = Boolean(
+              user?.auto_rank_permanent || (user?.auto_rank_purchased && !user?.auto_rank_trial),
+            ) && !user?.auto_rank_email_entitlement;
             const disabled =
               (u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max) ||
               (u.id === 'hitlist-npc-cap' && (Number(user?.hitlist_npc_bonus_slots) || 0) >= 3) ||
@@ -1135,9 +1138,15 @@ export default function Store() {
                   </div>
                   <div className="p-2.5">
                     <p className="text-[10px] text-mutedForeground font-heading mb-1.5">{u.desc}</p>
-                    <p className="text-[9px] text-zinc-500 font-heading mb-2 leading-snug">
-                      Card purchase is tied to your verified email — survives if your account dies and you register again with the same email. Points purchase is account-only.
-                    </p>
+                    {hasAccountOnlyAutoRank ? (
+                      <p className="text-[9px] text-emerald-300/90 font-heading mb-2 leading-snug">
+                        You already have account-only Auto Rank on this character. Upgrade to email-tied below so it survives death / a new account on the same email.
+                      </p>
+                    ) : (
+                      <p className="text-[9px] text-zinc-500 font-heading mb-2 leading-snug">
+                        Card purchase is tied to your verified email — survives if your account dies and you register again with the same email. Points purchase is account-only.
+                      </p>
+                    )}
                     <button
                       type="button"
                       onClick={handleBuyAutoRankStripe}
@@ -1145,11 +1154,12 @@ export default function Store() {
                       title={!user?.email_verified ? 'Verify your email to unlock email-tied permanent Auto Rank' : undefined}
                       className="w-full min-h-[44px] py-2.5 text-[10px] font-heading font-bold uppercase rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/25 disabled:opacity-50 touch-manipulation"
                     >
-                      {autoRankStripeLoading ? '…' : `Buy with card £${AUTO_RANK_STRIPE_PRICE_GBP}`}
+                      {autoRankStripeLoading ? '…' : hasAccountOnlyAutoRank ? `Upgrade to email — £${AUTO_RANK_STRIPE_PRICE_GBP}` : `Buy with card £${AUTO_RANK_STRIPE_PRICE_GBP}`}
                     </button>
                     {!user?.email_verified ? (
                       <p className="text-[9px] text-amber-400/90 font-heading mt-1.5">Verify your email in Profile before buying with card.</p>
                     ) : null}
+                    {!hasAccountOnlyAutoRank ? (
                     <button
                       type="button"
                       onClick={() => apiBuy(`${u.path}?pay_with=${encodeURIComponent(storePayWith)}`, {}, 'Purchased')}
@@ -1172,6 +1182,11 @@ export default function Store() {
                             ? `${storeRespectForPoints(priceVal)} resp`
                             : `${priceVal} pts or ${storeRespectForPoints(priceVal)} resp`}
                     </button>
+                    ) : (
+                      <div className="mt-2 py-1.5 text-center text-[10px] font-heading font-bold text-primary uppercase border border-primary/20 rounded bg-primary/5">
+                        Account-only — owned
+                      </div>
+                    )}
                   </div>
                   <div className="store-art-line text-primary mx-3" />
                 </div>

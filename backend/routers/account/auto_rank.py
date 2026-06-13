@@ -2355,7 +2355,6 @@ def register(router):
                 user.get("email_verified")
                 and email_norm
                 and not prefs["auto_rank_email_entitled"]
-                and not prefs["auto_rank_permanent"]
             )
             logger.debug("Auto rank GET /me ok user_id=%s", user_id)
             return prefs
