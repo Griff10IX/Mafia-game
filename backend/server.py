@@ -689,6 +689,8 @@ POINT_PACKAGES = {
     "legend": {"points": 200000, "price_gbp": 349.99},
     # Rank-XP pass entitlement (no points credited; token is activated in Armoury).
     "rank_xp_pass_499": {"points": 0, "price_gbp": 9.99},
+    # Permanent Auto Rank (email-tied entitlement; no points credited).
+    "auto_rank_permanent_899": {"points": 0, "price_gbp": 8.99},
 }
 
 # Travel times based on car rarity (in seconds)
@@ -2768,6 +2770,21 @@ def _parse_kill_inflation_updated_at(val, *, now: datetime) -> Optional[datetime
         return None
 
 
+async def _last_successful_kill_at(user_id: str, *, now: datetime) -> Optional[datetime]:
+    """Most recent player/NPC kill by this attacker (attack_attempts)."""
+    row = await db.attack_attempts.find_one(
+        {"attacker_id": user_id, "outcome": "killed"},
+        {"_id": 0, "created_at": 1},
+        sort=[("created_at", -1)],
+    )
+    if not row:
+        return None
+    dt = _parse_kill_inflation_updated_at(row.get("created_at"), now=now)
+    if dt and dt > now:
+        return now
+    return dt
+
+
 async def _apply_kill_inflation_decay(user_id: str) -> float:
     """
     Inflation system:
@@ -2792,19 +2809,33 @@ async def _apply_kill_inflation_decay(user_id: str) -> float:
 
     updated_at = _parse_kill_inflation_updated_at(user.get("kill_inflation_updated_at"), now=now)
     if updated_at is None:
-        # Missing/invalid timestamp with active inflation — allow catch-up decay instead of freezing.
         updated_at = now - timedelta(days=30)
+    elif updated_at > now:
+        updated_at = now
 
     hours = int((now - updated_at).total_seconds() // 3600)
+
+    # Heal stuck inflation: an old bug reset kill_inflation_updated_at to "now" without decaying.
+    last_kill_at = await _last_successful_kill_at(user_id, now=now)
+    if (
+        last_kill_at
+        and inflation > 1.0
+        and hours < 1
+        and (now - last_kill_at).total_seconds() >= 3 * 86400
+    ):
+        hours = int((now - last_kill_at).total_seconds() // 3600)
+
     if hours <= 0:
         return inflation
+
+    hours = min(hours, 24 * 90)
 
     new_inflation = inflation
     for _ in range(hours):
         new_inflation = max(0.0, new_inflation - random.uniform(0.03, 0.06))
 
-    new_ts = (updated_at + timedelta(hours=hours)).isoformat()
-    if abs(new_inflation - inflation) > 1e-9 or user.get("kill_inflation_updated_at") != new_ts:
+    new_ts = now.isoformat()
+    if abs(new_inflation - inflation) > 1e-9:
         await db.users.update_one(
             {"id": user_id},
             {"$set": {"kill_inflation": new_inflation, "kill_inflation_updated_at": new_ts}},

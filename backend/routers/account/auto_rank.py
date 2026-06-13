@@ -2321,6 +2321,14 @@ def register(router):
             user_id = (current_user or {}).get("id", "?")
             await _expire_auto_rank_trials(db)
             user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0}) or current_user
+            if user.get("email_verified") and (user.get("email") or "").strip():
+                try:
+                    from utils.auto_rank_email_entitlement import sync_auto_rank_email_entitlement_to_user
+
+                    if await sync_auto_rank_email_entitlement_to_user(db, user.get("id"), user.get("email")):
+                        user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0}) or user
+                except Exception:
+                    pass
             _, user = await _resolve_permanent_auto_rank(db, user, heal=True)
             chat_id = (user.get("telegram_chat_id") or "").strip()
             prefs = _extract_preferences(user)
@@ -2337,6 +2345,18 @@ def register(router):
             prefs["auto_rank_melt_rarity_ids"] = user.get("auto_rank_melt_rarity_ids") or []
             prefs["auto_rank_scrap"] = user.get("auto_rank_scrap", False)
             prefs["auto_rank_scrap_rarity_ids"] = user.get("auto_rank_scrap_rarity_ids") or []
+            from utils.auto_rank_email_entitlement import email_has_auto_rank_entitlement
+
+            email_norm = (user.get("email") or "").strip()
+            prefs["auto_rank_email_entitled"] = bool(
+                user.get("auto_rank_email_entitlement") or await email_has_auto_rank_entitlement(db, email_norm)
+            )
+            prefs["auto_rank_stripe_purchasable"] = bool(
+                user.get("email_verified")
+                and email_norm
+                and not prefs["auto_rank_email_entitled"]
+                and not prefs["auto_rank_permanent"]
+            )
             logger.debug("Auto rank GET /me ok user_id=%s", user_id)
             return prefs
         except Exception as e:

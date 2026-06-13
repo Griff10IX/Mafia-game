@@ -35,6 +35,7 @@ STORE_POINTS_LOOT_PIECES_PER_BLOCK = 100
 STORE_POINTS_EVENT_BONUS_RATE = 0.35
 
 RANK_XP_PASS_PACKAGE_ID = "rank_xp_pass_499"
+AUTO_RANK_PERMANENT_PACKAGE_ID = "auto_rank_permanent_899"
 # No new Game Pass checkout while an active pass is within this many days of rank_xp_pass_token_expires_at.
 GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS = 7
 GAME_PASS_SEASON_END_AT = DEFAULT_GAME_PASS_SEASON_END_AT
@@ -370,7 +371,7 @@ def _resolve_points_for_stripe_payment(
         if pts <= 0:
             return 0, "invalid_points"
         return pts, None
-    if package_id != RANK_XP_PASS_PACKAGE_ID and txn:
+    if package_id != RANK_XP_PASS_PACKAGE_ID and package_id != AUTO_RANK_PERMANENT_PACKAGE_ID and txn:
         pts = int(txn.get("points") or 0)
         if pts > 0:
             return pts, None
@@ -535,7 +536,8 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
     Logs points_before and points_after on the transaction for admin audit.
     """
     is_rank_xp_pass = package_id == RANK_XP_PASS_PACKAGE_ID
-    if not user_id or (points <= 0 and not is_rank_xp_pass):
+    is_auto_rank_permanent = package_id == AUTO_RANK_PERMANENT_PACKAGE_ID
+    if not user_id or (points <= 0 and not is_rank_xp_pass and not is_auto_rank_permanent):
         return {"credited": False, "preorder": False}
     
     now = datetime.now(timezone.utc)
@@ -689,6 +691,95 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
             activated,
         )
         return {"credited": True, "preorder": False, "pass_entitled": True, "auto_activated": activated}
+
+    # Permanent Auto Rank (email-tied; no points credited).
+    if is_auto_rank_permanent:
+        user = await db.users.find_one(
+            {"id": user_id},
+            {"_id": 0, "email": 1, "email_verified": 1, "auto_rank_permanent": 1, "auto_rank_purchased": 1, "auto_rank_trial": 1},
+        )
+        email = (user or {}).get("email") or ""
+        if not email or not (user or {}).get("email_verified"):
+            blocked_detail = "Permanent Auto Rank requires a verified email on the purchasing account."
+            blocked = await db.payment_transactions.update_one(
+                {"session_id": session_id, "payment_status": "pending"},
+                {
+                    "$set": {
+                        "payment_status": "fulfillment_blocked",
+                        "fulfillment_blocked_at": now.isoformat(),
+                        "fulfillment_blocked_detail": blocked_detail[:1000],
+                    }
+                },
+            )
+            if blocked.modified_count:
+                logger.error(
+                    "Auto Rank Stripe payment blocked (no verified email): session_id=%s user_id=%s",
+                    session_id,
+                    user_id,
+                )
+            return {"credited": False, "preorder": False, "fulfillment_blocked": True, "detail": blocked_detail}
+
+        from utils.auto_rank_email_entitlement import (
+            email_has_auto_rank_entitlement,
+            grant_auto_rank_email_entitlement,
+            sync_auto_rank_email_entitlement_to_user,
+        )
+
+        if await email_has_auto_rank_entitlement(db, email):
+            blocked_detail = "Permanent Auto Rank is already entitled for this email."
+            await db.payment_transactions.update_one(
+                {"session_id": session_id, "payment_status": "pending"},
+                {
+                    "$set": {
+                        "payment_status": "fulfillment_blocked",
+                        "fulfillment_blocked_at": now.isoformat(),
+                        "fulfillment_blocked_detail": blocked_detail[:1000],
+                    }
+                },
+            )
+            return {"credited": False, "preorder": False, "fulfillment_blocked": True, "detail": blocked_detail}
+
+        points_before = int((user or {}).get("points") or 0) if user else 0
+        result = await db.payment_transactions.update_one(
+            {"session_id": session_id, "payment_status": {"$nin": ["completed", "preorder_pending", "manual_credit_pending"]}},
+            {
+                "$set": {
+                    "payment_status": "completed",
+                    "points_credited_at": now_iso,
+                    "points_before": points_before,
+                    "points_after": points_before,
+                    "entitlement_granted_at": now_iso,
+                    "buyer_email": str(email).strip().lower(),
+                }
+            },
+        )
+        if result.modified_count == 0:
+            snap = await db.payment_transactions.find_one({"session_id": session_id}, {"payment_status": 1})
+            if (snap or {}).get("payment_status") == "completed":
+                return {"credited": True, "preorder": False, "auto_rank_entitled": True}
+            return {"credited": False, "preorder": False}
+
+        await grant_auto_rank_email_entitlement(
+            db,
+            email,
+            source="stripe",
+            session_id=session_id,
+            user_id=user_id,
+        )
+        await sync_auto_rank_email_entitlement_to_user(db, user_id, email)
+        await send_notification(
+            user_id,
+            "Permanent Auto Rank",
+            "Your permanent Auto Rank is active on this account and tied to your verified email.",
+            "auto_rank_permanent_entitled",
+        )
+        logger.info(
+            "Permanent Auto Rank entitlement granted: session_id=%s user_id=%s email=%s",
+            session_id,
+            user_id,
+            str(email).strip().lower(),
+        )
+        return {"credited": True, "preorder": False, "auto_rank_entitled": True}
 
     settings = await db.game_settings.find_one({"_id": "main"})
     auto_credit = settings.get("store_points_auto_credit") if settings else None
@@ -1168,7 +1259,7 @@ def register(router):
             package = POINT_PACKAGES[package_id]
             base_points = int(package["points"])
             points = base_points
-            if package_id != RANK_XP_PASS_PACKAGE_ID:
+            if package_id not in (RANK_XP_PASS_PACKAGE_ID, AUTO_RANK_PERMANENT_PACKAGE_ID):
                 points, bonus_points, active_store_points_event = _apply_store_points_event_bonus(base_points, store_points_event)
                 store_points_event = active_store_points_event or store_points_event
             price_gbp = float(package["price_gbp"])
@@ -1206,6 +1297,20 @@ def register(router):
                         status_code=400,
                         detail="You already have an unactivated Game Pass token. Activate it before buying again.",
                     )
+        if package_id == AUTO_RANK_PERMANENT_PACKAGE_ID:
+            from utils.auto_rank_email_entitlement import email_has_auto_rank_entitlement
+
+            buyer_email = (current_user.get("email") or "").strip().lower()
+            if not buyer_email:
+                raise HTTPException(status_code=400, detail="Link an email to your account before purchasing permanent Auto Rank.")
+            if not current_user.get("email_verified"):
+                raise HTTPException(status_code=400, detail="Verify your email before purchasing permanent Auto Rank.")
+            if await email_has_auto_rank_entitlement(db, buyer_email):
+                raise HTTPException(status_code=400, detail="Permanent Auto Rank is already entitled for this email.")
+            if current_user.get("auto_rank_permanent") or (
+                current_user.get("auto_rank_purchased") and not current_user.get("auto_rank_trial")
+            ):
+                raise HTTPException(status_code=400, detail="You already have permanent Auto Rank on this account.")
         # success_url: frontend sends origin_url like http://localhost:3000/store
         origin = (request.origin_url or "").rstrip("/")
         success_url = f"{origin}?session_id={{CHECKOUT_SESSION_ID}}"
@@ -1220,6 +1325,8 @@ def register(router):
                 product_name = f"{points} points (includes +{bonus_points} bonus)"
             if package_id == RANK_XP_PASS_PACKAGE_ID:
                 product_name = "Game Pass"
+            if package_id == AUTO_RANK_PERMANENT_PACKAGE_ID:
+                product_name = "Permanent Auto Rank"
             md = {
                 "user_id": current_user["id"],
                 "package_id": package_id,
@@ -1274,6 +1381,8 @@ def register(router):
             txn_doc["store_points_event"] = store_points_event
         if expected_amount_minor is not None:
             txn_doc["expected_amount_minor"] = int(expected_amount_minor)
+        if package_id == AUTO_RANK_PERMANENT_PACKAGE_ID:
+            txn_doc["buyer_email"] = (current_user.get("email") or "").strip().lower()
         await db.payment_transactions.insert_one(txn_doc)
 
         # Refresh session activity: user is about to spend unbounded time on Stripe with no API calls;
@@ -1397,7 +1506,13 @@ def register(router):
             }
 
         if transaction and transaction.get("payment_status") == "completed":
-            return {"status": "completed", "payment_status": "paid", "points_added": transaction["points"]}
+            pkg = transaction.get("package_id") or ""
+            out = {"status": "completed", "payment_status": "paid", "points_added": transaction["points"], "package_id": pkg}
+            if pkg == RANK_XP_PASS_PACKAGE_ID:
+                out["pass_entitled"] = True
+            if pkg == AUTO_RANK_PERMANENT_PACKAGE_ID:
+                out["auto_rank_entitled"] = True
+            return out
         
         if transaction and transaction.get("payment_status") == "manual_credit_pending":
             settings = await db.game_settings.find_one({"_id": "main"})
@@ -1495,7 +1610,8 @@ def register(router):
                     )
                     return {"status": "pending", "payment_status": "unknown"}
                 is_rank_xp_pass = package_id == RANK_XP_PASS_PACKAGE_ID
-                if not points and not is_rank_xp_pass:
+                is_auto_rank_permanent = package_id == AUTO_RANK_PERMANENT_PACKAGE_ID
+                if not points and not is_rank_xp_pass and not is_auto_rank_permanent:
                     logger.warning("GET /payments/status: no points for package session=%s", session_id)
                     return {"status": "pending", "payment_status": "unknown"}
 
@@ -1548,8 +1664,12 @@ def register(router):
                             "preorder": True,
                             "preorder_release_date": credit_result.get("preorder_release_date"),
                         }
-                    return {"status": "completed", "payment_status": "paid", "points_added": points}
-                if credit_result.get("fulfillment_blocked"):
+                    out = {"status": "completed", "payment_status": "paid", "points_added": points, "package_id": package_id or ""}
+                    if credit_result.get("pass_entitled"):
+                        out["pass_entitled"] = True
+                    if credit_result.get("auto_rank_entitled"):
+                        out["auto_rank_entitled"] = True
+                    return out
                     return {
                         "status": "fulfillment_blocked",
                         "payment_status": "fulfillment_blocked",
@@ -1577,7 +1697,12 @@ def register(router):
                             "detail": t2.get("fulfillment_blocked_detail"),
                         }
                     if t2.get("payment_status") == "completed":
-                        return {"status": "completed", "payment_status": "paid", "points_added": t2.get("points", points)}
+                        out = {"status": "completed", "payment_status": "paid", "points_added": t2.get("points", points), "package_id": package_id or ""}
+                        if (package_id or "") == RANK_XP_PASS_PACKAGE_ID:
+                            out["pass_entitled"] = True
+                        if (package_id or "") == AUTO_RANK_PERMANENT_PACKAGE_ID:
+                            out["auto_rank_entitled"] = True
+                        return out
                     if t2.get("payment_status") == "manual_credit_pending":
                         settings = await db.game_settings.find_one({"_id": "main"})
                         eta = settings.get("store_points_manual_credit_eta") if settings else None

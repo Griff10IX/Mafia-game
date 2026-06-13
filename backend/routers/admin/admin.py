@@ -2946,6 +2946,38 @@ def register(router):
             "modified_count": result.modified_count,
         }
 
+    @router.post("/admin/reset-kill-inflation")
+    async def admin_reset_kill_inflation(
+        target_username: str,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Set Combat kill inflation to 0% for one user (bullet surcharge decay reset)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one(
+            {"username": username_pattern},
+            {"_id": 0, "id": 1, "username": 1, "kill_inflation": 1},
+        )
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        now = datetime.now(timezone.utc)
+        prev = float(target.get("kill_inflation", 0.0) or 0.0)
+        await db.users.update_one(
+            {"id": target["id"]},
+            {"$set": {"kill_inflation": 0.0, "kill_inflation_updated_at": now.isoformat()}},
+        )
+        un = target.get("username") or target_username
+        prev_pct = int(round(prev * 100))
+        return {
+            "message": f"Reset kill inflation for {un} from {prev_pct}% to 0%.",
+            "username": un,
+            "previous_inflation": prev,
+            "previous_inflation_pct": prev_pct,
+            "kill_inflation": 0.0,
+            "kill_inflation_pct": 0,
+        }
+
     @router.post("/admin/grant-game-pass")
     async def admin_grant_game_pass(
         target_username: str,
@@ -6468,6 +6500,68 @@ def register(router):
             },
         )
         return {"message": f"Auto rank removed from {target.get('username', target_username)}", "username": target.get("username")}
+
+    @router.post("/admin/auto-rank/grant-email-entitlement")
+    async def admin_grant_auto_rank_email_entitlement(
+        email: str,
+        current_user: dict = Depends(require_admin),
+    ):
+        from utils.auto_rank_email_entitlement import (
+            grant_auto_rank_email_entitlement,
+            normalize_entitlement_email,
+            sync_auto_rank_email_entitlement_to_all_users_with_email,
+        )
+
+        norm = normalize_entitlement_email(email)
+        if not norm:
+            raise HTTPException(status_code=400, detail="Valid email required")
+        await grant_auto_rank_email_entitlement(
+            db,
+            norm,
+            source="admin",
+            user_id=current_user.get("id"),
+        )
+        synced = await sync_auto_rank_email_entitlement_to_all_users_with_email(db, norm)
+        return {
+            "message": f"Permanent Auto Rank email entitlement granted for {norm} ({synced} live account(s) synced).",
+            "email": norm,
+            "users_synced": synced,
+        }
+
+    @router.post("/admin/auto-rank/revoke-email-entitlement")
+    async def admin_revoke_auto_rank_email_entitlement(
+        email: str,
+        current_user: dict = Depends(require_admin),
+    ):
+        from utils.auto_rank_email_entitlement import (
+            clear_email_entitlement_from_users,
+            normalize_entitlement_email,
+            revoke_auto_rank_email_entitlement,
+        )
+
+        _ = current_user
+        norm = normalize_entitlement_email(email)
+        if not norm:
+            raise HTTPException(status_code=400, detail="Valid email required")
+        revoked = await revoke_auto_rank_email_entitlement(db, norm, reason="admin")
+        cleared = await clear_email_entitlement_from_users(db, norm)
+        if not revoked and cleared == 0:
+            raise HTTPException(status_code=404, detail="No active email entitlement found")
+        return {
+            "message": f"Revoked permanent Auto Rank email entitlement for {norm} ({cleared} account(s) cleared).",
+            "email": norm,
+            "users_cleared": cleared,
+        }
+
+    @router.get("/admin/auto-rank/email-entitlement")
+    async def admin_inspect_auto_rank_email_entitlement(
+        email: str,
+        current_user: dict = Depends(require_admin),
+    ):
+        from utils.auto_rank_email_entitlement import inspect_auto_rank_email_entitlement
+
+        _ = current_user
+        return await inspect_auto_rank_email_entitlement(db, email)
 
     async def _alive_accounts_linked_to_dead(dead_user: Dict[str, Any]) -> List[Dict[str, Any]]:
         """Alive accounts that may be the player's replacement signup (same email or post-death registration IP)."""

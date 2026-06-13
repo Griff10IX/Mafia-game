@@ -4,6 +4,10 @@ import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, B
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+import {
+  AUTO_RANK_STRIPE_PACKAGE_ID,
+  AUTO_RANK_STRIPE_PRICE_GBP,
+} from '../../constants/autoRankStripePricing';
 
 const MIN_INTERVAL = 5;
 const MIN_BUST_INTERVAL = 1;
@@ -341,7 +345,15 @@ const TrialBanner = ({ trialUntil, dismissed, onDismiss }) => {
 /* ═══════════════════════════════════════════════════════
    Setup & Status Card
    ═══════════════════════════════════════════════════════ */
-const SetupCard = ({ canEnable, hasTelegram, telegramNotifyOn }) => (
+const SetupCard = ({
+  canEnable,
+  hasTelegram,
+  telegramNotifyOn,
+  stripePurchasable,
+  stripeLoading,
+  onBuyStripe,
+  emailEntitled,
+}) => (
   <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel} mobile-panel`}>
     <div className={`relative px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
       <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1.5">
@@ -367,19 +379,42 @@ const SetupCard = ({ canEnable, hasTelegram, telegramNotifyOn }) => (
       )}
       
       {!canEnable && (
-        <div className="rounded border border-amber-500/30 bg-amber-500/5 p-2 sm:p-2.5">
+        <div className="rounded border border-amber-500/30 bg-amber-500/5 p-2 sm:p-2.5 space-y-2">
           <div className="flex items-start gap-2">
             <Lock size={14} className="text-amber-400 shrink-0 mt-0.5 sm:w-4 sm:h-4" />
             <p className="text-[10px] sm:text-xs font-heading text-zinc-300 leading-relaxed">
               Activate an <strong>Auto Rank (2h)</strong> token from My Inventory, or purchase Auto Rank permanently in the{' '}
-              <Link to="/game/store" className="text-primary underline font-bold hover:text-primary/80">
+              <Link to="/game/store?tab=upgrades#store-auto-rank" className="text-primary underline font-bold hover:text-primary/80">
                 Store
               </Link>
-              , to enable automation
+              , to enable automation.
             </p>
           </div>
+          {stripePurchasable ? (
+            <button
+              type="button"
+              onClick={onBuyStripe}
+              disabled={stripeLoading}
+              className="w-full min-h-[44px] py-2 text-[10px] font-heading font-bold uppercase rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/25 disabled:opacity-50 touch-manipulation"
+            >
+              {stripeLoading ? '…' : `Buy permanent Auto Rank — £${AUTO_RANK_STRIPE_PRICE_GBP}`}
+            </button>
+          ) : null}
+          {!stripePurchasable && !emailEntitled ? (
+            <p className="text-[9px] text-amber-400/90 font-heading">
+              Card purchase requires a verified email (Profile → verify email). Points purchase in Store is account-only.
+            </p>
+          ) : null}
         </div>
       )}
+
+      {emailEntitled && canEnable ? (
+        <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-2 sm:p-2.5">
+          <p className="text-[10px] sm:text-xs font-heading text-emerald-300">
+            Permanent (email) — tied to your verified email; restores on a new account with the same email.
+          </p>
+        </div>
+      ) : null}
       
       {canEnable && hasTelegram && telegramNotifyOn && (
         <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-2 sm:p-2.5">
@@ -1289,7 +1324,10 @@ export default function AutoRank() {
     auto_rank_melt_action_ids: [],
     auto_rank_melt_rarity_ids: [],
     auto_rank_scrap_rarity_ids: [],
+    auto_rank_email_entitled: false,
+    auto_rank_stripe_purchasable: false,
   });
+  const [autoRankStripeLoading, setAutoRankStripeLoading] = useState(false);
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [settingsData, setSettingsData] = useState({
     crimes: [], gta_options: [], melt_options: { actions: [], rarities: [], scrap_rarities: [] },
@@ -1534,6 +1572,8 @@ export default function AutoRank() {
             auto_rank_melt_action_ids: meRes.data.auto_rank_melt_action_ids ?? [],
             auto_rank_melt_rarity_ids: meRes.data.auto_rank_melt_rarity_ids ?? [],
             auto_rank_scrap_rarity_ids: meRes.data.auto_rank_scrap_rarity_ids ?? [],
+            auto_rank_email_entitled: !!meRes.data.auto_rank_email_entitled,
+            auto_rank_stripe_purchasable: !!meRes.data.auto_rank_stripe_purchasable,
           });
         }
         const hasFeature = meRes?.data?.auto_rank_has_access || meRes?.data?.auto_rank_purchased || meRes?.data?.auto_rank_enabled;
@@ -1621,6 +1661,65 @@ export default function AutoRank() {
     };
     run();
   }, []);
+
+  useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const sessionId = sp.get('session_id');
+    if (!sessionId) return;
+    let cancelled = false;
+    const poll = async (attempt = 0) => {
+      if (cancelled) return;
+      if (attempt >= 5) {
+        toast.error('Payment verification timed out.');
+        window.history.replaceState({}, '', '/account/autorank');
+        return;
+      }
+      try {
+        const res = await api.get(`/payments/status/${encodeURIComponent(sessionId)}`);
+        if (res.data.status === 'fulfillment_blocked' || res.data.payment_status === 'fulfillment_blocked') {
+          toast.error(res.data.detail || 'Purchase could not be completed.');
+          window.history.replaceState({}, '', '/account/autorank');
+          return;
+        }
+        if (res.data.payment_status === 'paid' || res.data.status === 'completed') {
+          if (res.data.auto_rank_entitled) {
+            toast.success('Permanent Auto Rank purchased — tied to your verified email.');
+          }
+          window.history.replaceState({}, '', '/account/autorank');
+          const meRes = await api.get('/auto-rank/me');
+          if (meRes?.data) {
+            setPrefs((p) => ({
+              ...p,
+              ...meRes.data,
+              auto_rank_email_entitled: !!meRes.data.auto_rank_email_entitled,
+              auto_rank_stripe_purchasable: !!meRes.data.auto_rank_stripe_purchasable,
+            }));
+          }
+          return;
+        }
+      } catch {
+        /* retry */
+      }
+      setTimeout(() => poll(attempt + 1), 1500);
+    };
+    poll();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleBuyAutoRankStripe = async () => {
+    if (autoRankStripeLoading) return;
+    setAutoRankStripeLoading(true);
+    try {
+      const res = await api.post('/payments/checkout', {
+        package_id: AUTO_RANK_STRIPE_PACKAGE_ID,
+        origin_url: `${window.location.origin}/account/autorank`,
+      });
+      window.location.href = res.data.url;
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Checkout failed');
+      setAutoRankStripeLoading(false);
+    }
+  };
 
   const updatePref = async (key, value) => {
     setSavingPrefs(true);
@@ -1969,7 +2068,15 @@ export default function AutoRank() {
         </p>
       </div>
 
-      <SetupCard canEnable={canEnable} hasTelegram={hasTelegram} telegramNotifyOn={prefs?.auto_rank_telegram_notify !== false} />
+      <SetupCard
+        canEnable={canEnable}
+        hasTelegram={hasTelegram}
+        telegramNotifyOn={prefs?.auto_rank_telegram_notify !== false}
+        stripePurchasable={!!prefs?.auto_rank_stripe_purchasable}
+        stripeLoading={autoRankStripeLoading}
+        onBuyStripe={handleBuyAutoRankStripe}
+        emailEntitled={!!prefs?.auto_rank_email_entitled}
+      />
 
       {prefs?.auto_rank_trial && prefs?.auto_rank_trial_until && !prefs?.auto_rank_permanent && (
         <TrialBanner

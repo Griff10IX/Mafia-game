@@ -12,6 +12,10 @@ import {
   SILVER_PACK_POINTS,
   SILVER_PACK_PRICE_GBP,
 } from '../../constants/gamePassPricing';
+import {
+  AUTO_RANK_STRIPE_PACKAGE_ID,
+  AUTO_RANK_STRIPE_PRICE_GBP,
+} from '../../constants/autoRankStripePricing';
 import { formatGameDateTime, formatGameDateTimeShort, formatGameDateOnly } from '../../utils/gameDateTime';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import { STORE_PAGE_CACHE_KEY } from '../../utils/sessionStaleCache';
@@ -263,6 +267,7 @@ const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, onBuy, loadi
 export default function Store() {
   const storeBoot = readSessionJson(STORE_PAGE_CACHE_KEY);
   const [loading, setLoading] = useState(false);
+  const [autoRankStripeLoading, setAutoRankStripeLoading] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [user, setUser] = useState(() => storeBoot?.user ?? null);
   const [boozeConfig, setBoozeConfig] = useState(() => storeBoot?.boozeConfig ?? null);
@@ -563,7 +568,9 @@ export default function Store() {
           toast.success(`Payment received. ${res.data.points_added} points will be credited on ${releaseDate}.`);
         } else {
           const pts = Number(res.data.points_added || 0);
-          if (pts === 0) toast.success('Game Pass purchased — token delivered. Activate in My Inventory.');
+          if (res.data.auto_rank_entitled) {
+            toast.success('Permanent Auto Rank purchased — tied to your verified email.');
+          } else if (pts === 0) toast.success('Game Pass purchased — token delivered. Activate in My Inventory.');
           else toast.success(`${pts} points added.`);
         }
         refreshUser();
@@ -603,6 +610,26 @@ export default function Store() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBuyAutoRankStripe = async () => {
+    if (autoRankStripeLoading) return;
+    if (!user?.email_verified) {
+      toast.error('Verify your email before purchasing permanent Auto Rank.');
+      return;
+    }
+    setAutoRankStripeLoading(true);
+    try {
+      const origin = `${window.location.origin}/game/store?tab=upgrades`;
+      const res = await api.post('/payments/checkout', {
+        package_id: AUTO_RANK_STRIPE_PACKAGE_ID,
+        origin_url: origin,
+      });
+      window.location.href = res.data.url;
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Checkout failed');
+      setAutoRankStripeLoading(false);
     }
   };
 
@@ -1070,8 +1097,9 @@ export default function Store() {
             <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Permanent upgrades & QoL</h2>
             <p className="text-[9px] text-zinc-500 font-heading leading-snug max-w-2xl">
               Includes <span className="text-primary font-bold">Auto Rank</span> for{' '}
-              <span className="text-foreground font-semibold">5,000 pts</span> or the respect equivalent — the buy button shows both prices.
-              {' '}Bought upgrades are removed from this list once owned permanently (e.g. Auto Rank after purchase — trial access still shows the buy option).
+              <span className="text-foreground font-semibold">£{AUTO_RANK_STRIPE_PRICE_GBP}</span> (email-tied, permanent) or{' '}
+              <span className="text-foreground font-semibold">5,000 pts</span> (account-only).
+              {' '}Bought upgrades are removed from this list once owned permanently.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
           {UPGRADES.filter((u) => {
@@ -1098,6 +1126,56 @@ export default function Store() {
               !!u.disabledWhen?.(user);
             return (
               <div key={u.id} id={u.id === 'auto-rank' ? 'store-auto-rank' : undefined}>
+              {u.id === 'auto-rank' ? (
+                <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+                  <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+                  <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">{u.title}</span>
+                    <u.Icon className="text-primary shrink-0" size={14} />
+                  </div>
+                  <div className="p-2.5">
+                    <p className="text-[10px] text-mutedForeground font-heading mb-1.5">{u.desc}</p>
+                    <p className="text-[9px] text-zinc-500 font-heading mb-2 leading-snug">
+                      Card purchase is tied to your verified email — survives if your account dies and you register again with the same email. Points purchase is account-only.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleBuyAutoRankStripe}
+                      disabled={autoRankStripeLoading || !user?.email_verified}
+                      title={!user?.email_verified ? 'Verify your email to unlock email-tied permanent Auto Rank' : undefined}
+                      className="w-full min-h-[44px] py-2.5 text-[10px] font-heading font-bold uppercase rounded bg-emerald-500/15 text-emerald-300 border border-emerald-500/40 hover:bg-emerald-500/25 disabled:opacity-50 touch-manipulation"
+                    >
+                      {autoRankStripeLoading ? '…' : `Buy with card £${AUTO_RANK_STRIPE_PRICE_GBP}`}
+                    </button>
+                    {!user?.email_verified ? (
+                      <p className="text-[9px] text-amber-400/90 font-heading mt-1.5">Verify your email in Profile before buying with card.</p>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => apiBuy(`${u.path}?pay_with=${encodeURIComponent(storePayWith)}`, {}, 'Purchased')}
+                      disabled={
+                        loading
+                        || disabled
+                        || (storePayWith === 'points'
+                          ? (user?.points ?? 0) < priceVal
+                          : storePayWith === 'respect'
+                            ? storeRespectForPoints(priceVal) > (user?.respect_points ?? 0)
+                            : ((user?.points ?? 0) < priceVal && storeRespectForPoints(priceVal) > (user?.respect_points ?? 0)))
+                      }
+                      className="w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 mt-2 touch-manipulation"
+                    >
+                      {loading
+                        ? '...'
+                        : storePayWith === 'points'
+                          ? `${priceVal} pts`
+                          : storePayWith === 'respect'
+                            ? `${storeRespectForPoints(priceVal)} resp`
+                            : `${priceVal} pts or ${storeRespectForPoints(priceVal)} resp`}
+                    </button>
+                  </div>
+                  <div className="store-art-line text-primary mx-3" />
+                </div>
+              ) : (
               <StoreCard
                 title={u.title}
                 Icon={u.Icon}
@@ -1115,6 +1193,7 @@ export default function Store() {
                   <p className="text-[10px] text-mutedForeground mb-1">Current: {extra.value}</p>
                 )}
               </StoreCard>
+              )}
               </div>
             );
           })}

@@ -218,6 +218,8 @@ const SEARCHABLE_TOOLS = [
   { label: 'Add Tokens', categoryId: 'admin-players', collapseKey: 'tokens', keywords: ['tokens', 'crime', 'gta', 'melt', 'booze', 'travel', 'oc', 'racket', 'jailbust'] },
   { label: 'Token Inspector', categoryId: 'admin-players', collapseKey: 'tokens', keywords: ['token', 'inspect', 'balance', 'boost', 'expiry', 'held', 'used', 'purchased', 'active'] },
   { label: 'Clear pool cue upgrades', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['pool', '8-ball', '8 ball', 'cue', 'upgrades', 'reset', 'minigame'] },
+  { label: 'Reset kill inflation', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['kill', 'inflation', 'combat', 'attack', 'bullets', 'reset', 'zero', '0%'], adminOnly: true },
+  { label: 'Auto Rank email entitlement', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['auto rank', 'email', 'entitlement', 'stripe', 'permanent', '899'], adminOnly: true },
   { label: 'Founding Member', categoryId: 'admin-players', collapseKey: 'founding', keywords: ['founding', 'member', 'badge', 'founder'] },
   { label: 'Add Money', categoryId: 'admin-players', collapseKey: 'money', keywords: ['money', 'cash', 'add', 'give'] },
   { label: 'Remove money (user)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['remove', 'money', 'cash', 'take', 'deduct', 'subtract', 'wallet'] },
@@ -973,6 +975,9 @@ export default function Admin() {
   const [autoRankInspectData, setAutoRankInspectData] = useState(null);
   const [autoRankInspectLoading, setAutoRankInspectLoading] = useState(false);
   const [autoRankInspectError, setAutoRankInspectError] = useState('');
+  const [autoRankEmailEntitlementEmail, setAutoRankEmailEntitlementEmail] = useState('');
+  const [autoRankEmailEntitlementData, setAutoRankEmailEntitlementData] = useState(null);
+  const [autoRankEmailEntitlementLoading, setAutoRankEmailEntitlementLoading] = useState(false);
   const [sessionStats, setSessionStats] = useState(null);
   const [sessionStatsLoading, setSessionStatsLoading] = useState(false);
   const [staffAccessDenials, setStaffAccessDenials] = useState(null);
@@ -3812,6 +3817,20 @@ export default function Admin() {
     }
   };
 
+  const handleResetKillInflation = async () => {
+    if (!(formData.targetUsername || '').trim()) {
+      toast.error('Enter target username');
+      return;
+    }
+    if (!window.confirm(`Reset Combat kill inflation to 0% for ${formData.targetUsername}?`)) return;
+    try {
+      const response = await api.post(`/admin/reset-kill-inflation?target_username=${encodeURIComponent(formData.targetUsername)}`);
+      toast.success(response.data?.message || 'Kill inflation reset to 0%');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
   const handleGrantGamePass = async () => {
     try {
       const qs = new URLSearchParams({
@@ -4208,6 +4227,43 @@ export default function Admin() {
       const response = await api.post(`/admin/remove-auto-rank?target_username=${encodeURIComponent(formData.targetUsername)}`);
       toast.success(response.data?.message || 'Auto rank removed');
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleGrantAutoRankEmailEntitlement = async () => {
+    const em = (autoRankEmailEntitlementEmail || '').trim();
+    if (!em) { toast.error('Enter email'); return; }
+    if (!window.confirm(`Grant permanent Auto Rank email entitlement to ${em}?`)) return;
+    try {
+      const res = await api.post(`/admin/auto-rank/grant-email-entitlement?email=${encodeURIComponent(em)}`);
+      toast.success(res.data?.message || 'Granted');
+      setAutoRankEmailEntitlementData(null);
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleRevokeAutoRankEmailEntitlement = async () => {
+    const em = (autoRankEmailEntitlementEmail || '').trim();
+    if (!em) { toast.error('Enter email'); return; }
+    if (!window.confirm(`Revoke permanent Auto Rank email entitlement for ${em}?`)) return;
+    try {
+      const res = await api.post(`/admin/auto-rank/revoke-email-entitlement?email=${encodeURIComponent(em)}`);
+      toast.success(res.data?.message || 'Revoked');
+      setAutoRankEmailEntitlementData(null);
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleInspectAutoRankEmailEntitlement = async () => {
+    const em = (autoRankEmailEntitlementEmail || '').trim();
+    if (!em) { toast.error('Enter email'); return; }
+    setAutoRankEmailEntitlementLoading(true);
+    try {
+      const res = await api.get('/admin/auto-rank/email-entitlement', { params: { email: em } });
+      setAutoRankEmailEntitlementData(res.data);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+      setAutoRankEmailEntitlementData(null);
+    } finally {
+      setAutoRankEmailEntitlementLoading(false);
+    }
   };
 
   const handleLoadAutoRankInspect = async () => {
@@ -8901,6 +8957,13 @@ export default function Admin() {
                   <AdminInput type="number" value={formData.respectRemove} onChange={(e) => setFormData((p) => ({ ...p, respectRemove: parseInt(e.target.value, 10) || 0 }))} className="w-20" />
                   <BtnSecondary type="button" onClick={handleRemoveRespectPoints}>Remove</BtnSecondary>
                 </div>
+                <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
+                  <span className="text-mutedForeground shrink-0">Kill inflation</span>
+                  <BtnDanger type="button" onClick={handleResetKillInflation} disabled={!(formData.targetUsername || '').trim()}>
+                    Set to 0%
+                  </BtnDanger>
+                  <span className="text-[9px] text-mutedForeground">Combat bullet surcharge</span>
+                </div>
               </div>
 
               <div id="admin-missions-ladder" className="rounded-md border border-emerald-500/25 bg-emerald-500/5 p-3 space-y-2 scroll-mt-24">
@@ -10751,6 +10814,45 @@ export default function Admin() {
                 {autoRankInspectLoading ? '…' : 'Inspect'}
               </button>
             </ActionRow>
+            <ActionRow
+              icon={Mail}
+              label="Auto Rank email entitlement"
+              description="Stripe £8.99 permanent Auto Rank tied to email (survives death / new account on same email). Account Give/Remove above is username-only."
+            >
+              <input
+                type="email"
+                value={autoRankEmailEntitlementEmail}
+                onChange={(e) => setAutoRankEmailEntitlementEmail(e.target.value)}
+                placeholder="player@email.com"
+                className="flex-1 min-w-[180px] max-w-sm px-2 py-1 rounded border border-input bg-transparent text-[11px]"
+              />
+              <BtnPrimary type="button" onClick={handleGrantAutoRankEmailEntitlement} disabled={!(autoRankEmailEntitlementEmail || '').trim()}>
+                Grant email
+              </BtnPrimary>
+              <BtnDanger type="button" onClick={handleRevokeAutoRankEmailEntitlement} disabled={!(autoRankEmailEntitlementEmail || '').trim()}>
+                Revoke email
+              </BtnDanger>
+              <BtnSecondary type="button" onClick={handleInspectAutoRankEmailEntitlement} disabled={autoRankEmailEntitlementLoading || !(autoRankEmailEntitlementEmail || '').trim()}>
+                {autoRankEmailEntitlementLoading ? '…' : 'Inspect'}
+              </BtnSecondary>
+            </ActionRow>
+            {autoRankEmailEntitlementData ? (
+              <div className="pl-6 pr-2 py-2 space-y-1 border-l-2 border-violet-500/30 ml-1 max-w-3xl text-[10px] font-heading">
+                <div><span className="text-mutedForeground">Email:</span> {autoRankEmailEntitlementData.email || '—'}</div>
+                <div><span className="text-mutedForeground">Entitled:</span> {autoRankEmailEntitlementData.entitled ? 'yes' : 'no'}</div>
+                {autoRankEmailEntitlementData.record?.source ? (
+                  <div><span className="text-mutedForeground">Source:</span> {autoRankEmailEntitlementData.record.source}</div>
+                ) : null}
+                {(autoRankEmailEntitlementData.users || []).length > 0 ? (
+                  <div className="text-mutedForeground pt-1">Linked accounts:</div>
+                ) : null}
+                {(autoRankEmailEntitlementData.users || []).map((u) => (
+                  <div key={u.id || u.username}>
+                    {u.username || '?'} {u.is_dead ? '(dead)' : ''} · permanent={u.auto_rank_permanent ? 'yes' : 'no'} · email_flag={u.auto_rank_email_entitlement ? 'yes' : 'no'}
+                  </div>
+                ))}
+              </div>
+            ) : null}
             {(autoRankInspectError || autoRankInspectData) && (
               <div className="pl-6 pr-2 py-2 space-y-2 border-l-2 border-primary/20 ml-1 max-w-3xl">
                 {autoRankInspectError ? (

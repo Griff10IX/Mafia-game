@@ -883,6 +883,12 @@ def register(router):
             user_doc["swiss_limit"] = int(_bank_cfg["swiss_limit_start"])
 
             await db.users.insert_one(user_doc.copy())
+            try:
+                from utils.auto_rank_email_entitlement import sync_auto_rank_email_entitlement_to_user
+
+                await sync_auto_rank_email_entitlement_to_user(db, user_id, user_doc.get("email"))
+            except Exception:
+                pass
             if reg_ip_rep and reg_ip_rep.get("verdict") in ("suspicious", "likely_proxy_service"):
                 try:
                     await flag_user_suspicious(
@@ -1905,6 +1911,21 @@ def register(router):
             if current_user.get("auto_rank_idle"):
                 from routers.account.auto_rank import wake_auto_rank_if_idle
                 await wake_auto_rank_if_idle(db, current_user["id"])
+
+            if float(current_user.get("kill_inflation") or 0) > 0:
+                await srv._apply_kill_inflation_decay(current_user["id"])
+
+            if current_user.get("email_verified") and (current_user.get("email") or "").strip():
+                try:
+                    from utils.auto_rank_email_entitlement import sync_auto_rank_email_entitlement_to_user
+
+                    await sync_auto_rank_email_entitlement_to_user(
+                        db,
+                        current_user["id"],
+                        current_user.get("email"),
+                    )
+                except Exception:
+                    pass
 
             _rp = _safe_int(current_user.get("rank_points"), 0)
             _prestige_m = float(current_user.get("prestige_rank_multiplier") or 1.0)

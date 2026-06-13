@@ -434,6 +434,7 @@ async def ensure_all_indexes(db):
         await db.login_page_visits.create_index("ip", unique=True)
         await db.ip_geodata_cache.create_index("ip", unique=True)
         await db.revive_used_by_email.create_index("email", unique=True)
+        await db.auto_rank_email_entitlements.create_index("email", unique=True)
         await db.payment_transactions.create_index("session_id", unique=True)
         await db.point_lots.create_index("id", unique=True)
         await db.point_lots.create_index([("owner_user_id", 1), ("created_at", 1)])
