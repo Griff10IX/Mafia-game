@@ -35,7 +35,7 @@ STORE_POINTS_LOOT_PIECES_PER_BLOCK = 100
 STORE_POINTS_EVENT_BONUS_RATE = 0.35
 
 RANK_XP_PASS_PACKAGE_ID = "rank_xp_pass_499"
-AUTO_RANK_PERMANENT_PACKAGE_ID = "auto_rank_permanent_899"
+AUTO_RANK_PERMANENT_PACKAGE_ID = "auto_rank_permanent_2000"
 # No new Game Pass checkout while an active pass is within this many days of rank_xp_pass_token_expires_at.
 GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS = 7
 GAME_PASS_SEASON_END_AT = DEFAULT_GAME_PASS_SEASON_END_AT

@@ -690,7 +690,7 @@ POINT_PACKAGES = {
     # Rank-XP pass entitlement (no points credited; token is activated in Armoury).
     "rank_xp_pass_499": {"points": 0, "price_gbp": 9.99},
     # Permanent Auto Rank (email-tied entitlement; no points credited).
-    "auto_rank_permanent_899": {"points": 0, "price_gbp": 8.99},
+    "auto_rank_permanent_2000": {"points": 0, "price_gbp": 20.00},
 }
 
 # Travel times based on car rarity (in seconds)

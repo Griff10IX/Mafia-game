@@ -219,7 +219,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Token Inspector', categoryId: 'admin-players', collapseKey: 'tokens', keywords: ['token', 'inspect', 'balance', 'boost', 'expiry', 'held', 'used', 'purchased', 'active'] },
   { label: 'Clear pool cue upgrades', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['pool', '8-ball', '8 ball', 'cue', 'upgrades', 'reset', 'minigame'] },
   { label: 'Reset kill inflation', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['kill', 'inflation', 'combat', 'attack', 'bullets', 'reset', 'zero', '0%'], adminOnly: true },
-  { label: 'Auto Rank email entitlement', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['auto rank', 'email', 'entitlement', 'stripe', 'permanent', '899'], adminOnly: true },
+  { label: 'Auto Rank email entitlement', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['auto rank', 'email', 'entitlement', 'stripe', 'permanent', '20'], adminOnly: true },
   { label: 'Founding Member', categoryId: 'admin-players', collapseKey: 'founding', keywords: ['founding', 'member', 'badge', 'founder'] },
   { label: 'Add Money', categoryId: 'admin-players', collapseKey: 'money', keywords: ['money', 'cash', 'add', 'give'] },
   { label: 'Remove money (user)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['remove', 'money', 'cash', 'take', 'deduct', 'subtract', 'wallet'] },
@@ -10817,7 +10817,7 @@ export default function Admin() {
             <ActionRow
               icon={Mail}
               label="Auto Rank email entitlement"
-              description="Stripe £8.99 permanent Auto Rank tied to email (survives death / new account on same email). Account Give/Remove above is username-only."
+              description="Stripe £20 permanent Auto Rank tied to email (survives death / new account on same email). Account Give/Remove above is username-only."
             >
               <input
                 type="email"
