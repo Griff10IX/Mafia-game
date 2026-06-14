@@ -3542,6 +3542,12 @@ async def startup_db():
     await ensure_profile_indexes(db)
     await ensure_all_indexes(db)
     try:
+        from routers.casinos.sports_betting import ensure_sports_bet_max_total_open_stake_setting
+
+        await ensure_sports_bet_max_total_open_stake_setting()
+    except Exception as e:
+        logging.warning("Failed to sync sports bet open stake cap: %s", e)
+    try:
         from utils.ensure_faq_topic import ensure_faq_forum_topic
 
         await ensure_faq_forum_topic(db)

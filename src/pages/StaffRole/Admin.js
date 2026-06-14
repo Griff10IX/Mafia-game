@@ -238,6 +238,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Gambling Log', categoryId: 'admin-logs', collapseKey: 'gamblingLog', keywords: ['gambling', 'log', 'casino', 'bet'] },
   { label: 'Casino seizures', categoryId: 'admin-logs', collapseKey: 'casinoSeizures', keywords: ['casino', 'seizure', 'won', 'ownership', 'transfer'] },
   { label: 'Casino buy-back history', categoryId: 'admin-logs', collapseKey: 'casinoBuybackHistory', keywords: ['buyback', 'buy-back', 'casino', 'escrow', 'points', 'held', 'offer'] },
+  { label: 'Sports open stake cap', categoryId: 'admin-logs', collapseKey: 'sportsOpenStakeCap', keywords: ['sports', 'betting', 'underground', 'open stake', 'cap', 'max bet'] },
   { label: 'Sports bets ledger', categoryId: 'admin-logs', collapseKey: 'sportsBetsLedger', keywords: ['sports', 'betting', 'bets', 'football', 'ledger'] },
   { label: 'Activity Log', categoryId: 'admin-logs', collapseKey: 'activityLog', keywords: ['activity', 'log', 'history'] },
   // Donations
@@ -383,8 +384,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true }; }
 }
 
 function saveCollapsed(state) {
@@ -475,6 +476,15 @@ function formatMdgGamblingLogDetails(details) {
     </div>
   );
 }
+
+const SPORTS_OPEN_STAKE_CAP_DEFAULT = 1_000_000_000;
+const SPORTS_OPEN_STAKE_CAP_PRESETS = [
+  { label: '$150M', value: 150_000_000 },
+  { label: '$500M', value: 500_000_000 },
+  { label: '$1B', value: 1_000_000_000 },
+  { label: '$2B', value: 2_000_000_000 },
+  { label: '$5B', value: 5_000_000_000 },
+];
 
 /** Parse admin money fields from text input (avoids number input scientific notation above ~1B). */
 function parseAdminInt(raw, fallback = 0) {
@@ -1410,7 +1420,8 @@ export default function Admin() {
   const [landingBannerEnabled, setLandingBannerEnabled] = useState(false);
   const [landingBannerMessage, setLandingBannerMessage] = useState('');
   const [stockMarketMaxPoints, setStockMarketMaxPoints] = useState(3000);
-  const [sportsBetMaxTotalOpenStake, setSportsBetMaxTotalOpenStake] = useState(25_000_000);
+  const [sportsOpenStakeCapText, setSportsOpenStakeCapText] = useState(String(SPORTS_OPEN_STAKE_CAP_DEFAULT));
+  const [sportsOpenStakeCapSaving, setSportsOpenStakeCapSaving] = useState(false);
   const [bankSwissDefaultLimit, setBankSwissDefaultLimit] = useState(50_000_000);
   const [bankInterestMaxUnclaimed, setBankInterestMaxUnclaimed] = useState(50_000_000);
   const [bankInterestOptionsRows, setBankInterestOptionsRows] = useState([]);
@@ -2272,8 +2283,8 @@ export default function Admin() {
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       setLandingBannerMessage(res.data?.landing_banner_message ?? '');
       setStockMarketMaxPoints(Math.max(1, parseInt(res.data?.stock_market_max_points, 10) || 3000));
-      setSportsBetMaxTotalOpenStake(
-        Math.max(1, parseInt(res.data?.sports_bet_max_total_open_stake, 10) || 25_000_000),
+      setSportsOpenStakeCapText(
+        String(Math.max(1, parseInt(res.data?.sports_bet_max_total_open_stake, 10) || SPORTS_OPEN_STAKE_CAP_DEFAULT)),
       );
       setBankSwissDefaultLimit(Math.max(1000, parseInt(res.data?.bank_swiss_default_limit, 10) || 50_000_000));
       setBankInterestMaxUnclaimed(Math.max(1, parseInt(res.data?.bank_interest_max_unclaimed_principal, 10) || 50_000_000));
@@ -2353,7 +2364,7 @@ export default function Admin() {
       setSpotifyFeatureEnabled(false);
       setLandingBannerMessage('');
       setStockMarketMaxPoints(3000);
-      setSportsBetMaxTotalOpenStake(25_000_000);
+      setSportsOpenStakeCapText(String(SPORTS_OPEN_STAKE_CAP_DEFAULT));
       setLoginLockFrom('');
       setLoginLockUntil('');
       setLoginLockMessage('');
@@ -2510,7 +2521,7 @@ export default function Admin() {
         landing_banner_enabled: landingBannerEnabled,
         landing_banner_message: landingBannerMessage,
         stock_market_max_points: Math.max(1, parseInt(stockMarketMaxPoints, 10) || 3000),
-        sports_bet_max_total_open_stake: Math.max(1, parseInt(sportsBetMaxTotalOpenStake, 10) || 25_000_000),
+        sports_bet_max_total_open_stake: Math.max(1, parseAdminInt(sportsOpenStakeCapText, SPORTS_OPEN_STAKE_CAP_DEFAULT)),
         bank_swiss_default_limit: Math.max(1000, parseAdminInt(bankSwissDefaultLimit, 50_000_000)),
         bank_interest_max_unclaimed_principal: Math.max(1, parseAdminInt(bankInterestMaxUnclaimed, 50_000_000)),
         bank_interest_options: (bankInterestOptionsRows || [])
@@ -2575,7 +2586,7 @@ export default function Admin() {
       if (res.data?.landing_banner_message !== undefined) setLandingBannerMessage(res.data.landing_banner_message ?? '');
       setStockMarketMaxPoints(Math.max(1, res.data?.stock_market_max_points ?? 3000));
       if (res.data?.sports_bet_max_total_open_stake != null) {
-        setSportsBetMaxTotalOpenStake(Math.max(1, Number(res.data.sports_bet_max_total_open_stake) || 25_000_000));
+        setSportsOpenStakeCapText(String(Math.max(1, Number(res.data.sports_bet_max_total_open_stake) || SPORTS_OPEN_STAKE_CAP_DEFAULT)));
       }
       if (res.data?.bank_swiss_default_limit != null) {
         setBankSwissDefaultLimit(Math.max(1000, Number(res.data.bank_swiss_default_limit) || 50_000_000));
@@ -7359,6 +7370,31 @@ export default function Admin() {
       setCasinoBuybackHistory(null);
     } finally {
       setCasinoBuybackHistoryLoading(false);
+    }
+  };
+
+  const fetchSportsOpenStakeCap = async () => {
+    try {
+      const res = await api.get('/admin/sports-betting/open-stake-cap');
+      const cap = Math.max(1, Number(res.data?.max_total_open_stake) || SPORTS_OPEN_STAKE_CAP_DEFAULT);
+      setSportsOpenStakeCapText(String(cap));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load sports open stake cap');
+    }
+  };
+
+  const saveSportsOpenStakeCap = async (overrideValue) => {
+    const cap = Math.max(1, parseAdminInt(overrideValue ?? sportsOpenStakeCapText, SPORTS_OPEN_STAKE_CAP_DEFAULT));
+    setSportsOpenStakeCapSaving(true);
+    try {
+      const res = await api.patch('/admin/sports-betting/open-stake-cap', { max_total_open_stake: cap });
+      const saved = Math.max(1, Number(res.data?.max_total_open_stake) || cap);
+      setSportsOpenStakeCapText(String(saved));
+      toast.success(res.data?.message || `Open stake cap set to $${saved.toLocaleString()}`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to save sports open stake cap');
+    } finally {
+      setSportsOpenStakeCapSaving(false);
     }
   };
 
@@ -14338,16 +14374,14 @@ export default function Admin() {
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-primary/10">
               <label className="text-sm font-heading text-foreground">Sports betting max open stake (cash, per user)</label>
               <input
-                type="number"
-                min={1}
-                value={sportsBetMaxTotalOpenStake}
-                onChange={(e) =>
-                  setSportsBetMaxTotalOpenStake(Math.max(1, parseInt(e.target.value, 10) || 25_000_000))
-                }
-                className="w-36 px-2 py-1 rounded border border-input bg-background text-foreground font-mono text-sm"
+                type="text"
+                inputMode="numeric"
+                value={sportsOpenStakeCapText}
+                onChange={(e) => setSportsOpenStakeCapText(e.target.value.replace(/[^\d,]/g, ''))}
+                className="w-40 px-2 py-1 rounded border border-input bg-background text-foreground font-mono text-sm"
               />
               <span className="text-mutedForeground text-xs">
-                Max total $ locked in open sports bets per player (split across all open tickets). Default $25,000,000.
+                Also editable in the Sports open stake cap tool below. Default ${SPORTS_OPEN_STAKE_CAP_DEFAULT.toLocaleString()}.
               </span>
             </div>
             <BtnPrimary onClick={handleSaveAdminSettings} disabled={adminSettingsSaving}>
@@ -21959,6 +21993,63 @@ export default function Admin() {
               {casinoBuybackHistory && (!casinoBuybackHistory.ledger || casinoBuybackHistory.ledger.length === 0) && !casinoBuybackHistoryLoading && (
                 <p className="text-[10px] text-mutedForeground">No buy-back ledger rows for this user (or none in the row limit).</p>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* Sports — Underground open stake cap */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Trophy}
+            title="Sports open stake cap"
+            badge={
+              <span className="text-[10px] font-heading text-mutedForeground">
+                Live: ${parseAdminInt(sportsOpenStakeCapText, SPORTS_OPEN_STAKE_CAP_DEFAULT).toLocaleString()}
+              </span>
+            }
+            toolAnchor="sportsOpenStakeCap"
+            isCollapsed={collapsed.sportsOpenStakeCap}
+            onToggle={() => {
+              if (collapsed.sportsOpenStakeCap) fetchSportsOpenStakeCap();
+              toggleSection('sportsOpenStakeCap');
+            }}
+          />
+          {!collapsed.sportsOpenStakeCap && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                Underground sports betting closes 10 minutes before kickoff. This cap is the max total cash a player can have locked across all open tickets combined. Changes apply immediately for new bets.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider">Cap ($)</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={sportsOpenStakeCapText}
+                  onChange={(e) => setSportsOpenStakeCapText(e.target.value.replace(/[^\d,]/g, ''))}
+                  className="min-w-[180px] flex-1 max-w-[280px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs font-mono text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <BtnPrimary onClick={() => saveSportsOpenStakeCap()} disabled={sportsOpenStakeCapSaving}>
+                  {sportsOpenStakeCapSaving ? 'Saving...' : 'Save cap'}
+                </BtnPrimary>
+                <BtnSecondary onClick={fetchSportsOpenStakeCap} disabled={sportsOpenStakeCapSaving}>
+                  Reload
+                </BtnSecondary>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {SPORTS_OPEN_STAKE_CAP_PRESETS.map(({ label, value }) => (
+                  <BtnSecondary
+                    key={value}
+                    onClick={() => {
+                      setSportsOpenStakeCapText(String(value));
+                      saveSportsOpenStakeCap(String(value));
+                    }}
+                    disabled={sportsOpenStakeCapSaving}
+                  >
+                    {label}
+                  </BtnSecondary>
+                ))}
+              </div>
             </div>
           )}
         </div>

@@ -117,10 +117,14 @@ class AdminSportsEventRequestDeny(BaseModel):
     reason: Optional[str] = None
 
 
+class AdminSportsOpenStakeCapBody(BaseModel):
+    max_total_open_stake: int
+
+
 # ----- Constants -----
 # Max total stake locked in open sports bets per user (split across any number of bets).
 # Override persisted in game_settings key sports_bet_max_total_open_stake (see get_sports_bet_max_total_open_stake).
-SPORTS_BET_MAX_TOTAL_OPEN_STAKE = 25_000_000
+SPORTS_BET_MAX_TOTAL_OPEN_STAKE = 1_000_000_000
 _SPORTS_BET_STAKE_CAP_CEILING = 10**15
 # Placing bets and cancelling open bets both end this many minutes before scheduled start.
 SPORTS_BETTING_CLOSE_BEFORE_START_MINUTES = 10
@@ -167,6 +171,39 @@ async def get_sports_bet_max_total_open_stake() -> int:
     except (TypeError, ValueError):
         pass
     return SPORTS_BET_MAX_TOTAL_OPEN_STAKE
+
+
+async def set_sports_bet_max_total_open_stake(value: int) -> int:
+    """Persist total open sports stake cap per user."""
+    cap = max(1, min(int(value), _SPORTS_BET_STAKE_CAP_CEILING))
+    await db.game_settings.update_one(
+        {"key": "sports_bet_max_total_open_stake"},
+        {"$set": {"key": "sports_bet_max_total_open_stake", "value": cap}},
+        upsert=True,
+    )
+    return cap
+
+
+async def ensure_sports_bet_max_total_open_stake_setting() -> None:
+    """Seed or migrate legacy open-stake caps to the current default."""
+    _legacy_caps = {25_000_000, 150_000_000, 500_000_000}
+    doc = await db.game_settings.find_one({"key": "sports_bet_max_total_open_stake"}, {"_id": 0, "value": 1})
+    if doc is None:
+        await db.game_settings.update_one(
+            {"key": "sports_bet_max_total_open_stake"},
+            {"$set": {"key": "sports_bet_max_total_open_stake", "value": SPORTS_BET_MAX_TOTAL_OPEN_STAKE}},
+            upsert=True,
+        )
+        return
+    try:
+        current = int(doc.get("value"))
+    except (TypeError, ValueError):
+        current = None
+    if current in _legacy_caps:
+        await db.game_settings.update_one(
+            {"key": "sports_bet_max_total_open_stake"},
+            {"$set": {"value": SPORTS_BET_MAX_TOTAL_OPEN_STAKE}},
+        )
 
 
 def _sports_odds_cache_ttl_sec() -> int:
@@ -3601,6 +3638,29 @@ async def admin_sports_bets_list(
     return {"bets": out, "count": len(out)}
 
 
+async def admin_sports_open_stake_cap_get(current_user: dict = Depends(require_admin_verified)):
+    """Admin: current Underground max total open stake cap per player."""
+    cap = await get_sports_bet_max_total_open_stake()
+    return {
+        "max_total_open_stake": cap,
+        "default_max_total_open_stake": SPORTS_BET_MAX_TOTAL_OPEN_STAKE,
+        "close_before_start_minutes": SPORTS_BETTING_CLOSE_BEFORE_START_MINUTES,
+    }
+
+
+async def admin_sports_open_stake_cap_set(
+    body: AdminSportsOpenStakeCapBody,
+    current_user: dict = Depends(require_admin_verified),
+):
+    """Admin: set Underground max total open stake cap per player (live immediately)."""
+    cap = await set_sports_bet_max_total_open_stake(body.max_total_open_stake)
+    return {
+        "ok": True,
+        "max_total_open_stake": cap,
+        "message": f"Sports open stake cap set to ${cap:,}",
+    }
+
+
 async def admin_sports_unsettled_events(
     limit: int = Query(200, ge=1, le=1000),
     include_no_open_bets: bool = Query(False),
@@ -4120,6 +4180,8 @@ def register(router):
     router.add_api_route("/admin/sports-betting/cancel-event", admin_sports_cancel_event, methods=["POST"])
     router.add_api_route("/admin/sports-betting/cancel-stale-open-bets", admin_sports_cancel_stale_open_bets, methods=["POST"])
     router.add_api_route("/admin/sports-betting/bets", admin_sports_bets_list, methods=["GET"])
+    router.add_api_route("/admin/sports-betting/open-stake-cap", admin_sports_open_stake_cap_get, methods=["GET"])
+    router.add_api_route("/admin/sports-betting/open-stake-cap", admin_sports_open_stake_cap_set, methods=["PATCH"])
     router.add_api_route("/admin/sports-betting/unsettled-events", admin_sports_unsettled_events, methods=["GET"])
     router.add_api_route("/admin/sports-betting/auto-settle-health", admin_sports_auto_settle_health, methods=["GET"])
     router.add_api_route("/admin/sports-betting/event-requests", admin_sports_event_requests_list, methods=["GET"])
