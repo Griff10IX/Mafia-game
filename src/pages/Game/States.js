@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Dice5, Spade, Trophy, CircleDot, Users, Plane, Shield, ChevronRight, ChevronDown } from 'lucide-react';
 import FamilyEmblem from '../../components/FamilyEmblem';
+import { SLOTS_FEATURE_ENABLED } from '../../config/gameFeatures';
 
 /** Slot machine icon: three reel windows, same outline style as Spade/CircleDot/Dice5 */
 function SlotsIcon({ size = 10, className = '' }) {
@@ -92,7 +93,7 @@ function climateCardShell(climateBand) {
 // CITY CARD
 // ============================================================================
 
-const GAMES_WITH_BUYBACK = ['dice', 'blackjack', 'roulette', 'horseracing', 'videopoker', 'slots'];
+const GAMES_WITH_BUYBACK = ['dice', 'blackjack', 'roulette', 'horseracing', 'videopoker', ...(SLOTS_FEATURE_ENABLED ? ['slots'] : [])];
 const STATES_BOOTSTRAP_CACHE_KEY = 'states_bootstrap_cache_v1';
 const STATES_BOOTSTRAP_CACHE_MAX_AGE_MS = 30_000;
 

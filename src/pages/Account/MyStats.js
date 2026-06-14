@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import api from '../../utils/api';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
 import styles from '../../styles/noir.module.css';
+import { SLOTS_FEATURE_ENABLED } from '../../config/gameFeatures';
 
 const STATS_STYLES = `
   @keyframes stat-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -58,7 +59,7 @@ const GAME_LABELS = {
 };
 
 /** All casino games in display order (for Gambling section to show every casino). */
-const ALL_CASINO_GAMES = ['dice', 'roulette', 'blackjack', 'horseracing', 'videopoker', 'slots', 'mdg', 'mp_blackjack', 'mp_poker_vs_dealer', 'mp_poker_vs_players', 'mp_poker'];
+const ALL_CASINO_GAMES = ['dice', 'roulette', 'blackjack', 'horseracing', 'videopoker', ...(SLOTS_FEATURE_ENABLED ? ['slots'] : []), 'mdg', 'mp_blackjack', 'mp_poker_vs_dealer', 'mp_poker_vs_players', 'mp_poker'];
 
 const MY_STATS_CACHE_KEY = 'mafia_stats_me_v1';
 

@@ -9,6 +9,8 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Optional
 from urllib.parse import urlencode, urlparse
 
+from routers.casinos.slots import SLOTS_FEATURE_ENABLED
+
 _VALID_TOAST_POSITIONS = frozenset(
     ("top-left", "top-center", "top-right", "bottom-left", "bottom-center", "bottom-right", "custom")
 )
@@ -827,6 +829,9 @@ def register(router):
                     sent = n
             return received, sent
 
+        async def _empty_casino_list():
+            return []
+
         (
             family_name_tag,
             dice_casinos,
@@ -845,7 +850,7 @@ def register(router):
             _casinos_for_type("roulette", db.roulette_ownership),
             _casinos_for_type("blackjack", db.blackjack_ownership),
             _casinos_for_type("horseracing", db.horseracing_ownership),
-            _casinos_for_type("slots", db.slots_ownership, "state"),
+            _casinos_for_type("slots", db.slots_ownership, "state") if SLOTS_FEATURE_ENABLED else _empty_casino_list(),
             _casinos_for_type("videopoker", db.videopoker_ownership),
             _user_owns_any_property(user_id),
             _inbox_sent_message_counts(),

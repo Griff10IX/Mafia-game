@@ -24,7 +24,7 @@ from routers.game.families import resolve_family_id, family_qualifies_for_state_
 from routers.casinos.roulette import ROULETTE_MAX_BET
 from routers.casinos.blackjack import BLACKJACK_MAX_BET
 from routers.casinos.horseracing import HORSERACING_MAX_BET
-from routers.casinos.slots import SLOTS_MAX_BET
+from routers.casinos.slots import SLOTS_MAX_BET, SLOTS_FEATURE_ENABLED
 from routers.casinos.video_poker import VIDEO_POKER_MAX_BET
 from routers.admin.airport import AIRPORT_COST, AIRPORT_PRICE_MIN, AIRPORT_PRICE_MAX
 from routers.kill.armoury import _accumulated_bullets
@@ -38,8 +38,13 @@ CASINO_GAMES = [
     {"id": "roulette", "name": "Roulette", "max_bet": ROULETTE_MAX_BET},
     {"id": "dice", "name": "Dice", "max_bet": DICE_MAX_BET},
     {"id": "videopoker", "name": "Video Poker", "max_bet": VIDEO_POKER_MAX_BET},
-    {"id": "slots", "name": "Slots", "max_bet": SLOTS_MAX_BET},
 ]
+if SLOTS_FEATURE_ENABLED:
+    CASINO_GAMES.append({"id": "slots", "name": "Slots", "max_bet": SLOTS_MAX_BET})
+
+
+async def _empty_doc_list():
+    return []
 
 
 class StateClaimRequest(BaseModel):
@@ -117,7 +122,7 @@ async def get_states(current_user: dict = Depends(get_current_user)):
         db.blackjack_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1}).to_list(states_count),
         db.horseracing_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1}).to_list(states_count),
         db.videopoker_ownership.find({}, {"_id": 0, "city": 1, "owner_id": 1, "max_bet": 1, "buy_back_reward": 1}).to_list(states_count),
-        db.slots_ownership.find({}, {"_id": 0, "state": 1, "owner_id": 1, "owner_username": 1, "max_bet": 1, "buy_back_reward": 1, "expires_at": 1, "next_draw_at": 1}).to_list(states_count),
+        db.slots_ownership.find({}, {"_id": 0, "state": 1, "owner_id": 1, "owner_username": 1, "max_bet": 1, "buy_back_reward": 1, "expires_at": 1, "next_draw_at": 1}).to_list(states_count) if SLOTS_FEATURE_ENABLED else _empty_doc_list(),
         db.bullet_factory.find({}, {"_id": 0, "state": 1, "owner_id": 1, "owner_username": 1, "last_collected_at": 1, "price_per_bullet": 1, "unowned_price": 1}).to_list(states_count),
         db.airport_ownership.find({"slot": 1}, {"_id": 0, "state": 1, "slot": 1, "owner_username": 1, "price_per_travel": 1}).to_list(states_count),
         load_claim_costs(db),
@@ -231,24 +236,25 @@ async def get_states(current_user: dict = Depends(get_current_user)):
             videopoker_owners[st] = {"username": None, "max_bet": vp_max}
 
     # Slots: one per state; include state-owned (no owner) with next_draw_at
-    slots_docs_by_state = {(d.get("state") or "").strip(): d for d in slots_docs if d.get("state")}
-    for st in STATES or []:
-        doc = slots_docs_by_state.get(st)
-        next_draw_at = doc.get("next_draw_at") if doc else None
-        slots_owner_for_cap = doc.get("owner_id") if doc and doc.get("owner_id") and not _slots_expired(doc) else None
-        slots_max = effective_public_casino_max_bet(
-            slots_owner_for_cap,
-            doc.get("max_bet") if doc else None,
-            default_when_owned_positive=SLOTS_MAX_BET,
-        )
-        if doc and doc.get("owner_id") and not _slots_expired(doc):
-            u = user_map.get(doc["owner_id"], {})
-            money = int((u.get("money") or 0) or 0)
-            _, wealth_rank_name, wealth_rank_color = get_wealth_rank(money)
-            slots_owners[st] = {"user_id": doc["owner_id"], "username": doc.get("owner_username") or u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "wealth_rank_color": wealth_rank_color, "max_bet": slots_max, "buy_back_reward": doc.get("buy_back_reward"), "next_draw_at": next_draw_at}
-        else:
-            # State-owned or no doc: still include so frontend can show "State owned" and next_draw_at
-            slots_owners[st] = {"username": None, "max_bet": slots_max, "next_draw_at": next_draw_at}
+    if SLOTS_FEATURE_ENABLED:
+        slots_docs_by_state = {(d.get("state") or "").strip(): d for d in slots_docs if d.get("state")}
+        for st in STATES or []:
+            doc = slots_docs_by_state.get(st)
+            next_draw_at = doc.get("next_draw_at") if doc else None
+            slots_owner_for_cap = doc.get("owner_id") if doc and doc.get("owner_id") and not _slots_expired(doc) else None
+            slots_max = effective_public_casino_max_bet(
+                slots_owner_for_cap,
+                doc.get("max_bet") if doc else None,
+                default_when_owned_positive=SLOTS_MAX_BET,
+            )
+            if doc and doc.get("owner_id") and not _slots_expired(doc):
+                u = user_map.get(doc["owner_id"], {})
+                money = int((u.get("money") or 0) or 0)
+                _, wealth_rank_name, wealth_rank_color = get_wealth_rank(money)
+                slots_owners[st] = {"user_id": doc["owner_id"], "username": doc.get("owner_username") or u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "wealth_rank_color": wealth_rank_color, "max_bet": slots_max, "buy_back_reward": doc.get("buy_back_reward"), "next_draw_at": next_draw_at}
+            else:
+                # State-owned or no doc: still include so frontend can show "State owned" and next_draw_at
+                slots_owners[st] = {"username": None, "max_bet": slots_max, "next_draw_at": next_draw_at}
 
     bullet_factories = []
     bullet_docs_by_state = {(d.get("state") or "").strip(): d for d in bullet_factory_docs if d.get("state")}

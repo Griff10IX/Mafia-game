@@ -6,8 +6,7 @@ import { removeCasinoBuyBack } from '../../utils/removeCasinoBuyBack';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
-
-const MP_STYLES = `
+import { SLOTS_FEATURE_ENABLED } from '../../config/gameFeatures';
   @keyframes mp-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .mp-fade-in { animation: mp-fade-in 0.4s ease-out both; }
   .mp-card { transition: all 0.3s ease; }
@@ -21,8 +20,16 @@ function formatMoney(n) {
   return `$${Math.trunc(num).toLocaleString()}`;
 }
 
-const CASINO_NAMES = { dice: 'Dice', roulette: 'Roulette', blackjack: 'Blackjack', horseracing: 'Horse Racing', videopoker: 'Video Poker', slots: 'Slots' };
-const CASINO_PATHS = { dice: '/casino/dice', roulette: '/casino/roulette', blackjack: '/casino/blackjack', horseracing: '/casino/horseracing', videopoker: '/casino/videopoker', slots: '/casino/slots' };
+const CASINO_NAMES = { dice: 'Dice', roulette: 'Roulette', blackjack: 'Blackjack', horseracing: 'Horse Racing', videopoker: 'Video Poker', ...(SLOTS_FEATURE_ENABLED ? { slots: 'Slots' } : {}) };
+
+const CASINO_PATHS = {
+  dice: '/casino/dice',
+  roulette: '/casino/roulette',
+  blackjack: '/casino/blackjack',
+  horseracing: '/casino/horseracing',
+  videopoker: '/casino/videopoker',
+  ...(SLOTS_FEATURE_ENABLED ? { slots: '/casino/slots' } : {}),
+};
 /** Casino types that support buy-back points (My Properties + game pages). */
 const CASINO_TYPES_WITH_BUY_BACK = ['dice', 'blackjack', 'roulette', 'horseracing', 'videopoker', 'slots'];
 const MY_PROPERTIES_CACHE_KEY = 'my_properties_bootstrap_v1';

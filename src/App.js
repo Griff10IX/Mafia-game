@@ -23,6 +23,7 @@ import { initToastObservability } from "./components/ui/sonner";
 import "@/App.css";
 import { prefetchDashboardData } from "./utils/dashboardSessionCache";
 import { preloadRoute } from "./utils/routePreload";
+import { SLOTS_FEATURE_ENABLED } from "./config/gameFeatures";
 
 // Lazy-load authenticated pages to shrink initial bundle
 // Account pages
@@ -804,12 +805,16 @@ function App() {
           <Route
             path="/casino/slots"
             element={
-              isAuthenticated ? (
-                <Layout>
-                  <Slots />
-                </Layout>
+              SLOTS_FEATURE_ENABLED ? (
+                isAuthenticated ? (
+                  <Layout>
+                    <Slots />
+                  </Layout>
+                ) : (
+                  <Navigate to="/" replace />
+                )
               ) : (
-                <Navigate to="/" replace />
+                <Navigate to="/casino" replace />
               )
             }
           />

@@ -13,6 +13,7 @@ import api, {
 import { clearStaffPortalSession, isStaffPortalTokenValid } from '../utils/staffPortalSession';
 import { getThemeUiPlatform } from '../utils/themePlatform';
 import { readDashboardSessionCache } from '../utils/dashboardSessionCache';
+import { SLOTS_FEATURE_ENABLED } from '../config/gameFeatures';
 import { preloadRoute, preloadRouteHandlers } from '../utils/routePreload';
 import { AuthContext } from '../context/AuthContext';
 import { warmLeaderboardCaches } from '../utils/leaderboardTopCache';
@@ -27,7 +28,7 @@ import ErrorBoundary from './ErrorBoundary';
 import ActiveEventBanner from './ActiveEventBanner';
 import FindWordHuntLayer from './entertainer/FindWordHuntLayer';
 import { NotificationMessage } from './NotificationMessage';
-import GameChat from './GameChat';
+import FamilyCommandCenter from './FamilyCommandCenter';
 import DeathScreen from './DeathScreen';
 import FamilyEmblem from './FamilyEmblem';
 import styles from '../styles/noir.module.css';
@@ -116,7 +117,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
         { path: '/casino/rlt', label: 'Roulette' },
         { path: '/casino/blackjack', label: 'Blackjack' },
         { path: '/casino/horseracing', label: 'Horse Racing' },
-        { path: '/casino/slots', label: 'Slots' },
+        ...(SLOTS_FEATURE_ENABLED ? [{ path: '/casino/slots', label: 'Slots' }] : []),
         { path: '/casino/keno', label: 'Keno' },
         { path: '/casino/coin-flip', label: 'Coin Flip' },
         { path: '/casino/videopoker', label: 'Video Poker' },
@@ -1617,7 +1618,7 @@ export default function Layout({ children }) {
             { to: '/casino/rlt', label: 'Roulette', testId: 'nav-roulette', Icon: CircleDot },
             { to: '/casino/blackjack', label: 'Blackjack', testId: 'nav-blackjack', Icon: Spade },
             { to: '/casino/horseracing', label: 'Horse Racing', testId: 'nav-horseracing', Icon: Flag },
-            { to: '/casino/slots', label: 'Slots', testId: 'nav-slots', Icon: SquareStack },
+            ...(SLOTS_FEATURE_ENABLED ? [{ to: '/casino/slots', label: 'Slots', testId: 'nav-slots', Icon: SquareStack }] : []),
             { to: '/casino/keno', label: 'Keno', testId: 'nav-keno', Icon: Grid3x3 },
             { to: '/casino/coin-flip', label: 'Coin Flip', testId: 'nav-coin-flip', Icon: CircleDot },
             { to: '/casino/videopoker', label: 'Video Poker', testId: 'nav-videopoker', Icon: Video },
@@ -2580,8 +2581,8 @@ export default function Layout({ children }) {
                 <span>Change</span>
               </button>
 
-              {/* Game Chat: whole game can talk; family-only toggle and block list in settings */}
-              <GameChat myUserId={user.id} onCloseSidebar={() => isMobileViewport && setRightSidebarOpen(false)} censorProfanity={user.censor_profanity} canClearChat={isAdmin || isModerator} />
+              {/* Family command center — vault, rackets, war at a glance */}
+              <FamilyCommandCenter onCloseSidebar={() => isMobileViewport && setRightSidebarOpen(false)} hasFamily={!!user?.family_id} />
             </div>
 
             {isMobileViewport && (
@@ -2941,9 +2942,9 @@ export default function Layout({ children }) {
                   </div>
                   )}
                 </div>
-                {/* Game Chat — same as right sidebar, bounded height in touch ball panel */}
+                {/* Family command center — same panel slot as desktop sidebar */}
                 <div className="pt-2 border-t flex flex-col min-h-0 overflow-hidden" style={{ borderColor: 'var(--noir-border)', maxHeight: '320px' }}>
-                  <GameChat myUserId={user.id} onCloseSidebar={() => setNotificationPanelOpen(false)} censorProfanity={user.censor_profanity} canClearChat={isAdmin || isModerator} />
+                  <FamilyCommandCenter onCloseSidebar={() => setNotificationPanelOpen(false)} hasFamily={!!user?.family_id} />
                 </div>
                 {/* Notifications */}
                 <div className="pt-1 border-t" style={{ borderColor: 'var(--noir-border)' }}>

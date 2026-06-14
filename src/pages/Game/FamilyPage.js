@@ -10,6 +10,7 @@ import { getFamiliesPrefetch, setFamiliesPrefetch } from '../../utils/prefetchCa
 import { invalidateForumCrewOcClientCaches } from '../../utils/forumSpecialTabsWarm';
 import FamilyEmblem, { FAMILY_EMBLEM_PRESETS, groupFamilyEmblemPresets } from '../../components/FamilyEmblem';
 import { fileToCompressedDataUrl, validateSafeImageFile } from '../../utils/fileToCompressedDataUrl';
+import { SLOTS_FEATURE_ENABLED } from '../../config/gameFeatures';
 
 // ============================================================================
 // CONSTANTS & UTILITIES
@@ -2516,7 +2517,7 @@ const STATE_HEAD_INCOME_KEYS = [
   { key: 'roulette', label: 'Roulette (house edge)' },
   { key: 'blackjack', label: 'Blackjack (house edge)' },
   { key: 'horseracing', label: 'Horse Racing (house edge)' },
-  { key: 'slots', label: 'Slots (house edge)' },
+  ...(SLOTS_FEATURE_ENABLED ? [{ key: 'slots', label: 'Slots (house edge)' }] : []),
   { key: 'videopoker', label: 'Video Poker (house edge)' },
   { key: 'dead_alive_tax', label: 'Dead > Alive (0.05% tax)', themeLabel: true },
 ];

@@ -44,6 +44,8 @@ from utils.casino_page_rl import casinos_sustained_rl_dependencies
 _casinos_rl_u = casinos_sustained_rl_dependencies(db, get_current_user)
 
 # ----- Constants -----
+# Lucky 7 slots removed from live game (routes, nav, draw ticker). Set True to re-enable.
+SLOTS_FEATURE_ENABLED = False
 SLOTS_MAX_BET = 5_000_000
 SLOTS_HOUSE_EDGE = 0.0005  # 0.05% house edge on wins
 SLOTS_OWNERSHIP_HOURS = 3
@@ -346,6 +348,9 @@ def _slots_payout(reels: tuple, bet: int) -> int:
 
 
 def register(router):
+    if not SLOTS_FEATURE_ENABLED:
+        return
+
     @router.get("/casino/slots/config", dependencies=_casinos_rl_u)
     async def casino_slots_config(current_user: dict = Depends(get_current_user_verified)):
         """Slots config: max_bet (owner or default), symbols, current_state, states. May be state-owned or player-owned."""

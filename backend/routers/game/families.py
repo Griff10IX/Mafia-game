@@ -203,7 +203,10 @@ CREW_OC_COOLDOWN_HOURS_REDUCED = 6
 CREW_OC_COMMIT_ROLES = ("boss", "underboss", "capo", "don")
 
 # Casino game types that contribute to state head income (and have gambling_log entries with city/state)
-STATE_HEAD_CASINO_GAMES = ["dice", "roulette", "blackjack", "horseracing", "slots", "videopoker"]
+STATE_HEAD_CASINO_GAMES = ["dice", "roulette", "blackjack", "horseracing", "videopoker"]
+from routers.casinos.slots import SLOTS_FEATURE_ENABLED as _SLOTS_FEATURE_ENABLED
+if _SLOTS_FEATURE_ENABLED:
+    STATE_HEAD_CASINO_GAMES.append("slots")
 
 
 async def count_families_toward_player_cap() -> int:
@@ -988,7 +991,7 @@ CASINO_OWNERSHIP_COLLECTIONS = (
     ("Dice", "dice_ownership"),
     ("Roulette", "roulette_ownership"),
     ("Blackjack", "blackjack_ownership"),
-    ("Slots", "slots_ownership"),
+    *([("Slots", "slots_ownership")] if _SLOTS_FEATURE_ENABLED else []),
     ("Video Poker", "videopoker_ownership"),
     ("Horse Racing", "horseracing_ownership"),
 )

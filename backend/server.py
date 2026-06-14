@@ -2897,8 +2897,9 @@ async def _get_casino_property_profit(user_id: str):
         ("blackjack", db.blackjack_ownership),
         ("horseracing", db.horseracing_ownership),
         ("videopoker", db.videopoker_ownership),
-        ("slots", db.slots_ownership),
     ]
+    if SLOTS_FEATURE_ENABLED:
+        casino_colls.append(("slots", db.slots_ownership))
     # Parallel: all 6 casino ownerships + airport + armoury (bullet_factory)
     async def fetch_casino(game_type, coll):
         return await coll.find_one({"owner_id": user_id}, {"_id": 0, "total_earnings": 1, "profit": 1, "expires_at": 1})
@@ -3163,7 +3164,7 @@ async def _iter_user_casino_summaries(user_id: str):
         ("blackjack", db.blackjack_ownership),
         ("horseracing", db.horseracing_ownership),
         ("videopoker", db.videopoker_ownership),
-        ("slots", db.slots_ownership),
+        *([("slots", db.slots_ownership)] if SLOTS_FEATURE_ENABLED else []),
     ]:
         doc = await coll.find_one({"owner_id": user_id}, {"_id": 0, "city": 1, "state": 1, "max_bet": 1, "buy_back_reward": 1, "total_earnings": 1, "profit": 1, "expires_at": 1, "odds_preset": 1})
         if doc:
@@ -3209,7 +3210,7 @@ from routers.casinos.dice import DICE_MAX_BET, DiceSellOnTradeRequest  # used by
 from routers.casinos.roulette import ROULETTE_MAX_BET, RouletteClaimRequest, RouletteSetMaxBetRequest, RouletteSendToUserRequest  # CASINO_GAMES, blackjack/horseracing reuse these models
 from routers.casinos.blackjack import BLACKJACK_MAX_BET  # CASINO_GAMES
 from routers.casinos.horseracing import HORSERACING_MAX_BET  # CASINO_GAMES
-from routers.casinos.slots import SLOTS_MAX_BET  # CASINO_GAMES
+from routers.casinos.slots import SLOTS_MAX_BET, SLOTS_FEATURE_ENABLED  # CASINO_GAMES
 from routers.casinos.video_poker import VIDEO_POKER_MAX_BET  # CASINO_GAMES
 
 
@@ -3276,8 +3277,9 @@ CASINO_GAMES = [
     {"id": "roulette", "name": "Roulette", "max_bet": ROULETTE_MAX_BET},
     {"id": "dice", "name": "Dice", "max_bet": DICE_MAX_BET},
     {"id": "videopoker", "name": "Video Poker", "max_bet": VIDEO_POKER_MAX_BET},
-    {"id": "slots", "name": "Slots", "max_bet": SLOTS_MAX_BET},
 ]
+if SLOTS_FEATURE_ENABLED:
+    CASINO_GAMES.append({"id": "slots", "name": "Slots", "max_bet": SLOTS_MAX_BET})
 crimes.register(api_router)
 gta.register(api_router)
 jail.register(api_router)
@@ -3312,7 +3314,8 @@ mp_blackjack.register(api_router)
 mp_poker.register(api_router)
 mp_8ball.register(api_router)
 horseracing.register(api_router)
-slots.register(api_router)
+if SLOTS_FEATURE_ENABLED:
+    slots.register(api_router)
 keno.register(api_router)
 coin_flip.register(api_router)
 video_poker.register(api_router)
@@ -3716,16 +3719,17 @@ async def startup_db():
         )
     from routers.cars import gta as gta_router
     asyncio.create_task(gta_router.run_dealer_replenish_loop())
-    # Slots: run ownership draw check every 60s so draws happen at next_draw_at even if no one is on the page (3h boundaries; 1m delay is fine)
-    from routers.casinos import slots as slots_router
-    async def slots_draw_ticker():
-        while True:
-            try:
-                await slots_router.run_slots_draws_due()
-            except Exception as e:
-                logging.exception("Slots draw ticker: %s", e)
-            await asyncio.sleep(60)
-    asyncio.create_task(slots_draw_ticker())
+    if SLOTS_FEATURE_ENABLED:
+        # Slots: run ownership draw check every 60s so draws happen at next_draw_at even if no one is on the page (3h boundaries; 1m delay is fine)
+        from routers.casinos import slots as slots_router
+        async def slots_draw_ticker():
+            while True:
+                try:
+                    await slots_router.run_slots_draws_due()
+                except Exception as e:
+                    logging.exception("Slots draw ticker: %s", e)
+                await asyncio.sleep(60)
+        asyncio.create_task(slots_draw_ticker())
     # City lottery (Wed/Sun UTC): poll so draws run at closes_at without relying on external cron
     lottery_draw_use_cron = (os.environ.get("LOTTERY_DRAW_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
     _lottery_draw_ticker_raw = (os.environ.get("LOTTERY_DRAW_TICKER") or "").strip().lower()

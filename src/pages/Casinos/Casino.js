@@ -1,6 +1,7 @@
 import { Dice1, Spade, Hash, TrendingUp, Target, ChevronRight, Coins, Users, LayoutGrid } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import styles from '../../styles/noir.module.css';
+import { SLOTS_FEATURE_ENABLED } from '../../config/gameFeatures';
 
 const CASINO_STYLES = `
   @keyframes cas-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -15,7 +16,7 @@ const GAMES = [
   { to: '/casino/blackjack', label: 'Blackjack', desc: 'Beat the dealer to 21', Icon: Spade, testId: 'play-blackjack' },
   { to: '/casino/dice', label: 'Dice', desc: 'Roll for riches', Icon: Hash, testId: 'play-dice' },
   { to: '/casino/horseracing', label: 'Horse Racing', desc: 'Bet on the fastest', Icon: TrendingUp, testId: 'play-horse-racing' },
-  { to: '/casino/slots', label: 'Slots', desc: 'Enter draw · own 3h · max bet & buy-back', Icon: Coins, testId: 'play-slots' },
+  ...(SLOTS_FEATURE_ENABLED ? [{ to: '/casino/slots', label: 'Slots', desc: 'Enter draw · own 3h · max bet & buy-back', Icon: Coins, testId: 'play-slots' }] : []),
   { to: '/casino/keno', label: 'Keno', desc: 'State table · pick numbers · 20 from 80', Icon: LayoutGrid, testId: 'play-keno' },
   { to: '/casino/coin-flip', label: 'Coin Flip', desc: 'House table · heads or tails · max $5M', Icon: Coins, testId: 'play-coin-flip' },
   { to: '/casino/videopoker', label: 'Video Poker', desc: 'Jacks or Better', Icon: Spade, testId: 'play-video-poker' },
