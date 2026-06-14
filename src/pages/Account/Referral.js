@@ -156,6 +156,7 @@ export default function Referral() {
   }
 
   const earnings = data?.earnings || {};
+  const weeklyPoints = data?.weekly_points || {};
 
   const cardClass = `relative ${styles.panel} rounded-lg overflow-hidden ref-fade-in mobile-panel`;
   const cardHeaderClass = `${styles.panelHeader} px-2.5 sm:px-3 py-2`;
@@ -296,12 +297,56 @@ export default function Referral() {
               <li>10% of their OC heist profit (cash)</li>
               <li>10% of their garage scrap profit (cash)</li>
               <li>10% of their booze profit (cash)</li>
+              <li>1,000 points per week for each referred player who is alive, email verified, and online 5+ days that week (max 3,000 points/week from this bonus)</li>
             </ul>
             <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading mt-2`}>
-              Referrals must verify their email before crimes, OC, GTA, and booze runs count toward your totals.
+              Referrals must verify their email before crimes, OC, GTA, booze runs, and weekly point bonuses count toward your totals.
             </p>
           </div>
         </div>
+
+        {/* Weekly referral points */}
+        {weeklyPoints?.week_start && (
+          <div className={cardClass} style={{ animationDelay: '0.17s' }}>
+            <div className={cardHeaderClass}>
+              <h2 className={cardTitleClass}>
+                <BarChart3 size={14} className="sm:w-4 sm:h-4" />
+                Weekly referral points
+              </h2>
+            </div>
+            <div className="p-2.5 sm:p-3 space-y-2">
+              <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading`}>
+                You and each qualifying referred player earn 1,000 points per London week when they are alive, verified, and online at least {weeklyPoints.min_active_days_required ?? 5} days. Capped at {Number(weeklyPoints.weekly_cap || 3000).toLocaleString()} points per week from this bonus.
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                <StatCard
+                  label="Active days"
+                  value={`${Number(weeklyPoints.active_days_this_week || 0)}/${weeklyPoints.min_active_days_required ?? 5}`}
+                  valueColor="text-primary"
+                  icon={BarChart3}
+                />
+                <StatCard
+                  label="This week"
+                  value={Number(weeklyPoints.earned_this_week || 0).toLocaleString()}
+                  valueColor="text-primary"
+                  icon={Gift}
+                />
+                <StatCard
+                  label="Cap left"
+                  value={Number(weeklyPoints.cap_remaining ?? 0).toLocaleString()}
+                  valueColor="text-amber-400"
+                  icon={KeyRound}
+                />
+                <StatCard
+                  label="Referee status"
+                  value={weeklyPoints.referee_qualifies ? 'Qualifies' : 'Not yet'}
+                  valueColor={weeklyPoints.referee_qualifies ? 'text-emerald-400' : 'text-foreground'}
+                  icon={UserPlus}
+                />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* What referred users get — for referrers and referred users */}
         <div className={cardClass} style={{ animationDelay: '0.18s' }}>
@@ -313,7 +358,7 @@ export default function Referral() {
           </div>
           <div className="p-2.5 sm:p-3">
             <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading`}>
-              People who sign up with your link get: free premium rank bar, 500 respect, 18 tokens (non-tradeable), 10% higher crime payouts, and a 10% GTA rare car boost.
+              People who sign up with your link get: free premium rank bar, 500 respect, 18 tokens (non-tradeable), 10% higher crime payouts, a 10% GTA rare car boost, and 1,000 points each week they stay alive, verified, and online 5+ days.
             </p>
           </div>
         </div>
@@ -328,9 +373,15 @@ export default function Referral() {
           </div>
           <div className="p-2.5 sm:p-3 space-y-3">
             <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading`}>
-              Lifetime totals from referred users (cash and bullets are added to your account when they play).
+              Lifetime totals from referred users (cash, bullets, and weekly point bonuses are added to your account when they qualify).
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+              <StatCard
+                label="Weekly points"
+                value={Number(earnings.weekly_points || 0).toLocaleString()}
+                valueColor="text-primary"
+                icon={BarChart3}
+              />
               <StatCard
                 label="Melt bullets"
                 value={Number(earnings.melt_bullets || 0).toLocaleString()}
@@ -342,7 +393,7 @@ export default function Referral() {
               <StatCard label="Garage scrap" value={formatMoney(earnings.garage_scrap || 0)} valueColor="text-emerald-400" icon={Car} />
               <StatCard label="Booze profit" value={formatMoney(earnings.booze_profit || 0)} valueColor="text-emerald-400" icon={Wine} />
             </div>
-            {(Number(earnings.melt_bullets || 0) + Number(earnings.crime_profit || 0) + Number(earnings.oc_profit || 0) + Number(earnings.garage_scrap || 0) + Number(earnings.booze_profit || 0)) === 0 && (
+            {(Number(earnings.weekly_points || 0) + Number(earnings.melt_bullets || 0) + Number(earnings.crime_profit || 0) + Number(earnings.oc_profit || 0) + Number(earnings.garage_scrap || 0) + Number(earnings.booze_profit || 0)) === 0 && (
               <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading`}>
                 All zero so far — earnings appear here once referrals verify email and earn from the activities above.
               </p>

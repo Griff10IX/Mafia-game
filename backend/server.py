@@ -887,6 +887,7 @@ class UserResponse(BaseModel):
     referral_earnings_booze: int = 0
     referral_earnings_garage_scrap: int = 0
     referral_earnings_melt_bullets: int = 0
+    referral_earnings_weekly_points: int = 0
     rules_accepted: bool = False
     rules_accepted_at: Optional[str] = None
 
@@ -1415,6 +1416,16 @@ async def get_current_user(
                         user["last_path"] = update["last_path"]
                     if "last_request_ip" in update:
                         user["last_request_ip"] = update["last_request_ip"]
+                    try:
+                        from utils.referral_weekly_points import (
+                            process_referral_weekly_points,
+                            record_referral_activity_day,
+                        )
+
+                        if await record_referral_activity_day(db, user_id, user=user):
+                            await process_referral_weekly_points(db, user_id)
+                    except Exception:
+                        pass
         except Exception:
             pass
 

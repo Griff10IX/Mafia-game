@@ -1906,6 +1906,16 @@ def register(router):
                     {"id": current_user["id"]},
                     {"$set": update}
                 )
+                try:
+                    from utils.referral_weekly_points import (
+                        process_referral_weekly_points,
+                        record_referral_activity_day,
+                    )
+
+                    if await record_referral_activity_day(db, current_user["id"], user=current_user):
+                        await process_referral_weekly_points(db, current_user["id"])
+                except Exception:
+                    pass
             
             # Wake up auto-rank if user was idle (no activity for 3+ hours)
             if current_user.get("auto_rank_idle"):
@@ -2245,9 +2255,26 @@ def register(router):
     @router.get("/account/referral")
     async def get_referral(current_user: dict = Depends(get_current_user)):
         """Referral page: link, referred-by, signup bonus if applicable, and earnings breakdown by source."""
+        from utils.referral_weekly_points import process_referral_weekly_points
+
         user_id = current_user.get("id")
-        username = (current_user.get("username") or "").strip()
-        ref_ids = normalize_referred_by_ids(current_user.get("referred_by"))
+        weekly_stats = await process_referral_weekly_points(db, user_id)
+        u = await db.users.find_one(
+            {"id": user_id},
+            {
+                "_id": 0,
+                "username": 1,
+                "referred_by": 1,
+                "referral_earnings_melt_bullets": 1,
+                "referral_earnings_crime": 1,
+                "referral_earnings_oc": 1,
+                "referral_earnings_garage_scrap": 1,
+                "referral_earnings_booze": 1,
+                "referral_earnings_weekly_points": 1,
+            },
+        ) or current_user
+        username = (u.get("username") or current_user.get("username") or "").strip()
+        ref_ids = normalize_referred_by_ids(u.get("referred_by") or current_user.get("referred_by"))
         referred_by_username = None
         referred_by_usernames_list: List[str] = []
         if ref_ids:
@@ -2259,11 +2286,12 @@ def register(router):
             referred_by_usernames_list = [id_to_name.get(i, "?") for i in ref_ids]
             referred_by_username = ", ".join(referred_by_usernames_list)
         earnings = {
-            "melt_bullets": int(current_user.get("referral_earnings_melt_bullets") or 0),
-            "crime_profit": int(current_user.get("referral_earnings_crime") or 0),
-            "oc_profit": int(current_user.get("referral_earnings_oc") or 0),
-            "garage_scrap": int(current_user.get("referral_earnings_garage_scrap") or 0),
-            "booze_profit": int(current_user.get("referral_earnings_booze") or 0),
+            "melt_bullets": int(u.get("referral_earnings_melt_bullets") or 0),
+            "crime_profit": int(u.get("referral_earnings_crime") or 0),
+            "oc_profit": int(u.get("referral_earnings_oc") or 0),
+            "garage_scrap": int(u.get("referral_earnings_garage_scrap") or 0),
+            "booze_profit": int(u.get("referral_earnings_booze") or 0),
+            "weekly_points": int(u.get("referral_earnings_weekly_points") or 0),
         }
         signup_bonus = None
         if referred_by_username:
@@ -2282,6 +2310,7 @@ def register(router):
             "referred_by_usernames": referred_by_usernames_list,
             "signup_bonus": signup_bonus,
             "earnings": earnings,
+            "weekly_points": weekly_stats,
             "redeem_stats": redeem_stats,
         }
 

@@ -445,6 +445,12 @@ async def ensure_all_indexes(db):
         await db.point_ledger_events.create_index([("user_id", 1), ("event_type", 1), ("created_at", -1)])
         await db.point_ledger_events.create_index([("root_purchase_ref", 1), ("created_at", -1)])
         await db.point_ledger_events.create_index([("origin_ref", 1), ("created_at", -1)])
+        await db.referral_weekly_grants.create_index(
+            [("week_start", 1), ("beneficiary_id", 1), ("role", 1), ("referee_id", 1)],
+            unique=True,
+            name="referral_weekly_grants_unique",
+        )
+        await db.referral_weekly_grants.create_index([("beneficiary_id", 1), ("week_start", 1)])
 
         # --- Notifications: unread count (profile has user_id) ---
         await db.notifications.create_index([("user_id", 1), ("read", 1)])

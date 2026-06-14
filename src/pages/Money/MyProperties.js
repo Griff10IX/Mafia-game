@@ -7,6 +7,8 @@ import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import { SLOTS_FEATURE_ENABLED } from '../../config/gameFeatures';
+
+const MP_STYLES = `
   @keyframes mp-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .mp-fade-in { animation: mp-fade-in 0.4s ease-out both; }
   .mp-card { transition: all 0.3s ease; }
