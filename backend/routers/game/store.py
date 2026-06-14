@@ -519,6 +519,12 @@ async def buy_auto_rank(
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
     await _record_store_points_spend(current_user["id"], inc, "buy-auto-rank")
+    try:
+        from routers.account.auto_rank import wake_auto_rank_if_idle
+
+        await wake_auto_rank_if_idle(db, current_user["id"])
+    except Exception:
+        pass
     return {
         "message": "Auto Rank purchased! Go to Auto Rank to enable it and choose which activities to run.",
         "cost": cost_used,

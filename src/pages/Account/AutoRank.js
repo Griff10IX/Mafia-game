@@ -411,7 +411,7 @@ const SetupCard = ({
       {emailEntitled && canEnable ? (
         <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-2 sm:p-2.5">
           <p className="text-[10px] sm:text-xs font-heading text-emerald-300">
-            Permanent (email) — tied to your verified email; restores on a new account with the same email.
+            Permanent (email) — tied to your verified email; restores on a new account with the same email. Keeps running without the 24h idle pause.
           </p>
         </div>
       ) : null}
@@ -419,7 +419,7 @@ const SetupCard = ({
       {canEnable && !emailEntitled && stripePurchasable ? (
         <div className="rounded border border-emerald-500/30 bg-emerald-500/5 p-2 sm:p-2.5 space-y-2">
           <p className="text-[10px] sm:text-xs font-heading text-zinc-300 leading-relaxed">
-            You have account-only Auto Rank. Upgrade to email-tied permanent so it survives death / a new account on the same email.
+            You have account-only Auto Rank. Upgrade to email-tied permanent so it survives death / a new account on the same email — and keeps running without the 24h idle pause.
           </p>
           <button
             type="button"

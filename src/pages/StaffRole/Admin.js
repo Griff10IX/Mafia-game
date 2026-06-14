@@ -1323,6 +1323,7 @@ export default function Admin() {
   const [racketResetFamilyId, setRacketResetFamilyId] = useState('');
   const [racketResetRacketId, setRacketResetRacketId] = useState('protection');
   const [racketResetLoading, setRacketResetLoading] = useState(false);
+  const [racketArmoryResetLoading, setRacketArmoryResetLoading] = useState(false);
 
   // Casino Max Bets
   const [casinoMaxBets, setCasinoMaxBets] = useState(null);
@@ -3327,6 +3328,24 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to reset racket cooldown');
     } finally {
       setRacketResetLoading(false);
+    }
+  };
+
+  const handleResetRacketArmory = async () => {
+    const fid = (racketResetFamilyId || '').trim();
+    if (!fid) {
+      toast.error('Enter family ID');
+      return;
+    }
+    if (!window.confirm('Clear all racket defence and crew offence upgrades for this family?')) return;
+    setRacketArmoryResetLoading(true);
+    try {
+      const res = await api.post('/admin/rackets/reset-armory', null, { params: { family_id: fid } });
+      toast.success(res.data?.message || 'Racket armory reset');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to reset racket armory');
+    } finally {
+      setRacketArmoryResetLoading(false);
     }
   };
 
@@ -13718,7 +13737,11 @@ export default function Admin() {
               <BtnPrimary onClick={handleResetRacketCooldown} disabled={racketResetLoading || !racketResetFamilyId.trim()}>
                 {racketResetLoading ? '...' : 'Reset Cooldown'}
               </BtnPrimary>
+              <BtnPrimary onClick={handleResetRacketArmory} disabled={racketArmoryResetLoading || !racketResetFamilyId.trim()}>
+                {racketArmoryResetLoading ? '...' : 'Reset Armory'}
+              </BtnPrimary>
             </div>
+            <p className="text-[9px] text-mutedForeground">Reset armory clears all per-racket defence upgrades and crew offence upgrades (vault purchases).</p>
           </div>
         )}
         </div>

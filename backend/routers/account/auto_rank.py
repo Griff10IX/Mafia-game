@@ -35,7 +35,13 @@ MIN_OC_INTERVAL_SECONDS = 10
 DEFAULT_OC_INTERVAL_SECONDS = 63  # was 60; 5% slower
 OC_LOOP_INTERVAL_SECONDS = 63  # fallback when config not used
 OC_RETRY_AFTER_AFFORD_SECONDS = 10 * 60
-AUTO_RANK_IDLE_TIMEOUT_SECONDS = 24 * 60 * 60  # 24 hours - if no real user activity, auto-rank goes idle (normal users)
+AUTO_RANK_IDLE_TIMEOUT_SECONDS = 24 * 60 * 60  # 24 hours - trial/token users pause if no real activity
+_AUTO_RANK_IDLE_CHECK_PROJECTION = {
+    "auto_rank_permanent": 1,
+    "auto_rank_purchased": 1,
+    "auto_rank_trial": 1,
+    "auto_rank_email_entitlement": 1,
+}
 
 
 def _auto_rank_env_int(key: str, default: int, lo: int = 1, hi: Optional[int] = None) -> int:
@@ -550,17 +556,21 @@ def _is_staff(user: dict) -> bool:
     return is_admin or is_mod
 
 
-async def _check_and_set_idle(db, user_id: str, user: dict, now: datetime) -> bool:
-    """Check if user should be idle. If so, save preferences, disable all tasks, set auto_rank_idle=True. Return True if idle.
-    Admins and moderators are exempt - their auto_rank never goes idle."""
-    # Staff (admins/mods) never go idle - their auto_rank always stays active
+def _auto_rank_idle_exempt(user: dict) -> bool:
+    """Permanent Auto Rank (store points or email-tied) and staff never pause after 24h inactivity."""
     if _is_staff(user):
-        return False
-    if _is_user_idle(user, now):
-        if not user.get("auto_rank_idle"):
-            await _set_user_idle(db, user_id, user.get("username", user_id))
+        return True
+    if _user_has_permanent_auto_rank(user):
+        return True
+    if user.get("auto_rank_email_entitlement"):
         return True
     return False
+
+
+def _should_apply_auto_rank_idle(user: dict, now: datetime) -> bool:
+    if _auto_rank_idle_exempt(user):
+        return False
+    return _is_user_idle(user, now)
 
 
 async def wake_auto_rank_if_idle(db, user_id: str):
@@ -592,6 +602,26 @@ async def wake_auto_rank_if_idle(db, user_id: str):
         }
     )
     logger.info("Auto rank: user %s woke up from idle - preferences restored", user_id)
+
+
+async def _wake_permanent_auto_rank_if_idle(db) -> None:
+    """Clear stale idle state for permanent buyers (legacy rows before idle-exempt rules)."""
+    cursor = db.users.find(
+        {
+            "auto_rank_idle": True,
+            "$or": [
+                {"auto_rank_permanent": True},
+                {"auto_rank_email_entitlement": True},
+                {"auto_rank_purchased": True, "auto_rank_trial": {"$ne": True}},
+            ],
+        },
+        {"_id": 0, "id": 1},
+    )
+    users = await cursor.to_list(500)
+    for u in users:
+        uid = u.get("id")
+        if uid:
+            await wake_auto_rank_if_idle(db, uid)
 
 
 # ─── Telegram helper ──────────────────────────────────────────────
@@ -1465,14 +1495,14 @@ async def run_booze_arrivals():
 
     cursor = db.users.find(
         {**_mongo_auto_rank_subscriber_clause(now), "auto_rank_enabled": True, "auto_rank_booze": True, "travel_arrives_at": {"$lte": now_iso}, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}, "auto_rank_idle": {"$ne": True}},
-        {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_telegram_notify": 1, "last_seen": 1, "email": 1, "is_moderator": 1},
+        {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_telegram_notify": 1, "last_seen": 1, "email": 1, "is_moderator": 1, **_AUTO_RANK_IDLE_CHECK_PROJECTION},
     )
     users = await cursor.to_list(200)
 
     # Check each user for idle status and filter out those who should be idle
     active_users = []
     for u in users:
-        if _is_user_idle(u, now):
+        if _should_apply_auto_rank_idle(u, now):
             await _set_user_idle(db, u["id"], u.get("username", u["id"]))
         else:
             active_users.append(u)
@@ -1539,6 +1569,7 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_
                 "last_seen_country": 1,
                 "last_request_ip": 1,
                 "last_login_ip": 1,
+                **_AUTO_RANK_IDLE_CHECK_PROJECTION,
             },
         )
         .sort("auto_rank_next_run_at", 1)
@@ -1549,7 +1580,7 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_
     # Check each user for idle status and filter out those who should be idle
     active_users = []
     for u in users:
-        if _is_user_idle(u, now):
+        if _should_apply_auto_rank_idle(u, now):
             await _set_user_idle(db, u["id"], u.get("username", u["id"]))
         else:
             active_users.append(u)
@@ -1623,14 +1654,14 @@ async def run_bust_5sec_once():
     try:
         cursor = db.users.find(
             {**_mongo_auto_rank_subscriber_clause(now), "auto_rank_enabled": True, "auto_rank_bust_every_5_sec": True, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}, "auto_rank_idle": {"$ne": True}},
-            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1, "email": 1, "is_moderator": 1},
+            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1, "email": 1, "is_moderator": 1, **_AUTO_RANK_IDLE_CHECK_PROJECTION},
         )
         users = await cursor.to_list(500)
         
         # Check each user for idle status and filter out those who should be idle
         active_users = []
         for u in users:
-            if _is_user_idle(u, now):
+            if _should_apply_auto_rank_idle(u, now):
                 await _set_user_idle(db, u["id"], u.get("username", u["id"]))
             else:
                 active_users.append(u)
@@ -1692,14 +1723,14 @@ async def run_auto_rank_oc_once():
     try:
         cursor = db.users.find(
             {**_mongo_auto_rank_subscriber_clause(now), "auto_rank_enabled": True, "auto_rank_oc": True, "in_jail": {"$ne": True}, "is_dead": {"$ne": True}, "auto_rank_idle": {"$ne": True}},
-            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_telegram_notify": 1, "auto_rank_oc_retry_at": 1, "last_seen": 1, "email": 1, "is_moderator": 1},
+            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "auto_rank_telegram_notify": 1, "auto_rank_oc_retry_at": 1, "last_seen": 1, "email": 1, "is_moderator": 1, **_AUTO_RANK_IDLE_CHECK_PROJECTION},
         )
         users = await cursor.to_list(500)
         
         # Check each user for idle status and filter out those who should be idle
         active_users = []
         for u in users:
-            if _is_user_idle(u, now):
+            if _should_apply_auto_rank_idle(u, now):
                 await _set_user_idle(db, u["id"], u.get("username", u["id"]))
             else:
                 active_users.append(u)
@@ -1760,6 +1791,10 @@ async def run_auto_rank_loop():
             await asyncio.sleep(2)
             continue
         await _expire_auto_rank_trials(db)
+        try:
+            await _wake_permanent_auto_rank_if_idle(db)
+        except Exception as e:
+            logger.warning("Auto rank loop: wake permanent idle users failed: %s", e)
         cycle_start = datetime.now(timezone.utc)
         try:
             await run_booze_arrivals()
@@ -1784,6 +1819,10 @@ async def run_auto_rank_cron_cycle():
         logger.info("Auto rank cron: skipped (auto_rank disabled in game settings)")
         return {"ok": True, "skipped": "auto_rank disabled"}
     await _expire_auto_rank_trials(db)
+    try:
+        await _wake_permanent_auto_rank_if_idle(db)
+    except Exception as e:
+        logger.warning("Auto rank: wake permanent idle users failed: %s", e)
     cycle_start = datetime.now(timezone.utc)
     try:
         await run_booze_arrivals()
@@ -1890,6 +1929,7 @@ def _build_auto_rank_diagnostics(doc: dict, *, global_enabled: bool) -> Dict[str
 
     auto_rank_2h_tokens = int(doc.get("auto_rank_2h_tokens") or 0)
     staff = _is_staff(doc)
+    idle_exempt = _auto_rank_idle_exempt(doc)
     last_seen = doc.get("last_seen")
     last_seen_hours_ago = None
     hours_until_idle = None
@@ -1901,7 +1941,7 @@ def _build_auto_rank_diagnostics(doc: dict, *, global_enabled: bool) -> Dict[str
             last_seen_hours_ago = round(elapsed_h, 2)
             remaining_s = AUTO_RANK_IDLE_TIMEOUT_SECONDS - (now - ls).total_seconds()
             hours_until_idle = round(max(0, remaining_s) / 3600, 2) if remaining_s > 0 else 0
-            would_go_idle_now = _is_user_idle(doc, now) and not staff
+            would_go_idle_now = _should_apply_auto_rank_idle(doc, now)
 
     if not has_access:
         if access_type == "trial_expired":
@@ -1932,6 +1972,8 @@ def _build_auto_rank_diagnostics(doc: dict, *, global_enabled: bool) -> Dict[str
 
     if staff:
         notes.append("Staff account — exempt from 24h idle pause")
+    elif idle_exempt:
+        notes.append("Permanent Auto Rank — exempt from 24h idle pause")
     elif last_seen_hours_ago is not None and not doc.get("auto_rank_idle") and hours_until_idle is not None and hours_until_idle < 6:
         warnings.append(
             f"Will go idle in ~{hours_until_idle}h if user does not visit the site (last seen {last_seen_hours_ago}h ago)"
@@ -1998,6 +2040,7 @@ def _build_auto_rank_diagnostics(doc: dict, *, global_enabled: bool) -> Dict[str
         "trial_until": doc.get("auto_rank_trial_until"),
         "auto_rank_2h_tokens": auto_rank_2h_tokens,
         "staff_exempt_from_idle": staff,
+        "idle_exempt": idle_exempt,
         "last_seen_hours_ago": last_seen_hours_ago,
         "idle_threshold_hours": AUTO_RANK_IDLE_TIMEOUT_SECONDS / 3600,
         "hours_until_idle": hours_until_idle,

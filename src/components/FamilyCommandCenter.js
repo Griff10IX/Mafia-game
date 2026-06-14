@@ -135,6 +135,12 @@ export default function FamilyCommandCenter({ onCloseSidebar, hasFamily }) {
   const myRole = myFamily?.my_role;
   const readyRackets = countReadyRackets(rackets);
   const unlockedRackets = rackets.filter((r) => !r.locked && (r.level || 0) > 0).length;
+  const tillAtRiskTotal = (rackets || []).reduce((sum, r) => {
+    if ((r.level || 0) <= 0 || r.locked) return sum;
+    const next = r.next_collect_at;
+    if (next && new Date(next).getTime() > Date.now()) return sum;
+    return sum + Number(r.till_at_risk || 0);
+  }, 0);
   const crewOcCd = cooldownRemaining(family?.crew_oc_cooldown_until);
   const vaultLocked = !!myFamily?.vault_and_rackets_locked;
   const warCount = activeWars.length;
@@ -273,6 +279,14 @@ export default function FamilyCommandCenter({ onCloseSidebar, hasFamily }) {
                   value={readyRackets > 0 ? `${readyRackets} ready · ${unlockedRackets} active` : `${unlockedRackets} active`}
                   tone={readyRackets > 0 ? 'text-emerald-400' : ''}
                 />
+                {tillAtRiskTotal > 0 && (
+                  <StatRow
+                    icon={<DollarSign size={10} />}
+                    label="Till at risk"
+                    value={formatMoney(tillAtRiskTotal)}
+                    tone="text-amber-400"
+                  />
+                )}
                 {warCount > 0 && (
                   <StatRow icon={<Swords size={10} />} label="War" value={`${warCount} active`} tone="text-red-400" />
                 )}

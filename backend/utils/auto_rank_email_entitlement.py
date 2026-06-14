@@ -99,6 +99,12 @@ async def sync_auto_rank_email_entitlement_to_user(
             "$unset": {"auto_rank_trial_until": ""},
         },
     )
+    try:
+        from routers.account.auto_rank import wake_auto_rank_if_idle
+
+        await wake_auto_rank_if_idle(db, user_id)
+    except Exception:
+        pass
     return True
 
 

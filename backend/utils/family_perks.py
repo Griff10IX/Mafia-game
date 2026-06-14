@@ -12,14 +12,14 @@ FAMILY_PERK_CREW_OC_AUTO_COMMIT_DAYS = 2
 FAMILY_PERK_COST_MELT = 250
 FAMILY_PERK_COST_GTA = 250
 FAMILY_PERK_COST_HITLIST = 300
-FAMILY_PERK_COST_RACKET = 500
+FAMILY_PERK_COST_RACKET = 2000
 FAMILY_PERK_COST_BOOZE_STEP = 50  # +15 cargo per step, max total bonus 300
 
 FAMILY_PERK_CREW_OC_HOURS_OFF = 1
 FAMILY_PERK_MELT_SECONDS_OFF = 5
 FAMILY_PERK_GTA_SECONDS_OFF = 5
 FAMILY_PERK_HITLIST_NPC_SLOTS = 2
-FAMILY_PERK_RACKET_BONUS_PERCENT = 5
+FAMILY_PERK_RACKET_BONUS_PERCENT = 50
 FAMILY_PERK_BOOZE_STEP_AMOUNT = 15
 FAMILY_PERK_BOOZE_BONUS_CAP = 300
 
@@ -118,7 +118,7 @@ def perk_catalog_prices() -> Dict[str, Any]:
         "melt": {"cost": FAMILY_PERK_COST_MELT, "label": "Family melt cooldown −5s"},
         "gta": {"cost": FAMILY_PERK_COST_GTA, "label": "Family GTA cooldown −5s"},
         "hitlist": {"cost": FAMILY_PERK_COST_HITLIST, "label": "+2 hitlist NPC slots"},
-        "racket": {"cost": FAMILY_PERK_COST_RACKET, "label": "+5% daily racket income"},
+        "racket": {"cost": FAMILY_PERK_COST_RACKET, "label": "+50% racket income this month"},
         "booze": {
             "cost_per_step": FAMILY_PERK_COST_BOOZE_STEP,
             "step_cargo": FAMILY_PERK_BOOZE_STEP_AMOUNT,

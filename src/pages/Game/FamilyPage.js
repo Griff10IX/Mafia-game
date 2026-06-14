@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, Building2, DollarSign, TrendingUp, TrendingDown, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw, Clock, ChevronRight, MessageSquare, UserPlus, Lock, Unlock, ArrowUpCircle, Flame, MapPin, Plane, Sparkles } from 'lucide-react';
+import { Users, Building2, DollarSign, TrendingUp, TrendingDown, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw, Clock, ChevronRight, ChevronDown, MessageSquare, UserPlus, Lock, Unlock, ArrowUpCircle, Flame, MapPin, Plane, Sparkles } from 'lucide-react';
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import { getRacketAccent } from '../../constants';
@@ -47,6 +47,10 @@ const VAULT_TX_KIND_LABELS = {
   racket_collect: 'Racket income',
   racket_unlock: 'Racket unlock',
   racket_upgrade: 'Racket upgrade',
+  racket_defence_buy: 'Racket defence',
+  racket_offence_buy: 'Crew armory',
+  racket_till_lost: 'Till raided',
+  racket_defence_destroyed: 'Defence destroyed',
   racket_raid_lost: 'Raided (lost cash)',
   racket_raid_won: 'Raid (stolen)',
   gta_melt: 'Garage melt',
@@ -76,6 +80,8 @@ const vaultTxSubtitle = (tx) => {
   if (tx.target_username) bits.push(`→ ${tx.target_username}`);
   const m = tx.meta || {};
   if (m.racket_id) bits.push(String(m.racket_id).replace(/_/g, ' '));
+  if (m.upgrade_name) bits.push(m.upgrade_name);
+  if (m.defence_destroyed) bits.push(`destroyed ${m.defence_destroyed}`);
   if (tx.kind === 'gta_melt' && (m.melt_reward_hits_paid > 0 || m.melt_treasury_pct > 0)) {
     const hits = m.melt_reward_hits_paid != null ? `${m.melt_reward_hits_paid} melt reward hit${m.melt_reward_hits_paid === 1 ? '' : 's'}` : '';
     const pct = m.melt_treasury_pct != null ? `${m.melt_treasury_pct}% cut` : '';
@@ -94,7 +100,7 @@ const TERRITORY_FAMILY_PERK_TITLE = {
   melt: 'Family melt cooldown −5s',
   gta: 'Family GTA cooldown −5s',
   hitlist: '+2 hitlist NPC slots',
-  racket: '+5% daily racket income',
+  racket: '+50% racket income this month',
 };
 
 function territoryFamilyPerkRows(familyPerks) {
@@ -121,6 +127,130 @@ function formatTerritoryPerkUntil(iso) {
     return String(iso);
   }
 }
+
+const TerritoryPerksPanel = ({ family }) => {
+  const [expanded, setExpanded] = useState(false);
+  const ph = family?.property_holdings ?? { airports: [], armouries: [], casinos: [] };
+  const cb = family?.crew_bonuses ?? { summary_lines: [], bonus_warnings: [], treasury_bullets_hourly: { active: false }, airport_crew_perk: { active: false } };
+  const holdingsCount = (ph.airports?.length || 0) + (ph.armouries?.length || 0) + (ph.casinos?.length || 0);
+  const perkRows = territoryFamilyPerkRows(family?.family_perks);
+  const bonusCount = (cb.summary_lines || []).length + (cb.bonus_warnings || []).length;
+  const summaryBits = [
+    holdingsCount > 0 ? `${holdingsCount} holding${holdingsCount !== 1 ? 's' : ''}` : null,
+    perkRows.length > 0 ? `${perkRows.length} perk${perkRows.length !== 1 ? 's' : ''}` : null,
+    bonusCount > 0 ? `${bonusCount} bonus${bonusCount !== 1 ? 'es' : ''}` : null,
+  ].filter(Boolean);
+
+  return (
+    <div className="rounded-xl border border-primary/15 bg-gradient-to-br from-zinc-900/80 to-zinc-950/90 overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center gap-2 px-3 py-3 sm:py-2.5 text-left touch-manipulation min-h-[48px] sm:min-h-0 hover:bg-primary/5 transition-colors"
+        aria-expanded={expanded}
+      >
+        <Building2 size={14} className="text-primary/70 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="text-[10px] font-heading font-bold uppercase tracking-wider text-primary/80">Territory &amp; perks</p>
+          <p className="text-[9px] text-zinc-500 truncate mt-0.5">
+            {summaryBits.length ? summaryBits.join(' · ') : 'Crew holdings, monthly perks, vault bonuses'}
+          </p>
+        </div>
+        <ChevronDown size={14} className={`text-zinc-500 shrink-0 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
+      </button>
+      {expanded && (
+        <div className="px-3 pb-3 pt-0 space-y-2 border-t border-primary/10">
+          <p className="text-[9px] text-zinc-500 leading-relaxed pt-2">
+            Each member may hold <strong className="text-zinc-400 font-heading">one airport</strong> and <strong className="text-zinc-400 font-heading">one armoury</strong>. Hourly vault bullets stack when high command holds both for this crew.
+          </p>
+          {holdingsCount > 0 ? (
+            <ul className="text-[10px] text-zinc-400 space-y-1 max-h-32 overflow-y-auto rounded-lg bg-zinc-950/50 border border-zinc-800/50 p-2">
+              {(ph.airports || []).map((a, i) => (
+                <li key={`a-${i}`} className="flex flex-wrap gap-x-1">
+                  <span className="text-primary/80 font-heading shrink-0">Airport</span>
+                  <span>{a.state}{a.slot != null ? ` #${a.slot}` : ''}</span>
+                  <span className="text-zinc-600">— {a.owner_username}</span>
+                </li>
+              ))}
+              {(ph.armouries || []).map((a, i) => (
+                <li key={`m-${i}`} className="flex flex-wrap gap-x-1">
+                  <span className="text-primary/80 font-heading shrink-0">Armoury</span>
+                  <span>{a.state}</span>
+                  <span className="text-zinc-600">— {a.owner_username}</span>
+                </li>
+              ))}
+              {(ph.casinos || []).map((c, i) => (
+                <li key={`c-${i}`} className="flex flex-wrap gap-x-1">
+                  <span className="text-primary/80 font-heading shrink-0">{c.game}</span>
+                  <span>{c.city}</span>
+                  <span className="text-zinc-600">— {c.owner_username}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-[9px] text-zinc-600 italic">No crew-owned airports, armouries, or casinos yet.</p>
+          )}
+          {perkRows.length > 0 && (
+            <div className="rounded-lg bg-emerald-500/5 border border-emerald-500/15 p-2 space-y-1">
+              <p className="text-[9px] font-heading uppercase tracking-wider text-emerald-400/90 flex items-center gap-1">
+                <Sparkles size={9} /> Monthly perks
+              </p>
+              <ul className="text-[9px] text-zinc-400 space-y-1">
+                {perkRows.map((p) => (
+                  <li key={p.id} className="flex justify-between gap-2 items-start">
+                    <span className="text-emerald-300/95 font-heading leading-snug">{p.title}</span>
+                    <span className="text-zinc-600 tabular-nums shrink-0 text-[8px]">{formatTerritoryPerkUntil(p.valid_until)}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {(cb.summary_lines || []).length > 0 || (cb.bonus_warnings || []).length > 0 ? (
+            <div className="space-y-1">
+              {(cb.bonus_warnings || []).map((line, i) => (
+                <p key={`w-${i}`} className="text-[9px] text-amber-300/95 leading-snug px-2 py-1.5 rounded-md bg-amber-500/8 border-l-2 border-amber-500/50 font-heading">{line}</p>
+              ))}
+              {(cb.summary_lines || []).map((line, i) => (
+                <p key={i} className="text-[9px] text-emerald-400/90 leading-snug px-2 py-1.5 rounded-md bg-emerald-500/5 border-l-2 border-emerald-500/35">{line}</p>
+              ))}
+            </div>
+          ) : (
+            <p className="text-[9px] text-zinc-600 flex items-start gap-1.5 leading-snug">
+              <Plane size={10} className="shrink-0 mt-0.5 opacity-50" />
+              No active crew vault or airport bonuses. See the Perks tab for the full Don catalog.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const MobileQuickNav = ({ readyRackets, tillAtRisk, activeWarsCount, onGo }) => (
+  <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-0.5 -mx-1 px-1 sm:hidden snap-x snap-mandatory">
+    {readyRackets > 0 && (
+      <button type="button" onClick={() => onGo('rackets')} className="snap-start shrink-0 min-h-[40px] px-3 py-2 rounded-full text-[10px] font-heading font-bold uppercase tracking-wide border border-emerald-500/40 bg-emerald-500/10 text-emerald-300 touch-manipulation">
+        Collect ({readyRackets})
+      </button>
+    )}
+    {tillAtRisk > 0 && (
+      <button type="button" onClick={() => onGo('rackets')} className="snap-start shrink-0 min-h-[40px] px-3 py-2 rounded-full text-[10px] font-heading font-bold uppercase tracking-wide border border-amber-500/35 bg-amber-500/10 text-amber-300 touch-manipulation">
+        {formatMoney(tillAtRisk)} at risk
+      </button>
+    )}
+    <button type="button" onClick={() => onGo('raid')} className="snap-start shrink-0 min-h-[40px] px-3 py-2 rounded-full text-[10px] font-heading font-bold uppercase tracking-wide border border-red-500/30 bg-red-500/8 text-red-300 touch-manipulation">
+      Hit jobs
+    </button>
+    <button type="button" onClick={() => onGo('treasury')} className="snap-start shrink-0 min-h-[40px] px-3 py-2 rounded-full text-[10px] font-heading font-bold uppercase tracking-wide border border-primary/30 bg-primary/8 text-primary touch-manipulation">
+      Vault
+    </button>
+    {activeWarsCount > 0 && (
+      <button type="button" onClick={() => onGo('families')} className="snap-start shrink-0 min-h-[40px] px-3 py-2 rounded-full text-[10px] font-heading font-bold uppercase tracking-wide border border-red-500/40 bg-red-500/12 text-red-400 touch-manipulation animate-pulse">
+        War ({activeWarsCount})
+      </button>
+    )}
+  </div>
+);
 
 const formatMoney = (n) => {
   const num = Number(n ?? 0);
@@ -233,6 +363,14 @@ const isRacketReadyAt = (isoUntil) => {
   return t <= Date.now();
 };
 
+function sumTillAtRisk(rackets) {
+  return (rackets || []).reduce((sum, r) => {
+    if ((r.level || 0) <= 0 || r.locked) return sum;
+    if (!isRacketReadyAt(r.next_collect_at)) return sum;
+    return sum + Number(r.till_at_risk || 0);
+  }, 0);
+}
+
 const formatUtcDateTime = (iso) => {
   if (!iso) return '—';
   const d = new Date(iso);
@@ -244,6 +382,20 @@ const apiDetail = (e) => {
   const d = e.response?.data?.detail;
   return typeof d === 'string' ? d : Array.isArray(d) && d.length ? d.map((x) => x.msg || x.loc?.join('.')).join('; ') : 'Request failed';
 };
+
+const RACKET_FLAVOR = {
+  protection: { icon: '🛡️', line: 'Shake down the neighborhood.' },
+  gambling: { icon: '🎲', line: 'Numbers and bookmaking.' },
+  loansharking: { icon: '💰', line: 'Vig runs deep.' },
+  labour: { icon: '🔨', line: 'Union kickbacks.' },
+  distillery: { icon: '🥃', line: 'Bootleg runs hot.' },
+  warehouse: { icon: '📦', line: 'Storage and distribution.' },
+  restaurant_bar: { icon: '🍸', line: 'Front with steady cash.' },
+  funeral_home: { icon: '⚰️', line: 'Respectable cover.' },
+  garment_shop: { icon: '🧵', line: 'Garment district ops.' },
+};
+
+const getRacketFlavor = (id) => RACKET_FLAVOR[id] || { icon: '💼', line: 'Family business.' };
 
 const getRoleConfig = (role) => ROLE_CONFIG[role?.toLowerCase()] || ROLE_CONFIG.associate;
 
@@ -271,20 +423,27 @@ function AnimatedCounter({ target, prefix = '', duration = 1000 }) {
 // STAT CARD — themed with icon glow
 // ============================================================================
 
-const StatCard = ({ label, value, sub, highlight, icon, accent: accentColor, delay = 0 }) => (
-  <div className={`relative overflow-hidden rounded-lg p-2 sm:p-3 fam-stat-card fam-scale-in ${highlight ? 'bg-emerald-500/10 border border-emerald-500/30' : `${styles.surface} border border-primary/20`}`} style={{ animationDelay: `${delay}s` }}>
-    {highlight && <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-emerald-500/10 blur-xl" />}
-    {!highlight && <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-20 h-12 bg-primary/5 rounded-full blur-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />}
-    <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 uppercase tracking-[0.15em] mb-1 font-heading">
-      {icon}
-      {label}
+const StatCard = ({ label, value, sub, highlight, warn, icon, accent: accentColor, delay = 0 }) => {
+  const shell = warn
+    ? 'bg-amber-500/8 border-amber-500/25'
+    : highlight
+      ? 'bg-emerald-500/10 border-emerald-500/30'
+      : `${styles.surface} border-primary/20`;
+  const valueColor = warn ? 'text-amber-300' : highlight ? 'text-emerald-400' : accentColor || 'text-foreground';
+  return (
+    <div className={`relative overflow-hidden rounded-xl border p-2.5 sm:p-3 fam-stat-card fam-scale-in min-h-[72px] sm:min-h-0 flex flex-col justify-center ${shell}`} style={{ animationDelay: `${delay}s` }}>
+      {(highlight || warn) && <div className={`absolute -top-4 -right-4 w-16 h-16 rounded-full blur-xl pointer-events-none ${warn ? 'bg-amber-500/10' : 'bg-emerald-500/10'}`} />}
+      <div className="flex items-center gap-1.5 text-[9px] text-zinc-500 uppercase tracking-[0.12em] mb-1 font-heading">
+        {icon}
+        <span className="truncate">{label}</span>
+      </div>
+      <div className={`text-lg sm:text-xl font-heading font-bold tabular-nums leading-none ${valueColor}`}>{value}</div>
+      {sub != null && sub !== '' && (
+        <div className="text-[9px] font-heading text-zinc-500 tabular-nums mt-1 leading-tight truncate">{sub}</div>
+      )}
     </div>
-    <div className={`text-base sm:text-lg font-heading font-bold ${highlight ? 'text-emerald-400' : accentColor || 'text-foreground'}`}>{value}</div>
-    {sub != null && sub !== '' && (
-      <div className="text-[8px] font-heading text-amber-400/90 tabular-nums mt-0.5 leading-tight">{sub}</div>
-    )}
-  </div>
-);
+  );
+};
 
 // ============================================================================
 // TAB BUTTON — sleek underline tabs
@@ -294,30 +453,17 @@ const Tab = ({ active, onClick, children, icon, subline }) => (
   <button
     type="button"
     onClick={onClick}
-    className={`flex items-center gap-1 px-2 sm:px-2.5 py-2 sm:py-2.5 min-h-[44px] sm:min-h-0 text-[10px] font-heading font-bold uppercase tracking-wider transition-all border-b-2 touch-manipulation shrink-0 snap-start ${
-      subline ? 'whitespace-normal' : 'whitespace-nowrap'
-    } ${
+    className={`flex flex-col items-center justify-center gap-0.5 px-2.5 sm:px-3 py-2 min-h-[52px] sm:min-h-[44px] min-w-[4.25rem] sm:min-w-0 sm:flex-row sm:gap-1.5 text-[9px] sm:text-[10px] font-heading font-bold uppercase tracking-wide transition-all touch-manipulation shrink-0 snap-start rounded-lg sm:rounded-none sm:border-b-2 mx-0.5 sm:mx-0 my-1 sm:my-0 ${
       active
-        ? 'text-primary border-primary bg-primary/5'
-        : 'text-zinc-500 border-transparent hover:text-zinc-300 hover:border-zinc-600'
+        ? 'text-primary bg-primary/12 border border-primary/30 shadow-sm shadow-primary/5 sm:bg-primary/5 sm:border-transparent sm:border-b-primary sm:shadow-none'
+        : 'text-zinc-500 border border-transparent sm:border-b-transparent hover:text-zinc-300 hover:bg-zinc-800/40 sm:hover:bg-transparent sm:hover:border-zinc-600'
     }`}
   >
-    {subline ? (
-      <span className="flex flex-col items-start gap-0.5 min-w-0 text-left">
-        <span className="flex items-center gap-1 whitespace-nowrap">
-          {icon}
-          <span className="hidden sm:inline">{children}</span>
-          <span className="sm:hidden">{children}</span>
-        </span>
-        {subline}
-      </span>
-    ) : (
-      <>
-        {icon}
-        <span className="hidden sm:inline">{children}</span>
-        <span className="sm:hidden">{children}</span>
-      </>
-    )}
+    <span className="flex items-center gap-1 whitespace-nowrap">
+      {icon}
+      <span>{children}</span>
+    </span>
+    {subline ? <span className="scale-[0.85] sm:scale-100 origin-center">{subline}</span> : null}
   </button>
 );
 
@@ -340,17 +486,25 @@ const RoleBadge = ({ role, size = 'sm' }) => {
 // RACKET CARD — business front with progress & glow
 // ============================================================================
 
-const RacketCard = ({ racket, maxLevel, canUpgrade, canCollect = true, onCollect, onUpgrade, onUnlock, showDebugReadout = false }) => {
+const RacketCard = ({ racket, maxLevel, canUpgrade, canCollect = true, onCollect, onUpgrade, onUnlock, onOpenDefence, showDebugReadout = false }) => {
   const timeLeft = formatTimeLeft(racket.next_collect_at);
   const isReady = racket.level > 0 && isRacketReadyAt(racket.next_collect_at);
   const onCooldown = racket.level > 0 && !isReady;
   const income = racket.effective_income_per_collect ?? racket.income_per_collect;
+  const tillAtRisk = Number(racket.till_at_risk || 0);
   const locked = racket.locked || racket.level <= 0;
   const isMax = racket.level >= maxLevel;
   const pct = maxLevel ? (racket.level / maxLevel) * 100 : 0;
+  const flavor = getRacketFlavor(racket.id);
+  const defenceCount = (racket.defence_upgrades || []).length;
+  const defenceWeight = Number(racket.defence_weight || 0);
 
   return (
-    <div className={`relative rounded-lg overflow-hidden fam-racket-card ${isReady ? 'animate-ready-pulse bg-emerald-500/5 border border-emerald-500/35' : locked ? 'bg-zinc-900/50 border border-dashed border-zinc-700/50' : 'bg-zinc-800/30 border border-zinc-700/30'}`}>
+    <button
+      type="button"
+      onClick={() => !locked && onOpenDefence?.(racket)}
+      className={`relative rounded-lg overflow-hidden fam-racket-card text-left w-full touch-manipulation ${isReady ? 'animate-ready-pulse bg-emerald-500/5 border border-emerald-500/35' : locked ? 'bg-zinc-900/50 border border-dashed border-zinc-700/50' : 'bg-zinc-800/30 border border-zinc-700/30 hover:border-zinc-600/50'}`}
+    >
       {isReady && <>
         <div className="absolute -top-3 -right-3 w-14 h-14 rounded-full bg-emerald-500/15 blur-lg pointer-events-none" />
         <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-emerald-400/50 to-transparent" />
@@ -358,20 +512,24 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, canCollect = true, onCollect
       {isMax && <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-primary/60 to-transparent" />}
 
       <div className="p-2.5 sm:p-3">
-        {/* Header row */}
-        <div className="flex items-center justify-between mb-1.5">
-          <h3 className={`font-heading font-bold text-sm tracking-wide ${locked ? 'text-zinc-500' : 'text-foreground'}`}>
-            {locked && <Lock size={10} className="inline mr-1 opacity-60" />}
-            {racket.name}
-          </h3>
-          <span className={`text-[10px] font-heading font-bold px-1.5 py-0.5 rounded ${
+        <div className="flex items-start justify-between gap-2 mb-1.5">
+          <div className="min-w-0 flex items-start gap-2">
+            <span className="text-lg shrink-0 leading-none mt-0.5" aria-hidden>{flavor.icon}</span>
+            <div className="min-w-0">
+              <h3 className={`font-heading font-bold text-sm tracking-wide truncate ${locked ? 'text-zinc-500' : 'text-foreground'}`}>
+                {locked && <Lock size={10} className="inline mr-1 opacity-60" />}
+                {racket.name}
+              </h3>
+              <p className="text-[9px] text-zinc-500 font-heading italic truncate">{flavor.line}</p>
+            </div>
+          </div>
+          <span className={`text-[10px] font-heading font-bold px-1.5 py-0.5 rounded shrink-0 ${
             isMax ? 'bg-primary/20 text-primary border border-primary/30' : locked ? 'bg-zinc-800 text-zinc-500' : 'bg-zinc-800 text-zinc-400'
           }`}>
             {isMax ? 'MAX' : locked ? 'LCK' : `L${racket.level}`}
           </span>
         </div>
 
-        {/* Level progress bar */}
         <div className="w-full h-1.5 bg-zinc-800 rounded-full overflow-hidden mb-1.5">
           <div
             className={`h-full rounded-full transition-all duration-700 ${locked ? 'bg-zinc-600' : isMax ? 'bg-gradient-to-r from-primary via-amber-400 to-primary' : 'bg-gradient-to-r from-primary to-yellow-700'}`}
@@ -379,7 +537,30 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, canCollect = true, onCollect
           />
         </div>
 
-        {/* Status line */}
+        {isReady && tillAtRisk > 0 && (
+          <div className="mb-2">
+            <div className="flex items-center justify-between text-[9px] font-heading mb-0.5">
+              <span className="text-amber-400/90 uppercase tracking-wider">Till at risk</span>
+              <span className="text-amber-300 font-bold tabular-nums">{formatMoney(tillAtRisk)}</span>
+            </div>
+            <div className="h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-amber-500/20">
+              <div className="h-full bg-gradient-to-r from-amber-600/80 to-amber-400/90 w-full animate-pulse" />
+            </div>
+          </div>
+        )}
+
+        {!locked && defenceCount > 0 && (
+          <div className="flex items-center gap-1 mb-2 overflow-x-auto scrollbar-hide pb-0.5">
+            <Shield size={10} className="text-blue-400/80 shrink-0" />
+            <span className="text-[9px] text-zinc-500 font-heading shrink-0">{defenceCount} def · {defenceWeight}pwr</span>
+            {(racket.defence_upgrades || []).slice(0, 4).map((id) => (
+              <span key={id} className="text-[8px] px-1.5 py-0.5 rounded bg-blue-500/10 border border-blue-500/25 text-blue-300/90 font-heading shrink-0">
+                {String(id).replace(/_/g, ' ').slice(0, 12)}
+              </span>
+            ))}
+          </div>
+        )}
+
         <div className="flex items-center justify-between mb-1.5">
           <span className={`text-[10px] font-heading font-bold ${
             isReady ? 'text-emerald-400' : locked ? 'text-zinc-600' : onCooldown ? 'text-amber-400' : 'text-zinc-500'
@@ -392,8 +573,7 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, canCollect = true, onCollect
           </span>
         </div>
 
-        {/* Action buttons */}
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
           {racket.level > 0 && (
             <button
               type="button"
@@ -426,6 +606,16 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, canCollect = true, onCollect
               <ArrowUpCircle size={12} />
             </button>
           )}
+          {!locked && racket.level > 0 && (
+            <button
+              type="button"
+              onClick={() => onOpenDefence?.(racket)}
+              className="px-2.5 py-2 sm:py-1.5 min-h-[44px] sm:min-h-0 rounded-md text-[10px] font-heading font-bold border bg-blue-500/10 border-blue-500/30 text-blue-300 hover:bg-blue-500/20 transition-all touch-manipulation"
+              title="Defence upgrades"
+            >
+              <Shield size={12} />
+            </button>
+          )}
         </div>
         {showDebugReadout && (
           <div className="mt-1.5 pt-1.5 border-t border-zinc-700/30 text-[9px] font-mono text-zinc-500 space-y-0.5">
@@ -433,6 +623,103 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, canCollect = true, onCollect
             <div>next_collect_at: {formatUtcDateTime(racket.debug_next_collect_at || racket.next_collect_at)}</div>
           </div>
         )}
+      </div>
+    </button>
+  );
+};
+
+const RacketDefenceSheet = ({ racket, armory, canBuy, vaultLocked, busy, onClose, onBuyDefence }) => {
+  if (!racket) return null;
+  const catalog = armory?.defence_catalog || [];
+  const owned = new Set(racket.defence_upgrades || []);
+  const ownedState = armory?.rackets?.[racket.id] || {};
+  const defenceWeight = Number(racket.defence_weight ?? ownedState.defence_weight ?? 0);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4" role="dialog" aria-modal="true">
+      <button type="button" className="absolute inset-0 bg-black/70" onClick={onClose} aria-label="Close" />
+      <div className="relative w-full sm:max-w-md max-h-[85vh] overflow-hidden rounded-t-xl sm:rounded-xl border border-zinc-700/50 bg-zinc-950 shadow-2xl flex flex-col">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800">
+          <div>
+            <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-wider">Racket defence</p>
+            <h3 className="font-heading font-bold text-foreground">{racket.name}</h3>
+          </div>
+          <button type="button" onClick={onClose} className="p-2 rounded-lg hover:bg-zinc-800 text-zinc-400 min-h-[44px] min-w-[44px] flex items-center justify-center">
+            <X size={16} />
+          </button>
+        </div>
+        <div className="px-4 py-2 bg-zinc-900/50 border-b border-zinc-800 text-[10px] font-heading text-zinc-400">
+          Defence power <span className="text-blue-300 font-bold">{defenceWeight}</span> — reduces rival hit success. Paid from vault.
+        </div>
+        <div className="overflow-y-auto flex-1 p-3 space-y-1.5">
+          {catalog.map((item) => {
+            const isOwned = owned.has(item.id);
+            const isBusy = busy === item.id;
+            return (
+              <div key={item.id} className={`flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg border ${isOwned ? 'bg-blue-500/5 border-blue-500/25' : 'bg-zinc-900/40 border-zinc-800'}`}>
+                <div className="min-w-0">
+                  <div className="text-[11px] font-heading font-bold text-foreground">{item.name}</div>
+                  <div className="text-[9px] text-zinc-500">+{item.defence_weight} defence · {formatMoney(item.cost)}</div>
+                </div>
+                {isOwned ? (
+                  <span className="text-[9px] font-heading font-bold uppercase text-blue-400 shrink-0">Owned</span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={!canBuy || vaultLocked || isBusy}
+                    onClick={() => onBuyDefence(racket.id, item.id)}
+                    className="px-3 py-2 min-h-[44px] rounded-md text-[9px] font-heading font-bold uppercase bg-primary/20 border border-primary/40 text-primary hover:bg-primary/30 disabled:opacity-40 shrink-0 touch-manipulation"
+                  >
+                    {isBusy ? '...' : 'Buy'}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const CrewArmorySection = ({ armory, offenceWeight, canBuy, vaultLocked, busy, onBuyOffence }) => {
+  const catalog = armory?.offence_catalog || [];
+  const owned = new Set(armory?.offence_upgrades || []);
+  if (!catalog.length) return null;
+  return (
+    <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-heading font-bold uppercase tracking-wider text-red-300/90 flex items-center gap-1.5">
+          <Swords size={11} /> Crew armory
+        </p>
+        <span className="text-[9px] text-zinc-500 font-heading">Offence <span className="text-red-300 font-bold">{offenceWeight || 0}</span></span>
+      </div>
+      <p className="text-[9px] text-zinc-500 font-heading leading-snug">Boosts hit success and till take on all rival rackets. Vault-funded.</p>
+      <div className="space-y-1 max-h-48 overflow-y-auto pr-0.5">
+        {catalog.map((item) => {
+          const isOwned = owned.has(item.id);
+          const isBusy = busy === item.id;
+          return (
+            <div key={item.id} className={`flex items-center justify-between gap-2 px-2.5 py-2 rounded-md border text-[10px] ${isOwned ? 'border-red-500/25 bg-red-500/5' : 'border-zinc-800 bg-zinc-900/40'}`}>
+              <div className="min-w-0">
+                <span className="font-heading font-bold text-foreground">{item.name}</span>
+                <span className="text-zinc-500 ml-1">+{item.offence_weight} · {formatMoney(item.cost)}</span>
+              </div>
+              {isOwned ? (
+                <span className="text-[9px] font-heading text-red-400 shrink-0">Owned</span>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!canBuy || vaultLocked || isBusy}
+                  onClick={() => onBuyOffence(item.id)}
+                  className="px-2.5 py-1.5 min-h-[36px] rounded text-[9px] font-heading font-bold uppercase border border-red-500/40 text-red-300 hover:bg-red-500/15 disabled:opacity-40 touch-manipulation shrink-0"
+                >
+                  {isBusy ? '...' : 'Buy'}
+                </button>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -743,23 +1030,40 @@ const TreasuryTab = ({
 // RACKETS TAB
 // ============================================================================
 
-const RacketsTab = ({ rackets, config, canUpgrade, vaultAndRacketsLocked, onCollect, onCollectAll, collectAllLoading, readyCount, onUpgrade, onUnlock, event, eventsEnabled }) => {
-  const maxLevel = config?.racket_max_level ?? 5;
+const RacketsTab = ({
+  rackets, config, canUpgrade, vaultAndRacketsLocked, onCollect, onCollectAll, collectAllLoading, readyCount,
+  onUpgrade, onUnlock, onOpenDefence, armory, offenceWeight, armoryBusy, onBuyOffence, event, eventsEnabled,
+}) => {
+  const maxLevel = config?.racket_max_level ?? 15;
   const showDebugReadout = (rackets || []).some((r) => r.debug_last_collected_at || r.debug_next_collect_at);
   const list = rackets || [];
   const allUnlocked = list.length > 0 && list.every((r) => (r.level || 0) > 0);
   const allMaxed = list.length > 0 && list.every((r) => (r.level || 0) >= maxLevel);
+  const tillAtRiskTotal = sumTillAtRisk(list);
 
   const effectiveCanUpgrade = canUpgrade && !vaultAndRacketsLocked;
   const effectiveCanCollect = !vaultAndRacketsLocked;
   return (
-    <div className="space-y-2">
+    <div className="space-y-2 pb-16 sm:pb-0">
       {vaultAndRacketsLocked && (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-[10px] text-amber-200/90 font-heading">
           Vault and rackets are locked until the family war is over.
         </div>
       )}
-      {/* Event Banner + Collect all */}
+      {tillAtRiskTotal > 0 && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/8 px-3 py-2 flex items-center justify-between gap-2">
+          <span className="text-[10px] text-amber-200/90 font-heading">Uncollected till exposed to raids</span>
+          <span className="text-sm font-heading font-bold text-amber-300 tabular-nums">{formatMoney(tillAtRiskTotal)}</span>
+        </div>
+      )}
+      <CrewArmorySection
+        armory={armory}
+        offenceWeight={offenceWeight}
+        canBuy={effectiveCanUpgrade}
+        vaultLocked={vaultAndRacketsLocked}
+        busy={armoryBusy}
+        onBuyOffence={onBuyOffence}
+      />
       <div className="flex flex-wrap items-center justify-between gap-2">
         {eventsEnabled && event && (event.racket_payout !== 1 || event.racket_cooldown !== 1) && event.name && (
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[10px] border border-primary/30 bg-primary/5">
@@ -772,7 +1076,7 @@ const RacketsTab = ({ rackets, config, canUpgrade, vaultAndRacketsLocked, onColl
             type="button"
             onClick={onCollectAll}
             disabled={collectAllLoading}
-            className="text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/40 hover:bg-primary/10 rounded px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation flex items-center gap-1.5 shrink-0"
+            className="hidden sm:flex text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/40 hover:bg-primary/10 rounded px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation items-center gap-1.5 shrink-0"
           >
             <DollarSign size={12} />
             {collectAllLoading ? '...' : `Collect all (${readyCount})`}
@@ -780,14 +1084,23 @@ const RacketsTab = ({ rackets, config, canUpgrade, vaultAndRacketsLocked, onColl
         )}
       </div>
 
-      {/* Racket Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {rackets.map((r) => (
-          <RacketCard key={r.id} racket={r} maxLevel={maxLevel} canUpgrade={effectiveCanUpgrade} canCollect={effectiveCanCollect} onCollect={onCollect} onUpgrade={onUpgrade} onUnlock={onUnlock} showDebugReadout={showDebugReadout} />
+          <RacketCard
+            key={r.id}
+            racket={r}
+            maxLevel={maxLevel}
+            canUpgrade={effectiveCanUpgrade}
+            canCollect={effectiveCanCollect}
+            onCollect={onCollect}
+            onUpgrade={onUpgrade}
+            onUnlock={onUnlock}
+            onOpenDefence={onOpenDefence}
+            showDebugReadout={showDebugReadout}
+          />
         ))}
       </div>
 
-      {/* Footer: reference costs while progression remains; no misleading prices when fully maxed */}
       <div className="flex items-center justify-between text-[10px] text-zinc-500 px-1 pt-2 border-t border-zinc-700/30">
         {config?.racket_unlock_cost != null && config?.racket_unlock_cost !== '' && (
           <span className={`flex items-center gap-1 ${allUnlocked ? 'text-emerald-500/90' : ''}`}>
@@ -802,6 +1115,20 @@ const RacketsTab = ({ rackets, config, canUpgrade, vaultAndRacketsLocked, onColl
           </span>
         )}
       </div>
+
+      {readyCount > 0 && effectiveCanCollect && (
+        <div className="sm:hidden fixed bottom-0 left-0 right-0 z-40 p-3 border-t border-emerald-500/30 bg-zinc-950/95 backdrop-blur-md">
+          <button
+            type="button"
+            onClick={onCollectAll}
+            disabled={collectAllLoading}
+            className="w-full min-h-[48px] rounded-lg text-[11px] font-heading font-bold uppercase tracking-wider bg-emerald-600/30 border border-emerald-500/50 text-emerald-300 hover:bg-emerald-600/40 disabled:opacity-50 touch-manipulation flex items-center justify-center gap-2"
+          >
+            <DollarSign size={14} />
+            {collectAllLoading ? 'Collecting…' : `Collect all (${readyCount})`}
+          </button>
+        </div>
+      )}
     </div>
   );
 };
@@ -810,13 +1137,15 @@ const RacketsTab = ({ rackets, config, canUpgrade, vaultAndRacketsLocked, onColl
 // RAID TAB — war room / corkboard aesthetic
 // ============================================================================
 
-const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
+const RaidTab = ({ targets, loading, offenceWeight, onRaid, onRefresh, refreshing }) => (
   <div className="space-y-2">
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="text-[10px] text-zinc-500 font-heading italic leading-relaxed">Hit their rackets, take 25% of the take. Two hits per rival family every 3 hours.</p>
+    <div className="flex items-center justify-between gap-2">
+      <div className="min-w-0">
+        <p className="text-[10px] text-zinc-500 font-heading italic leading-relaxed">
+          Steal uncollected till (~40% when ready). Crew offence {offenceWeight || 0} boosts success and take. Two hits per rival every 3 hours.
+        </p>
       </div>
-      <button onClick={onRefresh} disabled={refreshing} className="text-primary hover:opacity-80 p-2 rounded-md hover:bg-primary/10 transition-all shrink-0 ml-2">
+      <button onClick={onRefresh} disabled={refreshing} className="text-primary hover:opacity-80 p-2 rounded-md hover:bg-primary/10 transition-all shrink-0 min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation">
         <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
       </button>
     </div>
@@ -828,7 +1157,7 @@ const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
         <p className="text-[9px] text-zinc-600 font-heading mt-1 italic">The streets are quiet... for now</p>
       </div>
     ) : (
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-80 overflow-y-auto pr-1">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-[28rem] overflow-y-auto pr-1">
         {targets.map((t, idx) => {
           const raidsLeft = t.raids_remaining ?? 2;
           const canRaid = raidsLeft > 0;
@@ -852,28 +1181,37 @@ const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
                 </div>
               )}
               <div className="p-2 space-y-1">
-                {(t.rackets || []).slice(0, 3).map((r) => {
+                {(t.rackets || []).map((r) => {
                   const key = `${t.family_id}-${r.racket_id}`;
                   const isLoading = loading === key;
+                  const noTill = !(r.till_at_risk > 0);
                   return (
-                    <div key={key} className="flex items-center justify-between text-[11px] px-2 py-1.5 bg-zinc-900/50 rounded-md hover:bg-zinc-900/70 transition-colors">
+                    <div key={key} className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 text-[11px] px-2 py-2 bg-zinc-900/50 rounded-md hover:bg-zinc-900/70 transition-colors">
                       <div className="min-w-0">
-                        <span className="text-foreground">{r.racket_name}</span>
-                        <span className="text-zinc-500 ml-1 text-[10px]">L{r.level}</span>
+                        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                          <span className="text-foreground font-heading font-bold">{r.racket_name}</span>
+                          <span className="text-zinc-500 text-[10px]">L{r.level}</span>
+                          {r.defence_weight > 0 && (
+                            <span className="text-[9px] text-blue-300/90 flex items-center gap-0.5"><Shield size={9} />{r.defence_weight}</span>
+                          )}
+                        </div>
+                        <div className="text-[9px] text-zinc-500 font-heading mt-0.5 flex flex-wrap gap-x-2">
+                          <span>Till {formatMoney(r.till_at_risk || 0)}</span>
+                          <span className="text-red-300/90">{r.success_chance_pct ?? '?'}% hit</span>
+                          <span className="text-primary/80">Take ~{formatMoney(r.potential_take || 0)}</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-primary font-heading font-bold">{formatMoney(r.potential_take)}</span>
-                        <button 
-                          type="button"
-                          onClick={() => onRaid(t.family_id, r.racket_id)} 
-                          disabled={isLoading || !canRaid}
-                          className={`px-2.5 py-1.5 min-h-[36px] sm:min-h-0 rounded-md text-[9px] font-bold uppercase tracking-wider transition-all touch-manipulation ${
-                            canRaid ? 'bg-red-600/80 text-white hover:bg-red-500 hover:shadow-md hover:shadow-red-900/30' : 'bg-zinc-700 text-zinc-500'
-                          } disabled:opacity-40`}
-                        >
-                          {isLoading ? '...' : 'Hit'}
-                        </button>
-                      </div>
+                      <button 
+                        type="button"
+                        onClick={() => onRaid(t.family_id, r.racket_id)} 
+                        disabled={isLoading || !canRaid || noTill}
+                        title={noTill ? 'No till to steal' : undefined}
+                        className={`px-3 py-2 min-h-[44px] sm:min-h-[36px] rounded-md text-[9px] font-bold uppercase tracking-wider transition-all touch-manipulation shrink-0 ${
+                          canRaid && !noTill ? 'bg-red-600/80 text-white hover:bg-red-500 hover:shadow-md hover:shadow-red-900/30' : 'bg-zinc-700 text-zinc-500'
+                        } disabled:opacity-40`}
+                      >
+                        {isLoading ? '...' : noTill ? 'Dry' : 'Hit'}
+                      </button>
                     </div>
                   );
                 })}
@@ -2827,6 +3165,9 @@ export default function FamilyPage() {
   const [relinquishHoSLoading, setRelinquishHoSLoading] = useState(false);
   const [vaultTransactions, setVaultTransactions] = useState(() => getFamiliesPrefetch()?.vaultTransactions ?? []);
   const [vaultTxTotal, setVaultTxTotal] = useState(() => getFamiliesPrefetch()?.vaultTxTotal ?? 0);
+  const [armoryCatalog, setArmoryCatalog] = useState(null);
+  const [defenceSheetRacket, setDefenceSheetRacket] = useState(null);
+  const [armoryBusy, setArmoryBusy] = useState(null);
   /** False until we have a /families/my-shaped payload (prefetch or first fetch). Avoids one frame of join/create UI while myFamily is still null. */
   const [familyMembershipResolved, setFamilyMembershipResolved] = useState(() => getFamiliesPrefetch()?.myFamily != null);
 
@@ -2845,6 +3186,19 @@ export default function FamilyPage() {
 
   const readyRackets = rackets.filter((r) => r.level > 0 && isRacketReadyAt(r.next_collect_at)).length;
   const unlockedRackets = rackets.filter(r => r.level > 0).length;
+  const tillAtRiskTotal = sumTillAtRisk(rackets);
+  const offenceWeight = Number(myFamily?.racket_offence_weight ?? armoryCatalog?.offence_weight ?? 0);
+  const raidOffenceWeight = racketAttackTargets[0]?.offence_weight ?? offenceWeight;
+
+  const fetchArmoryCatalog = useCallback(async () => {
+    if (!myFamily?.family) return;
+    try {
+      const res = await apiRequestWith429Retry(() => api.get('/families/rackets/armory-catalog'));
+      setArmoryCatalog(res.data || null);
+    } catch {
+      setArmoryCatalog(null);
+    }
+  }, [myFamily?.family]);
 
   const fetchVaultTransactions = useCallback(async () => {
     if (!myFamily?.family) return;
@@ -3175,11 +3529,37 @@ export default function FamilyPage() {
   };
   const upgradeRacket = async (id) => { try { const res = await api.post(`/families/rackets/${id}/upgrade`); toast.success(res.data?.message || 'Upgraded'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const unlockRacket = async (id) => { try { const res = await api.post(`/families/rackets/${id}/unlock`); toast.success(res.data?.message || 'Unlocked'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
+  const buyRacketDefence = async (racketId, upgradeId) => {
+    setArmoryBusy(upgradeId);
+    try {
+      const res = await api.post(`/families/rackets/${racketId}/buy-defence`, { upgrade_id: upgradeId });
+      toast.success(res.data?.message || 'Defence purchased');
+      await fetchData();
+      await fetchArmoryCatalog();
+    } catch (e) { toast.error(apiDetail(e)); }
+    finally { setArmoryBusy(null); }
+  };
+  const buyRacketOffence = async (upgradeId) => {
+    setArmoryBusy(upgradeId);
+    try {
+      const res = await api.post('/families/rackets/buy-offence', { upgrade_id: upgradeId });
+      toast.success(res.data?.message || 'Offence purchased');
+      await fetchData();
+      await fetchArmoryCatalog();
+    } catch (e) { toast.error(apiDetail(e)); }
+    finally { setArmoryBusy(null); }
+  };
   const attackFamilyRacket = async (familyId, racketId) => {
     setRacketAttackLoading(`${familyId}-${racketId}`);
     try {
       const res = await api.post('/families/attack-racket', { family_id: familyId, racket_id: racketId });
-      res.data?.success ? toast.success(res.data?.message || 'Success!') : toast.error(res.data?.message || 'Failed');
+      if (res.data?.success) {
+        let msg = res.data?.message || 'Raid successful!';
+        if (res.data?.defence_destroyed) msg = `${msg} Broke their ${res.data.defence_destroyed}.`;
+        toast.success(msg);
+      } else {
+        toast.error(res.data?.message || 'Raid failed');
+      }
       fetchRacketAttackTargets(); fetchData();
     } catch (e) { toast.error(apiDetail(e)); }
     finally { setRacketAttackLoading(null); }
@@ -3252,6 +3632,9 @@ export default function FamilyPage() {
     if (activeTab === 'raid' && myFamily?.family) fetchRacketAttackTargets();
   }, [activeTab, myFamily?.family, fetchRacketAttackTargets]);
   useEffect(() => {
+    if ((activeTab === 'rackets' || defenceSheetRacket) && myFamily?.family) fetchArmoryCatalog();
+  }, [activeTab, defenceSheetRacket, myFamily?.family, fetchArmoryCatalog]);
+  useEffect(() => {
     if (showWarModal && myFamily?.family) {
       apiRequestWith429Retry(() => api.get('/families/war/stats')).then((res) => {
         setWarStats(res.data);
@@ -3262,7 +3645,7 @@ export default function FamilyPage() {
   }, [showWarModal, myFamily?.family]);
 
   return (
-    <div className={`space-y-2 sm:space-y-3 ${styles.pageContent} mobile-page-root px-3 sm:px-4 pb-6`} data-testid="families-page">
+    <div className={`space-y-2 sm:space-y-3 ${styles.pageContent} mobile-page-root px-3 sm:px-4 pb-6 fam-page-safe-bottom`} data-testid="families-page">
       <style>{`
         @keyframes ready-pulse {
           0%, 100% { box-shadow: 0 0 0 0 rgba(var(--noir-primary-rgb), 0); }
@@ -3301,6 +3684,16 @@ export default function FamilyPage() {
         .fam-vault-bg {
           background: radial-gradient(ellipse at center, rgba(var(--noir-primary-rgb), 0.08) 0%, transparent 70%);
         }
+        .fam-page-safe-bottom { padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px)); }
+        @media (max-width: 639px) {
+          .fam-page-safe-bottom { padding-bottom: max(5.5rem, calc(env(safe-area-inset-bottom, 0px) + 4.5rem)); }
+        }
+        @media (hover: none) {
+          .fam-stat-card:hover, .fam-racket-card:hover, .fam-target-card:hover, .fam-member-row:hover {
+            transform: none;
+            box-shadow: none;
+          }
+        }
       `}</style>
 
       {/* ── Family HQ Header ── */}
@@ -3310,31 +3703,31 @@ export default function FamilyPage() {
         </>}
 
         <div className={`${family ? 'px-3 py-3 sm:px-4 sm:py-4' : 'px-2 sm:px-0'}`}>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
               {family ? (
                 <div className="flex items-start gap-3">
-                  <FamilyEmblem emblemPresetId={family.emblem_preset_id} avatarUrl={family.avatar_url} size={46} className="mt-0.5 shrink-0" />
+                  <FamilyEmblem emblemPresetId={family.emblem_preset_id} avatarUrl={family.avatar_url} size={48} className="mt-0.5 shrink-0 ring-2 ring-primary/20 rounded-full" />
                   <div className="min-w-0">
-                  <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">La Cosa Nostra</p>
-                  <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary flex flex-wrap items-center gap-2 tracking-wider uppercase">
-                    {family.name}
-                    <span className="text-sm text-primary/40 font-mono font-normal">[{family.tag}]</span>
-                  </h1>
+                    <p className="text-[8px] sm:text-[9px] text-primary/40 font-heading uppercase tracking-[0.25em] mb-0.5">La Cosa Nostra</p>
+                    <h1 className="text-lg sm:text-2xl font-heading font-bold text-primary tracking-wide uppercase leading-tight">
+                      <span className="block truncate">{family.name}</span>
+                      <span className="text-xs sm:text-sm text-primary/45 font-mono font-normal normal-case tracking-normal">[{family.tag}]</span>
+                    </h1>
                   </div>
                 </div>
               ) : null}
               {family && (
-                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                <div className="flex items-center gap-1.5 mt-2 flex-wrap pl-0 sm:pl-[60px]">
                   <RoleBadge role={myRole} size="lg" />
                   {family.head_of_state && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[9px] font-heading font-bold bg-primary/15 text-primary border border-primary/30">
-                      <MapPin size={9} /> Head of {family.head_of_state}
+                    <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-heading font-bold bg-primary/12 text-primary border border-primary/25 max-w-full truncate">
+                      <MapPin size={9} className="shrink-0" /> Head of {family.head_of_state}
                     </span>
                   )}
                   {activeWars.length > 0 && (
-                    <button onClick={() => { setSelectedWarIndex(0); setShowWarModal(true); }}
-                      className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold bg-red-500/15 border border-red-500/30 text-red-400 animate-pulse hover:bg-red-500/25 transition-all">
+                    <button type="button" onClick={() => { setSelectedWarIndex(0); setShowWarModal(true); }}
+                      className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold bg-red-500/15 border border-red-500/30 text-red-400 animate-pulse hover:bg-red-500/25 transition-all min-h-[32px] touch-manipulation">
                       <Swords size={11} /> At War ({activeWars.length})
                     </button>
                   )}
@@ -3342,8 +3735,8 @@ export default function FamilyPage() {
               )}
             </div>
             {family && (
-              <button onClick={handleLeave} className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-red-400 px-2 py-1 rounded-md hover:bg-red-500/10 transition-all">
-                <LogOut size={11} /> Leave
+              <button type="button" onClick={handleLeave} className="flex items-center gap-1 text-[10px] text-zinc-500 hover:text-red-400 px-2.5 py-2 rounded-lg hover:bg-red-500/10 transition-all min-h-[44px] touch-manipulation shrink-0 border border-transparent hover:border-red-500/20">
+                <LogOut size={12} /> <span className="hidden sm:inline">Leave</span>
               </button>
             )}
           </div>
@@ -3355,90 +3748,49 @@ export default function FamilyPage() {
       {family ? (
         <>
           {/* ── Stats Row ── */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
             <StatCard
               label="The Vault"
               value={formatMoney(family.treasury)}
               sub={`${(Number(family.treasury_bullets) || 0).toLocaleString()} bullets`}
-              icon={<DollarSign size={10} />}
+              icon={<DollarSign size={11} />}
               accent="text-primary"
               delay={0}
             />
-            <StatCard label="Made Men" value={`${members.length}${fallen.length > 0 ? ` (+${fallen.length}†)` : ''}`} icon={<Users size={10} />} delay={0.05} />
-            <StatCard label="Rackets" value={`${unlockedRackets}/${rackets.length}`} icon={<TrendingUp size={10} />} delay={0.1} />
-            <StatCard label="Ready" value={readyRackets} highlight={readyRackets > 0} icon={<Clock size={10} />} delay={0.15} />
+            <StatCard
+              label="Made Men"
+              value={members.length}
+              sub={fallen.length > 0 ? `+${fallen.length} fallen` : `${unlockedRackets} rackets live`}
+              icon={<Users size={11} />}
+              delay={0.05}
+            />
+            <StatCard
+              label="Rackets"
+              value={`${unlockedRackets}/${rackets.length}`}
+              sub={readyRackets > 0 ? `${readyRackets} ready to collect` : 'On cooldown'}
+              highlight={readyRackets > 0}
+              icon={<TrendingUp size={11} />}
+              delay={0.1}
+            />
+            <StatCard
+              label={tillAtRiskTotal > 0 ? 'Till at risk' : 'Ready'}
+              value={tillAtRiskTotal > 0 ? formatMoney(tillAtRiskTotal) : readyRackets}
+              sub={tillAtRiskTotal > 0 ? 'Uncollected — raidable' : readyRackets > 0 ? 'Tap Collect on rackets' : 'Nothing to collect'}
+              warn={tillAtRiskTotal > 0}
+              highlight={tillAtRiskTotal <= 0 && readyRackets > 0}
+              icon={tillAtRiskTotal > 0 ? <Shield size={11} /> : <Clock size={11} />}
+              delay={0.15}
+            />
           </div>
 
-          {(() => {
-            const ph = family.property_holdings ?? { airports: [], armouries: [], casinos: [] };
-            const cb = family.crew_bonuses ?? { summary_lines: [], bonus_warnings: [], treasury_bullets_hourly: { active: false }, airport_crew_perk: { active: false } };
-            const n = (ph.airports?.length || 0) + (ph.armouries?.length || 0) + (ph.casinos?.length || 0);
-            const perkRows = territoryFamilyPerkRows(family.family_perks);
-            const perkN = perkRows.length;
-            return (
-              <div className="rounded-lg border border-primary/15 bg-zinc-900/40 px-3 py-2.5 space-y-2">
-                <div className="flex items-center gap-2 text-[9px] font-heading font-bold uppercase tracking-wider text-primary/70">
-                  <Building2 size={11} className="text-primary/60 shrink-0" />
-                  Territory and perks
-                  {(n > 0 || perkN > 0) && (
-                    <span className="text-zinc-500 font-normal normal-case ml-auto flex flex-wrap gap-x-2 justify-end max-w-[70%]">
-                      {n > 0 && <span>{n} crew holding{n !== 1 ? 's' : ''}</span>}
-                      {perkN > 0 && <span>{perkN} monthly perk{perkN !== 1 ? 's' : ''}</span>}
-                    </span>
-                  )}
-                </div>
-                <p className="text-[8px] text-zinc-600 leading-snug border-b border-primary/5 pb-2">
-                  Each member may hold <span className="text-zinc-400 font-heading font-bold">one</span> airport and <span className="text-zinc-400 font-heading font-bold">one</span> armoury. Hourly drip bullets stack when high command holds both for <span className="text-zinc-500">this family</span> (airport + armoury) and credit the <span className="text-amber-400/90 font-heading">bullet treasury</span> on the Vault tab—not vault cash. Casinos are separate.
-                </p>
-                {n > 0 ? (
-                  <ul className="text-[10px] text-zinc-400 space-y-0.5 max-h-28 overflow-y-auto">
-                    {(ph.airports || []).map((a, i) => (
-                      <li key={`a-${i}`}><span className="text-primary/80 font-heading">Airport</span> {a.state}{a.slot != null ? ` #${a.slot}` : ''} <span className="text-zinc-600">— {a.owner_username}</span></li>
-                    ))}
-                    {(ph.armouries || []).map((a, i) => (
-                      <li key={`m-${i}`}><span className="text-primary/80 font-heading">Armoury</span> {a.state} <span className="text-zinc-600">— {a.owner_username}</span></li>
-                    ))}
-                    {(ph.casinos || []).map((c, i) => (
-                      <li key={`c-${i}`}><span className="text-primary/80 font-heading">{c.game}</span> {c.city} <span className="text-zinc-600">— {c.owner_username}</span></li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="text-[9px] text-zinc-600">No crew-owned airports, armouries, or casinos yet.</p>
-                )}
-                {perkRows.length > 0 ? (
-                  <div className="pt-1 border-t border-primary/10 space-y-1">
-                    <p className="text-[9px] font-heading uppercase tracking-wider text-primary/80 flex items-center gap-1">
-                      <Sparkles size={9} /> Monthly perks (Don / points)
-                    </p>
-                    <ul className="text-[9px] text-zinc-400 space-y-0.5">
-                      {perkRows.map((p) => (
-                        <li key={p.id} className="flex flex-wrap gap-x-2 gap-y-0.5 justify-between items-baseline">
-                          <span className="text-emerald-400/95 font-heading">{p.title}</span>
-                          <span className="text-zinc-600 tabular-nums shrink-0">until {formatTerritoryPerkUntil(p.valid_until)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    <p className="text-[8px] text-zinc-600 leading-snug">
-                      Purchased with points by the Don; expires end of UTC month. Full catalog under the <span className="text-zinc-500 font-heading">Perks</span> tab.
-                    </p>
-                  </div>
-                ) : null}
-                {(cb.summary_lines || []).length > 0 || (cb.bonus_warnings || []).length > 0 ? (
-                  <div className="pt-1 border-t border-primary/10 space-y-0.5">
-                    <p className="text-[9px] font-heading uppercase tracking-wider text-zinc-500 flex items-center gap-1"><Sparkles size={9} /> Bonuses</p>
-                    {(cb.bonus_warnings || []).map((line, i) => (
-                      <p key={`w-${i}`} className="text-[9px] text-amber-300/95 leading-snug pl-2 border-l border-amber-500/40 font-heading">{line}</p>
-                    ))}
-                    {(cb.summary_lines || []).map((line, i) => (
-                      <p key={i} className="text-[9px] text-emerald-400/90 leading-snug pl-2 border-l border-emerald-500/30">{line}</p>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-[9px] text-zinc-600 pt-1 border-t border-primary/10 flex items-start gap-1 leading-snug"><Plane size={10} className="shrink-0 mt-0.5 opacity-50" /> No active vault or airport crew bonuses right now. Hourly vault bullets apply per source when high command owns this family&apos;s airport and/or armoury (both stack for the crew). The Don can pick an airport crew perk when high command holds an airport.</p>
-                )}
-              </div>
-            );
-          })()}
+          <MobileQuickNav
+            readyRackets={readyRackets}
+            tillAtRisk={tillAtRiskTotal}
+            activeWarsCount={activeWars.length}
+            onGo={setActiveTab}
+          />
+
+          <TerritoryPerksPanel family={family} />
 
           {/* ── State Takeover Offer Banner ── */}
           {family?.pending_state_takeover && canManage && (
@@ -3494,9 +3846,9 @@ export default function FamilyPage() {
           )}
 
           {/* ── Tabbed Content ── */}
-          <div className={`${styles.panel} rounded-xl overflow-hidden mobile-panel`}>
-            {/* Tab bar — scrollable on mobile */}
-            <div className="flex overflow-x-auto overflow-y-hidden scrollbar-hide scroll-smooth border-b border-zinc-700/40 bg-zinc-900/70 snap-x snap-mandatory">
+          <div className={`${styles.panel} rounded-xl overflow-hidden mobile-panel shadow-lg shadow-black/20`}>
+            <div className="sticky top-0 z-20 border-b border-zinc-700/40 bg-zinc-950/95 backdrop-blur-md">
+              <div className="flex overflow-x-auto overflow-y-hidden scrollbar-hide scroll-smooth px-1 sm:px-0 snap-x snap-mandatory sm:border-0">
               <Tab active={activeTab === 'rackets'} onClick={() => setActiveTab('rackets')} icon={<TrendingUp size={10} />}>Rackets</Tab>
               <Tab active={activeTab === 'raid'} onClick={() => setActiveTab('raid')} icon={<Swords size={10} />}>Hit Jobs</Tab>
               <Tab
@@ -3522,11 +3874,32 @@ export default function FamilyPage() {
                 Families
               </Tab>
               <Tab active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<Trophy size={10} />}>Vendettas</Tab>
+              </div>
             </div>
 
             {/* Tab content */}
-            <div className="p-3 sm:p-4">
-              {activeTab === 'rackets' && <RacketsTab rackets={rackets} config={config} canUpgrade={canUpgradeRacket} vaultAndRacketsLocked={vaultAndRacketsLocked} onCollect={collectRacket} onCollectAll={collectAllRackets} collectAllLoading={collectAllRacketsLoading} readyCount={readyRackets} onUpgrade={upgradeRacket} onUnlock={unlockRacket} event={event} eventsEnabled={eventsEnabled} />}
+            <div className="p-3 sm:p-5 min-h-[280px]">
+              {activeTab === 'rackets' && (
+                <RacketsTab
+                  rackets={rackets}
+                  config={config}
+                  canUpgrade={canUpgradeRacket}
+                  vaultAndRacketsLocked={vaultAndRacketsLocked}
+                  onCollect={collectRacket}
+                  onCollectAll={collectAllRackets}
+                  collectAllLoading={collectAllRacketsLoading}
+                  readyCount={readyRackets}
+                  onUpgrade={upgradeRacket}
+                  onUnlock={unlockRacket}
+                  onOpenDefence={setDefenceSheetRacket}
+                  armory={armoryCatalog}
+                  offenceWeight={offenceWeight}
+                  armoryBusy={armoryBusy}
+                  onBuyOffence={buyRacketOffence}
+                  event={event}
+                  eventsEnabled={eventsEnabled}
+                />
+              )}
               {activeTab === 'crewoc' && (
                 <CrewOCTab
                   family={family} myRole={myRole}
@@ -3545,8 +3918,14 @@ export default function FamilyPage() {
                 />
               )}
               {activeTab === 'raid' && (
-                <RaidTab targets={racketAttackTargets} loading={racketAttackLoading}
-                  onRaid={attackFamilyRacket} onRefresh={fetchRacketAttackTargets} refreshing={targetsRefreshing} />
+                <RaidTab
+                  targets={racketAttackTargets}
+                  loading={racketAttackLoading}
+                  offenceWeight={raidOffenceWeight}
+                  onRaid={attackFamilyRacket}
+                  onRefresh={fetchRacketAttackTargets}
+                  refreshing={targetsRefreshing}
+                />
               )}
               {activeTab === 'perks' && (
                 <FamilyPerksTab myRole={myRole} vaultAndRacketsLocked={vaultAndRacketsLocked} onRefresh={fetchData} />
@@ -3680,6 +4059,19 @@ export default function FamilyPage() {
           setCreateEmblemPreset={setCreateEmblemPreset}
           createEmblemDataUrl={createEmblemDataUrl}
           setCreateEmblemDataUrl={setCreateEmblemDataUrl}
+        />
+      )}
+
+      {/* Racket defence sheet */}
+      {defenceSheetRacket && (
+        <RacketDefenceSheet
+          racket={rackets.find((r) => r.id === defenceSheetRacket.id) || defenceSheetRacket}
+          armory={armoryCatalog}
+          canBuy={canUpgradeRacket}
+          vaultLocked={vaultAndRacketsLocked}
+          busy={armoryBusy}
+          onClose={() => setDefenceSheetRacket(null)}
+          onBuyDefence={buyRacketDefence}
         />
       )}
 

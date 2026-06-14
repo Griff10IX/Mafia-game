@@ -19777,6 +19777,40 @@ def register(router):
             "racket_name": racket_name,
         }
 
+    @router.post("/admin/rackets/reset-armory")
+    async def admin_reset_racket_armory(
+        family_id: str,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Clear all family racket defence and crew offence upgrades. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from routers.game.families import FAMILY_RACKETS, _invalidate_list_cache
+        fam = await db.families.find_one({"id": family_id}, {"_id": 0, "name": 1, "rackets": 1})
+        if not fam:
+            raise HTTPException(status_code=404, detail="Family not found")
+        rackets = (fam.get("rackets") or {}).copy()
+        cleared_defence = 0
+        for rid in [r["id"] for r in FAMILY_RACKETS]:
+            state = rackets.get(rid) or {}
+            owned = list(state.get("defence_upgrades") or [])
+            if owned:
+                cleared_defence += len(owned)
+                state = {**state, "defence_upgrades": []}
+                rackets[rid] = state
+        await db.families.update_one(
+            {"id": family_id},
+            {"$set": {"rackets": rackets, "racket_offence_upgrades": []}},
+        )
+        _invalidate_list_cache()
+        return {
+            "message": f"Cleared racket armory for {(fam.get('name') or family_id)}.",
+            "family_id": family_id,
+            "family_name": fam.get("name"),
+            "defence_upgrades_cleared": cleared_defence,
+            "offence_upgrades_cleared": True,
+        }
+
     # ─────────────────────────────────────────────────────────────────────────────
     # Mini Games Weekly Leaderboard Admin
     # ─────────────────────────────────────────────────────────────────────────────

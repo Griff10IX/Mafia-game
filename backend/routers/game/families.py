@@ -191,12 +191,45 @@ RACKET_MAX_LEVEL = 15
 # One daily treasury bullet payout per racket, paid on first collect of the UTC day.
 # With all rackets maxed, this is roughly ~100 bullets/day total.
 RACKET_DAILY_BULLETS_PER_LEVEL = 0.75
+FAMILY_RACKET_BASE_INCOME_MULT = 1.5
 FAMILY_RACKET_ATTACK_BASE_SUCCESS = 0.70
 FAMILY_RACKET_ATTACK_LEVEL_PENALTY = 0.10
 FAMILY_RACKET_ATTACK_MIN_SUCCESS = 0.10
-FAMILY_RACKET_ATTACK_REVENUE_PCT = 0.25
+FAMILY_RACKET_ATTACK_MAX_SUCCESS = 0.90
+FAMILY_RACKET_ATTACK_REVENUE_PCT = 0.25  # legacy; raids use till theft
+FAMILY_RACKET_ATTACK_TILL_TAKE_PCT = 0.40
+FAMILY_RACKET_OFFENCE_SUCCESS_PER_POINT = 0.02
+FAMILY_RACKET_DEFENCE_SUCCESS_PER_POINT = 0.02
+FAMILY_RACKET_OFFENCE_TAKE_BONUS_PER_POINT = 0.01
 FAMILY_RACKET_ATTACK_MAX_PER_CREW = 2
 FAMILY_RACKET_ATTACK_CREW_WINDOW_HOURS = 3
+
+FAMILY_RACKET_DEFENCE_UPGRADES = [
+    {"id": "reinforced_door", "name": "Reinforced door", "cost": 50_000, "defence_weight": 8},
+    {"id": "lookout", "name": "Lookout", "cost": 75_000, "defence_weight": 10},
+    {"id": "bouncers", "name": "Bouncers", "cost": 100_000, "defence_weight": 12},
+    {"id": "alarm_wire", "name": "Alarm wire", "cost": 125_000, "defence_weight": 9},
+    {"id": "thompson", "name": "Thompson crew", "cost": 175_000, "defence_weight": 14},
+    {"id": "guard_dog", "name": "Guard dog", "cost": 200_000, "defence_weight": 11},
+    {"id": "safe_room", "name": "Safe room", "cost": 275_000, "defence_weight": 16},
+    {"id": "bribed_cop", "name": "Bribed beat cop", "cost": 350_000, "defence_weight": 13},
+    {"id": "iron_bars", "name": "Iron bars", "cost": 425_000, "defence_weight": 10},
+    {"id": "vault_safe", "name": "Vault / safe", "cost": 500_000, "defence_weight": 18},
+]
+FAMILY_RACKET_OFFENCE_UPGRADES = [
+    {"id": "crew_driver", "name": "Getaway driver", "cost": 100_000, "offence_weight": 8},
+    {"id": "inside_man", "name": "Inside man", "cost": 150_000, "offence_weight": 10},
+    {"id": "muscle", "name": "Muscle squad", "cost": 200_000, "offence_weight": 12},
+    {"id": "sawed_off", "name": "Sawed-off crew", "cost": 275_000, "offence_weight": 11},
+    {"id": "tommy_crew", "name": "Tommy gunners", "cost": 350_000, "offence_weight": 14},
+    {"id": "wire_taps", "name": "Wire taps", "cost": 425_000, "offence_weight": 9},
+    {"id": "safe_cracker", "name": "Safe cracker", "cost": 500_000, "offence_weight": 13},
+    {"id": "wheelman", "name": "Wheelman network", "cost": 575_000, "offence_weight": 10},
+    {"id": "enforcer", "name": "Head enforcer", "cost": 650_000, "offence_weight": 15},
+    {"id": "war_council", "name": "War council", "cost": 750_000, "offence_weight": 16},
+]
+_FAMILY_RACKET_DEFENCE_BY_ID = {x["id"]: x for x in FAMILY_RACKET_DEFENCE_UPGRADES}
+_FAMILY_RACKET_OFFENCE_BY_ID = {x["id"]: x for x in FAMILY_RACKET_OFFENCE_UPGRADES}
 
 CREW_OC_COOLDOWN_HOURS = 8
 CREW_OC_COOLDOWN_HOURS_REDUCED = 6
@@ -455,6 +488,14 @@ class FamilyAttackRacketRequest(BaseModel):
     racket_id: str
 
 
+class FamilyRacketBuyDefenceRequest(BaseModel):
+    upgrade_id: str
+
+
+class FamilyRacketBuyOffenceRequest(BaseModel):
+    upgrade_id: str
+
+
 class FamilyCrewOCSetFeeRequest(BaseModel):
     fee: int
 
@@ -491,11 +532,71 @@ def _racket_income_and_cooldown(racket_id: str, level: int, ev: dict):
     r = next((x for x in FAMILY_RACKETS if x["id"] == racket_id), None)
     if not r or level <= 0:
         return 0, 0
-    base_income = r["base_income"] * level
+    base_income = r["base_income"] * level * FAMILY_RACKET_BASE_INCOME_MULT
     cooldown = r["cooldown_hours"]
     payout_mult = ev.get("racket_payout", 1.0)
     cooldown_mult = ev.get("racket_cooldown", 1.0)
     return int(base_income * payout_mult), cooldown * cooldown_mult
+
+
+def _racket_defence_weight(upgrade_ids: Optional[List[str]]) -> int:
+    total = 0
+    for uid in upgrade_ids or []:
+        row = _FAMILY_RACKET_DEFENCE_BY_ID.get(str(uid))
+        if row:
+            total += int(row.get("defence_weight") or 0)
+    return total
+
+
+def _racket_offence_weight(upgrade_ids: Optional[List[str]]) -> int:
+    total = 0
+    for uid in upgrade_ids or []:
+        row = _FAMILY_RACKET_OFFENCE_BY_ID.get(str(uid))
+        if row:
+            total += int(row.get("offence_weight") or 0)
+    return total
+
+
+def _compute_racket_raid_success(level: int, offence_weight: int, defence_weight: int) -> float:
+    base = FAMILY_RACKET_ATTACK_BASE_SUCCESS - level * FAMILY_RACKET_ATTACK_LEVEL_PENALTY
+    offence_bonus = offence_weight * FAMILY_RACKET_OFFENCE_SUCCESS_PER_POINT
+    defence_penalty = defence_weight * FAMILY_RACKET_DEFENCE_SUCCESS_PER_POINT
+    return max(
+        FAMILY_RACKET_ATTACK_MIN_SUCCESS,
+        min(FAMILY_RACKET_ATTACK_MAX_SUCCESS, base + offence_bonus - defence_penalty),
+    )
+
+
+def _compute_racket_raid_take_mult(offence_weight: int) -> float:
+    return 1.0 + offence_weight * FAMILY_RACKET_OFFENCE_TAKE_BONUS_PER_POINT
+
+
+async def _racket_effective_till_amount(
+    racket_id: str,
+    level: int,
+    last_collected_at: Optional[str],
+    ev: dict,
+    fam: dict,
+    family_id: str,
+    now=None,
+) -> int:
+    """Uncollected till including war-win and monthly perk bonuses (not founding-member mult)."""
+    if now is None:
+        now = datetime.now(timezone.utc)
+    war_sec = 0.0
+    if last_collected_at and family_id:
+        try:
+            last_dt = datetime.fromisoformat(str(last_collected_at).replace("Z", "+00:00"))
+            war_sec = await _family_war_duration_seconds(family_id, last_dt, now)
+        except Exception:
+            pass
+    base = _racket_available_income(racket_id, level, last_collected_at, ev, now=now, war_duration_seconds=war_sec)
+    if base <= 0:
+        return 0
+    bonus_pct = float((fam.get("racket_income_bonus_percent") or 0) or 0)
+    rpm = await family_perk_modifiers(db, family_id)
+    bonus_pct += float(rpm.get("racket_bonus_percent") or 0)
+    return int(base * (1 + bonus_pct / 100.0))
 
 
 # When a family wins a war (enemy wiped), winner gets this % extra on all racket income (passive, permanent stack).
@@ -1567,6 +1668,11 @@ async def families_my(current_user: dict = Depends(get_current_user)):
     rackets_raw = fam.get("rackets") or {}
     staff_debug = _is_admin(current_user)
     racket_bonus_pct = float((fam.get("racket_income_bonus_percent") or 0) or 0)
+    rpm = await family_perk_modifiers(db, family_id)
+    perk_racket_pct = float(rpm.get("racket_bonus_percent") or 0)
+    total_bonus_pct = racket_bonus_pct + perk_racket_pct
+    offence_upgrades = list(fam.get("racket_offence_upgrades") or [])
+    offence_weight = _racket_offence_weight(offence_upgrades)
     rackets = []
     now = datetime.now(timezone.utc)
     racket_ids_ordered = [x["id"] for x in FAMILY_RACKETS]
@@ -1587,7 +1693,13 @@ async def families_my(current_user: dict = Depends(get_current_user)):
                 can_unlock = True
             last_at = state.get("last_collected_at")
             income_per, cooldown_h = _racket_income_and_cooldown(rid, level, ev)
-            effective_income = int(income_per * (1 + racket_bonus_pct / 100.0))
+            effective_income = int(income_per * (1 + total_bonus_pct / 100.0))
+            till_available = 0
+            if level > 0:
+                till_available = await _racket_effective_till_amount(rid, level, last_at, ev, fam, family_id, now=now)
+            till_at_risk = till_available if till_available > 0 else 0
+            defence_upgrades = list(state.get("defence_upgrades") or [])
+            defence_weight = _racket_defence_weight(defence_upgrades)
             next_collect_at = None
             if last_at and level > 0 and cooldown_h > 0:
                 try:
@@ -1605,6 +1717,8 @@ async def families_my(current_user: dict = Depends(get_current_user)):
                 "unlock_cost": RACKET_UNLOCK_COST if locked else None,
                 "cooldown_hours": r["cooldown_hours"], "effective_cooldown_hours": cooldown_h,
                 "income_per_collect": income_per, "effective_income_per_collect": effective_income,
+                "till_available": till_available, "till_at_risk": till_at_risk,
+                "defence_upgrades": defence_upgrades, "defence_weight": defence_weight,
                 "next_collect_at": next_collect_at,
                 "debug_last_collected_at": last_at if staff_debug else None,
                 "debug_next_collect_at": next_collect_at if staff_debug else None,
@@ -1738,6 +1852,8 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "family_perks": clean_family_perks(fam.get("family_perks"), datetime.now(timezone.utc)),
         },
         "members": members, "fallen": fallen, "rackets": rackets, "my_role": my_role,
+        "racket_offence_upgrades": offence_upgrades,
+        "racket_offence_weight": offence_weight,
         "vault_and_rackets_locked": vault_and_rackets_locked,
         "qualifies_for_state_head": qualifies_for_state_head,
         "crew_oc_committer_has_timer": crew_oc_cd["actor_has_timer"],
@@ -4518,12 +4634,131 @@ async def families_racket_upgrade(racket_id: str, current_user: dict = Depends(g
     return {"message": f"Upgraded to level {level + 1}"}
 
 
+async def families_racket_armory_catalog(current_user: dict = Depends(get_current_user)):
+    family_id = current_user.get("family_id")
+    if not family_id:
+        return {"defence_catalog": FAMILY_RACKET_DEFENCE_UPGRADES, "offence_catalog": FAMILY_RACKET_OFFENCE_UPGRADES, "rackets": {}, "offence_upgrades": [], "offence_weight": 0}
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "rackets": 1, "racket_offence_upgrades": 1})
+    rackets_raw = (fam or {}).get("rackets") or {}
+    offence_upgrades = list((fam or {}).get("racket_offence_upgrades") or [])
+    racket_owned = {}
+    for rid in [x["id"] for x in FAMILY_RACKETS]:
+        state = rackets_raw.get(rid) or {}
+        owned = list(state.get("defence_upgrades") or [])
+        racket_owned[rid] = {
+            "defence_upgrades": owned,
+            "defence_weight": _racket_defence_weight(owned),
+            "level": int(state.get("level") or 0),
+        }
+    return {
+        "defence_catalog": FAMILY_RACKET_DEFENCE_UPGRADES,
+        "offence_catalog": FAMILY_RACKET_OFFENCE_UPGRADES,
+        "rackets": racket_owned,
+        "offence_upgrades": offence_upgrades,
+        "offence_weight": _racket_offence_weight(offence_upgrades),
+    }
+
+
+async def families_racket_buy_defence(racket_id: str, request: FamilyRacketBuyDefenceRequest, current_user: dict = Depends(get_current_user)):
+    if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
+        raise HTTPException(status_code=403, detail="Insufficient role")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    if await _family_in_active_war(family_id):
+        raise HTTPException(status_code=403, detail="Rackets are locked until the family war is over")
+    upgrade = _FAMILY_RACKET_DEFENCE_BY_ID.get(request.upgrade_id)
+    if not upgrade:
+        raise HTTPException(status_code=404, detail="Defence upgrade not found")
+    if racket_id not in [x["id"] for x in FAMILY_RACKETS]:
+        raise HTTPException(status_code=404, detail="Racket not found")
+    cost = int(upgrade.get("cost") or 0)
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "treasury": 1, "rackets": 1})
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    rackets = (fam.get("rackets") or {}).copy()
+    state = rackets.get(racket_id) or {}
+    level = int(state.get("level") or 0)
+    if level <= 0:
+        raise HTTPException(status_code=400, detail="Unlock this racket first")
+    owned = list(state.get("defence_upgrades") or [])
+    if request.upgrade_id in owned:
+        raise HTTPException(status_code=400, detail="Already owned")
+    treasury = int((fam.get("treasury") or 0) or 0)
+    if treasury < cost:
+        raise HTTPException(status_code=400, detail=f"Not enough treasury (need ${cost:,})")
+    owned.append(request.upgrade_id)
+    rackets[racket_id] = {**state, "defence_upgrades": owned}
+    result = await db.families.update_one(
+        {"id": family_id, "treasury": {"$gte": cost}},
+        {"$set": {"rackets": rackets}, "$inc": {"treasury": -cost}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Not enough treasury (balance may have changed)")
+    await log_family_vault_tx(
+        db,
+        family_id,
+        "racket_defence_buy",
+        current_user["id"],
+        current_user.get("username") or "?",
+        cash_delta=-cost,
+        meta={"racket_id": racket_id, "upgrade_id": request.upgrade_id, "upgrade_name": upgrade.get("name")},
+    )
+    _invalidate_my_cache(current_user["id"])
+    return {"message": f"Installed {upgrade.get('name')} on racket", "defence_weight": _racket_defence_weight(owned)}
+
+
+async def families_racket_buy_offence(request: FamilyRacketBuyOffenceRequest, current_user: dict = Depends(get_current_user)):
+    if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
+        raise HTTPException(status_code=403, detail="Insufficient role")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    if await _family_in_active_war(family_id):
+        raise HTTPException(status_code=403, detail="Rackets are locked until the family war is over")
+    upgrade = _FAMILY_RACKET_OFFENCE_BY_ID.get(request.upgrade_id)
+    if not upgrade:
+        raise HTTPException(status_code=404, detail="Offence upgrade not found")
+    cost = int(upgrade.get("cost") or 0)
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "treasury": 1, "racket_offence_upgrades": 1})
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    owned = list(fam.get("racket_offence_upgrades") or [])
+    if request.upgrade_id in owned:
+        raise HTTPException(status_code=400, detail="Already owned")
+    treasury = int((fam.get("treasury") or 0) or 0)
+    if treasury < cost:
+        raise HTTPException(status_code=400, detail=f"Not enough treasury (need ${cost:,})")
+    owned.append(request.upgrade_id)
+    result = await db.families.update_one(
+        {"id": family_id, "treasury": {"$gte": cost}},
+        {"$set": {"racket_offence_upgrades": owned}, "$inc": {"treasury": -cost}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Not enough treasury (balance may have changed)")
+    await log_family_vault_tx(
+        db,
+        family_id,
+        "racket_offence_buy",
+        current_user["id"],
+        current_user.get("username") or "?",
+        cash_delta=-cost,
+        meta={"upgrade_id": request.upgrade_id, "upgrade_name": upgrade.get("name")},
+    )
+    _invalidate_my_cache(current_user["id"])
+    return {"message": f"Crew armory: {upgrade.get('name')} purchased", "offence_weight": _racket_offence_weight(owned)}
+
+
 async def families_racket_attack_targets(debug: bool = False, current_user: dict = Depends(get_current_user)):
     my_family_id = current_user.get("family_id")
     if not my_family_id:
         return {"targets": []}
-    all_other = await db.families.find({"id": {"$ne": my_family_id}, "wiped": {"$ne": True}}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1, "rackets": 1}).to_list(50)
+    atk_fam = await db.families.find_one({"id": my_family_id}, {"_id": 0, "racket_offence_upgrades": 1})
+    offence_weight = _racket_offence_weight((atk_fam or {}).get("racket_offence_upgrades"))
+    offence_take_mult = _compute_racket_raid_take_mult(offence_weight)
+    all_other = await db.families.find({"id": {"$ne": my_family_id}, "wiped": {"$ne": True}}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1, "rackets": 1, "racket_income_bonus_percent": 1}).to_list(50)
     ev = await get_effective_event()
+    now = datetime.now(timezone.utc)
     targets = []
     for fam in all_other:
         rackets = fam.get("rackets") or {}
@@ -4533,11 +4768,24 @@ async def families_racket_attack_targets(debug: bool = False, current_user: dict
             if lv < 1:
                 continue
             r_def = next((x for x in FAMILY_RACKETS if x["id"] == rid), None)
-            income, cooldown_h = _racket_income_and_cooldown(rid, lv, ev)
-            potential_take = int(income * FAMILY_RACKET_ATTACK_REVENUE_PCT)
-            success_chance = max(FAMILY_RACKET_ATTACK_MIN_SUCCESS, FAMILY_RACKET_ATTACK_BASE_SUCCESS - lv * FAMILY_RACKET_ATTACK_LEVEL_PENALTY)
+            last_at = state.get("last_collected_at")
+            till_at_risk = await _racket_effective_till_amount(rid, lv, last_at, ev, fam, fam["id"], now=now)
+            defence_upgrades = list(state.get("defence_upgrades") or [])
+            defence_weight = _racket_defence_weight(defence_upgrades)
+            success_chance = _compute_racket_raid_success(lv, offence_weight, defence_weight)
             success_chance_pct = int(round(success_chance * 100))
-            racket_list.append({"racket_id": rid, "racket_name": r_def["name"] if r_def else rid, "level": lv, "potential_take": potential_take, "success_chance_pct": success_chance_pct})
+            potential_take = int(till_at_risk * FAMILY_RACKET_ATTACK_TILL_TAKE_PCT * offence_take_mult) if till_at_risk > 0 else 0
+            racket_list.append({
+                "racket_id": rid,
+                "racket_name": r_def["name"] if r_def else rid,
+                "level": lv,
+                "till_at_risk": till_at_risk,
+                "defence_weight": defence_weight,
+                "defence_count": len(defence_upgrades),
+                "potential_take": potential_take,
+                "success_chance_pct": success_chance_pct,
+                "offence_weight": offence_weight,
+            })
         if racket_list:
             window_start = datetime.now(timezone.utc) - timedelta(hours=FAMILY_RACKET_ATTACK_CREW_WINDOW_HOURS)
             window_start_iso = window_start.isoformat()
@@ -4571,16 +4819,24 @@ async def families_racket_attack_targets(debug: bool = False, current_user: dict
                     "raids_used": raids_used,
                     "raids_remaining": raids_remaining,
                     "next_raid_at": next_raid_at,
+                    "offence_weight": offence_weight,
                 }
             )
-    return {"targets": targets}
+    return {"targets": targets, "offence_weight": offence_weight}
 
 
 async def families_attack_racket(request: FamilyAttackRacketRequest, current_user: dict = Depends(get_current_user)):
     my_family_id = current_user.get("family_id")
     if not my_family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
-    target_fam = await db.families.find_one({"id": request.family_id}, {"_id": 0, "name": 1, "tag": 1, "treasury": 1, "rackets": 1})
+    if await _family_in_active_war(my_family_id):
+        raise HTTPException(status_code=403, detail="Racket raids are locked during family war")
+    if await _family_in_active_war(request.family_id):
+        raise HTTPException(status_code=403, detail="Target crew is at war — rackets are locked")
+    target_fam = await db.families.find_one(
+        {"id": request.family_id},
+        {"_id": 0, "name": 1, "tag": 1, "treasury": 1, "rackets": 1, "racket_income_bonus_percent": 1},
+    )
     if not target_fam or request.family_id == my_family_id:
         raise HTTPException(status_code=404, detail="Family not found")
     state = (target_fam.get("rackets") or {}).get(request.racket_id) or {}
@@ -4593,33 +4849,60 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
         raids_on_crew = await db.family_racket_attacks.count_documents({"attacker_family_id": my_family_id, "target_family_id": request.family_id, "last_at": {"$gte": window_start.isoformat()}})
         if raids_on_crew >= FAMILY_RACKET_ATTACK_MAX_PER_CREW:
             raise HTTPException(status_code=400, detail="Only 2 raids per family every 3 hours. You've used your raids on this crew.")
+        target_fam = await db.families.find_one(
+            {"id": request.family_id},
+            {"_id": 0, "name": 1, "tag": 1, "treasury": 1, "rackets": 1, "racket_income_bonus_percent": 1},
+        )
+        if not target_fam:
+            raise HTTPException(status_code=404, detail="Family not found")
+        state = (target_fam.get("rackets") or {}).get(request.racket_id) or {}
+        level = int(state.get("level") or 0)
+        if level < 1:
+            raise HTTPException(status_code=400, detail="Racket not active")
+        last_at = state.get("last_collected_at")
+        atk_fam = await db.families.find_one({"id": my_family_id}, {"_id": 0, "name": 1, "tag": 1, "racket_offence_upgrades": 1})
+        offence_weight = _racket_offence_weight((atk_fam or {}).get("racket_offence_upgrades"))
+        defence_upgrades = list(state.get("defence_upgrades") or [])
+        defence_weight = _racket_defence_weight(defence_upgrades)
         ev = await get_effective_event()
-        income_per, _ = _racket_income_and_cooldown(request.racket_id, level, ev)
-        take = int(income_per * FAMILY_RACKET_ATTACK_REVENUE_PCT)
-        success_chance = max(FAMILY_RACKET_ATTACK_MIN_SUCCESS, FAMILY_RACKET_ATTACK_BASE_SUCCESS - level * FAMILY_RACKET_ATTACK_LEVEL_PENALTY)
+        now = datetime.now(timezone.utc)
+        till_at_risk = await _racket_effective_till_amount(request.racket_id, level, last_at, ev, target_fam, request.family_id, now=now)
+        take_mult = _compute_racket_raid_take_mult(offence_weight)
+        take = int(till_at_risk * FAMILY_RACKET_ATTACK_TILL_TAKE_PCT * take_mult) if till_at_risk > 0 else 0
+        success_chance = _compute_racket_raid_success(level, offence_weight, defence_weight)
         success = _rng.random() < success_chance
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = now.isoformat()
         await db.family_racket_attacks.insert_one({"attacker_family_id": my_family_id, "target_family_id": request.family_id, "target_racket_id": request.racket_id, "last_at": now_iso})
         r_def = next((x for x in FAMILY_RACKETS if x["id"] == request.racket_id), None)
         racket_name = r_def["name"] if r_def else request.racket_id
         family_name = target_fam.get("name") or "Enemy"
-        if success and take > 0:
-            treasury = int((target_fam.get("treasury") or 0) or 0)
-            actual = min(take, treasury)
-            if actual > 0:
-                raid_result = await db.families.find_one_and_update(
-                    {"id": request.family_id, "treasury": {"$gte": actual}},
-                    {"$inc": {"treasury": -actual}},
-                    return_document=False,
-                )
-                if raid_result:
+        atk_label = (atk_fam or {}).get("name") or (atk_fam or {}).get("tag") or my_family_id
+        destroyed_id = None
+        destroyed_name = None
+        actual = 0
+        if success:
+            new_defence = list(defence_upgrades)
+            if new_defence:
+                destroyed_id = _rng.choice(new_defence)
+                new_defence = [x for x in new_defence if x != destroyed_id]
+                destroyed_row = _FAMILY_RACKET_DEFENCE_BY_ID.get(destroyed_id)
+                destroyed_name = (destroyed_row or {}).get("name") or destroyed_id
+            new_state = {**state, "last_collected_at": now_iso, "defence_upgrades": new_defence}
+            filter_cond: dict = {"id": request.family_id}
+            lc_key = f"rackets.{request.racket_id}.last_collected_at"
+            if last_at:
+                filter_cond[lc_key] = last_at
+            else:
+                filter_cond["$or"] = [{lc_key: {"$exists": False}}, {lc_key: None}]
+            victim_result = await db.families.update_one(filter_cond, {"$set": {f"rackets.{request.racket_id}": new_state}})
+            if victim_result.modified_count > 0:
+                actual = take if take > 0 else 0
+                if actual > 0:
                     await db.families.update_one({"id": my_family_id}, {"$inc": {"treasury": actual}})
-                    atk_fam = await db.families.find_one({"id": my_family_id}, {"_id": 0, "name": 1, "tag": 1})
-                    atk_label = (atk_fam or {}).get("name") or (atk_fam or {}).get("tag") or my_family_id
                     await log_family_vault_tx(
                         db,
                         request.family_id,
-                        "racket_raid_lost",
+                        "racket_till_lost",
                         current_user["id"],
                         current_user.get("username") or "?",
                         cash_delta=-actual,
@@ -4628,6 +4911,7 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
                             "attacker_family_name": atk_label,
                             "racket_id": request.racket_id,
                             "racket_name": racket_name,
+                            "till_stolen": actual,
                         },
                     )
                     await log_family_vault_tx(
@@ -4642,16 +4926,52 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
                             "target_family_name": family_name,
                             "racket_id": request.racket_id,
                             "racket_name": racket_name,
+                            "till_stolen": actual,
+                            "defence_destroyed": destroyed_name,
                         },
                     )
-                else:
-                    actual = 0
+                if destroyed_id:
+                    await log_family_vault_tx(
+                        db,
+                        request.family_id,
+                        "racket_defence_destroyed",
+                        current_user["id"],
+                        current_user.get("username") or "?",
+                        cash_delta=0,
+                        meta={
+                            "attacker_family_id": my_family_id,
+                            "attacker_family_name": atk_label,
+                            "racket_id": request.racket_id,
+                            "racket_name": racket_name,
+                            "upgrade_id": destroyed_id,
+                            "upgrade_name": destroyed_name,
+                        },
+                    )
+            else:
+                actual = 0
+                destroyed_id = None
+                destroyed_name = None
+        if success:
             msg = _rng.choice(FAMILY_RACKET_RAID_SUCCESS_MESSAGES).format(amount=actual, family_name=family_name, racket_name=racket_name)
+            if destroyed_name:
+                msg = f"{msg} Destroyed their {destroyed_name}."
             _invalidate_list_cache()
             _invalidate_my_cache(current_user["id"])
-            return {"success": True, "message": msg, "amount": actual}
+            return {
+                "success": True,
+                "message": msg,
+                "amount": actual,
+                "till_stolen": actual,
+                "defence_destroyed": destroyed_name,
+                "success_chance_pct": int(round(success_chance * 100)),
+            }
         fail_msg = _rng.choice(FAMILY_RACKET_RAID_FAIL_MESSAGES).format(family_name=family_name, racket_name=racket_name)
-        return {"success": False, "message": fail_msg, "amount": 0}
+        return {
+            "success": False,
+            "message": fail_msg,
+            "amount": 0,
+            "success_chance_pct": int(round(success_chance * 100)),
+        }
 
 
 async def families_war(current_user: dict = Depends(get_current_user)):
@@ -5378,6 +5698,9 @@ def register(router):
     router.add_api_route("/families/rackets/{racket_id}/collect", families_racket_collect, methods=["POST"])
     router.add_api_route("/families/rackets/{racket_id}/unlock", families_racket_unlock, methods=["POST"])
     router.add_api_route("/families/rackets/{racket_id}/upgrade", families_racket_upgrade, methods=["POST"])
+    router.add_api_route("/families/rackets/armory-catalog", families_racket_armory_catalog, methods=["GET"], dependencies=_families_rl_u)
+    router.add_api_route("/families/rackets/{racket_id}/buy-defence", families_racket_buy_defence, methods=["POST"])
+    router.add_api_route("/families/rackets/buy-offence", families_racket_buy_offence, methods=["POST"])
     router.add_api_route(
         "/families/racket-attack-targets",
         families_racket_attack_targets,

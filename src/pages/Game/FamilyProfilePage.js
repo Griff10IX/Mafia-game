@@ -59,7 +59,8 @@ const EMBERS = [
 ];
 
 // 3D perspective tilt hook
-function useTilt(strength = 5) {
+const RACKET_MAX_LEVEL = 15;
+
   const ref = useRef(null);
   const onMouseMove = useCallback((e) => {
     if (!ref.current) return;
@@ -981,7 +982,7 @@ export default function FamilyProfilePage() {
             </div>
             <div className="p-3 space-y-1.5">
               {rackets.map((r) => {
-                const isMax = r.level >= 5;
+                const isMax = r.level >= RACKET_MAX_LEVEL;
                 return (
                   <div key={r.id} className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-zinc-800/25 border border-zinc-700/20"
                     style={isMax ? { borderColor: 'rgba(var(--noir-primary-rgb),.2)' } : {}}>
@@ -992,7 +993,7 @@ export default function FamilyProfilePage() {
                     </span>
                     <div className="w-10 h-1 bg-zinc-800 rounded-full overflow-hidden shrink-0">
                       <div className={`h-full rounded-full transition-all duration-500 ${isMax ? 'bg-gradient-to-r from-primary to-amber-400' : 'bg-primary/60'}`}
-                        style={{ width: `${(r.level / 5) * 100}%` }} />
+                        style={{ width: `${(r.level / RACKET_MAX_LEVEL) * 100}%` }} />
                     </div>
                   </div>
                 );
