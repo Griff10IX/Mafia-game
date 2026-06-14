@@ -2170,7 +2170,7 @@ async def distillery_process_automation(user_id: str) -> None:
     now = _utc_now()
     user = await db.users.find_one(
         {"id": user_id},
-        {"_id": 0, "racket_until": 1, "booze_until": 1, "in_jail": 1, "booze_carrying": 1},
+        {"_id": 0, "id": 1, "racket_until": 1, "booze_until": 1, "in_jail": 1, "booze_carrying": 1},
     )
     distillery, _ = _distillery_ensure_state(business, now)
     _distillery_decay_and_status(distillery, now)
