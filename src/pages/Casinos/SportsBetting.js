@@ -389,6 +389,10 @@ export default function SportsBetting() {
       return null;
     }
   });
+  const [ownership, setOwnership] = useState(null);
+  const [ownershipSaving, setOwnershipSaving] = useState(false);
+  const [ownershipTransferUsername, setOwnershipTransferUsername] = useState('');
+  const [ownershipSellPoints, setOwnershipSellPoints] = useState('');
 
   useEffect(() => {
     try {
@@ -455,13 +459,14 @@ export default function SportsBetting() {
       let nextPublicLibrary = DEFAULT_PUBLIC_LIBRARY;
       let nextRequestInfo = DEFAULT_REQUEST_INFO;
 
-      const [eventsRes, betsRes, statsRes, resultsRes, libRes, reqRes] = await Promise.all([
+      const [eventsRes, betsRes, statsRes, resultsRes, libRes, reqRes, ownershipRes] = await Promise.all([
         api.get('/sports-betting/events'),
         api.get('/sports-betting/my-bets'),
         api.get('/sports-betting/stats'),
         api.get('/sports-betting/recent-results'),
         api.get('/sports-betting/template-library').catch(() => ({ data: null })),
         api.get('/sports-betting/my-event-requests').catch(() => ({ data: null })),
+        api.get('/sports-betting/ownership').catch(() => ({ data: null })),
       ]);
       nextEvents = eventsRes.data?.events ?? [];
       nextMyBets = {
@@ -473,6 +478,7 @@ export default function SportsBetting() {
       };
       nextStats = statsRes.data ?? null;
       nextRecentResults = resultsRes.data?.results ?? [];
+      setOwnership(ownershipRes?.data || null);
 
       setEvents(nextEvents);
       setMyBets(nextMyBets);
@@ -910,6 +916,87 @@ export default function SportsBetting() {
     try { if (hide) localStorage.setItem('sports-betting-admin-hidden', '1'); else localStorage.removeItem('sports-betting-admin-hidden'); } catch {}
   };
 
+  const handleClaimOwnership = async () => {
+    if (ownershipSaving) return;
+    setOwnershipSaving(true);
+    try {
+      const res = await api.post('/sports-betting/ownership/claim');
+      toast.success(res.data?.message || 'Claimed');
+      refreshUser();
+      await fetchAll({ silent: true });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not claim sports betting book');
+    } finally {
+      setOwnershipSaving(false);
+    }
+  };
+
+  const handleCollectOwnership = async () => {
+    if (ownershipSaving) return;
+    setOwnershipSaving(true);
+    try {
+      const res = await api.post('/sports-betting/ownership/collect');
+      toast.success(res.data?.message || 'Collected');
+      refreshUser();
+      await fetchAll({ silent: true });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not collect');
+    } finally {
+      setOwnershipSaving(false);
+    }
+  };
+
+  const handleRelinquishOwnership = async () => {
+    if (ownershipSaving) return;
+    if (!window.confirm('Relinquish the sports betting book? Pending profit will be paid out first.')) return;
+    setOwnershipSaving(true);
+    try {
+      const res = await api.post('/sports-betting/ownership/relinquish');
+      toast.success(res.data?.message || 'Relinquished');
+      refreshUser();
+      await fetchAll({ silent: true });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not relinquish');
+    } finally {
+      setOwnershipSaving(false);
+    }
+  };
+
+  const handleSendOwnership = async () => {
+    const username = (ownershipTransferUsername || '').trim();
+    if (!username || ownershipSaving) return;
+    setOwnershipSaving(true);
+    try {
+      const res = await api.post('/sports-betting/ownership/send-to-user', { target_username: username });
+      toast.success(res.data?.message || 'Transferred');
+      setOwnershipTransferUsername('');
+      await fetchAll({ silent: true });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not transfer');
+    } finally {
+      setOwnershipSaving(false);
+    }
+  };
+
+  const handleListOwnershipOnTrade = async () => {
+    const pts = parseInt(String(ownershipSellPoints).replace(/,/g, '').replace(/\D/g, ''), 10);
+    if (!pts || pts <= 0) {
+      toast.error('Enter a valid points price');
+      return;
+    }
+    if (ownershipSaving) return;
+    setOwnershipSaving(true);
+    try {
+      const res = await api.post('/sports-betting/ownership/sell-on-trade', { points: pts });
+      toast.success(res.data?.message || 'Listed on Quick Trade');
+      setOwnershipSellPoints('');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not list');
+    } finally {
+      setOwnershipSaving(false);
+    }
+  };
+
   const openBetsListedStake = (myBets.open || []).reduce((s, b) => s + Number(b.stake || 0), 0);
   const openBetsTotalStake = Number.isFinite(myBets.open_stake_total) ? Number(myBets.open_stake_total) : openBetsListedStake;
   const sportsOpenCap = Number(myBets.max_total_open_stake ?? SPORTS_MAX_TOTAL_OPEN_STAKE);
@@ -1115,6 +1202,81 @@ export default function SportsBetting() {
         </p>
         <p className="text-[10px] text-zinc-600 font-heading italic">Winnings are paid to your Swiss bank (can exceed your normal Swiss deposit limit). Stakes come from cash on hand.</p>
       </div>
+
+      {ownership && (
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 sb-fade-in mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Sports betting book</span>
+          </div>
+          <div className="p-3 space-y-2 text-[10px] font-heading">
+            {ownership.is_owner ? (
+              <>
+                <p className="text-mutedForeground">
+                  You own the book. Earn {ownership.owner_profit_share_pct ?? 10}% of weekly house profit when the book is net positive (UTC week). Passive income only — you do not add events or settle bets.
+                </p>
+                <p>
+                  <span className="text-mutedForeground">Pending profit: </span>
+                  <span className="text-emerald-400 font-bold">{formatMoney(ownership.owner_pending_profit || 0)}</span>
+                </p>
+                {ownership.weekly ? (
+                  <p className="text-[9px] text-mutedForeground">
+                    Week {ownership.weekly.week_key}: house {formatMoney(ownership.weekly.house_profit)} · your share {formatMoney(ownership.weekly.owner_share)}
+                  </p>
+                ) : null}
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" disabled={ownershipSaving} onClick={handleCollectOwnership} className="px-2 py-1 rounded border border-primary/40 bg-primary/10 text-primary font-bold disabled:opacity-50">Collect</button>
+                  <button type="button" disabled={ownershipSaving} onClick={handleRelinquishOwnership} className="px-2 py-1 rounded border border-rose-500/40 text-rose-400 font-bold disabled:opacity-50">Relinquish</button>
+                </div>
+                {ownership.transfer_locked_war ? (
+                  <p className="text-amber-400/90 text-[9px]">Family war active — you cannot send or list the book until the war ends.</p>
+                ) : null}
+                {ownership.stack_conflict?.seconds_remaining != null ? (
+                  <p className="text-amber-400/90 text-[9px]">
+                    You hold an airport or armoury — send the book to another player within{' '}
+                    {Math.max(1, Math.ceil((ownership.stack_conflict.seconds_remaining || 0) / 60))} min or it auto-drops.
+                  </p>
+                ) : null}
+                {!ownership.transfer_locked_war ? (
+                  <>
+                    <div className="flex flex-wrap items-end gap-2 pt-1 border-t border-border/50">
+                      <label className="flex flex-col gap-0.5 min-w-[8rem] flex-1">
+                        <span className="text-[8px] uppercase tracking-wider text-mutedForeground">Send to player</span>
+                        <input value={ownershipTransferUsername} onChange={(e) => setOwnershipTransferUsername(e.target.value)} className="rounded border border-primary/30 bg-background/80 px-2 py-1 text-[10px]" placeholder="Username" />
+                      </label>
+                      <button type="button" disabled={ownershipSaving || !ownershipTransferUsername.trim()} onClick={handleSendOwnership} className="px-2 py-1 rounded border border-primary/40 text-primary font-bold disabled:opacity-50">Send</button>
+                    </div>
+                    <div className="flex flex-wrap items-end gap-2">
+                      <label className="flex flex-col gap-0.5 min-w-[8rem] flex-1">
+                        <span className="text-[8px] uppercase tracking-wider text-mutedForeground">Quick Trade (points)</span>
+                        <input value={ownershipSellPoints} onChange={(e) => setOwnershipSellPoints(e.target.value)} className="rounded border border-primary/30 bg-background/80 px-2 py-1 text-[10px]" placeholder="Points price" />
+                      </label>
+                      <button type="button" disabled={ownershipSaving} onClick={handleListOwnershipOnTrade} className="px-2 py-1 rounded border border-primary/40 text-primary font-bold disabled:opacity-50">List on QT</button>
+                    </div>
+                  </>
+                ) : null}
+              </>
+            ) : ownership.owner_username ? (
+              <p className="text-mutedForeground">
+                Owned by <span className="text-foreground font-bold">{ownership.owner_username}</span>.
+              </p>
+            ) : (
+              <>
+                <p className="text-mutedForeground">
+                  Unclaimed — claim for {(ownership.claim_cost_points || 10000).toLocaleString()} points to earn {ownership.owner_profit_share_pct ?? 10}% of weekly house profit when the book wins.
+                </p>
+                {ownership.claim_blocked ? (
+                  <p className="text-[9px] text-amber-400">{ownership.claim_blocked}</p>
+                ) : (
+                  <button type="button" disabled={ownershipSaving} onClick={handleClaimOwnership} className="px-3 py-1.5 rounded border border-primary/50 bg-primary/15 text-primary font-bold disabled:opacity-50">
+                    Claim book · {(ownership.claim_cost_points || 10000).toLocaleString()} pts
+                  </button>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ═══ Stats bar ═══ */}
       <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg border border-primary/20 bg-primary/5 overflow-hidden">

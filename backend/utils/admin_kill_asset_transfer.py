@@ -78,7 +78,7 @@ async def transfer_staff_kill_seizures(db, victim_id: str, admin_user: dict) -> 
         _user_owns_any_casino,
         _user_owns_any_property,
         _user_owns_garage_dealership,
-        _user_owns_any_property,
+        _user_owns_sports_betting_book,
         get_rank_info,
         raise_if_dead_casino_transfer_target,
         user_prestige_rank_mult,
@@ -99,6 +99,7 @@ async def transfer_staff_kill_seizures(db, victim_id: str, admin_user: dict) -> 
         "airport_transferred": False,
         "bullet_factory_transferred": False,
         "garage_dealership_transferred": False,
+        "sports_betting_transferred": False,
     }
 
     await _clear_victim_casino_buyback_escrow(db, victim_id)
@@ -222,6 +223,31 @@ async def transfer_staff_kill_seizures(db, victim_id: str, admin_user: dict) -> 
             res = await db.garage_dealership.update_one({"owner_id": victim_id}, {"$set": dealership_set})
             if res.modified_count:
                 summary["garage_dealership_transferred"] = True
+
+    killer_owns_sports_book = await _user_owns_sports_betting_book(admin_id)
+    victim_sports_book = await db.sports_betting_ownership.find_one({"owner_id": victim_id}, {"_id": 0})
+    if victim_sports_book:
+        from utils.sports_betting_ownership import cancel_sports_betting_quicktrade_listings
+
+        try:
+            await cancel_sports_betting_quicktrade_listings(db)
+        except Exception:
+            logger.exception("admin_kill quicktrade cleanup sports_betting")
+        if killer_owns_sports_book:
+            await db.sports_betting_ownership.update_many(
+                {"owner_id": victim_id},
+                {"$set": {"owner_id": None, "owner_username": None}},
+            )
+        else:
+            sports_book_set = {"owner_id": admin_id, "owner_username": admin_username}
+            admin_had_property = await _user_owns_any_property(admin_id)
+            if admin_had_property:
+                sports_book_set["stack_conflict_acquired_at"] = datetime.now(timezone.utc)
+            elif receiver_rank_id < CAPO_RANK_ID:
+                sports_book_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
+            res = await db.sports_betting_ownership.update_one({"owner_id": victim_id}, {"$set": sports_book_set})
+            if res.modified_count:
+                summary["sports_betting_transferred"] = True
 
     victim_ep = await db.exclusive_properties.find_one({"owner_id": victim_id}, {"_id": 1})
     if victim_ep:

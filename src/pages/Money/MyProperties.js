@@ -36,7 +36,7 @@ const CASINO_PATHS = {
 const CASINO_TYPES_WITH_BUY_BACK = ['dice', 'blackjack', 'roulette', 'horseracing', 'videopoker', 'slots'];
 const MY_PROPERTIES_CACHE_KEY = 'my_properties_bootstrap_v1';
 const MY_PROPERTIES_CACHE_MAX_AGE_MS = 30_000;
-const EMPTY_MY_PROPERTIES_DATA = { casinos: [], airport: null, armoury: null, garage_dealership: null, points: 0 };
+const EMPTY_MY_PROPERTIES_DATA = { casinos: [], airport: null, armoury: null, garage_dealership: null, sports_betting: null, points: 0 };
 
 const VIDEO_POKER_ODDS_OPTIONS = [
   { id: 'tight', label: 'Tight (house)' },
@@ -100,11 +100,13 @@ function normalizeMyPropertiesPayload(props) {
   const airport = props?.airport ?? (props?.property?.type === 'airport' ? props.property : null);
   const armoury = props?.armoury ?? (props?.property?.type === 'bullet_factory' ? props.property : null);
   const garageDealership = props?.garage_dealership ?? (props?.property?.type === 'garage_dealership' ? props.property : null);
+  const sportsBetting = props?.sports_betting ?? (props?.property?.type === 'sports_betting' ? props.property : null);
   const points = Number(props?.points ?? 0) || 0;
   return {
-    data: { casinos, airport, armoury, garage_dealership: garageDealership, points },
+    data: { casinos, airport, armoury, garage_dealership: garageDealership, sports_betting: sportsBetting, points },
     armouryDetail: props?.armoury_detail || null,
     garageDealershipDetail: props?.garage_dealership_detail || null,
+    sportsBettingDetail: props?.sports_betting_detail || null,
   };
 }
 
@@ -448,6 +450,9 @@ export default function MyProperties() {
   const [garageDealershipDetail, setGarageDealershipDetail] = useState(cachedBootstrap?.garageDealershipDetail || null);
   const [garageDealershipTransferUsername, setGarageDealershipTransferUsername] = useState('');
   const [garageDealershipSellPoints, setGarageDealershipSellPoints] = useState('');
+  const [sportsBettingDetail, setSportsBettingDetail] = useState(cachedBootstrap?.sportsBettingDetail || null);
+  const [sportsBettingTransferUsername, setSportsBettingTransferUsername] = useState('');
+  const [sportsBettingSellPoints, setSportsBettingSellPoints] = useState('');
   // Pay-table data for any owned Video Poker casinos. Static across cities, so a single fetch
   // covers every CasinoBlock. Stays null until needed (only fetched if the user owns a VP casino).
   const [videoPokerConfig, setVideoPokerConfig] = useState(null);
@@ -456,8 +461,8 @@ export default function MyProperties() {
     try {
       const res = await api.get('/my-properties');
       const props = res.data;
-      const { data: nextData, armouryDetail: nextArmouryDetail, garageDealershipDetail: nextGarageDetail } = normalizeMyPropertiesPayload(props);
-      const { airport, armoury, garage_dealership: garageDealership } = nextData;
+      const { data: nextData, armouryDetail: nextArmouryDetail, garageDealershipDetail: nextGarageDetail, sportsBettingDetail: nextSportsDetail } = normalizeMyPropertiesPayload(props);
+      const { airport, armoury, garage_dealership: garageDealership, sports_betting: sportsBetting } = nextData;
       setData(nextData);
       if (airport?.price_per_travel != null) setAirportPrice(String(airport.price_per_travel));
       if (armoury?.state) {
@@ -467,6 +472,7 @@ export default function MyProperties() {
         setArmouryDetail(null);
       }
       setGarageDealershipDetail(garageDealership ? nextGarageDetail : null);
+      setSportsBettingDetail(sportsBetting ? nextSportsDetail : null);
       writeCachedMyProperties(props);
     } catch (error) {
       const detail = error.response?.data?.detail || error.message || 'Unknown error';
@@ -701,6 +707,72 @@ export default function MyProperties() {
       await api.post('/gta/dealership/sell-on-trade', { points: pts });
       toast.success('Listed on Quick Trade');
       setGarageDealershipSellPoints('');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSportsBettingCollect = async () => {
+    if (!data.sports_betting || saving) return;
+    setSaving(true);
+    try {
+      const res = await api.post('/sports-betting/ownership/collect');
+      toast.success(res?.data?.message || 'Collected');
+      fetchMyProperties();
+      window.dispatchEvent(new CustomEvent('app:refresh-user'));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSportsBettingRelinquish = async () => {
+    if (!data.sports_betting || saving) return;
+    if (!window.confirm('Relinquish the sports betting book?')) return;
+    setSaving(true);
+    try {
+      await api.post('/sports-betting/ownership/relinquish');
+      toast.success('Sports betting book relinquished');
+      fetchMyProperties();
+      window.dispatchEvent(new CustomEvent('app:refresh-user'));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSportsBettingTransfer = async () => {
+    if (!data.sports_betting || saving) return;
+    const username = (sportsBettingTransferUsername || '').trim();
+    if (!username) { toast.error('Enter a username'); return; }
+    setSaving(true);
+    try {
+      await api.post('/sports-betting/ownership/send-to-user', { target_username: username });
+      toast.success('Sports betting book transferred');
+      setSportsBettingTransferUsername('');
+      fetchMyProperties();
+      window.dispatchEvent(new CustomEvent('app:refresh-user'));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSportsBettingSell = async () => {
+    if (!data.sports_betting || saving) return;
+    const pts = parseInt(String(sportsBettingSellPoints).replace(/,/g, '').replace(/\D/g, ''), 10);
+    if (Number.isNaN(pts) || pts <= 0) { toast.error('Enter points'); return; }
+    setSaving(true);
+    try {
+      await api.post('/sports-betting/ownership/sell-on-trade', { points: pts });
+      toast.success('Listed on Quick Trade');
+      setSportsBettingSellPoints('');
+      fetchMyProperties();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
@@ -947,6 +1019,48 @@ export default function MyProperties() {
                 )}
               </>
             ) : null}
+            {data.sports_betting ? (
+              <>
+                <div className="flex items-center gap-2 mb-2 mt-4 pt-3 border-t border-zinc-700/30">
+                  <Trophy size={18} className="text-primary" />
+                  <span className="font-heading font-bold text-foreground">Sports Betting Book</span>
+                </div>
+                <p className="text-[11px] text-mutedForeground mb-1">Earn 10% of weekly house profit when the book is net positive (UTC week). Passive — you do not run events or settle bets.</p>
+                {sportsBettingDetail && (
+                  <>
+                    <p className="text-[11px] text-mutedForeground mb-1">
+                      Profit to collect: <span className="text-emerald-400 font-bold">{formatMoney(sportsBettingDetail.owner_pending_profit ?? 0)}</span>
+                    </p>
+                    {sportsBettingDetail.weekly ? (
+                      <p className="text-[10px] text-mutedForeground mb-2">
+                        This week ({sportsBettingDetail.weekly.week_key}): house {formatMoney(sportsBettingDetail.weekly.house_profit)} · your share {formatMoney(sportsBettingDetail.weekly.owner_share)}
+                      </p>
+                    ) : null}
+                  </>
+                )}
+                <div className="flex gap-2 flex-wrap mb-2">
+                  <button type="button" onClick={handleSportsBettingCollect} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading disabled:opacity-50">Collect</button>
+                  <Link to="/sports-betting" className="inline-flex items-center gap-1 px-2 py-1 rounded border border-primary/50 text-primary text-xs font-heading hover:bg-primary/10">
+                    <LinkIcon size={12} /> Sports Betting
+                  </Link>
+                  <button type="button" onClick={handleSportsBettingRelinquish} disabled={saving} className="px-2 py-1 rounded bg-red-500/20 border border-red-500/50 text-red-400 text-xs font-heading disabled:opacity-50">Relinquish</button>
+                </div>
+                {sportsBettingDetail?.transfer_locked_war ? (
+                  <p className="text-[10px] text-amber-400 mb-2">Family war active — send and Quick Trade listing are locked until the war ends.</p>
+                ) : (
+                  <>
+                <div className="flex gap-2 flex-wrap items-end mb-2">
+                  <input type="text" placeholder="Transfer to username" value={sportsBettingTransferUsername} onChange={(e) => setSportsBettingTransferUsername(e.target.value)} className="flex-1 min-w-[120px] px-2 py-1 rounded border border-zinc-600 bg-zinc-900/50 text-xs" />
+                  <button type="button" onClick={handleSportsBettingTransfer} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading disabled:opacity-50">Send</button>
+                </div>
+                <div className="flex gap-2 flex-wrap items-end">
+                  <input type="text" placeholder="Quick Trade points" value={sportsBettingSellPoints} onChange={(e) => setSportsBettingSellPoints(e.target.value)} className="flex-1 min-w-[120px] px-2 py-1 rounded border border-zinc-600 bg-zinc-900/50 text-xs" />
+                  <button type="button" onClick={handleSportsBettingSell} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading disabled:opacity-50">List</button>
+                </div>
+                  </>
+                )}
+              </>
+            ) : null}
           </div>
         </div>
       </div>
@@ -958,7 +1072,7 @@ export default function MyProperties() {
         </div>
         <div className="p-3">
           <p className="text-[11px] text-mutedForeground">
-            <strong className="text-foreground">Rule:</strong> You may own at most <strong>1 casino</strong>, up to <strong>1 airport</strong>, <strong>1 armoury</strong>, and <strong>1 car dealership</strong>. You cannot claim a dealership if you already hold an airport or armoury. If you take one by kill while holding airport/armoury, you have <strong>3 hours</strong> to send it away or it auto-drops.
+            <strong className="text-foreground">Rule:</strong> You may own at most <strong>1 casino</strong>, up to <strong>1 airport</strong>, <strong>1 armoury</strong>, <strong>1 car dealership</strong>, and <strong>1 sports betting book</strong>. You cannot claim a dealership or sports book if you already hold an airport or armoury. If you take one by kill while holding airport/armoury, you have <strong>3 hours</strong> to send it away or it auto-drops.
           </p>
         </div>
         <div className="mp-art-line text-primary mx-3" />

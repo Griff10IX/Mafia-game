@@ -25,15 +25,41 @@ from pydantic import BaseModel
 from fastapi import Body, Depends, Header, HTTPException, Query
 import httpx
 
+from bson import ObjectId
+
 from server import (
     db,
     get_current_user,
     get_current_user_verified,
     log_gambling,
+    log_activity,
     require_admin_or_mod_verified,
     require_admin_verified,
     send_notification,
     _get_staff_user_ids,
+    get_rank_info,
+    user_prestige_rank_mult,
+    CAPO_RANK_ID,
+    _family_in_active_war,
+    _username_pattern,
+    maybe_auto_relinquish_below_capo,
+    _user_owns_any_property,
+)
+from routers.game.families import resolve_family_id
+from utils.civilian_protection import maybe_revoke_civilian_protection
+from utils.sports_betting_ownership import (
+    SPORTS_BETTING_OWNERSHIP_ID,
+    SPORTS_BETTING_CLAIM_COST_POINTS,
+    SPORTS_BETTING_OWNER_PROFIT_SHARE,
+    get_sports_betting_ownership,
+    credit_sports_betting_profit,
+    user_owns_sports_betting_book,
+    cancel_sports_betting_quicktrade_listings,
+    maybe_auto_relinquish_sports_betting_stack_conflict,
+    sports_betting_stack_conflict_status,
+    get_sports_betting_weekly_stats,
+    record_sports_betting_house_settlement,
+    sports_betting_house_delta,
 )
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_SPORTS_BETTING
 
@@ -119,6 +145,25 @@ class AdminSportsEventRequestDeny(BaseModel):
 
 class AdminSportsOpenStakeCapBody(BaseModel):
     max_total_open_stake: int
+
+
+class SportsBettingOwnershipSendRequest(BaseModel):
+    target_username: str
+
+
+class SportsBettingOwnershipSellRequest(BaseModel):
+    points: int
+
+
+SPORTS_BETTING_WAR_LOCK_DETAIL = (
+    "You cannot transfer or list your sports betting book on Quick Trade while your family is at war."
+)
+SPORTS_BETTING_PROPERTY_CONFLICT_DETAIL = (
+    "You already own an airport or armoury. Relinquish it before claiming the sports betting book."
+)
+SPORTS_BETTING_TRANSFER_TARGET_CONFLICT_DETAIL = (
+    "That player already owns an airport or armoury and cannot hold the sports betting book."
+)
 
 
 # ----- Constants -----
@@ -3411,6 +3456,12 @@ async def _settle_event_internal(event_id: str, winning_option_id: str) -> bool:
             lose_msg = f"Your pick ({pick_nm}) lost on \"{ev_nm}\". Stake ${stake:,} was not returned."
             await send_notification(uid, "Sports bet lost", lose_msg, "system")
 
+        try:
+            house_delta = sports_betting_house_delta(won=won, stake=stake, payout=payout)
+            await record_sports_betting_house_settlement(db, house_delta)
+        except Exception:
+            logger.exception("Sports betting owner weekly profit update failed for bet %s", bet_claim.get("id"))
+
     return True
 
 
@@ -4143,6 +4194,238 @@ async def run_sports_auto_board_ticker() -> None:
             await asyncio.sleep(900)
 
 
+async def _maybe_auto_relinquish_sports_betting_ownership() -> None:
+    await maybe_auto_relinquish_below_capo(db.sports_betting_ownership, {"id": SPORTS_BETTING_OWNERSHIP_ID})
+    await maybe_auto_relinquish_sports_betting_stack_conflict(db)
+
+
+async def get_sports_betting_ownership_status(current_user: dict = Depends(get_current_user)):
+    """Ownership status for the global sports betting book."""
+    await _maybe_auto_relinquish_sports_betting_ownership()
+    ownership = await get_sports_betting_ownership(db)
+    uid = current_user.get("id") or ""
+    owner_id = ownership.get("owner_id")
+    is_owner = bool(owner_id and owner_id == uid)
+    family_id = await resolve_family_id(uid) if is_owner else None
+    transfer_locked_war = bool(is_owner and family_id and await _family_in_active_war(family_id))
+    weekly = await get_sports_betting_weekly_stats(db)
+    payload = {
+        "owner_id": owner_id,
+        "owner_username": ownership.get("owner_username"),
+        "is_owner": is_owner,
+        "claim_cost_points": SPORTS_BETTING_CLAIM_COST_POINTS,
+        "owner_pending_profit": int(ownership.get("owner_pending_profit") or 0) if is_owner else None,
+        "owner_profit_share_pct": int(SPORTS_BETTING_OWNER_PROFIT_SHARE * 100),
+        "transfer_locked_war": transfer_locked_war,
+        "weekly": weekly if is_owner else None,
+    }
+    if is_owner:
+        stack_conflict = sports_betting_stack_conflict_status(ownership)
+        if stack_conflict:
+            payload["stack_conflict"] = stack_conflict
+    elif not owner_id and await _user_owns_any_property(uid):
+        payload["claim_blocked"] = SPORTS_BETTING_PROPERTY_CONFLICT_DETAIL
+    return payload
+
+
+async def claim_sports_betting_ownership(current_user: dict = Depends(get_current_user_verified)):
+    """Pay points to become owner of the sports betting book."""
+    rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
+    prestige_level = int(current_user.get("prestige_level") or 0)
+    if rank_id < CAPO_RANK_ID and prestige_level < 1:
+        raise HTTPException(
+            status_code=403,
+            detail="You must be rank Capo or higher to claim the sports betting book. Reach Capo to hold one.",
+        )
+    uid = current_user.get("id") or ""
+    if await user_owns_sports_betting_book(db, uid):
+        raise HTTPException(status_code=400, detail="You already own the sports betting book")
+    if await _user_owns_any_property(uid):
+        raise HTTPException(status_code=400, detail=SPORTS_BETTING_PROPERTY_CONFLICT_DETAIL)
+    ownership = await get_sports_betting_ownership(db)
+    if ownership.get("owner_id"):
+        raise HTTPException(status_code=400, detail="The sports betting book already has an owner")
+    cost = SPORTS_BETTING_CLAIM_COST_POINTS
+    result = await db.users.update_one(
+        {"id": uid, "points": {"$gte": cost}},
+        {"$inc": {"points": -cost, "lifetime_points_spent": cost}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail=f"Insufficient points. Need {cost:,} points.")
+    claim_set = {
+        "owner_id": uid,
+        "owner_username": current_user.get("username") or "?",
+    }
+    if rank_id < CAPO_RANK_ID:
+        claim_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
+    claim_result = await db.sports_betting_ownership.update_one(
+        {"id": SPORTS_BETTING_OWNERSHIP_ID, "owner_id": None},
+        {"$set": claim_set},
+    )
+    if claim_result.modified_count == 0:
+        await db.users.update_one({"id": uid}, {"$inc": {"points": cost, "lifetime_points_spent": -cost}})
+        raise HTTPException(status_code=400, detail="Someone else claimed the sports betting book first. Try again.")
+    try:
+        from utils.point_provenance import log_points_event
+
+        await log_points_event(db, user_id=uid, points=-cost, event_type="sports_betting_claim", meta={"cost": cost})
+    except Exception:
+        pass
+    await log_activity(uid, current_user.get("username") or "?", "sports_betting_claim", {"cost_points": cost})
+    return {"message": f"You now own the sports betting book ({cost:,} points).", "cost_points": cost}
+
+
+async def collect_sports_betting_ownership(current_user: dict = Depends(get_current_user)):
+    """Collect pending cash profit from the sports betting book."""
+    uid = current_user.get("id") or ""
+    await _maybe_auto_relinquish_sports_betting_ownership()
+    old = await db.sports_betting_ownership.find_one_and_update(
+        {"id": SPORTS_BETTING_OWNERSHIP_ID, "owner_id": uid, "owner_pending_profit": {"$gt": 0}},
+        {"$set": {"owner_pending_profit": 0}},
+        projection={"_id": 0, "owner_pending_profit": 1},
+        return_document=False,
+    )
+    if not old:
+        ownership = await get_sports_betting_ownership(db)
+        if ownership.get("owner_id") != uid:
+            raise HTTPException(status_code=403, detail="You do not own the sports betting book")
+        return {"message": "No profit to collect yet.", "collected_money": 0}
+    pending = int(old.get("owner_pending_profit") or 0)
+    if pending > 0:
+        await db.users.update_one({"id": uid}, {"$inc": {"money": pending}})
+        try:
+            from routers.money.bank import _invalidate_overview_cache
+
+            _invalidate_overview_cache(uid)
+        except Exception:
+            pass
+    return {"message": f"Collected ${pending:,} from sports betting book profit.", "collected_money": pending}
+
+
+async def relinquish_sports_betting_ownership(current_user: dict = Depends(get_current_user)):
+    """Relinquish sports betting book ownership."""
+    uid = current_user.get("id") or ""
+    ownership = await get_sports_betting_ownership(db)
+    if ownership.get("owner_id") != uid:
+        raise HTTPException(status_code=403, detail="You do not own the sports betting book")
+    pending = int(ownership.get("owner_pending_profit") or 0)
+    if pending > 0:
+        await db.users.update_one({"id": uid}, {"$inc": {"money": pending}})
+        try:
+            from routers.money.bank import _invalidate_overview_cache
+
+            _invalidate_overview_cache(uid)
+        except Exception:
+            pass
+    await db.sports_betting_ownership.update_one(
+        {"id": SPORTS_BETTING_OWNERSHIP_ID, "owner_id": uid},
+        {"$set": {"owner_id": None, "owner_username": None, "owner_pending_profit": 0}, "$unset": {"stack_conflict_acquired_at": ""}},
+    )
+    await log_activity(uid, current_user.get("username") or "?", "sports_betting_relinquish", {})
+    return {"message": "Sports betting book relinquished. It is now unclaimed."}
+
+
+async def sports_betting_ownership_send_to_user(
+    request: SportsBettingOwnershipSendRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Transfer sports betting book ownership to another player."""
+    target_username = (request.target_username or "").strip()
+    if not target_username:
+        raise HTTPException(status_code=400, detail="Enter a username")
+    uid = current_user.get("id") or ""
+    family_id = await resolve_family_id(uid)
+    if family_id and await _family_in_active_war(family_id):
+        raise HTTPException(status_code=403, detail=SPORTS_BETTING_WAR_LOCK_DETAIL)
+    await _maybe_auto_relinquish_sports_betting_ownership()
+    ownership = await get_sports_betting_ownership(db)
+    if ownership.get("owner_id") != uid:
+        raise HTTPException(status_code=403, detail="You do not own the sports betting book")
+    target = await db.users.find_one(
+        {"username": _username_pattern(target_username)},
+        {"_id": 0, "id": 1, "username": 1, "rank_points": 1},
+    )
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target["id"] == uid:
+        raise HTTPException(status_code=400, detail="Cannot transfer to yourself")
+    if await user_owns_sports_betting_book(db, target["id"]):
+        raise HTTPException(status_code=400, detail="That user already owns the sports betting book")
+    if await _user_owns_any_property(target["id"]):
+        raise HTTPException(status_code=400, detail=SPORTS_BETTING_TRANSFER_TARGET_CONFLICT_DETAIL)
+    transfer_set = {
+        "owner_id": target["id"],
+        "owner_username": target.get("username", target_username),
+    }
+    tgt_rank = get_rank_info(target.get("rank_points", 0), user_prestige_rank_mult(target))[0]
+    unset_fields: Dict[str, str] = {"stack_conflict_acquired_at": ""}
+    if tgt_rank < CAPO_RANK_ID:
+        transfer_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
+    else:
+        unset_fields["below_capo_acquired_at"] = ""
+    await db.sports_betting_ownership.update_one(
+        {"id": SPORTS_BETTING_OWNERSHIP_ID, "owner_id": uid},
+        {"$set": transfer_set, "$unset": unset_fields},
+    )
+    await cancel_sports_betting_quicktrade_listings(db)
+    await log_activity(
+        uid,
+        current_user.get("username") or "?",
+        "sports_betting_transfer",
+        {"to_user": target.get("username", target_username), "to_user_id": target["id"]},
+    )
+    sender_name = (current_user.get("username") or "").strip() or "?"
+    await send_notification(
+        target["id"],
+        "Sports betting book transferred",
+        f"{sender_name} sent you the sports betting book.",
+        "reward",
+    )
+    await maybe_revoke_civilian_protection(db, target["id"], "received_property_transfer")
+    return {"message": f"Sports betting book transferred to {target.get('username', target_username)}."}
+
+
+async def sports_betting_ownership_sell_on_trade(
+    request: SportsBettingOwnershipSellRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """List the sports betting book on Quick Trade for points."""
+    pts = int(request.points or 0)
+    if pts <= 0:
+        raise HTTPException(status_code=400, detail="Points must be positive")
+    uid = current_user.get("id") or ""
+    family_id = await resolve_family_id(uid)
+    if family_id and await _family_in_active_war(family_id):
+        raise HTTPException(status_code=403, detail=SPORTS_BETTING_WAR_LOCK_DETAIL)
+    await _maybe_auto_relinquish_sports_betting_ownership()
+    ownership = await get_sports_betting_ownership(db)
+    if ownership.get("owner_id") != uid:
+        raise HTTPException(status_code=403, detail="You do not own the sports betting book")
+    existing = await db.properties.find_one({"type": "sports_betting", "for_sale": True})
+    if existing:
+        raise HTTPException(status_code=400, detail="The sports betting book is already listed on Quick Trade. Cancel that listing first.")
+    listing_id = ObjectId()
+    listing = {
+        "_id": listing_id,
+        "id": str(listing_id),
+        "type": "sports_betting",
+        "name": "Sports Betting Book",
+        "owner_id": uid,
+        "owner_username": current_user.get("username", "Unknown"),
+        "for_sale": True,
+        "sale_price": pts,
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.properties.insert_one(listing)
+    try:
+        from routers.money.quicktrade import _invalidate_trade_caches
+
+        _invalidate_trade_caches()
+    except Exception:
+        pass
+    return {"message": f"Sports Betting Book listed for {pts:,} points on Quick Trade"}
+
+
 def register(router):
     if _odds_api_key():
         logger.info(
@@ -4164,6 +4447,12 @@ def register(router):
     router.add_api_route("/sports-betting/cancel-bet", sports_betting_cancel_bet, methods=["POST"])
     router.add_api_route("/sports-betting/cancel-all-bets", sports_betting_cancel_all_bets, methods=["POST"])
     router.add_api_route("/sports-betting/stats", sports_betting_stats, methods=["GET"], dependencies=_sports_betting_rl_u)
+    router.add_api_route("/sports-betting/ownership", get_sports_betting_ownership_status, methods=["GET"], dependencies=_sports_betting_rl_u)
+    router.add_api_route("/sports-betting/ownership/claim", claim_sports_betting_ownership, methods=["POST"])
+    router.add_api_route("/sports-betting/ownership/collect", collect_sports_betting_ownership, methods=["POST"])
+    router.add_api_route("/sports-betting/ownership/relinquish", relinquish_sports_betting_ownership, methods=["POST"])
+    router.add_api_route("/sports-betting/ownership/send-to-user", sports_betting_ownership_send_to_user, methods=["POST"])
+    router.add_api_route("/sports-betting/ownership/sell-on-trade", sports_betting_ownership_sell_on_trade, methods=["POST"])
     router.add_api_route("/sports-betting/recent-results", sports_betting_recent_results, methods=["GET"], dependencies=_sports_betting_rl_u)
     router.add_api_route("/sports-betting/template-library", sports_template_library, methods=["GET"], dependencies=_sports_betting_rl_u)
     router.add_api_route("/sports-betting/my-event-requests", sports_my_event_requests, methods=["GET"], dependencies=_sports_betting_rl_u)

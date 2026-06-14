@@ -23,6 +23,7 @@ from server import (
     _user_owns_airport,
     _user_owns_bullet_factory,
     _user_owns_garage_dealership,
+    _user_owns_sports_betting_book,
     _user_owns_any_property,
     send_notification,
     _is_admin,
@@ -1271,7 +1272,7 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
         raise HTTPException(status_code=400, detail="Cannot buy your own property")
     _restore = lambda: db.properties.update_one({"_id": ObjectId(property_id)}, {"$set": {"for_sale": True}})
     prop_type = prop.get("type") or ""
-    if prop_type.startswith("casino_") or prop_type in ("airport", "bullet_factory", "garage_dealership"):
+    if prop_type.startswith("casino_") or prop_type in ("airport", "bullet_factory", "garage_dealership", "sports_betting"):
         rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
         prestige_level = int(current_user.get("prestige_level") or 0)
         if rank_id < CAPO_RANK_ID and prestige_level < 1:
@@ -1305,6 +1306,13 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
         if await _user_owns_any_property(buyer_id):
             await _restore()
             raise HTTPException(status_code=400, detail="You already own an airport or armoury. Relinquish it before buying the car dealership.")
+    if prop.get("type") == "sports_betting":
+        if await _user_owns_sports_betting_book(buyer_id):
+            await _restore()
+            raise HTTPException(status_code=400, detail="You already own the sports betting book. Relinquish it first.")
+        if await _user_owns_any_property(buyer_id):
+            await _restore()
+            raise HTTPException(status_code=400, detail="You already own an airport or armoury. Relinquish it before buying the sports betting book.")
     result = await db.users.update_one(
         {"id": buyer_id, "points": {"$gte": sale_price}},
         {"$inc": {"points": -sale_price}}
@@ -1500,6 +1508,24 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
             await db.garage_dealership.update_one(
                 {"id": GARAGE_DEALERSHIP_ID},
                 {"$set": dealership_set, "$unset": {"below_capo_acquired_at": ""}},
+                upsert=True,
+            )
+    elif prop_type == "sports_betting":
+        from utils.sports_betting_ownership import SPORTS_BETTING_OWNERSHIP_ID
+
+        buyer_rank_id, _ = get_rank_info(buyer.get("rank_points", 0), user_prestige_rank_mult(buyer))
+        sports_book_set = {"owner_id": buyer_id, "owner_username": buyer_username}
+        if buyer_rank_id < CAPO_RANK_ID:
+            sports_book_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
+            await db.sports_betting_ownership.update_one(
+                {"id": SPORTS_BETTING_OWNERSHIP_ID},
+                {"$set": sports_book_set},
+                upsert=True,
+            )
+        else:
+            await db.sports_betting_ownership.update_one(
+                {"id": SPORTS_BETTING_OWNERSHIP_ID},
+                {"$set": sports_book_set, "$unset": {"below_capo_acquired_at": ""}},
                 upsert=True,
             )
     elif prop_type == "family":

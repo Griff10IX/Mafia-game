@@ -2507,6 +2507,7 @@ async def remove_family_quicktrade_listings_for_war_families(family_a_id: str, f
     if member_ids:
         prop_types = [
             "garage_dealership",
+            "sports_betting",
             "airport",
             "bullet_factory",
             "casino_dice",

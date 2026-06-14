@@ -3264,6 +3264,12 @@ async def _user_owns_garage_dealership(user_id: str):
     return await user_owns_garage_dealership(db, user_id)
 
 
+async def _user_owns_sports_betting_book(user_id: str):
+    """Return global sports betting book owned by user or None. Max one per account."""
+    from utils.sports_betting_ownership import user_owns_sports_betting_book
+    return await user_owns_sports_betting_book(db, user_id)
+
+
 async def _user_owns_any_property(user_id: str):
     """Return one owned major property for legacy callers: airport first, else armoury. Users may hold both."""
     air = await _user_owns_airport(user_id)

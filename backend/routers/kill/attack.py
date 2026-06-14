@@ -125,6 +125,7 @@ from server import (
     _user_owns_any_casino,
     _user_owns_any_property,
     _user_owns_garage_dealership,
+    _user_owns_sports_betting_book,
     log_activity,
     founding_member_income_mult,
 )
@@ -2889,6 +2890,37 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 )
                 if res.modified_count:
                     transferred_dealership = True
+        # Transfer victim's sports betting book to killer (or release if killer already owns one)
+        killer_owns_sports_book = await _user_owns_sports_betting_book(killer_id)
+        victim_sports_book = await db.sports_betting_ownership.find_one({"owner_id": victim_id}, {"_id": 0})
+        transferred_sports_book = False
+        transferred_sports_book_stack_conflict = False
+        if victim_sports_book:
+            try:
+                from utils.sports_betting_ownership import cancel_sports_betting_quicktrade_listings
+
+                await cancel_sports_betting_quicktrade_listings(db)
+            except Exception:
+                pass
+            if killer_owns_sports_book:
+                await db.sports_betting_ownership.update_many(
+                    {"owner_id": victim_id},
+                    {"$set": {"owner_id": None, "owner_username": None}},
+                )
+            else:
+                sports_book_set = {"owner_id": killer_id, "owner_username": killer_username}
+                killer_had_property = await _user_owns_any_property(killer_id)
+                if killer_had_property:
+                    sports_book_set["stack_conflict_acquired_at"] = datetime.now(timezone.utc)
+                    transferred_sports_book_stack_conflict = True
+                elif attacker_rank_id < CAPO_RANK_ID:
+                    sports_book_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
+                res = await db.sports_betting_ownership.update_one(
+                    {"owner_id": victim_id},
+                    {"$set": sports_book_set},
+                )
+                if res.modified_count:
+                    transferred_sports_book = True
         # Transfer loot-exclusive weapon: victim loses one; killer gains only if they don't have it
         victim_uw = await db.user_weapons.find_one({"user_id": victim_id, "weapon_id": "weapon_loot", "quantity": {"$gte": 1}}, {"_id": 0, "quantity": 1})
         if victim_uw:
@@ -3063,6 +3095,11 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         if transferred_dealership:
             c = "their car dealership"
             if transferred_dealership_stack_conflict:
+                c += " (send it away within 3 hours — you already hold an airport or armoury)"
+            extras.append(c)
+        if transferred_sports_book:
+            c = "their sports betting book"
+            if transferred_sports_book_stack_conflict:
                 c += " (send it away within 3 hours — you already hold an airport or armoury)"
             extras.append(c)
         if extras:
