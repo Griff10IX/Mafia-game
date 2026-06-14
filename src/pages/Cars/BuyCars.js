@@ -535,7 +535,7 @@ export default function BuyCars() {
       <div className="relative bc-fade-in flex flex-wrap items-end justify-between gap-2">
         <div>
           <p className="text-[10px] text-zinc-500 font-heading italic">
-            Dealer and player listings. Dealership owner earns {dealership?.dealer_owner_profit_share_pct ?? 90}% of dealer-sale profit and {dealership?.player_sale_owner_profit_share_pct ?? 10}% of player listing profit.
+            Dealer and player listings. Dealership owner earns {dealership?.dealer_owner_profit_share_pct ?? 25}% of dealer-sale profit and {dealership?.player_sale_owner_profit_share_pct ?? 10}% of player listing profit.
           </p>
         </div>
         <Link

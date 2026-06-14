@@ -489,7 +489,7 @@ const GlobalPropertiesPanel = ({ garageDealership, sportsBetting }) => {
               <div className="min-w-0">
                 <div className="text-[10px] font-heading font-bold text-foreground leading-tight">Car Dealership</div>
                 <div className="text-[8px] text-mutedForeground leading-snug mt-0.5">
-                  Buy Cars dealer · owner earns {garageDealership?.dealer_owner_profit_share_pct ?? 90}% dealer markup, {garageDealership?.player_sale_owner_profit_share_pct ?? 10}% listings
+                  Buy Cars dealer · owner earns {garageDealership?.dealer_owner_profit_share_pct ?? 25}% dealer markup, {garageDealership?.player_sale_owner_profit_share_pct ?? 10}% listings
                 </div>
               </div>
             </div>

@@ -990,7 +990,9 @@ export default function MyProperties() {
                   <Car size={18} className="text-primary" />
                   <span className="font-heading font-bold text-foreground">Car Dealership</span>
                 </div>
-                <p className="text-[11px] text-mutedForeground mb-1">Earn from dealer sales (90% of markup) and player listings (10% of markup).</p>
+                <p className="text-[11px] text-mutedForeground mb-1">
+                  Earn from dealer sales ({garageDealershipDetail?.dealer_owner_profit_share_pct ?? 25}% of markup) and player listings ({garageDealershipDetail?.player_sale_owner_profit_share_pct ?? 10}% of markup).
+                </p>
                 {garageDealershipDetail && (
                   <p className="text-[11px] text-mutedForeground mb-2">
                     Profit to collect: <span className="text-emerald-400 font-bold">{formatMoney(garageDealershipDetail.owner_pending_profit ?? 0)}</span>
