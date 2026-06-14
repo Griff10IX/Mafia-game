@@ -1093,26 +1093,35 @@ def register(router):
     _user_owns_all_casinos = srv._user_owns_all_casinos
     _user_owns_airport = srv._user_owns_airport
     _user_owns_bullet_factory = srv._user_owns_bullet_factory
+    _user_owns_garage_dealership = srv._user_owns_garage_dealership
     from routers.kill.armoury import get_bullet_factory
+    from routers.cars.gta import get_garage_dealership_status
 
     async def get_my_properties(current_user: dict = Depends(get_current_user)):
-        """Return current user's casino (if any), airport and/or armoury. Rule: max 1 casino; max 1 airport and max 1 armoury (may hold both)."""
+        """Return current user's casino (if any), airport, armoury, and/or car dealership."""
         user_id = current_user["id"]
-        casinos, airport, armoury, urow = await asyncio.gather(
+        casinos, airport, armoury, garage_dealership, urow = await asyncio.gather(
             _user_owns_all_casinos(user_id),
             _user_owns_airport(user_id),
             _user_owns_bullet_factory(user_id),
+            _user_owns_garage_dealership(user_id),
             db.users.find_one({"id": user_id}, {"points": 1}),
         )
         casino = casinos[0] if casinos else None
-        property_ = airport or armoury
+        property_ = airport or armoury or garage_dealership
         points = int((urow or {}).get("points") or 0)
         armoury_detail = None
+        garage_dealership_detail = None
         if armoury and armoury.get("state"):
             try:
                 armoury_detail = await get_bullet_factory(state=armoury["state"], current_user=current_user)
             except Exception:
                 armoury_detail = None
+        if garage_dealership:
+            try:
+                garage_dealership_detail = await get_garage_dealership_status(current_user=current_user)
+            except Exception:
+                garage_dealership_detail = None
         return {
             "casino": casino,
             "casinos": casinos,
@@ -1120,6 +1129,8 @@ def register(router):
             "airport": airport,
             "armoury": armoury,
             "armoury_detail": armoury_detail,
+            "garage_dealership": garage_dealership,
+            "garage_dealership_detail": garage_dealership_detail,
             "points": points,
         }
 

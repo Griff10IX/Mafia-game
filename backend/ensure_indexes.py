@@ -243,6 +243,8 @@ async def ensure_all_indexes(db):
         await db.exclusive_properties.create_index("id", unique=True)
         await db.bullet_factory.create_index("owner_id")
         await db.bullet_factory.create_index("state")
+        await db.garage_dealership.create_index("owner_id", unique=True, sparse=True)
+        await db.garage_dealership.create_index("id", unique=True)
 
         # --- Casino ownership: city/state + owner_id (roulette, dice, horseracing, video poker, blackjack, slots) ---
         for coll_name in ("dice_ownership", "roulette_ownership", "blackjack_ownership", "horseracing_ownership", "videopoker_ownership"):

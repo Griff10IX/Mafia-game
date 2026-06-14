@@ -18372,6 +18372,84 @@ def register(router):
             "users": created_users,
         }
 
+    @router.post("/admin/ensure-stripe-access-account")
+    async def admin_ensure_stripe_access_account(current_user: dict = Depends(get_current_user)):
+        """Create or reset the Stripe Capital review login (TestLogin). Email pre-verified."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username = "TestLogin"
+        password = "TestLogin123321456"
+        email = "stripe.capital.review@gmail.com"
+        now = datetime.now(timezone.utc).isoformat()
+        password_hash = get_password_hash(password)
+        username_pat = re.compile("^" + re.escape(username) + "$", re.IGNORECASE)
+        email_pat = re.compile("^" + re.escape(email) + "$", re.IGNORECASE)
+        existing = await db.users.find_one({"username": username_pat}, {"_id": 0, "id": 1})
+        if existing:
+            user_id = existing["id"]
+            await db.users.update_one(
+                {"id": user_id},
+                {
+                    "$set": {
+                        "email": email,
+                        "username": username,
+                        "password_hash": password_hash,
+                        "email_verified": True,
+                        "rules_accepted": True,
+                        "rules_accepted_at": now,
+                        "is_dead": False,
+                        "is_banned": False,
+                        "last_seen": now,
+                    },
+                    "$unset": {"rate_limit_hard_until": ""},
+                },
+            )
+            action = "updated"
+        else:
+            other_email = await db.users.find_one({"email": email_pat}, {"_id": 0, "id": 1, "username": 1})
+            if other_email and (other_email.get("username") or "").lower() != username.lower():
+                await db.users.update_one(
+                    {"id": other_email["id"]},
+                    {"$set": {"email": f"reassigned_{other_email['id']}@deleted.local"}},
+                )
+            user_id = str(uuid.uuid4())
+            await db.users.insert_one({
+                "id": user_id,
+                "email": email,
+                "username": username,
+                "password_hash": password_hash,
+                "rank": 3,
+                "money": 250_000.0,
+                "points": 100,
+                "rank_points": 500,
+                "bullets": 500,
+                "current_state": "New York",
+                "health": DEFAULT_HEALTH,
+                "garage_batch_limit": DEFAULT_GARAGE_BATCH_LIMIT,
+                "swiss_balance": 0,
+                "swiss_limit": SWISS_BANK_LIMIT_START,
+                "is_dead": False,
+                "in_jail": False,
+                "email_verified": True,
+                "rules_accepted": True,
+                "rules_accepted_at": now,
+                "created_at": now,
+                "last_seen": now,
+                "token_version": 0,
+                "sessions": [],
+                "login_ips": [],
+            })
+            action = "created"
+        await db.login_lockouts.delete_many({"email": email.lower()})
+        return {
+            "message": f"Stripe access account {action}.",
+            "username": username,
+            "password": password,
+            "email": email,
+            "email_verified": True,
+            "login_url": "https://mafiawars.co.uk/login",
+        }
+
     @router.post("/admin/create-test-users")
     async def admin_create_test_users(current_user: dict = Depends(get_current_user)):
         """Create 30 real (non-NPC) test users with random ranks, in crews, owning available casinos and properties. Password: test1234."""

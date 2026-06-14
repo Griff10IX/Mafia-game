@@ -46,7 +46,6 @@ function storeRespectForPoints(pts) {
   return Math.floor((p * 27 + 3) / 4);
 }
 
-const STORE_TOKEN_MAX_HELD = 15;
 /** Keep in sync with backend armoury.TOKEN_MAX_STACK_HOURS (7 × 24 = 1 week). */
 const TOKEN_MAX_STACK_LABEL = '1 week';
 
@@ -1328,12 +1327,11 @@ export default function Store() {
           <div className="space-y-2">
             <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Consumable tokens</h2>
             <p className="text-[9px] text-zinc-500 font-heading italic max-w-2xl">
-              Buy unactivated tokens (max {STORE_TOKEN_MAX_HELD} stored per type). Activate from My Inventory. Also tradable via Quick Trade — store prices are a points sink for convenience.
+              Buy unactivated tokens. Activate from My Inventory. Also tradable via Quick Trade — store prices are a points sink for convenience.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
               {TOKEN_STORE_ITEMS.map((t) => {
                 const held = Number(user?.[t.userKey] ?? 0);
-                const atCap = held >= STORE_TOKEN_MAX_HELD;
                 const tokenCashPrice = cashPriceAvailable ? Math.round(t.price * cashPricePerPoint) : 0;
                 return (
                   <StoreCard
@@ -1345,7 +1343,7 @@ export default function Store() {
                     respectPrice={storeRespectForPoints(t.price)}
                     owned={false}
                     loading={loading}
-                    disabled={atCap || (storePayWith === 'cash' && cashPurchasesToday >= cashPurchasesLimit)}
+                    disabled={storePayWith === 'cash' && cashPurchasesToday >= cashPurchasesLimit}
                     user={user}
                     payWith={storePayWith}
                     cashPrice={storePayWith === 'cash' ? tokenCashPrice : undefined}
@@ -1359,7 +1357,7 @@ export default function Store() {
                       }
                     }}
                   >
-                    <p className="text-[10px] text-mutedForeground mb-1">Held: {held}/{STORE_TOKEN_MAX_HELD}</p>
+                    <p className="text-[10px] text-mutedForeground mb-1">Held: {held.toLocaleString()}</p>
                   </StoreCard>
                 );
               })}
@@ -1375,8 +1373,7 @@ export default function Store() {
               {SELECTABLE_BUNDLE_ITEMS.map((t) => {
                 const held = Number(user?.[t.userKey] ?? 0);
                 const picked = Number(selectableBundleQtyByToken[t.tokenType] || 0);
-                const atCap = held + picked >= STORE_TOKEN_MAX_HELD;
-                const canAdd = selectableBundlePickedTotal < SELECTABLE_BUNDLE_SIZE && !atCap;
+                const canAdd = selectableBundlePickedTotal < SELECTABLE_BUNDLE_SIZE;
                 const canRemove = picked > 0;
                 return (
                   <div key={`sel-${t.tokenType}`} className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
@@ -1388,7 +1385,7 @@ export default function Store() {
                     <div className="p-2.5">
                       <p className="text-[9px] text-mutedForeground font-heading mb-1.5">{t.desc}</p>
                       <p className="text-[10px] text-mutedForeground mb-1.5">
-                        Held: {held}/{STORE_TOKEN_MAX_HELD} · {t.price} pts each
+                        Held: {held.toLocaleString()} · {t.price} pts each
                       </p>
                       <div className="flex items-center gap-2">
                         <button

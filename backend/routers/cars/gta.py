@@ -13,6 +13,18 @@ from pydantic import BaseModel
 from pymongo import ReturnDocument, UpdateOne
 
 from utils.family_perks import family_perk_modifiers
+from utils.garage_dealership import (
+    GARAGE_DEALERSHIP_CLAIM_COST_POINTS,
+    GARAGE_DEALERSHIP_ID,
+    DEALER_OWNER_PROFIT_SHARE,
+    P2P_OWNER_PROFIT_SHARE,
+    dealership_sale_profit,
+    dealer_owner_profit_cut,
+    p2p_owner_profit_cut,
+    get_garage_dealership,
+    credit_garage_dealership_profit,
+    user_owns_garage_dealership,
+)
 
 from utils.referral_ids import (
     apply_referrer_referral_increment,
@@ -80,6 +92,14 @@ class GTABuyListedCarRequest(BaseModel):
     user_car_id: str
 
 
+class DealershipSendToUserRequest(BaseModel):
+    target_username: str
+
+
+class DealershipSellOnTradeRequest(BaseModel):
+    points: int
+
+
 class GTARepairCarRequest(BaseModel):
     user_car_id: str
 
@@ -123,6 +143,7 @@ from server import (
     GARAGE_BATCH_LIMIT_MAX,
     CustomCarImageUpdate,
     _family_in_active_war,
+    _username_pattern,
 )
 from routers.account.objectives import update_objectives_progress
 from routers.admin.airport import _invalidate_travel_info_cache
@@ -1694,7 +1715,22 @@ async def get_cars_for_sale(current_user: dict = Depends(get_current_user)):
             "in_stock": in_stock,
             "can_buy": in_stock > 0,
         })
-    return {"cars": out}
+    dealership = await get_garage_dealership(db)
+    owner_id = dealership.get("owner_id")
+    owner_username = dealership.get("owner_username")
+    uid = current_user.get("id") or ""
+    return {
+        "cars": out,
+        "dealership": {
+            "owner_id": owner_id,
+            "owner_username": owner_username,
+            "is_owner": bool(owner_id and owner_id == uid),
+            "claim_cost_points": GARAGE_DEALERSHIP_CLAIM_COST_POINTS,
+            "owner_pending_profit": int(dealership.get("owner_pending_profit") or 0) if owner_id == uid else None,
+            "dealer_owner_profit_share_pct": int(DEALER_OWNER_PROFIT_SHARE * 100),
+            "player_sale_owner_profit_share_pct": int(P2P_OWNER_PROFIT_SHARE * 100),
+        },
+    }
 
 
 # Per-process pacing: rapid "buy all" from the dealer was hammering Mongo (writes + restock).
@@ -1746,6 +1782,11 @@ async def buy_car(
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": price}})
         raise HTTPException(status_code=400, detail="That car is out of stock. Try again in a moment.")
     await _dealer_after_sale_restock(request.car_id, car_info)
+    catalog_value = int(car_info.get("value", 0))
+    profit = dealership_sale_profit(price, catalog_value)
+    dealership = await get_garage_dealership(db)
+    if dealership.get("owner_id") and profit > 0:
+        await credit_garage_dealership_profit(db, dealer_owner_profit_cut(profit))
     now = datetime.now(timezone.utc)
     doc = {
         "id": str(uuid.uuid4()),
@@ -1995,8 +2036,16 @@ async def buy_listed_car(
         await _rollback_car()
         raise HTTPException(status_code=400, detail=f"Insufficient money. Need ${price:,}.")
     car_name = (user_car.get("custom_name") or user_car.get("car_name") or (car_info or {}).get("name") or "Car") if (user_car.get("car_id") == "car_custom") else ((car_info or {}).get("name") or user_car.get("car_name") or "Car")
+    catalog_value = int((car_info or {}).get("value", 0))
+    profit = dealership_sale_profit(price, catalog_value)
+    dealership = await get_garage_dealership(db)
+    owner_cut = 0
+    if dealership.get("owner_id") and profit > 0:
+        owner_cut = p2p_owner_profit_cut(profit)
+        await credit_garage_dealership_profit(db, owner_cut)
+    seller_payout = max(0, price - owner_cut)
     # Ownership already transferred by find_one_and_update; pay seller
-    await db.users.update_one({"id": seller_id}, {"$inc": {"money": price}})
+    await db.users.update_one({"id": seller_id}, {"$inc": {"money": seller_payout}})
     seller = await db.users.find_one({"id": seller_id}, {"_id": 0, "username": 1})
     now_iso = datetime.now(timezone.utc).isoformat()
     await db.economy_events.insert_one({
@@ -2017,7 +2066,7 @@ async def buy_listed_car(
         "from_username": current_user.get("username") or "",
         "to_user_id": seller_id,
         "to_username": (seller or {}).get("username") or "?",
-        "amount": price,
+        "amount": seller_payout,
         "created_at": now_iso,
         "car_name": car_name,
         "transfer_type": "car_trade",
@@ -2343,6 +2392,169 @@ async def get_gta_exclusive_pool_status(current_user: dict = Depends(get_current
     return {"exclusive_in_pool": bool(released)}
 
 
+async def get_garage_dealership_status(current_user: dict = Depends(get_current_user)):
+    """Ownership status for the global car dealership (Buy Cars dealer)."""
+    dealership = await get_garage_dealership(db)
+    uid = current_user.get("id") or ""
+    owner_id = dealership.get("owner_id")
+    is_owner = bool(owner_id and owner_id == uid)
+    return {
+        "owner_id": owner_id,
+        "owner_username": dealership.get("owner_username"),
+        "is_owner": is_owner,
+        "claim_cost_points": GARAGE_DEALERSHIP_CLAIM_COST_POINTS,
+        "owner_pending_profit": int(dealership.get("owner_pending_profit") or 0) if is_owner else None,
+        "dealer_owner_profit_share_pct": int(DEALER_OWNER_PROFIT_SHARE * 100),
+        "player_sale_owner_profit_share_pct": int(P2P_OWNER_PROFIT_SHARE * 100),
+    }
+
+
+async def claim_garage_dealership(current_user: dict = Depends(get_current_user_verified)):
+    """Pay points to become owner of the car dealership."""
+    uid = current_user.get("id") or ""
+    if await user_owns_garage_dealership(db, uid):
+        raise HTTPException(status_code=400, detail="You already own the car dealership")
+    dealership = await get_garage_dealership(db)
+    if dealership.get("owner_id"):
+        raise HTTPException(status_code=400, detail="The car dealership already has an owner")
+    cost = GARAGE_DEALERSHIP_CLAIM_COST_POINTS
+    result = await db.users.update_one(
+        {"id": uid, "points": {"$gte": cost}},
+        {"$inc": {"points": -cost, "lifetime_points_spent": cost}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail=f"Insufficient points. Need {cost:,} points.")
+    claim_result = await db.garage_dealership.update_one(
+        {"id": GARAGE_DEALERSHIP_ID, "owner_id": None},
+        {"$set": {"owner_id": uid, "owner_username": current_user.get("username") or "?"}},
+    )
+    if claim_result.modified_count == 0:
+        await db.users.update_one({"id": uid}, {"$inc": {"points": cost, "lifetime_points_spent": -cost}})
+        raise HTTPException(status_code=400, detail="Someone else claimed the dealership first. Try again.")
+    try:
+        from utils.point_provenance import log_points_event
+        await log_points_event(db, user_id=uid, points=-cost, event_type="garage_dealership_claim", meta={"cost": cost})
+    except Exception:
+        pass
+    await log_activity(uid, current_user.get("username") or "?", "garage_dealership_claim", {"cost_points": cost})
+    return {"message": f"You now own the car dealership ({cost:,} points).", "cost_points": cost}
+
+
+async def collect_garage_dealership(current_user: dict = Depends(get_current_user)):
+    """Collect pending cash profit from dealership sales."""
+    uid = current_user.get("id") or ""
+    old = await db.garage_dealership.find_one_and_update(
+        {"id": GARAGE_DEALERSHIP_ID, "owner_id": uid, "owner_pending_profit": {"$gt": 0}},
+        {"$set": {"owner_pending_profit": 0}},
+        projection={"_id": 0, "owner_pending_profit": 1},
+        return_document=False,
+    )
+    if not old:
+        dealership = await get_garage_dealership(db)
+        if dealership.get("owner_id") != uid:
+            raise HTTPException(status_code=403, detail="You do not own the car dealership")
+        return {"message": "No profit to collect yet.", "collected_money": 0}
+    pending = int(old.get("owner_pending_profit") or 0)
+    if pending > 0:
+        await db.users.update_one({"id": uid}, {"$inc": {"money": pending}})
+        try:
+            from routers.money.bank import _invalidate_overview_cache
+            _invalidate_overview_cache(uid)
+        except Exception:
+            pass
+    return {"message": f"Collected ${pending:,} from dealership sales.", "collected_money": pending}
+
+
+async def relinquish_garage_dealership(current_user: dict = Depends(get_current_user)):
+    """Relinquish car dealership ownership."""
+    uid = current_user.get("id") or ""
+    dealership = await get_garage_dealership(db)
+    if dealership.get("owner_id") != uid:
+        raise HTTPException(status_code=403, detail="You do not own the car dealership")
+    pending = int(dealership.get("owner_pending_profit") or 0)
+    if pending > 0:
+        await db.users.update_one({"id": uid}, {"$inc": {"money": pending}})
+        try:
+            from routers.money.bank import _invalidate_overview_cache
+            _invalidate_overview_cache(uid)
+        except Exception:
+            pass
+    await db.garage_dealership.update_one(
+        {"id": GARAGE_DEALERSHIP_ID, "owner_id": uid},
+        {"$set": {"owner_id": None, "owner_username": None, "owner_pending_profit": 0}},
+    )
+    await log_activity(uid, current_user.get("username") or "?", "garage_dealership_relinquish", {})
+    return {"message": "Car dealership relinquished. It is now unclaimed."}
+
+
+async def garage_dealership_send_to_user(
+    request: DealershipSendToUserRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Transfer car dealership ownership to another player."""
+    target_username = (request.target_username or "").strip()
+    if not target_username:
+        raise HTTPException(status_code=400, detail="Enter a username")
+    uid = current_user.get("id") or ""
+    dealership = await get_garage_dealership(db)
+    if dealership.get("owner_id") != uid:
+        raise HTTPException(status_code=403, detail="You do not own the car dealership")
+    target = await db.users.find_one({"username": _username_pattern(target_username)}, {"_id": 0, "id": 1, "username": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target["id"] == uid:
+        raise HTTPException(status_code=400, detail="Cannot transfer to yourself")
+    if await user_owns_garage_dealership(db, target["id"]):
+        raise HTTPException(status_code=400, detail="That user already owns the car dealership")
+    await db.garage_dealership.update_one(
+        {"id": GARAGE_DEALERSHIP_ID, "owner_id": uid},
+        {"$set": {"owner_id": target["id"], "owner_username": target.get("username", target_username)}},
+    )
+    await log_activity(
+        uid,
+        current_user.get("username") or "?",
+        "garage_dealership_transfer",
+        {"to_user": target.get("username", target_username), "to_user_id": target["id"]},
+    )
+    return {"message": f"Car dealership transferred to {target.get('username', target_username)}."}
+
+
+async def garage_dealership_sell_on_trade(
+    request: DealershipSellOnTradeRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """List the car dealership on Quick Trade for points."""
+    pts = int(request.points or 0)
+    if pts <= 0:
+        raise HTTPException(status_code=400, detail="Points must be positive")
+    uid = current_user.get("id") or ""
+    dealership = await get_garage_dealership(db)
+    if dealership.get("owner_id") != uid:
+        raise HTTPException(status_code=403, detail="You do not own the car dealership")
+    existing = await db.properties.find_one({"type": "garage_dealership", "for_sale": True})
+    if existing:
+        raise HTTPException(status_code=400, detail="The car dealership is already listed on Quick Trade. Cancel that listing first.")
+    listing_id = ObjectId()
+    listing = {
+        "_id": listing_id,
+        "id": str(listing_id),
+        "type": "garage_dealership",
+        "name": "Car Dealership",
+        "owner_id": uid,
+        "owner_username": current_user.get("username", "Unknown"),
+        "for_sale": True,
+        "sale_price": pts,
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.properties.insert_one(listing)
+    try:
+        from routers.money.quicktrade import _invalidate_trade_caches
+        _invalidate_trade_caches()
+    except Exception:
+        pass
+    return {"message": f"Car Dealership listed for {pts:,} points on Quick Trade"}
+
+
 async def _gta_sustained_rl_user(current_user: dict = Depends(get_current_user)):
     await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_GTA)
 
@@ -2371,6 +2583,12 @@ def register(router):
     router.add_api_route("/gta/list-car", list_car, methods=["POST"])
     router.add_api_route("/gta/delist-car", delist_car, methods=["POST"])
     router.add_api_route("/gta/buy-listed-car", buy_listed_car, methods=["POST"])
+    router.add_api_route("/gta/dealership", get_garage_dealership_status, methods=["GET"], dependencies=_gta_rl_u)
+    router.add_api_route("/gta/dealership/claim", claim_garage_dealership, methods=["POST"])
+    router.add_api_route("/gta/dealership/collect", collect_garage_dealership, methods=["POST"])
+    router.add_api_route("/gta/dealership/relinquish", relinquish_garage_dealership, methods=["POST"])
+    router.add_api_route("/gta/dealership/send-to-user", garage_dealership_send_to_user, methods=["POST"])
+    router.add_api_route("/gta/dealership/sell-on-trade", garage_dealership_sell_on_trade, methods=["POST"])
     router.add_api_route("/gta/repair-car", repair_car, methods=["POST"])
     router.add_api_route("/gta/repair-all", repair_all_cars, methods=["POST"])
     router.add_api_route("/gta/custom-car/{user_car_id}", update_custom_car_image, methods=["PATCH"])

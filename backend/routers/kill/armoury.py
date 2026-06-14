@@ -32,7 +32,7 @@ from utils.game_pass_micro_rewards import (
     perks_for_micro_tier,
 )
 from utils.loot_perk_stack import apply_loot_style_perk_to_merged_set
-from routers.game.store import _store_cost_inc, STORE_TOKEN_MAX_HELD
+from routers.game.store import _store_cost_inc
 from routers.minigames.minigame_leaderboard import log_minigame_play
 from utils.minigame_run_session import (
     claim_minigame_run_session,
@@ -471,7 +471,7 @@ class ExchangeAutoRankRequest(BaseModel):
 class GiftTokenRequest(BaseModel):
     target_username: str
     token_type: str
-    amount: int = Field(default=1, ge=1, le=STORE_TOKEN_MAX_HELD)
+    amount: int = Field(default=1, ge=1, le=TOKEN_GIFT_DAILY_UNITS_MAX)
 
 
 class ShootingRangeTrainRequest(BaseModel):
@@ -2883,32 +2883,17 @@ async def gift_inventory_tokens(req: GiftTokenRequest, current_user: dict = Depe
             ),
         )
 
-    rec_count = int(recipient.get(count_field) or 0)
-    if rec_count + amt > STORE_TOKEN_MAX_HELD:
-        raise HTTPException(
-            status_code=400,
-            detail=f"They can hold at most {STORE_TOKEN_MAX_HELD} unactivated tokens of that type (they have {rec_count}).",
-        )
-
     r1 = await db.users.update_one({"id": uid, count_field: {"$gte": amt}}, {"$inc": {count_field: -amt}})
     if r1.modified_count == 0:
         raise HTTPException(status_code=400, detail="Could not remove tokens. Try again.")
 
     r2 = await db.users.update_one(
-        {
-            "id": rid,
-            "$expr": {
-                "$lte": [{"$add": [{"$ifNull": [f"${count_field}", 0]}, amt]}, STORE_TOKEN_MAX_HELD],
-            },
-        },
+        {"id": rid},
         {"$inc": {count_field: amt}},
     )
     if r2.modified_count == 0:
         await db.users.update_one({"id": uid}, {"$inc": {count_field: amt}})
-        raise HTTPException(
-            status_code=400,
-            detail=f"They cannot accept that many (max {STORE_TOKEN_MAX_HELD} of each type).",
-        )
+        raise HTTPException(status_code=400, detail="Could not deliver tokens. Try again.")
 
     await db.users.update_one(
         {"id": uid},

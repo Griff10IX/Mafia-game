@@ -72,20 +72,6 @@ def _store_cost_inc(current_user: dict, points_cost: int, pay_with: str = "auto"
     return points_cost, inc, gte
 
 
-def _token_count_lte_atom_filter(count_field: str, max_current: int) -> dict:
-    """Require (current stored count) <= max_current, treating missing/null as 0.
-    Plain {field: {$lte: n}} does not match docs where the field is absent, which caused
-    store token purchases to fail for first-time buyers even with enough points/respect."""
-    return {
-        "$expr": {
-            "$lte": [
-                {"$ifNull": [f"${count_field}", 0]},
-                max_current,
-            ]
-        }
-    }
-
-
 from server import (
     db,
     get_current_user,
@@ -215,8 +201,7 @@ class SendPointsRequest(BaseModel):
         return v
 
 
-# Consumable tokens (inventory caps) — prices above typical safe/loot EV; must match armoury.TOKEN_CONFIG keys
-STORE_TOKEN_MAX_HELD = 15
+# Consumable tokens — prices above typical safe/loot EV; must match armoury.TOKEN_CONFIG keys
 TOKEN_STORE_UNIT_PRICE_POINTS = {
     "xp_crimes": 42,
     "xp_gta": 42,
@@ -310,12 +295,6 @@ def _validate_selectable_bundle_purchase(current_user: dict, selections: dict, t
             raise HTTPException(status_code=400, detail=f"This token type is not sold in the store: {tt}")
         cfg = token_config[tt]
         cf = cfg["count_field"]
-        cur = int(current_user.get(cf) or 0)
-        if cur + qty > STORE_TOKEN_MAX_HELD:
-            raise HTTPException(
-                status_code=400,
-                detail=f"You can hold at most {STORE_TOKEN_MAX_HELD} unactivated tokens of this type ({tt}, have {cur}).",
-            )
         unit = int(TOKEN_STORE_UNIT_PRICE_POINTS[tt])
         subtotal_pts += unit * qty
         entries.append({"token_type": tt, "count_field": cf, "qty": qty, "unit_price": unit})
@@ -757,12 +736,6 @@ async def buy_store_token(
     amt = int(body.amount)
     cfg = TOKEN_CONFIG[tt]
     cf = cfg["count_field"]
-    cur = int(current_user.get(cf) or 0)
-    if cur + amt > STORE_TOKEN_MAX_HELD:
-        raise HTTPException(
-            status_code=400,
-            detail=f"You can hold at most {STORE_TOKEN_MAX_HELD} unactivated tokens of this type (have {cur}).",
-        )
     unit = TOKEN_STORE_UNIT_PRICE_POINTS[tt]
     total_cost = unit * amt
     cost_used, inc, gte_filter = _store_cost_inc(current_user, total_cost, pay_with)
@@ -777,12 +750,11 @@ async def buy_store_token(
         inc["token_respect_spent"] = _rsp
     filt = {
         "id": current_user["id"],
-        **_token_count_lte_atom_filter(cf, STORE_TOKEN_MAX_HELD - amt),
         **gte_filter,
     }
     result = await db.users.update_one(filt, {"$inc": inc})
     if result.modified_count == 0:
-        raise HTTPException(status_code=400, detail="Purchase failed (balance or token cap). Try again.")
+        raise HTTPException(status_code=400, detail="Purchase failed. Try again.")
     await _record_store_points_spend(current_user["id"], inc, f"buy-token:{tt}")
     await log_activity(current_user["id"], current_user.get("username", "?"), "store_purchase", {"item": f"token:{tt}", "amount": amt, "cost": cost_used})
     return {"message": f"+{amt} {tt.replace('_', ' ')} token(s) for {cost_used} points", "cost": cost_used, "token_type": tt, "amount": amt}
@@ -797,13 +769,6 @@ async def buy_store_token_bundle(
     if bid not in TOKEN_STORE_BUNDLES:
         raise HTTPException(status_code=400, detail=f"Unknown bundle. Options: {list(TOKEN_STORE_BUNDLES.keys())}")
     cost, field_inc = TOKEN_STORE_BUNDLES[bid]
-    for field, add in field_inc.items():
-        cur = int(current_user.get(field) or 0)
-        if cur + add > STORE_TOKEN_MAX_HELD:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Would exceed max {STORE_TOKEN_MAX_HELD} stored for {field} (currently {cur}).",
-            )
     cost_used, inc, gte_filter = _store_cost_inc(current_user, cost, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
@@ -815,18 +780,13 @@ async def buy_store_token_bundle(
         inc["token_points_spent"] = _pts
     if _rsp > 0:
         inc["token_respect_spent"] = _rsp
-    expr_clauses = [
-        {"$lte": [{"$ifNull": [f"${field}", 0]}, STORE_TOKEN_MAX_HELD - add]}
-        for field, add in field_inc.items()
-    ]
     filt = {
         "id": current_user["id"],
-        "$expr": expr_clauses[0] if len(expr_clauses) == 1 else {"$and": expr_clauses},
         **gte_filter,
     }
     result = await db.users.update_one(filt, {"$inc": inc})
     if result.modified_count == 0:
-        raise HTTPException(status_code=400, detail="Purchase failed (balance or token cap). Try again.")
+        raise HTTPException(status_code=400, detail="Purchase failed. Try again.")
     await _record_store_points_spend(current_user["id"], inc, f"buy-token-bundle:{bid}")
     return {"message": f"Bundle '{bid}' purchased for {cost_used} points", "cost": cost_used, "bundle_id": bid}
 
@@ -854,18 +814,13 @@ async def buy_store_token_selectable_bundle(
         inc["token_points_spent"] = _pts
     if _rsp > 0:
         inc["token_respect_spent"] = _rsp
-    expr_clauses = [
-        {"$lte": [{"$ifNull": [f"${e['count_field']}", 0]}, STORE_TOKEN_MAX_HELD - int(e["qty"])]}
-        for e in entries
-    ]
     filt = {
         "id": current_user["id"],
-        "$expr": expr_clauses[0] if len(expr_clauses) == 1 else {"$and": expr_clauses},
         **gte_filter,
     }
     result = await db.users.update_one(filt, {"$inc": inc})
     if result.modified_count == 0:
-        raise HTTPException(status_code=400, detail="Purchase failed (balance or token cap). Try again.")
+        raise HTTPException(status_code=400, detail="Purchase failed. Try again.")
     await _record_store_points_spend(current_user["id"], inc, "buy-token-selectable-bundle")
     selected = [{"token_type": e["token_type"], "amount": int(e["qty"])} for e in entries]
     return {
@@ -1032,12 +987,6 @@ async def buy_store_token_cash(
     amt = int(body.amount)
     cfg = TOKEN_CONFIG[tt]
     cf = cfg["count_field"]
-    cur = int(current_user.get(cf) or 0)
-    if cur + amt > STORE_TOKEN_MAX_HELD:
-        raise HTTPException(
-            status_code=400,
-            detail=f"You can hold at most {STORE_TOKEN_MAX_HELD} unactivated tokens of this type (have {cur}).",
-        )
 
     used = _cash_purchases_today(current_user)
     if used + amt > TOKEN_CASH_DAILY_LIMIT:
@@ -1065,7 +1014,6 @@ async def buy_store_token_cash(
     filt = {
         "id": current_user["id"],
         "money": {"$gte": cash_cost},
-        **_token_count_lte_atom_filter(cf, STORE_TOKEN_MAX_HELD - amt),
     }
     inc = {"money": -cash_cost, cf: amt, "token_cash_spent": cash_cost}
     set_doc = {"token_cash_purchases_date": today}
@@ -1075,7 +1023,7 @@ async def buy_store_token_cash(
         inc["token_cash_purchases_today"] = amt
     result = await db.users.update_one(filt, {"$inc": inc, "$set": set_doc})
     if result.modified_count == 0:
-        raise HTTPException(status_code=400, detail="Purchase failed (balance or token cap). Try again.")
+        raise HTTPException(status_code=400, detail="Purchase failed. Try again.")
 
     await log_activity(
         current_user["id"], current_user.get("username", "?"), "store_purchase",
@@ -1099,10 +1047,6 @@ async def buy_store_token_bundle_cash(
         raise HTTPException(status_code=400, detail=f"Unknown bundle. Options: {list(TOKEN_STORE_BUNDLES.keys())}")
 
     cost_pts, field_inc = TOKEN_STORE_BUNDLES[bid]
-    for field, add in field_inc.items():
-        cur = int(current_user.get(field) or 0)
-        if cur + add > STORE_TOKEN_MAX_HELD:
-            raise HTTPException(status_code=400, detail=f"Token cap reached for {field.replace('_tokens', '')} (have {cur}).")
 
     used = _cash_purchases_today(current_user)
     if used + 1 > TOKEN_CASH_DAILY_LIMIT:
@@ -1133,15 +1077,12 @@ async def buy_store_token_bundle_cash(
     if not new_day:
         inc["token_cash_purchases_today"] = 1
     filt = {"id": current_user["id"], **gte}
-    for field, add in field_inc.items():
-        filt.update(_token_count_lte_atom_filter(field, STORE_TOKEN_MAX_HELD - add))
-
     set_doc = {"token_cash_purchases_date": today}
     if new_day:
         set_doc["token_cash_purchases_today"] = 1
     result = await db.users.update_one(filt, {"$inc": inc, "$set": set_doc})
     if result.modified_count == 0:
-        raise HTTPException(status_code=400, detail="Purchase failed (balance or token cap). Try again.")
+        raise HTTPException(status_code=400, detail="Purchase failed. Try again.")
 
     await log_activity(
         current_user["id"], current_user.get("username", "?"), "store_purchase",
@@ -1190,21 +1131,16 @@ async def buy_store_token_selectable_bundle_cash(
         inc[field] = inc.get(field, 0) + qty
     if not new_day:
         inc["token_cash_purchases_today"] = units_selected
-    expr_clauses = [
-        {"$lte": [{"$ifNull": [f"${e['count_field']}", 0]}, STORE_TOKEN_MAX_HELD - int(e["qty"])]}
-        for e in entries
-    ]
     filt = {
         "id": current_user["id"],
         "money": {"$gte": cash_cost},
-        "$expr": expr_clauses[0] if len(expr_clauses) == 1 else {"$and": expr_clauses},
     }
     set_doc = {"token_cash_purchases_date": today}
     if new_day:
         set_doc["token_cash_purchases_today"] = units_selected
     result = await db.users.update_one(filt, {"$inc": inc, "$set": set_doc})
     if result.modified_count == 0:
-        raise HTTPException(status_code=400, detail="Purchase failed (balance or token cap). Try again.")
+        raise HTTPException(status_code=400, detail="Purchase failed. Try again.")
     selected = [{"token_type": e["token_type"], "amount": int(e["qty"])} for e in entries]
     return {
         "message": f"Selectable bundle purchased for ${cash_cost:,.0f}",

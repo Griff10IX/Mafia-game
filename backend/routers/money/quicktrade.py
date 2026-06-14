@@ -22,6 +22,7 @@ from server import (
     CASINO_MIN_OWNER_MAX_BET,
     _user_owns_airport,
     _user_owns_bullet_factory,
+    _user_owns_garage_dealership,
     send_notification,
     _is_admin,
     refund_casino_buy_back_escrow_points,
@@ -1269,7 +1270,7 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
         raise HTTPException(status_code=400, detail="Cannot buy your own property")
     _restore = lambda: db.properties.update_one({"_id": ObjectId(property_id)}, {"$set": {"for_sale": True}})
     prop_type = prop.get("type") or ""
-    if prop_type.startswith("casino_") or prop_type == "airport" or prop_type == "bullet_factory":
+    if prop_type.startswith("casino_") or prop_type in ("airport", "bullet_factory", "garage_dealership"):
         rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
         prestige_level = int(current_user.get("prestige_level") or 0)
         if rank_id < CAPO_RANK_ID and prestige_level < 1:
@@ -1296,6 +1297,10 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
         if await _user_owns_bullet_factory(buyer_id):
             await _restore()
             raise HTTPException(status_code=400, detail="You already own an armoury. Relinquish it first.")
+    if prop.get("type") == "garage_dealership":
+        if await _user_owns_garage_dealership(buyer_id):
+            await _restore()
+            raise HTTPException(status_code=400, detail="You already own the car dealership. Relinquish it first.")
     result = await db.users.update_one(
         {"id": buyer_id, "points": {"$gte": sale_price}},
         {"$inc": {"points": -sale_price}}
@@ -1475,6 +1480,13 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
                 {"$set": {"owner_id": buyer_id, "owner_username": buyer_username}},
                 upsert=True
             )
+    elif prop_type == "garage_dealership":
+        from utils.garage_dealership import GARAGE_DEALERSHIP_ID
+        await db.garage_dealership.update_one(
+            {"id": GARAGE_DEALERSHIP_ID},
+            {"$set": {"owner_id": buyer_id, "owner_username": buyer_username}},
+            upsert=True,
+        )
     elif prop_type == "family":
         from routers.game.families import complete_family_quicktrade_sale
 

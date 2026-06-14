@@ -309,7 +309,7 @@ export default function MyInventory() {
     const sent = data.token_gift_daily?.sent ?? 0;
     const lim = data.token_gift_daily?.limit ?? 20;
     const rem = Math.max(0, lim - sent);
-    const amt = Math.max(1, Math.min(15, held, rem, parseInt(String(giftAmount), 10) || 1));
+    const amt = Math.max(1, Math.min(held, rem, parseInt(String(giftAmount), 10) || 1));
     if (held < 1 || rem < 1) return;
     setGifting(true);
     try {
@@ -556,7 +556,7 @@ export default function MyInventory() {
                 <input
                   type="number"
                   min={1}
-                  max={Math.min(15, heldForGift || 15, dailyRemaining || 15)}
+                  max={Math.min(heldForGift || 1, dailyRemaining || 1)}
                   value={giftAmount}
                   onChange={(ev) => setGiftAmount(ev.target.value)}
                   disabled={giftableWithStock.length === 0}

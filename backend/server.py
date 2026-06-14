@@ -843,7 +843,7 @@ class UserResponse(BaseModel):
     jailbust_bonus_until: Optional[str] = None
     # Rank-XP pass token: 24h window starts only when the token is activated in Armoury.
     rank_xp_pass_bonus_until: Optional[str] = None
-    # Unactivated consumable token counts (armoury inventory); store purchases respect STORE_TOKEN_MAX_HELD
+    # Unactivated consumable token counts (armoury inventory)
     xp_crimes_tokens: int = 0
     xp_gta_tokens: int = 0
     melt_tokens: int = 0
@@ -3256,6 +3256,12 @@ async def _user_owns_bullet_factory(user_id: str):
                 "total_earnings": int(doc.get("owner_pending_profit_points") or 0),
             }
     return None
+
+
+async def _user_owns_garage_dealership(user_id: str):
+    """Return global car dealership owned by user or None. Max one per account."""
+    from utils.garage_dealership import user_owns_garage_dealership
+    return await user_owns_garage_dealership(db, user_id)
 
 
 async def _user_owns_any_property(user_id: str):

@@ -78,6 +78,10 @@ export default function BuyCars() {
   const authUser = useAuthUser();
   const [dealerCars, setDealerCars] = useState([]);
   const [marketplaceListings, setMarketplaceListings] = useState([]);
+  const [dealership, setDealership] = useState(null);
+  const [dealershipSaving, setDealershipSaving] = useState(false);
+  const [dealershipTransferUsername, setDealershipTransferUsername] = useState('');
+  const [dealershipSellPoints, setDealershipSellPoints] = useState('');
   const [userMoney, setUserMoney] = useState(() => (authUser?.money != null ? authUser.money : null));
   const [hasLoaded, setHasLoaded] = useState(false);
   const [selectedRarity, setSelectedRarity] = useState(null);
@@ -93,6 +97,7 @@ export default function BuyCars() {
         api.get('/gta/marketplace').catch(() => ({ data: { listings: [] } })),
       ]);
       setDealerCars(Array.isArray(saleRes.data?.cars) ? saleRes.data.cars : []);
+      setDealership(saleRes.data?.dealership || null);
       if (authUser?.money != null) setUserMoney(authUser.money);
       setMarketplaceListings(Array.isArray(marketRes.data?.listings) ? marketRes.data.listings : []);
     } catch (_) {}
@@ -131,6 +136,8 @@ export default function BuyCars() {
     })).filter((row) => row.modelCount > 0);
   }, [dealerCars, marketplaceListings]);
 
+  const dealerOwnerLabel = dealership?.owner_username || 'Dealer';
+
   const allVehicles = useMemo(() => {
     const cash = userMoney != null ? Number(userMoney) : null;
     const moneyKnown = cash != null && !Number.isNaN(cash);
@@ -147,7 +154,7 @@ export default function BuyCars() {
         name: c.name,
         price,
         speed: TRAVEL_TIMES[c.rarity] ?? 45,
-        owner: 'Dealer',
+        owner: dealerOwnerLabel,
         rarity: c.rarity || 'common',
         inStock,
         minRank: c.min_rank ?? 1,
@@ -177,7 +184,7 @@ export default function BuyCars() {
       });
     });
     return rows;
-  }, [dealerCars, marketplaceListings, userMoney]);
+  }, [dealerCars, marketplaceListings, userMoney, dealerOwnerLabel]);
 
   const filteredVehicles = useMemo(() => {
     let list = allVehicles;
@@ -279,6 +286,87 @@ export default function BuyCars() {
     }
   };
 
+  const handleClaimDealership = async () => {
+    if (dealershipSaving) return;
+    setDealershipSaving(true);
+    try {
+      const res = await api.post('/gta/dealership/claim');
+      toast.success(res?.data?.message || 'Dealership claimed');
+      refreshUser();
+      fetchAll();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not claim dealership');
+    } finally {
+      setDealershipSaving(false);
+    }
+  };
+
+  const handleCollectDealership = async () => {
+    if (dealershipSaving) return;
+    setDealershipSaving(true);
+    try {
+      const res = await api.post('/gta/dealership/collect');
+      toast.success(res?.data?.message || 'Profit collected');
+      refreshUser();
+      fetchAll();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not collect profit');
+    } finally {
+      setDealershipSaving(false);
+    }
+  };
+
+  const handleRelinquishDealership = async () => {
+    if (dealershipSaving) return;
+    if (!window.confirm('Relinquish the car dealership? Pending profit will be paid out first.')) return;
+    setDealershipSaving(true);
+    try {
+      const res = await api.post('/gta/dealership/relinquish');
+      toast.success(res?.data?.message || 'Dealership relinquished');
+      refreshUser();
+      fetchAll();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not relinquish');
+    } finally {
+      setDealershipSaving(false);
+    }
+  };
+
+  const handleSendDealership = async () => {
+    const username = (dealershipTransferUsername || '').trim();
+    if (!username || dealershipSaving) return;
+    setDealershipSaving(true);
+    try {
+      const res = await api.post('/gta/dealership/send-to-user', { target_username: username });
+      toast.success(res?.data?.message || 'Dealership transferred');
+      setDealershipTransferUsername('');
+      fetchAll();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Transfer failed');
+    } finally {
+      setDealershipSaving(false);
+    }
+  };
+
+  const handleListDealershipOnTrade = async () => {
+    const pts = parseInt(String(dealershipSellPoints).replace(/,/g, '').replace(/\D/g, ''), 10);
+    if (!pts || pts <= 0) {
+      toast.error('Enter points to list on Quick Trade');
+      return;
+    }
+    if (dealershipSaving) return;
+    setDealershipSaving(true);
+    try {
+      const res = await api.post('/gta/dealership/sell-on-trade', { points: pts });
+      toast.success(res?.data?.message || 'Listed on Quick Trade');
+      setDealershipSellPoints('');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not list on Quick Trade');
+    } finally {
+      setDealershipSaving(false);
+    }
+  };
+
   if (!hasLoaded) {
     return (
       <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
@@ -293,7 +381,9 @@ export default function BuyCars() {
 
       <div className="relative bc-fade-in flex flex-wrap items-end justify-between gap-2">
         <div>
-          <p className="text-[10px] text-zinc-500 font-heading italic">Dealer and player listings. Owner shows seller.</p>
+          <p className="text-[10px] text-zinc-500 font-heading italic">
+            Dealer and player listings. Dealership owner earns {dealership?.dealer_owner_profit_share_pct ?? 90}% of dealer-sale profit and {dealership?.player_sale_owner_profit_share_pct ?? 10}% of player listing profit.
+          </p>
         </div>
         <Link
           to="/cars/garage"
@@ -303,6 +393,59 @@ export default function BuyCars() {
           Garage
         </Link>
       </div>
+
+      {dealership && (
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bc-fade-in mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Car dealership</span>
+          </div>
+          <div className="p-3 space-y-2 text-[10px] font-heading">
+            {dealership.is_owner ? (
+              <>
+                <p className="text-mutedForeground">
+                  You own the dealership. Collect profit from dealer sales ({dealership.dealer_owner_profit_share_pct}% of markup) and player listings ({dealership.player_sale_owner_profit_share_pct}% of markup).
+                </p>
+                <p>
+                  <span className="text-mutedForeground">Pending profit: </span>
+                  <span className="text-emerald-400 font-bold">${Number(dealership.owner_pending_profit || 0).toLocaleString()}</span>
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" disabled={dealershipSaving} onClick={handleCollectDealership} className="px-2 py-1 rounded border border-primary/40 bg-primary/10 text-primary font-bold disabled:opacity-50">Collect</button>
+                  <button type="button" disabled={dealershipSaving} onClick={handleRelinquishDealership} className="px-2 py-1 rounded border border-rose-500/40 text-rose-400 font-bold disabled:opacity-50">Relinquish</button>
+                </div>
+                <div className="flex flex-wrap items-end gap-2 pt-1 border-t border-border/50">
+                  <label className="flex flex-col gap-0.5 min-w-[8rem] flex-1">
+                    <span className="text-[8px] uppercase tracking-wider text-mutedForeground">Send to player</span>
+                    <input value={dealershipTransferUsername} onChange={(e) => setDealershipTransferUsername(e.target.value)} className="rounded border border-primary/30 bg-background/80 px-2 py-1 text-[10px]" placeholder="Username" />
+                  </label>
+                  <button type="button" disabled={dealershipSaving || !dealershipTransferUsername.trim()} onClick={handleSendDealership} className="px-2 py-1 rounded border border-primary/40 text-primary font-bold disabled:opacity-50">Send</button>
+                </div>
+                <div className="flex flex-wrap items-end gap-2">
+                  <label className="flex flex-col gap-0.5 min-w-[8rem] flex-1">
+                    <span className="text-[8px] uppercase tracking-wider text-mutedForeground">Quick Trade (points)</span>
+                    <input value={dealershipSellPoints} onChange={(e) => setDealershipSellPoints(e.target.value)} className="rounded border border-primary/30 bg-background/80 px-2 py-1 text-[10px]" placeholder="Points price" />
+                  </label>
+                  <button type="button" disabled={dealershipSaving} onClick={handleListDealershipOnTrade} className="px-2 py-1 rounded border border-primary/40 text-primary font-bold disabled:opacity-50">List on QT</button>
+                </div>
+              </>
+            ) : dealership.owner_username ? (
+              <p className="text-mutedForeground">
+                Owned by <span className="text-foreground font-bold">{dealership.owner_username}</span>.
+              </p>
+            ) : (
+              <>
+                <p className="text-mutedForeground">
+                  Unclaimed — claim for {(dealership.claim_cost_points || 10000).toLocaleString()} points to earn from dealer and player car sales.
+                </p>
+                <button type="button" disabled={dealershipSaving} onClick={handleClaimDealership} className="px-3 py-1.5 rounded border border-primary/50 bg-primary/15 text-primary font-bold disabled:opacity-50">
+                  Claim dealership · {(dealership.claim_cost_points || 10000).toLocaleString()} pts
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bc-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
