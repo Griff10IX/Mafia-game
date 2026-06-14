@@ -38,8 +38,23 @@ MARKET_PREVIEW_MISSING_NOTIFICATION = (
 )
 
 
+def _listing_escrow_quantity(row: dict) -> int:
+    nids = row.get("notification_ids") or []
+    if nids:
+        return len(nids)
+    return max(0, int(row.get("quantity") or 0))
+
+
+def _persisted_messages_valid(messages) -> bool:
+    if not isinstance(messages, list) or not messages:
+        return False
+    return all(isinstance(m, str) and (m or "").strip() for m in messages)
+
+
 def active_witness_listing_is_broken(row: dict, notif_by_id: dict) -> bool:
-    """True if any referenced inbox row is missing, not a witness statement, wrong owner, or has no message."""
+    """True when listing has no saved witness text and inbox escrow rows are missing/invalid."""
+    if _persisted_messages_valid(row.get("witness_messages")):
+        return False
     seller_id = row.get("seller_id")
     nids = row.get("notification_ids") or []
     if not seller_id or not nids:
@@ -108,15 +123,87 @@ def register(router):
         ).to_list(len(ids))
         return {r["id"]: r.get("message") or "" for r in rows}
 
-    def _ordered_previews(ids: list[str], msg_by_id: dict, *, redact: bool) -> list:
+    async def _archived_messages_by_id(db, ids: list[str]) -> dict:
+        if not ids:
+            return {}
+        rows = await db.deleted_messages_archive.find(
+            {"source": "notification", "original.id": {"$in": ids}},
+            {"_id": 0, "original.id": 1, "original.message": 1},
+        ).to_list(len(ids))
+        out = {}
+        for row in rows:
+            orig = row.get("original") or {}
+            nid = orig.get("id")
+            if nid:
+                out[nid] = orig.get("message") or ""
+        return out
+
+    async def _resolve_listing_witness_messages(db, row: dict, msg_by_id: Optional[dict] = None) -> list[str]:
+        saved = row.get("witness_messages")
+        if _persisted_messages_valid(saved):
+            return list(saved)
+        nids = row.get("notification_ids") or []
+        if not nids:
+            return []
+        if msg_by_id is None:
+            msg_by_id = await _notification_messages_by_id(db, nids)
+        archived = await _archived_messages_by_id(db, nids)
+        messages = []
+        for nid in nids:
+            m = (msg_by_id.get(nid) or archived.get(nid) or "").strip()
+            messages.append(m)
+        return messages
+
+    async def _maybe_persist_listing_messages(db, listing_id: str, messages: list[str]) -> None:
+        if not listing_id or not _persisted_messages_valid(messages):
+            return
+        await db.witness_statement_listings.update_one(
+            {
+                "id": listing_id,
+                "status": "active",
+                "$or": [
+                    {"witness_messages": {"$exists": False}},
+                    {"witness_messages": None},
+                    {"witness_messages": []},
+                ],
+            },
+            {"$set": {"witness_messages": messages}},
+        )
+
+    def _ordered_previews_from_messages(messages: list[str], *, redact: bool) -> list:
         out = []
-        for nid in ids:
-            m = (msg_by_id.get(nid, "") or "").strip()
-            if not m:
+        for m in messages:
+            s = (m or "").strip()
+            if not s:
                 out.append(MARKET_PREVIEW_MISSING_NOTIFICATION)
                 continue
-            out.append(redact_witness_killer_for_market(m) if redact else m)
+            out.append(redact_witness_killer_for_market(s) if redact else s)
         return out
+
+    def _ordered_previews(ids: list[str], msg_by_id: dict, *, redact: bool) -> list:
+        messages = [(msg_by_id.get(nid, "") or "").strip() for nid in ids]
+        return _ordered_previews_from_messages(messages, redact=redact)
+
+    async def _deliver_witness_messages_to_buyer(db, buyer_id: str, messages: list[str], nids: list[str]) -> None:
+        from server import send_notification
+
+        for i, msg in enumerate(messages):
+            text = (msg or "").strip()
+            if not text:
+                continue
+            nid = nids[i] if i < len(nids) else None
+            if nid:
+                existing = await db.notifications.find_one({"id": nid, "user_id": buyer_id}, {"_id": 0, "id": 1})
+                if existing:
+                    continue
+            await send_notification(
+                buyer_id,
+                "Witness statement",
+                text,
+                "attack",
+                category="attacks",
+                always_deliver=True,
+            )
 
     @router.get("/admin/witness-statements-overview")
     async def admin_witness_statements_overview(current_user: dict = Depends(require_admin_or_mod)):
@@ -234,17 +321,15 @@ def register(router):
         escrow_ids: list[str] = []
         listing_rows = await db.witness_statement_listings.find(
             {"status": "active", "seller_id": uid},
-            {"_id": 0, "notification_ids": 1},
+            {"_id": 0, "notification_ids": 1, "quantity": 1},
         ).to_list(WITNESS_MAX_ACTIVE_LISTINGS + 2)
+        in_escrow = sum(_listing_escrow_quantity(row) for row in listing_rows)
         for row in listing_rows:
             for nid in row.get("notification_ids") or []:
                 s = str(nid).strip()
                 if s:
                     escrow_ids.append(s)
         escrow_set = list(dict.fromkeys(escrow_ids))
-        in_escrow = 0
-        if escrow_set:
-            in_escrow = await db.notifications.count_documents({**witness_base, "id": {"$in": escrow_set}})
 
         expected = max(0, int(total_notifications) - int(in_escrow))
         before = int(target.get("witness_statements") or 0)
@@ -425,7 +510,10 @@ def register(router):
             anon = bool(r.get("seller_anonymous"))
             nids = r.get("notification_ids") or []
             qty = int(r.get("quantity") or 0) or len(nids)
-            previews = _ordered_previews(nids, msg_by_id, redact=not is_own) if nids else []
+            messages = await _resolve_listing_witness_messages(db, r, msg_by_id)
+            if _persisted_messages_valid(messages) and not _persisted_messages_valid(r.get("witness_messages")):
+                await _maybe_persist_listing_messages(db, r.get("id") or "", messages)
+            previews = _ordered_previews_from_messages(messages, redact=not is_own) if messages else []
             seller_username_out = r.get("seller_username") or "?"
             if not is_own and anon:
                 seller_username_out = "Anonymous"
@@ -457,17 +545,22 @@ def register(router):
                 nids_all.append(x)
         nids_all = list(dict.fromkeys(nids_all))
         msg_by_id = await _notification_messages_by_id(db, nids_all)
-        return [
-            {
-                "id": r.get("id"),
-                "quantity": int(r.get("quantity") or 0) or len(r.get("notification_ids") or []),
-                "price_cash": int(r.get("price_cash") or 0),
-                "created_at": r.get("created_at"),
-                "seller_anonymous": bool(r.get("seller_anonymous")),
-                "previews": _ordered_previews(r.get("notification_ids") or [], msg_by_id, redact=False),
-            }
-            for r in rows
-        ]
+        my_out = []
+        for r in rows:
+            messages = await _resolve_listing_witness_messages(db, r, msg_by_id)
+            if _persisted_messages_valid(messages) and not _persisted_messages_valid(r.get("witness_messages")):
+                await _maybe_persist_listing_messages(db, r.get("id") or "", messages)
+            my_out.append(
+                {
+                    "id": r.get("id"),
+                    "quantity": int(r.get("quantity") or 0) or len(r.get("notification_ids") or []),
+                    "price_cash": int(r.get("price_cash") or 0),
+                    "created_at": r.get("created_at"),
+                    "seller_anonymous": bool(r.get("seller_anonymous")),
+                    "previews": _ordered_previews_from_messages(messages, redact=False),
+                }
+            )
+        return my_out
 
     @router.get("/witness-statements/recent")
     async def witness_statements_recent(current_user: dict = Depends(get_current_user)):
@@ -524,13 +617,17 @@ def register(router):
                 **_WITNESS_INBOX_TITLE,
                 **_NOT_LISTED,
             },
-            {"_id": 0, "id": 1},
+            {"_id": 0, "id": 1, "message": 1},
         ).to_list(qty + 1)
         if len(eligible) != qty:
             raise HTTPException(
                 status_code=400,
                 detail="Invalid selection, statements not owned, or already in escrow for a listing.",
             )
+        id_to_msg = {r["id"]: (r.get("message") or "").strip() for r in eligible}
+        witness_messages = [id_to_msg.get(i, "") for i in ids]
+        if not all(witness_messages):
+            raise HTTPException(status_code=400, detail="One or more witness statements have no text.")
         seller_res = await db.users.update_one(
             {"id": uid, "witness_statements": {"$gte": qty}},
             {"$inc": {"witness_statements": -qty}},
@@ -546,6 +643,7 @@ def register(router):
             "seller_anonymous": bool(req.seller_anonymous),
             "quantity": qty,
             "notification_ids": ids,
+            "witness_messages": witness_messages,
             "price_cash": price,
             "created_at": now,
             "status": "active",
@@ -632,14 +730,33 @@ def register(router):
             await db.users.update_one({"id": seller_id}, {"$inc": {"money": -price_f}})
             await db.witness_statement_listings.insert_one(row)
             raise HTTPException(status_code=400, detail="Could not credit statements; trade reverted")
+        messages = row.get("witness_messages") or []
+        if not _persisted_messages_valid(messages):
+            messages = await _resolve_listing_witness_messages(db, row)
         if nids:
-            xfer = await db.notifications.update_many(
+            await db.notifications.update_many(
                 {"listed_listing_id": lid, "user_id": seller_id, "id": {"$in": nids}},
                 {"$set": {"user_id": buyer_id}, "$unset": {"listed_listing_id": ""}},
             )
-            if xfer.modified_count != len(nids):
+        has_text = any((m or "").strip() for m in (messages[:qty] if messages else []))
+        if has_text:
+            await _deliver_witness_messages_to_buyer(db, buyer_id, messages[:qty], nids)
+        elif nids:
+            owned = await db.notifications.count_documents({"id": {"$in": nids}, "user_id": buyer_id})
+            if owned < qty:
                 await db.users.update_one({"id": buyer_id}, {"$inc": {"witness_statements": -qty, "money": price_f}})
                 await db.users.update_one({"id": seller_id}, {"$inc": {"money": -price_f}})
                 await db.witness_statement_listings.insert_one(row)
                 raise HTTPException(status_code=500, detail="Could not transfer statement records; trade reverted")
+        else:
+            await db.users.update_one({"id": buyer_id}, {"$inc": {"witness_statements": -qty, "money": price_f}})
+            await db.users.update_one({"id": seller_id}, {"$inc": {"money": -price_f}})
+            await db.witness_statement_listings.insert_one(row)
+            raise HTTPException(status_code=500, detail="Listing had no witness text; trade reverted")
+        try:
+            from routers.game.notifications import _invalidate_list_cache
+
+            _invalidate_list_cache(buyer_id)
+        except Exception:
+            pass
         return {"message": f"Bought {qty} witness statement(s).", "quantity": qty, "price_cash": price}

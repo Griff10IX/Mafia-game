@@ -205,6 +205,11 @@ def register(router):
         doc = await db.notifications.find_one({"id": notification_id, "user_id": current_user.get("id") or ""}, {"_id": 0})
         if not doc:
             raise HTTPException(status_code=404, detail="Notification not found")
+        if doc.get("listed_listing_id"):
+            raise HTTPException(
+                status_code=400,
+                detail="This witness statement is listed on the market. Cancel the listing on Witness statements first.",
+            )
         from utils.deleted_messages_archive import archive_message
         await archive_message(source="notification", doc=doc, deleted_by_id=current_user.get("id"), deleted_by_username=current_user.get("username"))
         await db.notifications.delete_one({"id": notification_id, "user_id": current_user.get("id") or ""})
@@ -213,12 +218,28 @@ def register(router):
     @router.delete("/notifications")
     async def delete_all_notifications(current_user: dict = Depends(get_current_user)):
         _invalidate_list_cache(current_user.get("id") or "")
+        uid = current_user.get("id") or ""
         from utils.deleted_messages_archive import archive_many
-        docs = await db.notifications.find({"user_id": current_user.get("id") or ""}, {"_id": 0}).sort("created_at", -1).to_list(200)
+        docs = await db.notifications.find(
+            {
+                "user_id": uid,
+                "$or": [{"listed_listing_id": {"$exists": False}}, {"listed_listing_id": None}],
+            },
+            {"_id": 0},
+        ).sort("created_at", -1).to_list(200)
         if docs:
-            await archive_many(source="notification", docs=docs, deleted_by_id=current_user.get("id"), deleted_by_username=current_user.get("username"))
-        result = await db.notifications.delete_many({"user_id": current_user.get("id") or ""})
-        return {"message": "All messages deleted", "deleted_count": result.deleted_count}
+            await archive_many(source="notification", docs=docs, deleted_by_id=uid, deleted_by_username=current_user.get("username"))
+        result = await db.notifications.delete_many(
+            {
+                "user_id": uid,
+                "$or": [{"listed_listing_id": {"$exists": False}}, {"listed_listing_id": None}],
+            }
+        )
+        skipped = await db.notifications.count_documents({"user_id": uid, "listed_listing_id": {"$exists": True, "$ne": None}})
+        msg = "All messages deleted"
+        if skipped:
+            msg = f"Deleted {result.deleted_count} message(s). {skipped} market-listed witness statement(s) were kept."
+        return {"message": msg, "deleted_count": result.deleted_count, "skipped_listed_witness": skipped}
 
     @router.post("/notifications/send")
     async def send_message_to_user(request: SendMessageRequest, current_user: dict = Depends(get_current_user)):

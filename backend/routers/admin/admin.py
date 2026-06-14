@@ -3341,6 +3341,11 @@ def register(router):
         doc = await db.notifications.find_one({"id": nid, "user_id": uid}, {"_id": 0})
         if not doc:
             raise HTTPException(status_code=404, detail="Notification not found")
+        if doc.get("listed_listing_id"):
+            raise HTTPException(
+                status_code=400,
+                detail="This witness statement is listed on the market. Cancel the seller's listing first.",
+            )
         from utils.deleted_messages_archive import archive_message
         from routers.game.notifications import invalidate_notifications_list_cache_for_user
 
