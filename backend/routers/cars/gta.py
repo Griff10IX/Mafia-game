@@ -88,6 +88,19 @@ class GTABuyCarRequest(BaseModel):
     car_id: str
 
 
+class GTABuyCarBulkItem(BaseModel):
+    car_id: str
+    quantity: int = 1
+
+
+class GTABuyCarsBulkRequest(BaseModel):
+    car_ids: Optional[List[str]] = None  # legacy: 1 each
+    items: Optional[List[GTABuyCarBulkItem]] = None
+
+
+DEALER_BUY_BULK_MAX = 200
+
+
 class GTAListCarRequest(BaseModel):
     user_car_id: str
     price: int
@@ -2088,6 +2101,175 @@ async def buy_car(
     }
 
 
+async def buy_cars_bulk(
+    request: GTABuyCarsBulkRequest, current_user: dict = Depends(get_current_user_verified)
+):
+    """Purchase many dealer cars in one request (no per-car rate limit). Supports quantity per model."""
+    uid = current_user.get("id") or ""
+    username = current_user.get("username") or "?"
+
+    qty_by_car: Dict[str, int] = {}
+    if request.items:
+        for item in request.items:
+            cid = str(item.car_id or "").strip()
+            if not cid:
+                continue
+            qty = int(item.quantity or 1)
+            if qty < 1:
+                raise HTTPException(status_code=400, detail="Quantity must be at least 1")
+            qty_by_car[cid] = qty_by_car.get(cid, 0) + qty
+    elif request.car_ids:
+        for cid in request.car_ids:
+            c = str(cid or "").strip()
+            if c:
+                qty_by_car[c] = qty_by_car.get(c, 0) + 1
+    else:
+        raise HTTPException(status_code=400, detail="No cars selected")
+
+    total_units = sum(qty_by_car.values())
+    if total_units <= 0:
+        raise HTTPException(status_code=400, detail="No cars selected")
+    if total_units > DEALER_BUY_BULK_MAX:
+        raise HTTPException(status_code=400, detail=f"Max {DEALER_BUY_BULK_MAX} cars per bulk purchase")
+
+    lines: List[Dict[str, Any]] = []
+    total_price = 0
+    for car_id, quantity in qty_by_car.items():
+        car_info = next((c for c in CARS if c.get("id") == car_id), None)
+        if not car_info:
+            raise HTTPException(status_code=400, detail=f"Car not found: {car_id}")
+        if car_info.get("id") in DEALER_EXCLUDED_IDS or car_info.get("rarity") == "loot_exclusive":
+            raise HTTPException(status_code=400, detail=f"That car is not for sale: {car_info.get('name') or car_id}")
+        price = int(car_info.get("value", 0) * _dealer_price_multiplier(car_info))
+        catalog_value = int(car_info.get("value", 0))
+        unit_profit = dealership_sale_profit(price, catalog_value)
+        lines.append({
+            "car_id": car_id,
+            "car_info": car_info,
+            "price": price,
+            "profit": unit_profit,
+            "requested": quantity,
+        })
+        total_price += price * quantity
+
+    pay_result = await db.users.update_one(
+        {"id": uid, "money": {"$gte": total_price}},
+        {"$inc": {"money": -total_price}},
+    )
+    if pay_result.modified_count == 0:
+        raise HTTPException(status_code=400, detail=f"Insufficient money. Need ${total_price:,}.")
+
+    bought_lines: List[Dict[str, Any]] = []
+    shortfalls: List[Dict[str, Any]] = []
+    for line in lines:
+        car_id = line["car_id"]
+        requested = int(line["requested"])
+        price = int(line["price"])
+        stock_docs = await db.dealer_stock.find({"car_id": car_id}).limit(requested).to_list(requested)
+        bought_count = len(stock_docs)
+        if bought_count < requested:
+            shortfalls.append({"car_id": car_id, "requested": requested, "bought": bought_count})
+        if stock_docs:
+            ids = [d["_id"] for d in stock_docs]
+            await db.dealer_stock.delete_many({"_id": {"$in": ids}})
+            for _ in range(bought_count):
+                bought_lines.append(line)
+
+    if not bought_lines:
+        await db.users.update_one({"id": uid}, {"$inc": {"money": total_price}})
+        raise HTTPException(status_code=400, detail="All selected cars are out of stock. Try again in a moment.")
+
+    refund = 0
+    for line in lines:
+        car_id = line["car_id"]
+        requested = int(line["requested"])
+        bought = sum(1 for bl in bought_lines if bl["car_id"] == car_id)
+        if bought < requested:
+            refund += int(line["price"]) * (requested - bought)
+    if refund > 0:
+        await db.users.update_one({"id": uid}, {"$inc": {"money": refund}})
+
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    user_car_docs = []
+    transfer_docs = []
+    for line in bought_lines:
+        car_info = line["car_info"]
+        price = int(line["price"])
+        user_car_id = str(uuid.uuid4())
+        user_car_docs.append({
+            "id": user_car_id,
+            "user_id": uid,
+            "car_id": line["car_id"],
+            "car_name": car_info.get("name"),
+            "acquired_at": now_iso,
+            "damage_percent": 0,
+        })
+        transfer_docs.append({
+            "id": str(uuid.uuid4()),
+            "from_user_id": uid,
+            "from_username": username,
+            "to_user_id": "__dealer__",
+            "to_username": "Dealer",
+            "amount": price,
+            "created_at": now_iso,
+            "car_name": car_info.get("name"),
+            "transfer_type": "car_purchase",
+        })
+
+    await db.user_cars.insert_many(user_car_docs)
+    if transfer_docs:
+        await db.money_transfers.insert_many(transfer_docs)
+
+    owner_profit_total = sum(int(l["profit"]) for l in bought_lines if int(l["profit"]) > 0)
+    dealership = await get_garage_dealership(db)
+    if dealership.get("owner_id") and owner_profit_total > 0:
+        await credit_garage_dealership_profit(db, dealer_owner_profit_cut(owner_profit_total))
+        try:
+            await _run_dealer_owner_auto_stock()
+        except Exception:
+            logger.exception("Dealer auto-stock after bulk sale")
+
+    await _dealer_after_sale_restock("", {})
+    _invalidate_travel_info_cache(uid)
+    try:
+        from routers.money.bank import _invalidate_overview_cache
+        _invalidate_overview_cache(uid)
+    except Exception:
+        pass
+
+    spent = sum(int(l["price"]) for l in bought_lines)
+    out_of_stock_car_ids = [s["car_id"] for s in shortfalls if int(s.get("bought") or 0) == 0]
+    await log_activity(
+        uid,
+        username,
+        "garage_buy_cars_bulk",
+        {
+            "count": len(bought_lines),
+            "spent": spent,
+            "car_ids": [l["car_id"] for l in bought_lines],
+            "shortfalls": shortfalls,
+            "out_of_stock": out_of_stock_car_ids,
+        },
+    )
+
+    msg = f"Purchased {len(bought_lines)} car{'s' if len(bought_lines) != 1 else ''} for ${spent:,}"
+    if shortfalls:
+        partial = [s for s in shortfalls if int(s.get("bought") or 0) > 0]
+        if partial:
+            msg += f" ({len(partial)} model{'s' if len(partial) != 1 else ''} partially filled — not charged for missing stock)"
+        elif out_of_stock_car_ids:
+            msg += f" ({len(out_of_stock_car_ids)} out of stock — not charged)"
+    return {
+        "success": True,
+        "message": msg,
+        "purchased_count": len(bought_lines),
+        "spent": spent,
+        "out_of_stock_car_ids": out_of_stock_car_ids,
+        "shortfalls": shortfalls,
+    }
+
+
 # ----- Player-to-player car marketplace (list your car, buy other players' cars) -----
 async def get_marketplace_listings(current_user: dict = Depends(get_current_user)):
     """List all listed player cars (cash). Includes your own listings so Buy Cars rarity filters stay accurate; you cannot buy your own listing (see buy_listed_car)."""
@@ -3042,6 +3224,7 @@ def register(router):
     router.add_api_route("/gta/melt", melt_cars, methods=["POST"])
     router.add_api_route("/gta/cars-for-sale", get_cars_for_sale, methods=["GET"], dependencies=_gta_rl_u)
     router.add_api_route("/gta/buy-car", buy_car, methods=["POST"])
+    router.add_api_route("/gta/buy-cars-bulk", buy_cars_bulk, methods=["POST"])
     router.add_api_route("/gta/marketplace", get_marketplace_listings, methods=["GET"], dependencies=_gta_rl_u)
     router.add_api_route("/gta/list-car", list_car, methods=["POST"])
     router.add_api_route("/gta/delist-car", delist_car, methods=["POST"])

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Car, CheckSquare, Square } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
@@ -42,9 +42,6 @@ const RARITY_LABELS = {
   exclusive: 'Exclusives',
 };
 /** Pause after each successful dealer buy so "buy selected" does not trip server pacing (see DEALER_BUY_MIN_INTERVAL_SEC in gta.py). */
-const DEALER_BUY_BATCH_GAP_MS = 500;
-
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 function VehicleSelectCheckbox({ selected, canAfford, onToggle }) {
   return (
@@ -93,6 +90,7 @@ export default function BuyCars() {
   const [selectedRarity, setSelectedRarity] = useState(null);
   const [sourceFilter, setSourceFilter] = useState('all'); // 'all' | 'dealer' | 'listing'
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const [dealerQtyByRowId, setDealerQtyByRowId] = useState({});
   const [buying, setBuying] = useState(false);
   const [cancellingUserCarId, setCancellingUserCarId] = useState(null);
 
@@ -223,28 +221,56 @@ export default function BuyCars() {
 
   useEffect(() => {
     setSelectedIds(new Set());
+    setDealerQtyByRowId({});
   }, [selectedRarity, sourceFilter]);
+
+  const dealerQtyForRow = useCallback((row) => {
+    if (!row || row.source !== 'dealer') return 1;
+    const max = Math.max(1, Number(row.inStock) || 1);
+    const raw = dealerQtyByRowId[row.id];
+    const n = parseInt(String(raw ?? '1').replace(/\D/g, ''), 10);
+    if (!n || n < 1) return 1;
+    return Math.min(n, max);
+  }, [dealerQtyByRowId]);
 
   const selectedTotal = useMemo(() => {
     let sum = 0;
     selectedIds.forEach((id) => {
       const row = allVehicles.find((v) => v.id === id);
-      if (row && row.canSelect) sum += row.price;
+      if (row && row.canSelect) {
+        const qty = row.source === 'dealer' ? dealerQtyForRow(row) : 1;
+        sum += (row.price || 0) * qty;
+      }
     });
     return sum;
-  }, [selectedIds, allVehicles]);
+  }, [selectedIds, allVehicles, dealerQtyForRow]);
+
+  const selectedUnitCount = useMemo(() => {
+    let n = 0;
+    selectedIds.forEach((id) => {
+      const row = allVehicles.find((v) => v.id === id);
+      if (row && row.canSelect) {
+        n += row.source === 'dealer' ? dealerQtyForRow(row) : 1;
+      }
+    });
+    return n;
+  }, [selectedIds, allVehicles, dealerQtyForRow]);
 
   const toggleSelect = (id) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
-      else next.add(id);
+      else {
+        next.add(id);
+        setDealerQtyByRowId((q) => (q[id] != null ? q : { ...q, [id]: '1' }));
+      }
       return next;
     });
   };
 
   const toggleSelectAll = () => {
-    const selectableIds = filteredVehicles.filter((v) => v.canSelect).map((v) => v.id);
+    const selectable = filteredVehicles.filter((v) => v.canSelect);
+    const selectableIds = selectable.map((v) => v.id);
     const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -252,43 +278,83 @@ export default function BuyCars() {
       else selectableIds.forEach((id) => next.add(id));
       return next;
     });
+    if (!allSelected) {
+      setDealerQtyByRowId((prev) => {
+        const next = { ...prev };
+        selectable.filter((v) => v.source === 'dealer').forEach((v) => {
+          if (next[v.id] == null) next[v.id] = '1';
+        });
+        return next;
+      });
+    }
   };
 
   const handleBuySelected = async () => {
     const cash = userMoney != null ? Number(userMoney) : null;
     const moneyOk = cash != null && !Number.isNaN(cash);
     const toBuy = [...selectedIds].map((id) => allVehicles.find((v) => v.id === id)).filter(Boolean);
-    const valid = toBuy.filter((r) => {
-      if (!r.canSelect) return false;
-      if (!moneyOk) return true;
-      return cash >= (r.price || 0);
-    });
+    const valid = toBuy.filter((r) => r.canSelect);
     if (valid.length === 0) {
-      const anySelectable = toBuy.some((r) => r.canSelect);
-      toast.error(anySelectable && moneyOk ? 'Select at least one car you can afford' : 'Select at least one vehicle');
+      toast.error('Select at least one vehicle');
+      return;
+    }
+    if (moneyOk && selectedTotal > cash) {
+      toast.error(`Insufficient cash. Need $${selectedTotal.toLocaleString()}.`);
       return;
     }
     setBuying(true);
     let bought = 0;
-    for (const row of valid) {
+    const dealerRows = valid.filter((r) => r.source === 'dealer');
+    const listingRows = valid.filter((r) => r.source === 'listing');
+    const boughtRowIds = new Set();
+
+    if (dealerRows.length > 0) {
       try {
-        if (row.source === 'dealer') {
-          await api.post('/gta/buy-car', { car_id: row.carId });
-          await sleep(DEALER_BUY_BATCH_GAP_MS);
-        } else {
-          await api.post('/gta/buy-listed-car', { user_car_id: row.userCarId });
-        }
-        bought++;
-        setSelectedIds((prev) => {
-          const next = new Set(prev);
-          next.delete(row.id);
-          return next;
+        const items = dealerRows.map((row) => ({
+          car_id: row.carId,
+          quantity: dealerQtyForRow(row),
+        }));
+        const res = await api.post('/gta/buy-cars-bulk', { items });
+        const count = Number(res.data?.purchased_count ?? 0);
+        bought += count;
+        const shortfalls = res.data?.shortfalls || [];
+        const shortfallByCar = Object.fromEntries(shortfalls.map((s) => [s.car_id, s]));
+        dealerRows.forEach((row) => {
+          const sf = shortfallByCar[row.carId];
+          if (!sf || Number(sf.bought) > 0) boughtRowIds.add(row.id);
         });
+        const partial = shortfalls.filter((s) => Number(s.bought) > 0 && Number(s.bought) < Number(s.requested));
+        const empty = shortfalls.filter((s) => Number(s.bought) === 0);
+        if (partial.length > 0) {
+          toast.warning(`${partial.length} model(s) only partially filled — not charged for missing stock`);
+        } else if (empty.length > 0) {
+          toast.warning(`${empty.length} model(s) were out of stock`);
+        }
+      } catch (e) {
+        const d = e.response?.data?.detail;
+        const msg = typeof d === 'string' ? d : (d && typeof d === 'object' ? d.message : null);
+        toast.error(msg || 'Failed to buy dealer cars');
+      }
+    }
+
+    for (const row of listingRows) {
+      try {
+        await api.post('/gta/buy-listed-car', { user_car_id: row.userCarId });
+        bought++;
+        boughtRowIds.add(row.id);
       } catch (e) {
         const d = e.response?.data?.detail;
         const msg = typeof d === 'string' ? d : (d && typeof d === 'object' ? d.message : null);
         toast.error(msg || `Failed to buy ${row.name}`);
       }
+    }
+
+    if (boughtRowIds.size > 0) {
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        boughtRowIds.forEach((id) => next.delete(id));
+        return next;
+      });
     }
     if (bought > 0) {
       toast.success(`Purchased ${bought} car(s)`);
@@ -599,7 +665,7 @@ export default function BuyCars() {
                   <button type="button" disabled={dealershipSaving} onClick={handleListDealershipOnTrade} className="px-2 py-1 rounded border border-primary/40 text-primary font-bold disabled:opacity-50">List on QT</button>
                 </div>
                   </>
-                )}
+                ) : null}
               </>
             ) : dealership.owner_username ? (
               <p className="text-mutedForeground">
@@ -687,6 +753,7 @@ export default function BuyCars() {
                   </button>
                 </th>
                 <th className="text-left py-1 px-2">Car</th>
+                <th className="text-right py-1 px-2 w-14">Qty</th>
                 <th className="text-right py-1 px-2">Price</th>
                 <th className="text-right py-1 px-2">Stock</th>
                 <th className="text-right py-1 px-2">Damage</th>
@@ -739,6 +806,32 @@ export default function BuyCars() {
                       </Link>
                     ) : (
                       <span className="font-heading text-foreground">{row.name}</span>
+                    )}
+                  </td>
+                  <td className="py-1 px-2 text-right font-heading">
+                    {row.source === 'dealer' && (row.inStock ?? 0) > 0 ? (
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={dealerQtyByRowId[row.id] ?? '1'}
+                        onChange={(e) => {
+                          const v = e.target.value.replace(/[^\d]/g, '');
+                          setDealerQtyByRowId((prev) => ({ ...prev, [row.id]: v }));
+                          if (v && !selectedIds.has(row.id)) {
+                            setSelectedIds((prev) => new Set(prev).add(row.id));
+                          }
+                        }}
+                        onBlur={() => {
+                          const max = Math.max(1, Number(row.inStock) || 1);
+                          const n = dealerQtyForRow(row);
+                          setDealerQtyByRowId((prev) => ({ ...prev, [row.id]: String(n) }));
+                        }}
+                        className="w-12 rounded border border-primary/30 bg-background/80 px-1 py-0.5 text-[10px] text-right"
+                        title={`Max ${row.inStock}`}
+                        aria-label={`Quantity for ${row.name}`}
+                      />
+                    ) : (
+                      <span className="text-mutedForeground">—</span>
                     )}
                   </td>
                   <td className="py-1 px-2 text-right font-heading font-bold text-emerald-400">
@@ -805,6 +898,7 @@ export default function BuyCars() {
               }`}
             >
               Buy — ${selectedTotal.toLocaleString()}
+              {selectedUnitCount > 1 ? ` (${selectedUnitCount} cars)` : ''}
             </button>
           </div>
         </div>
