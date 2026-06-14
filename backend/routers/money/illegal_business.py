@@ -108,6 +108,8 @@ DISTILLERY_ENFORCEMENT_VAULT_LOSS_MAX = 0.22
 DISTILLERY_AUTO_SELL_MARGIN_BASE = 0.85
 DISTILLERY_AUTO_SELL_MARGIN_CAP = 1.70
 DISTILLERY_BASE_BOOZE_UNIT_VALUE = 900
+RACKET_TOKEN_INCOME_MULT = 1.2
+BOOZE_TOKEN_DISTILLERY_MULT = 1.1
 DISTILLERY_COLLECT_ROI_SAFETY_FLOOR = 1.0
 DISTILLERY_MAX_ACTIVE_BATCHES = 8
 # Auto-aging won't start a batch below this (avoids spam when reserve is barely below carrying).
@@ -1109,16 +1111,57 @@ def _distillery_output_modifiers(distillery: dict) -> dict:
     }
 
 
-def _distillery_roi_snapshot(distillery: dict, business: dict) -> dict:
+def _token_until_active(until_raw: Optional[str], now: datetime) -> bool:
+    if not until_raw:
+        return False
+    try:
+        until = datetime.fromisoformat(until_raw.replace("Z", "+00:00"))
+        if until.tzinfo is None:
+            until = until.replace(tzinfo=timezone.utc)
+        return now < until
+    except Exception:
+        return False
+
+
+def _racket_token_income_mult(user: Optional[dict], now: datetime) -> float:
+    if user and _token_until_active(user.get("racket_until"), now):
+        return RACKET_TOKEN_INCOME_MULT
+    return 1.0
+
+
+def _booze_token_distillery_mult(user: Optional[dict], now: datetime) -> float:
+    if user and _token_until_active(user.get("booze_until"), now):
+        return BOOZE_TOKEN_DISTILLERY_MULT
+    return 1.0
+
+
+def _distillery_cash_token_mult(user: Optional[dict], now: datetime) -> float:
+    return _racket_token_income_mult(user, now) * _booze_token_distillery_mult(user, now)
+
+
+def _distillery_roi_snapshot(
+    distillery: dict,
+    business: dict,
+    user: Optional[dict] = None,
+    now: Optional[datetime] = None,
+) -> dict:
+    now = now or _utc_now()
+    racket_mult = _racket_token_income_mult(user, now)
+    booze_mult = _booze_token_distillery_mult(user, now)
+    distillery_cash_mult = racket_mult * booze_mult
     equipment = distillery.get("equipment") or {}
     workers = distillery.get("workers") or {}
     worker_cap = int(distillery.get("worker_capacity") or DISTILLERY_BASE_WORKER_CAP)
     bph = int(business.get("booze_per_hour") or BOOZE_PER_HOUR_BASE)
     base_cash_per_hour = float(business.get("income_per_hour") or INCOME_PER_HOUR_BASE)
     mods = _distillery_output_modifiers(distillery)
-    effective_booze_per_hour = bph * mods["production_mult"]
-    implied_cash_per_hour = (base_cash_per_hour * mods["cash_mult"]) + (
-        effective_booze_per_hour * DISTILLERY_BASE_BOOZE_UNIT_VALUE * mods["auto_sell_margin"] * mods["quality_mult"]
+    effective_booze_per_hour = bph * mods["production_mult"] * booze_mult
+    implied_cash_per_hour = (base_cash_per_hour * mods["cash_mult"] * racket_mult) + (
+        effective_booze_per_hour
+        * DISTILLERY_BASE_BOOZE_UNIT_VALUE
+        * mods["auto_sell_margin"]
+        * mods["quality_mult"]
+        * distillery_cash_mult
     )
     heat = float(distillery.get("heat") or 0.0)
     downside_exposure = 0.0
@@ -1172,6 +1215,10 @@ def _distillery_roi_snapshot(distillery: dict, business: dict) -> dict:
         "hard_cap_progress": round(hard_cap_progress, 4),
         "target_12d_top_end": DISTILLERY_TARGET_12D_TOP_END,
         "efficiency_score": round((_clamp(float(distillery.get("maintenance") or 0.0), 0.0, 100.0) * 0.42) + ((100.0 - _clamp(float(distillery.get("heat") or 0.0), 0.0, 100.0)) * 0.58), 2),
+        "racket_token_active": racket_mult > 1.0,
+        "booze_token_active": booze_mult > 1.0,
+        "racket_token_income_mult": racket_mult,
+        "booze_token_distillery_mult": booze_mult,
     }
 
 
@@ -1620,8 +1667,14 @@ async def _distillery_business_for_user(current_user: dict) -> tuple[dict, dict]
     return business, dist
 
 
-def _distillery_public_payload(distillery: dict, business: dict) -> dict:
-    roi = _distillery_roi_snapshot(distillery, business)
+def _distillery_public_payload(
+    distillery: dict,
+    business: dict,
+    user: Optional[dict] = None,
+    now: Optional[datetime] = None,
+) -> dict:
+    now = now or _utc_now()
+    roi = _distillery_roi_snapshot(distillery, business, user, now)
     progression = _distillery_progression_state(distillery)
     effects = _distillery_special_effect_totals(distillery)
     loss_forecast_24h = _distillery_projected_24h_loss_forecast(distillery)
@@ -1768,7 +1821,7 @@ async def get_illegal_business(
         distillery, changed = _distillery_ensure_state(business, now_utc)
         if distillery:
             view = _distillery_decay_view(distillery, now_utc)
-            distillery_payload = _distillery_public_payload(view, business)
+            distillery_payload = _distillery_public_payload(view, business, current_user, now_utc)
         if changed:
             await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": {"distillery": distillery}})
     slots = int(business.get("guard_slots") or GUARD_SLOTS_INITIAL)
@@ -1836,6 +1889,10 @@ async def get_illegal_business(
         "business": business,
         "pending_take": round(pending_take, 2),
         "racket_payout_mult": float(ev.get("racket_payout", 1.0)),
+        "racket_token_active": _token_until_active(current_user.get("racket_until"), now),
+        "racket_token_income_mult": _racket_token_income_mult(current_user, now),
+        "booze_token_active": _token_until_active(current_user.get("booze_until"), now),
+        "booze_token_distillery_mult": _booze_token_distillery_mult(current_user, now),
         "guards": guards,
         "guards_count": active_guards_count,
         "guard_slots": slots,
@@ -1988,16 +2045,7 @@ def _illegal_business_pending_take_and_hours_sync(
     income = round(_illegal_business_base_pending_take(business, user, now), 2)
     prestige = get_prestige_bonus(user)
     income = round(income * float(prestige.get("illegal_business_mult", 1.0)), 2)
-    racket_until = user.get("racket_until")
-    if racket_until:
-        try:
-            until = datetime.fromisoformat(racket_until.replace("Z", "+00:00"))
-            if until.tzinfo is None:
-                until = until.replace(tzinfo=timezone.utc)
-            if now < until:
-                income = round(income * 1.2, 2)
-        except Exception:
-            pass
+    income = round(income * _racket_token_income_mult(user, now), 2)
     return income, hours
 
 
@@ -2120,12 +2168,17 @@ async def distillery_process_automation(user_id: str) -> None:
     if not business or not business.get("booze_per_hour"):
         return
     now = _utc_now()
+    user = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "racket_until": 1, "booze_until": 1, "in_jail": 1, "booze_carrying": 1},
+    )
     distillery, _ = _distillery_ensure_state(business, now)
     _distillery_decay_and_status(distillery, now)
     claimed, vault_add = _distillery_claim_ready_mutate(distillery, now)
     set_doc: Dict[str, Any] = {"distillery": distillery}
     inc_doc: Dict[str, int] = {}
     if vault_add > 0:
+        vault_add = int(vault_add * _distillery_cash_token_mult(user, now))
         inc_doc["vault"] = vault_add
         inc_doc["vault_lifetime_earned"] = max(0, vault_add)
     if inc_doc:
@@ -2148,7 +2201,6 @@ async def distillery_process_automation(user_id: str) -> None:
     last_dt = _parse_iso_utc(last_raw, now) if last_raw else None
     if last_dt and (now - last_dt).total_seconds() < DISTILLERY_AUTO_COLLECT_MIN_INTERVAL_SECONDS:
         return
-    user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user or user.get("in_jail"):
         return
     try:
@@ -2187,6 +2239,9 @@ async def run_distillery_automation_ticker():
 
 async def _collect_illegal_business_impl(current_user: dict) -> dict:
     now = datetime.now(timezone.utc)
+    racket_mult = _racket_token_income_mult(current_user, now)
+    booze_mult = _booze_token_distillery_mult(current_user, now)
+    distillery_cash_mult = racket_mult * booze_mult
     # Atomically swap last_collected_at — returns the pre-update document so
     # a concurrent request sees the already-advanced timestamp and computes ~0 income.
     business = await db.illegal_businesses.find_one_and_update(
@@ -2277,8 +2332,9 @@ async def _collect_illegal_business_impl(current_user: dict) -> dict:
         distillery, _ = _distillery_ensure_state(business, now)
         status = _distillery_decay_and_status(distillery, now) if distillery else None
         mods = _distillery_output_modifiers(distillery or {})
+        production_mult = float(mods.get("production_mult") or 1.0) * booze_mult
 
-        booze_raw = min(hours_booze * bph * mods["production_mult"], (bph * bcap) * mods["production_mult"])
+        booze_raw = min(hours_booze * bph * production_mult, (bph * bcap) * production_mult)
         booze_earned = int(max(0, booze_raw)) if not (status and status.get("is_shutdown")) else 0
 
         default_booze_id = _default_booze_type_id()
@@ -2369,7 +2425,9 @@ async def _collect_illegal_business_impl(current_user: dict) -> dict:
                         DISTILLERY_ENFORCEMENT_VAULT_LOSS_MIN,
                         DISTILLERY_ENFORCEMENT_VAULT_LOSS_MAX,
                     )
-                    vault_total_before = int(business.get("vault") or 0) + int(income) + auto_sell_cash
+                    vault_total_before = int(business.get("vault") or 0) + int(
+                        round(float(income) / racket_mult, 2) if racket_mult > 1.0 else float(income)
+                    ) + auto_sell_cash
                     vault_penalty = int(max(0, vault_total_before * loss_pct))
                     if distillery.get("allow_vault_for_heat") is False:
                         vault_penalty = 0
@@ -2377,9 +2435,12 @@ async def _collect_illegal_business_impl(current_user: dict) -> dict:
                     stats["heat_events_survived"] = int(stats.get("heat_events_survived") or 0) + 1
                     distillery["stats"] = stats
 
+            if auto_sell_cash > 0 and distillery_cash_mult > 1.0:
+                auto_sell_cash = int(auto_sell_cash * distillery_cash_mult)
+
             updates["distillery"] = distillery
             distillery_breakdown = {
-                "production_mult": round(float(mods.get("production_mult") or 1.0), 3),
+                "production_mult": round(float(mods.get("production_mult") or 1.0) * booze_mult, 3),
                 "quality_mult": round(float(mods.get("quality_mult") or 1.0), 3),
                 "auto_sell_margin": round(float(mods.get("auto_sell_margin") or DISTILLERY_AUTO_SELL_MARGIN_BASE), 3),
                 "heat": round(float(distillery.get("heat") or 0.0), 2),
@@ -2391,9 +2452,11 @@ async def _collect_illegal_business_impl(current_user: dict) -> dict:
                 "booze_loss_cash": booze_loss_cash,
                 "vault_penalty": vault_penalty,
                 "maintenance_degradation": maintenance_degradation,
-                "roi": _distillery_roi_snapshot(distillery, business),
+                "roi": _distillery_roi_snapshot(distillery, business, current_user, now),
                 "booze_run_vault": 0,
                 "booze_run_jailed": False,
+                "racket_token_income_mult": racket_mult,
+                "booze_token_distillery_mult": booze_mult,
             }
         carry_inc = booze_earned
         if distillery and auto_sold_units > 0 and auto_sell_mode == "booze_run":
@@ -2416,6 +2479,7 @@ async def _collect_illegal_business_impl(current_user: dict) -> dict:
                         auto_sold_units,
                         via_distillery_collect=True,
                         illegal_business_id=business["id"],
+                        distillery_cash_mult=distillery_cash_mult,
                     )
                 except HTTPException:
                     sell_out = {}
@@ -2501,7 +2565,7 @@ async def get_distillery(current_user: dict = Depends(get_current_user)):
     business, distillery = await _distillery_business_readonly(current_user)
     now = _utc_now()
     view = _distillery_decay_view(distillery, now)
-    payload = _distillery_public_payload(view, business)
+    payload = _distillery_public_payload(view, business, current_user, now)
     booze_id = _default_booze_type_id()
     udoc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "booze_carrying": 1})
     carrying = (udoc or {}).get("booze_carrying") or {}
@@ -2513,7 +2577,7 @@ async def get_distillery_page(current_user: dict = Depends(get_current_user)):
     business, distillery = await _distillery_business_readonly(current_user)
     now = _utc_now()
     view = _distillery_decay_view(distillery, now)
-    dist_payload = _distillery_public_payload(view, business)
+    dist_payload = _distillery_public_payload(view, business, current_user, now)
     booze_id = _default_booze_type_id()
     udoc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "booze_carrying": 1})
     carrying = (udoc or {}).get("booze_carrying") or {}
@@ -2544,7 +2608,7 @@ async def get_distillery_progression_catalog(current_user: dict = Depends(get_cu
 async def distillery_collect(current_user: dict = Depends(get_current_user)):
     payload = await collect_illegal_business(current_user)
     business, distillery = await _distillery_business_for_user(current_user)
-    payload["distillery_state"] = _distillery_public_payload(distillery, business)
+    payload["distillery_state"] = _distillery_public_payload(distillery, business, current_user, _utc_now())
     return payload
 
 
@@ -2577,7 +2641,7 @@ async def distillery_upgrade_equipment(req: DistilleryUpgradeEquipmentRequest, c
     return {
         "message": f"Installed {lane.replace('_', ' ')} level {next_level}.",
         "cost": cost,
-        **_distillery_public_payload(distillery, business),
+        **_distillery_public_payload(distillery, business, current_user, _utc_now()),
     }
 
 
@@ -2622,7 +2686,7 @@ async def distillery_assign_workers(req: DistilleryAssignWorkersRequest, current
     return {
         "message": "Crew assignments updated.",
         "hire_cost": hire_cost,
-        **_distillery_public_payload(distillery, business),
+        **_distillery_public_payload(distillery, business, current_user, _utc_now()),
     }
 
 
@@ -2645,7 +2709,7 @@ async def distillery_maintenance(req: DistilleryMaintenanceRequest, current_user
     return {
         "message": "Maintenance crew finished their pass.",
         "cost": cost,
-        **_distillery_public_payload(distillery, business),
+        **_distillery_public_payload(distillery, business, current_user, _utc_now()),
     }
 
 
@@ -2666,7 +2730,7 @@ async def distillery_set_auto_sell(req: DistilleryAutoSellRequest, current_user:
     await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": {"distillery": distillery}})
     return {
         "message": "Auto-sell rules updated.",
-        **_distillery_public_payload(distillery, business),
+        **_distillery_public_payload(distillery, business, current_user, _utc_now()),
     }
 
 
@@ -2678,7 +2742,7 @@ async def distillery_set_heat_vault_spend(req: DistilleryHeatVaultSpendRequest, 
         msg = "Vault can pay for heat again (enforcement seizures on collect + Cool Off / Bribe)."
     else:
         msg = "Vault will not pay for heat: enforcement will not seize vault cash on collect, and Cool Off / Bribe are disabled until you turn this back on."
-    return {"message": msg, **_distillery_public_payload(distillery, business)}
+    return {"message": msg, **_distillery_public_payload(distillery, business, current_user, _utc_now())}
 
 
 async def distillery_set_auto_aging(req: DistilleryAutoAgingRequest, current_user: dict = Depends(get_current_user)):
@@ -2695,7 +2759,7 @@ async def distillery_set_auto_aging(req: DistilleryAutoAgingRequest, current_use
     await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": {"distillery": distillery}})
     return {
         "message": "Auto-aging rules updated.",
-        **_distillery_public_payload(distillery, business),
+        **_distillery_public_payload(distillery, business, current_user, _utc_now()),
     }
 
 
@@ -2731,7 +2795,7 @@ async def distillery_buy_special_upgrade(req: DistilleryBuySpecialUpgradeRequest
         "message": f"Purchased {row.get('name')}.",
         "upgrade_id": uid,
         "cost": cost,
-        **_distillery_public_payload(distillery, business),
+        **_distillery_public_payload(distillery, business, current_user, _utc_now()),
     }
 
 
@@ -2792,7 +2856,7 @@ async def distillery_risk_action(req: DistilleryRiskActionRequest, current_user:
         "message": "Risk action completed.",
         "action": action,
         "cost": cost,
-        **_distillery_public_payload(distillery, business),
+        **_distillery_public_payload(distillery, business, current_user, _utc_now()),
     }
 
 
@@ -2818,7 +2882,7 @@ async def distillery_start_aging_batch(req: DistilleryStartAgingRequest, current
         "message": f"Batch {batch_id[:8]} started in the {tier} cellar.",
         "batch_id": batch_id,
         "ready_at": ready_at,
-        **_distillery_public_payload(distillery, business),
+        **_distillery_public_payload(distillery, business, current_user, _utc_now()),
     }
 
 
@@ -2843,6 +2907,7 @@ async def distillery_claim_aged_batch(req: DistilleryClaimBatchRequest, current_
     heat = float(distillery.get("heat") or 0.0)
     if heat >= DISTILLERY_HEAT_THRESHOLDS["hot"]:
         cash = int(cash * 0.9)
+    cash = int(cash * _distillery_cash_token_mult(current_user, now))
     queue.pop(idx)
     distillery["aging_queue"] = queue
     stats = distillery.get("stats") or {}
@@ -2858,7 +2923,7 @@ async def distillery_claim_aged_batch(req: DistilleryClaimBatchRequest, current_
     return {
         "message": f"Batch sold for ${cash:,}.",
         "cash": cash,
-        **_distillery_public_payload(distillery, business),
+        **_distillery_public_payload(distillery, business, current_user, _utc_now()),
     }
 
 

@@ -708,7 +708,7 @@ TRAVEL_TIMES = {
 
 # Melt-for-bullets: catalog value × (100 − damage)% (damage-immune cars unchanged); melt_value = that × NUM // DEN; bullets = melt_value // MELT_VALUE_PER_BULLET — see gta._melt_cars_impl
 MELT_VALUE_PER_BULLET = 385
-MELT_BULLETS_VALUE_MULT_NUM = 122
+MELT_BULLETS_VALUE_MULT_NUM = 165  # ~35% above prior 122 (122 × 1.35 ≈ 165)
 MELT_BULLETS_VALUE_MULT_DEN = 100
 
 # Base car cash values (GTA sell, scrap, melt, dealer, etc.). Non-exclusive tiers + custom: ×1.25 on prior table (rounded). exclusive + loot_exclusive: unchanged.

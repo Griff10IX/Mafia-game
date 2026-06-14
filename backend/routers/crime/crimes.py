@@ -258,7 +258,7 @@ MOLOTOV_GLOBAL_DROP_CHANCE = 0.001
 MOLOTOV_GLOBAL_DROP_AMOUNT = 1
 
 # Successful crime cash (main roll + prestige bonus cash) scaled after all other multipliers
-CRIME_CASH_PAYOUT_MULT = 1.10
+CRIME_CASH_PAYOUT_MULT = 1.485  # ~35% above prior 1.10 (1.10 × 1.35)
 
 # Extremely rare loot box piece drops from crimes
 # Normal crimes: ~0.05% (1 in 2,000) per successful crime

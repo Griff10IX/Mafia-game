@@ -602,12 +602,12 @@ export default function VideoPoker() {
                     <option key={o.id} value={o.id}>{o.label}</option>
                   ))}
                 </select>
-                <span className="text-[9px] text-mutedForeground leading-snug">Applies to new deals. Active hands keep the table they started on.</span>
+                <span className="text-[9px] text-mutedForeground leading-snug">Changes payout multipliers only — hand odds stay the same. Active hands keep the table they started on.</span>
               </div>
             </div>
             <p className="text-[9px] text-mutedForeground leading-snug sm:pl-20 sm:ml-0 border-t border-primary/10 pt-2">
-              <span className="text-amber-200/90 font-heading font-bold">Owner bank:</span> Tight pays players less on big hands (safer for you).
-              Increased and Enhanced raise payouts (more player-friendly, more risk to your cash stack).
+              <span className="text-amber-200/90 font-heading font-bold">Owner bank:</span> Tight pays less cash per hand tier; Increased and Enhanced pay more.
+              Cards are dealt fairly — preset does not rig which hands appear.
             </p>
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-mutedForeground w-20 shrink-0">Max Bet</span>
@@ -954,7 +954,8 @@ export default function VideoPoker() {
         </div>
         <div className="p-3">
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
-            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Payouts are multiples of your bet (total return). The owner picks the pay table: Tight is kindest to the house; Increased and Enhanced pay more to players.</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Payouts are multiples of your bet (total return). The owner picks the pay table — that changes how much each hand pays, not how often hands hit.</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Cards are dealt and drawn fairly from a shuffled deck</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>5 cards dealt, choose which to hold</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Discards replaced on draw</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Pair of Jacks or better to win</li>

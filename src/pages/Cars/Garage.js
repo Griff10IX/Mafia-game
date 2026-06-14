@@ -27,7 +27,7 @@ const GARAGE_MELT_SCRAP_BATCH_MAX = 100;
 const MELT_SCRAP_RARITIES_KEY = 'garage_melt_scrap_rarities';
 /** Keep in sync with backend `server.py` + `routers/cars/gta.py` melt math. */
 const MELT_VALUE_PER_BULLET = 385;
-const MELT_VALUE_MULTIPLIER_NUM = 122;
+const MELT_VALUE_MULTIPLIER_NUM = 165;  // ~35% above prior 122; keep in sync with server.py
 const MELT_VALUE_MULTIPLIER_DEN = 100;
 /** Applied to sum of per-car bullets in one melt; keep in sync with `gta.py` MELT_BULLETS_TOTAL_PAYOUT_* */
 const MELT_BULLETS_TOTAL_PAYOUT_MULT_NUM = 125;

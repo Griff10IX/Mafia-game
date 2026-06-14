@@ -548,6 +548,7 @@ async def _booze_sell_impl(
     via_auto_rank: bool = False,
     via_distillery_collect: bool = False,
     illegal_business_id: Optional[str] = None,
+    distillery_cash_mult: float = 1.0,
 ) -> dict:
     """Perform sell for given user. Returns response dict or raises HTTPException. Updates DB.
 
@@ -641,6 +642,8 @@ async def _booze_sell_impl(
             pass
         profit = max(0, int(profit * BOOZE_RUN_PROFIT_MULT))
         revenue = cost_of_sold + profit
+    if via_distillery_collect and distillery_cash_mult > 1.0:
+        revenue = int(revenue * distillery_cash_mult)
     new_val = have - amount
     booze_name = BOOZE_TYPES[booze_index]["name"]
     today_utc = game_today_date_str()

@@ -147,9 +147,9 @@ def _effective_weapon_money_sell(weapon: dict, factory: Optional[dict], mult: fl
 # Store: buy bullets with points (pack size -> points cost)
 BULLET_PACKS = {5000: 100, 10000: 175, 50000: 775, 100000: 1525}  # matches store
 
-# Consumable tokens: 1 token = 1 hour effect. Stackable up to max_stack_hours per type (24h cap).
+# Consumable tokens: 1 token = 1 hour effect (or per-token duration_hours). Stackable up to max_stack_hours per type (1 week cap).
 TOKEN_DURATION_HOURS = 1
-TOKEN_MAX_STACK_HOURS = 24
+TOKEN_MAX_STACK_HOURS = 7 * 24  # 168h = 1 week
 TOKEN_TYPES = (
     "xp_crimes",
     "xp_gta",

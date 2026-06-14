@@ -924,6 +924,17 @@ export default function Distillery() {
               <div className="dist-roi-row"><span className="dist-roi-key">Rebuy exposure</span><span className="dist-roi-val">{money(projectedRebuyCost24h)}</span></div>
               <div className="dist-roi-row"><span className="dist-roi-key">Booze/h</span><span className="dist-roi-val">{Number(roi.booze_per_hour_estimate || 0).toFixed(2)}</span></div>
               <div className="dist-roi-row"><span className="dist-roi-key">Next payback</span><span className="dist-roi-val">{roi.next_upgrade_payback_hours ?? 'n/a'}h</span></div>
+              {(roi.racket_token_active || roi.booze_token_active) && (
+                <div className="dist-roi-row">
+                  <span className="dist-roi-key">Token boost</span>
+                  <span className="dist-roi-val" style={{ fontSize: 11 }}>
+                    {[
+                      roi.racket_token_active && `Racket +${Math.round((Number(roi.racket_token_income_mult || 1) - 1) * 100)}%`,
+                      roi.booze_token_active && `Booze +${Math.round((Number(roi.booze_token_distillery_mult || 1) - 1) * 100)}%`,
+                    ].filter(Boolean).join(' · ')}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 

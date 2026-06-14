@@ -19,23 +19,25 @@ const INV_REFRESH = 30_000;
 const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'auto_rank_2h', 'crew_oc_auto_3h', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus', 'rank_xp_pass'];
 const GIFTABLE_TOKEN_TYPES = TOKEN_TYPES.filter((k) => k !== 'rank_xp_pass' && k !== 'crew_oc_auto_3h');
 const TOKEN_GIFT_DAILY_DEFAULT = { sent: 0, limit: 20 };
+/** Keep in sync with backend armoury.TOKEN_MAX_STACK_HOURS (7 × 24 = 1 week). */
+const TOKEN_MAX_STACK_LABEL = '1 week';
 
 const tokenLabels = {
-  xp_crimes: { name: 'Crimes XP', icon: Zap, desc: 'Double XP from crimes, 1h per token (stack up to 24h)' },
-  xp_gta: { name: 'GTA XP', icon: Zap, desc: 'Double XP from GTA, 1h per token (stack up to 24h)' },
-  auto_rank_2h: { name: 'Auto Rank (2h)', icon: Zap, desc: 'Temporary Auto Rank access, 2h per token (stack up to 24h)' },
+  xp_crimes: { name: 'Crimes XP', icon: Zap, desc: `Double XP from crimes, 1h per token (stack up to ${TOKEN_MAX_STACK_LABEL})` },
+  xp_gta: { name: 'GTA XP', icon: Zap, desc: `Double XP from GTA, 1h per token (stack up to ${TOKEN_MAX_STACK_LABEL})` },
+  auto_rank_2h: { name: 'Auto Rank (2h)', icon: Zap, desc: `Temporary Auto Rank access, 2h per token (stack up to ${TOKEN_MAX_STACK_LABEL})` },
   crew_oc_auto_3h: {
     name: 'Crew OC auto-apply (3h)',
     icon: Users,
-    desc: 'Set a max join fee when you use it — auto-apply only runs after that (families above your cap are skipped). 3h per token, stack up to 24h.',
+    desc: `Set a max join fee when you use it — auto-apply only runs after that (families above your cap are skipped). 3h per token, stack up to ${TOKEN_MAX_STACK_LABEL}.`,
   },
-  melt: { name: 'Melt', icon: Zap, desc: 'Reduced melt (bullets) cooldown, 1h per token (stack up to 24h)' },
-  oc_reduced: { name: 'OC Reduced', icon: Zap, desc: 'Reduced OC cooldown, setup cost & higher payout, 1h per token (stack up to 24h)' },
-  booze: { name: 'Booze', icon: Zap, desc: 'Booze costs less to buy, 1h per token (stack up to 24h)' },
-  racket: { name: 'Racket', icon: Zap, desc: 'Increased racket (illegal business) profit, 1h per token (stack up to 24h)' },
-  travel: { name: 'Travel', icon: Zap, desc: 'Lower airport cost & 2% car travel time reduction, 1h per token (stack up to 24h)' },
-  properties: { name: 'Properties', icon: Building2, desc: '3× property income, 1h per token (stack up to 24h)' },
-  jailbust_bonus: { name: 'Jailbust bonus', icon: Target, desc: '+10% jail bust success, less chance of jail on fail, 1h per token (stack up to 24h)' },
+  melt: { name: 'Melt', icon: Zap, desc: `Reduced melt (bullets) cooldown, 1h per token (stack up to ${TOKEN_MAX_STACK_LABEL})` },
+  oc_reduced: { name: 'OC Reduced', icon: Zap, desc: `Reduced OC cooldown, setup cost & higher payout, 1h per token (stack up to ${TOKEN_MAX_STACK_LABEL})` },
+  booze: { name: 'Booze', icon: Zap, desc: `Booze costs less to buy, 1h per token (stack up to ${TOKEN_MAX_STACK_LABEL})` },
+  racket: { name: 'Racket', icon: Zap, desc: `Increased racket (illegal business) profit, 1h per token (stack up to ${TOKEN_MAX_STACK_LABEL})` },
+  travel: { name: 'Travel', icon: Zap, desc: `Lower airport cost & 2% car travel time reduction, 1h per token (stack up to ${TOKEN_MAX_STACK_LABEL})` },
+  properties: { name: 'Properties', icon: Building2, desc: `3× property income, 1h per token (stack up to ${TOKEN_MAX_STACK_LABEL})` },
+  jailbust_bonus: { name: 'Jailbust bonus', icon: Target, desc: `+10% jail bust success, less chance of jail on fail, 1h per token (stack up to ${TOKEN_MAX_STACK_LABEL})` },
   rank_xp_pass: { name: 'Game Pass', icon: Package, desc: 'Activate in Armoury/My Inventory to claim one-time Game Pass rewards. Expires in 1 month if unused.' },
 };
 

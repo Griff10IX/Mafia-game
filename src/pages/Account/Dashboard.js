@@ -191,6 +191,15 @@ function formatProtectionCountdown(endsAtIso) {
   return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
 }
 
+function formatProtectionDurationLabel(hours) {
+  const h = Number(hours) || 168;
+  if (h >= 24 && h % 24 === 0) {
+    const days = h / 24;
+    return `${days} day${days === 1 ? '' : 's'}`;
+  }
+  return `${h} hour${h === 1 ? '' : 's'}`;
+}
+
 const QUICK_LINKS = [
   { to: '/account/profile', icon: User, label: 'Profile' },
   { to: '/crime/crimes', icon: Target, label: 'Crimes' },
@@ -511,7 +520,7 @@ export default function Dashboard() {
             <CollapsibleContent>
               <div className="px-2.5 py-2 space-y-2">
                 <p className="text-[10px] font-heading text-mutedForeground leading-relaxed">
-                  For your first {civilianProtection.protection_hours ?? 48} hours, other players can't attack you in normal PvP. When the countdown hits zero, protection ends on its own — or it ends immediately if you do any of the following.
+                  For your first {formatProtectionDurationLabel(civilianProtection.protection_hours)}, other players can't attack you in normal PvP. When the countdown hits zero, protection ends on its own — or it ends immediately if you do any of the following.
                 </p>
                 <div>
                   <p className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.1em] mb-1">These actions remove protection</p>

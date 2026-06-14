@@ -423,7 +423,7 @@ async def buy_crew_oc_timer(
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
     await _record_store_points_spend(current_user["id"], inc, "buy-crew-oc-timer")
-    return {"message": "Crew OC timer purchased! When you commit, family Crew OC cooldown is 6h instead of 8h.", "cost": cost_used}
+    return {"message": "Crew OC timer purchased! When your crew commits, cooldown is 6h instead of 8h (5h with the family −1h perk). Applies while any Don, Underboss, or Capo who can commit holds this upgrade.", "cost": cost_used}
 
 
 async def upgrade_garage_batch_limit(

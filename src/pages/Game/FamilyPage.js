@@ -2372,12 +2372,17 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
 // ============================================================================
 
 const CrewOCTab = ({
-  family, myRole, crewOCCooldownUntil, committerHasTimer, crewOCJoinFee, crewOCAutoAccept, crewOCForumTopicId,
+  family, myRole, crewOCCooldownUntil, committerHasTimer, familyHasTimer, effectiveCooldownHours, perkHoursOff,
+  crewOCJoinFee, crewOCAutoAccept, crewOCForumTopicId,
   crewOCApplications, canManageCrewOC, onCommit, committing, feeInput, setFeeInput,
   onSetFee, setFeeLoading, onAdvertise, advertiseLoading, onAcceptApp, onRejectApp, onKickApp, onSetAutoAccept, setAutoAcceptLoading,
 }) => {
   const canCommit = ['boss', 'underboss', 'capo'].includes(myRole?.toLowerCase());
-  const cooldownHours = committerHasTimer ? 6 : 8;
+  const cooldownHours = effectiveCooldownHours ?? (committerHasTimer || familyHasTimer ? 6 : 8);
+  const timerNote = familyHasTimer
+    ? (committerHasTimer ? ' (you hold the timer upgrade)' : ' (family timer active)')
+    : '';
+  const perkNote = (perkHoursOff ?? 0) > 0 ? `, incl. −${perkHoursOff}h family perk` : '';
   const [, setCrewOcTick] = useState(0);
   useEffect(() => {
     const iso = family?.crew_oc_cooldown_until;
@@ -2399,7 +2404,7 @@ const CrewOCTab = ({
   return (
     <div className="space-y-2">
       <p className="text-[10px] text-zinc-500 font-heading leading-relaxed italic">
-        When the Don, Underboss, or Caporegime calls the crew together, every living member and accepted outsiders earn their cut — cash, XP, bullets, points, booze. The family vault takes its share. Once every {cooldownHours}h{committerHasTimer ? ' (you hold the timer)' : ''}.
+        When the Don, Underboss, or Caporegime calls the crew together, every living member and accepted outsiders earn their cut — cash, XP, bullets, points, booze. The family vault takes its share. Once every {cooldownHours}h{timerNote}{perkNote}.
       </p>
 
       {/* Set join fee & Advertise */}
@@ -3524,7 +3529,11 @@ export default function FamilyPage() {
               {activeTab === 'crewoc' && (
                 <CrewOCTab
                   family={family} myRole={myRole}
-                  committerHasTimer={myFamily?.crew_oc_committer_has_timer} crewOCJoinFee={family?.crew_oc_join_fee}
+                  committerHasTimer={myFamily?.crew_oc_committer_has_timer}
+                  familyHasTimer={myFamily?.crew_oc_family_has_timer}
+                  effectiveCooldownHours={myFamily?.crew_oc_effective_cooldown_hours}
+                  perkHoursOff={myFamily?.crew_oc_perk_hours_off}
+                  crewOCJoinFee={family?.crew_oc_join_fee}
                   crewOCAutoAccept={family?.crew_oc_auto_accept} crewOCForumTopicId={family?.crew_oc_forum_topic_id}
                   crewOCApplications={myFamily?.crew_oc_applications}
                   canManageCrewOC={canManageCrewOC} onCommit={handleCrewOCCommit} committing={crewOCCommitting}

@@ -67,7 +67,7 @@ function describePrestigeBonusLines(crime) {
 
   if (Array.isArray(pb.cash) && pb.cash.length >= 2) {
     const [a, b] = roll(pb.cash[0], pb.cash[1]);
-    lines.push(`+$${a.toLocaleString()}–$${b.toLocaleString()} extra cash (+10% crime payout on bonus cash)`);
+    lines.push(`+$${a.toLocaleString()}–$${b.toLocaleString()} extra cash (+48.5% crime payout on bonus cash)`);
   }
   if (Array.isArray(pb.respect_points) && pb.respect_points.length >= 2) {
     const [a, b] = roll(pb.respect_points[0], pb.respect_points[1]);

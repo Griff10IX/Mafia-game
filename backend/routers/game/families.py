@@ -199,6 +199,8 @@ FAMILY_RACKET_ATTACK_MAX_PER_CREW = 2
 FAMILY_RACKET_ATTACK_CREW_WINDOW_HOURS = 3
 
 CREW_OC_COOLDOWN_HOURS = 8
+CREW_OC_COOLDOWN_HOURS_REDUCED = 6
+CREW_OC_COMMIT_ROLES = ("boss", "underboss", "capo", "don")
 
 # Casino game types that contribute to state head income (and have gambling_log entries with city/state)
 STATE_HEAD_CASINO_GAMES = ["dice", "roulette", "blackjack", "horseracing", "slots", "videopoker"]
@@ -260,7 +262,6 @@ async def _state_head_casino_week_stats(state_name: str):
     except Exception:
         pass
     return result
-CREW_OC_COOLDOWN_HOURS_REDUCED = 6
 CREW_OC_REWARD_RP = 250
 CREW_OC_REWARD_CASH = 250_000
 CREW_OC_REWARD_BULLETS = 500
@@ -268,6 +269,45 @@ CREW_OC_REWARD_POINTS_MIN = 5
 CREW_OC_REWARD_POINTS_MAX = 25  # rolled per crew member on commit
 CREW_OC_REWARD_BOOZE = 10
 CREW_OC_TREASURY_LUMP = 500_000
+
+
+async def _crew_oc_committer_user_ids(family_id: str) -> List[str]:
+    """User ids allowed to commit Crew OC (Don / Underboss / Capo), including families.boss_id fallback."""
+    rows = await db.family_members.find(
+        {"family_id": family_id, "role": {"$in": list(CREW_OC_COMMIT_ROLES)}},
+        {"_id": 0, "user_id": 1},
+    ).to_list(20)
+    ids = {str(r["user_id"]) for r in rows if r.get("user_id")}
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "boss_id": 1})
+    bid = _uid_str((fam or {}).get("boss_id"))
+    if bid:
+        ids.add(bid)
+    return list(ids)
+
+
+async def _crew_oc_effective_cooldown_info(family_id: str, actor_user_id: Optional[str] = None) -> Dict[str, Any]:
+    """Crew OC cooldown after store timer (any committer holds upgrade) + active family crew_oc perk."""
+    leader_ids = await _crew_oc_committer_user_ids(family_id)
+    timer_holder_ids: set = set()
+    if leader_ids:
+        timer_rows = await db.users.find(
+            {"id": {"$in": leader_ids}, "crew_oc_timer_reduced": True, "is_dead": {"$ne": True}},
+            {"_id": 0, "id": 1},
+        ).to_list(10)
+        timer_holder_ids = {str(u["id"]) for u in timer_rows if u.get("id")}
+    has_store_timer = bool(timer_holder_ids)
+    actor_has_timer = bool(actor_user_id and str(actor_user_id) in timer_holder_ids)
+    mods = await family_perk_modifiers(db, family_id)
+    perk_off = int(mods.get("crew_oc_hours_off") or 0)
+    base_hours = CREW_OC_COOLDOWN_HOURS_REDUCED if has_store_timer else CREW_OC_COOLDOWN_HOURS
+    hours = max(1, base_hours - perk_off) if perk_off > 0 else base_hours
+    return {
+        "hours": hours,
+        "base_hours": base_hours,
+        "perk_hours_off": perk_off,
+        "has_store_timer": has_store_timer,
+        "actor_has_timer": actor_has_timer,
+    }
 
 FAMILY_RACKET_RAID_SUCCESS_MESSAGES = [
     "Raid successful! Took ${amount:,} from {family_name}'s {racket_name}.",
@@ -1659,6 +1699,8 @@ async def families_my(current_user: dict = Depends(get_current_user)):
         if _qt_row and _qt_row.get("_id") is not None:
             quicktrade_family_listing_id = str(_qt_row["_id"])
 
+    crew_oc_cd = await _crew_oc_effective_cooldown_info(family_id, uid)
+
     payload = {
         "family": {
             "id": fam["id"], "name": fam["name"], "tag": fam["tag"],
@@ -1695,7 +1737,10 @@ async def families_my(current_user: dict = Depends(get_current_user)):
         "members": members, "fallen": fallen, "rackets": rackets, "my_role": my_role,
         "vault_and_rackets_locked": vault_and_rackets_locked,
         "qualifies_for_state_head": qualifies_for_state_head,
-        "crew_oc_committer_has_timer": bool(current_user.get("crew_oc_timer_reduced", False)),
+        "crew_oc_committer_has_timer": crew_oc_cd["actor_has_timer"],
+        "crew_oc_family_has_timer": crew_oc_cd["has_store_timer"],
+        "crew_oc_effective_cooldown_hours": crew_oc_cd["hours"],
+        "crew_oc_perk_hours_off": crew_oc_cd["perk_hours_off"],
         "crew_oc_applications": crew_oc_applications,
         "join_applications": join_applications,
         "compound_cars": compound_cars,
@@ -4183,19 +4228,15 @@ async def _execute_crew_oc_commit(
                 return {"ok": False, "reason": "cooldown", "detail": f"Crew OC on cooldown. Try again in {secs}s"}
         except Exception:
             pass
-    has_timer = bool(actor_user_doc.get("crew_oc_timer_reduced", False))
-    cooldown_hours = CREW_OC_COOLDOWN_HOURS_REDUCED if has_timer else CREW_OC_COOLDOWN_HOURS
-    mods = await family_perk_modifiers(db, family_id)
-    oc_off = int(mods.get("crew_oc_hours_off") or 0)
-    if oc_off > 0:
-        cooldown_hours = max(1, cooldown_hours - oc_off)
+    cd_info = await _crew_oc_effective_cooldown_info(family_id, aid)
+    cooldown_hours = int(cd_info["hours"])
     new_cooldown_until = now + timedelta(hours=cooldown_hours)
     members = await db.family_members.find({"family_id": family_id}, {"_id": 0, "user_id": 1}).to_list(100)
     member_ids = [m["user_id"] for m in members]
     accepted = await db.family_crew_oc_applications.find({"family_id": family_id, "status": "accepted"}, {"_id": 0, "user_id": 1}).to_list(50)
     accepted_ids = [a["user_id"] for a in accepted]
     roster_ids = list(dict.fromkeys(member_ids + accepted_ids))
-    living = await db.users.find({"id": {"$in": roster_ids}, "is_dead": {"$ne": True}}, {"_id": 0, "id": 1, "rank_points": 1, "username": 1, "prestige_rank_multiplier": 1}).to_list(100)
+    living = await db.users.find({"id": {"$in": roster_ids}, "is_dead": {"$ne": True}}, {"_id": 0, "id": 1, "rank_points": 1, "username": 1, "prestige_rank_multiplier": 1, "total_oc_heists": 1}).to_list(100)
     living_ids = [u["id"] for u in living]
     if not living_ids:
         return {"ok": False, "reason": "no_crew", "detail": "No living crew members"}
@@ -4203,6 +4244,7 @@ async def _execute_crew_oc_commit(
     for u in living:
         uid = u["id"]
         rp_before = int(u.get("rank_points") or 0)
+        oc_heists_before = int(u.get("total_oc_heists") or 0)
         respect_roll = _rng.randint(CREW_OC_REWARD_POINTS_MIN, CREW_OC_REWARD_POINTS_MAX)
         await db.users.update_one(
             {"id": uid},
@@ -4213,9 +4255,15 @@ async def _execute_crew_oc_commit(
                     "bullets": CREW_OC_REWARD_BULLETS,
                     "respect_points": respect_roll,
                     "booze": CREW_OC_REWARD_BOOZE,
+                    "total_oc_heists": 1,
                 }
             },
         )
+        try:
+            from routers.game.achievements import maybe_log_oc_heist_badge_tiers
+            await maybe_log_oc_heist_badge_tiers(uid, oc_heists_before, username=u.get("username"))
+        except Exception:
+            pass
         if respect_roll:
             await log_respect_earned(uid, respect_roll, "crew_oc")
         try:
@@ -4241,7 +4289,12 @@ async def _execute_crew_oc_commit(
             },
         },
     )
-    meta = {"crew_oc_cooldown_until": new_cooldown_until.isoformat(), "cooldown_hours": cooldown_hours}
+    meta = {
+        "crew_oc_cooldown_until": new_cooldown_until.isoformat(),
+        "cooldown_hours": cooldown_hours,
+        "crew_oc_has_store_timer": cd_info["has_store_timer"],
+        "crew_oc_perk_hours_off": cd_info["perk_hours_off"],
+    }
     if meta_extra:
         meta.update(meta_extra)
     await log_family_vault_tx(

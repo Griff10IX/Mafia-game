@@ -76,17 +76,15 @@ VALUE_RANK = {"2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "1
 
 # Payout multipliers: cash credited to the player on draw = round(bet * multiplier) (stake was already taken on deal).
 # So "even money" on a pair of Jacks requires multiplier 2 (full stake back + equal win), not 1.5.
-# Preset "enhanced" was the reference for the low tier; "normal" / "increased" match that pattern at the bottom.
 #
-# House lean: cards are generated with a strong house-favouring outcome bias. Payouts remain honest:
-# if the visible final hand is a paying tier, it pays exactly according to the pay table. The edge
-# comes from making paying deals/draws much rarer, not from reducing payouts after the fact.
+# Presets change pay table multipliers only. Cards are dealt fairly from a shuffled deck; hit frequency
+# does not change when the owner switches preset — only the cash returned for each hand tier changes.
 VIDEO_POKER_DEFAULT_ODDS_PRESET = "tight"
 VIDEO_POKER_ODDS_PRESET_LABELS = {
-    "tight": "Tight (house)",
-    "normal": "Normal",
-    "increased": "Increased",
-    "enhanced": "Enhanced",
+    "tight": "Tight payouts",
+    "normal": "Normal payouts",
+    "increased": "Increased payouts",
+    "enhanced": "Enhanced payouts",
 }
 # Between normal and enhanced (rounded); not specified by players — middle tier.
 VIDEO_POKER_PAY_PRESETS: dict[str, dict[str, float]] = {
@@ -138,79 +136,6 @@ VIDEO_POKER_PAY_PRESETS: dict[str, dict[str, float]] = {
 # Back-compat alias for imports / admin tooling
 PAY_TABLE = VIDEO_POKER_PAY_PRESETS[VIDEO_POKER_DEFAULT_ODDS_PRESET]
 
-# Per-preset card-generation profile. Instead of rejecting all winning hands equally, accept
-# small wins much more often and make big hands significantly harder to land. This keeps the
-# casino owner favoured while still letting players see regular low-tier hits.
-VIDEO_POKER_GENERATION_PROFILE_BY_PRESET: dict[str, dict[str, Any]] = {
-    "tight": {
-        "deal_attempts": 14,
-        "draw_attempts": 22,
-        "accept": {
-            "jacks_or_better": 0.72,
-            "two_pair": 0.55,
-            "three_of_a_kind": 0.38,
-            "straight": 0.55,
-            "flush": 0.55,
-            "full_house": 0.55,
-            "four_of_a_kind": 0.55,
-            "straight_flush": 0.45,
-            "royal_flush": 0.30,
-        },
-    },
-    "normal": {
-        "deal_attempts": 12,
-        "draw_attempts": 18,
-        "accept": {
-            "jacks_or_better": 0.80,
-            "two_pair": 0.62,
-            "three_of_a_kind": 0.43,
-            "straight": 0.65,
-            "flush": 0.65,
-            "full_house": 0.65,
-            "four_of_a_kind": 0.65,
-            "straight_flush": 0.55,
-            "royal_flush": 0.40,
-        },
-    },
-    "increased": {
-        "deal_attempts": 10,
-        "draw_attempts": 15,
-        "accept": {
-            "jacks_or_better": 0.88,
-            "two_pair": 0.70,
-            "three_of_a_kind": 0.50,
-            "straight": 0.75,
-            "flush": 0.75,
-            "full_house": 0.75,
-            "four_of_a_kind": 0.75,
-            "straight_flush": 0.65,
-            "royal_flush": 0.50,
-        },
-    },
-    "enhanced": {
-        "deal_attempts": 8,
-        "draw_attempts": 12,
-        "accept": {
-            "jacks_or_better": 0.95,
-            "two_pair": 0.80,
-            "three_of_a_kind": 0.62,
-            "straight": 0.85,
-            "flush": 0.85,
-            "full_house": 0.85,
-            "four_of_a_kind": 0.85,
-            "straight_flush": 0.75,
-            "royal_flush": 0.60,
-        },
-    },
-}
-
-
-def _vp_generation_profile(preset: str) -> dict[str, Any]:
-    return VIDEO_POKER_GENERATION_PROFILE_BY_PRESET.get(
-        _normalize_odds_preset(preset),
-        VIDEO_POKER_GENERATION_PROFILE_BY_PRESET[VIDEO_POKER_DEFAULT_ODDS_PRESET],
-    )
-
 
 def _vp_sample_cards(deck: list, count: int) -> tuple[list, list]:
     candidate_deck = list(deck)
@@ -219,54 +144,26 @@ def _vp_sample_cards(deck: list, count: int) -> tuple[list, list]:
     return hand, candidate_deck
 
 
-def _vp_accept_candidate(hand_key: str, profile: dict[str, Any]) -> bool:
-    if hand_key == "nothing":
-        return True
-    accept = profile.get("accept") or {}
-    chance = max(0.0, min(1.0, float(accept.get(hand_key, 0.0) or 0.0)))
-    return _rng.random() < chance
-
-
 def _vp_deal_initial_hand(deck: list, preset: str, pay_table: dict[str, float]) -> list:
-    """Deal a visible 5-card hand while making high-paying openings harder than small pairs."""
-    profile = _vp_generation_profile(preset)
-    attempts = max(1, int(profile.get("deal_attempts") or 1))
-    last_hand = None
-    last_deck = None
-    for _ in range(attempts):
-        hand, remaining = _vp_sample_cards(deck, 5)
-        last_hand, last_deck = hand, remaining
-        hand_key, _, _ = _evaluate_hand(hand, pay_table)
-        if _vp_accept_candidate(hand_key, profile):
-            deck[:] = remaining
-            return hand
-    deck[:] = last_deck or []
-    return last_hand or []
+    """Deal 5 cards fairly from a shuffled deck (preset affects payouts only, not deal odds)."""
+    hand, remaining = _vp_sample_cards(deck, 5)
+    deck[:] = remaining
+    return hand
 
 
 def _vp_draw_biased_hand(hand: list, held_idx: set[int], deck: list, preset: str, pay_table: dict[str, float]) -> list:
-    """Draw replacements while allowing mostly small wins and making big hands much rarer."""
+    """Draw replacements fairly from the remaining deck (preset affects payouts only, not draw odds)."""
     swap_indices = [i for i in range(5) if i not in held_idx]
     if not swap_indices:
         return hand
-    profile = _vp_generation_profile(preset)
-    attempts = max(1, int(profile.get("draw_attempts") or 1))
-    last_hand = None
-    last_deck = None
-    for _ in range(attempts):
-        candidate_deck = list(deck)
-        _rng.shuffle(candidate_deck)
-        candidate_hand = list(hand)
-        for i in swap_indices:
-            if candidate_deck:
-                candidate_hand[i] = candidate_deck.pop()
-        last_hand, last_deck = candidate_hand, candidate_deck
-        hand_key, _, _ = _evaluate_hand(candidate_hand, pay_table)
-        if _vp_accept_candidate(hand_key, profile):
-            deck[:] = candidate_deck
-            return candidate_hand
-    deck[:] = last_deck or []
-    return last_hand or hand
+    candidate_deck = list(deck)
+    _rng.shuffle(candidate_deck)
+    new_hand = list(hand)
+    for i in swap_indices:
+        if candidate_deck:
+            new_hand[i] = candidate_deck.pop()
+    deck[:] = candidate_deck
+    return new_hand
 
 
 HAND_NAMES = {
@@ -305,7 +202,7 @@ def _effective_odds_preset(doc: Optional[dict]) -> str:
 
 
 def _payout_for_multiplier(bet: int, mult: float) -> int:
-    """Cash credited on draw: honest round(bet * multiplier). House edge comes from card generation, not a credit haircut."""
+    """Cash credited on draw: honest round(bet * multiplier)."""
     m = float(mult or 0)
     if m <= 0:
         return 0
@@ -738,7 +635,7 @@ def register(router):
             raise HTTPException(status_code=403, detail="You do not own this table")
         raw = (request.odds_preset or "").strip().lower()
         if raw not in VIDEO_POKER_PAY_PRESETS:
-            raise HTTPException(status_code=400, detail="Invalid odds preset. Use tight, normal, increased, or enhanced.")
+            raise HTTPException(status_code=400, detail="Invalid pay table preset. Use tight, normal, increased, or enhanced.")
         preset = raw
         await db.videopoker_ownership.update_one({"city": stored_city or city}, {"$set": {"odds_preset": preset}})
         return {

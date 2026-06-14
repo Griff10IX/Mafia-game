@@ -1,10 +1,10 @@
-# New account civilian protection: 48h from created_at, revocable by rules or manual opt-out.
+# New account civilian protection: 7 days from created_at, revocable by rules or manual opt-out.
 from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
-PROTECTION_HOURS = 48
+PROTECTION_HOURS = 7 * 24
 
 CIVILIAN_PROTECTION_KILL_BLOCKED_DETAIL = (
     "That player still has new-account protection and can't be attacked in normal PvP yet."
@@ -49,7 +49,7 @@ def protection_window_end_iso(user: Optional[dict]) -> Optional[str]:
 
 
 def is_civilian_protected(user: Optional[dict]) -> bool:
-    """True if this user is within the 48h window and has not revoked protection. NPCs and staff are never 'protected' for combat rules."""
+    """True if this user is within the protection window and has not revoked protection. NPCs and staff are never 'protected' for combat rules."""
     if not user or user.get("is_npc"):
         return False
     try:

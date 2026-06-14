@@ -641,7 +641,7 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     if user_ids:
         users_raw = await db.users.find(
             {"id": {"$in": user_ids}},
-            {"_id": 0, "id": 1, "rank_points": 1, "username": 1, "prestige_rank_multiplier": 1},
+            {"_id": 0, "id": 1, "rank_points": 1, "username": 1, "prestige_rank_multiplier": 1, "total_oc_heists": 1},
         ).to_list(10)
         user_map = {u["id"]: u for u in users_raw}
     cash_each = rp_each = 0
@@ -660,10 +660,20 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
             cash_each += cash_add
             rp_each += rp_add
         rp_before = int((user_map.get(user_id) or {}).get("rank_points") or 0)
+        oc_heists_before = int((user_map.get(user_id) or {}).get("total_oc_heists") or 0)
         await db.users.update_one(
             {"id": user_id},
             apply_season_rp_mirror_to_update({"$inc": {"money": cash_add, "rank_points": rp_add, "total_oc_heists": 1}}),
         )
+        try:
+            from routers.game.achievements import maybe_log_oc_heist_badge_tiers
+            await maybe_log_oc_heist_badge_tiers(
+                user_id,
+                oc_heists_before,
+                username=(user_map.get(user_id) or {}).get("username"),
+            )
+        except Exception:
+            pass
         if rp_add > 0:
             try:
                 await maybe_process_rank_up(

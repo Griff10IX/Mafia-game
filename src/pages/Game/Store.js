@@ -47,6 +47,8 @@ function storeRespectForPoints(pts) {
 }
 
 const STORE_TOKEN_MAX_HELD = 15;
+/** Keep in sync with backend armoury.TOKEN_MAX_STACK_HOURS (7 × 24 = 1 week). */
+const TOKEN_MAX_STACK_LABEL = '1 week';
 
 /** Must match backend AUTO_RANK_COST_POINTS / pricing logic (8× token pts ≈ full unlock pts for 16h only). */
 const AUTO_RANK_COST_POINTS = 5000;
@@ -55,28 +57,28 @@ const CREW_OC_AUTO_3H_TOKEN_STORE_PTS = 48; // match backend jailbust_bonus / cr
 
 /** Single consumable tokens (armoury); activate from My Inventory */
 const TOKEN_STORE_ITEMS = [
-  { tokenType: 'xp_crimes', title: 'Crimes XP Token', price: 42, userKey: 'xp_crimes_tokens', desc: '2× crime XP for 1h when activated (stack up to 24h).' },
-  { tokenType: 'xp_gta', title: 'GTA XP Token', price: 42, userKey: 'xp_gta_tokens', desc: '2× GTA XP for 1h when activated (stack up to 24h).' },
-  { tokenType: 'melt', title: 'Melt Token', price: 42, userKey: 'melt_tokens', desc: 'Melt bonus hour when activated (stack up to 24h).' },
-  { tokenType: 'oc_reduced', title: 'OC Token', price: 42, userKey: 'oc_reduced_tokens', desc: 'Reduced OC cooldown hour when activated (stack up to 24h).' },
-  { tokenType: 'booze', title: 'Booze Token', price: 42, userKey: 'booze_tokens', desc: 'Booze run bonus hour when activated (stack up to 24h).' },
-  { tokenType: 'racket', title: 'Racket Token', price: 42, userKey: 'racket_tokens', desc: 'Racket income bonus hour when activated (stack up to 24h).' },
-  { tokenType: 'properties', title: 'Properties Token', price: 48, userKey: 'properties_tokens', desc: 'Property income bonus when activated (stack up to 24h).' },
-  { tokenType: 'travel', title: 'Travel Token', price: 55, userKey: 'travel_tokens', desc: 'Travel bonus when activated (stack up to 24h).' },
-  { tokenType: 'jailbust_bonus', title: 'Jailbust Token', price: 48, userKey: 'jailbust_tokens', desc: '+10% bust success for 1h when activated.' },
+  { tokenType: 'xp_crimes', title: 'Crimes XP Token', price: 42, userKey: 'xp_crimes_tokens', desc: `2× crime XP for 1h when activated (stack up to ${TOKEN_MAX_STACK_LABEL}).` },
+  { tokenType: 'xp_gta', title: 'GTA XP Token', price: 42, userKey: 'xp_gta_tokens', desc: `2× GTA XP for 1h when activated (stack up to ${TOKEN_MAX_STACK_LABEL}).` },
+  { tokenType: 'melt', title: 'Melt Token', price: 42, userKey: 'melt_tokens', desc: `Melt bonus hour when activated (stack up to ${TOKEN_MAX_STACK_LABEL}).` },
+  { tokenType: 'oc_reduced', title: 'OC Token', price: 42, userKey: 'oc_reduced_tokens', desc: `Reduced OC cooldown hour when activated (stack up to ${TOKEN_MAX_STACK_LABEL}).` },
+  { tokenType: 'booze', title: 'Booze Token', price: 42, userKey: 'booze_tokens', desc: `Cheaper booze buys + distillery boost when activated (stack up to ${TOKEN_MAX_STACK_LABEL}).` },
+  { tokenType: 'racket', title: 'Racket Token', price: 42, userKey: 'racket_tokens', desc: `+20% illegal business & distillery cash when activated (stack up to ${TOKEN_MAX_STACK_LABEL}).` },
+  { tokenType: 'properties', title: 'Properties Token', price: 48, userKey: 'properties_tokens', desc: `Property income bonus when activated (stack up to ${TOKEN_MAX_STACK_LABEL}).` },
+  { tokenType: 'travel', title: 'Travel Token', price: 55, userKey: 'travel_tokens', desc: `Travel bonus when activated (stack up to ${TOKEN_MAX_STACK_LABEL}).` },
+  { tokenType: 'jailbust_bonus', title: 'Jailbust Token', price: 48, userKey: 'jailbust_tokens', desc: `+10% bust success for 1h when activated (stack up to ${TOKEN_MAX_STACK_LABEL}).` },
   {
     tokenType: 'auto_rank_2h',
     title: 'Auto Rank (2h) Token',
     price: AUTO_RANK_2H_TOKEN_STORE_PTS,
     userKey: 'auto_rank_2h_tokens',
-    desc: `+2h Auto Rank when activated (stack to 24h). ${AUTO_RANK_2H_TOKEN_STORE_PTS} pts each — eight tokens equal ${AUTO_RANK_COST_POINTS.toLocaleString()} pts but only 16h vs permanent unlock.`,
+    desc: `+2h Auto Rank when activated (stack to ${TOKEN_MAX_STACK_LABEL}). ${AUTO_RANK_2H_TOKEN_STORE_PTS} pts each — eight tokens equal ${AUTO_RANK_COST_POINTS.toLocaleString()} pts but only 16h vs permanent unlock.`,
   },
   {
     tokenType: 'crew_oc_auto_3h',
     title: 'Crew OC auto-apply (3h)',
     price: CREW_OC_AUTO_3H_TOKEN_STORE_PTS,
     userKey: 'crew_oc_auto_apply_tokens',
-    desc: 'Activate in My Inventory — you must set a max join fee; auto-apply only runs after that. 3h per token, stack to 24h.',
+    desc: `Activate in My Inventory — you must set a max join fee; auto-apply only runs after that. 3h per token, stack to ${TOKEN_MAX_STACK_LABEL}.`,
   },
 ];
 
@@ -96,8 +98,8 @@ const UPGRADES = [
   { id: 'auto-rank', title: 'Auto Rank', Icon: Bot, price: AUTO_RANK_COST_POINTS, path: '/store/buy-auto-rank', ownedKey: 'auto_rank_purchased', desc: 'Auto-commit crimes, GTA, busts, OC. Optional: set Telegram in Profile for notifications.' },
   { id: 'silencer', title: 'Silencer', Icon: VolumeX, price: 150, path: '/store/buy-silencer', ownedKey: 'has_silencer', desc: 'Fewer witness statements when you kill' },
   { id: 'anti-snitch', title: 'Anti Snitch', Icon: Shield, price: 120, path: '/store/buy-anti-snitch', ownedKey: 'anti_snitch', desc: 'Cannot be snitched on when others are in jail' },
-  { id: 'oc-timer', title: 'OC Timer', Icon: Clock, price: 300, path: '/store/buy-oc-timer', ownedKey: 'oc_timer_reduced', desc: 'Heist cooldown 4h instead of 6h' },
-  { id: 'crew-oc-timer', title: 'Crew OC Timer', Icon: Clock, price: 350, path: '/store/buy-crew-oc-timer', ownedKey: 'crew_oc_timer_reduced', desc: 'Family Crew OC 6h when you commit' },
+  { id: 'oc-timer', title: 'OC Timer', Icon: Clock, price: 300, path: '/store/buy-oc-timer', ownedKey: 'oc_timer_reduced', desc: 'Solo Organised Crime heists: 4h cooldown instead of 6h (not Family Crew OC)' },
+  { id: 'crew-oc-timer', title: 'Crew OC Timer', Icon: Clock, price: 350, path: '/store/buy-crew-oc-timer', ownedKey: 'crew_oc_timer_reduced', desc: 'Family Crew OC: 6h base when you commit (stacks with family −1h perk → 5h). Any Don/Underboss/Capo with this upgrade applies it for the crew.' },
   { id: 'garage', title: 'Garage Batch', Icon: Zap, price: 75, path: '/store/upgrade-garage-batch', ownedKey: null, desc: '+10 melt/scrap at once', extra: (u) => ({ line: 'Limit', value: u?.garage_batch_limit ?? 6 }) },
   { id: 'booze', title: 'Booze Capacity', Icon: ShoppingBag, price: 100, path: '/store/buy-booze-capacity', ownedKey: null, desc: '+25 bonus cargo from Points Store (rank + prestige set your base)', extra: (u, cfg) => cfg && ({
     line: 'Cargo',

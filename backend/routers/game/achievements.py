@@ -34,7 +34,7 @@ BADGE_CATEGORIES = [
     {
         "id": "oc_heists",
         "name": "OC Heists",
-        "progress_key": "total_oc_heists",
+        "progress_key": "total_oc_heists",  # solo/team OC + family Crew OC
         "targets": [5, 10, 20, 25, 40, 50, 75, 100, 150, 250, 400, 500, 750, 1000, 1500, 2500, 4000, 5000, 7500, 10000, 25000, 50000, 100000],
     },
     {
@@ -62,7 +62,7 @@ BONUS_BENEFITS = {
     "crimes": "Crime payout",
     "gta": "GTA rarity boost",
     "jail_busts": "Jail bust success",
-    "oc_heists": "OC heist payout",
+    "oc_heists": "OC & Crew OC heist payout",
     "kills": "Attacker: fewer bullets / Victim: more to survive",
     "bullets_melted": "Melt cooldown reduction",
     "booze_runs": "Booze profit",
@@ -164,6 +164,27 @@ async def log_badge_events(
             })
         except Exception:
             pass
+
+
+def newly_unlocked_oc_heist_tiers(previous: int, increment: int = 1) -> List[int]:
+    """Badge tiers crossed when OC count goes from ``previous`` to ``previous + increment``."""
+    cat = next((c for c in BADGE_CATEGORIES if c["id"] == "oc_heists"), None)
+    if not cat or increment <= 0:
+        return []
+    new_total = previous + increment
+    return [t for t in sorted(cat["targets"]) if previous < t <= new_total]
+
+
+async def maybe_log_oc_heist_badge_tiers(
+    user_id: str,
+    previous: int,
+    *,
+    username: Optional[str] = None,
+    increment: int = 1,
+) -> None:
+    tiers = newly_unlocked_oc_heist_tiers(previous, increment)
+    if tiers:
+        await log_badge_events(user_id, "oc_heists", tiers, username=username)
 
 
 def _compute_category(cat: dict, user: dict) -> dict:
