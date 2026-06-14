@@ -82,6 +82,12 @@ export default function BuyCars() {
   const [dealershipSaving, setDealershipSaving] = useState(false);
   const [dealershipTransferUsername, setDealershipTransferUsername] = useState('');
   const [dealershipSellPoints, setDealershipSellPoints] = useState('');
+  const [stockRarity, setStockRarity] = useState('legendary');
+  const [stockTarget, setStockTarget] = useState('100');
+  const [stockPayFrom, setStockPayFrom] = useState('cash');
+  const [stockEstimate, setStockEstimate] = useState(null);
+  const [autoStockRarity, setAutoStockRarity] = useState('legendary');
+  const [autoStockTarget, setAutoStockTarget] = useState('100');
   const [userMoney, setUserMoney] = useState(() => (authUser?.money != null ? authUser.money : null));
   const [hasLoaded, setHasLoaded] = useState(false);
   const [selectedRarity, setSelectedRarity] = useState(null);
@@ -98,6 +104,10 @@ export default function BuyCars() {
       ]);
       setDealerCars(Array.isArray(saleRes.data?.cars) ? saleRes.data.cars : []);
       setDealership(saleRes.data?.dealership || null);
+      const d = saleRes.data?.dealership;
+      if (d?.auto_stock?.rarity) setAutoStockRarity(d.auto_stock.rarity);
+      if (d?.auto_stock?.target_per_model) setAutoStockTarget(String(d.auto_stock.target_per_model));
+      if (d?.stock_default_target) setStockTarget(String(d.stock_default_target));
       if (authUser?.money != null) setUserMoney(authUser.money);
       setMarketplaceListings(Array.isArray(marketRes.data?.listings) ? marketRes.data.listings : []);
     } catch (_) {}
@@ -111,6 +121,23 @@ export default function BuyCars() {
   useEffect(() => {
     fetchAll();
   }, []);
+
+  useEffect(() => {
+    if (!dealership?.is_owner) {
+      setStockEstimate(null);
+      return;
+    }
+    const target = parseInt(String(stockTarget).replace(/\D/g, ''), 10);
+    if (!stockRarity || !target || target <= 0) {
+      setStockEstimate(null);
+      return;
+    }
+    let cancelled = false;
+    api.get('/gta/dealership/stock-estimate', { params: { rarity: stockRarity, target_per_model: target } })
+      .then((res) => { if (!cancelled) setStockEstimate(res.data || null); })
+      .catch(() => { if (!cancelled) setStockEstimate(null); });
+    return () => { cancelled = true; };
+  }, [dealership?.is_owner, stockRarity, stockTarget]);
 
   const raritySummary = useMemo(() => {
     const forSaleByRarity = {};
@@ -367,6 +394,65 @@ export default function BuyCars() {
     }
   };
 
+  const stockableRarities = dealership?.stockable_rarities || ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary'];
+  const stockFeePct = dealership?.stock_fee_rate_pct ?? 25;
+  const stockMaxPerModel = dealership?.stock_max_per_model ?? 100;
+
+  const handleStockDealership = async () => {
+    const target = parseInt(String(stockTarget).replace(/\D/g, ''), 10);
+    if (!stockRarity || !target || target <= 0) {
+      toast.error('Choose a rarity and target stock count');
+      return;
+    }
+    if (dealershipSaving) return;
+    const fee = stockEstimate?.total_fee ?? 0;
+    const units = stockEstimate?.total_units ?? 0;
+    if (units <= 0) {
+      toast.error('Nothing to stock at that target');
+      return;
+    }
+    const payLabel = stockPayFrom === 'profit' ? 'pending profit' : 'cash';
+    if (!window.confirm(`Stock ${units} ${stockRarity.replace(/_/g, ' ')} car${units !== 1 ? 's' : ''} for $${Number(fee).toLocaleString()} (${stockFeePct}% catalog value) from ${payLabel}?`)) return;
+    setDealershipSaving(true);
+    try {
+      const res = await api.post('/gta/dealership/stock', {
+        rarity: stockRarity,
+        target_per_model: target,
+        pay_from: stockPayFrom,
+      });
+      toast.success(res?.data?.message || 'Stocked');
+      refreshUser();
+      fetchAll();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not stock dealership');
+    } finally {
+      setDealershipSaving(false);
+    }
+  };
+
+  const handleAutoStockDealership = async (enabled) => {
+    if (dealershipSaving) return;
+    const target = parseInt(String(autoStockTarget).replace(/\D/g, ''), 10);
+    if (enabled && (!autoStockRarity || !target || target <= 0)) {
+      toast.error('Choose a rarity and target for auto-stock');
+      return;
+    }
+    setDealershipSaving(true);
+    try {
+      const res = await api.post('/gta/dealership/auto-stock', {
+        enabled,
+        rarity: enabled ? autoStockRarity : null,
+        target_per_model: enabled ? target : undefined,
+      });
+      toast.success(res?.data?.message || (enabled ? 'Auto-stock enabled' : 'Auto-stock disabled'));
+      fetchAll();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not update auto-stock');
+    } finally {
+      setDealershipSaving(false);
+    }
+  };
+
   if (!hasLoaded) {
     return (
       <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
@@ -404,7 +490,7 @@ export default function BuyCars() {
             {dealership.is_owner ? (
               <>
                 <p className="text-mutedForeground">
-                  You own the dealership. Collect profit from dealer sales ({dealership.dealer_owner_profit_share_pct}% of markup) and player listings ({dealership.player_sale_owner_profit_share_pct}% of markup).
+                  You own the dealership. Collect profit from dealer sales ({dealership.dealer_owner_profit_share_pct}% of markup) and player listings ({dealership.player_sale_owner_profit_share_pct}% of markup). The lot also gets a free baseline restock every 1–4 hours (up to 5 per model).
                 </p>
                 <p>
                   <span className="text-mutedForeground">Pending profit: </span>
@@ -414,6 +500,79 @@ export default function BuyCars() {
                   <button type="button" disabled={dealershipSaving} onClick={handleCollectDealership} className="px-2 py-1 rounded border border-primary/40 bg-primary/10 text-primary font-bold disabled:opacity-50">Collect</button>
                   <button type="button" disabled={dealershipSaving} onClick={handleRelinquishDealership} className="px-2 py-1 rounded border border-rose-500/40 text-rose-400 font-bold disabled:opacity-50">Relinquish</button>
                 </div>
+                <div className="pt-2 border-t border-border/50 space-y-2">
+                  <p className="text-[9px] uppercase tracking-wider text-mutedForeground font-bold">Owner stocking · {stockFeePct}% of catalog value per car</p>
+                  <p className="text-[9px] text-mutedForeground">
+                    Fill each model of a rarity up to {stockMaxPerModel} units. Fee is {stockFeePct}% of catalog value × cars added (not dealer sale price).
+                  </p>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <label className="flex flex-col gap-0.5">
+                      <span className="text-[8px] uppercase tracking-wider text-mutedForeground">Rarity</span>
+                      <select value={stockRarity} onChange={(e) => setStockRarity(e.target.value)} className="rounded border border-primary/30 bg-background/80 px-2 py-1 text-[10px]">
+                        {stockableRarities.map((r) => (
+                          <option key={r} value={r}>{RARITY_LABELS[r] || r.replace(/_/g, ' ')}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-0.5 min-w-[5rem]">
+                      <span className="text-[8px] uppercase tracking-wider text-mutedForeground">Target / model</span>
+                      <input value={stockTarget} onChange={(e) => setStockTarget(e.target.value)} className="rounded border border-primary/30 bg-background/80 px-2 py-1 text-[10px]" placeholder="100" />
+                    </label>
+                    <label className="flex flex-col gap-0.5">
+                      <span className="text-[8px] uppercase tracking-wider text-mutedForeground">Pay from</span>
+                      <select value={stockPayFrom} onChange={(e) => setStockPayFrom(e.target.value)} className="rounded border border-primary/30 bg-background/80 px-2 py-1 text-[10px]">
+                        <option value="cash">Cash</option>
+                        <option value="profit">Pending profit</option>
+                      </select>
+                    </label>
+                    <button type="button" disabled={dealershipSaving || !(stockEstimate?.total_units > 0)} onClick={handleStockDealership} className="px-2 py-1 rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 font-bold disabled:opacity-50">
+                      Stock now
+                    </button>
+                  </div>
+                  {stockEstimate?.total_units > 0 ? (
+                    <p className="text-[9px] text-mutedForeground">
+                      Adds <span className="text-foreground font-bold">{stockEstimate.total_units}</span> car{stockEstimate.total_units !== 1 ? 's' : ''} · fee <span className="text-emerald-400 font-bold">${Number(stockEstimate.total_fee || 0).toLocaleString()}</span>
+                    </p>
+                  ) : (
+                    <p className="text-[9px] text-mutedForeground">At target {stockTarget || '—'} per model, nothing more to add for this rarity.</p>
+                  )}
+                  <div className="flex flex-wrap items-end gap-2 pt-1">
+                    <label className="flex flex-col gap-0.5">
+                      <span className="text-[8px] uppercase tracking-wider text-mutedForeground">Auto-stock rarity</span>
+                      <select value={autoStockRarity} onChange={(e) => setAutoStockRarity(e.target.value)} className="rounded border border-primary/30 bg-background/80 px-2 py-1 text-[10px]" disabled={!!dealership.auto_stock?.enabled}>
+                        {stockableRarities.map((r) => (
+                          <option key={r} value={r}>{RARITY_LABELS[r] || r.replace(/_/g, ' ')}</option>
+                        ))}
+                      </select>
+                    </label>
+                    <label className="flex flex-col gap-0.5 min-w-[5rem]">
+                      <span className="text-[8px] uppercase tracking-wider text-mutedForeground">Auto target</span>
+                      <input value={autoStockTarget} onChange={(e) => setAutoStockTarget(e.target.value)} className="rounded border border-primary/30 bg-background/80 px-2 py-1 text-[10px]" disabled={!!dealership.auto_stock?.enabled} />
+                    </label>
+                    {dealership.auto_stock?.enabled ? (
+                      <button type="button" disabled={dealershipSaving} onClick={() => handleAutoStockDealership(false)} className="px-2 py-1 rounded border border-amber-500/40 text-amber-400 font-bold disabled:opacity-50">
+                        Disable auto
+                      </button>
+                    ) : (
+                      <button type="button" disabled={dealershipSaving} onClick={() => handleAutoStockDealership(true)} className="px-2 py-1 rounded border border-primary/40 text-primary font-bold disabled:opacity-50">
+                        Enable auto
+                      </button>
+                    )}
+                  </div>
+                  {dealership.auto_stock?.enabled ? (
+                    <p className="text-[9px] text-primary">
+                      Auto-stock on: {RARITY_LABELS[dealership.auto_stock.rarity] || dealership.auto_stock.rarity} → {dealership.auto_stock.target_per_model}/model (fee from profit each restock cycle)
+                    </p>
+                  ) : (
+                    <p className="text-[9px] text-mutedForeground">Auto-stock tops up your chosen rarity from pending profit on each dealer restock cycle (1–4h).</p>
+                  )}
+                </div>
+                {dealership.transfer_locked_war ? (
+                  <p className="text-amber-400/90 text-[9px]">
+                    Family war active — you cannot send or list the dealership until the war ends.
+                  </p>
+                ) : (
+                  <>
                 <div className="flex flex-wrap items-end gap-2 pt-1 border-t border-border/50">
                   <label className="flex flex-col gap-0.5 min-w-[8rem] flex-1">
                     <span className="text-[8px] uppercase tracking-wider text-mutedForeground">Send to player</span>
@@ -428,6 +587,8 @@ export default function BuyCars() {
                   </label>
                   <button type="button" disabled={dealershipSaving} onClick={handleListDealershipOnTrade} className="px-2 py-1 rounded border border-primary/40 text-primary font-bold disabled:opacity-50">List on QT</button>
                 </div>
+                  </>
+                )}
               </>
             ) : dealership.owner_username ? (
               <p className="text-mutedForeground">

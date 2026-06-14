@@ -77,6 +77,7 @@ async def transfer_staff_kill_seizures(db, victim_id: str, admin_user: dict) -> 
         CAPO_RANK_ID,
         _user_owns_any_casino,
         _user_owns_any_property,
+        _user_owns_garage_dealership,
         get_rank_info,
         raise_if_dead_casino_transfer_target,
         user_prestige_rank_mult,
@@ -96,6 +97,7 @@ async def transfer_staff_kill_seizures(db, victim_id: str, admin_user: dict) -> 
         "casino_transferred": None,
         "airport_transferred": False,
         "bullet_factory_transferred": False,
+        "garage_dealership_transferred": False,
     }
 
     await _clear_victim_casino_buyback_escrow(db, victim_id)
@@ -194,6 +196,28 @@ async def transfer_staff_kill_seizures(db, victim_id: str, admin_user: dict) -> 
                 {"owner_id": victim_id},
                 {"$set": {"owner_id": None, "owner_username": None}},
             )
+
+    killer_owns_dealership = await _user_owns_garage_dealership(admin_id)
+    victim_dealership = await db.garage_dealership.find_one({"owner_id": victim_id}, {"_id": 0})
+    if victim_dealership:
+        from utils.garage_dealership import cancel_garage_dealership_quicktrade_listings, dealership_auto_stock_defaults
+
+        try:
+            await cancel_garage_dealership_quicktrade_listings(db)
+        except Exception:
+            logger.exception("admin_kill quicktrade cleanup garage_dealership")
+        if killer_owns_dealership:
+            await db.garage_dealership.update_many(
+                {"owner_id": victim_id},
+                {"$set": {"owner_id": None, "owner_username": None}},
+            )
+        else:
+            dealership_set = {"owner_id": admin_id, "owner_username": admin_username, **dealership_auto_stock_defaults()}
+            if receiver_rank_id < CAPO_RANK_ID:
+                dealership_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
+            res = await db.garage_dealership.update_one({"owner_id": victim_id}, {"$set": dealership_set})
+            if res.modified_count:
+                summary["garage_dealership_transferred"] = True
 
     victim_ep = await db.exclusive_properties.find_one({"owner_id": victim_id}, {"_id": 1})
     if victim_ep:

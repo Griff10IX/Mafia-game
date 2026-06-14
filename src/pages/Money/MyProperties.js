@@ -931,6 +931,10 @@ export default function MyProperties() {
                   </Link>
                   <button type="button" onClick={handleGarageDealershipRelinquish} disabled={saving} className="px-2 py-1 rounded bg-red-500/20 border border-red-500/50 text-red-400 text-xs font-heading disabled:opacity-50">Relinquish</button>
                 </div>
+                {garageDealershipDetail?.transfer_locked_war ? (
+                  <p className="text-[10px] text-amber-400 mb-2">Family war active — send and Quick Trade listing are locked until the war ends.</p>
+                ) : (
+                  <>
                 <div className="flex gap-2 flex-wrap items-end mb-2">
                   <input type="text" placeholder="Transfer to username" value={garageDealershipTransferUsername} onChange={(e) => setGarageDealershipTransferUsername(e.target.value)} className="flex-1 min-w-[120px] px-2 py-1 rounded border border-zinc-600 bg-zinc-900/50 text-xs" />
                   <button type="button" onClick={handleGarageDealershipTransfer} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading disabled:opacity-50">Send</button>
@@ -939,6 +943,8 @@ export default function MyProperties() {
                   <input type="text" placeholder="Quick Trade points" value={garageDealershipSellPoints} onChange={(e) => setGarageDealershipSellPoints(e.target.value)} className="flex-1 min-w-[120px] px-2 py-1 rounded border border-zinc-600 bg-zinc-900/50 text-xs" />
                   <button type="button" onClick={handleGarageDealershipSell} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading disabled:opacity-50">List</button>
                 </div>
+                  </>
+                )}
               </>
             ) : null}
           </div>
@@ -952,7 +958,7 @@ export default function MyProperties() {
         </div>
         <div className="p-3">
           <p className="text-[11px] text-mutedForeground">
-            <strong className="text-foreground">Rule:</strong> You may own at most <strong>1 casino</strong>, up to <strong>1 airport</strong>, <strong>1 armoury</strong>, and <strong>1 car dealership</strong> (airport + armoury + dealership can stack). Not two of the same type.
+            <strong className="text-foreground">Rule:</strong> You may own at most <strong>1 casino</strong>, up to <strong>1 airport</strong>, <strong>1 armoury</strong>, and <strong>1 car dealership</strong> (airport + armoury + dealership can stack). Not two of the same type. Kill the owner to take a casino, airport, armoury, or car dealership. During a family war you cannot send or Quick Trade-list those properties.
           </p>
         </div>
         <div className="mp-art-line text-primary mx-3" />

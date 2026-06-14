@@ -2494,7 +2494,32 @@ async def remove_family_quicktrade_listings_for_war_families(family_a_id: str, f
     if not ids:
         return
     res = await db.properties.delete_many({"for_sale": True, "type": "family", "family_id": {"$in": ids}})
-    if res.deleted_count:
+    deleted_count = int(res.deleted_count or 0)
+    member_ids: set = set()
+    async for row in db.family_members.find({"family_id": {"$in": ids}}, {"_id": 0, "user_id": 1}):
+        uid = row.get("user_id")
+        if uid is None:
+            continue
+        member_ids.add(str(uid).strip())
+        for v in _user_id_variants_for_family_members(uid):
+            member_ids.add(str(v).strip())
+    member_ids = {x for x in member_ids if x}
+    if member_ids:
+        prop_types = [
+            "garage_dealership",
+            "airport",
+            "bullet_factory",
+            "casino_dice",
+            "casino_rlt",
+            "casino_blackjack",
+            "casino_horseracing",
+            "casino_videopoker",
+        ]
+        prop_res = await db.properties.delete_many(
+            {"for_sale": True, "type": {"$in": prop_types}, "owner_id": {"$in": list(member_ids)}},
+        )
+        deleted_count += int(prop_res.deleted_count or 0)
+    if deleted_count:
         _invalidate_quicktrade_property_cache()
         _invalidate_list_cache()
         for fid in ids:

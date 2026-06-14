@@ -5,6 +5,10 @@ GARAGE_DEALERSHIP_ID = "main"
 GARAGE_DEALERSHIP_CLAIM_COST_POINTS = 10_000
 DEALER_OWNER_PROFIT_SHARE = 0.90
 P2P_OWNER_PROFIT_SHARE = 0.10
+DEALER_OWNER_STOCK_FEE_RATE = 0.25
+DEALER_OWNER_STOCK_MAX_PER_MODEL = 100
+DEALER_OWNER_STOCK_DEFAULT_TARGET = 100
+DEALER_OWNER_STOCKABLE_RARITIES = ("common", "uncommon", "rare", "ultra_rare", "legendary")
 
 
 def dealership_sale_profit(sale_price: int, catalog_value: int) -> int:
@@ -34,6 +38,27 @@ async def get_garage_dealership(db) -> Dict[str, Any]:
     return doc
 
 
+def dealership_auto_stock_defaults() -> Dict[str, Any]:
+    return {
+        "auto_stock_enabled": False,
+        "auto_stock_rarity": None,
+        "auto_stock_target": DEALER_OWNER_STOCK_DEFAULT_TARGET,
+    }
+
+
+async def debit_garage_dealership_profit(db, amount: int) -> bool:
+    """Atomically pay a stocking fee from pending dealership profit. Returns False if insufficient."""
+    amt = int(amount or 0)
+    if amt <= 0:
+        return True
+    doc = await db.garage_dealership.find_one_and_update(
+        {"id": GARAGE_DEALERSHIP_ID, "owner_pending_profit": {"$gte": amt}},
+        {"$inc": {"owner_pending_profit": -amt}},
+        projection={"_id": 1},
+    )
+    return bool(doc)
+
+
 async def credit_garage_dealership_profit(db, amount: int) -> None:
     amt = int(amount or 0)
     if amt <= 0:
@@ -56,3 +81,9 @@ async def user_owns_garage_dealership(db, user_id: str) -> Optional[Dict[str, An
         "type": "garage_dealership",
         "owner_pending_profit": int(doc.get("owner_pending_profit") or 0),
     }
+
+
+async def cancel_garage_dealership_quicktrade_listings(db) -> int:
+    """Remove active Quick Trade rows for the global car dealership."""
+    res = await db.properties.delete_many({"for_sale": True, "type": "garage_dealership"})
+    return int(res.deleted_count or 0)

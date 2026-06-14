@@ -1481,12 +1481,23 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
                 upsert=True
             )
     elif prop_type == "garage_dealership":
-        from utils.garage_dealership import GARAGE_DEALERSHIP_ID
-        await db.garage_dealership.update_one(
-            {"id": GARAGE_DEALERSHIP_ID},
-            {"$set": {"owner_id": buyer_id, "owner_username": buyer_username}},
-            upsert=True,
-        )
+        from utils.garage_dealership import GARAGE_DEALERSHIP_ID, dealership_auto_stock_defaults
+
+        buyer_rank_id, _ = get_rank_info(buyer.get("rank_points", 0), user_prestige_rank_mult(buyer))
+        dealership_set = {"owner_id": buyer_id, "owner_username": buyer_username, **dealership_auto_stock_defaults()}
+        if buyer_rank_id < CAPO_RANK_ID:
+            dealership_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
+            await db.garage_dealership.update_one(
+                {"id": GARAGE_DEALERSHIP_ID},
+                {"$set": dealership_set},
+                upsert=True,
+            )
+        else:
+            await db.garage_dealership.update_one(
+                {"id": GARAGE_DEALERSHIP_ID},
+                {"$set": dealership_set, "$unset": {"below_capo_acquired_at": ""}},
+                upsert=True,
+            )
     elif prop_type == "family":
         from routers.game.families import complete_family_quicktrade_sale
 

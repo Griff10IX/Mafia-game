@@ -124,6 +124,7 @@ from server import (
     _family_war_check_wipe_and_award,
     _user_owns_any_casino,
     _user_owns_any_property,
+    _user_owns_garage_dealership,
     log_activity,
     founding_member_income_mult,
 )
@@ -2857,6 +2858,32 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     {"owner_id": victim_id},
                     {"$set": {"owner_id": None, "owner_username": None}},
                 )
+        # Transfer victim's car dealership to killer (or release if killer already owns one)
+        killer_owns_dealership = await _user_owns_garage_dealership(killer_id)
+        victim_dealership = await db.garage_dealership.find_one({"owner_id": victim_id}, {"_id": 0})
+        transferred_dealership = False
+        if victim_dealership:
+            try:
+                from utils.garage_dealership import cancel_garage_dealership_quicktrade_listings, dealership_auto_stock_defaults
+
+                await cancel_garage_dealership_quicktrade_listings(db)
+            except Exception:
+                pass
+            if killer_owns_dealership:
+                await db.garage_dealership.update_many(
+                    {"owner_id": victim_id},
+                    {"$set": {"owner_id": None, "owner_username": None}},
+                )
+            else:
+                dealership_set = {"owner_id": killer_id, "owner_username": killer_username, **dealership_auto_stock_defaults()}
+                if attacker_rank_id < CAPO_RANK_ID:
+                    dealership_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
+                res = await db.garage_dealership.update_one(
+                    {"owner_id": victim_id},
+                    {"$set": dealership_set},
+                )
+                if res.modified_count:
+                    transferred_dealership = True
         # Transfer loot-exclusive weapon: victim loses one; killer gains only if they don't have it
         victim_uw = await db.user_weapons.find_one({"user_id": victim_id, "weapon_id": "weapon_loot", "quantity": {"$gte": 1}}, {"_id": 0, "quantity": 1})
         if victim_uw:
@@ -3028,6 +3055,8 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         if transferred_armoury:
             bf_state = (victim_bf or {}).get("state")
             extras.append(f"their armoury ({bf_state})" if bf_state else "their armoury")
+        if transferred_dealership:
+            extras.append("their car dealership")
         if extras:
             success_message += ", " + ", ".join(extras) + "."
         else:
