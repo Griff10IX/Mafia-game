@@ -2919,8 +2919,9 @@ async def _get_casino_property_profit(user_id: str):
     airport_task = db.airport_ownership.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "slot": 1, "price_per_travel": 1, "total_earnings": 1})
     bullet_task = db.bullet_factory.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "price_per_bullet": 1, "owner_pending_profit_points": 1})
     results = await asyncio.gather(*casino_tasks, airport_task, bullet_task)
-    casino_docs = results[:6]
-    airport_doc, bullet_doc = results[6], results[7]
+    n_casino = len(casino_colls)
+    casino_docs = results[:n_casino]
+    airport_doc, bullet_doc = results[n_casino], results[n_casino + 1]
 
     casino_cash = 0
     casino_lifetime = 0
