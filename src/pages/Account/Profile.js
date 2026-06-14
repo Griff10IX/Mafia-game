@@ -282,6 +282,8 @@ const ProfileInfoCard = ({
   honours = [],
   ownedCasinos = [],
   property: profileProperty = null,
+  garageDealership = null,
+  sportsBetting = null,
   isPropertyOwner = false,
   showCompactHonoursAndProperties = false,
   topCars = [],
@@ -811,7 +813,7 @@ const ProfileInfoCard = ({
                 <span className="text-[8px] font-heading font-bold text-primary uppercase tracking-wider">Properties</span>
               </div>
               <div className="text-[8px] font-heading text-mutedForeground leading-tight">
-                {!ownedCasinos?.length && !profileProperty && (
+                {!ownedCasinos?.length && !profileProperty && !garageDealership && !sportsBetting && (
                   <span>None</span>
                 )}
                 {ownedCasinos?.length > 0 && (
@@ -819,6 +821,8 @@ const ProfileInfoCard = ({
                 )}
                 {profileProperty?.type === 'airport' && <span className="block">Airport — {profileProperty.state ?? '—'}</span>}
                 {profileProperty?.type === 'bullet_factory' && <span className="block">Bullet factory — {profileProperty.state ?? '—'}</span>}
+                {garageDealership && <span className="block">Car Dealership</span>}
+                {sportsBetting && <span className="block">Sports Betting Book</span>}
               </div>
             </div>
           </div>
@@ -1207,10 +1211,10 @@ const TopCarsCard = ({ topCars, showCars }) => {
   );
 };
 
-const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
+const PropertiesCard = ({ ownedCasinos, property, garageDealership, sportsBetting, isOwner }) => {
   const hasCasinos = ownedCasinos?.length > 0;
   const hasProperty = property && (property.type === 'airport' || property.type === 'bullet_factory');
-  const isEmpty = !hasCasinos && !hasProperty;
+  const isEmpty = !hasCasinos && !hasProperty && !garageDealership && !sportsBetting;
 
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
@@ -1294,6 +1298,38 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
                     <div className="text-[10px] md:text-xs font-heading mt-0.5">
                       <span className="text-mutedForeground">Price per bullet: </span>
                       <span className="text-primary font-bold">${Number(property.price_per_bullet).toLocaleString()}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {garageDealership && (
+              <div className="prof-row rounded-md border border-primary/20 px-2.5 py-1.5 bg-zinc-800/30 flex items-start gap-2">
+                <Car size={16} className="md:w-5 md:h-5 text-primary shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <div className="font-heading font-bold text-foreground text-[11px] md:text-sm leading-tight">
+                    Car Dealership
+                  </div>
+                  {isOwner && garageDealership.owner_pending_profit != null && (
+                    <div className="text-[10px] md:text-xs font-heading mt-0.5">
+                      <span className="text-mutedForeground">Pending profit: </span>
+                      <span className="text-primary font-bold">${Number(garageDealership.owner_pending_profit || 0).toLocaleString()}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+            {sportsBetting && (
+              <div className="prof-row rounded-md border border-primary/20 px-2.5 py-1.5 bg-zinc-800/30 flex items-start gap-2">
+                <Trophy size={16} className="md:w-5 md:h-5 text-primary shrink-0 mt-0.5" />
+                <div className="min-w-0 flex-1">
+                  <div className="font-heading font-bold text-foreground text-[11px] md:text-sm leading-tight">
+                    Sports Betting Book
+                  </div>
+                  {isOwner && sportsBetting.owner_pending_profit != null && (
+                    <div className="text-[10px] md:text-xs font-heading mt-0.5">
+                      <span className="text-mutedForeground">Pending profit: </span>
+                      <span className="text-primary font-bold">${Number(sportsBetting.owner_pending_profit || 0).toLocaleString()}</span>
                     </div>
                   )}
                 </div>
@@ -2794,6 +2830,8 @@ export default function Profile() {
               honours={honours}
               ownedCasinos={ownedCasinos}
               property={profile.property}
+              garageDealership={profile.garage_dealership}
+              sportsBetting={profile.sports_betting}
               isPropertyOwner={isMe}
               showCompactHonoursAndProperties
               topCars={profile.top_cars}

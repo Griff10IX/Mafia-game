@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { MapPin, Dice5, Spade, Trophy, CircleDot, Users, Plane, Shield, ChevronRight, ChevronDown } from 'lucide-react';
+import { MapPin, Dice5, Spade, Trophy, CircleDot, Users, Plane, Shield, ChevronRight, ChevronDown, Car } from 'lucide-react';
 import FamilyEmblem from '../../components/FamilyEmblem';
 import { SLOTS_FEATURE_ENABLED } from '../../config/gameFeatures';
 
@@ -94,7 +94,7 @@ function climateCardShell(climateBand) {
 // ============================================================================
 
 const GAMES_WITH_BUYBACK = ['dice', 'blackjack', 'roulette', 'horseracing', 'videopoker', ...(SLOTS_FEATURE_ENABLED ? ['slots'] : [])];
-const STATES_BOOTSTRAP_CACHE_KEY = 'states_bootstrap_cache_v1';
+const STATES_BOOTSTRAP_CACHE_KEY = 'states_bootstrap_cache_v2';
 const STATES_BOOTSTRAP_CACHE_MAX_AGE_MS = 30_000;
 
 const emptyStatesData = {
@@ -120,6 +120,8 @@ function normalizeStatesPayload(raw = {}) {
     },
     bulletFactories: raw.bullet_factories ?? [],
     airports: raw.airports ?? [],
+    garageDealership: raw.garage_dealership ?? null,
+    sportsBetting: raw.sports_betting ?? null,
     airportClaimCost: raw.airport_claim_cost != null ? Number(raw.airport_claim_cost) : 175_000_000,
     userCurrentCity: raw.user_current_state ?? null,
     familyMy: raw.family_my ?? null,
@@ -463,19 +465,89 @@ const CityCard = ({
 };
 
 // ============================================================================
+// GLOBAL PROPERTIES (one owner each — not tied to a city)
+// ============================================================================
+
+const GlobalPropertiesPanel = ({ garageDealership, sportsBetting }) => {
+  const dealerOwner = (garageDealership?.owner_username || '').trim();
+  const sportsOwner = (sportsBetting?.owner_username || '').trim();
+  const dealerClaimed = Boolean(garageDealership?.owner_id && dealerOwner);
+  const sportsClaimed = Boolean(sportsBetting?.owner_id && sportsOwner);
+
+  return (
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 st-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
+        <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Global properties</span>
+        <span className="text-[8px] text-mutedForeground font-heading">One of each · whole game · not per city</span>
+      </div>
+      <div className="p-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+        <div className="rounded-md border border-zinc-700/50 bg-zinc-900/40 p-2 flex flex-col gap-1.5 min-h-[4.5rem]">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start gap-1.5 min-w-0">
+              <Car size={14} className="text-emerald-400 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <div className="text-[10px] font-heading font-bold text-foreground leading-tight">Car Dealership</div>
+                <div className="text-[8px] text-mutedForeground leading-snug mt-0.5">
+                  Buy Cars dealer · owner earns {garageDealership?.dealer_owner_profit_share_pct ?? 90}% dealer markup, {garageDealership?.player_sale_owner_profit_share_pct ?? 10}% listings
+                </div>
+              </div>
+            </div>
+            <Link to="/cars/buy" className="text-[8px] font-heading font-bold text-primary hover:underline shrink-0 whitespace-nowrap">Buy Cars →</Link>
+          </div>
+          <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-800/60 text-[9px] font-heading">
+            {dealerClaimed ? (
+              <Link to={`/profile/${encodeURIComponent(dealerOwner)}`} className="text-primary hover:underline truncate">{dealerOwner}</Link>
+            ) : (
+              <span className="text-zinc-500">Unclaimed · {(garageDealership?.claim_cost_points ?? 10000).toLocaleString()} pts</span>
+            )}
+            <span className="text-[8px] text-zinc-500 shrink-0">Global</span>
+          </div>
+        </div>
+
+        <div className="rounded-md border border-zinc-700/50 bg-zinc-900/40 p-2 flex flex-col gap-1.5 min-h-[4.5rem]">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start gap-1.5 min-w-0">
+              <Trophy size={14} className="text-amber-400 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <div className="text-[10px] font-heading font-bold text-foreground leading-tight">Sports Betting Book</div>
+                <div className="text-[8px] text-mutedForeground leading-snug mt-0.5">
+                  Passive owner · {sportsBetting?.owner_profit_share_pct ?? 10}% of weekly house profit (collect Sun 10 PM UTC)
+                </div>
+              </div>
+            </div>
+            <Link to="/sports-betting" className="text-[8px] font-heading font-bold text-primary hover:underline shrink-0 whitespace-nowrap">Sports →</Link>
+          </div>
+          <div className="flex items-center justify-between gap-2 pt-1 border-t border-zinc-800/60 text-[9px] font-heading">
+            {sportsClaimed ? (
+              <Link to={`/profile/${encodeURIComponent(sportsOwner)}`} className="text-primary hover:underline truncate">{sportsOwner}</Link>
+            ) : (
+              <span className="text-zinc-500">Unclaimed · {(sportsBetting?.claim_cost_points ?? 10000).toLocaleString()} pts</span>
+            )}
+            <span className="text-[8px] text-zinc-500 shrink-0">Global</span>
+          </div>
+        </div>
+      </div>
+      <div className="st-art-line text-primary mx-2.5 mb-2" />
+    </div>
+  );
+};
+
+// ============================================================================
 // STATS OVERVIEW
 // ============================================================================
 
-const StatsOverview = ({ cities, games, allOwners, bulletFactories, airports }) => {
+const StatsOverview = ({ cities, games, allOwners, bulletFactories, airports, garageDealership, sportsBetting }) => {
   const totalCasinos = cities.length * games.length;
   const ownedCasinos = cities.reduce((sum, city) => {
     return sum + games.filter(g => (allOwners[g.id] || {})[city]?.username).length;
   }, 0);
   const ownedFactories = bulletFactories.filter(f => f.owner_username).length;
   const ownedAirports = airports.filter(a => a.owner_username).length;
+  const globalOwned = (garageDealership?.owner_id ? 1 : 0) + (sportsBetting?.owner_id ? 1 : 0);
 
   return (
-    <div className="grid grid-cols-4 gap-1.5">
+    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-1.5">
       <div className="p-1.5 rounded-md bg-zinc-800/30 border border-primary/20 text-center st-card st-fade-in">
         <div className="text-[8px] text-mutedForeground uppercase tracking-[0.1em] font-heading">Cities</div>
         <div className="text-sm font-heading font-bold text-foreground">{cities.length}</div>
@@ -492,6 +564,10 @@ const StatsOverview = ({ cities, games, allOwners, bulletFactories, airports }) 
         <div className="text-[8px] text-mutedForeground uppercase tracking-[0.1em] font-heading">Airports</div>
         <div className="text-sm font-heading font-bold text-foreground">{ownedAirports}/{cities.length}</div>
       </div>
+      <div className="p-1.5 rounded-md bg-zinc-800/30 border border-primary/20 text-center st-card st-fade-in col-span-2 sm:col-span-1" style={{ animationDelay: '0.12s' }}>
+        <div className="text-[8px] text-mutedForeground uppercase tracking-[0.1em] font-heading">Global</div>
+        <div className="text-sm font-heading font-bold text-foreground">{globalOwned}/2</div>
+      </div>
     </div>
   );
 };
@@ -507,6 +583,8 @@ export default function States() {
   const [loadError, setLoadError] = useState(false);
   const [bulletFactories, setBulletFactories] = useState(cachedBootstrap?.bulletFactories ?? []);
   const [airports, setAirports] = useState(cachedBootstrap?.airports ?? []);
+  const [garageDealership, setGarageDealership] = useState(cachedBootstrap?.garageDealership ?? null);
+  const [sportsBetting, setSportsBetting] = useState(cachedBootstrap?.sportsBetting ?? null);
   const [airportClaimCost, setAirportClaimCost] = useState(cachedBootstrap?.airportClaimCost ?? 175_000_000);
   const [expandedCities, setExpandedCities] = useState({});
   const [claimingCity, setClaimingCity] = useState(null);
@@ -519,6 +597,8 @@ export default function States() {
     setData(normalized.data);
     setBulletFactories(normalized.bulletFactories);
     setAirports(normalized.airports);
+    setGarageDealership(normalized.garageDealership);
+    setSportsBetting(normalized.sportsBetting);
     setAirportClaimCost(normalized.airportClaimCost);
     setUserCurrentCity(normalized.userCurrentCity);
     setFamilyMy(normalized.familyMy);
@@ -723,7 +803,11 @@ export default function States() {
         allOwners={allOwners} 
         bulletFactories={bulletFactories}
         airports={airports}
+        garageDealership={garageDealership}
+        sportsBetting={sportsBetting}
       />
+
+      <GlobalPropertiesPanel garageDealership={garageDealership} sportsBetting={sportsBetting} />
 
       {/* Destinations section */}
       <div className="st-fade-in" style={{ animationDelay: '0.06s' }}>

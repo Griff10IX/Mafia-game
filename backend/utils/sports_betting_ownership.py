@@ -1,11 +1,12 @@
 """Global sports betting book ownership (10% of weekly house profit when the book is net positive)."""
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Optional
 
 SPORTS_BETTING_OWNERSHIP_ID = "main"
 SPORTS_BETTING_CLAIM_COST_POINTS = 10_000
 SPORTS_BETTING_OWNER_PROFIT_SHARE = 0.10
 SPORTS_BETTING_STACK_CONFLICT_HOURS = 3
+SPORTS_BETTING_COLLECT_HOUR_UTC = 22  # 10 PM UTC every Sunday
 
 
 def sports_betting_week_key(dt: Optional[datetime] = None) -> str:
@@ -28,6 +29,93 @@ def sports_betting_owner_share_for_profit(house_profit: int) -> int:
     if hp <= 0:
         return 0
     return int(hp * SPORTS_BETTING_OWNER_PROFIT_SHARE)
+
+
+def _sunday_date_for(dt: datetime) -> datetime.date:
+    days_since_sunday = (dt.weekday() + 1) % 7
+    return (dt - timedelta(days=days_since_sunday)).date()
+
+
+def _parse_utc_datetime(value) -> Optional[datetime]:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        try:
+            dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
+def sports_betting_collect_window_start(now: Optional[datetime] = None) -> datetime:
+    """Most recent Sunday 10:00 PM UTC at or before now (start of the current collect period)."""
+    now = now or datetime.now(timezone.utc)
+    sunday = _sunday_date_for(now)
+    window_start = datetime(
+        sunday.year,
+        sunday.month,
+        sunday.day,
+        SPORTS_BETTING_COLLECT_HOUR_UTC,
+        0,
+        0,
+        tzinfo=timezone.utc,
+    )
+    if now < window_start:
+        window_start -= timedelta(days=7)
+    return window_start
+
+
+def sports_betting_next_collect_opens_at(now: Optional[datetime] = None) -> datetime:
+    """Next Sunday 10:00 PM UTC when collection opens."""
+    now = now or datetime.now(timezone.utc)
+    sunday = _sunday_date_for(now)
+    this_sunday = datetime(
+        sunday.year,
+        sunday.month,
+        sunday.day,
+        SPORTS_BETTING_COLLECT_HOUR_UTC,
+        0,
+        0,
+        tzinfo=timezone.utc,
+    )
+    if now < this_sunday:
+        return this_sunday
+    return this_sunday + timedelta(days=7)
+
+
+def sports_betting_collect_availability(ownership: Dict[str, Any], now: Optional[datetime] = None) -> Dict[str, Any]:
+    """Whether the owner may collect pending profit (once per week after Sunday 10 PM UTC)."""
+    now = now or datetime.now(timezone.utc)
+    window_start = sports_betting_collect_window_start(now)
+    next_opens = sports_betting_next_collect_opens_at(now)
+    pending = int((ownership or {}).get("owner_pending_profit") or 0)
+    last_collected = _parse_utc_datetime((ownership or {}).get("last_collected_at"))
+    in_window = now >= window_start
+    already_collected = bool(last_collected and last_collected >= window_start)
+    can_collect = in_window and not already_collected and pending > 0
+
+    if not in_window:
+        blocked_reason = "Collection opens Sunday 10:00 PM UTC."
+    elif already_collected:
+        blocked_reason = "Already collected this week. Next collection Sunday 10:00 PM UTC."
+    elif pending <= 0:
+        blocked_reason = "No profit to collect yet."
+    else:
+        blocked_reason = None
+
+    waiting_for_window = not in_window or already_collected
+    return {
+        "can_collect": can_collect,
+        "collect_blocked_reason": blocked_reason,
+        "collect_window_open": in_window and not already_collected,
+        "next_collect_opens_at": next_opens.isoformat(),
+        "seconds_until_collect_opens": max(0, int((next_opens - now).total_seconds())) if waiting_for_window else 0,
+        "last_collected_at": last_collected.isoformat() if last_collected else None,
+    }
 
 
 async def get_sports_betting_ownership(db) -> Dict[str, Any]:
@@ -129,21 +217,6 @@ async def user_owns_sports_betting_book(db, user_id: str) -> Optional[Dict[str, 
 async def cancel_sports_betting_quicktrade_listings(db) -> int:
     res = await db.properties.delete_many({"for_sale": True, "type": "sports_betting"})
     return int(res.deleted_count or 0)
-
-
-def _parse_utc_datetime(value) -> Optional[datetime]:
-    if not value:
-        return None
-    if isinstance(value, datetime):
-        dt = value
-    else:
-        try:
-            dt = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-        except ValueError:
-            return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt
 
 
 async def maybe_auto_relinquish_sports_betting_stack_conflict(db) -> bool:

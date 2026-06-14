@@ -108,6 +108,8 @@ def register(router):
     get_wealth_rank = srv.get_wealth_rank
     get_wealth_rank_range = srv.get_wealth_rank_range
     _user_owns_any_property = srv._user_owns_any_property
+    _user_owns_garage_dealership = srv._user_owns_garage_dealership
+    _user_owns_sports_betting_book = srv._user_owns_sports_betting_book
     _is_moderator = srv._is_moderator
     _is_entertainer = srv._is_entertainer
     _is_hdo = srv._is_hdo
@@ -841,6 +843,8 @@ def register(router):
             slots_casinos,
             videopoker_casinos,
             property_,
+            garage_dealership,
+            sports_betting,
             message_counts,
             top_cars,
             show_war_rat,
@@ -853,6 +857,8 @@ def register(router):
             _casinos_for_type("slots", db.slots_ownership, "state") if SLOTS_FEATURE_ENABLED else _empty_casino_list(),
             _casinos_for_type("videopoker", db.videopoker_ownership),
             _user_owns_any_property(user_id),
+            _user_owns_garage_dealership(user_id),
+            _user_owns_sports_betting_book(user_id),
             _inbox_sent_message_counts(),
             _top_cars_for_profile(
                 user_id,
@@ -874,6 +880,10 @@ def register(router):
 
         if property_ and user_id != current_user.get("id") and property_.get("type") == "airport":
             property_ = {k: v for k, v in property_.items() if k != "total_earnings"}
+        if garage_dealership and user_id != current_user.get("id"):
+            garage_dealership = {"type": "garage_dealership"}
+        if sports_betting and user_id != current_user.get("id"):
+            sports_betting = {"type": "sports_betting"}
         messages_sent = int(messages_sent_count or 0)
 
         # Own profile only if the requested profile is the current user (by id and by URL username)
@@ -930,6 +940,8 @@ def register(router):
             "honours": honours,
             "owned_casinos": owned_casinos,
             "property": property_,
+            "garage_dealership": garage_dealership,
+            "sports_betting": sports_betting,
             "messages_sent": messages_sent,
             "messages_received": messages_received,
             "top_cars": top_cars or [],

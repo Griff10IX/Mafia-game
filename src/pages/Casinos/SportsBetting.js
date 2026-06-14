@@ -1213,7 +1213,7 @@ export default function SportsBetting() {
             {ownership.is_owner ? (
               <>
                 <p className="text-mutedForeground">
-                  You own the book. Earn {ownership.owner_profit_share_pct ?? 10}% of weekly house profit when the book is net positive (UTC week). Passive income only — you do not add events or settle bets.
+                  You own the book. Earn {ownership.owner_profit_share_pct ?? 10}% of weekly house profit when the book is net positive (UTC week). Collect once per week after Sunday 10:00 PM UTC. Passive income only — you do not add events or settle bets.
                 </p>
                 <p>
                   <span className="text-mutedForeground">Pending profit: </span>
@@ -1225,9 +1225,19 @@ export default function SportsBetting() {
                   </p>
                 ) : null}
                 <div className="flex flex-wrap gap-2">
-                  <button type="button" disabled={ownershipSaving} onClick={handleCollectOwnership} className="px-2 py-1 rounded border border-primary/40 bg-primary/10 text-primary font-bold disabled:opacity-50">Collect</button>
+                  <button
+                    type="button"
+                    disabled={ownershipSaving || !ownership.collect?.can_collect}
+                    onClick={handleCollectOwnership}
+                    className="px-2 py-1 rounded border border-primary/40 bg-primary/10 text-primary font-bold disabled:opacity-50"
+                  >
+                    Collect
+                  </button>
                   <button type="button" disabled={ownershipSaving} onClick={handleRelinquishOwnership} className="px-2 py-1 rounded border border-rose-500/40 text-rose-400 font-bold disabled:opacity-50">Relinquish</button>
                 </div>
+                {ownership.collect && !ownership.collect.can_collect && ownership.collect.collect_blocked_reason ? (
+                  <p className="text-[9px] text-amber-400/90">{ownership.collect.collect_blocked_reason}</p>
+                ) : null}
                 {ownership.transfer_locked_war ? (
                   <p className="text-amber-400/90 text-[9px]">Family war active — you cannot send or list the book until the war ends.</p>
                 ) : null}

@@ -60,6 +60,7 @@ from utils.sports_betting_ownership import (
     get_sports_betting_weekly_stats,
     record_sports_betting_house_settlement,
     sports_betting_house_delta,
+    sports_betting_collect_availability,
 )
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_SPORTS_BETTING
 
@@ -4223,6 +4224,7 @@ async def get_sports_betting_ownership_status(current_user: dict = Depends(get_c
         stack_conflict = sports_betting_stack_conflict_status(ownership)
         if stack_conflict:
             payload["stack_conflict"] = stack_conflict
+        payload["collect"] = sports_betting_collect_availability(ownership)
     elif not owner_id and await _user_owns_any_property(uid):
         payload["claim_blocked"] = SPORTS_BETTING_PROPERTY_CONFLICT_DETAIL
     return payload
@@ -4276,19 +4278,23 @@ async def claim_sports_betting_ownership(current_user: dict = Depends(get_curren
 
 
 async def collect_sports_betting_ownership(current_user: dict = Depends(get_current_user)):
-    """Collect pending cash profit from the sports betting book."""
+    """Collect pending cash profit from the sports betting book (once per week after Sunday 10 PM UTC)."""
     uid = current_user.get("id") or ""
     await _maybe_auto_relinquish_sports_betting_ownership()
+    ownership = await get_sports_betting_ownership(db)
+    if ownership.get("owner_id") != uid:
+        raise HTTPException(status_code=403, detail="You do not own the sports betting book")
+    avail = sports_betting_collect_availability(ownership)
+    if not avail.get("can_collect"):
+        raise HTTPException(status_code=400, detail=avail.get("collect_blocked_reason") or "Cannot collect yet")
+    now_iso = datetime.now(timezone.utc).isoformat()
     old = await db.sports_betting_ownership.find_one_and_update(
         {"id": SPORTS_BETTING_OWNERSHIP_ID, "owner_id": uid, "owner_pending_profit": {"$gt": 0}},
-        {"$set": {"owner_pending_profit": 0}},
+        {"$set": {"owner_pending_profit": 0, "last_collected_at": now_iso}},
         projection={"_id": 0, "owner_pending_profit": 1},
         return_document=False,
     )
     if not old:
-        ownership = await get_sports_betting_ownership(db)
-        if ownership.get("owner_id") != uid:
-            raise HTTPException(status_code=403, detail="You do not own the sports betting book")
         return {"message": "No profit to collect yet.", "collected_money": 0}
     pending = int(old.get("owner_pending_profit") or 0)
     if pending > 0:

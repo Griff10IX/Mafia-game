@@ -1025,7 +1025,7 @@ export default function MyProperties() {
                   <Trophy size={18} className="text-primary" />
                   <span className="font-heading font-bold text-foreground">Sports Betting Book</span>
                 </div>
-                <p className="text-[11px] text-mutedForeground mb-1">Earn 10% of weekly house profit when the book is net positive (UTC week). Passive — you do not run events or settle bets.</p>
+                <p className="text-[11px] text-mutedForeground mb-1">Earn 10% of weekly house profit when the book is net positive (UTC week). Collect once per week after Sunday 10:00 PM UTC.</p>
                 {sportsBettingDetail && (
                   <>
                     <p className="text-[11px] text-mutedForeground mb-1">
@@ -1038,8 +1038,18 @@ export default function MyProperties() {
                     ) : null}
                   </>
                 )}
+                {sportsBettingDetail?.collect && !sportsBettingDetail.collect.can_collect && sportsBettingDetail.collect.collect_blocked_reason ? (
+                  <p className="text-[10px] text-amber-400 mb-2">{sportsBettingDetail.collect.collect_blocked_reason}</p>
+                ) : null}
                 <div className="flex gap-2 flex-wrap mb-2">
-                  <button type="button" onClick={handleSportsBettingCollect} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading disabled:opacity-50">Collect</button>
+                  <button
+                    type="button"
+                    onClick={handleSportsBettingCollect}
+                    disabled={saving || !sportsBettingDetail?.collect?.can_collect}
+                    className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading disabled:opacity-50"
+                  >
+                    Collect
+                  </button>
                   <Link to="/sports-betting" className="inline-flex items-center gap-1 px-2 py-1 rounded border border-primary/50 text-primary text-xs font-heading hover:bg-primary/10">
                     <LinkIcon size={12} /> Sports Betting
                   </Link>
