@@ -1424,6 +1424,7 @@ def register(router):
             m = gbp_to_minor_pence(pr)
             store_points_event = await _store_points_event_payload_for_db(db)
             credited_points, bonus_points, active_store_points_event = _apply_store_points_event_bonus(p, store_points_event)
+            loot_box_pieces = loot_box_pieces_for_gbp_stripe_minor(m, "gbp")
             return {
                 "mode": "points",
                 "base_points": p,
@@ -1431,6 +1432,7 @@ def register(router):
                 "bonus_points": bonus_points,
                 "price_gbp": round(float(pr), 2),
                 "expected_amount_minor": m,
+                "loot_box_pieces": loot_box_pieces,
                 "min_points": CUSTOM_POINTS_MIN,
                 "max_points": CUSTOM_POINTS_MAX,
                 "store_points_event": active_store_points_event,
@@ -1442,6 +1444,7 @@ def register(router):
         m = gbp_to_minor_pence(pr)
         store_points_event = await _store_points_event_payload_for_db(db)
         credited_points, bonus_points, active_store_points_event = _apply_store_points_event_bonus(pts, store_points_event)
+        loot_box_pieces = loot_box_pieces_for_gbp_stripe_minor(m, "gbp")
         return {
             "mode": "gbp",
             "base_points": pts,
@@ -1449,6 +1452,7 @@ def register(router):
             "bonus_points": bonus_points,
             "price_gbp": round(float(pr), 2),
             "expected_amount_minor": m,
+            "loot_box_pieces": loot_box_pieces,
             "min_points": CUSTOM_POINTS_MIN,
             "max_points": CUSTOM_POINTS_MAX,
             "store_points_event": active_store_points_event,

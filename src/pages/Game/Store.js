@@ -931,6 +931,12 @@ export default function Store() {
                       )}
                       {' · '}
                       <span className="text-emerald-400/90">£{Number(customQuote.price_gbp).toFixed(2)}</span>
+                      {Number(customQuote.loot_box_pieces || 0) > 0 && (
+                        <>
+                          {' · '}
+                          <span className="text-violet-400/90">{Number(customQuote.loot_box_pieces).toLocaleString()} loot pieces</span>
+                        </>
+                      )}
                     </>
                   ) : (
                     <>
@@ -939,6 +945,12 @@ export default function Store() {
                       <span className="text-primary font-bold">{Number(customQuote.points).toLocaleString()} pts</span>
                       {Number(customQuote.bonus_points || 0) > 0 && (
                         <span className="text-emerald-400/90"> ({Number(customQuote.base_points || 0).toLocaleString()} + {Number(customQuote.bonus_points || 0).toLocaleString()} bonus)</span>
+                      )}
+                      {Number(customQuote.loot_box_pieces || 0) > 0 && (
+                        <>
+                          {' · '}
+                          <span className="text-violet-400/90">{Number(customQuote.loot_box_pieces).toLocaleString()} loot pieces</span>
+                        </>
                       )}
                       <span className="block text-[8px] text-mutedForeground mt-0.5">GBP mode charges the shown amount (largest whole base points that fit your budget; event bonus is added on top).</span>
                     </>
