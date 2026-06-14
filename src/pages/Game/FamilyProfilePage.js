@@ -61,6 +61,7 @@ const EMBERS = [
 // 3D perspective tilt hook
 const RACKET_MAX_LEVEL = 15;
 
+function useTilt(strength = 5) {
   const ref = useRef(null);
   const onMouseMove = useCallback((e) => {
     if (!ref.current) return;

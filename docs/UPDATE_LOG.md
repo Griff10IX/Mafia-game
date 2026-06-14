@@ -6,6 +6,65 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-06-04 20:00 UTC[/color][/b] — [b]Family rackets overhaul: income, armory, till raids[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Game → Family → Rackets[/b] — all family racket [b]base income is +50%[/b] (same cooldown; stacks with level, war-win bonus, events, and founding-member mult on collect).[/color]
+[*][color=#888888][b]Changed:[/b] [b]Family → Perks[/b] monthly [b]racket income[/b] perk is now [b]+50% for the UTC month[/b] (was +5%) and costs [b]2,000 Don points[/b] (was 500).[/color]
+[*][color=#888888][b]New:[/b] [b]Vault-funded armory[/b] — officers (Don / Underboss / Consigliere) can buy [b]defence upgrades per racket[/b] and [b]crew offence upgrades[/b] (family-wide) from the family vault. Defence lowers rival hit success; offence raises your crew’s success and till take on raids.[/color]
+[*][color=#888888][b]Changed:[/b] [b]Hit Jobs[/b] (family racket raids) — success now uses [b]level + offence − defence[/b] (roughly ±2% per weight point, clamped 10–90%). On a successful hit, attackers steal about [b]40% of the victim’s uncollected till[/b] (not vault cash), the victim’s collect timer resets, and [b]one random defence upgrade[/b] on that racket is destroyed (if any). Raids are [b]blocked during an active family war[/b].[/color]
+[*][color=#888888][b]UI:[/b] Racket cards show [b]till at risk[/b], defence chips, a defence purchase sheet, and a [b]Crew armory[/b] section. Hit Jobs lists [b]all[/b] rival rackets with till, defence, success %, and take preview. [b]Family HQ[/b] sidebar shows total till at risk when rackets are ready.[/color]
+[*][color=#888888][b]Admin:[/b] [b]Reset Racket Armory[/b] clears all family defence/offence upgrades (alongside existing racket cooldown reset).[/color]
+[*][color=#888888][b]Fixed:[/b] [b]Family profile[/b] racket level bars now use the correct [b]max level 15[/b] (was 5).[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-06-04 18:00 UTC[/color][/b] — [b]Family page: mobile layout & clearer HQ[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Game → Family[/b] — cleaner header on small screens, larger stat cards, and a [b]collapsible Territory & perks[/b] panel (collapsed by default on mobile so the racket grid is not buried).[/color]
+[*][color=#888888][b]New:[/b] Mobile [b]quick-nav chips[/b] (Collect, Till at risk, Hit jobs, Vault, War) jump straight to the right tab.[/color]
+[*][color=#888888][b]Changed:[/b] Tab bar uses [b]pill-style[/b] active states on phone, stays [b]sticky[/b] while scrolling, and tab content has safe bottom padding so sticky [b]Collect all[/b] does not cover buttons. Touch hover effects disabled on touch devices.[/color]
+[*][color=#888888][b]Changed:[/b] Fourth HQ stat shows [b]Till at risk[/b] (amber) when uncollected income is exposed to raids, otherwise [b]Ready[/b] racket count.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-06-04 16:00 UTC[/color][/b] — [b]Auto Rank: permanent buyers stay active; distillery collect fix[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Permanent Auto Rank[/b] (store purchase or [b]email-tied entitlement[/b]) is [b]exempt from the 24-hour idle pause[/b] — it keeps running without needing to log in every day. Account-only / trial Auto Rank still idles after 24h offline as before.[/color]
+[*][color=#888888][b]Fixed:[/b] Legacy permanent buyers stuck in [b]auto_rank_idle[/b] are [b]woken automatically[/b] on the next Auto Rank loop pass.[/color]
+[*][color=#888888][b]Fixed:[/b] [b]Auto Rank[/b] collecting from [b]Illegal Business / distillery[/b] no longer errors when projecting racket state (missing id field).[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-06-04 14:00 UTC[/color][/b] — [b]Store GBP loot bonus, sports stake cap, witness market, referral weekly[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Game → Store → Points[/b] (GBP card checkouts) — bonus [b]loot box pieces[/b] are now [b]25 per whole £1[/b] charged (~[b]2,500[/b] per £100; was 50 per £5). Pieces credit with your points; custom-quote checkout shows the piece count in the preview.[/color]
+[*][color=#888888][b]Changed:[/b] [b]Casino → Sports betting[/b] — default [b]max total open stake[/b] per account is [b]$1,000,000,000[/b] (staff can view/adjust via admin open-stake-cap tool).[/color]
+[*][color=#888888][b]New:[/b] [b]Combat → Witness statements[/b] — [b]player market[/b]: list witness lines for cash, buy from others, cancel listings (48h expiry; up to 5 active listings). Killer names are redacted on listings.[/color]
+[*][color=#888888][b]New:[/b] [b]Referral weekly bonus[/b] — when a referred player is active [b]5+ London days[/b] in a week, referrer and referee each earn [b]1,000 points[/b] (up to [b]3,000[/b]/week cap across links). Shown on referral stats.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-06-04 12:00 UTC[/color][/b] — [b]Casino profit dashboard stability[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] Admin / server [b]casino profit[/b] aggregation no longer crashes when [b]slots[/b] are disabled in config — game-type counts follow the live feature flag.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-05-14 12:00 UTC[/color][/b] — [b]Booze run: cargo rework (prestige, caps, API, stats, Store)[/b][/size]
 [quote]
 [list]
