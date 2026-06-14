@@ -29,9 +29,9 @@ from utils.store_points_pricing import (
 
 logger = logging.getLogger(__name__)
 
-# GBP store points (Stripe): bonus loot box pieces — 100 pieces per whole £15 charged (currency must be GBP).
-STORE_POINTS_LOOT_GBP_MINOR_PER_BLOCK = 1500
-STORE_POINTS_LOOT_PIECES_PER_BLOCK = 100
+# GBP store points (Stripe): bonus loot box pieces — 25 pieces per whole £1 charged (~2,500 per £100; currency must be GBP).
+STORE_POINTS_LOOT_GBP_MINOR_PER_BLOCK = 100
+STORE_POINTS_LOOT_PIECES_PER_BLOCK = 25
 STORE_POINTS_EVENT_BONUS_RATE = 0.50
 
 RANK_XP_PASS_PACKAGE_ID = "rank_xp_pass_499"
@@ -214,7 +214,7 @@ async def _notify_staff_custom_points_fulfillment_blocked(
 
 
 def loot_box_pieces_for_gbp_stripe_minor(amount_minor: Optional[int], currency: Optional[str]) -> int:
-    """Whole £15 blocks (1500 pence each) → 100 loot box pieces. Non-GBP or invalid → 0."""
+    """Whole £1 blocks (100 pence each) → 25 loot box pieces (~2,500 per £100). Non-GBP or invalid → 0."""
     if amount_minor is None:
         return 0
     cur = (currency or "gbp").strip().lower()
