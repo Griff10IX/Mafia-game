@@ -94,12 +94,12 @@ function formatCountdown(ms) {
 }
 
 // Reward math / v4 deterministic layout must stay in sync with backend `game_pass_micro_rewards.py`.
-const TARGET_CASH_TOTAL = 1_000_000_000;
-const TARGET_POINTS_TOTAL = 15_000;
+const TARGET_CASH_TOTAL = 5_000_000_000;
+const TARGET_POINTS_TOTAL = 25_000;
 const TARGET_BULLETS_TOTAL = 250_000;
 const TARGET_AUTO_RANK_2H_TOTAL = 75;
 const TARGET_RANDOM_TOKENS_TOTAL = 250; // tokens chosen from this "random pool" set
-const TARGET_LOOT_PIECES_TOTAL = 500;
+const TARGET_LOOT_PIECES_TOTAL = 2_000;
 const TARGET_XP_CRIMES_TOKENS_TOTAL = 150;
 const TARGET_XP_GTA_TOKENS_TOTAL = 150;
 

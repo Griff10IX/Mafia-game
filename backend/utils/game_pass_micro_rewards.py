@@ -68,8 +68,8 @@ REWARD_KEY_LABELS = {
 }
 
 # Targets (season VIP totals — keep in sync with src/pages/Game/GamePass.js)
-TARGET_CASH_TOTAL = 1_000_000_000
-TARGET_POINTS_TOTAL = 15_000
+TARGET_CASH_TOTAL = 5_000_000_000
+TARGET_POINTS_TOTAL = 25_000
 TARGET_BULLETS_TOTAL = 250_000
 TARGET_AUTO_RANK_2H_TOTAL = 75
 
@@ -131,7 +131,7 @@ def _initial_base_amount_for_total(*, tiers: range, base_tier: int, target_total
 # - Normalization keeps totals near: cash, bullets, points, loot pieces, XP tokens, random tokens, auto-rank 2h.
 
 TARGET_RANDOM_TOKENS_TOTAL = 250
-TARGET_LOOT_PIECES_TOTAL = 500
+TARGET_LOOT_PIECES_TOTAL = 2_000
 TARGET_XP_CRIMES_TOKENS_TOTAL = 150
 TARGET_XP_GTA_TOKENS_TOTAL = 150
 

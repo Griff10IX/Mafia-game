@@ -1,7 +1,7 @@
 # Witness statements: P2P cash market (list / cancel / buy). Balance minted when players receive kill witness notifications.
 import re
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import Depends, HTTPException
@@ -12,6 +12,7 @@ from server import db, get_current_user, require_admin_or_mod, _username_pattern
 
 WITNESS_MAX_QTY_PER_LISTING = 10_000
 WITNESS_MAX_ACTIVE_LISTINGS = 5
+WITNESS_LISTING_TTL_HOURS = 48
 
 # Inbox + witness log match (case/spacing tolerant; must match send_notification title from kills).
 _WITNESS_INBOX_TITLE = {"title": {"$regex": r"^\s*Witness\s+statement\s*$", "$options": "i"}}
@@ -36,6 +37,34 @@ MARKET_PREVIEW_MISSING_NOTIFICATION = (
     "Witness text unavailable: linked notification not found (deleted or stale ID). "
     "Listing anonymously only hides the seller, not the preview—this row has no saved text."
 )
+
+
+def _parse_utc_iso(raw) -> Optional[datetime]:
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except (TypeError, ValueError):
+        return None
+
+
+def listing_expires_at(row: dict, *, now: Optional[datetime] = None) -> datetime:
+    """When this listing expires (explicit expires_at or created_at + TTL)."""
+    exp = _parse_utc_iso(row.get("expires_at"))
+    if exp is not None:
+        return exp
+    created = _parse_utc_iso(row.get("created_at"))
+    if created is None:
+        return (now or datetime.now(timezone.utc)) + timedelta(hours=WITNESS_LISTING_TTL_HOURS)
+    return created + timedelta(hours=WITNESS_LISTING_TTL_HOURS)
+
+
+def listing_is_expired(row: dict, *, now: Optional[datetime] = None) -> bool:
+    now = now or datetime.now(timezone.utc)
+    return listing_expires_at(row, now=now) <= now
 
 
 def _listing_escrow_quantity(row: dict) -> int:
@@ -204,6 +233,53 @@ def register(router):
                 category="attacks",
                 always_deliver=True,
             )
+
+    async def _return_witness_listing_to_seller(db, row: dict) -> bool:
+        """Cancel listing and return escrowed witness statements to seller."""
+        lid = row.get("id")
+        uid = row.get("seller_id")
+        if not lid or not uid:
+            return False
+        nids = row.get("notification_ids") or []
+        qty = len(nids) if nids else int(row.get("quantity") or 0)
+        dr = await db.witness_statement_listings.delete_one({"id": lid, "status": "active"})
+        if dr.deleted_count == 0:
+            return False
+        if nids:
+            await db.notifications.update_many(
+                {"listed_listing_id": lid, "user_id": uid},
+                {"$unset": {"listed_listing_id": ""}},
+            )
+        await db.users.update_one({"id": uid}, {"$inc": {"witness_statements": qty}})
+        try:
+            from routers.game.notifications import _invalidate_list_cache
+
+            _invalidate_list_cache(uid)
+        except Exception:
+            pass
+        return True
+
+    async def _expire_stale_witness_listings(db, *, limit: int = 500) -> int:
+        """Remove active listings older than WITNESS_LISTING_TTL_HOURS; return statements to sellers."""
+        now = datetime.now(timezone.utc)
+        cutoff = (now - timedelta(hours=WITNESS_LISTING_TTL_HOURS)).isoformat()
+        now_iso = now.isoformat()
+        query = {
+            "status": "active",
+            "$or": [
+                {"expires_at": {"$lt": now_iso}},
+                {
+                    "$or": [{"expires_at": {"$exists": False}}, {"expires_at": None}],
+                    "created_at": {"$lt": cutoff},
+                },
+            ],
+        }
+        rows = await db.witness_statement_listings.find(query, {"_id": 0}).limit(limit).to_list(limit)
+        removed = 0
+        for row in rows:
+            if await _return_witness_listing_to_seller(db, row):
+                removed += 1
+        return removed
 
     @router.get("/admin/witness-statements-overview")
     async def admin_witness_statements_overview(current_user: dict = Depends(require_admin_or_mod)):
@@ -493,6 +569,7 @@ def register(router):
     @router.get("/witness-statements/listings")
     async def witness_listings(current_user: dict = Depends(get_current_user)):
         me = current_user.get("id") or ""
+        await _expire_stale_witness_listings(db)
         rows = await db.witness_statement_listings.find(
             {"status": "active"},
             {"_id": 0},
@@ -528,6 +605,7 @@ def register(router):
                     "seller_anonymous": anon,
                     "seller_profile_hidden": (not is_own) and anon,
                     "previews": previews,
+                    "expires_at": (r.get("expires_at") or listing_expires_at(r).isoformat()),
                 }
             )
         return out
@@ -535,6 +613,7 @@ def register(router):
     @router.get("/witness-statements/my-listings")
     async def witness_my_listings(current_user: dict = Depends(get_current_user)):
         me = current_user.get("id") or ""
+        await _expire_stale_witness_listings(db)
         rows = await db.witness_statement_listings.find(
             {"status": "active", "seller_id": me},
             {"_id": 0},
@@ -558,6 +637,7 @@ def register(router):
                     "created_at": r.get("created_at"),
                     "seller_anonymous": bool(r.get("seller_anonymous")),
                     "previews": _ordered_previews_from_messages(messages, redact=False),
+                    "expires_at": (r.get("expires_at") or listing_expires_at(r).isoformat()),
                 }
             )
         return my_out
@@ -599,6 +679,7 @@ def register(router):
             raise HTTPException(status_code=400, detail="Select at least one witness statement.")
         if qty > WITNESS_MAX_QTY_PER_LISTING:
             raise HTTPException(status_code=400, detail=f"Maximum {WITNESS_MAX_QTY_PER_LISTING} statements per listing.")
+        await _expire_stale_witness_listings(db)
         active = await db.witness_statement_listings.count_documents({"status": "active", "seller_id": uid})
         if active >= WITNESS_MAX_ACTIVE_LISTINGS:
             raise HTTPException(
@@ -635,7 +716,9 @@ def register(router):
         if seller_res.modified_count == 0:
             raise HTTPException(status_code=400, detail="Not enough witness statements to list.")
         listing_id = str(uuid.uuid4())
-        now = datetime.now(timezone.utc).isoformat()
+        now_dt = datetime.now(timezone.utc)
+        now = now_dt.isoformat()
+        expires_at = (now_dt + timedelta(hours=WITNESS_LISTING_TTL_HOURS)).isoformat()
         doc = {
             "id": listing_id,
             "seller_id": uid,
@@ -646,6 +729,7 @@ def register(router):
             "witness_messages": witness_messages,
             "price_cash": price,
             "created_at": now,
+            "expires_at": expires_at,
             "status": "active",
         }
         try:
@@ -666,7 +750,7 @@ def register(router):
             await db.witness_statement_listings.delete_one({"id": listing_id})
             await db.users.update_one({"id": uid}, {"$inc": {"witness_statements": qty}})
             raise HTTPException(status_code=400, detail="Could not reserve statements. Refresh and try again.")
-        return {"message": "Listed.", "listing_id": listing_id}
+        return {"message": "Listed.", "listing_id": listing_id, "expires_at": expires_at}
 
     @router.post("/witness-statements/cancel")
     async def witness_cancel(req: WitnessListingIdRequest, current_user: dict = Depends(get_current_user)):
@@ -679,17 +763,8 @@ def register(router):
             raise HTTPException(status_code=404, detail="Listing not found")
         if row.get("seller_id") != uid:
             raise HTTPException(status_code=403, detail="Not your listing")
-        nids = row.get("notification_ids") or []
-        qty = len(nids) if nids else int(row.get("quantity") or 0)
-        dr = await db.witness_statement_listings.delete_one({"id": lid, "status": "active"})
-        if dr.deleted_count == 0:
+        if not await _return_witness_listing_to_seller(db, row):
             raise HTTPException(status_code=404, detail="Listing not found")
-        if nids:
-            await db.notifications.update_many(
-                {"listed_listing_id": lid, "user_id": uid},
-                {"$unset": {"listed_listing_id": ""}},
-            )
-        await db.users.update_one({"id": uid}, {"$inc": {"witness_statements": qty}})
         return {"message": "Listing cancelled. Statements returned to you."}
 
     @router.post("/witness-statements/buy")
@@ -698,6 +773,13 @@ def register(router):
         lid = (req.listing_id or "").strip()
         if not lid:
             raise HTTPException(status_code=400, detail="listing_id required")
+        await _expire_stale_witness_listings(db)
+        row = await db.witness_statement_listings.find_one({"id": lid, "status": "active"})
+        if not row:
+            raise HTTPException(status_code=404, detail="Listing not found or already sold")
+        if listing_is_expired(row):
+            await _return_witness_listing_to_seller(db, row)
+            raise HTTPException(status_code=404, detail="Listing expired (48 hours). Statements returned to seller.")
         row = await db.witness_statement_listings.find_one_and_delete({"id": lid, "status": "active"})
         if not row:
             raise HTTPException(status_code=404, detail="Listing not found or already sold")

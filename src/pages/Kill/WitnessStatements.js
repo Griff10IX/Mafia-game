@@ -193,7 +193,7 @@ export default function WitnessStatements() {
         <div className="p-3 space-y-3">
           <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Create listing</div>
           <p className="text-[9px] text-mutedForeground">
-            Up to 5 active listings. Tick rows in the witness log below, then set one price for the whole lot. Listed lines stay in your log but are held in escrow until sold or cancelled.
+            Up to 5 active listings. Tick rows in the witness log below, then set one price for the whole lot. Listed lines stay in your log but are held in escrow until sold, cancelled, or expired (48 hours).
           </p>
           <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
             <div className="flex-1 space-y-1">
@@ -292,7 +292,7 @@ export default function WitnessStatements() {
           <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Market</span>
         </div>
         <p className="px-3 pt-2 text-[9px] text-mutedForeground font-heading">
-          Previews hide the killer&apos;s name until purchase. Sellers who list anonymously appear as &quot;Anonymous&quot; (no profile link). Your own listings always show full preview text to you.
+          Previews hide the killer&apos;s name until purchase. Sellers who list anonymously appear as &quot;Anonymous&quot; (no profile link). Your own listings always show full preview text to you. Unsold listings expire after 48 hours and statements return to the seller.
         </p>
         {loading ? (
           <div className="p-8 text-center text-xs text-mutedForeground font-heading">Loading…</div>

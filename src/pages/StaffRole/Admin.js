@@ -11438,7 +11438,7 @@ export default function Admin() {
               <div className="space-y-3">
                 <p className="text-[10px] font-heading font-bold text-emerald-400 uppercase tracking-wider">Store Points Sale Event</p>
                 <p className="text-[10px] text-mutedForeground">
-                  Random 2-day UTC schedule: the sale is on at least once every 2 days (sometimes both days in a pair). When active, card point purchases get +35% extra points and players see a Sale badge on the Store menu.
+                  Random 2-day UTC schedule: the sale is on at least once every 2 days (sometimes both days in a pair). When active, card point purchases get +50% extra points and players see a Sale badge on the Store menu.
                 </p>
                 {storePointsEventForceUntil && (
                   <p className="rounded border border-emerald-500/25 bg-emerald-500/10 px-2 py-1 text-[10px] text-emerald-300 font-heading">

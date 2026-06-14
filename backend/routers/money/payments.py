@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 # GBP store points (Stripe): bonus loot box pieces — 100 pieces per whole £15 charged (currency must be GBP).
 STORE_POINTS_LOOT_GBP_MINOR_PER_BLOCK = 1500
 STORE_POINTS_LOOT_PIECES_PER_BLOCK = 100
-STORE_POINTS_EVENT_BONUS_RATE = 0.35
+STORE_POINTS_EVENT_BONUS_RATE = 0.50
 
 RANK_XP_PASS_PACKAGE_ID = "rank_xp_pass_499"
 AUTO_RANK_PERMANENT_PACKAGE_ID = "auto_rank_permanent_2000"

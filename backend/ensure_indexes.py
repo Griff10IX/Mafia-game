@@ -196,6 +196,7 @@ async def ensure_all_indexes(db):
         )
         await db.witness_statement_listings.create_index("id", unique=True)
         await db.witness_statement_listings.create_index([("seller_id", 1), ("status", 1)])
+        await db.witness_statement_listings.create_index([("status", 1), ("expires_at", 1)], sparse=True)
 
         # --- Attack client audit (per-search/per-execute audit; admin investigations) ---
         # Previously unindexed and unbounded. TTL keeps the collection small so writes stay fast.
