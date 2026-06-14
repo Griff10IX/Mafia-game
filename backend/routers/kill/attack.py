@@ -2862,6 +2862,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         killer_owns_dealership = await _user_owns_garage_dealership(killer_id)
         victim_dealership = await db.garage_dealership.find_one({"owner_id": victim_id}, {"_id": 0})
         transferred_dealership = False
+        transferred_dealership_stack_conflict = False
         if victim_dealership:
             try:
                 from utils.garage_dealership import cancel_garage_dealership_quicktrade_listings, dealership_auto_stock_defaults
@@ -2876,7 +2877,11 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 )
             else:
                 dealership_set = {"owner_id": killer_id, "owner_username": killer_username, **dealership_auto_stock_defaults()}
-                if attacker_rank_id < CAPO_RANK_ID:
+                killer_had_property = await _user_owns_any_property(killer_id)
+                if killer_had_property:
+                    dealership_set["stack_conflict_acquired_at"] = datetime.now(timezone.utc)
+                    transferred_dealership_stack_conflict = True
+                elif attacker_rank_id < CAPO_RANK_ID:
                     dealership_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
                 res = await db.garage_dealership.update_one(
                     {"owner_id": victim_id},
@@ -3056,7 +3061,10 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             bf_state = (victim_bf or {}).get("state")
             extras.append(f"their armoury ({bf_state})" if bf_state else "their armoury")
         if transferred_dealership:
-            extras.append("their car dealership")
+            c = "their car dealership"
+            if transferred_dealership_stack_conflict:
+                c += " (send it away within 3 hours — you already hold an airport or armoury)"
+            extras.append(c)
         if extras:
             success_message += ", " + ", ".join(extras) + "."
         else:

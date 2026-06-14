@@ -958,7 +958,7 @@ export default function MyProperties() {
         </div>
         <div className="p-3">
           <p className="text-[11px] text-mutedForeground">
-            <strong className="text-foreground">Rule:</strong> You may own at most <strong>1 casino</strong>, up to <strong>1 airport</strong>, <strong>1 armoury</strong>, and <strong>1 car dealership</strong> (airport + armoury + dealership can stack). Not two of the same type. Kill the owner to take a casino, airport, armoury, or car dealership. During a family war you cannot send or Quick Trade-list those properties.
+            <strong className="text-foreground">Rule:</strong> You may own at most <strong>1 casino</strong>, up to <strong>1 airport</strong>, <strong>1 armoury</strong>, and <strong>1 car dealership</strong>. You cannot claim a dealership if you already hold an airport or armoury. If you take one by kill while holding airport/armoury, you have <strong>3 hours</strong> to send it away or it auto-drops.
           </p>
         </div>
         <div className="mp-art-line text-primary mx-3" />

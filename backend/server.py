@@ -3743,6 +3743,7 @@ async def startup_db():
         )
     from routers.cars import gta as gta_router
     asyncio.create_task(gta_router.run_dealer_replenish_loop())
+    asyncio.create_task(gta_router.run_dealer_auto_stock_loop())
     if SLOTS_FEATURE_ENABLED:
         # Slots: run ownership draw check every 60s so draws happen at next_draw_at even if no one is on the page (3h boundaries; 1m delay is fine)
         from routers.casinos import slots as slots_router

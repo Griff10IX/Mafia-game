@@ -31,6 +31,8 @@ from utils.garage_dealership import (
     user_owns_garage_dealership,
     cancel_garage_dealership_quicktrade_listings,
     dealership_auto_stock_defaults,
+    maybe_auto_relinquish_dealership_stack_conflict,
+    dealership_stack_conflict_status,
 )
 
 from utils.referral_ids import (
@@ -165,6 +167,7 @@ from server import (
     _family_in_active_war,
     _username_pattern,
     maybe_auto_relinquish_below_capo,
+    _user_owns_any_property,
 )
 from routers.account.objectives import update_objectives_progress
 from routers.admin.airport import _invalidate_travel_info_cache
@@ -181,6 +184,12 @@ EXCLUSIVE_CAR_WAR_LOCK_DETAIL = (
 )
 GARAGE_DEALERSHIP_WAR_LOCK_DETAIL = (
     "You cannot transfer or list your car dealership on Quick Trade while your family is at war."
+)
+GARAGE_DEALERSHIP_PROPERTY_CONFLICT_DETAIL = (
+    "You already own an airport or armoury. Relinquish it before claiming the car dealership."
+)
+GARAGE_DEALERSHIP_TRANSFER_TARGET_CONFLICT_DETAIL = (
+    "That player already owns an airport or armoury and cannot hold the car dealership."
 )
 from utils.minigame_captcha_gate import require_turnstile_for_game_action
 from utils.civilian_protection import maybe_revoke_civilian_protection
@@ -1648,6 +1657,7 @@ DEALER_EXCLUDED_IDS = {"car_custom", "car20"}
 # Replenish at random intervals so restocks are spread throughout the day
 DEALER_REPLENISH_MIN_SEC = 1 * 3600   # 1 hour
 DEALER_REPLENISH_MAX_SEC = 4 * 3600   # 4 hours
+DEALER_AUTO_STOCK_INTERVAL_SEC = 5 * 60  # owner auto-stock checks every 5 minutes
 # Chance to restock this cycle (rarer = less often; sometimes high rarities don't stock)
 DEALER_RESTOCK_CHANCE_BY_RARITY = {
     "common": 1.0,
@@ -1769,6 +1779,73 @@ async def _owner_stock_plan(rarity: str, target_per_model: int) -> Tuple[List[Di
     return lines, total_fee, total_units
 
 
+async def _owner_stock_plan_within_budget(
+    rarity: str, target_per_model: int, budget: int
+) -> Tuple[List[Dict[str, Any]], int, int]:
+    """Stock up toward target using only the cash budget (round-robin across models)."""
+    target = _owner_stock_target_per_model(target_per_model)
+    remaining = max(0, int(budget or 0))
+    if remaining <= 0:
+        return [], 0, 0
+    pending: List[Dict[str, Any]] = []
+    for car in _dealer_sellable_cars():
+        if (car.get("rarity") or "common") != rarity:
+            continue
+        car_id = car.get("id")
+        count = await db.dealer_stock.count_documents({"car_id": car_id})
+        need = max(0, target - int(count or 0))
+        unit_fee = _owner_stock_unit_fee(int(car.get("value") or 0))
+        if need <= 0 or unit_fee <= 0:
+            continue
+        pending.append(
+            {
+                "car": car,
+                "car_id": car_id,
+                "need": need,
+                "unit_fee": unit_fee,
+                "added": 0,
+            }
+        )
+    if not pending:
+        return [], 0, 0
+    total_fee = 0
+    total_units = 0
+    while remaining > 0:
+        progressed = False
+        for item in pending:
+            if item["added"] >= item["need"]:
+                continue
+            fee = int(item["unit_fee"])
+            if fee > remaining:
+                continue
+            item["added"] += 1
+            remaining -= fee
+            total_fee += fee
+            total_units += 1
+            progressed = True
+        if not progressed:
+            break
+    lines: List[Dict[str, Any]] = []
+    for item in pending:
+        added = int(item["added"] or 0)
+        if added <= 0:
+            continue
+        unit_fee = int(item["unit_fee"])
+        car = item["car"]
+        lines.append(
+            {
+                "car_id": item["car_id"],
+                "car_name": car.get("name") or item["car_id"],
+                "units": added,
+                "unit_fee": unit_fee,
+                "fee": unit_fee * added,
+                "target_per_model": target,
+                "current_stock": max(0, target - int(item["need"]) + added),
+            }
+        )
+    return lines, total_fee, total_units
+
+
 async def _insert_owner_stock_lines(lines: List[Dict[str, Any]]) -> int:
     now = datetime.now(timezone.utc).isoformat()
     to_insert = []
@@ -1783,12 +1860,14 @@ async def _insert_owner_stock_lines(lines: List[Dict[str, Any]]) -> int:
 
 
 def _dealership_stock_status_payload(dealership: dict, stock_by_rarity: Dict[str, int]) -> dict:
+    stack_conflict = dealership_stack_conflict_status(dealership)
     return {
         "stock_fee_rate_pct": int(DEALER_OWNER_STOCK_FEE_RATE * 100),
         "stock_max_per_model": DEALER_OWNER_STOCK_MAX_PER_MODEL,
         "stock_default_target": DEALER_OWNER_STOCK_DEFAULT_TARGET,
         "stockable_rarities": list(DEALER_OWNER_STOCKABLE_RARITIES),
         "stock_by_rarity": stock_by_rarity,
+        "stack_conflict": stack_conflict,
         "auto_stock": {
             "enabled": bool(dealership.get("auto_stock_enabled")),
             "rarity": dealership.get("auto_stock_rarity"),
@@ -1797,31 +1876,40 @@ def _dealership_stock_status_payload(dealership: dict, stock_by_rarity: Dict[str
     }
 
 
-async def _run_dealer_owner_auto_stock() -> None:
-    """Top up owner-configured rarity from pending profit (runs on replenish loop)."""
+async def _maybe_auto_relinquish_dealership() -> None:
+    await maybe_auto_relinquish_below_capo(db.garage_dealership, {"id": GARAGE_DEALERSHIP_ID})
+    await maybe_auto_relinquish_dealership_stack_conflict(db)
+
+
+async def _run_dealer_owner_auto_stock() -> Dict[str, Any]:
+    """Top up owner-configured rarity from pending profit (partial fills when profit is low)."""
     dealership = await get_garage_dealership(db)
     owner_id = dealership.get("owner_id")
     if not owner_id or not dealership.get("auto_stock_enabled"):
-        return
+        return {"stocked": 0, "fee": 0, "reason": "disabled"}
     rarity = (dealership.get("auto_stock_rarity") or "").strip().lower()
     if rarity not in DEALER_OWNER_STOCKABLE_RARITIES:
-        return
+        return {"stocked": 0, "fee": 0, "reason": "invalid_rarity"}
     target = int(dealership.get("auto_stock_target") or DEALER_OWNER_STOCK_DEFAULT_TARGET)
-    lines, total_fee, total_units = await _owner_stock_plan(rarity, target)
+    pending_profit = int(dealership.get("owner_pending_profit") or 0)
+    if pending_profit <= 0:
+        return {"stocked": 0, "fee": 0, "reason": "no_profit"}
+    lines, total_fee, total_units = await _owner_stock_plan_within_budget(rarity, target, pending_profit)
     if not lines or total_fee <= 0 or total_units <= 0:
-        return
+        return {"stocked": 0, "fee": 0, "reason": "at_target_or_cannot_afford_unit"}
     if not await debit_garage_dealership_profit(db, total_fee):
-        return
+        return {"stocked": 0, "fee": 0, "reason": "insufficient_profit"}
     inserted = await _insert_owner_stock_lines(lines)
     if inserted <= 0:
         await credit_garage_dealership_profit(db, total_fee)
-        return
+        return {"stocked": 0, "fee": 0, "reason": "insert_failed"}
     await log_activity(
         owner_id,
         dealership.get("owner_username") or "?",
         "garage_dealership_auto_stock",
         {"rarity": rarity, "units": inserted, "fee": total_fee, "target_per_model": _owner_stock_target_per_model(target)},
     )
+    return {"stocked": inserted, "fee": total_fee, "reason": "ok"}
 
 
 async def _fill_dealer_stock_full() -> None:
@@ -1855,6 +1943,7 @@ async def _dealer_after_sale_restock(_car_id: str, _car_info: dict) -> None:
 
 async def get_cars_for_sale(current_user: dict = Depends(get_current_user)):
     """List dealer cars: one row per model with in_stock count. Excludes custom and exclusive. Any rank can buy."""
+    await _maybe_auto_relinquish_dealership()
     pipeline = [{"$group": {"_id": "$car_id", "count": {"$sum": 1}}}]
     counts = await db.dealer_stock.aggregate(pipeline).to_list(100)
     stock_by_car = {d["_id"]: d["count"] for d in counts}
@@ -1890,6 +1979,9 @@ async def get_cars_for_sale(current_user: dict = Depends(get_current_user)):
         family_id = await resolve_family_id(uid)
         dealership_payload["transfer_locked_war"] = bool(family_id and await _family_in_active_war(family_id))
         dealership_payload.update(_dealership_stock_status_payload(dealership, stock_by_rarity))
+    elif not owner_id and uid:
+        if await _user_owns_any_property(uid):
+            dealership_payload["claim_blocked"] = GARAGE_DEALERSHIP_PROPERTY_CONFLICT_DETAIL
     return {
         "cars": out,
         "dealership": dealership_payload,
@@ -1950,6 +2042,10 @@ async def buy_car(
     dealership = await get_garage_dealership(db)
     if dealership.get("owner_id") and profit > 0:
         await credit_garage_dealership_profit(db, dealer_owner_profit_cut(profit))
+        try:
+            await _run_dealer_owner_auto_stock()
+        except Exception:
+            logger.exception("Dealer auto-stock after sale")
     now = datetime.now(timezone.utc)
     doc = {
         "id": str(uuid.uuid4()),
@@ -2206,6 +2302,10 @@ async def buy_listed_car(
     if dealership.get("owner_id") and profit > 0:
         owner_cut = p2p_owner_profit_cut(profit)
         await credit_garage_dealership_profit(db, owner_cut)
+        try:
+            await _run_dealer_owner_auto_stock()
+        except Exception:
+            logger.exception("Dealer auto-stock after listing sale")
     seller_payout = max(0, price - owner_cut)
     # Ownership already transferred by find_one_and_update; pay seller
     await db.users.update_one({"id": seller_id}, {"$inc": {"money": seller_payout}})
@@ -2550,6 +2650,17 @@ async def run_dealer_replenish_loop():
         await asyncio.sleep(delay)
 
 
+async def run_dealer_auto_stock_loop():
+    """Run owner auto-stock frequently (partial fills from pending profit)."""
+    await asyncio.sleep(90)
+    while True:
+        try:
+            await _run_dealer_owner_auto_stock()
+        except Exception as e:
+            logger.exception("Dealer auto-stock loop: %s", e)
+        await asyncio.sleep(DEALER_AUTO_STOCK_INTERVAL_SEC)
+
+
 async def get_gta_exclusive_pool_status(current_user: dict = Depends(get_current_user)):
     """Return whether the Al Capone exclusive is currently in the GTA car pool (any authenticated user)."""
     released = await _gta_exclusive_pool_released_from_config()
@@ -2558,7 +2669,7 @@ async def get_gta_exclusive_pool_status(current_user: dict = Depends(get_current
 
 async def get_garage_dealership_status(current_user: dict = Depends(get_current_user)):
     """Ownership status for the global car dealership (Buy Cars dealer)."""
-    await maybe_auto_relinquish_below_capo(db.garage_dealership, {"id": GARAGE_DEALERSHIP_ID})
+    await _maybe_auto_relinquish_dealership()
     dealership = await get_garage_dealership(db)
     uid = current_user.get("id") or ""
     owner_id = dealership.get("owner_id")
@@ -2686,9 +2797,23 @@ async def configure_garage_dealership_auto_stock(
                 }
             },
         )
+        run_result = await _run_dealer_owner_auto_stock()
+        msg = (
+            f"Auto-stock enabled: keep {r.replace('_', ' ')} models at {target} each "
+            f"({int(DEALER_OWNER_STOCK_FEE_RATE * 100)}% catalog fee, paid from pending profit as it builds)."
+        )
+        stocked = int(run_result.get("stocked") or 0)
+        fee = int(run_result.get("fee") or 0)
+        if stocked > 0:
+            msg += f" Stocked {stocked} car{'s' if stocked != 1 else ''} now (${fee:,} from profit)."
+        elif run_result.get("reason") == "no_profit":
+            msg += " No pending profit yet — cars will stock automatically when sales profit accumulates."
+        elif run_result.get("reason") == "at_target_or_cannot_afford_unit":
+            msg += " Already at target, or profit is below the cheapest unit fee for this rarity."
         return {
-            "message": f"Auto-stock enabled: keep {r.replace('_', ' ')} models at {target} each (fee {int(DEALER_OWNER_STOCK_FEE_RATE * 100)}% of catalog value, paid from profit).",
+            "message": msg,
             "auto_stock": {"enabled": True, "rarity": r, "target_per_model": target},
+            "auto_stock_run": run_result,
         }
     await db.garage_dealership.update_one(
         {"id": GARAGE_DEALERSHIP_ID, "owner_id": uid},
@@ -2709,6 +2834,8 @@ async def claim_garage_dealership(current_user: dict = Depends(get_current_user_
     uid = current_user.get("id") or ""
     if await user_owns_garage_dealership(db, uid):
         raise HTTPException(status_code=400, detail="You already own the car dealership")
+    if await _user_owns_any_property(uid):
+        raise HTTPException(status_code=400, detail=GARAGE_DEALERSHIP_PROPERTY_CONFLICT_DETAIL)
     dealership = await get_garage_dealership(db)
     if dealership.get("owner_id"):
         raise HTTPException(status_code=400, detail="The car dealership already has an owner")
@@ -2745,7 +2872,7 @@ async def claim_garage_dealership(current_user: dict = Depends(get_current_user_
 async def collect_garage_dealership(current_user: dict = Depends(get_current_user)):
     """Collect pending cash profit from dealership sales."""
     uid = current_user.get("id") or ""
-    await maybe_auto_relinquish_below_capo(db.garage_dealership, {"id": GARAGE_DEALERSHIP_ID})
+    await _maybe_auto_relinquish_dealership()
     old = await db.garage_dealership.find_one_and_update(
         {"id": GARAGE_DEALERSHIP_ID, "owner_id": uid, "owner_pending_profit": {"$gt": 0}},
         {"$set": {"owner_pending_profit": 0}},
@@ -2784,7 +2911,7 @@ async def relinquish_garage_dealership(current_user: dict = Depends(get_current_
             pass
     await db.garage_dealership.update_one(
         {"id": GARAGE_DEALERSHIP_ID, "owner_id": uid},
-        {"$set": {"owner_id": None, "owner_username": None, "owner_pending_profit": 0, **dealership_auto_stock_defaults()}},
+        {"$set": {"owner_id": None, "owner_username": None, "owner_pending_profit": 0, **dealership_auto_stock_defaults()}, "$unset": {"stack_conflict_acquired_at": ""}},
     )
     await log_activity(uid, current_user.get("username") or "?", "garage_dealership_relinquish", {})
     return {"message": "Car dealership relinquished. It is now unclaimed."}
@@ -2802,7 +2929,7 @@ async def garage_dealership_send_to_user(
     family_id = await resolve_family_id(uid)
     if family_id and await _family_in_active_war(family_id):
         raise HTTPException(status_code=403, detail=GARAGE_DEALERSHIP_WAR_LOCK_DETAIL)
-    await maybe_auto_relinquish_below_capo(db.garage_dealership, {"id": GARAGE_DEALERSHIP_ID})
+    await _maybe_auto_relinquish_dealership()
     dealership = await get_garage_dealership(db)
     if dealership.get("owner_id") != uid:
         raise HTTPException(status_code=403, detail="You do not own the car dealership")
@@ -2816,20 +2943,22 @@ async def garage_dealership_send_to_user(
         raise HTTPException(status_code=400, detail="Cannot transfer to yourself")
     if await user_owns_garage_dealership(db, target["id"]):
         raise HTTPException(status_code=400, detail="That user already owns the car dealership")
+    if await _user_owns_any_property(target["id"]):
+        raise HTTPException(status_code=400, detail=GARAGE_DEALERSHIP_TRANSFER_TARGET_CONFLICT_DETAIL)
     transfer_set = {
         "owner_id": target["id"],
         "owner_username": target.get("username", target_username),
         **dealership_auto_stock_defaults(),
     }
     tgt_rank = get_rank_info(target.get("rank_points", 0), user_prestige_rank_mult(target))[0]
-    update_ops: Dict[str, Any] = {"$set": transfer_set}
+    unset_fields: Dict[str, str] = {"stack_conflict_acquired_at": ""}
     if tgt_rank < CAPO_RANK_ID:
         transfer_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
     else:
-        update_ops["$unset"] = {"below_capo_acquired_at": ""}
+        unset_fields["below_capo_acquired_at"] = ""
     await db.garage_dealership.update_one(
         {"id": GARAGE_DEALERSHIP_ID, "owner_id": uid},
-        update_ops,
+        {"$set": transfer_set, "$unset": unset_fields},
     )
     await cancel_garage_dealership_quicktrade_listings(db)
     await log_activity(
@@ -2861,7 +2990,7 @@ async def garage_dealership_sell_on_trade(
     family_id = await resolve_family_id(uid)
     if family_id and await _family_in_active_war(family_id):
         raise HTTPException(status_code=403, detail=GARAGE_DEALERSHIP_WAR_LOCK_DETAIL)
-    await maybe_auto_relinquish_below_capo(db.garage_dealership, {"id": GARAGE_DEALERSHIP_ID})
+    await _maybe_auto_relinquish_dealership()
     dealership = await get_garage_dealership(db)
     if dealership.get("owner_id") != uid:
         raise HTTPException(status_code=403, detail="You do not own the car dealership")

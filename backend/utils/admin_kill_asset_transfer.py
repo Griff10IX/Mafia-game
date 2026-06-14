@@ -78,6 +78,7 @@ async def transfer_staff_kill_seizures(db, victim_id: str, admin_user: dict) -> 
         _user_owns_any_casino,
         _user_owns_any_property,
         _user_owns_garage_dealership,
+        _user_owns_any_property,
         get_rank_info,
         raise_if_dead_casino_transfer_target,
         user_prestige_rank_mult,
@@ -213,7 +214,10 @@ async def transfer_staff_kill_seizures(db, victim_id: str, admin_user: dict) -> 
             )
         else:
             dealership_set = {"owner_id": admin_id, "owner_username": admin_username, **dealership_auto_stock_defaults()}
-            if receiver_rank_id < CAPO_RANK_ID:
+            admin_had_property = await _user_owns_any_property(admin_id)
+            if admin_had_property:
+                dealership_set["stack_conflict_acquired_at"] = datetime.now(timezone.utc)
+            elif receiver_rank_id < CAPO_RANK_ID:
                 dealership_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
             res = await db.garage_dealership.update_one({"owner_id": victim_id}, {"$set": dealership_set})
             if res.modified_count:

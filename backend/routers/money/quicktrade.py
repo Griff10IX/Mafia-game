@@ -23,6 +23,7 @@ from server import (
     _user_owns_airport,
     _user_owns_bullet_factory,
     _user_owns_garage_dealership,
+    _user_owns_any_property,
     send_notification,
     _is_admin,
     refund_casino_buy_back_escrow_points,
@@ -1301,6 +1302,9 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
         if await _user_owns_garage_dealership(buyer_id):
             await _restore()
             raise HTTPException(status_code=400, detail="You already own the car dealership. Relinquish it first.")
+        if await _user_owns_any_property(buyer_id):
+            await _restore()
+            raise HTTPException(status_code=400, detail="You already own an airport or armoury. Relinquish it before buying the car dealership.")
     result = await db.users.update_one(
         {"id": buyer_id, "points": {"$gte": sale_price}},
         {"$inc": {"points": -sale_price}}

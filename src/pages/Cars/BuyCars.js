@@ -445,6 +445,7 @@ export default function BuyCars() {
         target_per_model: enabled ? target : undefined,
       });
       toast.success(res?.data?.message || (enabled ? 'Auto-stock enabled' : 'Auto-stock disabled'));
+      refreshUser();
       fetchAll();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Could not update auto-stock');
@@ -561,17 +562,27 @@ export default function BuyCars() {
                   </div>
                   {dealership.auto_stock?.enabled ? (
                     <p className="text-[9px] text-primary">
-                      Auto-stock on: {RARITY_LABELS[dealership.auto_stock.rarity] || dealership.auto_stock.rarity} → {dealership.auto_stock.target_per_model}/model (fee from profit each restock cycle)
+                      Auto-stock on: {RARITY_LABELS[dealership.auto_stock.rarity] || dealership.auto_stock.rarity} → {dealership.auto_stock.target_per_model}/model.
+                      Spends pending profit in small batches (every sale + every 5 min), not all at once.
                     </p>
                   ) : (
-                    <p className="text-[9px] text-mutedForeground">Auto-stock tops up your chosen rarity from pending profit on each dealer restock cycle (1–4h).</p>
+                    <p className="text-[9px] text-mutedForeground">
+                      Auto-stock tops up your chosen rarity from pending profit as sales come in (partial fills; no need to pay the full target upfront).
+                    </p>
                   )}
                 </div>
                 {dealership.transfer_locked_war ? (
                   <p className="text-amber-400/90 text-[9px]">
                     Family war active — you cannot send or list the dealership until the war ends.
                   </p>
-                ) : (
+                ) : null}
+                {dealership.stack_conflict?.seconds_remaining != null ? (
+                  <p className="text-amber-400/90 text-[9px]">
+                    You hold an airport or armoury — send the dealership to another player within{' '}
+                    {Math.max(1, Math.ceil((dealership.stack_conflict.seconds_remaining || 0) / 60))} min or it auto-drops.
+                  </p>
+                ) : null}
+                {!dealership.transfer_locked_war ? (
                   <>
                 <div className="flex flex-wrap items-end gap-2 pt-1 border-t border-border/50">
                   <label className="flex flex-col gap-0.5 min-w-[8rem] flex-1">
@@ -599,9 +610,13 @@ export default function BuyCars() {
                 <p className="text-mutedForeground">
                   Unclaimed — claim for {(dealership.claim_cost_points || 10000).toLocaleString()} points to earn from dealer and player car sales.
                 </p>
+                {dealership.claim_blocked ? (
+                  <p className="text-[9px] text-amber-400">{dealership.claim_blocked}</p>
+                ) : (
                 <button type="button" disabled={dealershipSaving} onClick={handleClaimDealership} className="px-3 py-1.5 rounded border border-primary/50 bg-primary/15 text-primary font-bold disabled:opacity-50">
                   Claim dealership · {(dealership.claim_cost_points || 10000).toLocaleString()} pts
                 </button>
+                )}
               </>
             )}
           </div>
