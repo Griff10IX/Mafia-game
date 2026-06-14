@@ -476,6 +476,14 @@ function formatMdgGamblingLogDetails(details) {
   );
 }
 
+/** Parse admin money fields from text input (avoids number input scientific notation above ~1B). */
+function parseAdminInt(raw, fallback = 0) {
+  const digits = String(raw ?? '').replace(/\D/g, '');
+  if (!digits) return fallback;
+  const n = parseInt(digits, 10);
+  return Number.isNaN(n) ? fallback : n;
+}
+
 /** Live interest preview from draft term rows + principal (matches backend rounding). */
 function buildBankInterestPreviewRows(rows, principalRaw) {
   const principal = Math.max(0, parseInt(String(principalRaw).replace(/,/g, ''), 10) || 0);
@@ -2410,8 +2418,8 @@ export default function Admin() {
     setBankEconomySaving(true);
     try {
       const res = await api.patch('/admin/settings', {
-        bank_swiss_default_limit: Math.max(1000, parseInt(bankSwissDefaultLimit, 10) || 50_000_000),
-        bank_interest_max_unclaimed_principal: Math.max(1, parseInt(bankInterestMaxUnclaimed, 10) || 50_000_000),
+        bank_swiss_default_limit: Math.max(1000, parseAdminInt(bankSwissDefaultLimit, 50_000_000)),
+        bank_interest_max_unclaimed_principal: Math.max(1, parseAdminInt(bankInterestMaxUnclaimed, 50_000_000)),
         bank_interest_options: (bankInterestOptionsRows || [])
           .map((r) => ({
             hours: Math.max(1, parseInt(r.hours, 10) || 0),
@@ -2503,8 +2511,8 @@ export default function Admin() {
         landing_banner_message: landingBannerMessage,
         stock_market_max_points: Math.max(1, parseInt(stockMarketMaxPoints, 10) || 3000),
         sports_bet_max_total_open_stake: Math.max(1, parseInt(sportsBetMaxTotalOpenStake, 10) || 25_000_000),
-        bank_swiss_default_limit: Math.max(1000, parseInt(bankSwissDefaultLimit, 10) || 50_000_000),
-        bank_interest_max_unclaimed_principal: Math.max(1, parseInt(bankInterestMaxUnclaimed, 10) || 50_000_000),
+        bank_swiss_default_limit: Math.max(1000, parseAdminInt(bankSwissDefaultLimit, 50_000_000)),
+        bank_interest_max_unclaimed_principal: Math.max(1, parseAdminInt(bankInterestMaxUnclaimed, 50_000_000)),
         bank_interest_options: (bankInterestOptionsRows || [])
           .map((r) => ({
             hours: Math.max(1, parseInt(r.hours, 10) || 0),
@@ -14520,21 +14528,23 @@ export default function Admin() {
               <label className="block text-[10px] font-heading uppercase tracking-wider text-mutedForeground">
                 Swiss default cap (economy + new signups)
                 <input
-                  type="number"
-                  min={1000}
-                  value={bankSwissDefaultLimit}
-                  onChange={(e) => setBankSwissDefaultLimit(Math.max(1000, parseInt(e.target.value, 10) || 50_000_000))}
+                  type="text"
+                  inputMode="numeric"
+                  value={bankSwissDefaultLimit ? Number(bankSwissDefaultLimit).toLocaleString() : ''}
+                  onChange={(e) => setBankSwissDefaultLimit(parseAdminInt(e.target.value, 0))}
                   className="mt-1 w-full px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-mono font-heading"
+                  placeholder="50,000,000"
                 />
               </label>
               <label className="block text-[10px] font-heading uppercase tracking-wider text-mutedForeground">
                 Max unclaimed interest principal
                 <input
-                  type="number"
-                  min={1}
-                  value={bankInterestMaxUnclaimed}
-                  onChange={(e) => setBankInterestMaxUnclaimed(Math.max(1, parseInt(e.target.value, 10) || 50_000_000))}
+                  type="text"
+                  inputMode="numeric"
+                  value={bankInterestMaxUnclaimed ? Number(bankInterestMaxUnclaimed).toLocaleString() : ''}
+                  onChange={(e) => setBankInterestMaxUnclaimed(parseAdminInt(e.target.value, 0))}
                   className="mt-1 w-full px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-mono font-heading"
+                  placeholder="50,000,000"
                 />
               </label>
             </div>
