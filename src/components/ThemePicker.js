@@ -16,7 +16,7 @@ import {
   THEME_COLOUR_SECTIONS, THEME_WRITING_SECTIONS, THEME_VARIANTS,
   DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID,
   DEFAULT_BUTTON_STYLE_ID, DEFAULT_WRITING_COLOUR_ID, DEFAULT_TEXT_STYLE_ID,
-  getThemeColour,
+  getThemeColour, EXPANDED_PRESET_CATEGORIES,
 } from '../constants/themes';
 import styles from '../styles/noir.module.css';
 
@@ -37,6 +37,32 @@ function swatchStyle(c) {
   if (c.stops?.length >= 2) return { background: `linear-gradient(135deg,${c.stops.slice(0,3).join(',')})` };
   if (c.id?.startsWith('gradient-')) return { background: `linear-gradient(135deg,${c.primaryDark},${c.primaryBright})` };
   return { backgroundColor: c.primary };
+}
+
+const FULL_PRESET_CATEGORIES = [
+  { id: 'all', label: 'All' },
+  { id: 'cyberpunk', label: 'Cyberpunk' },
+  { id: 'luxury', label: 'Luxury' },
+  { id: 'nature', label: 'Nature' },
+  { id: 'retro', label: 'Retro' },
+  { id: 'minimalist', label: 'Minimalist' },
+  { id: 'winter', label: 'Winter' },
+  { id: 'metallic', label: 'Metallic' },
+  { id: 'dark-pro', label: 'Dark Pro' },
+  { id: 'gradient', label: 'Gradient' },
+  ...EXPANDED_PRESET_CATEGORIES,
+  { id: 'other', label: 'Other' },
+];
+
+function matchesPresetSearch(preset, query) {
+  if (!query.trim()) return true;
+  const q = query.trim().toLowerCase();
+  return (
+    preset.name?.toLowerCase().includes(q)
+    || preset.description?.toLowerCase().includes(q)
+    || preset.id?.toLowerCase().includes(q)
+    || preset.presetCategory?.toLowerCase().includes(q)
+  );
 }
 
 /* ─────────────────────── sub-components ─────────────────────── */
@@ -225,6 +251,7 @@ export default function ThemePicker({ open, onClose }) {
   /* ── state ── */
   const [activeTab, setActiveTab] = useState('presets');
   const [presetCat, setPresetCat] = useState('all');
+  const [presetSearch, setPresetSearch] = useState('');
   const [colourSearch, setColourSearch] = useState('');
   const [customName, setCustomName] = useState('');
   const [customNumColours, setCustomNumColours] = useState(2);
@@ -538,27 +565,38 @@ export default function ThemePicker({ open, onClose }) {
                 </div>
               </TabSection>
 
+              <div className="relative mb-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
+                <input
+                  type="text"
+                  value={presetSearch}
+                  onChange={(e) => setPresetSearch(e.target.value)}
+                  placeholder="Search presets by name, vibe, or category…"
+                  className="w-full bg-zinc-900 border border-zinc-700 rounded-xl pl-8 pr-8 py-2 text-xs text-zinc-100 focus:border-primary/50 focus:outline-none placeholder:text-zinc-700"
+                />
+                {presetSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setPresetSearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 p-1"
+                    aria-label="Clear preset search"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
               <TabSection icon={Wand2} title="Quick colour presets" sub="Changes accent colour only — leaves text, buttons and layout untouched">
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                  {THEME_PRESETS.filter(p => !p.isFullPreset).map(p => <PresetCard key={p.id} preset={p} active={getPresetIsActive(p)} onSelect={applyPreset} />)}
+                  {THEME_PRESETS.filter((p) => !p.isFullPreset && matchesPresetSearch(p, presetSearch)).map((p) => (
+                    <PresetCard key={p.id} preset={p} active={getPresetIsActive(p)} onSelect={applyPreset} />
+                  ))}
                 </div>
               </TabSection>
 
               <TabSection icon={Sparkles} title="Full presets" sub="Applies accent + text + buttons + layout all at once">
                 <div className="flex flex-wrap gap-1.5 mb-3">
-                  {[
-                    { id: 'all', label: 'All' },
-                    { id: 'cyberpunk', label: 'Cyberpunk' },
-                    { id: 'luxury', label: 'Luxury' },
-                    { id: 'nature', label: 'Nature' },
-                    { id: 'retro', label: 'Retro' },
-                    { id: 'minimalist', label: 'Minimalist' },
-                    { id: 'winter', label: 'Winter' },
-                    { id: 'metallic', label: 'Metallic' },
-                    { id: 'dark-pro', label: 'Dark Pro' },
-                    { id: 'gradient', label: 'Gradient' },
-                    { id: 'other', label: 'Other' },
-                  ].map(cat => (
+                  {FULL_PRESET_CATEGORIES.map((cat) => (
                     <button
                       key={cat.id}
                       type="button"
@@ -574,12 +612,13 @@ export default function ThemePicker({ open, onClose }) {
                   ))}
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                  {THEME_PRESETS.filter(p => {
+                  {THEME_PRESETS.filter((p) => {
                     if (!p.isFullPreset) return false;
+                    if (!matchesPresetSearch(p, presetSearch)) return false;
                     if (presetCat === 'all') return true;
                     if (presetCat === 'other') return !p.presetCategory;
                     return p.presetCategory === presetCat;
-                  }).map(p => <PresetCard key={p.id} preset={p} active={getPresetIsActive(p)} onSelect={applyPreset} />)}
+                  }).map((p) => <PresetCard key={p.id} preset={p} active={getPresetIsActive(p)} onSelect={applyPreset} />)}
                 </div>
               </TabSection>
 

@@ -16,8 +16,6 @@ from utils.family_perks import family_perk_modifiers
 from utils.garage_dealership import (
     GARAGE_DEALERSHIP_CLAIM_COST_POINTS,
     GARAGE_DEALERSHIP_ID,
-    DEALER_OWNER_PROFIT_SHARE,
-    P2P_OWNER_PROFIT_SHARE,
     DEALER_OWNER_STOCK_FEE_RATE,
     DEALER_OWNER_STOCK_MAX_PER_MODEL,
     DEALER_OWNER_STOCK_DEFAULT_TARGET,
@@ -34,6 +32,7 @@ from utils.garage_dealership import (
     maybe_auto_relinquish_dealership_stack_conflict,
     dealership_stack_conflict_status,
 )
+from utils.global_property_owner_shares import load_global_property_owner_shares
 
 from utils.referral_ids import (
     apply_referrer_referral_increment,
@@ -1974,6 +1973,7 @@ async def get_cars_for_sale(current_user: dict = Depends(get_current_user)):
             "can_buy": in_stock > 0,
         })
     dealership = await get_garage_dealership(db)
+    owner_shares = await load_global_property_owner_shares(db)
     owner_id = dealership.get("owner_id")
     owner_username = dealership.get("owner_username")
     uid = current_user.get("id") or ""
@@ -1985,8 +1985,8 @@ async def get_cars_for_sale(current_user: dict = Depends(get_current_user)):
         "is_owner": is_owner,
         "claim_cost_points": GARAGE_DEALERSHIP_CLAIM_COST_POINTS,
         "owner_pending_profit": int(dealership.get("owner_pending_profit") or 0) if is_owner else None,
-        "dealer_owner_profit_share_pct": int(DEALER_OWNER_PROFIT_SHARE * 100),
-        "player_sale_owner_profit_share_pct": int(P2P_OWNER_PROFIT_SHARE * 100),
+        "dealer_owner_profit_share_pct": owner_shares["dealer_owner_profit_share_pct"],
+        "player_sale_owner_profit_share_pct": owner_shares["player_sale_owner_profit_share_pct"],
     }
     if is_owner:
         family_id = await resolve_family_id(uid)
@@ -2054,7 +2054,8 @@ async def buy_car(
     profit = dealership_sale_profit(price, catalog_value)
     dealership = await get_garage_dealership(db)
     if dealership.get("owner_id") and profit > 0:
-        await credit_garage_dealership_profit(db, dealer_owner_profit_cut(profit))
+        owner_shares = await load_global_property_owner_shares(db)
+        await credit_garage_dealership_profit(db, dealer_owner_profit_cut(profit, owner_shares))
         try:
             await _run_dealer_owner_auto_stock()
         except Exception:
@@ -2224,7 +2225,8 @@ async def buy_cars_bulk(
     owner_profit_total = sum(int(l["profit"]) for l in bought_lines if int(l["profit"]) > 0)
     dealership = await get_garage_dealership(db)
     if dealership.get("owner_id") and owner_profit_total > 0:
-        await credit_garage_dealership_profit(db, dealer_owner_profit_cut(owner_profit_total))
+        owner_shares = await load_global_property_owner_shares(db)
+        await credit_garage_dealership_profit(db, dealer_owner_profit_cut(owner_profit_total, owner_shares))
         try:
             await _run_dealer_owner_auto_stock()
         except Exception:
@@ -2482,7 +2484,8 @@ async def buy_listed_car(
     dealership = await get_garage_dealership(db)
     owner_cut = 0
     if dealership.get("owner_id") and profit > 0:
-        owner_cut = p2p_owner_profit_cut(profit)
+        owner_shares = await load_global_property_owner_shares(db)
+        owner_cut = p2p_owner_profit_cut(profit, owner_shares)
         await credit_garage_dealership_profit(db, owner_cut)
         try:
             await _run_dealer_owner_auto_stock()
@@ -2853,6 +2856,7 @@ async def get_garage_dealership_status(current_user: dict = Depends(get_current_
     """Ownership status for the global car dealership (Buy Cars dealer)."""
     await _maybe_auto_relinquish_dealership()
     dealership = await get_garage_dealership(db)
+    owner_shares = await load_global_property_owner_shares(db)
     uid = current_user.get("id") or ""
     owner_id = dealership.get("owner_id")
     is_owner = bool(owner_id and owner_id == uid)
@@ -2865,8 +2869,8 @@ async def get_garage_dealership_status(current_user: dict = Depends(get_current_
         "is_owner": is_owner,
         "claim_cost_points": GARAGE_DEALERSHIP_CLAIM_COST_POINTS,
         "owner_pending_profit": int(dealership.get("owner_pending_profit") or 0) if is_owner else None,
-        "dealer_owner_profit_share_pct": int(DEALER_OWNER_PROFIT_SHARE * 100),
-        "player_sale_owner_profit_share_pct": int(P2P_OWNER_PROFIT_SHARE * 100),
+        "dealer_owner_profit_share_pct": owner_shares["dealer_owner_profit_share_pct"],
+        "player_sale_owner_profit_share_pct": owner_shares["player_sale_owner_profit_share_pct"],
         "transfer_locked_war": transfer_locked_war,
     }
     if is_owner:

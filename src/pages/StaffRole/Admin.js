@@ -255,6 +255,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Booze Run rotation & global discount', categoryId: 'admin-gameworld', collapseKey: 'boozeRun', keywords: ['booze', 'run', 'rotation', 'prices', 'discount', 'listed', 'nudge', 'global', 'jail', 'bust', 'prohibition'], adminOnly: true },
   { label: 'Booze Run analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'boozeRunAnalytics', keywords: ['booze', 'analytics', 'economy', 'events', 'profit', 'revenue', 'jail', 'leaderboard'] },
   { label: 'Coin Flip economy', categoryId: 'admin-analytics-monitoring', collapseKey: 'coinFlipEconomy', keywords: ['coin', 'flip', 'casino', 'economy', 'heads', 'tails', 'bets', 'winners', 'house'] },
+  { label: 'Global properties profit', categoryId: 'admin-analytics-monitoring', collapseKey: 'globalPropertiesEconomy', keywords: ['car', 'dealership', 'sports', 'betting', 'book', 'global', 'property', 'owner', 'profit', 'pending', 'house', 'percent', 'share'], adminOnly: true },
   { label: 'Keno economy', categoryId: 'admin-analytics-monitoring', collapseKey: 'kenoEconomy', keywords: ['keno', 'casino', 'economy', 'payout', 'gambling', 'state', 'max bet', 'keno settings', 'top wins', 'player'] },
   { label: 'Presence simulator', categoryId: 'admin-gameworld', collapseKey: 'presenceSimulator', keywords: ['presence', 'simulator', 'online', 'active', 'fake', 'last_seen'], adminOnly: true },
   { label: 'Slots Draw', categoryId: 'admin-gameworld', collapseKey: 'slotsDraw', keywords: ['slots', 'draw', 'lottery'] },
@@ -384,8 +385,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, globalPropertiesEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, globalPropertiesEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true }; }
 }
 
 function saveCollapsed(state) {
@@ -1117,6 +1118,15 @@ export default function Admin() {
   const [coinFlipEconomyDays, setCoinFlipEconomyDays] = useState(30);
   const [coinFlipEconomyData, setCoinFlipEconomyData] = useState(null);
   const [coinFlipEconomyLoading, setCoinFlipEconomyLoading] = useState(false);
+  const [globalPropertiesEconomyDays, setGlobalPropertiesEconomyDays] = useState(30);
+  const [globalPropertiesEconomyData, setGlobalPropertiesEconomyData] = useState(null);
+  const [globalPropertiesEconomyLoading, setGlobalPropertiesEconomyLoading] = useState(false);
+  const [globalOwnerShares, setGlobalOwnerShares] = useState({
+    dealer_owner_profit_share_pct: 25,
+    player_sale_owner_profit_share_pct: 10,
+    sports_betting_owner_profit_share_pct: 10,
+  });
+  const [globalOwnerSharesSaving, setGlobalOwnerSharesSaving] = useState(false);
   const [kenoAdminMaxBet, setKenoAdminMaxBet] = useState('');
   const [kenoAdminMaxBetDefault, setKenoAdminMaxBetDefault] = useState(null);
   const [kenoAdminMaxBetLoading, setKenoAdminMaxBetLoading] = useState(false);
@@ -6263,6 +6273,49 @@ export default function Admin() {
       setCoinFlipEconomyData(null);
     } finally {
       setCoinFlipEconomyLoading(false);
+    }
+  };
+
+  const handleFetchGlobalPropertiesEconomy = async () => {
+    setGlobalPropertiesEconomyLoading(true);
+    try {
+      const res = await api.get('/admin/global-properties/economy', { params: { days: globalPropertiesEconomyDays } });
+      setGlobalPropertiesEconomyData(res.data || null);
+      if (res.data?.owner_shares) {
+        setGlobalOwnerShares(res.data.owner_shares);
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load global properties economy');
+      setGlobalPropertiesEconomyData(null);
+    } finally {
+      setGlobalPropertiesEconomyLoading(false);
+    }
+  };
+
+  const fetchGlobalOwnerShares = async () => {
+    try {
+      const res = await api.get('/admin/global-property-owner-shares');
+      if (res.data) setGlobalOwnerShares(res.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load owner share settings');
+    }
+  };
+
+  const handleSaveGlobalOwnerShares = async () => {
+    setGlobalOwnerSharesSaving(true);
+    try {
+      const clamp = (v) => Math.max(0, Math.min(100, parseInt(String(v).replace(/\D/g, ''), 10) || 0));
+      const res = await api.patch('/admin/global-property-owner-shares', {
+        dealer_owner_profit_share_pct: clamp(globalOwnerShares.dealer_owner_profit_share_pct),
+        player_sale_owner_profit_share_pct: clamp(globalOwnerShares.player_sale_owner_profit_share_pct),
+        sports_betting_owner_profit_share_pct: clamp(globalOwnerShares.sports_betting_owner_profit_share_pct),
+      });
+      setGlobalOwnerShares(res.data || globalOwnerShares);
+      toast.success('Owner profit shares saved');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to save owner shares');
+    } finally {
+      setGlobalOwnerSharesSaving(false);
     }
   };
 
@@ -19177,6 +19230,284 @@ export default function Admin() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+        </div>
+
+        {/* Global properties — car dealership + sports betting book */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-violet-500/40 to-transparent" />
+          <SectionHeader
+            icon={Building2}
+            title="Global properties profit"
+            badge={
+              globalPropertiesEconomyData?.garage_dealership ? (
+                <span className="text-[10px] font-heading text-mutedForeground">
+                  {globalPropertiesEconomyData.days}d window
+                </span>
+              ) : null
+            }
+            toolAnchor="globalPropertiesEconomy"
+            isCollapsed={collapsed.globalPropertiesEconomy}
+            onToggle={() => {
+              if (collapsed.globalPropertiesEconomy) fetchGlobalOwnerShares();
+              toggleSection('globalPropertiesEconomy');
+            }}
+            color="text-violet-400/90"
+          />
+          {!collapsed.globalPropertiesEconomy && (
+            <div className="p-3 space-y-4">
+              <div className="rounded-xl border border-violet-500/20 bg-gradient-to-br from-violet-950/20 via-zinc-900/45 to-zinc-950/90 p-3">
+                <p className="text-[10px] text-zinc-300 font-heading leading-relaxed">
+                  One car dealership and one sports betting book globally. Shows owner, pending profit, estimated owner share from sales/bets in the window, weekly book history, stock, and recent activity.
+                </p>
+              </div>
+              <div className="rounded-xl border border-violet-500/25 bg-zinc-900/50 p-3 space-y-2">
+                <div className="text-[10px] font-heading font-bold text-violet-300 uppercase tracking-wide">Owner profit %</div>
+                <p className="text-[9px] text-mutedForeground leading-snug">
+                  Applies to new sales and settlements going forward. Pending profit already banked is not recalculated. Stored in <span className="font-mono text-[8px]">game_settings</span>.
+                </p>
+                {[
+                  { key: 'dealer_owner_profit_share_pct', label: 'Car dealership — dealer sales %' },
+                  { key: 'player_sale_owner_profit_share_pct', label: 'Car dealership — marketplace listings %' },
+                  { key: 'sports_betting_owner_profit_share_pct', label: 'Sports betting book — weekly house profit %' },
+                ].map(({ key, label }) => (
+                  <div key={key} className="flex items-center gap-2">
+                    <span className="text-[10px] text-mutedForeground flex-1 min-w-0">{label}</span>
+                    <input
+                      type="text"
+                      value={String(globalOwnerShares[key] ?? '')}
+                      onChange={(e) =>
+                        setGlobalOwnerShares((prev) => ({
+                          ...prev,
+                          [key]: parseInt(e.target.value.replace(/\D/g, ''), 10) || 0,
+                        }))
+                      }
+                      disabled={globalOwnerSharesSaving}
+                      className="w-16 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none font-mono text-right"
+                    />
+                    <span className="text-[10px] text-mutedForeground w-4">%</span>
+                  </div>
+                ))}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <BtnSecondary type="button" onClick={fetchGlobalOwnerShares} disabled={globalOwnerSharesSaving}>
+                    Reload %
+                  </BtnSecondary>
+                  <BtnPrimary type="button" onClick={handleSaveGlobalOwnerShares} disabled={globalOwnerSharesSaving}>
+                    {globalOwnerSharesSaving ? 'Saving…' : 'Save owner %'}
+                  </BtnPrimary>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[9px] text-mutedForeground font-heading uppercase">Window</span>
+                {[7, 30, 90].map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setGlobalPropertiesEconomyDays(d)}
+                    className={`px-2 py-1 rounded border text-[10px] font-heading touch-manipulation ${
+                      globalPropertiesEconomyDays === d ? 'bg-violet-500/20 border-violet-500/50 text-violet-300' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'
+                    }`}
+                  >
+                    {d}d
+                  </button>
+                ))}
+                <BtnPrimary onClick={handleFetchGlobalPropertiesEconomy} disabled={globalPropertiesEconomyLoading}>
+                  {globalPropertiesEconomyLoading ? 'Loading…' : 'Load report'}
+                </BtnPrimary>
+                {globalPropertiesEconomyData?.cutoff_iso && (
+                  <span className="text-[9px] text-mutedForeground font-heading">Since {formatAdminDateTime(globalPropertiesEconomyData.cutoff_iso)}</span>
+                )}
+              </div>
+
+              {globalPropertiesEconomyData && (() => {
+                const dealer = globalPropertiesEconomyData.garage_dealership || {};
+                const sports = globalPropertiesEconomyData.sports_betting || {};
+                const dealerPeriod = dealer.period || {};
+                const sportsPeriod = sports.period || {};
+                const globalBook = sports.global_book || {};
+                const Stat = ({ label, value, sub, accent }) => (
+                  <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                    <div className="text-[8px] text-mutedForeground uppercase tracking-wide">{label}</div>
+                    <div className={`text-sm font-heading font-bold tabular-nums ${accent || 'text-foreground'}`}>{value}</div>
+                    {sub ? <div className="text-[8px] text-mutedForeground mt-0.5 leading-snug">{sub}</div> : null}
+                  </div>
+                );
+                return (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                      {/* Car dealership */}
+                      <div className="rounded-lg border border-emerald-500/20 bg-zinc-900/40 p-3 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Car size={16} className="text-emerald-400" />
+                          <span className="text-[11px] font-heading font-bold text-emerald-300 uppercase tracking-wide">Car Dealership</span>
+                        </div>
+                        <div className="text-[10px] font-heading space-y-1">
+                          <div>
+                            Owner:{' '}
+                            {dealer.owner_username ? (
+                              <Link to={`/profile/${encodeURIComponent(dealer.owner_username)}`} className="text-primary hover:underline font-bold">{dealer.owner_username}</Link>
+                            ) : (
+                              <span className="text-zinc-500">Unclaimed ({(dealer.claim_cost_points ?? 10000).toLocaleString()} pts)</span>
+                            )}
+                          </div>
+                          <div>Pending profit: <span className="text-emerald-400 font-bold tabular-nums">{formatAdminMoneyInt(dealer.owner_pending_profit ?? 0)}</span></div>
+                          <div className="text-mutedForeground">
+                            Shares: {dealer.dealer_owner_profit_share_pct ?? 25}% dealer markup · {dealer.player_sale_owner_profit_share_pct ?? 10}% marketplace markup
+                          </div>
+                          {dealer.auto_stock?.enabled && (
+                            <div className="text-mutedForeground">
+                              Auto-stock: {dealer.auto_stock.rarity || '—'} · target {dealer.auto_stock.target_per_model ?? 100}/model · fee {dealer.stock_fee_rate_pct ?? 25}%
+                            </div>
+                          )}
+                          {dealer.quick_trade_listing && (
+                            <div className="text-amber-300/90">QT listed: {(dealer.quick_trade_listing.points ?? 0).toLocaleString()} pts by {dealer.quick_trade_listing.seller_username || '?'}</div>
+                          )}
+                          {dealer.stack_conflict && (
+                            <div className="text-amber-400">Stack conflict — auto-relinquish in {Math.ceil((dealer.stack_conflict.seconds_remaining || 0) / 3600)}h</div>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                          <Stat label="Dealer stock" value={(dealer.dealer_stock_total ?? 0).toLocaleString()} sub={`${dealer.dealer_stock_owner_stocked ?? 0} owner-stocked`} />
+                          <Stat label="Market listings" value={(dealer.marketplace_listings_count ?? 0).toLocaleString()} />
+                          <Stat label={`${globalPropertiesEconomyData.days}d dealer sales`} value={(dealerPeriod.dealer_sales_count ?? 0).toLocaleString()} sub={formatAdminMoneyInt(dealerPeriod.dealer_sales_gross ?? 0)} />
+                          <Stat label={`${globalPropertiesEconomyData.days}d dealer owner est.`} value={formatAdminMoneyInt(dealerPeriod.dealer_owner_share_estimated ?? 0)} accent="text-emerald-400" />
+                          <Stat label={`${globalPropertiesEconomyData.days}d marketplace sales`} value={(dealerPeriod.marketplace_sales_count ?? 0).toLocaleString()} sub={formatAdminMoneyInt(dealerPeriod.marketplace_sales_gross ?? 0)} />
+                          <Stat label={`${globalPropertiesEconomyData.days}d listing owner est.`} value={formatAdminMoneyInt(dealerPeriod.marketplace_owner_share_estimated ?? 0)} accent="text-emerald-400" />
+                          <Stat label="Stock fees (period)" value={formatAdminMoneyInt(dealerPeriod.owner_stock_fees_paid ?? 0)} sub="Paid from pending profit" />
+                          <Stat label="Total owner est. (period)" value={formatAdminMoneyInt(dealerPeriod.total_owner_share_estimated ?? 0)} accent="text-primary" />
+                        </div>
+                        {dealer.stock_by_rarity && (
+                          <div className="text-[9px] text-mutedForeground font-heading">
+                            Stock by rarity: {Object.entries(dealer.stock_by_rarity).map(([r, n]) => `${r.replace(/_/g, ' ')} ${n}`).join(' · ')}
+                          </div>
+                        )}
+                        {(dealer.recent_dealer_sales || []).length > 0 && (
+                          <div>
+                            <div className="text-[9px] font-heading text-mutedForeground uppercase mb-1">Recent dealer sales</div>
+                            <div className="space-y-0.5 max-h-28 overflow-y-auto text-[9px] font-heading">
+                              {dealer.recent_dealer_sales.map((row, idx) => (
+                                <div key={idx} className="flex justify-between gap-2 border-b border-zinc-800/60 py-0.5">
+                                  <span className="truncate">{row.buyer_username || '?'} · {row.car_name || 'Car'}</span>
+                                  <span className="text-emerald-400/90 shrink-0 tabular-nums">{formatAdminMoneyInt(row.amount ?? 0)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {(dealer.recent_activity || []).length > 0 && (
+                          <div>
+                            <div className="text-[9px] font-heading text-mutedForeground uppercase mb-1">Ownership activity</div>
+                            <div className="space-y-0.5 max-h-24 overflow-y-auto text-[9px] font-heading">
+                              {dealer.recent_activity.map((row, idx) => (
+                                <div key={idx} className="flex justify-between gap-2 border-b border-zinc-800/60 py-0.5">
+                                  <span className="truncate">{row.action} · {row.username || '?'}</span>
+                                  <span className="text-mutedForeground shrink-0">{formatAdminDateTime(row.created_at)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Sports betting book */}
+                      <div className="rounded-lg border border-amber-500/20 bg-zinc-900/40 p-3 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Trophy size={16} className="text-amber-400" />
+                          <span className="text-[11px] font-heading font-bold text-amber-300 uppercase tracking-wide">Sports Betting Book</span>
+                        </div>
+                        <div className="text-[10px] font-heading space-y-1">
+                          <div>
+                            Owner:{' '}
+                            {sports.owner_username ? (
+                              <Link to={`/profile/${encodeURIComponent(sports.owner_username)}`} className="text-primary hover:underline font-bold">{sports.owner_username}</Link>
+                            ) : (
+                              <span className="text-zinc-500">Unclaimed ({(sports.claim_cost_points ?? 10000).toLocaleString()} pts)</span>
+                            )}
+                          </div>
+                          <div>Pending profit: <span className="text-amber-400 font-bold tabular-nums">{formatAdminMoneyInt(sports.owner_pending_profit ?? 0)}</span></div>
+                          <div className="text-mutedForeground">Owner share: {sports.owner_profit_share_pct ?? 10}% of weekly house profit (when positive)</div>
+                          {sports.collect && (
+                            <div className={sports.collect.can_collect ? 'text-emerald-400' : 'text-mutedForeground'}>
+                              Collect: {sports.collect.can_collect ? 'Available now' : (sports.collect.collect_blocked_reason || 'Not available')}
+                            </div>
+                          )}
+                          {sports.last_collected_at && (
+                            <div className="text-mutedForeground">Last collected: {formatAdminDateTime(sports.last_collected_at)}</div>
+                          )}
+                          {sports.quick_trade_listing && (
+                            <div className="text-amber-300/90">QT listed: {(sports.quick_trade_listing.points ?? 0).toLocaleString()} pts by {sports.quick_trade_listing.seller_username || '?'}</div>
+                          )}
+                          {sports.stack_conflict && (
+                            <div className="text-amber-400">Stack conflict — auto-relinquish in {Math.ceil((sports.stack_conflict.seconds_remaining || 0) / 3600)}h</div>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                          <Stat label="This week house" value={formatAdminMoneyInt(sports.current_week?.house_profit ?? 0)} sub={`Week ${sports.current_week_key || '—'}`} />
+                          <Stat label="This week owner share" value={formatAdminMoneyInt(sports.current_week?.owner_share ?? 0)} accent="text-amber-400" />
+                          <Stat label="Open stake (all)" value={formatAdminMoneyInt(globalBook.open_stake_all_players ?? 0)} />
+                          <Stat label={`${globalPropertiesEconomyData.days}d house profit`} value={formatAdminMoneyInt(sportsPeriod.house_profit ?? 0)} sub={`${(sportsPeriod.settled_bets_count ?? 0).toLocaleString()} settled bets`} />
+                          <Stat label="All-time house" value={formatAdminMoneyInt(sports.all_time_house_profit ?? 0)} />
+                          <Stat label="All-time owner credited" value={formatAdminMoneyInt(sports.all_time_owner_share_credited ?? 0)} accent="text-amber-400" />
+                          <Stat label="Settled bets (all)" value={(globalBook.settled_bets_count ?? 0).toLocaleString()} />
+                          <Stat label="Player P/L (all)" value={formatAdminMoneyInt(globalBook.aggregate_player_profit_loss ?? 0)} sub="Excl. staff bets" />
+                        </div>
+                        {(sports.weekly_history || []).length > 0 && (
+                          <div>
+                            <div className="text-[9px] font-heading text-mutedForeground uppercase mb-1">Weekly book history</div>
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-[9px] font-heading">
+                                <thead>
+                                  <tr className="text-mutedForeground border-b border-zinc-700/40">
+                                    <th className="text-left py-1 pr-2">Week</th>
+                                    <th className="text-right py-1 px-2">House</th>
+                                    <th className="text-right py-1 pl-2">Owner credited</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {sports.weekly_history.map((w) => (
+                                    <tr key={w.week_key} className="border-b border-zinc-800/50">
+                                      <td className="py-1 pr-2">{w.week_key}</td>
+                                      <td className={`py-1 px-2 text-right tabular-nums ${(w.house_profit ?? 0) >= 0 ? 'text-emerald-400/90' : 'text-red-400/90'}`}>{formatAdminMoneyInt(w.house_profit ?? 0)}</td>
+                                      <td className="py-1 pl-2 text-right tabular-nums text-amber-400/90">{formatAdminMoneyInt(w.owner_share_credited ?? 0)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
+                        {(sports.top_open_bets || []).length > 0 && (
+                          <div>
+                            <div className="text-[9px] font-heading text-mutedForeground uppercase mb-1">Largest open bets</div>
+                            <div className="space-y-0.5 max-h-28 overflow-y-auto text-[9px] font-heading">
+                              {sports.top_open_bets.map((row, idx) => (
+                                <div key={idx} className="flex justify-between gap-2 border-b border-zinc-800/60 py-0.5">
+                                  <span className="truncate">{row.username || '?'} · {row.option_name || row.event_name || 'Bet'}</span>
+                                  <span className="text-amber-400/90 shrink-0 tabular-nums">{formatAdminMoneyInt(row.stake ?? 0)} @ {row.odds}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {(sports.recent_activity || []).length > 0 && (
+                          <div>
+                            <div className="text-[9px] font-heading text-mutedForeground uppercase mb-1">Ownership activity</div>
+                            <div className="space-y-0.5 max-h-24 overflow-y-auto text-[9px] font-heading">
+                              {sports.recent_activity.map((row, idx) => (
+                                <div key={idx} className="flex justify-between gap-2 border-b border-zinc-800/60 py-0.5">
+                                  <span className="truncate">{row.action} · {row.username || '?'}</span>
+                                  <span className="text-mutedForeground shrink-0">{formatAdminDateTime(row.created_at)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </div>

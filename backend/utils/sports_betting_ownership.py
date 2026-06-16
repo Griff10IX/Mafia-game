@@ -4,7 +4,14 @@ from typing import Any, Dict, Optional
 
 SPORTS_BETTING_OWNERSHIP_ID = "main"
 SPORTS_BETTING_CLAIM_COST_POINTS = 10_000
-SPORTS_BETTING_OWNER_PROFIT_SHARE = 0.10
+from utils.global_property_owner_shares import (  # noqa: E402
+    DEFAULT_GLOBAL_PROPERTY_OWNER_SHARES,
+    sports_betting_owner_share_for_profit,
+)
+
+SPORTS_BETTING_OWNER_PROFIT_SHARE = (
+    DEFAULT_GLOBAL_PROPERTY_OWNER_SHARES["sports_betting_owner_profit_share_pct"] / 100.0
+)
 SPORTS_BETTING_STACK_CONFLICT_HOURS = 3
 SPORTS_BETTING_COLLECT_HOUR_UTC = 22  # 10 PM UTC every Sunday
 
@@ -22,13 +29,6 @@ def sports_betting_house_delta(*, won: bool, stake: int, payout: int) -> int:
     if not won:
         return st
     return st - int(payout or 0)
-
-
-def sports_betting_owner_share_for_profit(house_profit: int) -> int:
-    hp = int(house_profit or 0)
-    if hp <= 0:
-        return 0
-    return int(hp * SPORTS_BETTING_OWNER_PROFIT_SHARE)
 
 
 def _sunday_date_for(dt: datetime) -> datetime.date:
@@ -163,15 +163,18 @@ async def debit_sports_betting_profit_clawback(db, amount: int) -> None:
 
 
 async def _sync_sports_betting_owner_week_share(db, week_key: str) -> None:
+    from utils.global_property_owner_shares import load_global_property_owner_shares
+
     ownership = await get_sports_betting_ownership(db)
     if not ownership.get("owner_id"):
         return
+    shares = await load_global_property_owner_shares(db)
     week_doc = await db.sports_betting_weekly.find_one({"week_key": week_key}, {"_id": 0})
     if not week_doc:
         return
     house_profit = int(week_doc.get("house_profit") or 0)
     credited = int(week_doc.get("owner_share_credited") or 0)
-    target = sports_betting_owner_share_for_profit(house_profit)
+    target = sports_betting_owner_share_for_profit(house_profit, shares)
     delta = target - credited
     if delta == 0:
         return
@@ -278,10 +281,13 @@ def sports_betting_stack_conflict_status(ownership: Dict[str, Any]) -> Optional[
 
 
 async def get_sports_betting_weekly_stats(db, week_key: Optional[str] = None) -> Dict[str, Any]:
+    from utils.global_property_owner_shares import load_global_property_owner_shares
+
     wk = week_key or sports_betting_week_key()
     doc = await db.sports_betting_weekly.find_one({"week_key": wk}, {"_id": 0})
     house_profit = int((doc or {}).get("house_profit") or 0)
-    owner_share = sports_betting_owner_share_for_profit(house_profit)
+    shares = await load_global_property_owner_shares(db)
+    owner_share = sports_betting_owner_share_for_profit(house_profit, shares)
     return {
         "week_key": wk,
         "house_profit": house_profit,

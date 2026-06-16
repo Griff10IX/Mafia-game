@@ -50,7 +50,6 @@ from utils.civilian_protection import maybe_revoke_civilian_protection
 from utils.sports_betting_ownership import (
     SPORTS_BETTING_OWNERSHIP_ID,
     SPORTS_BETTING_CLAIM_COST_POINTS,
-    SPORTS_BETTING_OWNER_PROFIT_SHARE,
     get_sports_betting_ownership,
     credit_sports_betting_profit,
     user_owns_sports_betting_book,
@@ -62,6 +61,7 @@ from utils.sports_betting_ownership import (
     sports_betting_house_delta,
     sports_betting_collect_availability,
 )
+from utils.global_property_owner_shares import load_global_property_owner_shares
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_SPORTS_BETTING
 
 logger = logging.getLogger(__name__)
@@ -4210,13 +4210,14 @@ async def get_sports_betting_ownership_status(current_user: dict = Depends(get_c
     family_id = await resolve_family_id(uid) if is_owner else None
     transfer_locked_war = bool(is_owner and family_id and await _family_in_active_war(family_id))
     weekly = await get_sports_betting_weekly_stats(db)
+    owner_shares = await load_global_property_owner_shares(db)
     payload = {
         "owner_id": owner_id,
         "owner_username": ownership.get("owner_username"),
         "is_owner": is_owner,
         "claim_cost_points": SPORTS_BETTING_CLAIM_COST_POINTS,
         "owner_pending_profit": int(ownership.get("owner_pending_profit") or 0) if is_owner else None,
-        "owner_profit_share_pct": int(SPORTS_BETTING_OWNER_PROFIT_SHARE * 100),
+        "owner_profit_share_pct": owner_shares["sports_betting_owner_profit_share_pct"],
         "transfer_locked_war": transfer_locked_war,
         "weekly": weekly if is_owner else None,
     }

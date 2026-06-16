@@ -4,8 +4,14 @@ from typing import Any, Dict, Optional
 
 GARAGE_DEALERSHIP_ID = "main"
 GARAGE_DEALERSHIP_CLAIM_COST_POINTS = 10_000
-DEALER_OWNER_PROFIT_SHARE = 0.25
-P2P_OWNER_PROFIT_SHARE = 0.10
+from utils.global_property_owner_shares import (  # noqa: E402
+    DEFAULT_GLOBAL_PROPERTY_OWNER_SHARES,
+    dealer_owner_profit_cut,
+    p2p_owner_profit_cut,
+)
+
+DEALER_OWNER_PROFIT_SHARE = DEFAULT_GLOBAL_PROPERTY_OWNER_SHARES["dealer_owner_profit_share_pct"] / 100.0
+P2P_OWNER_PROFIT_SHARE = DEFAULT_GLOBAL_PROPERTY_OWNER_SHARES["player_sale_owner_profit_share_pct"] / 100.0
 DEALER_OWNER_STOCK_FEE_RATE = 0.25
 DEALER_OWNER_STOCK_MAX_PER_MODEL = 100
 DEALER_OWNER_STOCK_DEFAULT_TARGET = 100
@@ -16,14 +22,6 @@ DEALERSHIP_STACK_CONFLICT_HOURS = 3
 def dealership_sale_profit(sale_price: int, catalog_value: int) -> int:
     """Markup over catalog value treated as profit for owner revenue splits."""
     return max(0, int(sale_price or 0) - int(catalog_value or 0))
-
-
-def dealer_owner_profit_cut(profit: int) -> int:
-    return int(profit * DEALER_OWNER_PROFIT_SHARE)
-
-
-def p2p_owner_profit_cut(profit: int) -> int:
-    return int(profit * P2P_OWNER_PROFIT_SHARE)
 
 
 async def get_garage_dealership(db) -> Dict[str, Any]:

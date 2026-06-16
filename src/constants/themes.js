@@ -3,6 +3,18 @@
  * Changing theme updates Rank Progress bar, panel headers, buttons, sidebar, and all accent UI.
  */
 
+import {
+  EXPANDED_THEME_COLOURS,
+  EXPANDED_THEME_TEXTURES,
+  EXPANDED_THEME_FONTS,
+  EXPANDED_THEME_WRITING_COLOURS,
+  EXPANDED_QUICK_PRESETS,
+  EXPANDED_FULL_PRESETS,
+  EXPANDED_COLOUR_SECTION,
+  EXPANDED_WRITING_SECTION,
+  EXPANDED_PRESET_CATEGORIES,
+} from './themes-expanded.js';
+
 /** Hex colour presets: { id, name, primary, primaryBright, primaryDark, foregroundOnPrimary } */
 export const THEME_COLOURS = [
   { id: 'gold', name: 'Gold', primary: '#d4af37', primaryBright: '#e6c229', primaryDark: '#b8860b', foregroundOnPrimary: '#ffffff' },
@@ -359,6 +371,7 @@ export const THEME_COLOURS = [
   { id: 'deep-bronze', name: 'Deep Bronze', primary: '#4a3620', primaryBright: '#684e30', primaryDark: '#342414', foregroundOnPrimary: '#ffffff' },
   { id: 'deep-charcoal', name: 'Deep Charcoal', primary: '#1c1c1e', primaryBright: '#2c2c2e', primaryDark: '#0e0e10', foregroundOnPrimary: '#ffffff' },
   { id: 'deep-sapphire', name: 'Deep Sapphire', primary: '#0c2461', primaryBright: '#133a8c', primaryDark: '#081840', foregroundOnPrimary: '#ffffff' },
+  ...EXPANDED_THEME_COLOURS,
 ];
 
 /** Display order: sections for main/button/line colours. Colours not listed go in "More". */
@@ -383,6 +396,7 @@ export const THEME_COLOUR_SECTIONS = [
   { label: 'Vintage', ids: ['retro-mustard', 'avocado-70s', 'burnt-sienna', 'faded-denim', 'harvest', 'parchment', 'rust-orange', 'old-rose', 'olive-drab', 'dusty-pink'] },
   { label: 'Luxury', ids: ['champagne', 'caviar', 'truffle', 'cognac', 'cashmere', 'ebony', 'ivory-lux', 'mink-fur'] },
   { label: 'More', ids: ['sunset', 'sunrise', 'pale-gold', 'antique-brass', 'lagoon', 'mulberry', 'steel-blue', 'deep-maroon', 'obsidian-blue', 'void', 'abyss', 'deep-olive', 'deep-teal', 'deep-amber', 'deep-rose', 'deep-violet', 'deep-copper', 'deep-slate-green', 'deep-burgundy', 'deep-bronze', 'deep-charcoal', 'deep-sapphire'] },
+  EXPANDED_COLOUR_SECTION,
 ];
 
 /** Texture presets: applied as body overlay. id used for body[data-texture] and swatch preview. */
@@ -394,6 +408,7 @@ export const THEME_TEXTURES = [
   { id: 'crosshatch', name: 'Crosshatch' },
   { id: 'hexagons', name: 'Hexagons' },
   { id: 'fine-lines', name: 'Fine Lines' },
+  ...EXPANDED_THEME_TEXTURES,
 ];
 
 /** Writing style: heading + body font family (CSS font-family value). */
@@ -418,6 +433,7 @@ export const THEME_FONTS = [
   { id: 'geometric', name: 'Geometric', heading: 'Poppins, "Century Gothic", sans-serif', body: 'Poppins, "Century Gothic", sans-serif' },
   { id: 'humanist', name: 'Humanist', heading: '"Source Sans 3", "Lucida Grande", sans-serif', body: '"Source Sans 3", "Lucida Grande", sans-serif' },
   { id: 'slab', name: 'Slab', heading: '"Roboto Slab", Rockwell, serif', body: '"Roboto Slab", Rockwell, serif' },
+  ...EXPANDED_THEME_FONTS,
 ];
 
 /** Text style: weight and slant (applies to body/heading base). */
@@ -720,6 +736,7 @@ export const THEME_WRITING_COLOURS = [
   { id: 'driftwood-text', name: 'Driftwood', foreground: '#c0a888', muted: '#9a8868' },
   { id: 'wheat-text', name: 'Wheat', foreground: '#e4bc72', muted: '#c09c50' },
   { id: 'ochre-text', name: 'Ochre', foreground: '#e09838', muted: '#b87820' },
+  ...EXPANDED_THEME_WRITING_COLOURS,
 ];
 
 /** Display order: sections for writing (text) colours. */
@@ -739,6 +756,7 @@ export const THEME_WRITING_SECTIONS = [
   { label: 'Metallics', ids: ['champagne-text', 'brass-text', 'chrome-text', 'platinum-text', 'bronze-metal-text', 'rose-metal-text'] },
   { label: 'Neon & cyber', ids: ['neon-cyan-text', 'neon-violet-text', 'synthwave-text', 'matrix-text', 'vaporwave-text', 'plasma-text'] },
   { label: 'Earth & nature', ids: ['sandstone-text', 'cinnamon-text', 'mahogany-text', 'driftwood-text', 'wheat-text', 'ochre-text'] },
+  EXPANDED_WRITING_SECTION,
 ];
 
 export const DEFAULT_COLOUR_ID = 'gold';
@@ -1034,6 +1052,10 @@ export const THEME_PRESETS = [
   { id: 'grad-dark-teal-warm', name: 'Gradient Dark Teal Warm', description: 'Dark teal to warm amber', colourId: 'tone-4-dark-teal-warm', textureId: 'modern-soft', buttonColourId: 'teal', accentLineColourId: null, writingColourId: 'cream-gold', mutedWritingColourId: 'aqua-text', buttonStyleId: 'flat', fontId: 'geometric', textStyleId: 'medium', toastTextColourId: 'cream-gold', mobileNavStyle: 'bottom', themeVariant: 'modern', isFullPreset: true, presetCategory: 'gradient' },
   { id: 'grad-ice', name: 'Gradient Ice', description: 'Cool ice blues', colourId: 'tone-4-ice', textureId: 'modern-soft', buttonColourId: 'glacier', accentLineColourId: null, writingColourId: 'cool-white', mutedWritingColourId: 'powder-blue', buttonStyleId: 'flat', fontId: 'clean', textStyleId: 'light', toastTextColourId: 'cool-white', mobileNavStyle: 'bottom', themeVariant: 'modern', isFullPreset: true, presetCategory: 'gradient' },
   { id: 'grad-wine', name: 'Gradient Wine', description: 'Deep wine gradient', colourId: 'tone-4-wine', textureId: 'modern-soft', buttonColourId: 'wine', accentLineColourId: null, writingColourId: 'burgundy-text', mutedWritingColourId: 'garnet-text', buttonStyleId: 'flat', fontId: 'elegant', textStyleId: 'medium', toastTextColourId: 'burgundy-text', mobileNavStyle: 'bottom', themeVariant: 'modern', isFullPreset: true, presetCategory: 'gradient' },
+
+  /* ── Expanded studio collection ─────────────────────────── */
+  ...EXPANDED_QUICK_PRESETS,
+  ...EXPANDED_FULL_PRESETS,
 ];
 
 export function getThemeColour(id) {
@@ -1063,3 +1085,5 @@ export function getThemeWritingColour(id) {
 export function getThemeTextStyle(id) {
   return THEME_TEXT_STYLES.find((t) => t.id === id) || THEME_TEXT_STYLES[0];
 }
+
+export { EXPANDED_PRESET_CATEGORIES };

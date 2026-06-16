@@ -34,14 +34,12 @@ from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_STA
 from utils.garage_dealership import (
     get_garage_dealership,
     GARAGE_DEALERSHIP_CLAIM_COST_POINTS,
-    DEALER_OWNER_PROFIT_SHARE,
-    P2P_OWNER_PROFIT_SHARE,
 )
 from utils.sports_betting_ownership import (
     get_sports_betting_ownership,
     SPORTS_BETTING_CLAIM_COST_POINTS,
-    SPORTS_BETTING_OWNER_PROFIT_SHARE,
 )
+from utils.global_property_owner_shares import load_global_property_owner_shares
 
 CASINO_GAMES = [
     {"id": "blackjack", "name": "Blackjack", "max_bet": BLACKJACK_MAX_BET},
@@ -318,22 +316,23 @@ async def get_states(current_user: dict = Depends(get_current_user)):
         else:
             state_heads[st] = None
 
-    dealership_doc, sports_doc = await asyncio.gather(
+    dealership_doc, sports_doc, owner_shares = await asyncio.gather(
         get_garage_dealership(db),
         get_sports_betting_ownership(db),
+        load_global_property_owner_shares(db),
     )
     garage_dealership = {
         "owner_id": dealership_doc.get("owner_id"),
         "owner_username": dealership_doc.get("owner_username"),
         "claim_cost_points": GARAGE_DEALERSHIP_CLAIM_COST_POINTS,
-        "dealer_owner_profit_share_pct": int(DEALER_OWNER_PROFIT_SHARE * 100),
-        "player_sale_owner_profit_share_pct": int(P2P_OWNER_PROFIT_SHARE * 100),
+        "dealer_owner_profit_share_pct": owner_shares["dealer_owner_profit_share_pct"],
+        "player_sale_owner_profit_share_pct": owner_shares["player_sale_owner_profit_share_pct"],
     }
     sports_betting = {
         "owner_id": sports_doc.get("owner_id"),
         "owner_username": sports_doc.get("owner_username"),
         "claim_cost_points": SPORTS_BETTING_CLAIM_COST_POINTS,
-        "owner_profit_share_pct": int(SPORTS_BETTING_OWNER_PROFIT_SHARE * 100),
+        "owner_profit_share_pct": owner_shares["sports_betting_owner_profit_share_pct"],
     }
 
     payload = {

@@ -53,6 +53,12 @@ from utils.claim_costs import (
     load_claim_costs,
     merge_claim_costs,
 )
+from utils.global_property_owner_shares import (
+    GLOBAL_PROPERTY_OWNER_SHARES_KEY,
+    invalidate_global_property_owner_shares_cache,
+    load_global_property_owner_shares,
+    merge_global_property_owner_shares,
+)
 from utils.keno_settings import (
     DEFAULT_KENO_MAX_BET,
     KENO_MAX_BET_SETTINGS_KEY,
@@ -349,6 +355,14 @@ class AdminClaimCostsPatch(BaseModel):
     video_poker: Optional[int] = None
     airport: Optional[int] = None
     armoury: Optional[int] = None
+
+
+class AdminGlobalPropertyOwnerSharesPatch(BaseModel):
+    """Owner profit share % for global car dealership and sports betting book (0–100 each)."""
+
+    dealer_owner_profit_share_pct: Optional[int] = None
+    player_sale_owner_profit_share_pct: Optional[int] = None
+    sports_betting_owner_profit_share_pct: Optional[int] = None
 
 
 class TestUsersAutoRankRequest(BaseModel):
@@ -4877,6 +4891,288 @@ def register(router):
             )
         return {"races": races_out}
 
+    @router.get("/admin/global-properties/economy")
+    async def admin_global_properties_economy(
+        days: int = Query(30, ge=1, le=366),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Admin: car dealership + sports betting book ownership, profit, and activity."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        from routers.casinos.sports_betting import (
+            _sports_bet_datetime,
+            compute_sports_betting_global_stats,
+        )
+        from utils.garage_dealership import (
+            DEALER_OWNER_STOCK_DEFAULT_TARGET,
+            DEALER_OWNER_STOCK_FEE_RATE,
+            DEALER_OWNER_STOCK_MAX_PER_MODEL,
+            DEALER_OWNER_STOCKABLE_RARITIES,
+            GARAGE_DEALERSHIP_CLAIM_COST_POINTS,
+            dealer_owner_profit_cut,
+            dealership_sale_profit,
+            dealership_stack_conflict_status,
+            get_garage_dealership,
+            p2p_owner_profit_cut,
+        )
+        from utils.sports_betting_ownership import (
+            SPORTS_BETTING_CLAIM_COST_POINTS,
+            get_sports_betting_ownership,
+            get_sports_betting_weekly_stats,
+            sports_betting_collect_availability,
+            sports_betting_house_delta,
+            sports_betting_stack_conflict_status,
+            sports_betting_week_key,
+        )
+        from utils.global_property_owner_shares import (
+            sports_betting_owner_share_for_profit,
+        )
+
+        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff_iso = cutoff.isoformat()
+        car_catalog = {c.get("id"): c for c in (CARS or []) if c.get("id")}
+        car_by_name = {c.get("name"): c for c in (CARS or []) if c.get("name")}
+        owner_shares = await load_global_property_owner_shares(db, ttl_sec=0.0)
+
+        dealership_doc, sports_doc, dealer_stock_total, dealer_owner_stocked, marketplace_listings, qt_dealer, qt_sports = await asyncio.gather(
+            get_garage_dealership(db),
+            get_sports_betting_ownership(db),
+            db.dealer_stock.count_documents({}),
+            db.dealer_stock.count_documents({"owner_stocked": True}),
+            db.user_cars.count_documents({"listed_for_sale": True}),
+            db.properties.find_one({"type": "garage_dealership", "for_sale": True}, {"_id": 0}),
+            db.properties.find_one({"type": "sports_betting", "for_sale": True}, {"_id": 0}),
+        )
+
+        stock_rows = await db.dealer_stock.aggregate([{"$group": {"_id": "$car_id", "count": {"$sum": 1}}}]).to_list(200)
+        stock_by_rarity: Dict[str, int] = {r: 0 for r in DEALER_OWNER_STOCKABLE_RARITIES}
+        for row in stock_rows:
+            car = car_catalog.get(row.get("_id"))
+            if not car:
+                continue
+            rarity = car.get("rarity") or "common"
+            if rarity in stock_by_rarity:
+                stock_by_rarity[rarity] += int(row.get("count") or 0)
+
+        dealer_xfer = await db.money_transfers.find(
+            {"to_user_id": "__dealer__", "transfer_type": "car_purchase", "created_at": {"$gte": cutoff_iso}},
+            {"_id": 0, "amount": 1, "car_name": 1, "from_username": 1, "created_at": 1},
+        ).sort("created_at", -1).to_list(5000)
+        dealer_gross = 0
+        dealer_markup = 0
+        dealer_owner_est = 0
+        for row in dealer_xfer:
+            amt = int(row.get("amount") or 0)
+            dealer_gross += amt
+            car = car_by_name.get(row.get("car_name"))
+            if car:
+                profit = dealership_sale_profit(amt, int(car.get("value") or 0))
+                dealer_markup += profit
+                dealer_owner_est += dealer_owner_profit_cut(profit, owner_shares)
+
+        car_trades = await db.economy_events.find(
+            {"type": "car_trade", "at": {"$gte": cutoff_iso}},
+            {"_id": 0, "price": 1, "car_id": 1, "car_name": 1, "buyer_username": 1, "seller_username": 1, "at": 1},
+        ).sort("at", -1).to_list(2000)
+        p2p_gross = 0
+        p2p_markup = 0
+        p2p_owner_est = 0
+        for tr in car_trades:
+            price = int(tr.get("price") or 0)
+            p2p_gross += price
+            car = car_catalog.get(tr.get("car_id"))
+            if car:
+                profit = dealership_sale_profit(price, int(car.get("value") or 0))
+                p2p_markup += profit
+                p2p_owner_est += p2p_owner_profit_cut(profit, owner_shares)
+
+        dealer_activity, sports_activity = await asyncio.gather(
+            db.activity_log.find(
+                {
+                    "action": {
+                        "$in": [
+                            "garage_dealership_claim",
+                            "garage_dealership_relinquish",
+                            "garage_dealership_transfer",
+                            "garage_dealership_auto_stock",
+                            "garage_dealership_stock",
+                        ]
+                    }
+                },
+                {"_id": 0, "action": 1, "username": 1, "details": 1, "created_at": 1},
+            ).sort("created_at", -1).to_list(40),
+            db.activity_log.find(
+                {
+                    "action": {
+                        "$in": [
+                            "sports_betting_claim",
+                            "sports_betting_relinquish",
+                            "sports_betting_transfer",
+                        ]
+                    }
+                },
+                {"_id": 0, "action": 1, "username": 1, "details": 1, "created_at": 1},
+            ).sort("created_at", -1).to_list(40),
+        )
+
+        stock_activity = [
+            a for a in dealer_activity
+            if a.get("action") in ("garage_dealership_auto_stock", "garage_dealership_stock")
+            and (a.get("created_at") or "") >= cutoff_iso
+        ]
+        stock_fees_period = sum(int((a.get("details") or {}).get("fee") or 0) for a in stock_activity)
+
+        weekly_rows = await db.sports_betting_weekly.find({}, {"_id": 0}).sort("week_key", -1).to_list(52)
+        all_time_house = sum(int(r.get("house_profit") or 0) for r in weekly_rows)
+        all_time_owner_credited = sum(int(r.get("owner_share_credited") or 0) for r in weekly_rows)
+        weekly_history = []
+        for row in weekly_rows[:16]:
+            hp = int(row.get("house_profit") or 0)
+            credited = int(row.get("owner_share_credited") or 0)
+            weekly_history.append(
+                {
+                    "week_key": row.get("week_key"),
+                    "house_profit": hp,
+                    "owner_share_credited": credited,
+                    "owner_share_target": sports_betting_owner_share_for_profit(hp, owner_shares),
+                }
+            )
+
+        current_week = await get_sports_betting_weekly_stats(db)
+        global_book = await compute_sports_betting_global_stats()
+
+        staff_ids = await srv._get_staff_user_ids()
+        settled_match: Dict[str, Any] = {"status": {"$in": ["won", "lost"]}}
+        if staff_ids:
+            settled_match["user_id"] = {"$nin": staff_ids}
+        settled_bets = await db.sports_bets.find(
+            settled_match,
+            {"_id": 0, "status": 1, "stake": 1, "odds": 1, "settled_at": 1, "created_at": 1},
+        ).to_list(100_000)
+        period_house = 0
+        period_settled = 0
+        for bet in settled_bets:
+            settled_at = _sports_bet_datetime(bet.get("settled_at")) or _sports_bet_datetime(bet.get("created_at"))
+            if settled_at is None or settled_at < cutoff:
+                continue
+            period_settled += 1
+            stake = int(bet.get("stake") or 0)
+            odds = float(bet.get("odds") or 1)
+            won = (bet.get("status") or "") == "won"
+            payout = int(stake * odds) if won else 0
+            period_house += sports_betting_house_delta(won=won, stake=stake, payout=payout)
+
+        open_match: Dict[str, Any] = {"status": "open"}
+        if staff_ids:
+            open_match["user_id"] = {"$nin": staff_ids}
+        open_bets = await db.sports_bets.find(
+            open_match,
+            {"_id": 0, "username": 1, "event_name": 1, "option_name": 1, "stake": 1, "odds": 1, "created_at": 1},
+        ).sort("stake", -1).limit(15).to_list(15)
+
+        def _qt_brief(doc: Optional[dict]) -> Optional[dict]:
+            if not doc:
+                return None
+            return {
+                "points": int(doc.get("points") or 0),
+                "seller_username": doc.get("seller_username"),
+                "listed_at": doc.get("listed_at"),
+            }
+
+        return {
+            "days": days,
+            "cutoff_iso": cutoff_iso,
+            "owner_shares": owner_shares,
+            "garage_dealership": {
+                "owner_id": dealership_doc.get("owner_id"),
+                "owner_username": dealership_doc.get("owner_username"),
+                "owner_pending_profit": int(dealership_doc.get("owner_pending_profit") or 0),
+                "claim_cost_points": GARAGE_DEALERSHIP_CLAIM_COST_POINTS,
+                "dealer_owner_profit_share_pct": owner_shares["dealer_owner_profit_share_pct"],
+                "player_sale_owner_profit_share_pct": owner_shares["player_sale_owner_profit_share_pct"],
+                "auto_stock": {
+                    "enabled": bool(dealership_doc.get("auto_stock_enabled")),
+                    "rarity": dealership_doc.get("auto_stock_rarity"),
+                    "target_per_model": int(dealership_doc.get("auto_stock_target") or DEALER_OWNER_STOCK_DEFAULT_TARGET),
+                },
+                "stock_fee_rate_pct": int(DEALER_OWNER_STOCK_FEE_RATE * 100),
+                "stock_max_per_model": DEALER_OWNER_STOCK_MAX_PER_MODEL,
+                "stack_conflict": dealership_stack_conflict_status(dealership_doc),
+                "quick_trade_listing": _qt_brief(qt_dealer),
+                "dealer_stock_total": int(dealer_stock_total or 0),
+                "dealer_stock_owner_stocked": int(dealer_owner_stocked or 0),
+                "stock_by_rarity": stock_by_rarity,
+                "marketplace_listings_count": int(marketplace_listings or 0),
+                "period": {
+                    "dealer_sales_count": len(dealer_xfer),
+                    "dealer_sales_gross": dealer_gross,
+                    "dealer_markup_estimated": dealer_markup,
+                    "dealer_owner_share_estimated": dealer_owner_est,
+                    "marketplace_sales_count": len(car_trades),
+                    "marketplace_sales_gross": p2p_gross,
+                    "marketplace_markup_estimated": p2p_markup,
+                    "marketplace_owner_share_estimated": p2p_owner_est,
+                    "owner_stock_fees_paid": stock_fees_period,
+                    "total_owner_share_estimated": dealer_owner_est + p2p_owner_est,
+                },
+                "recent_dealer_sales": [
+                    {
+                        "buyer_username": r.get("from_username"),
+                        "car_name": r.get("car_name"),
+                        "amount": int(r.get("amount") or 0),
+                        "created_at": r.get("created_at"),
+                    }
+                    for r in dealer_xfer[:12]
+                ],
+                "recent_marketplace_sales": [
+                    {
+                        "buyer_username": tr.get("buyer_username"),
+                        "seller_username": tr.get("seller_username"),
+                        "car_name": tr.get("car_name"),
+                        "price": int(tr.get("price") or 0),
+                        "at": tr.get("at"),
+                    }
+                    for tr in car_trades[:12]
+                ],
+                "recent_activity": dealer_activity[:20],
+            },
+            "sports_betting": {
+                "owner_id": sports_doc.get("owner_id"),
+                "owner_username": sports_doc.get("owner_username"),
+                "owner_pending_profit": int(sports_doc.get("owner_pending_profit") or 0),
+                "claim_cost_points": SPORTS_BETTING_CLAIM_COST_POINTS,
+                "owner_profit_share_pct": owner_shares["sports_betting_owner_profit_share_pct"],
+                "last_collected_at": sports_doc.get("last_collected_at"),
+                "collect": sports_betting_collect_availability(sports_doc),
+                "stack_conflict": sports_betting_stack_conflict_status(sports_doc),
+                "quick_trade_listing": _qt_brief(qt_sports),
+                "current_week_key": sports_betting_week_key(),
+                "current_week": current_week,
+                "weekly_history": weekly_history,
+                "global_book": global_book,
+                "all_time_house_profit": all_time_house,
+                "all_time_owner_share_credited": all_time_owner_credited,
+                "period": {
+                    "settled_bets_count": period_settled,
+                    "house_profit": period_house,
+                    "owner_share_if_positive_week": sports_betting_owner_share_for_profit(period_house, owner_shares),
+                },
+                "top_open_bets": [
+                    {
+                        "username": b.get("username"),
+                        "event_name": b.get("event_name"),
+                        "option_name": b.get("option_name"),
+                        "stake": int(b.get("stake") or 0),
+                        "odds": b.get("odds"),
+                        "created_at": b.get("created_at"),
+                    }
+                    for b in open_bets
+                ],
+                "recent_activity": sports_activity[:20],
+            },
+        }
+
     @router.get("/admin/lottery/round/{round_id}/money-trail")
     async def admin_lottery_round_money_trail(round_id: str, current_user: dict = Depends(get_current_user)):
         """Admin: where pot / tax / payouts went for one round; recompute from tickets vs stored doc."""
@@ -8967,6 +9263,42 @@ def register(router):
         except Exception:
             pass
         return await load_claim_costs(db)
+
+    @router.get("/admin/global-property-owner-shares")
+    async def admin_get_global_property_owner_shares(current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return await load_global_property_owner_shares(db, ttl_sec=0.0)
+
+    @router.patch("/admin/global-property-owner-shares")
+    async def admin_patch_global_property_owner_shares(
+        body: AdminGlobalPropertyOwnerSharesPatch,
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        doc = await db.game_settings.find_one({"key": GLOBAL_PROPERTY_OWNER_SHARES_KEY}, {"_id": 0, "value": 1})
+        raw = (doc or {}).get("value")
+        merged = merge_global_property_owner_shares(raw if isinstance(raw, dict) else None)
+        patch = body.model_dump(exclude_unset=True)
+        for key, val in patch.items():
+            if val is None:
+                continue
+            try:
+                n = int(val)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail=f"Invalid integer for {key}")
+            if n < 0 or n > 100:
+                raise HTTPException(status_code=400, detail=f"{key} must be between 0 and 100")
+            merged[key] = n
+        await db.game_settings.update_one(
+            {"key": GLOBAL_PROPERTY_OWNER_SHARES_KEY},
+            {"$set": {"key": GLOBAL_PROPERTY_OWNER_SHARES_KEY, "value": merged}},
+            upsert=True,
+        )
+        invalidate_global_property_owner_shares_cache()
+        return await load_global_property_owner_shares(db, ttl_sec=0.0)
 
     PAGE_LOCKS_KEY = "page_locks"
 
