@@ -1,6 +1,7 @@
 """Global sports betting book ownership (10% of weekly house profit when the book is net positive)."""
+import logging
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 SPORTS_BETTING_OWNERSHIP_ID = "main"
 SPORTS_BETTING_CLAIM_COST_POINTS = 10_000
@@ -29,6 +30,124 @@ def sports_betting_house_delta(*, won: bool, stake: int, payout: int) -> int:
     if not won:
         return st
     return st - int(payout or 0)
+
+
+async def aggregate_sports_house_profit_since(
+    db,
+    cutoff: datetime,
+    *,
+    staff_user_ids: Optional[List[str]] = None,
+) -> Dict[str, int]:
+    """Settled sports book house P/L since cutoff (excludes staff bets). Uses DB aggregation."""
+    cutoff_dt = cutoff if cutoff.tzinfo else cutoff.replace(tzinfo=timezone.utc)
+    try:
+        return await _aggregate_sports_house_profit_since(db, cutoff_dt, staff_user_ids=staff_user_ids)
+    except Exception:
+        logging.exception("aggregate_sports_house_profit_since aggregation failed; using cursor fallback")
+        return await _fallback_sports_house_profit_since(db, cutoff_dt, staff_user_ids=staff_user_ids)
+
+
+async def _aggregate_sports_house_profit_since(
+    db,
+    cutoff: datetime,
+    *,
+    staff_user_ids: Optional[List[str]] = None,
+) -> Dict[str, int]:
+    match: Dict[str, Any] = {"status": {"$in": ["won", "lost"]}}
+    if staff_user_ids:
+        match["user_id"] = {"$nin": list(staff_user_ids)}
+    pipeline = [
+        {"$match": match},
+        {"$addFields": {"_settled": {"$ifNull": ["$settled_at", "$created_at"]}}},
+        {
+            "$match": {
+                "$expr": {
+                    "$and": [
+                        {"$ne": ["$_settled", None]},
+                        {
+                            "$gte": [
+                                {
+                                    "$convert": {
+                                        "input": "$_settled",
+                                        "to": "date",
+                                        "onError": None,
+                                        "onNull": None,
+                                    }
+                                },
+                                cutoff,
+                            ]
+                        },
+                    ]
+                }
+            }
+        },
+        {
+            "$group": {
+                "_id": None,
+                "settled_bets_count": {"$sum": 1},
+                "house_profit": {
+                    "$sum": {
+                        "$cond": [
+                            {"$eq": ["$status", "lost"]},
+                            {"$ifNull": ["$stake", 0]},
+                            {
+                                "$subtract": [
+                                    {"$ifNull": ["$stake", 0]},
+                                    {
+                                        "$multiply": [
+                                            {"$ifNull": ["$stake", 0]},
+                                            {"$ifNull": ["$odds", 1]},
+                                        ]
+                                    },
+                                ]
+                            },
+                        ]
+                    }
+                },
+            }
+        },
+    ]
+    rows = await db.sports_bets.aggregate(pipeline).to_list(1)
+    if not rows:
+        return {"settled_bets_count": 0, "house_profit": 0}
+    row = rows[0]
+    return {
+        "settled_bets_count": int(row.get("settled_bets_count") or 0),
+        "house_profit": int(row.get("house_profit") or 0),
+    }
+
+
+async def _fallback_sports_house_profit_since(
+    db,
+    cutoff: datetime,
+    *,
+    staff_user_ids: Optional[List[str]] = None,
+) -> Dict[str, int]:
+    from routers.casinos.sports_betting import _sports_bet_datetime
+
+    match: Dict[str, Any] = {"status": {"$in": ["won", "lost"]}}
+    if staff_user_ids:
+        match["user_id"] = {"$nin": list(staff_user_ids)}
+    period_house = 0
+    period_settled = 0
+    cursor = db.sports_bets.find(
+        match,
+        {"_id": 0, "status": 1, "stake": 1, "odds": 1, "settled_at": 1, "created_at": 1},
+    )
+    async for bet in cursor:
+        settled_at = _sports_bet_datetime(bet.get("settled_at")) or _sports_bet_datetime(bet.get("created_at"))
+        if settled_at is None or settled_at < cutoff:
+            continue
+        period_settled += 1
+        stake = int(bet.get("stake") or 0)
+        try:
+            odds = float(bet.get("odds") or 1)
+        except (TypeError, ValueError):
+            odds = 1.0
+        won = (bet.get("status") or "") == "won"
+        payout = int(stake * odds) if won else 0
+        period_house += sports_betting_house_delta(won=won, stake=stake, payout=payout)
+    return {"settled_bets_count": period_settled, "house_profit": period_house}
 
 
 def _sunday_date_for(dt: datetime) -> datetime.date:

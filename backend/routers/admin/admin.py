@@ -4900,34 +4900,41 @@ def register(router):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
 
-        from routers.casinos.sports_betting import (
-            _sports_bet_datetime,
-            compute_sports_betting_global_stats,
-        )
+        from routers.casinos.sports_betting import compute_sports_betting_global_stats
         from utils.garage_dealership import (
             DEALER_OWNER_STOCK_DEFAULT_TARGET,
             DEALER_OWNER_STOCK_FEE_RATE,
             DEALER_OWNER_STOCK_MAX_PER_MODEL,
             DEALER_OWNER_STOCKABLE_RARITIES,
             GARAGE_DEALERSHIP_CLAIM_COST_POINTS,
-            dealer_owner_profit_cut,
             dealership_sale_profit,
             dealership_stack_conflict_status,
             get_garage_dealership,
+        )
+        from utils.global_property_owner_shares import (
+            dealer_owner_profit_cut,
             p2p_owner_profit_cut,
+            sports_betting_owner_share_for_profit,
         )
         from utils.sports_betting_ownership import (
             SPORTS_BETTING_CLAIM_COST_POINTS,
+            aggregate_sports_house_profit_since,
             get_sports_betting_ownership,
             get_sports_betting_weekly_stats,
             sports_betting_collect_availability,
-            sports_betting_house_delta,
             sports_betting_stack_conflict_status,
             sports_betting_week_key,
         )
-        from utils.global_property_owner_shares import (
-            sports_betting_owner_share_for_profit,
-        )
+
+        def _iso_dt(val) -> Optional[str]:
+            if val is None:
+                return None
+            if isinstance(val, datetime):
+                dt = val if val.tzinfo else val.replace(tzinfo=timezone.utc)
+                return dt.astimezone(timezone.utc).isoformat()
+            if isinstance(val, str):
+                return val.strip() or None
+            return str(val)
 
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         cutoff_iso = cutoff.isoformat()
@@ -5043,25 +5050,9 @@ def register(router):
         global_book = await compute_sports_betting_global_stats()
 
         staff_ids = await srv._get_staff_user_ids()
-        settled_match: Dict[str, Any] = {"status": {"$in": ["won", "lost"]}}
-        if staff_ids:
-            settled_match["user_id"] = {"$nin": staff_ids}
-        settled_bets = await db.sports_bets.find(
-            settled_match,
-            {"_id": 0, "status": 1, "stake": 1, "odds": 1, "settled_at": 1, "created_at": 1},
-        ).to_list(100_000)
-        period_house = 0
-        period_settled = 0
-        for bet in settled_bets:
-            settled_at = _sports_bet_datetime(bet.get("settled_at")) or _sports_bet_datetime(bet.get("created_at"))
-            if settled_at is None or settled_at < cutoff:
-                continue
-            period_settled += 1
-            stake = int(bet.get("stake") or 0)
-            odds = float(bet.get("odds") or 1)
-            won = (bet.get("status") or "") == "won"
-            payout = int(stake * odds) if won else 0
-            period_house += sports_betting_house_delta(won=won, stake=stake, payout=payout)
+        period_stats = await aggregate_sports_house_profit_since(db, cutoff, staff_user_ids=staff_ids)
+        period_settled = int(period_stats.get("settled_bets_count") or 0)
+        period_house = int(period_stats.get("house_profit") or 0)
 
         open_match: Dict[str, Any] = {"status": "open"}
         if staff_ids:
@@ -5077,7 +5068,7 @@ def register(router):
             return {
                 "points": int(doc.get("points") or 0),
                 "seller_username": doc.get("seller_username"),
-                "listed_at": doc.get("listed_at"),
+                "listed_at": _iso_dt(doc.get("listed_at")),
             }
 
         return {
@@ -5121,7 +5112,7 @@ def register(router):
                         "buyer_username": r.get("from_username"),
                         "car_name": r.get("car_name"),
                         "amount": int(r.get("amount") or 0),
-                        "created_at": r.get("created_at"),
+                        "created_at": _iso_dt(r.get("created_at")),
                     }
                     for r in dealer_xfer[:12]
                 ],
@@ -5131,11 +5122,17 @@ def register(router):
                         "seller_username": tr.get("seller_username"),
                         "car_name": tr.get("car_name"),
                         "price": int(tr.get("price") or 0),
-                        "at": tr.get("at"),
+                        "at": _iso_dt(tr.get("at")),
                     }
                     for tr in car_trades[:12]
                 ],
-                "recent_activity": dealer_activity[:20],
+                "recent_activity": [
+                    {
+                        **a,
+                        "created_at": _iso_dt(a.get("created_at")),
+                    }
+                    for a in dealer_activity[:20]
+                ],
             },
             "sports_betting": {
                 "owner_id": sports_doc.get("owner_id"),
@@ -5143,7 +5140,7 @@ def register(router):
                 "owner_pending_profit": int(sports_doc.get("owner_pending_profit") or 0),
                 "claim_cost_points": SPORTS_BETTING_CLAIM_COST_POINTS,
                 "owner_profit_share_pct": owner_shares["sports_betting_owner_profit_share_pct"],
-                "last_collected_at": sports_doc.get("last_collected_at"),
+                "last_collected_at": _iso_dt(sports_doc.get("last_collected_at")),
                 "collect": sports_betting_collect_availability(sports_doc),
                 "stack_conflict": sports_betting_stack_conflict_status(sports_doc),
                 "quick_trade_listing": _qt_brief(qt_sports),
@@ -5165,11 +5162,17 @@ def register(router):
                         "option_name": b.get("option_name"),
                         "stake": int(b.get("stake") or 0),
                         "odds": b.get("odds"),
-                        "created_at": b.get("created_at"),
+                        "created_at": _iso_dt(b.get("created_at")),
                     }
                     for b in open_bets
                 ],
-                "recent_activity": sports_activity[:20],
+                "recent_activity": [
+                    {
+                        **a,
+                        "created_at": _iso_dt(a.get("created_at")),
+                    }
+                    for a in sports_activity[:20]
+                ],
             },
         }
 

@@ -192,7 +192,6 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
         { path: '/game/users-online', label: 'Users Online' },
         { path: '/game/family/list', label: 'Families' },
         { path: '/game/leaderboard', label: 'Leaderboard' },
-        ...(worldCupEnabled ? [{ path: '/game/world-cup', label: 'World Cup 2026' }] : []),
       ],
     },
   ];
@@ -1346,7 +1345,6 @@ export default function Layout({ children }) {
     { path: '/game/daily-rewards', icon: Gift, label: 'Daily Rewards' },
     ...(user?.is_entertainer ? [{ path: '/game/entertainer', icon: Mic2, label: 'Entertainer Hub' }] : []),
     ...(user?.is_help_desk_operator ? [{ path: '/game/help-desk-hub', icon: Headphones, label: 'Help Desk Hub' }] : []),
-    ...(worldCupEnabled ? [{ path: '/game/world-cup', icon: Trophy, label: 'World Cup 2026' }] : []),
     { path: '/game/leaderboard', icon: Trophy, label: 'Leaderboard' },
     { path: '/game/store', icon: ShoppingBag, label: 'Store', saleBadge: storePointsEventActive },
     { path: '/game-pass', icon: Package, label: 'Game Pass' },
