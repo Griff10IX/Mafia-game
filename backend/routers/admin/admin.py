@@ -4936,6 +4936,29 @@ def register(router):
                 return val.strip() or None
             return str(val)
 
+        def _as_utc_dt(val) -> Optional[datetime]:
+            if val is None:
+                return None
+            if isinstance(val, datetime):
+                dt = val if val.tzinfo else val.replace(tzinfo=timezone.utc)
+                return dt.astimezone(timezone.utc)
+            if isinstance(val, str):
+                s = val.strip()
+                if not s:
+                    return None
+                try:
+                    dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+                except ValueError:
+                    return None
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt.astimezone(timezone.utc)
+            return None
+
+        def _on_or_after_cutoff(val) -> bool:
+            dt = _as_utc_dt(val)
+            return dt is not None and dt >= cutoff
+
         cutoff = datetime.now(timezone.utc) - timedelta(days=days)
         cutoff_iso = cutoff.isoformat()
         car_catalog = {c.get("id"): c for c in (CARS or []) if c.get("id")}
@@ -5026,7 +5049,7 @@ def register(router):
         stock_activity = [
             a for a in dealer_activity
             if a.get("action") in ("garage_dealership_auto_stock", "garage_dealership_stock")
-            and (a.get("created_at") or "") >= cutoff_iso
+            and _on_or_after_cutoff(a.get("created_at"))
         ]
         stock_fees_period = sum(int((a.get("details") or {}).get("fee") or 0) for a in stock_activity)
 
