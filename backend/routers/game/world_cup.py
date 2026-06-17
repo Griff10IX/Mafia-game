@@ -1056,7 +1056,16 @@ async def _sync_fixtures_from_odds(db) -> dict:
         existing = await db.world_cup_matches.find_one({"external_event_id": ext_id}, {"_id": 0, "status": 1, "result": 1})
         if existing and existing.get("status") == "settled":
             continue
-        kickoff = commence if isinstance(commence, str) else _now_iso()
+        commence_parsed = sb._parse_commence_time(commence) if commence else None
+        from utils.world_cup_fixtures import resolve_wc_kickoff_utc
+
+        kickoff = resolve_wc_kickoff_utc(
+            home_name,
+            away_name,
+            commence_parsed or (commence if isinstance(commence, str) else None),
+        )
+        if not kickoff:
+            kickoff = commence_parsed or (commence if isinstance(commence, str) else _now_iso())
         doc = {
             "external_event_id": ext_id,
             "external_sport_key": WC_SPORT_KEY,
@@ -1078,7 +1087,12 @@ async def _sync_fixtures_from_odds(db) -> dict:
         synced += 1
     await db.game_config.update_one({"id": CONFIG_ID}, {"$set": {"last_fixture_sync_at": now}}, upsert=True)
     await _refresh_tournament_start_in_config(db)
-    return {"synced": synced, "skipped": skipped, "source_events": len(events or [])}
+    board_updated = 0
+    try:
+        board_updated = await sb._propagate_wc_kickoffs_to_open_board_events()
+    except Exception as ex:
+        logger.warning("wc kickoff propagate after fixture sync failed: %s", ex)
+    return {"synced": synced, "skipped": skipped, "source_events": len(events or []), "board_kickoffs_updated": board_updated}
 
 
 async def _get_tournament_start_at(db, cfg: dict) -> Optional[datetime]:
