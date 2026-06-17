@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Coins, ArrowLeftRight, Users, Building2, TrendingUp, TrendingDown, HelpCircle, Zap } from 'lucide-react';
+import { Coins, ArrowLeftRight, Users, Building2, TrendingUp, TrendingDown, HelpCircle, Zap, Puzzle } from 'lucide-react';
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -36,8 +36,10 @@ export default function QuickTrade() {
   const [sellOffers, setSellOffers] = useState(() => qtBoot?.sellOffers ?? []);
   const [buyOffers, setBuyOffers] = useState(() => qtBoot?.buyOffers ?? []);
   const [tokenOffers, setTokenOffers] = useState(() => qtBoot?.tokenOffers ?? []);
+  const [lootPieceOffers, setLootPieceOffers] = useState(() => qtBoot?.lootPieceOffers ?? []);
   const [properties, setProperties] = useState(() => qtBoot?.properties ?? []);
   const [tokenBalances, setTokenBalances] = useState(() => qtBoot?.tokenBalances ?? {});
+  const [lootPieceBalance, setLootPieceBalance] = useState(() => qtBoot?.lootPieceBalance ?? { total: 0, sellable: 0 });
 
   const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus'];
   const formatTokenName = (t) => t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
@@ -58,8 +60,14 @@ export default function QuickTrade() {
   /** 'points' | 'money' — cash listings require min $250k per token (server-enforced). */
   const [tokenPriceCurrency, setTokenPriceCurrency] = useState('points');
   const [creatingToken, setCreatingToken] = useState(false);
+  const [lootPieceQuantity, setLootPieceQuantity] = useState('10');
+  const [lootPiecePrice, setLootPiecePrice] = useState('');
+  const [lootPiecePriceCurrency, setLootPiecePriceCurrency] = useState('points');
+  const [creatingLootPiece, setCreatingLootPiece] = useState(false);
 
   const TOKEN_MIN_CASH_PER_TOKEN = 250_000;
+  const LOOT_PIECE_MIN_QUANTITY = 10;
+  const LOOT_MIN_CASH_PER_PIECE = 25_000;
 
   /** Server masks anon listings as "[Anonymous]" for normal players; admins get the real username in `username`. */
   const isMaskedQtUsername = (u) => !u || u === 'Anonymous' || u === '[Anonymous]';
@@ -87,29 +95,37 @@ export default function QuickTrade() {
 
   const fetchTrades = useCallback(async ({ silent = false } = {}) => {
     try {
-      const [sellRes, buyRes, tokenRes, propRes, balancesRes] = await Promise.all([
+      const [sellRes, buyRes, tokenRes, lootRes, propRes, balancesRes, lootBalRes] = await Promise.all([
         apiRequestWith429Retry(() => api.get('/trade/sell-offers')),
         apiRequestWith429Retry(() => api.get('/trade/buy-offers')),
         apiRequestWith429Retry(() => api.get('/trade/token-offers')),
+        apiRequestWith429Retry(() => api.get('/trade/loot-piece-offers')),
         apiRequestWith429Retry(() => api.get('/trade/properties')),
         apiRequestWith429Retry(() => api.get('/trade/my-token-balances')),
+        apiRequestWith429Retry(() => api.get('/trade/my-loot-piece-balance')),
       ]);
       const nextSell = sellRes.data || [];
       const nextBuy = buyRes.data || [];
       const nextToken = tokenRes.data || [];
+      const nextLoot = lootRes.data || [];
       const nextProp = propRes.data || [];
       const nextBal = balancesRes.data || {};
+      const nextLootBal = lootBalRes.data || { total: 0, sellable: 0 };
       setSellOffers(nextSell);
       setBuyOffers(nextBuy);
       setTokenOffers(nextToken);
+      setLootPieceOffers(nextLoot);
       setProperties(nextProp);
       setTokenBalances(nextBal);
+      setLootPieceBalance(nextLootBal);
       writeSessionJsonWithSavedAt(QUICKTRADE_SESSION_CACHE_KEY, {
         sellOffers: nextSell,
         buyOffers: nextBuy,
         tokenOffers: nextToken,
+        lootPieceOffers: nextLoot,
         properties: nextProp,
         tokenBalances: nextBal,
+        lootPieceBalance: nextLootBal,
       });
     } catch (e) {
       if (!silent) toast.error(e.response?.data?.detail || 'Failed to load trades');
@@ -355,6 +371,73 @@ export default function QuickTrade() {
     try {
       await api.post(`/trade/token-offer/${offerId}/cancel`);
       toast.success('Token offer cancelled.');
+      fetchTrades();
+      refreshUser();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to cancel');
+    }
+  };
+
+  const handleCreateLootPieceOffer = async () => {
+    let qty = Math.max(LOOT_PIECE_MIN_QUANTITY, parseInt(String(lootPieceQuantity).replace(/,/g, ''), 10) || LOOT_PIECE_MIN_QUANTITY);
+    const sellable = lootPieceBalance?.sellable ?? lootPieceBalance?.total ?? 0;
+    if (qty < LOOT_PIECE_MIN_QUANTITY) {
+      toast.error(`Minimum listing size is ${LOOT_PIECE_MIN_QUANTITY} loot box pieces`);
+      return;
+    }
+    if (qty > sellable) {
+      toast.error(`You only have ${sellable.toLocaleString()} loot box piece(s) available`);
+      return;
+    }
+    let body;
+    if (lootPiecePriceCurrency === 'points') {
+      const price = Math.max(1, parseInt(String(lootPiecePrice).replace(/,/g, ''), 10) || 0);
+      if (!price) {
+        toast.error('Enter a price in points');
+        return;
+      }
+      body = { quantity: qty, price_currency: 'points', price_points: price, price_money: 0 };
+    } else {
+      const cash = Math.round(parseFloat(String(lootPiecePrice).replace(/,/g, '')) || 0);
+      const minCash = LOOT_MIN_CASH_PER_PIECE * qty;
+      if (cash < minCash) {
+        toast.error(`Minimum cash for ${qty} piece(s) is $${formatNumber(minCash)} ($${formatNumber(LOOT_MIN_CASH_PER_PIECE)} per piece)`);
+        return;
+      }
+      body = { quantity: qty, price_currency: 'money', price_points: 0, price_money: cash };
+    }
+    setCreatingLootPiece(true);
+    try {
+      await api.post('/trade/loot-piece-offer', body);
+      toast.success('Loot piece offer created!');
+      setLootPieceQuantity('10');
+      setLootPiecePrice('');
+      fetchTrades();
+      refreshUser();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to create loot piece offer');
+    } finally {
+      setCreatingLootPiece(false);
+    }
+  };
+
+  const handleAcceptLootPieceOffer = async (offerId) => {
+    if (!window.confirm('Accept this loot piece offer?')) return;
+    try {
+      await api.post(`/trade/loot-piece-offer/${offerId}/accept`);
+      toast.success('Loot piece trade completed!');
+      fetchTrades();
+      refreshUser();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Trade failed');
+    }
+  };
+
+  const handleCancelLootPieceOffer = async (offerId) => {
+    if (!window.confirm('Cancel this loot piece offer? Pieces will be returned.')) return;
+    try {
+      await api.post(`/trade/loot-piece-offer/${offerId}/cancel`);
+      toast.success('Loot piece offer cancelled.');
       fetchTrades();
       refreshUser();
     } catch (e) {
@@ -979,6 +1062,159 @@ export default function QuickTrade() {
                       <button
                         type="button"
                         onClick={() => handleAcceptTokenOffer(offer.id)}
+                        className={`px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 min-h-[36px] sm:min-h-0 ${qtActionBtn}`}
+                      >
+                        Accept
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          <div className="qt-art-line text-primary mx-3" />
+        </section>
+      </div>
+
+      {/* Loot box piece offers: sell for points or cash (min 10 pieces) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+            <div className="flex items-center gap-2">
+              <Puzzle className="w-5 h-5 text-primary" />
+              <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Sell loot box pieces (points or cash)</h2>
+            </div>
+          </div>
+          <div className="p-4 space-y-2.5">
+            <div className="flex flex-col gap-1 rounded-md px-3 py-2 bg-zinc-800/40 border border-zinc-700/30 text-[10px] font-heading">
+              <span className="text-mutedForeground">Your balance: <span className="text-foreground font-bold">{(lootPieceBalance?.total ?? 0).toLocaleString()}</span> loot box pieces</span>
+              <span className="text-primary font-bold">Available to list: {(lootPieceBalance?.sellable ?? lootPieceBalance?.total ?? 0).toLocaleString()}</span>
+              <span className="text-mutedForeground">Minimum listing: {LOOT_PIECE_MIN_QUANTITY} pieces (100 pieces = 1 loot box open)</span>
+            </div>
+            <div>
+              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">
+                Quantity (min {LOOT_PIECE_MIN_QUANTITY}
+                {lootPieceBalance?.sellable != null ? `, max ${lootPieceBalance.sellable}` : ''})
+              </label>
+              <FormattedNumberInput
+                value={lootPieceQuantity}
+                onChange={setLootPieceQuantity}
+                placeholder="10"
+                className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+              />
+            </div>
+            <div>
+              <span className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Price in</span>
+              <div className="flex flex-wrap gap-3 mb-2">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-heading text-foreground">
+                  <input
+                    type="radio"
+                    name="lootPiecePriceCurrency"
+                    checked={lootPiecePriceCurrency === 'points'}
+                    onChange={() => setLootPiecePriceCurrency('points')}
+                    className="rounded border-zinc-600"
+                  />
+                  Points
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-heading text-foreground">
+                  <input
+                    type="radio"
+                    name="lootPiecePriceCurrency"
+                    checked={lootPiecePriceCurrency === 'money'}
+                    onChange={() => setLootPiecePriceCurrency('money')}
+                    className="rounded border-zinc-600"
+                  />
+                  Cash ($)
+                </label>
+              </div>
+              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">
+                {lootPiecePriceCurrency === 'points' ? 'Price (points)' : 'Price (total $ for this listing)'}
+              </label>
+              {lootPiecePriceCurrency === 'points' ? (
+                <FormattedNumberInput
+                  value={lootPiecePrice}
+                  onChange={setLootPiecePrice}
+                  placeholder="e.g. 100"
+                  className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                />
+              ) : (
+                <FormattedNumberInput
+                  value={lootPiecePrice}
+                  onChange={setLootPiecePrice}
+                  allowDecimals
+                  placeholder={`min ${formatNumber(LOOT_MIN_CASH_PER_PIECE)} per piece`}
+                  className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                />
+              )}
+              {lootPiecePriceCurrency === 'money' && (
+                <p className="text-[9px] text-mutedForeground font-heading mt-1">
+                  Minimum <span className="text-primary font-bold">${formatNumber(LOOT_MIN_CASH_PER_PIECE)}</span> per piece
+                  (e.g. {lootPieceQuantity || '10'} piece(s) → min ${formatNumber(LOOT_MIN_CASH_PER_PIECE * Math.max(LOOT_PIECE_MIN_QUANTITY, parseInt(String(lootPieceQuantity).replace(/,/g, ''), 10) || LOOT_PIECE_MIN_QUANTITY))}).
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={handleCreateLootPieceOffer}
+              disabled={!lootPiecePrice || creatingLootPiece}
+              className={`w-full py-2.5 rounded bg-primary/20 text-primary text-xs font-heading font-bold border border-primary/40 hover:bg-primary/30 disabled:opacity-40 disabled:cursor-not-allowed min-h-[44px] sm:min-h-0 ${qtActionBtn}`}
+            >
+              {creatingLootPiece
+                ? 'Listing...'
+                : lootPiecePriceCurrency === 'points'
+                  ? `List ${lootPieceQuantity || '0'} pieces for ${lootPiecePrice ? formatNumber(lootPiecePrice) : '0'} pts`
+                  : `List ${lootPieceQuantity || '0'} pieces for $${lootPiecePrice ? formatNumber(lootPiecePrice) : '0'}`}
+            </button>
+          </div>
+          <div className="qt-art-line text-primary mx-3" />
+        </section>
+        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+            <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Loot piece offers</h3>
+          </div>
+          <div className="divide-y divide-zinc-700/30 max-h-96 overflow-y-auto">
+            {lootPieceOffers.length === 0 ? (
+              <div className="p-6 text-center">
+                <Puzzle size={28} className="mx-auto text-primary/30 mb-2" />
+                <p className="text-xs text-mutedForeground font-heading">No loot piece offers</p>
+              </div>
+            ) : (
+              lootPieceOffers.map((offer) => (
+                <div key={offer.id} className={`px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-zinc-800/30 ${offer.is_own ? 'bg-primary/5' : ''}`}>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-heading font-bold text-foreground">
+                        {renderQtTraderLabel(offer, offer.is_own)}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-mutedForeground mt-0.5">
+                      <span className="text-primary font-bold">{offer.quantity}</span> loot box pieces ·{' '}
+                      {(offer.price_currency || 'points') === 'money' ? (
+                        <>
+                          <span className="text-foreground font-bold">${formatNumber(offer.price_money || 0)}</span> cash
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-foreground font-bold">{formatNumber(offer.price_points)}</span> pts
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="shrink-0">
+                    {offer.is_own ? (
+                      <button
+                        type="button"
+                        onClick={() => handleCancelLootPieceOffer(offer.id)}
+                        className={`px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 min-h-[36px] sm:min-h-0 ${qtActionBtn}`}
+                      >
+                        Cancel
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleAcceptLootPieceOffer(offer.id)}
                         className={`px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 min-h-[36px] sm:min-h-0 ${qtActionBtn}`}
                       >
                         Accept

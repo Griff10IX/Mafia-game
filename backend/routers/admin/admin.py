@@ -2553,6 +2553,22 @@ def register(router):
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 
+    @router.post("/admin/quicktrade/cancel-loot-piece/{offer_id}")
+    async def admin_quicktrade_cancel_loot_piece(
+        offer_id: str,
+        body: AdminQuicktradeReason = Body(default=AdminQuicktradeReason()),
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from routers.money import quicktrade as qt_mod
+
+        actor = str(current_user.get("id") or "")
+        try:
+            return await qt_mod.force_cancel_loot_piece_offer_by_id(offer_id, actor_user_id=actor, reason=body.reason)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
     @router.post("/admin/quicktrade/cancel-property/{property_id}")
     async def admin_quicktrade_cancel_property(
         property_id: str,

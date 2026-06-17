@@ -50,6 +50,8 @@ _buy_offers_cache: Optional[tuple] = None
 _buy_offers_ts: float = 0
 _token_offers_cache: Optional[tuple] = None
 _token_offers_ts: float = 0
+_loot_piece_offers_cache: Optional[tuple] = None
+_loot_piece_offers_ts: float = 0
 _properties_cache: Optional[tuple] = None
 _properties_ts: float = 0
 _LIST_TTL_SEC = 5
@@ -62,6 +64,11 @@ _FOUNDING_LOCK_EXEMPT_COUNT_FIELDS = frozenset(
 
 # Minimum total cash (USD) for a token Quick Trade listing when selling for money: $250,000 per token.
 TOKEN_MIN_CASH_PER_TOKEN = 250_000
+
+# Loot box pieces: min 10 per listing; cash floor $25k/piece (10 pieces → $250k min, same as 1 token).
+LOOT_PIECE_MIN_QUANTITY = 10
+LOOT_MIN_CASH_PER_PIECE = 25_000
+LOOT_BOX_PIECES_FIELD = "loot_box_pieces"
 
 
 def _token_type_label(token_type: str) -> str:
@@ -95,13 +102,17 @@ def _qt_list_username(offer: dict, viewer: dict) -> str:
 
 
 def _invalidate_trade_caches():
-    global _sell_offers_cache, _sell_offers_ts, _buy_offers_cache, _buy_offers_ts, _token_offers_cache, _token_offers_ts, _properties_cache, _properties_ts
+    global _sell_offers_cache, _sell_offers_ts, _buy_offers_cache, _buy_offers_ts
+    global _token_offers_cache, _token_offers_ts, _loot_piece_offers_cache, _loot_piece_offers_ts
+    global _properties_cache, _properties_ts
     _sell_offers_cache = None
     _sell_offers_ts = 0
     _buy_offers_cache = None
     _buy_offers_ts = 0
     _token_offers_cache = None
     _token_offers_ts = 0
+    _loot_piece_offers_cache = None
+    _loot_piece_offers_ts = 0
     _properties_cache = None
     _properties_ts = 0
 
@@ -247,6 +258,7 @@ async def cancel_offers_on_death(user_id: str):
     Sell listings: refund points (same amounts as manual cancel — original_points, including fee).
     Buy listings: refund escrowed cash (the ``offer`` field).
     Token listings: return tokens to the user's inventory.
+    Loot piece listings: return loot box pieces to the user's balance.
     """
     now = datetime.now(timezone.utc)
     # One offer at a time: cancel in DB before refund so a retry after a crash cannot double-refund.
@@ -326,6 +338,15 @@ async def cancel_offers_on_death(user_id: str):
         {"user_id": user_id, "status": "active"},
         {"$set": {"status": "cancelled", "cancelled_at": now}},
     )
+    loot_offers = await db.trade_loot_piece_offers.find({"user_id": user_id, "status": "active"}).to_list(100)
+    for offer in loot_offers:
+        qty = int(offer.get("quantity") or 0)
+        if qty > 0:
+            await db.users.update_one({"id": user_id}, {"$inc": {LOOT_BOX_PIECES_FIELD: qty}})
+    await db.trade_loot_piece_offers.update_many(
+        {"user_id": user_id, "status": "active"},
+        {"$set": {"status": "cancelled", "cancelled_at": now}},
+    )
     _invalidate_trade_caches()
 
 
@@ -345,6 +366,14 @@ class CreateTokenOffer(BaseModel):
     token_type: str
     quantity: int
     # "points" = buyer pays pts; "money" = buyer pays cash (min $250k per token, server-enforced).
+    price_currency: str = "points"
+    price_points: int = 0
+    price_money: int = 0
+
+
+class CreateLootPieceOffer(BaseModel):
+    quantity: int
+    # "points" = buyer pays pts; "money" = buyer pays cash (min $25k per piece, server-enforced).
     price_currency: str = "points"
     price_points: int = 0
     price_money: int = 0
@@ -944,6 +973,279 @@ async def cancel_token_offer(offer_id: str, current_user: dict = Depends(get_cur
     await db.users.update_one({"id": user_id}, {"$inc": {field: offer["quantity"]}})
     _invalidate_trade_caches()
     return {"message": f"Offer cancelled. {offer['quantity']} {offer['token_type']} token(s) returned."}
+
+
+# ----- Loot box piece offers (points or cash; min 10 pieces per listing) -----
+async def get_loot_piece_offers(current_user: dict = Depends(get_current_user)):
+    """List active loot box piece sell offers."""
+    global _loot_piece_offers_cache, _loot_piece_offers_ts
+    now = time.monotonic()
+    if _loot_piece_offers_cache is not None and now <= _loot_piece_offers_ts + _LIST_TTL_SEC:
+        raw_list = _loot_piece_offers_cache
+    else:
+        try:
+            raw_list = await db.trade_loot_piece_offers.find({"status": "active"}).sort("created_at", -1).to_list(length=100)
+            _loot_piece_offers_cache = raw_list
+            _loot_piece_offers_ts = now
+        except Exception as e:
+            print(f"Error fetching loot piece offers: {e}")
+            return []
+    result = []
+    for offer in raw_list:
+        cur = offer.get("price_currency") or "points"
+        result.append({
+            "id": str(offer["_id"]),
+            "username": offer.get("username", "Anonymous"),
+            "quantity": offer["quantity"],
+            "price_currency": cur,
+            "price_points": int(offer.get("price_points") or 0),
+            "price_money": int(offer.get("price_money") or 0),
+            "created_at": offer.get("created_at"),
+            "is_own": _same_user_id(offer.get("user_id"), current_user.get("id")),
+        })
+    return result
+
+
+async def get_my_loot_piece_balance(current_user: dict = Depends(get_current_user)):
+    """Return loot box piece balance available for Quick Trade listing."""
+    user_id = current_user["id"]
+    user = await db.users.find_one({"id": user_id}, {"_id": 0, LOOT_BOX_PIECES_FIELD: 1})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    total = int(user.get(LOOT_BOX_PIECES_FIELD) or 0)
+    return {"total": total, "sellable": total}
+
+
+async def create_loot_piece_offer(offer: CreateLootPieceOffer, current_user: dict = Depends(get_current_user)):
+    """Create a loot box piece sell offer. Deducts pieces from seller."""
+    user_id = current_user["id"]
+    username = current_user.get("username", "Unknown")
+    if offer.quantity < LOOT_PIECE_MIN_QUANTITY:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Minimum listing size is {LOOT_PIECE_MIN_QUANTITY} loot box pieces",
+        )
+    cur = (offer.price_currency or "points").strip().lower()
+    if cur not in ("points", "money"):
+        raise HTTPException(status_code=400, detail="price_currency must be 'points' or 'money'")
+    price_points = int(offer.price_points or 0)
+    price_money = int(offer.price_money or 0)
+    if cur == "points":
+        if price_points <= 0:
+            raise HTTPException(status_code=400, detail="Price in points must be positive")
+        price_money = 0
+    else:
+        min_cash = LOOT_MIN_CASH_PER_PIECE * offer.quantity
+        if price_money < min_cash:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Minimum cash for this listing is ${min_cash:,} (${LOOT_MIN_CASH_PER_PIECE:,} per piece × {offer.quantity})",
+            )
+        price_points = 0
+    active_offers = await db.trade_loot_piece_offers.count_documents({"user_id": user_id, "status": "active"})
+    if active_offers >= 10:
+        raise HTTPException(status_code=400, detail="Maximum 10 loot piece offers at once")
+    result = await db.users.update_one(
+        {"id": user_id, LOOT_BOX_PIECES_FIELD: {"$gte": offer.quantity}},
+        {"$inc": {LOOT_BOX_PIECES_FIELD: -offer.quantity}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient loot box pieces")
+    new_offer = {
+        "user_id": user_id,
+        "username": username,
+        "quantity": offer.quantity,
+        "price_currency": cur,
+        "price_points": price_points,
+        "price_money": price_money,
+        "status": "active",
+        "created_at": datetime.now(timezone.utc),
+    }
+    result = await db.trade_loot_piece_offers.insert_one(new_offer)
+    _invalidate_trade_caches()
+    await log_activity(
+        user_id,
+        username,
+        "quicktrade_loot_piece_offer",
+        {
+            "quantity": offer.quantity,
+            "price_currency": cur,
+            "price_points": price_points,
+            "price_money": price_money,
+        },
+    )
+    if cur == "money":
+        return {
+            "message": f"Loot piece offer created: {offer.quantity} pieces for ${price_money:,} cash",
+            "offer_id": str(result.inserted_id),
+        }
+    return {
+        "message": f"Loot piece offer created: {offer.quantity} pieces for {price_points} points",
+        "offer_id": str(result.inserted_id),
+    }
+
+
+async def accept_loot_piece_offer(offer_id: str, current_user: dict = Depends(get_current_user)):
+    """Buyer pays points or cash and receives loot box pieces; seller receives payment."""
+    buyer_id = current_user["id"]
+    buyer_username = current_user.get("username", "Unknown")
+    now = datetime.now(timezone.utc)
+    offer = await db.trade_loot_piece_offers.find_one_and_update(
+        {"_id": ObjectId(offer_id), "status": "active"},
+        {"$set": {"status": "completed", "buyer_id": buyer_id, "buyer_username": buyer_username, "completed_at": now}},
+    )
+    if not offer:
+        raise HTTPException(status_code=400, detail="Offer no longer available")
+    if offer["user_id"] == buyer_id:
+        await db.trade_loot_piece_offers.update_one(
+            {"_id": ObjectId(offer_id)},
+            {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
+        )
+        raise HTTPException(status_code=400, detail="Cannot accept your own offer")
+    buyer = await db.users.find_one({"id": buyer_id})
+    if not buyer:
+        await db.trade_loot_piece_offers.update_one(
+            {"_id": ObjectId(offer_id)},
+            {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
+        )
+        raise HTTPException(status_code=400, detail="Buyer not found")
+    qty = int(offer["quantity"])
+    currency = offer.get("price_currency") or "points"
+    price_points = int(offer.get("price_points") or 0)
+    price_money = int(offer.get("price_money") or 0)
+
+    if currency == "money":
+        if price_money <= 0:
+            await db.trade_loot_piece_offers.update_one(
+                {"_id": ObjectId(offer_id)},
+                {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
+            )
+            raise HTTPException(status_code=400, detail="Invalid cash offer")
+        result = await db.users.update_one(
+            {"id": buyer_id, "money": {"$gte": float(price_money)}},
+            {"$inc": {"money": -float(price_money), LOOT_BOX_PIECES_FIELD: qty}},
+        )
+        if result.modified_count == 0:
+            await db.trade_loot_piece_offers.update_one(
+                {"_id": ObjectId(offer_id)},
+                {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
+            )
+            raise HTTPException(status_code=400, detail="Insufficient cash")
+        await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"money": float(price_money)}})
+        _invalidate_trade_caches()
+        await log_activity(
+            buyer_id,
+            buyer_username,
+            "quicktrade_accept_loot_piece",
+            {
+                "seller_id": offer["user_id"],
+                "quantity": qty,
+                "cash_paid": price_money,
+                "price_currency": "money",
+                "offer_id": offer_id,
+            },
+        )
+        await _notify_quicktrade_inbox(
+            offer["user_id"],
+            "Quick Trade: loot pieces sold",
+            f"{buyer_username} bought your listing: {qty:,} loot box pieces for ${price_money:,} cash.",
+        )
+        try:
+            await db.trade_events.insert_one(
+                {
+                    "id": str(offer_id),
+                    "type": "loot_piece_offer_accepted",
+                    "direction": "loot_piece",
+                    "seller_id": offer["user_id"],
+                    "seller_username": offer.get("username"),
+                    "buyer_id": buyer_id,
+                    "buyer_username": buyer_username,
+                    "quantity": qty,
+                    "price_currency": "money",
+                    "points": 0,
+                    "money": int(price_money),
+                    "at": datetime.now(timezone.utc),
+                }
+            )
+        except Exception:
+            pass
+        return {
+            "message": "Trade completed",
+            "quantity": qty,
+            "price_currency": "money",
+            "cash_paid": price_money,
+        }
+
+    result = await db.users.update_one(
+        {"id": buyer_id, "points": {"$gte": price_points}},
+        {"$inc": {"points": -price_points, LOOT_BOX_PIECES_FIELD: qty}},
+    )
+    if result.modified_count == 0:
+        await db.trade_loot_piece_offers.update_one(
+            {"_id": ObjectId(offer_id)},
+            {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
+        )
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"points": price_points}})
+    await log_points_event(db, user_id=buyer_id, points=-price_points, event_type="quicktrade_item_shop", meta={"offer_id": offer_id, "loot_pieces": qty})
+    await log_points_event(db, user_id=offer["user_id"], points=price_points, event_type="quicktrade_sell", meta={"offer_id": offer_id, "loot_pieces": qty})
+    _invalidate_trade_caches()
+    await log_activity(
+        buyer_id,
+        buyer_username,
+        "quicktrade_accept_loot_piece",
+        {
+            "seller_id": offer["user_id"],
+            "quantity": qty,
+            "points_paid": price_points,
+            "price_currency": "points",
+            "offer_id": offer_id,
+        },
+    )
+    await _notify_quicktrade_inbox(
+        offer["user_id"],
+        "Quick Trade: loot pieces sold",
+        f"{buyer_username} bought your listing: {qty:,} loot box pieces for {price_points:,} points.",
+    )
+    try:
+        await db.trade_events.insert_one(
+            {
+                "id": str(offer_id),
+                "type": "loot_piece_offer_accepted",
+                "direction": "loot_piece",
+                "seller_id": offer["user_id"],
+                "seller_username": offer.get("username"),
+                "buyer_id": buyer_id,
+                "buyer_username": buyer_username,
+                "quantity": qty,
+                "price_currency": "points",
+                "points": int(price_points),
+                "money": 0,
+                "at": datetime.now(timezone.utc),
+            }
+        )
+    except Exception:
+        pass
+    return {
+        "message": "Trade completed",
+        "quantity": qty,
+        "price_currency": "points",
+        "points_paid": price_points,
+    }
+
+
+async def cancel_loot_piece_offer(offer_id: str, current_user: dict = Depends(get_current_user)):
+    """Cancel loot piece offer and return pieces to seller."""
+    user_id = current_user["id"]
+    offer = await db.trade_loot_piece_offers.find_one_and_update(
+        {"_id": ObjectId(offer_id), "user_id": user_id, "status": "active"},
+        {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc)}},
+    )
+    if not offer:
+        raise HTTPException(status_code=404, detail="Offer not found or already cancelled")
+    await db.users.update_one({"id": user_id}, {"$inc": {LOOT_BOX_PIECES_FIELD: offer["quantity"]}})
+    _invalidate_trade_caches()
+    return {"message": f"Offer cancelled. {offer['quantity']} loot box piece(s) returned."}
 
 
 # ----- Buy offers -----
@@ -1738,6 +2040,50 @@ async def force_cancel_token_offer_by_id(
     }
 
 
+async def force_cancel_loot_piece_offer_by_id(
+    offer_id: str,
+    *,
+    actor_user_id: str,
+    reason: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Cancel any active loot piece offer; return pieces to seller."""
+    try:
+        oid = ObjectId(offer_id)
+    except Exception as exc:
+        raise ValueError("Invalid offer id") from exc
+    now = datetime.now(timezone.utc)
+    offer = await db.trade_loot_piece_offers.find_one_and_update(
+        {"_id": oid, "status": "active"},
+        {"$set": {"status": "cancelled", "cancelled_at": now}},
+    )
+    if not offer:
+        raise ValueError("Loot piece offer not found or already cancelled")
+    user_id = offer["user_id"]
+    qty = int(offer.get("quantity") or 0)
+    await db.users.update_one({"id": user_id}, {"$inc": {LOOT_BOX_PIECES_FIELD: qty}})
+    _invalidate_trade_caches()
+    try:
+        await db.trade_events.insert_one(
+            {
+                "id": str(offer_id),
+                "type": "loot_piece_offer_cancelled",
+                "user_id": user_id,
+                "quantity": qty,
+                "at": now,
+                **_admin_cancel_reason_meta(actor_user_id, reason),
+            }
+        )
+    except Exception:
+        pass
+    return {
+        "ok": True,
+        "kind": "loot_piece",
+        "offer_id": offer_id,
+        "user_id": user_id,
+        "quantity_returned": qty,
+    }
+
+
 async def force_cancel_property_listing_by_id(
     property_id: str,
     *,
@@ -1923,6 +2269,7 @@ async def admin_quicktrade_overview(
         ]
     ).to_list(1)
     token_count = await db.trade_token_offers.count_documents(match_active_excl)
+    loot_piece_count = await db.trade_loot_piece_offers.count_documents(match_active_excl)
     prop_match: Dict[str, Any] = {"for_sale": True, "type": {"$ne": "casino_slots"}}
     if excl:
         prop_match["owner_id"] = {"$nin": excl}
@@ -1957,27 +2304,39 @@ async def admin_quicktrade_overview(
             {"$group": {"_id": "$user_id", "token_n": {"$sum": 1}}},
         ]
     ).to_list(200)
+    loot_by_user = await db.trade_loot_piece_offers.aggregate(
+        [
+            {"$match": {"status": "active", **({"user_id": {"$nin": excl}} if excl else {})}},
+            {"$group": {"_id": "$user_id", "loot_piece_n": {"$sum": 1}}},
+        ]
+    ).to_list(200)
     uid_scores: Dict[str, Dict[str, Any]] = {}
     for row in sell_by_user:
         uid = str(row["_id"] or "")
         if not uid:
             continue
-        uid_scores.setdefault(uid, {"user_id": uid, "sell_offers": 0, "buy_offers": 0, "token_offers": 0, "sell_points_escrow": 0, "buy_cash_escrow": 0, "score": 0})
+        uid_scores.setdefault(uid, {"user_id": uid, "sell_offers": 0, "buy_offers": 0, "token_offers": 0, "loot_piece_offers": 0, "sell_points_escrow": 0, "buy_cash_escrow": 0, "score": 0})
         uid_scores[uid]["sell_offers"] = int(row.get("sell_n") or 0)
         uid_scores[uid]["sell_points_escrow"] = int(row.get("sell_points") or 0)
     for row in buy_by_user:
         uid = str(row["_id"] or "")
         if not uid:
             continue
-        uid_scores.setdefault(uid, {"user_id": uid, "sell_offers": 0, "buy_offers": 0, "token_offers": 0, "sell_points_escrow": 0, "buy_cash_escrow": 0, "score": 0})
+        uid_scores.setdefault(uid, {"user_id": uid, "sell_offers": 0, "buy_offers": 0, "token_offers": 0, "loot_piece_offers": 0, "sell_points_escrow": 0, "buy_cash_escrow": 0, "score": 0})
         uid_scores[uid]["buy_offers"] = int(row.get("buy_n") or 0)
         uid_scores[uid]["buy_cash_escrow"] = int(row.get("cash") or 0)
     for row in token_by_user:
         uid = str(row["_id"] or "")
         if not uid:
             continue
-        uid_scores.setdefault(uid, {"user_id": uid, "sell_offers": 0, "buy_offers": 0, "token_offers": 0, "sell_points_escrow": 0, "buy_cash_escrow": 0, "score": 0})
+        uid_scores.setdefault(uid, {"user_id": uid, "sell_offers": 0, "buy_offers": 0, "token_offers": 0, "loot_piece_offers": 0, "sell_points_escrow": 0, "buy_cash_escrow": 0, "score": 0})
         uid_scores[uid]["token_offers"] = int(row.get("token_n") or 0)
+    for row in loot_by_user:
+        uid = str(row["_id"] or "")
+        if not uid:
+            continue
+        uid_scores.setdefault(uid, {"user_id": uid, "sell_offers": 0, "buy_offers": 0, "token_offers": 0, "loot_piece_offers": 0, "sell_points_escrow": 0, "buy_cash_escrow": 0, "score": 0})
+        uid_scores[uid]["loot_piece_offers"] = int(row.get("loot_piece_n") or 0)
     for u in uid_scores.values():
         u["score"] = u["sell_points_escrow"] + u["buy_cash_escrow"] // 1_000_000
     top_users = sorted(uid_scores.values(), key=lambda x: (-x["score"], -x["sell_points_escrow"], -x["buy_cash_escrow"]))[: max(0, top_users_limit)]
@@ -1996,6 +2355,7 @@ async def admin_quicktrade_overview(
         "buy_offers_active": int(b0.get("count") or 0),
         "buy_cash_escrow": int(b0.get("cash_escrow") or 0),
         "token_offers_active": int(token_count),
+        "loot_piece_offers_active": int(loot_piece_count),
         "property_listings_active": int(prop_count),
         "top_users": top_users,
     }
@@ -2005,16 +2365,18 @@ async def admin_quicktrade_user_detail(user_id: str) -> Dict[str, Any]:
     """All active Quick Trade rows for one user (admin)."""
     uid = (user_id or "").strip()
     if not uid:
-        return {"user_id": "", "sell_offers": [], "buy_offers": [], "token_offers": [], "property_listings": []}
+        return {"user_id": "", "sell_offers": [], "buy_offers": [], "token_offers": [], "loot_piece_offers": [], "property_listings": []}
     sell = await db.trade_sell_offers.find({"user_id": uid, "status": "active"}).sort("created_at", -1).to_list(100)
     buy = await db.trade_buy_offers.find({"user_id": uid, "status": "active"}).sort("created_at", -1).to_list(100)
     tok = await db.trade_token_offers.find({"user_id": uid, "status": "active"}).sort("created_at", -1).to_list(100)
+    loot = await db.trade_loot_piece_offers.find({"user_id": uid, "status": "active"}).sort("created_at", -1).to_list(100)
     props = await db.properties.find({"owner_id": uid, "for_sale": True, "type": {"$ne": "casino_slots"}}).sort("created_at", -1).to_list(50)
     return {
         "user_id": uid,
         "sell_offers": [_serialize_offer_doc(x) for x in sell],
         "buy_offers": [_serialize_offer_doc(x) for x in buy],
         "token_offers": [_serialize_offer_doc(x) for x in tok],
+        "loot_piece_offers": [_serialize_offer_doc(x) for x in loot],
         "property_listings": [_serialize_offer_doc(x) for x in props],
     }
 
@@ -2027,7 +2389,7 @@ async def admin_quicktrade_cancel_all_for_user(
 ) -> Dict[str, Any]:
     """Cancel every active Quick Trade listing for user_id with normal refunds."""
     uid = (user_id or "").strip()
-    cancelled = {"sell": 0, "buy": 0, "token": 0, "property": 0}
+    cancelled = {"sell": 0, "buy": 0, "token": 0, "loot_piece": 0, "property": 0}
     errors: List[str] = []
     sell_ids = await db.trade_sell_offers.distinct("_id", {"user_id": uid, "status": "active"})
     for sid in sell_ids:
@@ -2050,6 +2412,13 @@ async def admin_quicktrade_cancel_all_for_user(
             cancelled["token"] += 1
         except ValueError as e:
             errors.append(f"token {tid}: {e}")
+    loot_ids = await db.trade_loot_piece_offers.distinct("_id", {"user_id": uid, "status": "active"})
+    for lid in loot_ids:
+        try:
+            await force_cancel_loot_piece_offer_by_id(str(lid), actor_user_id=actor_user_id, reason=reason)
+            cancelled["loot_piece"] += 1
+        except ValueError as e:
+            errors.append(f"loot_piece {lid}: {e}")
     prop_ids = await db.properties.distinct(
         "_id",
         {"owner_id": uid, "for_sale": True, "type": {"$ne": "casino_slots"}},
@@ -2082,3 +2451,8 @@ def register(router):
     router.add_api_route("/trade/token-offer", create_token_offer, methods=["POST"])
     router.add_api_route("/trade/token-offer/{offer_id}/accept", accept_token_offer, methods=["POST"])
     router.add_api_route("/trade/token-offer/{offer_id}/cancel", cancel_token_offer, methods=["POST"])
+    router.add_api_route("/trade/loot-piece-offers", get_loot_piece_offers, methods=["GET"], dependencies=_quicktrade_rl_u)
+    router.add_api_route("/trade/my-loot-piece-balance", get_my_loot_piece_balance, methods=["GET"], dependencies=_quicktrade_rl_u)
+    router.add_api_route("/trade/loot-piece-offer", create_loot_piece_offer, methods=["POST"])
+    router.add_api_route("/trade/loot-piece-offer/{offer_id}/accept", accept_loot_piece_offer, methods=["POST"])
+    router.add_api_route("/trade/loot-piece-offer/{offer_id}/cancel", cancel_loot_piece_offer, methods=["POST"])

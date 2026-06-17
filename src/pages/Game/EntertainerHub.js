@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import api from '../../utils/api';
+import { getApiErrorMessage } from '../../utils/api';
 import {
   fundedGameKindLabel,
   formatTotalWinnings,
@@ -26,6 +27,7 @@ const PERK_LABELS = {
 export default function EntertainerHub() {
   const [dash, setDash] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadErr, setLoadErr] = useState(null);
   const [entColor, setEntColor] = useState('#7c3aed');
   const [colorSaving, setColorSaving] = useState(false);
   const [perkTarget, setPerkTarget] = useState('');
@@ -38,17 +40,22 @@ export default function EntertainerHub() {
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadErr(null);
     try {
       const res = await api.get('/entertainer/dashboard');
       setDash(res.data);
     } catch (e) {
-      const d = e.response?.data?.detail;
-      toast.error(typeof d === 'string' ? d : 'Could not load Entertainer hub');
-      setDash(null);
+      const status = e?.response?.status;
+      const msg = getApiErrorMessage(e);
+      setLoadErr({ status, msg });
+      // Keep last good dashboard (prevents random mobile connection blips from showing "no access")
+      setDash((prev) => (prev?.username ? prev : null));
+      // Only toast if we don't already have content to show.
+      if (!dash?.username) toast.error(msg || 'Could not load Entertainer hub');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [dash?.username]);
 
   useEffect(() => {
     load();
@@ -94,8 +101,24 @@ export default function EntertainerHub() {
   if (!dash?.username) {
     return (
       <div className="p-4 max-w-lg mx-auto space-y-3">
-        <p className="text-foreground font-heading">You do not have Entertainer access, or the dashboard could not be loaded.</p>
-        <Link to="/account/dashboard" className="text-primary underline text-sm font-heading">Back to dashboard</Link>
+        <p className="text-foreground font-heading">
+          {loadErr?.status === 403
+            ? 'You do not have Entertainer access.'
+            : 'Connection problem — the Entertainer dashboard could not be loaded.'}
+        </p>
+        {loadErr?.msg && loadErr?.status !== 403 ? (
+          <p className="text-xs text-mutedForeground">{loadErr.msg}</p>
+        ) : null}
+        <div className="flex flex-wrap gap-3 items-center">
+          <button
+            type="button"
+            onClick={() => load()}
+            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-heading font-bold uppercase rounded bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30"
+          >
+            <RefreshCw size={14} /> Retry
+          </button>
+          <Link to="/account/dashboard" className="text-primary underline text-sm font-heading">Back to dashboard</Link>
+        </div>
       </div>
     );
   }

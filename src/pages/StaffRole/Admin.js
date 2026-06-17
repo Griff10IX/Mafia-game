@@ -7771,6 +7771,20 @@ export default function Admin() {
     }
   };
 
+  const handleQtCancelLootPiece = async (offerId) => {
+    setQtActionKey(`loot-${offerId}`);
+    try {
+      await api.post(`/admin/quicktrade/cancel-loot-piece/${encodeURIComponent(offerId)}`, qtCancelBody());
+      toast.success('Loot piece offer cancelled (pieces returned)');
+      await handleFetchQuicktradeOverview();
+      await refreshQuicktradeUserIfAny();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Cancel failed');
+    } finally {
+      setQtActionKey(null);
+    }
+  };
+
   const handleQtCancelProperty = async (propertyId) => {
     setQtActionKey(`prop-${propertyId}`);
     try {
@@ -7791,13 +7805,13 @@ export default function Admin() {
       toast.error('Enter user id or username and load (or use loaded user)');
       return;
     }
-    if (!window.confirm('Cancel ALL Quick Trade listings for this user? Normal refunds apply (points, cash, tokens, unlist properties).')) return;
+    if (!window.confirm('Cancel ALL Quick Trade listings for this user? Normal refunds apply (points, cash, tokens, loot pieces, unlist properties).')) return;
     setQtActionKey('cancel-all');
     try {
       const res = await api.post(`/admin/quicktrade/user/${encodeURIComponent(q)}/cancel-all`, qtCancelBody());
       const c = res.data?.cancelled || {};
       toast.success(
-        `Cancelled: sell ${c.sell ?? 0}, buy ${c.buy ?? 0}, token ${c.token ?? 0}, property ${c.property ?? 0}`,
+        `Cancelled: sell ${c.sell ?? 0}, buy ${c.buy ?? 0}, token ${c.token ?? 0}, loot ${c.loot_piece ?? 0}, property ${c.property ?? 0}`,
       );
       await handleFetchQuicktradeOverview();
       await refreshQuicktradeUserIfAny();
@@ -11949,6 +11963,10 @@ export default function Admin() {
                       <div className="text-foreground font-bold text-sm">{quicktradeOverview.token_offers_active}</div>
                     </div>
                     <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/40">
+                      <div className="text-mutedForeground uppercase text-[9px] tracking-wide">Loot piece offers</div>
+                      <div className="text-foreground font-bold text-sm">{quicktradeOverview.loot_piece_offers_active ?? 0}</div>
+                    </div>
+                    <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/40">
                       <div className="text-mutedForeground uppercase text-[9px] tracking-wide">Property listings</div>
                       <div className="text-foreground font-bold text-sm">{quicktradeOverview.property_listings_active}</div>
                     </div>
@@ -12150,6 +12168,39 @@ export default function Admin() {
                       </div>
                     </div>
                   )}
+                  {quicktradeUserDetail.loot_piece_offers?.length > 0 && (
+                    <div>
+                      <p className="text-[9px] uppercase text-mutedForeground mb-1">Loot piece offers</p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-[9px] border-collapse">
+                          <thead>
+                            <tr className="border-b border-zinc-700/50 text-mutedForeground">
+                              <th className="py-0.5 pr-2">Id</th>
+                              <th className="py-0.5 pr-2">Qty</th>
+                              <th className="py-0.5 pr-2">Price</th>
+                              <th className="py-0.5 pr-2" />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {quicktradeUserDetail.loot_piece_offers.map((o) => (
+                              <tr key={o.id} className="border-b border-zinc-800/60">
+                                <td className="py-0.5 pr-2 font-mono break-all max-w-[120px]">{o.id}</td>
+                                <td className="py-0.5 pr-2">{(o.quantity ?? 0).toLocaleString()}</td>
+                                <td className="py-0.5 pr-2">
+                                  {(o.price_currency || 'points') === 'money'
+                                    ? `$${formatWholeCash(o.price_money)}`
+                                    : `${(o.price_points ?? 0).toLocaleString()} pts`}
+                                </td>
+                                <td className="py-0.5 pr-2">
+                                  <BtnDanger type="button" className="!py-0.5 !px-1.5" disabled={qtActionKey === `loot-${o.id}`} onClick={() => handleQtCancelLootPiece(o.id)}>Cancel</BtnDanger>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
                   {quicktradeUserDetail.property_listings?.length > 0 && (
                     <div>
                       <p className="text-[9px] uppercase text-mutedForeground mb-1">Property listings</p>
@@ -12181,7 +12232,7 @@ export default function Admin() {
                       </div>
                     </div>
                   )}
-                  {(!quicktradeUserDetail.sell_offers?.length && !quicktradeUserDetail.buy_offers?.length && !quicktradeUserDetail.token_offers?.length && !quicktradeUserDetail.property_listings?.length) && (
+                  {(!quicktradeUserDetail.sell_offers?.length && !quicktradeUserDetail.buy_offers?.length && !quicktradeUserDetail.token_offers?.length && !quicktradeUserDetail.loot_piece_offers?.length && !quicktradeUserDetail.property_listings?.length) && (
                     <p className="text-mutedForeground italic">No active listings for this user.</p>
                   )}
                 </div>

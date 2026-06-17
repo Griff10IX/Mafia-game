@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import api from '../../utils/api';
+import { getApiErrorMessage } from '../../utils/api';
 import { Headphones, RefreshCw, HelpCircle } from 'lucide-react';
 
 const DEFAULT_HDO_COLOR = '#166534';
@@ -9,22 +10,26 @@ const DEFAULT_HDO_COLOR = '#166534';
 export default function HelpDeskHub() {
   const [dash, setDash] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadErr, setLoadErr] = useState(null);
   const [hdoColor, setHdoColor] = useState(DEFAULT_HDO_COLOR);
   const [colorSaving, setColorSaving] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadErr(null);
     try {
       const res = await api.get('/help-desk/hdo/dashboard');
       setDash(res.data);
     } catch (e) {
-      const d = e.response?.data?.detail;
-      toast.error(typeof d === 'string' ? d : 'Could not load Help Desk hub');
-      setDash(null);
+      const status = e?.response?.status;
+      const msg = getApiErrorMessage(e);
+      setLoadErr({ status, msg });
+      setDash((prev) => (prev?.username ? prev : null));
+      if (!dash?.username) toast.error(msg || 'Could not load Help Desk hub');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [dash?.username]);
 
   useEffect(() => {
     load();
@@ -71,7 +76,21 @@ export default function HelpDeskHub() {
   if (!dash?.username) {
     return (
       <div className="p-4 max-w-lg mx-auto space-y-3">
-        <p className="text-foreground font-heading">You do not have Help Desk Operator access, or the dashboard could not be loaded.</p>
+        <p className="text-foreground font-heading">
+          {loadErr?.status === 403
+            ? 'You do not have Help Desk Operator access.'
+            : 'Connection problem — the Help Desk dashboard could not be loaded.'}
+        </p>
+        {loadErr?.msg && loadErr?.status !== 403 ? (
+          <p className="text-xs text-mutedForeground">{loadErr.msg}</p>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => load()}
+          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-heading font-bold uppercase rounded bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30"
+        >
+          <RefreshCw size={14} /> Retry
+        </button>
         <Link to="/account/dashboard" className="text-primary underline text-sm font-heading">
           Back to dashboard
         </Link>
