@@ -152,6 +152,7 @@ class AdminRevivePlayerBody(BaseModel):
     transfer_alt_balance: bool = True
     refund_alt_points_spent: bool = True
     lock_alt_accounts: bool = False
+    grant_dead_alive_revive: bool = True  # Clear revive slot so same email can use player Dead > Alive again
     confirm_username: Optional[str] = Field(
         default=None,
         max_length=80,
@@ -6982,6 +6983,12 @@ def register(router):
         linked = await _alive_accounts_linked_to_dead(target)
         dead_at_s = str(target.get("dead_at") or "") or None
         alt_rows = []
+        victim_email = (target.get("email") or "").strip().lower()
+        dead_alive_revive_used = False
+        if victim_email:
+            from routers.game.dead_alive import revive_slot_used_for_email
+
+            dead_alive_revive_used = await revive_slot_used_for_email(db, victim_email)
         for alt in linked:
             ledger_spent = await _points_spent_ledger_total(alt["id"], dead_at_s)
             lifetime = int(alt.get("lifetime_points_spent") or 0)
@@ -7009,6 +7016,7 @@ def register(router):
                 "current_money": int(target.get("money") or 0),
             },
             "linked_alive_accounts": alt_rows,
+            "dead_alive_revive_used": dead_alive_revive_used,
             "note": (
                 "Revive restores death balances on the victim. Optional: move remaining points from a linked alt "
                 "and credit points they spent on that alt (ledger spend since victim death, else lifetime_points_spent)."
@@ -7156,6 +7164,11 @@ def register(router):
         )
         if revive_result.modified_count == 0:
             raise HTTPException(status_code=400, detail="Revive failed — account may already be alive or was changed concurrently.")
+        revive_slot_cleared = False
+        if body.grant_dead_alive_revive:
+            from routers.game.dead_alive import clear_revive_used_slot_for_email
+
+            revive_slot_cleared = await clear_revive_used_slot_for_email(db, target.get("email"))
         await ensure_user_legacy_seed_lot(db, victim_id, pts)
         await db.attacks.delete_many({"attacker_id": victim_id})
 
@@ -7168,6 +7181,8 @@ def register(router):
             parts.append(f" Refunded {total_refund_spent:,} points spent on alt(s).")
         if body.lock_alt_accounts and alt_transfers:
             parts.append(" Linked alt account(s) closed (staff kill).")
+        if body.grant_dead_alive_revive and revive_slot_cleared:
+            parts.append(" Dead > Alive revive slot reset for this email.")
 
         try:
             await send_notification(
@@ -7194,6 +7209,7 @@ def register(router):
             "final_money": money,
             "alt_transfers": alt_transfers,
             "restore_death_balances": body.restore_death_balances,
+            "dead_alive_revive_slot_cleared": revive_slot_cleared,
         }
 
     @router.get("/admin/revive-player/preview")
@@ -7220,6 +7236,37 @@ def register(router):
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
         return await _admin_revive_execute(target, body, staff_user=current_user)
+
+    @router.post("/admin/grant-dead-alive-revive")
+    async def admin_grant_dead_alive_revive(
+        target_username: str = Query(..., min_length=1),
+        current_user: dict = Depends(require_admin_or_mod),
+    ):
+        """Clear the Dead > Alive revive lock for the target's email so they can use Revive again."""
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1, "email": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        email = (target.get("email") or "").strip().lower()
+        if not email:
+            raise HTTPException(status_code=400, detail="That account has no email on file.")
+        from routers.game.dead_alive import clear_revive_used_slot_for_email
+
+        cleared = await clear_revive_used_slot_for_email(db, email)
+        uname = (target.get("username") or target_username).strip()
+        if cleared:
+            return {
+                "message": f"Dead > Alive revive slot cleared for {uname} ({email}). They can use Revive again on a living alt.",
+                "revive_slot_cleared": True,
+                "username": uname,
+                "email": email,
+            }
+        return {
+            "message": f"No revive lock on file for {uname} ({email}) — slot was already available.",
+            "revive_slot_cleared": False,
+            "username": uname,
+            "email": email,
+        }
 
     @router.post("/admin/change-email")
     async def admin_change_email(

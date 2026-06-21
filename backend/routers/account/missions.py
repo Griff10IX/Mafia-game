@@ -1136,18 +1136,18 @@ def mission_ladder_missions() -> List[Dict[str, Any]]:
 
 
 def infer_next_mission_display_index(completed_ids: set) -> int:
-    """1-based index of next incomplete mission, or 101 if all 100 are done."""
-    for i, m in enumerate(mission_ladder_missions(), start=1):
+    """1-based story step of next incomplete mission (order field), or 101 if all 100 are done."""
+    for m in sorted(MISSIONS, key=lambda x: x.get("order", 0)):
         if m["id"] not in completed_ids:
-            return i
+            return int(m.get("order", 0)) + 1
     return 101
 
 
 def display_index_for_mission_id(mid: str) -> Optional[int]:
-    for i, m in enumerate(mission_ladder_missions(), start=1):
-        if m["id"] == mid:
-            return i
-    return None
+    m = next((x for x in MISSIONS if x["id"] == mid), None)
+    if not m:
+        return None
+    return int(m.get("order", 0)) + 1
 
 
 async def ensure_mission_chain_baselines(user: dict) -> None:

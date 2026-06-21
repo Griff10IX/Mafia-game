@@ -1388,6 +1388,7 @@ export default function Admin() {
   const [reviveTransferAltBalance, setReviveTransferAltBalance] = useState(true);
   const [reviveRefundAltSpent, setReviveRefundAltSpent] = useState(true);
   const [reviveLockAlts, setReviveLockAlts] = useState(false);
+  const [reviveGrantDeadAlive, setReviveGrantDeadAlive] = useState(true);
   const [reviveConfirmUsername, setReviveConfirmUsername] = useState('');
   const [cheaterImpactRefundLoading, setCheaterImpactRefundLoading] = useState(false);
 
@@ -4253,11 +4254,28 @@ export default function Admin() {
         transfer_alt_balance: reviveTransferAltBalance,
         refund_alt_points_spent: reviveRefundAltSpent,
         lock_alt_accounts: reviveLockAlts,
+        grant_dead_alive_revive: reviveGrantDeadAlive,
         confirm_username: needsConfirm ? reviveConfirmUsername.trim() : null,
       });
       toast.success(response.data.message);
       setRevivePreview(null);
       setReviveConfirmUsername('');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
+  const handleGrantDeadAliveRevive = async () => {
+    const u = (formData.targetUsername || '').trim();
+    if (!u) {
+      toast.error('Enter target username');
+      return;
+    }
+    try {
+      const response = await api.post(`/admin/grant-dead-alive-revive?target_username=${encodeURIComponent(u)}`);
+      toast.success(response.data?.message || 'Revive slot updated');
+      const previewRes = await api.get('/admin/revive-player/preview', { params: { target_username: u } });
+      setRevivePreview(previewRes.data);
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed');
     }
@@ -11231,9 +11249,16 @@ export default function Admin() {
                     {revivePreviewLoading ? '…' : 'Preview'}
                   </BtnSecondary>
                   <BtnPrimary onClick={handleRevivePlayer}>Revive</BtnPrimary>
+                  <BtnSecondary type="button" onClick={handleGrantDeadAliveRevive} title="Clear one-time Dead > Alive revive lock for this email">
+                    Grant Revive slot
+                  </BtnSecondary>
                 </div>
               </ActionRow>
               <div className="pl-6 space-y-2 border-l-2 border-primary/25 text-[10px] font-heading">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={reviveGrantDeadAlive} onChange={(e) => setReviveGrantDeadAlive(e.target.checked)} />
+                  Reset Dead &gt; Alive revive slot on revive (allows 50k revive again)
+                </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={reviveRestoreBalances} onChange={(e) => setReviveRestoreBalances(e.target.checked)} />
                   Restore points/money at death
@@ -11278,6 +11303,11 @@ export default function Admin() {
                       At death: {Number(revivePreview.victim?.points_at_death ?? 0).toLocaleString()} pts · $
                       {Number(revivePreview.victim?.money_at_death ?? 0).toLocaleString()}
                     </div>
+                    {revivePreview.dead_alive_revive_used ? (
+                      <p className="text-amber-300">Dead &gt; Alive revive already used on this email — use Grant Revive slot or revive with reset checked.</p>
+                    ) : (
+                      <p className="text-green-400/90">Dead &gt; Alive revive slot available on this email.</p>
+                    )}
                     {(revivePreview.linked_alive_accounts || []).length === 0 ? (
                       <p className="text-mutedForeground">No linked alive alt on same email / post-death IP.</p>
                     ) : (

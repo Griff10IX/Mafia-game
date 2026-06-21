@@ -11,8 +11,25 @@ from utils.redeem_code_lifecycle import release_redeem_slots_for_deceased_user
 
 REVEAL_KILLER_COST = 1000
 TOKEN_RESTORE_PERCENT = 0.50  # 50% of tokens restored on Dead > Alive
-REVIVE_COST = 50_000  # points to revive one dead account (same email, once per email)
+REVIVE_COST = 50_000  # points to revive one dead account (same email, once per email unless staff clears slot)
 ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL = "Error, this account has been locked for investigation."
+
+
+async def clear_revive_used_slot_for_email(db, email: str) -> bool:
+    """Remove the one-time Dead > Alive revive lock for an email (staff grant). Returns True if a row was deleted."""
+    norm = (email or "").strip().lower()
+    if not norm:
+        return False
+    result = await db.revive_used_by_email.delete_one({"email": norm})
+    return result.deleted_count > 0
+
+
+async def revive_slot_used_for_email(db, email: str) -> bool:
+    norm = (email or "").strip().lower()
+    if not norm:
+        return False
+    doc = await db.revive_used_by_email.find_one({"email": norm}, {"_id": 1})
+    return bool(doc)
 
 
 def _parse_iso_utc(s):
@@ -360,7 +377,7 @@ def register(router):
         if revive_used:
             return {
                 "can_revive": False,
-                "reason": "This email has already used its one-time revive.",
+                "reason": "This email has already used its revive (staff can grant another from Admin).",
                 "points_balance": points_balance,
                 "revive_used": True,
                 "dead_accounts_same_email": [],
@@ -450,10 +467,10 @@ def register(router):
             await db.revive_used_by_email.insert_one({"email": email, "used_at": now_iso, "reviver_id": current_user["id"]})
         except (DuplicateKeyError, Exception) as e:
             if "duplicate" in str(e).lower() or "E11000" in str(e):
-                raise HTTPException(status_code=400, detail="This email has already used its one-time revive.")
+                raise HTTPException(status_code=400, detail="This email has already used its revive (staff can grant another from Admin).")
             existing = await db.revive_used_by_email.find_one({"email": email})
             if existing:
-                raise HTTPException(status_code=400, detail="This email has already used its one-time revive.")
+                raise HTTPException(status_code=400, detail="This email has already used its revive (staff can grant another from Admin).")
 
         # 2) Deduct 50k points from current user (atomic)
         res = await db.users.find_one_and_update(

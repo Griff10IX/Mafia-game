@@ -247,11 +247,11 @@ export default function DeadAlive() {
             <div className="p-5 space-y-4">
               <p className="text-[11px] font-heading leading-relaxed" style={{ color: 'var(--noir-muted)' }}>
                 Pay {REVIVE_COST.toLocaleString()} points once to bring back one of your dead accounts (same email, or prove ownership with that account&apos;s password if its email was freed).
-                This account will become dead; only your money and points (minus the cost) move to the revived account. No mission or rank transfer. One-time per email.
+                This account will become dead; only your money and points (minus the cost) move to the revived account. No mission or rank transfer. Once per email unless staff grants another revive.
               </p>
               {reviveEligibility.revive_used && (
                 <p className="text-[11px] font-heading text-amber-400" style={{ color: 'var(--noir-foreground)' }}>
-                  This email has already used its one-time revive.
+                  This email has already used its revive. Contact staff if you need another Dead &gt; Alive revive granted.
                 </p>
               )}
               {!reviveEligibility.revive_used && !reviveEligibility.can_revive && reviveEligibility.reason && (

@@ -297,7 +297,7 @@ function MissionFocusSection({
   cityLabel,
   currentMission,
   nextMission,
-  missionIdToIndex,
+  missionStoryStep,
   orderedTotal,
   completedCount,
   onOpen,
@@ -317,8 +317,8 @@ function MissionFocusSection({
           <span className="text-[11px] text-mutedForeground truncate">{cityLabel}</span>
         </div>
         <span className="text-[11px] md:text-xs font-heading font-bold text-foreground tabular-nums">
-          {currentMission && missionIdToIndex[currentMission.id]
-            ? `Mission ${fmtInt(missionIdToIndex[currentMission.id].index)} of ${fmtInt(orderedTotal)}`
+          {currentMission
+            ? `Mission ${fmtInt(missionStoryStep(currentMission))} of ${fmtInt(orderedTotal)}`
             : `Progress ${fmtInt(completedCount)} / ${fmtInt(orderedTotal)}`}
         </span>
       </div>
@@ -336,8 +336,8 @@ function MissionFocusSection({
               <MissionFocusCard
                 mission={currentMission}
                 role="current"
-                missionIndex={missionIdToIndex[currentMission.id]?.index}
-                missionTotal={missionIdToIndex[currentMission.id]?.total}
+                missionIndex={missionStoryStep(currentMission)}
+                missionTotal={orderedTotal}
                 onOpen={onOpen}
                 delay={0.05}
               />
@@ -346,8 +346,8 @@ function MissionFocusSection({
               <MissionFocusCard
                 mission={nextMission}
                 role="next"
-                missionIndex={missionIdToIndex[nextMission.id]?.index}
-                missionTotal={missionIdToIndex[nextMission.id]?.total}
+                missionIndex={missionStoryStep(nextMission)}
+                missionTotal={orderedTotal}
                 onOpen={onOpen}
                 delay={0.1}
               />
@@ -1112,10 +1112,7 @@ export default function Missions() {
     currentIdx >= 0 && currentIdx + 1 < orderedCityMissions.length
       ? orderedCityMissions[currentIdx + 1]
       : null;
-  const missionIdToIndex = {};
-  orderedCityMissions.forEach((m, i) => {
-    missionIdToIndex[m.id] = { index: i + 1, total: orderedCityMissions.length };
-  });
+  const missionStoryStep = (m) => (m?.order ?? 0) + 1;
 
   const bossMissions   = cityMissions.filter(m => m.is_boss);
   const completedMissions = cityMissions.filter(m => m.completed).sort((a, b) => {
@@ -1294,8 +1291,8 @@ export default function Missions() {
           cityLabel={cityDisplayName(city)}
           currentMission={currentMission}
           nextMission={nextMission}
-          missionIdToIndex={missionIdToIndex}
-          orderedTotal={orderedCityMissions.length}
+          missionStoryStep={missionStoryStep}
+          orderedTotal={totalMissions}
           completedCount={completedCount}
           onOpen={setSelected}
         />
