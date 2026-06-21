@@ -2360,6 +2360,40 @@ const TruceCooldownBanner = ({ cooldownUntil }) => {
   );
 };
 
+function WarTruceActions({ war, family, canManage, onOfferTruce, onAcceptTruce, compact = false }) {
+  if (!war || !canManage) return null;
+  const canOffer = war.status === 'active';
+  const canAccept = war.status === 'truce_offered' && war.truce_offered_by_family_id !== family?.id;
+  if (!canOffer && !canAccept) return null;
+
+  const onCooldown = canOffer && war.truce_cooldown_until && new Date(war.truce_cooldown_until) > new Date();
+  const pad = compact ? 'px-3 py-2' : 'px-4 py-3';
+
+  return (
+    <div className={`flex gap-2 ${pad} border-t border-zinc-800/60 bg-zinc-950/90`}>
+      {canOffer && (
+        <button
+          type="button"
+          onClick={onOfferTruce}
+          disabled={onCooldown}
+          className={`flex-1 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border transition-all min-h-[44px] touch-manipulation ${onCooldown ? 'bg-zinc-900 border-zinc-800 text-zinc-600 cursor-not-allowed' : 'bg-zinc-800/60 border-zinc-700/40 text-zinc-400 hover:border-primary/40 hover:text-primary'}`}
+        >
+          {onCooldown ? '⏳ Truce on Cooldown' : '🤝 Offer Truce'}
+        </button>
+      )}
+      {canAccept && (
+        <button
+          type="button"
+          onClick={onAcceptTruce}
+          className="flex-1 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-primary/20 border-primary/50 text-primary hover:bg-primary/30 transition-all min-h-[44px] touch-manipulation"
+        >
+          ✓ Accept Truce
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ============================================================================
 // WAR MODAL — Boxing Match Card
 // ============================================================================
@@ -2417,9 +2451,9 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/95 backdrop-blur-sm" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-3 pt-[max(0.75rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))] bg-black/95 backdrop-blur-sm overflow-y-auto" onClick={onClose}>
       <div
-        className={`relative w-full max-w-lg ${styles.panel} rounded-xl overflow-hidden shadow-2xl fam-scale-in`}
+        className={`relative w-full max-w-lg max-h-[min(92dvh,760px)] flex flex-col ${styles.panel} rounded-xl overflow-hidden shadow-2xl fam-scale-in my-auto`}
         style={{ border: '1px solid rgba(239,68,68,0.2)' }}
         onClick={e => e.stopPropagation()}
       >
@@ -2445,6 +2479,21 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
         )}
         {war.status === 'active' && war.truce_cooldown_until && (
           <TruceCooldownBanner cooldownUntil={war.truce_cooldown_until} />
+        )}
+
+        <WarTruceActions
+          war={war}
+          family={family}
+          canManage={canManage}
+          onOfferTruce={onOfferTruce}
+          onAcceptTruce={onAcceptTruce}
+          compact
+        />
+
+        {!canManage && (war.status === 'active' || war.status === 'truce_offered') && (
+          <p className="mx-4 mt-2 text-[9px] text-zinc-500 font-heading text-center">
+            Only Boss or Underboss can offer or accept a truce.
+          </p>
         )}
 
         {/* ── FIGHT CARD ── */}
@@ -2547,7 +2596,7 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
         </div>
 
         {/* ── TAB CONTENT ── */}
-        <div className="overflow-y-auto" style={{ maxHeight: '220px' }}>
+        <div className="overflow-y-auto flex-1 min-h-0" style={{ maxHeight: '220px' }}>
 
           {/* FIGHTERS TAB */}
           {modalTab === 'fighters' && (
@@ -2675,32 +2724,6 @@ const WarModal = ({ war, stats, family, canManage, onClose, onOfferTruce, onAcce
             </div>
           )}
         </div>
-
-        {/* ── TRUCE BUTTONS ── */}
-        {canManage && (war.status === 'active' || (war.status === 'truce_offered' && war.truce_offered_by_family_id !== family?.id)) && (
-          <div className="flex gap-2 px-4 py-3 border-t border-zinc-800/60">
-            {war.status === 'active' && (() => {
-              const onCooldown = war.truce_cooldown_until && new Date(war.truce_cooldown_until) > new Date();
-              return (
-                <button
-                  onClick={onOfferTruce}
-                  disabled={onCooldown}
-                  className={`flex-1 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border transition-all ${onCooldown ? 'bg-zinc-900 border-zinc-800 text-zinc-600 cursor-not-allowed' : 'bg-zinc-800/60 border-zinc-700/40 text-zinc-400 hover:border-primary/40 hover:text-primary'}`}
-                >
-                  {onCooldown ? '⏳ Truce on Cooldown' : '🤝 Offer Truce'}
-                </button>
-              );
-            })()}
-            {war.status === 'truce_offered' && war.truce_offered_by_family_id !== family?.id && (
-              <button
-                onClick={onAcceptTruce}
-                className="flex-1 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-primary/20 border-primary/50 text-primary hover:bg-primary/30 transition-all"
-              >
-                ✓ Accept Truce
-              </button>
-            )}
-          </div>
-        )}
       </div>
     </div>
   );
@@ -3566,6 +3589,20 @@ export default function FamilyPage() {
   };
   const handleOfferTruce = async () => { const entry = activeWars[selectedWarIndex]; if (!entry?.war?.id) return; try { await api.post('/families/war/truce/offer', { war_id: entry.war.id }); toast.success('Truce offered'); fetchData(); setShowWarModal(false); } catch (e) { toast.error(apiDetail(e)); } };
   const handleAcceptTruce = async () => { const entry = activeWars[selectedWarIndex]; if (!entry?.war?.id) return; try { await api.post('/families/war/truce/accept', { war_id: entry.war.id }); toast.success('Accepted'); fetchData(); setShowWarModal(false); } catch (e) { toast.error(apiDetail(e)); } };
+
+  const openWarModalById = (warId) => {
+    const idx = activeWars.findIndex((entry) => entry.war?.id === warId);
+    if (idx < 0) return false;
+    setSelectedWarIndex(idx);
+    setShowWarModal(true);
+    return true;
+  };
+
+  const handleWarDetails = (warId) => {
+    if (!openWarModalById(warId)) {
+      setDetailsWarId(warId);
+    }
+  };
   const handleStateTakeoverAccept = async () => {
     if (!window.confirm(`Accept takeover of ${family?.pending_state_takeover}? Your current state (${family?.head_of_state}) will become unclaimed.`)) return;
     setStateTakeoverLoading(true);
@@ -3839,9 +3876,20 @@ export default function FamilyPage() {
                   </button>
                 ))}
               </div>
-              <button onClick={() => { setSelectedWarIndex(0); setShowWarModal(true); }} className="text-[10px] text-zinc-500 hover:text-foreground shrink-0 transition-colors">
-                Details →
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                {canManage && (
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedWarIndex(0); setShowWarModal(true); }}
+                    className="text-[10px] font-heading font-bold uppercase tracking-wider px-2.5 py-1.5 min-h-[36px] rounded border border-primary/30 text-primary/80 hover:text-primary hover:border-primary/50 hover:bg-primary/10 transition-all touch-manipulation"
+                  >
+                    Truce
+                  </button>
+                )}
+                <button type="button" onClick={() => { setSelectedWarIndex(0); setShowWarModal(true); }} className="text-[10px] text-zinc-500 hover:text-foreground transition-colors touch-manipulation min-h-[36px] px-1">
+                  War panel →
+                </button>
+              </div>
             </div>
           )}
 
@@ -4030,7 +4078,7 @@ export default function FamilyPage() {
                 />
               )}
               {activeTab === 'families' && <FamiliesTab families={families} myFamilyId={family?.id} />}
-              {activeTab === 'history' && <WarHistoryTab wars={warHistory} onDetails={setDetailsWarId} />}
+              {activeTab === 'history' && <WarHistoryTab wars={warHistory} onDetails={handleWarDetails} />}
             </div>
           </div>
         </>

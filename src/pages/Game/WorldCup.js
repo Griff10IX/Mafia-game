@@ -48,6 +48,35 @@ function WcPointsBadge({ pts }) {
   );
 }
 
+function WcEnterBanner({ entered, canEnter, lateEntryAvailable, entering, onEnter }) {
+  if (entered) return null;
+  return (
+    <WcPanel className="p-4 space-y-3 border-amber-500/30 bg-amber-950/20">
+      <p className="text-sm text-amber-100 font-heading leading-relaxed">
+        {canEnter ? (
+          lateEntryAvailable ? (
+            <>Join the World Cup event to save predictions. The team draft already ran on this account — you can still predict scores and earn points, but you won&apos;t receive drafted nations for the jackpot.</>
+          ) : (
+            <>Join the World Cup event before you can change scores or save predictions. Each account must enter separately (a new character after death does not carry over your old entry).</>
+          )
+        ) : (
+          <>World Cup entry is closed for new players. Contact staff if you need access on this account.</>
+        )}
+      </p>
+      {canEnter ? (
+        <button
+          type="button"
+          disabled={entering}
+          onClick={onEnter}
+          className="w-full sm:w-auto min-h-[44px] px-5 rounded-md bg-primary text-primary-foreground font-heading uppercase text-sm tracking-wider hover:opacity-90 disabled:opacity-50"
+        >
+          {entering ? 'Joining…' : lateEntryAvailable ? 'Join for predictions' : 'Enter World Cup Event'}
+        </button>
+      ) : null}
+    </WcPanel>
+  );
+}
+
 function WcPanel({ children, className = '', accent = false }) {
   return (
     <div className={`${styles.panel} mobile-panel rounded-lg border border-primary/20 overflow-hidden ${accent ? 'border-t-2 border-t-primary/50' : ''} ${className}`}>
@@ -220,8 +249,12 @@ export default function WorldCup() {
   const enterEvent = async () => {
     setEntering(true);
     try {
-      await api.post('/world-cup/enter');
-      toast.success('You joined the World Cup predictions event!');
+      const res = await api.post('/world-cup/enter');
+      toast.success(
+        res.data?.late_entry
+          ? 'Joined for predictions — match picks are unlocked (no draft nations on this account).'
+          : 'You joined the World Cup predictions event!'
+      );
       await load();
     } catch (e) {
       toast.error(getApiErrorMessage(e));
@@ -246,6 +279,10 @@ export default function WorldCup() {
   const tournamentPicksLocked = status?.tournament_picks_locked === true
     || status?.tournament_started === true
     || (status?.tournament_start_at ? new Date(status.tournament_start_at).getTime() <= Date.now() : false);
+
+  const canEnter = status?.can_enter === true
+    || (!status?.entered && status?.config?.entry_open !== false && status?.enabled !== false);
+  const lateEntryAvailable = status?.late_entry_available === true;
 
   const savePrediction = async (type, target_id, value) => {
     const lockEarlyTypes = ['group_winner', 'second_place', 'third_place'];
@@ -358,14 +395,25 @@ export default function WorldCup() {
             </ul>
             {!status?.entered ? (
               <div className="space-y-2">
-                <button
-                  type="button"
-                  disabled={entering}
-                  onClick={enterEvent}
-                  className="w-full min-h-[44px] rounded-md bg-primary text-primary-foreground font-heading uppercase text-sm tracking-wider hover:opacity-90 disabled:opacity-50"
-                >
-                  {entering ? 'Joining…' : 'Enter World Cup Event'}
-                </button>
+                {canEnter ? (
+                  <>
+                    <button
+                      type="button"
+                      disabled={entering}
+                      onClick={enterEvent}
+                      className="w-full min-h-[44px] rounded-md bg-primary text-primary-foreground font-heading uppercase text-sm tracking-wider hover:opacity-90 disabled:opacity-50"
+                    >
+                      {entering ? 'Joining…' : lateEntryAvailable ? 'Join for predictions' : 'Enter World Cup Event'}
+                    </button>
+                    {lateEntryAvailable ? (
+                      <p className="text-[10px] text-amber-300/90 font-heading uppercase tracking-wider">
+                        Team draft already ran — match and knockout predictions still earn points; no jackpot nations.
+                      </p>
+                    ) : null}
+                  </>
+                ) : (
+                  <p className="text-sm text-amber-300 font-heading">Entry is closed for new accounts.</p>
+                )}
                 {status?.can_ghost_enter ? (
                   <button
                     type="button"
@@ -484,6 +532,13 @@ export default function WorldCup() {
 
       {tab === 'groups' && (
         <div className="space-y-3 wc-fade-in">
+          <WcEnterBanner
+            entered={status?.entered}
+            canEnter={canEnter}
+            lateEntryAvailable={lateEntryAvailable}
+            entering={entering}
+            onEnter={enterEvent}
+          />
           {tournamentPicksLocked && (
             <WcPanel className="p-3 text-[10px] text-amber-300/90 font-heading uppercase tracking-wider">
               Tournament has started — group winner picks are locked and cannot be changed.
@@ -525,6 +580,10 @@ export default function WorldCup() {
           predsByKey={predsByKey}
           points={points}
           entered={status?.entered}
+          canEnter={canEnter}
+          lateEntryAvailable={lateEntryAvailable}
+          entering={entering}
+          onEnter={enterEvent}
           saving={saving}
           onSave={savePrediction}
         />
@@ -536,6 +595,10 @@ export default function WorldCup() {
           predsByKey={predsByKey}
           points={points}
           entered={status?.entered}
+          canEnter={canEnter}
+          lateEntryAvailable={lateEntryAvailable}
+          entering={entering}
+          onEnter={enterEvent}
           saving={saving}
           picksLocked={tournamentPicksLocked}
           onSave={savePrediction}
@@ -585,22 +648,33 @@ function formatDraftCountdown(draftScheduledAt) {
   return `${hours}h ${mins}m until team draft`;
 }
 
-function ScoreStepper({ value, onChange, disabled }) {
+function ScoreStepper({ value, onChange, disabled, disabledHint }) {
   const v = Number(value) || 0;
+  const softBlock = Boolean(disabled && disabledHint);
+  const hardDisabled = Boolean(disabled && !disabledHint);
+  const bump = (delta) => {
+    if (disabled) {
+      if (disabledHint) toast.error(disabledHint);
+      return;
+    }
+    onChange(v + delta);
+  };
+  const minusDisabled = hardDisabled || (!softBlock && v <= 0);
+  const plusDisabled = hardDisabled || (!softBlock && v >= 15);
   return (
-    <div className="flex items-center gap-1">
-      <button type="button" disabled={disabled || v <= 0} onClick={() => onChange(v - 1)} className="min-w-[44px] min-h-[44px] rounded border border-primary/20 flex items-center justify-center">
+    <div className={`flex items-center gap-1 ${disabled ? 'opacity-50' : ''}`}>
+      <button type="button" disabled={minusDisabled} onClick={() => bump(-1)} className="min-w-[44px] min-h-[44px] rounded border border-primary/20 flex items-center justify-center disabled:cursor-not-allowed">
         <Minus size={16} />
       </button>
       <span className="w-8 text-center font-heading tabular-nums">{v}</span>
-      <button type="button" disabled={disabled || v >= 15} onClick={() => onChange(v + 1)} className="min-w-[44px] min-h-[44px] rounded border border-primary/20 flex items-center justify-center">
+      <button type="button" disabled={plusDisabled} onClick={() => bump(1)} className="min-w-[44px] min-h-[44px] rounded border border-primary/20 flex items-center justify-center disabled:cursor-not-allowed">
         <Plus size={16} />
       </button>
     </div>
   );
 }
 
-function MatchPredictionsTab({ matches, predsByKey, points, entered, saving, onSave }) {
+function MatchPredictionsTab({ matches, predsByKey, points, entered, canEnter, lateEntryAvailable, entering, onEnter, saving, onSave }) {
   const [filter, setFilter] = useState('all');
   const filtered = useMemo(() => {
     if (filter === 'all') return matches;
@@ -609,6 +683,13 @@ function MatchPredictionsTab({ matches, predsByKey, points, entered, saving, onS
 
   return (
     <div className="space-y-3 wc-fade-in">
+      <WcEnterBanner
+        entered={entered}
+        canEnter={canEnter}
+        lateEntryAvailable={lateEntryAvailable}
+        entering={entering}
+        onEnter={onEnter}
+      />
       <div className="wc-tab-scroll flex gap-1.5 overflow-x-auto pb-1">
         {['all', 'group', 'knockout'].map((f) => (
           <button
@@ -636,6 +717,8 @@ function MatchCard({ match, predsByKey, points, entered, saving, onSave }) {
   const [away, setAway] = useState(() => predsByKey[`match_score:${match.id}`]?.value?.away ?? 0);
   const [scorer, setScorer] = useState(() => predsByKey[`match_scorer:${match.id}`]?.value?.name || '');
   const locked = match.locked || match.status === 'settled';
+  const controlsDisabled = !entered || saving;
+  const disabledHint = !entered ? 'Join the World Cup event first (Overview or banner above).' : null;
 
   useEffect(() => {
     const ps = predsByKey[`match_score:${match.id}`]?.value;
@@ -673,11 +756,11 @@ function MatchCard({ match, predsByKey, points, entered, saving, onSave }) {
           <div className="flex flex-wrap items-center gap-6">
             <div className="flex items-center gap-2.5">
               <WcFlag team={homeTeam} size="sm" />
-              <ScoreStepper value={home} onChange={setHome} disabled={!entered || saving} />
+              <ScoreStepper value={home} onChange={setHome} disabled={controlsDisabled} disabledHint={disabledHint} />
             </div>
             <div className="flex items-center gap-2.5">
               <WcFlag team={awayTeam} size="sm" />
-              <ScoreStepper value={away} onChange={setAway} disabled={!entered || saving} />
+              <ScoreStepper value={away} onChange={setAway} disabled={controlsDisabled} disabledHint={disabledHint} />
             </div>
           </div>
           <input
@@ -717,13 +800,20 @@ function MatchCard({ match, predsByKey, points, entered, saving, onSave }) {
   );
 }
 
-function KnockoutTab({ teams, predsByKey, points, entered, saving, picksLocked, onSave }) {
+function KnockoutTab({ teams, predsByKey, points, entered, canEnter, lateEntryAvailable, entering, onEnter, saving, picksLocked, onSave }) {
   const second = predsByKey['second_place:tournament']?.value?.team_id || predsByKey['second_place:tournament']?.value;
   const third = predsByKey['third_place:tournament']?.value?.team_id || predsByKey['third_place:tournament']?.value;
   const disabled = !entered || saving || picksLocked;
 
   return (
     <div className="space-y-3 wc-fade-in">
+      <WcEnterBanner
+        entered={entered}
+        canEnter={canEnter}
+        lateEntryAvailable={lateEntryAvailable}
+        entering={entering}
+        onEnter={onEnter}
+      />
       {picksLocked && (
         <WcPanel className="p-3 text-[10px] text-amber-300/90 font-heading uppercase tracking-wider">
           Tournament has started — 2nd and 3rd place picks are locked and cannot be changed.

@@ -132,6 +132,22 @@ async def _require_enabled(cfg: dict, *, admin_ok: bool = False) -> None:
     raise HTTPException(status_code=403, detail=cfg.get("ended_message") or DEFAULT_ENDED_MESSAGE)
 
 
+def _can_enter_event(cfg: dict, entry: Optional[dict]) -> bool:
+    """Whether this user may join (or has already joined) the World Cup event."""
+    if entry:
+        return False
+    if not cfg.get("enabled"):
+        return False
+    if cfg.get("entry_open", True):
+        return True
+    # After the team draft closes entry_open, still allow late join for match/group predictions (no raffle teams).
+    return bool(cfg.get("draft_run"))
+
+
+def _late_entry_only(cfg: dict) -> bool:
+    return bool(cfg.get("draft_run")) and not cfg.get("entry_open", True)
+
+
 async def _require_enabled_staff(cfg: dict) -> None:
     if not cfg.get("enabled"):
         raise HTTPException(status_code=403, detail="World Cup event is disabled")
@@ -1883,11 +1899,14 @@ def register(router):
         start = await _get_tournament_start_at(db, cfg)
         draft_timing = _draft_timing_payload(cfg, start)
         tournament_started = _is_tournament_started_at(start)
+        can_enter = _can_enter_event(cfg, entry)
         return {
             "enabled": True,
             "config": {k: cfg.get(k) for k in list(DEFAULT_POINTS.keys()) + ["entry_open", "draft_run", "phase", "banner_text"]},
             "points": _points_from_config(cfg),
             "entered": bool(entry),
+            "can_enter": can_enter,
+            "late_entry_available": can_enter and _late_entry_only(cfg),
             "ghost_entry": bool(entry and entry.get("ghost_entry")),
             "can_ghost_enter": bool(
                 _is_admin(current_user)
@@ -2009,14 +2028,18 @@ def register(router):
     async def world_cup_enter(current_user: dict = Depends(get_current_user)):
         cfg = await _load_config(db)
         await _require_enabled(cfg)
-        if not cfg.get("entry_open", True):
-            raise HTTPException(status_code=400, detail="Entry is closed")
         uid = current_user.get("id") or ""
         existing = await db.world_cup_entries.find_one({"user_id": uid})
         if existing:
             return {"ok": True, "already_entered": True}
-        await db.world_cup_entries.insert_one({"user_id": uid, "entered_at": _now_iso(), "drafted_team_ids": []})
-        return {"ok": True}
+        if not _can_enter_event(cfg, None):
+            raise HTTPException(status_code=400, detail="Entry is closed")
+        late = _late_entry_only(cfg)
+        doc = {"user_id": uid, "entered_at": _now_iso(), "drafted_team_ids": []}
+        if late:
+            doc["late_entry"] = True
+        await db.world_cup_entries.insert_one(doc)
+        return {"ok": True, "late_entry": late}
 
     @router.post("/world-cup/enter-ghost")
     async def world_cup_enter_ghost(current_user: dict = Depends(get_current_user)):
