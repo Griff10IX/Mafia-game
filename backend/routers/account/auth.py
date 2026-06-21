@@ -26,6 +26,7 @@ from utils.proxy_detection import assess_ip_for_auth
 from utils.geo_country import country_code_from_request_headers
 from utils.game_pass_season import get_game_pass_season_public
 from utils.redeem_code_lifecycle import reconcile_stale_dead_redeemers_on_code
+from utils.username_rules import validate_username
 
 
 class UserRegister(BaseModel):
@@ -65,6 +66,9 @@ class UserRegister(BaseModel):
             )
         if u.lower() == e:
             raise ValueError("Username must be different from your email address.")
+        _, err = validate_username(u, email=e)
+        if err:
+            raise ValueError(err)
         return self
 
 
@@ -562,6 +566,9 @@ def register(router):
                 status_code=400,
                 detail="Usernames cannot contain '@'. Choose a display name, not an email address.",
             )
+        _, err = validate_username(raw)
+        if err:
+            raise HTTPException(status_code=400, detail=err)
         username_pattern = re.compile("^" + re.escape(raw) + "$", re.IGNORECASE)
         existing_username = await db.users.find_one(
             {"username": username_pattern},

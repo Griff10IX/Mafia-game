@@ -401,6 +401,10 @@ class AdminChangeEmailRequest(BaseModel):
     new_email: str
 
 
+class AdminChangeUsernameRequest(BaseModel):
+    new_username: str
+
+
 class AdminSetPasswordRequest(BaseModel):
     new_password: str
 
@@ -7345,6 +7349,55 @@ def register(router):
         await db.users.update_one({"id": target["id"]}, {"$set": {"email": new_email}})
         await db.login_lockouts.delete_many({"email": (target.get("email") or "").strip().lower()})
         return {"message": f"Email updated for {target.get('username', target_username)}", "username": target.get("username")}
+
+    @router.post("/admin/change-username")
+    async def admin_change_username(
+        target_username: str,
+        body: AdminChangeUsernameRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Change a user's username (max 20 chars). Propagates to common denormalized fields."""
+        from utils.username_change import propagate_username_change
+        from utils.username_rules import validate_username
+
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        new_username, err = validate_username(body.new_username)
+        if err:
+            raise HTTPException(status_code=400, detail=err)
+        old_query = (target_username or "").strip()
+        if not old_query:
+            raise HTTPException(status_code=400, detail="Target username required")
+        if new_username.lower() == old_query.lower():
+            raise HTTPException(status_code=400, detail="New username is the same as the current one.")
+        username_pattern = _username_pattern(old_query)
+        target = await db.users.find_one(
+            {"username": username_pattern},
+            {"_id": 0, "id": 1, "username": 1, "email": 1},
+        )
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        if target.get("email") and new_username.lower() == str(target["email"]).strip().lower():
+            raise HTTPException(status_code=400, detail="Username must be different from email address.")
+        taken = await db.users.find_one(
+            {"username": _username_pattern(new_username), "id": {"$ne": target["id"]}},
+            {"_id": 0, "id": 1},
+        )
+        if taken:
+            raise HTTPException(status_code=400, detail="Username already registered.")
+        old_username = target.get("username") or old_query
+        propagation = await propagate_username_change(
+            db,
+            user_id=target["id"],
+            old_username=old_username,
+            new_username=new_username,
+        )
+        return {
+            "message": f"Username changed from {old_username} to {new_username}",
+            "old_username": old_username,
+            "new_username": new_username,
+            "propagation": propagation,
+        }
 
     @router.post("/admin/log-out-user")
     async def admin_log_out_user(target_username: str, current_user: dict = Depends(get_current_user)):

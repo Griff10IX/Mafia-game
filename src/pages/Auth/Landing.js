@@ -253,6 +253,11 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
         setLoading(false);
         return;
       }
+      if (u.length > 20) {
+        toast.error('Username must be 20 characters or fewer.');
+        setLoading(false);
+        return;
+      }
       if (em && u.toLowerCase() === em) {
         toast.error('Username must be different from your email.');
         setLoading(false);
@@ -645,12 +650,13 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                     data-testid="username-input"
                     value={formData.username}
                     onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                    maxLength={20}
                     className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
-                    placeholder="Choose a character name (not your email)"
+                    placeholder="Choose a character name (max 20)"
                     required
                   />
                   <p className="mt-1 text-[8px] font-heading leading-snug" style={{ color: 'var(--noir-muted)' }}>
-                    Shown in-game; must not be your email or contain @.
+                    Shown in-game; max 20 characters. Must not be your email or contain @.
                   </p>
                   {usernameCheck.status !== 'idle' && (
                     <p

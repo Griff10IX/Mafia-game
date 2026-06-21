@@ -110,6 +110,7 @@ export default function StaffUserDetailsPanel({
   const [dossierTokenAmount, setDossierTokenAmount] = useState(5);
   const [dossierCarId, setDossierCarId] = useState('car1');
   const [dossierNewEmail, setDossierNewEmail] = useState('');
+  const [dossierNewUsername, setDossierNewUsername] = useState('');
   const [dossierNewPassword, setDossierNewPassword] = useState('');
 
   const refetch = useCallback(() => {
@@ -588,6 +589,41 @@ export default function StaffUserDetailsPanel({
                               }
                             >
                               {actionLoading.changeEmail ? '…' : 'Set'}
+                            </button>
+                          </ToolRow>
+                          <ToolRow label="Change username">
+                            <input
+                              type="text"
+                              value={dossierNewUsername}
+                              onChange={(e) => setDossierNewUsername(e.target.value)}
+                              placeholder="max 20 chars"
+                              maxLength={20}
+                              className={`${inputClass} w-32`}
+                            />
+                            <button
+                              type="button"
+                              className={btnClass}
+                              disabled={actionLoading.changeUsername || !dossierNewUsername.trim()}
+                              onClick={() => {
+                                const next = dossierNewUsername.trim();
+                                if (next.length > 20) {
+                                  toast.error('Username must be 20 characters or fewer');
+                                  return;
+                                }
+                                if (!window.confirm(`Rename ${username} to "${next}"?`)) return;
+                                runAction('changeUsername', async () => {
+                                  const res = await api.post(
+                                    '/admin/change-username',
+                                    { new_username: next },
+                                    { params: { target_username: username } }
+                                  );
+                                  toast.success(res.data?.message || 'Username updated');
+                                  setDossierNewUsername('');
+                                  onActionDone?.();
+                                });
+                              }}
+                            >
+                              {actionLoading.changeUsername ? '…' : 'Rename'}
                             </button>
                           </ToolRow>
                           <ToolRow label="Set password">

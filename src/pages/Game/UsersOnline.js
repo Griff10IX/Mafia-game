@@ -276,7 +276,7 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
   const profileTo = selfFromRoster
     ? `/profile/${encodeURIComponent(user.username)}?view=public`
     : `/profile/${encodeURIComponent(user.username)}`;
-  const linkClass = `relative z-10 text-[11px] font-heading font-bold transition-colors ${displayColor ? '' : 'text-foreground hover:text-primary'}`;
+  const linkClass = `relative z-10 inline-block max-w-[160px] truncate text-[11px] font-heading font-bold transition-colors ${displayColor ? '' : 'text-foreground hover:text-primary'}`;
   const prefetchFullProfile = () => warmProfilePrefetchFromUsername(user.username);
 
   const profileLink = (extra = {}) => (
@@ -288,6 +288,7 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
       onPointerDown={prefetchFullProfile}
       onPointerEnter={prefetchFullProfile}
       onFocus={prefetchFullProfile}
+      title={user.username}
       {...extra}
     >
       {user.username}

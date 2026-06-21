@@ -756,6 +756,7 @@ export default function Admin() {
     lockMinutes: 5,
     searchMinutes: 1,
     adminNewEmail: '',
+    adminNewUsername: '',
     adminNewPassword: '',
     tokenType: 'xp_crimes',
     tokenAmount: 5,
@@ -4379,6 +4380,22 @@ export default function Admin() {
       const response = await api.post('/admin/change-email', { new_email: email }, { params: { target_username: formData.targetUsername } });
       toast.success(response.data?.message || 'Email updated');
       setFormData(prev => ({ ...prev, adminNewEmail: '' }));
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleChangeUsername = async () => {
+    const newUsername = (formData.adminNewUsername || '').trim();
+    if (!newUsername) { toast.error('Enter new username'); return; }
+    if (newUsername.length > 20) { toast.error('Username must be 20 characters or fewer'); return; }
+    if (!window.confirm(`Rename ${formData.targetUsername || 'this user'} to "${newUsername}"?`)) return;
+    try {
+      const response = await api.post(
+        '/admin/change-username',
+        { new_username: newUsername },
+        { params: { target_username: formData.targetUsername } },
+      );
+      toast.success(response.data?.message || 'Username updated');
+      setFormData(prev => ({ ...prev, adminNewUsername: '', targetUsername: response.data?.new_username || prev.targetUsername }));
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
 
@@ -11157,6 +11174,10 @@ export default function Admin() {
             <ActionRow icon={Mail} label="Change Email" description="Set a new email for the target user">
               <Input type="email" value={formData.adminNewEmail} onChange={(e) => setFormData((prev) => ({ ...prev, adminNewEmail: e.target.value }))} placeholder="new@email.com" className="flex-1 min-w-0 text-[11px]" />
               <BtnPrimary onClick={handleChangeEmail}>Set</BtnPrimary>
+            </ActionRow>
+            <ActionRow icon={User} label="Change Username" description="Rename account (max 20 characters). Updates live roster and profile links.">
+              <Input type="text" value={formData.adminNewUsername} onChange={(e) => setFormData((prev) => ({ ...prev, adminNewUsername: e.target.value }))} placeholder="New name (max 20)" maxLength={20} className="flex-1 min-w-0 text-[11px]" />
+              <BtnPrimary onClick={handleChangeUsername}>Rename</BtnPrimary>
             </ActionRow>
             <ActionRow icon={LogOut} label="Log Out User" description="Invalidate target user’s sessions, or log out everyone (site-wide) except you">
               <BtnPrimary onClick={handleLogOutUser}>Log out</BtnPrimary>
