@@ -4281,6 +4281,23 @@ export default function Admin() {
     }
   };
 
+  const handleGrantDeadAliveInheritance = async () => {
+    const u = (formData.targetUsername || '').trim();
+    if (!u) {
+      toast.error('Enter the dead account username');
+      return;
+    }
+    if (!window.confirm(`Reset Claim Inheritance on dead account "${u}"?\n\nUse the fallen account name, not the new living alt.`)) return;
+    try {
+      const response = await api.post(`/admin/grant-dead-alive-inheritance?target_username=${encodeURIComponent(u)}`);
+      toast.success(response.data?.message || 'Inheritance reset');
+      const previewRes = await api.get('/admin/revive-player/preview', { params: { target_username: u } });
+      setRevivePreview(previewRes.data);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
   const handleGiveAutoRank = async () => {
     try {
       const response = await api.post(`/admin/give-auto-rank?target_username=${encodeURIComponent(formData.targetUsername)}`);
@@ -11249,12 +11266,20 @@ export default function Admin() {
                     {revivePreviewLoading ? '…' : 'Preview'}
                   </BtnSecondary>
                   <BtnPrimary onClick={handleRevivePlayer}>Revive</BtnPrimary>
-                  <BtnSecondary type="button" onClick={handleGrantDeadAliveRevive} title="Clear one-time Dead > Alive revive lock for this email">
+                  <BtnSecondary type="button" onClick={handleGrantDeadAliveRevive} title="Clear 50k Revive lock for this email (not Claim Inheritance)">
                     Grant Revive slot
+                  </BtnSecondary>
+                  <BtnSecondary type="button" onClick={handleGrantDeadAliveInheritance} title="Reset Claim Inheritance on the dead account (retrieval_used)">
+                    Reset inheritance
                   </BtnSecondary>
                 </div>
               </ActionRow>
               <div className="pl-6 space-y-2 border-l-2 border-primary/25 text-[10px] font-heading">
+                <p className="text-mutedForeground leading-relaxed">
+                  <strong className="text-foreground">Grant Revive slot</strong> — 50k revive on same email.
+                  {' '}
+                  <strong className="text-foreground">Reset inheritance</strong> — Claim Inheritance on the <em>dead</em> account (enter fallen username, e.g. K).
+                </p>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={reviveGrantDeadAlive} onChange={(e) => setReviveGrantDeadAlive(e.target.checked)} />
                   Reset Dead &gt; Alive revive slot on revive (allows 50k revive again)
@@ -11308,6 +11333,11 @@ export default function Admin() {
                     ) : (
                       <p className="text-green-400/90">Dead &gt; Alive revive slot available on this email.</p>
                     )}
+                    {revivePreview.victim?.retrieval_used ? (
+                      <p className="text-amber-300">Claim Inheritance already used on this account — use Reset inheritance (dead username above).</p>
+                    ) : revivePreview.victim?.is_dead ? (
+                      <p className="text-green-400/90">Claim Inheritance available on this dead account.</p>
+                    ) : null}
                     {(revivePreview.linked_alive_accounts || []).length === 0 ? (
                       <p className="text-mutedForeground">No linked alive alt on same email / post-death IP.</p>
                     ) : (

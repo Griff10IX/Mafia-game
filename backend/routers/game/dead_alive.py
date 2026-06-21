@@ -32,6 +32,23 @@ async def revive_slot_used_for_email(db, email: str) -> bool:
     return bool(doc)
 
 
+async def clear_inheritance_retrieval_for_user(db, user_id: str) -> bool:
+    """Clear Claim Inheritance locks on a dead account (staff grant). Returns True if flags were reset."""
+    if not user_id:
+        return False
+    result = await db.users.update_one(
+        {"id": user_id, "is_dead": True},
+        {
+            "$set": {
+                "retrieval_used": False,
+                "swiss_retrieval_used": False,
+                "rank_xp_pass_dead_alive_carry_used": False,
+            }
+        },
+    )
+    return result.modified_count > 0
+
+
 def _parse_iso_utc(s):
     if not s:
         return None

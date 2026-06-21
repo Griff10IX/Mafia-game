@@ -416,6 +416,7 @@ const SearchesCard = ({
   setTargetFilter,
   isFavoriteTarget,
   toggleFavorite,
+  favoriteCount,
   selectedAttackIds,
   toggleSelected,
   toggleSelectAll,
@@ -460,6 +461,11 @@ const SearchesCard = ({
         <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-1">
           <Users size={14} />
           My Searches ({attacks.length})
+          {favoriteCount > 0 ? (
+            <span className="text-red-400/90 normal-case tracking-normal font-bold" title="Favorited targets">
+              · ★ {favoriteCount}
+            </span>
+          ) : null}
         </h2>
         <div className="flex flex-wrap items-center justify-end gap-x-3 gap-y-1">
           <div className="flex items-center gap-1">
@@ -471,6 +477,7 @@ const SearchesCard = ({
               data-testid="attack-show-filter"
             >
               <option value="all">All</option>
+              <option value="favorites">Favorites</option>
               <option value="searching">Searching</option>
               <option value="found">Found</option>
             </select>
@@ -1910,7 +1917,13 @@ export default function Attack() {
   const filteredAttacks = useMemo(() => {
     const t = filterText.trim().toLowerCase();
     const list = attacks
-      .filter((a) => (show === 'all' ? true : a.status === show))
+      .filter((a) => {
+        if (show === 'all') return true;
+        if (show === 'favorites') {
+          return !!(a.target_username && favoriteTargets.has(normKillFavUser(a.target_username)));
+        }
+        return a.status === show;
+      })
       .filter((a) => {
         if (targetFilter === 'all') return true;
         const isRobot = a.target_is_robot_bodyguard === true;
@@ -2001,6 +2014,7 @@ export default function Attack() {
           setTargetFilter={setTargetFilter}
           isFavoriteTarget={isFavoriteTarget}
           toggleFavorite={toggleFavorite}
+          favoriteCount={favoriteTargets.size}
           selectedAttackIds={selectedAttackIds}
           toggleSelected={toggleSelected}
           toggleSelectAll={() => toggleSelectAllFiltered(filteredIds)}

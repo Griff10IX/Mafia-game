@@ -7014,6 +7014,8 @@ def register(router):
                 "money_at_death": target.get("money_at_death"),
                 "current_points": int(target.get("points") or 0),
                 "current_money": int(target.get("money") or 0),
+                "retrieval_used": bool(target.get("retrieval_used")),
+                "swiss_retrieval_used": bool(target.get("swiss_retrieval_used")),
             },
             "linked_alive_accounts": alt_rows,
             "dead_alive_revive_used": dead_alive_revive_used,
@@ -7266,6 +7268,54 @@ def register(router):
             "revive_slot_cleared": False,
             "username": uname,
             "email": email,
+        }
+
+    @router.post("/admin/grant-dead-alive-inheritance")
+    async def admin_grant_dead_alive_inheritance(
+        target_username: str = Query(..., min_length=1),
+        current_user: dict = Depends(require_admin_or_mod),
+    ):
+        """Reset Claim Inheritance locks on a dead account so a new character can retrieve again."""
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one(
+            {"username": username_pattern},
+            {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "retrieval_used": 1, "points_at_death": 1, "money_at_death": 1},
+        )
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        if not target.get("is_dead"):
+            raise HTTPException(
+                status_code=400,
+                detail="Enter the dead account username (the fallen account), not the new living account.",
+            )
+        from routers.game.dead_alive import clear_inheritance_retrieval_for_user
+
+        cleared = await clear_inheritance_retrieval_for_user(db, target["id"])
+        uname = (target.get("username") or target_username).strip()
+        pts = int(target.get("points_at_death") or 0)
+        cash = int(target.get("money_at_death") or 0)
+        if cleared:
+            return {
+                "message": (
+                    f"Inheritance reset for dead account {uname}. "
+                    f"They can Claim Inheritance again from a living alt "
+                    f"(at-death snapshot: {pts:,} pts · ${cash:,})."
+                ),
+                "inheritance_reset": True,
+                "username": uname,
+                "points_at_death": pts,
+                "money_at_death": cash,
+            }
+        if not target.get("retrieval_used"):
+            return {
+                "message": f"{uname} was already eligible for Claim Inheritance (retrieval not marked used).",
+                "inheritance_reset": False,
+                "username": uname,
+            }
+        return {
+            "message": f"Could not reset inheritance flags for {uname}.",
+            "inheritance_reset": False,
+            "username": uname,
         }
 
     @router.post("/admin/change-email")

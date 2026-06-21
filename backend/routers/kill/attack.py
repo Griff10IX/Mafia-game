@@ -3633,11 +3633,20 @@ def _normalize_kill_favorite_username(s: Optional[str]) -> str:
 
 
 def _sanitize_kill_favorite_list(raw: Any) -> List[str]:
-    if not isinstance(raw, list):
+    if raw is None:
+        return []
+    items: List[Any]
+    if isinstance(raw, str):
+        items = [raw]
+    elif isinstance(raw, list):
+        items = raw
+    elif isinstance(raw, (tuple, set)):
+        items = list(raw)
+    else:
         return []
     out: List[str] = []
     seen: Set[str] = set()
-    for x in raw:
+    for x in items:
         n = _normalize_kill_favorite_username(str(x))
         if n and n not in seen:
             seen.add(n)
@@ -3647,14 +3656,22 @@ def _sanitize_kill_favorite_list(raw: Any) -> List[str]:
     return out
 
 
+async def _load_kill_favorite_targets(user_id: str) -> List[str]:
+    u = await db.users.find_one({"id": user_id}, {"_id": 0, "kill_favorite_targets": 1})
+    raw = (u or {}).get("kill_favorite_targets")
+    targets = _sanitize_kill_favorite_list(raw)
+    if raw is not None and not isinstance(raw, list):
+        await db.users.update_one({"id": user_id}, {"$set": {"kill_favorite_targets": targets}})
+    return targets
+
+
 class KillFavoriteToggleBody(BaseModel):
     target_username: str
 
 
 async def get_kill_favorites(current_user: dict = Depends(get_current_user)):
     """Starred search targets by username — persists across devices (stored on user doc)."""
-    u = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "kill_favorite_targets": 1})
-    targets = _sanitize_kill_favorite_list((u or {}).get("kill_favorite_targets"))
+    targets = await _load_kill_favorite_targets(current_user["id"])
     return {"targets": targets}
 
 
@@ -3666,17 +3683,33 @@ async def post_kill_favorites_toggle(
     if not target:
         raise HTTPException(status_code=400, detail="Username required")
     uid = current_user["id"]
-    u = await db.users.find_one({"id": uid}, {"_id": 0, "kill_favorite_targets": 1})
-    cur = _sanitize_kill_favorite_list((u or {}).get("kill_favorite_targets"))
+    cur = await _load_kill_favorite_targets(uid)
     if target in cur:
-        nxt = [x for x in cur if x != target]
+        updated = await db.users.find_one_and_update(
+            {"id": uid},
+            {"$pull": {"kill_favorite_targets": target}},
+            return_document=ReturnDocument.AFTER,
+            projection={"_id": 0, "kill_favorite_targets": 1},
+        )
+        nxt = _sanitize_kill_favorite_list((updated or {}).get("kill_favorite_targets"))
+        if target in nxt:
+            nxt = [x for x in nxt if x != target]
+            await db.users.update_one({"id": uid}, {"$set": {"kill_favorite_targets": nxt}})
         favorited = False
     else:
         if len(cur) >= KILL_FAVORITE_TARGETS_MAX:
-            raise HTTPException(status_code=400, detail="Favorite list is full")
-        nxt = cur + [target]
+            raise HTTPException(status_code=400, detail=f"Favorite list is full (max {KILL_FAVORITE_TARGETS_MAX})")
+        updated = await db.users.find_one_and_update(
+            {"id": uid},
+            {"$addToSet": {"kill_favorite_targets": target}},
+            return_document=ReturnDocument.AFTER,
+            projection={"_id": 0, "kill_favorite_targets": 1},
+        )
+        nxt = _sanitize_kill_favorite_list((updated or {}).get("kill_favorite_targets"))
+        if len(nxt) > KILL_FAVORITE_TARGETS_MAX:
+            await db.users.update_one({"id": uid}, {"$pull": {"kill_favorite_targets": target}})
+            raise HTTPException(status_code=400, detail=f"Favorite list is full (max {KILL_FAVORITE_TARGETS_MAX})")
         favorited = True
-    await db.users.update_one({"id": uid}, {"$set": {"kill_favorite_targets": nxt}})
     return {"targets": nxt, "favorited": favorited}
 
 
