@@ -166,3 +166,25 @@ export function setPropertiesPrefetch(data) {
 export function clearPropertiesPrefetch() {
   propertiesPrefetch = null;
 }
+
+const TRAVEL_PREFETCH_MAX_AGE_MS = 30000;
+let travelPrefetch = null;
+
+export function getTravelPrefetch() {
+  if (!travelPrefetch?.data) return null;
+  const age = Date.now() - (travelPrefetch.timestamp || 0);
+  if (age > TRAVEL_PREFETCH_MAX_AGE_MS) {
+    travelPrefetch = null;
+    return null;
+  }
+  return travelPrefetch.data;
+}
+
+export function setTravelPrefetch(data) {
+  if (!data?.travelInfo) return;
+  travelPrefetch = { data, timestamp: Date.now() };
+}
+
+export function clearTravelPrefetch() {
+  travelPrefetch = null;
+}

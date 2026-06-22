@@ -15,6 +15,7 @@ import { getThemeUiPlatform } from '../utils/themePlatform';
 import { readDashboardSessionCache } from '../utils/dashboardSessionCache';
 import { SLOTS_FEATURE_ENABLED } from '../config/gameFeatures';
 import { preloadRoute, preloadRouteHandlers } from '../utils/routePreload';
+import { prefetchTravelPageData } from '../utils/travelPageWarm';
 import { AuthContext } from '../context/AuthContext';
 import { warmLeaderboardCaches } from '../utils/leaderboardTopCache';
 import { setCrimesPrefetch, getCrimesPrefetch, clearProfileSessionLastMeUsername, setProfileSessionLastMeUsername } from '../utils/prefetchCache';
@@ -319,6 +320,7 @@ function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, ...rest }) {
   const location = useLocation();
   const path = typeof to === 'string' ? to : (to.pathname || '/');
   const preload = preloadRouteHandlers(path);
+  const warmTravel = path === '/game/travel' || path === '/travel';
   const mergeClick = (e) => {
     const search = typeof to === 'string' ? '' : (to.search || '');
     preloadRoute(path);
@@ -333,8 +335,16 @@ function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, ...rest }) {
       to={to}
       {...rest}
       onClick={mergeClick}
-      onMouseEnter={(e) => { preload.onMouseEnter(); if (onMouseEnter) onMouseEnter(e); }}
-      onFocus={(e) => { preload.onFocus(); if (onFocus) onFocus(e); }}
+      onMouseEnter={(e) => {
+        preload.onMouseEnter();
+        if (warmTravel) prefetchTravelPageData({ force: false }).catch(() => {});
+        if (onMouseEnter) onMouseEnter(e);
+      }}
+      onFocus={(e) => {
+        preload.onFocus();
+        if (warmTravel) prefetchTravelPageData({ force: false }).catch(() => {});
+        if (onFocus) onFocus(e);
+      }}
     />
   );
 }
@@ -1201,7 +1211,11 @@ export default function Layout({ children }) {
       return undefined;
     }
     const t = setTimeout(() => fetchRankingCounts(), 2500);
-    return () => clearTimeout(t);
+    const tTravel = setTimeout(() => { prefetchTravelPageData({ force: false }).catch(() => {}); }, 3500);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(tTravel);
+    };
   }, [userId]); // eslint-disable-line
 
   useEffect(() => {

@@ -411,11 +411,12 @@ export default function Referral() {
           </div>
           <div className="p-2.5 sm:p-3 space-y-3">
             <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading`}>Lifetime totals from codes you have redeemed</p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
               <StatCard label="Cash" value={formatMoneyCompact(data?.redeem_stats?.total_money || 0)} title={formatMoney(data?.redeem_stats?.total_money || 0)} valueColor="text-emerald-400" icon={DollarSign} />
               <StatCard label="Points" value={Number(data?.redeem_stats?.total_points || 0).toLocaleString()} valueColor="text-primary" icon={BarChart3} />
               <StatCard label="Respect" value={Number(data?.redeem_stats?.total_respect_points || 0).toLocaleString()} valueColor="text-amber-400" icon={UserPlus} />
               <StatCard label="Loot pieces" value={Number(data?.redeem_stats?.total_loot_box_pieces || 0).toLocaleString()} valueColor="text-foreground" icon={Gift} />
+              <StatCard label="Bullets" value={Number(data?.redeem_stats?.total_bullets || 0).toLocaleString()} valueColor="text-red-400" icon={Crosshair} />
               <StatCard label="Cars" value={Number(data?.redeem_stats?.total_cars || 0).toLocaleString()} valueColor="text-foreground" icon={Car} />
               <StatCard label="Tokens" value={Number(data?.redeem_stats?.total_tokens || 0).toLocaleString()} valueColor="text-foreground" icon={KeyRound} />
             </div>

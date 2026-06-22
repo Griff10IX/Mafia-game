@@ -182,6 +182,7 @@ function summarizeRedeemRewardsForAdmin(rewards) {
   if (rewards.points) parts.push(`${Number(rewards.points).toLocaleString()} pts`);
   if (rewards.respect_points) parts.push(`${Number(rewards.respect_points).toLocaleString()} respect`);
   if (rewards.loot_box_pieces) parts.push(`${Number(rewards.loot_box_pieces)} loot`);
+  if (rewards.bullets) parts.push(`${Number(rewards.bullets).toLocaleString()} bullets`);
   const carN = Array.isArray(rewards.cars) ? rewards.cars.length : 0;
   if (carN) parts.push(`${carN} car${carN === 1 ? '' : 's'}`);
   const tok = rewards.tokens;
@@ -357,7 +358,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Give All Points', categoryId: 'admin-quick', collapseKey: 'quick', keywords: ['give', 'all', 'points', 'bulk'] },
   { label: 'Give All Money', categoryId: 'admin-quick', collapseKey: 'quick', keywords: ['give', 'all', 'money', 'bulk'] },
   { label: 'Bulk User Action', categoryId: 'admin-quick', collapseKey: 'bulkAction', keywords: ['bulk', 'action', 'multiple', 'users'] },
-  { label: 'Redeem Codes', categoryId: 'admin-quick', collapseKey: 'redeemCodes', keywords: ['redeem', 'code', 'reward', 'cash', 'points', 'cars'] },
+  { label: 'Redeem Codes', categoryId: 'admin-quick', collapseKey: 'redeemCodes', keywords: ['redeem', 'code', 'reward', 'cash', 'points', 'cars', 'bullets'] },
   // Database (image host only; destructive DB tools removed from UI)
   { label: 'Image host (user uploads)', categoryId: 'admin-database', collapseKey: 'imageHostAdmin', keywords: ['image', 'host', 'upload', 'picture', 'imgur', 'photo'], adminOnly: true },
   // Staff Management
@@ -1591,6 +1592,7 @@ export default function Admin() {
     points: '',
     respect_points: '',
     loot_box_pieces: '',
+    bullets: '',
     cars: [],
     tokenEntries: [], // [{ type, amount }]
   });
@@ -3571,10 +3573,12 @@ export default function Admin() {
     const pts = parseRewardInt(redeemForm.points);
     const rsp = parseRewardInt(redeemForm.respect_points);
     const loot = parseRewardInt(redeemForm.loot_box_pieces);
+    const bullets = parseRewardInt(redeemForm.bullets);
     if (m > 0) rewards.money = m;
     if (pts > 0) rewards.points = pts;
     if (rsp > 0) rewards.respect_points = rsp;
     if (loot > 0) rewards.loot_box_pieces = loot;
+    if (bullets > 0) rewards.bullets = bullets;
     if (redeemForm.cars && redeemForm.cars.length > 0) rewards.cars = redeemForm.cars;
     const tokenEntries = redeemForm.tokenEntries.filter((e) => e.type && Number(e.amount) > 0);
     if (tokenEntries.length > 0) {
@@ -3593,7 +3597,7 @@ export default function Admin() {
         rewards,
       });
       toast.success('Redeem code created');
-      setRedeemForm({ code: '', max_uses: '', money: '', points: '', respect_points: '', loot_box_pieces: '', cars: [], tokenEntries: [] });
+      setRedeemForm({ code: '', max_uses: '', money: '', points: '', respect_points: '', loot_box_pieces: '', bullets: '', cars: [], tokenEntries: [] });
       await fetchRedeemCodes();
     } catch (e) {
       const d = e.response?.data?.detail;
@@ -23469,7 +23473,7 @@ export default function Admin() {
               <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Rewards</p>
               <div>
                 <p className="text-[10px] text-mutedForeground mb-2">Currency (leave blank for none)</p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                   <div>
                     <label className="text-[10px] text-mutedForeground font-heading uppercase block mb-1">Cash</label>
                     <FormattedNumberInput value={redeemForm.money} onChange={(v) => setRedeemForm((p) => ({ ...p, money: v }))} className="w-full px-2.5 py-1.5 rounded-md border border-input bg-transparent text-xs" />
@@ -23485,6 +23489,10 @@ export default function Admin() {
                   <div>
                     <label className="text-[10px] text-mutedForeground font-heading uppercase block mb-1">Loot pieces</label>
                     <input type="number" min="0" value={redeemForm.loot_box_pieces} onChange={(e) => setRedeemForm((p) => ({ ...p, loot_box_pieces: e.target.value }))} className="w-full px-2.5 py-1.5 rounded-md border border-input bg-transparent text-xs font-heading" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-mutedForeground font-heading uppercase block mb-1">Bullets</label>
+                    <FormattedNumberInput value={redeemForm.bullets} onChange={(v) => setRedeemForm((p) => ({ ...p, bullets: v }))} className="w-full px-2.5 py-1.5 rounded-md border border-input bg-transparent text-xs" />
                   </div>
                 </div>
               </div>

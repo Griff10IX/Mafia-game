@@ -2,6 +2,8 @@
  * Preload lazy route chunks on nav hover/focus and on route change so Suspense "Loading..." is brief.
  * Keys must match pathname (no trailing slash).
  */
+import { prefetchTravelPageData } from './travelPageWarm';
+
 const ROUTE_PRELOADERS = {
   '/account/dashboard': () => import('../pages/Account/Dashboard'),
   '/account/settings': () => import('../pages/Account/IPRules'),
@@ -23,7 +25,7 @@ const ROUTE_PRELOADERS = {
   '/social/forum': () => import('../pages/Social/Forum'),
   '/game/store': () => import('../pages/Game/Store'),
   '/game/states': () => import('../pages/Game/States'),
-  '/game/travel': () => import('../pages/Game/Travel'),
+  '/game/travel': () => import('../pages/Game/Travel').then(() => prefetchTravelPageData({ force: false })),
   '/game/ranking': () => import('../pages/Game/Ranking'),
   '/game/leaderboard': () => import('../pages/Game/Leaderboard'),
   '/game/family/list': () => import('../pages/Game/FamilyPage'),

@@ -193,6 +193,7 @@ class RedeemCodeRewards(BaseModel):
     points: Optional[int] = None
     respect_points: Optional[int] = None
     loot_box_pieces: Optional[int] = None
+    bullets: Optional[int] = None
     cars: Optional[List[str]] = None
     tokens: Optional[Dict[str, int]] = None  # token_type -> amount
 
@@ -18554,6 +18555,8 @@ def register(router):
             lines.append(f"{int(reward_dict['respect_points']):,} respect")
         if reward_dict.get("loot_box_pieces"):
             lines.append(f"{int(reward_dict['loot_box_pieces'])} loot box pieces")
+        if reward_dict.get("bullets"):
+            lines.append(f"{int(reward_dict['bullets']):,} bullets")
         for car_id in reward_dict.get("cars") or []:
             car_info = next((c for c in CARS if c.get("id") == car_id), None)
             lines.append(car_info.get("name", car_id) if car_info else str(car_id))
@@ -18599,6 +18602,8 @@ def register(router):
             reward_dict["respect_points"] = int(rewards.respect_points)
         if (rewards.loot_box_pieces or 0) > 0:
             reward_dict["loot_box_pieces"] = int(rewards.loot_box_pieces)
+        if (rewards.bullets or 0) > 0:
+            reward_dict["bullets"] = int(rewards.bullets)
         if rewards.cars:
             valid_car_ids = {c["id"] for c in CARS}
             car_list = [str(cid).strip() for cid in rewards.cars if str(cid).strip() in valid_car_ids]

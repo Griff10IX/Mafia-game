@@ -5,10 +5,14 @@ import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import ActiveTokenBadge from '../../components/ActiveTokenBadge';
-import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import { getTravelPrefetch, clearTravelPrefetch } from '../../utils/prefetchCache';
+import {
+  readTravelBoot,
+  writeTravelBoot,
+} from '../../utils/travelPageWarm';
+import { SAME_ROUTE_NAV_CLICK } from '../../constants/navigationEvents';
 
 const MAX_TRAVELS_PER_HOUR = 15;
-const TRAVEL_CACHE_KEY = 'mafia_travel_v1';
 
 /** Slug for location image path: "New York" -> "new-york". Images in public/images/travel/ to avoid /travel/ conflicting with SPA route. */
 function locationImageSlug(location) {
@@ -362,63 +366,73 @@ const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => (
 
 // Main component
 export default function Travel() {
-  const travelBoot = readSessionJson(TRAVEL_CACHE_KEY);
-  const [travelInfo, setTravelInfo] = useState(() => travelBoot?.travelInfo ?? null);
-  const [loading, setLoading] = useState(() => !travelBoot?.travelInfo);
+  const [bootCached] = useState(() => readTravelBoot());
+  const [travelInfo, setTravelInfo] = useState(() => bootCached?.travelInfo ?? null);
   const [loadError, setLoadError] = useState(false);
   const [traveling, setTraveling] = useState(false);
   const [travelPostPending, setTravelPostPending] = useState(false);
   const [travelTime, setTravelTime] = useState(0);
   const [selectedDest, setSelectedDest] = useState('');
-  const [autoRankBoozeOn, setAutoRankBoozeOn] = useState(() => !!travelBoot?.autoRankBoozeOn);
-  const [user, setUser] = useState(() => travelBoot?.user ?? null);
+  const [autoRankBoozeOn, setAutoRankBoozeOn] = useState(() => !!bootCached?.autoRankBoozeOn);
+  const [user, setUser] = useState(() => bootCached?.user ?? null);
   /** Block travel while single-player or MP blackjack is unfinished */
-  const [bjTravelBlock, setBjTravelBlock] = useState(() => travelBoot?.bjTravelBlock ?? null);
+  const [bjTravelBlock, setBjTravelBlock] = useState(() => bootCached?.bjTravelBlock ?? null);
+
+  const applyTravelBundle = useCallback((bundle) => {
+    if (!bundle?.travelInfo) return;
+    setTravelInfo(bundle.travelInfo);
+    setAutoRankBoozeOn(!!bundle.autoRankBoozeOn);
+    if (bundle.user) setUser(bundle.user);
+    setBjTravelBlock(bundle.bjTravelBlock ?? null);
+    writeTravelBoot(bundle);
+  }, []);
 
   const fetchTravelInfo = useCallback(async ({ silent = false } = {}) => {
-    if (!silent) setLoading(true);
     try {
+      const prefetched = getTravelPrefetch();
+      const infoPromise = prefetched?.travelInfo
+        ? Promise.resolve({ data: prefetched.travelInfo })
+        : apiRequestWith429Retry(() => api.get('/travel/info'));
       const [infoRes, autoRankRes, userRes, bjRes, mpBjRes] = await Promise.all([
-        apiRequestWith429Retry(() => api.get('/travel/info')),
+        infoPromise,
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
         api.get('/auth/me').catch(() => ({ data: null })),
         api.get('/casino/blackjack/current-game').catch(() => ({ data: {} })),
         api.get('/casino/mp-blackjack/active-participation').catch(() => ({ data: { in_game: false } })),
       ]);
-      setTravelInfo(infoRes.data);
-      setLoadError(false);
-      setAutoRankBoozeOn(!!(autoRankRes.data?.auto_rank_enabled && autoRankRes.data?.auto_rank_booze));
-      if (userRes.data) setUser(userRes.data);
-      if (mpBjRes.data?.in_game && mpBjRes.data?.game_id) {
-        setBjTravelBlock({ kind: 'mp', gameId: String(mpBjRes.data.game_id) });
-      } else if (bjRes.data?.hasGame) {
-        setBjTravelBlock({ kind: 'single' });
-      } else {
-        setBjTravelBlock(null);
-      }
-      writeSessionJson(TRAVEL_CACHE_KEY, {
-        travelInfo: infoRes.data ?? null,
+      applyTravelBundle({
+        travelInfo: infoRes.data,
         autoRankBoozeOn: !!(autoRankRes.data?.auto_rank_enabled && autoRankRes.data?.auto_rank_booze),
         user: userRes.data ?? null,
-        bjTravelBlock: mpBjRes.data?.in_game && mpBjRes.data?.game_id
-          ? { kind: 'mp', gameId: String(mpBjRes.data.game_id) }
-          : bjRes.data?.hasGame
-            ? { kind: 'single' }
-            : null,
+        bjTravelBlock:
+          mpBjRes.data?.in_game && mpBjRes.data?.game_id
+            ? { kind: 'mp', gameId: String(mpBjRes.data.game_id) }
+            : bjRes.data?.hasGame
+              ? { kind: 'single' }
+              : null,
       });
+      setLoadError(false);
     } catch (error) {
       if (!silent) {
         setLoadError(true);
         toast.error('Failed to load travel info');
       }
-    } finally {
-      if (!silent) setLoading(false);
     }
-  }, []);
+  }, [applyTravelBundle]);
 
   useEffect(() => {
-    const cached = readSessionJson(TRAVEL_CACHE_KEY);
-    fetchTravelInfo({ silent: cached?.travelInfo != null });
+    fetchTravelInfo({ silent: !!bootCached?.travelInfo });
+  }, [fetchTravelInfo, bootCached]);
+
+  useEffect(() => {
+    const onSameRouteNav = (e) => {
+      const d = e.detail;
+      if (!d || d.pathname !== '/game/travel') return;
+      clearTravelPrefetch();
+      fetchTravelInfo({ silent: false });
+    };
+    window.addEventListener(SAME_ROUTE_NAV_CLICK, onSameRouteNav);
+    return () => window.removeEventListener(SAME_ROUTE_NAV_CLICK, onSameRouteNav);
   }, [fetchTravelInfo]);
 
   useEffect(() => {
@@ -549,18 +563,6 @@ export default function Travel() {
         timeLeft={travelTime}
         pending={travelPostPending}
       />
-    );
-  }
-
-  if (loading && !travelInfo) {
-    return (
-      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="travel-page">
-        <style>{TRAVEL_STYLES}</style>
-        <div className="flex flex-col items-center justify-center min-h-[30vh] gap-2 p-4">
-          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-mutedForeground text-xs font-heading uppercase tracking-wider">Loading travel…</span>
-        </div>
-      </div>
     );
   }
 

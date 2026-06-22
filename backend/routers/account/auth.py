@@ -2308,6 +2308,7 @@ def register(router):
             "total_points": int(current_user.get("redeem_stats_total_points") or 0),
             "total_respect_points": int(current_user.get("redeem_stats_total_respect_points") or 0),
             "total_loot_box_pieces": int(current_user.get("redeem_stats_total_loot_box_pieces") or 0),
+            "total_bullets": int(current_user.get("redeem_stats_total_bullets") or 0),
             "total_cars": int(current_user.get("redeem_stats_total_cars") or 0),
             "total_tokens": int(current_user.get("redeem_stats_total_tokens") or 0),
         }
@@ -2377,6 +2378,8 @@ def register(router):
             inc["respect_points"] = int(rewards["respect_points"])
         if rewards.get("loot_box_pieces"):
             inc["loot_box_pieces"] = int(rewards["loot_box_pieces"])
+        if rewards.get("bullets"):
+            inc["bullets"] = int(rewards["bullets"])
         for token_type, amount in (rewards.get("tokens") or {}).items():
             if token_type == "rank_xp_pass":
                 continue
@@ -2387,6 +2390,7 @@ def register(router):
         inc["redeem_stats_total_points"] = int(rewards.get("points") or 0)
         inc["redeem_stats_total_respect_points"] = int(rewards.get("respect_points") or 0)
         inc["redeem_stats_total_loot_box_pieces"] = int(rewards.get("loot_box_pieces") or 0)
+        inc["redeem_stats_total_bullets"] = int(rewards.get("bullets") or 0)
         inc["redeem_stats_total_cars"] = len(rewards.get("cars") or [])
         inc["redeem_stats_total_tokens"] = sum(
             int(a)
@@ -2428,6 +2432,8 @@ def register(router):
             granted.append(f"{inc['respect_points']:,} respect")
         if inc.get("loot_box_pieces"):
             granted.append(f"{inc['loot_box_pieces']} loot pieces")
+        if inc.get("bullets"):
+            granted.append(f"{inc['bullets']:,} bullets")
         for token_type, amount in (rewards.get("tokens") or {}).items():
             if token_type == "rank_xp_pass":
                 continue
