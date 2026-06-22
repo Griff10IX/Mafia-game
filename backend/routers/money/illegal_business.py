@@ -35,6 +35,7 @@ from routers.kill.armoury import (
 )
 from utils.game_timezone import game_today_date_str
 from utils.point_provenance import log_points_event
+from utils.booze_intake_gate import booze_intake_blocked
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_ILLEGAL_BUSINESS
 
 logger = logging.getLogger(__name__)
@@ -1606,6 +1607,10 @@ class DistilleryAutoAgingRequest(BaseModel):
     auto_collect_booze: bool = True
 
 
+class DistilleryPassiveBoozePausedRequest(BaseModel):
+    paused: bool = True
+
+
 class DistilleryStartAgingRequest(BaseModel):
     tier: str
     quantity: int
@@ -2170,7 +2175,15 @@ async def distillery_process_automation(user_id: str) -> None:
     now = _utc_now()
     user = await db.users.find_one(
         {"id": user_id},
-        {"_id": 0, "id": 1, "racket_until": 1, "booze_until": 1, "in_jail": 1, "booze_carrying": 1},
+        {
+            "_id": 0,
+            "id": 1,
+            "racket_until": 1,
+            "booze_until": 1,
+            "in_jail": 1,
+            "booze_carrying": 1,
+            "passive_booze_paused": 1,
+        },
     )
     distillery, _ = _distillery_ensure_state(business, now)
     _distillery_decay_and_status(distillery, now)
@@ -2185,6 +2198,8 @@ async def distillery_process_automation(user_id: str) -> None:
         await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": set_doc, "$inc": inc_doc})
     else:
         await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": set_doc})
+    if booze_intake_blocked(user):
+        return
     auto_aging = distillery.get("auto_aging") or {}
     if not auto_aging.get("enabled"):
         return
@@ -2461,13 +2476,18 @@ async def _collect_illegal_business_impl(current_user: dict) -> dict:
         carry_inc = booze_earned
         if distillery and auto_sold_units > 0 and auto_sell_mode == "booze_run":
             carry_inc = booze_earned + auto_sold_units
-        if carry_inc > 0:
+        if carry_inc > 0 and not booze_intake_blocked(current_user):
             updates["last_collected_booze_at"] = now.isoformat()
             await db.users.update_one(
                 {"id": current_user["id"]},
                 {"$inc": {f"booze_carrying.{default_booze_id}": carry_inc}},
             )
-        if distillery and auto_sold_units > 0 and auto_sell_mode == "booze_run":
+        if (
+            distillery
+            and auto_sold_units > 0
+            and auto_sell_mode == "booze_run"
+            and not booze_intake_blocked(current_user)
+        ):
             from routers.money.booze_run import _booze_sell_impl
 
             fresh_user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
@@ -2579,7 +2599,10 @@ async def get_distillery_page(current_user: dict = Depends(get_current_user)):
     view = _distillery_decay_view(distillery, now)
     dist_payload = _distillery_public_payload(view, business, current_user, now)
     booze_id = _default_booze_type_id()
-    udoc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "booze_carrying": 1})
+    udoc = await db.users.find_one(
+        {"id": current_user["id"]},
+        {"_id": 0, "booze_carrying": 1, "passive_booze_paused": 1, "auto_rank_enabled": 1},
+    )
     carrying = (udoc or {}).get("booze_carrying") or {}
     dist_payload["booze_units_carrying"] = int(carrying.get(booze_id) or 0)
     vault = int(business.get("vault") or 0)
@@ -2595,6 +2618,8 @@ async def get_distillery_page(current_user: dict = Depends(get_current_user)):
         "pending_take": round(pending_take, 2),
         "distillery_state": dist_payload,
         "catalog": _distillery_progression_catalog(vault, view.get("special_upgrades") or {}),
+        "passive_booze_paused": bool((udoc or {}).get("passive_booze_paused")),
+        "auto_rank_enabled": bool((udoc or {}).get("auto_rank_enabled")),
     }
 
 
@@ -2761,6 +2786,16 @@ async def distillery_set_auto_aging(req: DistilleryAutoAgingRequest, current_use
         "message": "Auto-aging rules updated.",
         **_distillery_public_payload(distillery, business, current_user, _utc_now()),
     }
+
+
+async def distillery_set_passive_booze_paused(req: DistilleryPassiveBoozePausedRequest, current_user: dict = Depends(get_current_user)):
+    paused = bool(req.paused)
+    await db.users.update_one({"id": current_user["id"]}, {"$set": {"passive_booze_paused": paused}})
+    if paused:
+        msg = "All booze intake blocked — nothing can add booze to your inventory until you turn this off in Account → Auto Rank."
+    else:
+        msg = "Booze intake allowed again (distillery, crimes, missions, booze runs, and other sources)."
+    return {"message": msg, "passive_booze_paused": paused}
 
 
 async def distillery_buy_special_upgrade(req: DistilleryBuySpecialUpgradeRequest, current_user: dict = Depends(get_current_user)):
@@ -3641,6 +3676,7 @@ def register(router):
     router.add_api_route("/illegal-business/distillery/set-heat-vault-spend", distillery_set_heat_vault_spend, methods=["POST"])
     router.add_api_route("/illegal-business/distillery/set-auto-sell-rules", distillery_set_auto_sell, methods=["POST"])
     router.add_api_route("/illegal-business/distillery/set-auto-aging-rules", distillery_set_auto_aging, methods=["POST"])
+    router.add_api_route("/illegal-business/distillery/set-passive-booze-paused", distillery_set_passive_booze_paused, methods=["POST"])
     router.add_api_route("/illegal-business/distillery/start-aging-batch", distillery_start_aging_batch, methods=["POST"])
     router.add_api_route("/illegal-business/distillery/claim-aged-batch", distillery_claim_aged_batch, methods=["POST"])
     router.add_api_route("/illegal-business/missions", get_illegal_business_missions, methods=["GET"])

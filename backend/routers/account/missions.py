@@ -31,6 +31,7 @@ import random
 
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_MISSIONS
+from utils.booze_intake_gate import booze_intake_blocked
 
 
 async def _missions_sustained_rl_user(current_user: dict = Depends(get_current_user)):
@@ -712,7 +713,7 @@ def _build_mission_completion_reward_update(
         update.setdefault("$inc", {})["tribute_loot_box_pieces"] = reward_loot_box_pieces
     if reward_auto_rank_2h:
         update.setdefault("$inc", {})["auto_rank_2h_tokens"] = reward_auto_rank_2h
-    if isinstance(reward_booze, dict) and reward_booze:
+    if isinstance(reward_booze, dict) and reward_booze and not booze_intake_blocked(current_user):
         booze_ids = [b["id"] for b in BOOZE_TYPES]
         for bid, amt in reward_booze.items():
             if bid in booze_ids and amt and int(amt) > 0:

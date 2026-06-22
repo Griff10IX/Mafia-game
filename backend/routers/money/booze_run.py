@@ -443,6 +443,9 @@ class AdminBoozeListedPriceRequest(BaseModel):
 # ----- Internal impls (for auto-rank) -----
 async def _booze_buy_impl(user: dict, booze_id: str, amount: int, *, via_auto_rank: bool = False) -> dict:
     """Perform buy for given user (by id). Returns response dict or raises HTTPException. Updates DB."""
+    from utils.booze_intake_gate import raise_if_booze_intake_blocked
+
+    raise_if_booze_intake_blocked(user)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
     if _booze_user_in_jail(user):

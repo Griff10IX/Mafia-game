@@ -8447,6 +8447,20 @@ export default function Admin() {
                     <Row label="Last login IP" value={u.last_login_ip} />
                     <Row label="User-Agent (last login)" value={u.last_user_agent ? <span className="font-mono text-[9px] break-all text-mutedForeground">{u.last_user_agent}</span> : '—'} fullWidth />
                     <Row label="Login IPs" value={Array.isArray(u.login_ips) && u.login_ips.length ? u.login_ips.join(', ') : '—'} fullWidth />
+                    {u.username ? (
+                      <Row
+                        label="Access investigation"
+                        value={
+                          <Link
+                            to={`/tjjeujr3wa/ip-history?user=${encodeURIComponent(u.username)}`}
+                            className="px-2 py-0.5 text-[10px] font-heading uppercase border border-amber-500/40 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25 rounded inline-block"
+                          >
+                            Open account access check
+                          </Link>
+                        }
+                        fullWidth
+                      />
+                    ) : null}
                   </div>
                 </Section>
                 <Section title="Wealth & resources">

@@ -1374,7 +1374,7 @@ export default function Layout({ children }) {
     { path: '/tjjeujr3wa/users-online', icon: Users, label: 'Users online (live)' },
     { path: '/tjjeujr3wa/witness-statements', icon: FileText, label: 'Witness statements' },
     { path: '/tjjeujr3wa/attack-logs', icon: Crosshair, label: 'Attack logs' },
-    { path: '/tjjeujr3wa/ip-history', icon: Globe, label: 'IP history' },
+    { path: '/tjjeujr3wa/ip-history', icon: Globe, label: 'Account access' },
     { path: '/tjjeujr3wa/exclusive-cars', icon: Car, label: 'Exclusive cars' },
     { path: '/tjjeujr3wa/crew-recovery', icon: Building2, label: 'Crew recovery' },
     { path: '/tjjeujr3wa/property-transfer', icon: Landmark, label: 'Armoury / airport' },
@@ -1384,7 +1384,7 @@ export default function Layout({ children }) {
     { path: '/tjjeujr3wa/users-online', icon: Users, label: 'Users online (live)' },
     { path: '/tjjeujr3wa/witness-statements', icon: FileText, label: 'Witness statements' },
     { path: '/tjjeujr3wa/attack-logs', icon: Crosshair, label: 'Attack logs' },
-    { path: '/tjjeujr3wa/ip-history', icon: Globe, label: 'IP history' },
+    { path: '/tjjeujr3wa/ip-history', icon: Globe, label: 'Account access' },
   ] : [];
   const staffTopBarEntry = isAdmin && staffToolsNavVisible ? adminNavItems[0] : (isModerator && staffToolsNavVisible ? moderatorNavItems[0] : null);
   const StaffTopBarIcon = staffTopBarEntry?.icon;

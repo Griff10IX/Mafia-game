@@ -1273,6 +1273,9 @@ export default function Distillery() {
                 <p className="mb-2 text-[10px] leading-snug text-mutedForeground">
                   On by default: the server claims ready batches, starts new ones when spare booze stays above your reserve, and can run throttled racket collects so income keeps moving without this page open. Each collect (manual or auto) applies the same rules as the main racket: till goes to the vault, distillery heat rises from production and auto-sell, and heat slowly decays over real time between updates. Turn auto-aging off if you want full manual control of the cellar queue only.
                 </p>
+                <p className="mb-2 rounded border border-zinc-700/50 bg-zinc-900/40 px-2 py-1.5 text-[9px] leading-snug text-mutedForeground">
+                  To stop <strong className="text-foreground/85">all</strong> booze entering your inventory (distillery, crimes, booze runs, etc.), use <strong className="text-foreground/85">Block all booze intake</strong> on <strong className="text-foreground/85">Account → Auto Rank</strong>.
+                </p>
                 <div className="dist-autosell-row">
                   <input
                     type="checkbox"

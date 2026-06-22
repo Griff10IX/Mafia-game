@@ -1,28 +1,76 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Globe, RefreshCw, Search, User } from 'lucide-react';
+import { Globe, RefreshCw, Search, User, ShieldAlert, Smartphone, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
 import api from '../../utils/api';
 import { formatAdminDateTime } from '../../utils/adminDateTime';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
-function RiskBanner({ risks }) {
-  if (!risks?.length) return null;
+const TAG_STYLES = {
+  registration_ip: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200',
+  new_ip: 'border-amber-500/40 bg-amber-500/10 text-amber-200',
+  shared_ip: 'border-red-500/40 bg-red-500/10 text-red-200',
+  hosting: 'border-violet-500/40 bg-violet-500/10 text-violet-200',
+  proxy: 'border-violet-500/40 bg-violet-500/10 text-violet-200',
+  mobile: 'border-sky-500/40 bg-sky-500/10 text-sky-200',
+};
+
+const SEV_ICON = {
+  critical: AlertTriangle,
+  warn: AlertTriangle,
+  info: Info,
+};
+
+const SEV_BORDER = {
+  critical: 'border-red-500/50 bg-red-500/10',
+  warn: 'border-amber-500/50 bg-amber-500/10',
+  info: 'border-zinc-600/50 bg-zinc-800/40',
+};
+
+function TagBadges({ tags }) {
+  if (!tags?.length) return <span className="text-mutedForeground">—</span>;
   return (
-    <div className="space-y-1">
-      {risks.map((r, i) => (
-        <div
-          key={i}
-          className={`text-[10px] font-heading rounded border px-2 py-1 ${
-            r.level === 'warn'
-              ? 'border-amber-500/50 bg-amber-500/10 text-amber-200'
-              : 'border-zinc-600/50 bg-zinc-800/60 text-mutedForeground'
-          }`}
+    <span className="flex flex-wrap gap-0.5">
+      {tags.map((t) => (
+        <span
+          key={t}
+          className={`rounded px-1 py-0.5 text-[8px] font-heading uppercase tracking-wide border ${TAG_STYLES[t] || 'border-zinc-600 text-zinc-400'}`}
         >
-          <span className="font-bold uppercase text-[9px]">{r.code}</span>
-          <div className="mt-0.5 leading-snug">{r.detail}</div>
-        </div>
+          {t.replace(/_/g, ' ')}
+        </span>
       ))}
+    </span>
+  );
+}
+
+function FindingsPanel({ findings }) {
+  if (!findings?.length) return null;
+  return (
+    <div className="space-y-1.5">
+      <div className="text-[9px] font-heading text-primary uppercase tracking-wider flex items-center gap-1">
+        <ShieldAlert className="w-3.5 h-3.5" />
+        Findings & recommendations
+      </div>
+      {findings.map((f, i) => {
+        const Icon = SEV_ICON[f.severity] || Info;
+        return (
+          <div
+            key={`${f.code}-${i}`}
+            className={`rounded border px-2 py-1.5 text-[10px] font-heading ${SEV_BORDER[f.severity] || SEV_BORDER.info}`}
+          >
+            <div className="flex items-start gap-1.5">
+              <Icon className="w-3.5 h-3.5 shrink-0 mt-0.5 opacity-80" />
+              <div className="min-w-0">
+                <div className="font-bold text-foreground">{f.title}</div>
+                <div className="text-mutedForeground leading-snug mt-0.5">{f.detail}</div>
+                {f.suggested_action ? (
+                  <div className="text-[9px] text-primary/90 mt-1 leading-snug">→ {f.suggested_action}</div>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
@@ -70,7 +118,7 @@ export default function AdminIpHistory() {
 
   const [userQuery, setUserQuery] = useState(searchParams.get('user') || '');
   const [attackDays, setAttackDays] = useState(90);
-  const [userData, setUserData] = useState(null);
+  const [report, setReport] = useState(null);
   const [userLoading, setUserLoading] = useState(false);
 
   const [ipQuery, setIpQuery] = useState(searchParams.get('ip') || '');
@@ -97,14 +145,14 @@ export default function AdminIpHistory() {
     };
   }, [navigate]);
 
-  const loadUserHistory = useCallback(async (overrideQuery) => {
+  const loadAccessReport = useCallback(async (overrideQuery) => {
     const q = (overrideQuery != null ? String(overrideQuery) : userQuery).trim();
     if (!q) {
       toast.error('Enter a username or user id');
       return;
     }
     setUserLoading(true);
-    setUserData(null);
+    setReport(null);
     try {
       const params = new URLSearchParams();
       const compact = q.replace(/-/g, '');
@@ -113,18 +161,19 @@ export default function AdminIpHistory() {
       if (looksUserId) params.set('user_id', q);
       else params.set('username', q);
       params.set('attack_days', String(Math.max(1, Math.min(365, attackDays))));
-      const res = await api.get(`/admin/investigate/user-ip-history?${params.toString()}`);
-      setUserData(res.data || null);
+      const res = await api.get(`/admin/investigate/account-access-report?${params.toString()}`);
+      setReport(res.data || null);
       setSearchParams((prev) => {
         const next = new URLSearchParams(prev);
         next.set('user', q);
         next.delete('ip');
         return next;
       });
-      const n = res.data?.meta?.unique_ip_count_including_attacks ?? res.data?.meta?.unique_ip_count ?? 0;
-      toast.success(`Loaded IP history (${n} unique IPs)`);
+      const findings = res.data?.access?.findings?.length ?? 0;
+      const ips = res.data?.ip?.meta?.unique_ip_count_including_attacks ?? 0;
+      toast.success(`Access report loaded (${ips} IPs, ${findings} finding(s))`);
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to load IP history');
+      toast.error(e.response?.data?.detail || 'Failed to load access report');
     } finally {
       setUserLoading(false);
     }
@@ -163,6 +212,14 @@ export default function AdminIpHistory() {
     if (ip) setIpQuery(ip);
   }, [accessChecked, searchParams]);
 
+  useEffect(() => {
+    if (!accessChecked) return;
+    const u = searchParams.get('user');
+    if (u && !report && !userLoading) {
+      void loadAccessReport(u);
+    }
+  }, [accessChecked, searchParams, report, userLoading, loadAccessReport]);
+
   if (!accessChecked) {
     return (
       <div
@@ -177,8 +234,11 @@ export default function AdminIpHistory() {
     );
   }
 
+  const userData = report?.ip;
+  const access = report?.access;
   const sources = userData?.sources || {};
   const attack = userData?.attack_activity;
+  const account = access?.account;
 
   return (
     <div
@@ -188,12 +248,12 @@ export default function AdminIpHistory() {
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <Globe className="w-6 h-6 text-primary shrink-0" />
+          <ShieldAlert className="w-6 h-6 text-primary shrink-0" />
           <div>
-            <h1 className="text-lg font-heading font-bold text-foreground">IP history</h1>
-            <p className="text-[10px] text-mutedForeground font-heading max-w-xl">
-              Sign-in timeline, stored profile IPs, active sessions, and attack log IPs. Reverse search finds accounts
-              tied to an address. Geo labels use ip-api.com (7-day cache).
+            <h1 className="text-lg font-heading font-bold text-foreground">Account access check</h1>
+            <p className="text-[10px] text-mutedForeground font-heading max-w-2xl">
+              Use when a player reports unauthorized logins or a hacked account: all IPs, devices, what matches other
+              accounts, suspicious attempts, and staff next steps.
             </p>
           </div>
         </div>
@@ -202,7 +262,7 @@ export default function AdminIpHistory() {
       <section className="rounded border border-border overflow-hidden">
         <div className="px-2 py-1.5 bg-primary/10 border-b border-border text-[10px] font-heading font-bold uppercase tracking-wider text-primary flex items-center gap-2">
           <User className="w-3.5 h-3.5" />
-          Player IP history
+          Player investigation
         </div>
         <div className="p-3 space-y-3">
           <div className="flex flex-wrap items-end gap-2">
@@ -212,7 +272,7 @@ export default function AdminIpHistory() {
                 type="text"
                 value={userQuery}
                 onChange={(e) => setUserQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && loadUserHistory()}
+                onKeyDown={(e) => e.key === 'Enter' && loadAccessReport()}
                 placeholder="GhostFace or user id"
                 className="px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-heading"
                 autoComplete="off"
@@ -231,70 +291,160 @@ export default function AdminIpHistory() {
             </label>
             <button
               type="button"
-              onClick={() => void loadUserHistory()}
+              onClick={() => void loadAccessReport()}
               disabled={userLoading}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-primary/40 bg-primary/15 text-primary text-[10px] font-heading uppercase tracking-wider hover:bg-primary/25 disabled:opacity-50"
             >
               {userLoading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
-              {userLoading ? 'Loading…' : 'Load history'}
+              {userLoading ? 'Loading…' : 'Run check'}
             </button>
           </div>
 
-          {userData && (
-            <div className="space-y-3">
+          {access && userData && (
+            <div className="space-y-4">
               <div className="flex flex-wrap gap-2 text-[10px] font-heading">
                 <span className="rounded border border-zinc-700/50 px-2 py-1">
-                  <strong className="text-foreground">{userData.user?.username}</strong>
-                  <span className="text-mutedForeground"> · {userData.user?.id}</span>
+                  <strong className="text-foreground">{account?.username}</strong>
+                  <span className="text-mutedForeground"> · {account?.id}</span>
                 </span>
                 <span className="rounded border border-zinc-700/50 px-2 py-1 tabular-nums">
                   {userData.meta?.unique_ip_count_including_attacks ?? userData.meta?.unique_ip_count ?? 0} unique IPs
                 </span>
-                <span className="rounded border border-zinc-700/50 px-2 py-1 text-mutedForeground">
-                  {userData.meta?.login_history_entries ?? userData.login_timeline?.length ?? 0} login events
+                <span className="rounded border border-zinc-700/50 px-2 py-1">
+                  {access.device_count ?? 0} device profile(s)
                 </span>
-                {userData.meta?.truncated_geo_lookups ? (
-                  <span className="rounded border border-amber-500/40 px-2 py-1 text-amber-200">
-                    Geo capped at {userData.meta?.looked_up_ips} lookups
+                <span className="rounded border border-zinc-700/50 px-2 py-1 text-mutedForeground">
+                  token v{account?.token_version ?? 0}
+                </span>
+                {account?.last_seen ? (
+                  <span className="rounded border border-zinc-700/50 px-2 py-1 text-mutedForeground">
+                    last seen {formatAdminDateTime(account.last_seen)}
                   </span>
                 ) : null}
               </div>
 
-              <RiskBanner risks={userData.risks} />
+              <FindingsPanel findings={access.findings} />
+
+              {access.staff_checklist?.length > 0 && (
+                <div className="rounded border border-zinc-700/40 bg-zinc-900/30 p-2">
+                  <div className="text-[9px] font-heading text-primary uppercase mb-1.5 flex items-center gap-1">
+                    <CheckCircle2 className="w-3 h-3" />
+                    Staff checklist
+                  </div>
+                  <ul className="text-[9px] text-mutedForeground font-heading space-y-1 list-disc pl-4">
+                    {access.staff_checklist.map((item) => (
+                      <li key={item.id}>{item.label}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 text-[10px] font-heading">
                 <div className="rounded border border-zinc-700/40 bg-zinc-900/40 px-2 py-1.5">
                   <div className="text-[9px] uppercase text-mutedForeground">Registration IP</div>
-                  <div className="font-mono text-foreground break-all">{sources.registration_ip || '—'}</div>
+                  <div className="font-mono text-foreground break-all">{account?.registration_ip || sources.registration_ip || '—'}</div>
                 </div>
                 <div className="rounded border border-zinc-700/40 bg-zinc-900/40 px-2 py-1.5">
                   <div className="text-[9px] uppercase text-mutedForeground">Last login IP</div>
-                  <div className="font-mono text-foreground break-all">{sources.last_login_ip || '—'}</div>
+                  <div className="font-mono text-foreground break-all">{account?.last_login_ip || sources.last_login_ip || '—'}</div>
                 </div>
                 <div className="rounded border border-zinc-700/40 bg-zinc-900/40 px-2 py-1.5">
                   <div className="text-[9px] uppercase text-mutedForeground">Last request IP</div>
-                  <div className="font-mono text-foreground break-all">{sources.last_request_ip || '—'}</div>
+                  <div className="font-mono text-foreground break-all">{account?.last_request_ip || sources.last_request_ip || '—'}</div>
                 </div>
                 <div className="rounded border border-zinc-700/40 bg-zinc-900/40 px-2 py-1.5">
-                  <div className="text-[9px] uppercase text-mutedForeground">Device</div>
-                  <div className="text-foreground">{userData.last_device_type || '—'}</div>
+                  <div className="text-[9px] uppercase text-mutedForeground">Device fingerprint</div>
+                  <div className="font-mono text-[9px] text-foreground break-all">{account?.device_fingerprint || '—'}</div>
                 </div>
               </div>
 
-              {(sources.login_ips?.length > 0 || sources.session_ips?.length > 0) && (
-                <div className="text-[9px] font-heading text-mutedForeground space-y-1">
-                  {sources.login_ips?.length > 0 ? (
-                    <p>
-                      <span className="text-primary uppercase">login_ips:</span>{' '}
-                      <span className="font-mono">{sources.login_ips.join(' · ')}</span>
-                    </p>
-                  ) : null}
-                  {sources.session_ips?.length > 0 ? (
-                    <p>
-                      <span className="text-primary uppercase">Session IPs:</span>{' '}
-                      <span className="font-mono">{sources.session_ips.join(' · ')}</span>
-                    </p>
-                  ) : null}
+              {(access.devices?.length ?? 0) > 0 && (
+                <div>
+                  <div className="text-[9px] font-heading text-primary uppercase mb-1 flex items-center gap-1">
+                    <Smartphone className="w-3 h-3" />
+                    Devices (from login history & sessions)
+                  </div>
+                  <div className="max-h-48 overflow-auto border border-zinc-700/50 rounded">
+                    <table className="w-full text-[9px] font-mono">
+                      <thead className="sticky top-0 bg-zinc-900/95">
+                        <tr className="text-mutedForeground border-b border-zinc-700/50">
+                          <th className="p-1 text-left">Type</th>
+                          <th className="p-1 text-left">UA / label</th>
+                          <th className="p-1 text-left">IPs</th>
+                          <th className="p-1 text-left">Logins</th>
+                          <th className="p-1 text-left">Last seen</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {access.devices.map((d, i) => (
+                          <tr key={i} className="border-b border-zinc-800/80">
+                            <td className="p-1">{d.device_type}</td>
+                            <td className="p-1 break-all max-w-[140px]">{d.ua_short || '—'}</td>
+                            <td className="p-1 break-all">{(d.ips || []).join(', ') || '—'}</td>
+                            <td className="p-1 tabular-nums">{d.login_count}</td>
+                            <td className="p-1 whitespace-nowrap">{formatAdminDateTime(d.last_at)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {(access.ip_sharing?.length ?? 0) > 0 && (
+                <div className="space-y-2 rounded border border-red-500/20 bg-red-500/5 p-2">
+                  <div className="text-[9px] font-heading text-red-200 uppercase">IPs shared with other accounts</div>
+                  {access.ip_sharing.map((block) => (
+                    <div key={block.ip} className="text-[9px] font-heading">
+                      <div className="font-mono text-foreground">
+                        {block.ip}{' '}
+                        <span className="text-mutedForeground">
+                          — {block.other_alive_count} alive / {block.other_account_count} total other account(s)
+                        </span>
+                      </div>
+                      <ul className="mt-0.5 pl-3 text-mutedForeground font-mono space-y-0.5">
+                        {(block.accounts || []).slice(0, 8).map((a) => (
+                          <li key={a.id}>
+                            <button
+                              type="button"
+                              className="text-primary hover:underline"
+                              onClick={() => {
+                                const name = a.username || a.id;
+                                setUserQuery(name);
+                                void loadAccessReport(name);
+                              }}
+                            >
+                              {a.username || a.id}
+                            </button>
+                            {a.is_dead ? ' (dead)' : ''} · {(a.roles || []).join(', ')}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {(access.fingerprint_matches?.length ?? 0) > 0 && (
+                <div className="text-[9px] font-heading">
+                  <div className="text-primary uppercase mb-1">Same device fingerprint as</div>
+                  <ul className="font-mono text-mutedForeground space-y-0.5">
+                    {access.fingerprint_matches.map((m) => (
+                      <li key={m.id}>
+                        <button
+                          type="button"
+                          className="text-primary hover:underline"
+                          onClick={() => {
+                            setUserQuery(m.username || m.id);
+                            void loadAccessReport(m.username || m.id);
+                          }}
+                        >
+                          {m.username || m.id}
+                        </button>
+                        {m.is_dead ? ' (dead)' : ''} · {m.last_login_ip || '—'}
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
 
@@ -305,7 +455,7 @@ export default function AdminIpHistory() {
 
               <div>
                 <div className="text-[9px] font-heading text-primary uppercase mb-1">
-                  Login timeline (oldest → newest)
+                  Login timeline (tags: reg / new / shared / hosting)
                 </div>
                 <div className="max-h-64 overflow-auto border border-zinc-700/50 rounded">
                   <table className="w-full text-[9px] font-mono">
@@ -313,25 +463,57 @@ export default function AdminIpHistory() {
                       <tr className="text-left text-mutedForeground border-b border-zinc-700/50">
                         <th className="p-1">When</th>
                         <th className="p-1">IP</th>
-                        <th className="p-1">ISP / org</th>
-                        <th className="p-1">Source</th>
+                        <th className="p-1">ISP</th>
                         <th className="p-1">Device</th>
+                        <th className="p-1">Tags</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {(userData.login_timeline || []).map((row, i) => (
+                      {(access.login_timeline_tagged || userData.login_timeline || []).map((row, i) => (
                         <tr key={i} className="border-b border-zinc-800/80">
                           <td className="p-1 whitespace-nowrap">{formatAdminDateTime(row.at)}</td>
                           <td className="p-1 break-all">{row.ip || '—'}</td>
                           <td className="p-1 break-words">{row.isp || row.org || '—'}</td>
-                          <td className="p-1">{row.source || '—'}</td>
                           <td className="p-1">{row.device_type || '—'}</td>
+                          <td className="p-1">
+                            <TagBadges tags={row.tags} />
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               </div>
+
+              {(access.suspicious_logins?.recent?.length ?? 0) > 0 && (
+                <div>
+                  <div className="text-[9px] font-heading text-amber-200 uppercase mb-1">
+                    Suspicious logins ({access.suspicious_logins.count_30d} in 30d)
+                  </div>
+                  <div className="max-h-36 overflow-auto border border-amber-500/20 rounded">
+                    <table className="w-full text-[9px] font-mono">
+                      <thead>
+                        <tr className="text-mutedForeground">
+                          <th className="p-1 text-left">When</th>
+                          <th className="p-1 text-left">IP</th>
+                          <th className="p-1 text-left">Reason</th>
+                          <th className="p-1 text-left">Input</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {access.suspicious_logins.recent.map((r, i) => (
+                          <tr key={i} className="border-t border-zinc-800/60">
+                            <td className="p-1 whitespace-nowrap">{formatAdminDateTime(r.at)}</td>
+                            <td className="p-1">{r.ip || '—'}</td>
+                            <td className="p-1">{r.reason || '—'}</td>
+                            <td className="p-1 break-all">{r.login_input || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {(userData.sessions?.length ?? 0) > 0 && (
                 <div>
@@ -394,44 +576,13 @@ export default function AdminIpHistory() {
                       )}
                     </div>
                   </div>
-                  {(attack.recent_samples?.length ?? 0) > 0 && (
-                    <div>
-                      <div className="text-[9px] text-mutedForeground mb-1">Recent attempts (sample)</div>
-                      <div className="max-h-36 overflow-auto border border-zinc-700/40 rounded">
-                        <table className="w-full text-[9px] font-mono">
-                          <thead>
-                            <tr className="text-mutedForeground">
-                              <th className="p-1 text-left">Time</th>
-                              <th className="p-1 text-left">IP</th>
-                              <th className="p-1 text-left">Role</th>
-                              <th className="p-1 text-left">Outcome</th>
-                              <th className="p-1 text-left">Parties</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {attack.recent_samples.map((r, i) => (
-                              <tr key={i} className="border-t border-zinc-800/60">
-                                <td className="p-1 whitespace-nowrap">{formatAdminDateTime(r.at)}</td>
-                                <td className="p-1">{r.ip}</td>
-                                <td className="p-1">{r.role}</td>
-                                <td className="p-1">{r.outcome}</td>
-                                <td className="p-1">
-                                  {r.attacker_username} → {r.target_username}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
 
-              {userData.last_user_agent ? (
-                <p className="text-[9px] text-mutedForeground font-mono break-all" title={userData.last_user_agent}>
-                  Last UA: {userData.last_user_agent.slice(0, 200)}
-                  {userData.last_user_agent.length > 200 ? '…' : ''}
+              {account?.last_user_agent ? (
+                <p className="text-[9px] text-mutedForeground font-mono break-all" title={account.last_user_agent}>
+                  Last UA: {account.last_user_agent.slice(0, 220)}
+                  {account.last_user_agent.length > 220 ? '…' : ''}
                 </p>
               ) : null}
             </div>
@@ -442,7 +593,7 @@ export default function AdminIpHistory() {
       <section className="rounded border border-border overflow-hidden">
         <div className="px-2 py-1.5 bg-violet-500/10 border-b border-border text-[10px] font-heading font-bold uppercase tracking-wider text-violet-200 flex items-center gap-2">
           <Search className="w-3.5 h-3.5" />
-          Reverse IP — accounts on this address
+          Reverse IP — who else uses this address?
         </div>
         <div className="p-3 space-y-3">
           <div className="flex flex-wrap items-end gap-2">
@@ -503,7 +654,7 @@ export default function AdminIpHistory() {
                             onClick={() => {
                               const name = a.username || a.id;
                               setUserQuery(name);
-                              void loadUserHistory(name);
+                              void loadAccessReport(name);
                             }}
                           >
                             {a.username || a.id}
@@ -519,18 +670,6 @@ export default function AdminIpHistory() {
                   </tbody>
                 </table>
               </div>
-              {(ipData.attack_attackers?.length ?? 0) > 0 && (
-                <div>
-                  <div className="text-[9px] uppercase text-mutedForeground mb-1">Attack attempts from this IP (by attacker)</div>
-                  <ul className="text-[9px] font-mono space-y-0.5">
-                    {ipData.attack_attackers.map((a, i) => (
-                      <li key={i}>
-                        {a.username || a.attacker_id} · {a.count} attempts · last {formatAdminDateTime(a.last_at)}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </div>
           )}
         </div>

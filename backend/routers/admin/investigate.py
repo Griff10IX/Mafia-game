@@ -244,6 +244,14 @@ def register(router):
         "created_at": 1,
     }
 
+    _USER_ACCESS_PROJ = {
+        **_USER_IP_PROJ,
+        "device_fingerprint": 1,
+        "last_seen": 1,
+        "token_version": 1,
+        "is_dead": 1,
+    }
+
     async def _resolve_investigate_user(
         user_id: Optional[str],
         username: Optional[str],
@@ -574,6 +582,50 @@ def register(router):
                 all_unique.add(block["ip"])
         payload["meta"]["unique_ip_count_including_attacks"] = len(all_unique)
         return payload
+
+    @router.get("/admin/investigate/account-access-report")
+    async def admin_investigate_account_access_report(
+        user_id: Optional[str] = Query(None, description="Exact user id"),
+        username: Optional[str] = Query(None, description="Exact username (case-insensitive)"),
+        attack_days: int = Query(90, ge=1, le=365, description="Window for attack_attempts client_ip aggregates"),
+        current_user: dict = Depends(require_admin_or_mod),
+    ):
+        """
+        Compromise / unauthorized-access investigation for staff: IPs, devices, shared-IP accounts,
+        fingerprint matches, tagged login timeline, suspicious logins, and recommended actions.
+        """
+        from utils.account_access_investigation import enrich_account_access_report
+
+        uid = (user_id or "").strip()
+        uname = (username or "").strip()
+        if not uid and not uname:
+            raise HTTPException(status_code=400, detail="Provide user_id or username")
+        q: Dict[str, Any] = {}
+        if uid:
+            q["id"] = uid
+        else:
+            q["username"] = re.compile("^" + re.escape(uname) + "$", re.IGNORECASE)
+        user = await db.users.find_one(q, _USER_ACCESS_PROJ)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        ip_payload = await _build_user_ip_check_payload(user)
+        uid = ip_payload["user"]["id"]
+        attack = await _attack_ips_for_user(uid, attack_days, 40)
+        ip_payload["attack_activity"] = attack
+        ip_payload["meta"]["attack_days"] = int(attack_days)
+        all_unique = {row.get("ip") for row in (ip_payload.get("ip_summary") or []) if row.get("ip")}
+        for block in (attack.get("as_attacker") or []) + (attack.get("as_target") or []):
+            if block.get("ip"):
+                all_unique.add(block["ip"])
+        ip_payload["meta"]["unique_ip_count_including_attacks"] = len(all_unique)
+
+        access = await enrich_account_access_report(db, user, ip_payload, attack_days=attack_days)
+        return {
+            "report_type": "account_access",
+            "ip": ip_payload,
+            "access": access,
+        }
 
     @router.get("/admin/investigate/accounts-by-ip")
     async def admin_investigate_accounts_by_ip(

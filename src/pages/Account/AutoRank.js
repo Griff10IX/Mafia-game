@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity, Settings2, Flame, CircleDot, Search, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
+import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity, Settings2, Flame, CircleDot, Search, AlertTriangle, CheckCircle2, Info, PauseCircle } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -481,6 +481,21 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
       />
 
       <ToggleRow
+        icon={PauseCircle}
+        label="Block all booze intake"
+        description={
+          p.passive_booze_paused
+            ? 'Nothing can add booze to your inventory (distillery, crimes, missions, booze runs, hitlist)'
+            : !p.auto_rank_enabled
+              ? 'Booze can still enter from distillery and other sources — turn on to block all intake'
+              : 'Turn on to stop every source adding booze; auto-enabled when you turn off Auto Rank'
+        }
+        checked={!!p.passive_booze_paused}
+        disabled={savingPrefs}
+        onToggle={() => onUpdatePref('passive_booze_paused', !p.passive_booze_paused)}
+      />
+
+      <ToggleRow
         icon={MessageSquare}
         label="Telegram notifications"
         description="Success summaries, busts, OC, booze/jail alerts. Requires chat ID in Profile. /autorank and other bot replies still work when off"
@@ -553,12 +568,14 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
         icon={Wine}
         label="Run booze running"
         description={
-          !p.auto_rank_enabled && p.auto_rank_booze
+          p.passive_booze_paused
+            ? 'Blocked while all booze intake is on — turn that off above first'
+            : !p.auto_rank_enabled && p.auto_rank_booze
             ? 'Still on in your account — turn off to allow manual travel (Auto Rank is off)'
-            : 'Buy, travel, sell on round-trip route'
+            : 'Buy, travel, sell on round-trip route (city arbitrage only)'
         }
         checked={!!p.auto_rank_booze}
-        disabled={savingPrefs || (!p.auto_rank_enabled && !p.auto_rank_booze)}
+        disabled={savingPrefs || p.passive_booze_paused || (!p.auto_rank_enabled && !p.auto_rank_booze)}
         onToggle={() => onUpdatePref('auto_rank_booze', !p.auto_rank_booze)}
       />
     </div>
@@ -1328,6 +1345,7 @@ export default function AutoRank() {
     auto_rank_booze: false,
     auto_rank_melt: false,
     auto_rank_scrap: false,
+    passive_booze_paused: false,
     auto_rank_purchased: false,
     auto_rank_permanent: false,
     auto_rank_has_access: false,
@@ -1573,6 +1591,7 @@ export default function AutoRank() {
             auto_rank_bust_every_5_sec: !!meRes.data.auto_rank_bust_every_5_sec,
             auto_rank_oc: !!meRes.data.auto_rank_oc,
             auto_rank_booze: !!meRes.data.auto_rank_booze,
+            passive_booze_paused: !!meRes.data.passive_booze_paused,
             auto_rank_purchased: !!meRes.data.auto_rank_purchased,
             auto_rank_permanent: !!meRes.data.auto_rank_permanent,
             auto_rank_has_access: meRes.data.auto_rank_has_access === true,
@@ -1752,6 +1771,7 @@ export default function AutoRank() {
         auto_rank_bust_every_5_sec: res.data?.auto_rank_bust_every_5_sec ?? p.auto_rank_bust_every_5_sec,
         auto_rank_oc: res.data?.auto_rank_oc ?? p.auto_rank_oc,
         auto_rank_booze: res.data?.auto_rank_booze ?? p.auto_rank_booze,
+        passive_booze_paused: res.data?.passive_booze_paused ?? p.passive_booze_paused,
         auto_rank_melt: res.data?.auto_rank_melt ?? p.auto_rank_melt,
         auto_rank_scrap: res.data?.auto_rank_scrap ?? p.auto_rank_scrap,
         auto_rank_telegram_notify: res.data?.auto_rank_telegram_notify !== false,

@@ -852,6 +852,10 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
     if not user:
         logger.info("Auto rank booze %s: user not found", user_id)
         return False
+    from utils.booze_intake_gate import booze_intake_blocked
+
+    if booze_intake_blocked(user):
+        return False
     user = await _apply_overdue_travel(db, user_id, user, now)
     if not user or user.get("in_jail"):
         logger.info("Auto rank booze %s: in jail or missing after travel apply", user_id)
@@ -1448,7 +1452,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user or user.get("in_jail"):
         return
-    if user.get("auto_rank_booze", False):
+    if user.get("auto_rank_booze", False) and not user.get("passive_booze_paused"):
         try:
             if await _run_booze_for_user(db, user_id, username, chat_id, bot_token, now, lines):
                 has_success = True
@@ -2285,6 +2289,7 @@ def register(router):
                         updates["auto_rank_oc"] = False
                         updates["auto_rank_booze"] = False
                         updates["auto_rank_melt"] = False
+                        updates["passive_booze_paused"] = True
                     op = {"$set": updates}
                     if field == "auto_rank_enabled":
                         op["$unset"] = {"auto_rank_stats_since": ""}
@@ -2346,6 +2351,7 @@ def register(router):
         auto_rank_melt: Optional[bool] = None
         auto_rank_scrap: Optional[bool] = None
         auto_rank_telegram_notify: Optional[bool] = None
+        passive_booze_paused: Optional[bool] = None
         auto_rank_crime_ids: Optional[list] = None
         auto_rank_gta_option_ids: Optional[list] = None
         auto_rank_melt_action_ids: Optional[list] = None
@@ -2399,6 +2405,7 @@ def register(router):
                 and email_norm
                 and not prefs["auto_rank_email_entitled"]
             )
+            prefs["passive_booze_paused"] = bool(user.get("passive_booze_paused"))
             logger.debug("Auto rank GET /me ok user_id=%s", user_id)
             return prefs
         except Exception as e:
@@ -2631,6 +2638,10 @@ def register(router):
             if body.auto_rank_enabled:
                 # When enabling, clear idle state so auto-rank runs immediately
                 updates["auto_rank_idle"] = False
+            elif body.auto_rank_enabled is False:
+                # Stop passive distillery booze when Auto Rank is turned off (user can resume on Distillery)
+                updates["passive_booze_paused"] = True
+                updates["auto_rank_booze"] = False
         for field in ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze", "auto_rank_melt", "auto_rank_scrap"]:
             val = getattr(body, field, None)
             if val is not None:
@@ -2639,6 +2650,10 @@ def register(router):
                 updates[field] = val
         if body.auto_rank_telegram_notify is not None:
             updates["auto_rank_telegram_notify"] = bool(body.auto_rank_telegram_notify)
+        if body.passive_booze_paused is not None:
+            updates["passive_booze_paused"] = bool(body.passive_booze_paused)
+            if body.passive_booze_paused:
+                updates["auto_rank_booze"] = False
         if body.auto_rank_crime_ids is not None:
             updates["auto_rank_crime_ids"] = [str(x) for x in body.auto_rank_crime_ids] if body.auto_rank_crime_ids else []
         if body.auto_rank_gta_option_ids is not None:
@@ -2669,7 +2684,7 @@ def register(router):
         await db.users.update_one({"id": user_id}, op)
         updated = await db.users.find_one(
             {"id": user_id},
-            {"_id": 0, **{f: 1 for f in _PREFERENCE_FIELDS}, "auto_rank_crime_ids": 1, "auto_rank_gta_option_ids": 1, "auto_rank_melt_action_ids": 1, "auto_rank_melt_rarity_ids": 1, "auto_rank_scrap_rarity_ids": 1},
+            {"_id": 0, **{f: 1 for f in _PREFERENCE_FIELDS}, "auto_rank_crime_ids": 1, "auto_rank_gta_option_ids": 1, "auto_rank_melt_action_ids": 1, "auto_rank_melt_rarity_ids": 1, "auto_rank_scrap_rarity_ids": 1, "passive_booze_paused": 1},
         )
         out = {"message": "Preferences saved", **_extract_preferences(updated)}
         out["auto_rank_has_access"] = _user_has_auto_rank_access(updated or {})
@@ -2679,6 +2694,7 @@ def register(router):
         out["auto_rank_melt_action_ids"] = updated.get("auto_rank_melt_action_ids") if isinstance(updated.get("auto_rank_melt_action_ids"), list) else []
         out["auto_rank_melt_rarity_ids"] = updated.get("auto_rank_melt_rarity_ids") if isinstance(updated.get("auto_rank_melt_rarity_ids"), list) else []
         out["auto_rank_scrap_rarity_ids"] = updated.get("auto_rank_scrap_rarity_ids") if isinstance(updated.get("auto_rank_scrap_rarity_ids"), list) else []
+        out["passive_booze_paused"] = bool((updated or {}).get("passive_booze_paused"))
         return out
 
     @router.get("/auto-rank/interval")
@@ -3022,6 +3038,7 @@ def register(router):
             if body.auto_rank_enabled is False:
                 for f in ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze"]:
                     updates[f] = False
+                updates["passive_booze_paused"] = True
         if not updates:
             return {"message": "No changes", "username": target.get("username")}
         op = {"$set": updates}

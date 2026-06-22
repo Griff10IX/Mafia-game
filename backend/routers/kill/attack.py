@@ -148,6 +148,7 @@ from routers.kill.armoury import (
 from routers.game.families import resolve_family_id
 from utils.staff_bot_client_alert import maybe_notify_staff_bot_attack_from_ua, maybe_notify_staff_attack_execute_token_fail
 from utils.sustained_page_ratelimit import PAGE_KEY_KILL, check_sustained_page_rl
+from utils.booze_intake_gate import booze_intake_blocked
 from utils.attack_turnstile_gate import (
     attack_turnstile_config as load_attack_turnstile_config,
     issue_attack_turnstile_nonce,
@@ -2340,7 +2341,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 respect_drop = maybe_respect_points_drop()
                 inc["respect_points"] = reward_respect + (respect_drop or 0)
                 booze = rewards.get("booze")
-                if isinstance(booze, dict) and booze:
+                if isinstance(booze, dict) and booze and not booze_intake_blocked(current_user):
                     booze_ids = [b["id"] for b in BOOZE_TYPES]
                     for bid, amt in booze.items():
                         if bid in booze_ids and amt and int(amt) > 0:

@@ -65,7 +65,7 @@ export const ADMIN_ROUTE_GROUPS = [
   { id: 'engineering', label: 'Engineering', categoryId: 'admin-world-systems', anchorId: 'admin-database', icon: Wrench, description: 'Testing, DB utilities, and diagnostics.' },
   { id: 'users-online', label: 'Live online', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: Radio, description: 'Who is online now (IPs, last page, same-IP hints).' },
   { id: 'attack-logs', label: 'Attack logs', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: Crosshair, description: 'PVP attack log console and analytics.' },
-  { id: 'ip-history', label: 'IP history', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: History, description: 'Per-player IP timeline and reverse IP account lookup.' },
+  { id: 'ip-history', label: 'Account access', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: History, description: 'Hacked-account check: IPs, devices, shared logins, staff checklist.' },
   { id: 'exclusive-cars', label: 'Exclusive cars', categoryId: 'admin-world-systems', anchorId: 'admin-gameworld', icon: Car, description: 'Remove, transfer, or grant Al Capone / loot-exclusive cars.' },
   { id: 'crew-recovery', label: 'Crew recovery', categoryId: 'admin-operations', anchorId: 'admin-moderation', icon: Building2, description: 'Revive families and restore illegal businesses from kill snapshots.' },
   { id: 'racket-progress', label: 'Racket progress', categoryId: 'admin-economy-progression', anchorId: 'admin-donations', icon: Wine, description: 'Set player racket business progress (ladder, vault, guards, security).' },

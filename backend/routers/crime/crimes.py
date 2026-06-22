@@ -463,6 +463,7 @@ from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
 from utils.point_provenance import log_points_event
 from utils.rolling_event_stats import rolling_event_stats_pipeline, rolling_stats_response_from_doc
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_CRIMES
+from utils.booze_intake_gate import booze_intake_blocked
 
 
 async def _crimes_sustained_rl_user(current_user: dict = Depends(get_current_user)):
@@ -940,7 +941,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
                     bonus_inc["loot_box_pieces"] = bonus_inc.get("loot_box_pieces", 0) + prestige_bonus_from_prestige["loot_box_pieces"]
                 if "points" in prestige_bonus_from_prestige:
                     bonus_inc["points"] = prestige_bonus_from_prestige["points"]
-                if "booze" in prestige_bonus_from_prestige:
+                if "booze" in prestige_bonus_from_prestige and not booze_intake_blocked(current_user):
                     b = prestige_bonus_from_prestige["booze"]
                     bonus_inc[f"booze_carrying.{b['id']}"] = b["amount"]
                 if bonus_inc:
@@ -951,12 +952,15 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
                         await log_points_event(db, user_id=current_user["id"], points=bonus_inc["points"], event_type="prestige_crime_bonus", event_ref=crime.get("id"), meta={"crime_name": crime.get("name")})
                 # Merge prestige bonuses into the response dict (preserving any global molotov drop)
                 if prestige_bonus_earned is None:
-                    prestige_bonus_earned = dict(prestige_bonus_from_prestige)
+                    prestige_bonus_earned = {
+                        k: v for k, v in prestige_bonus_from_prestige.items()
+                        if k != "booze" or not booze_intake_blocked(current_user)
+                    }
                 else:
                     for k, v in prestige_bonus_from_prestige.items():
                         if k in {"cash", "respect_points", "bullets", "points", "molotovs", "loot_box_pieces"}:
                             prestige_bonus_earned[k] = prestige_bonus_earned.get(k, 0) + v
-                        elif k == "booze":
+                        elif k == "booze" and not booze_intake_blocked(current_user):
                             prestige_bonus_earned["booze"] = v
 
         new_total_crimes = (current_user.get("total_crimes") or 0) + 1
