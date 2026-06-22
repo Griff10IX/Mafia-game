@@ -364,6 +364,8 @@ const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => (
 export default function Travel() {
   const travelBoot = readSessionJson(TRAVEL_CACHE_KEY);
   const [travelInfo, setTravelInfo] = useState(() => travelBoot?.travelInfo ?? null);
+  const [loading, setLoading] = useState(() => !travelBoot?.travelInfo);
+  const [loadError, setLoadError] = useState(false);
   const [traveling, setTraveling] = useState(false);
   const [travelPostPending, setTravelPostPending] = useState(false);
   const [travelTime, setTravelTime] = useState(0);
@@ -374,6 +376,7 @@ export default function Travel() {
   const [bjTravelBlock, setBjTravelBlock] = useState(() => travelBoot?.bjTravelBlock ?? null);
 
   const fetchTravelInfo = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const [infoRes, autoRankRes, userRes, bjRes, mpBjRes] = await Promise.all([
         apiRequestWith429Retry(() => api.get('/travel/info')),
@@ -383,6 +386,7 @@ export default function Travel() {
         api.get('/casino/mp-blackjack/active-participation').catch(() => ({ data: { in_game: false } })),
       ]);
       setTravelInfo(infoRes.data);
+      setLoadError(false);
       setAutoRankBoozeOn(!!(autoRankRes.data?.auto_rank_enabled && autoRankRes.data?.auto_rank_booze));
       if (userRes.data) setUser(userRes.data);
       if (mpBjRes.data?.in_game && mpBjRes.data?.game_id) {
@@ -403,12 +407,18 @@ export default function Travel() {
             : null,
       });
     } catch (error) {
-      if (!silent) toast.error('Failed to load travel info');
+      if (!silent) {
+        setLoadError(true);
+        toast.error('Failed to load travel info');
+      }
+    } finally {
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchTravelInfo({ silent: !!travelBoot?.travelInfo });
+    const cached = readSessionJson(TRAVEL_CACHE_KEY);
+    fetchTravelInfo({ silent: cached?.travelInfo != null });
   }, [fetchTravelInfo]);
 
   useEffect(() => {
@@ -542,7 +552,19 @@ export default function Travel() {
     );
   }
 
-  if (!travelInfo) {
+  if (loading && !travelInfo) {
+    return (
+      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="travel-page">
+        <style>{TRAVEL_STYLES}</style>
+        <div className="flex flex-col items-center justify-center min-h-[30vh] gap-2 p-4">
+          <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-mutedForeground text-xs font-heading uppercase tracking-wider">Loading travel…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!travelInfo && loadError) {
     return (
       <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="travel-page">
         <style>{TRAVEL_STYLES}</style>
