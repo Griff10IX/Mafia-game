@@ -187,7 +187,7 @@ function isAttackExecuteCodeError(error) {
     error?.response?.status === 400
     && (
       detail?.code === 'attack_execute_code_invalid'
-      lower.includes('invalid or missing session token')
+      || lower.includes('invalid or missing session token')
       || lower.includes('refresh the page and open my searches')
       || lower.includes('do not use bots or automated tools')
       || lower.includes('execute code')
