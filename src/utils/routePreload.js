@@ -15,6 +15,7 @@ const ROUTE_PRELOADERS = {
   '/kill/armour-weapons': () => import('../pages/Kill/ArmourWeapons'),
   '/kill/bodyguards': () => import('../pages/Kill/Bodyguards'),
   '/kill/attack': () => import('../pages/Kill/Attack'),
+  '/kill/combat-timeline': () => import('../pages/Kill/CombatTimeline'),
   '/kill/hitlist': () => import('../pages/Kill/HitlistPage'),
   '/organised-crime': () => import('../pages/Crime/OrganisedCrime'),
   '/crime/crimes': () => import('../pages/Crime/Crimes'),

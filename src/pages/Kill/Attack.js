@@ -1,11 +1,10 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
-import { Search, Plane, Car, Crosshair, Clock, MapPin, Skull, Calculator, Zap, FileText, Users, History, ChevronDown, ChevronRight, Star } from 'lucide-react';
+import { Search, Plane, Car, Crosshair, Clock, MapPin, Skull, Calculator, Zap, FileText, Users, Star } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import api, { refreshUser, getApiErrorMessage, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
-import { formatGameDateTimeShort as formatDateTime } from '../../utils/gameDateTime';
 import { useAttackTurnstile } from '../../hooks/useAttackTurnstile';
 
 const ATTACK_STYLES = `
@@ -42,6 +41,7 @@ function formatCountdown(expiresAtIso) {
 const BOOZE_CAUGHT_IMAGE = 'https://historicipswich.net/wp-content/uploads/2021/12/0a79f-boston-rum-prohibition1.jpg';
 const MOLOTOV_BULLET_EQUIV = 5000;
 const MAX_BULLETS_REQUIRED = 150000;
+const MOBILE_SEARCH_RENDER_STEP = 40;
 
 function clampBulletsRequired(value) {
   const n = Number(value);
@@ -152,6 +152,41 @@ function writeCachedTravelInfo(data) {
       JSON.stringify({ savedAt: Date.now(), data }),
     );
   } catch (_e) { /* quota / disabled storage is non-fatal */ }
+}
+
+function getAttackExecuteCodePayload(attack) {
+  const codeName = String(attack?.execute_code_name || '').trim();
+  if (
+    codeName
+    && Object.prototype.hasOwnProperty.call(attack || {}, codeName)
+    && typeof attack[codeName] === 'string'
+    && attack[codeName].trim().length >= 16
+  ) {
+    return {
+      execute_code_name: codeName,
+      [codeName]: attack[codeName].trim(),
+    };
+  }
+  const legacy = typeof attack?.execute_token === 'string' ? attack.execute_token.trim() : '';
+  return legacy.length >= 16 ? { execute_token: legacy } : null;
+}
+
+function isAttackExecuteCodeError(error) {
+  const detail = error?.response?.data?.detail;
+  const msg = typeof detail === 'string'
+    ? detail
+    : typeof detail?.message === 'string'
+      ? detail.message
+      : '';
+  const lower = msg.toLowerCase();
+  return (
+    error?.response?.status === 400
+    && (
+      lower.includes('invalid or missing session token')
+      || lower.includes('refresh the page and open my searches')
+      || lower.includes('execute code')
+    )
+  );
 }
 
 /** Kill / execute feedback: same pattern as roulette — compact banner, × to dismiss only (no auto-close). */
@@ -430,6 +465,7 @@ const SearchesCard = ({
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
     return window.matchMedia('(min-width: 768px)').matches;
   });
+  const [mobileVisibleCount, setMobileVisibleCount] = useState(MOBILE_SEARCH_RENDER_STEP);
   const showKillForRow = (a) => !!(a.can_attack && onFillKillTarget);
   const selectedIdSet = useMemo(() => new Set(selectedAttackIds), [selectedAttackIds]);
 
@@ -449,9 +485,17 @@ const SearchesCard = ({
   const [, setTick] = useState(0);
   useEffect(() => {
     if (attacks.length === 0) return;
-    const id = setInterval(() => setTick((t) => t + 1), 1000);
+    const heavyMobileList = !isDesktop && attacks.length > MOBILE_SEARCH_RENDER_STEP;
+    const id = setInterval(() => setTick((t) => t + 1), heavyMobileList ? 15000 : 1000);
     return () => clearInterval(id);
-  }, [attacks.length]);
+  }, [attacks.length, isDesktop]);
+
+  useEffect(() => {
+    setMobileVisibleCount(MOBILE_SEARCH_RENDER_STEP);
+  }, [filterText, show, targetFilter, isDesktop]);
+
+  const mobileListCapped = !isDesktop && attacks.length > mobileVisibleCount;
+  const mobileAttacksToRender = !isDesktop ? attacks.slice(0, mobileVisibleCount) : attacks;
 
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-card atk-fade-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
@@ -677,7 +721,13 @@ const SearchesCard = ({
             </div>
             ) : (
             <div className="space-y-2">
-              {attacks.map((a) => (
+              {attacks.length > MOBILE_SEARCH_RENDER_STEP ? (
+                <div className="rounded border border-primary/20 bg-primary/8 px-2 py-1.5 text-[9px] text-mutedForeground font-heading">
+                  Showing {Math.min(mobileVisibleCount, attacks.length)} of {attacks.length} searches on mobile to keep the kill page smooth.
+                  Use the filter box to narrow the list.
+                </div>
+              ) : null}
+              {mobileAttacksToRender.map((a) => (
                 <div
                   key={a.attack_id}
                   className={`atk-row bg-zinc-800/30 rounded p-2 border space-y-2 ${
@@ -794,6 +844,15 @@ const SearchesCard = ({
                   </div>
                 </div>
               ))}
+              {mobileListCapped ? (
+                <button
+                  type="button"
+                  onClick={() => setMobileVisibleCount((n) => Math.min(n + MOBILE_SEARCH_RENDER_STEP, attacks.length))}
+                  className="w-full rounded border border-primary/30 bg-primary/10 px-2 py-2 text-[10px] font-heading font-bold uppercase tracking-wider text-primary hover:bg-primary/20"
+                >
+                  Show {Math.min(MOBILE_SEARCH_RENDER_STEP, attacks.length - mobileVisibleCount)} more searches
+                </button>
+              ) : null}
             </div>
             )}
           </>
@@ -1192,16 +1251,17 @@ export default function Attack() {
   const [travelCountdown, setTravelCountdown] = useState(null);
   const [pendingResend, setPendingResend] = useState(null);
   const [killBannerMessage, setKillBannerMessage] = useState(null);
-  const [combatTimelineOpen, setCombatTimelineOpen] = useState(false);
-  const [combatTimelineLoading, setCombatTimelineLoading] = useState(false);
-  const [combatTimelineEvents, setCombatTimelineEvents] = useState([]);
-  const [combatTimelineErr, setCombatTimelineErr] = useState(null);
-  const [combatTimelineExpanded, setCombatTimelineExpanded] = useState({});
 
   /** Abort in-flight GET /attack/list so overlapping polls/loads cannot apply out-of-order (empty after full). */
   const attackListAbortRef = useRef(null);
+  /** Last good /attack/list result. Used so a transient refresh failure does not look like "no target". */
+  const attacksRef = useRef(attacks);
   /** Abort in-flight kill-form bullet calc while typing. */
   const killCalcAbortRef = useRef(null);
+
+  useEffect(() => {
+    attacksRef.current = Array.isArray(attacks) ? attacks : [];
+  }, [attacks]);
 
   const showKillResult = (text, type, options = {}) => {
     const { description, action } = options;
@@ -1231,6 +1291,7 @@ export default function Attack() {
       const response = await api.get('/attack/list', { signal: ac.signal });
       const list = response.data?.attacks || [];
       setAttacks(list);
+      attacksRef.current = list;
       writeCachedAttacks(list);
       // Inflation comes inline now (Tier 3 plan item: drop the dedicated /attack/inflation page-load call).
       if (response.data && typeof response.data.inflation_pct === 'number') {
@@ -1243,7 +1304,7 @@ export default function Attack() {
         error?.name === 'CanceledError' ||
         (typeof error?.message === 'string' && error.message.toLowerCase().includes('canceled'));
       if (canceled) return null;
-      return [];
+      return Array.isArray(attacksRef.current) ? attacksRef.current : [];
     }
   }, []);
 
@@ -1265,26 +1326,6 @@ export default function Attack() {
       clearTimeout(t);
     };
   }, []);
-
-  const loadCombatTimeline = useCallback(async () => {
-    setCombatTimelineLoading(true);
-    setCombatTimelineErr(null);
-    try {
-      const res = await api.get('/attack/timeline');
-      setCombatTimelineEvents(res.data?.events || []);
-    } catch (e) {
-      setCombatTimelineErr(getApiErrorMessage(e));
-      setCombatTimelineEvents([]);
-    } finally {
-      setCombatTimelineLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (combatTimelineOpen) {
-      void loadCombatTimeline();
-    }
-  }, [combatTimelineOpen, loadCombatTimeline]);
 
   useEffect(() => {
     const onRefreshAttacks = () => {
@@ -1383,6 +1424,27 @@ export default function Attack() {
     const captcha = await getAttackCaptcha(action);
     return captcha ? { ...body, ...captcha } : body;
   }, [getAttackCaptcha]);
+
+  const postAttackExecute = useCallback((body) => (
+    apiRequestWith429Retry(() => api.post('/attack/execute', body, { timeout: 20000 }))
+  ), []);
+
+  const showExecuteError = useCallback((error) => {
+    const status = error?.response?.status;
+    const transient = status === 0 || status === 502 || status === 503 || status === 504 || error?.code === 'ECONNABORTED';
+    if (transient) {
+      showKillResult(
+        'Attack result could not be confirmed. Refreshing your searches now.',
+        'warning',
+        { description: getApiErrorMessage(error) || 'Check My Searches before clicking kill again.' },
+      );
+      refreshAttacks();
+      fetchBullets();
+      refreshUser();
+      return;
+    }
+    showKillResult(getApiErrorMessage(error) || 'Failed to execute attack', 'error');
+  }, [refreshAttacks]);
 
   // Hitlist board crosshair → /attack?target=… — prefill kill form and start a search (same as Find User submit)
   useEffect(() => {
@@ -1554,19 +1616,17 @@ export default function Attack() {
             }
             return;
           }
+          const executeCode = getAttackExecuteCodePayload(best);
           const extra = {
             death_message: payload.deathMessage || null,
             make_public: payload.makePublic || false,
             bullets_to_use: payload.bulletsToUse ?? 1,
             use_molotovs: payload.useMolotovs ?? false,
-            ...(best.execute_token ? { execute_token: best.execute_token } : {}),
+            ...(executeCode || {}),
           };
-          const execBody =
-            best.execute_token && String(best.execute_token).trim().length >= 16
-              ? extra
-              : { attack_id: best.attack_id, ...extra };
+          const execBody = executeCode ? extra : { attack_id: best.attack_id, ...extra };
           const securedExecBody = await withAttackCaptcha('execute', execBody);
-          const execRes = await api.post('/attack/execute', securedExecBody);
+          const execRes = await postAttackExecute(securedExecBody);
           refreshUser();
           fetchBullets();
           // Background refresh — the result toast/feedback below doesn't need the latest list.
@@ -1606,7 +1666,7 @@ export default function Attack() {
             showKillResult(execRes.data?.message || 'Kill failed.', 'error');
           }
         } catch (error) {
-          showKillResult(error.response?.data?.detail || 'Failed to execute attack', 'error');
+          showExecuteError(error);
         } finally {
           setLoading(false);
         }
@@ -1706,11 +1766,37 @@ export default function Attack() {
   const executeAttack = async (attackId, extra = null) => {
     setLoading(true);
     try {
-      const tok = extra && typeof extra.execute_token === 'string' ? extra.execute_token.trim() : '';
-      const payload =
-        tok.length >= 16 ? { ...extra } : extra ? { attack_id: attackId, ...extra } : { attack_id: attackId };
-      const securedPayload = await withAttackCaptcha('execute', payload);
-      const response = await api.post('/attack/execute', securedPayload);
+      const buildPayload = (payloadExtra) => {
+        const tok = payloadExtra && typeof payloadExtra.execute_token === 'string' ? payloadExtra.execute_token.trim() : '';
+        const hasRotatingCode = payloadExtra && Object.entries(payloadExtra).some(([k, v]) => (
+          typeof k === 'string'
+          && k.startsWith('kc_')
+          && typeof v === 'string'
+          && v.trim().length >= 16
+        ));
+        return tok.length >= 16 || hasRotatingCode
+          ? { ...payloadExtra }
+          : payloadExtra
+            ? { attack_id: attackId, ...payloadExtra }
+            : { attack_id: attackId };
+      };
+      const sendExecute = async (payloadExtra) => {
+        const securedPayload = await withAttackCaptcha('execute', buildPayload(payloadExtra));
+        return postAttackExecute(securedPayload);
+      };
+      let response;
+      try {
+        response = await sendExecute(extra);
+      } catch (error) {
+        if (!isAttackExecuteCodeError(error)) throw error;
+        await refreshAttacks();
+        showKillResult(
+          'Kill code refreshed. Click Kill again.',
+          'warning',
+          { description: 'The hidden kill code changed while you were on the page. Nothing was retried automatically.' },
+        );
+        return;
+      }
       setLoading(false);
       if (response.data.success) {
         const rewardMoney = response.data.rewards?.money;
@@ -1748,7 +1834,7 @@ export default function Attack() {
       // for another /attack/list round-trip (which can be 0.5-1.5s under load).
       refreshAttacks();
     } catch (error) {
-      showKillResult(error.response?.data?.detail || 'Failed to execute attack', 'error');
+      showExecuteError(error);
     } finally {
       setLoading(false);
     }
@@ -1800,7 +1886,7 @@ export default function Attack() {
         make_public: makePublic,
         bullets_to_use: bulletNum,
         use_molotovs: useMolotovs,
-        ...(best.execute_token ? { execute_token: best.execute_token } : {}),
+        ...(getAttackExecuteCodePayload(best) || {}),
       };
       try {
         sessionStorage.setItem('attack-last-submit', JSON.stringify({
@@ -1897,7 +1983,7 @@ export default function Attack() {
       clearTimeout(timer);
       killCalcAbortRef.current?.abort();
     };
-  }, [killUsername]);
+  }, [killUsername, setBulletsToUse]);
 
   // Convenience: if molotov mode is on and molotovs alone can cover the kill requirement,
   // auto-set bullets input to 1 so the attack still includes a minimal bullet amount.
@@ -2028,114 +2114,20 @@ export default function Attack() {
 
       <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-card atk-fade-in mobile-panel`}>
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <button
-          type="button"
-          onClick={() => setCombatTimelineOpen((o) => !o)}
-          className="w-full px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2 text-left hover:bg-primary/12 transition-colors"
-        >
-          <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1.5">
-            <History size={12} />
-            Combat timeline (detailed)
-          </span>
-          {combatTimelineOpen ? <ChevronDown size={14} className="text-primary shrink-0" /> : <ChevronRight size={14} className="text-primary shrink-0" />}
-        </button>
-        {combatTimelineOpen && (
-          <div className="p-2.5 space-y-2">
-            <p className="text-[9px] text-mutedForeground font-heading leading-relaxed">
-              Includes bodyguard blocks, failed attacks, validation errors, travel, kill log entries, and active searches.
+        <div className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <p className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Combat timeline</p>
+            <p className="text-[9px] text-mutedForeground font-heading mt-0.5">
+              Detailed combat logs moved to their own page to keep Attack fast.
             </p>
-            <div className="flex flex-wrap items-center gap-2">
-              <Link
-                to="/kill/attempts"
-                className="text-[9px] font-heading font-bold text-primary underline-offset-2 hover:underline"
-              >
-                Open full history
-              </Link>
-              <button
-                type="button"
-                onClick={() => void loadCombatTimeline()}
-                disabled={combatTimelineLoading}
-                className="text-[9px] font-heading font-bold text-mutedForeground hover:text-primary disabled:opacity-50"
-              >
-                Refresh
-              </button>
-            </div>
-            {combatTimelineErr && (
-              <p className="text-[10px] text-destructive font-heading">{combatTimelineErr}</p>
-            )}
-            {combatTimelineLoading && combatTimelineEvents.length === 0 && !combatTimelineErr ? (
-              <div className="flex items-center gap-2 py-6 justify-center text-mutedForeground">
-                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                <span className="text-[9px] font-heading uppercase tracking-wider">Loading timeline…</span>
-              </div>
-            ) : combatTimelineEvents.length === 0 ? (
-              <p className="text-[10px] text-mutedForeground font-heading py-4 text-center">No combat events yet.</p>
-            ) : (
-              <div className="max-h-[360px] overflow-y-auto rounded border border-border/60 divide-y divide-zinc-700/30">
-                {combatTimelineEvents.map((ev) => {
-                  const et = ev.event_type || '';
-                  const badgeClass =
-                    et === 'killed' || et === 'attack_kill'
-                      ? 'bg-primary/20 text-primary border-primary/30'
-                      : et === 'failed'
-                        ? 'bg-secondary text-mutedForeground border-border'
-                        : et === 'bodyguard'
-                          ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30'
-                          : et === 'error'
-                            ? 'bg-destructive/15 text-destructive border-destructive/30'
-                            : et === 'attack_travel'
-                              ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/25'
-                              : et === 'active_found' || et === 'active_search'
-                                ? 'bg-violet-500/10 text-violet-600 dark:text-violet-300 border-violet-500/25'
-                                : 'bg-secondary text-mutedForeground border-border';
-                  const expanded = !!combatTimelineExpanded[ev.id];
-                  return (
-                    <div key={ev.id} className="atk-row">
-                      <div
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setCombatTimelineExpanded((m) => ({ ...m, [ev.id]: !m[ev.id] }))}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setCombatTimelineExpanded((m) => ({ ...m, [ev.id]: !m[ev.id] }));
-                          }
-                        }}
-                        className="w-full px-2 py-1.5 flex items-start gap-2 text-left cursor-pointer hover:bg-primary/[0.04]"
-                      >
-                        <span className="shrink-0 mt-0.5 text-mutedForeground">{expanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
-                        <div className="min-w-0 flex-1 space-y-0.5">
-                          <div className="flex flex-wrap items-center gap-1.5">
-                            <span className="text-[9px] text-mutedForeground font-heading tabular-nums shrink-0">{formatDateTime(ev.occurred_at)}</span>
-                            <span className={`shrink-0 inline-flex px-1.5 py-0.5 rounded text-[8px] font-heading font-bold uppercase border ${badgeClass}`}>
-                              {String(et).replace(/_/g, ' ')}
-                            </span>
-                            <span className="text-[8px] text-zinc-500 font-heading uppercase">{ev.direction}</span>
-                            {ev.other_username && ev.other_username !== '—' && (
-                              <Link
-                                to={`/profile/${encodeURIComponent(ev.other_username)}`}
-                                onClick={(e) => e.stopPropagation()}
-                                className="text-[10px] font-heading font-bold text-foreground hover:text-primary truncate max-w-[140px]"
-                              >
-                                {ev.other_username}
-                              </Link>
-                            )}
-                          </div>
-                          <p className="text-[10px] text-mutedForeground font-heading leading-snug pl-0 line-clamp-2">{ev.summary}</p>
-                        </div>
-                      </div>
-                      {expanded && ev.payload && (
-                        <pre className="mx-2 mb-2 p-2 rounded bg-black/30 border border-border/50 text-[9px] text-zinc-400 overflow-x-auto font-mono whitespace-pre-wrap break-words">
-                          {JSON.stringify(ev.payload, null, 2)}
-                        </pre>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
-        )}
+          <Link
+            to="/kill/combat-timeline"
+            className="px-2 py-1 rounded border border-primary/30 bg-primary/10 text-primary text-[9px] font-heading font-bold uppercase tracking-wider hover:bg-primary/20"
+          >
+            Open timeline
+          </Link>
+        </div>
         <div className="atk-art-line text-primary mx-2.5" />
       </div>
 

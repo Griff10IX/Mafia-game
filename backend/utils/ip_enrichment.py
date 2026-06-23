@@ -26,7 +26,7 @@ async def get_or_fetch_ip_geodata(db, ip: str) -> Dict[str, Any]:
     """
     Return cached or freshly fetched geodata for a public IP.
     Document shape (also stored in ip_geodata_cache): ip, fetched_at, ok, country, countryCode,
-    isp, org, as_field, asname, mobile, proxy, hosting, error (optional).
+    regionName, city, isp, org, as_field, asname, mobile, proxy, hosting, error (optional).
     """
     ipn = normalize_ip(ip)
     if not ipn:
@@ -62,7 +62,7 @@ async def get_or_fetch_ip_geodata(db, ip: str) -> Dict[str, Any]:
 
         url = (
             f"http://ip-api.com/json/{ipn}"
-            "?fields=status,message,country,countryCode,isp,org,as,asname,mobile,proxy,hosting,query"
+            "?fields=status,message,country,countryCode,regionName,city,isp,org,as,asname,mobile,proxy,hosting,query"
         )
         async with httpx.AsyncClient(timeout=10.0) as client:
             r = await client.get(
@@ -94,6 +94,8 @@ async def get_or_fetch_ip_geodata(db, ip: str) -> Dict[str, Any]:
             "ok": True,
             "country": j.get("country"),
             "countryCode": j.get("countryCode"),
+            "regionName": j.get("regionName"),
+            "city": j.get("city"),
             "isp": j.get("isp"),
             "org": j.get("org"),
             "as_field": j.get("as"),

@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Globe, RefreshCw, Search, User, ShieldAlert, Smartphone, AlertTriangle, CheckCircle2, Info } from 'lucide-react';
+import { Globe, RefreshCw, Search, User, ShieldAlert, Smartphone, AlertTriangle, CheckCircle2, Info, EyeOff } from 'lucide-react';
 import api from '../../utils/api';
 import { formatAdminDateTime } from '../../utils/adminDateTime';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+import StaffIpReputationCard, { maskIp } from '../../components/StaffIpReputationCard';
 
 const TAG_STYLES = {
   registration_ip: 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200',
@@ -75,7 +76,7 @@ function FindingsPanel({ findings }) {
   );
 }
 
-function IpSummaryTable({ rows }) {
+function IpSummaryTable({ rows, blurIps }) {
   if (!rows?.length) {
     return <p className="text-[10px] text-mutedForeground font-heading">No IPs recorded.</p>;
   }
@@ -95,7 +96,7 @@ function IpSummaryTable({ rows }) {
         <tbody>
           {rows.map((row, i) => (
             <tr key={i} className="border-b border-zinc-800/80">
-              <td className="p-1 align-top break-all text-primary">{row.ip}</td>
+              <td className="p-1 align-top break-all text-primary">{blurIps ? maskIp(row.ip) : row.ip}</td>
               <td className="p-1 align-top break-words text-foreground">
                 {row.network || row.isp || row.org || row.lookup || '—'}
               </td>
@@ -120,6 +121,7 @@ export default function AdminIpHistory() {
   const [attackDays, setAttackDays] = useState(90);
   const [report, setReport] = useState(null);
   const [userLoading, setUserLoading] = useState(false);
+  const [blurIps, setBlurIps] = useState(false);
 
   const [ipQuery, setIpQuery] = useState(searchParams.get('ip') || '');
   const [ipData, setIpData] = useState(null);
@@ -257,6 +259,19 @@ export default function AdminIpHistory() {
             </p>
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => setBlurIps((v) => !v)}
+          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded border font-heading font-bold text-[10px] uppercase tracking-wide ${
+            blurIps
+              ? 'border-sky-500/60 bg-sky-500/25 text-sky-200 hover:bg-sky-500/35'
+              : 'border-zinc-600/50 bg-zinc-800/40 text-mutedForeground hover:bg-zinc-700/40'
+          }`}
+          title="Mask IPs for screenshots shown to players"
+        >
+          <EyeOff size={12} />
+          {blurIps ? 'IPs blurred' : 'Blur IPs'}
+        </button>
       </div>
 
       <section className="rounded border border-border overflow-hidden">
@@ -342,15 +357,15 @@ export default function AdminIpHistory() {
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-2 text-[10px] font-heading">
                 <div className="rounded border border-zinc-700/40 bg-zinc-900/40 px-2 py-1.5">
                   <div className="text-[9px] uppercase text-mutedForeground">Registration IP</div>
-                  <div className="font-mono text-foreground break-all">{account?.registration_ip || sources.registration_ip || '—'}</div>
+                  <div className="font-mono text-foreground break-all">{blurIps ? maskIp(account?.registration_ip || sources.registration_ip) : (account?.registration_ip || sources.registration_ip || '—')}</div>
                 </div>
                 <div className="rounded border border-zinc-700/40 bg-zinc-900/40 px-2 py-1.5">
                   <div className="text-[9px] uppercase text-mutedForeground">Last login IP</div>
-                  <div className="font-mono text-foreground break-all">{account?.last_login_ip || sources.last_login_ip || '—'}</div>
+                  <div className="font-mono text-foreground break-all">{blurIps ? maskIp(account?.last_login_ip || sources.last_login_ip) : (account?.last_login_ip || sources.last_login_ip || '—')}</div>
                 </div>
                 <div className="rounded border border-zinc-700/40 bg-zinc-900/40 px-2 py-1.5">
                   <div className="text-[9px] uppercase text-mutedForeground">Last request IP</div>
-                  <div className="font-mono text-foreground break-all">{account?.last_request_ip || sources.last_request_ip || '—'}</div>
+                  <div className="font-mono text-foreground break-all">{blurIps ? maskIp(account?.last_request_ip || sources.last_request_ip) : (account?.last_request_ip || sources.last_request_ip || '—')}</div>
                 </div>
                 <div className="rounded border border-zinc-700/40 bg-zinc-900/40 px-2 py-1.5">
                   <div className="text-[9px] uppercase text-mutedForeground">Device fingerprint</div>
@@ -380,7 +395,9 @@ export default function AdminIpHistory() {
                           <tr key={i} className="border-b border-zinc-800/80">
                             <td className="p-1">{d.device_type}</td>
                             <td className="p-1 break-all max-w-[140px]">{d.ua_short || '—'}</td>
-                            <td className="p-1 break-all">{(d.ips || []).join(', ') || '—'}</td>
+                            <td className="p-1 break-all">
+                              {blurIps ? (d.ips || []).map(maskIp).join(', ') : ((d.ips || []).join(', ') || '—')}
+                            </td>
                             <td className="p-1 tabular-nums">{d.login_count}</td>
                             <td className="p-1 whitespace-nowrap">{formatAdminDateTime(d.last_at)}</td>
                           </tr>
@@ -397,7 +414,7 @@ export default function AdminIpHistory() {
                   {access.ip_sharing.map((block) => (
                     <div key={block.ip} className="text-[9px] font-heading">
                       <div className="font-mono text-foreground">
-                        {block.ip}{' '}
+                        {blurIps ? maskIp(block.ip) : block.ip}{' '}
                         <span className="text-mutedForeground">
                           — {block.other_alive_count} alive / {block.other_account_count} total other account(s)
                         </span>
@@ -441,7 +458,7 @@ export default function AdminIpHistory() {
                         >
                           {m.username || m.id}
                         </button>
-                        {m.is_dead ? ' (dead)' : ''} · {m.last_login_ip || '—'}
+                        {m.is_dead ? ' (dead)' : ''} · {blurIps ? maskIp(m.last_login_ip) : (m.last_login_ip || '—')}
                       </li>
                     ))}
                   </ul>
@@ -449,8 +466,28 @@ export default function AdminIpHistory() {
               )}
 
               <div>
+                <div className="text-[9px] font-heading text-primary uppercase mb-1">IP reputation proof cards</div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+                  {(userData.ip_summary || []).slice(0, 8).map((row) => (
+                    <StaffIpReputationCard
+                      key={row.ip}
+                      ip={row.ip}
+                      geo={row}
+                      blurIp={blurIps}
+                      compact
+                    />
+                  ))}
+                </div>
+                {(userData.ip_summary || []).length > 8 ? (
+                  <p className="mt-1 text-[9px] text-mutedForeground font-heading">
+                    Showing first 8 proof cards. Full IP table below still contains all known IPs.
+                  </p>
+                ) : null}
+              </div>
+
+              <div>
                 <div className="text-[9px] font-heading text-primary uppercase mb-1">All known IPs (geo)</div>
-                <IpSummaryTable rows={userData.ip_summary} />
+                <IpSummaryTable rows={userData.ip_summary} blurIps={blurIps} />
               </div>
 
               <div>
@@ -472,7 +509,7 @@ export default function AdminIpHistory() {
                       {(access.login_timeline_tagged || userData.login_timeline || []).map((row, i) => (
                         <tr key={i} className="border-b border-zinc-800/80">
                           <td className="p-1 whitespace-nowrap">{formatAdminDateTime(row.at)}</td>
-                          <td className="p-1 break-all">{row.ip || '—'}</td>
+                          <td className="p-1 break-all">{blurIps ? maskIp(row.ip) : (row.ip || '—')}</td>
                           <td className="p-1 break-words">{row.isp || row.org || '—'}</td>
                           <td className="p-1">{row.device_type || '—'}</td>
                           <td className="p-1">
@@ -504,7 +541,7 @@ export default function AdminIpHistory() {
                         {access.suspicious_logins.recent.map((r, i) => (
                           <tr key={i} className="border-t border-zinc-800/60">
                             <td className="p-1 whitespace-nowrap">{formatAdminDateTime(r.at)}</td>
-                            <td className="p-1">{r.ip || '—'}</td>
+                            <td className="p-1">{blurIps ? maskIp(r.ip) : (r.ip || '—')}</td>
                             <td className="p-1">{r.reason || '—'}</td>
                             <td className="p-1 break-all">{r.login_input || '—'}</td>
                           </tr>
@@ -530,7 +567,7 @@ export default function AdminIpHistory() {
                       <tbody>
                         {userData.sessions.map((s, i) => (
                           <tr key={i} className="border-b border-zinc-800/80">
-                            <td className="p-1 break-all">{s.ip || '—'}</td>
+                            <td className="p-1 break-all">{blurIps ? maskIp(s.ip) : (s.ip || '—')}</td>
                             <td className="p-1">{s.device_type || '—'}</td>
                             <td className="p-1 whitespace-nowrap">{formatAdminDateTime(s.last_used_at)}</td>
                           </tr>
@@ -555,7 +592,7 @@ export default function AdminIpHistory() {
                         <ul className="text-[9px] font-mono space-y-0.5">
                           {attack.as_attacker.map((r, i) => (
                             <li key={i}>
-                              {r.ip} · {r.count}× · last {formatAdminDateTime(r.last_at)}
+                              {blurIps ? maskIp(r.ip) : r.ip} · {r.count}× · last {formatAdminDateTime(r.last_at)}
                             </li>
                           ))}
                         </ul>
@@ -569,7 +606,7 @@ export default function AdminIpHistory() {
                         <ul className="text-[9px] font-mono space-y-0.5">
                           {attack.as_target.map((r, i) => (
                             <li key={i}>
-                              {r.ip} · {r.count}× · last {formatAdminDateTime(r.last_at)}
+                              {blurIps ? maskIp(r.ip) : r.ip} · {r.count}× · last {formatAdminDateTime(r.last_at)}
                             </li>
                           ))}
                         </ul>
@@ -622,8 +659,14 @@ export default function AdminIpHistory() {
 
           {ipData && (
             <div className="space-y-2">
+              <StaffIpReputationCard
+                ip={ipData.ip}
+                geo={ipData.geo}
+                accountCount={ipData.account_count}
+                blurIp={blurIps}
+              />
               <div className="flex flex-wrap gap-2 text-[10px] font-heading items-center">
-                <span className="font-mono text-foreground text-sm">{ipData.ip}</span>
+                <span className="font-mono text-foreground text-sm">{blurIps ? maskIp(ipData.ip) : ipData.ip}</span>
                 {ipData.geo?.isp ? (
                   <span className="text-mutedForeground">
                     {ipData.geo.network || ipData.geo.isp}

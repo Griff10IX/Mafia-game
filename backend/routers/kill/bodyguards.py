@@ -2,13 +2,17 @@
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 import asyncio
+import hashlib
+import hmac
 import logging
+import os
+import secrets
 import time
 import uuid
 import random
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
-from fastapi import Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Query, Request
 from pymongo import UpdateOne
 from utils.point_provenance import log_points_event
 
@@ -43,6 +47,7 @@ from server import (
     STATES,
     DEFAULT_HEALTH,
     DEFAULT_GARAGE_BATCH_LIMIT,
+    SECRET_KEY,
     _is_admin,
     _admin_or_mod,
     _username_pattern,
@@ -67,6 +72,98 @@ BODYGUARD_ARMOUR_UPGRADE_COSTS = {0: 50, 1: 100, 2: 200, 3: 400, 4: 800}
 BODYGUARD_HUMAN_HIRE_DISCOUNT = 0.75  # 75% of robot price
 # After someone else kills your robot NPC bodyguard, you cannot hire another for this many seconds (self-kill does not apply; see attack.py).
 BODYGUARD_ROBOT_KILLED_HIRE_COOLDOWN_SECONDS = 60
+_BODYGUARD_HIRE_CODE_PREFIX = "bgc_"
+
+
+def _bodyguard_hire_code_bucket_seconds() -> int:
+    try:
+        return max(900, int(os.getenv("BODYGUARD_HIRE_CODE_BUCKET_SECONDS", "7200") or "7200"))
+    except Exception:
+        return 7200
+
+
+def _bodyguard_hire_code_bucket(now: Optional[float] = None) -> int:
+    return int((time.time() if now is None else now) // _bodyguard_hire_code_bucket_seconds())
+
+
+def _bodyguard_hire_code_field_name(bucket: Optional[int] = None) -> str:
+    b = _bodyguard_hire_code_bucket() if bucket is None else int(bucket)
+    secret = str(SECRET_KEY or "bodyguard-hire-code").encode("utf-8", "ignore")
+    digest = hmac.new(secret, f"bodyguard-hire-field:{b}".encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{_BODYGUARD_HIRE_CODE_PREFIX}{digest[:16]}"
+
+
+def _bodyguard_hire_code_value(user_id: str, bucket: Optional[int] = None) -> str:
+    b = _bodyguard_hire_code_bucket() if bucket is None else int(bucket)
+    secret = str(SECRET_KEY or "bodyguard-hire-code").encode("utf-8", "ignore")
+    digest = hmac.new(secret, f"bodyguard-hire-value:{user_id}:{b}".encode("utf-8"), hashlib.sha256).hexdigest()
+    return digest[:48]
+
+
+def _bodyguard_hire_code_payload(user_id: str) -> Dict[str, Any]:
+    name = _bodyguard_hire_code_field_name()
+    return {
+        "hire_code_name": name,
+        "hire_code_bucket": _bodyguard_hire_code_bucket(),
+        name: _bodyguard_hire_code_value(user_id),
+    }
+
+
+def _accepted_bodyguard_hire_code_fields() -> Dict[str, int]:
+    b = _bodyguard_hire_code_bucket()
+    return {
+        _bodyguard_hire_code_field_name(b): b,
+        _bodyguard_hire_code_field_name(b - 1): b - 1,
+    }
+
+
+async def _submitted_bodyguard_hire_code(payload: "BodyguardHireRequest", req: Request) -> Optional[str]:
+    body: Dict[str, Any] = {}
+    try:
+        raw = await req.json()
+        if isinstance(raw, dict):
+            body = raw
+    except Exception:
+        body = {}
+
+    fields = _accepted_bodyguard_hire_code_fields()
+    hinted = body.get("hire_code_name")
+    if isinstance(hinted, str) and hinted in fields:
+        val = body.get(hinted)
+        if isinstance(val, str) and len(val.strip()) >= 16:
+            return val.strip()
+
+    for name in fields:
+        val = body.get(name)
+        if isinstance(val, str) and len(val.strip()) >= 16:
+            return val.strip()
+
+    extra = getattr(payload, "__pydantic_extra__", None)
+    if isinstance(extra, dict):
+        hinted = extra.get("hire_code_name")
+        if isinstance(hinted, str) and hinted in fields:
+            val = extra.get(hinted)
+            if isinstance(val, str) and len(val.strip()) >= 16:
+                return val.strip()
+        for name in fields:
+            val = extra.get(name)
+            if isinstance(val, str) and len(val.strip()) >= 16:
+                return val.strip()
+    return None
+
+
+def _valid_bodyguard_hire_code(user_id: str, submitted: Optional[str]) -> bool:
+    sub = (submitted or "").strip()
+    if len(sub) < 16:
+        return False
+    for bucket in set(_accepted_bodyguard_hire_code_fields().values()):
+        expected = _bodyguard_hire_code_value(user_id, bucket)
+        try:
+            if secrets.compare_digest(expected.encode("utf-8"), sub.encode("utf-8")):
+                return True
+        except Exception:
+            continue
+    return False
 
 # Bodyguard inflation: each purchase starts/resets a 3h timer; buying again before it expires adds % (2, 5, 7, 12, 17, 22, ...)
 BODYGUARD_INFLATION_HOURS = 3
@@ -201,6 +298,8 @@ class BodyguardInviteRequest(BaseModel):
 
 
 class BodyguardHireRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     slot: int
     is_robot: bool
 
@@ -395,7 +494,7 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
         if len(_bodyguards_cache) >= _BODYGUARDS_CACHE_MAX_ENTRIES:
             oldest = next(iter(_bodyguards_cache))
             _bodyguards_cache.pop(oldest, None)
-        payload = {"bodyguards": result}
+        payload = {"bodyguards": result, **_bodyguard_hire_code_payload(uid)}
         as_guard = await db.bodyguards.find_one(
             {"bodyguard_user_id": uid, "is_robot": False},
             {"_id": 0, "user_id": 1},
@@ -550,8 +649,30 @@ async def buy_bodyguard_slot(current_user: dict = Depends(get_current_user)):
     return {"message": f"Bodyguard slot purchased for {cost} points"}
 
 
-async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Depends(get_current_user)):
-    return await _do_hire_bodyguard(request.slot, request.is_robot, current_user)
+async def hire_bodyguard(payload: BodyguardHireRequest, req: Request, current_user: dict = Depends(get_current_user)):
+    submitted_code = await _submitted_bodyguard_hire_code(payload, req)
+    if not _valid_bodyguard_hire_code(current_user.get("id") or "", submitted_code):
+        try:
+            from utils.staff_bot_client_alert import maybe_notify_staff_bodyguard_hire_code_fail
+
+            await maybe_notify_staff_bodyguard_hire_code_fail(
+                db=db,
+                request=req,
+                user_id=current_user.get("id") or "",
+                username=current_user.get("username") or "",
+                slot=payload.slot,
+                is_robot=payload.is_robot,
+            )
+        except Exception:
+            logger.exception("bodyguard hire code fail notification failed")
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "bodyguard_hire_code_invalid",
+                "detail": "Bodyguard hire code refreshed. Reload Bodyguards and try again.",
+            },
+        )
+    return await _do_hire_bodyguard(payload.slot, payload.is_robot, current_user)
 
 
 async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):

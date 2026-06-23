@@ -75,6 +75,7 @@ const UsersOnline = lazy(() => import("./pages/Game/UsersOnline"));
 const ArmourWeapons = lazy(() => import("./pages/Kill/ArmourWeapons"));
 const Attack = lazy(() => import("./pages/Kill/Attack"));
 const Attemps = lazy(() => import("./pages/Kill/Attemps"));
+const CombatTimeline = lazy(() => import("./pages/Kill/CombatTimeline"));
 const WitnessStatements = lazy(() => import("./pages/Kill/WitnessStatements"));
 const Bodyguards = lazy(() => import("./pages/Kill/Bodyguards"));
 const HitlistPage = lazy(() => import("./pages/Kill/HitlistPage"));
@@ -608,7 +609,9 @@ function App() {
             element={
               isAuthenticated ? (
                 <Layout>
-                  <Attack />
+                  <ErrorBoundary>
+                    <Attack />
+                  </ErrorBoundary>
                 </Layout>
               ) : (
                 <Navigate to="/" replace />
@@ -652,6 +655,18 @@ function App() {
             }
           />
           <Route
+            path="/kill/combat-timeline"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <CombatTimeline />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
             path="/kill/witness-statements"
             element={
               isAuthenticated ? (
@@ -680,6 +695,7 @@ function App() {
           <Route path="/bodyguards" element={<Navigate to="/kill/bodyguards" replace />} />
           <Route path="/hitlist" element={<Navigate to="/kill/hitlist" replace />} />
           <Route path="/attempts" element={<Navigate to="/kill/attempts" replace />} />
+          <Route path="/combat-timeline" element={<Navigate to="/kill/combat-timeline" replace />} />
           <Route path="/witness-statements" element={<Navigate to="/kill/witness-statements" replace />} />
           <Route path="/armour-weapons" element={<Navigate to="/kill/armour-weapons" replace />} />
           <Route path="/weapons" element={<Navigate to="/kill/armour-weapons" replace />} />

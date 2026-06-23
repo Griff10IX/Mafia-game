@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Skull, Crosshair, ArrowUpRight, ArrowDownLeft, Clock, Shield, DollarSign, History, List, ChevronDown, ChevronRight, Copy } from 'lucide-react';
+import { Skull, Crosshair, ArrowUpRight, Clock, Shield, DollarSign, History, List, ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
 import { copyTextToClipboard } from '../../utils/copyToClipboard';
 import { toast } from 'sonner';
@@ -55,15 +55,9 @@ function money(n) {
 }
 
 function buildAttemptCopySummary(attempt) {
-  const outgoingRow = attempt.direction === 'outgoing';
   const killed = attempt.outcome === 'killed';
-  const incomingKilled = !outgoingRow && killed;
-  const otherUser = (outgoingRow ? attempt.target_username : attempt.attacker_username) ?? '?';
-  const statusLabel = incomingKilled
-    ? `Killed by ${attempt.attacker_username ?? '?'}`
-    : killed
-      ? 'Killed'
-      : 'Failed';
+  const otherUser = attempt.target_username ?? '?';
+  const statusLabel = killed ? 'Killed' : 'Failed';
   const bu = Number(attempt.bullets_used || 0);
   const mv = Number(attempt.molotovs_used || 0);
   const ammoBits = [];
@@ -71,7 +65,7 @@ function buildAttemptCopySummary(attempt) {
   if (mv) ammoBits.push(`${mv.toLocaleString()} molotov${mv === 1 ? '' : 's'}`);
   const ammoStr = ammoBits.length ? ammoBits.join(', ') : '0 bullets';
   const parts = [
-    outgoingRow ? `Outgoing vs ${otherUser}` : `Incoming from ${otherUser}`,
+    `Attack vs ${otherUser}`,
     statusLabel,
     ammoStr,
   ];
@@ -100,20 +94,13 @@ function buildTimelineEventCopySummary(ev) {
 }
 
 const AttemptRow = ({ attempt }) => {
-  const outgoingRow = attempt.direction === 'outgoing';
   const killed = attempt.outcome === 'killed';
-  const incomingKilled = !outgoingRow && killed;
-  const DirIcon = outgoingRow ? ArrowUpRight : ArrowDownLeft;
-  const otherUser = (outgoingRow ? attempt.target_username : attempt.attacker_username) ?? '?';
+  const otherUser = attempt.target_username ?? '?';
   const rewardMoney = attempt.rewards?.money;
   const isBodyguardKill = attempt.is_bodyguard_kill;
   const bgOwner = attempt.bodyguard_owner_username;
 
-  const statusLabel = incomingKilled
-    ? `Killed by ${attempt.attacker_username ?? '?'}`
-    : killed
-      ? 'Killed'
-      : 'Failed';
+  const statusLabel = killed ? 'Killed' : 'Failed';
 
   const buN = Number(attempt.bullets_used || 0);
   const mvN = Number(attempt.molotovs_used || 0);
@@ -132,8 +119,8 @@ const AttemptRow = ({ attempt }) => {
         {/* Left side - Main info */}
         <div className="min-w-0 flex-1 space-y-1">
           <div className="flex items-center gap-1.5 flex-wrap">
-            <div className={`p-0.5 rounded ${outgoingRow ? 'bg-primary/20' : 'bg-secondary'}`}>
-              <DirIcon size={10} className={outgoingRow ? 'text-primary' : 'text-mutedForeground'} />
+            <div className="p-0.5 rounded bg-primary/20">
+              <ArrowUpRight size={10} className="text-primary" />
             </div>
             
             <Link
@@ -443,8 +430,7 @@ export default function Attempts() {
     }
   }, [tab, fetchAttempts, fetchTimeline]);
 
-  const outgoing = useMemo(() => (attempts || []).filter((a) => a.direction === 'outgoing'), [attempts]);
-  const incoming = useMemo(() => (attempts || []).filter((a) => a.direction === 'incoming'), [attempts]);
+  const outgoing = useMemo(() => attempts || [], [attempts]);
 
   const toggleTimelineRow = (id) => {
     setTimelineExpanded((m) => ({ ...m, [id]: !m[id] }));
@@ -456,7 +442,7 @@ export default function Attempts() {
 
       <div className="relative atmp-fade-in flex flex-col gap-2">
         <p className="text-[9px] text-zinc-500 font-heading italic">
-          Full combat history or a short summary of kills and damage only.
+          Your attack history only. Attacks other players make against you are not shown here.
         </p>
         {canViewPayload && tab === 'everything' && (
           <div className="flex flex-wrap items-center gap-1 p-1 rounded-md border border-primary/20 bg-primary/5">
@@ -568,20 +554,13 @@ export default function Attempts() {
       )}
 
       {tab === 'summary' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 md:gap-3">
+        <div className="grid grid-cols-1 gap-2 md:gap-3">
           <AttemptsCard
-            title="My Attempts"
+            title="My Attacks"
             attempts={outgoing}
             icon={ArrowUpRight}
             emptyMessage="No attacks made yet"
             delay={0}
-          />
-          <AttemptsCard
-            title="Against Me (health loss only)"
-            attempts={incoming}
-            icon={ArrowDownLeft}
-            emptyMessage="No damaging attacks against you"
-            delay={0.05}
           />
         </div>
       )}

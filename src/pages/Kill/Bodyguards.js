@@ -21,6 +21,17 @@ const BODYGUARD_SLOT_COSTS = [75, 150, 300, 450];
 // Match backend: BODYGUARD_ARMOUR_UPGRADE_COSTS = {0: 50, 1: 100, 2: 200, 3: 400, 4: 800}
 const BODYGUARD_ARMOUR_UPGRADE_COSTS = { 0: 50, 1: 100, 2: 200, 3: 400, 4: 800 };
 
+function getBodyguardHireCodePayload(data) {
+  const name = data?.hire_code_name;
+  if (!name || typeof name !== 'string') return {};
+  const value = data?.[name];
+  if (!value || typeof value !== 'string') return {};
+  return {
+    hire_code_name: name,
+    [name]: value,
+  };
+}
+
 function formatDuration(totalSeconds) {
   if (totalSeconds == null || totalSeconds < 0) return '—';
   const d = Math.floor(totalSeconds / 86400);
@@ -81,6 +92,7 @@ export default function Bodyguards() {
   const [hireBanner, setHireBanner] = useState(null);
   const claimedSlotsRef = useRef(new Set());
   const pendingHiresRef = useRef(0);
+  const hireCodePayloadRef = useRef({});
 
   const WEEKDAY_OPTIONS = [
     { value: 0, label: 'Monday' },
@@ -99,6 +111,7 @@ export default function Bodyguards() {
     setBodyguards(Array.isArray(bgData) ? bgData : (bgData?.bodyguards ?? []));
     setBodyguardFor(bgData?.bodyguard_for ?? null);
     setBodyguardProfit(bgData?.bodyguard_profit ?? null);
+    hireCodePayloadRef.current = getBodyguardHireCodePayload(bgData);
     if (w.user) setUser(w.user);
     setEvent(w.event ?? null);
     setEventsEnabled(!!w.eventsEnabled);
@@ -187,6 +200,7 @@ export default function Bodyguards() {
       setBodyguards(Array.isArray(bgData) ? bgData : (bgData?.bodyguards ?? []));
       setBodyguardFor(bgData?.bodyguard_for ?? null);
       setBodyguardProfit(bgData?.bodyguard_profit ?? null);
+      hireCodePayloadRef.current = getBodyguardHireCodePayload(bgData);
       setUser(userRes.data);
       setEvent(eventsRes.data?.event ?? null);
       setEventsEnabled(!!eventsRes.data?.events_enabled);
@@ -279,7 +293,11 @@ export default function Bodyguards() {
       );
     }
     try {
-      const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
+      const response = await api.post('/bodyguards/hire', {
+        slot,
+        is_robot: isRobot,
+        ...hireCodePayloadRef.current,
+      });
       const hiredSlot = response?.data?.slot ?? slot;
       const hiredBodyguard = response?.data?.bodyguard;
       if (hiredBodyguard) {
@@ -336,11 +354,17 @@ export default function Bodyguards() {
           ? raw
           : Array.isArray(raw)
             ? raw.map((x) => (typeof x === 'string' ? x : x?.msg || x?.message || JSON.stringify(x))).join(', ')
-            : raw != null
-              ? String(raw)
-              : 'Failed to hire bodyguard';
+            : raw?.detail
+              ? String(raw.detail)
+              : raw != null
+                ? String(raw)
+                : 'Failed to hire bodyguard';
       if (detail.includes('Slot already occupied')) {
         showHireBanner('info', 'Slot already filled — list updated');
+      } else if (raw?.code === 'bodyguard_hire_code_invalid') {
+        hireCodePayloadRef.current = {};
+        showHireBanner('info', 'Bodyguard hire code refreshed. Click Hire Robot again.');
+        fetchData().catch(() => {});
       } else {
         showHireBanner('error', detail);
       }

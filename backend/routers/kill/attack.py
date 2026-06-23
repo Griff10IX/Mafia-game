@@ -2,6 +2,8 @@
 from typing import Any, Dict, List, Optional, Set, Tuple
 from datetime import datetime, timezone, timedelta
 import asyncio
+import hashlib
+import hmac
 import math
 import random
 import re
@@ -14,7 +16,7 @@ import sys
 import logging
 from fastapi import Depends, HTTPException, Request, Query
 from jose import JWTError, jwt
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 from pymongo import DeleteOne, ReturnDocument, UpdateOne
 
 logger = logging.getLogger(__name__)
@@ -26,6 +28,15 @@ _ATTACK_MICRO_COOLDOWN_PRUNE_AFTER_SEC = 60.0
 _attack_micro_cooldown_seen: Dict[str, float] = {}
 _attack_micro_cooldown_lock = asyncio.Lock()
 ACCOUNT_LOCKED_ATTACK_BLOCK_DETAIL = "Error, this account has been locked for investigation."
+MAX_ACTIVE_ATTACK_SEARCHES_PER_PLAYER = 250
+_EXECUTE_CODE_PREFIX = "kc_"
+
+
+def _execute_code_bucket_seconds() -> int:
+    try:
+        return max(900, int(os.getenv("KILL_EXECUTE_CODE_BUCKET_SECONDS", "7200") or "7200"))
+    except Exception:
+        return 7200
 
 # Background tasks scheduled by _fire_and_forget. Holding strong refs prevents the event loop
 # from garbage-collecting them mid-flight (asyncio only weak-refs tasks). Tasks self-remove on done.
@@ -223,6 +234,58 @@ def _safe_compare_execute_token(stored: str, submitted: Optional[str]) -> bool:
         return False
 
 
+def _execute_code_bucket(now: Optional[float] = None) -> int:
+    return int((time.time() if now is None else now) // _execute_code_bucket_seconds())
+
+
+def _execute_code_field_name(bucket: Optional[int] = None) -> str:
+    """Deterministic random-looking JSON key for the current kill execute window."""
+    b = _execute_code_bucket() if bucket is None else int(bucket)
+    secret = str(SECRET_KEY or "kill-execute-code").encode("utf-8", "ignore")
+    digest = hmac.new(secret, f"kill-execute-field:{b}".encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{_EXECUTE_CODE_PREFIX}{digest[:16]}"
+
+
+def _accepted_execute_code_field_names() -> Set[str]:
+    b = _execute_code_bucket()
+    return {_execute_code_field_name(b), _execute_code_field_name(b - 1)}
+
+
+def _execute_code_payload(token: str) -> Dict[str, Any]:
+    name = _execute_code_field_name()
+    return {
+        "execute_code_name": name,
+        "execute_code_bucket": _execute_code_bucket(),
+        name: token,
+    }
+
+
+async def _submitted_execute_token(request: "AttackExecuteRequest", req: Request) -> Optional[str]:
+    """Read the current rotating execute code field, with legacy execute_token fallback."""
+    body: Dict[str, Any] = {}
+    try:
+        raw = await req.json()
+        if isinstance(raw, dict):
+            body = raw
+    except Exception:
+        body = {}
+
+    names = _accepted_execute_code_field_names()
+    hinted = body.get("execute_code_name")
+    if isinstance(hinted, str) and hinted in names:
+        val = body.get(hinted)
+        if isinstance(val, str) and len(val.strip()) >= 16:
+            return val.strip()
+
+    for name in names:
+        val = body.get(name)
+        if isinstance(val, str) and len(val.strip()) >= 16:
+            return val.strip()
+
+    legacy = (request.execute_token or "").strip()
+    return legacy if len(legacy) >= 16 else None
+
+
 async def _resolve_attack_row_for_execute(
     attacker_id: str,
     attack_id: Optional[str],
@@ -236,7 +299,14 @@ async def _resolve_attack_row_for_execute(
     aid = (attack_id or "").strip()
     if len(etok) >= 16:
         row = await db.attacks.find_one(
-            {"attacker_id": attacker_id, "status": "found", "execute_token": etok},
+            {
+                "attacker_id": attacker_id,
+                "status": "found",
+                "$or": [
+                    {"execute_token": etok},
+                    {"execute_token_prev": etok},
+                ],
+            },
             {"_id": 0},
         )
         if row:
@@ -256,23 +326,36 @@ async def _ensure_execute_token(attacker_id: str, attack_id: str) -> Optional[st
     Clients may send only this token on execute (no attack UUID in the JSON body).
     """
     base_filter = {"id": attack_id, "attacker_id": attacker_id}
-    doc = await db.attacks.find_one(base_filter, {"_id": 0, "execute_token": 1})
+    bucket = _execute_code_bucket()
+    doc = await db.attacks.find_one(
+        base_filter,
+        {"_id": 0, "execute_token": 1, "execute_token_bucket": 1},
+    )
     if not doc:
         return None
     t = doc.get("execute_token")
-    if isinstance(t, str) and len(t) >= 16:
+    if isinstance(t, str) and len(t) >= 16 and doc.get("execute_token_bucket") == bucket:
         return t
     new_t = secrets.token_urlsafe(24)
+    set_fields: Dict[str, Any] = {
+        "execute_token": new_t,
+        "execute_token_bucket": bucket,
+    }
+    if isinstance(t, str) and len(t) >= 16:
+        set_fields["execute_token_prev"] = t
+        set_fields["execute_token_prev_bucket"] = doc.get("execute_token_bucket")
     updated = await db.attacks.find_one_and_update(
         {
             **base_filter,
             "$or": [
+                {"execute_token_bucket": {"$ne": bucket}},
+                {"execute_token_bucket": {"$exists": False}},
                 {"execute_token": {"$exists": False}},
                 {"execute_token": None},
                 {"execute_token": ""},
             ],
         },
-        {"$set": {"execute_token": new_t}},
+        {"$set": set_fields},
         return_document=ReturnDocument.AFTER,
         projection={"_id": 0, "execute_token": 1},
     )
@@ -884,6 +967,8 @@ class AttackSearchResponse(BaseModel):
     estimated_completion: str
 
 class AttackStatusResponse(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     attack_id: str
     status: str
     target_username: str
@@ -900,6 +985,8 @@ class AttackDeleteRequest(BaseModel):
     attack_ids: List[str]
 
 class AttackExecuteRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     # Optional when execute_token is sent (preferred — avoids scrapeable UUID in request body).
     attack_id: Optional[str] = None
     death_message: Optional[str] = None
@@ -915,9 +1002,17 @@ class AttackExecuteRequest(BaseModel):
     def _require_attack_handle(self):
         aid = (self.attack_id or "").strip()
         etok = (self.execute_token or "").strip()
-        if len(etok) >= 16 or aid:
+        extras = getattr(self, "__pydantic_extra__", {}) or {}
+        has_rotating_code = any(
+            isinstance(k, str)
+            and k.startswith(_EXECUTE_CODE_PREFIX)
+            and isinstance(v, str)
+            and len(v.strip()) >= 16
+            for k, v in extras.items()
+        )
+        if len(etok) >= 16 or aid or has_rotating_code:
             return self
-        raise ValueError("Provide execute_token (from My Searches when you can attack) or attack_id")
+        raise ValueError("Provide the execute code from My Searches or attack_id")
 
     @field_validator("bullets_to_use", mode="before")
     @classmethod
@@ -1080,6 +1175,9 @@ _ATTACK_LIST_FIELDS = {
     "location_state": 1,
     "planned_location_state": 1,
     "execute_token": 1,
+    "execute_token_bucket": 1,
+    "execute_token_prev": 1,
+    "execute_token_prev_bucket": 1,
 }
 
 
@@ -1245,10 +1343,12 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
                 if new_location and ac_state and new_location == ac_state and not attack.get("execute_token"):
                     flip_token = secrets.token_urlsafe(24)
                     set_fields["execute_token"] = flip_token
+                    set_fields["execute_token_bucket"] = _execute_code_bucket()
                 op = UpdateOne({"id": attack["id"]}, {"$set": set_fields})
                 if flip_token:
                     urgent_bulk_ops.append(op)
                     attack["execute_token"] = flip_token
+                    attack["execute_token_bucket"] = set_fields["execute_token_bucket"]
                 else:
                     bulk_ops.append(op)
                 attack["status"] = "found"
@@ -1298,8 +1398,12 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
         # Mint execute token only when the attacker can actually strike (same location). Reuse token on row; batch mint.
         if attack["status"] == "found" and can_attack:
             existing_tok = attack.get("execute_token")
-            if isinstance(existing_tok, str) and len(existing_tok) >= 16:
-                item["execute_token"] = existing_tok
+            if (
+                isinstance(existing_tok, str)
+                and len(existing_tok) >= 16
+                and attack.get("execute_token_bucket") == _execute_code_bucket()
+            ):
+                item.update(_execute_code_payload(existing_tok))
             else:
                 token_deferred.append((len(items), attack["id"]))
         if attack["status"] == "found" and tid:
@@ -1330,7 +1434,7 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
         for (idx, _), tok in zip(token_deferred, minted):
             if isinstance(tok, BaseException) or not tok:
                 continue
-            items[idx]["execute_token"] = tok
+            items[idx].update(_execute_code_payload(tok))
 
     # Token-bearing flips MUST be awaited so /attack/execute can find the token in the row.
     if urgent_bulk_ops:
@@ -1463,6 +1567,9 @@ _ATTACK_STATUS_ROW_PROJECTION = {
     "planned_location_state": 1,
     "found_at": 1,
     "execute_token": 1,
+    "execute_token_bucket": 1,
+    "execute_token_prev": 1,
+    "execute_token_prev_bucket": 1,
 }
 
 
@@ -1542,6 +1649,15 @@ async def search_target(payload: AttackSearchRequest, req: Request, current_user
     )
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     await db.attacks.delete_many({"attacker_id": current_user["id"], "search_started": {"$lte": cutoff.isoformat()}})
+    active_count = await db.attacks.count_documents({
+        "attacker_id": current_user["id"],
+        "status": {"$in": ["searching", "found", "traveling"]},
+    })
+    if active_count >= MAX_ACTIVE_ATTACK_SEARCHES_PER_PLAYER:
+        raise HTTPException(
+            status_code=400,
+            detail=f"You have too many active searches ({active_count}). Delete old searches before starting another.",
+        )
     user_filter = _find_user_by_username_case_insensitive(payload.target_username)
     if not user_filter:
         raise HTTPException(status_code=400, detail="Target username required")
@@ -1710,20 +1826,22 @@ async def get_attack_status(
     exec_tok = None
     if attack["status"] == "found" and can_attack:
         et = attack.get("execute_token")
-        if isinstance(et, str) and len(et) >= 16:
+        if isinstance(et, str) and len(et) >= 16 and attack.get("execute_token_bucket") == _execute_code_bucket():
             exec_tok = et
         else:
             exec_tok = await _ensure_execute_token(current_user["id"], attack["id"])
-    return AttackStatusResponse(
-        attack_id=attack["id"],
-        status=attack["status"],
-        target_username=attack.get("target_username") or "?",
-        location_state=attack.get("location_state"),
-        can_travel=can_travel,
-        can_attack=can_attack,
-        message=message,
-        execute_token=exec_tok,
-    )
+    payload: Dict[str, Any] = {
+        "attack_id": attack["id"],
+        "status": attack["status"],
+        "target_username": attack.get("target_username") or "?",
+        "location_state": attack.get("location_state"),
+        "can_travel": can_travel,
+        "can_attack": can_attack,
+        "message": message,
+    }
+    if exec_tok:
+        payload.update(_execute_code_payload(exec_tok))
+    return AttackStatusResponse(**payload)
 
 async def list_attacks(current_user: dict = Depends(get_current_user)):
     attacker_id = current_user["id"]
@@ -1922,10 +2040,11 @@ async def get_attack_inflation(current_user: dict = Depends(get_current_user)):
 async def execute_attack(request: AttackExecuteRequest, req: Request, current_user: dict = Depends(get_current_user_verified)):
   try:
     meta = _request_meta(req)
+    submitted_execute_token = await _submitted_execute_token(request, req)
     attack = await _resolve_attack_row_for_execute(
         current_user["id"],
         request.attack_id,
-        request.execute_token,
+        submitted_execute_token,
     )
     if not attack:
         _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "No active attack to execute", req), label="log_no_active_attack")
@@ -1982,8 +2101,12 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             raise HTTPException(status_code=400, detail="You can only attack NPCs you added to your hitlist")
     stored_tok = attack.get("execute_token")
     if not is_hitlist_npc_target and isinstance(stored_tok, str) and len(stored_tok) >= 16:
-        if not _safe_compare_execute_token(stored_tok, request.execute_token):
-            submitted_tok = (request.execute_token or "").strip()
+        prev_tok = attack.get("execute_token_prev")
+        token_ok = _safe_compare_execute_token(stored_tok, submitted_execute_token)
+        if not token_ok and isinstance(prev_tok, str) and len(prev_tok) >= 16:
+            token_ok = _safe_compare_execute_token(prev_tok, submitted_execute_token)
+        if not token_ok:
+            submitted_tok = (submitted_execute_token or "").strip()
             token_failure_reason = "execute_token_mismatch" if submitted_tok else "execute_token_missing"
             _fire_and_forget(
                 _log_attack_error(
@@ -3574,30 +3697,11 @@ async def get_attack_timeline(
 
 
 async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
-    """Player attempt history (outgoing always, incoming only if real damage / kill).
-
-    DB-side filter cuts >80% of rows on busy users (bodyguard blocks, validation errors,
-    zero-bullet entries) so we transfer ~120 rows max instead of 500. Projection trims
-    each doc to fields the UI actually renders.
-    """
+    """Player attempt history: only attacks this user started."""
     uid = current_user["id"]
-    # bullets_used > 0 is always required (skip validation/error/bodyguard-block rows).
-    # For outgoing: include any row with bullets used.
-    # For incoming: only kills, or attempts that actually hit (health_dealt_pct/damage_done > 0).
-    base_filter = {"bullets_used": {"$gt": 0}}
-    incoming_real_damage = {
-        "$or": [
-            {"outcome": "killed"},
-            {"health_dealt_pct": {"$gt": 0}},
-            {"damage_done": {"$gt": 0}},
-        ]
-    }
     query = {
-        **base_filter,
-        "$or": [
-            {"attacker_id": uid},
-            {"$and": [{"target_id": uid}, incoming_real_damage]},
-        ],
+        "attacker_id": uid,
+        "bullets_used": {"$gt": 0},
     }
     projection = {
         "_id": 0,
@@ -3622,7 +3726,7 @@ async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
     for d in docs:
         if not d.get("id"):
             d["id"] = str(uuid.uuid4())
-        d["direction"] = "outgoing" if d.get("attacker_id") == uid else "incoming"
+        d["direction"] = "outgoing"
     return {"attempts": docs}
 
 

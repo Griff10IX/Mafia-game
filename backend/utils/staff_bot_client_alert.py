@@ -376,7 +376,22 @@ async def maybe_notify_staff_bot_attack_from_ua(
 
 
 _last_execute_token_alert: dict[str, float] = {}
+_last_execute_token_telegram_alert: dict[str, float] = {}
+_last_bodyguard_hire_code_alert: dict[str, float] = {}
+_last_bodyguard_hire_code_telegram_alert: dict[str, float] = {}
 _EXECUTE_TOKEN_ALERT_TTL_SEC = 3600.0
+
+
+def _execute_token_telegram_cooldown_sec() -> float:
+    raw = (os.environ.get("ATTACK_TOKEN_FAIL_TELEGRAM_COOLDOWN_SEC") or "").strip()
+    if raw:
+        try:
+            v = float(raw)
+            if v >= 0:
+                return min(v, 86400.0)
+        except ValueError:
+            pass
+    return 300.0
 
 
 async def maybe_notify_staff_attack_execute_token_fail(
@@ -399,10 +414,10 @@ async def maybe_notify_staff_attack_execute_token_fail(
     if not aid:
         return
     key = f"atktok|{aid}"
-    if _last_execute_token_alert.get(key, 0) + _EXECUTE_TOKEN_ALERT_TTL_SEC > now:
-        return
-    _last_execute_token_alert[key] = now
-    _prune(_last_execute_token_alert)
+    inbox_should_send = _last_execute_token_alert.get(key, 0) + _EXECUTE_TOKEN_ALERT_TTL_SEC <= now
+    if inbox_should_send:
+        _last_execute_token_alert[key] = now
+        _prune(_last_execute_token_alert)
 
     ip = client_ip_from_request(request)
     ua = (request.headers.get("user-agent") or "").strip()
@@ -432,6 +447,36 @@ async def maybe_notify_staff_attack_execute_token_fail(
         lines.extend(acc)
 
     try:
+        from middleware.security import flush_telegram_alerts, send_telegram_alert
+
+        tg_cooldown = _execute_token_telegram_cooldown_sec()
+        tg_key = f"tgatktok|{aid}"
+        if _last_execute_token_telegram_alert.get(tg_key, 0) + tg_cooldown <= now:
+            _last_execute_token_telegram_alert[tg_key] = now
+            _prune(_last_execute_token_telegram_alert)
+            await send_telegram_alert(
+                "\n".join([
+                    "Attack execute token/code failed",
+                    f"Attacker: {attacker_username} (id {aid})",
+                    f"Target: {target_username} (id {target_id or '?'})",
+                    f"Attack row id: {attack_id}",
+                    f"Location: {location_state or '—'}",
+                    f"IP: {ip or '—'}",
+                    f"UA: {ua_short or '—'}",
+                    f"Signal: {attacker_client_signal or '—'}",
+                    "Stored in attack logs / attack_attempts for review.",
+                ]),
+                "warning",
+                use_markdown=False,
+            )
+            await flush_telegram_alerts()
+    except Exception:
+        logger.exception("execute token fail telegram alert failed")
+
+    if not inbox_should_send:
+        return
+
+    try:
         from server import _get_admin_user_ids, _get_staff_user_ids, send_notification
 
         mode = (os.environ.get("BOT_BLOCK_ALERT_RECIPIENTS") or "staff").strip().lower()
@@ -452,3 +497,110 @@ async def maybe_notify_staff_attack_execute_token_fail(
                 logger.warning("staff execute-token notify %s: %s", uid, e)
     except Exception:
         logger.exception("maybe_notify_staff_attack_execute_token_fail failed")
+
+
+async def maybe_notify_staff_bodyguard_hire_code_fail(
+    *,
+    db,
+    request,
+    user_id: str,
+    username: str,
+    slot: int,
+    is_robot: bool,
+) -> None:
+    """Staff inbox + Telegram when robot bodyguard hire POST fails the rotating hidden code."""
+    now = time.monotonic()
+    uid = (user_id or "").strip()
+    if not uid:
+        return
+
+    ip = client_ip_from_request(request)
+    ua = (request.headers.get("user-agent") or "").strip()
+    ua_short = (ua[:200] + "…") if len(ua) > 200 else ua
+    event_id = await record_bot_client_block_event(
+        db=db,
+        user_id=uid,
+        username=username,
+        source="bodyguard_hire_code_fail",
+        internal_reason="invalid_or_missing_bodyguard_hire_code",
+        request=request,
+        extra={
+            "slot": slot,
+            "is_robot": bool(is_robot),
+            "path": str(getattr(request, "url", "")),
+        },
+    )
+
+    lines = [
+        "— Bodyguard hire: invalid / missing hidden code (anti-bot) —",
+        "The client POSTed /bodyguards/hire without the current rotating hire code.",
+        "Legitimate clients receive this code from GET /bodyguards; scripts often skip that step.",
+        f"User: {username or '?'} (id {uid})",
+        f"Slot requested: {slot}",
+        f"Robot bodyguard: {'yes' if is_robot else 'no'}",
+        f"IP: {ip or '—'}",
+        f"User-Agent: {ua_short or '—'}",
+    ]
+    if event_id:
+        lines.append(f"Persisted event id (Mongo bot_client_block_events): {event_id}")
+    lines.append("— Request metadata —")
+    lines.extend(_request_intel_lines(request))
+    acc = await _account_intel_lines(db, uid)
+    if acc:
+        lines.append("— Account —")
+        lines.extend(acc)
+
+    try:
+        from middleware.security import flush_telegram_alerts, send_telegram_alert
+
+        tg_cooldown = _execute_token_telegram_cooldown_sec()
+        tg_key = f"tgbghire|{uid}"
+        if _last_bodyguard_hire_code_telegram_alert.get(tg_key, 0) + tg_cooldown <= now:
+            _last_bodyguard_hire_code_telegram_alert[tg_key] = now
+            _prune(_last_bodyguard_hire_code_telegram_alert)
+            await send_telegram_alert(
+                "\n".join([
+                    "Bodyguard hire hidden code failed",
+                    f"User: {username or '?'} (id {uid})",
+                    f"Slot: {slot}",
+                    f"Robot: {'yes' if is_robot else 'no'}",
+                    f"IP: {ip or '—'}",
+                    f"UA: {ua_short or '—'}",
+                    f"Stored event id: {event_id or '—'}",
+                ]),
+                "warning",
+                use_markdown=False,
+            )
+            await flush_telegram_alerts()
+    except Exception:
+        logger.exception("bodyguard hire code fail telegram alert failed")
+
+    key = f"bghire|{uid}"
+    if _last_bodyguard_hire_code_alert.get(key, 0) + _EXECUTE_TOKEN_ALERT_TTL_SEC > now:
+        return
+    _last_bodyguard_hire_code_alert[key] = now
+    _prune(_last_bodyguard_hire_code_alert)
+
+    try:
+        from server import _get_admin_user_ids, _get_staff_user_ids, send_notification
+
+        mode = (os.environ.get("BOT_BLOCK_ALERT_RECIPIENTS") or "staff").strip().lower()
+        if mode == "admins":
+            recipient_ids = await _get_admin_user_ids()
+            if not recipient_ids:
+                recipient_ids = await _get_staff_user_ids()
+        else:
+            recipient_ids = await _get_staff_user_ids()
+
+        title = "Security: bodyguard hire hidden code failed"
+        msg = "\n".join(lines)
+        extra = {"staff_alert_kind": "bodyguard_hire_code_fail"}
+        if event_id:
+            extra["staff_alert_event_id"] = event_id
+        for rid in recipient_ids:
+            try:
+                await send_notification(rid, title, msg, "staff_bot_client", **extra)
+            except Exception as e:
+                logger.warning("staff bodyguard-hire-code notify %s: %s", rid, e)
+    except Exception:
+        logger.exception("maybe_notify_staff_bodyguard_hire_code_fail failed")
