@@ -5000,9 +5000,30 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
         }
 
 
+async def _current_family_context(current_user: dict) -> tuple[Optional[str], Optional[str]]:
+    """Resolve current family and role from token first, then live roster membership."""
+    uid = current_user.get("id")
+    family_id = _norm_fid(current_user.get("family_id"))
+    if not family_id and uid:
+        family_id = _norm_fid(await resolve_family_id(uid))
+    role = (current_user.get("family_role") or "").strip().lower() or None
+    if role == "don":
+        role = "boss"
+    if family_id and uid and (not role or _norm_fid(current_user.get("family_id")) != family_id):
+        variants = _user_id_variants_for_family_members(uid)
+        member = await db.family_members.find_one(
+            {"family_id": family_id, "user_id": {"$in": variants}},
+            {"_id": 0, "role": 1},
+        ) if variants else None
+        role = ((member or {}).get("role") or role or "").strip().lower() or None
+        if role == "don":
+            role = "boss"
+    return family_id, role
+
+
 async def families_war(current_user: dict = Depends(get_current_user)):
     """Lightweight: list active wars for current user's family (e.g. for sidebar badge)."""
-    my_family_id = _norm_fid(current_user.get("family_id"))
+    my_family_id, _role = await _current_family_context(current_user)
     if not my_family_id:
         return {"wars": []}
     wars = await db.family_wars.find(
@@ -5013,7 +5034,7 @@ async def families_war(current_user: dict = Depends(get_current_user)):
 
 
 async def families_war_stats(current_user: dict = Depends(get_current_user)):
-    my_family_id = _norm_fid(current_user.get("family_id"))
+    my_family_id, _role = await _current_family_context(current_user)
     if not my_family_id:
         return {"wars": []}
 
@@ -5177,10 +5198,10 @@ async def _check_and_expire_truce(war: dict) -> dict | None:
 
 
 async def families_war_truce_offer(request: WarTruceRequest, current_user: dict = Depends(get_current_user)):
-    family_id = current_user.get("family_id")
+    family_id, family_role = await _current_family_context(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
-    if current_user.get("family_role") not in ("boss", "underboss"):
+    if family_role not in ("boss", "underboss"):
         raise HTTPException(status_code=403, detail="Only Boss or Underboss can offer truce")
     war = await db.family_wars.find_one({"id": request.war_id}, {"_id": 0})
     if not war or war.get("status") not in ("active", "truce_offered"):
@@ -5221,10 +5242,10 @@ async def families_war_truce_offer(request: WarTruceRequest, current_user: dict 
 
 
 async def families_war_truce_accept(request: WarTruceRequest, current_user: dict = Depends(get_current_user)):
-    family_id = current_user.get("family_id")
+    family_id, family_role = await _current_family_context(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
-    if current_user.get("family_role") not in ("boss", "underboss"):
+    if family_role not in ("boss", "underboss"):
         raise HTTPException(status_code=403, detail="Only Boss or Underboss can accept truce")
     war = await db.family_wars.find_one({"id": request.war_id}, {"_id": 0})
     if not war or war.get("status") != "truce_offered":

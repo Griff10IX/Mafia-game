@@ -3330,6 +3330,20 @@ export default function FamilyPage() {
     }
   }, [myFamily?.family]);
 
+  const fetchWarStats = useCallback(async () => {
+    try {
+      const res = await apiRequestWith429Retry(() => api.get('/families/war/stats', { params: { _: Date.now() } }));
+      const data = res.data || { wars: [] };
+      setWarStats(data);
+      const prev = getFamiliesPrefetch() || {};
+      setFamiliesPrefetch({ ...prev, warStats: data });
+      return data;
+    } catch {
+      setWarStats({ wars: [] });
+      return { wars: [] };
+    }
+  }, []);
+
   const fetchData = useCallback(async () => {
     try {
       const dashRes = await apiRequestWith429Retry(() => api.get('/families/dashboard'));
@@ -3358,9 +3372,14 @@ export default function FamilyPage() {
         event: nextEvent,
         eventsEnabled: nextEventsEnabled,
       });
+      if (nextMyFamily?.family) {
+        fetchWarStats().catch(() => {});
+      } else {
+        setWarStats({ wars: [] });
+      }
     } catch (e) { toast.error(apiDetail(e)); }
     finally { setFamilyMembershipResolved(true); }
-  }, []);
+  }, [fetchWarStats]);
 
   const fetchRacketAttackTargets = useCallback(async () => {
     if (!myFamily?.family) return;
@@ -3787,14 +3806,8 @@ export default function FamilyPage() {
     if ((activeTab === 'rackets' || defenceSheetRacket) && myFamily?.family) fetchArmoryCatalog();
   }, [activeTab, defenceSheetRacket, myFamily?.family, fetchArmoryCatalog]);
   useEffect(() => {
-    if (showWarModal && myFamily?.family) {
-      apiRequestWith429Retry(() => api.get('/families/war/stats')).then((res) => {
-        setWarStats(res.data);
-        const prev = getFamiliesPrefetch() || {};
-        setFamiliesPrefetch({ ...prev, warStats: res.data });
-      }).catch(() => {});
-    }
-  }, [showWarModal, myFamily?.family]);
+    if ((activeTab === 'war' || showWarModal) && myFamily?.family) fetchWarStats();
+  }, [activeTab, showWarModal, myFamily?.family, fetchWarStats]);
 
   return (
     <div className={`space-y-2 sm:space-y-3 ${styles.pageContent} mobile-page-root px-3 sm:px-4 pb-6 fam-page-safe-bottom`} data-testid="families-page">
