@@ -245,7 +245,7 @@ const MobileQuickNav = ({ readyRackets, tillAtRisk, activeWarsCount, onGo }) => 
       Vault
     </button>
     {activeWarsCount > 0 && (
-      <button type="button" onClick={() => onGo('families')} className="snap-start shrink-0 min-h-[40px] px-3 py-2 rounded-full text-[10px] font-heading font-bold uppercase tracking-wide border border-red-500/40 bg-red-500/12 text-red-400 touch-manipulation animate-pulse">
+      <button type="button" onClick={() => onGo('war')} className="snap-start shrink-0 min-h-[40px] px-3 py-2 rounded-full text-[10px] font-heading font-bold uppercase tracking-wide border border-red-500/40 bg-red-500/12 text-red-400 touch-manipulation animate-pulse">
         War ({activeWarsCount})
       </button>
     )}
@@ -2075,6 +2075,97 @@ const WarHistoryTab = ({ wars, onDetails }) => (
   </div>
 );
 
+const ActiveWarTab = ({ wars, family, canManage, onDetails, onOfferTruce, onAcceptTruce }) => (
+  <div className="space-y-3">
+    <div className="rounded-lg border border-red-500/25 bg-red-500/8 px-3 py-2">
+      <div className="flex items-center gap-2">
+        <Swords size={14} className="text-red-400" />
+        <div>
+          <p className="text-[11px] font-heading font-bold uppercase tracking-wider text-red-400">War room</p>
+          <p className="text-[9px] text-zinc-500 font-heading">
+            Active family wars and truce options are shown here so leaders can act quickly.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    {wars.length === 0 ? (
+      <div className="text-center py-12 rounded-lg bg-zinc-800/20 border border-dashed border-zinc-700/40">
+        <Shield size={32} className="mx-auto text-zinc-700 mb-3" />
+        <p className="text-xs text-zinc-500 font-heading tracking-wider uppercase">No active family war</p>
+        <p className="text-[9px] text-zinc-600 font-heading mt-1 italic">Any active feud will appear in this tab.</p>
+      </div>
+    ) : (
+      <div className="space-y-2">
+        {wars.map((entry, idx) => {
+          const war = entry?.war || {};
+          const stats = entry?.stats || {};
+          const myTotals = stats.my_family_totals || {};
+          const otherTotals = stats.other_family_totals || {};
+          const truceOffered = war.status === 'truce_offered';
+          const theyOffered = truceOffered && war.truce_offered_by_family_id !== family?.id;
+          const weOffered = truceOffered && war.truce_offered_by_family_id === family?.id;
+
+          return (
+            <div key={war.id || idx} className="relative rounded-xl border border-red-500/25 bg-zinc-950/70 overflow-hidden fam-blood-pulse">
+              <div className="absolute left-0 top-0 bottom-0 w-1 bg-red-500/45" />
+              <div className="p-3 sm:p-4 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-heading font-bold uppercase tracking-[0.18em] text-red-400/75">
+                      {truceOffered ? 'Truce pending' : 'Blood feud active'}
+                    </p>
+                    <h3 className="text-sm font-heading font-bold text-foreground truncate mt-0.5">
+                      {family?.name || 'Your family'} <span className="text-zinc-600 mx-1">vs</span> {war.other_family_name || 'Enemy family'}
+                      {war.other_family_tag ? <span className="text-primary/60 ml-1">[{war.other_family_tag}]</span> : null}
+                    </h3>
+                    {weOffered && <p className="text-[10px] text-primary/80 font-heading mt-1">You offered a truce. Waiting for the enemy family to accept.</p>}
+                    {theyOffered && <p className="text-[10px] text-emerald-300/90 font-heading mt-1">Enemy offered a truce. Boss or Underboss can accept it here.</p>}
+                    {!canManage && <p className="text-[9px] text-zinc-500 font-heading mt-1">Only Boss or Underboss can offer or accept a truce.</p>}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onDetails(idx)}
+                    className="px-3 py-2 min-h-[40px] rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border border-primary/30 text-primary hover:bg-primary/10 transition-all touch-manipulation shrink-0"
+                  >
+                    War details
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-[1fr_auto_1fr] gap-2 items-center">
+                  <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/8 px-3 py-2 text-center">
+                    <p className="text-[8px] uppercase tracking-wider text-emerald-400/70 font-heading mb-1">Our side</p>
+                    <p className="text-2xl font-heading font-bold text-emerald-400 tabular-nums">{myTotals.kills ?? 0}</p>
+                    <p className="text-[9px] text-zinc-500 font-heading">{myTotals.deaths ?? 0} deaths · {myTotals.bodyguard_kills ?? 0} BG kills</p>
+                  </div>
+                  <div className="flex flex-col items-center gap-1 text-zinc-600">
+                    <Swords size={18} className="text-red-400" />
+                    <span className="text-[8px] font-heading font-bold uppercase">vs</span>
+                  </div>
+                  <div className="rounded-lg border border-red-500/20 bg-red-500/8 px-3 py-2 text-center">
+                    <p className="text-[8px] uppercase tracking-wider text-red-400/70 font-heading mb-1">Enemy</p>
+                    <p className="text-2xl font-heading font-bold text-red-400 tabular-nums">{otherTotals.kills ?? 0}</p>
+                    <p className="text-[9px] text-zinc-500 font-heading">{otherTotals.deaths ?? 0} deaths · {otherTotals.bodyguard_kills ?? 0} BG kills</p>
+                  </div>
+                </div>
+              </div>
+
+              <WarTruceActions
+                war={war}
+                family={family}
+                canManage={canManage}
+                onOfferTruce={() => onOfferTruce(idx)}
+                onAcceptTruce={() => onAcceptTruce(idx)}
+                compact
+              />
+            </div>
+          );
+        })}
+      </div>
+    )}
+  </div>
+);
+
 // ============================================================================
 // WAR DETAILS MODAL — public read-only view of any war
 // ============================================================================
@@ -3587,8 +3678,32 @@ export default function FamilyPage() {
     } catch (e) { toast.error(apiDetail(e)); }
     finally { setRacketAttackLoading(null); }
   };
-  const handleOfferTruce = async () => { const entry = activeWars[selectedWarIndex]; if (!entry?.war?.id) return; try { await api.post('/families/war/truce/offer', { war_id: entry.war.id }); toast.success('Truce offered'); fetchData(); setShowWarModal(false); } catch (e) { toast.error(apiDetail(e)); } };
-  const handleAcceptTruce = async () => { const entry = activeWars[selectedWarIndex]; if (!entry?.war?.id) return; try { await api.post('/families/war/truce/accept', { war_id: entry.war.id }); toast.success('Accepted'); fetchData(); setShowWarModal(false); } catch (e) { toast.error(apiDetail(e)); } };
+  const handleOfferTruceAtIndex = async (idx) => {
+    const entry = activeWars[idx];
+    if (!entry?.war?.id) return;
+    try {
+      await api.post('/families/war/truce/offer', { war_id: entry.war.id });
+      toast.success('Truce offered');
+      fetchData();
+      setShowWarModal(false);
+    } catch (e) {
+      toast.error(apiDetail(e));
+    }
+  };
+  const handleAcceptTruceAtIndex = async (idx) => {
+    const entry = activeWars[idx];
+    if (!entry?.war?.id) return;
+    try {
+      await api.post('/families/war/truce/accept', { war_id: entry.war.id });
+      toast.success('Accepted');
+      fetchData();
+      setShowWarModal(false);
+    } catch (e) {
+      toast.error(apiDetail(e));
+    }
+  };
+  const handleOfferTruce = () => handleOfferTruceAtIndex(selectedWarIndex);
+  const handleAcceptTruce = () => handleAcceptTruceAtIndex(selectedWarIndex);
 
   const openWarModalById = (warId) => {
     const idx = activeWars.findIndex((entry) => entry.war?.id === warId);
@@ -3900,6 +4015,14 @@ export default function FamilyPage() {
               <Tab active={activeTab === 'rackets'} onClick={() => setActiveTab('rackets')} icon={<TrendingUp size={10} />}>Rackets</Tab>
               <Tab active={activeTab === 'raid'} onClick={() => setActiveTab('raid')} icon={<Swords size={10} />}>Hit Jobs</Tab>
               <Tab
+                active={activeTab === 'war'}
+                onClick={() => { setActiveTab('war'); fetchData(); }}
+                icon={<Flame size={10} />}
+                subline={activeWars.length > 0 ? <FamiliesNavWarHint activeWarCount={activeWars.length} /> : undefined}
+              >
+                War
+              </Tab>
+              <Tab
                 active={activeTab === 'crewoc'}
                 onClick={() => setActiveTab('crewoc')}
                 icon={<Crosshair size={10} />}
@@ -4075,6 +4198,16 @@ export default function FamilyPage() {
                   vaultAndRacketsLocked={vaultAndRacketsLocked}
                   onFamilyQuickTradeList={handleFamilyQuickTradeList}
                   onFamilyQuickTradeCancel={handleFamilyQuickTradeCancel}
+                />
+              )}
+              {activeTab === 'war' && (
+                <ActiveWarTab
+                  wars={activeWars}
+                  family={family}
+                  canManage={canManage}
+                  onDetails={(idx) => { setSelectedWarIndex(idx); setShowWarModal(true); }}
+                  onOfferTruce={handleOfferTruceAtIndex}
+                  onAcceptTruce={handleAcceptTruceAtIndex}
                 />
               )}
               {activeTab === 'families' && <FamiliesTab families={families} myFamilyId={family?.id} />}
