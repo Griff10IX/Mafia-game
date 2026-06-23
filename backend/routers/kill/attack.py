@@ -1933,6 +1933,7 @@ async def travel_to_target(body: AttackIdRequest, req: Request, current_user: di
         {"id": current_user["id"]},
         {"$set": {"current_state": location_state}}
     )
+    _attack_list_cache_invalidate(current_user["id"])
     await log_activity(current_user["id"], current_user.get("username", "?"), "attack_travel", {"target_city": location_state})
     return {"message": f"Traveled to {location_state}"}
 
@@ -2163,6 +2164,119 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             status_code=400,
             detail="Target is already dead. This search has been removed — refresh your list and search for another target if needed.",
         )
+    early_target_bodyguards = await db.bodyguards.find(
+        {"user_id": target["id"]},
+        {"_id": 0, "slot_number": 1, "robot_name": 1, "bodyguard_user_id": 1},
+    ).to_list(10)
+    if early_target_bodyguards:
+        first_bg = max(early_target_bodyguards, key=lambda b: b.get("slot_number", 0))
+        display_name = first_bg.get("robot_name") or "bodyguard"
+        search_username = None
+        if first_bg.get("bodyguard_user_id"):
+            bg_user = await db.users.find_one({"id": first_bg["bodyguard_user_id"]}, {"_id": 0, "username": 1})
+            if bg_user:
+                search_username = bg_user.get("username")
+                if not first_bg.get("robot_name"):
+                    display_name = search_username
+        slot_n = first_bg.get("slot_number")
+        target_name = target["username"]
+        if search_username:
+            msg = f"{target_name} has a bodyguard called {display_name}. You need to kill them first."
+            try:
+                meta = _request_meta(req)
+                attempt_doc = {
+                    "id": str(uuid.uuid4()),
+                    "attacker_id": current_user["id"],
+                    "attacker_username": current_user.get("username") or "?",
+                    "target_id": target["id"],
+                    "target_username": target_name,
+                    "attack_id": attack.get("id"),
+                    "location_state": attack.get("location_state"),
+                    "outcome": "bodyguard",
+                    "player_message": msg,
+                    "bullets_used": 0,
+                    "created_at": datetime.now(timezone.utc),
+                    **_bodyguard_block_attempt_extra(
+                        target_id=target["id"],
+                        target_username=target_name,
+                        display_name=display_name,
+                        search_username=search_username,
+                        bodyguard_user_id=first_bg.get("bodyguard_user_id"),
+                        slot_number=slot_n,
+                    ),
+                    **meta,
+                }
+                _fire_and_forget(db.attack_attempts.insert_one(attempt_doc), label="early_bg_block_attempt_log")
+                _fire_and_forget(
+                    _notify_target_if_bot_attack(
+                        target["id"], current_user.get("username") or "?", "bodyguard",
+                        attack.get("location_state"), msg, meta.get("attacker_is_bot", False),
+                        attacker_id=str(current_user.get("id") or ""),
+                        target_username=target_name,
+                        meta=meta,
+                    ),
+                    label="early_bg_block_notify_target",
+                )
+            except Exception:
+                pass
+            return AttackExecuteResponse(
+                success=False,
+                message=msg,
+                rewards=None,
+                first_bodyguard=_first_bodyguard_client_payload(
+                    display_name=display_name,
+                    search_username=search_username,
+                    target_username=target_name,
+                ),
+            )
+        msg = f"{target_name} has a bodyguard. You need to kill them first."
+        try:
+            meta = _request_meta(req)
+            attempt_doc = {
+                "id": str(uuid.uuid4()),
+                "attacker_id": current_user["id"],
+                "attacker_username": current_user.get("username") or "?",
+                "target_id": target["id"],
+                "target_username": target_name,
+                "attack_id": attack.get("id"),
+                "location_state": attack.get("location_state"),
+                "outcome": "bodyguard",
+                "player_message": msg,
+                "bullets_used": 0,
+                "created_at": datetime.now(timezone.utc),
+                **_bodyguard_block_attempt_extra(
+                    target_id=target["id"],
+                    target_username=target_name,
+                    display_name=display_name or "bodyguard",
+                    search_username=None,
+                    bodyguard_user_id=first_bg.get("bodyguard_user_id"),
+                    slot_number=slot_n,
+                ),
+                **meta,
+            }
+            _fire_and_forget(db.attack_attempts.insert_one(attempt_doc), label="early_bg_block_attempt_log_anon")
+            _fire_and_forget(
+                _notify_target_if_bot_attack(
+                    target["id"], current_user.get("username") or "?", "bodyguard",
+                    attack.get("location_state"), msg, meta.get("attacker_is_bot", False),
+                    attacker_id=str(current_user.get("id") or ""),
+                    target_username=target_name,
+                    meta=meta,
+                ),
+                label="early_bg_block_notify_target_anon",
+            )
+        except Exception:
+            pass
+        return AttackExecuteResponse(
+            success=False,
+            message=msg,
+            rewards=None,
+            first_bodyguard=_first_bodyguard_client_payload(
+                display_name=display_name or "bodyguard",
+                search_username=None,
+                target_username=target_name,
+            ),
+        )
     if not target.get("is_npc"):
         await apply_passive_health_regen(target["id"], target)
     if user_has_admin_list_email(target) or _is_moderator(target):
@@ -2195,7 +2309,6 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         bb_a,
         bb_v,
         exclusive_car_bullet_mult,
-        target_bodyguards,
     ) = await asyncio.gather(
         db.user_weapons.find(
             {"user_id": current_user["id"], "quantity": {"$gt": 0}},
@@ -2205,10 +2318,6 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         _badge_bonuses_safe(current_user.get("id") or ""),
         _badge_bonuses_safe(target.get("id") or "") if not target.get("is_npc") else _badge_bonuses_safe(""),
         _exclusive_car_bullet_defense_multiplier(target),
-        db.bodyguards.find(
-            {"user_id": target["id"]},
-            {"_id": 0, "slot_number": 1, "robot_name": 1, "bodyguard_user_id": 1},
-        ).to_list(10),
     )
     attacker_kill_badges = bb_a.get("kills", 0) * bb_a.get("prestige_badge_mult", 1)
     victim_kill_badges = bb_v.get("kills", 0) * bb_v.get("prestige_badge_mult", 1)
@@ -2256,115 +2365,6 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     if attacker_bullets <= 0:
         _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "You need bullets to attack.", req), label="log_no_bullets")
         raise HTTPException(status_code=400, detail="You need bullets to attack.")
-    if target_bodyguards:
-        first_bg = max(target_bodyguards, key=lambda b: b.get("slot_number", 0))
-        display_name = first_bg.get("robot_name") or "bodyguard"
-        search_username = None
-        if first_bg.get("bodyguard_user_id"):
-            bg_user = await db.users.find_one({"id": first_bg["bodyguard_user_id"]}, {"_id": 0, "username": 1})
-            if bg_user:
-                search_username = bg_user.get("username")
-                if not first_bg.get("robot_name"):
-                    display_name = search_username
-        slot_n = first_bg.get("slot_number")
-        target_name = target["username"]
-        if search_username:
-            msg = f"{target_name} has a bodyguard called {display_name}. You need to kill them first."
-            try:
-                meta = _request_meta(req)
-                attempt_doc = {
-                    "id": str(uuid.uuid4()),
-                    "attacker_id": current_user["id"],
-                    "attacker_username": current_user.get("username") or "?",
-                    "target_id": target["id"],
-                    "target_username": target_name,
-                    "attack_id": attack.get("id"),
-                    "location_state": attack.get("location_state"),
-                    "outcome": "bodyguard",
-                    "player_message": msg,
-                    "bullets_used": 0,
-                    "created_at": datetime.now(timezone.utc),
-                    **_bodyguard_block_attempt_extra(
-                        target_id=target["id"],
-                        target_username=target_name,
-                        display_name=display_name,
-                        search_username=search_username,
-                        bodyguard_user_id=first_bg.get("bodyguard_user_id"),
-                        slot_number=slot_n,
-                    ),
-                    **meta,
-                }
-                _fire_and_forget(db.attack_attempts.insert_one(attempt_doc), label="bg_block_attempt_log")
-                _fire_and_forget(
-                    _notify_target_if_bot_attack(
-                        target["id"], current_user.get("username") or "?", "bodyguard",
-                        attack.get("location_state"), msg, meta.get("attacker_is_bot", False),
-                        attacker_id=str(current_user.get("id") or ""),
-                        target_username=target_name,
-                        meta=meta,
-                    ),
-                    label="bg_block_notify_target",
-                )
-            except Exception:
-                pass
-            return AttackExecuteResponse(
-                success=False,
-                message=msg,
-                rewards=None,
-                first_bodyguard=_first_bodyguard_client_payload(
-                    display_name=display_name,
-                    search_username=search_username,
-                    target_username=target_name,
-                ),
-            )
-        msg = f"{target_name} has a bodyguard. You need to kill them first."
-        try:
-            meta = _request_meta(req)
-            attempt_doc = {
-                "id": str(uuid.uuid4()),
-                "attacker_id": current_user["id"],
-                "attacker_username": current_user.get("username") or "?",
-                "target_id": target["id"],
-                "target_username": target_name,
-                "attack_id": attack.get("id"),
-                "location_state": attack.get("location_state"),
-                "outcome": "bodyguard",
-                "player_message": msg,
-                "bullets_used": 0,
-                "created_at": datetime.now(timezone.utc),
-                **_bodyguard_block_attempt_extra(
-                    target_id=target["id"],
-                    target_username=target_name,
-                    display_name=display_name or "bodyguard",
-                    search_username=None,
-                    bodyguard_user_id=first_bg.get("bodyguard_user_id"),
-                    slot_number=slot_n,
-                ),
-                **meta,
-            }
-            _fire_and_forget(db.attack_attempts.insert_one(attempt_doc), label="bg_block_attempt_log_anon")
-            _fire_and_forget(
-                _notify_target_if_bot_attack(
-                    target["id"], current_user.get("username") or "?", "bodyguard",
-                    attack.get("location_state"), msg, meta.get("attacker_is_bot", False),
-                    attacker_id=str(current_user.get("id") or ""),
-                    target_username=target_name,
-                    meta=meta,
-                ),
-                label="bg_block_notify_target_anon",
-            )
-        except Exception:
-            pass
-        return AttackExecuteResponse(
-            success=False,
-            message=msg,
-            rewards=None,
-            first_bodyguard=_first_bodyguard_client_payload(
-                display_name=display_name or "bodyguard",
-                search_username=None,
-                target_username=target_name,
-            ),
-        )
     target_name = target["username"]
     target_health = float(target.get("health", DEFAULT_HEALTH))
     if not request.bullets_to_use or request.bullets_to_use < 1:

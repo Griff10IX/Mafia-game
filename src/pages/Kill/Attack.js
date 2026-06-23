@@ -78,6 +78,8 @@ let attackResendCheckDoneThisLoad = false;
 // while /attack/list is in flight. Keyed by JWT-bearing token presence (sessionStorage) — cleared on browser close.
 const _ATTACK_LIST_CACHE_KEY = 'kill_attacks_cache_v1';
 const _ATTACK_LIST_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
+const ATTACK_LIST_POLL_MS = 3000;
+const ATTACK_LIST_REFRESH_AFTER_USER_EVENT_MS = 200;
 function readCachedAttacks() {
   try {
     if (typeof window === 'undefined') return [];
@@ -177,13 +179,17 @@ function isAttackExecuteCodeError(error) {
     ? detail
     : typeof detail?.message === 'string'
       ? detail.message
+      : typeof detail?.detail === 'string'
+        ? detail.detail
       : '';
   const lower = msg.toLowerCase();
   return (
     error?.response?.status === 400
     && (
+      detail?.code === 'attack_execute_code_invalid'
       lower.includes('invalid or missing session token')
       || lower.includes('refresh the page and open my searches')
+      || lower.includes('do not use bots or automated tools')
       || lower.includes('execute code')
     )
   );
@@ -1446,6 +1452,34 @@ export default function Attack() {
     showKillResult(getApiErrorMessage(error) || 'Failed to execute attack', 'error');
   }, [refreshAttacks]);
 
+  const showBodyguardBlockResult = useCallback((data, fallbackMessage) => {
+    const bg = data?.first_bodyguard || data;
+    const message =
+      stripBodyguardSlotFromToastMessage(data?.message || fallbackMessage)
+      || 'Target has a bodyguard. You need to kill them first.';
+    const action = bg?.search_username
+      ? {
+          label: 'Search',
+          onClick: async () => {
+            setKillBannerMessage(null);
+            setSearchLoading(true);
+            try {
+              const note = bg.target_username ? `Bodyguard for: ${bg.target_username}` : '';
+              const searchBody = await withAttackCaptcha('search', { target_username: bg.search_username, note });
+              const res = await api.post('/attack/search', searchBody);
+              toast.success(res.data?.message || 'Search started', { duration: 10000 });
+              await refreshAttacks();
+            } catch (err) {
+              toast.error(err.response?.data?.detail || 'Failed to search', { duration: 10000 });
+            } finally {
+              setSearchLoading(false);
+            }
+          },
+        }
+      : undefined;
+    showKillResult(message, 'warning', action ? { action } : {});
+  }, [refreshAttacks, withAttackCaptcha]);
+
   // Hitlist board crosshair → /attack?target=… — prefill kill form and start a search (same as Find User submit)
   useEffect(() => {
     const t = searchParams.get('target');
@@ -1552,12 +1586,35 @@ export default function Attack() {
       }
     };
     load();
-    const interval = setInterval(refreshAttacks, 10000);
+    const interval = setInterval(refreshAttacks, ATTACK_LIST_POLL_MS);
     return () => {
       clearInterval(interval);
       attackListAbortRef.current?.abort();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    let timeoutId = null;
+    const scheduleRefresh = () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        timeoutId = null;
+        refreshAttacks();
+      }, ATTACK_LIST_REFRESH_AFTER_USER_EVENT_MS);
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') scheduleRefresh();
+    };
+    window.addEventListener('app:refresh-user', scheduleRefresh);
+    window.addEventListener('focus', scheduleRefresh);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      window.removeEventListener('app:refresh-user', scheduleRefresh);
+      window.removeEventListener('focus', scheduleRefresh);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [refreshAttacks]);
 
   useEffect(() => {
     if (travelCountdown == null || travelCountdown <= 0) return;
@@ -1637,31 +1694,7 @@ export default function Attack() {
               description: rewardMoney != null ? `Rewards: $${Number(rewardMoney).toLocaleString()}` : undefined,
             });
           } else if (execRes.data?.first_bodyguard) {
-            const bg = execRes.data.first_bodyguard;
-            showKillResult(
-              stripBodyguardSlotFromToastMessage(execRes.data?.message) || 'Target has a bodyguard.',
-              'warning',
-              {
-                action: {
-                  label: 'Search',
-                  onClick: async () => {
-                    setKillBannerMessage(null);
-                    setSearchLoading(true);
-                    try {
-                      const note = bg.target_username ? `Bodyguard for: ${bg.target_username}` : '';
-                      const searchBody = await withAttackCaptcha('search', { target_username: bg.search_username, note });
-                      const res = await api.post('/attack/search', searchBody);
-                      toast.success(res.data?.message || 'Search started', { duration: 10000 });
-                      await refreshAttacks();
-                    } catch (err) {
-                      toast.error(err.response?.data?.detail || 'Failed to search', { duration: 10000 });
-                    } finally {
-                      setSearchLoading(false);
-                    }
-                  },
-                },
-              },
-            );
+            showBodyguardBlockResult(execRes.data, 'Target has a bodyguard.');
           } else {
             showKillResult(execRes.data?.message || 'Kill failed.', 'error');
           }
@@ -1673,7 +1706,7 @@ export default function Attack() {
       }
     };
     run();
-  }, [pendingResend, withAttackCaptcha]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pendingResend, withAttackCaptcha, showBodyguardBlockResult]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleSelected = (attackId) => {
     setSelectedAttackIds((prev) => (
@@ -1754,6 +1787,7 @@ export default function Attack() {
         await refreshAttacks();
       } else {
         toast.success(response.data?.message || `Traveling to ${travelModalDestination}`);
+        refreshAttacks();
         setTravelCountdown(travelTime);
       }
     } catch (error) {
@@ -1804,27 +1838,7 @@ export default function Attack() {
           description: rewardMoney != null ? `Rewards: $${Number(rewardMoney).toLocaleString()}` : undefined,
         });
       } else if (response.data.first_bodyguard) {
-        const bg = response.data.first_bodyguard;
-        showKillResult(stripBodyguardSlotFromToastMessage(response.data.message) || 'Target has a bodyguard.', 'warning', {
-          action: {
-            label: 'Search',
-            onClick: async () => {
-              setKillBannerMessage(null);
-              setSearchLoading(true);
-              try {
-                const note = bg.target_username ? `Bodyguard for: ${bg.target_username}` : '';
-                const searchBody = await withAttackCaptcha('search', { target_username: bg.search_username, note });
-                const res = await api.post('/attack/search', searchBody);
-                toast.success(res.data?.message || 'Search started', { duration: 10000 });
-                await refreshAttacks();
-              } catch (err) {
-                toast.error(err.response?.data?.detail || 'Failed to search', { duration: 10000 });
-              } finally {
-                setSearchLoading(false);
-              }
-            },
-          },
-        });
+        showBodyguardBlockResult(response.data, 'Target has a bodyguard.');
       } else {
         showKillResult(response.data.message, 'error');
       }
@@ -1888,6 +1902,14 @@ export default function Attack() {
         use_molotovs: useMolotovs,
         ...(getAttackExecuteCodePayload(best) || {}),
       };
+      if (best.first_bodyguard) {
+        const bg = best.first_bodyguard;
+        const protectedName = bg.target_username || best.target_username || username;
+        const fallbackMessage = bg.search_username
+          ? `${protectedName} has a bodyguard called ${bg.display_name || bg.search_username}. You need to kill them first.`
+          : `${protectedName} has a bodyguard. You need to kill them first.`;
+        showBodyguardBlockResult({ message: fallbackMessage, first_bodyguard: bg }, fallbackMessage);
+      }
       try {
         sessionStorage.setItem('attack-last-submit', JSON.stringify({
           type: 'kill',
