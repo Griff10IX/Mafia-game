@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { X } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
+import { maskIp } from '../StaffIpReputationCard';
 import {
   formatAttackLogTime,
   formatAttackLogBotCell,
@@ -121,6 +122,7 @@ export default function AttackLogsPanel({
   const [globalIntel, setGlobalIntel] = useState(null);
   const [globalIntelLoading, setGlobalIntelLoading] = useState(false);
   const [groupDuplicates, setGroupDuplicates] = useState(true);
+  const [blurAttackLogIps, setBlurAttackLogIps] = useState(false);
   const attackLogsDataRef = useRef(null);
   attackLogsDataRef.current = attackLogsData;
   const [attackLogViewRow, setAttackLogViewRow] = useState(null);
@@ -467,7 +469,9 @@ export default function AttackLogsPanel({
         >
           {row.player_message ?? '—'}
         </td>
-        <td className="py-1 pr-1 text-mutedForeground font-mono text-[8px]">{row.client_ip ?? '—'}</td>
+        <td className="py-1 pr-1 text-mutedForeground font-mono text-[8px]">
+          {blurAttackLogIps ? maskIp(row.client_ip) : (row.client_ip ?? '—')}
+        </td>
         <td className="py-1 pr-1 text-mutedForeground">{device}</td>
         <td className="py-1 pr-1">
           {botCell.text === '—' ? (
@@ -1206,54 +1210,68 @@ export default function AttackLogsPanel({
 
       {attackLogsData && (
         <div className={`overflow-x-auto overflow-y-auto ${tableMaxHeightClass}`}>
-          <p className="text-[10px] font-heading text-primary mb-1">
-            {attackLogsData.scope === 'all' || attackLogsData.username == null ? (
-              <>
-                Showing: <strong>All players</strong> (limit {attackLogsLimit}
-                {attackLogsData.exclude_target_npc ? ', NPC excluded' : ''})
-                {attackLogsData.target_username ? (
-                  <>
-                    {' '}
-                    · target <strong>{attackLogsData.target_username}</strong>
-                  </>
-                ) : null}
-                {attackerFilter ? (
-                  <>
-                    {' '}
-                    · attacker <strong>{attackerFilter}</strong>
-                  </>
-                ) : null}
-              </>
-            ) : (
-              <>
-                Attack log for: <strong>{attackLogsData.username}</strong>
-                {attackLogsData.exclude_target_npc ? ' (NPC excluded)' : ''}
-                {attackLogsData.target_username ? (
-                  <>
-                    {' '}
-                    · target <strong>{attackLogsData.target_username}</strong>
-                  </>
-                ) : null}
-                {attackerFilter ? (
-                  <>
-                    {' '}
-                    · attacker <strong>{attackerFilter}</strong>
-                  </>
-                ) : null}
-              </>
-            )}
-            {summary ? (
-              <span className="text-mutedForeground ml-2">
-                — {summary.total} rows
-                {groupDuplicates && logGroups && summary.total > displayRowCount ? (
-                  <span> ({displayRowCount} grouped)</span>
-                ) : null}
-                {summary.bodyguard_blocks > 0 ? ` · ${summary.bodyguard_blocks} BG blocks` : ''}
-                {summary.bodyguard_kills > 0 ? ` · ${summary.bodyguard_kills} BG kills` : ''}
-                {summary.errors > 0 ? ` · ${summary.errors} errors` : ''}
-              </span>
-            ) : null}
-          </p>
+          <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-[10px] font-heading text-primary">
+              {attackLogsData.scope === 'all' || attackLogsData.username == null ? (
+                <>
+                  Showing: <strong>All players</strong> (limit {attackLogsLimit}
+                  {attackLogsData.exclude_target_npc ? ', NPC excluded' : ''})
+                  {attackLogsData.target_username ? (
+                    <>
+                      {' '}
+                      · target <strong>{attackLogsData.target_username}</strong>
+                    </>
+                  ) : null}
+                  {attackerFilter ? (
+                    <>
+                      {' '}
+                      · attacker <strong>{attackerFilter}</strong>
+                    </>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  Attack log for: <strong>{attackLogsData.username}</strong>
+                  {attackLogsData.exclude_target_npc ? ' (NPC excluded)' : ''}
+                  {attackLogsData.target_username ? (
+                    <>
+                      {' '}
+                      · target <strong>{attackLogsData.target_username}</strong>
+                    </>
+                  ) : null}
+                  {attackerFilter ? (
+                    <>
+                      {' '}
+                      · attacker <strong>{attackerFilter}</strong>
+                    </>
+                  ) : null}
+                </>
+              )}
+              {summary ? (
+                <span className="text-mutedForeground ml-2">
+                  — {summary.total} rows
+                  {groupDuplicates && logGroups && summary.total > displayRowCount ? (
+                    <span> ({displayRowCount} grouped)</span>
+                  ) : null}
+                  {summary.bodyguard_blocks > 0 ? ` · ${summary.bodyguard_blocks} BG blocks` : ''}
+                  {summary.bodyguard_kills > 0 ? ` · ${summary.bodyguard_kills} BG kills` : ''}
+                  {summary.errors > 0 ? ` · ${summary.errors} errors` : ''}
+                </span>
+              ) : null}
+            </p>
+            <button
+              type="button"
+              onClick={() => setBlurAttackLogIps((v) => !v)}
+              className={`rounded border px-2 py-1 text-[9px] font-heading font-bold uppercase tracking-wide ${
+                blurAttackLogIps
+                  ? 'border-sky-500/50 bg-sky-500/20 text-sky-200'
+                  : 'border-zinc-600/50 bg-zinc-800/50 text-mutedForeground hover:bg-zinc-700/50'
+              }`}
+              title="Mask IPs for screenshots shown outside staff"
+            >
+              {blurAttackLogIps ? 'IPs blurred' : 'Blur IPs'}
+            </button>
+          </div>
           {!attackLogsData.logs || attackLogsData.logs.length === 0 ? (
             <p className="text-[10px] text-mutedForeground font-heading">No attack attempts found.</p>
           ) : (
@@ -1331,7 +1349,9 @@ export default function AttackLogsPanel({
                 </div>
                 <div>
                   <span className="text-mutedForeground">IP:</span>{' '}
-                  <span className="font-mono">{attackLogViewRow.client_ip ?? '—'}</span>
+                  <span className="font-mono">
+                    {blurAttackLogIps ? maskIp(attackLogViewRow.client_ip) : (attackLogViewRow.client_ip ?? '—')}
+                  </span>
                 </div>
                 <div>
                   <span className="text-mutedForeground">Bullets used:</span>{' '}
