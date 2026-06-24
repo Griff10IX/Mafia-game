@@ -1,4 +1,5 @@
 # Admin/mod: bot & scripting investigation — aggregated per-user profile and bot-block audit trail.
+import asyncio
 import logging
 import math
 import re
@@ -249,6 +250,14 @@ def register(router):
         "device_fingerprint": 1,
         "last_seen": 1,
         "token_version": 1,
+        "is_dead": 1,
+    }
+
+    _COMPARE_USER_PROJ = {
+        **_USER_IP_PROJ,
+        "device_fingerprint": 1,
+        "family_id": 1,
+        "referred_by": 1,
         "is_dead": 1,
     }
 
@@ -614,6 +623,323 @@ def register(router):
             ua_values.add(last_ua[:180])
         return {"device_types": device_types, "user_agents": ua_values}
 
+    def _provider_label(g: Dict[str, Any]) -> str:
+        return network_label(g) if g.get("ok") else ""
+
+    def _isp_key(g: Dict[str, Any]) -> str:
+        isp = (g.get("isp") or "").strip().lower()
+        if isp:
+            return isp
+        org = (g.get("org") or "").strip().lower()
+        if org:
+            return org
+        return _provider_label(g).lower()
+
+    def _asn_key(g: Dict[str, Any]) -> str:
+        asn = (g.get("as_field") or "").strip().upper()
+        if asn:
+            return asn
+        asname = (g.get("asname") or "").strip().lower()
+        return asname
+
+    def _geodata_row(ipn: str, g: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "ip": ipn,
+            "network": network_label(g) if g.get("ok") else None,
+            "country": g.get("country"),
+            "countryCode": g.get("countryCode"),
+            "regionName": g.get("regionName"),
+            "city": g.get("city"),
+            "isp": g.get("isp"),
+            "org": g.get("org"),
+            "as_field": g.get("as_field"),
+            "asname": g.get("asname"),
+            "mobile": g.get("mobile"),
+            "hosting": g.get("hosting"),
+            "proxy": g.get("proxy"),
+            "geo_ok": g.get("ok"),
+            "geo_error": g.get("error"),
+        }
+
+    def _provider_buckets(
+        ip_sources: Dict[str, set],
+        geodata_by_ip: Dict[str, Dict[str, Any]],
+    ) -> Tuple[Dict[str, Dict[str, Any]], Dict[str, Dict[str, Any]]]:
+        by_isp: Dict[str, Dict[str, Any]] = {}
+        by_asn: Dict[str, Dict[str, Any]] = {}
+        for ipn, sources in ip_sources.items():
+            g = geodata_by_ip.get(ipn) or {}
+            if not g.get("ok"):
+                continue
+            isp_k = _isp_key(g)
+            asn_k = _asn_key(g)
+            if isp_k:
+                row = by_isp.setdefault(
+                    isp_k,
+                    {
+                        "isp": _provider_label(g),
+                        "ips": set(),
+                        "sources": set(),
+                        "mobile": False,
+                        "hosting": False,
+                        "proxy": False,
+                    },
+                )
+                row["ips"].add(ipn)
+                row["sources"].update(sources)
+                row["mobile"] = row["mobile"] or bool(g.get("mobile"))
+                row["hosting"] = row["hosting"] or bool(g.get("hosting"))
+                row["proxy"] = row["proxy"] or bool(g.get("proxy"))
+            if asn_k:
+                row = by_asn.setdefault(
+                    asn_k,
+                    {
+                        "as_field": g.get("as_field"),
+                        "asname": g.get("asname"),
+                        "isp": _provider_label(g),
+                        "ips": set(),
+                        "sources": set(),
+                    },
+                )
+                row["ips"].add(ipn)
+                row["sources"].update(sources)
+        return by_isp, by_asn
+
+    def _shared_provider_rows(
+        buckets_a: Dict[str, Dict[str, Any]],
+        buckets_b: Dict[str, Dict[str, Any]],
+        *,
+        shared_ip_values: set,
+        label_field: str,
+    ) -> List[Dict[str, Any]]:
+        rows: List[Dict[str, Any]] = []
+        for key in sorted(set(buckets_a.keys()) & set(buckets_b.keys())):
+            a = buckets_a[key]
+            b = buckets_b[key]
+            ips_a = sorted(a["ips"])
+            ips_b = sorted(b["ips"])
+            overlap = sorted(set(ips_a) & set(ips_b))
+            rows.append(
+                {
+                    label_field: a.get(label_field) or b.get(label_field) or key,
+                    "isp": a.get("isp") or b.get("isp"),
+                    "as_field": a.get("as_field") or b.get("as_field"),
+                    "asname": a.get("asname") or b.get("asname"),
+                    "user_a_ips": ips_a,
+                    "user_b_ips": ips_b,
+                    "shared_exact_ips": overlap,
+                    "same_exact_ip": bool(overlap),
+                    "user_a_sources": sorted(a.get("sources") or []),
+                    "user_b_sources": sorted(b.get("sources") or []),
+                    "mobile": bool(a.get("mobile") or b.get("mobile")),
+                    "hosting": bool(a.get("hosting") or b.get("hosting")),
+                    "proxy": bool(a.get("proxy") or b.get("proxy")),
+                    "different_ips_same_provider": not overlap and bool(ips_a and ips_b),
+                }
+            )
+        rows.sort(
+            key=lambda r: (
+                0 if r.get("same_exact_ip") else 1,
+                -(len(r.get("user_a_ips") or []) + len(r.get("user_b_ips") or [])),
+                str(r.get("isp") or r.get("asname") or ""),
+            )
+        )
+        return rows
+
+    async def _account_compare_links(
+        ua: Dict[str, Any],
+        ub: Dict[str, Any],
+        uid_a: str,
+        uid_b: str,
+        *,
+        days: int,
+        shared_devices: Dict[str, Any],
+        registration_shared: bool,
+        shared_ip_count: int,
+        shared_isp_count: int,
+        shared_asn_count: int,
+        money_rows: List[Dict[str, Any]],
+        points_rows: List[Dict[str, Any]],
+        vault_rows: List[Dict[str, Any]],
+        car_rows: List[Dict[str, Any]],
+    ) -> List[Dict[str, Any]]:
+        from utils.referral_ids import normalize_referred_by_ids
+
+        links: List[Dict[str, Any]] = []
+        un_a = ua.get("username") or "Account A"
+        un_b = ub.get("username") or "Account B"
+        since = datetime.now(timezone.utc) - timedelta(days=int(days))
+        since_iso = since.isoformat()
+        time_q = {"$or": [{"created_at": {"$gte": since}}, {"created_at": {"$gte": since_iso}}]}
+
+        fam_a = (ua.get("family_id") or "").strip()
+        fam_b = (ub.get("family_id") or "").strip()
+        if not fam_a or not fam_b:
+            mem_rows = await db.family_members.find(
+                {"user_id": {"$in": [uid_a, uid_b]}},
+                {"_id": 0, "user_id": 1, "family_id": 1},
+            ).to_list(2)
+            for m in mem_rows:
+                if m.get("user_id") == uid_a:
+                    fam_a = fam_a or (m.get("family_id") or "")
+                if m.get("user_id") == uid_b:
+                    fam_b = fam_b or (m.get("family_id") or "")
+        if fam_a and fam_b and fam_a == fam_b:
+            fam = await db.families.find_one({"id": fam_a}, {"_id": 0, "name": 1, "tag": 1})
+            fam_name = (fam or {}).get("name") or fam_a
+            fam_tag = (fam or {}).get("tag") or "?"
+            links.append(
+                {
+                    "severity": "warn",
+                    "code": "same_family",
+                    "title": "Same family",
+                    "detail": f"Both accounts are in {fam_name} [{fam_tag}].",
+                    "meta": {"family_id": fam_a, "family_name": fam_name, "family_tag": fam_tag},
+                }
+            )
+
+        refs_a = normalize_referred_by_ids(ua.get("referred_by"))
+        refs_b = normalize_referred_by_ids(ub.get("referred_by"))
+        if uid_b in refs_a:
+            links.append(
+                {
+                    "severity": "warn",
+                    "code": "referral_b_by_a",
+                    "title": "Referral link",
+                    "detail": f"{un_b} was referred by {un_a}.",
+                }
+            )
+        if uid_a in refs_b:
+            links.append(
+                {
+                    "severity": "warn",
+                    "code": "referral_a_by_b",
+                    "title": "Referral link",
+                    "detail": f"{un_a} was referred by {un_b}.",
+                }
+            )
+
+        a_on_b, b_on_a = await asyncio.gather(
+            db.attack_attempts.count_documents({"attacker_id": uid_a, "target_id": uid_b, **time_q}),
+            db.attack_attempts.count_documents({"attacker_id": uid_b, "target_id": uid_a, **time_q}),
+        )
+        if a_on_b:
+            links.append(
+                {
+                    "severity": "warn",
+                    "code": "attacks_a_on_b",
+                    "title": "Kill activity",
+                    "detail": f"{un_a} has {a_on_b} attack attempt(s) on {un_b} in the last {days} days.",
+                    "meta": {"count": int(a_on_b)},
+                }
+            )
+        if b_on_a:
+            links.append(
+                {
+                    "severity": "warn",
+                    "code": "attacks_b_on_a",
+                    "title": "Kill activity",
+                    "detail": f"{un_b} has {b_on_a} attack attempt(s) on {un_a} in the last {days} days.",
+                    "meta": {"count": int(b_on_a)},
+                }
+            )
+
+        email_a = (ua.get("email") or "").strip().lower()
+        email_b = (ub.get("email") or "").strip().lower()
+        if email_a and email_b and "@" in email_a and "@" in email_b:
+            dom_a = email_a.split("@", 1)[1]
+            dom_b = email_b.split("@", 1)[1]
+            if dom_a and dom_a == dom_b:
+                links.append(
+                    {
+                        "severity": "info",
+                        "code": "same_email_domain",
+                        "title": "Same email domain",
+                        "detail": f"Both accounts use @{dom_a}. This is weak evidence on its own.",
+                    }
+                )
+
+        shared_uas = shared_devices.get("shared_user_agents") or []
+        if shared_uas:
+            links.append(
+                {
+                    "severity": "warn",
+                    "code": "shared_user_agent",
+                    "title": "Same browser fingerprint",
+                    "detail": f"{len(shared_uas)} exact matching user-agent string(s) across sessions.",
+                }
+            )
+
+        if registration_shared:
+            links.append(
+                {
+                    "severity": "warn",
+                    "code": "shared_registration_ip",
+                    "title": "Same registration IP",
+                    "detail": "Both accounts registered from the same normalized IP.",
+                }
+            )
+
+        if shared_ip_count:
+            links.append(
+                {
+                    "severity": "info" if shared_ip_count < 2 else "warn",
+                    "code": "shared_ips",
+                    "title": "Shared IP addresses",
+                    "detail": f"{shared_ip_count} exact IP address(es) overlap between the accounts.",
+                }
+            )
+
+        if shared_isp_count:
+            links.append(
+                {
+                    "severity": "warn" if shared_isp_count >= 2 else "info",
+                    "code": "shared_isp",
+                    "title": "Same internet provider (ISP)",
+                    "detail": f"{shared_isp_count} shared ISP/network label(s), including cases where the IP differs but the provider matches.",
+                }
+            )
+
+        if shared_asn_count:
+            links.append(
+                {
+                    "severity": "info",
+                    "code": "shared_asn",
+                    "title": "Same ASN / carrier network",
+                    "detail": f"{shared_asn_count} shared autonomous-system network(s) between the accounts.",
+                }
+            )
+
+        if money_rows or points_rows:
+            links.append(
+                {
+                    "severity": "warn",
+                    "code": "direct_transfers",
+                    "title": "Direct cash/points movement",
+                    "detail": f"{len(money_rows)} cash and {len(points_rows)} points transfer row(s) between the accounts.",
+                }
+            )
+        if vault_rows:
+            links.append(
+                {
+                    "severity": "warn",
+                    "code": "family_vault_between_accounts",
+                    "title": "Family vault activity",
+                    "detail": f"{len(vault_rows)} family vault row(s) involve both accounts.",
+                }
+            )
+        if car_rows:
+            links.append(
+                {
+                    "severity": "warn",
+                    "code": "exclusive_car_between_accounts",
+                    "title": "Exclusive car events",
+                    "detail": f"{len(car_rows)} exclusive car event(s) between the accounts.",
+                }
+            )
+
+        return links
+
     async def _bilateral_rows(
         collection,
         uid_a: str,
@@ -725,8 +1051,15 @@ def register(router):
         async def _resolve_any(raw: str) -> Dict[str, Any]:
             q = (raw or "").strip()
             if _looks_user_id(q):
-                return await _resolve_investigate_user(q, None)
-            return await _resolve_investigate_user(None, q)
+                user = await db.users.find_one({"id": q}, _COMPARE_USER_PROJ)
+            else:
+                user = await db.users.find_one(
+                    {"username": re.compile("^" + re.escape(q) + "$", re.IGNORECASE)},
+                    _COMPARE_USER_PROJ,
+                )
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            return user
 
         ua = await _resolve_any(user_a)
         ub = await _resolve_any(user_b)
@@ -741,32 +1074,48 @@ def register(router):
         attack_b = await _attack_ips_for_user(uid_b, days, 60)
         ip_sources_a = _account_ip_sources(ua, attack_a)
         ip_sources_b = _account_ip_sources(ub, attack_b)
-        shared_ip_values = sorted(set(ip_sources_a.keys()) & set(ip_sources_b.keys()))
+        shared_ip_set = set(ip_sources_a.keys()) & set(ip_sources_b.keys())
+        shared_ip_values = sorted(shared_ip_set)
+        all_ip_values = sorted(set(ip_sources_a.keys()) | set(ip_sources_b.keys()))
+        remaining_ips = [ip for ip in all_ip_values if ip not in shared_ip_set]
+        lookup_ips = (shared_ip_values + remaining_ips)[:MAX_IP_GEO_LOOKUPS]
+        provider_lookup_truncated = len(all_ip_values) > MAX_IP_GEO_LOOKUPS
+
+        geodata_by_ip: Dict[str, Dict[str, Any]] = {}
+        for ipn in lookup_ips:
+            geodata_by_ip[ipn] = await get_or_fetch_ip_geodata(db, ipn)
 
         shared_ips: List[Dict[str, Any]] = []
-        for ipn in shared_ip_values[:MAX_IP_GEO_LOOKUPS]:
-            g = await get_or_fetch_ip_geodata(db, ipn)
-            shared_ips.append(
-                {
-                    "ip": ipn,
-                    "user_a_sources": sorted(ip_sources_a.get(ipn) or []),
-                    "user_b_sources": sorted(ip_sources_b.get(ipn) or []),
-                    "network": network_label(g) if g.get("ok") else None,
-                    "country": g.get("country"),
-                    "countryCode": g.get("countryCode"),
-                    "regionName": g.get("regionName"),
-                    "city": g.get("city"),
-                    "isp": g.get("isp"),
-                    "org": g.get("org"),
-                    "as_field": g.get("as_field"),
-                    "asname": g.get("asname"),
-                    "mobile": g.get("mobile"),
-                    "hosting": g.get("hosting"),
-                    "proxy": g.get("proxy"),
-                    "geo_ok": g.get("ok"),
-                    "geo_error": g.get("error"),
-                }
-            )
+        for ipn in shared_ip_values:
+            g = geodata_by_ip.get(ipn) or await get_or_fetch_ip_geodata(db, ipn)
+            geodata_by_ip[ipn] = g
+            row = _geodata_row(ipn, g)
+            row["user_a_sources"] = sorted(ip_sources_a.get(ipn) or [])
+            row["user_b_sources"] = sorted(ip_sources_b.get(ipn) or [])
+            shared_ips.append(row)
+
+        isp_a, asn_a = _provider_buckets(ip_sources_a, geodata_by_ip)
+        isp_b, asn_b = _provider_buckets(ip_sources_b, geodata_by_ip)
+        shared_isps = _shared_provider_rows(isp_a, isp_b, shared_ip_values=shared_ip_set, label_field="isp")
+        shared_asns = _shared_provider_rows(asn_a, asn_b, shared_ip_values=shared_ip_set, label_field="asname")
+
+        def _serialize_provider_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+            out: List[Dict[str, Any]] = []
+            for row in rows:
+                item = dict(row)
+                out.append(item)
+            return out
+
+        shared_network_providers = {
+            "shared_isps": _serialize_provider_rows(shared_isps),
+            "shared_asns": _serialize_provider_rows(shared_asns),
+            "shared_isp_count": len(shared_isps),
+            "shared_asn_count": len(shared_asns),
+            "unique_ips_a": len(ip_sources_a),
+            "unique_ips_b": len(ip_sources_b),
+            "lookup_truncated": provider_lookup_truncated,
+            "lookups_performed": len(lookup_ips),
+        }
 
         dev_a = _session_device_summary(ua)
         dev_b = _session_device_summary(ub)
@@ -830,17 +1179,39 @@ def register(router):
             and normalize_ip(ua.get("registration_ip")) == normalize_ip(ub.get("registration_ip"))
         )
 
+        account_links = await _account_compare_links(
+            ua,
+            ub,
+            uid_a,
+            uid_b,
+            days=days,
+            shared_devices=shared_devices,
+            registration_shared=registration_shared,
+            shared_ip_count=len(shared_ip_values),
+            shared_isp_count=len(shared_isps),
+            shared_asn_count=len(shared_asns),
+            money_rows=money_rows,
+            points_rows=points_rows,
+            vault_rows=vault_rows,
+            car_rows=car_rows,
+        )
+
         findings: List[Dict[str, Any]] = []
-        if registration_shared:
-            findings.append({"severity": "warn", "code": "shared_registration_ip", "title": "Shared registration IP", "detail": "Both accounts registered from the same normalized IP."})
         if same_fingerprint:
             findings.append({"severity": "critical", "code": "same_device_fingerprint", "title": "Same device fingerprint", "detail": "Both accounts have the same stored device fingerprint."})
-        if shared_ips:
-            findings.append({"severity": "info", "code": "shared_ips", "title": "Shared IP activity", "detail": f"{len(shared_ip_values)} shared IP(s) found across login/session/attack sources."})
-        if money_rows or points_rows:
-            findings.append({"severity": "warn", "code": "direct_transfers", "title": "Direct value movement", "detail": f"{len(money_rows)} cash and {len(points_rows)} points transfer row(s) between the accounts."})
         if quicktrade_rows:
             findings.append({"severity": "warn", "code": "quicktrade_between_accounts", "title": "Quick Trade between accounts", "detail": f"{len(quicktrade_rows)} transfer row(s) look related to Quick Trade movement."})
+        for link in account_links:
+            if link.get("code") in {"quicktrade_between_accounts", "same_device_fingerprint"}:
+                continue
+            findings.append(
+                {
+                    "severity": link.get("severity") or "info",
+                    "code": link.get("code"),
+                    "title": link.get("title"),
+                    "detail": link.get("detail"),
+                }
+            )
 
         return {
             "report_type": "account_compare",
@@ -852,6 +1223,8 @@ def register(router):
             "shared_ips": shared_ips,
             "shared_ip_count": len(shared_ip_values),
             "shared_ip_truncated": len(shared_ip_values) > MAX_IP_GEO_LOOKUPS,
+            "shared_network_providers": shared_network_providers,
+            "account_links": account_links,
             "shared_devices": shared_devices,
             "transactions": {
                 "money_transfers": money_rows,
@@ -863,6 +1236,9 @@ def register(router):
                 "shared_registration_ip": registration_shared,
                 "same_device_fingerprint": same_fingerprint,
                 "shared_ip_count": len(shared_ip_values),
+                "shared_isp_count": len(shared_isps),
+                "shared_asn_count": len(shared_asns),
+                "account_link_count": len(account_links),
                 "money_transfer_count": len(money_rows),
                 "points_transfer_count": len(points_rows),
                 "direct_cash_transfer_count": len(direct_money),

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { AlertTriangle, ArrowLeftRight, Car, Coins, EyeOff, Fingerprint, RefreshCw, Search, ShieldAlert, Users } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, Car, Coins, EyeOff, Fingerprint, Link2, RefreshCw, Search, ShieldAlert, Users, Wifi } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../utils/api';
 import { formatAdminDateTime } from '../../utils/adminDateTime';
@@ -31,11 +31,81 @@ function severityClass(sev) {
   return 'border-zinc-700/50 bg-zinc-900/60 text-zinc-200';
 }
 
-function AccountCard({ title, user, blurIps }) {
-  if (!user) return null;
+const ACCOUNT_A_STYLE = {
+  badge: 'bg-sky-500/20 text-sky-100 border-sky-500/45',
+  border: 'border-sky-500/35 bg-sky-500/5',
+  dot: 'bg-sky-400',
+  text: 'text-sky-100',
+};
+
+const ACCOUNT_B_STYLE = {
+  badge: 'bg-amber-500/20 text-amber-100 border-amber-500/45',
+  border: 'border-amber-500/35 bg-amber-500/5',
+  dot: 'bg-amber-400',
+  text: 'text-amber-100',
+};
+
+const IP_SOURCE_LABELS = {
+  registration: 'Registered from this IP',
+  last_login: 'Last login from this IP',
+  last_request: 'Last request from this IP',
+  login_ips: 'Saved login IP',
+  login_history: 'Login history',
+  session: 'Session IP',
+  attack_attacker: 'Attacked someone from this IP',
+  attack_target: 'Was attacked on this IP',
+};
+
+function accountSideStyle(side) {
+  return side === 'a' ? ACCOUNT_A_STYLE : ACCOUNT_B_STYLE;
+}
+
+function accountSideLabel(side, user) {
+  const name = user?.username || (side === 'a' ? 'Account A' : 'Account B');
+  return side === 'a' ? `Account A — ${name}` : `Account B — ${name}`;
+}
+
+function formatIpSources(sources) {
+  return (sources || []).map((source) => IP_SOURCE_LABELS[source] || source.replace(/_/g, ' '));
+}
+
+function AccountCompareLegend({ userA, userB }) {
   return (
-    <div className="rounded-lg border border-zinc-700/45 bg-zinc-950/55 p-3 font-heading">
-      <div className="text-[9px] text-primary uppercase tracking-wider font-bold mb-2">{title}</div>
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 font-heading">
+      {[
+        { side: 'a', user: userA },
+        { side: 'b', user: userB },
+      ].map(({ side, user }) => {
+        const style = accountSideStyle(side);
+        return (
+          <div key={side} className={`rounded-lg border px-3 py-2 ${style.border}`}>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${style.dot}`} />
+              <div className="min-w-0">
+                <div className={`text-[10px] font-bold uppercase tracking-wider ${style.text}`}>
+                  {accountSideLabel(side, user)}
+                </div>
+                <div className="text-[9px] text-mutedForeground truncate">{user?.email || '—'}</div>
+              </div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function AccountCard({ side, user, blurIps }) {
+  if (!user) return null;
+  const style = accountSideStyle(side);
+  return (
+    <div className={`rounded-lg border p-3 font-heading ${style.border}`}>
+      <div className="flex items-center gap-2 mb-2 min-w-0">
+        <span className={`inline-block w-2.5 h-2.5 rounded-full shrink-0 ${style.dot}`} />
+        <div className={`text-[9px] uppercase tracking-wider font-bold truncate ${style.text}`}>
+          {accountSideLabel(side, user)}
+        </div>
+      </div>
       <div className="text-sm text-foreground font-bold truncate">{user.username}</div>
       <div className="font-mono text-[9px] text-mutedForeground break-all">{user.id}</div>
       <div className="grid grid-cols-2 gap-2 mt-3 text-[10px]">
@@ -68,41 +138,18 @@ function AccountCard({ title, user, blurIps }) {
   );
 }
 
-function Findings({ rows }) {
-  if (!rows?.length) {
-    return (
-      <div className="rounded border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-[10px] text-emerald-200 font-heading">
-        No major shared-account signals found in the selected window.
-      </div>
-    );
-  }
-  return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-      {rows.map((f, idx) => (
-        <div key={`${f.code}-${idx}`} className={`rounded border px-3 py-2 text-[10px] font-heading ${severityClass(f.severity)}`}>
-          <div className="flex items-start gap-2">
-            <ShieldAlert size={14} className="shrink-0 mt-0.5 opacity-80" />
-            <div>
-              <div className="font-bold text-foreground">{f.title || f.code}</div>
-              <div className="text-mutedForeground mt-0.5 leading-snug">{f.detail}</div>
-            </div>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
 function SummaryCards({ summary, userA, userB }) {
   if (!summary) return null;
   const cards = [
-    { label: 'Shared IPs', value: fmtNum(summary.shared_ip_count), sub: summary.shared_registration_ip ? 'Registration IP matches' : 'Login/session/attack overlap' },
+    { label: 'Shared IPs', value: fmtNum(summary.shared_ip_count), sub: summary.shared_registration_ip ? 'Registration IP matches' : 'Exact address overlap' },
+    { label: 'Shared ISPs', value: fmtNum(summary.shared_isp_count), sub: 'Same internet provider, even on different IPs' },
+    { label: 'Possible links', value: fmtNum(summary.account_link_count), sub: 'Family, referral, kills, transfers, etc.' },
     { label: 'Cash moved', value: fmtMoney(summary.cash_moved_total), sub: `${fmtMoney(summary.cash_by_direction?.a_to_b)} ${userA?.username || 'A'} -> ${userB?.username || 'B'}` },
     { label: 'Points moved', value: fmtNum(summary.points_moved_total), sub: `${fmtNum(summary.points_by_direction?.a_to_b)} ${userA?.username || 'A'} -> ${userB?.username || 'B'}` },
     { label: 'Quick Trade rows', value: fmtNum(summary.quicktrade_transfer_count), sub: 'Cash/points rows marked as QT' },
   ];
   return (
-    <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-2">
       {cards.map((c) => (
         <div key={c.label} className="rounded-lg border border-primary/20 bg-zinc-950/55 p-3 font-heading">
           <div className="text-[9px] text-mutedForeground uppercase tracking-wider">{c.label}</div>
@@ -114,10 +161,152 @@ function SummaryCards({ summary, userA, userB }) {
   );
 }
 
-function SharedIpSection({ rows, blurIps, truncated }) {
+function PossibleLinksSection({ links }) {
+  if (!links?.length) {
+    return (
+      <p className="text-[10px] text-mutedForeground font-heading">
+        No direct relationship signals found between these accounts in the selected window.
+      </p>
+    );
+  }
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+      {links.map((link, idx) => (
+        <div key={`${link.code}-${idx}`} className={`rounded border px-3 py-2 text-[10px] font-heading ${severityClass(link.severity)}`}>
+          <div className="flex items-start gap-2">
+            <Link2 size={14} className="shrink-0 mt-0.5 opacity-80" />
+            <div>
+              <div className="font-bold text-foreground">{link.title || link.code}</div>
+              <div className="text-mutedForeground mt-0.5 leading-snug">{link.detail}</div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ProviderIpList({ ips, blurIps, style }) {
+  if (!ips?.length) return <span className="text-mutedForeground">—</span>;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {ips.map((ip) => (
+        <span key={ip} className={`font-mono text-[8px] rounded px-1 py-0.5 border ${style.border} ${style.text}`}>
+          {blurIps ? maskIp(ip) : ip}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function SharedProvidersSection({ data, blurIps, userA, userB }) {
+  const isps = data?.shared_isps || [];
+  const asns = data?.shared_asns || [];
+  if (!isps.length && !asns.length) {
+    return (
+      <p className="text-[10px] text-mutedForeground font-heading">
+        No shared internet provider or ASN overlap found from the looked-up IP history.
+      </p>
+    );
+  }
+
+  const renderRow = (row, idx) => {
+    const label = row.isp || row.asname || row.as_field || 'Unknown provider';
+    const badges = [];
+    if (row.same_exact_ip) badges.push('Same IP');
+    else if (row.different_ips_same_provider) badges.push('Different IPs, same provider');
+    if (row.mobile) badges.push('Mobile');
+    if (row.hosting) badges.push('Hosting');
+    if (row.proxy) badges.push('Proxy/VPN');
+
+    return (
+      <div key={`${label}-${idx}`} className="rounded-lg border border-zinc-700/45 bg-zinc-950/55 p-3 space-y-2 font-heading">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <div className="text-[11px] font-bold text-foreground">{label}</div>
+            {row.as_field ? (
+              <div className="text-[9px] text-mutedForeground mt-0.5">{row.as_field}{row.asname ? ` · ${row.asname}` : ''}</div>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {badges.map((badge) => (
+              <span key={badge} className="rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[8px] text-primary uppercase tracking-wide">
+                {badge}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          <div className={`rounded border px-2 py-1.5 ${ACCOUNT_A_STYLE.border}`}>
+            <div className={`text-[9px] font-bold uppercase mb-1 ${ACCOUNT_A_STYLE.text}`}>
+              {userA?.username || 'Account A'}
+            </div>
+            <ProviderIpList ips={row.user_a_ips} blurIps={blurIps} style={ACCOUNT_A_STYLE} />
+          </div>
+          <div className={`rounded border px-2 py-1.5 ${ACCOUNT_B_STYLE.border}`}>
+            <div className={`text-[9px] font-bold uppercase mb-1 ${ACCOUNT_B_STYLE.text}`}>
+              {userB?.username || 'Account B'}
+            </div>
+            <ProviderIpList ips={row.user_b_ips} blurIps={blurIps} style={ACCOUNT_B_STYLE} />
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="space-y-3">
+      {data?.lookup_truncated ? (
+        <div className="text-[10px] text-amber-300 font-heading rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1">
+          Provider lookup capped at {fmtNum(data.lookups_performed)} IP(s). Some provider overlap may be missing.
+        </div>
+      ) : null}
+      {isps.length ? (
+        <div className="space-y-2">
+          <div className="text-[10px] text-mutedForeground uppercase tracking-wider">Shared internet providers (ISP)</div>
+          {isps.map(renderRow)}
+        </div>
+      ) : null}
+      {asns.length ? (
+        <div className="space-y-2">
+          <div className="text-[10px] text-mutedForeground uppercase tracking-wider">Shared carrier / ASN networks</div>
+          {asns.map(renderRow)}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function SharedIpSection({ rows, blurIps, truncated, userA, userB }) {
   if (!rows?.length) {
     return <p className="text-[10px] text-mutedForeground font-heading">No shared IPs found.</p>;
   }
+
+  const renderAccountEvidence = (side, user, sources) => {
+    const style = accountSideStyle(side);
+    const labels = formatIpSources(sources);
+    return (
+      <div className={`rounded border px-2 py-1.5 ${style.border}`}>
+        <div className={`text-[9px] font-bold uppercase tracking-wide mb-1 flex items-center gap-1 ${style.text}`}>
+          <span className={`inline-block w-2 h-2 rounded-full shrink-0 ${style.dot}`} />
+          <span className="truncate">{user?.username || (side === 'a' ? 'Account A' : 'Account B')}</span>
+        </div>
+        {labels.length ? (
+          <ul className="space-y-0.5 text-[9px] text-mutedForeground leading-snug">
+            {labels.map((label) => (
+              <li key={label} className="flex items-start gap-1">
+                <span className="text-primary shrink-0">•</span>
+                <span>{label}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="text-[9px] text-mutedForeground">No linked activity on this IP</div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div className="space-y-2">
       {truncated ? (
@@ -127,11 +316,11 @@ function SharedIpSection({ rows, blurIps, truncated }) {
       ) : null}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
         {rows.map((row) => (
-          <div key={row.ip} className="space-y-1">
+          <div key={row.ip} className="space-y-1.5">
             <StaffIpReputationCard ip={row.ip} geo={row} blurIp={blurIps} compact />
-            <div className="grid grid-cols-2 gap-1 text-[9px] font-heading text-mutedForeground px-1">
-              <div>Account A: {(row.user_a_sources || []).join(', ') || '—'}</div>
-              <div>Account B: {(row.user_b_sources || []).join(', ') || '—'}</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+              {renderAccountEvidence('a', userA, row.user_a_sources)}
+              {renderAccountEvidence('b', userB, row.user_b_sources)}
             </div>
           </div>
         ))}
@@ -140,13 +329,15 @@ function SharedIpSection({ rows, blurIps, truncated }) {
   );
 }
 
-function DevicesSection({ data }) {
+function DevicesSection({ data, userA, userB }) {
   if (!data) return null;
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[10px] font-heading">
       <div className={`rounded border p-2 ${data.same_device_fingerprint ? 'border-red-500/40 bg-red-500/10' : 'border-zinc-700/45 bg-zinc-950/55'}`}>
         <div className="text-[9px] text-mutedForeground uppercase tracking-wider flex items-center gap-1"><Fingerprint size={11} /> Fingerprint</div>
-        <div className="text-foreground mt-1 break-all">{data.same_device_fingerprint ? 'Match' : 'No exact match'}</div>
+        <div className="text-foreground mt-1 break-all">{data.same_device_fingerprint ? 'Exact match' : 'No exact match'}</div>
+        <div className="text-[8px] text-mutedForeground mt-1 break-all">{userA?.username || 'A'}: {safeVal(data.device_fingerprint_a)}</div>
+        <div className="text-[8px] text-mutedForeground break-all">{userB?.username || 'B'}: {safeVal(data.device_fingerprint_b)}</div>
       </div>
       <div className="rounded border border-zinc-700/45 bg-zinc-950/55 p-2">
         <div className="text-[9px] text-mutedForeground uppercase tracking-wider">Shared device types</div>
@@ -303,7 +494,7 @@ export default function AdminAccountCompare() {
           <h1 className="text-sm font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-2">
             <ArrowLeftRight size={16} /> Account Compare
           </h1>
-          <p className="text-[10px] text-mutedForeground font-heading">Compare two accounts for shared IP/device evidence and direct value movement.</p>
+          <p className="text-[10px] text-mutedForeground font-heading">Compare two accounts for shared providers, IPs, device signals, kill activity, and direct value movement.</p>
         </div>
         <button
           type="button"
@@ -352,26 +543,75 @@ export default function AdminAccountCompare() {
 
       {hasReport ? (
         <>
+          <AccountCompareLegend userA={userObjA} userB={userObjB} />
           <SummaryCards summary={report.summary} userA={userObjA} userB={userObjB} />
-          <Findings rows={report.findings || []} />
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <AccountCard title="Account A" user={userObjA} blurIps={blurIps} />
-            <AccountCard title="Account B" user={userObjB} blurIps={blurIps} />
+            <AccountCard side="a" user={userObjA} blurIps={blurIps} />
+            <AccountCard side="b" user={userObjB} blurIps={blurIps} />
           </div>
 
           <section className={`${styles.panel} rounded-lg p-3 space-y-2`}>
             <h2 className="text-[11px] text-primary font-heading font-bold uppercase tracking-wider flex items-center gap-1">
-              <Users size={13} /> Shared IP Evidence
+              <Link2 size={13} /> Possible Links Between Accounts
             </h2>
-            <SharedIpSection rows={report.shared_ips || []} blurIps={blurIps} truncated={report.shared_ip_truncated} />
+            <PossibleLinksSection links={report.account_links || []} />
+          </section>
+
+          <section className={`${styles.panel} rounded-lg p-3 space-y-2`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-[11px] text-primary font-heading font-bold uppercase tracking-wider flex items-center gap-1">
+                <Wifi size={13} /> Shared Internet Providers
+              </h2>
+              <div className="flex flex-wrap items-center gap-3 text-[9px] font-heading">
+                <span className="inline-flex items-center gap-1 text-sky-200">
+                  <span className="inline-block w-2 h-2 rounded-full bg-sky-400" />
+                  {userObjA?.username || 'Account A'}
+                </span>
+                <span className="inline-flex items-center gap-1 text-amber-200">
+                  <span className="inline-block w-2 h-2 rounded-full bg-amber-400" />
+                  {userObjB?.username || 'Account B'}
+                </span>
+              </div>
+            </div>
+            <SharedProvidersSection
+              data={report.shared_network_providers}
+              blurIps={blurIps}
+              userA={userObjA}
+              userB={userObjB}
+            />
+          </section>
+
+          <section className={`${styles.panel} rounded-lg p-3 space-y-2`}>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-[11px] text-primary font-heading font-bold uppercase tracking-wider flex items-center gap-1">
+                <Users size={13} /> Shared IP Evidence
+              </h2>
+              <div className="flex flex-wrap items-center gap-3 text-[9px] font-heading">
+                <span className="inline-flex items-center gap-1 text-sky-200">
+                  <span className="inline-block w-2 h-2 rounded-full bg-sky-400" />
+                  {userObjA?.username || 'Account A'}
+                </span>
+                <span className="inline-flex items-center gap-1 text-amber-200">
+                  <span className="inline-block w-2 h-2 rounded-full bg-amber-400" />
+                  {userObjB?.username || 'Account B'}
+                </span>
+              </div>
+            </div>
+            <SharedIpSection
+              rows={report.shared_ips || []}
+              blurIps={blurIps}
+              truncated={report.shared_ip_truncated}
+              userA={userObjA}
+              userB={userObjB}
+            />
           </section>
 
           <section className={`${styles.panel} rounded-lg p-3 space-y-2`}>
             <h2 className="text-[11px] text-primary font-heading font-bold uppercase tracking-wider flex items-center gap-1">
               <Fingerprint size={13} /> Shared Device Evidence
             </h2>
-            <DevicesSection data={report.shared_devices} />
+            <DevicesSection data={report.shared_devices} userA={userObjA} userB={userObjB} />
           </section>
 
           <section className={`${styles.panel} rounded-lg p-3 space-y-3`}>
