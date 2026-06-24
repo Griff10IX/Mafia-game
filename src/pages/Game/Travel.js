@@ -50,6 +50,30 @@ const TRAVEL_STYLES = `
   .trv-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
 
+function getTravelCodePayload(travelInfo) {
+  const codeName = String(travelInfo?.travel_code_name || '').trim();
+  if (
+    codeName
+    && Object.prototype.hasOwnProperty.call(travelInfo || {}, codeName)
+    && typeof travelInfo[codeName] === 'string'
+    && travelInfo[codeName].trim().length >= 16
+  ) {
+    return {
+      travel_code_name: codeName,
+      [codeName]: travelInfo[codeName].trim(),
+    };
+  }
+  return {};
+}
+
+function travelErrorMessage(error) {
+  const detail = error?.response?.data?.detail;
+  if (detail && typeof detail === 'object') {
+    return detail.detail || 'Travel failed';
+  }
+  return detail || 'Travel failed';
+}
+
 const TravelingScreen = ({ destination, timeLeft, pending }) => (
   <div className="flex flex-col items-center justify-center min-h-[40vh] space-y-3" data-testid="traveling-screen">
     <div className="text-4xl md:text-5xl animate-bounce">🚗</div>
@@ -520,7 +544,7 @@ export default function Travel() {
         setTravelPostPending(false);
         return;
       }
-      const payload = { destination, travel_method: method };
+      const payload = { destination, travel_method: method, ...getTravelCodePayload(travelInfo) };
       if (method === 'airport' && airportSlot != null) payload.airport_slot = airportSlot;
       const response = await api.post('/travel', payload);
       const sec = parseTravelSeconds(response.data?.travel_time);
@@ -539,7 +563,7 @@ export default function Travel() {
       }
     } catch (error) {
       setTravelPostPending(false);
-      toast.error(error.response?.data?.detail || 'Travel failed');
+      toast.error(travelErrorMessage(error));
       setTraveling(false);
       setTravelTime(0);
     }

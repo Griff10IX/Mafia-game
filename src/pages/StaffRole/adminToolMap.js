@@ -1,4 +1,4 @@
-import { Activity, BarChart3, Building2, Car, Crosshair, FileText, Globe, History, Landmark, Layers, Lock, LockKeyhole, Radio, Shield, UserCog, Users, Wrench, Coins, Zap, Wine } from 'lucide-react';
+import { Activity, ArrowLeftRight, BarChart3, Building2, Car, Crosshair, FileText, Globe, History, Landmark, Layers, Lock, LockKeyhole, Radio, Shield, UserCog, Users, Wrench, Coins, Zap, Wine } from 'lucide-react';
 
 export const ADMIN_CATEGORIES = [
   { id: 'admin-operations', label: 'Operations', icon: UserCog },
@@ -66,6 +66,7 @@ export const ADMIN_ROUTE_GROUPS = [
   { id: 'users-online', label: 'Live online', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: Radio, description: 'Who is online now (IPs, last page, same-IP hints).' },
   { id: 'attack-logs', label: 'Attack logs', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: Crosshair, description: 'PVP attack log console and analytics.' },
   { id: 'ip-history', label: 'Account access', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: History, description: 'Hacked-account check: IPs, devices, shared logins, staff checklist.' },
+  { id: 'account-compare', label: 'Account compare', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: ArrowLeftRight, description: 'Compare two accounts: shared IPs, devices, and direct transfers.' },
   { id: 'exclusive-cars', label: 'Exclusive cars', categoryId: 'admin-world-systems', anchorId: 'admin-gameworld', icon: Car, description: 'Remove, transfer, or grant Al Capone / loot-exclusive cars.' },
   { id: 'crew-recovery', label: 'Crew recovery', categoryId: 'admin-operations', anchorId: 'admin-moderation', icon: Building2, description: 'Revive families and restore illegal businesses from kill snapshots.' },
   { id: 'racket-progress', label: 'Racket progress', categoryId: 'admin-economy-progression', anchorId: 'admin-donations', icon: Wine, description: 'Set player racket business progress (ladder, vault, guards, security).' },
@@ -96,6 +97,7 @@ export const ADMIN_ROUTE_GROUP_MOBILE_SHORT = {
   'users-online': 'Live',
   'attack-logs': 'Attacks',
   'ip-history': 'IPs',
+  'account-compare': 'Compare',
   'exclusive-cars': 'Cars',
   'crew-recovery': 'Crew',
   'racket-progress': 'Racket',

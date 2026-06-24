@@ -554,6 +554,123 @@ def register(router):
             "recent_samples": recent,
         }
 
+    def _compare_user_snapshot(user: Dict[str, Any]) -> Dict[str, Any]:
+        return {
+            "id": user.get("id"),
+            "username": user.get("username"),
+            "email": user.get("email"),
+            "created_at": user.get("created_at"),
+            "is_dead": user.get("is_dead"),
+            "registration_ip": normalize_ip(user.get("registration_ip")) or None,
+            "last_login_ip": normalize_ip(user.get("last_login_ip")) or None,
+            "last_request_ip": normalize_ip(user.get("last_request_ip")) or None,
+            "last_user_agent": user.get("last_user_agent"),
+            "last_device_type": user.get("last_device_type"),
+            "device_fingerprint": user.get("device_fingerprint"),
+            "sessions_count": len(user.get("sessions") or []) if isinstance(user.get("sessions"), list) else 0,
+        }
+
+    def _account_ip_sources(user: Dict[str, Any], attack: Dict[str, Any]) -> Dict[str, set]:
+        sources: Dict[str, set] = {}
+
+        def add(raw: Any, source: str) -> None:
+            ipn = normalize_ip(str(raw) if raw is not None else "")
+            if not ipn:
+                return
+            sources.setdefault(ipn, set()).add(source)
+
+        add(user.get("registration_ip"), "registration")
+        add(user.get("last_login_ip"), "last_login")
+        add(user.get("last_request_ip"), "last_request")
+        for ip in user.get("login_ips") or []:
+            add(ip, "login_ips")
+        for h in user.get("login_history") or []:
+            if isinstance(h, dict):
+                add(h.get("ip"), "login_history")
+        for s in user.get("sessions") or []:
+            if isinstance(s, dict):
+                add(s.get("ip"), "session")
+        for block in (attack.get("as_attacker") or []) + (attack.get("as_target") or []):
+            add(block.get("ip"), f"attack_{block.get('role') or 'activity'}")
+        return sources
+
+    def _session_device_summary(user: Dict[str, Any]) -> Dict[str, set]:
+        device_types: set = set()
+        ua_values: set = set()
+        for s in user.get("sessions") or []:
+            if not isinstance(s, dict):
+                continue
+            dt = (s.get("device_type") or "").strip()
+            ua = (s.get("user_agent") or s.get("ua") or "").strip()
+            if dt:
+                device_types.add(dt)
+            if ua:
+                ua_values.add(ua[:180])
+        last_dt = (user.get("last_device_type") or "").strip()
+        last_ua = (user.get("last_user_agent") or "").strip()
+        if last_dt:
+            device_types.add(last_dt)
+        if last_ua:
+            ua_values.add(last_ua[:180])
+        return {"device_types": device_types, "user_agents": ua_values}
+
+    async def _bilateral_rows(
+        collection,
+        uid_a: str,
+        uid_b: str,
+        *,
+        date_field: str,
+        projection: Dict[str, int],
+        days: int,
+        limit: int,
+    ) -> List[Dict[str, Any]]:
+        since = datetime.now(timezone.utc) - timedelta(days=int(days))
+        since_iso = since.isoformat()
+        q = {
+            "$and": [
+                {
+                    "$or": [
+                        {"from_user_id": uid_a, "to_user_id": uid_b},
+                        {"from_user_id": uid_b, "to_user_id": uid_a},
+                    ]
+                },
+                {"$or": [{date_field: {"$gte": since}}, {date_field: {"$gte": since_iso}}]},
+            ]
+        }
+        return await collection.find(q, projection).sort(date_field, -1).limit(int(limit)).to_list(int(limit))
+
+    async def _family_vault_between_users(uid_a: str, uid_b: str, days: int, limit: int) -> List[Dict[str, Any]]:
+        since = datetime.now(timezone.utc) - timedelta(days=int(days))
+        since_iso = since.isoformat()
+        q = {
+            "$and": [
+                {
+                    "$or": [
+                        {"actor_user_id": uid_a, "target_user_id": uid_b},
+                        {"actor_user_id": uid_b, "target_user_id": uid_a},
+                    ]
+                },
+                {"$or": [{"at": {"$gte": since}}, {"at": {"$gte": since_iso}}]},
+            ]
+        }
+        return await db.family_vault_transactions.find(q, {"_id": 0}).sort("at", -1).limit(int(limit)).to_list(int(limit))
+
+    async def _exclusive_car_between_users(uid_a: str, uid_b: str, days: int, limit: int) -> List[Dict[str, Any]]:
+        since = datetime.now(timezone.utc) - timedelta(days=int(days))
+        since_iso = since.isoformat()
+        q = {
+            "$and": [
+                {
+                    "$or": [
+                        {"from_user_id": uid_a, "to_user_id": uid_b},
+                        {"from_user_id": uid_b, "to_user_id": uid_a},
+                    ]
+                },
+                {"$or": [{"at": {"$gte": since}}, {"at": {"$gte": since_iso}}]},
+            ]
+        }
+        return await db.exclusive_car_events.find(q, {"_id": 0}).sort("at", -1).limit(int(limit)).to_list(int(limit))
+
     @router.get("/admin/investigate/user-ip-check")
     async def admin_investigate_user_ip_check(
         user_id: Optional[str] = Query(None, description="Exact user id"),
@@ -587,6 +704,178 @@ def register(router):
                 all_unique.add(block["ip"])
         payload["meta"]["unique_ip_count_including_attacks"] = len(all_unique)
         return payload
+
+    @router.get("/admin/investigate/account-compare")
+    async def admin_investigate_account_compare(
+        user_a: str = Query(..., min_length=1, description="Username or user id for first account"),
+        user_b: str = Query(..., min_length=1, description="Username or user id for second account"),
+        days: int = Query(90, ge=1, le=365, description="Window for attack and transaction evidence"),
+        current_user: dict = Depends(require_admin_or_mod),
+    ):
+        """Compare two accounts for shared access signals and direct value movement."""
+        def _looks_user_id(raw: str) -> bool:
+            s = (raw or "").strip()
+            compact = s.replace("-", "")
+            return bool(
+                re.match(r"^[0-9a-fA-F]{24}$", s)
+                or re.match(r"^[0-9a-fA-F]{32}$", compact)
+                or re.match(r"^[0-9a-fA-F-]{36}$", s)
+            )
+
+        async def _resolve_any(raw: str) -> Dict[str, Any]:
+            q = (raw or "").strip()
+            if _looks_user_id(q):
+                return await _resolve_investigate_user(q, None)
+            return await _resolve_investigate_user(None, q)
+
+        ua = await _resolve_any(user_a)
+        ub = await _resolve_any(user_b)
+        uid_a = ua.get("id")
+        uid_b = ub.get("id")
+        if not uid_a or not uid_b:
+            raise HTTPException(status_code=404, detail="One or both accounts could not be resolved")
+        if uid_a == uid_b:
+            raise HTTPException(status_code=400, detail="Choose two different accounts")
+
+        attack_a = await _attack_ips_for_user(uid_a, days, 60)
+        attack_b = await _attack_ips_for_user(uid_b, days, 60)
+        ip_sources_a = _account_ip_sources(ua, attack_a)
+        ip_sources_b = _account_ip_sources(ub, attack_b)
+        shared_ip_values = sorted(set(ip_sources_a.keys()) & set(ip_sources_b.keys()))
+
+        shared_ips: List[Dict[str, Any]] = []
+        for ipn in shared_ip_values[:MAX_IP_GEO_LOOKUPS]:
+            g = await get_or_fetch_ip_geodata(db, ipn)
+            shared_ips.append(
+                {
+                    "ip": ipn,
+                    "user_a_sources": sorted(ip_sources_a.get(ipn) or []),
+                    "user_b_sources": sorted(ip_sources_b.get(ipn) or []),
+                    "network": network_label(g) if g.get("ok") else None,
+                    "country": g.get("country"),
+                    "countryCode": g.get("countryCode"),
+                    "regionName": g.get("regionName"),
+                    "city": g.get("city"),
+                    "isp": g.get("isp"),
+                    "org": g.get("org"),
+                    "as_field": g.get("as_field"),
+                    "asname": g.get("asname"),
+                    "mobile": g.get("mobile"),
+                    "hosting": g.get("hosting"),
+                    "proxy": g.get("proxy"),
+                    "geo_ok": g.get("ok"),
+                    "geo_error": g.get("error"),
+                }
+            )
+
+        dev_a = _session_device_summary(ua)
+        dev_b = _session_device_summary(ub)
+        same_fingerprint = bool(ua.get("device_fingerprint") and ua.get("device_fingerprint") == ub.get("device_fingerprint"))
+        shared_devices = {
+            "same_device_fingerprint": same_fingerprint,
+            "device_fingerprint_a": ua.get("device_fingerprint"),
+            "device_fingerprint_b": ub.get("device_fingerprint"),
+            "shared_device_types": sorted(dev_a["device_types"] & dev_b["device_types"]),
+            "shared_user_agents": sorted(dev_a["user_agents"] & dev_b["user_agents"])[:10],
+        }
+
+        money_rows = await _bilateral_rows(
+            db.money_transfers,
+            uid_a,
+            uid_b,
+            date_field="created_at",
+            projection={"_id": 0},
+            days=days,
+            limit=100,
+        )
+        points_rows = await _bilateral_rows(
+            db.points_transfers,
+            uid_a,
+            uid_b,
+            date_field="created_at",
+            projection={"_id": 0},
+            days=days,
+            limit=100,
+        )
+        vault_rows = await _family_vault_between_users(uid_a, uid_b, days, 60)
+        car_rows = await _exclusive_car_between_users(uid_a, uid_b, days, 60)
+
+        def _sum_amount(rows: List[Dict[str, Any]], field: str = "amount") -> int:
+            total = 0
+            for row in rows:
+                try:
+                    total += int(row.get(field) or 0)
+                except Exception:
+                    pass
+            return total
+
+        def _sum_by_direction(rows: List[Dict[str, Any]], field: str = "amount") -> Dict[str, int]:
+            a_to_b = 0
+            b_to_a = 0
+            for row in rows:
+                try:
+                    amt = int(row.get(field) or 0)
+                except Exception:
+                    amt = 0
+                if row.get("from_user_id") == uid_a and row.get("to_user_id") == uid_b:
+                    a_to_b += amt
+                elif row.get("from_user_id") == uid_b and row.get("to_user_id") == uid_a:
+                    b_to_a += amt
+            return {"a_to_b": a_to_b, "b_to_a": b_to_a}
+
+        quicktrade_rows = [r for r in money_rows + points_rows if (r.get("transfer_kind") == "quicktrade" or r.get("qt_anonymize_from") or r.get("qt_anonymize_to"))]
+        direct_money = [r for r in money_rows if not r.get("transfer_kind") and not r.get("transfer_type")]
+        registration_shared = bool(
+            normalize_ip(ua.get("registration_ip"))
+            and normalize_ip(ua.get("registration_ip")) == normalize_ip(ub.get("registration_ip"))
+        )
+
+        findings: List[Dict[str, Any]] = []
+        if registration_shared:
+            findings.append({"severity": "warn", "code": "shared_registration_ip", "title": "Shared registration IP", "detail": "Both accounts registered from the same normalized IP."})
+        if same_fingerprint:
+            findings.append({"severity": "critical", "code": "same_device_fingerprint", "title": "Same device fingerprint", "detail": "Both accounts have the same stored device fingerprint."})
+        if shared_ips:
+            findings.append({"severity": "info", "code": "shared_ips", "title": "Shared IP activity", "detail": f"{len(shared_ip_values)} shared IP(s) found across login/session/attack sources."})
+        if money_rows or points_rows:
+            findings.append({"severity": "warn", "code": "direct_transfers", "title": "Direct value movement", "detail": f"{len(money_rows)} cash and {len(points_rows)} points transfer row(s) between the accounts."})
+        if quicktrade_rows:
+            findings.append({"severity": "warn", "code": "quicktrade_between_accounts", "title": "Quick Trade between accounts", "detail": f"{len(quicktrade_rows)} transfer row(s) look related to Quick Trade movement."})
+
+        return {
+            "report_type": "account_compare",
+            "window_days": int(days),
+            "users": {
+                "a": _compare_user_snapshot(ua),
+                "b": _compare_user_snapshot(ub),
+            },
+            "shared_ips": shared_ips,
+            "shared_ip_count": len(shared_ip_values),
+            "shared_ip_truncated": len(shared_ip_values) > MAX_IP_GEO_LOOKUPS,
+            "shared_devices": shared_devices,
+            "transactions": {
+                "money_transfers": money_rows,
+                "points_transfers": points_rows,
+                "family_vault_transactions": vault_rows,
+                "exclusive_car_events": car_rows,
+            },
+            "summary": {
+                "shared_registration_ip": registration_shared,
+                "same_device_fingerprint": same_fingerprint,
+                "shared_ip_count": len(shared_ip_values),
+                "money_transfer_count": len(money_rows),
+                "points_transfer_count": len(points_rows),
+                "direct_cash_transfer_count": len(direct_money),
+                "quicktrade_transfer_count": len(quicktrade_rows),
+                "cash_moved_total": _sum_amount(money_rows),
+                "points_moved_total": _sum_amount(points_rows),
+                "cash_by_direction": _sum_by_direction(money_rows),
+                "points_by_direction": _sum_by_direction(points_rows),
+                "family_vault_row_count": len(vault_rows),
+                "exclusive_car_event_count": len(car_rows),
+            },
+            "findings": findings,
+        }
 
     @router.get("/admin/investigate/account-access-report")
     async def admin_investigate_account_access_report(

@@ -173,6 +173,22 @@ function getAttackExecuteCodePayload(attack) {
   return legacy.length >= 16 ? { execute_token: legacy } : null;
 }
 
+function getTravelCodePayload(travelInfo) {
+  const codeName = String(travelInfo?.travel_code_name || '').trim();
+  if (
+    codeName
+    && Object.prototype.hasOwnProperty.call(travelInfo || {}, codeName)
+    && typeof travelInfo[codeName] === 'string'
+    && travelInfo[codeName].trim().length >= 16
+  ) {
+    return {
+      travel_code_name: codeName,
+      [codeName]: travelInfo[codeName].trim(),
+    };
+  }
+  return {};
+}
+
 function isAttackExecuteCodeError(error) {
   const detail = error?.response?.data?.detail;
   const msg = typeof detail === 'string'
@@ -1778,7 +1794,11 @@ export default function Attack() {
     if (!travelModalDestination) return;
     setTravelSubmitLoading(true);
     try {
-      const response = await api.post('/travel', { destination: travelModalDestination, travel_method: method });
+      const response = await api.post('/travel', {
+        destination: travelModalDestination,
+        travel_method: method,
+        ...getTravelCodePayload(travelInfo),
+      });
       const travelTime = response.data?.travel_time ?? 0;
       if (travelTime <= 0) {
         toast.success(response.data?.message || `Traveled to ${travelModalDestination}`);
@@ -1791,7 +1811,8 @@ export default function Attack() {
         setTravelCountdown(travelTime);
       }
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Travel failed');
+      const detail = error.response?.data?.detail;
+      toast.error((detail && typeof detail === 'object' ? detail.detail : detail) || 'Travel failed');
     } finally {
       setTravelSubmitLoading(false);
     }

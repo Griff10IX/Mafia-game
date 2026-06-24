@@ -1,12 +1,15 @@
 # Travel (info, travel, buy-airmiles) and Airports (list, claim, set-price, transfer, sell-on-trade)
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Any, Dict, Optional, Set
 import asyncio
+import hashlib
+import hmac
+import os
 import random
 import time
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from bson.objectid import ObjectId
 
 from utils.claim_costs import load_claim_costs
@@ -18,6 +21,7 @@ from server import (
     STATES,
     CARS,
     TRAVEL_TIMES,
+    SECRET_KEY,
     get_rank_info,
     user_prestige_rank_mult,
     CAPO_RANK_ID,
@@ -50,11 +54,85 @@ TRAVEL_TOKEN_CAR_TIME_MIN = 3
 USER_CARS_FETCH_LIMIT = 5000
 TRAVEL_CUSTOM_ROWS_MAX = 20
 TRAVEL_IMMUNE_ROWS_MAX = 50
+_TRAVEL_CODE_PREFIX = "tc_"
 
 # Catalog ids for rarities that must always appear in /travel/info (bulk query is capped).
 _TRAVEL_ALWAYS_INCLUDE_CAR_IDS = frozenset(
     c["id"] for c in (CARS or []) if c.get("rarity") in ("exclusive", "loot_exclusive")
 )
+
+
+def _travel_code_bucket_seconds() -> int:
+    try:
+        return max(900, int(os.getenv("TRAVEL_CODE_BUCKET_SECONDS", "7200") or "7200"))
+    except Exception:
+        return 7200
+
+
+def _travel_code_bucket(now: Optional[float] = None) -> int:
+    return int((time.time() if now is None else now) // _travel_code_bucket_seconds())
+
+
+def _travel_code_field_name(bucket: Optional[int] = None) -> str:
+    b = _travel_code_bucket() if bucket is None else int(bucket)
+    secret = str(SECRET_KEY or "travel-code").encode("utf-8", "ignore")
+    digest = hmac.new(secret, f"travel-code-field:{b}".encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{_TRAVEL_CODE_PREFIX}{digest[:16]}"
+
+
+def _accepted_travel_code_field_names() -> Set[str]:
+    b = _travel_code_bucket()
+    return {_travel_code_field_name(b), _travel_code_field_name(b - 1)}
+
+
+def _travel_code_value(user_id: str, bucket: Optional[int] = None) -> str:
+    b = _travel_code_bucket() if bucket is None else int(bucket)
+    secret = str(SECRET_KEY or "travel-code").encode("utf-8", "ignore")
+    digest = hmac.new(secret, f"travel-code-value:{user_id}:{b}".encode("utf-8"), hashlib.sha256).hexdigest()
+    return digest[:48]
+
+
+def _travel_code_payload(user_id: str) -> Dict[str, Any]:
+    name = _travel_code_field_name()
+    return {
+        "travel_code_name": name,
+        "travel_code_bucket": _travel_code_bucket(),
+        name: _travel_code_value(user_id),
+    }
+
+
+def _valid_travel_code(user_id: str, submitted: Optional[str]) -> bool:
+    s = (submitted or "").strip()
+    if len(s) < 16:
+        return False
+    b = _travel_code_bucket()
+    for candidate in (_travel_code_value(user_id, b), _travel_code_value(user_id, b - 1)):
+        if hmac.compare_digest(candidate, s):
+            return True
+    return False
+
+
+async def _submitted_travel_code(payload: "TravelRequest", req: Request) -> Optional[str]:
+    body: Dict[str, Any] = {}
+    try:
+        raw = await req.json()
+        if isinstance(raw, dict):
+            body = raw
+    except Exception:
+        body = {}
+
+    names = _accepted_travel_code_field_names()
+    hinted = body.get("travel_code_name")
+    if isinstance(hinted, str) and hinted in names:
+        val = body.get(hinted)
+        if isinstance(val, str) and len(val.strip()) >= 16:
+            return val.strip()
+    for name in names:
+        val = body.get(name)
+        if isinstance(val, str) and len(val.strip()) >= 16:
+            return val.strip()
+    legacy = (payload.travel_code or "").strip()
+    return legacy if len(legacy) >= 16 else None
 
 
 async def _fetch_travel_user_cars(user_id: str) -> tuple[list, list, list]:
@@ -198,11 +276,14 @@ def _invalidate_airports_list_cache():
 
 # ----- Models -----
 class TravelRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     destination: str
     travel_method: str  # car_id or "airport"
     airport_slot: Optional[int] = None  # 1-4 when travel_method == "airport"
     # When true, applies booze-run car damage (0.3% / leg) and allows car travel while carrying booze (same as Auto Rank booze).
     booze_run: bool = False
+    travel_code: Optional[str] = None
 
 
 class AirportClaimRequest(BaseModel):
@@ -408,6 +489,7 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
         "carrying_booze": carrying_booze,
         "travel_boost_applies_to_car_times": _travel_token_active(current_user, now_utc),
         "location_climate": get_location_climate(now_utc),
+        **_travel_code_payload(uid),
     }
 
     if len(_travel_info_cache) >= _TRAVEL_INFO_MAX_ENTRIES:
@@ -611,12 +693,36 @@ async def _start_travel_impl(
     }
 
 
-async def travel(request: TravelRequest, current_user: dict = Depends(get_current_user)):
+async def travel(request: TravelRequest, req: Request, current_user: dict = Depends(get_current_user)):
     # Only block when Auto Rank is actually on; stale auto_rank_booze after trial expiry must not lock travel.
     if current_user.get("auto_rank_booze") and current_user.get("auto_rank_enabled"):
         raise HTTPException(
             status_code=400,
             detail="Manual travel is disabled while Auto Rank booze running is on. Turn off booze running in Auto Rank to travel.",
+        )
+    submitted_code = await _submitted_travel_code(request, req)
+    if not _valid_travel_code(current_user.get("id") or "", submitted_code):
+        try:
+            from utils.staff_bot_client_alert import maybe_notify_staff_travel_code_fail
+
+            await maybe_notify_staff_travel_code_fail(
+                db=db,
+                request=req,
+                user_id=current_user.get("id") or "",
+                username=current_user.get("username") or "",
+                destination=request.destination,
+                travel_method=request.travel_method,
+                airport_slot=request.airport_slot,
+                source="travel",
+            )
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "travel_code_invalid",
+                "detail": "Travel refreshed. Reload travel options and try again.",
+            },
         )
     return await _start_travel_impl(
         current_user,
