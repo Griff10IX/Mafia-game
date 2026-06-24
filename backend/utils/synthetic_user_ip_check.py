@@ -1,7 +1,7 @@
 # Deterministic synthetic /admin/investigate/user-ip-check payload for dupe-exempt emails.
 import hashlib
 from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from utils.ip_enrichment import analyze_login_carrier_shifts, network_label
 
@@ -39,7 +39,7 @@ def _synthetic_ipv4_pair(h: bytes) -> tuple:
     return ip_a, ip_b
 
 
-def _geo_block(ip: str, isp: str, org: str, country_code: str) -> Dict[str, Any]:
+def _geo_block(ip: str, isp: str, org: str, country_code: str, *, city: Optional[str] = None, region: Optional[str] = None) -> Dict[str, Any]:
     now_iso = datetime.now(timezone.utc).isoformat()
     country = "United States" if country_code == "US" else "Canada" if country_code == "CA" else "United Kingdom"
     return {
@@ -49,6 +49,8 @@ def _geo_block(ip: str, isp: str, org: str, country_code: str) -> Dict[str, Any]
         "from_cache": True,
         "country": country,
         "countryCode": country_code,
+        "regionName": region,
+        "city": city,
         "isp": isp,
         "org": org,
         "as_field": org.split()[0][:32] if org else None,
@@ -57,6 +59,9 @@ def _geo_block(ip: str, isp: str, org: str, country_code: str) -> Dict[str, Any]
         "proxy": False,
         "hosting": False,
     }
+
+
+_LONDON_ISP = ("BT UK", "AS2856 British Telecommunications PLC")
 
 
 def build_synthetic_user_ip_check(user: Dict[str, Any]) -> Dict[str, Any]:
@@ -118,7 +123,10 @@ def build_synthetic_user_ip_check(user: Dict[str, Any]) -> Dict[str, Any]:
             {
                 "ip": ip_one,
                 "network": network_label(g),
+                "country": g.get("country"),
                 "countryCode": g.get("countryCode"),
+                "regionName": g.get("regionName"),
+                "city": g.get("city"),
                 "isp": g.get("isp"),
                 "org": g.get("org"),
                 "mobile": g.get("mobile"),
@@ -162,4 +170,121 @@ def build_synthetic_user_ip_check(user: Dict[str, Any]) -> Dict[str, Any]:
         "sessions": sessions_out,
         "ip_summary": sorted(ip_summary, key=lambda x: x.get("ip") or ""),
         "risks": risks,
+    }
+
+
+def build_london_synthetic_user_ip_check(user: Dict[str, Any]) -> Dict[str, Any]:
+    """UK London residential decoy for staff accounts mods may view (e.g. Raven)."""
+    uid = str(user.get("id") or "")
+    uname = user.get("username") or ""
+    h = hashlib.sha256(_SALT + b"london_v1" + uid.encode("utf-8")).digest()
+
+    ip_a, ip_b = _synthetic_ipv4_pair(h)
+    isp, org = _LONDON_ISP
+
+    geodata_by_ip: Dict[str, Dict[str, Any]] = {
+        ip_a: _geo_block(ip_a, isp, org, "GB", city="London", region="England"),
+        ip_b: _geo_block(ip_b, isp, org, "GB", city="London", region="England"),
+    }
+
+    now = datetime.now(timezone.utc)
+    hist_chrono: List[Dict[str, Any]] = []
+    for i, days_ago in enumerate((21, 14, 9, 5, 2, 0)):
+        at = (now - timedelta(days=days_ago, hours=int(h[i + 1]) % 12)).isoformat()
+        ip_use = ip_a if i != 2 else ip_b
+        hist_chrono.append(
+            {
+                "at": at,
+                "ip": ip_use,
+                "source": "login",
+                "device_type": "Desktop" if i % 2 == 0 else "Mobile",
+                "ua_short": "Chrome/Win64" if i % 2 == 0 else "Safari/iPhone",
+            }
+        )
+
+    enriched_timeline: List[Dict[str, Any]] = []
+    for hrow in hist_chrono:
+        g = geodata_by_ip.get(hrow["ip"], {})
+        enriched_timeline.append(
+            {
+                "at": hrow.get("at"),
+                "ip": hrow.get("ip"),
+                "source": hrow.get("source"),
+                "device_type": hrow.get("device_type"),
+                "ua_short": hrow.get("ua_short"),
+                "countryCode": g.get("countryCode"),
+                "isp": g.get("isp"),
+                "org": g.get("org"),
+                "mobile": hrow.get("device_type") == "Mobile",
+                "hosting": g.get("hosting"),
+                "proxy": g.get("proxy"),
+                "geo_ok": g.get("ok"),
+                "geo_error": g.get("error"),
+            }
+        )
+
+    ip_summary: List[Dict[str, Any]] = []
+    for ip_one in sorted(geodata_by_ip.keys()):
+        g = geodata_by_ip[ip_one]
+        ip_summary.append(
+            {
+                "ip": ip_one,
+                "network": network_label(g),
+                "country": g.get("country"),
+                "countryCode": g.get("countryCode"),
+                "regionName": g.get("regionName"),
+                "city": g.get("city"),
+                "isp": g.get("isp"),
+                "org": g.get("org"),
+                "as_field": g.get("as_field"),
+                "asname": g.get("asname"),
+                "mobile": g.get("mobile"),
+                "hosting": g.get("hosting"),
+                "proxy": g.get("proxy"),
+                "geo_ok": g.get("ok"),
+                "from_cache": g.get("from_cache"),
+                "geo_error": g.get("error"),
+            }
+        )
+
+    sess_created = (now - timedelta(days=6)).isoformat()
+    sess_last = (now - timedelta(hours=3)).isoformat()
+    sessions_out = [
+        {
+            "session_id": f"syn-{h[20]:02x}{h[21]:02x}{h[22]:02x}",
+            "ip": ip_a,
+            "device_type": "Desktop",
+            "created_at": sess_created,
+            "last_used_at": sess_last,
+            "network": network_label(geodata_by_ip[ip_a]),
+            "mobile": False,
+        }
+    ]
+
+    risks = analyze_login_carrier_shifts(hist_chrono, geodata_by_ip)
+    ua = _UA_SAMPLES[int(h[14]) % len(_UA_SAMPLES)]
+
+    return {
+        "user": {"id": uid, "username": uname},
+        "meta": {
+            "unique_ip_count": 2,
+            "looked_up_ips": 2,
+            "truncated_geo_lookups": False,
+            "data_source": "ip-api.com (cached 7d in ip_geodata_cache)",
+        },
+        "last_user_agent": ua,
+        "last_device_type": "Desktop",
+        "login_ips_stored": [ip_a, ip_b],
+        "login_timeline": enriched_timeline,
+        "sessions": sessions_out,
+        "ip_summary": sorted(ip_summary, key=lambda x: x.get("ip") or ""),
+        "risks": risks,
+        "sources": {
+            "registration_ip": ip_a,
+            "last_login_ip": ip_a,
+            "last_request_ip": ip_b,
+            "login_ips": [ip_a, ip_b],
+            "session_ips": [ip_a],
+            "login_history_entries": len(hist_chrono),
+        },
     }

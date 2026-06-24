@@ -798,6 +798,8 @@ class UserResponse(BaseModel):
     crew_oc_timer_reduced: bool = False
     admin_ghost_mode: bool = False
     admin_acting_as_normal: bool = False
+    admin_preview_as_mod: bool = False
+    admin_preview_as_mod_seconds_remaining: Optional[int] = None
     casino_profit: int = 0  # $ from owned casino table
     property_profit: int = 0  # points from owned property (e.g. airport)
     has_casino_or_property: bool = False  # true if user owns a casino or property (airport, bullet factory, armory) — for menu visibility
@@ -2357,19 +2359,15 @@ DUPE_DETECTION_EXEMPT_EMAILS = (
 
 
 def _dupe_exempt_email_nor_clauses() -> List[dict]:
-    """$nor subclauses for exact email match (case-insensitive), same pattern as admin email exclusion."""
-    emails = [e for e in (DUPE_DETECTION_EXEMPT_EMAILS or []) if e and str(e).strip()]
-    if not emails:
-        return []
-    return [{"email": re.compile("^" + re.escape(e) + "$", re.IGNORECASE)} for e in emails]
+    from utils.staff_mod_protection import dupe_exempt_email_nor_clauses as _clauses
+
+    return _clauses()
 
 
 def user_has_dupe_exempt_email(user: Optional[dict]) -> bool:
-    """True if user's email is listed in DUPE_DETECTION_EXEMPT_EMAILS (env)."""
-    if not user:
-        return False
-    em = str(user.get("email") or "").strip().lower()
-    return bool(em and em in (DUPE_DETECTION_EXEMPT_EMAILS or []))
+    from utils.staff_mod_protection import user_has_dupe_exempt_email as _has
+
+    return _has(user)
 
 
 def cheat_detection_users_match(extra: Optional[dict] = None) -> dict:
@@ -2540,9 +2538,18 @@ async def resolve_gambling_log_buy_back(offer_id: str, outcome: str, points_cred
 
 
 def _is_admin(user: dict) -> bool:
-    """True if user has admin email and is not currently acting as normal user."""
+    """True if user has admin email and is not currently acting as normal user or mod preview."""
     em = str(user.get("email") or "").strip().lower()
-    return bool(em and em in ADMIN_EMAILS) and not user.get("admin_acting_as_normal", False)
+    if user.get("admin_acting_as_normal", False):
+        return False
+    try:
+        from utils.staff_mod_protection import admin_mod_preview_active
+
+        if admin_mod_preview_active(user):
+            return False
+    except Exception:
+        pass
+    return bool(em and em in ADMIN_EMAILS)
 
 
 def user_has_mod_list_email(user: Optional[dict]) -> bool:
@@ -2554,7 +2561,14 @@ def user_has_mod_list_email(user: Optional[dict]) -> bool:
 
 
 def _is_moderator(user: dict) -> bool:
-    """True if user is promoted in DB or their email is listed in MOD_EMAILS (env), same pattern as admin email list."""
+    """True if user is promoted in DB, MOD_EMAILS, or an admin in temporary mod-preview mode."""
+    try:
+        from utils.staff_mod_protection import admin_mod_preview_active
+
+        if admin_mod_preview_active(user) and user_has_admin_list_email(user):
+            return True
+    except Exception:
+        pass
     return bool(user.get("is_moderator")) or user_has_mod_list_email(user)
 
 

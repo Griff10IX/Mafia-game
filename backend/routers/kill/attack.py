@@ -2688,6 +2688,22 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             await release_redeem_slots_for_deceased_user(db, victim_id)
         except Exception:
             logger.exception("release_redeem_slots_for_deceased_user (attack victim)")
+        # Snapshot estate fields immediately so Dead > Alive cannot claim before points_at_death is set.
+        from routers.kill.armoury import TOKEN_CONFIG as _TOKEN_CONFIG_DEATH
+
+        _tokens_at_death_immediate = {}
+        for _token_type, _cfg in _TOKEN_CONFIG_DEATH.items():
+            _tokens_at_death_immediate[_cfg["count_field"]] = int(death_claim.get(_cfg["count_field"], 0) or 0)
+        await db.users.update_one(
+            {"id": victim_id},
+            {
+                "$set": {
+                    "points_at_death": int(death_claim.get("points", 0) or 0),
+                    "money_at_death": 0,
+                    "tokens_at_death": _tokens_at_death_immediate,
+                }
+            },
+        )
         victim_money = max(0, int(death_claim.get("money", 0) or 0))
         base_cash_loot = int(victim_money * KILL_CASH_PERCENT)
         rank_points = 25

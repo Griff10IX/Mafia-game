@@ -18,12 +18,14 @@ async def build_staff_flags_payload(db, current_user: Dict[str, Any]) -> Dict[st
     _is_hdo = srv._is_hdo
     _is_entertainer = srv._is_entertainer
     user_has_admin_list_email = getattr(srv, "user_has_admin_list_email", lambda _u: False)
+    from utils.staff_mod_protection import admin_mod_preview_active, admin_mod_preview_seconds_remaining
 
     is_admin = _is_admin(current_user)
     is_moderator = _is_moderator(current_user)
     is_help_desk_operator = _is_hdo(current_user)
     has_admin_email = user_has_admin_list_email(current_user)
     is_entertainer = _is_entertainer(current_user)
+    preview_active = admin_mod_preview_active(current_user)
     out: Dict[str, Any] = {
         "is_admin": is_admin,
         "is_moderator": is_moderator,
@@ -33,6 +35,8 @@ async def build_staff_flags_payload(db, current_user: Dict[str, Any]) -> Dict[st
         "staff_login_session": bool(current_user.get("_jwt_staff_issued")),
         "staff_portal_enabled": staff_portal_password_configured(),
         "staff_portal_session_minutes": staff_portal_session_minutes(),
+        "admin_preview_as_mod": preview_active,
+        "admin_preview_as_mod_seconds_remaining": admin_mod_preview_seconds_remaining(current_user),
     }
     if is_moderator:
         doc = await db.game_settings.find_one({"key": "mod_visible_category_ids"}, {"_id": 0, "value": 1})
@@ -41,6 +45,8 @@ async def build_staff_flags_payload(db, current_user: Dict[str, Any]) -> Dict[st
             merged = list(raw)
             if "admin-world-systems" not in merged:
                 merged.append("admin-world-systems")
+            if "admin-analytics-monitoring" not in merged:
+                merged.append("admin-analytics-monitoring")
             out["mod_visible_category_ids"] = merged
         else:
             out["mod_visible_category_ids"] = list(mod_visible_default)

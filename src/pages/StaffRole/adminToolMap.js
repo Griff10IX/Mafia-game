@@ -13,6 +13,21 @@ export const LISTED_ONLY_STAFF_CATEGORY = { id: 'admin-listed-recovery', label: 
 /** Default category tabs visible to moderators (admins can narrow via Staff → Categories). */
 export const MOD_ONLY_CATEGORY_IDS = ADMIN_CATEGORIES.map((c) => c.id);
 
+/** Standalone /tjjeujr3wa/* routes moderators may open (sidebar, mobile, AdminShell strip). */
+export const MOD_STAFF_ROUTE_IDS = [
+  'overview',
+  'users-online',
+  'witness-statements',
+  'attack-logs',
+  'ip-history',
+  'account-compare',
+];
+
+export function modStaffRouteGroups(allGroups = ADMIN_ROUTE_GROUPS) {
+  const allowed = new Set(MOD_STAFF_ROUTE_IDS);
+  return allGroups.filter((g) => allowed.has(g.id));
+}
+
 export const ADMIN_CATEGORY_MOBILE_SHORT = {
   'admin-operations': 'Ops',
   'admin-economy-progression': 'Economy',

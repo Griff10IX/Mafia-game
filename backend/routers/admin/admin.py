@@ -1331,11 +1331,43 @@ def register(router):
         # which would lock listed admins out of toggling the flag back off.
         if not user_has_admin_list_email(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
+        update: Dict[str, Any] = {"$set": {"admin_acting_as_normal": bool(acting)}}
+        if acting:
+            update["$unset"] = {"admin_preview_as_mod_until": ""}
+        await db.users.update_one({"id": current_user["id"]}, update)
+        return {"admin_acting_as_normal": bool(acting), "message": "Act as normal user " + ("on" if acting else "off")}
+
+    @router.post("/admin/preview-as-mod")
+    async def admin_preview_as_mod(enabled: bool, current_user: dict = Depends(get_current_user)):
+        """Temporarily use moderator-only tools (30 minutes) to verify mod experience. Admin only."""
+        from utils.staff_mod_protection import ADMIN_MOD_PREVIEW_MINUTES
+
+        if not user_has_admin_list_email(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if enabled:
+            until = datetime.now(timezone.utc) + timedelta(minutes=ADMIN_MOD_PREVIEW_MINUTES)
+            await db.users.update_one(
+                {"id": current_user["id"]},
+                {
+                    "$set": {"admin_preview_as_mod_until": until.isoformat()},
+                    "$unset": {"admin_acting_as_normal": ""},
+                },
+            )
+            secs = int(ADMIN_MOD_PREVIEW_MINUTES * 60)
+            return {
+                "admin_preview_as_mod": True,
+                "admin_preview_as_mod_seconds_remaining": secs,
+                "message": f"Moderator preview enabled for {ADMIN_MOD_PREVIEW_MINUTES} minutes.",
+            }
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$set": {"admin_acting_as_normal": bool(acting)}}
+            {"$unset": {"admin_preview_as_mod_until": ""}},
         )
-        return {"admin_acting_as_normal": bool(acting), "message": "Act as normal user " + ("on" if acting else "off")}
+        return {
+            "admin_preview_as_mod": False,
+            "admin_preview_as_mod_seconds_remaining": None,
+            "message": "Moderator preview disabled. Full admin tools restored.",
+        }
 
     @router.post("/admin/change-rank")
     async def admin_change_rank(
@@ -6541,10 +6573,13 @@ def register(router):
     @router.post("/admin/lock-player")
     async def admin_lock_player(target_username: str, lock_minutes: int = 0, current_user: dict = Depends(require_admin_or_mod)):
         """Lock account for investigation: user can only access /locked page and submit one comment until unlocked. lock_minutes ignored (kept for API compat). Admin or moderator."""
+        from utils.staff_mod_protection import assert_mod_may_target_user
+
         username_pattern = _username_pattern(target_username)
         target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
+        assert_mod_may_target_user(current_user, target)
         now_iso = datetime.now(timezone.utc).isoformat()
         await db.users.update_one(
             {"id": target["id"]},
@@ -6568,6 +6603,9 @@ def register(router):
         target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1, "email": 1})
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
+        from utils.staff_mod_protection import assert_mod_may_target_user
+
+        assert_mod_may_target_user(current_user, target)
         await db.users.update_one(
             {"id": target["id"]},
             {
@@ -6585,9 +6623,12 @@ def register(router):
         """List users currently locked for investigation (username, comment, dates). Admin or moderator."""
         cursor = db.users.find(
             {"account_locked": True},
-            {"_id": 0, "username": 1, "account_locked_at": 1, "account_locked_until": 1, "account_locked_comment": 1, "account_locked_comment_at": 1, "account_locked_admin_message": 1, "account_locked_admin_message_at": 1, "account_locked_user_reply": 1, "account_locked_user_reply_at": 1},
+            {"_id": 0, "username": 1, "email": 1, "account_locked_at": 1, "account_locked_until": 1, "account_locked_comment": 1, "account_locked_comment_at": 1, "account_locked_admin_message": 1, "account_locked_admin_message_at": 1, "account_locked_user_reply": 1, "account_locked_user_reply_at": 1},
         )
         users = await cursor.to_list(100)
+        from utils.staff_mod_protection import filter_admin_accounts
+
+        users = filter_admin_accounts(users, current_user)
         return {"locked": users}
 
     @router.get("/admin/users-online-live")
@@ -6624,8 +6665,12 @@ def register(router):
             },
         )
         raw = await cursor.to_list(200)
+        from utils.staff_mod_protection import actor_has_full_admin_powers, user_is_admin_account
+
         users = []
         for u in raw:
+            if not actor_has_full_admin_powers(current_user) and user_is_admin_account(u):
+                continue
             if (user_has_admin_list_email(u) or _is_moderator(u)) and u.get("admin_ghost_mode"):
                 continue
             ip = _normalize_ip(u.get("last_request_ip") or u.get("last_login_ip") or "")
@@ -6663,20 +6708,16 @@ def register(router):
                 "auto_rank_idle": bool(u.get("auto_rank_idle")),
                 "forced_online": is_forced_online,
                 "last_seen_recent": last_seen_recent,
-                "_dupe_exempt": bool(user_has_dupe_exempt_email(u)),
             })
-        # Same-IP badge: ignore DUPE_DETECTION_EXEMPT_EMAILS accounts (not counted, never show linked).
+        # Same-IP badge: dupe-exempt accounts are not counted (includes admins silently).
         ip_counts = {}
         for u in users:
-            if u.get("_dupe_exempt"):
+            if user_has_dupe_exempt_email(u):
                 continue
             ip = u.get("ip")
             if ip:
                 ip_counts[ip] = ip_counts.get(ip, 0) + 1
         for u in users:
-            if u.pop("_dupe_exempt", False):
-                u["same_ip_online_count"] = 0
-                continue
             ip = u.get("ip")
             same = (ip_counts.get(ip, 0) - 1) if ip else 0
             u["same_ip_online_count"] = max(0, same)
@@ -6711,9 +6752,12 @@ def register(router):
     async def admin_locked_account_message(body: LockedAccountMessageBody, current_user: dict = Depends(require_admin_or_mod)):
         """Leave a message for a locked user; they see it on the locked page and can reply once. Admin or moderator."""
         username_pattern = _username_pattern(body.target_username)
-        target = await db.users.find_one({"username": username_pattern, "account_locked": True}, {"_id": 0, "id": 1, "username": 1})
+        target = await db.users.find_one({"username": username_pattern, "account_locked": True}, {"_id": 0, "id": 1, "username": 1, "email": 1})
         if not target:
             raise HTTPException(status_code=404, detail="User not found or not locked")
+        from utils.staff_mod_protection import assert_mod_may_target_user
+
+        assert_mod_may_target_user(current_user, target)
         msg = (body.message or "").strip()[:2000]
         now_iso = datetime.now(timezone.utc).isoformat()
         await db.users.update_one(
@@ -6724,10 +6768,13 @@ def register(router):
 
     @router.post("/admin/kill-player")
     async def admin_kill_player(target_username: str, current_user: dict = Depends(require_admin_or_mod)):
+        from utils.staff_mod_protection import assert_mod_may_target_user
+
         username_pattern = _username_pattern(target_username)
         target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
+        assert_mod_may_target_user(current_user, target)
         if target.get("is_dead"):
             raise HTTPException(status_code=400, detail="That account is already dead")
         if target.get("id") == current_user.get("id"):
@@ -6758,6 +6805,7 @@ def register(router):
                 "money_at_death": int(target.get("money", 0) or 0),
                 "tokens_at_death": tokens_at_death,
                 "money": 0,
+                "points": 0,
                 "health": 0,
             }, "$inc": {"total_deaths": 1}}
         )
@@ -16302,7 +16350,7 @@ def register(router):
                 })
             password_reset_heavy_users.sort(key=lambda g: (-g["risk_score"], -g["reset_count"]))
 
-        return {
+        report = {
             "same_ip_groups": same_ip_groups[:80],
             "total_same_ip_groups": len(same_ip_groups),
             "same_subnet_groups": same_subnet_groups[:40],
@@ -16347,6 +16395,9 @@ def register(router):
             "password_reset_heavy_users": password_reset_heavy_users[:60],
             "total_password_reset_heavy_users": len(password_reset_heavy_users),
         }
+        from utils.staff_mod_protection import sanitize_dupe_intel_report_for_actor
+
+        return sanitize_dupe_intel_report_for_actor(report, current_user)
 
     @router.get("/admin/cheat-detection/proxy-farm")
     async def admin_cheat_proxy_farm_report(
@@ -16388,6 +16439,9 @@ def register(router):
             full = await db.users.find_one({"id": user["id"]}, proj)
             if not full:
                 raise HTTPException(status_code=404, detail="User not found")
+            from utils.staff_mod_protection import assert_mod_may_target_user
+
+            assert_mod_may_target_user(current_user, full)
             profile = await assess_user_proxy_profile(
                 db,
                 full,

@@ -200,8 +200,11 @@ async def enrich_account_access_report(
     attack_days: int = 90,
     ip_overlap_limit: int = 12,
     accounts_per_ip_limit: int = 15,
+    actor: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Add devices, IP overlap, fingerprint matches, findings, and staff checklist."""
+    from utils.staff_mod_protection import filter_investigation_linked_accounts
+
     uid = user["id"]
     uname = user.get("username") or ""
     now = datetime.now(timezone.utc)
@@ -226,6 +229,7 @@ async def enrich_account_access_report(
         linked = await _accounts_linked_to_ip(
             db, ipn, exclude_user_id=uid, limit=int(accounts_per_ip_limit)
         )
+        linked = filter_investigation_linked_accounts(linked, actor)
         alive_others = [a for a in linked if not a.get("is_dead")]
         ip_sharing_counts[ipn] = len(alive_others)
         if linked:
@@ -257,6 +261,7 @@ async def enrich_account_access_report(
             }
             for r in fp_rows
         ]
+        fingerprint_matches = filter_investigation_linked_accounts(fingerprint_matches, actor)
 
     ua_norm = _normalize_ua(user.get("last_user_agent") or "")
     ua_matches: List[Dict[str, Any]] = []
@@ -267,6 +272,7 @@ async def enrich_account_access_report(
             {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "last_login_ip": 1},
         ).limit(20)
         ua_matches = await cursor.to_list(20)
+        ua_matches = filter_investigation_linked_accounts(ua_matches, actor)
 
     susp_cut = (now - timedelta(days=30)).isoformat()
     susp_q = {

@@ -3,6 +3,7 @@
 # Revive: pay 50k points to bring back a dead account (same email, once per email)
 import logging
 from datetime import datetime, timezone
+from typing import Any, Dict
 
 from fastapi import Depends, HTTPException
 from routers.kill.armoury import TOKEN_CONFIG
@@ -161,6 +162,8 @@ def register(router):
         swiss_at_death = int(dead_user.get("swiss_balance") or 0)
         swiss_retrieval_used = bool(dead_user.get("swiss_retrieval_used"))
         rank_pass_carry_used = bool(dead_user.get("rank_xp_pass_dead_alive_carry_used"))
+        dead_live_points = max(0, int(dead_user.get("points") or 0))
+        already_retrieved = bool(dead_user.get("retrieval_used"))
         supplemental_swiss_only = False
         supplemental_rank_pass_only = False
         supplemental_points_only = False
@@ -173,26 +176,31 @@ def register(router):
         current_current_xp = max(0, int(current_user.get("rank_xp_pass_season_rp") or 0))
         missing_game_pass_current_xp = dead_current_xp > current_current_xp
         points_at_death_snap = int(dead_user.get("points_at_death") or 0)
-        if dead_user.get("retrieval_used"):
-            supplemental_points_amount = max(0, int(dead_user.get("points") or 0) - points_at_death_snap)
-            if swiss_at_death > 0 and not swiss_retrieval_used:
-                supplemental_swiss_only = True
-            elif supplemental_points_amount > 0:
-                supplemental_points_only = True
-            elif has_dead_rank_xp_carry and (not rank_pass_carry_used or missing_game_pass_current_xp):
-                supplemental_rank_pass_only = True
-            else:
+
+        pending_swiss = swiss_at_death if not swiss_retrieval_used else 0
+        pending_rank_pass = has_dead_rank_xp_carry and (not rank_pass_carry_used or missing_game_pass_current_xp)
+
+        if already_retrieved:
+            supplemental_points_amount = max(0, dead_live_points - points_at_death_snap)
+            if supplemental_points_amount <= 0 and dead_live_points > 0:
+                supplemental_points_amount = dead_live_points
+            if pending_swiss <= 0 and supplemental_points_amount <= 0 and not pending_rank_pass:
                 raise HTTPException(status_code=400, detail="That dead account has already been used for a transfer.")
+            supplemental_swiss_only = pending_swiss > 0 and supplemental_points_amount <= 0 and not pending_rank_pass
+            supplemental_rank_pass_only = pending_rank_pass and pending_swiss <= 0 and supplemental_points_amount <= 0
+            supplemental_points_only = supplemental_points_amount > 0 and pending_swiss <= 0 and not pending_rank_pass
         tokens_at_death_raw = dead_user.get("tokens_at_death") or {}
         token_inc, tokens_restored = _compute_token_restore_for_dead_alive(tokens_at_death_raw, pass_token_expires_dt, now)
 
-        add_swiss = swiss_at_death if not swiss_retrieval_used else 0
-        if supplemental_points_only:
+        add_swiss = pending_swiss
+        if supplemental_points_only or (already_retrieved and supplemental_points_amount > 0 and not supplemental_swiss_only and not supplemental_rank_pass_only):
             has_estate = supplemental_points_amount > 0
+        elif supplemental_swiss_only:
+            has_estate = pending_swiss > 0
         else:
             has_estate = points_at_death > 0 or money_at_death > 0 or add_swiss > 0
-        has_rank_xp_merge = (not supplemental_swiss_only and not supplemental_points_only) and has_dead_rank_xp_carry
-        has_token_restore = (not supplemental_swiss_only and not supplemental_rank_pass_only and not supplemental_points_only) and bool(token_inc)
+        has_rank_xp_merge = pending_rank_pass and not supplemental_swiss_only and not supplemental_points_only
+        has_token_restore = (not already_retrieved) and bool(token_inc)
         if not has_estate and not has_token_restore and not has_rank_xp_merge:
             raise HTTPException(
                 status_code=400,
@@ -200,41 +208,53 @@ def register(router):
             )
 
         # Atomically claim — prevents double-retrieval race condition
-        if supplemental_swiss_only:
-            claim = await db.users.find_one_and_update(
-                {"id": dead_user["id"], "is_dead": True, "account_locked": {"$ne": True}, "swiss_retrieval_used": {"$ne": True}, "swiss_balance": {"$gt": 0}},
-                {"$set": {"swiss_retrieval_used": True, "swiss_balance": 0}},
-                projection={"_id": 0, "swiss_balance": 1},
-            )
-        elif supplemental_rank_pass_only:
-            if rank_pass_carry_used:
+        dead_claim_update: Dict[str, Any] = {}
+        if already_retrieved:
+            if pending_swiss > 0:
+                dead_claim_update["$set"] = {"swiss_retrieval_used": True, "swiss_balance": 0}
+            if supplemental_points_amount > 0:
+                dead_claim_update.setdefault("$inc", {})["points"] = -supplemental_points_amount
+            if pending_rank_pass and not rank_pass_carry_used:
+                dead_claim_update.setdefault("$set", {})["rank_xp_pass_dead_alive_carry_used"] = True
+            claim_filter: Dict[str, Any] = {
+                "id": dead_user["id"],
+                "is_dead": True,
+                "account_locked": {"$ne": True},
+                "retrieval_used": True,
+            }
+            if pending_swiss > 0:
+                claim_filter["swiss_retrieval_used"] = {"$ne": True}
+                claim_filter["swiss_balance"] = {"$gt": 0}
+            if supplemental_points_amount > 0:
+                claim_filter["points"] = {"$gte": supplemental_points_amount}
+            if pending_rank_pass and not rank_pass_carry_used:
+                claim_filter["rank_xp_pass_dead_alive_carry_used"] = {"$ne": True}
+            if pending_rank_pass and rank_pass_carry_used and supplemental_points_amount <= 0 and pending_swiss <= 0:
                 claim = await db.users.find_one(
-                    {"id": dead_user["id"], "is_dead": True, "account_locked": {"$ne": True}},
+                    {"id": dead_user["id"], "is_dead": True, "account_locked": {"$ne": True}, "retrieval_used": True},
                     {"_id": 0, "swiss_balance": 1},
                 )
             else:
                 claim = await db.users.find_one_and_update(
-                    {"id": dead_user["id"], "is_dead": True, "account_locked": {"$ne": True}, "rank_xp_pass_dead_alive_carry_used": {"$ne": True}},
-                    {"$set": {"rank_xp_pass_dead_alive_carry_used": True}},
+                    claim_filter,
+                    dead_claim_update or {"$set": {"retrieval_used": True}},
                     projection={"_id": 0, "swiss_balance": 1},
                 )
-        elif supplemental_points_only:
-            needed = supplemental_points_amount
-            claim = await db.users.find_one_and_update(
-                {
-                    "id": dead_user["id"],
-                    "is_dead": True,
-                    "account_locked": {"$ne": True},
-                    "retrieval_used": True,
-                    "points": {"$gte": points_at_death_snap + needed},
-                },
-                {"$inc": {"points": -needed}},
-                projection={"_id": 0, "swiss_balance": 1},
-            )
         else:
+            initial_points_transfer = max(0, int(points_at_death * float(DEAD_ALIVE_POINTS_PERCENT)))
+            dead_claim_update = {
+                "$set": {
+                    "retrieval_used": True,
+                    "swiss_retrieval_used": True,
+                    "rank_xp_pass_dead_alive_carry_used": True,
+                    "swiss_balance": 0,
+                },
+            }
+            if initial_points_transfer > 0:
+                dead_claim_update["$inc"] = {"points": -initial_points_transfer}
             claim = await db.users.find_one_and_update(
                 {"id": dead_user["id"], "is_dead": True, "account_locked": {"$ne": True}, "retrieval_used": {"$ne": True}},
-                {"$set": {"retrieval_used": True, "swiss_retrieval_used": True, "rank_xp_pass_dead_alive_carry_used": True, "swiss_balance": 0}},
+                dead_claim_update,
                 projection={"_id": 0, "swiss_balance": 1},
             )
         if not claim:
@@ -242,18 +262,17 @@ def register(router):
             if locked_now:
                 raise HTTPException(status_code=403, detail=ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL)
             raise HTTPException(status_code=400, detail="That dead account has already been used for a transfer.")
-        add_swiss = max(0, int((claim or {}).get("swiss_balance") or add_swiss or 0))
-        supplemental_no_estate = supplemental_swiss_only or supplemental_rank_pass_only
-        if supplemental_points_only:
-            add_points = supplemental_points_amount
+        add_swiss = max(0, int((claim or {}).get("swiss_balance") or pending_swiss or 0))
+        if already_retrieved:
+            add_points = supplemental_points_amount if supplemental_points_amount > 0 else 0
             add_money = 0
             tax_money = 0
             tax_points = 0
         else:
-            add_points = 0 if supplemental_no_estate else max(0, int(points_at_death * float(DEAD_ALIVE_POINTS_PERCENT)))
-            add_money = 0 if supplemental_no_estate else max(0, int(money_at_death * DEAD_ALIVE_PERCENT))
-            tax_money = 0 if supplemental_no_estate else max(0, int(money_at_death * (1 - DEAD_ALIVE_PERCENT)))
-            tax_points = 0 if supplemental_no_estate else max(0, int(points_at_death * (1 - float(DEAD_ALIVE_POINTS_PERCENT))))
+            add_points = max(0, int(points_at_death * float(DEAD_ALIVE_POINTS_PERCENT)))
+            add_money = max(0, int(money_at_death * DEAD_ALIVE_PERCENT))
+            tax_money = max(0, int(money_at_death * (1 - DEAD_ALIVE_PERCENT)))
+            tax_points = max(0, int(points_at_death * (1 - float(DEAD_ALIVE_POINTS_PERCENT))))
         dead_state = (dead_user.get("current_state") or "").strip()
         head_family_id = await get_head_family_id_for_state(dead_state) if dead_state else None
         if head_family_id:
@@ -337,7 +356,7 @@ def register(router):
             # points or prestige carry, because that feeds "Most Rank Points Earned".
             await db.users.update_one({"id": current_user["id"]}, {"$set": pass_updates})
 
-        if supplemental_points_only and add_points > 0:
+        if supplemental_points_amount > 0 and already_retrieved:
             msg = f"Transferred additional points from your dead account ({dead_user['username']}): "
         elif has_estate or has_token_restore:
             msg = f"Transferred inheritance from your dead account ({dead_user['username']}): "
@@ -359,7 +378,7 @@ def register(router):
             msg += ", ".join(parts)
         else:
             msg += "nothing (account had no cash, points, or tokens)"
-        msg += ". One-time transfer complete." if not supplemental_points_only else "."
+        msg += ". One-time transfer complete." if not already_retrieved else "."
         return {
             "message": msg,
             "points_transferred": add_points,

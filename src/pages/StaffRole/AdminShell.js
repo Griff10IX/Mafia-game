@@ -26,6 +26,8 @@ import {
   ADMIN_ROUTE_GROUP_MAP,
   ADMIN_ROUTE_GROUPS,
   ADMIN_ROUTE_GROUP_MOBILE_SHORT,
+  MOD_STAFF_ROUTE_IDS,
+  modStaffRouteGroups,
 } from './adminToolMap';
 import { StaffAccessVerifyContext } from './staffAccessVerifyContext';
 
@@ -72,6 +74,12 @@ function staffShellAllowedFromCheck(data) {
   return staffCapsFromAdminCheck(data) && !!data?.staff_login_session;
 }
 
+function isFullAdminShellFromCheck(data) {
+  if (data?.is_admin) return true;
+  if (data?.has_admin_email && !data?.admin_preview_as_mod) return true;
+  return false;
+}
+
 const LEGACY_HASH_TO_ROUTE_GROUP = {
   'admin-players': 'players',
   'admin-moderation': 'moderation',
@@ -95,6 +103,7 @@ export default function AdminShell() {
   const [targetContextOpen, setTargetContextOpen] = useState(false);
   /** null = verifying with API; staff UI requires DB caps and a staff-issued JWT (see GET /admin/check staff_login_session). */
   const [staffAllowed, setStaffAllowed] = useState(null);
+  const [isFullAdminShell, setIsFullAdminShell] = useState(null);
   /** When STAFF_PORTAL_PASSWORD is set, API requires X-Staff-Portal-Token for /admin/* calls except check. */
   const [staffPortalEnabled, setStaffPortalEnabled] = useState(false);
   const [staffPortalSessionMin, setStaffPortalSessionMin] = useState(30);
@@ -115,6 +124,7 @@ export default function AdminShell() {
       const res = await api.get('/admin/check');
       const caps = staffCapsFromAdminCheck(res.data);
       const shellOk = staffShellAllowedFromCheck(res.data);
+      setIsFullAdminShell(isFullAdminShellFromCheck(res.data));
       const portalEnabled = !!res.data?.staff_portal_enabled;
       setStaffPortalEnabled(portalEnabled);
       setStaffPortalSessionMin(Number(res.data?.staff_portal_session_minutes) || 30);
@@ -230,6 +240,7 @@ export default function AdminShell() {
         if (cancelled) return;
         const caps = staffCapsFromAdminCheck(res.data);
         const shellOk = staffShellAllowedFromCheck(res.data);
+        setIsFullAdminShell(isFullAdminShellFromCheck(res.data));
         setStaffPortalEnabled(!!res.data?.staff_portal_enabled);
         setStaffPortalSessionMin(Number(res.data?.staff_portal_session_minutes) || 30);
         if (!caps) {
@@ -274,6 +285,7 @@ export default function AdminShell() {
         const res = await api.get('/admin/check');
         const caps = staffCapsFromAdminCheck(res.data);
         const shellOk = staffShellAllowedFromCheck(res.data);
+        setIsFullAdminShell(isFullAdminShellFromCheck(res.data));
         setStaffAllowed(shellOk);
         setStaffPortalEnabled(!!res.data?.staff_portal_enabled);
         setStaffPortalSessionMin(Number(res.data?.staff_portal_session_minutes) || 30);
@@ -305,6 +317,7 @@ export default function AdminShell() {
         const res = await api.get('/admin/check');
         const caps = staffCapsFromAdminCheck(res.data);
         const shellOk = staffShellAllowedFromCheck(res.data);
+        setIsFullAdminShell(isFullAdminShellFromCheck(res.data));
         setStaffAllowed(shellOk);
         if (!shellOk && typeof window !== 'undefined') {
           const p = window.location.pathname || '';
@@ -386,6 +399,18 @@ export default function AdminShell() {
   }, [presenceOpen]);
 
   const hubSection = (section || 'overview').toLowerCase();
+
+  const visibleRouteGroups = useMemo(
+    () => (isFullAdminShell ? ADMIN_ROUTE_GROUPS : modStaffRouteGroups()),
+    [isFullAdminShell],
+  );
+
+  useEffect(() => {
+    if (isFullAdminShell !== false) return;
+    if (!MOD_STAFF_ROUTE_IDS.includes(hubSection)) {
+      navigate('/tjjeujr3wa/overview', { replace: true });
+    }
+  }, [isFullAdminShell, hubSection, navigate]);
 
   const routeGroup = useMemo(() => {
     return ADMIN_ROUTE_GROUP_MAP[hubSection] || ADMIN_ROUTE_GROUP_MAP.overview;
@@ -918,7 +943,7 @@ export default function AdminShell() {
             aria-label="Admin areas"
           >
             <div className="flex md:hidden gap-1.5 overflow-x-auto pb-0.5 snap-x snap-mandatory touch-pan-x [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-              {ADMIN_ROUTE_GROUPS.map((group) => {
+              {visibleRouteGroups.map((group) => {
                 const active = group.id === routeGroup?.id;
                 const Icon = group.icon;
                 const short = ADMIN_ROUTE_GROUP_MOBILE_SHORT[group.id] || group.label;
@@ -950,7 +975,7 @@ export default function AdminShell() {
               })}
             </div>
             <div className="hidden md:grid md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-1.5">
-              {ADMIN_ROUTE_GROUPS.map((group) => {
+              {visibleRouteGroups.map((group) => {
                 const active = group.id === routeGroup?.id;
                 const Icon = group.icon;
                 return (

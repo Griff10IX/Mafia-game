@@ -2083,6 +2083,59 @@ export default function Profile() {
     }
   };
 
+  const togglePreviewAsMod = async () => {
+    const caps = isAdmin || hasAdminEmail || me?.admin_preview_as_mod;
+    if (caps && !staffLoginSession) {
+      toast.error('Use staff login (Staff entrance) for admin actions.');
+      navigate('/staff-entrance');
+      return;
+    }
+    if (caps && staffPortalEnabled && !isStaffPortalTokenValid()) {
+      toast.error('Enter the staff portal password first (unlock on a profile or open Admin).');
+      return;
+    }
+    try {
+      const enabling = !me?.admin_preview_as_mod;
+      const res = await api.post('/admin/preview-as-mod', null, { params: { enabled: enabling } });
+      toast.success(res.data?.message || (enabling ? 'Moderator preview on' : 'Moderator preview off'));
+      await refetchMe();
+      await refetchAdmin();
+      window.dispatchEvent(new CustomEvent('app:admin-changed'));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to toggle moderator preview');
+    }
+  };
+
+  const formatPreviewCountdown = (secs) => {
+    const n = Math.max(0, Number(secs) || 0);
+    const m = Math.floor(n / 60);
+    const s = n % 60;
+    return `${m}:${String(s).padStart(2, '0')}`;
+  };
+
+  useEffect(() => {
+    if (!me?.admin_preview_as_mod) return undefined;
+    const iv = setInterval(() => {
+      setMe((prev) => {
+        if (!prev?.admin_preview_as_mod) return prev;
+        const rem = prev.admin_preview_as_mod_seconds_remaining;
+        if (rem == null || rem <= 0) return prev;
+        return { ...prev, admin_preview_as_mod_seconds_remaining: rem - 1 };
+      });
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [me?.admin_preview_as_mod]);
+
+  useEffect(() => {
+    if (!me?.admin_preview_as_mod) return;
+    const rem = me.admin_preview_as_mod_seconds_remaining;
+    if (rem != null && rem <= 0) {
+      refetchMe();
+      refetchAdmin();
+      window.dispatchEvent(new CustomEvent('app:admin-changed'));
+    }
+  }, [me?.admin_preview_as_mod, me?.admin_preview_as_mod_seconds_remaining]);
+
   const saveModOnlineColor = async () => {
     const hex = (modOnlineColor || '').trim() || '#1e3a5f';
     if (!/^#[0-9A-Fa-f]{3}([0-9A-Fa-f]{3})?$/.test(hex)) {
@@ -2662,6 +2715,7 @@ export default function Profile() {
               </div>
             )}
             {hasAdminEmail ? (
+            <>
             <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-fade-in`}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-1.5">
@@ -2688,6 +2742,35 @@ export default function Profile() {
                   : 'Turn off to test the game as a normal user (e.g. with others).'}
               </p>
             </div>
+            {(isAdmin || me?.admin_preview_as_mod) && (
+            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-fade-in`}>
+              <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-1.5">
+                <div className="flex items-center gap-1 md:gap-1.5">
+                  <Shield className="w-3.5 h-3.5 md:w-4 md:h-4 text-primary" />
+                  <span className="text-[9px] md:text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
+                    {me?.admin_preview_as_mod ? 'Moderator preview' : 'Preview as moderator'}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={togglePreviewAsMod}
+                  className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-primary/50 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${me?.admin_preview_as_mod ? 'bg-primary' : 'bg-secondary'}`}
+                  role="switch"
+                  aria-checked={!!me?.admin_preview_as_mod}
+                  title={me?.admin_preview_as_mod ? 'Exit moderator preview early' : 'Use moderator-only tools for 30 minutes'}
+                >
+                  <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow ring-0 transition-transform ${me?.admin_preview_as_mod ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                </button>
+              </div>
+              <p className="px-2.5 py-1.5 md:px-3 text-[9px] md:text-[10px] text-mutedForeground font-heading">
+                {me?.admin_preview_as_mod
+                  ? `You see the same mod tools a moderator sees. Time left: ${formatPreviewCountdown(me?.admin_preview_as_mod_seconds_remaining)}. Turn off to restore full admin access.`
+                  : 'Turn on for 30 minutes to test moderator tools (dupe checks, investigations, locks, etc.) without full admin powers.'}
+              </p>
+            </div>
+            )}
+            </>
             ) : isModerator ? (
             <>
             <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-fade-in`}>

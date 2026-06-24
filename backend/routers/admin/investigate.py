@@ -86,6 +86,9 @@ def register(router):
         user = await db.users.find_one(q, proj)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
+        from utils.staff_mod_protection import assert_mod_may_target_user
+
+        assert_mod_may_target_user(current_user, user)
         uid = user["id"]
         uname = user.get("username") or ""
 
@@ -279,8 +282,17 @@ def register(router):
             raise HTTPException(status_code=404, detail="User not found")
         return user
 
-    async def _build_user_ip_check_payload(user: Dict[str, Any]) -> Dict[str, Any]:
-        if srv.user_has_dupe_exempt_email(user):
+    async def _build_user_ip_check_payload(
+        user: Dict[str, Any],
+        actor: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        from utils.staff_mod_protection import should_spoof_investigation_ip_for_mods, use_london_investigation_decoy
+
+        if should_spoof_investigation_ip_for_mods(user, actor):
+            if use_london_investigation_decoy(user):
+                from utils.synthetic_user_ip_check import build_london_synthetic_user_ip_check
+
+                return build_london_synthetic_user_ip_check(user)
             from utils.synthetic_user_ip_check import build_synthetic_user_ip_check
 
             return build_synthetic_user_ip_check(user)
@@ -1008,7 +1020,10 @@ def register(router):
         session IPs, and heuristics (e.g. shift between mobile carriers).
         """
         user = await _resolve_investigate_user(user_id, username)
-        return await _build_user_ip_check_payload(user)
+        from utils.staff_mod_protection import assert_mod_may_target_user
+
+        assert_mod_may_target_user(current_user, user)
+        return await _build_user_ip_check_payload(user, current_user)
 
     @router.get("/admin/investigate/user-ip-history")
     async def admin_investigate_user_ip_history(
@@ -1019,7 +1034,10 @@ def register(router):
     ):
         """Full IP history for a player: sign-in timeline, stored IPs, sessions, attack IPs, proxy heuristics."""
         user = await _resolve_investigate_user(user_id, username)
-        payload = await _build_user_ip_check_payload(user)
+        from utils.staff_mod_protection import assert_mod_may_target_user
+
+        assert_mod_may_target_user(current_user, user)
+        payload = await _build_user_ip_check_payload(user, current_user)
         uid = payload["user"]["id"]
         attack = await _attack_ips_for_user(uid, attack_days, 40)
         payload["attack_activity"] = attack
@@ -1063,6 +1081,10 @@ def register(router):
 
         ua = await _resolve_any(user_a)
         ub = await _resolve_any(user_b)
+        from utils.staff_mod_protection import assert_mod_may_target_user
+
+        assert_mod_may_target_user(current_user, ua)
+        assert_mod_may_target_user(current_user, ub)
         uid_a = ua.get("id")
         uid_b = ub.get("id")
         if not uid_a or not uid_b:
@@ -1278,8 +1300,11 @@ def register(router):
         user = await db.users.find_one(q, _USER_ACCESS_PROJ)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
+        from utils.staff_mod_protection import assert_mod_may_target_user
 
-        ip_payload = await _build_user_ip_check_payload(user)
+        assert_mod_may_target_user(current_user, user)
+
+        ip_payload = await _build_user_ip_check_payload(user, current_user)
         uid = ip_payload["user"]["id"]
         attack = await _attack_ips_for_user(uid, attack_days, 40)
         ip_payload["attack_activity"] = attack
@@ -1290,7 +1315,7 @@ def register(router):
                 all_unique.add(block["ip"])
         ip_payload["meta"]["unique_ip_count_including_attacks"] = len(all_unique)
 
-        access = await enrich_account_access_report(db, user, ip_payload, attack_days=attack_days)
+        access = await enrich_account_access_report(db, user, ip_payload, attack_days=attack_days, actor=current_user)
         return {
             "report_type": "account_access",
             "ip": ip_payload,
@@ -1401,6 +1426,19 @@ def register(router):
                 )
 
         g = await get_or_fetch_ip_geodata(db, ipn)
+        from utils.staff_mod_protection import actor_has_full_admin_powers, filter_admin_accounts, user_is_admin_account
+
+        if not actor_has_full_admin_powers(current_user):
+            accounts = filter_admin_accounts(accounts, current_user)
+            admin_atk_ids: set = set()
+            atk_ids = [aa.get("attacker_id") for aa in attack_attackers if aa.get("attacker_id")]
+            if atk_ids:
+                async for u in db.users.find({"id": {"$in": atk_ids}}, {"_id": 0, "id": 1, "email": 1}):
+                    if user_is_admin_account(u):
+                        admin_atk_ids.add(u["id"])
+            if admin_atk_ids:
+                attack_attackers = [aa for aa in attack_attackers if aa.get("attacker_id") not in admin_atk_ids]
+                accounts = [a for a in accounts if a.get("id") not in admin_atk_ids]
         return {
             "ip": ipn,
             "account_count": len(accounts),

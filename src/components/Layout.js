@@ -14,6 +14,7 @@ import { clearStaffPortalSession, isStaffPortalTokenValid } from '../utils/staff
 import { getThemeUiPlatform } from '../utils/themePlatform';
 import { readDashboardSessionCache } from '../utils/dashboardSessionCache';
 import { SLOTS_FEATURE_ENABLED } from '../config/gameFeatures';
+import { MOD_STAFF_ROUTE_IDS, ADMIN_ROUTE_GROUP_MAP } from '../pages/StaffRole/adminToolMap';
 import { preloadRoute, preloadRouteHandlers } from '../utils/routePreload';
 import { prefetchTravelPageData } from '../utils/travelPageWarm';
 import { AuthContext } from '../context/AuthContext';
@@ -41,6 +42,15 @@ function readLayoutBootFromDashboardCache() {
 }
 
 /** Bottom bar: 6 icons. Rank = crimes/rank; Misc = everything that doesn't fit elsewhere. */
+function buildModStaffNavItems() {
+  return MOD_STAFF_ROUTE_IDS.map((id) => {
+    const group = ADMIN_ROUTE_GROUP_MAP[id];
+    const Icon = id === 'overview' ? Shield : (group?.icon || Shield);
+    const label = id === 'overview' ? 'Moderator tools' : (group?.label || id);
+    return { path: `/tjjeujr3wa/${id}`, icon: Icon, label };
+  });
+}
+
 function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEntertainer, isHelpDeskOperator, staffToolsNavVisible, worldCupEnabled) {
   const goItems = [
     { path: '/game/travel', label: 'Travel' },
@@ -151,7 +161,11 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
         { action: 'logout', label: 'Logout' },
         { path: '/account/autorank', label: 'Auto Rank' },
         ...(staffToolsNavVisible && isAdmin ? [{ path: '/tjjeujr3wa/overview', label: 'Admin Tools' }, { path: '/tjjeujr3wa/locked', label: 'Locked accounts' }] : []),
-        ...(staffToolsNavVisible && isModerator && !isAdmin ? [{ path: '/tjjeujr3wa/overview', label: 'Moderator tools' }] : []),
+        ...(staffToolsNavVisible && isModerator && !isAdmin
+          ? buildModStaffNavItems()
+              .filter((item) => item.path !== '/tjjeujr3wa/overview')
+              .map((item) => ({ path: item.path, label: item.label }))
+          : []),
       ],
     },
     {
@@ -392,6 +406,7 @@ export default function Layout({ children }) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
+  const [adminPreviewAsMod, setAdminPreviewAsMod] = useState(false);
   const [staffLoginSession, setStaffLoginSession] = useState(false);
   /** When true (env STAFF_PORTAL_PASSWORD), Layout hides staff tool links until portal JWT is valid. */
   const [staffPortalEnabled, setStaffPortalEnabled] = useState(false);
@@ -515,7 +530,7 @@ export default function Layout({ children }) {
   }, [isAdmin, isModerator, staffLoginSession, staffPortalEnabled, portalNavTick]);
   const mobileBottomNavItems = useMemo(() => {
     let items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, !!user?.is_entertainer, !!user?.is_help_desk_operator, staffToolsNavVisible, !!worldCupEnabled);
-    if (hasAdminEmail && !isAdmin) {
+    if (hasAdminEmail && !isAdmin && !adminPreviewAsMod) {
       items = items.map((i) =>
         i.type === 'group' && i.id === 'you'
           ? { ...i, items: [...i.items, { action: 'promoteAdmin', label: 'Use admin powers' }] }
@@ -1134,10 +1149,11 @@ export default function Layout({ children }) {
     try {
       const response = await api.get('/auth/staff-flags');
       setIsAdmin(!!response.data.is_admin); setIsModerator(!!response.data.is_moderator); setHasAdminEmail(!!response.data.has_admin_email);
+      setAdminPreviewAsMod(!!response.data.admin_preview_as_mod);
       setStaffLoginSession(!!response.data.staff_login_session);
       setStaffPortalEnabled(!!response.data.staff_portal_enabled);
     } catch (error) {
-      setIsAdmin(false); setIsModerator(false); setHasAdminEmail(false); setStaffLoginSession(false); setStaffPortalEnabled(false);
+      setIsAdmin(false); setIsModerator(false); setHasAdminEmail(false); setAdminPreviewAsMod(false); setStaffLoginSession(false); setStaffPortalEnabled(false);
     }
   };
 
@@ -1381,14 +1397,7 @@ export default function Layout({ children }) {
     { path: '/tjjeujr3wa/crew-recovery', icon: Building2, label: 'Crew recovery' },
     { path: '/tjjeujr3wa/property-transfer', icon: Landmark, label: 'Armoury / airport' },
   ] : [];
-  const moderatorNavItems = isModerator && !isAdmin && staffToolsNavVisible ? [
-    { path: '/tjjeujr3wa/overview', icon: Shield, label: 'Moderator tools' },
-    { path: '/tjjeujr3wa/users-online', icon: Users, label: 'Users online (live)' },
-    { path: '/tjjeujr3wa/witness-statements', icon: FileText, label: 'Witness statements' },
-    { path: '/tjjeujr3wa/attack-logs', icon: Crosshair, label: 'Attack logs' },
-    { path: '/tjjeujr3wa/ip-history', icon: Globe, label: 'Account access' },
-    { path: '/tjjeujr3wa/account-compare', icon: ArrowLeftRight, label: 'Account compare' },
-  ] : [];
+  const moderatorNavItems = isModerator && !isAdmin && staffToolsNavVisible ? buildModStaffNavItems() : [];
   const staffTopBarEntry = isAdmin && staffToolsNavVisible ? adminNavItems[0] : (isModerator && staffToolsNavVisible ? moderatorNavItems[0] : null);
   const StaffTopBarIcon = staffTopBarEntry?.icon;
 
@@ -2049,7 +2058,7 @@ export default function Layout({ children }) {
                   </SameRouteAwareLink>
                 </>
               )}
-              {hasAdminEmail && !isAdmin && (
+              {hasAdminEmail && !isAdmin && !adminPreviewAsMod && (
                 <button type="button" onClick={() => { promoteToAdmin(); setSidebarOpen(false); }} className="flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 w-full text-left text-amber-400 hover:bg-amber-500/10 text-[10px]">
                   <Shield size={14} /><span className="uppercase tracking-widest text-xs font-heading">Use admin powers</span>
                 </button>

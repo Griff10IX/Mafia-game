@@ -798,7 +798,8 @@ export default function Admin() {
 
   const [activeCategoryId, setActiveCategoryId] = useState('admin-operations');
   const [modVisibleCategoryIds, setModVisibleCategoryIds] = useState(() => [...MOD_ONLY_CATEGORY_IDS]);
-  const hasFullAdminCategories = isAdmin || hasAdminEmail;
+  const [adminPreviewAsMod, setAdminPreviewAsMod] = useState(false);
+  const hasFullAdminCategories = (isAdmin || hasAdminEmail) && !adminPreviewAsMod;
   /** Full admin tool search / dangerous tools — same as is_admin API or listed admin email (act-as-normal). */
   const isFullAdminUi = hasFullAdminCategories;
   const visibleCategories = hasFullAdminCategories
@@ -1646,6 +1647,7 @@ export default function Admin() {
       setIsAdmin(admin);
       setIsModerator(mod);
       setHasAdminEmail(listedEmail);
+      setAdminPreviewAsMod(!!response.data.admin_preview_as_mod);
       setStaffLoginSession(!!response.data.staff_login_session);
       if (mod && Array.isArray(response.data.mod_visible_category_ids) && response.data.mod_visible_category_ids.length > 0) {
         setModVisibleCategoryIds(response.data.mod_visible_category_ids);
@@ -1676,6 +1678,7 @@ export default function Admin() {
       setIsAdmin(false);
       setIsModerator(false);
       setHasAdminEmail(false);
+      setAdminPreviewAsMod(false);
       setStaffLoginSession(false);
     }
     finally { setLoading(false); }

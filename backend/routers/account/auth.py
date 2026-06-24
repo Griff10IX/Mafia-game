@@ -438,6 +438,7 @@ def register(router):
     _is_moderator = srv._is_moderator
     _is_entertainer = srv._is_entertainer
     _is_hdo = srv._is_hdo
+    from utils.staff_mod_protection import admin_mod_preview_active, admin_mod_preview_seconds_remaining
     get_wealth_rank = srv.get_wealth_rank
     get_wealth_rank_range = srv.get_wealth_rank_range
     _get_casino_property_profit = srv._get_casino_property_profit
@@ -2097,6 +2098,8 @@ def register(router):
                 crew_oc_timer_reduced=bool(u.get("crew_oc_timer_reduced", False)),
                 admin_ghost_mode=bool(u.get("admin_ghost_mode", False)),
                 admin_acting_as_normal=bool(u.get("admin_acting_as_normal", False)),
+                admin_preview_as_mod=bool(admin_mod_preview_active(u)),
+                admin_preview_as_mod_seconds_remaining=admin_mod_preview_seconds_remaining(u),
                 casino_profit=0,
                 property_profit=0,
                 has_casino_or_property=False,
