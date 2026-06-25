@@ -1338,8 +1338,8 @@ export default function AutoRank() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [prefs, setPrefs] = useState({
     auto_rank_enabled: false,
-    auto_rank_crimes: true,
-    auto_rank_gta: true,
+    auto_rank_crimes: false,
+    auto_rank_gta: false,
     auto_rank_bust_every_5_sec: false,
     auto_rank_oc: false,
     auto_rank_booze: false,
@@ -1586,8 +1586,8 @@ export default function AutoRank() {
         if (meRes?.data) {
           setPrefs({
             auto_rank_enabled: meRes.data.auto_rank_enabled === true,
-            auto_rank_crimes: meRes.data.auto_rank_crimes !== false,
-            auto_rank_gta: meRes.data.auto_rank_gta !== false,
+            auto_rank_crimes: meRes.data.auto_rank_crimes === true,
+            auto_rank_gta: meRes.data.auto_rank_gta === true,
             auto_rank_bust_every_5_sec: !!meRes.data.auto_rank_bust_every_5_sec,
             auto_rank_oc: !!meRes.data.auto_rank_oc,
             auto_rank_booze: !!meRes.data.auto_rank_booze,
@@ -1763,17 +1763,17 @@ export default function AutoRank() {
       const res = await api.patch('/auto-rank/me', payload);
       setPrefs((p) => ({
         ...p,
-        auto_rank_enabled: res.data?.auto_rank_enabled ?? p.auto_rank_enabled,
+        auto_rank_enabled: res.data?.auto_rank_enabled === true,
         auto_rank_has_access: res.data?.auto_rank_has_access ?? p.auto_rank_has_access,
         auto_rank_purchased: res.data?.auto_rank_purchased ?? p.auto_rank_purchased,
-        auto_rank_crimes: res.data?.auto_rank_crimes ?? p.auto_rank_crimes,
-        auto_rank_gta: res.data?.auto_rank_gta ?? p.auto_rank_gta,
-        auto_rank_bust_every_5_sec: res.data?.auto_rank_bust_every_5_sec ?? p.auto_rank_bust_every_5_sec,
-        auto_rank_oc: res.data?.auto_rank_oc ?? p.auto_rank_oc,
-        auto_rank_booze: res.data?.auto_rank_booze ?? p.auto_rank_booze,
+        auto_rank_crimes: res.data?.auto_rank_crimes === true,
+        auto_rank_gta: res.data?.auto_rank_gta === true,
+        auto_rank_bust_every_5_sec: res.data?.auto_rank_bust_every_5_sec === true,
+        auto_rank_oc: res.data?.auto_rank_oc === true,
+        auto_rank_booze: res.data?.auto_rank_booze === true,
         passive_booze_paused: res.data?.passive_booze_paused ?? p.passive_booze_paused,
-        auto_rank_melt: res.data?.auto_rank_melt ?? p.auto_rank_melt,
-        auto_rank_scrap: res.data?.auto_rank_scrap ?? p.auto_rank_scrap,
+        auto_rank_melt: res.data?.auto_rank_melt === true,
+        auto_rank_scrap: res.data?.auto_rank_scrap === true,
         auto_rank_telegram_notify: res.data?.auto_rank_telegram_notify !== false,
         auto_rank_crime_ids: res.data?.auto_rank_crime_ids ?? p.auto_rank_crime_ids,
         auto_rank_gta_option_ids: res.data?.auto_rank_gta_option_ids ?? p.auto_rank_gta_option_ids,

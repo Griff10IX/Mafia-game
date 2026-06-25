@@ -224,6 +224,18 @@ function _shouldSuppressServerUnavailableOverlay() {
   return false;
 }
 
+/** Optional/captcha/bootstrap calls must not trigger the full-screen server-down overlay. */
+function _shouldIgnoreServerUnavailableStrike(config) {
+  if (config?.suppressServerUnavailable) return true;
+  const url = String(config?.url || '').toLowerCase();
+  if (!url) return false;
+  return (
+    url.includes('/attack/turnstile-nonce')
+    || url.includes('/attack/turnstile-config')
+    || url.includes('/minigame/turnstile')
+  );
+}
+
 // Full reload / tab close / external navigation tears down in-flight XHRs; those often look like
 // "network" errors (no response) and must not trigger the server-unavailable overlay.
 let _pageUnloading = false;
@@ -476,19 +488,16 @@ api.interceptors.response.use(
       // No response: network error, timeout, or server unreachable (often after server restart)
       error.response = { status: 0, data: { detail: NETWORK_ERROR_MSG } };
     }
-    // Show full-screen overlay for repeated server-down scenarios (skip 401/403 — those redirect)
-    // Throttle: only dispatch once per 30s to avoid overlay + toast spam when many requests fail at once
+    // Full-screen overlay only for real gateway outages — not transient mobile/network blips (status 0).
     const status = error.response?.status;
-    const reqMethod = String(error.config?.method || 'get').toLowerCase();
-    const isBackgroundSafeMethod = reqMethod === 'get' || reqMethod === 'head' || reqMethod === 'options';
-    const shouldCountAsServerDownSignal =
-      isServerUnavailable(status) || (status === 0 && !isBackgroundSafeMethod);
+    const shouldCountAsServerDownSignal = isServerUnavailable(status);
     if (
       shouldCountAsServerDownSignal &&
       typeof window !== 'undefined' &&
       !isPublicPath() &&
       !_pageUnloading &&
-      !_shouldSuppressServerUnavailableOverlay()
+      !_shouldSuppressServerUnavailableOverlay() &&
+      !_shouldIgnoreServerUnavailableStrike(error.config)
     ) {
       const now = Date.now();
       const strikes = _recordServerUnavailableStrike(now);

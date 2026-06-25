@@ -45,8 +45,20 @@ export function useAttackTurnstile() {
     if (!current?.enabled || !current?.site_key || current?.enforce === 'off') {
       return null;
     }
-    const nonceRes = await api.post('/attack/turnstile-nonce', { action: normalizedAction });
-    const nonceData = nonceRes.data || {};
+    let nonceData = {};
+    try {
+      const nonceRes = await api.post(
+        '/attack/turnstile-nonce',
+        { action: normalizedAction },
+        { suppressServerUnavailable: true },
+      );
+      nonceData = nonceRes.data || {};
+    } catch (err) {
+      if (current?.enforce === 'enforce') {
+        throw err;
+      }
+      return null;
+    }
     if (!nonceData.required || !nonceData.nonce || !nonceData.site_key) {
       return null;
     }

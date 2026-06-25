@@ -537,7 +537,7 @@ async def _set_user_idle(db, user_id: str, username: str = "?"):
         return  # Already idle or user not found
     
     # Save current preferences before disabling
-    saved_prefs = {f"auto_rank_idle_saved_{k}": user.get(k, False) for k in _IDLE_SAVE_FIELDS}
+    saved_prefs = {f"auto_rank_idle_saved_{k}": _auto_rank_task_enabled(user, k) for k in _IDLE_SAVE_FIELDS}
     # Disable all task toggles while idle
     disabled_prefs = {k: False for k in _IDLE_SAVE_FIELDS}
     await db.users.update_one(
@@ -574,39 +574,22 @@ def _should_apply_auto_rank_idle(user: dict, now: datetime) -> bool:
 
 
 async def wake_auto_rank_if_idle(db, user_id: str):
-    """Called when user makes a real request. If they were idle, restore preferences and wake up auto-rank."""
-    # First fetch user to get saved preferences
-    user = await db.users.find_one(
-        {"id": user_id, "auto_rank_idle": True},
-        {"_id": 0, **{f"auto_rank_idle_saved_{k}": 1 for k in _IDLE_SAVE_FIELDS}}
-    )
-    if not user:
-        return  # Not idle, nothing to do
-    
-    # Restore saved preferences
-    restored_prefs = {}
-    for k in _IDLE_SAVE_FIELDS:
-        saved_key = f"auto_rank_idle_saved_{k}"
-        if saved_key in user:
-            restored_prefs[k] = user[saved_key]
-    
-    # Clear idle status and saved prefs, restore original settings
+    """Clear idle pause when the user returns. Do not resurrect old module toggles."""
     unset_fields = {f"auto_rank_idle_saved_{k}": "" for k in _IDLE_SAVE_FIELDS}
     unset_fields["auto_rank_next_run_at"] = ""
-    
-    await db.users.update_one(
-        {"id": user_id},
-        {
-            "$set": {"auto_rank_idle": False, **restored_prefs},
-            "$unset": unset_fields
-        }
+    result = await db.users.update_one(
+        {"id": user_id, "auto_rank_idle": True},
+        {"$set": {"auto_rank_idle": False}, "$unset": unset_fields},
     )
-    logger.info("Auto rank: user %s woke up from idle - preferences restored", user_id)
+    if result.modified_count:
+        logger.info("Auto rank: user %s woke up from idle (module toggles unchanged)", user_id)
 
 
 async def _wake_permanent_auto_rank_if_idle(db) -> None:
-    """Clear stale idle state for permanent buyers (legacy rows before idle-exempt rules)."""
-    cursor = db.users.find(
+    """Clear stale idle flag for permanent buyers without re-enabling saved module toggles."""
+    unset_fields = {f"auto_rank_idle_saved_{k}": "" for k in _IDLE_SAVE_FIELDS}
+    unset_fields["auto_rank_next_run_at"] = ""
+    await db.users.update_many(
         {
             "auto_rank_idle": True,
             "$or": [
@@ -615,13 +598,8 @@ async def _wake_permanent_auto_rank_if_idle(db) -> None:
                 {"auto_rank_purchased": True, "auto_rank_trial": {"$ne": True}},
             ],
         },
-        {"_id": 0, "id": 1},
+        {"$set": {"auto_rank_idle": False}, "$unset": unset_fields},
     )
-    users = await cursor.to_list(500)
-    for u in users:
-        uid = u.get("id")
-        if uid:
-            await wake_auto_rank_if_idle(db, uid)
 
 
 # ─── Telegram helper ──────────────────────────────────────────────
@@ -1048,10 +1026,10 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     has_success = False
     respect_before = int(user.get("respect_points") or 0)
 
-    run_crimes = user.get("auto_rank_crimes", True)
-    run_gta = user.get("auto_rank_gta", True)
-    run_melt = bool(user.get("auto_rank_melt", False))
-    run_scrap = bool(user.get("auto_rank_scrap", False))
+    run_crimes = _auto_rank_task_enabled(user, "auto_rank_crimes")
+    run_gta = _auto_rank_task_enabled(user, "auto_rank_gta")
+    run_melt = _auto_rank_task_enabled(user, "auto_rank_melt")
+    run_scrap = _auto_rank_task_enabled(user, "auto_rank_scrap")
 
     # --- Crimes: only those off cooldown (same rules as manual play; _commit_crime_impl also enforces) ---
     if run_crimes:
@@ -1862,8 +1840,8 @@ _PREFERENCE_FIELDS = [
 ]
 _PREFERENCE_DEFAULTS = {
     "auto_rank_enabled": False,
-    "auto_rank_crimes": True,
-    "auto_rank_gta": True,
+    "auto_rank_crimes": False,
+    "auto_rank_gta": False,
     "auto_rank_bust_every_5_sec": False,
     "auto_rank_oc": False,
     "auto_rank_booze": False,
@@ -1871,6 +1849,13 @@ _PREFERENCE_DEFAULTS = {
     "auto_rank_scrap": False,
     "auto_rank_telegram_notify": True,
 }
+
+
+def _auto_rank_task_enabled(user: Optional[dict], field: str) -> bool:
+    """Module toggles are opt-in only — missing/legacy fields must not run."""
+    if not user:
+        return False
+    return user.get(field) is True
 
 MELT_OPTIONS = [
     {"id": "bullets", "name": "Melt for Bullets"},
@@ -1884,7 +1869,14 @@ SCRAP_INTERVAL_SECONDS = 120  # Scrap (when run separately) runs once every 2 mi
 def _extract_preferences(user: dict) -> dict:
     if not user:
         return dict(_PREFERENCE_DEFAULTS)
-    return {k: user.get(k, _PREFERENCE_DEFAULTS[k]) for k in _PREFERENCE_FIELDS}
+    out = dict(_PREFERENCE_DEFAULTS)
+    out["auto_rank_enabled"] = user.get("auto_rank_enabled") is True
+    out["auto_rank_telegram_notify"] = user.get("auto_rank_telegram_notify") is not False
+    for k in _PREFERENCE_FIELDS:
+        if k in ("auto_rank_enabled", "auto_rank_telegram_notify"):
+            continue
+        out[k] = _auto_rank_task_enabled(user, k)
+    return out
 
 
 def _format_duration_hms(seconds: Optional[int]) -> Optional[str]:
@@ -1970,7 +1962,7 @@ def _build_auto_rank_diagnostics(doc: dict, *, global_enabled: bool) -> Dict[str
     if jail_active:
         blockers.append("In jail — main crime/GTA/OC/booze cycles paused")
 
-    active_tasks = [k for k in _IDLE_SAVE_FIELDS if doc.get(k)]
+    active_tasks = [k for k in _IDLE_SAVE_FIELDS if _auto_rank_task_enabled(doc, k)]
     if doc.get("auto_rank_enabled") and not doc.get("auto_rank_idle") and not active_tasks:
         warnings.append("Enabled but all task toggles are off — nothing to run")
 
@@ -2392,7 +2384,7 @@ def register(router):
             prefs["auto_rank_gta_option_ids"] = user.get("auto_rank_gta_option_ids") or []
             prefs["auto_rank_melt_action_ids"] = user.get("auto_rank_melt_action_ids") or []
             prefs["auto_rank_melt_rarity_ids"] = user.get("auto_rank_melt_rarity_ids") or []
-            prefs["auto_rank_scrap"] = user.get("auto_rank_scrap", False)
+            prefs["auto_rank_scrap"] = _auto_rank_task_enabled(user, "auto_rank_scrap")
             prefs["auto_rank_scrap_rarity_ids"] = user.get("auto_rank_scrap_rarity_ids") or []
             from utils.auto_rank_email_entitlement import email_has_auto_rank_entitlement
 

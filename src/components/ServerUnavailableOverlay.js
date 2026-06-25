@@ -47,7 +47,7 @@ export default function ServerUnavailableOverlay() {
           Server unavailable
         </p>
         <p className={`${styles.textMuted} text-sm mb-4`}>
-          We hit repeated connection errors. You can retry now.
+          The game server is not responding (gateway error). You can retry or refresh.
         </p>
         <p className={`${styles.textMuted} text-[11px] mb-4 opacity-80 break-all`}>
           {statusLabel} · {endpointLabel}
