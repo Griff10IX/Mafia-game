@@ -78,7 +78,7 @@ export const ADMIN_ROUTE_GROUPS = [
   { id: 'logs', label: 'Logs', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: Layers, description: 'Audit trails and event logs.' },
   { id: 'staff', label: 'Staff', categoryId: 'admin-operations', anchorId: 'admin-staff', icon: UserCog, description: 'Moderator visibility and staffing tools.' },
   { id: 'engineering', label: 'Engineering', categoryId: 'admin-world-systems', anchorId: 'admin-database', icon: Wrench, description: 'Testing, DB utilities, and diagnostics.' },
-  { id: 'users-online', label: 'Live online', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: Radio, description: 'Who is online now — dupe/proxy screen, shared IPs, fingerprints.' },
+  { id: 'users-online', label: 'Online dupe screen', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: Radio, description: 'Who is online now — dupe/proxy screen, shared IPs, fingerprints, likely main account.' },
   { id: 'attack-logs', label: 'Attack logs', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: Crosshair, description: 'PVP attack log console and analytics.' },
   { id: 'ip-history', label: 'Account access', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: History, description: 'Hacked-account check: IPs, devices, shared logins, staff checklist.' },
   { id: 'account-compare', label: 'Account compare', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: ArrowLeftRight, description: 'Compare two accounts: shared IPs, devices, and direct transfers.' },

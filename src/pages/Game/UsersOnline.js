@@ -149,6 +149,7 @@ const ActivitySnapshotCard = ({
   countriesDay = [],
   countriesWeek = [],
   staffUnknownFooter = null,
+  staffDupeScreenFooter = null,
 }) => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-card uo-fade-in mobile-panel`}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -172,6 +173,9 @@ const ActivitySnapshotCard = ({
         {snapshotTile(CalendarRange, 'Past week', activeWeek, 'Accounts', undefined, countriesWeek)}
       </div>
     </div>
+    {staffDupeScreenFooter ? (
+      <div className="px-2.5 pb-2 pt-2 border-t border-primary/15">{staffDupeScreenFooter}</div>
+    ) : null}
     {staffUnknownFooter ? (
       <div className="px-2.5 pb-2 pt-0 border-t border-primary/15">{staffUnknownFooter}</div>
     ) : null}
@@ -666,6 +670,19 @@ export default function UsersOnline() {
     return Number(row?.count) || 0;
   }, [countriesRoster]);
 
+  const staffDupeScreenFooter = useMemo(() => {
+    const ok = !!(staffFlags?.is_admin || staffFlags?.is_moderator);
+    if (!ok) return null;
+    return (
+      <Link
+        to="/tjjeujr3wa/users-online"
+        className="inline-flex items-center gap-1.5 text-[10px] font-heading font-bold uppercase tracking-wide text-red-300 hover:text-red-200 border border-red-500/40 rounded px-2.5 py-1.5 bg-red-500/10"
+      >
+        Staff — open online dupe / proxy screen →
+      </Link>
+    );
+  }, [staffFlags]);
+
   const staffUnknownFooter = useMemo(() => {
     const ok = !!(staffFlags?.is_admin || staffFlags?.is_moderator);
     if (!ok || unknownRosterCount <= 0) return null;
@@ -788,6 +805,7 @@ export default function UsersOnline() {
         countriesDay={countriesDay}
         countriesWeek={countriesWeek}
         staffUnknownFooter={staffUnknownFooter}
+        staffDupeScreenFooter={staffDupeScreenFooter}
       />
 
       {users.length === 0 ? (

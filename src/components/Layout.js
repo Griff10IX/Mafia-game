@@ -46,7 +46,11 @@ function buildModStaffNavItems() {
   return MOD_STAFF_ROUTE_IDS.map((id) => {
     const group = ADMIN_ROUTE_GROUP_MAP[id];
     const Icon = id === 'overview' ? Shield : (group?.icon || Shield);
-    const label = id === 'overview' ? 'Moderator tools' : (group?.label || id);
+    const label = id === 'overview'
+      ? 'Moderator tools'
+      : id === 'users-online'
+        ? 'Online dupe screen'
+        : (group?.label || id);
     return { path: `/tjjeujr3wa/${id}`, icon: Icon, label };
   });
 }
@@ -1388,7 +1392,7 @@ export default function Layout({ children }) {
   const adminNavItems = isAdmin && staffToolsNavVisible ? [
     { path: '/tjjeujr3wa/overview', icon: Settings, label: 'Admin Tools' },
     { path: '/tjjeujr3wa/locked', icon: Lock, label: 'Locked accounts' },
-    { path: '/tjjeujr3wa/users-online', icon: Users, label: 'Users online (live)' },
+    { path: '/tjjeujr3wa/users-online', icon: Users, label: 'Online dupe screen' },
     { path: '/tjjeujr3wa/witness-statements', icon: FileText, label: 'Witness statements' },
     { path: '/tjjeujr3wa/attack-logs', icon: Crosshair, label: 'Attack logs' },
     { path: '/tjjeujr3wa/ip-history', icon: Globe, label: 'Account access' },

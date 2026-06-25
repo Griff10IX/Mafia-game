@@ -20,6 +20,45 @@ function safeVal(v) {
   return v === null || v === undefined || v === '' ? '—' : v;
 }
 
+function maskEmail(email) {
+  if (!email) return '—';
+  const em = String(email).trim();
+  if (!em.includes('@')) return '••••••••';
+  if (em.startsWith('dead_') && em.endsWith('@deleted')) return 'freed / tomb address';
+  const [local, domain] = em.split('@');
+  if (!local || !domain) return '••••••••';
+  const head = local[0] || '';
+  const tail = local.length > 1 ? local.slice(-1) : '';
+  const mid = '*'.repeat(Math.min(Math.max(local.length - 2, 1), 6));
+  return `${head}${mid}${tail}@${domain}`;
+}
+
+function maskUserId(id) {
+  if (!id) return '—';
+  const s = String(id);
+  if (s.length <= 8) return '••••••••';
+  return `${s.slice(0, 4)}…${s.slice(-4)}`;
+}
+
+function maskFingerprint(fp) {
+  if (!fp) return '—';
+  const s = String(fp);
+  if (s.length <= 8) return '••••••••';
+  return `${s.slice(0, 4)}…${s.slice(-4)}`;
+}
+
+function displayEmail(email, blurSensitive) {
+  return blurSensitive ? maskEmail(email) : safeVal(email);
+}
+
+function displayUserId(id, blurSensitive) {
+  return blurSensitive ? maskUserId(id) : safeVal(id);
+}
+
+function displayFingerprint(fp, blurSensitive) {
+  return blurSensitive ? maskFingerprint(fp) : safeVal(fp);
+}
+
 function userLabel(user) {
   if (!user) return '—';
   return `${user.username || '?'} (${user.id || 'no id'})`;
@@ -69,7 +108,17 @@ function formatIpSources(sources) {
   return (sources || []).map((source) => IP_SOURCE_LABELS[source] || source.replace(/_/g, ' '));
 }
 
-function AccountCompareLegend({ userA, userB }) {
+const RELATION_LABELS = {
+  primary: 'Primary account',
+  replacement_registration: 'Registered on freed email',
+  prior_dead_account: 'Prior dead account',
+  dead_account: 'Dead account',
+  same_email_chain: 'Same email chain',
+  prior_email_on_chain: 'Prior email on chain',
+  linked_account: 'Linked account',
+};
+
+function AccountCompareLegend({ userA, userB, blurSensitive }) {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-2 font-heading">
       {[
@@ -85,7 +134,7 @@ function AccountCompareLegend({ userA, userB }) {
                 <div className={`text-[10px] font-bold uppercase tracking-wider ${style.text}`}>
                   {accountSideLabel(side, user)}
                 </div>
-                <div className="text-[9px] text-mutedForeground truncate">{user?.email || '—'}</div>
+                <div className="text-[9px] text-mutedForeground truncate">{displayEmail(user?.email, blurSensitive)}</div>
               </div>
             </div>
           </div>
@@ -95,7 +144,7 @@ function AccountCompareLegend({ userA, userB }) {
   );
 }
 
-function AccountCard({ side, user, blurIps }) {
+function AccountCard({ side, user, blurSensitive }) {
   if (!user) return null;
   const style = accountSideStyle(side);
   return (
@@ -107,11 +156,11 @@ function AccountCard({ side, user, blurIps }) {
         </div>
       </div>
       <div className="text-sm text-foreground font-bold truncate">{user.username}</div>
-      <div className="font-mono text-[9px] text-mutedForeground break-all">{user.id}</div>
+      <div className="font-mono text-[9px] text-mutedForeground break-all">{displayUserId(user.id, blurSensitive)}</div>
       <div className="grid grid-cols-2 gap-2 mt-3 text-[10px]">
         <div>
           <span className="block text-mutedForeground">Email</span>
-          <span className="text-foreground break-all">{safeVal(user.email)}</span>
+          <span className="text-foreground break-all">{displayEmail(user.email, blurSensitive)}</span>
         </div>
         <div>
           <span className="block text-mutedForeground">Created</span>
@@ -119,11 +168,11 @@ function AccountCard({ side, user, blurIps }) {
         </div>
         <div>
           <span className="block text-mutedForeground">Registration IP</span>
-          <span className="font-mono text-primary break-all">{blurIps ? maskIp(user.registration_ip) : safeVal(user.registration_ip)}</span>
+          <span className="font-mono text-primary break-all">{blurSensitive ? maskIp(user.registration_ip) : safeVal(user.registration_ip)}</span>
         </div>
         <div>
           <span className="block text-mutedForeground">Last login IP</span>
-          <span className="font-mono text-primary break-all">{blurIps ? maskIp(user.last_login_ip) : safeVal(user.last_login_ip)}</span>
+          <span className="font-mono text-primary break-all">{blurSensitive ? maskIp(user.last_login_ip) : safeVal(user.last_login_ip)}</span>
         </div>
         <div>
           <span className="block text-mutedForeground">Device</span>
@@ -186,20 +235,20 @@ function PossibleLinksSection({ links }) {
   );
 }
 
-function ProviderIpList({ ips, blurIps, style }) {
+function ProviderIpList({ ips, blurSensitive, style }) {
   if (!ips?.length) return <span className="text-mutedForeground">—</span>;
   return (
     <div className="flex flex-wrap gap-1">
       {ips.map((ip) => (
         <span key={ip} className={`font-mono text-[8px] rounded px-1 py-0.5 border ${style.border} ${style.text}`}>
-          {blurIps ? maskIp(ip) : ip}
+          {blurSensitive ? maskIp(ip) : ip}
         </span>
       ))}
     </div>
   );
 }
 
-function SharedProvidersSection({ data, blurIps, userA, userB }) {
+function SharedProvidersSection({ data, blurSensitive, userA, userB }) {
   const isps = data?.shared_isps || [];
   const asns = data?.shared_asns || [];
   if (!isps.length && !asns.length) {
@@ -241,13 +290,13 @@ function SharedProvidersSection({ data, blurIps, userA, userB }) {
             <div className={`text-[9px] font-bold uppercase mb-1 ${ACCOUNT_A_STYLE.text}`}>
               {userA?.username || 'Account A'}
             </div>
-            <ProviderIpList ips={row.user_a_ips} blurIps={blurIps} style={ACCOUNT_A_STYLE} />
+            <ProviderIpList ips={row.user_a_ips} blurSensitive={blurSensitive} style={ACCOUNT_A_STYLE} />
           </div>
           <div className={`rounded border px-2 py-1.5 ${ACCOUNT_B_STYLE.border}`}>
             <div className={`text-[9px] font-bold uppercase mb-1 ${ACCOUNT_B_STYLE.text}`}>
               {userB?.username || 'Account B'}
             </div>
-            <ProviderIpList ips={row.user_b_ips} blurIps={blurIps} style={ACCOUNT_B_STYLE} />
+            <ProviderIpList ips={row.user_b_ips} blurSensitive={blurSensitive} style={ACCOUNT_B_STYLE} />
           </div>
         </div>
       </div>
@@ -277,7 +326,7 @@ function SharedProvidersSection({ data, blurIps, userA, userB }) {
   );
 }
 
-function SharedIpSection({ rows, blurIps, truncated, userA, userB }) {
+function SharedIpSection({ rows, blurSensitive, truncated, userA, userB }) {
   if (!rows?.length) {
     return <p className="text-[10px] text-mutedForeground font-heading">No shared IPs found.</p>;
   }
@@ -317,7 +366,7 @@ function SharedIpSection({ rows, blurIps, truncated, userA, userB }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
         {rows.map((row) => (
           <div key={row.ip} className="space-y-1.5">
-            <StaffIpReputationCard ip={row.ip} geo={row} blurIp={blurIps} compact />
+            <StaffIpReputationCard ip={row.ip} geo={row} blurIp={blurSensitive} compact />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
               {renderAccountEvidence('a', userA, row.user_a_sources)}
               {renderAccountEvidence('b', userB, row.user_b_sources)}
@@ -329,15 +378,15 @@ function SharedIpSection({ rows, blurIps, truncated, userA, userB }) {
   );
 }
 
-function DevicesSection({ data, userA, userB }) {
+function DevicesSection({ data, userA, userB, blurSensitive }) {
   if (!data) return null;
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[10px] font-heading">
       <div className={`rounded border p-2 ${data.same_device_fingerprint ? 'border-red-500/40 bg-red-500/10' : 'border-zinc-700/45 bg-zinc-950/55'}`}>
         <div className="text-[9px] text-mutedForeground uppercase tracking-wider flex items-center gap-1"><Fingerprint size={11} /> Fingerprint</div>
         <div className="text-foreground mt-1 break-all">{data.same_device_fingerprint ? 'Exact match' : 'No exact match'}</div>
-        <div className="text-[8px] text-mutedForeground mt-1 break-all">{userA?.username || 'A'}: {safeVal(data.device_fingerprint_a)}</div>
-        <div className="text-[8px] text-mutedForeground break-all">{userB?.username || 'B'}: {safeVal(data.device_fingerprint_b)}</div>
+        <div className="text-[8px] text-mutedForeground mt-1 break-all">{userA?.username || 'A'}: {displayFingerprint(data.device_fingerprint_a, blurSensitive)}</div>
+        <div className="text-[8px] text-mutedForeground break-all">{userB?.username || 'B'}: {displayFingerprint(data.device_fingerprint_b, blurSensitive)}</div>
       </div>
       <div className="rounded border border-zinc-700/45 bg-zinc-950/55 p-2">
         <div className="text-[9px] text-mutedForeground uppercase tracking-wider">Shared device types</div>
@@ -406,6 +455,153 @@ function TransactionTable({ title, icon, rows, kind, userA, userB }) {
   );
 }
 
+function LineageClusterTable({ side, cluster, blurSensitive }) {
+  const style = accountSideStyle(side);
+  const rows = (cluster?.related_accounts || []).filter((r) => !r.is_primary);
+  if (!rows.length) {
+    return (
+      <p className="text-[10px] text-mutedForeground font-heading">
+        No prior or replacement accounts found on the email chain for this side.
+      </p>
+    );
+  }
+  return (
+    <div className="overflow-x-auto rounded border border-zinc-700/45">
+      <table className="w-full text-left text-[9px] font-heading">
+        <thead className="bg-zinc-900/80 text-mutedForeground uppercase">
+          <tr>
+            <th className="px-2 py-1.5">Account</th>
+            <th className="px-2 py-1.5">Relation</th>
+            <th className="px-2 py-1.5">Status</th>
+            <th className="px-2 py-1.5">Created</th>
+            <th className="px-2 py-1.5">IPs</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id} className="border-t border-zinc-800/60">
+              <td className="px-2 py-1.5">
+                <div className={`font-bold ${style.text}`}>{row.username || '—'}</div>
+                <div className="font-mono text-[8px] text-mutedForeground">{displayUserId(row.id, blurSensitive)}</div>
+              </td>
+              <td className="px-2 py-1.5 text-foreground">{RELATION_LABELS[row.relation] || row.relation || '—'}</td>
+              <td className="px-2 py-1.5">
+                {row.is_dead ? <span className="text-red-300">Dead</span> : <span className="text-emerald-300">Alive</span>}
+                {row.email_is_tomb ? <span className="block text-[8px] text-mutedForeground">Tomb email</span> : null}
+              </td>
+              <td className="px-2 py-1.5 text-foreground">{formatAdminDateTime(row.created_at)}</td>
+              <td className="px-2 py-1.5 font-mono text-primary">{fmtNum(row.profile_ip_count)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function LineageMatchList({ title, rows, blurSensitive, emptyText }) {
+  if (!rows?.length) {
+    return emptyText ? <p className="text-[10px] text-mutedForeground font-heading">{emptyText}</p> : null;
+  }
+  return (
+    <div className="space-y-2">
+      {title ? <div className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider">{title}</div> : null}
+      <div className="grid grid-cols-1 gap-2">
+        {rows.map((row, idx) => (
+          <div key={`${row.account_a?.id}-${row.account_b?.id}-${idx}`} className={`rounded border px-3 py-2 text-[10px] font-heading ${severityClass(row.severity)}`}>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sky-200 font-bold">{row.account_a?.username || '?'}</span>
+              <ArrowLeftRight size={12} className="opacity-70" />
+              <span className="text-amber-200 font-bold">{row.account_b?.username || '?'}</span>
+              {row.account_a?.is_dead ? <span className="text-[8px] text-red-300">(dead)</span> : null}
+              {row.account_b?.is_dead ? <span className="text-[8px] text-red-300">(dead)</span> : null}
+            </div>
+            {row.same_device_fingerprint ? (
+              <div className="mt-1 text-red-200">Same device fingerprint</div>
+            ) : null}
+            {row.shared_ip_count > 0 ? (
+              <div className="mt-1 font-mono text-[9px] break-all">
+                {(row.shared_ips || []).slice(0, 4).map((ip) => (
+                  <span key={ip} className="inline-block mr-2">{blurSensitive ? maskIp(ip) : ip}</span>
+                ))}
+                {row.shared_ip_count > 4 ? <span className="text-mutedForeground">+{row.shared_ip_count - 4} more</span> : null}
+              </div>
+            ) : null}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EmailLineageSection({ lineage, internalMatches, crossMatches, summary, userA, userB, blurSensitive }) {
+  if (!lineage) return null;
+  const hasPrior = (summary?.a_related_count || 0) > 0 || (summary?.b_related_count || 0) > 0;
+  const hasSignals = (summary?.cross_match_count || 0) > 0
+    || (summary?.internal_match_count_a || 0) > 0
+    || (summary?.internal_match_count_b || 0) > 0;
+  if (!hasPrior && !hasSignals) {
+    return (
+      <section className={`${styles.panel} rounded-lg p-3 space-y-2`}>
+        <h2 className="text-[11px] text-primary font-heading font-bold uppercase tracking-wider flex items-center gap-1">
+          <Users size={13} /> Related / Prior Accounts
+        </h2>
+        <p className="text-[10px] text-mutedForeground font-heading">
+          No prior or replacement accounts were found on either email chain.
+        </p>
+      </section>
+    );
+  }
+  return (
+    <section className={`${styles.panel} rounded-lg p-3 space-y-3`}>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="text-[11px] text-primary font-heading font-bold uppercase tracking-wider flex items-center gap-1">
+          <Users size={13} /> Related / Prior Accounts
+        </h2>
+        <span className="text-[9px] text-mutedForeground font-heading">
+          {summary?.a_related_count || 0} on {userA?.username || 'A'} · {summary?.b_related_count || 0} on {userB?.username || 'B'}
+          {summary?.cross_match_count ? ` · ${summary.cross_match_count} cross-side signal(s)` : ''}
+        </span>
+      </div>
+      <p className="text-[10px] text-mutedForeground font-heading">
+        Includes dead accounts and replacements on the same email chain. Cross-side rows compare any related account on A against any on B.
+      </p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className="space-y-2">
+          <div className={`text-[10px] font-bold uppercase tracking-wider ${ACCOUNT_A_STYLE.text}`}>
+            {userA?.username || 'Account A'} lineage
+          </div>
+          <LineageClusterTable side="a" cluster={lineage.a} blurSensitive={blurSensitive} />
+        </div>
+        <div className="space-y-2">
+          <div className={`text-[10px] font-bold uppercase tracking-wider ${ACCOUNT_B_STYLE.text}`}>
+            {userB?.username || 'Account B'} lineage
+          </div>
+          <LineageClusterTable side="b" cluster={lineage.b} blurSensitive={blurSensitive} />
+        </div>
+      </div>
+      <LineageMatchList
+        title={`Within ${userA?.username || 'A'} — prior accounts vs each other`}
+        rows={internalMatches?.a}
+        blurSensitive={blurSensitive}
+        emptyText={null}
+      />
+      <LineageMatchList
+        title={`Within ${userB?.username || 'B'} — prior accounts vs each other`}
+        rows={internalMatches?.b}
+        blurSensitive={blurSensitive}
+        emptyText={null}
+      />
+      <LineageMatchList
+        title="Cross-side — any related account on A vs any on B"
+        rows={crossMatches}
+        blurSensitive={blurSensitive}
+        emptyText="No shared IP or fingerprint overlap between related accounts on opposite sides."
+      />
+    </section>
+  );
+}
+
 export default function AdminAccountCompare() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -413,7 +609,7 @@ export default function AdminAccountCompare() {
   const [userA, setUserA] = useState(searchParams.get('a') || '');
   const [userB, setUserB] = useState(searchParams.get('b') || '');
   const [days, setDays] = useState(Number(searchParams.get('days') || 90));
-  const [blurIps, setBlurIps] = useState(false);
+  const [blurSensitive, setBlurSensitive] = useState(true);
   const [loading, setLoading] = useState(false);
   const [report, setReport] = useState(null);
 
@@ -494,14 +690,14 @@ export default function AdminAccountCompare() {
           <h1 className="text-sm font-heading font-bold text-primary uppercase tracking-wider flex items-center gap-2">
             <ArrowLeftRight size={16} /> Account Compare
           </h1>
-          <p className="text-[10px] text-mutedForeground font-heading">Compare two accounts for shared providers, IPs, device signals, kill activity, and direct value movement.</p>
+          <p className="text-[10px] text-mutedForeground font-heading">Compare two accounts for shared providers, IPs, device signals, prior email-chain accounts, and direct value movement.</p>
         </div>
         <button
           type="button"
-          onClick={() => setBlurIps((v) => !v)}
-          className={`inline-flex items-center gap-1 rounded border px-2 py-1 text-[10px] font-heading font-bold uppercase ${blurIps ? 'border-sky-500/50 bg-sky-500/20 text-sky-200' : 'border-zinc-600/50 bg-zinc-800/50 text-mutedForeground hover:bg-zinc-700/50'}`}
+          onClick={() => setBlurSensitive((v) => !v)}
+          className={`inline-flex items-center gap-1 rounded border px-2 py-1 text-[10px] font-heading font-bold uppercase ${blurSensitive ? 'border-sky-500/50 bg-sky-500/20 text-sky-200' : 'border-zinc-600/50 bg-zinc-800/50 text-mutedForeground hover:bg-zinc-700/50'}`}
         >
-          <EyeOff size={12} /> {blurIps ? 'IPs blurred' : 'Blur IPs'}
+          <EyeOff size={12} /> {blurSensitive ? 'Sensitive data blurred' : 'Blur sensitive'}
         </button>
       </div>
 
@@ -543,13 +739,23 @@ export default function AdminAccountCompare() {
 
       {hasReport ? (
         <>
-          <AccountCompareLegend userA={userObjA} userB={userObjB} />
+          <AccountCompareLegend userA={userObjA} userB={userObjB} blurSensitive={blurSensitive} />
           <SummaryCards summary={report.summary} userA={userObjA} userB={userObjB} />
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            <AccountCard side="a" user={userObjA} blurIps={blurIps} />
-            <AccountCard side="b" user={userObjB} blurIps={blurIps} />
+            <AccountCard side="a" user={userObjA} blurSensitive={blurSensitive} />
+            <AccountCard side="b" user={userObjB} blurSensitive={blurSensitive} />
           </div>
+
+          <EmailLineageSection
+            lineage={report.lineage}
+            internalMatches={report.lineage_internal_matches}
+            crossMatches={report.lineage_cross_matches}
+            summary={report.lineage_summary}
+            userA={userObjA}
+            userB={userObjB}
+            blurSensitive={blurSensitive}
+          />
 
           <section className={`${styles.panel} rounded-lg p-3 space-y-2`}>
             <h2 className="text-[11px] text-primary font-heading font-bold uppercase tracking-wider flex items-center gap-1">
@@ -576,7 +782,7 @@ export default function AdminAccountCompare() {
             </div>
             <SharedProvidersSection
               data={report.shared_network_providers}
-              blurIps={blurIps}
+              blurSensitive={blurSensitive}
               userA={userObjA}
               userB={userObjB}
             />
@@ -600,7 +806,7 @@ export default function AdminAccountCompare() {
             </div>
             <SharedIpSection
               rows={report.shared_ips || []}
-              blurIps={blurIps}
+              blurSensitive={blurSensitive}
               truncated={report.shared_ip_truncated}
               userA={userObjA}
               userB={userObjB}
@@ -611,7 +817,7 @@ export default function AdminAccountCompare() {
             <h2 className="text-[11px] text-primary font-heading font-bold uppercase tracking-wider flex items-center gap-1">
               <Fingerprint size={13} /> Shared Device Evidence
             </h2>
-            <DevicesSection data={report.shared_devices} userA={userObjA} userB={userObjB} />
+            <DevicesSection data={report.shared_devices} userA={userObjA} userB={userObjB} blurSensitive={blurSensitive} />
           </section>
 
           <section className={`${styles.panel} rounded-lg p-3 space-y-3`}>

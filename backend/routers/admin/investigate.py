@@ -1218,6 +1218,18 @@ def register(router):
             car_rows=car_rows,
         )
 
+        from utils.account_compare_lineage import build_account_compare_lineage
+
+        lineage_payload = await build_account_compare_lineage(
+            db,
+            ua,
+            ub,
+            days=days,
+            actor=current_user,
+        )
+        lineage_summary = lineage_payload.get("lineage_summary") or {}
+        lineage_cross = lineage_payload.get("lineage_cross_matches") or []
+
         findings: List[Dict[str, Any]] = []
         if same_fingerprint:
             findings.append({"severity": "critical", "code": "same_device_fingerprint", "title": "Same device fingerprint", "detail": "Both accounts have the same stored device fingerprint."})
@@ -1234,6 +1246,30 @@ def register(router):
                     "detail": link.get("detail"),
                 }
             )
+        if int(lineage_summary.get("cross_match_count") or 0) > 0:
+            findings.append(
+                {
+                    "severity": "critical" if int(lineage_summary.get("cross_same_fingerprint_pairs") or 0) > 0 else "warn",
+                    "code": "lineage_cross_overlap",
+                    "title": "Prior accounts overlap between sides",
+                    "detail": (
+                        f"{lineage_summary.get('cross_match_count')} signal(s) between related/prior accounts "
+                        f"({lineage_summary.get('a_related_count')} on A, {lineage_summary.get('b_related_count')} on B)."
+                    ),
+                }
+            )
+        for side_key, user_obj in (("a", ua), ("b", ub)):
+            internal = (lineage_payload.get("lineage_internal_matches") or {}).get(side_key) or []
+            if internal:
+                uname = user_obj.get("username") or side_key.upper()
+                findings.append(
+                    {
+                        "severity": "warn",
+                        "code": f"lineage_internal_{side_key}",
+                        "title": f"Prior accounts overlap on {uname}",
+                        "detail": f"{len(internal)} shared IP or fingerprint match(es) among related accounts on this side.",
+                    }
+                )
 
         return {
             "report_type": "account_compare",
@@ -1273,6 +1309,11 @@ def register(router):
                 "exclusive_car_event_count": len(car_rows),
             },
             "findings": findings,
+            "lineage": lineage_payload.get("lineage"),
+            "lineage_internal_matches": lineage_payload.get("lineage_internal_matches"),
+            "lineage_cross_matches": lineage_cross,
+            "lineage_transfers": lineage_payload.get("lineage_transfers"),
+            "lineage_summary": lineage_summary,
         }
 
     @router.get("/admin/investigate/account-access-report")
