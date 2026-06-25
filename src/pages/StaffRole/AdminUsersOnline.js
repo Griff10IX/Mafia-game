@@ -281,7 +281,7 @@ export default function AdminUsersOnline() {
                 {screenEnabled ? (
                   <>
                     <th className="py-2 px-3 font-bold uppercase tracking-wider">Risk</th>
-                    <th className="py-2 px-3 font-bold uppercase tracking-wider">Likely real</th>
+                    <th className="py-2 px-3 font-bold uppercase tracking-wider">Online main / alt</th>
                     <th className="py-2 px-3 font-bold uppercase tracking-wider">Flags</th>
                     <th className="py-2 px-3 font-bold uppercase tracking-wider">Linked</th>
                   </>
@@ -369,7 +369,7 @@ export default function AdminUsersOnline() {
                                   >
                                     → {likelyReal.username}
                                   </Link>
-                                  <div className="text-mutedForeground text-[8px]">likely main</div>
+                                  <div className="text-mutedForeground text-[8px]">online main</div>
                                 </div>
                               ) : clusterRole === 'possible_main' && possibleDupes[0]?.username ? (
                                 <div>
@@ -464,7 +464,7 @@ export default function AdminUsersOnline() {
                               <div className="space-y-2">
                                 {(screen.account_links?.length ?? 0) > 0 ? (
                                   <div className="rounded border border-emerald-500/25 bg-emerald-500/5 p-2 text-[9px] space-y-1.5">
-                                    <div className="text-emerald-300/90 uppercase font-bold">Account pairing (guess)</div>
+                                    <div className="text-emerald-300/90 uppercase font-bold">Online pairing (alive + online only)</div>
                                     {screen.account_links.map((link) => (
                                       <div key={`${link.role}-${link.id || link.username}`} className="flex flex-wrap items-center gap-2">
                                         <span className={`px-1 py-0.5 rounded border text-[8px] uppercase font-bold ${
@@ -472,7 +472,7 @@ export default function AdminUsersOnline() {
                                             ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-200'
                                             : 'border-amber-500/40 bg-amber-500/15 text-amber-200'
                                         }`}>
-                                          {link.role === 'likely_real' ? 'Likely real' : 'Likely dupe'}
+                                          {link.role === 'likely_real' ? 'Online main' : 'Online alt'}
                                         </span>
                                         <Link
                                           to={`/profile/${encodeURIComponent(link.username)}`}
@@ -574,6 +574,7 @@ export default function AdminUsersOnline() {
 
       <p className="text-[9px] text-mutedForeground font-heading">
         Dupe screen uses cached IP geo (proxy/hosting flags) plus DB links — shared IPs, fingerprints, and who else is online from the same address.
+        <strong className="text-foreground"> Online main / alt</strong> only pairs alive accounts that are online right now on the same IP or device — dead accounts still appear under linked IP / fingerprint lists.
         Click <span className="text-primary">Screen</span> for details or open full <span className="text-amber-300/90">Account access</span> for VPN timeline / login history.
         Refreshes every 60s.
       </p>

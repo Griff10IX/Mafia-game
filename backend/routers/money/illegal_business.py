@@ -136,6 +136,7 @@ DISTILLERY_TARGET_12D_TOP_END = 50_000_000
 DISTILLERY_TARGET_DAILY_TOP_END = DISTILLERY_TARGET_12D_TOP_END / 12.0
 DISTILLERY_TOP_END_HOURS = 12 * 24
 DISTILLERY_RISK_ACTION_COOLDOWN_HOURS = 4
+DISTILLERY_RISK_ACTION_HEAT_AFTER = 0.0
 DISTILLERY_PRICE_SCALE = 0.72
 DISTILLERY_MAX_SINGLE_UPGRADE_COST = 120_000_000
 DISTILLERY_RISK_ACTION_COSTS = {"cool_off": 900_000, "bribe_crackdown": 3_500_000}
@@ -1015,7 +1016,20 @@ def _distillery_ensure_state(business: dict, now: Optional[datetime] = None) -> 
     if "last_tick_at" not in dist:
         dist["last_tick_at"] = ts.isoformat()
         changed = True
+    if _distillery_forgive_stale_risk_cooldown(dist):
+        changed = True
     return dist, changed
+
+
+def _distillery_forgive_stale_risk_cooldown(distillery: dict) -> bool:
+    """Old balance only trimmed heat; if still critical+ on cooldown, allow paying again."""
+    heat = float(distillery.get("heat") or 0.0)
+    if heat < float(DISTILLERY_HEAT_THRESHOLDS["critical"]):
+        return False
+    if not distillery.get("last_risk_action_at"):
+        return False
+    distillery["last_risk_action_at"] = None
+    return True
 
 
 def _distillery_decay_and_status(distillery: dict, now: datetime) -> dict:
@@ -2854,11 +2868,11 @@ async def distillery_risk_action(req: DistilleryRiskActionRequest, current_user:
     if vault < cost:
         raise HTTPException(status_code=400, detail=f"Need ${cost:,} in vault. You have ${vault:,}.")
     heat = float(distillery.get("heat") or 0.0)
-    if action == "cool_off":
-        heat = _clamp(heat - 18.0, 0.0, 100.0)
-    else:
-        heat = _clamp(heat - 34.0, 0.0, 100.0)
+    had_shutdown = bool(distillery.get("shutdown_until"))
+    heat_before = heat
+    heat = float(DISTILLERY_RISK_ACTION_HEAT_AFTER)
     distillery["heat"] = heat
+    distillery["shutdown_until"] = None
     distillery["last_heat_at"] = now.isoformat()
     distillery["last_risk_action_at"] = now.isoformat()
     risk_actions = distillery.get("risk_actions") or {}
@@ -2887,10 +2901,17 @@ async def distillery_risk_action(req: DistilleryRiskActionRequest, current_user:
         if latest_last and (now - last_dt).total_seconds() < DISTILLERY_RISK_ACTION_COOLDOWN_HOURS * 3600:
             raise HTTPException(status_code=400, detail=f"Risk actions are on cooldown ({DISTILLERY_RISK_ACTION_COOLDOWN_HOURS}h).")
         raise HTTPException(status_code=400, detail="Risk action failed.")
+    action_label = "Cool Off" if action == "cool_off" else "Bribe"
+    msg = f"{action_label} paid (${cost:,}). Heat cleared from {heat_before:.1f} to {heat:.1f}."
+    if had_shutdown:
+        msg += " Enforcement shutdown lifted — stills are back online."
     return {
-        "message": "Risk action completed.",
+        "message": msg,
         "action": action,
         "cost": cost,
+        "heat_before": heat_before,
+        "heat_after": heat,
+        "shutdown_lifted": had_shutdown,
         **_distillery_public_payload(distillery, business, current_user, _utc_now()),
     }
 

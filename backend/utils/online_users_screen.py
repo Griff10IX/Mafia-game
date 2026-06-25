@@ -40,8 +40,10 @@ def _rank_real_account_candidates(
     subject_raw: Dict[str, Any],
     candidates_by_id: Dict[str, Dict[str, Any]],
     reasons_by_id: Dict[str, List[str]],
+    *,
+    online_user_ids: Set[str],
 ) -> List[Dict[str, Any]]:
-    """Guess which linked account is the player's original / main account."""
+    """Guess which other online account is the player's main when this row looks like an alt."""
     sub_created = _parse_created_at(subject_raw.get("created_at"))
     sub_prog = _progression_score(subject_raw)
     sub_email = _effective_email(subject_raw)
@@ -50,16 +52,27 @@ def _rank_real_account_candidates(
     for cid, cand in candidates_by_id.items():
         if cid == subject_id:
             continue
+        if cand.get("is_dead"):
+            continue
+        if cid not in online_user_ids:
+            continue
+
         reasons = list(dict.fromkeys(reasons_by_id.get(cid) or []))
+        reason_blob = " ".join(reasons)
+        has_online_overlap = (
+            "same_ip_online" in reasons
+            or "same_fingerprint_online" in reasons
+        )
+        if not has_online_overlap:
+            continue
+
         score = 0
-        why: List[str] = []
+        why: List[str] = ["online_now"]
         cand_created = _parse_created_at(cand.get("created_at"))
         cand_prog = _progression_score(cand)
         cand_email = _effective_email(cand)
 
-        if not cand.get("is_dead"):
-            score += 18
-            why.append("alive")
+        score += 50
         if cand_created and sub_created and cand_created < sub_created:
             score += 28
             why.append("older_account")
@@ -74,20 +87,13 @@ def _rank_real_account_candidates(
         if subject_raw.get("registration_freed_email_from_user_id") == cid:
             score += 42
             why.append("replaced_dead_account")
-        if cand.get("registration_freed_email_from_user_id") == subject_id:
-            score -= 30
-            why.append("newer_replacement_for_subject")
 
-        reason_blob = " ".join(reasons)
         if "same_ip_online" in reasons:
             score += 34
             why.append("same_ip_online_now")
         if "shared_fingerprint" in reason_blob or "same_fingerprint_online" in reason_blob:
             score += 24
             why.append("same_device")
-        if "shared_ip" in reason_blob:
-            score += 14
-            why.append("shared_ip_history")
 
         confidence = "low"
         if score >= 55:
@@ -100,7 +106,8 @@ def _rank_real_account_candidates(
                 "id": cid,
                 "username": cand.get("username"),
                 "email": cand_email,
-                "is_dead": bool(cand.get("is_dead")),
+                "is_dead": False,
+                "is_online": True,
                 "created_at": cand.get("created_at"),
                 "rank_points": int(cand.get("rank_points") or 0),
                 "points": int(cand.get("points") or 0),
@@ -120,17 +127,27 @@ def _rank_possible_dupes(
     subject_raw: Dict[str, Any],
     candidates_by_id: Dict[str, Dict[str, Any]],
     reasons_by_id: Dict[str, List[str]],
+    *,
+    online_user_ids: Set[str],
 ) -> List[Dict[str, Any]]:
-    """If this online user looks like the main account, list likely alts."""
+    """If this online user looks like the main account, list other online alts on the same IP/device."""
     sub_created = _parse_created_at(subject_raw.get("created_at"))
     sub_prog = _progression_score(subject_raw)
     out: List[Dict[str, Any]] = []
     for cid, cand in candidates_by_id.items():
         if cid == subject_id:
             continue
+        if cand.get("is_dead"):
+            continue
+        if cid not in online_user_ids:
+            continue
+
         reasons = list(dict.fromkeys(reasons_by_id.get(cid) or []))
+        if not any(r in reasons for r in ("same_ip_online", "same_fingerprint_online")):
+            continue
+
         score = 0
-        why: List[str] = []
+        why: List[str] = ["online_now"]
         cand_created = _parse_created_at(cand.get("created_at"))
         cand_prog = _progression_score(cand)
         if cand_created and sub_created and cand_created > sub_created:
@@ -155,7 +172,8 @@ def _rank_possible_dupes(
             {
                 "id": cid,
                 "username": cand.get("username"),
-                "is_dead": bool(cand.get("is_dead")),
+                "is_dead": False,
+                "is_online": True,
                 "created_at": cand.get("created_at"),
                 "link_reasons": reasons,
                 "why_likely_dupe": why,
@@ -333,7 +351,11 @@ async def attach_online_screening(
     fp_rows_by_fp = await _batch_fingerprint_matches(db, unique_fps)
 
     online_by_ip: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    online_user_ids: Set[str] = set()
     for row in users:
+        uid = row.get("id")
+        if uid:
+            online_user_ids.add(uid)
         ip_row = normalize_ip(row.get("ip") or "")
         if ip_row:
             online_by_ip[ip_row].append(row)
@@ -441,13 +463,17 @@ async def attach_online_screening(
                 )
                 break
 
-        likely_real_accounts = _rank_real_account_candidates(uid, raw, candidates_by_id, reasons_by_id)
+        likely_real_accounts = _rank_real_account_candidates(
+            uid, raw, candidates_by_id, reasons_by_id, online_user_ids=online_user_ids
+        )
         top_real = (
             likely_real_accounts[0]
             if likely_real_accounts and int(likely_real_accounts[0].get("confidence_score") or 0) >= 30
             else None
         )
-        possible_dupes = _rank_possible_dupes(uid, raw, candidates_by_id, reasons_by_id)
+        possible_dupes = _rank_possible_dupes(
+            uid, raw, candidates_by_id, reasons_by_id, online_user_ids=online_user_ids
+        )
 
         cluster_role = "unknown"
         if top_real and int(top_real.get("confidence_score") or 0) >= 35:
