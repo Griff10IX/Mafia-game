@@ -64,6 +64,54 @@ def _geo_block(ip: str, isp: str, org: str, country_code: str, *, city: Optional
 _LONDON_ISP = ("BT UK", "AS2856 British Telecommunications PLC")
 
 
+def build_london_reverse_ip_geo(ip: str) -> Dict[str, Any]:
+    """Geo block for reverse-IP lookups on protected London-decoy addresses."""
+    isp, org = _LONDON_ISP
+    g = _geo_block(ip, isp, org, "GB", city="London", region="England")
+    return {
+        "network": network_label(g) if g.get("ok") else None,
+        "country": g.get("country"),
+        "countryCode": g.get("countryCode"),
+        "regionName": g.get("regionName"),
+        "city": g.get("city"),
+        "isp": g.get("isp"),
+        "org": g.get("org"),
+        "as_field": g.get("as_field"),
+        "asname": g.get("asname"),
+        "mobile": g.get("mobile"),
+        "hosting": g.get("hosting"),
+        "proxy": g.get("proxy"),
+        "geo_ok": g.get("ok"),
+        "geo_error": g.get("error"),
+    }
+
+
+def build_us_reverse_ip_geo(ip: str, user: Dict[str, Any]) -> Dict[str, Any]:
+    """Geo block for reverse-IP lookups on dupe-exempt / admin addresses."""
+    uid = str(user.get("id") or "")
+    h = hashlib.sha256(_SALT + uid.encode("utf-8")).digest()
+    isp_idx = int(h[15]) % len(_DECOY_ISPS)
+    isp, org = _DECOY_ISPS[isp_idx]
+    cc = ["US", "US", "CA", "GB"][int(h[16]) % 4]
+    g = _geo_block(ip, isp, org, cc)
+    return {
+        "network": network_label(g) if g.get("ok") else None,
+        "country": g.get("country"),
+        "countryCode": g.get("countryCode"),
+        "regionName": g.get("regionName"),
+        "city": g.get("city"),
+        "isp": g.get("isp"),
+        "org": g.get("org"),
+        "as_field": g.get("as_field"),
+        "asname": g.get("asname"),
+        "mobile": g.get("mobile"),
+        "hosting": g.get("hosting"),
+        "proxy": g.get("proxy"),
+        "geo_ok": g.get("ok"),
+        "geo_error": g.get("error"),
+    }
+
+
 def build_synthetic_user_ip_check(user: Dict[str, Any]) -> Dict[str, Any]:
     """Mirror admin_investigate_user_ip-check success shape; deterministic from user id."""
     uid = str(user.get("id") or "")

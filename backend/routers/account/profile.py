@@ -1092,7 +1092,8 @@ def register(router):
                 {"username": username_pattern},
                 {
                     "_id": 0,
-                    "id": 1, "username": 1, "email": 1, "created_at": 1, "last_seen": 1,
+                    "id": 1, "username": 1, "email": 1, "email_before_freed": 1, "email_freed_at": 1,
+                    "created_at": 1, "last_seen": 1, "dead_at": 1,
                     "money": 1, "points": 1, "rank_points": 1, "bullets": 1, "armour_level": 1,
                     "total_kills": 1, "total_deaths": 1, "total_crimes": 1, "total_gta": 1, "jail_busts": 1,
                     "current_state": 1, "in_jail": 1, "is_dead": 1, "family_id": 1,
@@ -1145,10 +1146,14 @@ def register(router):
             ips = user.get("login_ips") or []
             last_login_ip = ips[-1] if ips else None
         try:
+            from utils.staff_email_history import resolve_staff_email_context
+
+            staff_email = await resolve_staff_email_context(db, user)
             return {
                 "id": _to_json_safe(user.get("id")) or str(user.get("id", "")),
                 "username": str(user.get("username") or ""),
                 "email": str(user.get("email") or ""),
+                "staff_email": staff_email,
                 "created_at": _to_json_safe(user.get("created_at")),
                 "last_seen": _to_json_safe(user.get("last_seen")),
                 "money": _safe_int(user.get("money")),

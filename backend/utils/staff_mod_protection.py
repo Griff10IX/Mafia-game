@@ -138,6 +138,32 @@ def use_london_investigation_decoy(target: Optional[dict]) -> bool:
     return uname in _STAFF_INVESTIGATION_LONDON_DECOY_USERNAMES
 
 
+def account_hidden_from_mod_reverse_ip(user: Optional[dict]) -> bool:
+    """Hide protected staff targets from reverse-IP account lists for mods."""
+    if account_hidden_from_mod_investigation_links(user):
+        return True
+    return use_london_investigation_decoy(user)
+
+
+def reverse_ip_geo_decoy_kind(linked_users: List[dict], actor: Optional[dict]) -> Optional[str]:
+    """Return 'london' or 'us' when mods should see decoy geo for a searched IP."""
+    if actor_has_full_admin_powers(actor):
+        return None
+    kind: Optional[str] = None
+    for user in linked_users or []:
+        if use_london_investigation_decoy(user):
+            return "london"
+        if user_has_dupe_exempt_email(user) or user_is_admin_account(user):
+            kind = kind or "us"
+    return kind
+
+
+def filter_reverse_ip_accounts(rows: List[dict], actor: Optional[dict]) -> List[dict]:
+    if actor_has_full_admin_powers(actor):
+        return rows
+    return [r for r in rows if not account_hidden_from_mod_reverse_ip(r)]
+
+
 def filter_investigation_linked_accounts(rows: List[dict], actor: Optional[dict]) -> List[dict]:
     if actor_has_full_admin_powers(actor):
         return rows
@@ -206,4 +232,161 @@ def sanitize_dupe_intel_report_for_actor(report: dict, actor: dict) -> dict:
             if kept:
                 cleaned.append(kept)
         out[key] = cleaned
+    return out
+
+
+def _filter_proxy_country_accounts(accounts: List[dict], hidden_ids: Set[str]) -> List[dict]:
+    return [a for a in accounts if a.get("id") not in hidden_ids]
+
+
+def _sanitize_proxy_countries(countries: dict, hidden_ids: Set[str]) -> dict:
+    by_ip_out: List[dict] = []
+    country_accounts: Dict[str, Set[str]] = {}
+    country_ips: Dict[str, Set[str]] = {}
+    id_to_user: Dict[str, dict] = {}
+
+    for row in countries.get("by_ip") or []:
+        if not isinstance(row, dict):
+            continue
+        accs = _filter_proxy_country_accounts(row.get("accounts") or [], hidden_ids)
+        for ac in accs:
+            uid = ac.get("id")
+            if uid:
+                id_to_user[uid] = ac
+        if not accs:
+            continue
+        cc = row.get("country_code") or "?"
+        cc_key = str(cc)
+        for ac in accs:
+            if ac.get("id"):
+                country_accounts.setdefault(cc_key, set()).add(ac["id"])
+        country_ips.setdefault(cc_key, set()).add(row.get("ip") or "")
+        by_ip_out.append({**row, "accounts": accs})
+
+    by_country_out: List[dict] = []
+    for cc in sorted(country_accounts.keys()):
+        acc_rows = [id_to_user[uid] for uid in country_accounts[cc] if uid in id_to_user]
+        by_country_out.append(
+            {
+                "country_code": None if cc == "?" else cc,
+                "account_count": len(acc_rows),
+                "ip_count": len(country_ips.get(cc) or []),
+                "ips": sorted(country_ips.get(cc) or [])[:30],
+                "accounts": sorted(acc_rows, key=lambda x: (x.get("username") or "").lower()),
+            }
+        )
+    return {"by_ip": by_ip_out, "by_country": by_country_out}
+
+
+def _sanitize_cluster_points(points: dict, hidden_ids: Set[str]) -> dict:
+    out = dict(points)
+    transfers = [
+        t
+        for t in (out.get("transfers") or [])
+        if t.get("from_user_id") not in hidden_ids and t.get("to_user_id") not in hidden_ids
+    ]
+    ledger = [
+        t
+        for t in (out.get("ledger_between_cluster") or [])
+        if t.get("from_user_id") not in hidden_ids and t.get("to_user_id") not in hidden_ids
+    ]
+    per_user = [p for p in (out.get("per_user") or []) if p.get("user_id") not in hidden_ids]
+    total_pts = sum(int(t.get("amount") or 0) for t in transfers)
+    out["transfers"] = transfers
+    out["ledger_between_cluster"] = ledger
+    out["per_user"] = per_user
+    out["totals"] = {
+        "transfer_count": len(transfers),
+        "points_moved": total_pts,
+        "accounts_in_cluster": len({p.get("user_id") for p in per_user if p.get("user_id")}),
+    }
+    return out
+
+
+def sanitize_proxy_farm_report_for_actor(report: dict, actor: dict) -> dict:
+    """Strip protected staff-linked accounts from proxy-farm / dupe investigate output for mods."""
+    if actor_has_full_admin_powers(actor):
+        return report
+    out = dict(report)
+    hidden_ids: Set[str] = set()
+
+    linked = out.get("linked_accounts")
+    if isinstance(linked, list):
+        kept: List[dict] = []
+        for row in linked:
+            if not isinstance(row, dict):
+                continue
+            if row.get("is_seed"):
+                kept.append(row)
+                continue
+            if account_hidden_from_mod_investigation_links(row):
+                rid = row.get("id")
+                if rid:
+                    hidden_ids.add(rid)
+                continue
+            kept.append(row)
+        out["linked_accounts"] = kept
+        out["linked_account_count"] = len(kept)
+
+    if hidden_ids:
+        countries = out.get("countries")
+        if isinstance(countries, dict):
+            out["countries"] = _sanitize_proxy_countries(countries, hidden_ids)
+        peers = out.get("subnet24_peers")
+        if isinstance(peers, list):
+            filtered_peers = [
+                p
+                for p in peers
+                if p.get("id") not in hidden_ids and not account_hidden_from_mod_investigation_links(p)
+            ]
+            out["subnet24_peers"] = filtered_peers
+            out["subnet_peer_count"] = len(filtered_peers)
+        pic = out.get("points_in_cluster")
+        if isinstance(pic, dict):
+            out["points_in_cluster"] = _sanitize_cluster_points(pic, hidden_ids)
+
+    if out.get("mode") == "global":
+        hotspots = out.get("hotspots")
+        if isinstance(hotspots, list):
+            cleaned_hotspots: List[dict] = []
+            for hotspot in hotspots:
+                if not isinstance(hotspot, dict):
+                    continue
+                accs = hotspot.get("accounts")
+                if isinstance(accs, list):
+                    kept_accs = filter_investigation_linked_accounts(accs, actor)
+                    if len(kept_accs) != len(accs):
+                        hotspot = dict(hotspot)
+                        hotspot["accounts"] = kept_accs
+                        hotspot["account_count"] = len(kept_accs)
+                if int(hotspot.get("account_count") or 0) >= 2:
+                    cleaned_hotspots.append(hotspot)
+            out["hotspots"] = cleaned_hotspots
+
+    # Recompute farm heuristics without hidden alts.
+    linked_only = [a for a in (out.get("linked_accounts") or []) if not a.get("is_seed")]
+    pts_moved = int(((out.get("points_in_cluster") or {}).get("totals") or {}).get("points_moved") or 0)
+    xfer_count = int(((out.get("points_in_cluster") or {}).get("totals") or {}).get("transfer_count") or 0)
+    worst_score = 0
+    for assessment in out.get("ip_assessments") or []:
+        worst_score = max(worst_score, int(assessment.get("risk_score") or 0))
+    worst_verdict = out.get("worst_ip_verdict") or "clean"
+    reg_rep = out.get("registration_ip_assessment") or {}
+    behavior = out.get("behavior") or {}
+    likely_farm = (
+        worst_verdict == "likely_proxy_service"
+        or bool(reg_rep.get("block_auth"))
+        or (len(linked_only) >= 2 and worst_score >= 28)
+        or (behavior.get("behavior_flags") and worst_score >= 40)
+        or (len(linked_only) >= 2 and pts_moved >= 5000)
+    )
+    out["likely_proxy_farm"] = likely_farm
+    combined_risk = min(
+        100,
+        worst_score
+        + int(behavior.get("behavior_risk_score") or 0)
+        + (15 if len(linked_only) >= 2 else 0)
+        + (10 if xfer_count >= 3 else 0),
+    )
+    out["combined_risk_score"] = combined_risk
     return out

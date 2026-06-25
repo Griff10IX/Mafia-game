@@ -259,6 +259,15 @@ export default function StaffUserDetailsPanel({
                   <Row label="User ID" value={data.id} mono />
                   <Row label="Username" value={data.username} />
                   <Row label="Email" value={data.email} />
+                  {data.staff_email?.email_before_freed ? (
+                    <Row label="Original email" value={data.staff_email.email_before_freed} highlight />
+                  ) : null}
+                  {data.staff_email?.replacement_account?.username ? (
+                    <Row
+                      label="Email now on"
+                      value={`${data.staff_email.replacement_account.username}${data.staff_email.replacement_account.email ? ` (${data.staff_email.replacement_account.email})` : ''}`}
+                    />
+                  ) : null}
                   <Row label="Created" value={formatDateTime(data.created_at)} />
                   <Row label="Last seen" value={formatDateTime(data.last_seen)} />
                 </Section>

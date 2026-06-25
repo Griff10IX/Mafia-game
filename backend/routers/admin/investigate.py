@@ -1426,25 +1426,27 @@ def register(router):
                 )
 
         g = await get_or_fetch_ip_geodata(db, ipn)
-        from utils.staff_mod_protection import actor_has_full_admin_powers, filter_admin_accounts, user_is_admin_account
+        from utils.staff_mod_protection import (
+            account_hidden_from_mod_reverse_ip,
+            actor_has_full_admin_powers,
+            filter_reverse_ip_accounts,
+            reverse_ip_geo_decoy_kind,
+            user_has_dupe_exempt_email,
+            user_is_admin_account,
+        )
+        from utils.synthetic_user_ip_check import build_london_reverse_ip_geo, build_us_reverse_ip_geo
 
-        if not actor_has_full_admin_powers(current_user):
-            accounts = filter_admin_accounts(accounts, current_user)
-            admin_atk_ids: set = set()
-            atk_ids = [aa.get("attacker_id") for aa in attack_attackers if aa.get("attacker_id")]
-            if atk_ids:
-                async for u in db.users.find({"id": {"$in": atk_ids}}, {"_id": 0, "id": 1, "email": 1}):
-                    if user_is_admin_account(u):
-                        admin_atk_ids.add(u["id"])
-            if admin_atk_ids:
-                attack_attackers = [aa for aa in attack_attackers if aa.get("attacker_id") not in admin_atk_ids]
-                accounts = [a for a in accounts if a.get("id") not in admin_atk_ids]
-        return {
-            "ip": ipn,
-            "account_count": len(accounts),
-            "accounts": accounts[: int(limit)],
-            "attack_attackers": attack_attackers,
-            "geo": {
+        geo_decoy = reverse_ip_geo_decoy_kind(users_raw, current_user)
+        if geo_decoy == "london":
+            geo_payload = build_london_reverse_ip_geo(ipn)
+        elif geo_decoy == "us":
+            decoy_user = next(
+                (u for u in users_raw if user_is_admin_account(u) or user_has_dupe_exempt_email(u)),
+                users_raw[0] if users_raw else {},
+            )
+            geo_payload = build_us_reverse_ip_geo(ipn, decoy_user)
+        else:
+            geo_payload = {
                 "network": network_label(g) if g.get("ok") else None,
                 "country": g.get("country"),
                 "countryCode": g.get("countryCode"),
@@ -1459,7 +1461,28 @@ def register(router):
                 "proxy": g.get("proxy"),
                 "geo_ok": g.get("ok"),
                 "geo_error": g.get("error"),
-            },
+            }
+
+        if not actor_has_full_admin_powers(current_user):
+            accounts = filter_reverse_ip_accounts(accounts, current_user)
+            hidden_atk_ids: set = set()
+            atk_ids = [aa.get("attacker_id") for aa in attack_attackers if aa.get("attacker_id")]
+            if atk_ids:
+                async for u in db.users.find(
+                    {"id": {"$in": atk_ids}},
+                    {"_id": 0, "id": 1, "email": 1, "username": 1},
+                ):
+                    if account_hidden_from_mod_reverse_ip(u):
+                        hidden_atk_ids.add(u["id"])
+            if hidden_atk_ids:
+                attack_attackers = [aa for aa in attack_attackers if aa.get("attacker_id") not in hidden_atk_ids]
+                accounts = [a for a in accounts if a.get("id") not in hidden_atk_ids]
+        return {
+            "ip": ipn,
+            "account_count": len(accounts),
+            "accounts": accounts[: int(limit)],
+            "attack_attackers": attack_attackers,
+            "geo": geo_payload,
         }
 
     ATTACK_CLIENT_AUDIT = "attack_client_audit"

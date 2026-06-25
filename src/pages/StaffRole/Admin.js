@@ -230,7 +230,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Ghost Mode', categoryId: 'admin-players', collapseKey: 'ghost', keywords: ['ghost', 'invisible', 'hide'] },
   { label: 'Lock Account', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['lock', 'ban', 'account'] },
   { label: 'Kill Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['kill', 'death', 'player'] },
-  { label: 'Revive Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['revive', 'resurrect', 'alive'] },
+  { label: 'Revive Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['revive', 'resurrect', 'alive'], adminOnly: true },
   { label: 'User Details', categoryId: 'admin-players', collapseKey: 'userDetails', keywords: ['user', 'details', 'info', 'profile', 'jail', 'bust', 'reward'] },
   { label: 'User give / take & leaderboards', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['leaderboard', 'adjust', 'strip', 'username', 'crimes', 'scores', 'gta', 'busts', 'kills', 'minigame', 'money', 'points', 'respect', 'bullets', 'weekly', 'alltime', 'preview', 'partial', 'bootleg', 'racing lifetime', 'lifetime earnings'] },
   { label: 'Missions & tribute (user)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-missions-ladder', keywords: ['mission', 'tribute', 'ladder', 'progress', 'daily tribute', 'm_first', 'story'] },
@@ -4558,7 +4558,7 @@ export default function Admin() {
     setViewRegistrationInfo(null);
     try {
       const response = await api.get('/admin/user-registration', { params: { target_username: formData.targetUsername } });
-      setViewRegistrationInfo(response.data?.user || null);
+      setViewRegistrationInfo(response.data || null);
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to load');
       setViewRegistrationInfo(null);
@@ -8351,6 +8351,9 @@ export default function Admin() {
       {/* User detail modal — outside category tabs so Open dossier works from Game World etc. */}
       {userDetailData && (() => {
         const u = userDetailData.user || {};
+        const staffEmail = userDetailData.staff_email || {};
+        const originalEmail = staffEmail.email_before_freed;
+        const replacement = staffEmail.replacement_account;
         const fmtDate = (v) => (v ? formatAdminDateTime(v) : '—');
         const fmtNum = (v) => {
           if (v == null || v === '') return '—';
@@ -8435,6 +8438,27 @@ export default function Admin() {
                   <div className="grid grid-cols-2 gap-x-6 gap-y-1">
                     <Row label="Username" value={u.username} />
                     <Row label="Email" value={u.email} />
+                    {originalEmail ? (
+                      <Row
+                        label="Original email"
+                        value={
+                          <span>
+                            {originalEmail}
+                            {staffEmail.is_tomb_email ? (
+                              <span className="text-mutedForeground text-[9px]"> (freed for new signup)</span>
+                            ) : null}
+                          </span>
+                        }
+                        fullWidth
+                      />
+                    ) : null}
+                    {replacement?.username ? (
+                      <Row
+                        label="Email now on"
+                        value={`${replacement.username}${replacement.email ? ` (${replacement.email})` : ''}`}
+                        fullWidth
+                      />
+                    ) : null}
                     <Row label="User ID" value={u.id} fullWidth />
                     <Row label="Created" value={fmtDate(u.created_at)} />
                     <Row label="Email verified" value={u.email_verified === false ? 'No' : 'Yes'} />
@@ -9922,18 +9946,32 @@ export default function Admin() {
             {!(formData.targetUsername || '').trim() && (
               <p className="text-[9px] text-mutedForeground font-heading pl-6">Enter target username above.</p>
             )}
-            {viewRegistrationInfo && (
+            {viewRegistrationInfo && (() => {
+              const regUser = viewRegistrationInfo.user || viewRegistrationInfo;
+              const regStaffEmail = viewRegistrationInfo.staff_email || {};
+              return (
               <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-1">
                 <div className="font-bold text-primary mb-1">Registration info</div>
-                <div><span className="text-mutedForeground">Username:</span> {viewRegistrationInfo.username ?? '—'}</div>
-                <div><span className="text-mutedForeground">Email:</span> {viewRegistrationInfo.email ?? '—'}</div>
-                <div><span className="text-mutedForeground">User ID:</span> {viewRegistrationInfo.id ?? '—'}</div>
-                <div><span className="text-mutedForeground">Created:</span> {viewRegistrationInfo.created_at ? formatAdminDateTime(viewRegistrationInfo.created_at) : '—'}</div>
-                <div><span className="text-mutedForeground">Registration IP:</span> {viewRegistrationInfo.registration_ip || '—'}</div>
-                <div><span className="text-mutedForeground">Last login IP:</span> {viewRegistrationInfo.last_login_ip || '—'}</div>
-                {viewRegistrationInfo.is_dead && <div className="text-red-400 font-bold">Account is dead</div>}
+                <div><span className="text-mutedForeground">Username:</span> {regUser.username ?? '—'}</div>
+                <div><span className="text-mutedForeground">Email:</span> {regUser.email ?? '—'}</div>
+                {regStaffEmail.email_before_freed ? (
+                  <div><span className="text-mutedForeground">Original email:</span> {regStaffEmail.email_before_freed}</div>
+                ) : null}
+                {regStaffEmail.replacement_account?.username ? (
+                  <div>
+                    <span className="text-mutedForeground">Email now on:</span>{' '}
+                    {regStaffEmail.replacement_account.username}
+                    {regStaffEmail.replacement_account.email ? ` (${regStaffEmail.replacement_account.email})` : ''}
+                  </div>
+                ) : null}
+                <div><span className="text-mutedForeground">User ID:</span> {regUser.id ?? '—'}</div>
+                <div><span className="text-mutedForeground">Created:</span> {regUser.created_at ? formatAdminDateTime(regUser.created_at) : '—'}</div>
+                <div><span className="text-mutedForeground">Registration IP:</span> {regUser.registration_ip || '—'}</div>
+                <div><span className="text-mutedForeground">Last login IP:</span> {regUser.last_login_ip || '—'}</div>
+                {regUser.is_dead && <div className="text-red-400 font-bold">Account is dead</div>}
               </div>
-            )}
+              );
+            })()}
             <ActionRow icon={AlertTriangle} label="Login 500 diagnosis" description="Inspect user document by email (keys & types). Compare with a working user to find missing/wrong fields.">
               <input
                 type="email"
@@ -11284,7 +11322,7 @@ export default function Admin() {
           />
           {!collapsed.moderationPlayer && (
             <div className="p-2 space-y-1">
-              <ActionRow icon={User} label="Target username" description="User to lock, unlock, modkill, or revive">
+              <ActionRow icon={User} label="Target username" description={isFullAdminUi ? 'User to lock, unlock, modkill, or revive' : 'User to lock, unlock, or modkill'}>
                 <input
                   type="text"
                   value={formData.targetUsername}
@@ -11302,6 +11340,8 @@ export default function Admin() {
               <ActionRow icon={Skull} label="Modkill" description="Permanently kill the target account. They cannot log in until revived." color="text-red-400">
                 <BtnDanger onClick={handleKillPlayer}>Kill</BtnDanger>
               </ActionRow>
+              {isFullAdminUi && (
+              <>
               <ActionRow icon={Zap} label="Revive (fair)" description="Restore victim; optional alt point recovery if they remade on same email">
                 <div className="flex flex-wrap gap-1.5 items-center">
                   <BtnSecondary type="button" onClick={loadRevivePreview} disabled={revivePreviewLoading}>
@@ -11399,6 +11439,8 @@ export default function Admin() {
                   </div>
                 )}
               </div>
+              </>
+              )}
               {isAdmin && (
                 <ActionRow icon={Lock} label="Test lock (60s)" description="Lock yourself for 60 seconds to test the locked page">
                   <button type="button" onClick={handleTestLockSelf} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-amber-500/20 border-amber-500/40 text-amber-400 hover:bg-amber-500/30">
@@ -23760,7 +23802,7 @@ export default function Admin() {
                   <ul className="space-y-0.5 text-mutedForeground">
                     <li>• Change rank / add points or cash</li>
                     <li>• Add bullets, cars, loot pieces</li>
-                    <li>• Kill or revive player</li>
+                    <li>• Revive player / reset inheritance</li>
                     <li>• Set email, password, log out user</li>
                     <li>• Clear gambling log (bulk)</li>
                     <li>• Wipe / delete user / database</li>

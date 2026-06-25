@@ -6632,7 +6632,10 @@ def register(router):
         return {"locked": users}
 
     @router.get("/admin/users-online-live")
-    async def admin_users_online_live(current_user: dict = Depends(require_admin_or_mod)):
+    async def admin_users_online_live(
+        screen: bool = Query(True, description="Attach dupe/proxy screening per online user"),
+        current_user: dict = Depends(require_admin_or_mod),
+    ):
         """List everyone actually online (last 5 min), with last click, last page, IP, and same-IP count. Admin or moderator."""
         now = datetime.now(timezone.utc)
         five_min_ago = now - timedelta(minutes=5)
@@ -6654,6 +6657,7 @@ def register(router):
                 "last_path": 1,
                 "last_request_ip": 1,
                 "last_login_ip": 1,
+                "registration_ip": 1,
                 "email": 1,
                 "is_moderator": 1,
                 "admin_ghost_mode": 1,
@@ -6662,17 +6666,29 @@ def register(router):
                 "auto_rank_enabled": 1,
                 "auto_rank_idle": 1,
                 "forced_online_until": 1,
+                "device_fingerprint": 1,
+                "registration_ip_reputation": 1,
+                "last_login_ip_reputation": 1,
+                "created_at": 1,
+                "rank_points": 1,
+                "points": 1,
+                "registration_freed_email_from_user_id": 1,
+                "email_before_freed": 1,
             },
         )
         raw = await cursor.to_list(200)
         from utils.staff_mod_protection import actor_has_full_admin_powers, user_is_admin_account
 
+        raw_by_id: Dict[str, Any] = {}
         users = []
         for u in raw:
             if not actor_has_full_admin_powers(current_user) and user_is_admin_account(u):
                 continue
             if (user_has_admin_list_email(u) or _is_moderator(u)) and u.get("admin_ghost_mode"):
                 continue
+            uid = u.get("id")
+            if uid:
+                raw_by_id[uid] = u
             ip = _normalize_ip(u.get("last_request_ip") or u.get("last_login_ip") or "")
             cc_raw = (u.get("last_seen_country") or "").strip().upper()
             country = cc_raw if (len(cc_raw) == 2 and cc_raw.isalpha()) else ""
@@ -6722,7 +6738,12 @@ def register(router):
             same = (ip_counts.get(ip, 0) - 1) if ip else 0
             u["same_ip_online_count"] = max(0, same)
         users.sort(key=lambda x: (x.get("last_seen") or ""), reverse=True)
-        return {"users": users}
+        if screen:
+            from utils.online_users_screen import attach_online_screening
+
+            screened = await attach_online_screening(db, users, raw_by_id, current_user)
+            return {"users": screened["users"], "screen_summary": screened["screen_summary"], "screen_enabled": True}
+        return {"users": users, "screen_enabled": False}
 
     @router.post("/admin/test-lock-self")
     async def admin_test_lock_self(current_user: dict = Depends(require_admin)):
@@ -6967,6 +6988,9 @@ def register(router):
         ouname = (dead_user.get("username") or "").strip() or "?"
         em = (dead_user.get("email") or "").strip().lower()
         tomb = bool(em.startswith("dead_") and em.endswith("@deleted"))
+        lookup_email = (dead_user.get("email_before_freed") or "").strip().lower()
+        if not lookup_email and not tomb:
+            lookup_email = em
         linked: List[Dict[str, Any]] = []
         seen: set[str] = set()
 
@@ -6981,9 +7005,9 @@ def register(router):
             "registration_ip": 1,
         }
 
-        if not tomb and em and "@" in em:
+        if lookup_email and "@" in lookup_email and not (lookup_email.startswith("dead_") and lookup_email.endswith("@deleted")):
             for ar in await db.users.find(
-                {"email": em, "is_dead": {"$ne": True}, "id": {"$ne": dead_id}},
+                {"email": lookup_email, "is_dead": {"$ne": True}, "id": {"$ne": dead_id}},
                 proj,
             ).to_list(5):
                 aid = ar.get("id")
@@ -7270,7 +7294,7 @@ def register(router):
     @router.get("/admin/revive-player/preview")
     async def admin_revive_player_preview(
         target_username: str = Query(..., min_length=1),
-        current_user: dict = Depends(require_admin_or_mod),
+        current_user: dict = Depends(require_admin),
     ):
         """Preview death balances and linked alive alt accounts before a fair revive."""
         username_pattern = _username_pattern(target_username)
@@ -7283,7 +7307,7 @@ def register(router):
     async def admin_revive_player(
         target_username: str,
         body: AdminRevivePlayerBody = Body(default_factory=AdminRevivePlayerBody),
-        current_user: dict = Depends(require_admin_or_mod),
+        current_user: dict = Depends(require_admin),
     ):
         """Revive a dead account; optionally restore death balances and recover points from a same-email / post-death alt."""
         username_pattern = _username_pattern(target_username)
@@ -7295,7 +7319,7 @@ def register(router):
     @router.post("/admin/grant-dead-alive-revive")
     async def admin_grant_dead_alive_revive(
         target_username: str = Query(..., min_length=1),
-        current_user: dict = Depends(require_admin_or_mod),
+        current_user: dict = Depends(require_admin),
     ):
         """Clear the Dead > Alive revive lock for the target's email so they can use Revive again."""
         username_pattern = _username_pattern(target_username)
@@ -7326,7 +7350,7 @@ def register(router):
     @router.post("/admin/grant-dead-alive-inheritance")
     async def admin_grant_dead_alive_inheritance(
         target_username: str = Query(..., min_length=1),
-        current_user: dict = Depends(require_admin_or_mod),
+        current_user: dict = Depends(require_admin),
     ):
         """Reset Claim Inheritance locks on a dead account so a new character can retrieve again."""
         username_pattern = _username_pattern(target_username)
@@ -16450,14 +16474,20 @@ def register(router):
                 include_session_ips=True,
                 max_linked=max_linked,
             )
-            return {"mode": "user", "generated_at": datetime.now(timezone.utc).isoformat(), **profile}
+            from utils.staff_mod_protection import sanitize_proxy_farm_report_for_actor
+
+            payload = {"mode": "user", "generated_at": datetime.now(timezone.utc).isoformat(), **profile}
+            return sanitize_proxy_farm_report_for_actor(payload, current_user)
         if global_scan:
             hotspots = await find_proxy_farm_hotspots(
                 db,
                 days=days,
                 min_accounts_per_subnet=min_accounts_per_subnet,
             )
-            return {"mode": "global", "generated_at": datetime.now(timezone.utc).isoformat(), **hotspots}
+            from utils.staff_mod_protection import sanitize_proxy_farm_report_for_actor
+
+            payload = {"mode": "global", "generated_at": datetime.now(timezone.utc).isoformat(), **hotspots}
+            return sanitize_proxy_farm_report_for_actor(payload, current_user)
         raise HTTPException(
             status_code=400,
             detail="Provide username for a user report, or set global_scan=true for subnet hotspots.",
@@ -16668,11 +16698,15 @@ def register(router):
         username_pattern = _username_pattern(target_username)
         user = await db.users.find_one(
             {"username": username_pattern},
-            {"_id": 0, "id": 1, "username": 1, "email": 1, "created_at": 1, "registration_ip": 1, "last_login_ip": 1, "login_ips": 1, "is_dead": 1},
+            {"_id": 0, "id": 1, "username": 1, "email": 1, "email_before_freed": 1, "email_freed_at": 1, "dead_at": 1,
+             "created_at": 1, "registration_ip": 1, "last_login_ip": 1, "login_ips": 1, "is_dead": 1},
         )
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
-        return {"user": user}
+        from utils.staff_email_history import resolve_staff_email_context
+
+        staff_email = await resolve_staff_email_context(db, user)
+        return {"user": user, "staff_email": staff_email}
 
     @router.get("/admin/user-inspect")
     async def admin_user_inspect(email: str = Query(..., description="User's email (to diagnose login 500)"), current_user: dict = Depends(get_current_user)):
@@ -16846,7 +16880,10 @@ def register(router):
             casinos_owned.append({"game_type": "videopoker", "location": d.get("city") or "?"})
         for d in slots_owned:
             casinos_owned.append({"game_type": "slots", "location": d.get("state") or "?"})
-        return {"user": user, "dice_owned": dice_owned, "casinos_owned": casinos_owned}
+        from utils.staff_email_history import resolve_staff_email_context
+
+        staff_email = await resolve_staff_email_context(db, user)
+        return {"user": user, "staff_email": staff_email, "dice_owned": dice_owned, "casinos_owned": casinos_owned}
 
     @router.post("/admin/users/inactivity-reminder-email")
     async def admin_send_inactivity_reminder_email(

@@ -673,13 +673,18 @@ def register(router):
             if existing_username:
                 raise HTTPException(status_code=400, detail="Username already registered.")
             # Email: block if taken by an alive account; if taken only by a dead account, free it so this registration can use it
-            existing_email = await db.users.find_one({"email": email_pattern}, {"_id": 0, "id": 1, "is_dead": 1})
+            freed_email_from_dead_user_id = None
+            existing_email = await db.users.find_one({"email": email_pattern}, {"_id": 0, "id": 1, "is_dead": 1, "email": 1})
             if existing_email:
                 if not existing_email.get("is_dead"):
                     raise HTTPException(status_code=400, detail="Email already registered.")
-                await db.users.update_one(
-                    {"id": existing_email["id"]},
-                    {"$set": {"email": f"dead_{existing_email['id']}@deleted"}},
+                from utils.staff_email_history import record_email_freed_from_dead_account
+
+                freed_email_from_dead_user_id = existing_email["id"]
+                await record_email_freed_from_dead_account(
+                    db,
+                    freed_email_from_dead_user_id,
+                    user_data.email.strip(),
                 )
 
             user_id = str(uuid.uuid4())
@@ -889,6 +894,9 @@ def register(router):
                 interest_options_fallback=list(getattr(srv, "BANK_INTEREST_OPTIONS", []) or []),
             )
             user_doc["swiss_limit"] = int(_bank_cfg["swiss_limit_start"])
+
+            if freed_email_from_dead_user_id:
+                user_doc["registration_freed_email_from_user_id"] = freed_email_from_dead_user_id
 
             await db.users.insert_one(user_doc.copy())
             try:
