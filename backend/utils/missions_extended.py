@@ -37,6 +37,8 @@ TOTAL_BULLETS_DAILY = 14_500
 TOTAL_TRIBUTE_TOKEN_CREDITS_DAILY = 20
 # Auto-rank 2h tokens credited daily to balance (not tribute bank); split only across missions that used to grant this bonus.
 TOTAL_TRIBUTE_AUTO_RANK_2H_DAILY = 10
+# Loot box pieces per day from completed missions only (100 missions sum to this when ladder complete).
+TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY = 150
 
 WEIGHT_P = 1.6
 WEIGHT_BASE = 12.0
@@ -183,6 +185,7 @@ def build_missions() -> List[Dict[str, Any]]:
     cash = _allocate_exact_int(TOTAL_CASH_IMMEDIATE, w)
     resp_d = _allocate_exact_int(TOTAL_RESPECT_DAILY, w)
     bull_d = _allocate_exact_int(TOTAL_BULLETS_DAILY, w)
+    loot_d = _allocate_exact_int(TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY, w)
 
     # Token daily credits for orders 4..99 only (m_5–m_100)
     w_tok = w[4:100]
@@ -223,6 +226,7 @@ def build_missions() -> List[Dict[str, Any]]:
             "reward_tribute_daily": trib[o],
             "reward_respect_daily": resp_d[o],
             "reward_tribute_bullets_daily": bull_d[o],
+            "reward_tribute_loot_box_pieces_daily": loot_d[o],
             "reward_car_id": COMMON_CAR_REWARD_ID,
             "reward_token": "random",
             "reward_auto_rank_2h": 1,
@@ -258,7 +262,7 @@ def build_missions() -> List[Dict[str, Any]]:
             "reward_car_ids": ["car7", "car2"],
             "reward_bullets": 2_500,
             "reward_tribute_bullets_daily": bull_d[o],
-            "reward_loot_box_pieces": 1,
+            "reward_tribute_loot_box_pieces_daily": loot_d[o],
             "reward_auto_rank_2h": 1,
             "reward_points": pts[o],
             "difficulty": 2,
@@ -296,6 +300,7 @@ def build_missions() -> List[Dict[str, Any]]:
             "reward_tribute_daily": trib[o],
             "reward_respect_daily": resp_d[o],
             "reward_tribute_bullets_daily": bull_d[o],
+            "reward_tribute_loot_box_pieces_daily": loot_d[o],
             "reward_token": "random",
             "reward_auto_rank_2h": 1,
             "difficulty": 3,
@@ -332,6 +337,7 @@ def build_missions() -> List[Dict[str, Any]]:
             "reward_tribute_daily": trib[o],
             "reward_respect_daily": resp_d[o],
             "reward_tribute_bullets_daily": bull_d[o],
+            "reward_tribute_loot_box_pieces_daily": loot_d[o],
             "reward_auto_rank_2h": 1,
             "difficulty": 4,
             "unlocks_city": None,
@@ -573,6 +579,7 @@ def build_missions() -> List[Dict[str, Any]]:
             "reward_tribute_daily": trib[o],
             "reward_respect_daily": resp_d[o],
             "reward_tribute_bullets_daily": bull_d[o],
+            "reward_tribute_loot_box_pieces_daily": loot_d[o],
             "reward_auto_rank_2h": 1,
             "difficulty": diff,
             "unlocks_city": None,
@@ -613,6 +620,7 @@ def build_missions() -> List[Dict[str, Any]]:
             "reward_tribute_daily": trib[o],
             "reward_respect_daily": resp_d[o],
             "reward_tribute_bullets_daily": bull_d[o],
+            "reward_tribute_loot_box_pieces_daily": loot_d[o],
             "reward_auto_rank_2h": 1,
             "difficulty": diff,
             "unlocks_city": None,
@@ -645,6 +653,10 @@ def build_missions() -> List[Dict[str, Any]]:
     assert (
         sum(int(m.get("reward_tribute_auto_rank_2h_daily") or 0) for m in missions)
         == TOTAL_TRIBUTE_AUTO_RANK_2H_DAILY
+    )
+    assert (
+        sum(int(m.get("reward_tribute_loot_box_pieces_daily") or 0) for m in missions)
+        == TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY
     )
 
     return missions

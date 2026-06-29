@@ -567,6 +567,15 @@ function MissionModal({ mission, onClose, onComplete, completing }) {
                   <span style={{ color: '#f87171', fontWeight: 700 }}>+{fmtInt(mission.reward_tribute_bullets_daily)}/day</span>
                 </div>
               )}
+              {mission.reward_tribute_loot_box_pieces_daily > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
+                  <span style={{ color: '#71717a' }}>Tribute loot box pieces (daily)</span>
+                  <span style={{ color: '#a78bfa', fontWeight: 700 }}>
+                    +{fmtInt(mission.reward_tribute_loot_box_pieces_daily)}/day{' '}
+                    <Link to="/loot-box" style={{ color: '#a78bfa', textDecoration: 'underline' }}>Loot Box</Link>
+                  </span>
+                </div>
+              )}
               {mission.reward_loot_box_pieces > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
                   <span style={{ color: '#71717a' }}>Loot box pieces</span>
@@ -707,7 +716,7 @@ function TributeBanner({
   tributeDepositDailyAt,
   nextTributeDepositAt,
   dailyCashBase = 500,
-  dailyLootBase = 1,
+  dailyLootBase = 0,
   dailyTokensTotal = 0,
   dailyTributeCashTotal,
   dailyTributeBulletsTotal,
@@ -1198,7 +1207,7 @@ export default function Missions() {
         tributeDepositDailyAt={data?.tribute_deposit_daily_at}
         nextTributeDepositAt={data?.next_tribute_deposit_at}
         dailyCashBase={data?.daily_tribute_cash_base ?? 500}
-        dailyLootBase={data?.daily_tribute_loot_box_pieces_base ?? 1}
+        dailyLootBase={data?.daily_tribute_loot_box_pieces_base ?? 0}
         dailyTokensTotal={data?.daily_tribute_tokens_total ?? 0}
         dailyTributeCashTotal={data?.daily_tribute_cash_total}
         dailyTributeBulletsTotal={data?.daily_tribute_bullets_total}

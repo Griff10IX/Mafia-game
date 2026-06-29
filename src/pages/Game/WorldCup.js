@@ -156,6 +156,7 @@ export default function WorldCup() {
   const [teams, setTeams] = useState([]);
   const [groups, setGroups] = useState([]);
   const [matches, setMatches] = useState([]);
+  const [knockoutRounds, setKnockoutRounds] = useState([]);
   const [predictions, setPredictions] = useState([]);
   const [leaderboard, setLeaderboard] = useState(null);
   const [draftResults, setDraftResults] = useState(null);
@@ -172,6 +173,16 @@ export default function WorldCup() {
     }
     return m;
   }, [predictions]);
+
+  const knockoutMatches = useMemo(
+    () => matches.filter((m) => m.is_knockout || (m.stage && m.stage !== 'group')),
+    [matches],
+  );
+
+  const groupMatches = useMemo(
+    () => matches.filter((m) => m.stage === 'group' || (!m.is_knockout && m.stage !== 'knockout' && !m.stage)),
+    [matches],
+  );
 
   const teamsByGroup = useMemo(() => {
     const m = {};
@@ -203,6 +214,7 @@ export default function WorldCup() {
       setTeams(tRes.data?.teams || []);
       setGroups(tRes.data?.groups || []);
       setMatches(mRes.data?.matches || []);
+      setKnockoutRounds(mRes.data?.knockout_rounds || []);
       setPredictions(pRes.data?.predictions || []);
     } catch (e) {
       if (e.response?.status === 403) {
@@ -391,7 +403,7 @@ export default function WorldCup() {
               <li className="flex gap-2"><span className="text-primary">2.</span> Every entrant gets assigned nation(s) — all 48 teams are distributed (more teams per player if fewer entrants).</li>
               <li className="flex gap-2"><span className="text-primary">3.</span> If any assigned nation wins the World Cup, earn <WcPointsBadge pts={points.jackpot_points} />.</li>
               <li className="flex gap-2"><span className="text-primary">4.</span> Predict group winners — <WcPointsBadge pts={points.group_winner_points} /> each.</li>
-              <li className="flex gap-2"><span className="text-primary">5.</span> Predict match scores, scorers, 2nd &amp; 3rd place for more points.</li>
+              <li className="flex gap-2"><span className="text-primary">5.</span> Knockout tab — pick match winners and exact scores; 2nd &amp; 3rd place picks too.</li>
             </ul>
             {!status?.entered ? (
               <div className="space-y-2">
@@ -576,7 +588,7 @@ export default function WorldCup() {
 
       {tab === 'matches' && (
         <MatchPredictionsTab
-          matches={matches}
+          matches={groupMatches}
           predsByKey={predsByKey}
           points={points}
           entered={status?.entered}
@@ -591,6 +603,8 @@ export default function WorldCup() {
 
       {tab === 'knockout' && (
         <KnockoutTab
+          matches={knockoutMatches}
+          knockoutRounds={knockoutRounds}
           teams={teams}
           predsByKey={predsByKey}
           points={points}
@@ -676,9 +690,13 @@ function ScoreStepper({ value, onChange, disabled, disabledHint }) {
 
 function MatchPredictionsTab({ matches, predsByKey, points, entered, canEnter, lateEntryAvailable, entering, onEnter, saving, onSave }) {
   const [filter, setFilter] = useState('all');
+  const groupIds = useMemo(() => {
+    const ids = new Set(matches.map((m) => m.group_id).filter(Boolean));
+    return [...ids].sort();
+  }, [matches]);
   const filtered = useMemo(() => {
     if (filter === 'all') return matches;
-    return matches.filter((m) => m.stage === filter);
+    return matches.filter((m) => m.group_id === filter);
   }, [matches, filter]);
 
   return (
@@ -690,35 +708,72 @@ function MatchPredictionsTab({ matches, predsByKey, points, entered, canEnter, l
         entering={entering}
         onEnter={onEnter}
       />
+      <p className="text-[10px] text-mutedForeground font-heading px-1">
+        Group-stage matches only — knockout fixtures are on the Knockout tab.
+      </p>
       <div className="wc-tab-scroll flex gap-1.5 overflow-x-auto pb-1">
-        {['all', 'group', 'knockout'].map((f) => (
+        <button
+          type="button"
+          onClick={() => setFilter('all')}
+          className={`shrink-0 px-3 py-2 min-h-[44px] rounded-full text-[10px] font-heading uppercase ${
+            filter === 'all' ? 'bg-primary/15 text-primary border border-primary/30' : 'text-mutedForeground border border-primary/10'
+          }`}
+        >
+          All groups
+        </button>
+        {groupIds.map((gid) => (
           <button
-            key={f}
+            key={gid}
             type="button"
-            onClick={() => setFilter(f)}
+            onClick={() => setFilter(gid)}
             className={`shrink-0 px-3 py-2 min-h-[44px] rounded-full text-[10px] font-heading uppercase ${
-              filter === f ? 'bg-primary/15 text-primary border border-primary/30' : 'text-mutedForeground border border-primary/10'
+              filter === gid ? 'bg-primary/15 text-primary border border-primary/30' : 'text-mutedForeground border border-primary/10'
             }`}
           >
-            {f === 'all' ? 'All' : f}
+            Group {gid}
           </button>
         ))}
       </div>
       {filtered.map((m) => (
         <MatchCard key={m.id} match={m} predsByKey={predsByKey} points={points} entered={entered} saving={saving} onSave={onSave} />
       ))}
-      {!filtered.length && <p className="text-sm text-mutedForeground p-4">No matches scheduled yet.</p>}
+      {!filtered.length && <p className="text-sm text-mutedForeground p-4">No group matches scheduled yet.</p>}
     </div>
   );
 }
 
-function MatchCard({ match, predsByKey, points, entered, saving, onSave }) {
+function MatchCard({ match, predsByKey, points, entered, saving, onSave, knockoutPickMode = false }) {
   const [home, setHome] = useState(() => predsByKey[`match_score:${match.id}`]?.value?.home ?? 0);
   const [away, setAway] = useState(() => predsByKey[`match_score:${match.id}`]?.value?.away ?? 0);
   const [scorer, setScorer] = useState(() => predsByKey[`match_scorer:${match.id}`]?.value?.name || '');
   const locked = match.locked || match.status === 'settled';
   const controlsDisabled = !entered || saving;
   const disabledHint = !entered ? 'Join the World Cup event first (Overview or banner above).' : null;
+  const scorePred = predsByKey[`match_score:${match.id}`]?.value;
+  const pickedWinnerId = useMemo(() => {
+    if (!scorePred) return null;
+    const h = Number(scorePred.home) || 0;
+    const a = Number(scorePred.away) || 0;
+    if (h > a) return match.home_team?.id;
+    if (a > h) return match.away_team?.id;
+    return null;
+  }, [scorePred, match.home_team?.id, match.away_team?.id]);
+
+  const pickWinner = (side) => {
+    if (controlsDisabled) {
+      if (disabledHint) toast.error(disabledHint);
+      return;
+    }
+    if (side === 'home') {
+      setHome(1);
+      setAway(0);
+      onSave('match_score', match.id, { home: 1, away: 0 });
+    } else {
+      setHome(0);
+      setAway(1);
+      onSave('match_score', match.id, { home: 0, away: 1 });
+    }
+  };
 
   useEffect(() => {
     const ps = predsByKey[`match_score:${match.id}`]?.value;
@@ -735,6 +790,14 @@ function MatchCard({ match, predsByKey, points, entered, saving, onSave }) {
 
   return (
     <WcPanel className="p-3 space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        {match.round_label && (
+          <span className="text-[9px] font-heading uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded">
+            {match.round_label}
+          </span>
+        )}
+        <span className="text-[10px] text-mutedForeground shrink-0 ml-auto">{formatGameDateTime(match.kickoff)}</span>
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -747,10 +810,68 @@ function MatchCard({ match, predsByKey, points, entered, saving, onSave }) {
             <WcFlag team={awayTeam} size="md" />
           </div>
         </div>
-        <span className="text-[10px] text-mutedForeground shrink-0">{formatGameDateTime(match.kickoff)}</span>
       </div>
       {locked ? (
         <p className="text-[10px] text-amber-400 uppercase font-heading">Locked</p>
+      ) : knockoutPickMode ? (
+        <>
+          <p className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider">
+            Pick winner · {Number(points.match_score_result_points || 0).toLocaleString()} pts (result) · exact score {Number(points.match_score_exact_points || 0).toLocaleString()} pts
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={controlsDisabled}
+              onClick={() => pickWinner('home')}
+              className={`flex items-center gap-2 min-h-[48px] px-3 py-2 rounded-md border text-left ${
+                pickedWinnerId === homeTeam?.id ? 'bg-primary/12 border-primary/35' : 'border-primary/15 hover:bg-primary/5'
+              } ${controlsDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+            >
+              <WcFlag team={homeTeam} size="md" />
+              <span className="text-sm font-heading text-foreground flex-1 truncate">{homeTeam?.name || 'TBD'}</span>
+              {pickedWinnerId === homeTeam?.id ? (
+                <span className="text-[9px] text-primary font-heading uppercase">Your pick</span>
+              ) : null}
+            </button>
+            <button
+              type="button"
+              disabled={controlsDisabled}
+              onClick={() => pickWinner('away')}
+              className={`flex items-center gap-2 min-h-[48px] px-3 py-2 rounded-md border text-left ${
+                pickedWinnerId === awayTeam?.id ? 'bg-primary/12 border-primary/35' : 'border-primary/15 hover:bg-primary/5'
+              } ${controlsDisabled ? 'opacity-60 cursor-not-allowed' : ''}`}
+            >
+              <WcFlag team={awayTeam} size="md" />
+              <span className="text-sm font-heading text-foreground flex-1 truncate">{awayTeam?.name || 'TBD'}</span>
+              {pickedWinnerId === awayTeam?.id ? (
+                <span className="text-[9px] text-primary font-heading uppercase">Your pick</span>
+              ) : null}
+            </button>
+          </div>
+          <details className="text-[10px] text-mutedForeground">
+            <summary className="cursor-pointer font-heading uppercase tracking-wider text-primary/80">Exact score (optional)</summary>
+            <div className="pt-2 space-y-2">
+              <div className="flex flex-wrap items-center gap-6">
+                <div className="flex items-center gap-2.5">
+                  <WcFlag team={homeTeam} size="sm" />
+                  <ScoreStepper value={home} onChange={setHome} disabled={controlsDisabled} disabledHint={disabledHint} />
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <WcFlag team={awayTeam} size="sm" />
+                  <ScoreStepper value={away} onChange={setAway} disabled={controlsDisabled} disabledHint={disabledHint} />
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={!entered || saving}
+                onClick={() => onSave('match_score', match.id, { home, away })}
+                className="min-h-[40px] px-4 rounded bg-primary/15 text-primary text-xs font-heading uppercase"
+              >
+                Save exact score
+              </button>
+            </div>
+          </details>
+        </>
       ) : (
         <>
           <div className="flex flex-wrap items-center gap-6">
@@ -800,10 +921,57 @@ function MatchCard({ match, predsByKey, points, entered, saving, onSave }) {
   );
 }
 
-function KnockoutTab({ teams, predsByKey, points, entered, canEnter, lateEntryAvailable, entering, onEnter, saving, picksLocked, onSave }) {
+function KnockoutTab({
+  matches,
+  knockoutRounds,
+  teams,
+  predsByKey,
+  points,
+  entered,
+  canEnter,
+  lateEntryAvailable,
+  entering,
+  onEnter,
+  saving,
+  picksLocked,
+  onSave,
+}) {
+  const [section, setSection] = useState('fixtures');
+  const [roundFilter, setRoundFilter] = useState('all');
   const second = predsByKey['second_place:tournament']?.value?.team_id || predsByKey['second_place:tournament']?.value;
   const third = predsByKey['third_place:tournament']?.value?.team_id || predsByKey['third_place:tournament']?.value;
   const disabled = !entered || saving || picksLocked;
+
+  const roundOrder = useMemo(() => {
+    const fromApi = knockoutRounds || [];
+    const fromMatches = [...new Set(matches.map((m) => m.round_key).filter(Boolean))];
+    const merged = [...new Set([...fromApi, ...fromMatches])];
+    const order = ['round_of_32', 'round_of_16', 'quarter_final', 'semi_final', 'third_place', 'final', 'knockout'];
+    return merged.sort((a, b) => order.indexOf(a) - order.indexOf(b));
+  }, [knockoutRounds, matches]);
+
+  const roundLabels = useMemo(() => {
+    const m = {};
+    matches.forEach((match) => {
+      if (match.round_key) m[match.round_key] = match.round_label || match.round_key;
+    });
+    return m;
+  }, [matches]);
+
+  const filteredMatches = useMemo(() => {
+    if (roundFilter === 'all') return matches;
+    return matches.filter((m) => m.round_key === roundFilter);
+  }, [matches, roundFilter]);
+
+  const matchesByRound = useMemo(() => {
+    const groups = {};
+    filteredMatches.forEach((m) => {
+      const key = m.round_key || 'knockout';
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(m);
+    });
+    return groups;
+  }, [filteredMatches]);
 
   return (
     <div className="space-y-3 wc-fade-in">
@@ -814,45 +982,131 @@ function KnockoutTab({ teams, predsByKey, points, entered, canEnter, lateEntryAv
         entering={entering}
         onEnter={onEnter}
       />
-      {picksLocked && (
-        <WcPanel className="p-3 text-[10px] text-amber-300/90 font-heading uppercase tracking-wider">
-          Tournament has started — 2nd and 3rd place picks are locked and cannot be changed.
-        </WcPanel>
+      <div className="wc-tab-scroll flex gap-1.5 overflow-x-auto pb-1">
+        {[
+          { id: 'fixtures', label: 'Knockout fixtures' },
+          { id: 'podium', label: '2nd & 3rd place' },
+        ].map(({ id, label }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setSection(id)}
+            className={`shrink-0 px-3 py-2 min-h-[44px] rounded-full text-[10px] font-heading uppercase ${
+              section === id ? 'bg-primary/15 text-primary border border-primary/30' : 'text-mutedForeground border border-primary/10'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {section === 'fixtures' && (
+        <>
+          <WcPanel className="p-3 text-[10px] text-mutedForeground font-heading leading-relaxed">
+            Tap a team to pick the winner (like group picks). Correct result earns{' '}
+            <span className="text-primary">{Number(points.match_score_result_points || 0).toLocaleString()} pts</span>
+            ; exact score earns{' '}
+            <span className="text-primary">{Number(points.match_score_exact_points || 0).toLocaleString()} pts</span>.
+            Fixtures load when staff sync from the odds feed — if empty, ask staff to run <strong className="text-foreground">Sync fixtures</strong> in admin.
+          </WcPanel>
+          {roundOrder.length > 0 && (
+            <div className="wc-tab-scroll flex gap-1.5 overflow-x-auto pb-1">
+              <button
+                type="button"
+                onClick={() => setRoundFilter('all')}
+                className={`shrink-0 px-3 py-2 min-h-[40px] rounded-full text-[10px] font-heading uppercase ${
+                  roundFilter === 'all' ? 'bg-primary/15 text-primary border border-primary/30' : 'text-mutedForeground border border-primary/10'
+                }`}
+              >
+                All rounds
+              </button>
+              {roundOrder.map((rk) => (
+                <button
+                  key={rk}
+                  type="button"
+                  onClick={() => setRoundFilter(rk)}
+                  className={`shrink-0 px-3 py-2 min-h-[40px] rounded-full text-[10px] font-heading uppercase ${
+                    roundFilter === rk ? 'bg-primary/15 text-primary border border-primary/30' : 'text-mutedForeground border border-primary/10'
+                  }`}
+                >
+                  {roundLabels[rk] || rk}
+                </button>
+              ))}
+            </div>
+          )}
+          {!matches.length ? (
+            <WcPanel className="p-4 text-sm text-mutedForeground">
+              No knockout fixtures in the system yet. Staff need to sync fixtures after the group stage ends.
+            </WcPanel>
+          ) : (
+            Object.keys(matchesByRound)
+              .sort((a, b) => roundOrder.indexOf(a) - roundOrder.indexOf(b))
+              .map((rk) => (
+                <div key={rk} className="space-y-2">
+                  <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-wider px-1">
+                    {roundLabels[rk] || rk}
+                  </h3>
+                  {matchesByRound[rk].map((m) => (
+                    <MatchCard
+                      key={m.id}
+                      match={m}
+                      predsByKey={predsByKey}
+                      points={points}
+                      entered={entered}
+                      saving={saving}
+                      onSave={onSave}
+                      knockoutPickMode
+                    />
+                  ))}
+                </div>
+              ))
+          )}
+        </>
       )}
-      <WcPanel className="p-4 space-y-2">
-        <div className="flex justify-between items-center">
-          <h3 className="text-sm font-heading text-primary uppercase">2nd place</h3>
-          <WcPointsBadge pts={points.second_place_points} />
-        </div>
-        <div className="max-h-64 overflow-y-auto space-y-1">
-          {teams.map((t) => (
-            <WcTeamRow
-              key={`2-${t.id}`}
-              team={t}
-              selected={second === t.id}
-              disabled={disabled}
-              onSelect={(id) => onSave('second_place', 'tournament', { team_id: id })}
-            />
-          ))}
-        </div>
-      </WcPanel>
-      <WcPanel className="p-4 space-y-2">
-        <div className="flex justify-between items-center">
-          <h3 className="text-sm font-heading text-primary uppercase">3rd place</h3>
-          <WcPointsBadge pts={points.third_place_points} />
-        </div>
-        <div className="max-h-64 overflow-y-auto space-y-1">
-          {teams.map((t) => (
-            <WcTeamRow
-              key={`3-${t.id}`}
-              team={t}
-              selected={third === t.id}
-              disabled={disabled}
-              onSelect={(id) => onSave('third_place', 'tournament', { team_id: id })}
-            />
-          ))}
-        </div>
-      </WcPanel>
+
+      {section === 'podium' && (
+        <>
+          {picksLocked && (
+            <WcPanel className="p-3 text-[10px] text-amber-300/90 font-heading uppercase tracking-wider">
+              Tournament has started — 2nd and 3rd place picks are locked and cannot be changed.
+            </WcPanel>
+          )}
+          <WcPanel className="p-4 space-y-2">
+            <div className="flex justify-between items-center">
+              <h3 className="text-sm font-heading text-primary uppercase">2nd place</h3>
+              <WcPointsBadge pts={points.second_place_points} />
+            </div>
+            <div className="max-h-64 overflow-y-auto space-y-1">
+              {teams.map((t) => (
+                <WcTeamRow
+                  key={`2-${t.id}`}
+                  team={t}
+                  selected={second === t.id}
+                  disabled={disabled}
+                  onSelect={(id) => onSave('second_place', 'tournament', { team_id: id })}
+                />
+              ))}
+            </div>
+          </WcPanel>
+          <WcPanel className="p-4 space-y-2">
+            <div className="flex justify-between items-center">
+              <h3 className="text-sm font-heading text-primary uppercase">3rd place</h3>
+              <WcPointsBadge pts={points.third_place_points} />
+            </div>
+            <div className="max-h-64 overflow-y-auto space-y-1">
+              {teams.map((t) => (
+                <WcTeamRow
+                  key={`3-${t.id}`}
+                  team={t}
+                  selected={third === t.id}
+                  disabled={disabled}
+                  onSelect={(id) => onSave('third_place', 'tournament', { team_id: id })}
+                />
+              ))}
+            </div>
+          </WcPanel>
+        </>
+      )}
     </div>
   );
 }

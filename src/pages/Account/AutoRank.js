@@ -474,7 +474,7 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
       <ToggleRow
         icon={Bot}
         label="Enable Auto Rank"
-        description="Master switch for automation (Telegram alerts are separate below)"
+        description="Master switch for automation. Turning off clears all task toggles below."
         checked={p.auto_rank_enabled}
         disabled={masterDisabled}
         onToggle={() => onUpdatePref('auto_rank_enabled', !p.auto_rank_enabled)}

@@ -1026,13 +1026,8 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     has_success = False
     respect_before = int(user.get("respect_points") or 0)
 
-    run_crimes = _auto_rank_task_enabled(user, "auto_rank_crimes")
-    run_gta = _auto_rank_task_enabled(user, "auto_rank_gta")
-    run_melt = _auto_rank_task_enabled(user, "auto_rank_melt")
-    run_scrap = _auto_rank_task_enabled(user, "auto_rank_scrap")
-
     # --- Crimes: only those off cooldown (same rules as manual play; _commit_crime_impl also enforces) ---
-    if run_crimes:
+    if _auto_rank_task_enabled(user, "auto_rank_crimes"):
         if crimes is None or (isinstance(crimes, list) and len(crimes) == 0):
             crimes = await db.crimes.find(
                 {},
@@ -1165,7 +1160,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                     lines.append("**Crime bonuses** — " + " | ".join(uniq[:8]))
         if crime_fail_count > 0:
             await _inc_failed_today(db, user_id, "auto_rank_failed_crimes_today", "auto_rank_failed_crimes_date", now, crime_fail_count)
-        if run_crimes and crime_success_count == 0 and crime_fail_count == 0:
+        if _auto_rank_task_enabled(user, "auto_rank_crimes") and crime_success_count == 0 and crime_fail_count == 0:
             logger.debug("Auto rank user %s: 0 crimes this cycle (all on cooldown or none available)", user_id)
 
     # --- GTA ---
@@ -1176,7 +1171,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         return
 
     # --- GTA: only if global GTA cooldown has passed. Rotate through all unlocked options (by rank), not just the first. ---
-    if run_gta:
+    if _auto_rank_task_enabled(user, "auto_rank_gta"):
         cooldown_doc = await db.gta_cooldowns.find_one({"user_id": user_id}, {"_id": 0, "cooldown_until": 1})
         until = _parse_iso(cooldown_doc.get("cooldown_until")) if cooldown_doc else None
         if not (until and until > now):
@@ -1219,7 +1214,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         return
     total_batch_limit = effective_garage_batch_limit(user)
     used_in_melt = 0  # shared cap across melt + timed scrap
-    if run_melt:
+    if _auto_rank_task_enabled(user, "auto_rank_melt"):
         melt_action_ids = user.get("auto_rank_melt_action_ids") or []
         melt_rarity_ids = user.get("auto_rank_melt_rarity_ids") or []
         if isinstance(melt_action_ids, list) and len(melt_action_ids) > 0:
@@ -1360,7 +1355,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         return
     if user.get("in_jail"):
         return
-    if run_scrap:
+    if _auto_rank_task_enabled(user, "auto_rank_scrap"):
         scrap_rarity_ids = user.get("auto_rank_scrap_rarity_ids") or []
         allowed_scrap_rarities = set(scrap_rarity_ids) if isinstance(scrap_rarity_ids, list) and len(scrap_rarity_ids) > 0 else set()
         allowed_scrap_rarities = {r for r in allowed_scrap_rarities if r in SCRAP_RARITIES}
@@ -1430,7 +1425,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user or user.get("in_jail"):
         return
-    if user.get("auto_rank_booze", False) and not user.get("passive_booze_paused"):
+    if _auto_rank_task_enabled(user, "auto_rank_booze") and not user.get("passive_booze_paused"):
         try:
             if await _run_booze_for_user(db, user_id, username, chat_id, bot_token, now, lines):
                 has_success = True
@@ -1854,6 +1849,10 @@ _PREFERENCE_DEFAULTS = {
 def _auto_rank_task_enabled(user: Optional[dict], field: str) -> bool:
     """Module toggles are opt-in only — missing/legacy fields must not run."""
     if not user:
+        return False
+    if user.get("auto_rank_enabled") is not True:
+        return False
+    if user.get("auto_rank_idle") is True:
         return False
     return user.get(field) is True
 
@@ -2633,11 +2632,19 @@ def register(router):
             elif body.auto_rank_enabled is False:
                 # Stop passive distillery booze when Auto Rank is turned off (user can resume on Distillery)
                 updates["passive_booze_paused"] = True
-                updates["auto_rank_booze"] = False
+                # Persist all task toggles off — UI shows them off while master is off; leaving them true
+                # in DB made crimes/GTA run again when the user re-enabled Auto Rank.
+                for f in _IDLE_SAVE_FIELDS:
+                    updates[f] = False
         for field in ["auto_rank_crimes", "auto_rank_gta", "auto_rank_bust_every_5_sec", "auto_rank_oc", "auto_rank_booze", "auto_rank_melt", "auto_rank_scrap"]:
             val = getattr(body, field, None)
             if val is not None:
-                if val and not user_row.get("auto_rank_enabled") and body.auto_rank_enabled is not True:
+                master_will_be_on = (
+                    body.auto_rank_enabled is True
+                    if body.auto_rank_enabled is not None
+                    else bool(user_row.get("auto_rank_enabled"))
+                )
+                if val and not master_will_be_on:
                     raise HTTPException(status_code=400, detail="Turn on Enable Auto Rank first, or turn this off while Auto Rank is paused.")
                 updates[field] = val
         if body.auto_rank_telegram_notify is not None:

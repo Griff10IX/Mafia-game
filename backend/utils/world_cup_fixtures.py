@@ -110,3 +110,95 @@ def apply_wc_kickoff_to_template(template: dict) -> dict:
         template = dict(template)
         template["start_time"] = fixed
     return template
+
+
+WC_KNOCKOUT_ROUND_LABELS: Dict[str, str] = {
+    "knockout": "Knockout",
+    "round_of_32": "Round of 32",
+    "round_of_16": "Round of 16",
+    "quarter_final": "Quarter-final",
+    "semi_final": "Semi-final",
+    "third_place": "Third-place play-off",
+    "final": "Final",
+}
+
+_WC_KNOCKOUT_ROUND_ORDER = (
+    "round_of_32",
+    "round_of_16",
+    "quarter_final",
+    "semi_final",
+    "third_place",
+    "final",
+    "knockout",
+)
+
+
+def infer_knockout_round_from_kickoff(kickoff: Optional[str]) -> Optional[str]:
+    """Best-effort WC 2026 knockout round from kickoff date (after group stage)."""
+    if not kickoff:
+        return None
+    try:
+        from datetime import date, datetime, timezone
+
+        dt = datetime.fromisoformat(str(kickoff).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        d = dt.date()
+    except Exception:
+        return None
+    if d < date(2026, 6, 28):
+        return None
+    if d <= date(2026, 7, 3):
+        return "round_of_32"
+    if d <= date(2026, 7, 7):
+        return "round_of_16"
+    if d <= date(2026, 7, 12):
+        return "quarter_final"
+    if d <= date(2026, 7, 16):
+        return "semi_final"
+    if d == date(2026, 7, 18):
+        return "third_place"
+    if d >= date(2026, 7, 19):
+        return "final"
+    return "knockout"
+
+
+def knockout_round_label(round_key: Optional[str]) -> str:
+    key = (round_key or "").strip().lower()
+    if not key:
+        return "Knockout"
+    return WC_KNOCKOUT_ROUND_LABELS.get(key, key.replace("_", " ").title())
+
+
+def knockout_round_sort_key(round_key: Optional[str]) -> int:
+    key = (round_key or "knockout").strip().lower()
+    try:
+        return _WC_KNOCKOUT_ROUND_ORDER.index(key)
+    except ValueError:
+        return len(_WC_KNOCKOUT_ROUND_ORDER)
+
+
+def enrich_wc_match_round(match: dict) -> dict:
+    """Add round_key / round_label / is_knockout for API + UI."""
+    stage = (match.get("stage") or "").strip().lower()
+    round_key = (match.get("knockout_round") or "").strip().lower() or None
+    if stage == "group":
+        return {
+            **match,
+            "is_knockout": False,
+            "round_key": "group",
+            "round_label": f"Group {match.get('group_id') or '—'}",
+        }
+    if stage in WC_KNOCKOUT_ROUND_LABELS:
+        round_key = stage if stage != "knockout" else round_key
+    if not round_key:
+        round_key = infer_knockout_round_from_kickoff(match.get("kickoff")) or stage or "knockout"
+    if stage in ("final", "third_place"):
+        round_key = stage
+    label = knockout_round_label(round_key)
+    return {
+        **match,
+        "is_knockout": True,
+        "round_key": round_key,
+        "round_label": label,
+    }

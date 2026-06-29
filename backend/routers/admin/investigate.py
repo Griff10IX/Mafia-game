@@ -1688,3 +1688,24 @@ def register(router):
             return await build_admin_ip_lookup_report(db, ip)
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
+
+    @router.get("/admin/investigate/dead-alive-transfers")
+    async def admin_investigate_dead_alive_transfers(
+        username: Optional[str] = Query(None, description="Filter by recipient, dead, reviver, or revived username"),
+        event_type: Optional[str] = Query(None, description="retrieve or revive"),
+        days: int = Query(90, ge=1, le=365),
+        limit: int = Query(100, ge=1, le=500),
+        skip: int = Query(0, ge=0),
+        current_user: dict = Depends(require_admin_or_mod),
+    ):
+        """Staff log of Dead > Alive retrieve and revive transfers (points, cash, Swiss, tokens)."""
+        from utils.dead_alive_transfer_log import query_dead_alive_transfers
+
+        return await query_dead_alive_transfers(
+            db,
+            username=username,
+            event_type=event_type,
+            days=days,
+            limit=limit,
+            skip=skip,
+        )

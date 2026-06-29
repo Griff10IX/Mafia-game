@@ -82,6 +82,26 @@ export default function WorldCupStaff() {
   const [awayScore, setAwayScore] = useState(0);
   const [scorers, setScorers] = useState('');
   const [stage, setStage] = useState('');
+  const [groupsSetup, setGroupsSetup] = useState([]);
+  const [groupWinners, setGroupWinners] = useState({});
+  const [groupWinnersSaving, setGroupWinnersSaving] = useState(false);
+  const [settlingAndPaying, setSettlingAndPaying] = useState(false);
+
+  const loadGroupsSetup = useCallback(async () => {
+    try {
+      const r = await api.get('/world-cup/staff/groups-setup');
+      const groups = r.data?.groups || [];
+      setGroupsSetup(groups);
+      const initial = {};
+      groups.forEach((g) => {
+        if (g.winner_team_id) initial[g.group_id] = g.winner_team_id;
+      });
+      setGroupWinners((prev) => ({ ...initial, ...prev }));
+    } catch (err) {
+      toast.error(getApiErrorMessage(err));
+      setGroupsSetup([]);
+    }
+  }, []);
 
   const loadPredictions = useCallback(async (filters) => {
     try {
@@ -116,6 +136,81 @@ export default function WorldCupStaff() {
   };
   const reloadPredictions = () => loadPredictions(predFilters);
 
+  const applyGroupWinners = async ({ autoApprove = false } = {}) => {
+    const winners = {};
+    groupsSetup.forEach((g) => {
+      const pick = groupWinners[g.group_id];
+      if (pick) winners[g.group_id] = pick;
+    });
+    const count = Object.keys(winners).length;
+    if (!count) {
+      toast.error('Pick at least one group winner');
+      return;
+    }
+    const msg = autoApprove
+      ? `Set ${count} group winner(s), settle predictions, and pay all correct picks now?`
+      : `Set ${count} group winner(s) and queue payouts for approval?`;
+    if (!window.confirm(msg)) return;
+    if (autoApprove) setSettlingAndPaying(true);
+    else setGroupWinnersSaving(true);
+    try {
+      const r = await api.post('/world-cup/staff/group-winners/bulk', {
+        winners,
+        auto_approve: autoApprove,
+      });
+      const paid = r.data?.payout;
+      toast.success(
+        autoApprove
+          ? `Settled ${r.data?.groups_updated || 0} groups · paid ${Number(paid?.total_points || 0).toLocaleString()} pts`
+          : `Settled ${r.data?.groups_updated || 0} groups · ${r.data?.predictions_settled || 0} predictions queued`
+      );
+      await load();
+      await reloadPredictions();
+      await loadGroupsSetup();
+    } catch (err) {
+      toast.error(getApiErrorMessage(err));
+    } finally {
+      setGroupWinnersSaving(false);
+      setSettlingAndPaying(false);
+    }
+  };
+
+  const settleGroupsAndPay = async () => {
+    if (!window.confirm('Settle all groups (standings or winners already saved) and pay every pending winner?')) return;
+    setSettlingAndPaying(true);
+    try {
+      const r = await api.post('/world-cup/staff/settle-groups-and-pay', { auto_approve: true });
+      const paid = r.data?.payout;
+      toast.success(
+        `Settled ${r.data?.groups_settled || 0} group(s) · paid ${Number(paid?.total_points || 0).toLocaleString()} pts`
+      );
+      await load();
+      await reloadPredictions();
+      await loadGroupsSetup();
+    } catch (err) {
+      toast.error(getApiErrorMessage(err));
+    } finally {
+      setSettlingAndPaying(false);
+    }
+  };
+
+  const setSingleGroupWinner = async (groupId) => {
+    const pick = groupWinners[groupId];
+    if (!pick) {
+      toast.error(`Pick a winner for group ${groupId}`);
+      return;
+    }
+    try {
+      const r = await api.post(`/world-cup/staff/group/${groupId}/winner`, { team_id: pick });
+      toast.success(`Group ${groupId}: ${r.data?.winner_name || 'winner'} settled (${r.data?.predictions_settled || 0} picks)`);
+      await load();
+      await reloadPredictions();
+      await loadGroupsSetup();
+    } catch (err) {
+      toast.error(getApiErrorMessage(err));
+    }
+  };
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
@@ -127,6 +222,7 @@ export default function WorldCupStaff() {
       setDash(d.data);
       setEntries(e.data?.entries || []);
       setPending(p.data);
+      await loadGroupsSetup();
     } catch (err) {
       toast.error(getApiErrorMessage(err));
       setDash(null);
@@ -134,7 +230,7 @@ export default function WorldCupStaff() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [loadGroupsSetup]);
 
   useEffect(() => {
     load();
@@ -633,6 +729,73 @@ export default function WorldCupStaff() {
             )}
           </div>
 
+          <div className={`${styles.panel} mobile-panel rounded-lg border border-emerald-500/30 p-4 space-y-3`}>
+            <h2 className="text-sm font-heading text-emerald-300 uppercase">Group stage winners</h2>
+            <p className="text-[10px] text-mutedForeground">
+              When group games are done, pick the exact group winner for each group (2,500 pts per correct pick).
+              This settles every player&apos;s group pick and queues payouts — use Pay all when you&apos;re ready to send points.
+            </p>
+            {!groupsSetup.length ? (
+              <p className="text-sm text-mutedForeground">Loading groups…</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {groupsSetup.map((g) => (
+                  <div key={g.group_id} className="flex flex-wrap items-center gap-2 p-2 rounded border border-primary/10 bg-primary/5">
+                    <span className="text-xs font-heading text-primary w-16 shrink-0">Group {g.group_id}</span>
+                    <select
+                      value={groupWinners[g.group_id] || ''}
+                      onChange={(e) => setGroupWinners((prev) => ({ ...prev, [g.group_id]: e.target.value }))}
+                      className="flex-1 min-h-[40px] px-2 rounded border border-primary/20 bg-transparent text-sm min-w-[140px]"
+                    >
+                      <option value="">— pick winner —</option>
+                      {(g.teams || []).map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.flag_emoji ? `${t.flag_emoji} ` : ''}{t.name}
+                        </option>
+                      ))}
+                    </select>
+                    {g.settled && g.winner_team?.name && (
+                      <span className="text-[9px] text-emerald-400 uppercase shrink-0">Settled</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setSingleGroupWinner(g.group_id)}
+                      className="min-h-[36px] px-2 rounded border border-primary/20 text-[10px] font-heading uppercase"
+                    >
+                      Set
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                disabled={groupWinnersSaving || settlingAndPaying}
+                onClick={() => applyGroupWinners({ autoApprove: false })}
+                className="flex-1 min-h-[44px] rounded border border-emerald-500/40 text-emerald-300 text-sm font-heading uppercase"
+              >
+                {groupWinnersSaving ? 'Saving…' : 'Save all winners & settle'}
+              </button>
+              <button
+                type="button"
+                disabled={groupWinnersSaving || settlingAndPaying}
+                onClick={() => applyGroupWinners({ autoApprove: true })}
+                className="flex-1 min-h-[44px] rounded bg-emerald-600 text-white text-sm font-heading uppercase"
+              >
+                {settlingAndPaying ? 'Paying…' : 'Save all & pay winners'}
+              </button>
+            </div>
+            <button
+              type="button"
+              disabled={settlingAndPaying}
+              onClick={settleGroupsAndPay}
+              className="w-full min-h-[40px] rounded border border-primary/20 text-[11px] font-heading uppercase text-mutedForeground"
+            >
+              Auto-settle from standings + pay all pending
+            </button>
+          </div>
+
           <div className={`${styles.panel} mobile-panel rounded-lg border border-primary/20 p-4 space-y-3`}>
             <h2 className="text-sm font-heading text-primary uppercase">Manual match result</h2>
             <input
@@ -657,7 +820,7 @@ export default function WorldCupStaff() {
               type="text"
               value={stage}
               onChange={(e) => setStage(e.target.value)}
-              placeholder="Stage override (group, final, third_place…)"
+              placeholder="Stage override (group, round_of_16, quarter_final, semi_final, final, third_place…)"
               className="w-full min-h-[44px] px-3 rounded border border-primary/20 bg-transparent text-sm"
             />
             <button type="button" onClick={patchResult} className="w-full min-h-[44px] rounded border border-primary/30 text-sm font-heading uppercase">

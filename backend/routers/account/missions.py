@@ -25,7 +25,12 @@ from server import (
 )
 from routers.money.booze_run import BOOZE_TYPES
 from routers.kill.armoury import TOKEN_CONFIG
-from utils.missions_extended import build_missions, MISSION_RANDOM_TOKEN_TYPES
+from utils.missions_extended import (
+    build_missions,
+    MISSION_RANDOM_TOKEN_TYPES,
+    TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY,
+)
+from utils.mission_loot_daily import daily_loot_for_completed_ids, ensure_mission_loot_daily_backfill
 from pymongo.errors import DuplicateKeyError
 import random
 
@@ -418,6 +423,7 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
         await db.users.update_one({"id": current_user["id"]}, {"$set": m3_set})
         current_user.update(m3_set)
     await _ensure_extended_mission_baselines(current_user)
+    current_user = await _maybe_mission_loot_backfill(current_user)
     missions_out = []
     for m in MISSIONS:
         if m["city"] not in unlocked:
@@ -448,6 +454,7 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
             "reward_booze": m.get("reward_booze"),
             "reward_bullets": m.get("reward_bullets", 0),
             "reward_tribute_bullets_daily": m.get("reward_tribute_bullets_daily", 0),
+            "reward_tribute_loot_box_pieces_daily": m.get("reward_tribute_loot_box_pieces_daily", 0),
             "reward_tribute_auto_rank_2h_daily": m.get("reward_tribute_auto_rank_2h_daily", 0),
             "reward_loot_box_pieces": m.get("reward_loot_box_pieces", 0),
             "reward_auto_rank_2h": m.get("reward_auto_rank_2h", 0),
@@ -517,6 +524,7 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         await db.users.update_one({"id": current_user["id"]}, {"$set": m3_set})
         current_user.update(m3_set)
     await _ensure_extended_mission_baselines(current_user)
+    current_user = await _maybe_mission_loot_backfill(current_user)
     by_city = {}
     for m in MISSIONS:
         if m["city"] not in unlocked:
@@ -549,6 +557,7 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
             "reward_booze": m.get("reward_booze"),
             "reward_bullets": m.get("reward_bullets", 0),
             "reward_tribute_bullets_daily": m.get("reward_tribute_bullets_daily", 0),
+            "reward_tribute_loot_box_pieces_daily": m.get("reward_tribute_loot_box_pieces_daily", 0),
             "reward_tribute_auto_rank_2h_daily": m.get("reward_tribute_auto_rank_2h_daily", 0),
             "reward_loot_box_pieces": m.get("reward_loot_box_pieces", 0),
             "reward_auto_rank_2h": m.get("reward_auto_rank_2h", 0),
@@ -584,7 +593,7 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
     daily_cash_total = DAILY_TRIBUTE_AMOUNT
     daily_bullets_total = 0
     daily_respect_total = 0
-    daily_loot_total = DAILY_TRIBUTE_LOOT_BOX_PIECES
+    daily_loot_total = _daily_tribute_loot_for_completed(completed_ids)
     for mid in completed_ids:
         m = next((x for x in MISSIONS if x["id"] == mid), None)
         if not m:
@@ -594,8 +603,6 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         daily_cash_total += int(m.get("reward_tribute_daily") or 0)
         daily_bullets_total += int(m.get("reward_tribute_bullets_daily") or 0)
         daily_respect_total += int(m.get("reward_respect_daily") or 0)
-        if mid == SECOND_MISSION_ID:
-            daily_loot_total += MISSION_2_DAILY_LOOT_BOX_PIECES
     tribute_tokens = int(current_user.get("tribute_tokens") or 0)
     return {
         "current_city": current_city,
@@ -611,6 +618,7 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         "next_tribute_deposit_at": next_deposit_iso,
         "daily_tribute_cash_base": DAILY_TRIBUTE_AMOUNT,
         "daily_tribute_loot_box_pieces_base": DAILY_TRIBUTE_LOOT_BOX_PIECES,
+        "daily_tribute_loot_box_pieces_ladder_max": TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY,
         "daily_tribute_cash_total": daily_cash_total,
         "daily_tribute_bullets_total": daily_bullets_total,
         "daily_tribute_respect_total": daily_respect_total,
@@ -973,9 +981,9 @@ async def get_missions_characters(current_user: dict = Depends(get_current_user)
     return {"characters": out}
 
 
-# Loot box pieces in daily tribute: base for all users; optional extra for m_second completers (env; default 0).
-DAILY_TRIBUTE_LOOT_BOX_PIECES = int(os.environ.get("DAILY_TRIBUTE_LOOT_BOX_PIECES", "25"))
-MISSION_2_DAILY_LOOT_BOX_PIECES = int(os.environ.get("MISSION_2_DAILY_LOOT_BOX_PIECES", "0"))
+# Loot box pieces in daily tribute: per completed mission only (see reward_tribute_loot_box_pieces_daily).
+DAILY_TRIBUTE_LOOT_BOX_PIECES = 0
+MISSION_2_DAILY_LOOT_BOX_PIECES = 0
 
 # Filled when MISSIONS loads at EOF (see register() block below)
 MISSION_1_DAILY_CASH = 0
@@ -998,7 +1006,7 @@ async def run_daily_tribute_deposit():
     Deposit time and "already ran today" are stored in game_config (id=tribute_deposit): deposit_utc_hour, last_run_utc_date.
     We atomically claim the run for today (set last_run_utc_date only when not already today) so a restart or multiple workers cannot double-pay.
     For each mission, users who completed it get that mission's reward_tribute_daily, reward_respect_daily,
-    reward_tribute_bullets_daily, and reward_tribute_tokens_daily (random tokens). m_second completers get MISSION_2_DAILY_LOOT_BOX_PIECES extra loot when that env is > 0.
+    reward_tribute_bullets_daily, reward_tribute_loot_box_pieces_daily, and reward_tribute_tokens_daily (random tokens).
     """
     now = datetime.now(timezone.utc)
     today = now.date().isoformat()
@@ -1033,10 +1041,10 @@ async def run_daily_tribute_deposit():
     claim_result = await db.game_config.update_one(claim_filter, {"$set": {"last_run_utc_date": today}})
     if claim_result.modified_count == 0:
         return  # already ran today or lost a claim race
-    # All daily rewards stack in tribute buckets until user collects (cash, bullets, respect, loot)
+    # All daily rewards stack in tribute buckets until user collects (cash, bullets, respect, loot from missions).
     result = await db.users.update_many(
         {},
-        {"$inc": {"tribute_bank": DAILY_TRIBUTE_AMOUNT, "tribute_loot_box_pieces": DAILY_TRIBUTE_LOOT_BOX_PIECES}},
+        {"$inc": {"tribute_bank": DAILY_TRIBUTE_AMOUNT}},
     )
     counts = {}
     for m in MISSIONS:
@@ -1044,6 +1052,7 @@ async def run_daily_tribute_deposit():
         cash = int(m.get("reward_tribute_daily") or 0)
         respect = int(m.get("reward_respect_daily") or 0)
         bullets = int(m.get("reward_tribute_bullets_daily") or 0)
+        loot = int(m.get("reward_tribute_loot_box_pieces_daily") or 0)
         tokens = int(m.get("reward_tribute_tokens_daily") or 0)
         auto_rank_tokens = int(m.get("reward_tribute_auto_rank_2h_daily") or 0)
         inc = {}
@@ -1053,12 +1062,12 @@ async def run_daily_tribute_deposit():
             inc["tribute_respect"] = respect
         if bullets:
             inc["tribute_bullets"] = bullets
+        if loot:
+            inc["tribute_loot_box_pieces"] = loot
         if tokens:
             inc["tribute_tokens"] = tokens
         if auto_rank_tokens:
             inc["auto_rank_2h_tokens"] = auto_rank_tokens
-        if mid == "m_second" and MISSION_2_DAILY_LOOT_BOX_PIECES:
-            inc["tribute_loot_box_pieces"] = MISSION_2_DAILY_LOOT_BOX_PIECES
         if not inc:
             continue
         r = await db.users.update_many(
@@ -1085,9 +1094,8 @@ async def run_daily_tribute_deposit():
     )
     
     logging.getLogger(__name__).info(
-        "Daily tribute deposit: %s cash + %s loot to %d users; per-mission bonuses %s; completed_it tokens to %d users at %s UTC",
+        "Daily tribute deposit: %s cash to %d users; per-mission bonuses %s; completed_it tokens to %d users at %s UTC",
         DAILY_TRIBUTE_AMOUNT,
-        DAILY_TRIBUTE_LOOT_BOX_PIECES,
         result.modified_count,
         counts,
         completed_it_result.modified_count,
@@ -1105,6 +1113,7 @@ def register(router):
 
 # Load mission table after router registration (avoids circular import with server).
 MISSIONS = build_missions()
+MISSION_BY_ID = {m["id"]: m for m in MISSIONS}
 MISSION_ID_TO_TITLE = {m["id"]: m["title"] for m in MISSIONS}
 _def_m1 = next((m for m in MISSIONS if m.get("id") == FIRST_MISSION_ID), {})
 _def_m2 = next((m for m in MISSIONS if m.get("id") == "m_second"), {})
@@ -1122,6 +1131,25 @@ MISSION_3_DAILY_BULLETS = int(_def_m3.get("reward_tribute_bullets_daily") or 0)
 MISSION_4_DAILY_CASH = int(_def_m4.get("reward_tribute_daily") or 0)
 MISSION_4_DAILY_RESPECT = int(_def_m4.get("reward_respect_daily") or 0)
 MISSION_4_DAILY_BULLETS = int(_def_m4.get("reward_tribute_bullets_daily") or 0)
+MISSION_2_DAILY_LOOT_BOX_PIECES = int(_def_m2.get("reward_tribute_loot_box_pieces_daily") or 0)
+
+
+def _daily_tribute_loot_for_completed(completed_ids: set) -> int:
+    return daily_loot_for_completed_ids(completed_ids, MISSION_BY_ID)
+
+
+async def _maybe_mission_loot_backfill(current_user: dict) -> dict:
+    completed_ids = _user_completed_mission_ids(current_user)
+    credited = await ensure_mission_loot_daily_backfill(
+        db,
+        current_user,
+        mission_by_id=MISSION_BY_ID,
+        completed_ids=completed_ids,
+    )
+    if not credited:
+        return current_user
+    fresh = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
+    return fresh or current_user
 
 
 def mission_ladder_missions() -> List[Dict[str, Any]]:
@@ -1190,7 +1218,7 @@ async def _admin_tribute_snapshot(user: dict, completed_ids: set) -> Dict[str, A
     daily_cash_total = DAILY_TRIBUTE_AMOUNT
     daily_bullets_total = 0
     daily_respect_total = 0
-    daily_loot_total = DAILY_TRIBUTE_LOOT_BOX_PIECES
+    daily_loot_total = _daily_tribute_loot_for_completed(completed_ids)
     for mid in completed_ids:
         m = next((x for x in MISSIONS if x["id"] == mid), None)
         if not m:
@@ -1200,8 +1228,6 @@ async def _admin_tribute_snapshot(user: dict, completed_ids: set) -> Dict[str, A
         daily_cash_total += int(m.get("reward_tribute_daily") or 0)
         daily_bullets_total += int(m.get("reward_tribute_bullets_daily") or 0)
         daily_respect_total += int(m.get("reward_respect_daily") or 0)
-        if mid == SECOND_MISSION_ID:
-            daily_loot_total += MISSION_2_DAILY_LOOT_BOX_PIECES
     return {
         "tribute_bank": int(user.get("tribute_bank") or 0),
         "tribute_bullets": int(user.get("tribute_bullets") or 0),
@@ -1212,6 +1238,7 @@ async def _admin_tribute_snapshot(user: dict, completed_ids: set) -> Dict[str, A
         "next_tribute_deposit_at": next_deposit_iso,
         "daily_tribute_cash_base": DAILY_TRIBUTE_AMOUNT,
         "daily_tribute_loot_box_pieces_base": DAILY_TRIBUTE_LOOT_BOX_PIECES,
+        "daily_tribute_loot_box_pieces_ladder_max": TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY,
         "daily_tribute_cash_total": daily_cash_total,
         "daily_tribute_bullets_total": daily_bullets_total,
         "daily_tribute_respect_total": daily_respect_total,

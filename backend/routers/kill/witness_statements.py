@@ -126,6 +126,25 @@ class WitnessListingIdRequest(BaseModel):
     listing_id: str
 
 
+class WitnessDeleteRequest(BaseModel):
+    notification_ids: list[str] = Field(..., min_length=1, max_length=100)
+
+    @field_validator("notification_ids", mode="before")
+    @classmethod
+    def _normalize_delete_notification_ids(cls, v):
+        if not isinstance(v, list):
+            raise ValueError("notification_ids must be a list")
+        out = []
+        seen = set()
+        for x in v:
+            s = str(x).strip()
+            if not s or s in seen:
+                continue
+            seen.add(s)
+            out.append(s)
+        return out
+
+
 class WitnessStatementReconcileRequest(BaseModel):
     """Staff: set witness_statements to match inbox + active listing escrow (fixes mute/delete desync)."""
 
@@ -653,6 +672,61 @@ def register(router):
             {"_id": 0, "id": 1, "message": 1, "created_at": 1, "read": 1, "listed_listing_id": 1},
         ).sort("created_at", -1).limit(100).to_list(100)
         return {"items": rows}
+
+    @router.post("/witness-statements/delete")
+    async def witness_statements_delete(req: WitnessDeleteRequest, current_user: dict = Depends(get_current_user)):
+        """Delete witness log lines (inbox notifications). Blocked while listed on the market."""
+        uid = current_user.get("id") or ""
+        if not uid:
+            raise HTTPException(status_code=401, detail="Not logged in")
+        ids = list(req.notification_ids)
+        if not ids:
+            raise HTTPException(status_code=400, detail="Select at least one witness statement.")
+        rows = await db.notifications.find(
+            {"id": {"$in": ids}, "user_id": uid, **_WITNESS_INBOX_TITLE},
+            {"_id": 0},
+        ).to_list(len(ids) + 1)
+        if len(rows) != len(ids):
+            raise HTTPException(status_code=400, detail="Invalid selection or statements not owned.")
+        listed = [r for r in rows if r.get("listed_listing_id")]
+        if listed:
+            if len(listed) == 1 and len(ids) == 1:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This witness statement is listed on the market. Remove it from the market first.",
+                )
+            raise HTTPException(
+                status_code=400,
+                detail="One or more statements are listed on the market. Remove them from the market first.",
+            )
+        from utils.deleted_messages_archive import archive_many
+
+        await archive_many(
+            source="notification",
+            docs=rows,
+            deleted_by_id=uid,
+            deleted_by_username=current_user.get("username"),
+            reason="witness_statement_delete",
+        )
+        result = await db.notifications.delete_many({"id": {"$in": ids}, "user_id": uid, **_WITNESS_INBOX_TITLE})
+        deleted = int(result.deleted_count or 0)
+        if deleted > 0:
+            user = await db.users.find_one({"id": uid}, {"_id": 0, "witness_statements": 1, "witness_nav_red": 1})
+            before_bal = int((user or {}).get("witness_statements") or 0)
+            before_nav = int((user or {}).get("witness_nav_red") or 0)
+            after_bal = max(0, before_bal - deleted)
+            after_nav = min(before_nav, after_bal)
+            await db.users.update_one(
+                {"id": uid},
+                {"$set": {"witness_statements": after_bal, "witness_nav_red": after_nav}},
+            )
+        try:
+            from routers.game.notifications import _invalidate_list_cache
+
+            _invalidate_list_cache(uid)
+        except Exception:
+            pass
+        return {"message": f"Deleted {deleted} witness statement(s).", "deleted_count": deleted}
 
     @router.post("/witness-statements/nav-seen")
     async def witness_statements_nav_seen(current_user: dict = Depends(get_current_user)):

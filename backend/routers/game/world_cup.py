@@ -488,7 +488,7 @@ def _prediction_type_label(ptype: str) -> str:
 def _team_brief(team: dict) -> dict:
     if not team:
         return {}
-    return {k: team.get(k) for k in ("id", "name", "short_code", "group_id") if team.get(k)}
+    return {k: team.get(k) for k in ("id", "name", "short_code", "group_id", "flag_emoji") if team.get(k)}
 
 
 def _match_snapshot(match: Optional[dict], teams_by_id: dict) -> Optional[dict]:
@@ -936,8 +936,17 @@ def _compute_group_standings(group_teams: list, matches: list) -> list:
 
 async def _try_settle_group(db, send_notification, cfg: dict, group_id: str) -> bool:
     grp = await db.world_cup_groups.find_one({"group_id": group_id}, {"_id": 0})
-    if grp and grp.get("winner_team_id") and grp.get("settled_at"):
-        return False
+    if grp and grp.get("winner_team_id"):
+        if grp.get("settled_at"):
+            unsettled = await db.world_cup_predictions.count_documents(
+                {"type": PRED_GROUP_WINNER, "target_id": group_id, "settled": {"$ne": True}}
+            )
+            if unsettled <= 0:
+                return False
+            await _settle_group_predictions(db, send_notification, cfg, group_id, grp["winner_team_id"])
+            return True
+        await _settle_group_predictions(db, send_notification, cfg, group_id, grp["winner_team_id"])
+        return True
     gteams = grp.get("team_ids") if grp else []
     if not gteams:
         tdocs = await db.world_cup_teams.find({"group_id": group_id}, {"_id": 0, "id": 1}).to_list(10)
@@ -955,6 +964,143 @@ async def _try_settle_group(db, send_notification, cfg: dict, group_id: str) -> 
     winner = ranked[0]
     await _settle_group_predictions(db, send_notification, cfg, group_id, winner)
     return True
+
+
+async def _resolve_winner_team_in_group(
+    db,
+    group_id: str,
+    *,
+    team_id: Optional[str] = None,
+    team_name: Optional[str] = None,
+) -> dict:
+    gid = (group_id or "").strip().upper()
+    if gid not in GROUP_IDS:
+        raise HTTPException(status_code=400, detail=f"Invalid group {group_id}")
+    tid = (team_id or "").strip()
+    if tid:
+        team = await db.world_cup_teams.find_one({"id": tid}, {"_id": 0})
+        if not team or (team.get("group_id") or "").upper() != gid:
+            raise HTTPException(status_code=400, detail="Team is not in that group")
+        return team
+    name = (team_name or "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="Provide team_id or team_name")
+    pattern = re.compile("^" + re.escape(name) + "$", re.IGNORECASE)
+    team = await db.world_cup_teams.find_one({"group_id": gid, "name": pattern}, {"_id": 0})
+    if not team:
+        team = await db.world_cup_teams.find_one({"group_id": gid, "short_code": pattern}, {"_id": 0})
+    if not team:
+        raise HTTPException(status_code=404, detail=f"No team '{name}' in group {gid}")
+    return team
+
+
+async def _reset_group_winner_settlement(db, group_id: str) -> int:
+    res = await db.world_cup_predictions.update_many(
+        {"type": PRED_GROUP_WINNER, "target_id": group_id, "settled": True},
+        {
+            "$set": {"settled": False, "points_awarded": 0, "payout_status": "none"},
+            "$unset": {
+                "settled_at": "",
+                "settle_label": "",
+                "payout_approved_at": "",
+                "payout_approved_by": "",
+            },
+        },
+    )
+    await db.world_cup_groups.update_one(
+        {"group_id": group_id},
+        {"$unset": {"winner_team_id": "", "settled_at": ""}},
+    )
+    return int(res.modified_count or 0)
+
+
+async def _set_group_winner_manual(
+    db,
+    send_notification,
+    cfg: dict,
+    group_id: str,
+    winner_team_id: str,
+    *,
+    force: bool = False,
+) -> dict:
+    gid = (group_id or "").strip().upper()
+    grp = await db.world_cup_groups.find_one({"group_id": gid}, {"_id": 0})
+    if grp and grp.get("settled_at"):
+        same_winner = str(grp.get("winner_team_id") or "") == str(winner_team_id)
+        if same_winner and not force:
+            count = await _settle_group_predictions(db, send_notification, cfg, gid, winner_team_id)
+            team = await db.world_cup_teams.find_one({"id": winner_team_id}, {"_id": 0, "name": 1})
+            return {
+                "group_id": gid,
+                "winner_team_id": winner_team_id,
+                "winner_name": (team or {}).get("name"),
+                "predictions_settled": count,
+                "already_settled": True,
+            }
+        if not force:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Group {gid} already settled. Pass force=true to change the winner.",
+            )
+        await _reset_group_winner_settlement(db, gid)
+    count = await _settle_group_predictions(db, send_notification, cfg, gid, winner_team_id)
+    team = await db.world_cup_teams.find_one({"id": winner_team_id}, {"_id": 0, "name": 1})
+    return {
+        "group_id": gid,
+        "winner_team_id": winner_team_id,
+        "winner_name": (team or {}).get("name"),
+        "predictions_settled": count,
+        "already_settled": False,
+    }
+
+
+async def _settle_all_groups_comprehensive(db, send_notification, cfg: dict) -> dict:
+    details = []
+    settled_count = 0
+    for gid in GROUP_IDS:
+        if await _try_settle_group(db, send_notification, cfg, gid):
+            settled_count += 1
+            details.append({"group_id": gid, "method": "auto"})
+    return {"groups_settled": settled_count, "details": details}
+
+
+async def _build_groups_setup(db) -> dict:
+    teams_by_id = await _teams_by_id(db)
+    groups_by_id = {}
+    async for g in db.world_cup_groups.find({}, {"_id": 0}):
+        gid = g.get("group_id")
+        if gid:
+            groups_by_id[gid] = g
+    groups_out = []
+    for gid in GROUP_IDS:
+        grp = groups_by_id.get(gid) or {}
+        teams = [
+            _team_brief(t)
+            for t in teams_by_id.values()
+            if (t.get("group_id") or "").upper() == gid
+        ]
+        teams.sort(key=lambda x: x.get("name") or "")
+        winner_id = grp.get("winner_team_id")
+        groups_out.append({
+            "group_id": gid,
+            "teams": teams,
+            "winner_team": _team_brief(teams_by_id.get(winner_id) or {}) if winner_id else None,
+            "winner_team_id": winner_id,
+            "settled_at": grp.get("settled_at"),
+            "settled": bool(grp.get("settled_at")),
+        })
+    return {"groups": groups_out, "group_winner_points": _points_from_config(await _load_config(db))["group_winner_points"]}
+
+
+async def _resolve_winner_pick_in_group(db, group_id: str, pick: str) -> dict:
+    pick_s = (pick or "").strip()
+    if not pick_s:
+        raise HTTPException(status_code=400, detail="Empty team pick")
+    gid = (group_id or "").strip().upper()
+    by_id = await db.world_cup_teams.find_one({"id": pick_s, "group_id": gid}, {"_id": 0})
+    if by_id:
+        return by_id
+    return await _resolve_winner_team_in_group(db, gid, team_name=pick_s)
 
 
 async def _apply_match_result(db, send_notification, cfg: dict, match_id: str, home_score: int, away_score: int, scorers: Optional[list] = None) -> dict:
@@ -1073,7 +1219,7 @@ async def _sync_fixtures_from_odds(db) -> dict:
         if existing and existing.get("status") == "settled":
             continue
         commence_parsed = sb._parse_commence_time(commence) if commence else None
-        from utils.world_cup_fixtures import resolve_wc_kickoff_utc
+        from utils.world_cup_fixtures import infer_knockout_round_from_kickoff, resolve_wc_kickoff_utc
 
         kickoff = resolve_wc_kickoff_utc(
             home_name,
@@ -1082,6 +1228,11 @@ async def _sync_fixtures_from_odds(db) -> dict:
         )
         if not kickoff:
             kickoff = commence_parsed or (commence if isinstance(commence, str) else _now_iso())
+        knockout_round = None
+        if stage == "knockout":
+            knockout_round = infer_knockout_round_from_kickoff(kickoff)
+        elif stage in ("round_of_32", "round_of_16", "quarter_final", "semi_final", "final", "third_place"):
+            knockout_round = stage
         doc = {
             "external_event_id": ext_id,
             "external_sport_key": WC_SPORT_KEY,
@@ -1091,6 +1242,7 @@ async def _sync_fixtures_from_odds(db) -> dict:
             "lock_at": _lock_at_from_kickoff(kickoff),
             "stage": stage,
             "group_id": group_id,
+            "knockout_round": knockout_round,
             "status": "scheduled",
             "updated_at": now,
         }
@@ -1850,6 +2002,22 @@ class WorldCupPlayoffResolveBody(BaseModel):
     dry_run: bool = False
 
 
+class GroupWinnerSetBody(BaseModel):
+    team_id: Optional[str] = None
+    team_name: Optional[str] = None
+    force: bool = False
+
+
+class GroupWinnersBulkBody(BaseModel):
+    winners: Dict[str, str] = Field(default_factory=dict)
+    force: bool = False
+    auto_approve: bool = False
+
+
+class SettleGroupsPayBody(BaseModel):
+    auto_approve: bool = True
+
+
 def register(router):
     import server as srv
 
@@ -1950,14 +2118,21 @@ def register(router):
             q["stage"] = stage
         matches = await db.world_cup_matches.find(q, {"_id": 0}).sort("kickoff", 1).to_list(500)
         teams = await _teams_by_id(db)
+        from utils.world_cup_fixtures import enrich_wc_match_round, knockout_round_sort_key
+
         out = []
         for m in matches:
             row = dict(m)
             row["home_team"] = teams.get(m.get("home_team_id"))
             row["away_team"] = teams.get(m.get("away_team_id"))
             row["locked"] = _is_locked(m.get("lock_at"))
+            row = enrich_wc_match_round(row)
             out.append(row)
-        return {"matches": out}
+        knockout_rounds = sorted(
+            {r.get("round_key") for r in out if r.get("is_knockout") and r.get("round_key")},
+            key=knockout_round_sort_key,
+        )
+        return {"matches": out, "knockout_rounds": knockout_rounds}
 
     @router.get("/world-cup/my-predictions", dependencies=_wc_rl)
     async def world_cup_my_predictions(current_user: dict = Depends(get_current_user)):
@@ -2210,15 +2385,86 @@ def register(router):
 
     @router.post("/world-cup/staff/settle-groups")
     async def wc_staff_settle_groups(group_id: Optional[str] = Query(None), current_user: dict = Depends(get_current_user)):
-        _require_ent(current_user)
+        _require_staff(current_user)
         cfg = await _load_config(db)
         await _require_enabled_staff(cfg)
-        gids = [group_id] if group_id else list(GROUP_IDS)
-        done = 0
-        for gid in gids:
-            if gid and await _try_settle_group(db, send_notification, cfg, gid):
-                done += 1
-        return {"groups_settled": done}
+        if group_id:
+            gid = group_id.strip().upper()
+            ok = await _try_settle_group(db, send_notification, cfg, gid)
+            return {"groups_settled": 1 if ok else 0, "details": [{"group_id": gid, "settled": ok}]}
+        return await _settle_all_groups_comprehensive(db, send_notification, cfg)
+
+    @router.get("/world-cup/staff/groups-setup")
+    async def wc_staff_groups_setup(current_user: dict = Depends(get_current_user)):
+        _require_staff(current_user)
+        cfg = await _load_config(db)
+        await _require_enabled_staff(cfg)
+        return await _build_groups_setup(db)
+
+    @router.post("/world-cup/staff/group/{group_id}/winner")
+    async def wc_staff_set_group_winner(
+        group_id: str,
+        body: GroupWinnerSetBody,
+        current_user: dict = Depends(get_current_user),
+    ):
+        _require_staff(current_user)
+        cfg = await _load_config(db)
+        await _require_enabled_staff(cfg)
+        team = await _resolve_winner_team_in_group(
+            db, group_id, team_id=body.team_id, team_name=body.team_name
+        )
+        return await _set_group_winner_manual(
+            db,
+            send_notification,
+            cfg,
+            group_id,
+            team["id"],
+            force=bool(body.force),
+        )
+
+    @router.post("/world-cup/staff/group-winners/bulk")
+    async def wc_staff_set_group_winners_bulk(
+        body: GroupWinnersBulkBody,
+        current_user: dict = Depends(get_current_user),
+    ):
+        _require_staff(current_user)
+        cfg = await _load_config(db)
+        await _require_enabled_staff(cfg)
+        results = []
+        total_preds = 0
+        for raw_gid, pick in (body.winners or {}).items():
+            if not pick or not str(pick).strip():
+                continue
+            gid = str(raw_gid).strip().upper()
+            team = await _resolve_winner_pick_in_group(db, gid, str(pick))
+            row = await _set_group_winner_manual(
+                db, send_notification, cfg, gid, team["id"], force=bool(body.force)
+            )
+            total_preds += int(row.get("predictions_settled") or 0)
+            results.append(row)
+        payout = None
+        if body.auto_approve and results:
+            payout = await _approve_all_pending_payouts(db, send_notification, current_user.get("id") or "")
+        return {
+            "groups_updated": len(results),
+            "predictions_settled": total_preds,
+            "results": results,
+            "payout": payout,
+        }
+
+    @router.post("/world-cup/staff/settle-groups-and-pay")
+    async def wc_staff_settle_groups_and_pay(
+        body: SettleGroupsPayBody,
+        current_user: dict = Depends(get_current_user),
+    ):
+        _require_staff(current_user)
+        cfg = await _load_config(db)
+        await _require_enabled_staff(cfg)
+        settled = await _settle_all_groups_comprehensive(db, send_notification, cfg)
+        payout = None
+        if body.auto_approve:
+            payout = await _approve_all_pending_payouts(db, send_notification, current_user.get("id") or "")
+        return {**settled, "payout": payout}
 
     @router.post("/world-cup/staff/settle-tournament")
     async def wc_staff_settle_tournament(current_user: dict = Depends(get_current_user)):
@@ -2410,6 +2656,64 @@ def register(router):
     @router.post("/admin/world-cup/approve-all-payouts")
     async def admin_wc_approve_all_payouts(current_user: dict = Depends(require_admin)):
         return await _approve_all_pending_payouts(db, send_notification, current_user.get("id") or "")
+
+    @router.get("/admin/world-cup/groups-setup")
+    async def admin_wc_groups_setup(current_user: dict = Depends(require_admin)):
+        return await _build_groups_setup(db)
+
+    @router.post("/admin/world-cup/group/{group_id}/winner")
+    async def admin_wc_set_group_winner(
+        group_id: str,
+        body: GroupWinnerSetBody,
+        current_user: dict = Depends(require_admin),
+    ):
+        team = await _resolve_winner_team_in_group(
+            db, group_id, team_id=body.team_id, team_name=body.team_name
+        )
+        cfg = await _load_config(db)
+        return await _set_group_winner_manual(
+            db, send_notification, cfg, group_id, team["id"], force=bool(body.force)
+        )
+
+    @router.post("/admin/world-cup/group-winners/bulk")
+    async def admin_wc_set_group_winners_bulk(
+        body: GroupWinnersBulkBody,
+        current_user: dict = Depends(require_admin),
+    ):
+        cfg = await _load_config(db)
+        results = []
+        total_preds = 0
+        for raw_gid, pick in (body.winners or {}).items():
+            if not pick or not str(pick).strip():
+                continue
+            gid = str(raw_gid).strip().upper()
+            team = await _resolve_winner_pick_in_group(db, gid, str(pick))
+            row = await _set_group_winner_manual(
+                db, send_notification, cfg, gid, team["id"], force=bool(body.force)
+            )
+            total_preds += int(row.get("predictions_settled") or 0)
+            results.append(row)
+        payout = None
+        if body.auto_approve and results:
+            payout = await _approve_all_pending_payouts(db, send_notification, current_user.get("id") or "")
+        return {
+            "groups_updated": len(results),
+            "predictions_settled": total_preds,
+            "results": results,
+            "payout": payout,
+        }
+
+    @router.post("/admin/world-cup/settle-groups-and-pay")
+    async def admin_wc_settle_groups_and_pay(
+        body: SettleGroupsPayBody,
+        current_user: dict = Depends(require_admin),
+    ):
+        cfg = await _load_config(db)
+        settled = await _settle_all_groups_comprehensive(db, send_notification, cfg)
+        payout = None
+        if body.auto_approve:
+            payout = await _approve_all_pending_payouts(db, send_notification, current_user.get("id") or "")
+        return {**settled, "payout": payout}
 
     @router.post("/admin/world-cup/matches/bulk")
     async def admin_wc_bulk_matches(body: BulkMatchImport, current_user: dict = Depends(require_admin)):

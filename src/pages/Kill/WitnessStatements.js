@@ -93,6 +93,28 @@ export default function WitnessStatements() {
     });
   };
 
+  const handleDelete = async () => {
+    const ids = [...selectedIds];
+    if (ids.length < 1) {
+      toast.error('Select at least one statement from the log to delete.');
+      return;
+    }
+    const label = ids.length === 1 ? 'this witness statement' : `${ids.length} witness statements`;
+    if (!window.confirm(`Permanently delete ${label}? This cannot be undone.`)) return;
+    setSubmitting(true);
+    try {
+      const res = await api.post('/witness-statements/delete', { notification_ids: ids });
+      toast.success(res.data?.message || 'Deleted.');
+      setSelectedIds(new Set());
+      await load();
+      refreshUser();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e, 'Failed to delete'));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   const handleList = async () => {
     const ids = [...selectedIds];
     const price = parseInt(String(listPrice).replace(/\D/g, ''), 10) || 0;
@@ -193,7 +215,7 @@ export default function WitnessStatements() {
         <div className="p-3 space-y-3">
           <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Create listing</div>
           <p className="text-[9px] text-mutedForeground">
-            Up to 5 active listings. Tick rows in the witness log below, then set one price for the whole lot. Listed lines stay in your log but are held in escrow until sold, cancelled, or expired (48 hours).
+            Up to 5 active listings. Tick rows in the witness log below to list or delete them. Listed lines cannot be deleted until you remove them from the market. Listed lines stay in your log but are held in escrow until sold, cancelled, or expired (48 hours).
           </p>
           <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
             <div className="flex-1 space-y-1">
@@ -206,6 +228,14 @@ export default function WitnessStatements() {
               <label className="text-[9px] text-mutedForeground font-heading uppercase">Total cash ($)</label>
               <FormattedNumberInput value={listPrice} onChange={setListPrice} placeholder="Price for whole lot" className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs" />
             </div>
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={submitting || loading || nSelected < 1}
+              className="px-4 py-2 rounded border border-red-500/40 bg-red-500/10 text-red-400 text-[10px] font-heading font-bold uppercase hover:bg-red-500/20 disabled:opacity-50 shrink-0"
+            >
+              Delete
+            </button>
             <button
               type="button"
               onClick={handleList}

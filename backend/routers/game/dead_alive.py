@@ -9,6 +9,7 @@ from fastapi import Depends, HTTPException
 from routers.kill.armoury import TOKEN_CONFIG
 from utils.point_provenance import log_points_event
 from utils.redeem_code_lifecycle import release_redeem_slots_for_deceased_user
+from utils.dead_alive_transfer_log import log_dead_alive_transfer
 
 REVEAL_KILLER_COST = 1000
 TOKEN_RESTORE_PERCENT = 0.50  # 50% of tokens restored on Dead > Alive
@@ -181,9 +182,7 @@ def register(router):
         pending_rank_pass = has_dead_rank_xp_carry and (not rank_pass_carry_used or missing_game_pass_current_xp)
 
         if already_retrieved:
-            supplemental_points_amount = max(0, dead_live_points - points_at_death_snap)
-            if supplemental_points_amount <= 0 and dead_live_points > 0:
-                supplemental_points_amount = dead_live_points
+            supplemental_points_amount = dead_live_points
             if pending_swiss <= 0 and supplemental_points_amount <= 0 and not pending_rank_pass:
                 raise HTTPException(status_code=400, detail="That dead account has already been used for a transfer.")
             supplemental_swiss_only = pending_swiss > 0 and supplemental_points_amount <= 0 and not pending_rank_pass
@@ -198,7 +197,7 @@ def register(router):
         elif supplemental_swiss_only:
             has_estate = pending_swiss > 0
         else:
-            has_estate = points_at_death > 0 or money_at_death > 0 or add_swiss > 0
+            has_estate = dead_live_points > 0 or money_at_death > 0 or add_swiss > 0
         has_rank_xp_merge = pending_rank_pass and not supplemental_swiss_only and not supplemental_points_only
         has_token_restore = (not already_retrieved) and bool(token_inc)
         if not has_estate and not has_token_restore and not has_rank_xp_merge:
@@ -207,13 +206,15 @@ def register(router):
                 detail="That account had no points, cash, Swiss cash, restorable tokens, or Game Pass state to transfer.",
             )
 
+        claim_projection = {"_id": 0, "points": 1, "swiss_balance": 1}
         # Atomically claim — prevents double-retrieval race condition
         dead_claim_update: Dict[str, Any] = {}
         if already_retrieved:
             if pending_swiss > 0:
                 dead_claim_update["$set"] = {"swiss_retrieval_used": True, "swiss_balance": 0}
             if supplemental_points_amount > 0:
-                dead_claim_update.setdefault("$inc", {})["points"] = -supplemental_points_amount
+                dead_claim_update.setdefault("$set", {})["points"] = 0
+                dead_claim_update.setdefault("$set", {})["points_at_death"] = 0
             if pending_rank_pass and not rank_pass_carry_used:
                 dead_claim_update.setdefault("$set", {})["rank_xp_pass_dead_alive_carry_used"] = True
             claim_filter: Dict[str, Any] = {
@@ -226,53 +227,53 @@ def register(router):
                 claim_filter["swiss_retrieval_used"] = {"$ne": True}
                 claim_filter["swiss_balance"] = {"$gt": 0}
             if supplemental_points_amount > 0:
-                claim_filter["points"] = {"$gte": supplemental_points_amount}
+                claim_filter["points"] = {"$gt": 0}
             if pending_rank_pass and not rank_pass_carry_used:
                 claim_filter["rank_xp_pass_dead_alive_carry_used"] = {"$ne": True}
             if pending_rank_pass and rank_pass_carry_used and supplemental_points_amount <= 0 and pending_swiss <= 0:
                 claim = await db.users.find_one(
                     {"id": dead_user["id"], "is_dead": True, "account_locked": {"$ne": True}, "retrieval_used": True},
-                    {"_id": 0, "swiss_balance": 1},
+                    claim_projection,
                 )
             else:
                 claim = await db.users.find_one_and_update(
                     claim_filter,
                     dead_claim_update or {"$set": {"retrieval_used": True}},
-                    projection={"_id": 0, "swiss_balance": 1},
+                    projection=claim_projection,
                 )
         else:
-            initial_points_transfer = max(0, int(points_at_death * float(DEAD_ALIVE_POINTS_PERCENT)))
             dead_claim_update = {
                 "$set": {
                     "retrieval_used": True,
                     "swiss_retrieval_used": True,
                     "rank_xp_pass_dead_alive_carry_used": True,
                     "swiss_balance": 0,
+                    "points": 0,
+                    "points_at_death": 0,
                 },
             }
-            if initial_points_transfer > 0:
-                dead_claim_update["$inc"] = {"points": -initial_points_transfer}
             claim = await db.users.find_one_and_update(
                 {"id": dead_user["id"], "is_dead": True, "account_locked": {"$ne": True}, "retrieval_used": {"$ne": True}},
                 dead_claim_update,
-                projection={"_id": 0, "swiss_balance": 1},
+                projection=claim_projection,
             )
         if not claim:
             locked_now = await db.users.find_one({"id": dead_user["id"], "account_locked": True}, {"_id": 0, "id": 1})
             if locked_now:
                 raise HTTPException(status_code=403, detail=ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL)
             raise HTTPException(status_code=400, detail="That dead account has already been used for a transfer.")
+        dead_points_before = max(0, int((claim or {}).get("points") or 0))
         add_swiss = max(0, int((claim or {}).get("swiss_balance") or pending_swiss or 0))
         if already_retrieved:
-            add_points = supplemental_points_amount if supplemental_points_amount > 0 else 0
+            add_points = max(0, int(dead_points_before * float(DEAD_ALIVE_POINTS_PERCENT)))
             add_money = 0
             tax_money = 0
             tax_points = 0
         else:
-            add_points = max(0, int(points_at_death * float(DEAD_ALIVE_POINTS_PERCENT)))
+            add_points = max(0, int(dead_points_before * float(DEAD_ALIVE_POINTS_PERCENT)))
             add_money = max(0, int(money_at_death * DEAD_ALIVE_PERCENT))
             tax_money = max(0, int(money_at_death * (1 - DEAD_ALIVE_PERCENT)))
-            tax_points = max(0, int(points_at_death * (1 - float(DEAD_ALIVE_POINTS_PERCENT))))
+            tax_points = max(0, int(dead_points_before * (1 - float(DEAD_ALIVE_POINTS_PERCENT))))
         dead_state = (dead_user.get("current_state") or "").strip()
         head_family_id = await get_head_family_id_for_state(dead_state) if dead_state else None
         if head_family_id:
@@ -307,6 +308,43 @@ def register(router):
             )
         if add_points > 0:
             await log_points_event(db, user_id=current_user["id"], points=add_points, event_type="dead_alive_retrieve", event_ref=dead_user["id"])
+        if dead_points_before > 0:
+            await log_points_event(
+                db,
+                user_id=dead_user["id"],
+                points=-dead_points_before,
+                event_type="dead_alive_retrieve_out",
+                event_ref=current_user["id"],
+                wallet_points_before=dead_points_before,
+                wallet_points_after=0,
+            )
+
+        try:
+            await log_dead_alive_transfer(
+                db,
+                {
+                    "event_type": "retrieve",
+                    "supplemental": already_retrieved,
+                    "recipient_id": current_user["id"],
+                    "recipient_username": current_user.get("username"),
+                    "dead_id": dead_user["id"],
+                    "dead_username": dead_user.get("username"),
+                    "dead_points_before": dead_points_before,
+                    "dead_points_after": 0,
+                    "points_at_death_snapshot": points_at_death_snap,
+                    "points_transferred": add_points,
+                    "money_transferred": add_money,
+                    "swiss_transferred": add_swiss,
+                    "tax_money": tax_money,
+                    "tax_points": tax_points,
+                    "tokens_restored": tokens_restored if has_token_restore else {},
+                    "game_pass_merged": has_rank_xp_merge,
+                    "dead_state": dead_state,
+                    "head_family_id": head_family_id,
+                },
+            )
+        except Exception:
+            logging.getLogger(__name__).exception("dead_alive transfer log (retrieve)")
 
         # Dead > Alive carry-over for Rank-XP pass state (only when dead had meaningful Game Pass data — do not wipe recipient).
         if has_rank_xp_merge:
@@ -588,6 +626,30 @@ def register(router):
                 "system",
                 category="system",
             )
+            try:
+                await log_dead_alive_transfer(
+                    db,
+                    {
+                        "event_type": "revive",
+                        "reviver_id": current_user["id"],
+                        "reviver_username": current_user.get("username"),
+                        "revived_id": dead_user["id"],
+                        "revived_username": dead_user.get("username"),
+                        "dead_id": dead_user["id"],
+                        "dead_username": dead_user.get("username"),
+                        "recipient_id": dead_user["id"],
+                        "recipient_username": dead_user.get("username"),
+                        "revive_cost": REVIVE_COST,
+                        "reviver_points_before": points_balance,
+                        "reviver_points_after_death": 0,
+                        "reviver_money_transferred": reviver_money,
+                        "points_transferred": revived_points,
+                        "dead_carry_points": dead_carry,
+                        "retrieval_used_on_dead": bool(dead_user.get("retrieval_used")),
+                    },
+                )
+            except Exception:
+                logging.getLogger(__name__).exception("dead_alive transfer log (revive)")
         except Exception as e:
             await db.users.update_one(
                 {"id": current_user["id"]},

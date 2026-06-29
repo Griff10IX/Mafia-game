@@ -14,6 +14,7 @@ import Admin from './Admin';
 import AdminUsersOnline from './AdminUsersOnline';
 import AdminAttackLogs from './AdminAttackLogs';
 import AdminIpHistory from './AdminIpHistory';
+import AdminDeadAliveLog from './AdminDeadAliveLog';
 import AdminAccountCompare from './AdminAccountCompare';
 import AdminExclusiveCars from './AdminExclusiveCars';
 import AdminCrewRecovery from './AdminCrewRecovery';
@@ -40,6 +41,7 @@ const STANDALONE_ADMIN_SECTIONS = new Set([
   'users-online',
   'attack-logs',
   'ip-history',
+  'dead-alive-log',
   'account-compare',
   'exclusive-cars',
   'crew-recovery',
@@ -1010,6 +1012,7 @@ export default function AdminShell() {
       {hubSection === 'users-online' && <AdminUsersOnline />}
       {hubSection === 'attack-logs' && <AdminAttackLogs />}
       {hubSection === 'ip-history' && <AdminIpHistory />}
+      {hubSection === 'dead-alive-log' && <AdminDeadAliveLog />}
       {hubSection === 'account-compare' && <AdminAccountCompare />}
       {hubSection === 'exclusive-cars' && <AdminExclusiveCars />}
       {hubSection === 'crew-recovery' && <AdminCrewRecovery />}
