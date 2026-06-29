@@ -230,6 +230,21 @@ _DRAFT_NOTIFY_RE = re.compile(
 async def _collect_old_team_id_to_name(db) -> Dict[str, str]:
     """Map pre-reseed team UUIDs to names using draft inbox notifications."""
     mapping: Dict[str, str] = {}
+    draft_names = await _draft_names_by_user(db)
+    async for entry in db.world_cup_entries.find({}, {"_id": 0, "user_id": 1, "drafted_team_ids": 1}):
+        uid = entry.get("user_id")
+        names = draft_names.get(uid) or []
+        old_ids = entry.get("drafted_team_ids") or []
+        for i, oid in enumerate(old_ids):
+            if not oid or not _is_legacy_team_id(oid):
+                continue
+            if i < len(names) and names[i]:
+                mapping.setdefault(str(oid), names[i])
+    return mapping
+
+
+async def _draft_names_by_user(db) -> Dict[str, List[str]]:
+    by_user: Dict[str, List[str]] = {}
     async for n in db.notifications.find(
         {"category": "world_cup", "message": {"$regex": "Team draft complete"}},
         {"_id": 0, "user_id": 1, "message": 1},
@@ -240,14 +255,164 @@ async def _collect_old_team_id_to_name(db) -> Dict[str, str]:
             continue
         names_part = re.sub(r"\s*\(\+\d+ more\)\s*$", "", m.group(2)).strip()
         names = [x.strip() for x in names_part.split(",") if x.strip()]
-        entry = await db.world_cup_entries.find_one({"user_id": n.get("user_id")}, {"drafted_team_ids": 1})
-        if not entry:
+        uid = n.get("user_id")
+        if uid and names:
+            by_user[uid] = names
+    return by_user
+
+
+def _is_legacy_team_id(tid: Any) -> bool:
+    if not tid:
+        return False
+    return not str(tid).startswith("wc26-")
+
+
+async def _build_comprehensive_old_team_map(db) -> Dict[str, str]:
+    """Map legacy team UUIDs to stable wc26-{code} ids."""
+    teams_by_id = await _teams_by_id(db)
+    name_index = await _build_team_name_index(db)
+    name_map: Dict[str, str] = {}
+
+    for old_id, name in (await _collect_old_team_id_to_name(db)).items():
+        if name:
+            name_map[old_id] = name
+
+    async for p in db.world_cup_predictions.find(
+        {"value.team_id": {"$exists": True}},
+        {"_id": 0, "value": 1, "type": 1, "target_id": 1},
+    ):
+        val = p.get("value") or {}
+        if not isinstance(val, dict):
             continue
-        old_ids = entry.get("drafted_team_ids") or []
-        for i, oid in enumerate(old_ids):
-            if i < len(names) and oid:
-                mapping.setdefault(str(oid), names[i])
-    return mapping
+        tid = val.get("team_id")
+        if not _is_legacy_team_id(tid):
+            continue
+        stored = (val.get("team_name") or val.get("name") or "").strip()
+        if stored:
+            name_map.setdefault(str(tid), stored)
+
+    for m in await db.world_cup_matches.find({}, {"_id": 0}).to_list(500):
+        from utils.world_cup_fixtures import team_briefs_from_official_schedule
+
+        sh, sa = team_briefs_from_official_schedule(m, teams_by_id)
+        for field, brief in (("home_team_id", sh), ("away_team_id", sa)):
+            tid = m.get(field)
+            if _is_legacy_team_id(tid) and brief and brief.get("name"):
+                name_map.setdefault(str(tid), brief["name"])
+
+    for gid in GROUP_IDS:
+        group_teams = [
+            t for t in teams_by_id.values()
+            if (t.get("group_id") or "").upper() == gid
+        ]
+        group_orphans: set = set()
+        async for p in db.world_cup_predictions.find(
+            {"type": PRED_GROUP_WINNER, "target_id": gid},
+            {"_id": 0, "value": 1},
+        ):
+            val = p.get("value") or {}
+            if not isinstance(val, dict):
+                continue
+            tid = val.get("team_id")
+            if _is_legacy_team_id(tid):
+                group_orphans.add(str(tid))
+        assigned_names = {_norm_name(name_map[o]) for o in group_orphans if o in name_map}
+        unmapped = {o for o in group_orphans if o not in name_map}
+        remaining = [
+            t for t in group_teams
+            if _norm_name(t.get("name") or "") not in assigned_names
+        ]
+        if len(unmapped) == 1 and len(remaining) == 1:
+            name_map[list(unmapped)[0]] = remaining[0].get("name") or ""
+
+    stable_id_set = set(_seed_file_team_ids_in_order())
+    old_to_new: Dict[str, str] = {}
+    for old_id, name in name_map.items():
+        new_id = name_index.get(_norm_name(name))
+        if new_id:
+            old_to_new[old_id] = new_id
+    await _expand_old_to_new_from_predictions(db, old_to_new, teams_by_id, stable_id_set)
+    return old_to_new
+
+
+async def _apply_orphan_team_id_map(db, old_to_new: Dict[str, str]) -> dict:
+    """Rewrite legacy UUID references in predictions, entries, and groups."""
+    teams_by_id = await _teams_by_id(db)
+    preds_updated = 0
+    entries_updated = 0
+    groups_updated = 0
+
+    async for p in db.world_cup_predictions.find(
+        {"value.team_id": {"$exists": True}},
+        {"_id": 0, "id": 1, "value": 1},
+    ):
+        val = p.get("value") or {}
+        if not isinstance(val, dict):
+            continue
+        old_tid = val.get("team_id")
+        new_tid = old_to_new.get(str(old_tid), old_tid)
+        if new_tid == old_tid and not _is_legacy_team_id(old_tid):
+            continue
+        if new_tid == old_tid:
+            continue
+        patch = dict(val)
+        patch["team_id"] = new_tid
+        team = teams_by_id.get(new_tid) or {}
+        if team.get("name"):
+            patch["team_name"] = team["name"]
+        if team.get("short_code"):
+            patch["short_code"] = team["short_code"]
+        await db.world_cup_predictions.update_one({"id": p["id"]}, {"$set": {"value": patch}})
+        preds_updated += 1
+
+    async for e in db.world_cup_entries.find({}, {"_id": 0, "user_id": 1, "drafted_team_ids": 1}):
+        old_tids = e.get("drafted_team_ids") or []
+        new_tids = [old_to_new.get(str(t), t) for t in old_tids]
+        if new_tids != old_tids:
+            await db.world_cup_entries.update_one(
+                {"user_id": e["user_id"]},
+                {"$set": {"drafted_team_ids": new_tids}},
+            )
+            entries_updated += 1
+
+    async for g in db.world_cup_groups.find({}, {"_id": 0, "group_id": 1, "winner_team_id": 1}):
+        wid = g.get("winner_team_id")
+        if not wid or not _is_legacy_team_id(wid):
+            continue
+        new_wid = old_to_new.get(str(wid))
+        if new_wid and new_wid != wid:
+            await db.world_cup_groups.update_one(
+                {"group_id": g["group_id"]},
+                {"$set": {"winner_team_id": new_wid}},
+            )
+            groups_updated += 1
+
+    return {
+        "predictions_remapped": preds_updated,
+        "entries_remapped": entries_updated,
+        "groups_remapped": groups_updated,
+        "mapping_size": len(old_to_new),
+    }
+
+
+async def _ensure_orphan_team_ids_healed(db) -> Optional[dict]:
+    """Auto-fix legacy team UUIDs still referenced in predictions."""
+    legacy = False
+    async for p in db.world_cup_predictions.find(
+        {"value.team_id": {"$exists": True}},
+        {"_id": 0, "value.team_id": 1},
+    ).limit(5000):
+        if _is_legacy_team_id((p.get("value") or {}).get("team_id")):
+            legacy = True
+            break
+    if not legacy:
+        return None
+    await _ensure_stable_teams_from_seed(db)
+    await _repair_match_team_ids(db)
+    old_to_new = await _build_comprehensive_old_team_map(db)
+    applied = await _apply_orphan_team_id_map(db, old_to_new)
+    await _backfill_prediction_team_fields(db)
+    return applied
 
 
 async def _replay_draft_assignments(db, team_ids: List[str]) -> Optional[Dict[str, List[str]]]:
@@ -650,33 +815,13 @@ async def _repair_wc_team_references(db) -> dict:
     stable_ids = _seed_file_team_ids_in_order(seed_data)
     stable_id_set = set(stable_ids)
     await _ensure_stable_teams_from_seed(db)
-    name_index = await _build_team_name_index(db)
 
-    old_to_name = await _collect_old_team_id_to_name(db)
-    old_to_new: Dict[str, str] = {}
-    for old_id, name in old_to_name.items():
-        new_id = name_index.get(_norm_name(name))
-        if new_id:
-            old_to_new[old_id] = new_id
+    # Heal legacy UUIDs in predictions/entries before anything else
+    match_repair = await _repair_match_team_ids(db)
+    old_to_new = await _build_comprehensive_old_team_map(db)
+    applied = await _apply_orphan_team_id_map(db, old_to_new)
 
-    # Orphan ids still referenced in DB
-    orphan_ids: set = set()
-    async for e in db.world_cup_entries.find({}, {"drafted_team_ids": 1}):
-        for tid in e.get("drafted_team_ids") or []:
-            if tid and str(tid) not in stable_id_set:
-                orphan_ids.add(str(tid))
-    async for p in db.world_cup_predictions.find({}, {"value": 1, "type": 1}):
-        val = p.get("value") or {}
-        if isinstance(val, dict) and val.get("team_id"):
-            tid = str(val["team_id"])
-            if tid not in stable_id_set:
-                orphan_ids.add(tid)
-    async for g in db.world_cup_groups.find({}, {"winner_team_id": 1}):
-        tid = g.get("winner_team_id")
-        if tid and str(tid) not in stable_id_set:
-            orphan_ids.add(str(tid))
-
-    # Replay draft from stored seed when draft already ran
+    # Replay draft from stored seed when draft already ran (stable ids on entries)
     draft_restored = 0
     replay = await _replay_draft_assignments(db, stable_ids)
     if replay:
@@ -687,39 +832,6 @@ async def _repair_wc_team_references(db) -> dict:
             )
             if res.modified_count:
                 draft_restored += 1
-    else:
-        entries_updated = 0
-        async for e in db.world_cup_entries.find({}, {"user_id": 1, "drafted_team_ids": 1}):
-            old_tids = e.get("drafted_team_ids") or []
-            new_tids = [await _remap_team_id_field(t, old_to_new, stable_id_set) for t in old_tids]
-            if new_tids != old_tids:
-                await db.world_cup_entries.update_one(
-                    {"user_id": e["user_id"]},
-                    {"$set": {"drafted_team_ids": new_tids}},
-                )
-                entries_updated += 1
-        draft_restored = entries_updated
-
-    # Remap prediction team picks (expand mapping after matches are fixed)
-    match_repair = await _repair_match_team_ids(db)
-    mapping_added = await _expand_old_to_new_from_predictions(db, old_to_new, await _teams_by_id(db), stable_id_set)
-
-    preds_updated = 0
-    async for p in db.world_cup_predictions.find(
-        {"value.team_id": {"$exists": True}},
-        {"_id": 0, "id": 1, "value": 1},
-    ):
-        val = p.get("value") or {}
-        if not isinstance(val, dict):
-            continue
-        old_tid = val.get("team_id")
-        new_tid = await _remap_team_id_field(old_tid, old_to_new, stable_id_set)
-        if new_tid != old_tid:
-            await db.world_cup_predictions.update_one(
-                {"id": p["id"]},
-                {"$set": {"value.team_id": new_tid}},
-            )
-            preds_updated += 1
 
     group_restore = await _restore_group_winners(db, old_to_new, stable_id_set)
     predictions_named = await _backfill_prediction_team_fields(db)
@@ -727,20 +839,17 @@ async def _repair_wc_team_references(db) -> dict:
         match_repair.get("matches_from_schedule") or 0
     )
 
-    still_orphan = len(orphan_ids - set(old_to_new.keys()))
     return {
         "ok": True,
         "stable_team_ids": len(stable_ids),
         "draft_entries_restored": draft_restored,
-        "predictions_remapped": preds_updated,
+        "predictions_remapped": applied.get("predictions_remapped", 0),
+        "entries_remapped": applied.get("entries_remapped", 0),
         "predictions_named": predictions_named,
-        "prediction_mappings_added": mapping_added,
+        "mapping_size": applied.get("mapping_size", 0),
         **group_restore,
         "matches_remapped": matches_updated,
         **match_repair,
-        "notification_mappings": len(old_to_new),
-        "orphan_ids_seen": len(orphan_ids),
-        "orphan_ids_unmapped": still_orphan,
         "draft_replay": bool(replay),
     }
 
@@ -756,15 +865,9 @@ async def _teams_by_id(db) -> dict:
 
 async def _teams_by_id_resolved(db) -> dict:
     """teams_by_id plus legacy UUID aliases and stored prediction names (admin display)."""
+    await _ensure_orphan_team_ids_healed(db)
     teams = await _teams_by_id(db)
-    name_index = await _build_team_name_index(db)
-    stable_id_set = set(_seed_file_team_ids_in_order())
-    old_to_new: Dict[str, str] = {}
-    for old_id, name in (await _collect_old_team_id_to_name(db)).items():
-        new_id = name_index.get(_norm_name(name))
-        if new_id:
-            old_to_new[old_id] = new_id
-    await _expand_old_to_new_from_predictions(db, old_to_new, teams, stable_id_set)
+    old_to_new = await _build_comprehensive_old_team_map(db)
     for old_id, new_id in old_to_new.items():
         if new_id in teams:
             teams[old_id] = {**teams[new_id], "id": old_id}
@@ -1309,9 +1412,10 @@ def _enrich_prediction_for_staff(
     }
     if ptype == PRED_GROUP_WINNER:
         tid = val.get("team_id") if isinstance(val, dict) else val
+        pick_label = _prediction_team_label(val, teams_by_id, tid)
         team = teams_by_id.get(tid) or {}
         grp = groups_by_id.get(target) or {}
-        row["summary"] = f"Group {target}: {team.get('name') or tid or '?'}"
+        row["summary"] = f"Group {target}: {pick_label}"
         row["team"] = _team_brief(team)
         row["group"] = {
             "group_id": target,
@@ -1360,6 +1464,7 @@ async def _build_staff_predictions_feed(
     payout_status: Optional[str] = None,
     verdict: Optional[str] = None,
 ) -> dict:
+    await _ensure_orphan_team_ids_healed(db)
     cfg = await _load_config(db)
     q: dict = {}
     if pred_type:
@@ -2636,6 +2741,7 @@ async def _build_admin_leaderboard(db, cfg: dict, ghost_ids: set, limit: int = 1
 
 
 async def _build_admin_overview(db, username: Optional[str] = None, limit: int = 500) -> dict:
+    await _ensure_orphan_team_ids_healed(db)
     cfg = await _load_config(db)
     teams_by_id = await _teams_by_id_resolved(db)
     ghost_ids = await _ghost_user_ids(db)
@@ -3385,16 +3491,11 @@ def register(router):
         _require_staff(current_user)
         cfg = await _load_config(db)
         await _require_enabled_staff(cfg)
-        await _ensure_stable_teams_from_seed(db)
-        await _repair_match_team_ids(db)
-        old_to_new: Dict[str, str] = {}
-        for old_id, name in (await _collect_old_team_id_to_name(db)).items():
-            new_id = (await _build_team_name_index(db)).get(_norm_name(name))
-            if new_id:
-                old_to_new[old_id] = new_id
+        healed = await _ensure_orphan_team_ids_healed(db)
+        old_to_new = await _build_comprehensive_old_team_map(db)
         stable_id_set = set(_seed_file_team_ids_in_order())
-        await _expand_old_to_new_from_predictions(db, old_to_new, await _teams_by_id(db), stable_id_set)
-        return await _restore_group_winners(db, old_to_new, stable_id_set)
+        restored = await _restore_group_winners(db, old_to_new, stable_id_set)
+        return {"healed": healed, **restored}
 
     @router.post("/world-cup/staff/repair-references")
     async def wc_staff_repair_references(current_user: dict = Depends(get_current_user)):
