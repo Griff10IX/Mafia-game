@@ -360,6 +360,129 @@ def _greedy_legacy_stable_match(
     return out
 
 
+async def _infer_legacy_from_single_draft_team_in_group(
+    db, existing: Dict[str, str],
+) -> Dict[str, str]:
+    """When a user has only one drafted nation in a group, map their legacy pick to it."""
+    teams_by_id = await _teams_by_id(db)
+    stable_order = _seed_file_team_ids_in_order()
+    replay = await _replay_draft_assignments(db, stable_order) or {}
+    out: Dict[str, str] = {}
+    async for p in db.world_cup_predictions.find(
+        {"type": PRED_GROUP_WINNER, "value.team_id": {"$exists": True}},
+        {"_id": 0, "user_id": 1, "target_id": 1, "value": 1},
+    ):
+        val = p.get("value") or {}
+        if not isinstance(val, dict):
+            continue
+        tid = val.get("team_id")
+        if not _is_legacy_team_id(tid):
+            continue
+        s = str(tid)
+        if s in existing or s in out:
+            continue
+        gid = (p.get("target_id") or "").upper()
+        uid = p.get("user_id")
+        if not uid or gid not in GROUP_IDS:
+            continue
+        assigned = replay.get(uid) or []
+        in_group = [
+            x for x in assigned
+            if (teams_by_id.get(x) or {}).get("group_id") == gid
+        ]
+        if len(in_group) != 1:
+            continue
+        candidate = in_group[0]
+        if teams_by_id.get(candidate):
+            out[s] = candidate
+    return out
+
+
+async def _infer_remaining_legacy_in_groups(db, existing: Dict[str, str]) -> Dict[str, str]:
+    """Finish mapping legacy ids still missing after earlier passes (partial groups)."""
+    teams_by_id = await _teams_by_id(db)
+    stable_order = _seed_file_team_ids_in_order()
+    replay = await _replay_draft_assignments(db, stable_order) or {}
+    draft_names = await _draft_names_by_user(db)
+    out: Dict[str, str] = {}
+
+    for gid in GROUP_IDS:
+        preds_by_legacy: Dict[str, List[str]] = {}
+        mapped_stables_in_group: set = set()
+
+        async for p in db.world_cup_predictions.find(
+            {"type": PRED_GROUP_WINNER, "target_id": gid},
+            {"_id": 0, "user_id": 1, "value": 1},
+        ):
+            val = p.get("value") or {}
+            if not isinstance(val, dict):
+                continue
+            tid = val.get("team_id")
+            if not tid:
+                continue
+            uid = p.get("user_id")
+            if _is_legacy_team_id(tid):
+                s = str(tid)
+                preds_by_legacy.setdefault(s, [])
+                if uid:
+                    preds_by_legacy[s].append(uid)
+                stab = existing.get(s) or out.get(s)
+                if stab:
+                    mapped_stables_in_group.add(stab)
+            elif str(tid) in teams_by_id:
+                mapped_stables_in_group.add(str(tid))
+
+        unmapped = [k for k in preds_by_legacy if k not in existing and k not in out]
+        if not unmapped:
+            continue
+
+        stable_in_group = [
+            t["id"] for t in teams_by_id.values()
+            if (t.get("group_id") or "").upper() == gid and t.get("id")
+        ]
+        stable_in_group.sort(key=lambda x: stable_order.index(x) if x in stable_order else 999)
+        remaining_stable = [s for s in stable_in_group if s not in mapped_stables_in_group]
+        if not remaining_stable:
+            continue
+
+        n = min(len(unmapped), len(remaining_stable))
+        chunk_legacy = sorted(unmapped)[:n]
+        chunk_stable = remaining_stable[:n]
+
+        mapping = _greedy_legacy_stable_match(
+            chunk_legacy,
+            chunk_stable,
+            replay,
+            draft_names,
+            teams_by_id,
+            preds_by_legacy,
+        )
+        if not mapping and len(chunk_legacy) == len(chunk_stable) and len(chunk_legacy) <= 4:
+            import itertools
+
+            best: Dict[str, str] = {}
+            best_score = -1
+            for perm in itertools.permutations(chunk_stable):
+                candidate = {chunk_legacy[i]: perm[i] for i in range(len(chunk_legacy))}
+                total = sum(
+                    _legacy_stable_overlap_score(
+                        leg, stab, replay, draft_names, teams_by_id, preds_by_legacy
+                    )
+                    for leg, stab in candidate.items()
+                )
+                if total > best_score:
+                    best_score = total
+                    best = candidate
+            if best:
+                mapping = best
+            elif len(chunk_legacy) == 1:
+                mapping = {chunk_legacy[0]: chunk_stable[0]}
+
+        out.update(mapping)
+
+    return out
+
+
 async def _infer_legacy_to_stable_from_draft_overlap(db) -> Dict[str, str]:
     """
     Guess legacy UUID → stable id when entries were already remapped.
@@ -653,29 +776,32 @@ async def _build_comprehensive_old_team_map(db) -> Dict[str, str]:
                 name_map.setdefault(str(tid), brief["name"])
 
     for gid in GROUP_IDS:
-        group_teams = [
-            t for t in teams_by_id.values()
-            if (t.get("group_id") or "").upper() == gid
-        ]
-        group_orphans: set = set()
-        async for p in db.world_cup_predictions.find(
-            {"type": PRED_GROUP_WINNER, "target_id": gid},
-            {"_id": 0, "value": 1},
-        ):
-            val = p.get("value") or {}
-            if not isinstance(val, dict):
-                continue
-            tid = val.get("team_id")
-            if _is_legacy_team_id(tid):
-                group_orphans.add(str(tid))
-        assigned_names = {_norm_name(name_map[o]) for o in group_orphans if o in name_map}
-        unmapped = {o for o in group_orphans if o not in name_map}
-        remaining = [
-            t for t in group_teams
-            if _norm_name(t.get("name") or "") not in assigned_names
-        ]
-        if len(unmapped) == 1 and len(remaining) == 1:
-            name_map[list(unmapped)[0]] = remaining[0].get("name") or ""
+        while True:
+            group_teams = [
+                t for t in teams_by_id.values()
+                if (t.get("group_id") or "").upper() == gid
+            ]
+            group_orphans: set = set()
+            async for p in db.world_cup_predictions.find(
+                {"type": PRED_GROUP_WINNER, "target_id": gid},
+                {"_id": 0, "value": 1},
+            ):
+                val = p.get("value") or {}
+                if not isinstance(val, dict):
+                    continue
+                tid = val.get("team_id")
+                if _is_legacy_team_id(tid):
+                    group_orphans.add(str(tid))
+            assigned_names = {_norm_name(name_map[o]) for o in group_orphans if o in name_map}
+            unmapped = {o for o in group_orphans if o not in name_map}
+            remaining = [
+                t for t in group_teams
+                if _norm_name(t.get("name") or "") not in assigned_names
+            ]
+            if len(unmapped) == 1 and len(remaining) == 1:
+                name_map[list(unmapped)[0]] = remaining[0].get("name") or ""
+            else:
+                break
 
     stable_id_set = set(_seed_file_team_ids_in_order())
     old_to_new: Dict[str, str] = {}
@@ -690,6 +816,10 @@ async def _build_comprehensive_old_team_map(db) -> Dict[str, str]:
     for old_id, new_id in (await _infer_legacy_to_stable_from_draft_overlap(db)).items():
         old_to_new.setdefault(old_id, new_id)
     for old_id, new_id in (await _infer_legacy_to_stable_from_notification_order(db)).items():
+        old_to_new.setdefault(old_id, new_id)
+    for old_id, new_id in (await _infer_legacy_from_single_draft_team_in_group(db, old_to_new)).items():
+        old_to_new.setdefault(old_id, new_id)
+    for old_id, new_id in (await _infer_remaining_legacy_in_groups(db, old_to_new)).items():
         old_to_new.setdefault(old_id, new_id)
     cfg = await _load_config(db)
     for old_id, new_id in (cfg.get("legacy_team_id_map") or {}).items():
@@ -773,11 +903,19 @@ async def _ensure_orphan_team_ids_healed(db) -> Optional[dict]:
         return None
     await _ensure_stable_teams_from_seed(db)
     await _repair_match_team_ids(db)
-    old_to_new = await _build_comprehensive_old_team_map(db)
-    applied = await _apply_orphan_team_id_map(db, old_to_new)
-    named = await _backfill_prediction_team_fields(db)
-    applied["predictions_named"] = named
-    return applied
+    total_remapped = 0
+    last_applied: dict = {}
+    old_to_new: Dict[str, str] = {}
+    for _ in range(3):
+        old_to_new = await _build_comprehensive_old_team_map(db)
+        last_applied = await _apply_orphan_team_id_map(db, old_to_new)
+        total_remapped += int(last_applied.get("predictions_remapped") or 0)
+        if not last_applied.get("predictions_remapped"):
+            break
+    named = await _backfill_prediction_team_fields(db, old_to_new)
+    last_applied["predictions_remapped"] = total_remapped
+    last_applied["predictions_named"] = named
+    return last_applied
 
 
 async def _replay_draft_assignments(db, team_ids: List[str]) -> Optional[Dict[str, List[str]]]:
@@ -1183,8 +1321,16 @@ async def _repair_wc_team_references(db) -> dict:
 
     # Heal legacy UUIDs in predictions/entries before anything else
     match_repair = await _repair_match_team_ids(db)
-    old_to_new = await _build_comprehensive_old_team_map(db)
-    applied = await _apply_orphan_team_id_map(db, old_to_new)
+    total_remapped = 0
+    old_to_new: Dict[str, str] = {}
+    applied: dict = {}
+    for _ in range(3):
+        old_to_new = await _build_comprehensive_old_team_map(db)
+        applied = await _apply_orphan_team_id_map(db, old_to_new)
+        total_remapped += int(applied.get("predictions_remapped") or 0)
+        if not applied.get("predictions_remapped"):
+            break
+    applied["predictions_remapped"] = total_remapped
 
     # Replay draft from stored seed when draft already ran (stable ids on entries)
     draft_restored = 0
@@ -1199,10 +1345,11 @@ async def _repair_wc_team_references(db) -> dict:
                 draft_restored += 1
 
     group_restore = await _restore_group_winners(db, old_to_new, stable_id_set)
-    predictions_named = await _backfill_prediction_team_fields(db)
+    predictions_named = await _backfill_prediction_team_fields(db, old_to_new)
     overlap_map = await _infer_legacy_to_stable_from_draft_overlap(db)
     notification_map = await _infer_legacy_to_stable_from_notification_order(db)
     snapshot_map = await _legacy_to_stable_from_draft_snapshot(db)
+    unmapped_preds = await _count_unmapped_group_winner_predictions(db, old_to_new)
     matches_updated = int(match_repair.get("matches_from_odds") or 0) + int(
         match_repair.get("matches_from_schedule") or 0
     )
@@ -1212,6 +1359,7 @@ async def _repair_wc_team_references(db) -> dict:
         "stable_team_ids": len(stable_ids),
         "draft_entries_restored": draft_restored,
         "predictions_remapped": applied.get("predictions_remapped", 0),
+        "predictions_still_unmapped": unmapped_preds,
         "entries_remapped": applied.get("entries_remapped", 0),
         "predictions_named": predictions_named,
         "mapping_size": applied.get("mapping_size", 0),
@@ -1283,9 +1431,13 @@ def _prediction_team_label(val: Any, teams_by_id: dict, tid: Optional[str] = Non
     return "?"
 
 
-async def _backfill_prediction_team_fields(db) -> int:
+async def _backfill_prediction_team_fields(
+    db, old_to_new: Optional[Dict[str, str]] = None,
+) -> int:
     """Persist team_name on predictions so labels survive future re-seeds."""
     teams_by_id = await _teams_by_id(db)
+    if old_to_new is None:
+        old_to_new = await _build_comprehensive_old_team_map(db)
     updated = 0
     async for p in db.world_cup_predictions.find(
         {"value.team_id": {"$exists": True}},
@@ -1295,11 +1447,15 @@ async def _backfill_prediction_team_fields(db) -> int:
         if not isinstance(val, dict):
             continue
         tid = val.get("team_id")
-        team = teams_by_id.get(tid) or {}
+        resolved = old_to_new.get(str(tid), tid)
+        team = teams_by_id.get(resolved) or {}
         if not team.get("name"):
             continue
         patch = dict(val)
         changed = False
+        if resolved != tid:
+            patch["team_id"] = resolved
+            changed = True
         if patch.get("team_name") != team.get("name"):
             patch["team_name"] = team["name"]
             changed = True
@@ -1311,6 +1467,28 @@ async def _backfill_prediction_team_fields(db) -> int:
             await db.world_cup_predictions.update_one({"id": p["id"]}, {"$set": {"value": patch}})
             updated += 1
     return updated
+
+
+async def _count_unmapped_group_winner_predictions(db, old_to_new: Dict[str, str]) -> int:
+    """Group-winner picks that still cannot resolve to a team name."""
+    teams_by_id = await _teams_by_id(db)
+    count = 0
+    async for p in db.world_cup_predictions.find(
+        {"type": PRED_GROUP_WINNER, "value.team_id": {"$exists": True}},
+        {"_id": 0, "value": 1},
+    ):
+        val = p.get("value") or {}
+        if not isinstance(val, dict):
+            count += 1
+            continue
+        tid = val.get("team_id")
+        if (val.get("team_name") or val.get("name") or "").strip():
+            continue
+        resolved = old_to_new.get(str(tid), tid)
+        team = teams_by_id.get(resolved) or {}
+        if not team.get("name"):
+            count += 1
+    return count
 
 
 async def _resolve_team_id(db, name: str, teams_by_id: Optional[dict] = None) -> Optional[str]:
