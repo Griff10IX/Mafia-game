@@ -1103,6 +1103,28 @@ async def _resolve_winner_pick_in_group(db, group_id: str, pick: str) -> dict:
     return await _resolve_winner_team_in_group(db, gid, team_name=pick_s)
 
 
+async def _build_staff_match_picker(db) -> list:
+    """Matches for entertainer result entry — unsettled / no score first, then by kickoff."""
+    teams = await _teams_by_id(db)
+    rows = await db.world_cup_matches.find({}, {"_id": 0}).sort("kickoff", 1).to_list(500)
+    out = []
+    for m in rows:
+        snap = _match_snapshot(m, teams)
+        if not snap:
+            continue
+        res = snap.get("result") or {}
+        has_score = res.get("home_score") is not None and res.get("away_score") is not None
+        needs_result = (m.get("status") or "") != "settled" or not has_score
+        out.append({**snap, "needs_result": needs_result})
+    out.sort(key=lambda x: (not x.get("needs_result"), x.get("kickoff") or ""), reverse=False)
+    # Within needs_result bucket, most recent kickoff first
+    pending = [x for x in out if x.get("needs_result")]
+    done = [x for x in out if not x.get("needs_result")]
+    pending.sort(key=lambda x: x.get("kickoff") or "", reverse=True)
+    done.sort(key=lambda x: x.get("kickoff") or "", reverse=True)
+    return pending + done
+
+
 async def _apply_match_result(db, send_notification, cfg: dict, match_id: str, home_score: int, away_score: int, scorers: Optional[list] = None) -> dict:
     match = await db.world_cup_matches.find_one({"id": match_id}, {"_id": 0})
     if not match:
@@ -1992,6 +2014,7 @@ class MatchResultPatch(BaseModel):
     away_score: int = Field(..., ge=0, le=30)
     scorers: Optional[List[str]] = None
     stage: Optional[str] = None
+    auto_approve: bool = False
 
 
 class BulkMatchImport(BaseModel):
@@ -2344,11 +2367,13 @@ def register(router):
         pending = await _pending_payout_counts(db)
         start = await _get_tournament_start_at(db, cfg)
         draft_timing = _draft_timing_payload(cfg, start)
+        matches = await _build_staff_match_picker(db)
         return {
             "entrants": entrants,
             "real_entrants": real_entrants,
             "ghost_entrants": ghost_entrants,
             "unsettled_matches": unsettled,
+            "matches": matches,
             "draft_run": bool(cfg.get("draft_run")),
             "last_fixture_sync_at": cfg.get("last_fixture_sync_at"),
             "last_auto_settle_at": cfg.get("last_auto_settle_at"),
@@ -2370,7 +2395,11 @@ def register(router):
         await _require_enabled_staff(cfg)
         if body.stage:
             await db.world_cup_matches.update_one({"id": match_id}, {"$set": {"stage": body.stage.strip().lower()}})
-        return await _apply_match_result(db, send_notification, cfg, match_id, body.home_score, body.away_score, body.scorers)
+        out = await _apply_match_result(db, send_notification, cfg, match_id, body.home_score, body.away_score, body.scorers)
+        if body.auto_approve:
+            payout = await _approve_all_pending_payouts(db, send_notification, current_user.get("id") or "")
+            out["payout"] = payout
+        return out
 
     @router.post("/world-cup/staff/settle-match/{match_id}")
     async def wc_staff_settle_match(match_id: str, current_user: dict = Depends(get_current_user)):

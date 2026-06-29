@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, Fragment } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Trophy, RefreshCw, Play, ArrowLeft, CheckCircle2, ClipboardList } from 'lucide-react';
+import { Trophy, RefreshCw, Play, ArrowLeft, CheckCircle2, ClipboardList, ChevronDown, ChevronUp } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
 import { formatGameDateTime } from '../../utils/gameDateTime';
 import styles from '../../styles/noir.module.css';
@@ -21,6 +21,16 @@ const VERDICT_FILTERS = [
   { id: 'correct', label: 'Correct' },
   { id: 'result_correct', label: 'Result only' },
   { id: 'incorrect', label: 'Wrong' },
+];
+
+const STAGE_OPTIONS = [
+  { id: '', label: 'Auto (from match)' },
+  { id: 'group', label: 'Group stage' },
+  { id: 'round_of_16', label: 'Round of 16' },
+  { id: 'quarter_final', label: 'Quarter-final' },
+  { id: 'semi_final', label: 'Semi-final' },
+  { id: 'third_place', label: '3rd place' },
+  { id: 'final', label: 'Final' },
 ];
 
 function predStatusLabel(row) {
@@ -58,7 +68,16 @@ function fmtTs(iso) {
   return formatGameDateTime(iso);
 }
 
+function matchOptionLabel(m) {
+  const base = m.label || m.id;
+  const when = m.kickoff ? ` · ${formatGameDateTime(m.kickoff)}` : '';
+  const score = m.result?.display ? ` · ${m.result.display}` : '';
+  const tag = m.needs_result ? ' · needs score' : '';
+  return `${base}${when}${score}${tag}`;
+}
+
 export default function WorldCupStaff() {
+  const [tab, setTab] = useState('quick');
   const [dash, setDash] = useState(null);
   const [entries, setEntries] = useState([]);
   const [pending, setPending] = useState(null);
@@ -77,15 +96,34 @@ export default function WorldCupStaff() {
   const [draftRunning, setDraftRunning] = useState(false);
   const [approvingAll, setApprovingAll] = useState(false);
   const [approvingId, setApprovingId] = useState(null);
-  const [matchId, setMatchId] = useState('');
-  const [homeScore, setHomeScore] = useState(0);
-  const [awayScore, setAwayScore] = useState(0);
+  const [selectedMatchId, setSelectedMatchId] = useState('');
+  const [homeScore, setHomeScore] = useState('0');
+  const [awayScore, setAwayScore] = useState('0');
   const [scorers, setScorers] = useState('');
   const [stage, setStage] = useState('');
+  const [autoApproveResult, setAutoApproveResult] = useState(true);
+  const [savingResult, setSavingResult] = useState(false);
   const [groupsSetup, setGroupsSetup] = useState([]);
   const [groupWinners, setGroupWinners] = useState({});
   const [groupWinnersSaving, setGroupWinnersSaving] = useState(false);
   const [settlingAndPaying, setSettlingAndPaying] = useState(false);
+  const [showAdvancedMatch, setShowAdvancedMatch] = useState(false);
+
+  const staffMatches = dash?.matches || [];
+  const selectedMatch = staffMatches.find((m) => m.id === selectedMatchId) || null;
+
+  const applyMatchSelection = useCallback((matchId, matches) => {
+    setSelectedMatchId(matchId);
+    const m = (matches || []).find((x) => x.id === matchId);
+    if (!m) return;
+    const res = m.result || {};
+    if (res.home_score != null) setHomeScore(String(res.home_score));
+    else setHomeScore('0');
+    if (res.away_score != null) setAwayScore(String(res.away_score));
+    else setAwayScore('0');
+    setScorers((res.scorers || []).join(', '));
+    setStage(m.stage || '');
+  }, []);
 
   const loadGroupsSetup = useCallback(async () => {
     try {
@@ -136,7 +174,48 @@ export default function WorldCupStaff() {
   };
   const reloadPredictions = () => loadPredictions(predFilters);
 
-  const applyGroupWinners = async ({ autoApprove = false } = {}) => {
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [d, e, p] = await Promise.all([
+        api.get('/world-cup/staff/dashboard'),
+        api.get('/world-cup/staff/entries', { params: { limit: 200 } }),
+        api.get('/world-cup/staff/pending-payouts', { params: { limit: 200 } }),
+      ]);
+      setDash(d.data);
+      setEntries(e.data?.entries || []);
+      setPending(p.data);
+      const matches = d.data?.matches || [];
+      setSelectedMatchId((prev) => {
+        const keep = prev && matches.some((m) => m.id === prev) ? prev : '';
+        const pick = keep || (matches.find((m) => m.needs_result) || matches[0])?.id || '';
+        if (pick) {
+          const m = matches.find((x) => x.id === pick);
+          const res = m?.result || {};
+          if (res.home_score != null) setHomeScore(String(res.home_score));
+          else if (!keep) setHomeScore('0');
+          if (res.away_score != null) setAwayScore(String(res.away_score));
+          else if (!keep) setAwayScore('0');
+          setScorers((res.scorers || []).join(', '));
+          if (m?.stage) setStage(m.stage);
+        }
+        return pick;
+      });
+      await loadGroupsSetup();
+    } catch (err) {
+      toast.error(getApiErrorMessage(err));
+      setDash(null);
+      setPending(null);
+    } finally {
+      setLoading(false);
+    }
+  }, [loadGroupsSetup]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const applyGroupWinners = async ({ autoApprove = true } = {}) => {
     const winners = {};
     groupsSetup.forEach((g) => {
       const pick = groupWinners[g.group_id];
@@ -148,7 +227,7 @@ export default function WorldCupStaff() {
       return;
     }
     const msg = autoApprove
-      ? `Set ${count} group winner(s), settle predictions, and pay all correct picks now?`
+      ? `Set ${count} group winner(s) and pay correct picks now?`
       : `Set ${count} group winner(s) and queue payouts for approval?`;
     if (!window.confirm(msg)) return;
     if (autoApprove) setSettlingAndPaying(true);
@@ -161,8 +240,8 @@ export default function WorldCupStaff() {
       const paid = r.data?.payout;
       toast.success(
         autoApprove
-          ? `Settled ${r.data?.groups_updated || 0} groups · paid ${Number(paid?.total_points || 0).toLocaleString()} pts`
-          : `Settled ${r.data?.groups_updated || 0} groups · ${r.data?.predictions_settled || 0} predictions queued`
+          ? `Done — ${r.data?.groups_updated || 0} groups · ${Number(paid?.total_points || 0).toLocaleString()} pts paid`
+          : `Queued — ${r.data?.groups_updated || 0} groups · ${r.data?.predictions_settled || 0} picks`
       );
       await load();
       await reloadPredictions();
@@ -176,7 +255,7 @@ export default function WorldCupStaff() {
   };
 
   const settleGroupsAndPay = async () => {
-    if (!window.confirm('Settle all groups (standings or winners already saved) and pay every pending winner?')) return;
+    if (!window.confirm('Auto-settle group winners from standings and pay everyone pending?')) return;
     setSettlingAndPaying(true);
     try {
       const r = await api.post('/world-cup/staff/settle-groups-and-pay', { auto_approve: true });
@@ -194,54 +273,12 @@ export default function WorldCupStaff() {
     }
   };
 
-  const setSingleGroupWinner = async (groupId) => {
-    const pick = groupWinners[groupId];
-    if (!pick) {
-      toast.error(`Pick a winner for group ${groupId}`);
-      return;
-    }
-    try {
-      const r = await api.post(`/world-cup/staff/group/${groupId}/winner`, { team_id: pick });
-      toast.success(`Group ${groupId}: ${r.data?.winner_name || 'winner'} settled (${r.data?.predictions_settled || 0} picks)`);
-      await load();
-      await reloadPredictions();
-      await loadGroupsSetup();
-    } catch (err) {
-      toast.error(getApiErrorMessage(err));
-    }
-  };
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const [d, e, p] = await Promise.all([
-        api.get('/world-cup/staff/dashboard'),
-        api.get('/world-cup/staff/entries', { params: { limit: 200 } }),
-        api.get('/world-cup/staff/pending-payouts', { params: { limit: 200 } }),
-      ]);
-      setDash(d.data);
-      setEntries(e.data?.entries || []);
-      setPending(p.data);
-      await loadGroupsSetup();
-    } catch (err) {
-      toast.error(getApiErrorMessage(err));
-      setDash(null);
-      setPending(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [loadGroupsSetup]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
   const runDraft = async () => {
     if (!window.confirm('Run team draft raffle for all entrants? This cannot be undone.')) return;
     setDraftRunning(true);
     try {
       const r = await api.post('/world-cup/staff/run-draft');
-      toast.success(`Draft complete — ${r.data?.real_entrants ?? r.data?.entrants} real, ${r.data?.ghost_entrants ?? 0} ghost, ${r.data?.teams} teams`);
+      toast.success(`Draft complete — ${r.data?.real_entrants ?? r.data?.entrants} real, ${r.data?.ghost_entrants ?? 0} ghost`);
       await load();
       await reloadPredictions();
     } catch (err) {
@@ -252,29 +289,48 @@ export default function WorldCupStaff() {
   };
 
   const patchResult = async () => {
-    if (!matchId.trim()) {
-      toast.error('Match ID required');
+    const mid = selectedMatchId.trim();
+    if (!mid) {
+      toast.error('Pick a match first');
       return;
     }
+    const h = parseInt(String(homeScore), 10);
+    const a = parseInt(String(awayScore), 10);
+    if (Number.isNaN(h) || Number.isNaN(a) || h < 0 || a < 0) {
+      toast.error('Enter valid scores');
+      return;
+    }
+    const label = selectedMatch?.label || 'this match';
+    const payNote = autoApproveResult ? ' and pay winners' : '';
+    if (!window.confirm(`Save ${label} as ${h}-${a}${payNote}?`)) return;
+    setSavingResult(true);
     try {
-      await api.patch(`/world-cup/staff/match/${matchId.trim()}/result`, {
-        home_score: Number(homeScore),
-        away_score: Number(awayScore),
+      const r = await api.patch(`/world-cup/staff/match/${mid}/result`, {
+        home_score: h,
+        away_score: a,
         scorers: scorers.split(',').map((s) => s.trim()).filter(Boolean),
         stage: stage.trim() || undefined,
+        auto_approve: autoApproveResult,
       });
-      toast.success('Result saved — correct predictions queued for staff approval');
+      const paid = r.data?.payout;
+      toast.success(
+        autoApproveResult && paid
+          ? `Saved · ${r.data?.predictions_settled || 0} picks settled · ${Number(paid?.total_points || 0).toLocaleString()} pts paid`
+          : `Saved · ${r.data?.predictions_settled || 0} picks queued for approval`
+      );
       await load();
       await reloadPredictions();
     } catch (err) {
       toast.error(getApiErrorMessage(err));
+    } finally {
+      setSavingResult(false);
     }
   };
 
   const settleGroups = async () => {
     try {
       const r = await api.post('/world-cup/staff/settle-groups');
-      toast.success(`Settled ${r.data?.groups_settled || 0} group(s) — winners queued for approval`);
+      toast.success(`Settled ${r.data?.groups_settled || 0} group(s)`);
       await load();
       await reloadPredictions();
     } catch (err) {
@@ -312,11 +368,11 @@ export default function WorldCupStaff() {
 
   const approveAll = async () => {
     const count = pending?.pending_payouts ?? 0;
-    if (!count || !window.confirm(`Approve and send points for all ${count} pending payout(s)?`)) return;
+    if (!count || !window.confirm(`Pay all ${count} pending winner(s) now?`)) return;
     setApprovingAll(true);
     try {
       const r = await api.post('/world-cup/staff/approve-all-payouts');
-      toast.success(`Approved ${r.data?.predictions_approved || 0} predictions and ${r.data?.jackpots_approved || 0} jackpots (${Number(r.data?.total_points || 0).toLocaleString()} pts total)`);
+      toast.success(`Paid ${Number(r.data?.total_points || 0).toLocaleString()} pts total`);
       await load();
       await reloadPredictions();
     } catch (err) {
@@ -327,12 +383,12 @@ export default function WorldCupStaff() {
   };
 
   useEffect(() => {
-    if (loading) return undefined;
+    if (loading || tab !== 'advanced') return undefined;
     const t = setTimeout(() => {
       loadPredictions(predFilters);
     }, 150);
     return () => clearTimeout(t);
-  }, [loading, predFilter, matchFilter, groupFilter, usernameFilter, verdictFilter, settledFilter, payoutFilter, loadPredictions]);
+  }, [loading, tab, predFilter, matchFilter, groupFilter, usernameFilter, verdictFilter, settledFilter, payoutFilter, loadPredictions]);
 
   const applyPredFilter = (id) => {
     setPredFilter(id);
@@ -342,6 +398,7 @@ export default function WorldCupStaff() {
 
   const pendingCount = pending?.pending_payouts ?? dash?.pending_payouts ?? 0;
   const predCounts = predMeta?.counts || {};
+  const needsScoreCount = staffMatches.filter((m) => m.needs_result).length;
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root pb-[calc(10rem+env(safe-area-inset-bottom))]`}>
@@ -351,89 +408,169 @@ export default function WorldCupStaff() {
           <ArrowLeft size={16} /> Hub
         </Link>
         <Trophy className="text-primary" size={22} />
-        <h1 className="text-lg font-heading font-bold text-primary uppercase tracking-wider">World Cup Staff</h1>
+        <h1 className="text-lg font-heading font-bold text-primary uppercase tracking-wider">World Cup</h1>
         <button
           type="button"
-          onClick={() => {
-            load();
-            reloadPredictions();
-          }}
+          onClick={() => { load(); if (tab === 'advanced') reloadPredictions(); }}
           className="ml-auto min-h-[44px] px-3 rounded border border-primary/20 flex items-center gap-1 text-sm"
         >
           <RefreshCw size={14} /> Refresh
         </button>
       </div>
 
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setTab('quick')}
+          className={`flex-1 min-h-[44px] rounded text-sm font-heading uppercase ${tab === 'quick' ? 'bg-primary/20 text-primary border border-primary/40' : 'border border-primary/10 text-mutedForeground'}`}
+        >
+          Quick actions
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab('advanced')}
+          className={`flex-1 min-h-[44px] rounded text-sm font-heading uppercase ${tab === 'advanced' ? 'bg-primary/20 text-primary border border-primary/40' : 'border border-primary/10 text-mutedForeground'}`}
+        >
+          Audit &amp; tools
+        </button>
+      </div>
+
       {loading ? (
         <p className="text-sm text-mutedForeground">Loading…</p>
-      ) : (
+      ) : tab === 'quick' ? (
         <>
-          <div className={`${styles.panel} mobile-panel rounded-lg border border-primary/20 p-4 space-y-2`}>
-            <p className="text-sm text-foreground">Entrants: <strong>{dash?.entrants ?? 0}</strong> ({dash?.real_entrants ?? 0} real · {dash?.ghost_entrants ?? 0} ghost)</p>
-            <p className="text-sm text-foreground">Pending payouts: <strong className={pendingCount ? 'text-amber-400' : ''}>{pendingCount}</strong></p>
-            <p className="text-sm text-foreground">Unsettled matches: <strong>{dash?.unsettled_matches ?? 0}</strong></p>
-            <p className="text-sm text-foreground">Draft run: <strong>{dash?.draft_run ? 'Yes' : 'No'}</strong></p>
-            <p className="text-[10px] text-mutedForeground">Last sync: {dash?.last_fixture_sync_at || '—'}</p>
-            <p className="text-[10px] text-mutedForeground">Last auto-settle: {dash?.last_auto_settle_at || '—'}</p>
+          <div className={`${styles.panel} mobile-panel rounded-lg border border-primary/20 p-4 flex flex-wrap gap-4 text-sm`}>
+            <span><strong className="text-amber-400">{pendingCount}</strong> to pay</span>
+            <span><strong>{needsScoreCount}</strong> need score</span>
+            <span><strong>{dash?.entrants ?? 0}</strong> entrants</span>
             {pendingCount > 0 && (
               <button
                 type="button"
                 disabled={approvingAll}
                 onClick={approveAll}
-                className="w-full min-h-[44px] mt-2 rounded bg-amber-600 text-white font-heading uppercase text-sm flex items-center justify-center gap-2"
+                className="ml-auto min-h-[40px] px-4 rounded bg-amber-600 text-white font-heading uppercase text-xs flex items-center gap-2"
               >
-                <CheckCircle2 size={16} /> {approvingAll ? 'Approving…' : `Approve all pending (${pendingCount})`}
-              </button>
-            )}
-            <p className="text-[10px] text-mutedForeground">Draft auto-runs 24h before first match{dash?.draft_scheduled_at ? ` (${formatGameDateTime(dash.draft_scheduled_at)})` : ''}</p>
-            {!dash?.draft_run && (
-              <button
-                type="button"
-                disabled={draftRunning}
-                onClick={runDraft}
-                className="w-full min-h-[44px] mt-2 rounded border border-primary/30 text-primary font-heading uppercase text-sm flex items-center justify-center gap-2"
-              >
-                <Play size={16} /> {draftRunning ? 'Running…' : 'Run draft now (manual override)'}
+                <CheckCircle2 size={14} /> {approvingAll ? 'Paying…' : `Pay all (${pendingCount})`}
               </button>
             )}
           </div>
 
+          <div className={`${styles.panel} mobile-panel rounded-lg border border-emerald-500/40 p-4 space-y-3`}>
+            <h2 className="text-sm font-heading text-emerald-300 uppercase">1 · Enter match score</h2>
+            <p className="text-[10px] text-mutedForeground">Pick the game, enter the final score, save. Winners are paid automatically if the box below is ticked.</p>
+            <select
+              value={selectedMatchId}
+              onChange={(e) => applyMatchSelection(e.target.value, staffMatches)}
+              className="w-full min-h-[48px] px-3 rounded border border-primary/30 bg-transparent text-sm"
+            >
+              <option value="">— pick a match —</option>
+              {staffMatches.map((m) => (
+                <option key={m.id} value={m.id}>{matchOptionLabel(m)}</option>
+              ))}
+            </select>
+            {selectedMatch && (
+              <p className="text-[10px] text-mutedForeground">
+                {selectedMatch.home_team?.name || 'Home'} vs {selectedMatch.away_team?.name || 'Away'}
+                {selectedMatch.stage ? ` · ${selectedMatch.stage.replace(/_/g, ' ')}` : ''}
+              </p>
+            )}
+            <div className="flex items-center gap-3">
+              <label className="flex-1 text-center">
+                <span className="block text-[9px] uppercase text-mutedForeground mb-1">Home</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={homeScore}
+                  onChange={(e) => setHomeScore(e.target.value)}
+                  className="w-full min-h-[52px] text-2xl text-center rounded border border-primary/30 bg-transparent tabular-nums"
+                />
+              </label>
+              <span className="text-xl text-mutedForeground pt-5">–</span>
+              <label className="flex-1 text-center">
+                <span className="block text-[9px] uppercase text-mutedForeground mb-1">Away</span>
+                <input
+                  type="number"
+                  min={0}
+                  value={awayScore}
+                  onChange={(e) => setAwayScore(e.target.value)}
+                  className="w-full min-h-[52px] text-2xl text-center rounded border border-primary/30 bg-transparent tabular-nums"
+                />
+              </label>
+            </div>
+            <input
+              type="text"
+              value={scorers}
+              onChange={(e) => setScorers(e.target.value)}
+              placeholder="Goal scorers (optional, comma-separated)"
+              className="w-full min-h-[44px] px-3 rounded border border-primary/20 bg-transparent text-sm"
+            />
+            <label className="flex items-center gap-2 text-sm cursor-pointer select-none">
+              <input type="checkbox" checked={autoApproveResult} onChange={(e) => setAutoApproveResult(e.target.checked)} className="rounded" />
+              <span>Pay winners immediately after saving</span>
+            </label>
+            <button
+              type="button"
+              disabled={savingResult || !selectedMatchId}
+              onClick={patchResult}
+              className="w-full min-h-[48px] rounded bg-emerald-600 text-white font-heading uppercase text-sm disabled:opacity-50"
+            >
+              {savingResult ? 'Saving…' : 'Save score'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAdvancedMatch((v) => !v)}
+              className="w-full text-[10px] text-mutedForeground flex items-center justify-center gap-1"
+            >
+              {showAdvancedMatch ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {showAdvancedMatch ? 'Hide' : 'Show'} stage override / match ID
+            </button>
+            {showAdvancedMatch && (
+              <div className="space-y-2 pt-1 border-t border-primary/10">
+                <select value={stage} onChange={(e) => setStage(e.target.value)} className="w-full min-h-[40px] px-3 rounded border border-primary/20 bg-transparent text-sm">
+                  {STAGE_OPTIONS.map((o) => (
+                    <option key={o.id || 'auto'} value={o.id}>{o.label}</option>
+                  ))}
+                </select>
+                <p className="text-[9px] text-mutedForeground font-mono break-all">ID: {selectedMatchId || '—'}</p>
+              </div>
+            )}
+          </div>
+
           {(pending?.predictions?.length > 0 || pending?.jackpots?.length > 0) && (
-            <div className={`${styles.panel} mobile-panel rounded-lg border border-amber-500/30 p-4 space-y-3`}>
-              <h2 className="text-sm font-heading text-amber-300 uppercase">Pending point approvals</h2>
-              <p className="text-[10px] text-mutedForeground">Correct predictions are queued here. Approve to send store points to players.</p>
-              <div className="space-y-2">
+            <div className={`${styles.panel} mobile-panel rounded-lg border border-amber-500/30 p-4 space-y-2`}>
+              <h2 className="text-sm font-heading text-amber-300 uppercase">2 · Pay winners</h2>
+              <div className="space-y-2 max-h-[280px] overflow-y-auto">
                 {(pending?.predictions || []).map((row) => (
-                  <div key={row.id} className="flex flex-wrap items-center gap-2 p-2 rounded border border-primary/10 bg-primary/5">
+                  <div key={row.id} className="flex items-center gap-2 p-2 rounded border border-primary/10 bg-primary/5">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-foreground truncate">{row.username}</p>
-                      <p className="text-[10px] text-mutedForeground truncate">{row.label || row.type} · {row.target_id}</p>
+                      <p className="text-sm truncate">{row.username}</p>
+                      <p className="text-[10px] text-mutedForeground truncate">{row.label || row.type}</p>
                     </div>
-                    <span className="text-sm text-primary tabular-nums">{Number(row.points || 0).toLocaleString()} pts</span>
+                    <span className="text-sm text-primary tabular-nums shrink-0">{Number(row.points || 0).toLocaleString()}</span>
                     <button
                       type="button"
                       disabled={approvingId === row.id}
                       onClick={() => approvePrediction(row.id)}
-                      className="min-h-[36px] px-3 rounded border border-emerald-500/40 text-emerald-300 text-xs font-heading uppercase"
+                      className="min-h-[36px] px-3 rounded border border-emerald-500/40 text-emerald-300 text-[10px] font-heading uppercase shrink-0"
                     >
-                      {approvingId === row.id ? '…' : 'Approve'}
+                      Pay
                     </button>
                   </div>
                 ))}
                 {(pending?.jackpots || []).map((row) => (
-                  <div key={row.user_id} className="flex flex-wrap items-center gap-2 p-2 rounded border border-amber-500/20 bg-amber-950/20">
+                  <div key={row.user_id} className="flex items-center gap-2 p-2 rounded border border-amber-500/20">
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm text-foreground truncate">{row.username}</p>
-                      <p className="text-[10px] text-mutedForeground truncate">{row.label} (jackpot)</p>
+                      <p className="text-sm truncate">{row.username}</p>
+                      <p className="text-[10px] text-mutedForeground">Jackpot</p>
                     </div>
-                    <span className="text-sm text-amber-300 tabular-nums">{Number(row.points || 0).toLocaleString()} pts</span>
+                    <span className="text-sm text-amber-300 tabular-nums shrink-0">{Number(row.points || 0).toLocaleString()}</span>
                     <button
                       type="button"
                       disabled={approvingId === `jackpot:${row.user_id}`}
                       onClick={() => approveJackpot(row.user_id)}
-                      className="min-h-[36px] px-3 rounded border border-emerald-500/40 text-emerald-300 text-xs font-heading uppercase"
+                      className="min-h-[36px] px-3 rounded border border-emerald-500/40 text-emerald-300 text-[10px] font-heading uppercase shrink-0"
                     >
-                      {approvingId === `jackpot:${row.user_id}` ? '…' : 'Approve'}
+                      Pay
                     </button>
                   </div>
                 ))}
@@ -442,41 +579,87 @@ export default function WorldCupStaff() {
           )}
 
           <div className={`${styles.panel} mobile-panel rounded-lg border border-primary/20 p-4 space-y-3`}>
-            <div className="flex flex-wrap items-center gap-2">
-              <ClipboardList size={16} className="text-primary" />
-              <h2 className="text-sm font-heading text-primary uppercase">Player predictions — verification</h2>
-              <span className="text-[10px] text-mutedForeground ml-auto">{predictions.length} shown</span>
-            </div>
-            <p className="text-[10px] text-mutedForeground">
-              Tap a row for full audit detail (IDs, timestamps, raw pick, match/group context). Compare pick vs actual before approving payouts.
-            </p>
-            {predMeta?.points_reference && (
-              <div className="text-[10px] text-mutedForeground flex flex-wrap gap-x-3 gap-y-1 p-2 rounded border border-primary/10 bg-primary/5">
-                <span>Group winner: {Number(predMeta.points_reference.group_winner_points || 0).toLocaleString()}</span>
-                <span>Exact score: {Number(predMeta.points_reference.match_score_exact_points || 0).toLocaleString()}</span>
-                <span>Result only: {Number(predMeta.points_reference.match_score_result_points || 0).toLocaleString()}</span>
-                <span>Scorer: {Number(predMeta.points_reference.match_scorer_points || 0).toLocaleString()}</span>
-                <span>2nd: {Number(predMeta.points_reference.second_place_points || 0).toLocaleString()}</span>
-                <span>3rd: {Number(predMeta.points_reference.third_place_points || 0).toLocaleString()}</span>
-                <span>Jackpot: {Number(predMeta.points_reference.jackpot_points || 0).toLocaleString()}</span>
+            <h2 className="text-sm font-heading text-primary uppercase">3 · Group winners</h2>
+            <p className="text-[10px] text-mutedForeground">When a group is finished, pick who won. 2,500 pts per correct pick.</p>
+            {!groupsSetup.length ? (
+              <p className="text-sm text-mutedForeground">No groups loaded.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {groupsSetup.map((g) => (
+                  <div key={g.group_id} className="flex items-center gap-2 p-2 rounded border border-primary/10">
+                    <span className="text-xs font-heading text-primary w-14 shrink-0">Grp {g.group_id}</span>
+                    <select
+                      value={groupWinners[g.group_id] || ''}
+                      onChange={(e) => setGroupWinners((prev) => ({ ...prev, [g.group_id]: e.target.value }))}
+                      className="flex-1 min-h-[40px] px-2 rounded border border-primary/20 bg-transparent text-sm"
+                    >
+                      <option value="">— winner —</option>
+                      {(g.teams || []).map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.flag_emoji ? `${t.flag_emoji} ` : ''}{t.name}
+                        </option>
+                      ))}
+                    </select>
+                    {g.settled && <span className="text-[9px] text-emerald-400 shrink-0">✓</span>}
+                  </div>
+                ))}
               </div>
             )}
+            <button
+              type="button"
+              disabled={groupWinnersSaving || settlingAndPaying}
+              onClick={() => applyGroupWinners({ autoApprove: true })}
+              className="w-full min-h-[48px] rounded bg-primary/20 border border-primary/40 text-primary font-heading uppercase text-sm"
+            >
+              {settlingAndPaying ? 'Working…' : 'Save group winners & pay'}
+            </button>
+            <button
+              type="button"
+              disabled={settlingAndPaying}
+              onClick={settleGroupsAndPay}
+              className="w-full min-h-[40px] rounded border border-primary/10 text-[10px] font-heading uppercase text-mutedForeground"
+            >
+              Auto from standings + pay all
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <div className={`${styles.panel} mobile-panel rounded-lg border border-primary/20 p-4 space-y-2 text-sm`}>
+            <p>Entrants: <strong>{dash?.entrants ?? 0}</strong> ({dash?.real_entrants ?? 0} real · {dash?.ghost_entrants ?? 0} ghost)</p>
+            <p>Pending payouts: <strong className={pendingCount ? 'text-amber-400' : ''}>{pendingCount}</strong></p>
+            <p>Unsettled matches: <strong>{dash?.unsettled_matches ?? 0}</strong></p>
+            <p>Draft: <strong>{dash?.draft_run ? 'Done' : 'Not run'}</strong></p>
+            {!dash?.draft_run && (
+              <button type="button" disabled={draftRunning} onClick={runDraft} className="w-full min-h-[44px] mt-2 rounded border border-primary/30 text-primary text-xs font-heading uppercase flex items-center justify-center gap-2">
+                <Play size={14} /> {draftRunning ? 'Running…' : 'Run draft now'}
+              </button>
+            )}
+            <button type="button" onClick={settleGroups} className="w-full min-h-[40px] rounded border border-primary/20 text-[10px] font-heading uppercase text-mutedForeground">
+              Force settle groups (queue only)
+            </button>
+          </div>
+
+          <div className={`${styles.panel} mobile-panel rounded-lg border border-primary/20 p-4 space-y-3`}>
+            <div className="flex flex-wrap items-center gap-2">
+              <ClipboardList size={16} className="text-primary" />
+              <h2 className="text-sm font-heading text-primary uppercase">Player predictions</h2>
+              <span className="text-[10px] text-mutedForeground ml-auto">{predictions.length} shown</span>
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {PRED_FILTERS.map(({ id, label }) => (
                 <button
                   key={id}
                   type="button"
                   onClick={() => applyPredFilter(id)}
-                  className={`min-h-[36px] px-2.5 rounded text-[10px] font-heading uppercase ${
-                    predFilter === id ? 'bg-primary/15 text-primary border border-primary/30' : 'text-mutedForeground border border-primary/10'
-                  }`}
+                  className={`min-h-[36px] px-2.5 rounded text-[10px] font-heading uppercase ${predFilter === id ? 'bg-primary/15 text-primary border border-primary/30' : 'text-mutedForeground border border-primary/10'}`}
                 >
                   {label}
-                  {id !== 'all' && predCounts[id] != null ? ` (${predCounts[id]})` : id === 'all' ? ` (${Object.values(predCounts).reduce((a, b) => a + b, 0) || 0})` : ''}
+                  {id !== 'all' && predCounts[id] != null ? ` (${predCounts[id]})` : ''}
                 </button>
               ))}
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div className="flex gap-1 sm:col-span-2">
                 <input
                   type="text"
@@ -486,91 +669,31 @@ export default function WorldCupStaff() {
                   placeholder="Search username"
                   className="flex-1 min-h-[40px] px-3 rounded border border-primary/20 bg-transparent text-sm"
                 />
-                <button
-                  type="button"
-                  onClick={() => setUsernameFilter(usernameQuery)}
-                  className="min-h-[40px] px-3 rounded border border-primary/20 text-xs font-heading uppercase"
-                >
-                  Search
-                </button>
-                {usernameFilter && (
-                  <button
-                    type="button"
-                    onClick={() => { setUsernameFilter(''); setUsernameQuery(''); }}
-                    className="min-h-[40px] px-2 rounded text-xs text-mutedForeground"
-                  >
-                    Clear
-                  </button>
-                )}
+                <button type="button" onClick={() => setUsernameFilter(usernameQuery)} className="min-h-[40px] px-3 rounded border border-primary/20 text-xs font-heading uppercase">Search</button>
               </div>
-              <select
-                value={verdictFilter}
-                onChange={(e) => setVerdictFilter(e.target.value)}
-                className="min-h-[40px] px-3 rounded border border-primary/20 bg-transparent text-sm"
-              >
-                {VERDICT_FILTERS.map(({ id, label }) => (
-                  <option key={id || 'any'} value={id}>{label}</option>
-                ))}
+              <select value={verdictFilter} onChange={(e) => setVerdictFilter(e.target.value)} className="min-h-[40px] px-3 rounded border border-primary/20 bg-transparent text-sm">
+                {VERDICT_FILTERS.map(({ id, label }) => <option key={id || 'any'} value={id}>{label}</option>)}
               </select>
-              <select
-                value={settledFilter}
-                onChange={(e) => setSettledFilter(e.target.value)}
-                className="min-h-[40px] px-3 rounded border border-primary/20 bg-transparent text-sm"
-              >
+              <select value={settledFilter} onChange={(e) => setSettledFilter(e.target.value)} className="min-h-[40px] px-3 rounded border border-primary/20 bg-transparent text-sm">
                 <option value="">Any settlement</option>
                 <option value="no">Open only</option>
                 <option value="yes">Settled only</option>
               </select>
-              <select
-                value={payoutFilter}
-                onChange={(e) => setPayoutFilter(e.target.value)}
-                className="min-h-[40px] px-3 rounded border border-primary/20 bg-transparent text-sm"
-              >
-                <option value="">Any payout</option>
-                <option value="pending">Pending approval</option>
-                <option value="paid">Paid</option>
-                <option value="ghost">Ghost (no pay)</option>
-              </select>
             </div>
-            {(predFilter === 'all' || predFilter === 'group_winner') && (predMeta?.groups || []).length > 0 && (
-              <select
-                value={groupFilter}
-                onChange={(e) => setGroupFilter(e.target.value)}
-                className="w-full min-h-[44px] px-3 rounded border border-primary/20 bg-transparent text-sm"
-              >
-                <option value="">All groups</option>
-                {(predMeta.groups || []).map((g) => (
-                  <option key={g.group_id} value={g.group_id}>
-                    Group {g.group_id}
-                    {g.winner_team?.name ? ` · winner: ${g.winner_team.name}` : ''}
-                    {g.prediction_count ? ` (${g.prediction_count})` : ''}
-                  </option>
-                ))}
-              </select>
-            )}
             {(predFilter === 'all' || predFilter === 'match_score' || predFilter === 'match_scorer') && (predMeta?.matches || []).length > 0 && (
-              <select
-                value={matchFilter}
-                onChange={(e) => setMatchFilter(e.target.value)}
-                className="w-full min-h-[44px] px-3 rounded border border-primary/20 bg-transparent text-sm"
-              >
+              <select value={matchFilter} onChange={(e) => setMatchFilter(e.target.value)} className="w-full min-h-[44px] px-3 rounded border border-primary/20 bg-transparent text-sm">
                 <option value="">All matches</option>
                 {(predMeta.matches || []).map((m) => (
-                  <option key={m.id} value={m.id}>
-                    {m.label}
-                    {m.result?.display ? ` · ${m.result.display}` : ''}
-                    {m.kickoff ? ` · ${formatGameDateTime(m.kickoff)}` : ''}
-                    {m.prediction_count ? ` (${m.prediction_count})` : ''}
-                  </option>
+                  <option key={m.id} value={m.id}>{m.label}{m.result?.display ? ` · ${m.result.display}` : ''}</option>
                 ))}
               </select>
             )}
             {!predictions.length ? (
-              <p className="text-sm text-mutedForeground">No predictions yet for this filter.</p>
+              <p className="text-sm text-mutedForeground">No predictions for this filter.</p>
             ) : (
-              <div className="overflow-x-auto max-h-[520px] overflow-y-auto rounded border border-primary/10">
-                <table className="w-full text-xs min-w-[900px]">
-                  <thead className="sticky top-0 bg-[var(--noir-content,#111)] z-10">
+              <div className="overflow-x-auto max-h-[480px] overflow-y-auto rounded border border-primary/10">
+                <table className="w-full text-xs min-w-[700px]">
+                  <thead className="sticky top-0 bg-[var(--noir-content,#111)]">
                     <tr className="border-b border-primary/10 text-left text-mutedForeground font-heading uppercase">
                       <th className="p-2 w-8" />
                       <th className="p-2">Player</th>
@@ -578,139 +701,33 @@ export default function WorldCupStaff() {
                       <th className="p-2">Pick</th>
                       <th className="p-2">Actual</th>
                       <th className="p-2">Verdict</th>
-                      <th className="p-2">Settlement</th>
                       <th className="p-2 text-right">Pts</th>
                     </tr>
                   </thead>
                   <tbody>
                     {predictions.map((row) => {
                       const expanded = expandedPredId === row.id;
-                      const ptsExpected = Number(row.expected_points || 0);
-                      const ptsAwarded = Number(row.points_awarded || 0);
                       return (
                         <Fragment key={row.id}>
-                          <tr
-                            className={`border-b border-primary/5 align-top cursor-pointer hover:bg-primary/5 ${expanded ? 'bg-primary/5' : ''}`}
-                            onClick={() => setExpandedPredId(expanded ? null : row.id)}
-                          >
+                          <tr className={`border-b border-primary/5 align-top cursor-pointer hover:bg-primary/5 ${expanded ? 'bg-primary/5' : ''}`} onClick={() => setExpandedPredId(expanded ? null : row.id)}>
                             <td className="p-2 text-mutedForeground">{expanded ? '▼' : '▶'}</td>
-                            <td className="p-2 whitespace-nowrap">
-                              <span className="text-sm text-foreground font-heading">{row.username}</span>
-                              {row.entrant?.ghost_entry && (
-                                <span className="ml-1 text-[9px] text-amber-400 uppercase">Ghost</span>
-                              )}
-                            </td>
-                            <td className="p-2 text-sm text-foreground max-w-[140px] truncate" title={row.target_label || row.target_id}>
-                              {row.target_label || row.target_id}
-                            </td>
-                            <td className="p-2 text-sm text-foreground font-mono">{row.pick || '—'}</td>
-                            <td className="p-2 text-sm text-foreground font-mono">{row.actual || '—'}</td>
-                            <td className={`p-2 text-[10px] font-heading uppercase whitespace-nowrap ${verdictClass(row.verdict)}`}>
-                              {verdictLabel(row.verdict)}
-                            </td>
-                            <td className={`p-2 text-[10px] font-heading uppercase whitespace-nowrap ${predStatusClass(row)}`}>
-                              {predStatusLabel(row)}
-                              {row.settle_label ? (
-                                <span className="block normal-case text-mutedForeground font-sans">{row.settle_label}</span>
-                              ) : null}
-                            </td>
-                            <td className="p-2 text-right tabular-nums whitespace-nowrap">
-                              {row.settled ? (
-                                <>
-                                  <span className={ptsAwarded > 0 ? 'text-primary' : 'text-mutedForeground'}>
-                                    {ptsAwarded > 0 ? ptsAwarded.toLocaleString() : '0'}
-                                  </span>
-                                  {ptsExpected > 0 && ptsExpected !== ptsAwarded && (
-                                    <span className="block text-[9px] text-mutedForeground">exp {ptsExpected.toLocaleString()}</span>
-                                  )}
-                                </>
-                              ) : ptsExpected > 0 ? (
-                                <span className="text-mutedForeground">exp {ptsExpected.toLocaleString()}</span>
-                              ) : (
-                                '—'
-                              )}
-                            </td>
+                            <td className="p-2 whitespace-nowrap">{row.username}</td>
+                            <td className="p-2 max-w-[120px] truncate">{row.target_label || row.target_id}</td>
+                            <td className="p-2 font-mono">{row.pick || '—'}</td>
+                            <td className="p-2 font-mono">{row.actual || '—'}</td>
+                            <td className={`p-2 uppercase ${verdictClass(row.verdict)}`}>{verdictLabel(row.verdict)}</td>
+                            <td className="p-2 text-right tabular-nums">{row.settled ? Number(row.points_awarded || 0).toLocaleString() : '—'}</td>
                           </tr>
                           {expanded && (
                             <tr className="border-b border-primary/10 bg-black/20">
-                              <td colSpan={8} className="p-3">
-                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-[10px]">
-                                  <div className="space-y-1">
-                                    <p className="font-heading uppercase text-mutedForeground">Reference IDs</p>
-                                    <p><span className="text-mutedForeground">Prediction:</span> <span className="font-mono break-all">{row.id}</span></p>
-                                    <p><span className="text-mutedForeground">User:</span> <span className="font-mono break-all">{row.user_id}</span></p>
-                                    <p><span className="text-mutedForeground">Target:</span> <span className="font-mono break-all">{row.target_id}</span></p>
-                                    <p><span className="text-mutedForeground">Type:</span> {row.type} ({row.type_label})</p>
-                                  </div>
-                                  <div className="space-y-1">
-                                    <p className="font-heading uppercase text-mutedForeground">Timestamps</p>
-                                    <p>Created: {fmtTs(row.created_at)}</p>
-                                    <p>Updated: {fmtTs(row.updated_at)}</p>
-                                    <p>Settled: {fmtTs(row.settled_at)}</p>
-                                    <p>Payout approved: {fmtTs(row.payout_approved_at)}</p>
-                                  </div>
-                                  <div className="space-y-1">
-                                    <p className="font-heading uppercase text-mutedForeground">Entrant</p>
-                                    <p>Entered: {row.entrant?.entered ? 'Yes' : 'No'}</p>
-                                    <p>Ghost: {row.entrant?.ghost_entry ? 'Yes' : 'No'}</p>
-                                    <p>Entered at: {fmtTs(row.entrant?.entered_at)}</p>
-                                    <p>Drafted teams: {row.entrant?.drafted_team_count ?? 0}</p>
-                                  </div>
-                                  {row.match && (
-                                    <div className="space-y-1 md:col-span-2">
-                                      <p className="font-heading uppercase text-mutedForeground">Match context</p>
-                                      <p>{row.match.label} · {row.match.stage || '—'} · {row.match.status || '—'}</p>
-                                      <p>Kickoff: {fmtTs(row.match.kickoff)} · Lock: {fmtTs(row.match.lock_at)} {row.match.locked ? '(locked)' : ''}</p>
-                                      <p>Match ID: <span className="font-mono">{row.match.id}</span></p>
-                                      {row.match.external_event_id && (
-                                        <p>External: <span className="font-mono">{row.match.external_event_id}</span></p>
-                                      )}
-                                      {row.match.result && (
-                                        <p>
-                                          Official result: <span className="font-mono">{row.match.result.display}</span>
-                                          {row.match.result.scorers?.length ? (
-                                            <span> · Scorers: {row.match.result.scorers.join(', ')}</span>
-                                          ) : null}
-                                        </p>
-                                      )}
-                                    </div>
-                                  )}
-                                  {row.group && (
-                                    <div className="space-y-1">
-                                      <p className="font-heading uppercase text-mutedForeground">Group context</p>
-                                      <p>Group {row.group.group_id}</p>
-                                      <p>Winner: {row.group.winner_team?.name || row.group.winner_team_id || '—'}</p>
-                                      <p>Group settled: {fmtTs(row.group.settled_at)}</p>
-                                    </div>
-                                  )}
-                                  {row.tournament && (
-                                    <div className="space-y-1">
-                                      <p className="font-heading uppercase text-mutedForeground">Tournament picks (config)</p>
-                                      <p>Champion ID: <span className="font-mono">{row.tournament.champion_team_id || '—'}</span></p>
-                                      <p>Runner-up ID: <span className="font-mono">{row.tournament.runner_up_team_id || '—'}</span></p>
-                                      <p>3rd place ID: <span className="font-mono">{row.tournament.third_place_team_id || '—'}</span></p>
-                                    </div>
-                                  )}
-                                  <div className="space-y-1 md:col-span-2 lg:col-span-3">
-                                    <p className="font-heading uppercase text-mutedForeground">Raw pick value</p>
-                                    <pre className="p-2 rounded border border-primary/10 bg-black/30 overflow-x-auto font-mono text-[10px]">
-                                      {JSON.stringify(row.value, null, 2)}
-                                    </pre>
-                                    <p className="text-mutedForeground">Summary: {row.summary}</p>
-                                  </div>
-                                  {row.payout_status === 'pending' && (
-                                    <div className="md:col-span-2 lg:col-span-3">
-                                      <button
-                                        type="button"
-                                        disabled={approvingId === row.id}
-                                        onClick={(e) => { e.stopPropagation(); approvePrediction(row.id); }}
-                                        className="min-h-[36px] px-4 rounded border border-emerald-500/40 text-emerald-300 text-xs font-heading uppercase"
-                                      >
-                                        {approvingId === row.id ? 'Approving…' : `Approve ${ptsAwarded.toLocaleString()} pts`}
-                                      </button>
-                                    </div>
-                                  )}
-                                </div>
+                              <td colSpan={7} className="p-3 text-[10px] space-y-1">
+                                <p className="font-mono break-all">ID: {row.id}</p>
+                                <p>{row.summary}</p>
+                                {row.payout_status === 'pending' && (
+                                  <button type="button" disabled={approvingId === row.id} onClick={(e) => { e.stopPropagation(); approvePrediction(row.id); }} className="mt-2 min-h-[32px] px-3 rounded border border-emerald-500/40 text-emerald-300 text-[10px] uppercase">
+                                    Approve payout
+                                  </button>
+                                )}
                               </td>
                             </tr>
                           )}
@@ -721,114 +738,6 @@ export default function WorldCupStaff() {
                 </table>
               </div>
             )}
-            {matchFilter && (
-              <p className="text-[10px] text-mutedForeground font-mono break-all">
-                Match ID (manual result): {matchFilter}
-                <button type="button" className="ml-2 text-primary underline" onClick={() => setMatchId(matchFilter)}>Use in form</button>
-              </p>
-            )}
-          </div>
-
-          <div className={`${styles.panel} mobile-panel rounded-lg border border-emerald-500/30 p-4 space-y-3`}>
-            <h2 className="text-sm font-heading text-emerald-300 uppercase">Group stage winners</h2>
-            <p className="text-[10px] text-mutedForeground">
-              When group games are done, pick the exact group winner for each group (2,500 pts per correct pick).
-              This settles every player&apos;s group pick and queues payouts — use Pay all when you&apos;re ready to send points.
-            </p>
-            {!groupsSetup.length ? (
-              <p className="text-sm text-mutedForeground">Loading groups…</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {groupsSetup.map((g) => (
-                  <div key={g.group_id} className="flex flex-wrap items-center gap-2 p-2 rounded border border-primary/10 bg-primary/5">
-                    <span className="text-xs font-heading text-primary w-16 shrink-0">Group {g.group_id}</span>
-                    <select
-                      value={groupWinners[g.group_id] || ''}
-                      onChange={(e) => setGroupWinners((prev) => ({ ...prev, [g.group_id]: e.target.value }))}
-                      className="flex-1 min-h-[40px] px-2 rounded border border-primary/20 bg-transparent text-sm min-w-[140px]"
-                    >
-                      <option value="">— pick winner —</option>
-                      {(g.teams || []).map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.flag_emoji ? `${t.flag_emoji} ` : ''}{t.name}
-                        </option>
-                      ))}
-                    </select>
-                    {g.settled && g.winner_team?.name && (
-                      <span className="text-[9px] text-emerald-400 uppercase shrink-0">Settled</span>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => setSingleGroupWinner(g.group_id)}
-                      className="min-h-[36px] px-2 rounded border border-primary/20 text-[10px] font-heading uppercase"
-                    >
-                      Set
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="flex flex-col sm:flex-row gap-2">
-              <button
-                type="button"
-                disabled={groupWinnersSaving || settlingAndPaying}
-                onClick={() => applyGroupWinners({ autoApprove: false })}
-                className="flex-1 min-h-[44px] rounded border border-emerald-500/40 text-emerald-300 text-sm font-heading uppercase"
-              >
-                {groupWinnersSaving ? 'Saving…' : 'Save all winners & settle'}
-              </button>
-              <button
-                type="button"
-                disabled={groupWinnersSaving || settlingAndPaying}
-                onClick={() => applyGroupWinners({ autoApprove: true })}
-                className="flex-1 min-h-[44px] rounded bg-emerald-600 text-white text-sm font-heading uppercase"
-              >
-                {settlingAndPaying ? 'Paying…' : 'Save all & pay winners'}
-              </button>
-            </div>
-            <button
-              type="button"
-              disabled={settlingAndPaying}
-              onClick={settleGroupsAndPay}
-              className="w-full min-h-[40px] rounded border border-primary/20 text-[11px] font-heading uppercase text-mutedForeground"
-            >
-              Auto-settle from standings + pay all pending
-            </button>
-          </div>
-
-          <div className={`${styles.panel} mobile-panel rounded-lg border border-primary/20 p-4 space-y-3`}>
-            <h2 className="text-sm font-heading text-primary uppercase">Manual match result</h2>
-            <input
-              type="text"
-              value={matchId}
-              onChange={(e) => setMatchId(e.target.value)}
-              placeholder="Match ID"
-              className="w-full min-h-[44px] px-3 rounded border border-primary/20 bg-transparent text-sm"
-            />
-            <div className="flex gap-2">
-              <input type="number" min={0} value={homeScore} onChange={(e) => setHomeScore(e.target.value)} className="flex-1 min-h-[44px] px-3 rounded border border-primary/20" placeholder="Home" />
-              <input type="number" min={0} value={awayScore} onChange={(e) => setAwayScore(e.target.value)} className="flex-1 min-h-[44px] px-3 rounded border border-primary/20" placeholder="Away" />
-            </div>
-            <input
-              type="text"
-              value={scorers}
-              onChange={(e) => setScorers(e.target.value)}
-              placeholder="Scorers (comma-separated)"
-              className="w-full min-h-[44px] px-3 rounded border border-primary/20 bg-transparent text-sm"
-            />
-            <input
-              type="text"
-              value={stage}
-              onChange={(e) => setStage(e.target.value)}
-              placeholder="Stage override (group, round_of_16, quarter_final, semi_final, final, third_place…)"
-              className="w-full min-h-[44px] px-3 rounded border border-primary/20 bg-transparent text-sm"
-            />
-            <button type="button" onClick={patchResult} className="w-full min-h-[44px] rounded border border-primary/30 text-sm font-heading uppercase">
-              Save result &amp; queue settlement
-            </button>
-            <button type="button" onClick={settleGroups} className="w-full min-h-[44px] rounded border border-primary/20 text-sm font-heading uppercase">
-              Force settle groups
-            </button>
           </div>
 
           <div className={`${styles.panel} mobile-panel rounded-lg border border-primary/20 overflow-x-auto`}>
@@ -844,7 +753,7 @@ export default function WorldCupStaff() {
               <tbody>
                 {entries.map((e) => (
                   <tr key={e.user_id} className="border-b border-primary/5">
-                    <td className="p-2 text-sm font-heading">{e.username || `${e.user_id?.slice(0, 8)}…`}</td>
+                    <td className="p-2">{e.username || `${e.user_id?.slice(0, 8)}…`}</td>
                     <td className="p-2">{e.ghost_entry ? <span className="text-amber-400">Ghost</span> : 'Real'}</td>
                     <td className="p-2">{e.entered_at?.slice(0, 10)}</td>
                     <td className="p-2">{(e.drafted_team_ids || []).length}</td>
