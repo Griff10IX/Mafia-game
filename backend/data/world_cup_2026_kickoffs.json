@@ -72,6 +72,23 @@
     { "home": "Colombia", "away": "Portugal", "kickoff_utc": "2026-06-27T23:30:00Z", "group_id": "K" },
     { "home": "DR Congo", "away": "Uzbekistan", "kickoff_utc": "2026-06-27T23:30:00Z", "group_id": "K" },
     { "home": "Algeria", "away": "Austria", "kickoff_utc": "2026-06-28T02:00:00Z", "group_id": "J" },
-    { "home": "Jordan", "away": "Argentina", "kickoff_utc": "2026-06-28T02:00:00Z", "group_id": "J" }
+    { "home": "Jordan", "away": "Argentina", "kickoff_utc": "2026-06-28T02:00:00Z", "group_id": "J" },
+
+    { "home": "South Africa", "away": "Canada", "kickoff_utc": "2026-06-28T19:00:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 73 },
+    { "home": "Germany", "away": "Paraguay", "kickoff_utc": "2026-06-29T20:30:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 74 },
+    { "home": "Netherlands", "away": "Morocco", "kickoff_utc": "2026-06-30T01:00:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 75 },
+    { "home": "Brazil", "away": "Japan", "kickoff_utc": "2026-06-29T17:00:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 76 },
+    { "home": "France", "away": "Sweden", "kickoff_utc": "2026-06-30T21:00:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 77 },
+    { "home": "Ivory Coast", "away": "Norway", "kickoff_utc": "2026-06-30T17:00:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 78 },
+    { "home": "Mexico", "away": "Ecuador", "kickoff_utc": "2026-07-01T01:00:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 79 },
+    { "home": "England", "away": "DR Congo", "kickoff_utc": "2026-07-01T16:00:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 80 },
+    { "home": "United States", "away": "Bosnia and Herzegovina", "kickoff_utc": "2026-07-02T00:00:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 81 },
+    { "home": "Belgium", "away": "Senegal", "kickoff_utc": "2026-07-01T20:00:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 82 },
+    { "home": "Portugal", "away": "Croatia", "kickoff_utc": "2026-07-02T23:00:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 83 },
+    { "home": "Spain", "away": "Austria", "kickoff_utc": "2026-07-02T19:00:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 84 },
+    { "home": "Switzerland", "away": "Algeria", "kickoff_utc": "2026-07-03T03:00:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 85 },
+    { "home": "Argentina", "away": "Cape Verde", "kickoff_utc": "2026-07-03T22:00:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 86 },
+    { "home": "Colombia", "away": "Ghana", "kickoff_utc": "2026-07-04T01:30:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 87 },
+    { "home": "Australia", "away": "Egypt", "kickoff_utc": "2026-07-03T18:00:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 88 }
   ]
 }

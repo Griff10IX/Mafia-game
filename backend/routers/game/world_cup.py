@@ -1214,6 +1214,8 @@ async def _sync_fixtures_from_odds(db) -> dict:
     teams_by_id = await _teams_by_id(db)
     synced, skipped = 0, 0
     now = _now_iso()
+    from utils.world_cup_fixtures import infer_knockout_round_from_kickoff, lookup_official_wc_fixture, resolve_wc_kickoff_utc
+
     for ev in events or []:
         ext_id = (ev.get("id") or "").strip()
         home_name = (ev.get("home_team") or "").strip()
@@ -1229,20 +1231,10 @@ async def _sync_fixtures_from_odds(db) -> dict:
             continue
         home_team = teams_by_id.get(home_id) or {}
         away_team = teams_by_id.get(away_id) or {}
-        g_home, g_away = home_team.get("group_id"), away_team.get("group_id")
-        stage = "group"
-        group_id = None
-        if g_home and g_home == g_away:
-            stage = "group"
-            group_id = g_home
-        else:
-            stage = "knockout"
         existing = await db.world_cup_matches.find_one({"external_event_id": ext_id}, {"_id": 0, "status": 1, "result": 1})
         if existing and existing.get("status") == "settled":
             continue
         commence_parsed = sb._parse_commence_time(commence) if commence else None
-        from utils.world_cup_fixtures import infer_knockout_round_from_kickoff, resolve_wc_kickoff_utc
-
         kickoff = resolve_wc_kickoff_utc(
             home_name,
             away_name,
@@ -1250,11 +1242,28 @@ async def _sync_fixtures_from_odds(db) -> dict:
         )
         if not kickoff:
             kickoff = commence_parsed or (commence if isinstance(commence, str) else _now_iso())
-        knockout_round = None
-        if stage == "knockout":
-            knockout_round = infer_knockout_round_from_kickoff(kickoff)
-        elif stage in ("round_of_32", "round_of_16", "quarter_final", "semi_final", "final", "third_place"):
-            knockout_round = stage
+
+        official = lookup_official_wc_fixture(home_name, away_name)
+        if official and official.get("kickoff_utc"):
+            kickoff = official["kickoff_utc"]
+        if official and official.get("group_id"):
+            stage = "group"
+            group_id = official["group_id"]
+            knockout_round = None
+        elif official and official.get("knockout_round"):
+            stage = "knockout"
+            group_id = None
+            knockout_round = official["knockout_round"]
+        else:
+            g_home, g_away = home_team.get("group_id"), away_team.get("group_id")
+            if g_home and g_home == g_away:
+                stage = "group"
+                group_id = g_home
+                knockout_round = None
+            else:
+                stage = "knockout"
+                group_id = None
+                knockout_round = infer_knockout_round_from_kickoff(kickoff)
         doc = {
             "external_event_id": ext_id,
             "external_sport_key": WC_SPORT_KEY,
@@ -1275,6 +1284,8 @@ async def _sync_fixtures_from_odds(db) -> dict:
             doc["created_at"] = now
             await db.world_cup_matches.insert_one(doc)
         synced += 1
+    reconciled = await _reconcile_wc_matches_from_official(db)
+    seeded = await _ensure_official_knockout_fixtures(db)
     await db.game_config.update_one({"id": CONFIG_ID}, {"$set": {"last_fixture_sync_at": now}}, upsert=True)
     await _refresh_tournament_start_in_config(db)
     board_updated = 0
@@ -1282,7 +1293,98 @@ async def _sync_fixtures_from_odds(db) -> dict:
         board_updated = await sb._propagate_wc_kickoffs_to_open_board_events()
     except Exception as ex:
         logger.warning("wc kickoff propagate after fixture sync failed: %s", ex)
-    return {"synced": synced, "skipped": skipped, "source_events": len(events or []), "board_kickoffs_updated": board_updated}
+    return {
+        "synced": synced,
+        "skipped": skipped,
+        "source_events": len(events or []),
+        "board_kickoffs_updated": board_updated,
+        "reconciled": reconciled,
+        "official_knockout_seeded": seeded,
+    }
+
+
+async def _reconcile_wc_matches_from_official(db) -> int:
+    """Fix stage / group / knockout_round / kickoff from FIFA schedule file (e.g. group J games on 28 Jun)."""
+    from utils.world_cup_fixtures import lookup_official_wc_fixture
+
+    teams_by_id = await _teams_by_id(db)
+    updated = 0
+    async for m in db.world_cup_matches.find({}, {"_id": 0, "id": 1, "status": 1, "home_team_id": 1, "away_team_id": 1}):
+        if m.get("status") == "settled":
+            continue
+        ht = teams_by_id.get(m.get("home_team_id")) or {}
+        at = teams_by_id.get(m.get("away_team_id")) or {}
+        official = lookup_official_wc_fixture(ht.get("name") or "", at.get("name") or "")
+        if not official:
+            continue
+        patch: dict = {}
+        if official.get("group_id"):
+            patch = {"stage": "group", "group_id": official["group_id"], "knockout_round": None}
+        elif official.get("knockout_round"):
+            patch = {"stage": "knockout", "group_id": None, "knockout_round": official["knockout_round"]}
+        if official.get("kickoff_utc"):
+            patch["kickoff"] = official["kickoff_utc"]
+            patch["lock_at"] = _lock_at_from_kickoff(official["kickoff_utc"])
+        if not patch:
+            continue
+        patch["updated_at"] = _now_iso()
+        res = await db.world_cup_matches.update_one({"id": m["id"]}, {"$set": patch})
+        updated += int(res.modified_count or 0)
+    return updated
+
+
+async def _ensure_official_knockout_fixtures(db) -> int:
+    """Insert official Round of 32 (etc.) rows if Odds API did not provide them."""
+    from utils.world_cup_fixtures import _official_fixture_rows, canonical_wc_team_name
+
+    teams_by_id = await _teams_by_id(db)
+    added = 0
+    now = _now_iso()
+    for row in _official_fixture_rows():
+        if not row.get("knockout_round"):
+            continue
+        home_name = canonical_wc_team_name(row.get("home") or "")
+        away_name = canonical_wc_team_name(row.get("away") or "")
+        kickoff = (row.get("kickoff_utc") or "").strip()
+        if not home_name or not away_name or not kickoff:
+            continue
+        home_id = await _resolve_team_id(db, home_name, teams_by_id)
+        away_id = await _resolve_team_id(db, away_name, teams_by_id)
+        if not home_id or not away_id:
+            continue
+        ext_key = f"official-wc26-{row.get('match_no') or kickoff}"
+        existing = await db.world_cup_matches.find_one(
+            {
+                "$or": [
+                    {"external_event_id": ext_key},
+                    {"home_team_id": home_id, "away_team_id": away_id, "knockout_round": row.get("knockout_round")},
+                ]
+            },
+            {"_id": 0, "id": 1, "status": 1},
+        )
+        doc = {
+            "external_event_id": ext_key,
+            "external_sport_key": WC_SPORT_KEY,
+            "home_team_id": home_id,
+            "away_team_id": away_id,
+            "kickoff": kickoff,
+            "lock_at": _lock_at_from_kickoff(kickoff),
+            "stage": "knockout",
+            "group_id": None,
+            "knockout_round": row.get("knockout_round"),
+            "status": "scheduled",
+            "updated_at": now,
+        }
+        if existing:
+            if existing.get("status") == "settled":
+                continue
+            await db.world_cup_matches.update_one({"id": existing["id"]}, {"$set": doc})
+            continue
+        doc["id"] = str(uuid.uuid4())
+        doc["created_at"] = now
+        await db.world_cup_matches.insert_one(doc)
+        added += 1
+    return added
 
 
 async def _get_tournament_start_at(db, cfg: dict) -> Optional[datetime]:

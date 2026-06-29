@@ -50,7 +50,7 @@
       "teams": [
         { "name": "Netherlands", "short_code": "NED", "flag_emoji": "🇳🇱", "odds_api_names": ["Netherlands"] },
         { "name": "Japan", "short_code": "JPN", "flag_emoji": "🇯🇵", "odds_api_names": ["Japan"] },
-        { "name": "Ukraine", "short_code": "UKR", "flag_emoji": "🇺🇦", "odds_api_names": ["Ukraine"] },
+        { "name": "Sweden", "short_code": "SWE", "flag_emoji": "🇸🇪", "odds_api_names": ["Sweden"] },
         { "name": "Tunisia", "short_code": "TUN", "flag_emoji": "🇹🇳", "odds_api_names": ["Tunisia"] }
       ]
     },

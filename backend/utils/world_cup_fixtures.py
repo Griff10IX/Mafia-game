@@ -72,13 +72,54 @@ def _pair_key(home: str, away: str) -> Tuple[str, str]:
 
 
 @lru_cache(maxsize=1)
-def _kickoff_index() -> Dict[Tuple[str, str], str]:
+def _official_fixture_rows() -> list:
     try:
         raw = json.loads(_KICKOFFS_PATH.read_text(encoding="utf-8"))
+        return list(raw.get("fixtures") or [])
     except Exception:
-        return {}
+        return []
+
+
+@lru_cache(maxsize=1)
+def _official_fixture_meta_index() -> Dict[Tuple[str, str], dict]:
+    """Canonical (home, away) → official stage / group / knockout_round / kickoff."""
+    out: Dict[Tuple[str, str], dict] = {}
+    for row in _official_fixture_rows():
+        home = canonical_wc_team_name(row.get("home") or "")
+        away = canonical_wc_team_name(row.get("away") or "")
+        kick = (row.get("kickoff_utc") or "").strip()
+        if not home or not away:
+            continue
+        meta = {
+            "kickoff_utc": kick or None,
+            "group_id": (row.get("group_id") or "").strip().upper() or None,
+            "stage": (row.get("stage") or "").strip().lower() or None,
+            "knockout_round": (row.get("knockout_round") or "").strip().lower() or None,
+            "match_no": row.get("match_no"),
+        }
+        if meta["group_id"]:
+            meta["stage"] = "group"
+            meta["knockout_round"] = None
+        elif meta["knockout_round"]:
+            meta["stage"] = "knockout"
+            meta["group_id"] = None
+        out[(home, away)] = meta
+        out[(away, home)] = meta
+    return out
+
+
+def lookup_official_wc_fixture(home: str, away: str) -> Optional[dict]:
+    """Return official FIFA schedule row for this pairing (either home/away order)."""
+    h, a = _pair_key(home, away)
+    if not h or not a:
+        return None
+    return _official_fixture_meta_index().get((h, a))
+
+
+@lru_cache(maxsize=1)
+def _kickoff_index() -> Dict[Tuple[str, str], str]:
     out: Dict[Tuple[str, str], str] = {}
-    for row in raw.get("fixtures") or []:
+    for row in _official_fixture_rows():
         home = canonical_wc_team_name(row.get("home") or "")
         away = canonical_wc_team_name(row.get("away") or "")
         kick = (row.get("kickoff_utc") or "").strip()
@@ -134,7 +175,7 @@ _WC_KNOCKOUT_ROUND_ORDER = (
 
 
 def infer_knockout_round_from_kickoff(kickoff: Optional[str]) -> Optional[str]:
-    """Best-effort WC 2026 knockout round from kickoff date (after group stage)."""
+    """Best-effort WC 2026 knockout round from kickoff date (after group stage ends 27 Jun)."""
     if not kickoff:
         return None
     try:
@@ -146,6 +187,7 @@ def infer_knockout_round_from_kickoff(kickoff: Optional[str]) -> Optional[str]:
         d = dt.date()
     except Exception:
         return None
+    # Group stage runs through 27 June — do not treat 28 Jun group games as knockouts.
     if d < date(2026, 6, 28):
         return None
     if d <= date(2026, 7, 3):
@@ -180,7 +222,32 @@ def knockout_round_sort_key(round_key: Optional[str]) -> int:
 
 def enrich_wc_match_round(match: dict) -> dict:
     """Add round_key / round_label / is_knockout for API + UI."""
+    ht = (match.get("home_team") or {}).get("name") or ""
+    at = (match.get("away_team") or {}).get("name") or ""
+    official = lookup_official_wc_fixture(ht, at) if ht and at else None
+
     stage = (match.get("stage") or "").strip().lower()
+    if official and official.get("group_id"):
+        gid = official["group_id"]
+        return {
+            **match,
+            "is_knockout": False,
+            "round_key": "group",
+            "round_label": f"Group {gid}",
+            "stage": "group",
+            "group_id": gid,
+        }
+    if official and official.get("knockout_round"):
+        round_key = official["knockout_round"]
+        return {
+            **match,
+            "is_knockout": True,
+            "round_key": round_key,
+            "round_label": knockout_round_label(round_key),
+            "stage": "knockout",
+            "group_id": None,
+        }
+
     round_key = (match.get("knockout_round") or "").strip().lower() or None
     if stage == "group":
         return {
@@ -191,14 +258,14 @@ def enrich_wc_match_round(match: dict) -> dict:
         }
     if stage in WC_KNOCKOUT_ROUND_LABELS:
         round_key = stage if stage != "knockout" else round_key
-    if not round_key:
+    if not round_key and stage == "knockout":
         round_key = infer_knockout_round_from_kickoff(match.get("kickoff")) or stage or "knockout"
     if stage in ("final", "third_place"):
         round_key = stage
     label = knockout_round_label(round_key)
     return {
         **match,
-        "is_knockout": True,
+        "is_knockout": stage != "group",
         "round_key": round_key,
         "round_label": label,
     }

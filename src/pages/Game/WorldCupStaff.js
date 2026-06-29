@@ -6,6 +6,23 @@ import api, { getApiErrorMessage } from '../../utils/api';
 import { formatGameDateTime } from '../../utils/gameDateTime';
 import styles from '../../styles/noir.module.css';
 
+const WC_STAFF_STYLES = `
+  .wc-staff-select {
+    background-color: #18181b;
+    color: #e4e4e7;
+    color-scheme: dark;
+  }
+  .wc-staff-select option {
+    background-color: #18181b;
+    color: #e4e4e7;
+  }
+`;
+
+const WC_SELECT = 'wc-staff-select rounded border border-primary/30 bg-zinc-900 text-foreground text-sm font-heading [color-scheme:dark] focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/30';
+const WC_SELECT_LG = `${WC_SELECT} w-full min-h-[48px] px-3`;
+const WC_SELECT_MD = `${WC_SELECT} min-h-[40px] px-3`;
+const WC_SELECT_SM = `${WC_SELECT} flex-1 min-h-[40px] px-2 min-w-[140px]`;
+
 const PRED_FILTERS = [
   { id: 'all', label: 'All' },
   { id: 'group_winner', label: 'Groups' },
@@ -402,6 +419,7 @@ export default function WorldCupStaff() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root pb-[calc(10rem+env(safe-area-inset-bottom))]`}>
+      <style>{WC_STAFF_STYLES}</style>
       <div className="h-1 bg-gradient-to-r from-emerald-800 via-primary to-emerald-800 rounded" />
       <div className="flex flex-wrap items-center gap-3">
         <Link to="/game/entertainer" className="text-mutedForeground hover:text-primary flex items-center gap-1 text-sm">
@@ -461,7 +479,7 @@ export default function WorldCupStaff() {
             <select
               value={selectedMatchId}
               onChange={(e) => applyMatchSelection(e.target.value, staffMatches)}
-              className="w-full min-h-[48px] px-3 rounded border border-primary/30 bg-transparent text-sm"
+              className={WC_SELECT_LG}
             >
               <option value="">— pick a match —</option>
               {staffMatches.map((m) => (
@@ -526,7 +544,7 @@ export default function WorldCupStaff() {
             </button>
             {showAdvancedMatch && (
               <div className="space-y-2 pt-1 border-t border-primary/10">
-                <select value={stage} onChange={(e) => setStage(e.target.value)} className="w-full min-h-[40px] px-3 rounded border border-primary/20 bg-transparent text-sm">
+                <select value={stage} onChange={(e) => setStage(e.target.value)} className={`${WC_SELECT_MD} w-full`}>
                   {STAGE_OPTIONS.map((o) => (
                     <option key={o.id || 'auto'} value={o.id}>{o.label}</option>
                   ))}
@@ -591,7 +609,7 @@ export default function WorldCupStaff() {
                     <select
                       value={groupWinners[g.group_id] || ''}
                       onChange={(e) => setGroupWinners((prev) => ({ ...prev, [g.group_id]: e.target.value }))}
-                      className="flex-1 min-h-[40px] px-2 rounded border border-primary/20 bg-transparent text-sm"
+                      className={WC_SELECT_SM}
                     >
                       <option value="">— winner —</option>
                       {(g.teams || []).map((t) => (
@@ -671,17 +689,17 @@ export default function WorldCupStaff() {
                 />
                 <button type="button" onClick={() => setUsernameFilter(usernameQuery)} className="min-h-[40px] px-3 rounded border border-primary/20 text-xs font-heading uppercase">Search</button>
               </div>
-              <select value={verdictFilter} onChange={(e) => setVerdictFilter(e.target.value)} className="min-h-[40px] px-3 rounded border border-primary/20 bg-transparent text-sm">
+              <select value={verdictFilter} onChange={(e) => setVerdictFilter(e.target.value)} className={WC_SELECT_MD}>
                 {VERDICT_FILTERS.map(({ id, label }) => <option key={id || 'any'} value={id}>{label}</option>)}
               </select>
-              <select value={settledFilter} onChange={(e) => setSettledFilter(e.target.value)} className="min-h-[40px] px-3 rounded border border-primary/20 bg-transparent text-sm">
+              <select value={settledFilter} onChange={(e) => setSettledFilter(e.target.value)} className={WC_SELECT_MD}>
                 <option value="">Any settlement</option>
                 <option value="no">Open only</option>
                 <option value="yes">Settled only</option>
               </select>
             </div>
             {(predFilter === 'all' || predFilter === 'match_score' || predFilter === 'match_scorer') && (predMeta?.matches || []).length > 0 && (
-              <select value={matchFilter} onChange={(e) => setMatchFilter(e.target.value)} className="w-full min-h-[44px] px-3 rounded border border-primary/20 bg-transparent text-sm">
+              <select value={matchFilter} onChange={(e) => setMatchFilter(e.target.value)} className={WC_SELECT_LG}>
                 <option value="">All matches</option>
                 {(predMeta.matches || []).map((m) => (
                   <option key={m.id} value={m.id}>{m.label}{m.result?.display ? ` · ${m.result.display}` : ''}</option>
