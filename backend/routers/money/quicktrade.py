@@ -59,7 +59,7 @@ _LIST_TTL_SEC = 5
 # Founding Member random drops still write `founding_tokens.*` for analytics, but these types also flow from
 # Game Pass / store — they should remain listable on Quick Trade (referral + entertainer locks still apply).
 _FOUNDING_LOCK_EXEMPT_COUNT_FIELDS = frozenset(
-    {"melt_tokens", "travel_tokens", "properties_tokens", "jailbust_tokens"}
+    {"melt_tokens", "travel_tokens", "properties_tokens", "jailbust_tokens", "auto_rank_2h_tokens"}
 )
 
 # Minimum total cash (USD) for a token Quick Trade listing when selling for money: $250,000 per token.

@@ -491,7 +491,8 @@ export default function MyInventory() {
             </div>
             <div className="p-2.5 space-y-2">
               <p className="text-[8px] text-mutedForeground font-heading leading-snug">
-                Trade <span className="text-foreground">1× Auto Rank (2h)</span> for <span className="text-foreground">2 random</span> other boost tokens. No cash or rank points.
+                Trade <span className="text-foreground">1× Auto Rank (2h)</span> for <span className="text-foreground">2 random</span> other boost tokens. No cash or rank points.{' '}
+                <Link to="/money/quick-trade" className="text-primary hover:underline">Sell on Quick Trade →</Link>
               </p>
               <button
                 type="button"

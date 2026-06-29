@@ -113,6 +113,10 @@ export default function WorldCupStaff() {
   const [draftRunning, setDraftRunning] = useState(false);
   const [repairing, setRepairing] = useState(false);
   const [restoringWinners, setRestoringWinners] = useState(false);
+  const [restorePicksUsername, setRestorePicksUsername] = useState('');
+  const [restorePicksText, setRestorePicksText] = useState('');
+  const [restoringPicks, setRestoringPicks] = useState(false);
+  const [autoRestoringPicks, setAutoRestoringPicks] = useState(false);
   const [approvingAll, setApprovingAll] = useState(false);
   const [approvingId, setApprovingId] = useState(null);
   const [selectedMatchId, setSelectedMatchId] = useState('');
@@ -324,6 +328,54 @@ export default function WorldCupStaff() {
       toast.error(getApiErrorMessage(err));
     } finally {
       setRepairing(false);
+    }
+  };
+
+  const restoreUserGroupPicks = async () => {
+    const uname = restorePicksUsername.trim();
+    const text = restorePicksText.trim();
+    if (!uname || !text) {
+      toast.error('Enter username and paste their group picks');
+      return;
+    }
+    if (!window.confirm(`Restore group-winner picks for ${uname} from pasted text?`)) return;
+    setRestoringPicks(true);
+    try {
+      const r = await api.post('/world-cup/staff/restore-user-group-picks', {
+        username: uname,
+        picks_text: text,
+        re_settle: true,
+      });
+      const d = r.data || {};
+      toast.success(`Updated ${d.groups_updated ?? 0} groups for ${d.username || uname}`);
+      await reloadPredictions();
+    } catch (err) {
+      toast.error(getApiErrorMessage(err));
+    } finally {
+      setRestoringPicks(false);
+    }
+  };
+
+  const autoRestoreGroupPicks = async () => {
+    if (!window.confirm(
+      'Auto-restore every player\'s group picks from saved snapshots, stored team names, and chat logs?'
+    )) return;
+    setAutoRestoringPicks(true);
+    try {
+      const r = await api.post('/world-cup/staff/auto-restore-group-picks', { re_settle: true });
+      const d = r.data || {};
+      const src = d.sources || {};
+      const srcBits = Object.entries(src).map(([k, v]) => `${k}: ${v}`).join(', ');
+      toast.success(
+        `Restored ${d.groups_updated ?? 0} picks for ${d.users_updated ?? 0} players`
+          + (srcBits ? ` (${srcBits})` : ''),
+      );
+      await reloadPredictions();
+      await loadGroupsSetup();
+    } catch (err) {
+      toast.error(getApiErrorMessage(err));
+    } finally {
+      setAutoRestoringPicks(false);
     }
   };
 
@@ -708,6 +760,46 @@ export default function WorldCupStaff() {
               className="w-full min-h-[40px] rounded border border-amber-500/30 text-amber-300 text-[10px] font-heading uppercase"
             >
               {repairing ? 'Restoring…' : 'Restore teams, matches & group winners'}
+            </button>
+          </div>
+
+          <div className={`${styles.panel} mobile-panel rounded-lg border border-amber-500/25 p-4 space-y-2`}>
+            <p className="text-[10px] font-heading text-amber-200 uppercase tracking-wider">Fix wrong group picks</p>
+            <p className="text-[9px] text-mutedForeground leading-snug">
+              Auto-restore uses saved pick snapshots, stored team names, and any Group A: style posts in game chat or inbox.
+            </p>
+            <button
+              type="button"
+              disabled={autoRestoringPicks}
+              onClick={autoRestoreGroupPicks}
+              className="w-full min-h-[44px] rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-200 text-[10px] font-heading uppercase"
+            >
+              {autoRestoringPicks ? 'Auto-restoring…' : 'Auto-restore all group picks'}
+            </button>
+            <p className="text-[9px] text-mutedForeground leading-snug pt-1">
+              One player still wrong? Paste their Discord log below (e.g. <span className="text-foreground">Group A: Mexico</span> per line).
+            </p>
+            <input
+              type="text"
+              value={restorePicksUsername}
+              onChange={(e) => setRestorePicksUsername(e.target.value)}
+              placeholder="Username (e.g. Meraxes)"
+              className="w-full min-h-[40px] px-3 rounded border border-primary/20 bg-transparent text-sm"
+            />
+            <textarea
+              value={restorePicksText}
+              onChange={(e) => setRestorePicksText(e.target.value)}
+              placeholder={'Group A: Mexico\nGroup B: Switzerland\n...'}
+              rows={6}
+              className="w-full px-3 py-2 rounded border border-primary/20 bg-transparent text-xs font-mono"
+            />
+            <button
+              type="button"
+              disabled={restoringPicks}
+              onClick={restoreUserGroupPicks}
+              className="w-full min-h-[40px] rounded border border-amber-500/40 text-amber-200 text-[10px] font-heading uppercase"
+            >
+              {restoringPicks ? 'Restoring…' : 'Restore picks from paste'}
             </button>
           </div>
 

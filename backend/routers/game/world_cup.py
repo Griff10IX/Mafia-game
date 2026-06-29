@@ -79,6 +79,7 @@ PRED_MATCH_SCORE = "match_score"
 PRED_MATCH_SCORER = "match_scorer"
 PRED_SECOND_PLACE = "second_place"
 PRED_THIRD_PLACE = "third_place"
+WC_PICK_SNAPSHOT_COL = "world_cup_group_pick_snapshots"
 
 DEFAULT_POINTS = {
     "group_winner_points": 2500,
@@ -461,7 +462,7 @@ async def _infer_remaining_legacy_in_groups(db, existing: Dict[str, str]) -> Dic
             import itertools
 
             best: Dict[str, str] = {}
-            best_score = -1
+            best_score = 0
             for perm in itertools.permutations(chunk_stable):
                 candidate = {chunk_legacy[i]: perm[i] for i in range(len(chunk_legacy))}
                 total = sum(
@@ -473,10 +474,8 @@ async def _infer_remaining_legacy_in_groups(db, existing: Dict[str, str]) -> Dic
                 if total > best_score:
                     best_score = total
                     best = candidate
-            if best:
+            if best_score > 0:
                 mapping = best
-            elif len(chunk_legacy) == 1:
-                mapping = {chunk_legacy[0]: chunk_stable[0]}
 
         out.update(mapping)
 
@@ -742,6 +741,152 @@ def _is_legacy_team_id(tid: Any) -> bool:
     return not str(tid).startswith("wc26-")
 
 
+async def _wc_upsert_group_pick_snapshot(
+    db,
+    user_id: str,
+    group_id: str,
+    value: dict,
+    *,
+    source: str = "save",
+) -> bool:
+    """Keep the first recorded group-winner pick per user/group (survives bad remaps)."""
+    gid = (group_id or "").strip().upper()
+    uid = (user_id or "").strip()
+    if not uid or gid not in GROUP_IDS:
+        return False
+    val = value if isinstance(value, dict) else {}
+    tid = val.get("team_id")
+    if not tid:
+        return False
+    existing = await db[WC_PICK_SNAPSHOT_COL].find_one(
+        {"user_id": uid, "group_id": gid},
+        {"_id": 0, "id": 1},
+    )
+    if existing:
+        return False
+    await db[WC_PICK_SNAPSHOT_COL].insert_one({
+        "id": str(uuid.uuid4()),
+        "user_id": uid,
+        "group_id": gid,
+        "team_id": tid,
+        "team_name": (val.get("team_name") or "").strip() or None,
+        "short_code": (val.get("short_code") or "").strip().upper() or None,
+        "original_team_id": val.get("original_team_id") or tid,
+        "source": source,
+        "captured_at": _now_iso(),
+    })
+    return True
+
+
+async def _wc_snapshot_all_group_picks(db, *, source: str = "pre_repair") -> int:
+    teams_by_id = await _teams_by_id(db)
+    count = 0
+    async for p in db.world_cup_predictions.find(
+        {"type": PRED_GROUP_WINNER, "value.team_id": {"$exists": True}},
+        {"_id": 0, "user_id": 1, "target_id": 1, "value": 1},
+    ):
+        val = p.get("value") or {}
+        if not isinstance(val, dict):
+            continue
+        tid = val.get("team_id")
+        name = (val.get("team_name") or "").strip()
+        orig = val.get("original_team_id")
+        # Skip likely-wrong stable ids with no name anchor (would freeze bad repair output).
+        if not _is_legacy_team_id(tid) and not _is_legacy_team_id(orig) and not name:
+            continue
+        if name and tid and not _is_legacy_team_id(tid):
+            team = teams_by_id.get(str(tid)) or {}
+            if team and _norm_name(team.get("name")) == _norm_name(name):
+                pass
+            elif team and _norm_name(team.get("name")) != _norm_name(name):
+                pass  # mismatched name — snapshot the stored name as ground truth
+        if await _wc_upsert_group_pick_snapshot(
+            db, p.get("user_id") or "", p.get("target_id") or "", val, source=source,
+        ):
+            count += 1
+    return count
+
+
+async def _build_high_confidence_old_team_map(db) -> Dict[str, str]:
+    """Legacy→stable map from draft snapshot and verified notification replay only."""
+    name_index = await _build_team_name_index(db)
+    old_to_new: Dict[str, str] = {}
+
+    for old_id, name in (await _collect_old_team_id_to_name(db)).items():
+        new_id = name_index.get(_norm_name(name))
+        if new_id:
+            old_to_new[str(old_id)] = new_id
+
+    for old_id, new_id in (await _legacy_to_stable_from_draft_snapshot(db)).items():
+        old_to_new[str(old_id)] = str(new_id)
+
+    for old_id, new_id in (await _infer_legacy_to_stable_from_notification_order(db)).items():
+        old_to_new.setdefault(str(old_id), str(new_id))
+
+    cfg = await _load_config(db)
+    for old_id, new_id in (cfg.get("legacy_team_id_map") or {}).items():
+        if old_id and new_id:
+            old_to_new[str(old_id)] = str(new_id)
+
+    return old_to_new
+
+
+async def _collect_group_picks_from_backup_collection(db) -> Dict[str, Dict[str, str]]:
+    """user_id → {group_id: team_name} from world_cup_predictions_backup if present."""
+    names = await db.list_collection_names()
+    if "world_cup_predictions_backup" not in names:
+        return {}
+    teams_by_id = await _teams_by_id(db)
+    high_map = await _build_high_confidence_old_team_map(db)
+    by_user: Dict[str, Dict[str, str]] = {}
+
+    async for p in db.world_cup_predictions_backup.find(
+        {"type": PRED_GROUP_WINNER, "value.team_id": {"$exists": True}},
+        {"_id": 0, "user_id": 1, "target_id": 1, "value": 1},
+    ):
+        uid = p.get("user_id") or ""
+        gid = (p.get("target_id") or "").upper()
+        val = p.get("value") or {}
+        if not uid or gid not in GROUP_IDS or not isinstance(val, dict):
+            continue
+        name = (val.get("team_name") or "").strip()
+        tid = val.get("team_id")
+        if not name and tid:
+            resolved = high_map.get(str(tid), tid)
+            team = teams_by_id.get(str(resolved)) or {}
+            name = (team.get("name") or "").strip()
+        if name:
+            by_user.setdefault(uid, {})[gid] = name
+    return by_user
+
+
+async def _collect_group_picks_from_messages(db) -> Dict[str, Dict[str, str]]:
+    """user_id → {group_id: team_name} from game chat and inbox messages."""
+    by_user: Dict[str, Dict[str, str]] = {}
+
+    def absorb(user_id: str, text: str) -> None:
+        if not user_id or not text:
+            return
+        parsed = _parse_group_picks_text(text)
+        if not parsed:
+            return
+        by_user.setdefault(user_id, {}).update(parsed)
+
+    async for msg in db.game_chat_messages.find(
+        {"message": {"$regex": r"Group\s+[A-L]\s*:", "$options": "i"}},
+        {"_id": 0, "user_id": 1, "message": 1},
+    ).sort("created_at", 1):
+        absorb(msg.get("user_id") or "", msg.get("message") or "")
+
+    async for n in db.notifications.find(
+        {"message": {"$regex": r"Group\s+[A-L]\s*:", "$options": "i"}},
+        {"_id": 0, "user_id": 1, "message": 1},
+    ).sort("created_at", 1):
+        absorb(n.get("user_id") or "", n.get("message") or "")
+
+    return by_user
+
+
 async def _build_comprehensive_old_team_map(db) -> Dict[str, str]:
     """Map legacy team UUIDs to stable wc26-{code} ids."""
     teams_by_id = await _teams_by_id(db)
@@ -838,7 +983,7 @@ async def _apply_orphan_team_id_map(db, old_to_new: Dict[str, str]) -> dict:
 
     async for p in db.world_cup_predictions.find(
         {"value.team_id": {"$exists": True}},
-        {"_id": 0, "id": 1, "value": 1},
+        {"_id": 0, "id": 1, "value": 1, "user_id": 1, "type": 1, "target_id": 1},
     ):
         val = p.get("value") or {}
         if not isinstance(val, dict):
@@ -849,12 +994,22 @@ async def _apply_orphan_team_id_map(db, old_to_new: Dict[str, str]) -> dict:
             continue
         if new_tid == old_tid:
             continue
+        if p.get("type") == PRED_GROUP_WINNER and _is_legacy_team_id(old_tid):
+            await _wc_upsert_group_pick_snapshot(
+                db,
+                p.get("user_id") or "",
+                p.get("target_id") or "",
+                val,
+                source="pre_remap",
+            )
         patch = dict(val)
         patch["team_id"] = new_tid
+        if not patch.get("original_team_id"):
+            patch["original_team_id"] = old_tid
         team = teams_by_id.get(new_tid) or {}
-        if team.get("name"):
+        if team.get("name") and not (patch.get("team_name") or "").strip():
             patch["team_name"] = team["name"]
-        if team.get("short_code"):
+        if team.get("short_code") and not (patch.get("short_code") or "").strip():
             patch["short_code"] = team["short_code"]
         await db.world_cup_predictions.update_one({"id": p["id"]}, {"$set": {"value": patch}})
         preds_updated += 1
@@ -907,7 +1062,7 @@ async def _ensure_orphan_team_ids_healed(db) -> Optional[dict]:
     last_applied: dict = {}
     old_to_new: Dict[str, str] = {}
     for _ in range(3):
-        old_to_new = await _build_comprehensive_old_team_map(db)
+        old_to_new = await _build_high_confidence_old_team_map(db)
         last_applied = await _apply_orphan_team_id_map(db, old_to_new)
         total_remapped += int(last_applied.get("predictions_remapped") or 0)
         if not last_applied.get("predictions_remapped"):
@@ -1319,13 +1474,16 @@ async def _repair_wc_team_references(db) -> dict:
     stable_id_set = set(stable_ids)
     await _ensure_stable_teams_from_seed(db)
 
+    # Preserve original picks before any remap (first run only fills missing snapshots)
+    snapshots_captured = await _wc_snapshot_all_group_picks(db, source="pre_repair")
+
     # Heal legacy UUIDs in predictions/entries before anything else
     match_repair = await _repair_match_team_ids(db)
     total_remapped = 0
     old_to_new: Dict[str, str] = {}
     applied: dict = {}
     for _ in range(3):
-        old_to_new = await _build_comprehensive_old_team_map(db)
+        old_to_new = await _build_high_confidence_old_team_map(db)
         applied = await _apply_orphan_team_id_map(db, old_to_new)
         total_remapped += int(applied.get("predictions_remapped") or 0)
         if not applied.get("predictions_remapped"):
@@ -1362,6 +1520,7 @@ async def _repair_wc_team_references(db) -> dict:
         "predictions_still_unmapped": unmapped_preds,
         "entries_remapped": applied.get("entries_remapped", 0),
         "predictions_named": predictions_named,
+        "snapshots_captured": snapshots_captured,
         "mapping_size": applied.get("mapping_size", 0),
         "draft_snapshot_mappings": len(snapshot_map),
         "draft_overlap_mappings": len(overlap_map),
@@ -2282,6 +2441,18 @@ async def _resolve_winner_team_in_group(
     name = (team_name or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Provide team_id or team_name")
+    teams_by_id = await _teams_by_id(db)
+    nm = _norm_name(name)
+    for t in teams_by_id.values():
+        if (t.get("group_id") or "").upper() != gid:
+            continue
+        if _norm_name(t.get("name")) == nm:
+            return t
+        for alias in t.get("odds_api_names") or []:
+            if _norm_name(alias) == nm:
+                return t
+        if sb._team_matches_option(t.get("name") or "", name):
+            return t
     pattern = re.compile("^" + re.escape(name) + "$", re.IGNORECASE)
     team = await db.world_cup_teams.find_one({"group_id": gid, "name": pattern}, {"_id": 0})
     if not team:
@@ -2289,6 +2460,340 @@ async def _resolve_winner_team_in_group(
     if not team:
         raise HTTPException(status_code=404, detail=f"No team '{name}' in group {gid}")
     return team
+
+
+_GROUP_PICK_LINE_RE = re.compile(r"^\s*Group\s+([A-L])\s*:\s*(.+?)\s*$", re.IGNORECASE)
+
+
+def _parse_group_picks_text(text: str) -> Dict[str, str]:
+    """Parse Discord-style lines: Group A: Mexico"""
+    out: Dict[str, str] = {}
+    for line in (text or "").splitlines():
+        m = _GROUP_PICK_LINE_RE.match(line.strip())
+        if not m:
+            continue
+        gid = m.group(1).upper()
+        if gid in GROUP_IDS:
+            out[gid] = m.group(2).strip()
+    return out
+
+
+async def _reverse_prediction_payout_if_needed(db, pred: dict) -> bool:
+    """Claw back points if a settled prediction was already paid (staff correction)."""
+    if pred.get("payout_status") != "paid":
+        return False
+    pts = int(pred.get("points_awarded") or 0)
+    uid = pred.get("user_id") or ""
+    if pts <= 0 or not uid:
+        return False
+    await db.users.update_one({"id": uid}, {"$inc": {"points": -pts}})
+    await log_points_event(
+        db,
+        user_id=uid,
+        points=-pts,
+        event_type="world_cup_pick_correction",
+        meta={"prediction_id": pred.get("id"), "reason": "staff_group_pick_restore"},
+    )
+    return True
+
+
+async def _staff_restore_user_group_picks(
+    db,
+    send_notification,
+    *,
+    username: str,
+    picks: Optional[Dict[str, str]] = None,
+    picks_text: Optional[str] = None,
+    re_settle: bool = True,
+) -> dict:
+    """Restore a player's group-winner picks from staff-provided team names (e.g. Discord log)."""
+    uname = (username or "").strip()
+    if not uname:
+        raise HTTPException(status_code=400, detail="username required")
+    merged = dict(picks or {})
+    merged.update(_parse_group_picks_text(picks_text or ""))
+    if not merged:
+        raise HTTPException(status_code=400, detail="No group picks provided (use picks map or picks_text)")
+
+    user = await db.users.find_one(
+        {"username": {"$regex": f"^{re.escape(uname)}$", "$options": "i"}},
+        {"_id": 0, "id": 1, "username": 1},
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    uid = user["id"]
+    cfg = await _load_config(db)
+    updated: List[dict] = []
+    groups_to_reset: set = set()
+
+    for gid in GROUP_IDS:
+        team_name = (merged.get(gid) or "").strip()
+        if not team_name:
+            continue
+        team = await _resolve_winner_team_in_group(db, gid, team_name=team_name)
+        pred = await db.world_cup_predictions.find_one(
+            {"user_id": uid, "type": PRED_GROUP_WINNER, "target_id": gid},
+            {"_id": 0},
+        )
+        if not pred:
+            continue
+        val = pred.get("value") or {}
+        old_tid = val.get("team_id") if isinstance(val, dict) else val
+        new_tid = team.get("id")
+        if str(old_tid) == str(new_tid):
+            continue
+        if pred.get("settled"):
+            await _reverse_prediction_payout_if_needed(db, pred)
+            groups_to_reset.add(gid)
+            await db.world_cup_predictions.update_one(
+                {"id": pred["id"]},
+                {
+                    "$set": {
+                        "settled": False,
+                        "points_awarded": 0,
+                        "payout_status": "none",
+                        "value": {
+                            "team_id": new_tid,
+                            "team_name": team.get("name"),
+                            "short_code": team.get("short_code"),
+                        },
+                        "updated_at": _now_iso(),
+                    },
+                    "$unset": {
+                        "settled_at": "",
+                        "settle_label": "",
+                        "payout_approved_at": "",
+                        "payout_approved_by": "",
+                    },
+                },
+            )
+        else:
+            await db.world_cup_predictions.update_one(
+                {"id": pred["id"]},
+                {
+                    "$set": {
+                        "value": {
+                            "team_id": new_tid,
+                            "team_name": team.get("name"),
+                            "short_code": team.get("short_code"),
+                        },
+                        "updated_at": _now_iso(),
+                    }
+                },
+            )
+        updated.append({
+            "group_id": gid,
+            "team_name": team.get("name"),
+            "team_id": new_tid,
+            "was_settled": bool(pred.get("settled")),
+        })
+
+    re_settled = 0
+    if re_settle and groups_to_reset:
+        for gid in sorted(groups_to_reset):
+            grp = await db.world_cup_groups.find_one({"group_id": gid}, {"_id": 0, "winner_team_id": 1})
+            wid = grp.get("winner_team_id") if grp else None
+            if wid:
+                re_settled += await _settle_group_predictions(db, send_notification, cfg, gid, wid)
+
+    return {
+        "ok": True,
+        "username": user.get("username") or uname,
+        "user_id": uid,
+        "groups_updated": len(updated),
+        "groups_re_settled": re_settled,
+        "details": updated,
+    }
+
+
+async def _resolve_group_pick_team_for_restore(
+    db,
+    *,
+    group_id: str,
+    current_value: dict,
+    snapshot: Optional[dict],
+    chat_picks: Dict[str, str],
+    high_conf_map: Dict[str, str],
+    teams_by_id: dict,
+) -> tuple[Optional[dict], Optional[str]]:
+    """Return (team_doc, source_label) for restoring a group-winner pick."""
+    gid = (group_id or "").strip().upper()
+    val = current_value if isinstance(current_value, dict) else {}
+    snap = snapshot or {}
+
+    stored_name = (snap.get("team_name") or val.get("team_name") or chat_picks.get(gid) or "").strip()
+    if stored_name:
+        current_tid = val.get("team_id")
+        current_team = teams_by_id.get(str(current_tid)) or {}
+        if _norm_name(current_team.get("name")) != _norm_name(stored_name):
+            try:
+                team = await _resolve_winner_team_in_group(db, gid, team_name=stored_name)
+                source = "snapshot" if snap.get("team_name") else (
+                    "team_name" if val.get("team_name") else "chat"
+                )
+                return team, source
+            except HTTPException:
+                pass
+
+    for legacy_field in ("original_team_id", "team_id"):
+        legacy_tid = snap.get(legacy_field) or val.get("original_team_id") or (
+            val.get(legacy_field) if legacy_field == "team_id" else None
+        )
+        if not legacy_tid or not _is_legacy_team_id(legacy_tid):
+            continue
+        stable_tid = high_conf_map.get(str(legacy_tid))
+        if stable_tid and teams_by_id.get(stable_tid):
+            return teams_by_id[stable_tid], "legacy_map"
+
+    snap_tid = snap.get("team_id")
+    if snap_tid and not _is_legacy_team_id(snap_tid) and teams_by_id.get(str(snap_tid)):
+        current_tid = str(val.get("team_id") or "")
+        if current_tid != str(snap_tid):
+            return teams_by_id[str(snap_tid)], "snapshot_id"
+
+    return None, None
+
+
+async def _auto_restore_all_group_picks(
+    db,
+    send_notification,
+    *,
+    re_settle: bool = True,
+    dry_run: bool = False,
+) -> dict:
+    """
+    Restore every player's group-winner picks from saved snapshots, stored team names,
+    chat/inbox posts, or high-confidence legacy team-id maps.
+    """
+    teams_by_id = await _teams_by_id(db)
+    high_conf_map = await _build_high_confidence_old_team_map(db)
+    backup_picks = await _collect_group_picks_from_backup_collection(db)
+    chat_by_user = await _collect_group_picks_from_messages(db)
+    for uid, picks in backup_picks.items():
+        merged = chat_by_user.setdefault(uid, {})
+        for gid, name in picks.items():
+            merged.setdefault(gid, name)
+
+    snaps_by_key: Dict[tuple, dict] = {}
+    async for s in db[WC_PICK_SNAPSHOT_COL].find({}, {"_id": 0}):
+        uid = s.get("user_id")
+        gid = (s.get("group_id") or "").upper()
+        if uid and gid:
+            snaps_by_key[(uid, gid)] = s
+
+    usernames: Dict[str, str] = {}
+    users_touched: set = set()
+    groups_updated = 0
+    groups_re_settled = 0
+    groups_to_reset: set = set()
+    sources: Dict[str, int] = {}
+    details: List[dict] = []
+
+    async for p in db.world_cup_predictions.find(
+        {"type": PRED_GROUP_WINNER, "value.team_id": {"$exists": True}},
+        {"_id": 0},
+    ):
+        uid = p.get("user_id") or ""
+        gid = (p.get("target_id") or "").upper()
+        if not uid or gid not in GROUP_IDS:
+            continue
+        val = p.get("value") or {}
+        if not isinstance(val, dict):
+            continue
+        snap = snaps_by_key.get((uid, gid)) or {}
+
+        team, source = await _resolve_group_pick_team_for_restore(
+            db,
+            group_id=gid,
+            current_value=val,
+            snapshot=snap,
+            chat_picks=chat_by_user.get(uid) or {},
+            high_conf_map=high_conf_map,
+            teams_by_id=teams_by_id,
+        )
+        if not team:
+            continue
+
+        new_tid = team.get("id")
+        if str(val.get("team_id")) == str(new_tid):
+            continue
+
+        if uid not in usernames:
+            u = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1})
+            usernames[uid] = (u or {}).get("username") or "?"
+
+        row = {
+            "user_id": uid,
+            "username": usernames[uid],
+            "group_id": gid,
+            "team_name": team.get("name"),
+            "team_id": new_tid,
+            "source": source,
+            "was_settled": bool(p.get("settled")),
+        }
+        details.append(row)
+        sources[source] = sources.get(source, 0) + 1
+        users_touched.add(uid)
+        groups_updated += 1
+
+        if dry_run:
+            continue
+
+        new_value = {
+            "team_id": new_tid,
+            "team_name": team.get("name"),
+            "short_code": team.get("short_code"),
+            "original_team_id": val.get("original_team_id") or snap.get("original_team_id") or val.get("team_id"),
+        }
+        if p.get("settled"):
+            await _reverse_prediction_payout_if_needed(db, p)
+            groups_to_reset.add(gid)
+            await db.world_cup_predictions.update_one(
+                {"id": p["id"]},
+                {
+                    "$set": {
+                        "settled": False,
+                        "points_awarded": 0,
+                        "payout_status": "none",
+                        "value": new_value,
+                        "updated_at": _now_iso(),
+                    },
+                    "$unset": {
+                        "settled_at": "",
+                        "settle_label": "",
+                        "payout_approved_at": "",
+                        "payout_approved_by": "",
+                    },
+                },
+            )
+        else:
+            await db.world_cup_predictions.update_one(
+                {"id": p["id"]},
+                {"$set": {"value": new_value, "updated_at": _now_iso()}},
+            )
+
+    if not dry_run and re_settle and groups_to_reset:
+        cfg = await _load_config(db)
+        for gid in sorted(groups_to_reset):
+            grp = await db.world_cup_groups.find_one({"group_id": gid}, {"_id": 0, "winner_team_id": 1})
+            wid = grp.get("winner_team_id") if grp else None
+            if wid:
+                groups_re_settled += await _settle_group_predictions(
+                    db, send_notification, cfg, gid, wid,
+                )
+
+    return {
+        "ok": True,
+        "dry_run": dry_run,
+        "users_updated": len(users_touched),
+        "groups_updated": groups_updated,
+        "groups_re_settled": groups_re_settled,
+        "snapshots_loaded": len(snaps_by_key),
+        "chat_users": len(chat_by_user),
+        "backup_users": len(backup_picks),
+        "sources": sources,
+        "details": details[:200],
+    }
 
 
 async def _reset_group_winner_settlement(db, group_id: str) -> int:
@@ -3490,6 +3995,18 @@ class SettleGroupsPayBody(BaseModel):
     auto_approve: bool = True
 
 
+class GroupPicksRestoreBody(BaseModel):
+    username: str
+    picks: Optional[Dict[str, str]] = None
+    picks_text: Optional[str] = None
+    re_settle: bool = True
+
+
+class AutoRestoreGroupPicksBody(BaseModel):
+    re_settle: bool = True
+    dry_run: bool = False
+
+
 def register(router):
     import server as srv
 
@@ -3734,6 +4251,10 @@ def register(router):
         target = (body.target_id or "").strip()
         if ptype not in (PRED_GROUP_WINNER, PRED_MATCH_SCORE, PRED_MATCH_SCORER, PRED_SECOND_PLACE, PRED_THIRD_PLACE):
             raise HTTPException(status_code=400, detail="Invalid prediction type")
+        lookup_target = "tournament" if ptype in (PRED_SECOND_PLACE, PRED_THIRD_PLACE) else target
+        existing = await db.world_cup_predictions.find_one(
+            {"user_id": uid, "type": ptype, "target_id": lookup_target},
+        )
         if ptype == PRED_GROUP_WINNER:
             if target not in GROUP_IDS:
                 raise HTTPException(status_code=400, detail="Invalid group")
@@ -3748,12 +4269,17 @@ def register(router):
             t = await db.world_cup_teams.find_one({"id": team_id, "group_id": target})
             if not t:
                 raise HTTPException(status_code=400, detail="Team not in group")
+            prior_val = {}
+            if existing and isinstance(existing.get("value"), dict):
+                prior_val = existing["value"]
             body.value = {
                 **(body.value if isinstance(body.value, dict) else {}),
                 "team_id": team_id,
                 "team_name": t.get("name"),
                 "short_code": t.get("short_code"),
+                "original_team_id": prior_val.get("original_team_id") or team_id,
             }
+            await _wc_upsert_group_pick_snapshot(db, uid, target, body.value, source="save")
         elif ptype in (PRED_SECOND_PLACE, PRED_THIRD_PLACE):
             if await _is_tournament_started(db, cfg):
                 raise HTTPException(status_code=400, detail="Tournament has started — picks are locked")
@@ -3793,7 +4319,6 @@ def register(router):
                 raise HTTPException(status_code=400, detail="Scorer name required")
             body.value = {"name": name[:80]}
         now = _now_iso()
-        existing = await db.world_cup_predictions.find_one({"user_id": uid, "type": ptype, "target_id": target})
         if existing:
             if existing.get("settled"):
                 raise HTTPException(status_code=400, detail="Prediction already settled")
@@ -4053,6 +4578,40 @@ def register(router):
         stable_id_set = set(_seed_file_team_ids_in_order())
         restored = await _restore_group_winners(db, old_to_new, stable_id_set)
         return {"healed": healed, **restored}
+
+    @router.post("/world-cup/staff/restore-user-group-picks")
+    async def wc_staff_restore_user_group_picks(
+        body: GroupPicksRestoreBody,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Fix corrupted group-winner picks from Discord-style text or a picks map."""
+        _require_staff(current_user)
+        cfg = await _load_config(db)
+        await _require_enabled_staff(cfg)
+        return await _staff_restore_user_group_picks(
+            db,
+            send_notification,
+            username=body.username,
+            picks=body.picks,
+            picks_text=body.picks_text,
+            re_settle=bool(body.re_settle),
+        )
+
+    @router.post("/world-cup/staff/auto-restore-group-picks")
+    async def wc_staff_auto_restore_group_picks(
+        body: AutoRestoreGroupPicksBody,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Restore all players' group-winner picks from snapshots, stored names, and chat logs."""
+        _require_staff(current_user)
+        cfg = await _load_config(db)
+        await _require_enabled_staff(cfg)
+        return await _auto_restore_all_group_picks(
+            db,
+            send_notification,
+            re_settle=bool(body.re_settle),
+            dry_run=bool(body.dry_run),
+        )
 
     @router.post("/world-cup/staff/repair-references")
     async def wc_staff_repair_references(current_user: dict = Depends(get_current_user)):

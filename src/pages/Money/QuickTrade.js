@@ -41,8 +41,11 @@ export default function QuickTrade() {
   const [tokenBalances, setTokenBalances] = useState(() => qtBoot?.tokenBalances ?? {});
   const [lootPieceBalance, setLootPieceBalance] = useState(() => qtBoot?.lootPieceBalance ?? { total: 0, sellable: 0 });
 
-  const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus'];
-  const formatTokenName = (t) => t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'auto_rank_2h', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus'];
+  const TOKEN_TYPE_LABELS = {
+    auto_rank_2h: 'Auto Rank (2h)',
+  };
+  const formatTokenName = (t) => TOKEN_TYPE_LABELS[t] || t.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
   
   // Create offer form
   const [sellPoints, setSellPoints] = useState('');
