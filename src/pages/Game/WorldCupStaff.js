@@ -111,6 +111,7 @@ export default function WorldCupStaff() {
   const [expandedPredId, setExpandedPredId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [draftRunning, setDraftRunning] = useState(false);
+  const [repairing, setRepairing] = useState(false);
   const [approvingAll, setApprovingAll] = useState(false);
   const [approvingId, setApprovingId] = useState(null);
   const [selectedMatchId, setSelectedMatchId] = useState('');
@@ -302,6 +303,25 @@ export default function WorldCupStaff() {
       toast.error(getApiErrorMessage(err));
     } finally {
       setDraftRunning(false);
+    }
+  };
+
+  const repairReferences = async () => {
+    if (!window.confirm('Restore drafted teams and group winners after an accidental re-seed?')) return;
+    setRepairing(true);
+    try {
+      const r = await api.post('/world-cup/staff/repair-references');
+      const d = r.data || {};
+      toast.success(
+        `Restored ${d.draft_entries_restored ?? 0} drafts, ${d.group_winners_restored ?? 0} group winners`,
+      );
+      await load();
+      await loadGroupsSetup();
+      await reloadPredictions();
+    } catch (err) {
+      toast.error(getApiErrorMessage(err));
+    } finally {
+      setRepairing(false);
     }
   };
 
@@ -655,6 +675,14 @@ export default function WorldCupStaff() {
             )}
             <button type="button" onClick={settleGroups} className="w-full min-h-[40px] rounded border border-primary/20 text-[10px] font-heading uppercase text-mutedForeground">
               Force settle groups (queue only)
+            </button>
+            <button
+              type="button"
+              disabled={repairing}
+              onClick={repairReferences}
+              className="w-full min-h-[40px] rounded border border-amber-500/30 text-amber-300 text-[10px] font-heading uppercase"
+            >
+              {repairing ? 'Restoring…' : 'Restore teams & group winners'}
             </button>
           </div>
 

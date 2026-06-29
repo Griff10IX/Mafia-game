@@ -12505,6 +12505,12 @@ export default function Admin() {
               <BtnSecondary onClick={() => api.post('/admin/world-cup/seed-2026').then((r) => toast.success(`Seeded ${r.data?.teams} teams`)).catch((e) => toast.error(e.response?.data?.detail || 'Seed failed'))} disabled={wcLoading}>
                 Seed 2026 teams
               </BtnSecondary>
+              <BtnSecondary onClick={() => api.post('/admin/world-cup/repair-references').then((r) => {
+                const d = r.data || {};
+                toast.success(`Restored ${d.draft_entries_restored ?? 0} drafts, ${d.group_winners_restored ?? 0} group winners`);
+              }).catch((e) => toast.error(e.response?.data?.detail || 'Repair failed'))} disabled={wcLoading}>
+                Repair WC data
+              </BtnSecondary>
               <BtnSecondary onClick={() => resolveWorldCupPlayoffs({ dryRun: true })} disabled={wcLoading}>
                 Preview playoffs
               </BtnSecondary>
