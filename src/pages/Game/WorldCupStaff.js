@@ -112,6 +112,7 @@ export default function WorldCupStaff() {
   const [loading, setLoading] = useState(true);
   const [draftRunning, setDraftRunning] = useState(false);
   const [repairing, setRepairing] = useState(false);
+  const [restoringWinners, setRestoringWinners] = useState(false);
   const [approvingAll, setApprovingAll] = useState(false);
   const [approvingId, setApprovingId] = useState(null);
   const [selectedMatchId, setSelectedMatchId] = useState('');
@@ -307,13 +308,13 @@ export default function WorldCupStaff() {
   };
 
   const repairReferences = async () => {
-    if (!window.confirm('Restore drafted teams and group winners after an accidental re-seed?')) return;
+    if (!window.confirm('Restore drafted teams, match names, and group winners after an accidental re-seed?')) return;
     setRepairing(true);
     try {
       const r = await api.post('/world-cup/staff/repair-references');
       const d = r.data || {};
       toast.success(
-        `Restored ${d.draft_entries_restored ?? 0} drafts, ${d.group_winners_restored ?? 0} group winners`,
+        `Restored ${d.draft_entries_restored ?? 0} drafts, ${d.group_winners_restored ?? 0} group winners, ${d.matches_remapped ?? 0} matches`,
       );
       await load();
       await loadGroupsSetup();
@@ -322,6 +323,21 @@ export default function WorldCupStaff() {
       toast.error(getApiErrorMessage(err));
     } finally {
       setRepairing(false);
+    }
+  };
+
+  const restoreGroupWinners = async () => {
+    setRestoringWinners(true);
+    try {
+      const r = await api.post('/world-cup/staff/restore-group-winners');
+      const d = r.data || {};
+      toast.success(`Restored ${d.group_winners_restored ?? 0} group winners`);
+      await loadGroupsSetup();
+      await reloadPredictions();
+    } catch (err) {
+      toast.error(getApiErrorMessage(err));
+    } finally {
+      setRestoringWinners(false);
     }
   };
 
@@ -659,6 +675,14 @@ export default function WorldCupStaff() {
             >
               Auto from standings + pay all
             </button>
+            <button
+              type="button"
+              disabled={restoringWinners || repairing}
+              onClick={restoreGroupWinners}
+              className="w-full min-h-[40px] rounded border border-amber-500/30 text-amber-300 text-[10px] font-heading uppercase"
+            >
+              {restoringWinners ? 'Restoring…' : 'Restore saved group winners'}
+            </button>
           </div>
         </>
       ) : (
@@ -682,7 +706,7 @@ export default function WorldCupStaff() {
               onClick={repairReferences}
               className="w-full min-h-[40px] rounded border border-amber-500/30 text-amber-300 text-[10px] font-heading uppercase"
             >
-              {repairing ? 'Restoring…' : 'Restore teams & group winners'}
+              {repairing ? 'Restoring…' : 'Restore teams, matches & group winners'}
             </button>
           </div>
 

@@ -326,6 +326,13 @@ async def _ensure_stable_teams_from_seed(db) -> dict:
             patch["winner_team_id"] = existing["winner_team_id"]
             if existing.get("settled_at"):
                 patch["settled_at"] = existing["settled_at"]
+        else:
+            cfg = await _load_config(db)
+            code = (cfg.get("official_group_winners") or {}).get(gid)
+            if code:
+                tid = await _winner_id_from_short_code(str(code), await _teams_by_id(db))
+                if tid:
+                    patch["winner_team_id"] = tid
         await db.world_cup_groups.update_one({"group_id": gid}, {"$set": patch}, upsert=True)
         groups_upserted += 1
     stable_ids = set(_seed_file_team_ids_in_order(data))
@@ -341,6 +348,297 @@ async def _remap_team_id_field(old_id: Any, old_to_new: Dict[str, str], stable_i
     if s in stable_ids:
         return s
     return old_to_new.get(s, s)
+
+
+async def _team_id_to_short_code(db, team_id: str, teams_by_id: Optional[dict] = None) -> Optional[str]:
+    teams = teams_by_id if teams_by_id is not None else await _teams_by_id(db)
+    team = teams.get(team_id) or await db.world_cup_teams.find_one({"id": team_id}, {"_id": 0, "short_code": 1})
+    sc = (team or {}).get("short_code") or ""
+    sc = sc.strip().upper()
+    return sc or None
+
+
+async def _persist_official_group_winner(db, group_id: str, winner_team_id: str) -> None:
+    """Survives team re-seeds — stored on game_config by short code."""
+    gid = (group_id or "").strip().upper()
+    if gid not in GROUP_IDS or not winner_team_id:
+        return
+    sc = await _team_id_to_short_code(db, winner_team_id)
+    if not sc:
+        return
+    await db.game_config.update_one(
+        {"id": CONFIG_ID},
+        {"$set": {f"official_group_winners.{gid}": sc}},
+        upsert=True,
+    )
+
+
+async def _winner_id_from_short_code(short_code: str, teams_by_id: dict) -> Optional[str]:
+    sc = (short_code or "").strip().upper()
+    if not sc:
+        return None
+    tid = _stable_wc_team_id(sc)
+    if teams_by_id.get(tid):
+        return tid
+    for t in teams_by_id.values():
+        if (t.get("short_code") or "").strip().upper() == sc:
+            return t.get("id")
+    return tid if sc else None
+
+
+async def _expand_old_to_new_from_predictions(
+    db,
+    old_to_new: Dict[str, str],
+    teams_by_id: dict,
+    stable_id_set: set,
+) -> int:
+    """Map legacy UUID picks using group winners inferred from standings."""
+    added = 0
+    for gid in GROUP_IDS:
+        gteams = [t["id"] for t in teams_by_id.values() if (t.get("group_id") or "").upper() == gid]
+        if len(gteams) < 2:
+            continue
+        matches = await db.world_cup_matches.find(
+            {"group_id": gid, "stage": "group", "status": "settled"},
+            {"_id": 0},
+        ).to_list(20)
+        expected = len(gteams) * (len(gteams) - 1) // 2
+        if len(matches) < expected:
+            continue
+        ranked = _compute_group_standings(gteams, matches)
+        if not ranked:
+            continue
+        winner_stable = ranked[0]
+        async for pred in db.world_cup_predictions.find(
+            {
+                "type": PRED_GROUP_WINNER,
+                "target_id": gid,
+                "settled": True,
+                "points_awarded": {"$gt": 0},
+            },
+            {"_id": 0, "value": 1},
+        ):
+            val = pred.get("value") or {}
+            raw = val.get("team_id") if isinstance(val, dict) else val
+            if not raw:
+                continue
+            s = str(raw)
+            if s in stable_id_set or s in old_to_new:
+                continue
+            old_to_new[s] = winner_stable
+            added += 1
+            break
+    return added
+
+
+async def _restore_group_winners(
+    db,
+    old_to_new: Dict[str, str],
+    stable_id_set: set,
+) -> dict:
+    """Restore official group winners from config backup, predictions, and standings."""
+    teams_by_id = await _teams_by_id(db)
+    cfg = await _load_config(db)
+    restored_config = 0
+    restored_preds = 0
+    restored_standings = 0
+    persisted = 0
+
+    # 1. Config backup (short codes survive re-seed)
+    for gid in GROUP_IDS:
+        grp = await db.world_cup_groups.find_one({"group_id": gid}, {"_id": 0, "winner_team_id": 1})
+        if grp and teams_by_id.get(grp.get("winner_team_id")):
+            continue
+        code = (cfg.get("official_group_winners") or {}).get(gid)
+        if not code:
+            continue
+        tid = await _winner_id_from_short_code(str(code), teams_by_id)
+        if not tid:
+            continue
+        await db.world_cup_groups.update_one(
+            {"group_id": gid},
+            {"$set": {"winner_team_id": tid, "settled_at": (grp or {}).get("settled_at") or _now_iso()}},
+            upsert=True,
+        )
+        restored_config += 1
+
+    teams_by_id = await _teams_by_id(db)
+
+    # 2. Settled predictions — actual_winner field or correct picks
+    for gid in GROUP_IDS:
+        grp = await db.world_cup_groups.find_one({"group_id": gid}, {"_id": 0, "winner_team_id": 1})
+        if grp and teams_by_id.get(grp.get("winner_team_id")):
+            continue
+        winner_tid = None
+        async for pred in db.world_cup_predictions.find(
+            {"type": PRED_GROUP_WINNER, "target_id": gid, "settled": True},
+            {"_id": 0, "value": 1, "points_awarded": 1, "actual_winner_team_id": 1},
+        ):
+            aw = pred.get("actual_winner_team_id")
+            if aw:
+                candidate = str(await _remap_team_id_field(aw, old_to_new, stable_id_set))
+                if teams_by_id.get(candidate):
+                    winner_tid = candidate
+                    break
+            if int(pred.get("points_awarded") or 0) > 0:
+                val = pred.get("value") or {}
+                raw = val.get("team_id") if isinstance(val, dict) else val
+                candidate = str(await _remap_team_id_field(raw, old_to_new, stable_id_set))
+                if teams_by_id.get(candidate):
+                    winner_tid = candidate
+                    break
+        if winner_tid:
+            await db.world_cup_groups.update_one(
+                {"group_id": gid},
+                {"$set": {"winner_team_id": winner_tid, "settled_at": (grp or {}).get("settled_at") or _now_iso()}},
+                upsert=True,
+            )
+            await _persist_official_group_winner(db, gid, winner_tid)
+            restored_preds += 1
+
+    teams_by_id = await _teams_by_id(db)
+
+    # 3. Standings (after match team ids are fixed)
+    for gid in GROUP_IDS:
+        grp = await db.world_cup_groups.find_one({"group_id": gid}, {"_id": 0})
+        if grp and teams_by_id.get(grp.get("winner_team_id")):
+            continue
+        gteams = grp.get("team_ids") if grp else []
+        if not gteams:
+            gteams = [t["id"] for t in teams_by_id.values() if (t.get("group_id") or "").upper() == gid]
+        matches = await db.world_cup_matches.find(
+            {"group_id": gid, "stage": "group", "status": "settled"},
+            {"_id": 0},
+        ).to_list(20)
+        expected = (len(gteams) * (len(gteams) - 1)) // 2 if len(gteams) >= 2 else 0
+        has_settled_preds = await db.world_cup_predictions.count_documents(
+            {"type": PRED_GROUP_WINNER, "target_id": gid, "settled": True}
+        ) > 0
+        min_matches = expected if not has_settled_preds else max(1, min(3, expected))
+        if len(matches) < min_matches or expected <= 0:
+            continue
+        if not all(
+            teams_by_id.get(m.get("home_team_id")) and teams_by_id.get(m.get("away_team_id"))
+            for m in matches
+        ):
+            continue
+        ranked = _compute_group_standings(gteams, matches)
+        if not ranked or not teams_by_id.get(ranked[0]):
+            continue
+        await db.world_cup_groups.update_one(
+            {"group_id": gid},
+            {"$set": {"winner_team_id": ranked[0], "settled_at": (grp or {}).get("settled_at") or _now_iso()}},
+            upsert=True,
+        )
+        await _persist_official_group_winner(db, gid, ranked[0])
+        restored_standings += 1
+
+    # Backfill actual_winner on settled preds + persist config for anything we restored
+    async for g in db.world_cup_groups.find({"winner_team_id": {"$exists": True, "$ne": None}}, {"_id": 0}):
+        gid = g.get("group_id")
+        wid = g.get("winner_team_id")
+        if not gid or not wid or not teams_by_id.get(wid):
+            continue
+        await db.world_cup_predictions.update_many(
+            {"type": PRED_GROUP_WINNER, "target_id": gid, "settled": True},
+            {"$set": {"actual_winner_team_id": wid}},
+        )
+        await _persist_official_group_winner(db, gid, wid)
+        persisted += 1
+
+    return {
+        "group_winners_from_config": restored_config,
+        "group_winners_from_predictions": restored_preds,
+        "group_winners_from_standings": restored_standings,
+        "group_winners_persisted": persisted,
+        "group_winners_restored": restored_config + restored_preds + restored_standings,
+    }
+
+
+async def _repair_match_team_ids(db) -> dict:
+    """Fix orphaned home_team_id / away_team_id on matches (scores unchanged)."""
+    from utils.world_cup_fixtures import (
+        canonical_wc_team_name,
+        lookup_official_fixtures_for_match_row,
+        normalize_wc_kickoff_utc,
+    )
+
+    teams_by_id = await _teams_by_id(db)
+
+    def team_broken(tid: Any) -> bool:
+        if not tid:
+            return True
+        return str(tid) not in teams_by_id
+
+    updated_odds = 0
+    try:
+        events = await sb._fetch_odds_api_h2h_events_merged(WC_SPORT_KEY)
+        by_ext = {(ev.get("id") or "").strip(): ev for ev in events or [] if (ev.get("id") or "").strip()}
+        async for m in db.world_cup_matches.find(
+            {"external_event_id": {"$exists": True, "$nin": ["", None]}},
+            {"_id": 0},
+        ):
+            if not team_broken(m.get("home_team_id")) and not team_broken(m.get("away_team_id")):
+                continue
+            ev = by_ext.get((m.get("external_event_id") or "").strip())
+            if not ev:
+                continue
+            home_id = await _resolve_team_id(db, ev.get("home_team") or "", teams_by_id)
+            away_id = await _resolve_team_id(db, ev.get("away_team") or "", teams_by_id)
+            if not home_id or not away_id:
+                continue
+            await db.world_cup_matches.update_one(
+                {"id": m["id"]},
+                {"$set": {"home_team_id": home_id, "away_team_id": away_id}},
+            )
+            teams_by_id[home_id] = teams_by_id.get(home_id) or await db.world_cup_teams.find_one({"id": home_id}, {"_id": 0})
+            teams_by_id[away_id] = teams_by_id.get(away_id) or await db.world_cup_teams.find_one({"id": away_id}, {"_id": 0})
+            updated_odds += 1
+    except Exception as ex:
+        logger.warning("wc repair match ids from odds failed: %s", ex)
+
+    updated_schedule = 0
+    assigned_by_slot: Dict[tuple, set] = {}
+    async for m in db.world_cup_matches.find({}, {"_id": 0}):
+        if not team_broken(m.get("home_team_id")) and not team_broken(m.get("away_team_id")):
+            continue
+        candidates = lookup_official_fixtures_for_match_row(m)
+        if not candidates:
+            continue
+        slot_key = (
+            normalize_wc_kickoff_utc(m.get("kickoff")),
+            (m.get("group_id") or "").strip().upper(),
+            (m.get("knockout_round") or "").strip().lower(),
+        )
+        used = assigned_by_slot.setdefault(slot_key, set())
+        fixture = None
+        for c in candidates:
+            pair = (
+                canonical_wc_team_name(c.get("home") or ""),
+                canonical_wc_team_name(c.get("away") or ""),
+            )
+            if pair in used:
+                continue
+            fixture = c
+            break
+        if not fixture:
+            fixture = candidates[0]
+        home_id = await _resolve_team_id(db, fixture.get("home") or "", teams_by_id)
+        away_id = await _resolve_team_id(db, fixture.get("away") or "", teams_by_id)
+        if not home_id or not away_id:
+            continue
+        await db.world_cup_matches.update_one(
+            {"id": m["id"]},
+            {"$set": {"home_team_id": home_id, "away_team_id": away_id}},
+        )
+        pair = (
+            canonical_wc_team_name(fixture.get("home") or ""),
+            canonical_wc_team_name(fixture.get("away") or ""),
+        )
+        used.add(pair)
+        updated_schedule += 1
+
+    return {"matches_from_odds": updated_odds, "matches_from_schedule": updated_schedule}
 
 
 async def _repair_wc_team_references(db) -> dict:
@@ -402,7 +700,10 @@ async def _repair_wc_team_references(db) -> dict:
                 entries_updated += 1
         draft_restored = entries_updated
 
-    # Remap prediction team picks
+    # Remap prediction team picks (expand mapping after matches are fixed)
+    match_repair = await _repair_match_team_ids(db)
+    mapping_added = await _expand_old_to_new_from_predictions(db, old_to_new, await _teams_by_id(db), stable_id_set)
+
     preds_updated = 0
     async for p in db.world_cup_predictions.find(
         {"value.team_id": {"$exists": True}},
@@ -420,80 +721,11 @@ async def _repair_wc_team_references(db) -> dict:
             )
             preds_updated += 1
 
-    # Restore staff group winners from settled correct predictions
-    groups_restored = 0
-    for gid in GROUP_IDS:
-        grp = await db.world_cup_groups.find_one({"group_id": gid}, {"_id": 0})
-        if grp and grp.get("winner_team_id") in stable_id_set:
-            continue
-        winner_tid = None
-        async for pred in db.world_cup_predictions.find(
-            {
-                "type": PRED_GROUP_WINNER,
-                "target_id": gid,
-                "settled": True,
-                "points_awarded": {"$gt": 0},
-            },
-            {"_id": 0, "value": 1},
-        ).limit(1):
-            val = pred.get("value") or {}
-            raw = val.get("team_id") if isinstance(val, dict) else val
-            winner_tid = await _remap_team_id_field(raw, old_to_new, stable_id_set)
-        if winner_tid and winner_tid in stable_id_set:
-            await db.world_cup_groups.update_one(
-                {"group_id": gid},
-                {"$set": {"winner_team_id": winner_tid, "settled_at": grp.get("settled_at") or _now_iso()}},
-                upsert=True,
-            )
-            groups_restored += 1
-
-    # Fallback: infer from completed group-stage match standings
-    groups_from_standings = 0
-    for gid in GROUP_IDS:
-        grp = await db.world_cup_groups.find_one({"group_id": gid}, {"_id": 0})
-        if grp and grp.get("winner_team_id") in stable_id_set:
-            continue
-        gteams = grp.get("team_ids") if grp else []
-        if not gteams:
-            tdocs = await db.world_cup_teams.find({"group_id": gid}, {"_id": 0, "id": 1}).to_list(10)
-            gteams = [t["id"] for t in tdocs]
-        matches = await db.world_cup_matches.find(
-            {"group_id": gid, "stage": "group", "status": "settled"},
-            {"_id": 0},
-        ).to_list(20)
-        expected = (len(gteams) * (len(gteams) - 1)) // 2 if len(gteams) >= 2 else 0
-        if len(matches) < expected or expected <= 0:
-            continue
-        ranked = _compute_group_standings(gteams, matches)
-        if ranked:
-            await db.world_cup_groups.update_one(
-                {"group_id": gid},
-                {"$set": {"winner_team_id": ranked[0]}},
-                upsert=True,
-            )
-            groups_from_standings += 1
-
-    # Remap match team ids by team name when orphaned
-    matches_updated = 0
-    teams_by_id = await _teams_by_id(db)
-    async for m in db.world_cup_matches.find({}, {"_id": 0, "id": 1, "home_team_id": 1, "away_team_id": 1}):
-        patch = {}
-        for field in ("home_team_id", "away_team_id"):
-            old = m.get(field)
-            if not old or str(old) in stable_id_set:
-                continue
-            old_team = teams_by_id.get(old) or {}
-            name = old_team.get("name")
-            if not name and str(old) in old_to_name:
-                name = old_to_name[str(old)]
-            new_id = name_index.get(_norm_name(name or "")) if name else None
-            if not new_id:
-                new_id = await _remap_team_id_field(old, old_to_new, stable_id_set)
-            if new_id and new_id != old:
-                patch[field] = new_id
-        if patch:
-            await db.world_cup_matches.update_one({"id": m["id"]}, {"$set": patch})
-            matches_updated += 1
+    group_restore = await _restore_group_winners(db, old_to_new, stable_id_set)
+    predictions_named = await _backfill_prediction_team_fields(db)
+    matches_updated = int(match_repair.get("matches_from_odds") or 0) + int(
+        match_repair.get("matches_from_schedule") or 0
+    )
 
     still_orphan = len(orphan_ids - set(old_to_new.keys()))
     return {
@@ -501,9 +733,11 @@ async def _repair_wc_team_references(db) -> dict:
         "stable_team_ids": len(stable_ids),
         "draft_entries_restored": draft_restored,
         "predictions_remapped": preds_updated,
-        "group_winners_restored": groups_restored,
-        "group_winners_from_standings": groups_from_standings,
+        "predictions_named": predictions_named,
+        "prediction_mappings_added": mapping_added,
+        **group_restore,
         "matches_remapped": matches_updated,
+        **match_repair,
         "notification_mappings": len(old_to_new),
         "orphan_ids_seen": len(orphan_ids),
         "orphan_ids_unmapped": still_orphan,
@@ -518,6 +752,91 @@ async def _teams_by_id(db) -> dict:
         if tid:
             out[tid] = t
     return out
+
+
+async def _teams_by_id_resolved(db) -> dict:
+    """teams_by_id plus legacy UUID aliases and stored prediction names (admin display)."""
+    teams = await _teams_by_id(db)
+    name_index = await _build_team_name_index(db)
+    stable_id_set = set(_seed_file_team_ids_in_order())
+    old_to_new: Dict[str, str] = {}
+    for old_id, name in (await _collect_old_team_id_to_name(db)).items():
+        new_id = name_index.get(_norm_name(name))
+        if new_id:
+            old_to_new[old_id] = new_id
+    await _expand_old_to_new_from_predictions(db, old_to_new, teams, stable_id_set)
+    for old_id, new_id in old_to_new.items():
+        if new_id in teams:
+            teams[old_id] = {**teams[new_id], "id": old_id}
+    async for p in db.world_cup_predictions.find(
+        {"value.team_id": {"$exists": True}},
+        {"_id": 0, "value": 1, "target_id": 1, "type": 1},
+    ):
+        val = p.get("value") or {}
+        if not isinstance(val, dict):
+            continue
+        tid = val.get("team_id")
+        if not tid or tid in teams:
+            continue
+        name = (val.get("team_name") or val.get("name") or "").strip()
+        if not name:
+            continue
+        teams[tid] = {
+            "id": tid,
+            "name": name,
+            "short_code": (val.get("short_code") or "").strip(),
+            "group_id": p.get("target_id") if p.get("type") == PRED_GROUP_WINNER else None,
+        }
+    return teams
+
+
+def _prediction_team_label(val: Any, teams_by_id: dict, tid: Optional[str] = None) -> str:
+    pick_id = tid
+    if pick_id is None and isinstance(val, dict):
+        pick_id = val.get("team_id")
+    if not pick_id:
+        return "?"
+    team = teams_by_id.get(pick_id) or {}
+    if team.get("name"):
+        return str(team["name"])
+    if isinstance(val, dict):
+        name = (val.get("team_name") or val.get("name") or "").strip()
+        if name:
+            return name
+        sc = (val.get("short_code") or "").strip()
+        if sc:
+            return sc
+    return "?"
+
+
+async def _backfill_prediction_team_fields(db) -> int:
+    """Persist team_name on predictions so labels survive future re-seeds."""
+    teams_by_id = await _teams_by_id(db)
+    updated = 0
+    async for p in db.world_cup_predictions.find(
+        {"value.team_id": {"$exists": True}},
+        {"_id": 0, "id": 1, "value": 1},
+    ):
+        val = p.get("value") or {}
+        if not isinstance(val, dict):
+            continue
+        tid = val.get("team_id")
+        team = teams_by_id.get(tid) or {}
+        if not team.get("name"):
+            continue
+        patch = dict(val)
+        changed = False
+        if patch.get("team_name") != team.get("name"):
+            patch["team_name"] = team["name"]
+            changed = True
+        sc = (team.get("short_code") or "").strip()
+        if sc and patch.get("short_code") != sc:
+            patch["short_code"] = sc
+            changed = True
+        if changed:
+            await db.world_cup_predictions.update_one({"id": p["id"]}, {"$set": {"value": patch}})
+            updated += 1
+    return updated
 
 
 async def _resolve_team_id(db, name: str, teams_by_id: Optional[dict] = None) -> Optional[str]:
@@ -810,6 +1129,14 @@ def _match_snapshot(match: Optional[dict], teams_by_id: dict) -> Optional[dict]:
         return None
     ht = teams_by_id.get(match.get("home_team_id")) or {}
     at = teams_by_id.get(match.get("away_team_id")) or {}
+    if not ht.get("name") or not at.get("name"):
+        from utils.world_cup_fixtures import team_briefs_from_official_schedule
+
+        sh, sa = team_briefs_from_official_schedule(match, teams_by_id)
+        if not ht.get("name") and sh:
+            ht = sh
+        if not at.get("name") and sa:
+            at = sa
     res = match.get("result") or {}
     has_score = res.get("home_score") is not None and res.get("away_score") is not None
     return {
@@ -865,13 +1192,12 @@ def _verification_for_prediction(
 
     if ptype == PRED_GROUP_WINNER:
         tid = val.get("team_id") if isinstance(val, dict) else val
-        team = teams_by_id.get(tid) or {}
-        pick_display = team.get("name") or str(tid or "?")
+        pick_display = _prediction_team_label(val, teams_by_id, tid)
         grp = groups_by_id.get(target) or {}
         winner_id = grp.get("winner_team_id")
         if winner_id:
             winner = teams_by_id.get(winner_id) or {}
-            actual_display = winner.get("name") or str(winner_id)
+            actual_display = winner.get("name") or _prediction_team_label({}, teams_by_id, winner_id)
             verdict = "correct" if str(tid) == str(winner_id) else "incorrect"
             expected_points = _points_for_type(cfg, ptype) if verdict == "correct" else 0
         else:
@@ -911,22 +1237,20 @@ def _verification_for_prediction(
             actual_display = "—"
     elif ptype == PRED_SECOND_PLACE:
         tid = val.get("team_id") if isinstance(val, dict) else val
-        team = teams_by_id.get(tid) or {}
-        pick_display = team.get("name") or "?"
+        pick_display = _prediction_team_label(val, teams_by_id, tid)
         actual_id = cfg.get("runner_up_team_id")
         if actual_id:
-            actual_display = (teams_by_id.get(actual_id) or {}).get("name") or str(actual_id)
+            actual_display = _prediction_team_label({}, teams_by_id, actual_id)
             verdict = "correct" if str(tid) == str(actual_id) else "incorrect"
             expected_points = _points_for_type(cfg, ptype) if verdict == "correct" else 0
         else:
             actual_display = "—"
     elif ptype == PRED_THIRD_PLACE:
         tid = val.get("team_id") if isinstance(val, dict) else val
-        team = teams_by_id.get(tid) or {}
-        pick_display = team.get("name") or "?"
+        pick_display = _prediction_team_label(val, teams_by_id, tid)
         actual_id = cfg.get("third_place_team_id")
         if actual_id:
-            actual_display = (teams_by_id.get(actual_id) or {}).get("name") or str(actual_id)
+            actual_display = _prediction_team_label({}, teams_by_id, actual_id)
             verdict = "correct" if str(tid) == str(actual_id) else "incorrect"
             expected_points = _points_for_type(cfg, ptype) if verdict == "correct" else 0
         else:
@@ -1064,7 +1388,7 @@ async def _build_staff_predictions_feed(
         q["user_id"] = {"$in": user_ids}
     lim = max(1, min(int(limit), 2000))
     preds = await db.world_cup_predictions.find(q, {"_id": 0}).sort("updated_at", -1).limit(lim).to_list(lim)
-    teams_by_id = await _teams_by_id(db)
+    teams_by_id = await _teams_by_id_resolved(db)
     matches_by_id = {}
     async for m in db.world_cup_matches.find({}, {"_id": 0}):
         mid = m.get("id")
@@ -1154,6 +1478,11 @@ async def _settle_group_predictions(db, send_notification, cfg: dict, group_id: 
         {"$set": {"winner_team_id": winner_team_id, "settled_at": _now_iso()}},
         upsert=True,
     )
+    await db.world_cup_predictions.update_many(
+        {"type": PRED_GROUP_WINNER, "target_id": group_id},
+        {"$set": {"actual_winner_team_id": winner_team_id}},
+    )
+    await _persist_official_group_winner(db, group_id, winner_team_id)
     return count
 
 
@@ -1545,8 +1874,15 @@ async def _sync_fixtures_from_odds(db) -> dict:
             continue
         home_team = teams_by_id.get(home_id) or {}
         away_team = teams_by_id.get(away_id) or {}
-        existing = await db.world_cup_matches.find_one({"external_event_id": ext_id}, {"_id": 0, "status": 1, "result": 1})
+        existing = await db.world_cup_matches.find_one({"external_event_id": ext_id}, {"_id": 0, "status": 1, "result": 1, "home_team_id": 1, "away_team_id": 1})
         if existing and existing.get("status") == "settled":
+            h_old, a_old = existing.get("home_team_id"), existing.get("away_team_id")
+            broken = not teams_by_id.get(h_old) or not teams_by_id.get(a_old)
+            if broken and home_id and away_id:
+                await db.world_cup_matches.update_one(
+                    {"external_event_id": ext_id},
+                    {"$set": {"home_team_id": home_id, "away_team_id": away_id, "updated_at": now}},
+                )
             continue
         commence_parsed = sb._parse_commence_time(commence) if commence else None
         kickoff = resolve_wc_kickoff_utc(
@@ -2212,13 +2548,13 @@ def _summarize_user_predictions(preds: list, teams_by_id: dict) -> dict:
         val = p.get("value") or {}
         if ptype == PRED_GROUP_WINNER:
             tid = val.get("team_id") if isinstance(val, dict) else val
-            group_picks[p.get("target_id") or "?"] = (teams_by_id.get(tid) or {}).get("name") or "?"
+            group_picks[p.get("target_id") or "?"] = _prediction_team_label(val, teams_by_id, tid)
         elif ptype == PRED_SECOND_PLACE:
             tid = val.get("team_id") if isinstance(val, dict) else val
-            second_place = (teams_by_id.get(tid) or {}).get("name") or "?"
+            second_place = _prediction_team_label(val, teams_by_id, tid)
         elif ptype == PRED_THIRD_PLACE:
             tid = val.get("team_id") if isinstance(val, dict) else val
-            third_place = (teams_by_id.get(tid) or {}).get("name") or "?"
+            third_place = _prediction_team_label(val, teams_by_id, tid)
     return {
         **stats,
         "group_picks": group_picks,
@@ -2301,7 +2637,7 @@ async def _build_admin_leaderboard(db, cfg: dict, ghost_ids: set, limit: int = 1
 
 async def _build_admin_overview(db, username: Optional[str] = None, limit: int = 500) -> dict:
     cfg = await _load_config(db)
-    teams_by_id = await _teams_by_id(db)
+    teams_by_id = await _teams_by_id_resolved(db)
     ghost_ids = await _ghost_user_ids(db)
     start = await _get_tournament_start_at(db, cfg)
     tournament_started = _is_tournament_started_at(start)
@@ -2401,7 +2737,7 @@ async def _build_admin_user_detail(db, user_id: str) -> dict:
     entry = await db.world_cup_entries.find_one({"user_id": user_id}, {"_id": 0})
     if not entry:
         raise HTTPException(status_code=404, detail="User not entered")
-    teams_by_id = await _teams_by_id(db)
+    teams_by_id = await _teams_by_id_resolved(db)
     matches_by_id = {}
     async for m in db.world_cup_matches.find({}, {"_id": 0}):
         mid = m.get("id")
@@ -2596,8 +2932,18 @@ def register(router):
         out = []
         for m in matches:
             row = dict(m)
-            row["home_team"] = teams.get(m.get("home_team_id"))
-            row["away_team"] = teams.get(m.get("away_team_id"))
+            ht = teams.get(m.get("home_team_id"))
+            at = teams.get(m.get("away_team_id"))
+            if not ht or not at:
+                from utils.world_cup_fixtures import team_briefs_from_official_schedule
+
+                sh, sa = team_briefs_from_official_schedule(m, teams)
+                if not ht and sh:
+                    ht = sh
+                if not at and sa:
+                    at = sa
+            row["home_team"] = ht
+            row["away_team"] = at
             row["locked"] = _is_locked(m.get("lock_at"))
             row = enrich_wc_match_round(row)
             out.append(row)
@@ -2739,12 +3085,25 @@ def register(router):
             t = await db.world_cup_teams.find_one({"id": team_id, "group_id": target})
             if not t:
                 raise HTTPException(status_code=400, detail="Team not in group")
+            body.value = {
+                **(body.value if isinstance(body.value, dict) else {}),
+                "team_id": team_id,
+                "team_name": t.get("name"),
+                "short_code": t.get("short_code"),
+            }
         elif ptype in (PRED_SECOND_PLACE, PRED_THIRD_PLACE):
             if await _is_tournament_started(db, cfg):
                 raise HTTPException(status_code=400, detail="Tournament has started — picks are locked")
             team_id = body.value.get("team_id") if isinstance(body.value, dict) else body.value
             if not team_id or not await db.world_cup_teams.find_one({"id": team_id}):
                 raise HTTPException(status_code=400, detail="Invalid team")
+            t = await db.world_cup_teams.find_one({"id": team_id}, {"_id": 0, "name": 1, "short_code": 1})
+            body.value = {
+                **(body.value if isinstance(body.value, dict) else {}),
+                "team_id": team_id,
+                "team_name": (t or {}).get("name"),
+                "short_code": (t or {}).get("short_code"),
+            }
             target = "tournament"
         elif ptype == PRED_MATCH_SCORE:
             match = await db.world_cup_matches.find_one({"id": target}, {"_id": 0})
@@ -3020,6 +3379,22 @@ def register(router):
         cfg = await _load_config(db)
         await _require_enabled_staff(cfg)
         return await _approve_all_pending_payouts(db, send_notification, current_user.get("id") or "")
+
+    @router.post("/world-cup/staff/restore-group-winners")
+    async def wc_staff_restore_group_winners(current_user: dict = Depends(get_current_user)):
+        _require_staff(current_user)
+        cfg = await _load_config(db)
+        await _require_enabled_staff(cfg)
+        await _ensure_stable_teams_from_seed(db)
+        await _repair_match_team_ids(db)
+        old_to_new: Dict[str, str] = {}
+        for old_id, name in (await _collect_old_team_id_to_name(db)).items():
+            new_id = (await _build_team_name_index(db)).get(_norm_name(name))
+            if new_id:
+                old_to_new[old_id] = new_id
+        stable_id_set = set(_seed_file_team_ids_in_order())
+        await _expand_old_to_new_from_predictions(db, old_to_new, await _teams_by_id(db), stable_id_set)
+        return await _restore_group_winners(db, old_to_new, stable_id_set)
 
     @router.post("/world-cup/staff/repair-references")
     async def wc_staff_repair_references(current_user: dict = Depends(get_current_user)):

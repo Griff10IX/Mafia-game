@@ -205,6 +205,75 @@ def infer_knockout_round_from_kickoff(kickoff: Optional[str]) -> Optional[str]:
     return "knockout"
 
 
+def normalize_wc_kickoff_utc(kickoff: Optional[str]) -> Optional[str]:
+    """Normalize kickoff to UTC Z string for schedule lookups."""
+    if not kickoff:
+        return None
+    try:
+        from datetime import datetime, timezone
+
+        dt = datetime.fromisoformat(str(kickoff).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+        return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+    except Exception:
+        s = (str(kickoff) or "").strip()
+        return s if s else None
+
+
+def lookup_official_fixtures_for_match_row(match: dict) -> list:
+    """Official FIFA rows matching a DB match by kickoff + group / knockout round."""
+    kick = normalize_wc_kickoff_utc(match.get("kickoff"))
+    if not kick:
+        return []
+    gid = (match.get("group_id") or "").strip().upper()
+    ko = (match.get("knockout_round") or "").strip().lower()
+    stage = (match.get("stage") or "").strip().lower()
+    out: list = []
+    for row in _official_fixture_rows():
+        row_kick = normalize_wc_kickoff_utc(row.get("kickoff_utc"))
+        if row_kick != kick:
+            continue
+        row_gid = (row.get("group_id") or "").strip().upper()
+        row_ko = (row.get("knockout_round") or "").strip().lower()
+        if gid and row_gid:
+            if gid == row_gid:
+                out.append(row)
+            continue
+        if ko and row_ko:
+            if ko == row_ko:
+                out.append(row)
+            continue
+        if stage == "group" and row_gid:
+            out.append(row)
+        elif stage == "knockout" and row_ko:
+            out.append(row)
+        elif not gid and not ko and not row_gid and not row_ko:
+            out.append(row)
+    return out
+
+
+def team_briefs_from_official_schedule(match: dict, teams_by_id: dict) -> Tuple[Optional[dict], Optional[dict]]:
+    """Resolve home/away team docs from FIFA schedule when match team ids are broken."""
+    fixtures = lookup_official_fixtures_for_match_row(match)
+    if not fixtures:
+        return None, None
+    row = fixtures[0]
+    home_name = canonical_wc_team_name(row.get("home") or "")
+    away_name = canonical_wc_team_name(row.get("away") or "")
+    home_doc = None
+    away_doc = None
+    for t in teams_by_id.values():
+        tname = canonical_wc_team_name(t.get("name") or "")
+        if tname == home_name:
+            home_doc = t
+        if tname == away_name:
+            away_doc = t
+    return home_doc, away_doc
+
+
 def knockout_round_label(round_key: Optional[str]) -> str:
     key = (round_key or "").strip().lower()
     if not key:
