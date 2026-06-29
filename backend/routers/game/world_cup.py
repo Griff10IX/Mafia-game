@@ -243,6 +243,358 @@ async def _collect_old_team_id_to_name(db) -> Dict[str, str]:
     return mapping
 
 
+async def _legacy_to_stable_from_draft_snapshot(db) -> Dict[str, str]:
+    """Map legacy UUIDs to stable ids when draft_source_team_ids was saved at draft time."""
+    cfg = await _load_config(db)
+    legacy_order = list(cfg.get("draft_source_team_ids") or [])
+    stable_order = _seed_file_team_ids_in_order()
+    if not legacy_order or len(legacy_order) != len(stable_order):
+        return {}
+    out: Dict[str, str] = {}
+    for i, leg in enumerate(legacy_order):
+        if _is_legacy_team_id(leg):
+            out[str(leg)] = stable_order[i]
+    return out
+
+
+async def _users_by_legacy_group_pick(db, group_id: str) -> Dict[str, List[str]]:
+    """legacy team_id → user ids who picked it for this group."""
+    by_legacy: Dict[str, List[str]] = {}
+    gid = (group_id or "").strip().upper()
+    async for p in db.world_cup_predictions.find(
+        {"type": PRED_GROUP_WINNER, "target_id": gid, "value.team_id": {"$exists": True}},
+        {"_id": 0, "user_id": 1, "value": 1},
+    ):
+        val = p.get("value") or {}
+        if not isinstance(val, dict):
+            continue
+        tid = val.get("team_id")
+        if not _is_legacy_team_id(tid):
+            continue
+        uid = p.get("user_id")
+        if not uid:
+            continue
+        by_legacy.setdefault(str(tid), []).append(uid)
+    return by_legacy
+
+
+def _legacy_stable_overlap_score(
+    legacy_id: str,
+    stable_id: str,
+    replay: Dict[str, List[str]],
+    draft_names: Dict[str, List[str]],
+    teams_by_id: dict,
+    preds_by_legacy: Dict[str, List[str]],
+) -> int:
+    team = teams_by_id.get(stable_id) or {}
+    team_name = _norm_name(team.get("name") or "")
+    pts = 0
+    for uid in preds_by_legacy.get(legacy_id) or []:
+        assigned = replay.get(uid) or []
+        if stable_id in assigned:
+            pts += 3
+        names = draft_names.get(uid) or []
+        try:
+            idx = assigned.index(stable_id)
+            if idx < len(names) and _norm_name(names[idx]) == team_name:
+                pts += 1
+        except ValueError:
+            pass
+    return pts
+
+
+def _greedy_legacy_stable_match(
+    legacy_ids: List[str],
+    stable_ids: List[str],
+    replay: Dict[str, List[str]],
+    draft_names: Dict[str, List[str]],
+    teams_by_id: dict,
+    preds_by_legacy: Dict[str, List[str]],
+) -> Dict[str, str]:
+    """Assign legacy UUIDs to stable team ids via draft-assignment overlap scoring."""
+    if not legacy_ids or not stable_ids:
+        return {}
+
+    if len(legacy_ids) == len(stable_ids) and len(legacy_ids) <= 4:
+        import itertools
+
+        best: Dict[str, str] = {}
+        best_score = 0
+        for perm in itertools.permutations(stable_ids):
+            mapping = {legacy_ids[i]: perm[i] for i in range(len(legacy_ids))}
+            total = sum(
+                _legacy_stable_overlap_score(
+                    leg, stab, replay, draft_names, teams_by_id, preds_by_legacy
+                )
+                for leg, stab in mapping.items()
+            )
+            if total > best_score:
+                best_score = total
+                best = mapping
+        if best:
+            return best
+
+    ranked: List[tuple] = []
+    for leg in legacy_ids:
+        for stab in stable_ids:
+            ranked.append(
+                (
+                    _legacy_stable_overlap_score(
+                        leg, stab, replay, draft_names, teams_by_id, preds_by_legacy
+                    ),
+                    leg,
+                    stab,
+                )
+            )
+    ranked.sort(key=lambda x: x[0], reverse=True)
+
+    used_legacy: set = set()
+    used_stable: set = set()
+    out: Dict[str, str] = {}
+    for pts, leg, stab in ranked:
+        if pts <= 0 or leg in used_legacy or stab in used_stable:
+            continue
+        out[leg] = stab
+        used_legacy.add(leg)
+        used_stable.add(stab)
+    return out
+
+
+async def _infer_legacy_to_stable_from_draft_overlap(db) -> Dict[str, str]:
+    """
+    Guess legacy UUID → stable id when entries were already remapped.
+    Uses group-winner picks + draft replay + inbox notification names.
+    """
+    stable_order = _seed_file_team_ids_in_order()
+    replay = await _replay_draft_assignments(db, stable_order)
+    if not replay:
+        return {}
+
+    teams_by_id = await _teams_by_id(db)
+    draft_names = await _draft_names_by_user(db)
+    mapping: Dict[str, str] = {}
+
+    for gid in GROUP_IDS:
+        legacy_ids = list((await _users_by_legacy_group_pick(db, gid)).keys())
+        if not legacy_ids:
+            continue
+        stable_ids = [
+            t["id"]
+            for t in teams_by_id.values()
+            if (t.get("group_id") or "").upper() == gid and t.get("id")
+        ]
+        stable_ids.sort(key=lambda s: stable_order.index(s) if s in stable_order else 999)
+        preds_by_legacy = await _users_by_legacy_group_pick(db, gid)
+        mapping.update(
+            _greedy_legacy_stable_match(
+                legacy_ids, stable_ids, replay, draft_names, teams_by_id, preds_by_legacy
+            )
+        )
+
+    # Tournament 2nd/3rd picks — match globally against draft overlap
+    global_legacy: set = set()
+    global_users: Dict[str, List[str]] = {}
+    async for p in db.world_cup_predictions.find(
+        {"type": {"$in": [PRED_SECOND_PLACE, PRED_THIRD_PLACE]}, "value.team_id": {"$exists": True}},
+        {"_id": 0, "user_id": 1, "value": 1},
+    ):
+        val = p.get("value") or {}
+        if not isinstance(val, dict):
+            continue
+        tid = val.get("team_id")
+        if not _is_legacy_team_id(tid):
+            continue
+        s = str(tid)
+        global_legacy.add(s)
+        uid = p.get("user_id")
+        if uid:
+            global_users.setdefault(s, []).append(uid)
+
+    if global_legacy:
+        all_stable = [t["id"] for t in teams_by_id.values() if t.get("id")]
+        mapping.update(
+            _greedy_legacy_stable_match(
+                list(global_legacy),
+                all_stable,
+                replay,
+                draft_names,
+                teams_by_id,
+                global_users,
+            )
+        )
+
+    return mapping
+
+
+async def _score_legacy_draft_order(
+    legacy_order: List[str],
+    stable_order: List[str],
+    draft_seed: int,
+    entries: list,
+    real_entries: list,
+    draft_names: Dict[str, List[str]],
+    teams_by_id: dict,
+) -> int:
+    if len(legacy_order) != len(stable_order) or not legacy_order:
+        return 0
+    legacy_to_stable = {str(legacy_order[i]): stable_order[i] for i in range(len(legacy_order))}
+    rng = random.Random(int(draft_seed))
+    shuffled = list(legacy_order)
+    rng.shuffle(shuffled)
+    n_all = len(entries)
+    n_real = len(real_entries)
+    assignments: Dict[str, List[str]] = {e["user_id"]: [] for e in entries}
+    for i, tid in enumerate(shuffled):
+        uid = real_entries[i % n_real]["user_id"]
+        assignments[uid].append(tid)
+    for i, entry in enumerate(entries):
+        if not entry.get("ghost_entry"):
+            continue
+        uid = entry["user_id"]
+        assignments[uid] = [shuffled[j] for j in range(i, len(shuffled), n_all)]
+    score = 0
+    for uid, legacy_tids in assignments.items():
+        names = draft_names.get(uid) or []
+        for i, lid in enumerate(legacy_tids):
+            if i >= len(names):
+                break
+            sid = legacy_to_stable.get(str(lid))
+            team = teams_by_id.get(sid) or {}
+            if _norm_name(team.get("name")) == _norm_name(names[i]):
+                score += 1
+    return score
+
+
+async def _infer_legacy_to_stable_from_notification_order(db) -> Dict[str, str]:
+    """
+    Reconstruct legacy UUID order by hill-climbing against draft inbox names.
+    Works when draft_source_team_ids was never saved but notifications still exist.
+    """
+    cfg = await _load_config(db)
+    if not cfg.get("draft_run") or cfg.get("draft_seed") is None:
+        return {}
+
+    stable_order = _seed_file_team_ids_in_order()
+    teams_by_id = await _teams_by_id(db)
+    draft_names = await _draft_names_by_user(db)
+    if not draft_names:
+        return {}
+
+    legacy_by_group: Dict[str, List[str]] = {}
+    known_legacy: set = set()
+
+    def note_legacy(tid: Any, gid: Optional[str] = None) -> None:
+        if not _is_legacy_team_id(tid):
+            return
+        s = str(tid)
+        known_legacy.add(s)
+        if gid and gid in GROUP_IDS:
+            legacy_by_group.setdefault(gid, [])
+            if s not in legacy_by_group[gid]:
+                legacy_by_group[gid].append(s)
+
+    async for entry in db.world_cup_entries.find({}, {"_id": 0, "drafted_team_ids": 1}):
+        for tid in entry.get("drafted_team_ids") or []:
+            team = teams_by_id.get(tid) or {}
+            note_legacy(tid, (team.get("group_id") or "").upper() or None)
+
+    async for m in db.world_cup_matches.find({}, {"_id": 0, "group_id": 1, "home_team_id": 1, "away_team_id": 1}):
+        gid = (m.get("group_id") or "").upper()
+        note_legacy(m.get("home_team_id"), gid or None)
+        note_legacy(m.get("away_team_id"), gid or None)
+
+    async for p in db.world_cup_predictions.find(
+        {"value.team_id": {"$exists": True}},
+        {"_id": 0, "type": 1, "target_id": 1, "value": 1},
+    ):
+        val = p.get("value") or {}
+        if not isinstance(val, dict):
+            continue
+        tid = val.get("team_id")
+        if p.get("type") == PRED_GROUP_WINNER:
+            note_legacy(tid, (p.get("target_id") or "").upper())
+        else:
+            note_legacy(tid)
+
+    # If group buckets are incomplete, bucket unknown legacy ids by prediction usage
+    for s in known_legacy:
+        placed = any(s in (legacy_by_group.get(g) or []) for g in GROUP_IDS)
+        if placed:
+            continue
+        async for p in db.world_cup_predictions.find(
+            {"type": PRED_GROUP_WINNER, "value.team_id": s},
+            {"_id": 0, "target_id": 1},
+        ).limit(1):
+            gid = (p.get("target_id") or "").upper()
+            if gid in GROUP_IDS:
+                note_legacy(s, gid)
+
+    entries = await db.world_cup_entries.find(
+        {}, {"_id": 0, "user_id": 1, "ghost_entry": 1},
+    ).to_list(5000)
+    real_entries = [e for e in entries if not e.get("ghost_entry")]
+    if not real_entries:
+        return {}
+
+    group_legacy_slots: Dict[str, List[str]] = {
+        gid: sorted(legacy_by_group.get(gid) or []) for gid in GROUP_IDS
+    }
+
+    def build_order(slots: Dict[str, List[str]]) -> List[str]:
+        out: List[str] = []
+        for gid in GROUP_IDS:
+            stab_group = [
+                s for s in stable_order
+                if (teams_by_id.get(s) or {}).get("group_id") == gid
+            ]
+            legs = list(slots.get(gid) or [])
+            if len(legs) != len(stab_group):
+                return []
+            out.extend(legs)
+        return out
+
+    slots = {g: list(v) for g, v in group_legacy_slots.items()}
+    legacy_order = build_order(slots)
+    if len(legacy_order) != len(stable_order):
+        return {}
+
+    seed = int(cfg["draft_seed"])
+    best_score = await _score_legacy_draft_order(
+        legacy_order, stable_order, seed, entries, real_entries, draft_names, teams_by_id
+    )
+    best_slots = {g: list(v) for g, v in slots.items()}
+
+    for _ in range(3000):
+        gid = random.choice(list(GROUP_IDS))
+        legs = slots.get(gid) or []
+        if len(legs) < 2:
+            continue
+        i, j = random.sample(range(len(legs)), 2)
+        legs[i], legs[j] = legs[j], legs[i]
+        candidate_order = build_order(slots)
+        if len(candidate_order) != len(stable_order):
+            continue
+        sc = await _score_legacy_draft_order(
+            candidate_order, stable_order, seed, entries, real_entries, draft_names, teams_by_id
+        )
+        if sc > best_score:
+            best_score = sc
+            best_slots = {g: list(slots[g]) for g in slots}
+            legacy_order = candidate_order
+        else:
+            slots[gid][i], slots[gid][j] = slots[gid][j], slots[gid][i]
+
+    if best_score <= 0:
+        return {}
+
+    final_order = build_order(best_slots)
+    out: Dict[str, str] = {}
+    for i, leg in enumerate(final_order):
+        if _is_legacy_team_id(leg):
+            out[str(leg)] = stable_order[i]
+    return out
+
+
 async def _draft_names_by_user(db) -> Dict[str, List[str]]:
     by_user: Dict[str, List[str]] = {}
     async for n in db.notifications.find(
@@ -332,6 +684,18 @@ async def _build_comprehensive_old_team_map(db) -> Dict[str, str]:
         if new_id:
             old_to_new[old_id] = new_id
     await _expand_old_to_new_from_predictions(db, old_to_new, teams_by_id, stable_id_set)
+
+    for old_id, new_id in (await _legacy_to_stable_from_draft_snapshot(db)).items():
+        old_to_new.setdefault(old_id, new_id)
+    for old_id, new_id in (await _infer_legacy_to_stable_from_draft_overlap(db)).items():
+        old_to_new.setdefault(old_id, new_id)
+    for old_id, new_id in (await _infer_legacy_to_stable_from_notification_order(db)).items():
+        old_to_new.setdefault(old_id, new_id)
+    cfg = await _load_config(db)
+    for old_id, new_id in (cfg.get("legacy_team_id_map") or {}).items():
+        if old_id and new_id:
+            old_to_new[str(old_id)] = str(new_id)
+
     return old_to_new
 
 
@@ -411,7 +775,8 @@ async def _ensure_orphan_team_ids_healed(db) -> Optional[dict]:
     await _repair_match_team_ids(db)
     old_to_new = await _build_comprehensive_old_team_map(db)
     applied = await _apply_orphan_team_id_map(db, old_to_new)
-    await _backfill_prediction_team_fields(db)
+    named = await _backfill_prediction_team_fields(db)
+    applied["predictions_named"] = named
     return applied
 
 
@@ -835,6 +1200,9 @@ async def _repair_wc_team_references(db) -> dict:
 
     group_restore = await _restore_group_winners(db, old_to_new, stable_id_set)
     predictions_named = await _backfill_prediction_team_fields(db)
+    overlap_map = await _infer_legacy_to_stable_from_draft_overlap(db)
+    notification_map = await _infer_legacy_to_stable_from_notification_order(db)
+    snapshot_map = await _legacy_to_stable_from_draft_snapshot(db)
     matches_updated = int(match_repair.get("matches_from_odds") or 0) + int(
         match_repair.get("matches_from_schedule") or 0
     )
@@ -847,6 +1215,9 @@ async def _repair_wc_team_references(db) -> dict:
         "entries_remapped": applied.get("entries_remapped", 0),
         "predictions_named": predictions_named,
         "mapping_size": applied.get("mapping_size", 0),
+        "draft_snapshot_mappings": len(snapshot_map),
+        "draft_overlap_mappings": len(overlap_map),
+        "draft_notification_mappings": len(notification_map),
         **group_restore,
         "matches_remapped": matches_updated,
         **match_repair,
@@ -2291,7 +2662,15 @@ async def _run_draft_internal(db, send_notification=None) -> dict:
         )
     await db.game_config.update_one(
         {"id": CONFIG_ID},
-        {"$set": {"draft_run": True, "draft_seed": seed, "draft_run_at": now, "entry_open": False}},
+        {
+            "$set": {
+                "draft_run": True,
+                "draft_seed": seed,
+                "draft_run_at": now,
+                "entry_open": False,
+                "draft_source_team_ids": team_ids,
+            }
+        },
         upsert=True,
     )
     if send_notification:

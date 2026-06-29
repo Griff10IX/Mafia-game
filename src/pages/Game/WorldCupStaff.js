@@ -314,7 +314,9 @@ export default function WorldCupStaff() {
       const r = await api.post('/world-cup/staff/repair-references');
       const d = r.data || {};
       toast.success(
-        `Restored ${d.draft_entries_restored ?? 0} drafts, ${d.group_winners_restored ?? 0} group winners, ${d.matches_remapped ?? 0} matches`,
+        `Remapped ${d.predictions_remapped ?? 0} picks (${d.mapping_size ?? 0} links, `
+          + `${d.draft_overlap_mappings ?? 0}+${d.draft_notification_mappings ?? 0} inferred) · `
+          + `${d.draft_entries_restored ?? 0} drafts · ${d.group_winners_restored ?? 0} group winners · ${d.matches_remapped ?? 0} matches`,
       );
       await load();
       await loadGroupsSetup();
