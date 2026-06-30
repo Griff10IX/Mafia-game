@@ -292,7 +292,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Bot / script investigation', categoryId: 'admin-cheat', collapseKey: 'botInvestigation', keywords: ['bot', 'script', 'automation', 'investigation', 'cheat', 'suspicious', 'ip', 'network', 'mobile', 'isp', 'vpn', 'attack', 'execute_token', 'spoof', 'ua', 'kill'] },
   { label: 'Find Duplicates', categoryId: 'admin-cheat', collapseKey: 'duplicates', keywords: ['duplicate', 'multi', 'account'] },
   { label: 'Proxy farm investigation', categoryId: 'admin-cheat', collapseKey: 'cheat', keywords: ['proxy', 'proxyroyal', 'iproyal', 'residential', 'vpn', 'multi', 'account', 'farm', 'rotator'] },
-  { label: 'Cheater kill impact', categoryId: 'admin-cheat', collapseKey: 'cheaterKillImpact', keywords: ['cheater', 'kill', 'impact', 'bodyguard', 'refund', 'hire'] },
+  { label: 'Cheater kill impact', categoryId: 'admin-cheat', collapseKey: 'cheaterKillImpact', keywords: ['cheater', 'kill', 'impact', 'bodyguard', 'refund', 'hire'], adminOnly: true },
   // Analytics
   { label: 'Login page unique visitors', categoryId: 'admin-analytics', collapseKey: 'loginPageVisitors', keywords: ['login', 'visitors', 'unique', 'page', 'stats'] },
   { label: 'Casino Ownership Profits', categoryId: 'admin-analytics', collapseKey: 'ownershipProfits', keywords: ['casino', 'ownership', 'profit', 'owner', 'earnings'] },
@@ -311,7 +311,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Hitlist & bodyguards analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'hitlistBodyguardsAnalytics', keywords: ['hitlist', 'bodyguard', 'analytics'] },
   { label: 'Economy analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'economyAnalytics', keywords: ['economy', 'analytics', 'sink', 'faucet'] },
   { label: 'Loot box opens log', categoryId: 'admin-analytics-monitoring', collapseKey: 'lootBoxOpens', keywords: ['loot', 'box', 'opens', 'rewards', 'username'] },
-  { label: 'Player compare', categoryId: 'admin-analytics-monitoring', collapseKey: 'playerCompare', keywords: ['compare', 'players', 'side by side'] },
+  { label: 'Player compare', categoryId: 'admin-analytics-monitoring', collapseKey: 'playerCompare', keywords: ['compare', 'players', 'side by side'], adminOnly: true },
   // Logs
   { label: 'Toast notifications', categoryId: 'admin-logs', collapseKey: 'toastNotifications', keywords: ['toast', 'notifications', 'popup', 'message', 'error', 'success'] },
   { label: 'Wallet activity', categoryId: 'admin-logs', collapseKey: 'walletActivity', keywords: ['wallet', 'money', 'points', 'cash', 'transfer', 'mdg', 'bank', 'ledger'] },
@@ -11499,67 +11499,6 @@ export default function Admin() {
             </div>
           )}
         </div>
-
-        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <SectionHeader
-            icon={Lock}
-            title="Page locks"
-            toolAnchor="moderationPageLocks"
-            isCollapsed={collapsed.moderationPageLocks}
-            onToggle={() => toggleSection('moderationPageLocks')}
-          />
-          {!collapsed.moderationPageLocks && (
-            <div className="p-3 space-y-2">
-              <p className="text-[10px] text-mutedForeground">
-                Route / page locks live under <span className="text-foreground font-semibold">World &amp; Systems</span> → <span className="text-foreground font-semibold">Lock page</span>. Use the button below to jump there.
-              </p>
-              <BtnSecondary
-                type="button"
-                onClick={() =>
-                  void activateCategory('admin-world-systems', () => {
-                    setCollapsed((prev) => ({ ...prev, pageLocks: false }));
-                    if (typeof window !== 'undefined') {
-                      const runScroll = () => {
-                        document.getElementById('admin-page-locks')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                      };
-                      window.requestAnimationFrame(() => setTimeout(runScroll, 280));
-                    }
-                  })}
-              >
-                Open canonical page lock panel
-              </BtnSecondary>
-            </div>
-          )}
-        </div>
-
-        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <SectionHeader
-            icon={AlertTriangle}
-            title="Related shortcuts"
-            toolAnchor="moderationRelated"
-            isCollapsed={collapsed.moderationRelated}
-            onToggle={() => toggleSection('moderationRelated')}
-          />
-          {!collapsed.moderationRelated && (
-            <div className="p-3 space-y-2">
-              <p className="text-[10px] text-mutedForeground font-heading">Quick jump to adjacent moderation surfaces.</p>
-              <div className="flex flex-wrap gap-2">
-                <BtnSecondary
-                  onClick={() => void activateCategory('admin-operations', () => setCollapsed((prev) => ({ ...prev, cheat: false })))}
-                >
-                  Open Cheat Detection
-                </BtnSecondary>
-                {isAdmin && (
-                  <BtnSecondary onClick={() => void activateCategory('admin-operations')}>
-                    Open Security & Cloudflare
-                  </BtnSecondary>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
       </section>
       )}
 
@@ -16471,6 +16410,7 @@ export default function Admin() {
           )}
         </div>
 
+        {isFullAdminUi && (
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
@@ -16517,7 +16457,9 @@ export default function Admin() {
           </div>
         )}
         </div>
+        )}
 
+        {isFullAdminUi && (
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-rose-500/25 mobile-panel`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-rose-500/30 to-transparent" />
           <SectionHeader
@@ -16757,6 +16699,7 @@ export default function Admin() {
             </div>
           )}
         </div>
+        )}
 
         <div className={`${styles.panel} rounded-md overflow-hidden border border-amber-500/30 mobile-panel`}>
         <SectionHeader

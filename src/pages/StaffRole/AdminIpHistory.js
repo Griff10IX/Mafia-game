@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Globe, RefreshCw, Search, User, ShieldAlert, Smartphone, AlertTriangle, CheckCircle2, Info, EyeOff } from 'lucide-react';
 import api from '../../utils/api';
@@ -121,7 +121,9 @@ export default function AdminIpHistory() {
   const [attackDays, setAttackDays] = useState(90);
   const [report, setReport] = useState(null);
   const [userLoading, setUserLoading] = useState(false);
+  const [userLoadError, setUserLoadError] = useState(null);
   const [blurIps, setBlurIps] = useState(false);
+  const autoLoadAttemptRef = useRef({ user: null, done: false });
 
   const [ipQuery, setIpQuery] = useState(searchParams.get('ip') || '');
   const [ipData, setIpData] = useState(null);
@@ -155,6 +157,7 @@ export default function AdminIpHistory() {
     }
     setUserLoading(true);
     setReport(null);
+    setUserLoadError(null);
     try {
       const params = new URLSearchParams();
       const compact = q.replace(/-/g, '');
@@ -175,7 +178,9 @@ export default function AdminIpHistory() {
       const ips = res.data?.ip?.meta?.unique_ip_count_including_attacks ?? 0;
       toast.success(`Access report loaded (${ips} IPs, ${findings} finding(s))`);
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to load access report');
+      const detail = e.response?.data?.detail || 'Failed to load access report';
+      setUserLoadError(detail);
+      toast.error(detail);
     } finally {
       setUserLoading(false);
     }
@@ -216,10 +221,13 @@ export default function AdminIpHistory() {
 
   useEffect(() => {
     if (!accessChecked) return;
-    const u = searchParams.get('user');
-    if (u && !report && !userLoading) {
-      void loadAccessReport(u);
+    const u = (searchParams.get('user') || '').trim();
+    if (autoLoadAttemptRef.current.user !== u) {
+      autoLoadAttemptRef.current = { user: u || null, done: false };
     }
+    if (!u || report || userLoading || autoLoadAttemptRef.current.done) return;
+    autoLoadAttemptRef.current.done = true;
+    void loadAccessReport(u);
   }, [accessChecked, searchParams, report, userLoading, loadAccessReport]);
 
   if (!accessChecked) {
@@ -314,6 +322,12 @@ export default function AdminIpHistory() {
               {userLoading ? 'Loading…' : 'Run check'}
             </button>
           </div>
+
+          {userLoadError && !userLoading && (
+            <div className="rounded border border-amber-500/40 bg-amber-500/10 px-2 py-1.5 text-[10px] font-heading text-amber-200">
+              {userLoadError}
+            </div>
+          )}
 
           {access && userData && (
             <div className="space-y-4">
