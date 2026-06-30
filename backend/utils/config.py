@@ -4,7 +4,10 @@ Imported by server.py and optionally by routers.
 """
 
 # Locations (travel / attack states)
-STATES = ["Chicago", "New York", "Las Vegas", "Atlantic City"]
+STATES = ["Chicago", "New York", "Las Vegas"]
+
+# Inactive cities kept in DB/assets for possible re-enable (not in STATES).
+DISABLED_STATES = ["Atlantic City"]
 
 # Rank is based on rank_points only. Godfather is the top rank.
 RANKS = [

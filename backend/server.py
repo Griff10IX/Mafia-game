@@ -106,7 +106,7 @@ def root():
 api_router = APIRouter(prefix="/api")
 
 # Constants
-STATES = ["Chicago", "New York", "Las Vegas", "Atlantic City"]
+from utils.config import STATES  # noqa: E402 — single source of truth for travel/cities
 # Rank is based on rank_points only. Godfather is the top rank (~1.02M RP after 15% curve ease).
 # Thresholds scaled by 0.85 vs original ladder (15% fewer RP per tier).
 RANKS = [

@@ -17,6 +17,14 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse, urlunparse
+
+
+def build_mongodump_uri(mongo_url: str, db_name: str) -> str:
+    """Put target DB in URI path so mongodump does not conflict with --db + authSource=admin."""
+    p = urlparse(mongo_url.strip())
+    path = "/" + db_name.lstrip("/")
+    return urlunparse((p.scheme, p.netloc, path, p.params, p.query, p.fragment))
 
 
 def _load_env() -> Path:
@@ -44,12 +52,11 @@ def main() -> None:
     ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%SZ")
     archive_path = backups / f"mongo-{db_name}-{ts}.archive.gz"
 
+    dump_uri = build_mongodump_uri(mongo_url, db_name)
     cmd = [
         "mongodump",
         "--uri",
-        mongo_url.strip(),
-        "--db",
-        db_name,
+        dump_uri,
         "--archive",
         str(archive_path),
         "--gzip",

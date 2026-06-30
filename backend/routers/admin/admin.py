@@ -3816,6 +3816,71 @@ def register(router):
             ),
         }
 
+    @router.get("/admin/states/disable-preview")
+    async def admin_disable_state_preview(
+        state: str = Query("Atlantic City", min_length=1),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Preview impact of removing a city from active play."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.config import DISABLED_STATES, STATES
+        from utils.disable_state_migration import get_disable_state_record, preview_disable_state
+
+        st = (state or "").strip()
+        if st not in (DISABLED_STATES or []):
+            raise HTTPException(
+                status_code=400,
+                detail=f"State must be one of configured disabled targets: {', '.join(DISABLED_STATES or [])}",
+            )
+        preview = await preview_disable_state(db, st, list(STATES or []))
+        preview["disabled_states_record"] = await get_disable_state_record(db)
+        return preview
+
+    class DisableStateRunRequest(BaseModel):
+        state: str = Field(default="Atlantic City", min_length=1)
+        confirm: str = Field(..., min_length=1)
+        dry_run: bool = False
+
+    @router.post("/admin/states/disable-run")
+    async def admin_disable_state_run(
+        req: DisableStateRunRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Relinquish properties, relocate users, patch hunts — remove city from active play."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.config import DISABLED_STATES, STATES
+        from utils.disable_state_migration import (
+            DISABLE_STATE_CONFIRM_PHRASE,
+            get_disable_state_record,
+            run_disable_state,
+        )
+
+        st = (req.state or "").strip()
+        if st not in (DISABLED_STATES or []):
+            raise HTTPException(
+                status_code=400,
+                detail=f"State must be one of configured disabled targets: {', '.join(DISABLED_STATES or [])}",
+            )
+        if (req.confirm or "").strip() != DISABLE_STATE_CONFIRM_PHRASE:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Confirmation must be exactly: {DISABLE_STATE_CONFIRM_PHRASE}",
+            )
+        if not req.dry_run and st in await get_disable_state_record(db):
+            raise HTTPException(
+                status_code=409,
+                detail=f"{st} migration already completed. See game_settings disabled_states audit.",
+            )
+        return await run_disable_state(
+            db,
+            state=st,
+            active_states=list(STATES or []),
+            dry_run=req.dry_run,
+            admin_username=current_user.get("username") or "?",
+        )
+
     @router.post("/admin/add-car")
     async def admin_add_car(target_username: str, car_id: str, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):

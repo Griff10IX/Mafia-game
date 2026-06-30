@@ -846,7 +846,7 @@ export default function BoozeRun() {
   const historyList = config.history || [];
   const pricesAtLocation = config.prices_at_location || [];
 
-  // Consider all 4 cities: for every (buy city, sell city) pair compute best profit and pick the best pair overall.
+  // Consider all cities from server config when computing best profit pairs.
   const allByLocation = config.all_prices_by_location || {};
   const currentLocation = config.current_location || '';
   const cities = Object.keys(allByLocation);

@@ -35,7 +35,7 @@ FAQ_MD_PATH_LEGACY = PROJECT_ROOT / "FORUM_FAQ.md"
 FALLBACK_FAQ_CONTENT = """[b]NOTE (operators):[/b] Used only if [i]docs/FORUM_FAQ.md[/i] is missing when seeding. Restore that file and re-run the FAQ update.
 
 [b]Short snapshot[/b] — players should rely on in-game screens for live numbers:
-• Cities: Chicago, New York, Las Vegas, Atlantic City.
+• Cities: Chicago, New York, Las Vegas.
 • Ranks: 13 ranks; Godfather at about 1.02M rank points.
 • Interest bank: current terms on the bank screen.
 • Personal OC cooldown: [b]6h[/b], or [b]4h[/b] after a one-time Point Store purchase.

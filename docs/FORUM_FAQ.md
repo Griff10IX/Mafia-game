@@ -485,7 +485,7 @@ Only a small set of [b]crime economy[/b] APIs are denied: [b]Crimes[/b] (list/st
 
 [quote]
 [color=#3498DB][b]Cities[/b][/color]
-4 cities available: Chicago, New York, Las Vegas, Atlantic City
+3 cities available: Chicago, New York, Las Vegas
 
 Each city has:
 [list]

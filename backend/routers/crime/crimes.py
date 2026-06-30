@@ -449,6 +449,7 @@ from server import (
     maybe_respect_points_drop,
     send_notification,
     RANKS,
+    STATES,
 )
 from utils.location_climate import get_location_climate, rank_multiplier_for_actor, success_multiplier_for_actor
 from routers.account.objectives import update_objectives_progress
@@ -844,6 +845,8 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
             if biz:
                 bstate = (biz.get("state") or "").strip()
                 here = (current_user.get("current_state") or "").strip()
+                if bstate and bstate not in (STATES or []):
+                    bstate = here
                 if bstate and here and bstate == here:
                     ib_crimes_in_state_inc = 1
         except Exception:

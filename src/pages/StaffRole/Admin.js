@@ -203,6 +203,7 @@ function formatWholeCash(x) {
 
 /** Must match backend `FIRST_GAME_PASS_CONFIRM_PHRASE` for first VIP completion bulk grant. */
 const FIRST_GAME_PASS_VIP_COMPLETION_CONFIRM = 'FIRST GAME PASS COMPLETE';
+const DISABLE_STATE_CONFIRM = 'DISABLE ATLANTIC CITY';
 
 // Searchable tools list - each item has: label (searchable), categoryId (scroll target), collapseKey (optional - to expand section)
 const SEARCHABLE_TOOLS = [
@@ -340,6 +341,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Game Pass points diagnostic', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-game-pass-inspector', keywords: ['game pass', 'points', 'diagnostic', 'ledger', 'stripe', 'purchase source', 'catch up pending'], adminOnly: true },
   { label: 'Game Pass stuck cursors', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-game-pass-inspector', keywords: ['game pass', 'stuck', 'cursor', 'broken', 'fix', 'repair', 'rewards'], adminOnly: true },
   { label: 'First Game Pass VIP completion', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-first-gp-vip-completion', keywords: ['game pass', 'first', 'vip', 'completion', 'bulk', 'tier', '100', 'bonus', 'one time'], adminOnly: true },
+  { label: 'Disable Atlantic City', categoryId: 'admin-operations', collapseKey: 'stateHeads', scrollToId: 'admin-disable-state', keywords: ['atlantic city', 'disable state', 'remove city', 'migration', 'relinquish'], adminOnly: true },
   { label: 'User inbox (live)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-inbox', keywords: ['inbox', 'notifications', 'dm', 'messages', 'mail', 'social'], adminOnly: true },
   { label: 'Deleted messages', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-deleted-messages', keywords: ['deleted', 'messages', 'archive', 'forum', 'chat', 'dm', 'notification', 'history'], adminOnly: true },
   { label: 'Reset OC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'timer'] },
@@ -972,6 +974,10 @@ export default function Admin() {
   const [firstGpVipCompletionPreviewLoading, setFirstGpVipCompletionPreviewLoading] = useState(false);
   const [firstGpVipCompletionConfirm, setFirstGpVipCompletionConfirm] = useState('');
   const [firstGpVipCompletionRunLoading, setFirstGpVipCompletionRunLoading] = useState(false);
+  const [disableStatePreview, setDisableStatePreview] = useState(null);
+  const [disableStatePreviewLoading, setDisableStatePreviewLoading] = useState(false);
+  const [disableStateConfirm, setDisableStateConfirm] = useState('');
+  const [disableStateRunLoading, setDisableStateRunLoading] = useState(false);
   const [userInboxData, setUserInboxData] = useState(null);
   const [userInboxLoading, setUserInboxLoading] = useState(false);
   const [userInboxDeletingId, setUserInboxDeletingId] = useState(null);
@@ -4117,6 +4123,43 @@ export default function Admin() {
       toast.error(error.response?.data?.detail || 'Run failed');
     } finally {
       setFirstGpVipCompletionRunLoading(false);
+    }
+  };
+
+  const loadDisableStatePreview = async () => {
+    setDisableStatePreviewLoading(true);
+    try {
+      const res = await api.get('/admin/states/disable-preview', { params: { state: 'Atlantic City' } });
+      setDisableStatePreview(res.data || null);
+      toast.success('Atlantic City disable preview loaded');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Preview failed');
+    } finally {
+      setDisableStatePreviewLoading(false);
+    }
+  };
+
+  const runDisableState = async (dryRun) => {
+    if ((disableStateConfirm || '').trim() !== DISABLE_STATE_CONFIRM) {
+      toast.error(`Type exactly: ${DISABLE_STATE_CONFIRM}`);
+      return;
+    }
+    if (!dryRun && !window.confirm('Live run: relinquish AC properties, relocate users/NPCs/robots, patch hunts, IBM rackets, QT listings, state heads. Continue?')) {
+      return;
+    }
+    setDisableStateRunLoading(true);
+    try {
+      const res = await api.post('/admin/states/disable-run', {
+        state: 'Atlantic City',
+        confirm: DISABLE_STATE_CONFIRM,
+        dry_run: dryRun,
+      });
+      toast.success(res.data?.message || 'Done');
+      await loadDisableStatePreview();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Run failed');
+    } finally {
+      setDisableStateRunLoading(false);
     }
   };
 
@@ -13844,6 +13887,38 @@ export default function Admin() {
         />
         {!collapsed.stateHeads && (
           <div className="p-3 space-y-2">
+            <div id="admin-disable-state" className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 space-y-2 scroll-mt-24 mb-3">
+              <div className="text-[10px] font-heading font-bold text-amber-300 uppercase tracking-wider">Disable Atlantic City (3 cities)</div>
+              <p className="text-[9px] text-mutedForeground font-heading">
+                Relinquishes AC casinos, airport, armoury (escrow refunds). Relocates players, hitlist NPCs, robot bodyguards.
+                Patches kill hunts, IBM racket states, booze buy pins, QT listings, state heads, and pending takeovers.
+                Missions, daily events, and hot/cold use the 3-city STATES list automatically. Preview shows full systems_audit.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <BtnSecondary type="button" onClick={loadDisableStatePreview} disabled={disableStatePreviewLoading || disableStateRunLoading}>
+                  {disableStatePreviewLoading ? '…' : 'Preview'}
+                </BtnSecondary>
+                <input
+                  type="text"
+                  value={disableStateConfirm}
+                  onChange={(e) => setDisableStateConfirm(e.target.value)}
+                  placeholder={DISABLE_STATE_CONFIRM}
+                  className="flex-1 min-w-[12rem] max-w-md px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono"
+                  autoComplete="off"
+                />
+                <BtnSecondary type="button" onClick={() => runDisableState(true)} disabled={disableStateRunLoading}>
+                  {disableStateRunLoading ? '…' : 'Dry run'}
+                </BtnSecondary>
+                <BtnDanger type="button" onClick={() => runDisableState(false)} disabled={disableStateRunLoading}>
+                  {disableStateRunLoading ? '…' : 'Run live'}
+                </BtnDanger>
+              </div>
+              {disableStatePreview && (
+                <pre className="text-[9px] font-mono whitespace-pre-wrap break-words max-h-64 overflow-y-auto text-zinc-200/90 rounded border border-amber-500/20 bg-zinc-900/40 p-2">
+                  {JSON.stringify(disableStatePreview, null, 2)}
+                </pre>
+              )}
+            </div>
             <p className="text-[10px] text-mutedForeground">Manage which family controls each state. A family can only be head of ONE state.</p>
             {stateHeadsLoading ? (
               <p className="text-xs text-mutedForeground">Loading...</p>
