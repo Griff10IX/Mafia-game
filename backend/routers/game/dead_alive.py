@@ -158,6 +158,24 @@ def register(router):
             raise HTTPException(status_code=403, detail=ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL)
         if not verify_password(request.dead_password, dead_user["password_hash"]):
             raise HTTPException(status_code=401, detail="Invalid password for that account")
+        if dead_user.get("revive_sacrifice"):
+            raise HTTPException(
+                status_code=400,
+                detail="That account died during a revive swap — its estate was already transferred and cannot be claimed again.",
+            )
+        revive_as_reviver = await db.dead_alive_transfers.find_one(
+            {
+                "event_type": "revive",
+                "reviver_id": dead_user["id"],
+                "revived_id": current_user["id"],
+            },
+            {"_id": 0, "id": 1},
+        )
+        if revive_as_reviver:
+            raise HTTPException(
+                status_code=400,
+                detail="You cannot claim inheritance from an account that died when it revived this character.",
+            )
         points_at_death = int(dead_user.get("points_at_death") or 0)
         money_at_death = int(dead_user.get("money_at_death") or 0)
         swiss_at_death = int(dead_user.get("swiss_balance") or 0)
@@ -592,7 +610,7 @@ def register(router):
                 raise HTTPException(status_code=400, detail="That account could not be revived.")
             if revived_points > 0:
                 await log_points_event(db, user_id=dead_user["id"], points=revived_points, event_type="dead_alive_reviver_pay", event_ref=current_user["id"])
-            # 4) Kill reviving account
+            # 4) Kill reviving account — estate already moved to revived; do not leave retrievable snapshot
             await db.users.update_one(
                 {"id": current_user["id"]},
                 {
@@ -600,8 +618,11 @@ def register(router):
                         "is_dead": True,
                         "dead_at": now_iso,
                         "death_by_staff": False,
-                        "points_at_death": reviver_points_after,
-                        "money_at_death": reviver_money,
+                        "points_at_death": 0,
+                        "money_at_death": 0,
+                        "tokens_at_death": {},
+                        "revive_sacrifice": True,
+                        "revive_sacrifice_for_user_id": dead_user["id"],
                         "money": 0,
                         "points": 0,
                         "health": 0,
@@ -641,8 +662,10 @@ def register(router):
                         "recipient_username": dead_user.get("username"),
                         "revive_cost": REVIVE_COST,
                         "reviver_points_before": points_balance,
+                        "reviver_points_after_cost": reviver_points_after,
                         "reviver_points_after_death": 0,
                         "reviver_money_transferred": reviver_money,
+                        "revived_id": dead_user["id"],
                         "points_transferred": revived_points,
                         "dead_carry_points": dead_carry,
                         "retrieval_used_on_dead": bool(dead_user.get("retrieval_used")),

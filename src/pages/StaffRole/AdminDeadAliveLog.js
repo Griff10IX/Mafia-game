@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { Skull, RefreshCw, Search, ArrowRight, Coins, Star } from 'lucide-react';
+import { Skull, RefreshCw, Search, ArrowRight, Coins, Star, AlertTriangle } from 'lucide-react';
 import api from '../../utils/api';
 import { formatAdminDateTime } from '../../utils/adminDateTime';
 import { toast } from 'sonner';
@@ -112,14 +112,31 @@ function TransferDetail({ row }) {
   );
 }
 
+function SeverityBadge({ severity }) {
+  const map = {
+    high: 'border-red-500/50 bg-red-500/15 text-red-200',
+    medium: 'border-amber-500/50 bg-amber-500/15 text-amber-200',
+    low: 'border-yellow-500/40 bg-yellow-500/10 text-yellow-200',
+    watch: 'border-zinc-500/40 bg-zinc-500/10 text-mutedForeground',
+  };
+  return (
+    <span className={`rounded px-1.5 py-0.5 text-[8px] font-heading uppercase tracking-wide border ${map[severity] || map.watch}`}>
+      {severity || 'watch'}
+    </span>
+  );
+}
+
 export default function AdminDeadAliveLog() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [accessChecked, setAccessChecked] = useState(false);
+  const [view, setView] = useState(searchParams.get('view') || 'transfers');
   const [userQuery, setUserQuery] = useState(searchParams.get('user') || '');
   const [days, setDays] = useState(Math.min(365, Math.max(1, parseInt(searchParams.get('days') || '90', 10) || 90)));
   const [eventType, setEventType] = useState(searchParams.get('type') || '');
   const [loading, setLoading] = useState(false);
+  const [abuseLoading, setAbuseLoading] = useState(false);
   const [data, setData] = useState(null);
+  const [abuseData, setAbuseData] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
 
   useEffect(() => {
@@ -159,12 +176,38 @@ export default function AdminDeadAliveLog() {
     }
   }, [userQuery, days, eventType, setSearchParams]);
 
+  const loadAbuse = useCallback(async () => {
+    setAbuseLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('days', String(days));
+      params.set('limit', '150');
+      const res = await api.get(`/admin/investigate/dead-alive-revive-abuse?${params.toString()}`);
+      setAbuseData(res.data);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to load revive abuse report');
+      setAbuseData(null);
+    } finally {
+      setAbuseLoading(false);
+    }
+  }, [days]);
+
   useEffect(() => {
     if (!accessChecked) return;
-    void loadLog();
-  }, [accessChecked, loadLog]);
+    if (view === 'abuse') void loadAbuse();
+    else void loadLog();
+  }, [accessChecked, view, loadLog, loadAbuse]);
 
   const rows = data?.transfers || [];
+  const abuseCases = (abuseData?.cases || []).filter((c) => {
+    const q = userQuery.trim().toLowerCase();
+    if (!q) return true;
+    const names = [
+      c.reviver_username,
+      c.revived_username,
+    ].map((s) => (s || '').toLowerCase());
+    return names.some((n) => n.includes(q));
+  });
 
   return (
     <div
@@ -178,26 +221,52 @@ export default function AdminDeadAliveLog() {
           <div>
             <h1 className="text-lg font-heading font-bold text-foreground">Dead &gt; Alive transfer log</h1>
             <p className="text-[10px] text-mutedForeground font-heading max-w-2xl">
-              Every retrieve (dead estate → living alt) and revive (50k revive swap). Shows points cleared on the dead
-              account and what the recipient received.
+              Every retrieve (dead estate → living alt) and revive (50k revive swap). Use{' '}
+              <strong className="text-foreground font-normal">Revive abuse</strong> to find players who reclaimed
+              points from the account that died in the swap (50k fee refunded).
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => void loadLog()}
-          disabled={loading}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-primary/40 bg-primary/15 text-primary text-[10px] font-heading uppercase tracking-wider hover:bg-primary/25 disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => setView('transfers')}
+            className={`px-3 py-1.5 rounded border text-[10px] font-heading uppercase tracking-wider ${
+              view === 'transfers'
+                ? 'border-primary/40 bg-primary/15 text-primary'
+                : 'border-border text-mutedForeground hover:text-foreground'
+            }`}
+          >
+            Transfers
+          </button>
+          <button
+            type="button"
+            onClick={() => setView('abuse')}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded border text-[10px] font-heading uppercase tracking-wider ${
+              view === 'abuse'
+                ? 'border-red-500/40 bg-red-500/15 text-red-200'
+                : 'border-border text-mutedForeground hover:text-foreground'
+            }`}
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            Revive abuse
+          </button>
+          <button
+            type="button"
+            onClick={() => (view === 'abuse' ? void loadAbuse() : void loadLog())}
+            disabled={loading || abuseLoading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-primary/40 bg-primary/15 text-primary text-[10px] font-heading uppercase tracking-wider hover:bg-primary/25 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${(loading || abuseLoading) ? 'animate-spin' : ''}`} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       <section className="rounded border border-border overflow-hidden">
         <div className="px-2 py-1.5 bg-primary/10 border-b border-border text-[10px] font-heading font-bold uppercase tracking-wider text-primary flex items-center gap-2">
           <Search className="w-3.5 h-3.5" />
-          Search transfers
+          {view === 'abuse' ? 'Abuse report filters' : 'Search transfers'}
         </div>
         <div className="p-3 flex flex-wrap items-end gap-2">
           <label className="flex flex-col gap-0.5 min-w-[200px] flex-1">
@@ -228,7 +297,8 @@ export default function AdminDeadAliveLog() {
             <select
               value={eventType}
               onChange={(e) => setEventType(e.target.value)}
-              className="px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-heading"
+              disabled={view === 'abuse'}
+              className="px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-heading disabled:opacity-50"
             >
               <option value="">All</option>
               <option value="retrieve">Retrieve</option>
@@ -237,16 +307,80 @@ export default function AdminDeadAliveLog() {
           </label>
           <button
             type="button"
-            onClick={() => void loadLog()}
-            disabled={loading}
+            onClick={() => (view === 'abuse' ? void loadAbuse() : void loadLog())}
+            disabled={loading || abuseLoading}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded border border-primary/40 bg-primary/15 text-primary text-[10px] font-heading uppercase tracking-wider hover:bg-primary/25 disabled:opacity-50"
           >
-            {loading ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
-            {loading ? 'Loading…' : 'Search'}
+            {(loading || abuseLoading) ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Search className="w-3.5 h-3.5" />}
+            {(loading || abuseLoading) ? 'Loading…' : 'Search'}
           </button>
         </div>
       </section>
 
+      {view === 'abuse' ? (
+        <section className="rounded border border-red-500/30 overflow-hidden">
+          <div className="px-2 py-1.5 bg-red-500/10 border-b border-red-500/20 flex items-center justify-between gap-2">
+            <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-red-200">
+              Suspected revive fee refunds ({abuseCases.length} of {abuseData?.revives_scanned ?? 0} revives)
+            </span>
+          </div>
+          {!abuseCases.length && !abuseLoading && (
+            <p className="p-4 text-[10px] text-mutedForeground font-heading">
+              No revive → retrieve loops found in this window (or none with reclaimed points).
+            </p>
+          )}
+          {abuseCases.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[10px] font-heading">
+                <thead className="bg-zinc-900/60 border-b border-border text-mutedForeground text-left">
+                  <tr>
+                    <th className="p-2">Revive</th>
+                    <th className="p-2">Reviver → Revived</th>
+                    <th className="p-2 text-right">Fee</th>
+                    <th className="p-2 text-right">Reclaimed</th>
+                    <th className="p-2 text-right">Effective cost</th>
+                    <th className="p-2">Severity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {abuseCases.map((c, i) => (
+                    <tr key={`${c.revive_at}-${c.reviver_id}-${i}`} className="border-b border-zinc-800/80 align-top">
+                      <td className="p-2 whitespace-nowrap text-mutedForeground font-mono text-[9px]">
+                        {formatAdminDateTime(c.revive_at)}
+                      </td>
+                      <td className="p-2">
+                        <span className="text-red-300/90 font-bold">{c.reviver_username || '?'}</span>
+                        <ArrowRight className="w-3 h-3 inline mx-1 text-mutedForeground" />
+                        <span className="text-emerald-300 font-bold">{c.revived_username || '?'}</span>
+                        {(c.pre_revive_retrieve_points || 0) > 0 && (
+                          <div className="text-[9px] text-mutedForeground mt-0.5">
+                            Pre-revive retrieve: {fmtInt(c.pre_revive_retrieve_points)} pts
+                          </div>
+                        )}
+                      </td>
+                      <td className="p-2 text-right text-amber-300">{fmtInt(c.revive_cost)}</td>
+                      <td className="p-2 text-right text-red-300 font-bold">+{fmtInt(c.post_revive_reclaim_points)}</td>
+                      <td className="p-2 text-right">
+                        <span className={c.effective_revive_cost === 0 ? 'text-red-300 font-bold' : 'text-foreground'}>
+                          {fmtInt(c.effective_revive_cost)}
+                        </span>
+                      </td>
+                      <td className="p-2">
+                        <SeverityBadge severity={c.severity} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <p className="p-3 text-[9px] text-mutedForeground font-heading border-t border-zinc-800/80">
+            <strong className="text-foreground font-normal">Reclaimed</strong> = points taken back from the reviver corpse
+            after the swap. If it matches or exceeds the 50k fee, revive was effectively free. Post-deploy revives block
+            this; this report catches historical abuse.
+          </p>
+        </section>
+      ) : (
       <section className="rounded border border-border overflow-hidden">
         <div className="px-2 py-1.5 bg-zinc-900/80 border-b border-border flex items-center justify-between gap-2">
           <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-mutedForeground">
@@ -333,6 +467,7 @@ export default function AdminDeadAliveLog() {
           </div>
         ))}
       </section>
+      )}
 
       <p className="text-[9px] text-mutedForeground font-heading leading-snug flex items-start gap-1.5">
         <Coins className="w-3 h-3 shrink-0 mt-0.5" />

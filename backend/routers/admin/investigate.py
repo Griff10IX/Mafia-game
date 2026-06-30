@@ -1709,3 +1709,14 @@ def register(router):
             limit=limit,
             skip=skip,
         )
+
+    @router.get("/admin/investigate/dead-alive-revive-abuse")
+    async def admin_investigate_dead_alive_revive_abuse(
+        days: int = Query(365, ge=1, le=365),
+        limit: int = Query(100, ge=1, le=500),
+        current_user: dict = Depends(require_admin_or_mod),
+    ):
+        """Users who may have refunded the 50k revive fee via retrieve after a revive swap."""
+        from utils.dead_alive_transfer_log import query_revive_retrieve_abuse
+
+        return await query_revive_retrieve_abuse(db, days=days, limit=limit)

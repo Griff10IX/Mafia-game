@@ -46,6 +46,17 @@ export default function DeadAlive() {
       toast.error('Choose or enter the dead account username to revive.');
       return;
     }
+    const balance = reviveEligibility?.points_balance ?? 0;
+    const afterCost = Math.max(0, balance - REVIVE_COST);
+    const msg = (
+      `Revive ${toRevive} for ${REVIVE_COST.toLocaleString()} points?\n\n`
+      + `• ${REVIVE_COST.toLocaleString()} points will be deducted from this account\n`
+      + `• Your remaining points and cash will transfer to ${toRevive}\n`
+      + `• This account will become DEAD — you must log in as ${toRevive} to continue\n`
+      + `• One revive per email (staff can grant another)\n\n`
+      + `You have ${balance.toLocaleString()} pts → about ${afterCost.toLocaleString()} pts would move to the revived account (plus any estate on the dead account).`
+    );
+    if (!window.confirm(msg)) return;
     setReviveLoading(true);
     setReviveSuccess(null);
     try {

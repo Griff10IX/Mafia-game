@@ -57,7 +57,7 @@ function buildGtaCacheFromSettled(
   let nextAutoRankGtaDisabled = false;
   if (autoRankRes.status === 'fulfilled' && autoRankRes.value?.data) {
     const ar = autoRankRes.value.data;
-    nextAutoRankGtaDisabled = !!(ar.auto_rank_enabled && (ar.auto_rank_gta || ar.auto_rank_bust_every_5_sec));
+    nextAutoRankGtaDisabled = !!(ar.auto_rank_enabled && ar.auto_rank_gta);
   }
 
   let nextActiveLootPerks = [];

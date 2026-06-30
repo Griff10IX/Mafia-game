@@ -462,7 +462,7 @@ export default function GTA() {
       }
       if (autoRankRes.status === 'fulfilled' && autoRankRes.value?.data) {
         const ar = autoRankRes.value.data;
-        nextAutoRankGtaDisabled = !!(ar.auto_rank_enabled && (ar.auto_rank_gta || ar.auto_rank_bust_every_5_sec));
+        nextAutoRankGtaDisabled = !!(ar.auto_rank_enabled && ar.auto_rank_gta);
         setAutoRankGtaDisabled(nextAutoRankGtaDisabled);
       }
       if (lootStatusRes.status === 'fulfilled' && Array.isArray(lootStatusRes.value?.data?.active_rewards)) {
