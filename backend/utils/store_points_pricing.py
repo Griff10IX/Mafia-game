@@ -11,7 +11,7 @@ CUSTOM_POINTS_PACKAGE_ID = "custom"
 
 # Match smallest / largest fixed point packs (mini / legend).
 CUSTOM_POINTS_MIN = 1_000
-CUSTOM_POINTS_MAX = 200_000
+CUSTOM_POINTS_MAX = 1_000_000
 
 _RANK_PASS_ID = "rank_xp_pass_499"
 
@@ -33,12 +33,8 @@ def _sorted_knots() -> List[Tuple[int, float]]:
 
 
 def price_gbp_for_points(points: int) -> float:
-    """GBP price for an integer point amount (piecewise linear between tier knots)."""
+    """GBP price for an integer point amount (piecewise linear between tier knots; extrapolate past top knot)."""
     p = int(points)
-    if p < CUSTOM_POINTS_MIN:
-        p = CUSTOM_POINTS_MIN
-    if p > CUSTOM_POINTS_MAX:
-        p = CUSTOM_POINTS_MAX
     knots = _sorted_knots()
     if not knots:
         raise RuntimeError("POINT_PACKAGES has no point tiers")
@@ -52,7 +48,12 @@ def price_gbp_for_points(points: int) -> float:
                 return float(g0)
             t = (p - p0) / (p1 - p0)
             return float(g0 + t * (g1 - g0))
-    return float(knots[-1][1])
+    p0, g0 = knots[-2]
+    p1, g1 = knots[-1]
+    if p1 == p0:
+        return float(g1)
+    slope = (g1 - g0) / (p1 - p0)
+    return float(g1 + slope * (p - p1))
 
 
 def gbp_to_minor_pence(price_gbp: float) -> int:
