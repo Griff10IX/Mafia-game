@@ -233,6 +233,7 @@ async def _try_grant_rank_xp_pass_micro_tier(
     user_id: str,
     micro_tier: int,
     free_cash_last_micro_tier_granted: int = 0,
+    season_id: Optional[str] = None,
 ) -> Optional[dict]:
     """Attempt to grant one micro-tier reward set (atomic, cursor-based)."""
     try:
@@ -242,7 +243,7 @@ async def _try_grant_rank_xp_pass_micro_tier(
     if t <= 0:
         return None
 
-    rewards = vip_rewards_after_free_dedupe(t, free_cash_last_micro_tier_granted)
+    rewards = vip_rewards_after_free_dedupe(t, free_cash_last_micro_tier_granted, season_id=season_id)
 
     inc = {k: int(v) for k, v in rewards.items() if int(v or 0) > 0}
     if not inc:
@@ -301,8 +302,9 @@ async def _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
     """
     u0 = await db.users.find_one(
         {"id": user_id},
-        {"_id": 0, "rank_xp_pass_season_rp": 1, "points": 1},
+        {"_id": 0, "rank_xp_pass_season_rp": 1, "points": 1, "game_pass_season_id": 1},
     )
+    grant_season_id = str((u0 or {}).get("game_pass_season_id") or "").strip() or None
     season_live = int((u0 or {}).get("rank_xp_pass_season_rp") or 0)
     points_running = int((u0 or {}).get("points") or 0)
     snap = int(tier_snapshot or 0)
@@ -331,6 +333,7 @@ async def _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
             user_id=user_id,
             micro_tier=t,
             free_cash_last_micro_tier_granted=free_cash_last_micro_tier_granted,
+            season_id=grant_season_id,
         )
         if not applied:
             continue
@@ -343,7 +346,7 @@ async def _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
         else:
             next_rewards = next_rewards_cache.get(next_t)
             if next_rewards is None:
-                next_rewards = rewards_for_micro_tier(next_t)
+                next_rewards = rewards_for_micro_tier(next_t, season_id=grant_season_id)
                 next_rewards_cache[next_t] = next_rewards
             next_summary = f"Tier {next_t} rewards: {format_rewards_summary(next_rewards)}"
 

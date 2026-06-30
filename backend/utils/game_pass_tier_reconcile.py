@@ -77,6 +77,7 @@ async def grant_missing_vip_micro_tier_rewards(
         }
 
     free_cash_last_micro = int(user.get("rank_xp_pass_free_last_micro_tier_granted") or 0)
+    grant_season_id = str(user.get("game_pass_season_id") or "").strip() or None
 
     from routers.kill.armoury import _try_grant_rank_xp_pass_micro_tier
 
@@ -86,6 +87,7 @@ async def grant_missing_vip_micro_tier_rewards(
             user_id=user_id,
             micro_tier=t,
             free_cash_last_micro_tier_granted=free_cash_last_micro,
+            season_id=grant_season_id,
         )
         if not applied:
             continue
@@ -99,7 +101,7 @@ async def grant_missing_vip_micro_tier_rewards(
         if next_t is None:
             next_summary = "Max tier reached"
         else:
-            next_rewards = rewards_for_micro_tier(next_t)
+            next_rewards = rewards_for_micro_tier(next_t, season_id=grant_season_id)
             next_summary = f"Tier {next_t} rewards: {format_rewards_summary(next_rewards)}"
 
         received_parts = []

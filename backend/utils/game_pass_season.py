@@ -18,7 +18,7 @@ from typing import Any, Dict, Optional
 
 GAME_PASS_SEASON_SETTINGS_KEY = "game_pass_season"
 # Fallback when DB unset (season #2 end — 15:00 BST)
-DEFAULT_GAME_PASS_SEASON_END_AT = "2026-06-01T14:00:00+00:00"
+DEFAULT_GAME_PASS_SEASON_END_AT = "2026-07-01T14:00:00+00:00"
 
 
 def _parse_iso_utc(v: Any) -> Optional[datetime]:

@@ -1324,13 +1324,14 @@ async def get_current_user(
             token_ready = bool(token_count > 0 and expires_dt and expires_dt > now)
 
             if not token_ready:
+                grant_season_id = str(user.get("game_pass_season_id") or "").strip() or None
                 current_micro = micro_tier_from_rank_points(int(user.get("rank_xp_pass_season_rp") or 0))
                 if current_micro > 0:
                     last_micro = int(user.get("rank_xp_pass_free_last_micro_tier_granted") or 0)
                     if current_micro > last_micro:
                         for t in range(last_micro + 1, current_micro + 1):
-                            rewards = rewards_for_micro_tier(t)
-                            free_key = free_unlocked_key_for_micro_tier(t, rewards)
+                            rewards = rewards_for_micro_tier(t, season_id=grant_season_id)
+                            free_key = free_unlocked_key_for_micro_tier(t, rewards, season_id=grant_season_id)
                             if not free_key:
                                 continue
                             reward_amount = int(rewards.get(free_key) or 0)
@@ -1355,14 +1356,14 @@ async def get_current_user(
 
                             next_tier = t + 1 if t < MAX_MICRO_TIER else None
                             next_summary = (
-                                f"Tier {next_tier} rewards: {format_rewards_summary(rewards_for_micro_tier(next_tier))}"
+                                f"Tier {next_tier} rewards: {format_rewards_summary(rewards_for_micro_tier(next_tier, season_id=grant_season_id))}"
                                 if next_tier
                                 else "Max tier reached"
                             )
 
                             if free_key == "money":
                                 received_text = f"${reward_amount:,} cash"
-                            elif free_key in ("bullets", "points", "respect_points"):
+                            elif free_key in ("bullets", "points", "respect_points", "molotovs"):
                                 received_text = f"{reward_amount:,} {REWARD_KEY_LABELS.get(free_key, free_key)}"
                             else:
                                 received_text = f"{reward_amount:,}x {REWARD_KEY_LABELS.get(free_key, free_key)}"

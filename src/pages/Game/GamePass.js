@@ -93,21 +93,153 @@ function formatCountdown(ms) {
   return parts.join(' ');
 }
 
-// Reward math / v4 deterministic layout must stay in sync with backend `game_pass_micro_rewards.py`.
+// Reward math — season profiles must stay in sync with backend `game_pass_micro_rewards.py`.
 const TARGET_CASH_TOTAL = 5_000_000_000;
-const TARGET_POINTS_TOTAL = 25_000;
 const TARGET_BULLETS_TOTAL = 250_000;
 const TARGET_AUTO_RANK_2H_TOTAL = 75;
-const TARGET_RANDOM_TOKENS_TOTAL = 250; // tokens chosen from this "random pool" set
-const TARGET_LOOT_PIECES_TOTAL = 2_000;
+const TARGET_RANDOM_TOKENS_TOTAL = 250;
 const TARGET_XP_CRIMES_TOKENS_TOTAL = 150;
 const TARGET_XP_GTA_TOKENS_TOTAL = 150;
+
+const PROFILE_META = {
+  v2: {
+    points: 25_000,
+    loot: 2_000,
+    molotovs: 0,
+  },
+  v3: {
+    points: 30_000,
+    loot: 2_500,
+    molotovs: 1_000,
+  },
+};
 
 const MONEY_BASE_TIER = 10;
 const POINTS_BASE_TIER = 50;
 const AUTO_RANK_2H_BASE_TIER = 100;
 
 const SELECTABLE_RANDOM_TOKEN_KEYS = ['melt_tokens', 'jailbust_tokens', 'travel_tokens', 'properties_tokens'];
+const ROT_PRIM_KEYS = ['money', 'bullets', 'xp_crimes_tokens', 'xp_gta_tokens', 'points'];
+const ROT_TOKEN_KEYS = ['melt_tokens', 'jailbust_tokens', 'travel_tokens', 'properties_tokens'];
+
+function profileKeyForSeason(seasonId) {
+  const n = parseInt(String(seasonId ?? '0'), 10);
+  return Number.isFinite(n) && n >= 3 ? 'v3' : 'v2';
+}
+
+function buildMicroRewardProfile({
+  seedFree,
+  targetPoints,
+  targetLootPieces,
+  targetMolotovs,
+  includeMolotovs,
+}) {
+  const BASE_TIER_BY_KEY = {
+    money: MONEY_BASE_TIER,
+    bullets: 20,
+    xp_crimes_tokens: 40,
+    xp_gta_tokens: 40,
+    points: POINTS_BASE_TIER,
+    loot_box_pieces: 55,
+    molotovs: 60,
+    melt_tokens: 70,
+    jailbust_tokens: 80,
+    travel_tokens: 90,
+    properties_tokens: 100,
+    auto_rank_2h_tokens: 100,
+  };
+
+  const targetRandomByKey = distributeTotal(TARGET_RANDOM_TOKENS_TOTAL, SELECTABLE_RANDOM_TOKEN_KEYS);
+  const TARGET_TOTAL_BY_KEY = {
+    money: TARGET_CASH_TOTAL,
+    bullets: TARGET_BULLETS_TOTAL,
+    points: targetPoints,
+    loot_box_pieces: targetLootPieces,
+    xp_crimes_tokens: TARGET_XP_CRIMES_TOKENS_TOTAL,
+    xp_gta_tokens: TARGET_XP_GTA_TOKENS_TOTAL,
+    ...targetRandomByKey,
+  };
+  if (includeMolotovs) {
+    TARGET_TOTAL_BY_KEY.molotovs = targetMolotovs;
+  }
+
+  const selectedKeysByTier = Array.from({ length: 101 }, () => []);
+  const freeUnlockedKeyByTier = Array.from({ length: 101 }, () => null);
+  const tiersAssignedByKey = {};
+  Object.keys(TARGET_TOTAL_BY_KEY).forEach((k) => { tiersAssignedByKey[k] = []; });
+
+  for (let t = 1; t <= 100; t += 1) {
+    const prim = ROT_PRIM_KEYS[(t - 1) % ROT_PRIM_KEYS.length];
+    const tok = ROT_TOKEN_KEYS[(t - 1) % ROT_TOKEN_KEYS.length];
+    const finalChosen = includeMolotovs
+      ? [prim, 'loot_box_pieces', 'molotovs', tok]
+      : [prim, 'loot_box_pieces', tok];
+    selectedKeysByTier[t] = finalChosen;
+
+    const freeRng = mulberry32(fnv1a32(`${seedFree}:${t}`));
+    freeUnlockedKeyByTier[t] = finalChosen.length ? finalChosen[Math.floor(freeRng() * finalChosen.length)] : null;
+
+    Object.keys(TARGET_TOTAL_BY_KEY).forEach((key) => {
+      if (finalChosen.includes(key)) tiersAssignedByKey[key].push(t);
+    });
+  }
+
+  const BASE_AMOUNT_BY_KEY = {};
+  for (const [key, assignedTiers] of Object.entries(tiersAssignedByKey)) {
+    if (!assignedTiers.length) {
+      BASE_AMOUNT_BY_KEY[key] = 1;
+      continue;
+    }
+    const baseTier = BASE_TIER_BY_KEY[key];
+    const targetTotal = TARGET_TOTAL_BY_KEY[key];
+    const guess = initialBaseGuess(assignedTiers, baseTier, targetTotal);
+    BASE_AMOUNT_BY_KEY[key] = normalizeBaseAmountToTotalForTiers(baseTier, targetTotal, assignedTiers, guess);
+  }
+
+  const AUTO_RANK_ALL_TIERS = Array.from({ length: 100 }, (_, i) => i + 1);
+  const autoRankGuess = initialBaseGuess(AUTO_RANK_ALL_TIERS, AUTO_RANK_2H_BASE_TIER, TARGET_AUTO_RANK_2H_TOTAL);
+  const AUTO_RANK_BASE_AMOUNT = normalizeBaseAmountToTotalForTiers(
+    AUTO_RANK_2H_BASE_TIER, TARGET_AUTO_RANK_2H_TOTAL, AUTO_RANK_ALL_TIERS, autoRankGuess,
+  );
+
+  const precomputedByTier = Array.from({ length: 101 }, () => ({}));
+  for (let t = 1; t <= 100; t += 1) {
+    const rewards = {};
+    for (const key of selectedKeysByTier[t]) {
+      const baseTier = BASE_TIER_BY_KEY[key];
+      const baseAmount = BASE_AMOUNT_BY_KEY[key] ?? 1;
+      rewards[key] = Math.ceil(baseAmount * rewardWeight(t, baseTier));
+    }
+    const arAmt = Math.ceil(AUTO_RANK_BASE_AMOUNT * rewardWeight(t, AUTO_RANK_2H_BASE_TIER));
+    if (arAmt > 0) rewards.auto_rank_2h_tokens = arAmt;
+    precomputedByTier[t] = rewards;
+  }
+
+  return { precomputedByTier, freeUnlockedKeyByTier };
+}
+
+const REWARD_PROFILES = {
+  v2: buildMicroRewardProfile({
+    seedFree: 'game_pass_micro_rewards:free:v4',
+    targetPoints: PROFILE_META.v2.points,
+    targetLootPieces: PROFILE_META.v2.loot,
+    targetMolotovs: 0,
+    includeMolotovs: false,
+  }),
+  v3: buildMicroRewardProfile({
+    seedFree: 'game_pass_micro_rewards:free:v5',
+    targetPoints: PROFILE_META.v3.points,
+    targetLootPieces: PROFILE_META.v3.loot,
+    targetMolotovs: PROFILE_META.v3.molotovs,
+    includeMolotovs: true,
+  }),
+};
+
+function initialBaseGuess(tiers, baseTier, targetTotal) {
+  const denom = tiers.reduce((acc, tt) => acc + (tt / baseTier), 0);
+  if (!denom) return 1;
+  return targetTotal / denom;
+}
 
 function normalizeBaseAmountToTotal(baseTier, targetTotal, initialBaseAmount) {
   let base = Number(initialBaseAmount) || 1;
@@ -165,100 +297,6 @@ function distributeTotal(total, keys) {
   return out;
 }
 
-// v4: must match backend `utils/game_pass_micro_rewards.py` (_SEED_FREE + rotation).
-const SEED_FREE = 'game_pass_micro_rewards:free:v4';
-
-const ROT_PRIM_KEYS = ['money', 'bullets', 'xp_crimes_tokens', 'xp_gta_tokens', 'points'];
-const ROT_TOKEN_KEYS = ['melt_tokens', 'jailbust_tokens', 'travel_tokens', 'properties_tokens'];
-
-const BASE_TIER_BY_KEY = {
-  money: MONEY_BASE_TIER,
-  bullets: 20,
-  xp_crimes_tokens: 40,
-  xp_gta_tokens: 40,
-  points: POINTS_BASE_TIER,
-  loot_box_pieces: 55,
-  melt_tokens: 70,
-  jailbust_tokens: 80,
-  travel_tokens: 90,
-  properties_tokens: 100,
-  auto_rank_2h_tokens: 100,
-};
-
-const FIXED_BASE_AMOUNT_BY_KEY = {};
-
-const targetRandomByKey = distributeTotal(TARGET_RANDOM_TOKENS_TOTAL, SELECTABLE_RANDOM_TOKEN_KEYS);
-const TARGET_TOTAL_BY_KEY = {
-  money: TARGET_CASH_TOTAL,
-  bullets: TARGET_BULLETS_TOTAL,
-  points: TARGET_POINTS_TOTAL,
-  loot_box_pieces: TARGET_LOOT_PIECES_TOTAL,
-  xp_crimes_tokens: TARGET_XP_CRIMES_TOKENS_TOTAL,
-  xp_gta_tokens: TARGET_XP_GTA_TOKENS_TOTAL,
-  ...targetRandomByKey,
-};
-
-const SELECTED_KEYS_BY_TIER = Array.from({ length: 101 }, () => []);
-const FREE_UNLOCKED_KEY_BY_TIER = Array.from({ length: 101 }, () => null);
-
-const _tiersAssignedByKey = {};
-Object.keys(TARGET_TOTAL_BY_KEY).forEach((k) => { _tiersAssignedByKey[k] = []; });
-
-// Precompute deterministic selections and baseAmount normalization.
-const BASE_AMOUNT_BY_KEY = {};
-const PRECOMPUTED_REWARDS_BY_TIER = Array.from({ length: 101 }, () => ({}));
-
-for (let t = 1; t <= 100; t += 1) {
-  const prim = ROT_PRIM_KEYS[(t - 1) % ROT_PRIM_KEYS.length];
-  const tok = ROT_TOKEN_KEYS[(t - 1) % ROT_TOKEN_KEYS.length];
-  const finalChosen = [prim, 'loot_box_pieces', tok];
-  SELECTED_KEYS_BY_TIER[t] = finalChosen;
-
-  const freeRng = mulberry32(fnv1a32(`${SEED_FREE}:${t}`));
-  FREE_UNLOCKED_KEY_BY_TIER[t] = finalChosen.length ? finalChosen[Math.floor(freeRng() * finalChosen.length)] : null;
-
-  Object.keys(TARGET_TOTAL_BY_KEY).forEach((key) => {
-    if (finalChosen.includes(key)) _tiersAssignedByKey[key].push(t);
-  });
-}
-
-function initialBaseGuess(tiers, baseTier, targetTotal) {
-  const denom = tiers.reduce((acc, tt) => acc + (tt / baseTier), 0);
-  if (!denom) return 1;
-  return targetTotal / denom;
-}
-
-for (const [key, assignedTiers] of Object.entries(_tiersAssignedByKey)) {
-  if (!assignedTiers.length) {
-    BASE_AMOUNT_BY_KEY[key] = 1;
-    continue;
-  }
-  const baseTier = BASE_TIER_BY_KEY[key];
-  const targetTotal = TARGET_TOTAL_BY_KEY[key];
-  const guess = initialBaseGuess(assignedTiers, baseTier, targetTotal);
-  BASE_AMOUNT_BY_KEY[key] = normalizeBaseAmountToTotalForTiers(baseTier, targetTotal, assignedTiers, guess);
-}
-
-// Guaranteed auto_rank_2h_tokens: normalized across all 100 tiers, added as bonus to every tier.
-const AUTO_RANK_ALL_TIERS = Array.from({ length: 100 }, (_, i) => i + 1);
-const autoRankGuess = initialBaseGuess(AUTO_RANK_ALL_TIERS, AUTO_RANK_2H_BASE_TIER, TARGET_AUTO_RANK_2H_TOTAL);
-const AUTO_RANK_BASE_AMOUNT = normalizeBaseAmountToTotalForTiers(
-  AUTO_RANK_2H_BASE_TIER, TARGET_AUTO_RANK_2H_TOTAL, AUTO_RANK_ALL_TIERS, autoRankGuess,
-);
-
-// Now precompute rewards per tier.
-for (let t = 1; t <= 100; t += 1) {
-  const rewards = {};
-  for (const key of SELECTED_KEYS_BY_TIER[t]) {
-    const baseTier = BASE_TIER_BY_KEY[key];
-    const baseAmount = FIXED_BASE_AMOUNT_BY_KEY[key] ?? BASE_AMOUNT_BY_KEY[key] ?? 1;
-    rewards[key] = Math.ceil(baseAmount * rewardWeight(t, baseTier));
-  }
-  const arAmt = Math.ceil(AUTO_RANK_BASE_AMOUNT * rewardWeight(t, AUTO_RANK_2H_BASE_TIER));
-  if (arAmt > 0) rewards.auto_rank_2h_tokens = arAmt;
-  PRECOMPUTED_REWARDS_BY_TIER[t] = rewards;
-}
-
 const PERK_ROTATION = ['rp_10', 'property_income_10', 'jail_bust_10', 'airport_cost'];
 const PERK_LABELS = {
   property_income_10: '+24h: 10% property income',
@@ -273,15 +311,19 @@ for (let tt = 1; tt <= 100; tt += 1) {
   }
 }
 
-function getRewardsForMicroTier(microTier) {
+function getRewardsForMicroTier(microTier, profile = REWARD_PROFILES.v3) {
   const t = Number(microTier || 0);
   if (!Number.isFinite(t) || t < 1) return {};
   const tier = Math.max(1, Math.min(100, Math.floor(t)));
-  return PRECOMPUTED_REWARDS_BY_TIER[tier] || {};
+  return profile?.precomputedByTier?.[tier] || {};
 }
 
-function getTierRewardObj(microTier) {
-  return { levelNumber: microTier, thresholdRp: microTierToThresholdRp(microTier), rewards: getRewardsForMicroTier(microTier) };
+function getTierRewardObj(microTier, profile = REWARD_PROFILES.v3) {
+  return {
+    levelNumber: microTier,
+    thresholdRp: microTierToThresholdRp(microTier),
+    rewards: getRewardsForMicroTier(microTier, profile),
+  };
 }
 
 const REWARD_DISPLAY_ORDER = [
@@ -292,6 +334,7 @@ const REWARD_DISPLAY_ORDER = [
   'points',
   'respect_points',
   'loot_box_pieces',
+  'molotovs',
   'melt_tokens',
   'jailbust_tokens',
   'travel_tokens',
@@ -308,6 +351,7 @@ const TOKEN_REWARD_NAMES = {
   properties_tokens: 'Properties Token',
   auto_rank_2h_tokens: 'Auto Rank (2h) Token',
   loot_box_pieces: 'Loot box pieces',
+  molotovs: 'molotovs',
 };
 
 function formatTierRewardItem(key, value) {
@@ -318,17 +362,18 @@ function formatTierRewardItem(key, value) {
   if (key === 'points') return `${n.toLocaleString()} points`;
   if (key === 'respect_points') return `${n.toLocaleString()} respect`;
   if (key === 'loot_box_pieces') return `${n.toLocaleString()} loot box pieces`;
+  if (key === 'molotovs') return `${n.toLocaleString()} molotovs`;
   const tokenName = TOKEN_REWARD_NAMES[key] || key;
   return `${n.toLocaleString()}x ${tokenName}`;
 }
 
-function TierRewards({ rewards, isFreeMembership, isTierCompleted, microTier }) {
+function TierRewards({ rewards, isFreeMembership, isTierCompleted, microTier, rewardProfile }) {
   const perkLines = PERKS_FOR_TIER[microTier] || [];
   const hasNumeric = !!rewards && Object.values(rewards).some((v) => Number(v || 0) > 0);
   const hasAny = hasNumeric || perkLines.length > 0;
   if (!hasAny) return null;
 
-  const freeUnlockedRewardKey = isFreeMembership ? FREE_UNLOCKED_KEY_BY_TIER[microTier] : null;
+  const freeUnlockedRewardKey = isFreeMembership ? rewardProfile?.freeUnlockedKeyByTier?.[microTier] : null;
 
   return (
     <div className="space-y-1">
@@ -376,6 +421,7 @@ function getTierPrimaryLabel(tier, { isFreeMembership, freeUnlockedRewardKey } =
     if (key === 'xp_crimes_tokens') return `${n.toLocaleString()}x Crimes XP Token`;
     if (key === 'xp_gta_tokens') return `${n.toLocaleString()}x GTA XP Token`;
     if (key === 'loot_box_pieces') return `${n.toLocaleString()} Loot Pieces`;
+    if (key === 'molotovs') return `${n.toLocaleString()} Molotovs`;
     return null;
   };
 
@@ -391,6 +437,7 @@ function getTierPrimaryLabel(tier, { isFreeMembership, freeUnlockedRewardKey } =
   if (rewards.xp_crimes_tokens) return `${Number(rewards.xp_crimes_tokens).toLocaleString()}x Crimes XP Token`;
   if (rewards.xp_gta_tokens) return `${Number(rewards.xp_gta_tokens).toLocaleString()}x GTA XP Token`;
   if (rewards.loot_box_pieces) return `${Number(rewards.loot_box_pieces).toLocaleString()} Loot Pieces`;
+  if (rewards.molotovs) return `${Number(rewards.molotovs).toLocaleString()} Molotovs`;
   if (rewards.points) return `${Number(rewards.points).toLocaleString()} Points`;
   if (rewards.respect_points) return `${Number(rewards.respect_points).toLocaleString()} Respect`;
   if (rewards.melt_tokens) return `${Number(rewards.melt_tokens).toLocaleString()} Melt Tokens`;
@@ -409,6 +456,7 @@ export default function GamePass() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
   const [seasonEndAtIso, setSeasonEndAtIso] = useState(GAME_PASS_SEASON_END_AT_ISO);
+  const [currentSeasonId, setCurrentSeasonId] = useState('2');
   const [seasonCloseWindowDays, setSeasonCloseWindowDays] = useState(GAME_PASS_PURCHASE_FINAL_DAYS_BLOCK);
 
   const [selectedBandIndex, setSelectedBandIndex] = useState(null);
@@ -426,6 +474,9 @@ export default function GamePass() {
       setIsAdmin(!!adminRes.data?.is_admin);
       if (seasonRes?.data?.game_pass_season_end_at) {
         setSeasonEndAtIso(String(seasonRes.data.game_pass_season_end_at));
+      }
+      if (seasonRes?.data?.game_pass_season_id != null) {
+        setCurrentSeasonId(String(seasonRes.data.game_pass_season_id));
       }
       if (seasonRes?.data?.game_pass_purchase_close_window_days != null) {
         const n = Number(seasonRes.data.game_pass_purchase_close_window_days);
@@ -500,6 +551,11 @@ export default function GamePass() {
   const passExpiryRemainingMs = seasonEndMs != null ? seasonEndMs - tickMs : null;
   const showGamePassExpiryPanel = Boolean(seasonEndUntil && !Number.isNaN(seasonEndUntil.getTime()));
 
+  const activeSeasonId = user?.game_pass_current_season_id ?? currentSeasonId ?? '2';
+  const rewardProfileKey = profileKeyForSeason(activeSeasonId);
+  const rewardProfile = REWARD_PROFILES[rewardProfileKey];
+  const seasonTargets = PROFILE_META[rewardProfileKey];
+
   useEffect(() => {
     // Default selection = current band. Keeps selection stable once picked.
     if (selectedBandIndex == null) setSelectedBandIndex(currentBandIndex);
@@ -515,8 +571,8 @@ export default function GamePass() {
     }
   }, [selectedBand, microTierCurrent, selectedMicroTier]);
 
-  const selectedTierObj = selectedMicroTier ? getTierRewardObj(selectedMicroTier) : null;
-  const selectedNextTierObj = selectedMicroTier && selectedMicroTier < 100 ? getTierRewardObj(selectedMicroTier + 1) : null;
+  const selectedTierObj = selectedMicroTier ? getTierRewardObj(selectedMicroTier, rewardProfile) : null;
+  const selectedNextTierObj = selectedMicroTier && selectedMicroTier < 100 ? getTierRewardObj(selectedMicroTier + 1, rewardProfile) : null;
 
   const handlePurchase = async () => {
     if (!user) return;
@@ -709,10 +765,14 @@ export default function GamePass() {
               </p>
 
               <p className="text-[10px] text-mutedForeground font-heading">
-                Value estimate for VIP: <span className="text-primary font-bold">~{TARGET_POINTS_TOTAL.toLocaleString()} points</span> +{" "}
+                Value estimate for VIP: <span className="text-primary font-bold">~{seasonTargets.points.toLocaleString()} points</span> +{" "}
                 <span className="text-primary font-bold">~${TARGET_CASH_TOTAL.toLocaleString()} cash</span> +{" "}
                 <span className="text-primary font-bold">~{TARGET_BULLETS_TOTAL.toLocaleString()} bullets</span> +{" "}
-                <span className="text-primary font-bold">~{TARGET_LOOT_PIECES_TOTAL} loot pieces</span> +{" "}
+                <span className="text-primary font-bold">~{seasonTargets.loot.toLocaleString()} loot pieces</span>
+                {seasonTargets.molotovs > 0 ? (
+                  <> + <span className="text-primary font-bold">~{seasonTargets.molotovs.toLocaleString()} molotovs</span></>
+                ) : null}{" "}
+                +{" "}
                 <span className="text-primary font-bold">~{TARGET_XP_CRIMES_TOKENS_TOTAL + TARGET_XP_GTA_TOKENS_TOTAL} XP tokens</span> +{" "}
                 <span className="text-primary font-bold">~{TARGET_AUTO_RANK_2H_TOTAL} Auto Rank (2h)</span> tokens (+ select 24h perks at tiers 25/50/75/100).
               </p>
@@ -834,8 +894,8 @@ export default function GamePass() {
                   const isBandPreviousDone = isBandCompleted && !isBandCurrent;
                   const isFreeMembership = membershipType === 'Free';
                   const isClickable = microTierCurrent >= band.start;
-                  const bandEndTier = getTierRewardObj(band.end);
-                  const freeUnlockedRewardKeyForBand = isFreeMembership ? FREE_UNLOCKED_KEY_BY_TIER[bandEndTier.levelNumber] : null;
+                  const bandEndTier = getTierRewardObj(band.end, rewardProfile);
+                  const freeUnlockedRewardKeyForBand = isFreeMembership ? rewardProfile.freeUnlockedKeyByTier[bandEndTier.levelNumber] : null;
 
                   return (
                     <div
@@ -879,6 +939,7 @@ export default function GamePass() {
                           isFreeMembership={isFreeMembership}
                           isTierCompleted={isBandCompleted}
                           microTier={bandEndTier.levelNumber}
+                          rewardProfile={rewardProfile}
                         />
                       </div>
                     </div>
@@ -937,6 +998,7 @@ export default function GamePass() {
                       isFreeMembership={membershipType === 'Free'}
                       isTierCompleted={microTierCurrent >= selectedMicroTier}
                       microTier={selectedMicroTier}
+                      rewardProfile={rewardProfile}
                     />
 
                     {selectedNextTierObj && (
@@ -950,6 +1012,7 @@ export default function GamePass() {
                             isFreeMembership={membershipType === 'Free'}
                             isTierCompleted={false}
                             microTier={selectedMicroTier + 1}
+                            rewardProfile={rewardProfile}
                           />
                         </div>
                       </div>
@@ -959,7 +1022,7 @@ export default function GamePass() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                   {Array.from({ length: selectedBand.end - selectedBand.start + 1 }, (_, i) => selectedBand.start + i).map((t) => {
-                    const tierObj = getTierRewardObj(t);
+                    const tierObj = getTierRewardObj(t, rewardProfile);
                     const isMicroCompleted = microTierCurrent >= t;
                     const isCurrent = microTierCurrent === t && t < MAX_MICRO_TIER;
                     const isNext = microTierCurrent + 1 === t;
@@ -1006,6 +1069,7 @@ export default function GamePass() {
                           isFreeMembership={membershipType === 'Free'}
                           isTierCompleted={isMicroCompleted}
                           microTier={t}
+                          rewardProfile={rewardProfile}
                         />
                       </div>
                       </div>

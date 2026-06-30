@@ -9,13 +9,17 @@ Scaling:
   - For each reward type: amount = ceil(baseAmount * w(tier, baseTier))
   - w(t, b) = (t / b) * (t / 100)^(gamma - 1) so early tiers are lighter and late tiers carry more
     of each key's budget (gamma=1 restores linear t/b scaling).
+
+Season profiles:
+  - v2 (season_id < 3): legacy totals — 25k points, 2k loot, no molotovs.
+  - v3 (season_id >= 3): season 3+ — 30k points, 2.5k loot, 1k molotovs every tier.
 """
 
 from __future__ import annotations
 
 import math
 from datetime import datetime, timezone
-from typing import Dict, Optional
+from typing import Any, Dict, Optional, TypedDict
 
 MAX_THRESHOLD_RP = 1_000_000
 MAX_MICRO_TIER = 100
@@ -45,6 +49,7 @@ REWARD_KEY_ORDER = [
     "points",
     "respect_points",
     "loot_box_pieces",
+    "molotovs",
     "melt_tokens",
     "jailbust_tokens",
     "travel_tokens",
@@ -65,43 +70,43 @@ REWARD_KEY_LABELS = {
     "properties_tokens": "Properties Token",
     "auto_rank_2h_tokens": "Auto Rank (2h) Token",
     "loot_box_pieces": "loot box pieces",
+    "molotovs": "molotovs",
 }
 
-# Targets (season VIP totals — keep in sync with src/pages/Game/GamePass.js)
+# Shared season targets (cash / bullets / tokens unchanged across profiles).
 TARGET_CASH_TOTAL = 5_000_000_000
-TARGET_POINTS_TOTAL = 25_000
 TARGET_BULLETS_TOTAL = 250_000
 TARGET_AUTO_RANK_2H_TOTAL = 75
+TARGET_RANDOM_TOKENS_TOTAL = 250
+TARGET_XP_CRIMES_TOKENS_TOTAL = 150
+TARGET_XP_GTA_TOKENS_TOTAL = 150
 
 _MONEY_BASE_TIER = 10
 _POINTS_BASE_TIER = 50
 
+# Token keys that represent the "random token pool" in this implementation.
+_RANDOM_TOKEN_KEYS = ["melt_tokens", "jailbust_tokens", "travel_tokens", "properties_tokens"]
 
-def _normalize_base_amount_to_total(*, base_tier: int, target_total: int, initial_base_amount: float) -> float:
-    """
-    Find a baseAmount such that:
-      sum_{t=1..100} ceil(baseAmount * w(t, base_tier)) ~= target_total
+_ROT_PRIM_KEYS = ("money", "bullets", "xp_crimes_tokens", "xp_gta_tokens", "points")
+_ROT_TOKEN_KEYS = ("melt_tokens", "jailbust_tokens", "travel_tokens", "properties_tokens")
 
-    Uses a small iterative scaling to converge (since ceil makes it piecewise).
-    """
-    base = float(initial_base_amount or 0.0)
-    if base <= 0:
-        base = 1.0
-
-    weights = [_reward_weight(t, base_tier) for t in range(1, MAX_MICRO_TIER + 1)]
-    for _ in range(8):
-        s = sum(int(math.ceil(base * w)) for w in weights)
-        if s <= 0:
-            return base
-        base *= float(target_total) / float(s)
-    return base
+_BASE_TIER_BY_KEY = {
+    "money": _MONEY_BASE_TIER,
+    "bullets": 20,
+    "xp_crimes_tokens": 40,
+    "xp_gta_tokens": 40,
+    "points": _POINTS_BASE_TIER,
+    "loot_box_pieces": 55,
+    "molotovs": 60,
+    "melt_tokens": 70,
+    "jailbust_tokens": 80,
+    "travel_tokens": 90,
+    "properties_tokens": 100,
+    "auto_rank_2h_tokens": 100,
+}
 
 
 def _normalize_base_amount_to_total_for_tiers(*, tiers: range, base_tier: int, target_total: int, initial_base_amount: float) -> float:
-    """
-    Find a baseAmount such that:
-      sum_{t in tiers} ceil(baseAmount * w(t, base_tier)) ~= target_total
-    """
     base = float(initial_base_amount or 0.0)
     if base <= 0:
         base = 1.0
@@ -124,55 +129,6 @@ def _initial_base_amount_for_total(*, tiers: range, base_tier: int, target_total
     if denom <= 0:
         return 1.0
     return float(target_total) / denom
-
-
-# Baselines (v4):
-# - Each micro tier: rotating primary + loot_box_pieces + rotating pool token (see _ROT_PRIM_KEYS / _ROT_TOKEN_KEYS).
-# - Normalization keeps totals near: cash, bullets, points, loot pieces, XP tokens, random tokens, auto-rank 2h.
-
-TARGET_RANDOM_TOKENS_TOTAL = 250
-TARGET_LOOT_PIECES_TOTAL = 2_000
-TARGET_XP_CRIMES_TOKENS_TOTAL = 150
-TARGET_XP_GTA_TOKENS_TOTAL = 150
-
-# Token keys that represent the "random token pool" in this implementation.
-_RANDOM_TOKEN_KEYS = ["melt_tokens", "jailbust_tokens", "travel_tokens", "properties_tokens"]
-
-# Deterministic seed for free-track unlock pick (string->int matches frontend fnv1a32).
-_SEED_FREE = "game_pass_micro_rewards:free:v4"
-
-# v4 layout: every micro tier grants three buckets — rotating primary, loot pieces every tier,
-# and rotating random token — so loot + melt/jailbust/travel/properties appear across all 100 tiers.
-_ROT_PRIM_KEYS = ("money", "bullets", "xp_crimes_tokens", "xp_gta_tokens", "points")
-_ROT_TOKEN_KEYS = ("melt_tokens", "jailbust_tokens", "travel_tokens", "properties_tokens")
-
-# Category pool for MICRO_TIER_REWARD_BASELINES init (auto_rank_2h_tokens is guaranteed separately).
-_SELECTABLE_KEYS = [
-    "money",
-    "bullets",
-    "xp_crimes_tokens",
-    "xp_gta_tokens",
-    "points",
-    "loot_box_pieces",
-    *_RANDOM_TOKEN_KEYS,
-]
-
-_BASE_TIER_BY_KEY = {
-    "money": _MONEY_BASE_TIER,
-    "bullets": 20,
-    "xp_crimes_tokens": 40,
-    "xp_gta_tokens": 40,
-    "points": _POINTS_BASE_TIER,
-    "loot_box_pieces": 55,
-    "melt_tokens": 70,
-    "jailbust_tokens": 80,
-    "travel_tokens": 90,
-    "properties_tokens": 100,
-    "auto_rank_2h_tokens": 100,
-}
-
-# For keys not included in the target normalization, we keep a fixed baseAmount.
-_FIXED_BASE_AMOUNT_BY_KEY: dict[str, float] = {}
 
 
 def _fnv1a_32(s: str) -> int:
@@ -202,7 +158,6 @@ def _mulberry32(seed: int):
 
 
 def _distribute_total(total: int, keys: list[str]) -> dict[str, int]:
-    """Split `total` across keys as evenly as possible (stable order)."""
     n = max(1, len(keys))
     base = total // n
     rem = total % n
@@ -212,89 +167,163 @@ def _distribute_total(total: int, keys: list[str]) -> dict[str, int]:
     return out
 
 
-_target_random_by_key = _distribute_total(TARGET_RANDOM_TOKENS_TOTAL, _RANDOM_TOKEN_KEYS)
-_TARGET_TOTAL_BY_KEY = {
-    "money": TARGET_CASH_TOTAL,
-    "bullets": TARGET_BULLETS_TOTAL,
-    "points": TARGET_POINTS_TOTAL,
-    "loot_box_pieces": TARGET_LOOT_PIECES_TOTAL,
-    "xp_crimes_tokens": TARGET_XP_CRIMES_TOKENS_TOTAL,
-    "xp_gta_tokens": TARGET_XP_GTA_TOKENS_TOTAL,
-    **_target_random_by_key,
-}
+class _RewardProfile(TypedDict):
+    selected_keys_by_tier: dict[int, list[str]]
+    free_unlocked_key_by_tier: dict[int, str | None]
+    baselines: dict[str, dict[str, float | int]]
 
 
-_SELECTED_KEYS_BY_TIER: dict[int, list[str]] = {}
-_FREE_UNLOCKED_KEY_BY_TIER: dict[int, str | None] = {}
+def _build_micro_reward_profile(
+    *,
+    seed_free: str,
+    target_points: int,
+    target_loot_pieces: int,
+    target_molotovs: int,
+    include_molotovs: bool,
+) -> _RewardProfile:
+    target_random_by_key = _distribute_total(TARGET_RANDOM_TOKENS_TOTAL, _RANDOM_TOKEN_KEYS)
+    target_total_by_key: dict[str, int] = {
+        "money": TARGET_CASH_TOTAL,
+        "bullets": TARGET_BULLETS_TOTAL,
+        "points": target_points,
+        "loot_box_pieces": target_loot_pieces,
+        "xp_crimes_tokens": TARGET_XP_CRIMES_TOKENS_TOTAL,
+        "xp_gta_tokens": TARGET_XP_GTA_TOKENS_TOTAL,
+        **target_random_by_key,
+    }
+    if include_molotovs:
+        target_total_by_key["molotovs"] = target_molotovs
 
-_BASE_AMOUNT_BY_KEY: dict[str, float] = {}
+    selectable_keys = [
+        "money",
+        "bullets",
+        "xp_crimes_tokens",
+        "xp_gta_tokens",
+        "points",
+        "loot_box_pieces",
+        *_RANDOM_TOKEN_KEYS,
+    ]
+    if include_molotovs:
+        selectable_keys.insert(selectable_keys.index("loot_box_pieces") + 1, "molotovs")
 
-# Precompute deterministic selections + normalization baseAmount.
-_tiers_assigned_by_key: dict[str, list[int]] = {k: [] for k in _TARGET_TOTAL_BY_KEY.keys()}
+    selected_keys_by_tier: dict[int, list[str]] = {}
+    free_unlocked_key_by_tier: dict[int, str | None] = {}
+    tiers_assigned_by_key: dict[str, list[int]] = {k: [] for k in target_total_by_key.keys()}
 
-for t in range(1, MAX_MICRO_TIER + 1):
-    prim = _ROT_PRIM_KEYS[(t - 1) % len(_ROT_PRIM_KEYS)]
-    tok = _ROT_TOKEN_KEYS[(t - 1) % len(_ROT_TOKEN_KEYS)]
-    chosen = [prim, "loot_box_pieces", tok]
-    _SELECTED_KEYS_BY_TIER[t] = chosen
+    for t in range(1, MAX_MICRO_TIER + 1):
+        prim = _ROT_PRIM_KEYS[(t - 1) % len(_ROT_PRIM_KEYS)]
+        tok = _ROT_TOKEN_KEYS[(t - 1) % len(_ROT_TOKEN_KEYS)]
+        chosen = [prim, "loot_box_pieces", tok]
+        if include_molotovs:
+            chosen = [prim, "loot_box_pieces", "molotovs", tok]
+        selected_keys_by_tier[t] = chosen
 
-    free_rng = _mulberry32(_fnv1a_32(f"{_SEED_FREE}:{t}"))
-    _FREE_UNLOCKED_KEY_BY_TIER[t] = chosen[int(math.floor(free_rng() * len(chosen)))]
+        free_rng = _mulberry32(_fnv1a_32(f"{seed_free}:{t}"))
+        free_unlocked_key_by_tier[t] = chosen[int(math.floor(free_rng() * len(chosen)))]
 
-    for k in _TARGET_TOTAL_BY_KEY.keys():
-        if k in chosen:
-            _tiers_assigned_by_key[k].append(t)
+        for k in target_total_by_key.keys():
+            if k in chosen:
+                tiers_assigned_by_key[k].append(t)
 
+    base_amount_by_key: dict[str, float] = {}
+    for k, assigned_tiers in tiers_assigned_by_key.items():
+        if not assigned_tiers:
+            base_amount_by_key[k] = 1.0
+            continue
+        base_tier = _BASE_TIER_BY_KEY.get(k)
+        if base_tier is None:
+            base_amount_by_key[k] = 1.0
+            continue
+        initial_guess = float(target_total_by_key[k]) / sum((tt / float(base_tier)) for tt in assigned_tiers)
+        base_amount_by_key[k] = _normalize_base_amount_to_total_for_tiers(
+            tiers=assigned_tiers,
+            base_tier=base_tier,
+            target_total=target_total_by_key[k],
+            initial_base_amount=initial_guess,
+        )
 
-for k, assigned_tiers in _tiers_assigned_by_key.items():
-    if not assigned_tiers:
-        # No tiers selected for this key; keep baseAmount minimal.
-        _BASE_AMOUNT_BY_KEY[k] = 1.0
-        continue
-    base_tier = _BASE_TIER_BY_KEY.get(k)
-    if base_tier is None:
-        _BASE_AMOUNT_BY_KEY[k] = 1.0
-        continue
-    initial_guess = _initial_base_amount_for_total(
-        tiers=range(min(assigned_tiers), max(assigned_tiers) + 1),
-        base_tier=base_tier,
-        target_total=_TARGET_TOTAL_BY_KEY[k],
+    auto_rank_base_tier = _BASE_TIER_BY_KEY["auto_rank_2h_tokens"]
+    auto_rank_initial = float(TARGET_AUTO_RANK_2H_TOTAL) / sum(
+        (tt / float(auto_rank_base_tier)) for tt in range(1, MAX_MICRO_TIER + 1)
     )
-    # Normalize using the exact assigned tier list (not a range).
-    initial_guess = float(_TARGET_TOTAL_BY_KEY[k]) / sum((t / float(base_tier)) for t in assigned_tiers) if assigned_tiers else 1.0
-    _BASE_AMOUNT_BY_KEY[k] = _normalize_base_amount_to_total_for_tiers(
-        tiers=assigned_tiers,
-        base_tier=base_tier,
-        target_total=_TARGET_TOTAL_BY_KEY[k],
-        initial_base_amount=initial_guess,
+    auto_rank_base_amount = _normalize_base_amount_to_total_for_tiers(
+        tiers=list(range(1, MAX_MICRO_TIER + 1)),
+        base_tier=auto_rank_base_tier,
+        target_total=TARGET_AUTO_RANK_2H_TOTAL,
+        initial_base_amount=auto_rank_initial,
     )
 
+    baselines: dict[str, dict[str, float | int]] = {}
+    for key in selectable_keys:
+        base_tier = _BASE_TIER_BY_KEY[key]
+        baselines[key] = {"baseTier": base_tier, "baseAmount": base_amount_by_key.get(key, 1.0)}
+    baselines["auto_rank_2h_tokens"] = {"baseTier": auto_rank_base_tier, "baseAmount": auto_rank_base_amount}
 
-# --- Guaranteed auto_rank_2h_tokens: appears in every tier, scaled low→high. ---
-_AUTO_RANK_BASE_TIER = _BASE_TIER_BY_KEY["auto_rank_2h_tokens"]  # 100
-_auto_rank_initial = float(TARGET_AUTO_RANK_2H_TOTAL) / sum(
-    (t / float(_AUTO_RANK_BASE_TIER)) for t in range(1, MAX_MICRO_TIER + 1)
-) if MAX_MICRO_TIER else 1.0
-_AUTO_RANK_BASE_AMOUNT = _normalize_base_amount_to_total_for_tiers(
-    tiers=list(range(1, MAX_MICRO_TIER + 1)),
-    base_tier=_AUTO_RANK_BASE_TIER,
-    target_total=TARGET_AUTO_RANK_2H_TOTAL,
-    initial_base_amount=_auto_rank_initial,
+    return {
+        "selected_keys_by_tier": selected_keys_by_tier,
+        "free_unlocked_key_by_tier": free_unlocked_key_by_tier,
+        "baselines": baselines,
+    }
+
+
+_PROFILE_V2 = _build_micro_reward_profile(
+    seed_free="game_pass_micro_rewards:free:v4",
+    target_points=25_000,
+    target_loot_pieces=2_000,
+    target_molotovs=0,
+    include_molotovs=False,
 )
+_PROFILE_V3 = _build_micro_reward_profile(
+    seed_free="game_pass_micro_rewards:free:v5",
+    target_points=30_000,
+    target_loot_pieces=2_500,
+    target_molotovs=1_000,
+    include_molotovs=True,
+)
+_REWARD_PROFILES: dict[str, _RewardProfile] = {"v2": _PROFILE_V2, "v3": _PROFILE_V3}
 
-# Baselines used at runtime to compute reward amounts.
-MICRO_TIER_REWARD_BASELINES = {}
-for key in _SELECTABLE_KEYS:
-    base_tier = _BASE_TIER_BY_KEY[key]
-    if key in _FIXED_BASE_AMOUNT_BY_KEY:
-        base_amount = _FIXED_BASE_AMOUNT_BY_KEY[key]
-    else:
-        base_amount = _BASE_AMOUNT_BY_KEY.get(key, 1.0)
-    MICRO_TIER_REWARD_BASELINES[key] = {"baseTier": base_tier, "baseAmount": base_amount}
-MICRO_TIER_REWARD_BASELINES["auto_rank_2h_tokens"] = {
-    "baseTier": _AUTO_RANK_BASE_TIER,
-    "baseAmount": _AUTO_RANK_BASE_AMOUNT,
-}
+# Season 3+ public targets (keep in sync with src/pages/Game/GamePass.js PROFILE_V3).
+TARGET_POINTS_TOTAL = 30_000
+TARGET_LOOT_PIECES_TOTAL = 2_500
+TARGET_MOLOTOVS_TOTAL = 1_000
+
+# Back-compat alias for admin/tools that expect a single baseline map.
+MICRO_TIER_REWARD_BASELINES = _PROFILE_V3["baselines"]
+
+
+def season_reward_profile_key(season_id: Optional[str]) -> str:
+    """Map a game_pass_season_id to v2 (legacy) or v3 (season 3+) reward math."""
+    try:
+        return "v3" if int(str(season_id or "0").strip() or "0") >= 3 else "v2"
+    except ValueError:
+        return "v2"
+
+
+def _profile_for_season(season_id: Optional[str]) -> _RewardProfile:
+    return _REWARD_PROFILES[season_reward_profile_key(season_id)]
+
+
+def _rewards_for_micro_tier_from_profile(micro_tier: int, profile: _RewardProfile) -> Dict[str, int]:
+    try:
+        t = int(micro_tier or 0)
+    except Exception:
+        t = 0
+
+    if t < 1:
+        return {}
+
+    t = max(1, min(MAX_MICRO_TIER, t))
+    selected_keys = profile["selected_keys_by_tier"].get(t) or []
+    baselines = profile["baselines"]
+    out: Dict[str, int] = {}
+    for key in selected_keys:
+        cfg = baselines[key]
+        out[key] = int(math.ceil(float(cfg["baseAmount"]) * _reward_weight(t, int(cfg["baseTier"]))))
+    ar_cfg = baselines["auto_rank_2h_tokens"]
+    ar_amt = int(math.ceil(float(ar_cfg["baseAmount"]) * _reward_weight(t, int(ar_cfg["baseTier"]))))
+    if ar_amt > 0:
+        out["auto_rank_2h_tokens"] = ar_amt
+    return out
 
 
 def micro_tier_from_rank_points(rank_points: Optional[int | float]) -> int:
@@ -376,42 +405,26 @@ def micro_tier_min_rank_points(micro_tier: int) -> int:
     return int(math.floor(micro_tier * MICRO_TIER_STEP_RP))
 
 
-def rewards_for_micro_tier(micro_tier: int) -> Dict[str, int]:
+def rewards_for_micro_tier(micro_tier: int, season_id: Optional[str] = None) -> Dict[str, int]:
     """
     Return the exact reward set for a given micro tier.
 
-    Deterministic v4 contract:
-    - Three buckets per tier: rotating primary, loot_box_pieces, rotating pool token (+ auto_rank every tier).
-    - Amounts use normalized baseAmount scalars so season totals stay near configured targets.
+    Pass `season_id` (user.game_pass_season_id) so season 2 VIP keeps legacy totals
+    until the global season rolls to 3+.
     """
-    try:
-        t = int(micro_tier or 0)
-    except Exception:
-        t = 0
-
-    if t < 1:
-        return {}
-
-    t = max(1, min(MAX_MICRO_TIER, t))
-    selected_keys = _SELECTED_KEYS_BY_TIER.get(t) or []
-    out: Dict[str, int] = {}
-    for key in selected_keys:
-        cfg = MICRO_TIER_REWARD_BASELINES[key]
-        out[key] = int(math.ceil(cfg["baseAmount"] * _reward_weight(t, cfg["baseTier"])))
-    # Guaranteed auto_rank_2h_tokens bonus in every tier.
-    ar_cfg = MICRO_TIER_REWARD_BASELINES["auto_rank_2h_tokens"]
-    ar_amt = int(math.ceil(ar_cfg["baseAmount"] * _reward_weight(t, ar_cfg["baseTier"])))
-    if ar_amt > 0:
-        out["auto_rank_2h_tokens"] = ar_amt
-    return out
+    return _rewards_for_micro_tier_from_profile(micro_tier, _profile_for_season(season_id))
 
 
-def next_rewards_for_micro_tier(micro_tier: int) -> Dict[str, int]:
+def next_rewards_for_micro_tier(micro_tier: int, season_id: Optional[str] = None) -> Dict[str, int]:
     """Next micro tier reward set."""
-    return rewards_for_micro_tier(int(micro_tier or 0) + 1)
+    return rewards_for_micro_tier(int(micro_tier or 0) + 1, season_id=season_id)
 
 
-def free_unlocked_key_for_micro_tier(micro_tier: int, rewards: Dict[str, int]) -> Optional[str]:
+def free_unlocked_key_for_micro_tier(
+    micro_tier: int,
+    rewards: Dict[str, int],
+    season_id: Optional[str] = None,
+) -> Optional[str]:
     """
     Deterministic free unlock key helper.
 
@@ -421,23 +434,23 @@ def free_unlocked_key_for_micro_tier(micro_tier: int, rewards: Dict[str, int]) -
         t = int(micro_tier or 0)
     except Exception:
         return None
-    chosen = _FREE_UNLOCKED_KEY_BY_TIER.get(t)
+    profile = _profile_for_season(season_id)
+    chosen = profile["free_unlocked_key_by_tier"].get(t)
     if not chosen:
         return None
-    # Safety: only return keys that are present in the provided reward dict.
     if int(rewards.get(chosen) or 0) > 0:
         return chosen
     return None
 
 
-def vip_rewards_after_free_dedupe(micro_tier: int, free_cash_last_micro_tier_granted: int) -> Dict[str, int]:
+def vip_rewards_after_free_dedupe(
+    micro_tier: int,
+    free_cash_last_micro_tier_granted: int,
+    season_id: Optional[str] = None,
+) -> Dict[str, int]:
     """
     VIP payout for a micro tier after optionally zeroing the bucket already granted by
     the free Game Pass track for that tier (avoid double-paying the same bucket).
-
-    If zeroing that bucket would remove *all* rewards (e.g. tier 1 is only xp_gta_tokens
-    and the free track already granted it), skip suppression so VIP still credits the tier
-    instead of advancing the cursor with an empty $inc.
     """
     try:
         t = int(micro_tier or 0)
@@ -446,15 +459,14 @@ def vip_rewards_after_free_dedupe(micro_tier: int, free_cash_last_micro_tier_gra
     if t < 1:
         return {}
 
-    r = dict(rewards_for_micro_tier(t))
+    r = dict(rewards_for_micro_tier(t, season_id=season_id))
     if int(free_cash_last_micro_tier_granted or 0) < t:
         return r
 
-    # Free track only auto-grants at band ends (10, 20, … 100), not every micro tier.
     if t % 10 != 0:
         return r
 
-    fk = free_unlocked_key_for_micro_tier(t, r)
+    fk = free_unlocked_key_for_micro_tier(t, r, season_id=season_id)
     if not fk:
         return r
 
@@ -481,12 +493,10 @@ def format_rewards_summary(rewards: Dict[str, int], *, include_zero: bool = Fals
         label = REWARD_KEY_LABELS.get(k, k)
         if k == "money":
             parts.append(f"${_format_amount(amt)} cash")
-        elif k in ("bullets", "points", "respect_points"):
-            # points/respect labels are already in REWARD_KEY_LABELS
+        elif k in ("bullets", "points", "respect_points", "molotovs"):
             parts.append(f"{_format_amount(amt)} {label}")
         elif k == "loot_box_pieces":
             parts.append(f"{_format_amount(amt)} {label}")
         else:
             parts.append(f"{_format_amount(amt)}x {label}")
     return ", ".join(parts)
-
