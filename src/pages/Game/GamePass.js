@@ -829,9 +829,15 @@ export default function GamePass() {
                 </li>
                 <li>
                   <span className="text-zinc-100 font-bold">Loot box pieces</span> — About{' '}
-                  <span className="text-primary tabular-nums">{TARGET_LOOT_PIECES_TOTAL}</span> pieces across VIP tiers, in the same deterministic pool as cash and
+                  <span className="text-primary tabular-nums">{seasonTargets.loot.toLocaleString()}</span> pieces across VIP tiers, in the same deterministic pool as cash and
                   bullets.
                 </li>
+                {seasonTargets.molotovs > 0 && (
+                  <li>
+                    <span className="text-zinc-100 font-bold">Molotovs</span> — About{' '}
+                    <span className="text-primary tabular-nums">{seasonTargets.molotovs.toLocaleString()}</span> across VIP tiers (new this season).
+                  </li>
+                )}
                 <li>
                   <span className="text-zinc-100 font-bold">Crimes and GTA XP tokens</span> — Roughly{' '}
                   <span className="text-primary tabular-nums">{TARGET_XP_CRIMES_TOKENS_TOTAL}</span> Crimes tokens plus{' '}
