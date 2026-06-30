@@ -22,8 +22,8 @@ export const GAME_PASS_DURATION_FINE_PRINT =
 
 /** Must match backend `payments.GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS`. */
 export const GAME_PASS_PURCHASE_FINAL_DAYS_BLOCK = 7;
-/** Fallback when API season end unavailable (15:00 BST). Live value comes from GET /payments/game-pass-season. */
-export const GAME_PASS_SEASON_END_AT_ISO = '2026-07-01T14:00:00+00:00';
+/** Fallback when API season end unavailable (00:00 UK on the 1st). Live value from GET /payments/game-pass-season. */
+export const GAME_PASS_SEASON_END_AT_ISO = '2026-07-31T23:00:00+00:00';
 
 const MS_PER_DAY = 86400000;
 

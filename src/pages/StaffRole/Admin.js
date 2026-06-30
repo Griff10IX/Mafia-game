@@ -1565,7 +1565,7 @@ export default function Admin() {
   const [maintenanceBannerLoading, setMaintenanceBannerLoading] = useState(false);
   const [gamePassSeasonLoading, setGamePassSeasonLoading] = useState(false);
   const [gamePassSeasonAdmin, setGamePassSeasonAdmin] = useState(null);
-  const [gamePassSeasonEndAt, setGamePassSeasonEndAt] = useState('2026-05-01T14:00:00+00:00');
+  const [gamePassSeasonEndAt, setGamePassSeasonEndAt] = useState('2026-07-31T23:00:00+00:00');
   const [wcConfig, setWcConfig] = useState(null);
   const [wcPlayoffSlots, setWcPlayoffSlots] = useState(null);
   const [wcHealth, setWcHealth] = useState(null);
@@ -15117,7 +15117,7 @@ export default function Admin() {
                 value={gamePassSeasonEndAt}
                 onChange={(e) => setGamePassSeasonEndAt(e.target.value)}
                 className="w-full px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-mono text-foreground"
-                placeholder="2026-05-01T14:00:00+00:00"
+                placeholder="2026-08-31T23:00:00+00:00 (00:00 UK on 1st)"
               />
             </div>
             <div className="flex flex-wrap gap-2">

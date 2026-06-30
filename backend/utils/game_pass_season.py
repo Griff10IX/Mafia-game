@@ -8,17 +8,30 @@ Users reconcile lazily on auth hot paths: season RP resets, pass cursors clear, 
 state is cleared so the pass must be purchased again for the new season.
 
 When `season_end_at` passes, `get_game_pass_season_public` auto-rolls to the next season_id and
-extends `season_end_at` by one calendar month (same wall-clock time). Purchases reopen until the
-final 7-day window before the new end.
+extends `season_end_at` to 00:00 UK on the 1st of the following calendar month. Purchases reopen
+until the final 7-day window before the new end.
 """
 
-import calendar
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
+from zoneinfo import ZoneInfo
 
 GAME_PASS_SEASON_SETTINGS_KEY = "game_pass_season"
-# Fallback when DB unset (season #2 end — 15:00 BST)
-DEFAULT_GAME_PASS_SEASON_END_AT = "2026-07-01T14:00:00+00:00"
+UK_TZ = ZoneInfo("Europe/London")
+
+
+def uk_midnight_first_of_month(year: int, month: int) -> datetime:
+    """00:00 UK on the 1st of the given month, returned as UTC-aware datetime."""
+    local = datetime(year, month, 1, 0, 0, 0, tzinfo=UK_TZ)
+    return local.astimezone(timezone.utc)
+
+
+def _default_season_end_dt() -> datetime:
+    """Fallback when DB unset — 1 Aug 2026 00:00 UK (season boundary)."""
+    return uk_midnight_first_of_month(2026, 8)
+
+
+DEFAULT_GAME_PASS_SEASON_END_AT = _default_season_end_dt().isoformat()
 
 
 def _parse_iso_utc(v: Any) -> Optional[datetime]:
@@ -33,22 +46,42 @@ def _parse_iso_utc(v: Any) -> Optional[datetime]:
         return None
 
 
-def _add_calendar_months(dt: datetime, months: int = 1) -> datetime:
-    """Add calendar months in UTC (e.g. Jun 1 -> Jul 1)."""
+def _migrate_legacy_season_end_to_uk_midnight(dt: datetime) -> datetime:
+    """
+    Convert legacy boundaries stored as 14:00 UTC (15:00 BST) on the 1st
+    to 00:00 UK on that calendar month.
+    """
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
-    y = dt.year + (dt.month - 1 + months) // 12
-    m = (dt.month - 1 + months) % 12 + 1
-    last_day = calendar.monthrange(y, m)[1]
-    d = min(dt.day, last_day)
-    return dt.replace(year=y, month=m, day=d)
+    if dt.day == 1 and dt.hour == 14 and dt.minute == 0 and dt.second == 0:
+        uk = dt.astimezone(UK_TZ)
+        return uk_midnight_first_of_month(uk.year, uk.month)
+    return dt
 
 
 def normalize_game_pass_season_end_at(v: Any) -> str:
+    """
+    Normalize season end to 00:00 UK on the 1st of the target month (UTC stored).
+    """
     dt = _parse_iso_utc(v)
     if not dt:
         return DEFAULT_GAME_PASS_SEASON_END_AT
+    dt = _migrate_legacy_season_end_to_uk_midnight(dt)
+    uk = dt.astimezone(UK_TZ)
+    dt = uk_midnight_first_of_month(uk.year, uk.month)
     return dt.isoformat()
+
+
+def next_season_end_uk_midnight(current_end_utc: datetime) -> datetime:
+    """Following calendar month, 00:00 UK on the 1st."""
+    if current_end_utc.tzinfo is None:
+        current_end_utc = current_end_utc.replace(tzinfo=timezone.utc)
+    uk = current_end_utc.astimezone(UK_TZ)
+    y, m = uk.year, uk.month + 1
+    if m > 12:
+        y += 1
+        m = 1
+    return uk_midnight_first_of_month(y, m)
 
 
 def game_pass_season_id_from_stored(stored: Dict[str, Any]) -> str:
@@ -75,6 +108,24 @@ async def _persist_game_pass_season(db, stored: Dict[str, Any]) -> None:
     )
 
 
+async def _maybe_fixup_stored_season_end(db, stored: Dict[str, Any]) -> Dict[str, Any]:
+    """One-time/read-path fix: snap stored end to UK midnight and migrate legacy 15:00 BST."""
+    raw = stored.get("season_end_at")
+    fixed = normalize_game_pass_season_end_at(raw)
+    if str(raw or "").strip() == fixed:
+        return stored
+    now = datetime.now(timezone.utc)
+    new_stored = {
+        **stored,
+        "season_end_at": fixed,
+        "set_by": "season_end_uk_midnight_fixup",
+        "set_at": now.isoformat(),
+        "previous_season_end_at": str(raw or ""),
+    }
+    await _persist_game_pass_season(db, new_stored)
+    return new_stored
+
+
 async def _apply_season_rollover_if_due(db, stored: Dict[str, Any]) -> Dict[str, Any]:
     """When global season end has passed, bump season_id and schedule the next month."""
     now = datetime.now(timezone.utc)
@@ -85,7 +136,7 @@ async def _apply_season_rollover_if_due(db, stored: Dict[str, Any]) -> Dict[str,
 
     season_id = game_pass_season_id_from_stored(stored)
     next_id = _next_season_id(season_id)
-    new_end = _add_calendar_months(season_end_dt, 1)
+    new_end = next_season_end_uk_midnight(season_end_dt)
     new_stored = {
         **stored,
         "season_id": next_id,
@@ -103,6 +154,7 @@ async def get_game_pass_season_public(db) -> Dict[str, Any]:
     doc = await db.game_settings.find_one({"key": GAME_PASS_SEASON_SETTINGS_KEY}, {"_id": 0, "value": 1})
     raw = (doc or {}).get("value")
     stored = raw if isinstance(raw, dict) else {}
+    stored = await _maybe_fixup_stored_season_end(db, stored)
     season_end_at = normalize_game_pass_season_end_at(stored.get("season_end_at"))
     season_id = game_pass_season_id_from_stored(stored)
     now = datetime.now(timezone.utc)
