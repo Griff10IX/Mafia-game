@@ -1,10 +1,11 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import { Shield, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
+import { Shield, ChevronDown, ChevronRight, RefreshCw, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api, { refreshUser } from '../../utils/api';
 import { readBodyguardsPageWarm, writeBodyguardsPageWarm } from '../../utils/bodyguardsPageWarm';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+import { formatGameDateTime } from '../../utils/gameDateTime';
 
 const BG_STYLES = `
   @keyframes bg-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -20,6 +21,7 @@ const BG_STYLES = `
 const BODYGUARD_SLOT_COSTS = [75, 150, 300, 450];
 // Match backend: BODYGUARD_ARMOUR_UPGRADE_COSTS = {0: 50, 1: 100, 2: 200, 3: 400, 4: 800}
 const BODYGUARD_ARMOUR_UPGRADE_COSTS = { 0: 50, 1: 100, 2: 200, 3: 400, 4: 800 };
+const ROBOT_BG_AUTO_SEARCH_COST_DEFAULT = 10_000;
 
 function getBodyguardHireCodePayload(data) {
   const name = data?.hire_code_name;
@@ -90,6 +92,10 @@ export default function Bodyguards() {
   const [hiringSlots, setHiringSlots] = useState(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const [hireBanner, setHireBanner] = useState(null);
+  const [robotBgAutoSearchActive, setRobotBgAutoSearchActive] = useState(false);
+  const [robotBgAutoSearchUntil, setRobotBgAutoSearchUntil] = useState(null);
+  const [robotBgAutoSearchCost, setRobotBgAutoSearchCost] = useState(ROBOT_BG_AUTO_SEARCH_COST_DEFAULT);
+  const [autoSearchBuying, setAutoSearchBuying] = useState(false);
   const claimedSlotsRef = useRef(new Set());
   const pendingHiresRef = useRef(0);
   const hireCodePayloadRef = useRef({});
@@ -200,6 +206,9 @@ export default function Bodyguards() {
       setBodyguards(Array.isArray(bgData) ? bgData : (bgData?.bodyguards ?? []));
       setBodyguardFor(bgData?.bodyguard_for ?? null);
       setBodyguardProfit(bgData?.bodyguard_profit ?? null);
+      setRobotBgAutoSearchActive(!!bgData?.robot_bg_auto_search_active);
+      setRobotBgAutoSearchUntil(bgData?.robot_bg_auto_search_until ?? null);
+      setRobotBgAutoSearchCost(Number(bgData?.robot_bg_auto_search_cost) || ROBOT_BG_AUTO_SEARCH_COST_DEFAULT);
       hireCodePayloadRef.current = getBodyguardHireCodePayload(bgData);
       setUser(userRes.data);
       setEvent(eventsRes.data?.event ?? null);
@@ -259,6 +268,35 @@ export default function Bodyguards() {
   const showHireBanner = (type, message) => {
     setHireBanner({ type, message });
     setTimeout(() => setHireBanner((prev) => (prev?.message === message ? null : prev)), 6000);
+  };
+
+  const buyRobotBgAutoSearch = async () => {
+    const cost = robotBgAutoSearchCost;
+    if ((user?.points ?? 0) < cost) {
+      toast.error(`You need ${cost.toLocaleString()} points (you have ${(user?.points ?? 0).toLocaleString()}).`);
+      return;
+    }
+    const extend = robotBgAutoSearchActive;
+    const ok = window.confirm(
+      `${extend ? 'Extend' : 'Buy'} robot auto-search for ${cost.toLocaleString()} points?\n\n`
+      + 'Keeps Attack searches running for your hired robots — starts missing searches and renews when a row has 3 hours or less left. Lasts 30 days (stacks if you extend early).'
+    );
+    if (!ok) return;
+    setAutoSearchBuying(true);
+    try {
+      const res = await api.post('/store/buy-robot-bg-auto-search');
+      toast.success(res.data?.message || 'Robot auto-search active.');
+      if (res.data?.robot_bg_auto_search_until) {
+        setRobotBgAutoSearchUntil(res.data.robot_bg_auto_search_until);
+        setRobotBgAutoSearchActive(true);
+      }
+      refreshUser().catch(() => {});
+      await fetchData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Purchase failed');
+    } finally {
+      setAutoSearchBuying(false);
+    }
   };
 
   const claimNextSlot = () => {
@@ -677,6 +715,39 @@ export default function Bodyguards() {
           </div>
         )}
       </div>
+
+      {!bodyguardFor?.owner_username && (
+        <div className="px-3 py-2.5 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-xs font-heading bg-fade-in" style={{ animationDelay: '0.03s' }}>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 text-cyan-300 font-bold uppercase tracking-wide text-[10px] mb-1">
+                <Search size={12} />
+                Robot auto-search
+              </div>
+              <p className="text-[10px] text-mutedForeground leading-snug">
+                {robotBgAutoSearchActive
+                  ? 'Active — your hired robots stay on the Attack page. New searches start when a row has ≤3h left (or when you hire a robot with no row).'
+                  : 'Pay once per 30 days to auto-maintain Attack searches for your robot bodyguards so you do not have to re-search manually.'}
+              </p>
+              {robotBgAutoSearchActive && robotBgAutoSearchUntil ? (
+                <p className="text-[9px] text-cyan-400/90 mt-1">
+                  Expires: {formatGameDateTime(robotBgAutoSearchUntil)}
+                  {formatInflationCountdown(robotBgAutoSearchUntil) ? ` (${formatInflationCountdown(robotBgAutoSearchUntil)} left)` : ''}
+                </p>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={buyRobotBgAutoSearch}
+              disabled={autoSearchBuying || bodyguardFor?.owner_username}
+              className="shrink-0 min-h-[40px] px-3 py-2 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30 text-[10px] font-bold uppercase disabled:opacity-50 touch-manipulation"
+              data-testid="buy-robot-bg-auto-search"
+            >
+              {autoSearchBuying ? '…' : `${robotBgAutoSearchActive ? 'Extend' : 'Buy'} (${robotBgAutoSearchCost.toLocaleString()} pts)`}
+            </button>
+          </div>
+        </div>
+      )}
       
       {/* Stats row */}
       <div className="flex flex-wrap items-center justify-end gap-4 bg-fade-in" style={{ animationDelay: '0.05s' }}>

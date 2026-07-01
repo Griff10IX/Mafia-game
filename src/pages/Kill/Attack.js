@@ -482,6 +482,7 @@ const SearchesCard = ({
   onDelete,
   onTravel,
   onFillKillTarget,
+  robotBgAutoSearchActive,
 }) => {
   const [isDesktop, setIsDesktop] = useState(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
@@ -883,6 +884,9 @@ const SearchesCard = ({
         {attacks.length > 0 && (
           <p className="text-[9px] text-mutedForeground font-heading italic pt-1">
             💡 Searches complete automatically. Typical find time ~2h 15m–2h 45m; the timer above is the 24h row expiry from search start.
+            {robotBgAutoSearchActive ? (
+              <span className="block mt-1 text-cyan-400/90">Robot auto-search is active — your hired robots are re-searched when a row has ≤3h left.</span>
+            ) : null}
           </p>
         )}
       </div>
@@ -1154,6 +1158,7 @@ export default function Attack() {
   const [show, setShow] = useState('all');
   const [targetFilter, setTargetFilter] = useState('all');
   const [favoriteTargets, setFavoriteTargets] = useState(() => readKillFavoriteMirror());
+  const [robotBgAutoSearchActive, setRobotBgAutoSearchActive] = useState(false);
 
   const isFavoriteTarget = useCallback(
     (a) => !!(a?.target_username && favoriteTargets.has(normKillFavUser(a.target_username))),
@@ -1318,6 +1323,9 @@ export default function Attack() {
       // Inflation comes inline now (Tier 3 plan item: drop the dedicated /attack/inflation page-load call).
       if (response.data && typeof response.data.inflation_pct === 'number') {
         setInflationPct(Number(response.data.inflation_pct));
+      }
+      if (typeof response.data?.robot_bg_auto_search_active === 'boolean') {
+        setRobotBgAutoSearchActive(response.data.robot_bg_auto_search_active);
       }
       return list;
     } catch (error) {
@@ -2152,6 +2160,7 @@ export default function Attack() {
           onDelete={deleteSelected}
           onTravel={openTravelModal}
           onFillKillTarget={setKillUsername}
+          robotBgAutoSearchActive={robotBgAutoSearchActive}
         />
       </div>
 

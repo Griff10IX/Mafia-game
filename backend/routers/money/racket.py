@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from fastapi import Depends, HTTPException
 
 from server import db, get_current_user, log_activity, maybe_process_rank_up, user_prestige_rank_mult
-from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 
 
 class ProtectionRacketRequest(BaseModel):
@@ -89,12 +89,22 @@ async def extort_property(request: ProtectionRacketRequest, current_user: dict =
             else:
                 rank_points = _rng.randint(2, 6)
                 rp_before = int(current_user.get("rank_points") or 0)
+                racket_update = apply_season_rp_mirror_to_update(
+                    {"$inc": {"money": extortion_amount, "rank_points": rank_points}},
+                    user=current_user,
+                )
                 await db.users.update_one(
                     {"id": current_user["id"]},
-                    apply_season_rp_mirror_to_update({"$inc": {"money": extortion_amount, "rank_points": rank_points}}),
+                    racket_update,
                 )
                 try:
-                    await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""), user_prestige_rank_mult(current_user))
+                    await maybe_process_rank_up(
+                        current_user["id"],
+                        rp_before,
+                        rank_points_in_update(racket_update),
+                        current_user.get("username", ""),
+                        user_prestige_rank_mult(current_user),
+                    )
                 except Exception:
                     pass
         await db.extortions.update_one(

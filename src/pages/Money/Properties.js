@@ -631,9 +631,9 @@ export default function Properties() {
                   onClick={() => bribePolice(propertiesHeatQuote.suggested_bribe)}
                   disabled={bribing}
                   className="text-[9px] font-heading font-bold uppercase tracking-wider rounded px-2 py-1 border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/15 disabled:opacity-50"
-                  title="Suggested: enough to get safe or clear residual heat (see max line above)"
+                  title="Pay the full amount to clear all heat to 0"
                 >
-                  Suggested {formatMoney(propertiesHeatQuote.suggested_bribe)}
+                  Clear all {formatMoney(propertiesHeatQuote.suggested_bribe)}
                 </button>
               ) : null}
             </div>

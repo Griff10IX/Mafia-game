@@ -27,7 +27,7 @@ from server import (
     maybe_respect_points_drop,
     founding_member_income_mult,
 )
-from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 
 # Equipment tiers for Organised Crime (reduced for beta)
 EQUIPMENT_TIERS = [
@@ -140,13 +140,13 @@ OC_HEIST_FAIL_ESCAPED_MESSAGES = [
     "Double-crossed. You got out with your life, not the cash.",
 ]
 
-# Heist jobs with different risk/reward (reduced for beta)
+# Heist jobs with different risk/reward
 HEIST_JOBS = [
     {
         "id": "country_bank",
         "name": "Country Bank",
         "base_success_rate": 0.65,
-        "reward": 131_250,
+        "reward": 25_000_000,
         "rank_points": 120,
         "jail_time": 45,
         "jail_chance": 0.05,
@@ -157,7 +157,7 @@ HEIST_JOBS = [
         "id": "state_bank",
         "name": "State Bank",
         "base_success_rate": 0.50,
-        "reward": 162_500,
+        "reward": 33_000_000,
         "rank_points": 360,
         "jail_time": 60,
         "jail_chance": 0.08,
@@ -168,7 +168,7 @@ HEIST_JOBS = [
         "id": "city_bank",
         "name": "City Bank",
         "base_success_rate": 0.35,
-        "reward": 237_500,
+        "reward": 41_000_000,
         "rank_points": 960,
         "jail_time": 75,
         "jail_chance": 0.12,
@@ -179,7 +179,7 @@ HEIST_JOBS = [
         "id": "government_vault",
         "name": "Government Vault",
         "base_success_rate": 0.20,
-        "reward": 343_750,
+        "reward": 50_000_000,
         "rank_points": 1920,
         "jail_time": 90,
         "jail_chance": 0.15,
@@ -363,14 +363,21 @@ async def run_heist(
         respect_drop = maybe_respect_points_drop()
         if respect_drop:
             oc_inc["respect_points"] = respect_drop
+        oc_update = apply_season_rp_mirror_to_update({"$inc": oc_inc}, user=current_user)
         await db.users.update_one(
             {"id": current_user["id"]},
-            apply_season_rp_mirror_to_update({"$inc": oc_inc}),
+            oc_update,
         )
         if oc_inc.get("respect_points"):
             await log_respect_earned(current_user["id"], oc_inc["respect_points"], "oc")
         try:
-            await maybe_process_rank_up(current_user["id"], rp_before, rp_added, current_user.get("username", ""), user_prestige_rank_mult(current_user))
+            await maybe_process_rank_up(
+                current_user["id"],
+                rp_before,
+                rank_points_in_update(oc_update),
+                current_user.get("username", ""),
+                user_prestige_rank_mult(current_user),
+            )
         except Exception as e:
             logger.exception("Rank-up notification (OC): %s", e)
         

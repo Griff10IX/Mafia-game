@@ -26,7 +26,7 @@ from pydantic import BaseModel
 from pymongo import UpdateOne
 
 from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, user_prestige_rank_mult, send_notification, log_gambling, _is_admin, _get_staff_user_ids, log_respect_delta, require_admin_verified
-from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 import pathlib as _pathlib
 
@@ -3194,7 +3194,20 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
             crew_in = min(bank_gross, cap_g) if cap_g > 0 else bank_gross
             if not is_dnf:
                 if rp:
-                    await db.users.update_one({"id": uid}, apply_season_rp_mirror_to_update({"$inc": {"rank_points": rp}}))
+                    _race_user = await db.users.find_one(
+                        {"id": uid},
+                        {
+                            "_id": 0,
+                            "rank_points": 1,
+                            "prestige_rank_multiplier": 1,
+                            "username": 1,
+                            "rank_xp_pass_rewards_granted": 1,
+                            "rank_xp_pass_token_expires_at": 1,
+                        },
+                    ) or {}
+                    rp_before = int(_race_user.get("rank_points") or 0)
+                    race_rp_update = apply_season_rp_mirror_to_update({"$inc": {"rank_points": rp}}, user=_race_user)
+                    await db.users.update_one({"id": uid}, race_rp_update)
                 allowed_crew, _ = await _mint_racing_economy_credits_daily_cap(uid, crew_in)
                 prize_trimmed = bank_gross - allowed_crew
                 await db.racing_profiles.update_one(
@@ -3204,9 +3217,13 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
                 )
                 if rp:
                     try:
-                        _ud = await db.users.find_one({"id": uid}, {"rank_points": 1, "prestige_rank_multiplier": 1}) or {}
-                        rp_before = int(_ud.get("rank_points", 0)) - rp
-                        await maybe_process_rank_up(uid, rp_before, rp, entrant.get("username", ""), user_prestige_rank_mult(_ud))
+                        await maybe_process_rank_up(
+                            uid,
+                            rp_before,
+                            rank_points_in_update(race_rp_update),
+                            entrant.get("username", ""),
+                            user_prestige_rank_mult(_race_user),
+                        )
                     except Exception:
                         pass
                 from_crew = await _pay_driver_salary_from_user_then_crew(uid, driver_salary)

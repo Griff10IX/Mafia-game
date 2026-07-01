@@ -11,7 +11,7 @@ from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, field_validator
 
 from server import db, get_current_user, get_current_user_verified, maybe_process_rank_up, user_prestige_rank_mult, log_gambling, _is_admin
-from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 from utils.point_provenance import log_points_event
 from routers.minigames.minigame_leaderboard import log_minigame_play
@@ -844,14 +844,25 @@ async def _apply_pool_match_rewards(db, game: dict, winner_uid: str, loser_uid: 
             upsert=True,
         )
     if w_human:
-        winner_doc = await db.users.find_one({"id": winner_uid}, {"_id": 0, "rank_points": 1, "username": 1, "prestige_rank_multiplier": 1})
+        winner_doc = await db.users.find_one(
+            {"id": winner_uid},
+            {
+                "_id": 0,
+                "rank_points": 1,
+                "username": 1,
+                "prestige_rank_multiplier": 1,
+                "rank_xp_pass_rewards_granted": 1,
+                "rank_xp_pass_token_expires_at": 1,
+            },
+        )
         if winner_doc:
             rp_gain = 60 if bool(game.get("rated", True)) else 25
-            await db.users.update_one({"id": winner_uid}, apply_season_rp_mirror_to_update({"$inc": {"rank_points": rp_gain}}))
+            pool_rp_update = apply_season_rp_mirror_to_update({"$inc": {"rank_points": rp_gain}}, user=winner_doc)
+            await db.users.update_one({"id": winner_uid}, pool_rp_update)
             await maybe_process_rank_up(
                 winner_uid,
                 int(winner_doc.get("rank_points") or 0),
-                rp_gain,
+                rank_points_in_update(pool_rp_update),
                 winner_doc.get("username") or "?",
                 user_prestige_rank_mult(winner_doc),
             )

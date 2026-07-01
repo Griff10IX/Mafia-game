@@ -23,6 +23,7 @@ const RARITY_COLORS = {
   legendary: 'text-amber-400',
   custom: 'text-primary',
   exclusive: 'text-rose-400',
+  vip_exclusive: 'text-cyan-500',
 };
 
 const RARITY_BORDER = {
@@ -33,6 +34,7 @@ const RARITY_BORDER = {
   legendary: 'border-amber-500/40',
   custom: 'border-primary/45',
   exclusive: 'border-rose-500/45',
+  vip_exclusive: 'border-cyan-600/50',
 };
 
 function StatCell({ icon: Icon, label, children, className = '', compact = false }) {
@@ -144,7 +146,7 @@ export default function ViewCar() {
 
   const isOnProfile = profileCarIds.includes(id);
   const profileFull = profileCarIds.length >= 5 && !isOnProfile;
-  const isCustomOwned = isOwner && car.id === 'car_custom';
+  const isCustomOwned = isOwner && (car.id === 'car_custom' || car.id === 'car22');
 
   const saveCustomCarPicture = async () => {
     if (!car?.user_car_id) return;

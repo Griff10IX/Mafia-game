@@ -14,7 +14,7 @@ const SELL_STYLES = `
 `;
 
 // GTA rarities (match backend and BuyCars)
-const GTA_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'loot_exclusive', 'exclusive'];
+const GTA_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'loot_exclusive', 'exclusive', 'vip_exclusive'];
 const RARITY_LABELS = {
   common: 'Common',
   uncommon: 'Uncommon',
@@ -24,6 +24,7 @@ const RARITY_LABELS = {
   custom: 'Customs',
   loot_exclusive: 'Loot Exclusive',
   exclusive: 'Exclusives',
+  vip_exclusive: 'VIP Pass',
 };
 const RARITY_COLOR = {
   common: 'text-gray-400',
@@ -34,10 +35,12 @@ const RARITY_COLOR = {
   custom: 'text-orange-400',
   loot_exclusive: 'text-amber-400',
   exclusive: 'text-red-400',
+  vip_exclusive: 'text-cyan-500',
 };
 const TRAVEL_TIMES = {
   exclusive: 7,
   loot_exclusive: 5,
+  vip_exclusive: 8,
   legendary: 12,
   ultra_rare: 18,
   rare: 25,

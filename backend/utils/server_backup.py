@@ -139,7 +139,7 @@ HORSERACING_HORSES = [
 DEFAULT_HEALTH = 100
 MIN_BULLETS_TO_KILL = 5000
 MAX_BULLETS_TO_KILL = 100000
-ARMOUR_BASE_BULLETS = {0: 5000, 1: 14000, 2: 25000, 3: 36000, 4: 47000, 5: 55000, 6: 66000}  # base before weapon/rank reduction (sync server.py)
+ARMOUR_BASE_BULLETS = {0: 5000, 1: 14000, 2: 25000, 3: 36000, 4: 47000, 5: 55000, 6: 60000, 7: 66000}  # sync server.py
 KILL_CASH_PERCENT = 0.75  # killer gets 75% of victim's cash
 DEAD_ALIVE_POINTS_PERCENT = 1.0  # retrieved points from dead account (100%)
 

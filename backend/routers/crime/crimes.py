@@ -460,7 +460,7 @@ from routers.kill.armoury import (
     TOKEN_GLOBAL_DROP_AMOUNT_MIN,
     TOKEN_GLOBAL_DROP_CHANCE,
 )
-from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.point_provenance import log_points_event
 from utils.rolling_event_stats import rolling_event_stats_pipeline, rolling_stats_response_from_doc
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_CRIMES
@@ -886,9 +886,10 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
             else:
                 prestige_bonus_earned["token"] = token_type
                 prestige_bonus_earned["token_amount"] = token_amt
+        crime_update = apply_season_rp_mirror_to_update({"$inc": inc}, user=current_user)
         await db.users.update_one(
             {"id": current_user["id"]},
-            apply_season_rp_mirror_to_update({"$inc": inc}),
+            crime_update,
         )
         # Exploit check: flag impossible single-action gains (e.g. >$50M from one crime)
         try:
@@ -973,7 +974,13 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         await _award_crime_milestones(current_user["id"], new_total_crimes, claimed)
         respect_earned = max(0, int((respect_drop or 0) * RESPECT_FROM_CRIMES_MULT)) + max(0, int(milestone_respect * RESPECT_FROM_CRIMES_MULT))
         try:
-            await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""), user_prestige_rank_mult(current_user))
+            await maybe_process_rank_up(
+                current_user["id"],
+                rp_before,
+                rank_points_in_update(crime_update),
+                current_user.get("username", ""),
+                user_prestige_rank_mult(current_user),
+            )
         except Exception as e:
             logger.exception("Rank-up notification (crimes): %s", e)
         await db.crime_earnings.insert_one(

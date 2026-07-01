@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp, Package, Copy } from 'lucide-react';
+import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp, Package, Copy, Swords } from 'lucide-react';
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { copyTextToClipboard } from '../../utils/copyToClipboard';
 import { toast } from 'sonner';
@@ -51,6 +51,9 @@ const TOKEN_MAX_STACK_LABEL = '1 week';
 
 /** Must match backend AUTO_RANK_COST_POINTS / pricing logic (8× token pts ≈ full unlock pts for 16h only). */
 const AUTO_RANK_COST_POINTS = 5000;
+const ROBOT_BG_AUTO_SEARCH_COST_POINTS = 10_000;
+const ARMOUR_TIER_6_STORE_COST_POINTS = 500;
+const WEAPON11_STORE_COST_POINTS = 1000;
 const AUTO_RANK_2H_TOKEN_STORE_PTS = Math.ceil(AUTO_RANK_COST_POINTS / 8);
 const CREW_OC_AUTO_3H_TOKEN_STORE_PTS = 48; // match backend jailbust_bonus / crew_oc_auto_3h store price
 
@@ -95,6 +98,9 @@ const UPGRADES = [
   { id: 'health', title: 'Full Health', Icon: Heart, price: 15, path: '/store/buy-health', ownedKey: null, desc: 'Restore health to 100%', extra: (u) => ({ line: 'Health', value: `${Number(u?.health ?? 100).toFixed(0)}%` }) },
   { id: 'rank-bar', title: 'Premium Rank Bar', Icon: Star, price: 50, path: '/store/buy-rank-bar', ownedKey: 'premium_rank_bar', desc: 'Exact numbers & amounts for next rank' },
   { id: 'auto-rank', title: 'Auto Rank', Icon: Bot, price: AUTO_RANK_COST_POINTS, path: '/store/buy-auto-rank', ownedKey: 'auto_rank_purchased', desc: 'Auto-commit crimes, GTA, busts, OC. Optional: set Telegram in Profile for notifications.' },
+  { id: 'robot-bg-auto-search', title: 'Robot Auto-Search', Icon: Crosshair, price: ROBOT_BG_AUTO_SEARCH_COST_POINTS, path: '/store/buy-robot-bg-auto-search', ownedKey: null, desc: '30 days: auto-maintain Attack searches for your hired robot bodyguards (renews when ≤3h left on a row). Buy or extend on Bodyguards too.' },
+  { id: 'armour-tier-6', title: 'Elite Composite Battledress', Icon: Shield, price: ARMOUR_TIER_6_STORE_COST_POINTS, path: '/store/buy-armour-tier-6', ownedKey: null, ownedCheck: (u) => (u?.armour_owned_level_max ?? 0) >= 6, disabledWhen: (u) => (u?.armour_owned_level_max ?? 0) < 5, desc: 'Armour level 6 (60k base bullets). Requires level 5 owned. Auto-equipped on purchase. Also shown on Armour page.' },
+  { id: 'weapon11', title: 'Engraved Lewis Gun', Icon: Swords, price: WEAPON11_STORE_COST_POINTS, path: '/store/buy-weapon11', ownedKey: null, ownedCheck: (u) => !!u?.owns_weapon11, disabledWhen: (u) => !u?.owns_weapon10, desc: 'Top store gun (130 dmg). Requires Chicago Typewriter Premium owned. Auto-equipped on purchase. Also on Armour page.' },
   { id: 'silencer', title: 'Silencer', Icon: VolumeX, price: 150, path: '/store/buy-silencer', ownedKey: 'has_silencer', desc: 'Fewer witness statements when you kill' },
   { id: 'anti-snitch', title: 'Anti Snitch', Icon: Shield, price: 120, path: '/store/buy-anti-snitch', ownedKey: 'anti_snitch', desc: 'Cannot be snitched on when others are in jail' },
   { id: 'oc-timer', title: 'OC Timer', Icon: Clock, price: 300, path: '/store/buy-oc-timer', ownedKey: 'oc_timer_reduced', desc: 'Solo Organised Crime heists: 4h cooldown instead of 6h (not Family Crew OC)' },
@@ -291,9 +297,13 @@ export default function Store() {
   const [sendAmount, setSendAmount] = useState('');
   const [customBullets, setCustomBullets] = useState('');
   const [customPurchaseMode, setCustomPurchaseMode] = useState('points');
+  const [pointsPaymentMode, setPointsPaymentMode] = useState('card');
   const [customPointsInput, setCustomPointsInput] = useState('');
   const [customGbpInput, setCustomGbpInput] = useState('');
   const [customQuote, setCustomQuote] = useState(null);
+  const [pointsCashInput, setPointsCashInput] = useState('');
+  const [pointsCashPriceData, setPointsCashPriceData] = useState(null);
+  const [pointsCashQuote, setPointsCashQuote] = useState(null);
   const [isAdmin, setIsAdmin] = useState(() => !!storeBoot?.isAdmin);
   const [pointsTabLocked, setPointsTabLocked] = useState(() => !!storeBoot?.pointsTabLocked);
   const [pointsTabLockMessage, setPointsTabLockMessage] = useState(() => storeBoot?.pointsTabLockMessage ?? '');
@@ -336,8 +346,63 @@ export default function Store() {
     }
   }, [activeTab, storePayWith]);
 
+  const fetchPointsCashPrice = useCallback(() => {
+    api.get('/store/points-cash-price').then(({ data }) => {
+      setPointsCashPriceData(data || null);
+    }).catch(() => {
+      setPointsCashPriceData(null);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (activeTab !== 'points' || pointsTabLocked || pointsPaymentMode !== 'cash') {
+      setPointsCashQuote(null);
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        const p = parseInt(String(pointsCashInput).replace(/\D/g, ''), 10);
+        if (!Number.isFinite(p) || p < 1) {
+          setPointsCashQuote(null);
+          return;
+        }
+        const r = await api.get('/store/points-cash-quote', { params: { points: p } });
+        setPointsCashQuote(r.data || null);
+      } catch {
+        setPointsCashQuote(null);
+      }
+    }, 450);
+    return () => clearTimeout(t);
+  }, [activeTab, pointsTabLocked, pointsPaymentMode, pointsCashInput]);
+
+  const pointsCashPrestigeOk = (user?.prestige_level ?? 0) >= 1;
+
+  useEffect(() => {
+    if (activeTab === 'points' && !pointsTabLocked && pointsPaymentMode === 'cash' && user?.email_verified && pointsCashPrestigeOk) {
+      fetchPointsCashPrice();
+    }
+  }, [activeTab, pointsTabLocked, pointsPaymentMode, user?.email_verified, pointsCashPrestigeOk, fetchPointsCashPrice]);
+
+  useEffect(() => {
+    if (activeTab !== 'points' || pointsTabLocked || pointsPaymentMode !== 'cash' || !user?.email_verified || !pointsCashPrestigeOk) return undefined;
+    const onVis = () => {
+      if (document.visibilityState === 'visible') fetchPointsCashPrice();
+    };
+    const onFocus = () => fetchPointsCashPrice();
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [activeTab, pointsTabLocked, pointsPaymentMode, user?.email_verified, pointsCashPrestigeOk, fetchPointsCashPrice]);
+
   useEffect(() => {
     if (activeTab !== 'points' || pointsTabLocked) {
+      setCustomQuote(null);
+      return;
+    }
+    if (pointsPaymentMode !== 'card') {
       setCustomQuote(null);
       return;
     }
@@ -366,7 +431,7 @@ export default function Store() {
       }
     }, 450);
     return () => clearTimeout(t);
-  }, [activeTab, pointsTabLocked, customPurchaseMode, customPointsInput, customGbpInput]);
+  }, [activeTab, pointsTabLocked, pointsPaymentMode, customPurchaseMode, customPointsInput, customGbpInput]);
 
   useEffect(() => {
     if (activeTab === 'tokens' && storePayWith === 'cash') {
@@ -686,6 +751,46 @@ export default function Store() {
     }
   };
 
+  const handleBuyPointsCash = async () => {
+    if (!user?.email_verified) {
+      toast.error('Verify your email before buying points with cash');
+      return;
+    }
+    if ((user?.prestige_level ?? 0) < 1) {
+      toast.error('Prestige 1+ required to buy points with cash');
+      return;
+    }
+    const p = parseInt(String(pointsCashInput).replace(/\D/g, ''), 10);
+    if (!Number.isFinite(p) || p < 1) {
+      toast.error('Enter at least 1 point');
+      return;
+    }
+    if (!pointsCashQuote?.can_buy) {
+      toast.error('Purchase blocked — check cash balance and monthly allowance');
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await api.post('/store/buy-points-cash', { points: p });
+      toast.success(res.data?.message || `+${p.toLocaleString()} points`);
+      setPointsCashInput('');
+      setPointsCashQuote(null);
+      fetchPointsCashPrice();
+      refreshUser();
+      fetchData({ silent: true });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Purchase failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatCashAllowance = (spent, limit) => {
+    const s = Number(spent) || 0;
+    const l = Number(limit) || 2_000_000_000;
+    return `$${s.toLocaleString()} / $${l.toLocaleString()}`;
+  };
+
   const handleCustomBulletsPurchase = async () => {
     const b = parseInt(String(customBullets).replace(/\D/g, ''), 10);
     if (!Number.isFinite(b) || b < 1 || b > CUSTOM_BULLETS_MAX) {
@@ -871,12 +976,24 @@ export default function Store() {
             <div className="px-3 py-2 bg-primary/8 border-b border-primary/20">
               <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Buy points</span>
               <p className="text-[8px] text-mutedForeground font-heading mt-0.5 leading-snug">
-                Enter whole points from 1,000–1,000,000, or a GBP budget — the server prices along the standard store curve (Stripe checkout).
-                {' '}
-                <span className="text-violet-400/90">GBP card checkouts earn ~5,000 loot box pieces per £100 charged</span> (50 per whole £1; credited when your points are).
+                {pointsPaymentMode === 'card'
+                  ? (
+                    <>
+                      Enter whole points from 1,000–1,000,000, or a GBP budget — the server prices along the standard store curve (Stripe checkout).
+                      {' '}
+                      <span className="text-violet-400/90">GBP card checkouts earn ~5,000 loot box pieces per £100 charged</span> (50 per whole £1; credited when your points are).
+                    </>
+                  )
+                  : (
+                    <>
+                      Buy points with in-game cash at Quick Trade pricing (avg of cheapest 3 sell offers; min $550,000/pt).
+                      {' '}
+                      Monthly allowance: $2B per IP and per verified email (London month) — purchase must fit under both.
+                    </>
+                  )}
               </p>
             </div>
-            {storePointsEvent?.active && (
+            {storePointsEvent?.active && pointsPaymentMode === 'card' && (
               <div className="mx-3 mt-3 rounded border border-emerald-500/25 bg-emerald-500/10 px-3 py-2">
                 <p className="text-[10px] font-heading font-bold uppercase tracking-[0.14em] text-emerald-400">
                   Store event live: +{Math.round(Number(storePointsEvent.bonus_rate ?? 0.50) * 100)}% points
@@ -887,6 +1004,24 @@ export default function Store() {
               </div>
             )}
             <div className="p-3 space-y-2">
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => { setPointsPaymentMode('card'); setPointsCashQuote(null); }}
+                  className={`flex-1 py-1.5 text-[9px] font-heading font-bold uppercase rounded border ${pointsPaymentMode === 'card' ? 'border-primary/50 bg-primary/15 text-primary' : 'border-primary/20 text-mutedForeground'}`}
+                >
+                  Card
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setPointsPaymentMode('cash'); setCustomQuote(null); }}
+                  className={`flex-1 py-1.5 text-[9px] font-heading font-bold uppercase rounded border ${pointsPaymentMode === 'cash' ? 'border-primary/50 bg-primary/15 text-primary' : 'border-primary/20 text-mutedForeground'}`}
+                >
+                  Cash ($)
+                </button>
+              </div>
+              {pointsPaymentMode === 'card' ? (
+              <>
               <div className="flex gap-1">
                 <button
                   type="button"
@@ -964,6 +1099,78 @@ export default function Store() {
               >
                 {loading ? '...' : 'Buy with card'}
               </button>
+              </>
+              ) : (
+              <>
+              {!user?.email_verified ? (
+                <p className="text-[9px] text-amber-400/90 font-heading">
+                  Verify your email before buying points with cash.{' '}
+                  <Link to="/verify-email" className="text-primary underline">Verify email</Link>
+                </p>
+              ) : (user?.prestige_level ?? 0) < 1 ? (
+                <p className="text-[9px] text-amber-400/90 font-heading">
+                  Prestige 1+ required to buy points with cash.{' '}
+                  <Link to="/account/prestige" className="text-primary underline">Prestige</Link>
+                </p>
+              ) : (
+                <>
+                  {pointsCashPriceData && (
+                    <div className="text-[9px] font-heading text-zinc-400 space-y-1 rounded border border-primary/15 bg-zinc-900/40 px-2.5 py-2">
+                      <p>
+                        Price per point:{' '}
+                        <span className="text-primary font-bold">${Number(pointsCashPriceData.price_per_point || 0).toLocaleString()}</span>
+                        {pointsCashPriceData.used_qt_average
+                          ? ' (avg of cheapest 3 QT sell offers)'
+                          : ` (floor; min $${Number(pointsCashPriceData.min_price_per_point || 550000).toLocaleString()}/pt)`}
+                      </p>
+                      <p>
+                        Monthly allowance (IP):{' '}
+                        <span className="text-zinc-300">{formatCashAllowance(pointsCashPriceData.ip_spent, pointsCashPriceData.monthly_limit)}</span>
+                      </p>
+                      <p>
+                        Monthly allowance (email):{' '}
+                        <span className="text-zinc-300">{formatCashAllowance(pointsCashPriceData.email_spent, pointsCashPriceData.monthly_limit)}</span>
+                      </p>
+                      <p>
+                        Effective remaining:{' '}
+                        <span className="text-emerald-400/90 font-bold">${Number(pointsCashPriceData.effective_remaining || 0).toLocaleString()}</span>
+                      </p>
+                    </div>
+                  )}
+                  <FormattedNumberInput
+                    value={pointsCashInput}
+                    onChange={setPointsCashInput}
+                    placeholder="Points (e.g. 100)"
+                    className="w-full px-3 py-2 text-xs bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none text-foreground font-heading"
+                  />
+                  {pointsCashQuote && (
+                    <p className="text-[10px] font-heading text-zinc-300">
+                      <span className="text-primary font-bold">{Number(pointsCashQuote.points).toLocaleString()} pts</span>
+                      {' · '}
+                      <span className="text-emerald-400/90">${Number(pointsCashQuote.cash_cost).toLocaleString()}</span>
+                      {!pointsCashQuote.prestige_eligible && (
+                        <span className="block text-amber-400/90 mt-0.5">Prestige 1+ required</span>
+                      )}
+                      {pointsCashQuote.prestige_eligible && !pointsCashQuote.fits_caps && (
+                        <span className="block text-amber-400/90 mt-0.5">Exceeds monthly IP or email allowance</span>
+                      )}
+                      {pointsCashQuote.prestige_eligible && pointsCashQuote.fits_caps && !pointsCashQuote.sufficient_cash && (
+                        <span className="block text-amber-400/90 mt-0.5">Insufficient cash</span>
+                      )}
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleBuyPointsCash}
+                    disabled={loading || !pointsCashQuote?.can_buy}
+                    className="w-full min-h-[44px] py-2.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+                  >
+                    {loading ? '...' : 'Buy with cash'}
+                  </button>
+                </>
+              )}
+              </>
+              )}
             </div>
             <div className="store-art-line text-primary mx-3" />
           </div>
@@ -1128,6 +1335,7 @@ export default function Store() {
             if (u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max) return false;
             // Hide Practice Targets when already at max (base 3 + bonus 3)
             if (u.id === 'hitlist-npc-cap' && (Number(user?.hitlist_npc_bonus_slots) || 0) >= 3) return false;
+            if (u.ownedCheck?.(user)) return false;
             return true;
           }).map((u) => {
             const extra = u.extra?.(user, boozeConfig);

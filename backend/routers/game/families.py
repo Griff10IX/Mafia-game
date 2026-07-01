@@ -31,6 +31,7 @@ from pymongo import ReturnDocument
 from utils.game_timezone import game_week_range_utc
 from utils.notepad_color import notepad_color_for_api_response, normalize_notepad_color_for_set
 from utils.point_provenance import log_points_event
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.family_vault_log import log_family_vault_tx
 from utils.family_perks import (
     PERK_IDS,
@@ -4381,7 +4382,7 @@ async def _execute_crew_oc_commit(
     accepted = await db.family_crew_oc_applications.find({"family_id": family_id, "status": "accepted"}, {"_id": 0, "user_id": 1}).to_list(50)
     accepted_ids = [a["user_id"] for a in accepted]
     roster_ids = list(dict.fromkeys(member_ids + accepted_ids))
-    living = await db.users.find({"id": {"$in": roster_ids}, "is_dead": {"$ne": True}}, {"_id": 0, "id": 1, "rank_points": 1, "username": 1, "prestige_rank_multiplier": 1, "total_oc_heists": 1}).to_list(100)
+    living = await db.users.find({"id": {"$in": roster_ids}, "is_dead": {"$ne": True}}, {"_id": 0, "id": 1, "rank_points": 1, "username": 1, "prestige_rank_multiplier": 1, "total_oc_heists": 1, "rank_xp_pass_rewards_granted": 1, "rank_xp_pass_token_expires_at": 1}).to_list(100)
     living_ids = [u["id"] for u in living]
     if not living_ids:
         return {"ok": False, "reason": "no_crew", "detail": "No living crew members"}
@@ -4391,8 +4392,7 @@ async def _execute_crew_oc_commit(
         rp_before = int(u.get("rank_points") or 0)
         oc_heists_before = int(u.get("total_oc_heists") or 0)
         respect_roll = _rng.randint(CREW_OC_REWARD_POINTS_MIN, CREW_OC_REWARD_POINTS_MAX)
-        await db.users.update_one(
-            {"id": uid},
+        crew_oc_update = apply_season_rp_mirror_to_update(
             {
                 "$inc": {
                     "rank_points": CREW_OC_REWARD_RP,
@@ -4403,7 +4403,10 @@ async def _execute_crew_oc_commit(
                     "total_oc_heists": 1,
                 }
             },
+            user=u,
         )
+        rp_awarded = rank_points_in_update(crew_oc_update)
+        await db.users.update_one({"id": uid}, crew_oc_update)
         try:
             from routers.game.achievements import maybe_log_oc_heist_badge_tiers
             await maybe_log_oc_heist_badge_tiers(uid, oc_heists_before, username=u.get("username"))
@@ -4412,13 +4415,13 @@ async def _execute_crew_oc_commit(
         if respect_roll:
             await log_respect_earned(uid, respect_roll, "crew_oc")
         try:
-            await maybe_process_rank_up(uid, rp_before, CREW_OC_REWARD_RP, u.get("username", ""), user_prestige_rank_mult(u))
+            await maybe_process_rank_up(uid, rp_before, rp_awarded, u.get("username", ""), user_prestige_rank_mult(u))
         except Exception:
             logging.exception("Rank-up notification (Crew OC)")
         await send_notification(
             uid,
             "Crew OC committed",
-            f"{fam_name} committed the Organised Crime. You received +{CREW_OC_REWARD_RP} RP, +${CREW_OC_REWARD_CASH:,} cash, +{CREW_OC_REWARD_BULLETS} bullets, +{respect_roll} respect points, +{CREW_OC_REWARD_BOOZE} booze. Family Treasury +${CREW_OC_TREASURY_LUMP:,}.",
+            f"{fam_name} committed the Organised Crime. You received +{rp_awarded} RP, +${CREW_OC_REWARD_CASH:,} cash, +{CREW_OC_REWARD_BULLETS} bullets, +{respect_roll} respect points, +{CREW_OC_REWARD_BOOZE} booze. Family Treasury +${CREW_OC_TREASURY_LUMP:,}.",
             "reward",
             category="crew_oc",
         )

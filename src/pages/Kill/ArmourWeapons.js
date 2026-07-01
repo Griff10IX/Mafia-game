@@ -11,10 +11,11 @@ const formatMoney = (n) => `$${Number(n ?? 0).toLocaleString()}`;
 /** Worst → best for combat (same as bullets-to-kill tier): non-loot by damage, loot-exclusive last. */
 function sortWeaponsByPower(list) {
   if (!Array.isArray(list)) return [];
+  const tier = (w) => (w.loot_exclusive ? 2 : w.store_exclusive ? 1 : 0);
   return [...list].sort((a, b) => {
-    const la = a.loot_exclusive ? 1 : 0;
-    const lb = b.loot_exclusive ? 1 : 0;
-    if (la !== lb) return la - lb;
+    const ta = tier(a);
+    const tb = tier(b);
+    if (ta !== tb) return ta - tb;
     const da = Number(a.damage) || 0;
     const db = Number(b.damage) || 0;
     if (da !== db) return da - db;
@@ -861,6 +862,10 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                                     {equipping ? '...' : opt.equipped ? 'Unequip' : 'Equip'}
                                   </button>
                                 </>
+                              ) : opt.store_exclusive ? (
+                                <span className="px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/30 text-cyan-400/90" title="Buy in Game → Store (500 pts)">
+                                  {opt.name} <span className="text-cyan-300/80">(Store — 500 pts)</span>
+                                </span>
                               ) : opt.loot_exclusive ? (
                                 <span className="px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/30 text-zinc-500 shadow-[0_0_10px_rgba(251,191,36,0.45)]" title="Obtain from loot box">
                                   {opt.name} <span className="text-amber-400/80">(Loot exclusive)</span>
@@ -921,6 +926,16 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                                 </>
                               ) : (
                                 <>
+                                  {w.store_exclusive ? (
+                                    <span className="px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/30 text-cyan-400/90 shrink-0" title="Buy in Game → Store (1000 pts)">
+                                      {nameShort} <span className="text-cyan-300/80">(Store — 1,000 pts)</span>
+                                    </span>
+                                  ) : w.loot_exclusive ? (
+                                    <span className="px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/30 text-zinc-500 shadow-[0_0_10px_rgba(251,191,36,0.45)] shrink-0" title="Obtain from loot box">
+                                      {nameShort} <span className="text-amber-400/80">(Loot exclusive)</span>
+                                    </span>
+                                  ) : (
+                                <>
                                   {priceMoney != null && (
                                     <button
                                       type="button"
@@ -948,6 +963,8 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                                     </button>
                                   )}
                                   {inStock && !w.owned && <span className="text-[7px] text-emerald-400">({w.armoury_stock})</span>}
+                                </>
+                                  )}
                                 </>
                               )}
                             </div>

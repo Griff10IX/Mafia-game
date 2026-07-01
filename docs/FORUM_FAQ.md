@@ -46,7 +46,7 @@ Combat is the heart of the game. Attack other players to steal their cash and ea
 [*][color=#FF6B6B]Lose all cars in your garage[/color]
 [*][color=#FF6B6B]Your character is marked dead (permadeath for that account)[/color]
 [*][color=#2ECC71][b]Dead > Alive:[/b] On a [b]new[/b] account, one-time transfer [b]99.95%[/b] of the dead account’s [b]cash and points at death[/b] (tiny tax to the state-head family), plus [b]~50% of consumable tokens[/b] stored at death. Requires the dead account’s password.[/color]
-[*][color=#2ECC71][b]Revive:[/b] Pay [b]50,000 points[/b] on a living account to revive a dead account on the [b]same email[/b] (once per email).[/color]
+[*][color=#2ECC71][b]Revive:[/b] Pay [b]50,000 points[/b] on a living account to revive a dead account on the [b]same email[/b] (once per email). Restores [b]properties[/b], [b]illegal business / Distillery[/b], and [b]cars[/b] lost on PvP death when a death snapshot exists (map mission progress stays on the dead account). Reviver cash/points still transfer; killer portfolio kill boost, armour, and weapons are [b]not[/b] reversed.[/color]
 [*][color=#888888]While dead: spend [b]1,000 points[/b] to reveal who killed you (if known).[/color]
 [*][color=#888888]You may register a new account to keep playing; use Dead > Alive to recover most wealth from the old character.[/color]
 [/list]
@@ -57,6 +57,9 @@ Weapons are bought in tiers from the armoury: each step is stronger than the las
 [b]Weapon tips:[/b]
 [list]
 [*][color=#888888]Higher damage weapons reduce bullets needed to kill (see Attack / bullet calculator)[/color]
+[*][color=#888888]Buy guns in order at the armoury; top cash tiers and Chicago Typewriter Premium (500 pts) are armoury stock[/color]
+[*][color=#2ECC71]Engraved Lewis Gun (weapon11) — [b]Points Store only[/b] (1,000 pts, 130 dmg); requires Chicago Typewriter Premium owned[/color]
+[*][color=#FFD700]Colt Monitor — loot-box exclusive, strongest gun[/color]
 [*][color=#888888]Loot boxes can drop special loot weapons[/color]
 [/list]
 
@@ -72,11 +75,12 @@ Train at the Shooting Range to increase mastery. Each weapon has its own mastery
 [color=#FFD700][b]Armour[/b][/color]
 Armour determines how many bullets are needed to kill you. Higher armour = more protection. Must be purchased in order.
 
-[b]Armour levels (0–6):[/b]
+[b]Armour levels (0–7):[/b]
 [list]
 [*][color=#888888]Higher armour = more bullets needed to kill you — the exact count depends on your armour tier, both players' ranks, weapon damage, mastery, inflation, and perks (use the in-game attack / bullet calculator)[/color]
 [*][color=#888888]Levels 1–5: bought in order from the armoury[/color]
-[*][color=#FFD700]Level 6 (Steel Plate Vest) — loot-box exclusive, strongest tier[/color]
+[*][color=#2ECC71]Level 6 (Elite Composite Battledress) — [b]Points Store only[/b] (500 pts, 60k base bullets); requires level 5 owned[/color]
+[*][color=#FFD700]Level 7 (Steel Plate Vest) — loot-box exclusive, strongest tier (66k base bullets)[/color]
 [/list]
 
 [color=#FFD700][b]Hitlist (Bounties)[/b][/color]
@@ -97,6 +101,7 @@ You can have [b]at most 4 bodyguards at once[/b] — [b]any mix[/b] of [b]robot[
 [list]
 [*][color=#888888][b]Slots:[/b] unlock extra empty slots via [b]Bodyguards → buy slot[/b] — [b]75 → 150 → 300 → 450[/b] pts for the 1st–4th purchase (order depends how many you already unlocked; daily events can change costs)[/color]
 [*][color=#888888][b]Robots[/b] — hire instantly into an empty slot (points; base cost depends on slot + a short inflation window if you hire often — see in-game)[/color]
+[*][color=#2ECC71][b]Robot Auto-Search:[/b] [b]10,000 points[/b] for [b]30 days[/b] ([b]Bodyguards[/b] page or [b]Store[/b]) — server keeps [b]Attack → My Searches[/b] rows for [b]your[/b] hired robots; renews when a row has [b]≤3 hours[/b] left until expiry[/color]
 [*][color=#888888][b]Humans[/b] — send a [b]bodyguard invite[/b] to another player; when they accept, they fill a slot. The inviter pays a [b]one-time hire fee in points[/b] (lower than a robot hire at the same moment). Weekly pay (points/cash) and contract length are set in the invite. Human guards use [b]their own armour[/b]; you cannot upgrade their armour from your screen (robots can).[/color]
 [*][color=#888888]Bodyguards die first when you're attacked[/color]
 [/list]
@@ -884,7 +889,7 @@ Collect loot box pieces to open a box (piece cost is shown in-game). Pieces drop
 [*][color=#888888]Points, rank points, cash, bullets — rolls depend on the loot table (see in-game when opening)[/color]
 [*][color=#888888]Cars (any rarity including Exclusive)[/color]
 [*][color=#888888]Tokens (various types)[/color]
-[*][color=#FFD700]Level 6 Armour (Steel Plate Vest) - ULTRA RARE[/color]
+[*][color=#FFD700]Level 7 Armour (Steel Plate Vest) - ULTRA RARE[/color]
 [*][color=#FFD700]Loot Weapon (special weapon) - ULTRA RARE[/color]
 [*][color=#FFD700]Exclusive Car - ULTRA RARE[/color]
 [/list]
@@ -911,6 +916,8 @@ Collect loot box pieces to open a box (piece cost is shown in-game). Pieces drop
 [color=#8E44AD][b]Combat Upgrades[/b][/color]
 [list]
 [*][color=#888888]Silencer (150 pts)[/color] - Fewer witness statements when you kill
+[*][color=#2ECC71]Elite Composite Battledress (500 pts)[/color] - Armour level 6 (60k base bullets); requires level 5 owned; auto-equipped
+[*][color=#2ECC71]Engraved Lewis Gun (1,000 pts)[/color] - Store gun (130 dmg); requires Chicago Typewriter Premium owned; auto-equipped
 [*][color=#888888]Anti-Snitch (120 pts)[/color] - Cannot be snitched on while in jail
 [*][color=#888888]Health Restore (15 pts or 102 respect if all-respect)[/color] - Instantly restore to 100% health
 [*][color=#888888][b]Respect[/b] — also earned in-game; some store purchases accept respect instead of points (see each item)[/color]
@@ -949,9 +956,10 @@ Consumable boosts (from [b]Inventory[/b]): each token adds [b]1 hour[/b] of effe
 [*][color=#888888]You get a [b]Game Pass token[/b] with an expiry: [b]one calendar month[/b] from purchase. [b]Activate[/b] it in [b]Armoury / My Inventory[/b] before that time or the token lapses. While VIP is active, tier rewards run until that same end date and time (see the page for your exact end date).[/color]
 [*][color=#888888][b]VIP track (after you activate):[/b] full [b]micro-tier[/b] rewards as you earn rank XP — exact payouts are on the Game Pass page.[/color]
 [*][color=#888888][b]Free track:[/b] if you have [b]not[/b] claimed VIP yet, you can still earn [b]limited[/b] free-tier rewards as you rank up (bands and amounts in-game).[/color]
-[*][color=#888888]There is [b]no[/b] timed global “double rank XP” buff from Game Pass — bonuses are delivered as [b]one-time tier rewards[/b] (the in-game multiplier display for pass is [b]1×[/b] for rank XP).[/color]
+[*][color=#888888]While [b]VIP is active[/b] (claimed pass, window not expired), you earn [b]+10% rank points[/b] from all gameplay sources. Tier milestone rewards are still one-time payouts; this is a separate always-on VIP bonus. Temporary loot perks (e.g. +10% RP for 24h) stack on top.[/color]
 [*][color=#888888]You [b]cannot[/b] buy another Game Pass in the [b]final 14 days[/b] before your current pass window ends (unactivated token or active VIP); you can buy again after it expires.[/color]
 [*][color=#888888][b]Inbox:[/b] activation and tier-reward lines are sent to [b]Social → Inbox[/b] so you have a record.[/color]
+[*][color=#888888][b]VIP tier 100:[/b] the first time you complete the VIP track (tier 100), you receive the [b]VIP Pass Car[/b] — fast travel ([b]8s[/b]), custom image, [b]+50% booze cargo[/b] while owned, survives death (not taken on kill), listable on the car marketplace. [b]Once per account[/b], not each season.[/color]
 [*][color=#888888][b]Dead > Alive:[/b] Game Pass rank-tier [b]progression state[/b] can carry over with a dead account’s estate when rules allow — see in-game fine print on Game Pass / Dead > Alive.[/color]
 [/list]
 [/quote]
@@ -1323,7 +1331,7 @@ If someone used your card without permission:
 [color=#AAAAAA]A: Boss declares war, both families fight by killing each other's members. War ends when one side surrenders or is wiped. Winner takes treasury and rackets.[/color]
 
 [color=#3498DB][b]Q: What is Dead to Alive?[/b][/color]
-[color=#AAAAAA]A: [b]Dead > Alive[/b] moves ~99.95% of a dead account’s cash/points (at death) to a new account with the dead password; [b]Revive[/b] costs 50k pts and restores the same email’s dead character. Open the Dead > Alive / Revive pages in-game.[/color]
+[color=#AAAAAA]A: [b]Dead > Alive[/b] moves ~99.95% of a dead account’s cash/points (at death) to a new account with the dead password; [b]Revive[/b] costs 50k pts and restores the same email’s dead character — including properties, illegal business, and cars lost to your killer when a death snapshot exists (see [b]COMBAT → What Happens When You Die[/b]). Open the Dead > Alive / Revive pages in-game.[/color]
 
 [color=#3498DB][b]Q: What is Prestige?[/b][/color]
 [color=#AAAAAA]A: After reaching Godfather (top of the 13-rank ladder), you can Prestige up to 5 times for permanent bonuses — stronger crime/OC/NPC/illegal-business payouts, GTA rare-car luck, mission redo scaling, and exclusive Prestige Crimes. See the Prestige screen for exact numbers.[/color]

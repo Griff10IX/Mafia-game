@@ -306,7 +306,7 @@ def _booze_rank_base_capacity(rank_id: int, prestige_level: int) -> int:
     return floor + int(round((god_rank_only - floor) * (r - 1) / span))
 
 
-def _booze_user_capacity_sync(current_user: dict, *, family_cargo_bonus: int = 0) -> int:
+def _booze_user_capacity_sync(current_user: dict, *, family_cargo_bonus: int = 0, vip_pass_car_owned: bool = False) -> int:
     rank_id, _ = get_rank_info(int(current_user.get("rank_points") or 0), user_prestige_rank_mult(current_user))
     pl = _booze_prestige_level_clamped(current_user)
     capacity_from_rank = _booze_rank_base_capacity(rank_id, pl)
@@ -318,11 +318,23 @@ def _booze_user_capacity_sync(current_user: dict, *, family_cargo_bonus: int = 0
     subtotal = max(1, subtotal)
     if current_user.get("completed_it_booze_capacity"):
         subtotal = min(int(cap_total) * 2, int(subtotal) * 2)
+    if vip_pass_car_owned:
+        subtotal = min(int(cap_total), max(1, int(subtotal * 1.5)))
     return int(subtotal)
 
 
-def _booze_user_capacity(current_user: dict, *, family_cargo_bonus: int = 0) -> int:
-    return _booze_user_capacity_sync(current_user, family_cargo_bonus=family_cargo_bonus)
+def _booze_user_capacity(current_user: dict, *, family_cargo_bonus: int = 0, vip_pass_car_owned: bool = False) -> int:
+    return _booze_user_capacity_sync(
+        current_user,
+        family_cargo_bonus=family_cargo_bonus,
+        vip_pass_car_owned=vip_pass_car_owned,
+    )
+
+
+async def _booze_vip_pass_car_owned(db, user_id: str) -> bool:
+    from utils.game_pass_vip_car import user_owns_game_pass_vip_car
+
+    return await user_owns_game_pass_vip_car(db, user_id or "")
 
 
 async def _family_booze_cargo_extra(family_id) -> int:
@@ -464,7 +476,8 @@ async def _booze_buy_impl(user: dict, booze_id: str, amount: int, *, via_auto_ra
     cost = price * amount
     carrying = dict(user.get("booze_carrying") or {})
     fam_extra = await _family_booze_cargo_extra(user.get("family_id"))
-    capacity = _booze_user_capacity(user, family_cargo_bonus=fam_extra)
+    vip_car = await _booze_vip_pass_car_owned(db, user.get("id") or "")
+    capacity = _booze_user_capacity(user, family_cargo_bonus=fam_extra, vip_pass_car_owned=vip_car)
     current_carry = _booze_user_carrying_total(carrying)
     if current_carry + amount > capacity:
         raise HTTPException(status_code=400, detail=f"Over capacity (max {capacity} units)")
@@ -784,7 +797,8 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
         round((godfather_rank_only - int(BOOZE_CAPACITY_BASE_RANK1)) / rank_span)
     )
     fam_extra = await _family_booze_cargo_extra(current_user.get("family_id"))
-    capacity = _booze_user_capacity(current_user, family_cargo_bonus=fam_extra)
+    vip_car = await _booze_vip_pass_car_owned(db, uid or "")
+    capacity = _booze_user_capacity(current_user, family_cargo_bonus=fam_extra, vip_pass_car_owned=vip_car)
     booze_until = _parse_iso_datetime(current_user.get("booze_until"))
     booze_boost_active = bool(booze_until and datetime.now(timezone.utc) < booze_until)
 
@@ -846,6 +860,7 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
         "capacity_bonus": capacity_bonus,
         "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX,
         "family_cargo_bonus": fam_extra,
+        "vip_pass_car_bonus": vip_car,
         "carrying_total": _booze_user_carrying_total(carrying),
         "listed_price_global_mult": _lpm,
         "listed_price_global_percent_off": round((1.0 - _lpm) * 100.0, 2) if _lpm < 1.0 else 0.0,
@@ -904,9 +919,11 @@ async def buy_booze_capacity(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=400, detail="Insufficient points")
     await log_points_event(db, user_id=current_user["id"], points=-BOOZE_CAPACITY_UPGRADE_COST, event_type="booze_upgrade", meta={"add_bonus": add_bonus, "new_bonus": current_bonus + add_bonus})
     fam_extra = await _family_booze_cargo_extra(current_user.get("family_id"))
+    vip_car = await _booze_vip_pass_car_owned(db, current_user.get("id") or "")
     new_capacity = _booze_user_capacity(
         {**current_user, "booze_capacity_bonus": current_bonus + add_bonus},
         family_cargo_bonus=fam_extra,
+        vip_pass_car_owned=vip_car,
     )
     _invalidate_config_cache(current_user["id"])
     return {"message": f"+{add_bonus} booze capacity for {BOOZE_CAPACITY_UPGRADE_COST} points", "new_capacity": new_capacity, "capacity_bonus": current_bonus + add_bonus, "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX}

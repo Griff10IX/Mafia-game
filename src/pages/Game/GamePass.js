@@ -370,7 +370,7 @@ function formatTierRewardItem(key, value) {
 function TierRewards({ rewards, isFreeMembership, isTierCompleted, microTier, rewardProfile }) {
   const perkLines = PERKS_FOR_TIER[microTier] || [];
   const hasNumeric = !!rewards && Object.values(rewards).some((v) => Number(v || 0) > 0);
-  const hasAny = hasNumeric || perkLines.length > 0;
+  const hasAny = hasNumeric || perkLines.length > 0 || (microTier === 100 && !isFreeMembership);
   if (!hasAny) return null;
 
   const freeUnlockedRewardKey = isFreeMembership ? rewardProfile?.freeUnlockedKeyByTier?.[microTier] : null;
@@ -383,6 +383,11 @@ function TierRewards({ rewards, isFreeMembership, isTierCompleted, microTier, re
             {PERK_LABELS[pk] || pk}
           </div>
         ))}
+      {microTier === 100 && !isFreeMembership && (
+        <div className="text-[9px] font-heading text-cyan-400/95">
+          VIP Pass Car — 8s travel, +50% booze cargo while owned, custom image, survives death (one-time tier 100 reward)
+        </div>
+      )}
       {REWARD_DISPLAY_ORDER.map((k) => {
         const v = rewards?.[k];
         const text = formatTierRewardItem(k, v);
@@ -844,6 +849,10 @@ export default function GamePass() {
                   <span className="text-primary tabular-nums">{TARGET_XP_GTA_TOKENS_TOTAL}</span> GTA tokens, spread across tiers like other currencies.
                 </li>
                 <li>
+                  <span className="text-zinc-100 font-bold">VIP tier 100</span> —{' '}
+                  <span className="text-cyan-400/95">VIP Pass Car</span> (8s travel, custom image, +50% booze cargo while owned, not lost on death; sellable on marketplace). One-time reward when you first complete VIP tier 100.
+                </li>
+                <li>
                   <span className="text-zinc-100 font-bold">24h VIP perks</span> — At micro-tiers 25, 50, 75, and 100: stacked loot-style boosts —{' '}
                   {PERK_ROTATION.map((pk) => PERK_LABELS[pk]).join(' · ')}.
                 </li>
@@ -875,9 +884,14 @@ export default function GamePass() {
                     VIP Game Pass tier rewards are complete — all payouts through tier {MAX_MICRO_TIER} have been credited.
                   </p>
                 ) : (
-                  <p className="text-[9px] text-zinc-500 font-heading leading-relaxed">
-                    VIP rewards are applied automatically: when you activate the pass, anything you already earned this season (season rank XP) is granted immediately; after that, each new tier credits on its own as soon as you pass the next milestone (you don’t need to buy again).
-                  </p>
+                  <>
+                    <p className="text-[9px] text-zinc-500 font-heading leading-relaxed">
+                      VIP rewards are applied automatically: when you activate the pass, anything you already earned this season (season rank XP) is granted immediately; after that, each new tier credits on its own as soon as you pass the next milestone (you don’t need to buy again).
+                    </p>
+                    <p className="text-[9px] text-emerald-400/90 font-heading leading-relaxed">
+                      While VIP is active: <span className="text-emerald-300 font-bold">+10% rank points</span> from all sources (crimes, kills, GTA, missions, objectives, and more).
+                    </p>
+                  </>
                 ))}
             </div>
             <div className="store-art-line text-primary mx-3" />

@@ -1989,7 +1989,15 @@ def register(router):
                     mq["created_at"] = {"$gt": cleared}
                 return await db.witness_statement_listings.count_documents(mq)
 
-            admin_color_doc, weapon_doc, fam, bodyguard_count, witness_nav_green_n, gp_season_pub = await asyncio.gather(
+            async def _owned_premium_weapon_flags():
+                rows = await db.user_weapons.find(
+                    {"user_id": u["id"], "weapon_id": {"$in": ["weapon10", "weapon11"]}, "quantity": {"$gte": 1}},
+                    {"_id": 0, "weapon_id": 1},
+                ).to_list(2)
+                ids = {str(r.get("weapon_id") or "") for r in rows}
+                return ("weapon10" in ids, "weapon11" in ids)
+
+            admin_color_doc, weapon_doc, fam, bodyguard_count, witness_nav_green_n, gp_season_pub, premium_weapon_flags = await asyncio.gather(
                 db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1}),
                 db.weapons.find_one({"id": equipped_weapon_id}, {"_id": 0, "name": 1}) if equipped_weapon_id else _noop(),
                 db.families.find_one({"id": family_id}, {"_id": 0, "name": 1}) if family_id else _noop(),
@@ -2002,7 +2010,9 @@ def register(router):
                 }),
                 _witness_nav_green_count(),
                 get_game_pass_season_public(db),
+                _owned_premium_weapon_flags(),
             )
+            owns_weapon10, owns_weapon11 = premium_weapon_flags
             gp_current_sid = str((gp_season_pub or {}).get("game_pass_season_id") or "1")
             witness_nav_red = _safe_int(u.get("witness_nav_red"), 0)
             witness_nav_green = min(_safe_int(witness_nav_green_n, 0), 999)
@@ -2038,8 +2048,11 @@ def register(router):
                 gun_name = weapon_doc.get("name") or equipped_weapon_id
             armour_name = None
             alvl = _safe_int(u.get("armour_level"), 0)
-            if alvl >= 6:
+            owned_armour_max = _safe_int(u.get("armour_owned_level_max"), alvl)
+            if alvl >= 7:
                 armour_name = "Steel Plate Bulletproof Vest (1922)"
+            elif alvl == 6:
+                armour_name = "Elite Composite Battledress"
             elif alvl > 0:
                 armour = next((a for a in ARMOUR_SETS if a.get("level") == alvl), None)
                 armour_name = armour.get("name") if armour else f"Level {alvl}"
@@ -2076,6 +2089,9 @@ def register(router):
                 witness_nav_green=witness_nav_green,
                 health=_safe_int(u.get("health"), DEFAULT_HEALTH),
                 armour_level=_safe_int(u.get("armour_level"), 0),
+                armour_owned_level_max=owned_armour_max,
+                owns_weapon10=bool(owns_weapon10),
+                owns_weapon11=bool(owns_weapon11),
                 current_state=str(u.get("current_state") or ""),
                 total_kills=effective_player_kill_count(u),
                 total_deaths=_safe_int(u.get("total_deaths"), 0),

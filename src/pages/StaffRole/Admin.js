@@ -247,6 +247,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Donations Payments Log', categoryId: 'admin-donations', collapseKey: 'donationsPayments', keywords: ['donations', 'payments', 'stripe', 'credit'], adminOnly: true },
   { label: 'Store Point Crediting', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['store', 'crediting', 'manual', 'eta', 'payments'], adminOnly: true },
   { label: 'Pre-order Settings', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['preorder', 'points', 'release', 'manual', 'store', 'credit'], adminOnly: true },
+  { label: 'Points cash purchase logs', categoryId: 'admin-donations', collapseKey: 'pointsCashLogs', keywords: ['points', 'cash', 'store', 'ip', 'email', 'monthly', 'quick trade'], adminOnly: true },
   { label: 'Release Preorder Points', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['release', 'preorder', 'points', 'credit'], adminOnly: true },
   { label: 'Quick Trade admin', categoryId: 'admin-economy-progression', collapseKey: 'quicktradeTool', keywords: ['quicktrade', 'trade', 'offers', 'escrow', 'cancel', 'listings', 'tokens', 'property'], adminOnly: true },
   { label: 'Racket & Distillery progress', categoryId: 'admin-economy-progression', collapseKey: 'racketProgress', scrollToId: 'admin-racket-progress', keywords: ['racket', 'distillery', 'illegal business', 'progress', 'vault', 'guards', 'security', 'ladder', 'booze', 'ibm'], adminOnly: true },
@@ -388,8 +389,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, globalPropertiesEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, globalPropertiesEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, globalPropertiesEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true, pointsCashLogs: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, globalPropertiesEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true, pointsCashLogs: true }; }
 }
 
 function saveCollapsed(state) {
@@ -1462,6 +1463,12 @@ export default function Admin() {
   const [storePointsManualCreditEta, setStorePointsManualCreditEta] = useState('');
   const [storePointsEventEnabled, setStorePointsEventEnabled] = useState(true);
   const [storePointsEventForceUntil, setStorePointsEventForceUntil] = useState('');
+  const [pointsCashLogs, setPointsCashLogs] = useState(null);
+  const [pointsCashLogsLoading, setPointsCashLogsLoading] = useState(false);
+  const [pointsCashLogsUsername, setPointsCashLogsUsername] = useState('');
+  const [pointsCashLogsIp, setPointsCashLogsIp] = useState('');
+  const [pointsCashLogsEmail, setPointsCashLogsEmail] = useState('');
+  const [pointsCashLogsMonthKey, setPointsCashLogsMonthKey] = useState('');
   const [launchSettingsSaving, setLaunchSettingsSaving] = useState(false);
   const [preorderReleaseLoading, setPreorderReleaseLoading] = useState(false);
   const [manualCreditLoading, setManualCreditLoading] = useState(null);
@@ -6175,6 +6182,24 @@ export default function Admin() {
       setPointsStoreSpends({ spends: [], count: 0 });
     } finally {
       setPointsStoreSpendsLoading(false);
+    }
+  };
+
+  const handleFetchPointsCashLogs = async () => {
+    setPointsCashLogsLoading(true);
+    try {
+      const params = { limit: 200 };
+      if ((pointsCashLogsUsername || '').trim()) params.username = pointsCashLogsUsername.trim();
+      if ((pointsCashLogsIp || '').trim()) params.ip = pointsCashLogsIp.trim();
+      if ((pointsCashLogsEmail || '').trim()) params.email = pointsCashLogsEmail.trim();
+      if ((pointsCashLogsMonthKey || '').trim()) params.month_key = pointsCashLogsMonthKey.trim();
+      const res = await api.get('/admin/store/points-cash-logs', { params });
+      setPointsCashLogs(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load points cash logs');
+      setPointsCashLogs({ logs: [], count: 0 });
+    } finally {
+      setPointsCashLogsLoading(false);
     }
   };
 
@@ -11101,7 +11126,7 @@ export default function Admin() {
             <ActionRow
               icon={Mail}
               label="Auto Rank email entitlement"
-              description="Stripe £20 permanent Auto Rank tied to email (survives death / new account on same email). Account Give/Remove above is username-only."
+              description="Stripe £15 permanent Auto Rank tied to email (survives death / new account on same email). Account Give/Remove above is username-only."
             >
               <input
                 type="email"
@@ -11782,6 +11807,83 @@ export default function Admin() {
                   {preorderReleaseLoading ? 'Releasing...' : 'Release All Pending Preorder Points'}
                 </button>
               </div>
+            </div>
+          )}
+        </div>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-emerald-500/30 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
+          <SectionHeader
+            icon={DollarSign}
+            title="Points cash purchase logs"
+            color="text-emerald-300"
+            badge={pointsCashLogs?.logs ? <span className="text-[10px] font-heading text-mutedForeground">{pointsCashLogs.count} rows</span> : null}
+            toolAnchor="pointsCashLogs"
+            isCollapsed={collapsed.pointsCashLogs}
+            onToggle={() => toggleSection('pointsCashLogs')}
+          />
+          {!collapsed.pointsCashLogs && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground">
+                Audit trail for store cash → points purchases (QT pricing, $2B/month per IP and per verified email).
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <Input value={pointsCashLogsUsername} onChange={(e) => setPointsCashLogsUsername(e.target.value)} placeholder="Username filter" className="text-[11px]" />
+                <Input value={pointsCashLogsIp} onChange={(e) => setPointsCashLogsIp(e.target.value)} placeholder="IP filter (+ month summary)" className="text-[11px]" />
+                <Input value={pointsCashLogsEmail} onChange={(e) => setPointsCashLogsEmail(e.target.value)} placeholder="Email filter (+ month summary)" className="text-[11px]" />
+                <Input value={pointsCashLogsMonthKey} onChange={(e) => setPointsCashLogsMonthKey(e.target.value)} placeholder="Month key YYYY-MM-DD" className="text-[11px]" />
+              </div>
+              <BtnPrimary onClick={handleFetchPointsCashLogs} disabled={pointsCashLogsLoading}>
+                {pointsCashLogsLoading ? 'Loading…' : 'Load logs'}
+              </BtnPrimary>
+              {(pointsCashLogs?.ip_summary || pointsCashLogs?.email_summary) && (
+                <div className="text-[10px] font-heading text-zinc-400 space-y-1">
+                  {pointsCashLogs.ip_summary && (
+                    <p>IP {pointsCashLogs.ip_summary.ip}: {formatAdminMoneyInt(pointsCashLogs.ip_summary.cash_spent)} spent · {formatAdminMoneyInt(pointsCashLogs.ip_summary.remaining)} remaining ({pointsCashLogs.ip_summary.month_key})</p>
+                  )}
+                  {pointsCashLogs.email_summary && (
+                    <p>Email {pointsCashLogs.email_summary.email}: {formatAdminMoneyInt(pointsCashLogs.email_summary.cash_spent)} spent · {formatAdminMoneyInt(pointsCashLogs.email_summary.remaining)} remaining ({pointsCashLogs.email_summary.month_key})</p>
+                  )}
+                </div>
+              )}
+              {pointsCashLogs && (
+                <div className="overflow-x-auto">
+                  {(!pointsCashLogs.logs || pointsCashLogs.logs.length === 0) ? (
+                    <p className="text-[10px] text-mutedForeground">No matching purchases.</p>
+                  ) : (
+                    <table className="w-full text-[9px] font-heading">
+                      <thead>
+                        <tr className="text-left text-mutedForeground border-b border-zinc-700/40">
+                          <th className="py-1 pr-2">Time</th>
+                          <th className="py-1 pr-2">User</th>
+                          <th className="py-1 pr-2">Email</th>
+                          <th className="py-1 pr-2">IP</th>
+                          <th className="py-1 pr-2 text-right">Pts</th>
+                          <th className="py-1 pr-2 text-right">Cash</th>
+                          <th className="py-1 pr-2 text-right">$/pt</th>
+                          <th className="py-1 pr-2 text-right">IP mo.</th>
+                          <th className="py-1 text-right">Email mo.</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pointsCashLogs.logs.map((row) => (
+                          <tr key={row.id} className="border-b border-zinc-800/50">
+                            <td className="py-1 pr-2 whitespace-nowrap">{formatAdminDateTime(row.created_at)}</td>
+                            <td className="py-1 pr-2">{row.username || '?'}</td>
+                            <td className="py-1 pr-2 max-w-[120px] truncate" title={row.email}>{row.email || '—'}</td>
+                            <td className="py-1 pr-2 font-mono text-[8px]">{row.client_ip || '—'}</td>
+                            <td className="py-1 pr-2 text-right">{Number(row.points || 0).toLocaleString()}</td>
+                            <td className="py-1 pr-2 text-right">{formatAdminMoneyInt(row.cash_cost)}</td>
+                            <td className="py-1 pr-2 text-right">{formatAdminMoneyInt(row.price_per_point)}</td>
+                            <td className="py-1 pr-2 text-right">{formatAdminMoneyInt(row.ip_month_spent_after)}</td>
+                            <td className="py-1 text-right">{formatAdminMoneyInt(row.email_month_spent_after)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

@@ -476,7 +476,7 @@ export default function Leaderboard() {
             <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Weekly Rewards</h2>
           </div>
           <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5 leading-tight">
-            Top 10 each week receive cash, respect points, and bullets (by category).
+            Top 10 each week receive cash, respect points, bullets, and points (by category).
           </p>
         </div>
         <div className="p-2">
@@ -487,7 +487,7 @@ export default function Leaderboard() {
                 1st Place
               </div>
               <div className="text-[10px] text-mutedForeground font-heading leading-tight">
-                $15,000,000 + 5,000 Respect Points + 10,000 Bullets
+                $150,000,000 + 10,000 Respect Points + 15,000 Bullets + 1,500 Points
               </div>
             </div>
             <div className="bg-gradient-to-b from-zinc-600/20 to-zinc-800/20 border border-zinc-500/30 rounded-sm p-2">
@@ -496,7 +496,7 @@ export default function Leaderboard() {
                 2nd Place
               </div>
               <div className="text-[10px] text-mutedForeground font-heading leading-tight">
-                $9,000,000 + 2,500 Respect Points + 6,000 Bullets
+                $90,000,000 + 5,000 Respect Points + 9,000 Bullets + 750 Points
               </div>
             </div>
             <div className="bg-gradient-to-b from-amber-700/20 to-amber-900/20 border border-amber-600/30 rounded-sm p-2">
@@ -505,7 +505,7 @@ export default function Leaderboard() {
                 3rd Place
               </div>
               <div className="text-[10px] text-mutedForeground font-heading leading-tight">
-                $4,500,000 + 1,250 Respect Points + 3,000 Bullets
+                $45,000,000 + 2,500 Respect Points + 4,500 Bullets + 375 Points
               </div>
             </div>
           </div>

@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
 from server import db, get_current_user, log_activity, log_minigame_payout, log_respect_earned, _get_staff_user_ids, _is_admin
-from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.minigame_security import skip_minigame_session
 from routers.minigames.minigame_leaderboard import log_minigame_play
 from utils.minigame_run_session import (
@@ -49,7 +49,7 @@ def _rewards_from_score(score: int) -> dict[str, int]:
     }
 
 
-async def _apply_rewards(user_id: str, score: int) -> dict[str, int]:
+async def _apply_rewards(user_id: str, score: int, user: dict | None = None) -> dict[str, int]:
     """Calculate and apply rewards from score. Returns what was applied."""
     inc = _rewards_from_score(score)
     inc = {k: v for k, v in inc.items() if v > 0}
@@ -57,7 +57,15 @@ async def _apply_rewards(user_id: str, score: int) -> dict[str, int]:
     applied = dict(inc)
 
     if inc:
-        await db.users.update_one({"id": user_id}, apply_season_rp_mirror_to_update({"$inc": inc}))
+        if user is None:
+            user = await db.users.find_one(
+                {"id": user_id},
+                {"_id": 0, "rank_xp_pass_rewards_granted": 1, "rank_xp_pass_token_expires_at": 1},
+            )
+        snake_update = apply_season_rp_mirror_to_update({"$inc": inc}, user=user)
+        await db.users.update_one({"id": user_id}, snake_update)
+        if "rank_points" in applied:
+            applied["rank_points"] = rank_points_in_update(snake_update)
         if inc.get("respect_points"):
             await log_respect_earned(user_id, inc["respect_points"], "snake")
 
@@ -175,7 +183,7 @@ def register(router):
                     detail=f"Play limit reached ({MAX_PLAYS_PER_HOUR} per {RATE_LIMIT_PERIOD_HOURS}h). Try again in {remaining}s.",
                 )
 
-        rewards_applied = await _apply_rewards(current_user["id"], score)
+        rewards_applied = await _apply_rewards(current_user["id"], score, user=current_user)
 
         doc = {
             "id": str(uuid.uuid4()),

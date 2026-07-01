@@ -1,4 +1,4 @@
-"""Email-tied permanent Auto Rank entitlement (Stripe £20)."""
+"""Email-tied permanent Auto Rank entitlement (Stripe £15)."""
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 

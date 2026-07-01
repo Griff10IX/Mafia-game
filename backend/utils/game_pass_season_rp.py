@@ -7,7 +7,10 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from utils.game_pass_micro_rewards import vip_game_pass_entitlement_active
 from utils.game_pass_season import get_game_pass_season_public
+
+VIP_RANK_POINTS_BONUS_MULT = 1.10
 
 _RECONCILE_UNSET_FIELDS = {
     "rank_xp_pass_token_expires_at": "",
@@ -20,23 +23,52 @@ async def current_game_pass_season_id(db) -> str:
     return str(season.get("game_pass_season_id") or "1")
 
 
-def apply_season_rp_mirror_to_inc(inc: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    """If $inc includes positive rank_points, also increment rank_xp_pass_season_rp by the same amount."""
+def scale_rank_points_for_vip(base_rp: int, user: Optional[Dict[str, Any]]) -> int:
+    """+10% rank points while active VIP Game Pass (claimed + token window not expired)."""
+    try:
+        rp = int(base_rp or 0)
+    except (TypeError, ValueError):
+        return 0
+    if rp <= 0 or not user:
+        return rp
+    if not vip_game_pass_entitlement_active(user):
+        return rp
+    return int(round(rp * VIP_RANK_POINTS_BONUS_MULT))
+
+
+def rank_points_in_update(update: Optional[Dict[str, Any]]) -> int:
+    if not update:
+        return 0
+    return int((update.get("$inc") or {}).get("rank_points") or 0)
+
+
+def apply_season_rp_mirror_to_inc(
+    inc: Optional[Dict[str, Any]],
+    *,
+    user: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
+    """Scale positive rank_points for VIP, then mirror into rank_xp_pass_season_rp."""
     if not inc:
         return inc
     rp = int(inc.get("rank_points") or 0)
     if rp <= 0:
         return inc
+    scaled = scale_rank_points_for_vip(rp, user)
     out = dict(inc)
-    out["rank_xp_pass_season_rp"] = int(out.get("rank_xp_pass_season_rp") or 0) + rp
+    out["rank_points"] = scaled
+    out["rank_xp_pass_season_rp"] = int(out.get("rank_xp_pass_season_rp") or 0) + scaled
     return out
 
 
-def apply_season_rp_mirror_to_update(update: Dict[str, Any]) -> Dict[str, Any]:
-    """Return a shallow-copied update dict with mirrored season RP inside $inc."""
+def apply_season_rp_mirror_to_update(
+    update: Dict[str, Any],
+    *,
+    user: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Return a shallow-copied update dict with VIP RP scaling and mirrored season RP inside $inc."""
     if not update or "$inc" not in update:
         return update
-    new_inc = apply_season_rp_mirror_to_inc(update.get("$inc") or {})
+    new_inc = apply_season_rp_mirror_to_inc(update.get("$inc") or {}, user=user)
     if new_inc == update.get("$inc"):
         return update
     out = dict(update)

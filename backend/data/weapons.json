@@ -100,6 +100,17 @@
     "price_points": 500
   },
   {
+    "id": "weapon11",
+    "name": "Engraved Lewis Gun",
+    "description": "Masterwork light machine gun — sold only in the Points Store.",
+    "damage": 130,
+    "bullets_needed": 45,
+    "rank_required": 11,
+    "price_money": null,
+    "price_points": null,
+    "store_exclusive": true
+  },
+  {
     "id": "weapon_loot",
     "name": "Colt Monitor",
     "description": "Loot-exclusive LMG. Not sold anywhere.",

@@ -34,7 +34,7 @@ from utils.mission_loot_daily import daily_loot_for_completed_ids, ensure_missio
 from pymongo.errors import DuplicateKeyError
 import random
 
-from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_MISSIONS
 from utils.booze_intake_gate import booze_intake_blocked
 
@@ -772,7 +772,14 @@ def _build_mission_completion_reward_update(
     return update, meta
 
 
-async def _run_mission_completion_side_effects(user_id: str, current_user: dict, mission_id: str, meta: dict) -> None:
+async def _run_mission_completion_side_effects(
+    user_id: str,
+    current_user: dict,
+    mission_id: str,
+    meta: dict,
+    *,
+    rp_awarded: int | None = None,
+) -> None:
     reward_respect = int(meta.get("reward_respect") or 0)
     if reward_respect:
         await log_respect_earned(user_id, reward_respect, "missions")
@@ -795,7 +802,7 @@ async def _run_mission_completion_side_effects(user_id: str, current_user: dict,
                 "acquired_at": datetime.now(timezone.utc).isoformat(),
             })
 
-    reward_points = int(meta.get("reward_points") or 0)
+    reward_points = int(rp_awarded if rp_awarded is not None else meta.get("reward_points") or 0)
     try:
         if reward_points:
             rp_before = int(current_user.get("rank_points") or 0)
@@ -855,13 +862,20 @@ async def complete_mission(
         include_mission_completion_push=True,
         include_next_mission_baseline=True,
     )
+    mission_update = apply_season_rp_mirror_to_update(update, user=current_user)
     result = await db.users.update_one(
         {"id": user_id, "mission_completions.mission_id": {"$ne": mission_id}},
-        apply_season_rp_mirror_to_update(update),
+        mission_update,
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Mission already completed")
-    await _run_mission_completion_side_effects(user_id, current_user, mission_id, meta)
+    await _run_mission_completion_side_effects(
+        user_id,
+        current_user,
+        mission_id,
+        meta,
+        rp_awarded=rank_points_in_update(mission_update),
+    )
 
     reward_car_names = [_car_display_name(cid) for cid in meta["granted_car_ids"]]
 
@@ -1349,8 +1363,15 @@ async def admin_apply_mission_progress(
                 include_next_mission_baseline=False,
             )
             if update:
-                await db.users.update_one({"id": user_id}, apply_season_rp_mirror_to_update(update))
-            await _run_mission_completion_side_effects(user_id, u, mid, meta)
+                mission_bulk_update = apply_season_rp_mirror_to_update(update, user=u)
+                await db.users.update_one({"id": user_id}, mission_bulk_update)
+                await _run_mission_completion_side_effects(
+                    user_id,
+                    u,
+                    mid,
+                    meta,
+                    rp_awarded=rank_points_in_update(mission_bulk_update),
+                )
 
     new_completions = [{"mission_id": m["id"], "completed_at": now_iso} for m in to_complete]
     await db.users.update_one(

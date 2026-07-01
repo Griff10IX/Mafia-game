@@ -107,6 +107,7 @@ from server import (
     STATES,
     CARS,
     ARMOUR_BASE_BULLETS,
+    MAX_ARMOUR_LEVEL,
     MIN_BULLETS_TO_KILL,
     DEFAULT_HEALTH,
     KILL_CASH_PERCENT,
@@ -140,7 +141,7 @@ from server import (
     log_activity,
     founding_member_income_mult,
 )
-from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.hitlist_resolution import resolve_user_hitlist_kill
 from utils.kill_search_duration import KILL_SEARCH_RANDOM_MAX_MINUTES, KILL_SEARCH_RANDOM_MIN_MINUTES
 from utils.civilian_protection import (
@@ -1473,7 +1474,7 @@ def _bullets_to_kill(
     attacker_kill_badges: int = 0,
     victim_kill_badges: int = 0,
 ) -> int:
-    arm = min(max(0, int(target_armour_level or 0)), 6)
+    arm = min(max(0, int(target_armour_level or 0)), MAX_ARMOUR_LEVEL)
     tr = min(max(1, int(target_rank_id or 1)), GODFATHER_RANK_ID)
     ar = min(max(1, int(attacker_rank_id or 1)), GODFATHER_RANK_ID)
     dmg = max(5, int(attacker_weapon_damage or 5))
@@ -1496,7 +1497,7 @@ def _bullets_to_kill_breakdown(
     attacker_kill_badges: int = 0,
     victim_kill_badges: int = 0,
 ) -> dict:
-    arm = min(max(0, int(target_armour_level or 0)), 6)
+    arm = min(max(0, int(target_armour_level or 0)), MAX_ARMOUR_LEVEL)
     tr = min(max(1, int(target_rank_id or 1)), GODFATHER_RANK_ID)
     ar = min(max(1, int(attacker_rank_id or 1)), GODFATHER_RANK_ID)
     dmg = max(5, int(attacker_weapon_damage or 5))
@@ -1636,6 +1637,92 @@ async def attack_turnstile_nonce(
     )
 
 
+async def _attack_search_duration_minutes(attacker: dict) -> int:
+    override_minutes = attacker.get("search_minutes_override")
+    if override_minutes is not None:
+        try:
+            override_minutes = int(override_minutes)
+        except Exception:
+            override_minutes = None
+    if override_minutes is None or override_minutes <= 0:
+        config = await db.game_config.find_one({"id": "main"}, {"_id": 0, "default_search_minutes": 1})
+        default_mins = config and config.get("default_search_minutes")
+        if default_mins is not None:
+            try:
+                override_minutes = int(default_mins)
+            except Exception:
+                override_minutes = None
+    if override_minutes and override_minutes > 0:
+        return int(override_minutes)
+    return random.randint(KILL_SEARCH_RANDOM_MIN_MINUTES, KILL_SEARCH_RANDOM_MAX_MINUTES)
+
+
+async def insert_attack_search_row(
+    db,
+    *,
+    attacker: dict,
+    target: dict,
+    note: str | None = None,
+    source: str = "manual",
+    raise_on_cap: bool = False,
+) -> Optional[dict]:
+    """Insert a searching attack row (no Turnstile). Returns None if at active-search cap."""
+    attacker_id = attacker["id"]
+    active_count = await db.attacks.count_documents({
+        "attacker_id": attacker_id,
+        "status": {"$in": ["searching", "found", "traveling"]},
+    })
+    if active_count >= MAX_ACTIVE_ATTACK_SEARCHES_PER_PLAYER:
+        if raise_on_cap:
+            raise HTTPException(
+                status_code=400,
+                detail=f"You have too many active searches ({active_count}). Delete old searches before starting another.",
+            )
+        return None
+
+    now = datetime.now(timezone.utc)
+    search_duration = await _attack_search_duration_minutes(attacker)
+    found_at = now + timedelta(minutes=search_duration)
+    expires_at = now + timedelta(hours=24)
+    attack_id = str(uuid.uuid4())
+    note_clean = (note or "").strip()
+    note_clean = note_clean[:80] if note_clean else None
+    if target.get("is_npc") and target.get("is_bodyguard"):
+        target_state = (target.get("current_state") or "").strip() or None
+    else:
+        target_state = target.get("current_state") if target.get("current_state") in STATES else random.choice(STATES)
+    target_username = (target.get("username") or "").strip() or "?"
+
+    doc: Dict[str, Any] = {
+        "id": attack_id,
+        "attacker_id": attacker_id,
+        "attacker_username": attacker.get("username") or "?",
+        "target_id": target["id"],
+        "target_username": target_username,
+        "note": note_clean,
+        "status": "searching",
+        "search_started": now.isoformat(),
+        "found_at": found_at.isoformat(),
+        "expires_at": expires_at.isoformat(),
+        "planned_location_state": target_state,
+        "location_state": None,
+        "result": None,
+        "rewards": None,
+    }
+    if source != "manual":
+        doc["search_source"] = source
+    await db.attacks.insert_one(doc)
+    _attack_list_cache_invalidate(attacker_id)
+    return {
+        "attack_id": attack_id,
+        "status": "searching",
+        "found_at": found_at.isoformat(),
+        "expires_at": expires_at.isoformat(),
+        "target_username": target_username,
+        "message": f"Searching for {target_username}...",
+    }
+
+
 async def search_target(payload: AttackSearchRequest, req: Request, current_user: dict = Depends(get_current_user_verified)):
     meta = _request_meta(req)
     await require_attack_turnstile(
@@ -1681,56 +1768,20 @@ async def search_target(payload: AttackSearchRequest, req: Request, current_user
     allowed_hitlist_npc_only = target.get("is_npc") and not target.get("is_bodyguard")
     if is_civilian_protected(current_user) and not allowed_hitlist_npc_only:
         await maybe_revoke_civilian_protection(db, current_user["id"], "search_player")
-    now = datetime.now(timezone.utc)
-    override_minutes = current_user.get("search_minutes_override")
-    if override_minutes is not None:
-        try:
-            override_minutes = int(override_minutes)
-        except Exception:
-            override_minutes = None
-    if override_minutes is None or override_minutes <= 0:
-        config = await db.game_config.find_one({"id": "main"}, {"_id": 0, "default_search_minutes": 1})
-        default_mins = config and config.get("default_search_minutes")
-        if default_mins is not None:
-            try:
-                override_minutes = int(default_mins)
-            except Exception:
-                override_minutes = None
-    # Multiple concurrent hunts for the same target are allowed; each row has its own timer and attack_id.
-
-    search_duration = (
-        int(override_minutes)
-        if override_minutes and override_minutes > 0
-        else random.randint(KILL_SEARCH_RANDOM_MIN_MINUTES, KILL_SEARCH_RANDOM_MAX_MINUTES)
-    )
-    found_at = now + timedelta(minutes=search_duration)
-    expires_at = now + timedelta(hours=24)
-    attack_id = str(uuid.uuid4())
     note = (payload.note or "").strip()
     note = note[:80] if note else None
-    if target.get("is_npc") and target.get("is_bodyguard"):
-        # Robot bodyguard location always comes from their user doc only (not a random planned city).
-        target_state = (target.get("current_state") or "").strip() or None
-    else:
-        target_state = target.get("current_state") if target.get("current_state") in STATES else random.choice(STATES)
-    target_username = (target.get("username") or "").strip() or "?"
-    await db.attacks.insert_one({
-        "id": attack_id,
-        "attacker_id": current_user["id"],
-        "attacker_username": current_user.get("username") or "?",
-        "target_id": target["id"],
-        "target_username": target_username,
-        "note": note,
-        "status": "searching",
-        "search_started": now.isoformat(),
-        "found_at": found_at.isoformat(),
-        "expires_at": expires_at.isoformat(),
-        "planned_location_state": target_state,
-        "location_state": None,
-        "result": None,
-        "rewards": None
-    })
-    _attack_list_cache_invalidate(current_user["id"])
+    row = await insert_attack_search_row(
+        db,
+        attacker=current_user,
+        target=target,
+        note=note,
+        source="manual",
+        raise_on_cap=True,
+    )
+    if not row:
+        raise HTTPException(status_code=400, detail="Could not start search.")
+    attack_id = row["attack_id"]
+    found_at_iso = row["found_at"]
     try:
         await db[ATTACK_CLIENT_AUDIT_COLLECTION].insert_one(
             {
@@ -1750,7 +1801,7 @@ async def search_target(payload: AttackSearchRequest, req: Request, current_user
         attack_id=attack_id,
         status="searching",
         message=f"Searching for {payload.target_username}...",
-        estimated_completion=found_at.isoformat()
+        estimated_completion=found_at_iso,
     )
 
 async def get_attack_status(
@@ -1846,18 +1897,31 @@ async def get_attack_status(
 async def list_attacks(current_user: dict = Depends(get_current_user)):
     attacker_id = current_user["id"]
     ac_state = (current_user.get("current_state") or "")
+    from utils.robot_bg_auto_search import robot_bg_auto_search_active
+
+    robot_auto_active = robot_bg_auto_search_active(current_user)
     cached = _attack_list_cache_get(attacker_id, ac_state)
     if cached is not None:
         # Inflation is already memoized for 3s in _get_kill_inflation_cached; the extra await is cheap.
         inflation = await _get_kill_inflation_cached(attacker_id)
-        return {"attacks": cached, "inflation": inflation, "inflation_pct": int(round(inflation * 100))}
+        return {
+            "attacks": cached,
+            "inflation": inflation,
+            "inflation_pct": int(round(inflation * 100)),
+            "robot_bg_auto_search_active": robot_auto_active,
+        }
     # Run list build and inflation calc concurrently to drop one round-trip from page load.
     items, inflation = await asyncio.gather(
         _build_active_attacks_list(attacker_id, ac_state),
         _get_kill_inflation_cached(attacker_id),
     )
     _attack_list_cache_set(attacker_id, ac_state, items)
-    return {"attacks": items, "inflation": inflation, "inflation_pct": int(round(inflation * 100))}
+    return {
+        "attacks": items,
+        "inflation": inflation,
+        "inflation_pct": int(round(inflation * 100)),
+        "robot_bg_auto_search_active": robot_auto_active,
+    }
 
 async def delete_attacks(request: AttackDeleteRequest, current_user: dict = Depends(get_current_user_verified)):
     ids = [x for x in (request.attack_ids or []) if isinstance(x, str) and x.strip()]
@@ -2476,12 +2540,20 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 inc["money"] = int(inc.get("money", 0) * _npc_mult)
                 if inc:
                     rp_before = int(current_user.get("rank_points") or 0)
-                    await db.users.update_one({"id": killer_id}, apply_season_rp_mirror_to_update({"$inc": inc}))
+                    hitlist_update = apply_season_rp_mirror_to_update({"$inc": inc}, user=current_user)
+                    await db.users.update_one({"id": killer_id}, hitlist_update)
                     if inc.get("respect_points"):
                         await log_respect_earned(killer_id, inc["respect_points"], "attack")
-                    if rp_added > 0:
+                    rp_awarded = rank_points_in_update(hitlist_update)
+                    if rp_awarded > 0:
                         try:
-                            await maybe_process_rank_up(killer_id, rp_before, rp_added, current_user.get("username", ""), user_prestige_rank_mult(current_user))
+                            await maybe_process_rank_up(
+                                killer_id,
+                                rp_before,
+                                rp_awarded,
+                                current_user.get("username", ""),
+                                user_prestige_rank_mult(current_user),
+                            )
                         except Exception as e:
                             logging.exception("Rank-up notification (hitlist NPC): %s", e)
                 car_id = (rewards.get("car_id") or "").strip()
@@ -2712,6 +2784,21 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         rank_points = int(rank_points * ev.get("rank_points", 1.0))
         victim_cars = await db.user_cars.find({"user_id": victim_id}).to_list(500)
         victim_prop_rows = await db.user_properties.find({"user_id": victim_id}).to_list(100)
+        try:
+            from utils.death_revive_snapshot import capture_death_revive_snapshot
+
+            death_snap = await capture_death_revive_snapshot(
+                db,
+                victim_id=victim_id,
+                killer_id=killer_id,
+                victim_username=target_name,
+                victim_prop_rows=victim_prop_rows,
+                victim_cars=victim_cars,
+                victim_user=target,
+            )
+            await db.users.update_one({"id": victim_id}, {"$set": {"death_revive_snapshot": death_snap}})
+        except Exception:
+            logging.exception("death_revive_snapshot capture victim=%s", victim_id)
         victim_cars_count = len(victim_cars)
         victim_props_count = len(victim_prop_rows)
         exclusive_car_count = 0
@@ -2751,9 +2838,16 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             kill_inc["total_kills"] = 1
         if target.get("is_bodyguard") and target.get("is_npc"):
             kill_inc["robot_bodyguard_kills"] = 1
-        await db.users.update_one({"id": killer_id}, apply_season_rp_mirror_to_update({"$inc": kill_inc}))
+        kill_update = apply_season_rp_mirror_to_update({"$inc": kill_inc}, user=current_user)
+        await db.users.update_one({"id": killer_id}, kill_update)
         try:
-            await maybe_process_rank_up(killer_id, killer_rp_before, rank_points, (killer_doc or {}).get("username", ""), killer_pm)
+            await maybe_process_rank_up(
+                killer_id,
+                killer_rp_before,
+                rank_points_in_update(kill_update),
+                (killer_doc or current_user or {}).get("username", ""),
+                killer_pm,
+            )
         except Exception as e:
             logging.exception("Rank-up notification (kill): %s", e)
         killer_fid_for_war = current_user.get("family_id") or await resolve_family_id(killer_id)
@@ -2768,10 +2862,13 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         killer_has_loot_car = await db.user_cars.count_documents({"user_id": killer_id, "car_id": "car21"})
         car_transfer_ops: List[Any] = []
         exclusive_transfer_logs: List[dict] = []
+        car_transfer_outcomes: List[dict] = []
         victim_name = target.get("username") or target_name
         killer_name = current_user.get("username") or "?"
         for uc in victim_cars:
             car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
+            if uc.get("car_id") == "car22" or (car_info and car_info.get("rarity") == "vip_exclusive"):
+                continue
             is_loot_exclusive = car_info and car_info.get("rarity") == "loot_exclusive"
             if is_loot_exclusive:
                 if killer_has_loot_car >= 1 and not war_kill:
@@ -2827,8 +2924,33 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                         {"$set": {"user_id": killer_id}, "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""}},
                     )
                 )
+                car_transfer_outcomes.append(
+                    {
+                        "car_id": uc.get("car_id"),
+                        "previous_user_car_id": uc.get("id"),
+                        "user_car_id": uc.get("id"),
+                        "destroyed": False,
+                    }
+                )
         if car_transfer_ops:
             await db.user_cars.bulk_write(car_transfer_ops, ordered=False)
+        if car_transfer_outcomes or exclusive_transfer_logs:
+            try:
+                from utils.death_revive_snapshot import patch_death_revive_snapshot_car_outcomes
+
+                outcomes = list(car_transfer_outcomes)
+                for row in exclusive_transfer_logs:
+                    outcomes.append(
+                        {
+                            "car_id": row.get("car_id"),
+                            "previous_user_car_id": row.get("previous_user_car_id"),
+                            "user_car_id": row.get("user_car_id"),
+                            "destroyed": bool(row.get("destroyed")),
+                        }
+                    )
+                await patch_death_revive_snapshot_car_outcomes(db, victim_id, outcomes)
+            except Exception:
+                logging.exception("death_revive_snapshot car outcomes victim=%s", victim_id)
         if exclusive_transfer_logs:
             from utils.exclusive_car_events import log_exclusive_car_event
 
@@ -3075,21 +3197,25 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     {"$inc": {"quantity": 1}, "$set": {"acquired_at": datetime.now(timezone.utc).isoformat()}},
                     upsert=True,
                 )
-        # Transfer armour level 6: victim drops to 5; killer gets 6 only if they don't have it
+        # Transfer loot-exclusive armour (level 7): victim drops one tier; killer gets 7 only if they don't have it
+        from server import LOOT_EXCLUSIVE_ARMOUR_LEVEL
+
         victim_armour = int(target.get("armour_level") or 0)
         victim_owned_max = int(target.get("armour_owned_level_max") or 0)
-        if victim_armour >= 6 or victim_owned_max >= 6:
+        loot_lv = LOOT_EXCLUSIVE_ARMOUR_LEVEL
+        if victim_armour >= loot_lv or victim_owned_max >= loot_lv:
+            drop_to = loot_lv - 1
             await db.users.update_one(
                 {"id": victim_id},
-                {"$set": {"armour_level": 5, "armour_owned_level_max": 5}},
+                {"$set": {"armour_level": drop_to, "armour_owned_level_max": drop_to}},
             )
             killer_doc = await db.users.find_one({"id": killer_id}, {"_id": 0, "armour_level": 1, "armour_owned_level_max": 1})
             k_level = int((killer_doc or {}).get("armour_level") or 0)
             k_owned = int((killer_doc or {}).get("armour_owned_level_max") or 0)
-            if k_level < 6 and k_owned < 6:
+            if k_level < loot_lv and k_owned < loot_lv:
                 await db.users.update_one(
                     {"id": killer_id},
-                    {"$set": {"armour_level": 6, "armour_owned_level_max": 6}},
+                    {"$set": {"armour_level": loot_lv, "armour_owned_level_max": loot_lv}},
                 )
         # Transfer exclusive property (Speakeasy): victim loses; killer gains only if they don't have one
         victim_ep = await db.exclusive_properties.find_one({"owner_id": victim_id}, {"_id": 1})
@@ -3837,6 +3963,23 @@ async def post_kill_favorites_toggle(
 def register(router):
     # Sustained RL only on mutating / costly POSTs. GET list/inflation/timeline were each doing find+update on
     # sustained_page_rl_state; parallel page load (5+ GETs & 10s polling) spammed DB and could trip kill-chain RL on POSTs.
+    from fastapi import Header
+    from typing import Optional as Opt
+
+    cron_secret = (os.environ.get("CRON_SECRET") or "").strip()
+
+    async def verify_cron_secret(x_cron_secret: Opt[str] = Header(None, alias="X-Cron-Secret")):
+        if not cron_secret:
+            raise HTTPException(status_code=503, detail="Cron not configured (CRON_SECRET unset)")
+        received = (x_cron_secret or "").strip()
+        if received != cron_secret:
+            raise HTTPException(status_code=403, detail="Invalid cron secret")
+
+    async def cron_robot_bg_auto_search(_: None = Depends(verify_cron_secret)):
+        from utils.robot_bg_auto_search import run_robot_bg_auto_search_cron
+
+        return await run_robot_bg_auto_search_cron(db)
+
     _kill_rl_v = [Depends(_kill_sustained_rl_verified)]
     _attack_button_rl_v = [Depends(_attack_micro_cooldown), Depends(_kill_sustained_rl_verified)]
     router.add_api_route("/attack/turnstile-config", attack_turnstile_config, methods=["GET"])
@@ -3853,3 +3996,4 @@ def register(router):
     router.add_api_route("/attack/timeline", get_attack_timeline, methods=["GET"])
     router.add_api_route("/attack/favorites", get_kill_favorites, methods=["GET"])
     router.add_api_route("/attack/favorites/toggle", post_kill_favorites_toggle, methods=["POST"], dependencies=_kill_rl_v)
+    router.add_api_route("/attack/cron/robot-bg-auto-search", cron_robot_bg_auto_search, methods=["POST"])

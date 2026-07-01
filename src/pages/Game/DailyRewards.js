@@ -147,6 +147,15 @@ function formatMoney(n) {
   return `$${Math.trunc(Number(n ?? 0)).toLocaleString()}`;
 }
 
+function formatWinRewards(data) {
+  const parts = [`You win! ${formatMoney(data.money_won)}`];
+  if (data.cars_won?.length) parts.push(data.cars_won.join(', '));
+  if (Number(data.loot_box_pieces) > 0) {
+    parts.push(`${Number(data.loot_box_pieces).toLocaleString()} loot pieces`);
+  }
+  return parts.join(' — ');
+}
+
 function formatNextPlay(iso) {
   if (!iso) return null;
   try {
@@ -238,9 +247,7 @@ export default function DailyRewards() {
         : null
       );
       if (res.data.result === 'win') {
-        const parts = [`You win! ${formatMoney(res.data.money_won)}`];
-        if (res.data.cars_won?.length) parts.push(res.data.cars_won.join(', '));
-        toast.success(parts.join(' — '));
+        toast.success(formatWinRewards(res.data));
         window.dispatchEvent(new CustomEvent('app:refresh-user'));
       } else if (res.data.result === 'lose') {
         toast.info('Computer wins this round.');
@@ -287,9 +294,7 @@ export default function DailyRewards() {
           : null
         );
         if (res.data.result === 'win') {
-          const parts = [`You win! ${formatMoney(res.data.money_won)}`];
-          if (res.data.cars_won?.length) parts.push(res.data.cars_won.join(', '));
-          toast.success(parts.join(' — '));
+          toast.success(formatWinRewards(res.data));
           window.dispatchEvent(new CustomEvent('app:refresh-user'));
         } else if (res.data.result === 'lose') {
           toast.info('Computer wins.');
@@ -362,7 +367,7 @@ export default function DailyRewards() {
           <div className="flex items-center gap-2 pt-2 border-t border-zinc-700/40">
             <DollarSign size={13} className="text-emerald-400" />
             <span className="text-[11px] text-zinc-500 font-heading">
-              Win = <span className="text-emerald-400">{formatMoney(info?.win_money ?? 50000)}</span> cash, maybe a car or two (max rare)
+              Win = <span className="text-emerald-400">{formatMoney(info?.win_money ?? 10000000)}</span> cash, maybe a car or two (max rare), or {Math.round((info?.loot_pieces_chance ?? 0.25) * 100)}% chance for {info?.loot_pieces_options?.join('/') ?? '10/15'} loot pieces
             </span>
           </div>
         </div>
@@ -498,6 +503,12 @@ export default function DailyRewards() {
                     ) : null}
                     {result.cars_won?.length ? (
                       <span className="text-primary font-bold">{result.cars_won.join(', ')}</span>
+                    ) : null}
+                    {Number(result.loot_box_pieces) > 0 ? (
+                      <>
+                        <span className="text-zinc-400 mx-1">—</span>
+                        <span className="text-violet-400 font-bold">+{Number(result.loot_box_pieces).toLocaleString()} loot pieces</span>
+                      </>
                     ) : null}
                   </p>
                 )}
@@ -727,6 +738,12 @@ export default function DailyRewards() {
                     ) : null}
                     {tttResult.cars_won?.length ? (
                       <span className="text-primary font-bold">{tttResult.cars_won.join(', ')}</span>
+                    ) : null}
+                    {Number(tttResult.loot_box_pieces) > 0 ? (
+                      <>
+                        <span className="text-zinc-400 mx-1">—</span>
+                        <span className="text-violet-400 font-bold">+{Number(tttResult.loot_box_pieces).toLocaleString()} loot pieces</span>
+                      </>
                     ) : null}
                   </p>
                 )}

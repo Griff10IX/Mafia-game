@@ -380,6 +380,9 @@ export default function MiniGamesLeaderboard() {
                     {reward.bullets > 0 && (
                       <div className="text-[8px] text-amber-400 font-heading">{reward.bullets} Bullets</div>
                     )}
+                    {reward.points > 0 && (
+                      <div className="text-[8px] text-primary font-heading">{reward.points.toLocaleString()} Points</div>
+                    )}
                   </div>
                 </div>
               );

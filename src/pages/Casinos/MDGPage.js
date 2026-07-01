@@ -224,7 +224,7 @@ function NextCycleCountdown({ deadline, large = false }) {
 }
 
 /** Entertainer MDG: max points (fee + extra pot) from fund per game — keep in sync with backend `ENTERTAINER_MDG_MAX_POINTS_PER_GAME`. */
-const ENTERTAINER_MDG_MAX_POINTS = 250;
+const ENTERTAINER_MDG_MAX_POINTS = 1_000;
 
 export default function MDGPage() {
   const [games, setGames] = useState([]);

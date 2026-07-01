@@ -258,7 +258,7 @@ export default function DeadAlive() {
             <div className="p-5 space-y-4">
               <p className="text-[11px] font-heading leading-relaxed" style={{ color: 'var(--noir-muted)' }}>
                 Pay {REVIVE_COST.toLocaleString()} points once to bring back one of your dead accounts (same email, or prove ownership with that account&apos;s password if its email was freed).
-                This account will become dead; only your money and points (minus the cost) move to the revived account. No mission or rank transfer. Once per email unless staff grants another revive.
+                This account will become dead; your money and points (minus the cost) move to the revived account. If the dead account was PvP-killed with a death snapshot, revive also restores properties, illegal business/distillery, and cars lost to the killer (map mission progress is kept on the dead account). Killer portfolio kill boost and armour/weapons are not reversed. Once per email unless staff grants another revive.
               </p>
               {reviveEligibility.revive_used && (
                 <p className="text-[11px] font-heading text-amber-400" style={{ color: 'var(--noir-foreground)' }}>

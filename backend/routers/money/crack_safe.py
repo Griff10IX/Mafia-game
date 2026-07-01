@@ -1,6 +1,6 @@
 # Crack the Safe: jackpot game. Each attempt costs SAFE_ENTRY_COST. After a win, 24h lock unless you pay
 # SAFE_REPLAY_COST (max SAFE_REPLAY_MAX_PER_DAY per UK calendar day). Admins unlimited / no win lock.
-# Reward pool: cash jackpot (always) + 25% chance for 1 bonus token (Crimes XP, GTA XP, Melt, etc.)
+# Reward pool: cash jackpot (always) + 25% chance for 1 bonus token + 25% chance for 10–15 loot box pieces
 from datetime import datetime, timedelta, timezone
 import secrets
 _rng = secrets.SystemRandom()
@@ -21,9 +21,11 @@ SAFE_TOKEN_REWARD_MIN_TYPES = 1   # exactly 1 token type
 SAFE_TOKEN_REWARD_MAX_TYPES = 1
 SAFE_TOKEN_REWARD_MIN_AMOUNT = 1  # 1–2 total tokens
 SAFE_TOKEN_REWARD_MAX_AMOUNT = 2
+SAFE_LOOT_REWARD_CHANCE = 0.25
+SAFE_LOOT_PIECES_OPTIONS = (10, 15)
 
 SAFE_ENTRY_COST = 250_000
-SAFE_JACKPOT_SEED = 25_000_000
+SAFE_JACKPOT_SEED = 100_000_000
 SAFE_JACKPOT_PER_ATTEMPT = 250_000  # Each wrong guess adds this to the jackpot (entry fee stays separate)
 SAFE_DIGITS = 5
 SAFE_MIN = 1
@@ -69,10 +71,12 @@ class SafeGuessRequest(BaseModel):
 
 async def _get_or_create_safe():
     safe = await db.safe_game.find_one({})
-    # One-time bump: legacy seed was $250k; migrate that exact value to the new floor.
-    if safe and int(safe.get("jackpot") or 0) == 250_000:
-        await db.safe_game.update_one({"_id": safe["_id"]}, {"$set": {"jackpot": SAFE_JACKPOT_SEED}})
-        safe = await db.safe_game.find_one({})
+    # One-time bump: legacy seeds migrate to the current floor.
+    if safe:
+        jp = int(safe.get("jackpot") or 0)
+        if jp in (250_000, 25_000_000):
+            await db.safe_game.update_one({"_id": safe["_id"]}, {"$set": {"jackpot": SAFE_JACKPOT_SEED}})
+            safe = await db.safe_game.find_one({})
     if not safe:
         combo = [_rng.randint(SAFE_MIN, SAFE_MAX) for _ in range(SAFE_DIGITS)]
         doc = {
@@ -153,6 +157,11 @@ def register(router):
             "jailbust_bonus": "+10% bust success, 1h",
         }
         possible_rewards = [{"id": "cash", "name": "Cash Jackpot", "desc": "Full jackpot amount (always)"}]
+        possible_rewards.append({
+            "id": "loot_pieces",
+            "name": "Loot Box Pieces",
+            "desc": f"{SAFE_LOOT_PIECES_OPTIONS[0]} or {SAFE_LOOT_PIECES_OPTIONS[1]} pieces ({int(SAFE_LOOT_REWARD_CHANCE * 100)}% chance)",
+        })
         for t in SAFE_TOKEN_REWARD_TYPES:
             name = t.replace("_", " ").title() + " Token"
             desc = (_token_desc.get(t, "1h bonus") + " — 1 type, 1–2 tokens (25% chance)")
@@ -350,13 +359,18 @@ def register(router):
                     "message": "Safe was cracked by someone else just before you!",
                 }
             jackpot_amount = won_safe.get("jackpot", SAFE_JACKPOT_SEED)
+            win_inc: dict = {"money": jackpot_amount}
+            bonus_loot_pieces = 0
+            if _rng.random() < SAFE_LOOT_REWARD_CHANCE:
+                bonus_loot_pieces = _rng.choice(SAFE_LOOT_PIECES_OPTIONS)
+                win_inc["loot_box_pieces"] = bonus_loot_pieces
             if is_admin:
-                await db.users.update_one({"id": uid}, {"$inc": {"money": jackpot_amount}})
+                await db.users.update_one({"id": uid}, {"$inc": win_inc})
             else:
                 await db.users.update_one(
                     {"id": uid},
                     {
-                        "$inc": {"money": jackpot_amount},
+                        "$inc": win_inc,
                         "$set": {"crack_safe_win_lock_until": now + timedelta(hours=SAFE_WIN_LOCK_HOURS)},
                     },
                 )
@@ -386,14 +400,17 @@ def register(router):
                 "won_at": now,
                 "amount_won": jackpot_amount,
                 "bonus_tokens": bonus_tokens,
+                "bonus_loot_pieces": bonus_loot_pieces,
             })
             await log_activity(
                 uid,
                 user.get("username") or "?",
                 "crack_safe_jackpot",
-                {"jackpot_won": jackpot_amount, "bonus_tokens": bonus_tokens},
+                {"jackpot_won": jackpot_amount, "bonus_tokens": bonus_tokens, "bonus_loot_pieces": bonus_loot_pieces},
             )
             msg = f"YOU CRACKED THE SAFE! ${jackpot_amount:,} is yours!"
+            if bonus_loot_pieces:
+                msg += f" Plus {bonus_loot_pieces:,} loot box pieces!"
             if bonus_tokens:
                 parts = [f"{b['amount']} {b['token_type'].replace('_', ' ').title()}" for b in bonus_tokens]
                 msg += f" Plus {'; '.join(parts)} token(s)!"
@@ -402,6 +419,7 @@ def register(router):
                 "correct_positions": SAFE_DIGITS,
                 "jackpot_won": jackpot_amount,
                 "bonus_tokens": bonus_tokens,
+                "bonus_loot_pieces": bonus_loot_pieces,
                 "message": msg,
             }
 

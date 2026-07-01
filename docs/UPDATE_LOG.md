@@ -6,6 +6,117 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-02 18:00 UTC[/color][/b] — [b]July 2 live updates[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Weekly rewards:[/b] [b]1st place[/b] payout increased to [b]$150,000,000[/b] cash, [b]10,000[/b] respect, [b]15,000[/b] bullets, and [b]1,500[/b] points. [b]2nd[/b] and [b]3rd[/b] scaled to match ([b]$90M[/b] / [b]5k[/b] respect / [b]9k[/b] bullets / [b]750[/b] pts; [b]$45M[/b] / [b]2.5k[/b] / [b]4.5k[/b] / [b]375[/b] pts). Ranks 4–5 unchanged.[/color]
+[*][color=#888888][b]New weapon:[/b] [b]Game → Store[/b] — [b]Engraved Lewis Gun[/b] ([b]weapon11[/b], [b]1,000 points[/b], [b]130[/b] damage). Requires [b]Chicago Typewriter Premium[/b]; auto-equipped. Store-only on Armour page; [b]Colt Monitor[/b] (loot) stays top tier. Sellable for [b]500 points[/b] (50%).[/color]
+[*][color=#888888][b]New armour:[/b] [b]Game → Store[/b] — [b]Elite Composite Battledress[/b] (level [b]6[/b], [b]500 points[/b]). Requires level 5; auto-equipped. Loot-exclusive [b]Steel Plate Vest[/b] is now [b]level 7[/b]; existing holders migrated.[/color]
+[*][color=#888888][b]Robot Auto-Search:[/b] [b]Kill → Bodyguards[/b] or [b]Store[/b] — [b]10,000 points[/b] for [b]30 days[/b]. Keeps [b]Attack → My Searches[/b] rows for your hired robots; renews when a row has [b]≤3 hours[/b] left. Search maintenance only (no auto-kill).[/color]
+[*][color=#888888][b]Revive:[/b] [b]Dead &gt; Alive → Revive[/b] (50,000 pts, same email) now restores [b]properties[/b], [b]illegal business / Distillery[/b], and [b]cars[/b] lost on PvP death when a death snapshot exists. Clawback from killer where assets still exist. Map missions stay on dead account; portfolio kill boost, armour, weapons, casinos, and airports are not restored.[/color]
+[*][color=#888888][b]VIP Pass Car:[/b] [b]VIP Game Pass[/b] tier [b]100[/b] grants the [b]VIP Pass Car[/b] [b]once[/b] (first VIP track completion). [b]8s[/b] travel, damage immune, custom image via [b]Garage → Edit[/b], [b]VIP[/b] profile badge, [b]+50% booze cargo[/b], survives PvP death / revive, tradable on [b]Cars → Sell Cars[/b].[/color]
+[*][color=#888888][b]Organised Crime:[/b] Heist cash pools raised — [b]Country Bank[/b] [b]$25M[/b] → [b]Government Vault[/b] [b]$50M[/b] (State [b]$33M[/b], City [b]$41M[/b]). Rank points unchanged.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-01 23:45 UTC[/color][/b] — [b]Store: cash → points requires Prestige 1+[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Game → Store → Points → Cash ($)[/b] — buying points with in-game cash now requires [b]Prestige 1+[/b] (verified email still required).[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-01 23:30 UTC[/color][/b] — [b]Properties heat: full-clear bribe button[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] [b]Money → Properties[/b] — the highlighted bribe button now always pays the full amount to clear all heat to zero (same as the max line). It no longer only drops you to the “safe” threshold.[/color]
+[*][color=#888888][b]UI:[/b] Button label changed from “Suggested” to “Clear all” with the exact full-clear cost.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-01 23:00 UTC[/color][/b] — [b]Entertainer MDG: higher points cap[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Casino → MDG[/b] — entertainer-created games can now use up to [b]1,000 points[/b] from the entertainer fund per game (fee + extra pot combined), up from [b]250[/b]. Cash limits unchanged.[/color]
+[*][color=#888888][b]UI:[/b] MDG create screen cap message and validation updated to match.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-01 22:00 UTC[/color][/b] — [b]VIP Game Pass: +10% rank points[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] While your [b]VIP Game Pass is active[/b] (claimed and within your pass window), you earn [b]+10% rank points[/b] from all sources — crimes, kills, GTA, missions, objectives, jail busts, loot boxes, racing, and more.[/color]
+[*][color=#888888][b]Note:[/b] Free track, unactivated tokens, and expired VIP do not get the bonus. Stacks with daily events and temporary RP perks (e.g. loot box +10% RP).[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-01 20:00 UTC[/color][/b] — [b]Entertainer Poker: bigger tournaments & podium prizes[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Casino → Poker[/b] tournaments — points buy-in cap and the entertainer fund limit per tournament raised from [b]1,000[/b] to [b]5,000 points[/b], so entertainers can run bigger games.[/color]
+[*][color=#888888][b]New:[/b] Tournament creators can now set separate [b]cash and points prizes for 1st, 2nd, and 3rd place[/b] (not just the winner). Prizes are funded at create time and paid on finish — [b]1st[/b] = last player standing, [b]2nd[/b] = last eliminated, [b]3rd[/b] = second-to-last eliminated.[/color]
+[*][color=#888888][b]UI:[/b] Create form has 1st/2nd/3rd prize fields; the tournament list shows the full podium prize breakdown; entertainer fund preview includes all place prizes.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-01 18:00 UTC[/color][/b] — [b]Reward boosts: OC, Crack Safe, jail NPCs[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Crime → Organised Crime[/b] cash pools increased by job: [b]Country Bank $5,000,000[/b], [b]State Bank $7,000,000[/b], [b]City Bank $9,000,000[/b], and [b]Government Vault $12,000,000[/b]. Splits, cooldowns, success rates, and rank point rewards are unchanged.[/color]
+[*][color=#888888][b]Changed:[/b] [b]Money → Crack the Safe[/b] jackpot seed is now [b]$100,000,000[/b] (wrong guesses still add $250,000). On win, there is also a [b]25% chance[/b] for [b]10 or 15 loot box pieces[/b], separate from the existing token bonus chance.[/color]
+[*][color=#888888][b]Changed:[/b] [b]Crime → Jail[/b] NPC bust rewards increased: lower-rank NPCs start around [b]$100,000[/b], scaling up to around [b]$500,000[/b] for the highest ranks. Applies to newly spawned public NPCs and private-cell inmates.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-01 16:00 UTC[/color][/b] — [b]Lottery: $500M starting jackpot & 50% rollover[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]Money → Lottery[/b] — each new round after a paid-out draw starts with a [b]$500,000,000[/b] house seed in the gross pot (before ticket sales). If the previous draw rolled over, that carried amount replaces the seed (no double-up).[/color]
+[*][color=#888888][b]Changed:[/b] When nobody matches all six drawn numbers, there is now a [b]50% chance[/b] the net pot [b]rolls to the next draw[/b] instead of always picking a random eligible ticket as winner. Random ticket pick still happens on the other 50%.[/color]
+[*][color=#888888][b]UI:[/b] Jackpot banner shows the starting seed and rollover carry separately; [b]How it works[/b] updated.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-01 14:00 UTC[/color][/b] — [b]Store: buy points with in-game cash[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]Game → Store → Points[/b] — [b]Cash ($)[/b] purchase mode alongside card checkout. Spend wallet cash for points at [b]Quick Trade[/b] pricing (average of the cheapest [b]3[/b] active sell offers; minimum [b]$550,000[/b] per point).[/color]
+[*][color=#888888][b]Limit:[/b] [b]$2,000,000,000[/b] cash spent per [b]calendar month[/b], tracked separately per [b]IP[/b] and per [b]verified email[/b] — each purchase must fit under [b]both[/b] remaining allowances.[/color]
+[*][color=#888888][b]Requires:[/b] [b]Verified email[/b] on your account (same gate as send-points). Card / Stripe checkout is unchanged.[/color]
+[*][color=#888888][b]UI:[/b] Points tab shows price per point, IP and email monthly allowance, live quote, and [b]Buy with cash[/b] when you have enough cash and allowance.[/color]
+[*][color=#888888][b]Note:[/b] [b]Token[/b] cash buys in the Store still use the [b]$150,000[/b]/pt floor and the existing [b]25[/b]/day unit limit — unchanged.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-01 12:00 UTC[/color][/b] — [b]Daily Rewards: higher cash wins & loot bonus[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Game → Daily Rewards[/b] ([b]Rock Paper Scissors[/b] and [b]Noughts & Crosses[/b]) — cash on win is now [b]$10,000,000[/b] (was $12,500).[/color]
+[*][color=#888888][b]New:[/b] On win, [b]25% chance[/b] for a bonus of [b]10 or 15 loot box pieces[/b] (random between those amounts). Car bonus chances unchanged (25% for one car, 8% for two; max rare).[/color]
+[*][color=#888888][b]UI:[/b] Daily Rewards screen and dashboard widget show loot pieces when awarded; info banner lists the new cash amount and loot bonus chance.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-06-04 20:00 UTC[/color][/b] — [b]Family rackets overhaul: income, armory, till raids[/b][/size]
 [quote]
 [list]

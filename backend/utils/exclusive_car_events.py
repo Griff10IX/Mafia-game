@@ -8,7 +8,7 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 
 logger = logging.getLogger(__name__)
 
-EXCLUSIVE_RARITIES = frozenset({"exclusive", "loot_exclusive"})
+EXCLUSIVE_RARITIES = frozenset({"exclusive", "loot_exclusive", "vip_exclusive"})
 
 EVENT_LABELS = {
     "market_listed": "Listed for sale",
@@ -20,7 +20,7 @@ EVENT_LABELS = {
     "gta_won": "GTA steal",
     "loot_box": "Loot box reward",
     "admin_grant": "Admin grant",
-    "admin_remove": "Admin remove",
+    "game_pass_tier_100": "Game Pass tier 100 reward",
     "admin_transfer": "Admin transfer",
     "scraped": "Scrapped",
     "melted": "Melted",

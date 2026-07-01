@@ -517,6 +517,16 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
             payload["bodyguard_profit"] = {"points": int(profit_list[0].get("points") or 0), "money": float(profit_list[0].get("money") or 0)}
         else:
             payload["bodyguard_profit"] = {"points": 0, "money": 0.0}
+        from utils.robot_bg_auto_search import ROBOT_BG_AUTO_SEARCH_COST, robot_bg_auto_search_active
+
+        sub_doc = await db.users.find_one(
+            {"id": uid},
+            {"_id": 0, "robot_bg_auto_search_until": 1},
+        )
+        until = (sub_doc or {}).get("robot_bg_auto_search_until")
+        payload["robot_bg_auto_search_until"] = until
+        payload["robot_bg_auto_search_active"] = robot_bg_auto_search_active(sub_doc or {})
+        payload["robot_bg_auto_search_cost"] = ROBOT_BG_AUTO_SEARCH_COST
         _bodyguards_cache[uid] = (payload, now + _BODYGUARDS_CACHE_TTL_SEC)
         logger.info("get_bodyguards success uid=%s slots=%d", uid, len(result))
         return payload

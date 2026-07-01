@@ -42,7 +42,7 @@ _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend not in sys.path:
     sys.path.insert(0, _backend)
 from server import db, get_current_user, get_effective_event, log_activity, maybe_process_rank_up, send_notification, user_prestige_rank_mult
-from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.point_provenance import log_points_event
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_OC
 
@@ -70,12 +70,11 @@ OC_JAIL_CHANCE_ON_FAIL = 0.50
 OC_JAIL_SECONDS_TEAM = 60  # Creator goes to jail on failed/jail outcome
 
 # Jobs: cash = total pool on success (split by team). Success chance is fixed 50%.
-# Reduced for beta
 OC_JOBS = [
-    {"id": "country_bank", "name": "Country Bank", "success_rate": 0.50, "cash": 137_500, "rp": 120},
-    {"id": "state_bank", "name": "State Bank", "success_rate": 0.50, "cash": 175_000, "rp": 280},
-    {"id": "city_bank", "name": "City Bank", "success_rate": 0.50, "cash": 237_500, "rp": 560},
-    {"id": "government_vault", "name": "Government Vault", "success_rate": 0.50, "cash": 343_750, "rp": 1100},
+    {"id": "country_bank", "name": "Country Bank", "success_rate": 0.50, "cash": 25_000_000, "rp": 120},
+    {"id": "state_bank", "name": "State Bank", "success_rate": 0.50, "cash": 33_000_000, "rp": 280},
+    {"id": "city_bank", "name": "City Bank", "success_rate": 0.50, "cash": 41_000_000, "rp": 560},
+    {"id": "government_vault", "name": "Government Vault", "success_rate": 0.50, "cash": 50_000_000, "rp": 1100},
 ]
 
 # Equipment (must match organised_crime EQUIPMENT_TIERS): used to boost success rate when running heist
@@ -641,7 +640,7 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     if user_ids:
         users_raw = await db.users.find(
             {"id": {"$in": user_ids}},
-            {"_id": 0, "id": 1, "rank_points": 1, "username": 1, "prestige_rank_multiplier": 1, "total_oc_heists": 1},
+            {"_id": 0, "id": 1, "rank_points": 1, "username": 1, "prestige_rank_multiplier": 1, "total_oc_heists": 1, "rank_xp_pass_rewards_granted": 1, "rank_xp_pass_token_expires_at": 1},
         ).to_list(10)
         user_map = {u["id"]: u for u in users_raw}
     cash_each = rp_each = 0
@@ -661,9 +660,14 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
             rp_each += rp_add
         rp_before = int((user_map.get(user_id) or {}).get("rank_points") or 0)
         oc_heists_before = int((user_map.get(user_id) or {}).get("total_oc_heists") or 0)
+        recipient = user_map.get(user_id) or {}
+        oc_user_update = apply_season_rp_mirror_to_update(
+            {"$inc": {"money": cash_add, "rank_points": rp_add, "total_oc_heists": 1}},
+            user=recipient,
+        )
         await db.users.update_one(
             {"id": user_id},
-            apply_season_rp_mirror_to_update({"$inc": {"money": cash_add, "rank_points": rp_add, "total_oc_heists": 1}}),
+            oc_user_update,
         )
         try:
             from routers.game.achievements import maybe_log_oc_heist_badge_tiers
@@ -679,9 +683,9 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
                 await maybe_process_rank_up(
                     user_id,
                     rp_before,
-                    rp_add,
-                    (user_map.get(user_id) or {}).get("username", ""),
-                    user_prestige_rank_mult(user_map.get(user_id)),
+                    rank_points_in_update(oc_user_update),
+                    recipient.get("username", ""),
+                    user_prestige_rank_mult(recipient),
                 )
             except Exception as e:
                 logger.exception("Rank-up notification (team OC): %s", e)

@@ -13,6 +13,7 @@ const RARITY_COLORS = {
   legendary: 'text-amber-400',
   custom: 'text-primary',
   exclusive: 'text-rose-400',
+  vip_exclusive: 'text-cyan-500',
 };
 
 export default function CarProfile() {

@@ -20,7 +20,7 @@ const GARAGE_STYLES = `
   .gar-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
 
-const RARITY_ORDER = { exclusive: 7, loot_exclusive: 6, custom: 5, legendary: 4, ultra_rare: 3, rare: 2, uncommon: 1, common: 0 };
+const RARITY_ORDER = { vip_exclusive: 8, exclusive: 7, loot_exclusive: 6, custom: 5, legendary: 4, ultra_rare: 3, rare: 2, uncommon: 1, common: 0 };
 const DEFAULT_VISIBLE = 100;
 /** Keep in sync with backend `GARAGE_BATCH_LIMIT_MAX` (manual_garage melt/scrap cap). */
 const GARAGE_MELT_SCRAP_BATCH_MAX = 100;
@@ -34,7 +34,7 @@ const MELT_BULLETS_TOTAL_PAYOUT_MULT_NUM = 125;
 const MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN = 100;
 /** Match `gta.REPAIR_COST_FRACTION` (repair-car / repair-all). */
 const REPAIR_COST_FRACTION = 0.6;
-const ALL_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'loot_exclusive', 'exclusive'];
+const ALL_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'loot_exclusive', 'exclusive', 'vip_exclusive'];
 /** Match SellCars / BuyCars labels for rarity pills */
 const RARITY_LABELS = {
   common: 'Common',
@@ -45,6 +45,7 @@ const RARITY_LABELS = {
   custom: 'Customs',
   loot_exclusive: 'Loot Exclusive',
   exclusive: 'Exclusives',
+  vip_exclusive: 'VIP Pass',
 };
 
 function normalizeCarRarity(rarity) {
@@ -58,8 +59,8 @@ function normalizeCarRarity(rarity) {
 
 function isDamageImmuneCar(carId, rarity) {
   const r = normalizeCarRarity(rarity);
-  if (carId === 'car_custom') return true;
-  return r === 'exclusive' || r === 'loot_exclusive';
+  if (carId === 'car_custom' || carId === 'car22') return true;
+  return r === 'exclusive' || r === 'loot_exclusive' || r === 'vip_exclusive';
 }
 
 /** Same billable repair total as the garage repair-all endpoint (listed / immune / 0 damage = $0). */
@@ -89,7 +90,7 @@ function previewBulletsForCarValue(value, rarity, damagePercent = 0, carId = '')
     else if (bullets > 7) bullets = 7;
   }
   // +25% bullets for all but exclusive / loot_exclusive (floor-rounded), keep in sync with backend melt rewards.
-  if (r !== 'exclusive' && r !== 'loot_exclusive') bullets = Math.floor((bullets * 125) / 100);
+  if (r !== 'exclusive' && r !== 'loot_exclusive' && r !== 'vip_exclusive') bullets = Math.floor((bullets * 125) / 100);
   return bullets;
 }
 
@@ -127,6 +128,7 @@ const RARITY_COLORS = {
   custom: 'text-orange-400',
   loot_exclusive: 'text-amber-400',
   exclusive: 'text-red-400',
+  vip_exclusive: 'text-cyan-500',
 };
 
 const EmptyGarageCard = () => (
@@ -367,7 +369,7 @@ const ActionsBar = ({
 };
 
 const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repairingCarId, repairingAll = false, getRarityColor, censorProfanity = false }) => {
-  const isCustom = car.car_id === 'car_custom';
+  const hasCustomImage = car.car_id === 'car_custom' || car.car_id === 'car22';
   const isListed = car.listed_for_sale;
   const damage = car.damage_percent ?? 0;
   const isRepairing = repairingCarId === car.user_car_id;
@@ -375,7 +377,7 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repai
   const handleClick = () => {
     if (!isListed) onToggle(car.user_car_id);
   };
-  const isExclusive = car.rarity === 'exclusive' || car.rarity === 'loot_exclusive';
+  const isExclusive = car.rarity === 'exclusive' || car.rarity === 'loot_exclusive' || car.rarity === 'vip_exclusive';
   return (
     <div
       onClick={handleClick}
@@ -383,7 +385,7 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repai
         isListed ? 'border-amber-500/40 opacity-90' : 'cursor-pointer'
       } ${
         !isListed && (isSelected ? 'border-primary shadow-md shadow-primary/20' : 'border-border hover:border-primary/30')
-      } ${isExclusive ? 'shadow-[0_0_10px_rgba(251,191,36,0.45)]' : ''}`}
+      } ${isExclusive ? (car.rarity === 'vip_exclusive' ? 'shadow-[0_0_10px_rgba(6,182,212,0.45)]' : 'shadow-[0_0_10px_rgba(251,191,36,0.45)]') : ''}`}
     >
       <div className="w-full aspect-[4/3] rounded overflow-hidden bg-secondary border border-border mb-1.5 relative">
         {car.image ? (
@@ -428,7 +430,7 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repai
       
       <div className="text-[10px] text-primary font-heading font-bold flex items-center justify-between">
         <span>${car.value.toLocaleString()}</span>
-        {isCustom && (
+        {hasCustomImage && (
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onOpenCustomModal(car); }}

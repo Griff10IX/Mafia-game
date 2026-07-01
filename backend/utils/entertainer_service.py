@@ -19,8 +19,8 @@ ENTERTAINER_COMPLETION_BONUS_POINTS = 50
 ENTERTAINER_COMPLETION_BONUS_DAILY_CAP = 250
 ENTERTAINER_ONLINE_COLOR_DEFAULT = "#7c3aed"  # violet; distinct from mod/HDO
 # Max points an entertainer may put into one game from the entertainer fund (fee + extra combined for MDG; tournament buy-in for MP Poker points).
-ENTERTAINER_MDG_MAX_POINTS_PER_GAME = 250
-ENTERTAINER_MP_POKER_MAX_POINTS_PER_GAME = 1000
+ENTERTAINER_MDG_MAX_POINTS_PER_GAME = 1_000
+ENTERTAINER_MP_POKER_MAX_POINTS_PER_GAME = 5_000
 # Max total reward points (Gbox pool) from entertainer fund per forum Gbox game.
 ENTERTAINER_GBOX_MAX_POINTS_PER_GAME = 500
 

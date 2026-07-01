@@ -23,6 +23,7 @@ from server import (
     _username_pattern,
     CARS,
     ARMOUR_BASE_BULLETS,
+    LOOT_EXCLUSIVE_ARMOUR_LEVEL,
 )
 from routers.kill.armoury import _invalidate_weapons_cache, TOKEN_CONFIG, TOKEN_TYPES
 from utils.point_provenance import log_points_event
@@ -32,7 +33,7 @@ from utils.speakeasy_rewards import (
     SPEAKEASY_DAILY_CASH,
     SPEAKEASY_COOLDOWN_HOURS,
 )
-from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.loot_perk_stack import stacked_perk_until as _stacked_perk_until, GTA_RARE_DROP_PERK_ATTEMPTS
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_LOOT_BOX
 
@@ -64,7 +65,10 @@ EXCLUSIVE_CAP_BY_TYPE: Dict[str, int] = {
 }
 LOOT_EXCLUSIVE_WEAPON_ID = "weapon_loot"
 LOOT_EXCLUSIVE_CAR_ID = "car21"
-ARMOUR_LEVEL_6_NAME = "Steel Plate Bulletproof Vest (1922)"
+LOOT_EXCLUSIVE_ARMOUR_LEVEL = 7
+ARMOUR_LEVEL_7_NAME = "Steel Plate Bulletproof Vest (1922)"
+# Back-compat alias (old code referenced level 6 loot name)
+ARMOUR_LEVEL_6_NAME = ARMOUR_LEVEL_7_NAME
 
 GAME_SETTINGS_LOOT_COUNTS_KEY = "loot_exclusive_counts"
 GAME_SETTINGS_LOOT_RARITY_KEY = "loot_box_rarity"
@@ -211,7 +215,7 @@ async def _user_has_armour_6(user_id: str) -> bool:
     u = await db.users.find_one({"id": user_id}, {"_id": 0, "armour_level": 1, "armour_owned_level_max": 1})
     if not u:
         return False
-    return int(u.get("armour_level") or 0) >= 6 or int(u.get("armour_owned_level_max") or 0) >= 6
+    return int(u.get("armour_level") or 0) >= LOOT_EXCLUSIVE_ARMOUR_LEVEL or int(u.get("armour_owned_level_max") or 0) >= LOOT_EXCLUSIVE_ARMOUR_LEVEL
 
 
 async def _user_has_exclusive_property(user_id: str) -> bool:
@@ -451,7 +455,7 @@ def _loot_public_reward_info() -> Dict[str, Any]:
     exclusives = [
         {"id": "weapon", "label": "Exclusive weapon", "cap_global": _exclusive_cap("weapon")},
         {"id": "car", "label": "Exclusive vehicle", "cap_global": _exclusive_cap("car")},
-        {"id": "armour", "label": f"Exclusive armour ({ARMOUR_LEVEL_6_NAME})", "cap_global": _exclusive_cap("armour")},
+        {"id": "armour", "label": f"Exclusive armour ({ARMOUR_LEVEL_7_NAME})", "cap_global": _exclusive_cap("armour")},
         {"id": "property", "label": "Speakeasy (exclusive property)", "cap_global": _exclusive_cap("property")},
     ]
     tiers: Dict[str, Any] = {}
@@ -819,16 +823,16 @@ async def open_loot_box(
                         if typ == "armour":
                             await db.users.update_one(
                                 {"id": user_id},
-                                {"$set": {"armour_level": 6, "armour_owned_level_max": 6}},
+                                {"$set": {"armour_level": LOOT_EXCLUSIVE_ARMOUR_LEVEL, "armour_owned_level_max": LOOT_EXCLUSIVE_ARMOUR_LEVEL}},
                             )
                             await _increment_claimed_count("armour")
                             new_claimed = await _get_claimed_counts()
                             if new_claimed["armour"] >= _exclusive_cap("armour"):
-                                await send_notification(user_id, "Loot box", f"The last exclusive armour ({ARMOUR_LEVEL_6_NAME}) has been claimed!", "system")
+                                await send_notification(user_id, "Loot box", f"The last exclusive armour ({ARMOUR_LEVEL_7_NAME}) has been claimed!", "system")
                             rewards.append({
                                 "type": "armour",
-                                "name": ARMOUR_LEVEL_6_NAME,
-                                "level": 6,
+                                "name": ARMOUR_LEVEL_7_NAME,
+                                "level": LOOT_EXCLUSIVE_ARMOUR_LEVEL,
                                 "rarity": "loot_exclusive",
                                 "reward_tier": "loot_exclusive",
                             })
@@ -974,7 +978,8 @@ async def open_loot_box(
                 update["$inc"] = merged_inc
             if merged_set:
                 update["$set"] = merged_set
-            await db.users.update_one({"id": user_id}, apply_season_rp_mirror_to_update(update))
+            loot_update = apply_season_rp_mirror_to_update(update, user=current_user)
+            await db.users.update_one({"id": user_id}, loot_update)
             if merged_inc.get("points", 0) > 0:
                 await log_points_event(db, user_id=user_id, points=merged_inc["points"], event_type="loot_box", meta={"box_quality": box_quality, "prizes_count": len(rewards)})
 

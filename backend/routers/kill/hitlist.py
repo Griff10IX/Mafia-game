@@ -9,7 +9,6 @@ from pydantic import BaseModel
 
 from fastapi import Depends, HTTPException
 
-from utils.kill_search_duration import KILL_SEARCH_RANDOM_MAX_MINUTES, KILL_SEARCH_RANDOM_MIN_MINUTES
 from utils.point_provenance import log_points_event
 from utils.family_perks import family_perk_modifiers
 from utils.hitlist_resolution import resolve_user_hitlist_kill
@@ -345,40 +344,21 @@ async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
         "created_at": now_iso,
     })
 
-    # Auto-add NPC to attacker's searches with note
-    override_minutes = current_user.get("search_minutes_override")
-    if override_minutes is not None:
-        try:
-            override_minutes = int(override_minutes)
-        except Exception:
-            override_minutes = None
-    if override_minutes is None or override_minutes <= 0:
-        config = await db.game_config.find_one({"id": "main"}, {"_id": 0, "default_search_minutes": 1})
-        default_mins = (config or {}).get("default_search_minutes")
-        override_minutes = int(default_mins) if default_mins is not None else None
-    search_duration = (
-        int(override_minutes)
-        if override_minutes and override_minutes > 0
-        else random.randint(KILL_SEARCH_RANDOM_MIN_MINUTES, KILL_SEARCH_RANDOM_MAX_MINUTES)
+    from routers.kill.attack import insert_attack_search_row
+
+    await insert_attack_search_row(
+        db,
+        attacker=current_user,
+        target={
+            "id": npc_user_id,
+            "username": npc_username,
+            "current_state": npc_state,
+            "is_npc": True,
+            "is_bodyguard": False,
+        },
+        note="Automatic search for hitlist npc",
+        source="hitlist_npc",
     )
-    found_at = now + timedelta(minutes=search_duration)
-    expires_at = now + timedelta(hours=24)
-    await db.attacks.insert_one({
-        "id": str(uuid.uuid4()),
-        "attacker_id": current_user["id"],
-        "attacker_username": current_user.get("username") or "?",
-        "target_id": npc_user_id,
-        "target_username": npc_username,
-        "note": "Automatic search for hitlist npc",
-        "status": "searching",
-        "search_started": now_iso,
-        "found_at": found_at.isoformat(),
-        "expires_at": expires_at.isoformat(),
-        "planned_location_state": npc_state,
-        "location_state": None,
-        "result": None,
-        "rewards": None,
-    })
 
     reward_labels = {"rank_points": "XP", "bullets": "Bullets", "respect_points": "Respect", "cash": "Cash", "points": "Points"}
     reward_parts = []

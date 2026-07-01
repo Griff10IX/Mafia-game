@@ -42,7 +42,7 @@ MP_POKER_VS_DEALER_MAX_SMALL_BLIND = 25_000  # Hard cap for vs-dealer small blin
 MP_POKER_VS_DEALER_MAX_BLIND_DEFAULT = 2_500_000
 MP_POKER_TOURNAMENT_MIN_PLAYERS = 4
 MP_POKER_TOURNAMENT_MAX_PLAYERS = 9
-MP_POKER_TOURNAMENT_MAX_POINTS_BUY_IN = 1000
+MP_POKER_TOURNAMENT_MAX_POINTS_BUY_IN = 5_000
 MP_POKER_TOURNAMENT_STARTING_STACK = 7_500
 MP_POKER_TOURNAMENT_LEVEL_SECONDS = 300
 MP_POKER_TOURNAMENT_REMINDER_COOLDOWN_SECONDS = 600
@@ -378,6 +378,10 @@ class PokerTournamentCreateRequest(BaseModel):
     buy_in: int = 100_000
     winner_bonus_cash: int = 0
     winner_bonus_points: int = 0
+    second_place_bonus_cash: int = 0
+    second_place_bonus_points: int = 0
+    third_place_bonus_cash: int = 0
+    third_place_bonus_points: int = 0
     buy_in_currency: Literal["money", "points"] = "money"
 
     @field_validator("max_players")
@@ -473,6 +477,82 @@ async def _tournament_refund_user(uid: str, amount: int, currency: str) -> None:
             pass
     else:
         await db.users.update_one({"id": uid}, {"$inc": {"money": amount}})
+
+
+def _clamp_tournament_bonus_amount(raw: Any) -> int:
+    return max(0, min(MP_POKER_MAX_EXTRA_PRIZE, int(raw or 0)))
+
+
+def _tournament_bonus_amounts_from_request(request: PokerTournamentCreateRequest) -> dict[str, int]:
+    return {
+        "winner_bonus_cash": _clamp_tournament_bonus_amount(request.winner_bonus_cash),
+        "winner_bonus_points": _clamp_tournament_bonus_amount(request.winner_bonus_points),
+        "second_place_bonus_cash": _clamp_tournament_bonus_amount(request.second_place_bonus_cash),
+        "second_place_bonus_points": _clamp_tournament_bonus_amount(request.second_place_bonus_points),
+        "third_place_bonus_cash": _clamp_tournament_bonus_amount(request.third_place_bonus_cash),
+        "third_place_bonus_points": _clamp_tournament_bonus_amount(request.third_place_bonus_points),
+    }
+
+
+def _tournament_bonus_amounts_from_game(g: dict) -> dict[str, int]:
+    return {
+        "winner_bonus_cash": int(g.get("winner_bonus_cash") or 0),
+        "winner_bonus_points": int(g.get("winner_bonus_points") or 0),
+        "second_place_bonus_cash": int(g.get("second_place_bonus_cash") or 0),
+        "second_place_bonus_points": int(g.get("second_place_bonus_points") or 0),
+        "third_place_bonus_cash": int(g.get("third_place_bonus_cash") or 0),
+        "third_place_bonus_points": int(g.get("third_place_bonus_points") or 0),
+    }
+
+
+def _tournament_total_bonus_cash(g: dict) -> int:
+    b = _tournament_bonus_amounts_from_game(g)
+    return b["winner_bonus_cash"] + b["second_place_bonus_cash"] + b["third_place_bonus_cash"]
+
+
+def _tournament_total_bonus_points(g: dict) -> int:
+    b = _tournament_bonus_amounts_from_game(g)
+    return b["winner_bonus_points"] + b["second_place_bonus_points"] + b["third_place_bonus_points"]
+
+
+def _tournament_podium_uids(g: dict, winner_uid: Optional[str]) -> dict[int, Optional[str]]:
+    eliminations = [str(u).strip() for u in (g.get("tournament_eliminations") or []) if u]
+    places: dict[int, Optional[str]] = {1: winner_uid, 2: None, 3: None}
+    if winner_uid and len(eliminations) >= 1:
+        places[2] = eliminations[-1]
+    if winner_uid and len(eliminations) >= 2:
+        places[3] = eliminations[-2]
+    return places
+
+
+async def _refund_tournament_creator_bonuses(creator_id: str, g: dict) -> None:
+    if not creator_id:
+        return
+    cash_refund = _tournament_total_bonus_cash(g)
+    pts_refund = _tournament_total_bonus_points(g)
+    if cash_refund > 0:
+        await db.users.update_one({"id": creator_id}, {"$inc": {"money": cash_refund}})
+    if pts_refund > 0:
+        await db.users.update_one({"id": creator_id}, {"$inc": {"points": pts_refund}})
+
+
+async def _pay_tournament_place_bonus(uid: Optional[str], cash: int, points: int) -> None:
+    if not uid:
+        return
+    if cash > 0:
+        await db.users.update_one({"id": uid}, {"$inc": {"money": cash}})
+    if points > 0:
+        await db.users.update_one({"id": uid}, {"$inc": {"points": points}})
+        try:
+            await log_points_event(
+                db,
+                user_id=uid,
+                points=points,
+                event_type="mp_poker_tournament_place_bonus",
+                meta={"cash": cash, "points": points},
+            )
+        except Exception:
+            pass
 
 
 def _safe_tournament_blind(level_idx: int) -> Tuple[int, int]:
@@ -1058,12 +1138,20 @@ def register(router):
             return g
         winner = alive[0] if alive else None
         prize_pool = int(g.get("prize_pool") or 0)
-        winner_bonus_cash = int(g.get("winner_bonus_cash") or 0)
-        winner_bonus_points = int(g.get("winner_bonus_points") or 0)
+        bonuses = _tournament_bonus_amounts_from_game(g)
+        winner_bonus_cash = bonuses["winner_bonus_cash"]
+        winner_bonus_points = bonuses["winner_bonus_points"]
+        second_bonus_cash = bonuses["second_place_bonus_cash"]
+        second_bonus_points = bonuses["second_place_bonus_points"]
+        third_bonus_cash = bonuses["third_place_bonus_cash"]
+        third_bonus_points = bonuses["third_place_bonus_points"]
         now_iso = datetime.now(timezone.utc).isoformat()
         winner_uid = (winner or {}).get("user_id")
         winner_name = (winner or {}).get("username")
         currency = _tournament_buy_in_currency(g)
+        podium = _tournament_podium_uids(g, winner_uid)
+        second_uid = podium.get(2)
+        third_uid = podium.get(3)
         if winner_uid and prize_pool > 0:
             if currency == "points":
                 await db.users.update_one({"id": winner_uid}, {"$inc": {"points": prize_pool}})
@@ -1079,10 +1167,10 @@ def register(router):
                     pass
             else:
                 await db.users.update_one({"id": winner_uid}, {"$inc": {"money": prize_pool}})
-            if winner_bonus_cash > 0:
-                await db.users.update_one({"id": winner_uid}, {"$inc": {"money": winner_bonus_cash}})
-            if winner_bonus_points > 0:
-                await db.users.update_one({"id": winner_uid}, {"$inc": {"points": winner_bonus_points}})
+        await _pay_tournament_place_bonus(winner_uid, winner_bonus_cash, winner_bonus_points)
+        await _pay_tournament_place_bonus(second_uid, second_bonus_cash, second_bonus_points)
+        await _pay_tournament_place_bonus(third_uid, third_bonus_cash, third_bonus_points)
+        if winner_uid and (prize_pool > 0 or winner_bonus_cash > 0 or winner_bonus_points > 0):
             await log_gambling(
                 winner_uid,
                 winner_name or "?",
@@ -1094,6 +1182,12 @@ def register(router):
                     "winnings": prize_pool,
                     "winner_bonus_cash": winner_bonus_cash,
                     "winner_bonus_points": winner_bonus_points,
+                    "second_place_user_id": second_uid,
+                    "second_place_bonus_cash": second_bonus_cash,
+                    "second_place_bonus_points": second_bonus_points,
+                    "third_place_user_id": third_uid,
+                    "third_place_bonus_cash": third_bonus_cash,
+                    "third_place_bonus_points": third_bonus_points,
                     "buy_in_currency": currency,
                 },
             )
@@ -1117,13 +1211,24 @@ def register(router):
         results = []
         for p in players:
             uid = p.get("user_id")
+            place_cash = 0
+            place_points = 0
+            if winner_uid and uid == winner_uid:
+                place_cash = winner_bonus_cash
+                place_points = winner_bonus_points
+            elif second_uid and uid == second_uid:
+                place_cash = second_bonus_cash
+                place_points = second_bonus_points
+            elif third_uid and uid == third_uid:
+                place_cash = third_bonus_cash
+                place_points = third_bonus_points
             results.append(
                 {
                     "user_id": uid,
                     "result": "win" if winner_uid and uid == winner_uid else "lose",
                     "payout": prize_pool if winner_uid and uid == winner_uid else 0,
-                    "winner_bonus_cash": winner_bonus_cash if winner_uid and uid == winner_uid else 0,
-                    "winner_bonus_points": winner_bonus_points if winner_uid and uid == winner_uid else 0,
+                    "winner_bonus_cash": place_cash,
+                    "winner_bonus_points": place_points,
                     "hand": None,
                 }
             )
@@ -1146,10 +1251,10 @@ def register(router):
             ent_outcome = {
                 "winner_username": (winner_name or "").strip() or None,
                 "winner_id": winner_uid,
-                "total_winnings_points": (int(prize_pool) if currency == "points" else 0) + int(winner_bonus_points),
-                "total_winnings_cash": (float(prize_pool) if currency == "money" else 0.0) + float(winner_bonus_cash),
-                "from_entertainer_fund_points": (int(bi) if currency == "points" else 0) + int(winner_bonus_points),
-                "from_entertainer_fund_cash": (float(bi) if currency == "money" else 0.0) + float(winner_bonus_cash),
+                "total_winnings_points": (int(prize_pool) if currency == "points" else 0) + _tournament_total_bonus_points(g),
+                "total_winnings_cash": (float(prize_pool) if currency == "money" else 0.0) + float(_tournament_total_bonus_cash(g)),
+                "from_entertainer_fund_points": (int(bi) if currency == "points" else 0) + _tournament_total_bonus_points(g),
+                "from_entertainer_fund_cash": (float(bi) if currency == "money" else 0.0) + float(_tournament_total_bonus_cash(g)),
                 "mp_poker_subkind": "tournament",
             }
             await on_funded_game_completed(
@@ -1229,6 +1334,10 @@ def register(router):
                 "prize_pool": 1,
                 "winner_bonus_cash": 1,
                 "winner_bonus_points": 1,
+                "second_place_bonus_cash": 1,
+                "second_place_bonus_points": 1,
+                "third_place_bonus_cash": 1,
+                "third_place_bonus_points": 1,
                 "winner_username": 1,
                 "admin_bonus_reward": 1,
                 "created_at": 1,
@@ -1260,6 +1369,10 @@ def register(router):
                     "prize_pool": int(g.get("prize_pool") or 0),
                     "winner_bonus_cash": int(g.get("winner_bonus_cash") or 0),
                     "winner_bonus_points": int(g.get("winner_bonus_points") or 0),
+                    "second_place_bonus_cash": int(g.get("second_place_bonus_cash") or 0),
+                    "second_place_bonus_points": int(g.get("second_place_bonus_points") or 0),
+                    "third_place_bonus_cash": int(g.get("third_place_bonus_cash") or 0),
+                    "third_place_bonus_points": int(g.get("third_place_bonus_points") or 0),
                     "winner_username": g.get("winner_username"),
                     "admin_bonus_reward": g.get("admin_bonus_reward") if isinstance(g.get("admin_bonus_reward"), dict) else None,
                     "created_at": g.get("created_at"),
@@ -1300,8 +1413,13 @@ def register(router):
         uid = current_user.get("id") or ""
         username = current_user.get("username") or "Player"
         buy_in = int(request.buy_in)
-        winner_bonus_cash = max(0, min(MP_POKER_MAX_EXTRA_PRIZE, int(getattr(request, "winner_bonus_cash", 0) or 0)))
-        winner_bonus_points = max(0, min(MP_POKER_MAX_EXTRA_PRIZE, int(getattr(request, "winner_bonus_points", 0) or 0)))
+        bonuses = _tournament_bonus_amounts_from_request(request)
+        winner_bonus_cash = bonuses["winner_bonus_cash"]
+        winner_bonus_points = bonuses["winner_bonus_points"]
+        second_place_bonus_cash = bonuses["second_place_bonus_cash"]
+        second_place_bonus_points = bonuses["second_place_bonus_points"]
+        third_place_bonus_cash = bonuses["third_place_bonus_cash"]
+        third_place_bonus_points = bonuses["third_place_bonus_points"]
         max_players = int(request.max_players)
         currency = str(request.buy_in_currency or "money").strip().lower()
         if currency not in ("money", "points"):
@@ -1319,12 +1437,12 @@ def register(router):
                 status_code=400,
                 detail=f"Entertainer points tournaments: buy-in cannot exceed {ENTERTAINER_MP_POKER_MAX_POINTS_PER_GAME:,} points from the entertainer fund.",
             )
-        points_debit = (buy_in if currency == "points" else 0) + winner_bonus_points
-        cash_debit = (buy_in if currency == "money" else 0) + winner_bonus_cash
+        points_debit = (buy_in if currency == "points" else 0) + winner_bonus_points + second_place_bonus_points + third_place_bonus_points
+        cash_debit = (buy_in if currency == "money" else 0) + winner_bonus_cash + second_place_bonus_cash + third_place_bonus_cash
         if use_ent_fund and points_debit > ENTERTAINER_MP_POKER_MAX_POINTS_PER_GAME:
             raise HTTPException(
                 status_code=400,
-                detail=f"Entertainer points tournaments: points buy-in + winner points bonus cannot exceed {ENTERTAINER_MP_POKER_MAX_POINTS_PER_GAME:,} points from the entertainer fund.",
+                detail=f"Entertainer points tournaments: buy-in + all place point prizes cannot exceed {ENTERTAINER_MP_POKER_MAX_POINTS_PER_GAME:,} points from the entertainer fund.",
             )
         if use_ent_fund:
             ok = await try_debit_entertainer_fund(db, uid, float(cash_debit), int(points_debit))
@@ -1379,6 +1497,11 @@ def register(router):
             "extra_prize": 0,
             "winner_bonus_cash": winner_bonus_cash,
             "winner_bonus_points": winner_bonus_points,
+            "second_place_bonus_cash": second_place_bonus_cash,
+            "second_place_bonus_points": second_place_bonus_points,
+            "third_place_bonus_cash": third_place_bonus_cash,
+            "third_place_bonus_points": third_place_bonus_points,
+            "tournament_eliminations": [],
             "prize_pool": buy_in + winner_bonus_cash + (winner_bonus_points if currency == "points" else 0),
             "pot": 0,
             "small_blind": sb,
@@ -1679,18 +1802,13 @@ def register(router):
             raise HTTPException(status_code=400, detail="Tournament is not pending")
         players = list(g.get("players") or [])
         buy_in = int(g.get("buy_in") or 0)
-        winner_bonus_cash = int(g.get("winner_bonus_cash") or 0)
-        winner_bonus_points = int(g.get("winner_bonus_points") or 0)
         currency = _tournament_buy_in_currency(g)
         for p in players:
             uid = (p.get("user_id") or "").strip()
             if uid and buy_in > 0:
                 await _tournament_refund_user(uid, buy_in, currency)
         creator_id = (g.get("creator_id") or "").strip()
-        if creator_id and winner_bonus_cash > 0:
-            await db.users.update_one({"id": creator_id}, {"$inc": {"money": int(winner_bonus_cash)}})
-        if creator_id and winner_bonus_points > 0:
-            await db.users.update_one({"id": creator_id}, {"$inc": {"points": int(winner_bonus_points)}})
+        await _refund_tournament_creator_bonuses(creator_id, g)
         await db.mp_poker_games.update_one(
             {"id": game_id},
             {
@@ -1854,8 +1972,6 @@ def register(router):
             raise HTTPException(status_code=400, detail="Tournament is already closed")
         players = list(g.get("players") or [])
         buy_in = int(g.get("buy_in") or 0)
-        winner_bonus_cash = int(g.get("winner_bonus_cash") or 0)
-        winner_bonus_points = int(g.get("winner_bonus_points") or 0)
         creator_id = (g.get("creator_id") or "").strip()
         currency = _tournament_buy_in_currency(g)
         refunded_users = []
@@ -1868,10 +1984,7 @@ def register(router):
                 seen.add(uid)
                 await _tournament_refund_user(uid, buy_in, currency)
                 refunded_users.append(uid)
-        if creator_id and winner_bonus_cash > 0:
-            await db.users.update_one({"id": creator_id}, {"$inc": {"money": int(winner_bonus_cash)}})
-        if creator_id and winner_bonus_points > 0:
-            await db.users.update_one({"id": creator_id}, {"$inc": {"points": int(winner_bonus_points)}})
+        await _refund_tournament_creator_bonuses(creator_id, g)
         now_iso = datetime.now(timezone.utc).isoformat()
         await db.mp_poker_games.update_one(
             {"id": game_id},
@@ -2430,6 +2543,7 @@ def register(router):
         last_snap = _mp_poker_last_hand_showdown_snapshot(g, players, board, pot, results) if is_tournament else None
         if is_tournament:
             # Tournament hand: pot is returned to winner stack(s), not paid out to wallet.
+            newly_busted_uids: list[str] = []
             for p in players:
                 uid = (p.get("user_id") or "").strip()
                 if not uid:
@@ -2440,6 +2554,7 @@ def register(router):
                 if int(p.get("stack") or 0) <= 0:
                     p["stack"] = 0
                     p["status"] = "busted"
+                    newly_busted_uids.append(uid)
                 else:
                     p["status"] = "waiting"
                 p["current_bet"] = 0
@@ -2447,32 +2562,37 @@ def register(router):
                 p["ready"] = True
                 p["hole_cards"] = []
             players = _tournament_survivors(players)
+            elim_patch = (
+                {"$push": {"tournament_eliminations": {"$each": newly_busted_uids}}}
+                if newly_busted_uids
+                else {}
+            )
             if len(players) <= 1:
-                await db.mp_poker_games.update_one(
-                    {"id": game_id},
-                    {"$set": {"players": players, "pot": 0, "results": results, "last_hand_showdown": last_snap}},
-                )
+                patch = {
+                    "$set": {"players": players, "pot": 0, "results": results, "last_hand_showdown": last_snap},
+                    **elim_patch,
+                }
+                await db.mp_poker_games.update_one({"id": game_id}, patch)
                 await _tournament_finalize_if_done(game_id)
                 return
             next_button = (int(g.get("button_index") or 0) + 1) % len(players)
-            await db.mp_poker_games.update_one(
-                {"id": game_id},
-                {
-                    "$set": {
-                        "status": "open",
-                        "phase": "settled",
-                        "street": None,
-                        "board": [],
-                        "deck": [],
-                        "pot": 0,
-                        "results": results,
-                        "last_hand_showdown": last_snap,
-                        "players": players,
-                        "all_ready_at": None,
-                        "button_index": next_button,
-                    }
+            patch = {
+                "$set": {
+                    "status": "open",
+                    "phase": "settled",
+                    "street": None,
+                    "board": [],
+                    "deck": [],
+                    "pot": 0,
+                    "results": results,
+                    "last_hand_showdown": last_snap,
+                    "players": players,
+                    "all_ready_at": None,
+                    "button_index": next_button,
                 },
-            )
+                **elim_patch,
+            }
+            await db.mp_poker_games.update_one({"id": game_id}, patch)
             await _mp_poker_deal_new_hand(game_id)
             return
 

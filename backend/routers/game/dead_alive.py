@@ -610,6 +610,13 @@ def register(router):
                 raise HTTPException(status_code=400, detail="That account could not be revived.")
             if revived_points > 0:
                 await log_points_event(db, user_id=dead_user["id"], points=revived_points, event_type="dead_alive_reviver_pay", event_ref=current_user["id"])
+            restore_summary = {}
+            try:
+                from utils.death_revive_snapshot import restore_death_revive_snapshot
+
+                restore_summary = await restore_death_revive_snapshot(db, victim_id=dead_user["id"])
+            except Exception:
+                logging.getLogger(__name__).exception("death_revive_snapshot restore revived=%s", dead_user.get("id"))
             # 4) Kill reviving account — estate already moved to revived; do not leave retrievable snapshot
             await db.users.update_one(
                 {"id": current_user["id"]},
@@ -640,6 +647,9 @@ def register(router):
                 f"Balance before revive: $0 cash, 0 points\n"
                 f"Balance after revive: ${reviver_money:,} cash, {revived_points:,} points"
             )
+            estate_text = (restore_summary or {}).get("summary_text") or ""
+            if estate_text:
+                notification_body += f"\n\nEstate restored: {estate_text}."
             await send_notification(
                 dead_user["id"],
                 "Account revived",

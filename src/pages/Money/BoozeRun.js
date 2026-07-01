@@ -115,6 +115,9 @@ const StatsCard = ({ config, timer }) => {
           <div className="text-[11px] font-heading font-bold text-foreground tabular-nums">
             {carryingTotal} / {capacity}
           </div>
+          {config.vip_pass_car_bonus && (
+            <div className="text-[8px] font-heading text-cyan-500/90">+50% cargo (VIP Pass car)</div>
+          )}
           <div className="w-full h-0.5 bg-zinc-800 rounded-full overflow-hidden">
             <div className={`h-full rounded-full transition-all duration-500 ${pctFull > 80 ? 'bg-amber-500' : 'bg-primary'}`} style={{ width: `${pctFull}%` }} />
           </div>

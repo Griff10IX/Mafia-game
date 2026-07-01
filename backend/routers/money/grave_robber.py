@@ -30,7 +30,7 @@ GR_TOKEN_TYPES = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
 # Exclude exclusive and loot-exclusive, plus custom car.
 GR_CAR_POOL = [
     c for c in CARS
-    if c.get("id") != "car_custom" and c.get("rarity") not in ("exclusive", "loot_exclusive")
+    if c.get("id") != "car_custom" and c.get("rarity") not in ("exclusive", "loot_exclusive", "vip_exclusive")
 ]
 
 GR_REWARD_WEIGHTS = (

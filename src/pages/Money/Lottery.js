@@ -497,6 +497,7 @@ function Lottery() {
   const last = state?.last_draw;
   const grossPot = Number(state?.gross_pot ?? 0);
   const rolloverIn = Number(state?.rollover_in ?? 0);
+  const startingPot = Number(state?.starting_pot ?? 0);
   const taxPct = Number(state?.pot_tax_percent ?? 10);
   const netIfWon = Math.floor((grossPot * (100 - taxPct)) / 100);
   const myTickets = state?.my_tickets ?? 0;
@@ -531,6 +532,11 @@ function Lottery() {
             <div className="text-[10px] text-zinc-500 font-heading">
               Gross pot {formatMoney(grossPot)} &mdash; {taxPct}% tax at draw
             </div>
+            {startingPot > 0 && (
+              <div className="text-[9px] text-emerald-400/90 font-heading">
+                Includes {formatMoney(startingPot)} starting jackpot (every new round after a payout).
+              </div>
+            )}
             {rolloverIn > 0 && (
               <div className="text-[9px] text-amber-400/90 font-heading">
                 Includes {formatMoney(rolloverIn)} carried over from the last draw (no jackpot paid).
@@ -729,7 +735,7 @@ function Lottery() {
         <div className="p-3 space-y-2">
           {recentWinners.length === 0 ? (
             <p className="text-[10px] text-zinc-500 font-heading leading-relaxed">
-              No jackpot wins recorded yet. Winners appear after each draw pays out (exact match or random ticket selection).
+              No jackpot wins recorded yet. Winners appear after a draw pays out (exact match or random ticket pick).
             </p>
           ) : (
             recentWinners.map((draw, idx) => {
@@ -783,8 +789,8 @@ function Lottery() {
         <div className="p-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
           {[
             { step: '1', title: 'Buy Tickets', desc: `Each ticket costs ${formatMoney(state?.ticket_price)}. Buy up to 500 per transaction.` },
-            { step: '2', title: 'Wait for the Draw', desc: 'Draws happen Wednesday & Sunday at 00:00 UTC. The pot grows with every ticket sold.' },
-            { step: '3', title: 'Win the Jackpot', desc: `Six numbers are drawn at random. Tickets that match all six split ${100 - taxPct}% of the gross pot (including any rolled amount). If nobody matches the draw, one eligible player ticket may be picked at random so the jackpot still pays—displayed numbers will match that ticket. Only if there is still no payout does the net pot roll forward. ${taxPct}% is removed as tax.` },
+            { step: '2', title: 'Wait for the Draw', desc: 'Draws happen Wednesday & Sunday at 00:00 UTC. Each round starts with a $500M house seed; the pot grows with every ticket sold.' },
+            { step: '3', title: 'Win the Jackpot', desc: `Six numbers are drawn at random. Tickets that match all six split ${100 - taxPct}% of the gross pot (seed, rollover, and ticket sales). If nobody matches, there is a 50% chance one eligible player ticket is picked at random (displayed numbers match that ticket); otherwise the net pot rolls to the next draw. ${taxPct}% is removed as tax.` },
           ].map(({ step, title, desc }) => (
             <div key={step} className="flex gap-2.5">
               <div

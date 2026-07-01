@@ -1,4 +1,4 @@
-# Daily Rewards: Rock Paper Scissors and Noughts & Crosses vs computer. 3 plays per 6 hours (shared). Win = cash + maybe cars (no points).
+# Daily Rewards: Rock Paper Scissors and Noughts & Crosses vs computer. 3 plays per 6 hours (shared). Win = cash + maybe cars + maybe loot pieces.
 from datetime import datetime, timezone, timedelta
 import secrets
 import uuid
@@ -13,12 +13,15 @@ _rng = secrets.SystemRandom()
 RPS_PLAYS_PER_WINDOW = 3
 RPS_WINDOW_HOURS = 6
 RPS_CHOICES = ["rock", "paper", "scissors"]
-RPS_WIN_MONEY = 12_500  # 75% reduction for beta
+RPS_WIN_MONEY = 10_000_000
 # Cars up to rare only (common, uncommon, rare)
-DAILY_REWARDS_CAR_IDS = [c["id"] for c in CARS if c.get("id") not in ("car_custom", "car20") and c.get("rarity") in ("common", "uncommon", "rare")]
+DAILY_REWARDS_CAR_IDS = [c["id"] for c in CARS if c.get("id") not in ("car_custom", "car20", "car21", "car22") and c.get("rarity") in ("common", "uncommon", "rare")]
 # On win: 25% chance 1 car, 8% chance 2 cars (so sometimes just cash, sometimes cash + 1 or 2 cars)
 DAILY_REWARDS_CAR_1_CHANCE = 0.25
 DAILY_REWARDS_CAR_2_CHANCE = 0.08
+# On win: 25% chance for 10 or 15 loot box pieces
+DAILY_REWARDS_LOOT_CHANCE = 0.25
+DAILY_REWARDS_LOOT_PIECES_OPTIONS = (10, 15)
 
 # Noughts & Crosses
 TTT_WIN_LINES = [(0, 1, 2), (3, 4, 5), (6, 7, 8), (0, 3, 6), (1, 4, 7), (2, 5, 8), (0, 4, 8), (2, 4, 6)]
@@ -150,31 +153,37 @@ async def _get_play_window(uid: str) -> tuple[int, str | None]:
     return plays_left, next_play_at
 
 
-async def _grant_daily_win_rewards(user_id: str) -> tuple[int, list]:
-    """Grant cash + optional cars (max rare). Returns (money_won, list of car names)."""
-    await db.users.update_one({"id": user_id}, {"$inc": {"money": RPS_WIN_MONEY}})
+async def _grant_daily_win_rewards(user_id: str) -> tuple[int, list, int]:
+    """Grant cash + optional cars (max rare) + optional loot pieces. Returns (money_won, car names, loot pieces)."""
+    inc: dict = {"money": RPS_WIN_MONEY}
+    loot_box_pieces = 0
+    if _rng.random() < DAILY_REWARDS_LOOT_CHANCE:
+        loot_box_pieces = _rng.choice(DAILY_REWARDS_LOOT_PIECES_OPTIONS)
+        inc["loot_box_pieces"] = loot_box_pieces
+
     cars_won = []
     car_ids = DAILY_REWARDS_CAR_IDS if isinstance(DAILY_REWARDS_CAR_IDS, list) else []
-    if not car_ids:
-        return RPS_WIN_MONEY, cars_won
-    r = _rng.random()
-    num_cars = 2 if r < DAILY_REWARDS_CAR_2_CHANCE else (1 if r < DAILY_REWARDS_CAR_1_CHANCE else 0)
-    chosen = _rng.sample(car_ids, min(num_cars, len(car_ids))) if num_cars else []
-    now_iso = datetime.now(timezone.utc).isoformat()
-    cars_list = CARS if isinstance(CARS, list) else []
-    for car_id in chosen:
-        car = next((c for c in cars_list if c.get("id") == car_id), None)
-        if car:
-            await db.user_cars.insert_one({
-                "id": str(uuid.uuid4()),
-                "user_id": user_id,
-                "car_id": car_id,
-                "car_name": car.get("name", car_id),
-                "acquired_at": now_iso,
-                "damage_percent": 0,
-            })
-            cars_won.append(car.get("name", car_id))
-    return RPS_WIN_MONEY, cars_won
+    if car_ids:
+        r = _rng.random()
+        num_cars = 2 if r < DAILY_REWARDS_CAR_2_CHANCE else (1 if r < DAILY_REWARDS_CAR_1_CHANCE else 0)
+        chosen = _rng.sample(car_ids, min(num_cars, len(car_ids))) if num_cars else []
+        now_iso = datetime.now(timezone.utc).isoformat()
+        cars_list = CARS if isinstance(CARS, list) else []
+        for car_id in chosen:
+            car = next((c for c in cars_list if c.get("id") == car_id), None)
+            if car:
+                await db.user_cars.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "user_id": user_id,
+                    "car_id": car_id,
+                    "car_name": car.get("name", car_id),
+                    "acquired_at": now_iso,
+                    "damage_percent": 0,
+                })
+                cars_won.append(car.get("name", car_id))
+
+    await db.users.update_one({"id": user_id}, {"$inc": inc})
+    return RPS_WIN_MONEY, cars_won, loot_box_pieces
 
 
 class RPSPlayRequest(BaseModel):
@@ -206,6 +215,8 @@ def register(router):
             "window_hours": RPS_WINDOW_HOURS,
             "next_play_at": next_play_at,
             "win_money": RPS_WIN_MONEY,
+            "loot_pieces_chance": DAILY_REWARDS_LOOT_CHANCE,
+            "loot_pieces_options": list(DAILY_REWARDS_LOOT_PIECES_OPTIONS),
         }
 
     @router.post("/daily-rewards/play")
@@ -222,13 +233,14 @@ def register(router):
         result = _rps_winner(choice, computer)
         money_won = 0
         cars_won = []
+        loot_box_pieces = 0
         if result == "win":
-            money_won, cars_won = await _grant_daily_win_rewards(uid)
+            money_won, cars_won, loot_box_pieces = await _grant_daily_win_rewards(uid)
         await log_activity(
             uid,
             current_user.get("username") or "?",
             "daily_rewards_rps",
-            {"game": "rps", "result": result, "money_won": money_won, "cars_won": cars_won, "your_choice": choice, "computer_choice": computer},
+            {"game": "rps", "result": result, "money_won": money_won, "cars_won": cars_won, "loot_box_pieces": loot_box_pieces, "your_choice": choice, "computer_choice": computer},
         )
 
         plays_left, next_play_at = await _get_play_window(uid)
@@ -238,6 +250,7 @@ def register(router):
             "result": result,
             "money_won": money_won,
             "cars_won": cars_won,
+            "loot_box_pieces": loot_box_pieces,
             "plays_left": plays_left,
             "next_play_at": next_play_at,
         }
@@ -331,15 +344,16 @@ def register(router):
         result = "ongoing"
         money_won = 0
         cars_won = []
+        loot_box_pieces = 0
         if winner:
             result = "win" if winner == player_side else "lose"
             if result == "win":
-                money_won, cars_won = await _grant_daily_win_rewards(uid)
+                money_won, cars_won, loot_box_pieces = await _grant_daily_win_rewards(uid)
             await log_activity(
                 uid,
                 current_user.get("username") or "?",
                 "daily_rewards_ttt",
-                {"game": "ttt", "result": result, "money_won": money_won, "cars_won": cars_won},
+                {"game": "ttt", "result": result, "money_won": money_won, "cars_won": cars_won, "loot_box_pieces": loot_box_pieces},
             )
             await db.daily_rewards_ttt.delete_one({"user_id": uid})
         else:
@@ -388,6 +402,7 @@ def register(router):
             "result": result,
             "money_won": money_won,
             "cars_won": cars_won,
+            "loot_box_pieces": loot_box_pieces,
             "plays_left": plays_left,
             "next_play_at": next_play_at,
         }

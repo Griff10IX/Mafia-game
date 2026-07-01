@@ -1,6 +1,6 @@
 # Twice-weekly lottery (Wed & Sun 00:00 UTC): $500k/ticket, 10% of gross pot removed at draw, 90% net to winner(s).
-# Each draw publishes six winning numbers. Exact-match lines split the net pot; if nobody matches the ball draw,
-# a random eligible player ticket may be chosen as winner (see LOTTERY_NO_RANDOM_FALLBACK). Admin can force-draw.
+# Each draw publishes six winning numbers. Exact-match lines split the net pot. If nobody matches, cron has a 50%
+# chance to pick a random eligible ticket (else net pot rolls forward). Admin can force-draw. New rounds seed STARTING_POT.
 # Jackpot inbox uses send_notification(..., category=None) so wins are not muted via notification_preferences.
 from __future__ import annotations
 
@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 TICKET_PRICE = 500_000
 POT_TAX_PERCENT = 10
+STARTING_POT = 500_000_000
+LOTTERY_RANDOM_FALLBACK_CHANCE = 0.5  # cron: if no exact match, chance to pick random ticket vs rollover
 _DRAW_WEEKDAYS = (2, 6)  # Wed, Sun — 00:00 UTC
 _LOTTERY_PICK_COUNT = 6
 _LOTTERY_NUMBER_MAX = 50
@@ -29,9 +31,18 @@ _MAX_WINNER_TICKETS = 100_000
 
 
 def _lottery_random_fallback_disabled() -> bool:
-    """When True, cron uses pure rollover if nobody matches the random ball draw (testing / legacy)."""
+    """When True, cron never picks a random ticket when nobody matches (always rollover)."""
     v = (os.environ.get("LOTTERY_NO_RANDOM_FALLBACK") or "").strip().lower()
     return v in ("1", "true", "yes")
+
+
+def _round_carry_in(rd: dict) -> int:
+    """Cash already in the pot before ticket sales (rollover carry + house seed)."""
+    return int(rd.get("rollover_in") or 0) + int(rd.get("starting_pot") or 0)
+
+
+def _round_gross_pot(rd: dict, ticket_count: int) -> int:
+    return ticket_count * TICKET_PRICE + _round_carry_in(rd)
 
 
 def _random_lottery_numbers() -> list[int]:
@@ -162,21 +173,34 @@ async def _ensure_open_round() -> dict[str, Any]:
     now = datetime.now(timezone.utc)
     open_rounds = await db.lottery_rounds.find(
         {"status": "open"},
-        {"_id": 1, "closes_at": 1, "status": 1, "created_at": 1, "rollover_in": 1},
+        {"_id": 1, "closes_at": 1, "status": 1, "created_at": 1, "rollover_in": 1, "starting_pot": 1},
     ).to_list(500)
     future_rounds: list[tuple[int, datetime, dict[str, Any]]] = []
     for r in open_rounds:
         closes_at = _parse_iso(r.get("closes_at"))
         if closes_at and closes_at > now:
-            rollover_in = int(r.get("rollover_in") or 0)
-            future_rounds.append((rollover_in, closes_at, r))
+            carry = _round_carry_in(r)
+            future_rounds.append((carry, closes_at, r))
     if future_rounds:
         # If duplicate open rounds exist, prefer the round carrying rollover.
         # Tie-break on earliest close time so buys still target the next due draw.
         future_rounds.sort(key=lambda x: (-x[0], x[1]))
-        return future_rounds[0][2]
+        primary = future_rounds[0][2]
+        if _round_carry_in(primary) == 0:
+            await db.lottery_rounds.update_one(
+                {"_id": primary["_id"], "status": "open"},
+                {"$set": {"starting_pot": STARTING_POT}},
+            )
+            primary["starting_pot"] = STARTING_POT
+        return primary
     closes = _next_draw_utc(now)
-    doc = {"closes_at": closes.isoformat(), "status": "open", "created_at": now.isoformat(), "rollover_in": 0}
+    doc = {
+        "closes_at": closes.isoformat(),
+        "status": "open",
+        "created_at": now.isoformat(),
+        "rollover_in": 0,
+        "starting_pot": STARTING_POT,
+    }
     ins = await db.lottery_rounds.insert_one(doc)
     doc["_id"] = ins.inserted_id
     return doc
@@ -226,7 +250,8 @@ async def get_lottery_state(current_user: dict = Depends(get_current_user)):
     total = await db.lottery_tickets.count_documents({"round_id": rid})
     mine = await db.lottery_tickets.count_documents({"round_id": rid, "user_id": current_user["id"]})
     rollover_in = int(rd.get("rollover_in") or 0)
-    gross = total * TICKET_PRICE + rollover_in
+    starting_pot = int(rd.get("starting_pot") or 0)
+    gross = _round_gross_pot(rd, total)
     closed_projection = {
         "_id": 0,
         "drawn_at": 1,
@@ -278,6 +303,7 @@ async def get_lottery_state(current_user: dict = Depends(get_current_user)):
         "ticket_count": total,
         "gross_pot": gross,
         "rollover_in": rollover_in,
+        "starting_pot": starting_pot,
         "my_tickets": mine,
         "last_draw": last,
         "recent_draws": recent_draws,
@@ -511,8 +537,9 @@ async def _settle_one_round(rid: Any, rd: dict[str, Any], *, settle_mode: str) -
 
     n = await db.lottery_tickets.count_documents({"round_id": rid})
     rollover_start = int(rd.get("rollover_in") or 0)
+    starting_pot = int(rd.get("starting_pot") or 0)
     ticket_revenue = n * TICKET_PRICE
-    gross = ticket_revenue + rollover_start
+    gross = ticket_revenue + rollover_start + starting_pot
     sink = (gross * POT_TAX_PERCENT) // 100 if gross > 0 else 0
     payout = gross - sink
     drawn_iso = datetime.now(timezone.utc).isoformat()
@@ -555,6 +582,7 @@ async def _settle_one_round(rid: Any, rd: dict[str, Any], *, settle_mode: str) -
         and gross > 0
         and not paid_user_ids
         and not _lottery_random_fallback_disabled()
+        and _lottery_rng.random() < LOTTERY_RANDOM_FALLBACK_CHANCE
     ):
         eligible = await _eligible_player_tickets_for_round(rid)
         if eligible:
@@ -612,6 +640,8 @@ async def _settle_one_round(rid: Any, rd: dict[str, Any], *, settle_mode: str) -
         "fallback_reason": fallback_reason,
         "exact_match_count": exact_match_count,
         "rollover_to_next": rollover_next,
+        "rollover_in_at_draw": rollover_start,
+        "starting_pot_at_draw": starting_pot,
         "winner_payouts": winner_payouts,
         "payout_errors": payout_errors,
     }
@@ -634,6 +664,7 @@ async def _settle_one_round(rid: Any, rd: dict[str, Any], *, settle_mode: str) -
             "exact_match_count": exact_match_count,
             "rollover_to_next": rollover_next,
             "rollover_in": rollover_start,
+            "starting_pot": starting_pot,
             "winners_paid_count": len(paid_user_ids),
         }
         if payout_errors:
@@ -721,12 +752,15 @@ async def _settle_one_round(rid: Any, rd: dict[str, Any], *, settle_mode: str) -
 
     now2 = datetime.now(timezone.utc)
     nxt = _next_draw_utc(now2)
+    next_rollover = rollover_next if rollover_next > 0 else 0
+    next_starting_pot = 0 if rollover_next > 0 else STARTING_POT
     await db.lottery_rounds.insert_one(
         {
             "closes_at": nxt.isoformat(),
             "status": "open",
             "created_at": now2.isoformat(),
-            "rollover_in": rollover_next,
+            "rollover_in": next_rollover,
+            "starting_pot": next_starting_pot,
         }
     )
 
@@ -752,7 +786,7 @@ async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
     while True:
         open_rounds = await db.lottery_rounds.find(
             {"status": "open"},
-            {"_id": 1, "closes_at": 1, "status": 1, "created_at": 1, "rollover_in": 1},
+            {"_id": 1, "closes_at": 1, "status": 1, "created_at": 1, "rollover_in": 1, "starting_pot": 1},
         ).to_list(500)
         due_rounds = []
         for r in open_rounds:
@@ -841,13 +875,13 @@ async def lottery_repair_stuck_rounds(_: bool = Depends(_cron_verify())):
     now2 = datetime.now(timezone.utc)
     open_rounds_after = await db.lottery_rounds.find(
         {"status": "open"},
-        {"_id": 1, "closes_at": 1, "rollover_in": 1, "created_at": 1},
+        {"_id": 1, "closes_at": 1, "rollover_in": 1, "starting_pot": 1, "created_at": 1},
     ).to_list(500)
     future: list[tuple[int, datetime, dict[str, Any]]] = []
     for rd in open_rounds_after:
         dt = _parse_iso(rd.get("closes_at"))
         if dt and dt > now2:
-            future.append((int(rd.get("rollover_in") or 0), dt, rd))
+            future.append((_round_carry_in(rd), dt, rd))
 
     merged_open_rounds = 0
     merged_rollover = 0
@@ -862,7 +896,8 @@ async def lottery_repair_stuck_rounds(_: bool = Depends(_cron_verify())):
             if ticket_count > 0:
                 continue
             rollover_in = int(rd.get("rollover_in") or 0)
-            move_total += rollover_in
+            starting_pot = int(rd.get("starting_pot") or 0)
+            carry = rollover_in + starting_pot
             res = await db.lottery_rounds.update_one(
                 {"_id": rid, "status": "open"},
                 {
@@ -875,7 +910,8 @@ async def lottery_repair_stuck_rounds(_: bool = Depends(_cron_verify())):
             )
             if res.modified_count:
                 merged_open_rounds += 1
-                merged_rollover += rollover_in
+                merged_rollover += carry
+                move_total += carry
         if move_total > 0:
             await db.lottery_rounds.update_one(
                 {"_id": primary_id},

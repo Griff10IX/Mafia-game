@@ -3651,6 +3651,7 @@ async def claim_kill_reward(req: ClaimKillRewardRequest, current_user: dict = De
     iph = int(biz_doc.get("income_per_hour") or INCOME_PER_HOUR_BASE)
     biz_doc["id"] = new_biz_id
     biz_doc["user_id"] = killer_id
+    biz_doc["seized_from_user_id"] = req.victim_id
     biz_doc["income_per_hour"] = int(round(iph * KILL_TAKEOVER_INCOME_MULT))
     type_def = next((t for t in ILLEGAL_BUSINESS_TYPES if t["id"] == biz_doc.get("type_id")), {})
     raw_name = (req.new_name or "").strip() if req.new_name is not None else ""

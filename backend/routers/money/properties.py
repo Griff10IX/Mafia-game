@@ -290,19 +290,8 @@ def _properties_heat_tick(heat: float, last_at_iso: Optional[str], now_utc: date
 
 def _properties_heat_bribe_quote(heat: float) -> dict:
     h = _clamp_float(heat or 0.0, 0.0, PROPERTIES_HEAT_MAX)
-    rate = float(PROPERTIES_HEAT_BRIBE_DOLLARS_PER_HEAT)
-    target_heat = max(0.0, float(PROPERTIES_HEAT_BLOCK_THRESHOLD) - 5.0)
-    need_above_target = max(0.0, h - target_heat)
     clear_all = _heat_max_dollars_to_clear(h)
-    to_safe_only = int(math.ceil(need_above_target * rate - 1e-9)) if need_above_target > 0.0 else 0
-    if h <= 0.0:
-        suggested = 0
-    elif need_above_target > 0.0 and to_safe_only > 0:
-        suggested = min(clear_all, to_safe_only)
-    else:
-        # Already below "safe" line — only pay to clear residual heat (not a flat $100k floor).
-        suggested = clear_all
-    # Minimum request: $100k rule only when clearing would cost that much; tiny heat = tiny minimum.
+    suggested = clear_all if h > 0.0 else 0
     if clear_all <= 0:
         min_bribe = 0
     elif clear_all < PROPERTIES_HEAT_BRIBE_MIN_CASH:

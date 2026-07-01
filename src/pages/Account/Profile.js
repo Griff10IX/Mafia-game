@@ -1088,6 +1088,7 @@ const RARITY_LABELS = {
   custom: 'Custom',
   loot_exclusive: 'Loot',
   exclusive: 'Exclusive',
+  vip_exclusive: 'VIP',
 };
 
 /** Rarity colours for profile car badges (match ViewCar / GTA). */
@@ -1100,6 +1101,7 @@ const RARITY_BADGE_CLASSES = {
   custom: 'border-primary/70 text-primary',
   loot_exclusive: 'border-rose-400/70 text-rose-400 bg-rose-950/30',
   exclusive: 'border-rose-400/70 text-rose-400',
+  vip_exclusive: 'border-cyan-700/80 text-cyan-500 bg-cyan-950/25',
 };
 
 /** Extract YouTube video ID from watch URL, youtu.be, or embed URL. */

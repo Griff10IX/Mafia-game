@@ -49,7 +49,7 @@ from server import (
     STATES,
 )
 from routers.account.objectives import update_objectives_progress
-from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.point_provenance import log_points_event
 from utils.rolling_event_stats import rolling_event_stats_pipeline, rolling_stats_response_from_doc
 from utils.sustained_page_ratelimit import check_jail_sustained_page_rl
@@ -351,6 +351,20 @@ async def _count_global_jail_npcs() -> int:
 
 _RANK_NAMES_FOR_JAIL_NPC = [r["name"] for r in RANKS]
 _RANK_WEIGHTS_FOR_JAIL_NPC = [30, 25, 20, 15, 10, 7, 5, 3, 2, 1, 1, 1, 1]
+JAIL_NPC_BUST_REWARD_FLOOR = 100_000
+JAIL_NPC_BUST_REWARD_CEILING = 500_000
+
+
+def _jail_npc_bust_reward_for_rank(rank_index: int) -> int:
+    """Cash reward for busting a jail NPC; scales by rank from floor to ceiling."""
+    max_idx = max(1, len(_RANK_NAMES_FOR_JAIL_NPC) - 1)
+    rank_index = max(0, min(rank_index, max_idx))
+    span = JAIL_NPC_BUST_REWARD_CEILING - JAIL_NPC_BUST_REWARD_FLOOR
+    band = max(10_000, span // 10)
+    t = rank_index / max_idx
+    cash_min = int(JAIL_NPC_BUST_REWARD_FLOOR + t * (span - band))
+    cash_max = int(JAIL_NPC_BUST_REWARD_FLOOR + band + t * (span - band))
+    return _rng.randint(cash_min, cash_max)
 
 
 async def _try_insert_one_global_jail_npc() -> bool:
@@ -362,9 +376,7 @@ async def _try_insert_one_global_jail_npc() -> bool:
             continue
         rank_name = _rng.choices(_RANK_NAMES_FOR_JAIL_NPC, weights=_RANK_WEIGHTS_FOR_JAIL_NPC, k=1)[0]
         rank_index = _RANK_NAMES_FOR_JAIL_NPC.index(rank_name) if rank_name in _RANK_NAMES_FOR_JAIL_NPC else 0
-        cash_min = 50 + rank_index * 30
-        cash_max = 150 + rank_index * 50
-        bust_reward_cash = _rng.randint(cash_min, cash_max)
+        bust_reward_cash = _jail_npc_bust_reward_for_rank(rank_index)
         await db.jail_npcs.insert_one(
             {
                 "username": npc_name,
@@ -747,9 +759,16 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             updates = {"$inc": {"rank_points": rank_points, "jail_busts": 1, "jail_busts_npc": 1, "jail_bust_attempts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}}
             if bust_reward_cash > 0:
                 updates["$inc"]["money"] = bust_reward_cash
-            await db.users.update_one({"id": current_user["id"]}, apply_season_rp_mirror_to_update(updates))
+            jail_npc_update = apply_season_rp_mirror_to_update(updates, user=current_user)
+            await db.users.update_one({"id": current_user["id"]}, jail_npc_update)
             try:
-                await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""), user_prestige_rank_mult(current_user))
+                await maybe_process_rank_up(
+                    current_user["id"],
+                    rp_before,
+                    rank_points_in_update(jail_npc_update),
+                    current_user.get("username", ""),
+                    user_prestige_rank_mult(current_user),
+                )
             except Exception as e:
                 logger.exception("Rank-up notification (jail NPC bust): %s", e)
             try:
@@ -869,14 +888,22 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         new_consec = _safe_int(current_user.get("current_consecutive_busts"), 0) + 1
         record = max(_safe_int(current_user.get("consecutive_busts_record"), 0), new_consec)
         rp_before = _rank_points_before_bust(current_user)
+        jail_player_update = apply_season_rp_mirror_to_update(
+            {"$inc": {"rank_points": rank_points, "jail_busts": 1, "jail_bust_attempts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}},
+            user=current_user,
+        )
         await db.users.update_one(
             {"id": current_user["id"]},
-            apply_season_rp_mirror_to_update(
-                {"$inc": {"rank_points": rank_points, "jail_busts": 1, "jail_bust_attempts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}},
-            ),
+            jail_player_update,
         )
         try:
-            await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""), user_prestige_rank_mult(current_user))
+            await maybe_process_rank_up(
+                current_user["id"],
+                rp_before,
+                rank_points_in_update(jail_player_update),
+                current_user.get("username", ""),
+                user_prestige_rank_mult(current_user),
+            )
         except Exception as e:
             logger.exception("Rank-up notification (jail player bust): %s", e)
         try:
@@ -1273,9 +1300,7 @@ async def try_spawn_private_jail_cell(uid: str) -> Tuple[bool, Optional[str], in
             used_local.add(uname)
             rank_name = _rng.choices(rank_names, weights=weights, k=1)[0]
             rank_index = rank_names.index(rank_name) if rank_name in rank_names else 0
-            cash_min = 50 + rank_index * 30
-            cash_max = 150 + rank_index * 50
-            bust_reward_cash = _rng.randint(cash_min, cash_max)
+            bust_reward_cash = _jail_npc_bust_reward_for_rank(rank_index)
             await db.jail_npcs.insert_one({
                 "username": uname,
                 "rank_name": rank_name,

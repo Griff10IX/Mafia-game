@@ -254,14 +254,33 @@ BANK_INTEREST_OPTIONS = [
     {"hours": 72, "rate": 0.10},    # 10%
 ]
 
-# Health & armour: health 0-100, armour 0-5. Bullets to kill clamped to [MIN_BULLETS_TO_KILL, MAX_BULLETS_TO_KILL]
+# Health & armour: health 0-100, armour 0-7. Bullets to kill clamped to [MIN_BULLETS_TO_KILL, MAX_BULLETS_TO_KILL]
 DEFAULT_HEALTH = 100
 # Passive regen: linear 0→100% over this many seconds of real time (lazy: applied on auth + before PvP damage calc)
 HEALTH_REGEN_FULL_SECONDS = 7200  # 2 hours
 MIN_BULLETS_TO_KILL = 5000
 MAX_BULLETS_TO_KILL = 100000
-# Base bullets before rank/weapon/gap factors; high tiers tuned down (was up to 120k @ 6).
-ARMOUR_BASE_BULLETS = {0: 5000, 1: 14000, 2: 25000, 3: 36000, 4: 47000, 5: 55000, 6: 66000}  # 6 = loot-exclusive Steel Plate Vest (1922)
+# Base bullets before rank/weapon/gap factors; high tiers tuned down (was up to 120k @ 7).
+MAX_ARMOUR_LEVEL = 7
+LOOT_EXCLUSIVE_ARMOUR_LEVEL = 7
+ARMOUR_BASE_BULLETS = {0: 5000, 1: 14000, 2: 25000, 3: 36000, 4: 47000, 5: 55000, 6: 60000, 7: 66000}
+# Level 6: Points Store only (not armoury factory stock). Requires owning level 5 first.
+ARMOUR_POINT_STORE_TIER = {
+    "level": 6,
+    "name": "Elite Composite Battledress",
+    "description": "Top-tier composite plating — sold only in the Points Store.",
+    "cost_points": 500,
+}
+# weapon11: Points Store only (not armoury stock). Requires owning weapon10 first.
+WEAPON_POINT_STORE_TIER = {
+    "id": "weapon11",
+    "name": "Engraved Lewis Gun",
+    "description": "Masterwork light machine gun — sold only in the Points Store.",
+    "damage": 130,
+    "bullets_needed": 45,
+    "rank_required": 11,
+    "cost_points": 1000,
+}
 KILL_CASH_PERCENT = 0.75  # killer gets 75% of victim's cash
 # Dead > Alive retrieve: cash uses DEAD_ALIVE_PERCENT (state head tax on money); points use DEAD_ALIVE_POINTS_PERCENT.
 DEAD_ALIVE_PERCENT = 0.9995  # cash: 0.05% tax to state head — recipient gets 99.95% of money_at_death
@@ -690,13 +709,14 @@ POINT_PACKAGES = {
     # Rank-XP pass entitlement (no points credited; token is activated in Armoury).
     "rank_xp_pass_499": {"points": 0, "price_gbp": 9.99},
     # Permanent Auto Rank (email-tied entitlement; no points credited).
-    "auto_rank_permanent_2000": {"points": 0, "price_gbp": 20.00},
+    "auto_rank_permanent_2000": {"points": 0, "price_gbp": 15.00},
 }
 
 # Travel times based on car rarity (in seconds)
 TRAVEL_TIMES = {
     "loot_exclusive": 5,
     "exclusive": 7,
+    "vip_exclusive": 8,
     "legendary": 15,
     "ultra_rare": 18,
     "rare": 25,
@@ -743,6 +763,8 @@ CARS = [
     {"id": "car20", "name": "Al Capone's Armored Cadillac", "rarity": "exclusive", "min_difficulty": 5, "value": 71875000, "travel_bonus": 60, "image": "/images/gta/car20.png"},
     # Loot-exclusive (loot box only; global caps per type in loot_box.py)
     {"id": "car21", "name": "1930 Cadillac Series 452 V-16 Armored Sedan", "rarity": "loot_exclusive", "min_difficulty": 5, "value": 143750000, "travel_bonus": 68, "image": "/images/gta/car21.png"},
+    # VIP Game Pass tier 100 (once per account; custom image; survives death)
+    {"id": "car22", "name": "VIP Pass Car", "rarity": "vip_exclusive", "min_difficulty": 5, "value": 71875, "travel_bonus": 55, "image": None},
 ]
 
 # Models (UserRegister, UserLogin, PasswordResetRequest, PasswordResetConfirm moved to routers/auth.py)
@@ -768,6 +790,9 @@ class UserResponse(BaseModel):
     witness_nav_green: int = 0  # other players' listings created since last Witness page visit (market reminder)
     health: int
     armour_level: int
+    armour_owned_level_max: int = 0
+    owns_weapon10: bool = False
+    owns_weapon11: bool = False
     current_state: str
     total_kills: int
     total_deaths: int
@@ -3645,6 +3670,15 @@ async def startup_db():
         logging.getLogger(__name__).info(
             "Distillery automation: ticker disabled (DISTILLERY_AUTOMATION_USE_CRON=1). Schedule a worker to call distillery_process_automation per user or add a cron route."
         )
+    robot_bg_auto_search_use_cron = (os.environ.get("ROBOT_BG_AUTO_SEARCH_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
+    if not robot_bg_auto_search_use_cron:
+        from utils.robot_bg_auto_search import run_robot_bg_auto_search_ticker
+
+        asyncio.create_task(run_robot_bg_auto_search_ticker(db))
+    else:
+        logging.getLogger(__name__).info(
+            "Robot bodyguard auto-search: using cron only (ROBOT_BG_AUTO_SEARCH_USE_CRON=1). Call POST /api/attack/cron/robot-bg-auto-search every ~15m. Header: X-Cron-Secret: <CRON_SECRET>"
+        )
     # Racing: 2 automated races per day (morning/evening UTC); in-process ticker or cron
     from routers.minigames import racing as racing_router
     racing_use_cron = (os.environ.get("RACING_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
@@ -3927,6 +3961,9 @@ async def init_game_data():
 
     logging.info("🔄 Initializing game data (weapons, properties...)...")
     await migrate_weapon_tier_order_if_needed(db)
+    from utils.migrate_armour_level7 import migrate_loot_armour_level_6_to_7_if_needed
+
+    await migrate_loot_armour_level_6_to_7_if_needed(db)
     weapons_count = await db.weapons.count_documents({})
     if weapons_count == 0:
         weapons = _load_seed_json("weapons.json")
@@ -3936,6 +3973,20 @@ async def init_game_data():
         else:
             logging.warning("Weapons collection is empty and no seed file; add data/weapons.json or insert via DB.")
     else:
+        if await db.weapons.find_one({"id": "weapon11"}) is None:
+            store_weapon = {
+                "id": WEAPON_POINT_STORE_TIER["id"],
+                "name": WEAPON_POINT_STORE_TIER["name"],
+                "description": WEAPON_POINT_STORE_TIER["description"],
+                "damage": WEAPON_POINT_STORE_TIER["damage"],
+                "bullets_needed": WEAPON_POINT_STORE_TIER["bullets_needed"],
+                "rank_required": WEAPON_POINT_STORE_TIER["rank_required"],
+                "price_money": None,
+                "price_points": None,
+                "store_exclusive": True,
+            }
+            await db.weapons.insert_one(store_weapon)
+            logging.info("Inserted Points Store weapon (weapon11) into existing weapons collection")
         if await db.weapons.find_one({"id": "weapon_loot"}) is None:
             loot_weapon = {"id": "weapon_loot", "name": "Colt Monitor", "description": "Loot-exclusive LMG. Not sold anywhere.", "damage": 140, "bullets_needed": 40, "rank_required": 11, "price_money": None, "price_points": None, "loot_exclusive": True}
             await db.weapons.insert_one(loot_weapon)

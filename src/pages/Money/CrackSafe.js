@@ -530,7 +530,8 @@ export default function CrackSafe() {
       setResult(res.data);
 
       if (res.data.cracked) {
-        toast.success((res.data.bonus_tokens?.length > 0) ? '🔓 SAFE CRACKED! Check your balance and tokens!' : '🔓 SAFE CRACKED! Check your balance!');
+        const hasBonus = (res.data.bonus_tokens?.length > 0) || Number(res.data.bonus_loot_pieces) > 0;
+        toast.success(hasBonus ? '🔓 SAFE CRACKED! Check your balance and rewards!' : '🔓 SAFE CRACKED! Check your balance!');
         await refreshUser();
       } else {
         setShaking(true);
@@ -766,7 +767,8 @@ export default function CrackSafe() {
             <div className="p-2.5 space-y-1.5">
               {(info?.possible_rewards ?? [
                 { id: 'cash', name: 'Cash Jackpot', desc: 'Full jackpot amount (always)' },
-                { id: 'xp_crimes', name: 'Crimes XP Token', desc: '2x XP from crimes, 1h — 1–3 types, 1–2 each (25% chance)' },
+                { id: 'loot_pieces', name: 'Loot Box Pieces', desc: '10 or 15 pieces (25% chance)' },
+                { id: 'xp_crimes', name: 'Crimes XP Token', desc: '2x XP from crimes, 1h — 1 type, 1–2 tokens (25% chance)' },
                 { id: 'xp_gta', name: 'GTA XP Token', desc: '2x XP from GTA, 1h — 1–3 types, 1–2 each (25% chance)' },
                 { id: 'melt', name: 'Melt Token', desc: 'Reduced melt cooldown, 1h — 1–3 types, 1–2 each (25% chance)' },
                 { id: 'oc_reduced', name: 'OC Token', desc: 'Reduced OC cost, 1h — 1–3 types, 1–2 each (25% chance)' },

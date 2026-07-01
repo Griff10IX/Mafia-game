@@ -265,7 +265,7 @@ def _gambling_log_entry_dt(created_at) -> Optional[datetime]:
     return None
 
 
-def _booze_stats(u: dict) -> dict:
+def _booze_stats(u: dict, *, vip_pass_car_owned: bool = False) -> dict:
     """Build booze stats dict. Uses same capacity math as booze_run (family bonus 0 here)."""
     from routers.money.booze_run import BOOZE_TYPES, _booze_user_capacity_sync
     profit_by_type = dict(u.get("booze_profit_by_type") or {})
@@ -279,7 +279,7 @@ def _booze_stats(u: dict) -> dict:
     best_name = None
     if best_id:
         best_name = next((b["name"] for b in BOOZE_TYPES if b.get("id") == best_id), best_id)
-    capacity = _booze_user_capacity_sync(u, family_cargo_bonus=0)
+    capacity = _booze_user_capacity_sync(u, family_cargo_bonus=0, vip_pass_car_owned=vip_pass_car_owned)
     return {
         "profit_total": int(u.get("booze_profit_total") or 0),
         "runs_count": int(u.get("booze_runs_count") or 0),
@@ -747,6 +747,9 @@ def register(router):
             stats_gambling_reset_at = _raw_gambling_reset.strip()
         else:
             stats_gambling_reset_at = None
+
+        from utils.game_pass_vip_car import user_owns_game_pass_vip_car
+        vip_pass_car_owned = await user_owns_game_pass_vip_car(db, uid)
         stats_gambling_reset_dt = _stats_parse_iso(stats_gambling_reset_at) if stats_gambling_reset_at else None
 
         stock_trades = 0
@@ -906,7 +909,7 @@ def register(router):
                 "display_reset_at": stats_gambling_reset_at,
             },
             "sports_betting": sports_stats,
-            "booze": _booze_stats(u),
+            "booze": _booze_stats(u, vip_pass_car_owned=vip_pass_car_owned),
             "auto_rank": {
                 "total_busts": int(u.get("auto_rank_total_busts") or 0),
                 "total_crimes": int(u.get("auto_rank_total_crimes") or 0),

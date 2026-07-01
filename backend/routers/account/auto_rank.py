@@ -762,6 +762,7 @@ async def _booze_buy_and_travel(db, user, user_id: str, username: str, telegram_
         _booze_user_capacity,
         _booze_user_carrying_total,
         _booze_buy_impl,
+        _booze_vip_pass_car_owned,
         _family_booze_cargo_extra,
     )
     from routers.admin.airport import _start_travel_impl
@@ -773,7 +774,8 @@ async def _booze_buy_and_travel(db, user, user_id: str, username: str, telegram_
 
     prices_map = _booze_prices_for_rotation()
     fam_extra = await _family_booze_cargo_extra(user.get("family_id"))
-    capacity = _booze_user_capacity(user, family_cargo_bonus=fam_extra)
+    vip_car = await _booze_vip_pass_car_owned(db, user_id)
+    capacity = _booze_user_capacity(user, family_cargo_bonus=fam_extra, vip_pass_car_owned=vip_car)
     carrying_now = _booze_user_carrying_total(dict(user.get("booze_carrying") or {}))
     room = max(0, capacity - carrying_now)
     money = int(user.get("money") or 0)

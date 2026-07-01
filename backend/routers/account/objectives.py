@@ -8,6 +8,7 @@ from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.point_provenance import log_points_event
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.game_timezone import game_month_start_date_str, game_today_date_str, game_week_start_date_str
 from fastapi import Depends, HTTPException, Body
 from pydantic import BaseModel
@@ -682,10 +683,14 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         reward["respect_points"] = reward.get("respect_points", 0) + DAILY_COMPLETION_BONUS.get("respect_points", 0)
         inc = {k: v for k, v in reward.items() if k in ("money", "rank_points", "points", "respect_points")}
         rp_before = int(user.get("rank_points") or 0)
-        rp_added = int(inc.get("rank_points") or 0)
+        daily_update = apply_season_rp_mirror_to_update(
+            {"$set": {"objectives_daily_claimed": True}, "$inc": inc},
+            user=user,
+        )
+        rp_added = rank_points_in_update(daily_update)
         result = await db.users.update_one(
             {"id": user_id, "objectives_daily_date": today_str, "objectives_daily_claimed": {"$ne": True}},
-            {"$set": {"objectives_daily_claimed": True}, "$inc": inc},
+            daily_update,
         )
         if result.modified_count == 0:
             raise HTTPException(status_code=400, detail="Daily objectives already claimed")
@@ -716,10 +721,14 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         reward["respect_points"] = (reward.get("respect_points", 0) + WEEKLY_COMPLETION_BONUS.get("respect_points", 0)) * WEEKLY_REWARD_MULTIPLIER
         inc = {k: v for k, v in reward.items() if k in ("money", "rank_points", "points", "respect_points")}
         rp_before = int(user.get("rank_points") or 0)
-        rp_added = int(inc.get("rank_points") or 0)
+        weekly_update = apply_season_rp_mirror_to_update(
+            {"$set": {"objectives_weekly_claimed": True}, "$inc": inc},
+            user=user,
+        )
+        rp_added = rank_points_in_update(weekly_update)
         result = await db.users.update_one(
             {"id": user_id, "objectives_weekly_start": week_start_str, "objectives_weekly_claimed": {"$ne": True}},
-            {"$set": {"objectives_weekly_claimed": True}, "$inc": inc},
+            weekly_update,
         )
         if result.modified_count == 0:
             raise HTTPException(status_code=400, detail="Weekly objectives already claimed")
@@ -750,10 +759,14 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         reward["respect_points"] = (reward.get("respect_points", 0) + MONTHLY_COMPLETION_BONUS.get("respect_points", 0)) * MONTHLY_REWARD_MULTIPLIER
         inc = {k: v for k, v in reward.items() if k in ("money", "rank_points", "points", "respect_points")}
         rp_before = int(user.get("rank_points") or 0)
-        rp_added = int(inc.get("rank_points") or 0)
+        monthly_update = apply_season_rp_mirror_to_update(
+            {"$set": {"objectives_monthly_claimed": True}, "$inc": inc},
+            user=user,
+        )
+        rp_added = rank_points_in_update(monthly_update)
         result = await db.users.update_one(
             {"id": user_id, "objectives_monthly_start": month_start_str, "objectives_monthly_claimed": {"$ne": True}},
-            {"$set": {"objectives_monthly_claimed": True}, "$inc": inc},
+            monthly_update,
         )
         if result.modified_count == 0:
             raise HTTPException(status_code=400, detail="Monthly objectives already claimed")

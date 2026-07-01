@@ -13,7 +13,31 @@ from fastapi import Depends, HTTPException, Request, Body
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from bson.objectid import ObjectId
 
-from server import db, get_current_user, get_effective_event, STATES, get_rank_info, user_prestige_rank_mult, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, require_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS, _get_staff_user_ids, send_notification, log_activity, log_minigame_payout
+from server import (
+    db,
+    get_current_user,
+    get_effective_event,
+    STATES,
+    get_rank_info,
+    user_prestige_rank_mult,
+    CAPO_RANK_ID,
+    maybe_auto_relinquish_below_capo,
+    _is_admin,
+    require_admin,
+    _username_pattern,
+    ARMOUR_SETS,
+    ARMOUR_POINT_STORE_TIER,
+    ARMOUR_WEAPON_MARGIN,
+    MAX_ARMOUR_LEVEL,
+    LOOT_EXCLUSIVE_ARMOUR_LEVEL,
+    WEAPON_POINT_STORE_TIER,
+    _family_in_active_war,
+    CARS,
+    _get_staff_user_ids,
+    send_notification,
+    log_activity,
+    log_minigame_payout
+)
 from utils.point_provenance import log_points_event
 from utils.speakeasy_rewards import (
     SPEAKEASY_DAILY_BULLETS,
@@ -284,6 +308,14 @@ async def _try_grant_rank_xp_pass_micro_tier(
     )
     if updated.modified_count == 0:
         return None
+    if t == MAX_MICRO_TIER:
+        try:
+            from utils.game_pass_vip_car import grant_game_pass_vip_car_if_eligible
+
+            await grant_game_pass_vip_car_if_eligible(db, user_id=user_id)
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception("game_pass_vip_car grant failed user_id=%s", user_id)
     return rewards
 
 
@@ -767,8 +799,8 @@ async def get_bullet_factory(
         out["produce_all_armour_cost_money"] = sum((a.get("cost_money") or 0) for a in ARMOUR_SETS) * ARMOURY_ARMOUR_RATE_PER_HOUR
         out["produce_all_armour_cost_points"] = sum((a.get("cost_points") or 0) for a in ARMOUR_SETS) * ARMOURY_ARMOUR_RATE_PER_HOUR
         weapons_for_cost = await db.weapons.find(
-            {},
-            {"_id": 0, "id": 1, "name": 1, "damage": 1, "price_money": 1, "price_points": 1, "loot_exclusive": 1},
+            {"loot_exclusive": {"$ne": True}, "store_exclusive": {"$ne": True}},
+            {"_id": 0, "id": 1, "name": 1, "damage": 1, "price_money": 1, "price_points": 1, "loot_exclusive": 1, "store_exclusive": 1},
         ).to_list(200)
         out["produce_all_weapons_cost_money"] = sum((w.get("price_money") or 0) for w in weapons_for_cost) * ARMOURY_WEAPON_RATE_PER_HOUR
         out["produce_all_weapons_cost_points"] = sum((w.get("price_points") or 0) for w in weapons_for_cost) * ARMOURY_WEAPON_RATE_PER_HOUR
@@ -780,7 +812,7 @@ async def get_bullet_factory(
             }
             for a in ARMOUR_SETS
         ]
-        weapons_produce = [w for w in weapons_for_cost if not w.get("loot_exclusive")]
+        weapons_produce = [w for w in weapons_for_cost if not w.get("loot_exclusive") and not w.get("store_exclusive")]
         weapons_produce.sort(key=lambda w: (int(w.get("damage") or 0), str(w.get("id") or "")))
         out["weapon_produce_costs"] = [
             {
@@ -976,11 +1008,13 @@ async def start_weapon_production(
     weapon_id = (request.weapon_id or "").strip()
     if not weapon_id:
         raise HTTPException(status_code=400, detail="weapon_id required")
-    weapon = await db.weapons.find_one({"id": weapon_id}, {"_id": 0, "price_money": 1, "price_points": 1, "name": 1, "loot_exclusive": 1})
+    weapon = await db.weapons.find_one({"id": weapon_id}, {"_id": 0, "price_money": 1, "price_points": 1, "name": 1, "loot_exclusive": 1, "store_exclusive": 1})
     if not weapon:
         raise HTTPException(status_code=404, detail="Weapon not found")
     if weapon.get("loot_exclusive"):
         raise HTTPException(status_code=400, detail="Loot-exclusive weapons cannot be produced at the armoury")
+    if weapon.get("store_exclusive"):
+        raise HTTPException(status_code=400, detail="Points Store weapons cannot be produced at the armoury")
     pm = weapon.get("price_money")
     pp = weapon.get("price_points")
     if pm is not None:
@@ -1076,9 +1110,9 @@ async def start_weapon_production_all(
     factory = await _get_or_create_factory(state)
     if factory.get("owner_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="You do not own the armoury in this state")
-    weapons = await db.weapons.find({}, {"_id": 0, "id": 1, "price_money": 1, "price_points": 1, "loot_exclusive": 1}).to_list(200)
+    weapons = await db.weapons.find({}, {"_id": 0, "id": 1, "price_money": 1, "price_points": 1, "loot_exclusive": 1, "store_exclusive": 1}).to_list(200)
     weapon_hours = dict(factory.get("weapon_production_hours") or {})
-    weapons_to_add = [w for w in weapons if w.get("id") and not w.get("loot_exclusive") and float(weapon_hours.get(w["id"]) or 0) <= 0.01]
+    weapons_to_add = [w for w in weapons if w.get("id") and not w.get("loot_exclusive") and not w.get("store_exclusive") and float(weapon_hours.get(w["id"]) or 0) <= 0.01]
     if not weapons_to_add:
         raise HTTPException(status_code=400, detail="Cannot stack. All weapons are still producing. Wait for them to finish, then use Produce all again (1 hr each).")
     total_money = sum((w.get("price_money") or 0) for w in weapons_to_add) * ARMOURY_WEAPON_RATE_PER_HOUR
@@ -1154,7 +1188,7 @@ async def set_armoury_item_prices(
     ).to_list(200)
     money_weapon_ids = {
         w["id"] for w in weapons
-        if w.get("price_money") is not None and not w.get("loot_exclusive")
+        if w.get("price_money") is not None and not w.get("loot_exclusive") and not w.get("store_exclusive")
     }
     set_doc: dict = {}
     if request.armour_sell_price_money is not None:
@@ -1474,18 +1508,38 @@ async def get_armour_options(request: Request, current_user: dict = Depends(get_
             "armoury_stock": int(armour_stock.get(level_key, 0) or 0),
             "unowned_restricted": unowned_restricted,
         })
-    # Loot-exclusive armour (level 6) — always shown: owned → equip; not owned → grayed "Loot exclusive"
-    from routers.money.loot_box import ARMOUR_LEVEL_6_NAME
+    # Points Store tier (level 6) — buy in Game → Store, not armoury
+    store_tier = ARMOUR_POINT_STORE_TIER
+    store_lv = int(store_tier["level"])
     rows.append({
-        "level": 6,
-        "name": ARMOUR_LEVEL_6_NAME,
+        "level": store_lv,
+        "name": store_tier["name"],
+        "description": store_tier["description"],
+        "cost_money": None,
+        "cost_points": store_tier["cost_points"],
+        "effective_cost_money": None,
+        "effective_cost_points": int(store_tier["cost_points"]),
+        "owned": owned_max >= store_lv,
+        "equipped": equipped_level == store_lv,
+        "affordable": owned_max >= store_lv - 1 and points >= int(store_tier["cost_points"]),
+        "armoury_stock": 0,
+        "store_exclusive": True,
+        "unowned_restricted": False,
+    })
+    # Loot-exclusive armour (level 7) — always shown: owned → equip; not owned → grayed "Loot exclusive"
+    from routers.money.loot_box import ARMOUR_LEVEL_7_NAME
+
+    loot_lv = LOOT_EXCLUSIVE_ARMOUR_LEVEL
+    rows.append({
+        "level": loot_lv,
+        "name": ARMOUR_LEVEL_7_NAME,
         "description": "Loot-exclusive steel plate vest — not sold anywhere.",
         "cost_money": None,
         "cost_points": None,
         "effective_cost_money": None,
         "effective_cost_points": None,
-        "owned": owned_max >= 6,
-        "equipped": equipped_level == 6,
+        "owned": owned_max >= loot_lv,
+        "equipped": equipped_level == loot_lv,
         "affordable": False,
         "armoury_stock": 0,
         "loot_exclusive": True,
@@ -1582,7 +1636,7 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
 async def equip_armour(request: ArmourBuyRequest, current_user: dict = Depends(get_current_user)):
     level = int(request.level or 0)
     owned_max = int(current_user.get("armour_owned_level_max", current_user.get("armour_level", 0) or 0) or 0)
-    max_level = 6 if owned_max >= 6 else 5
+    max_level = min(owned_max, MAX_ARMOUR_LEVEL)
     if level < 0 or level > max_level:
         raise HTTPException(status_code=400, detail="Invalid armour level")
     if level != 0 and level > owned_max:
@@ -1605,20 +1659,23 @@ async def unequip_armour(current_user: dict = Depends(get_current_user)):
 async def sell_armour(current_user: dict = Depends(get_current_user)):
     """Sell your highest owned armour tier for 50% of what you paid (sell price)."""
     owned_max = int(current_user.get("armour_owned_level_max", 0) or 0)
-    if owned_max == 6:  # loot-exclusive Steel Plate Vest
-        family_id = current_user.get("family_id")
-        if family_id and await _family_in_active_war(family_id):
-            raise HTTPException(status_code=403, detail="Loot-exclusive items cannot be sold during a family war")
+    if owned_max == LOOT_EXCLUSIVE_ARMOUR_LEVEL:
+        raise HTTPException(status_code=400, detail="Loot-exclusive armour cannot be sold")
     if owned_max < 1:
         raise HTTPException(status_code=400, detail="You have no armour to sell")
     armour = next((a for a in ARMOUR_SETS if a["level"] == owned_max), None)
+    if not armour and owned_max == int(ARMOUR_POINT_STORE_TIER["level"]):
+        armour = ARMOUR_POINT_STORE_TIER
     if not armour:
         raise HTTPException(status_code=404, detail="Armour tier not found")
-    # Refund 50% of sell price (production * 1.35)
-    sell_price_money = int(armour["cost_money"] * ARMOUR_WEAPON_MARGIN) if armour.get("cost_money") is not None else None
-    sell_price_points = int(armour["cost_points"] * ARMOUR_WEAPON_MARGIN) if armour.get("cost_points") is not None else None
-    refund_money = int(sell_price_money * 0.5) if sell_price_money is not None else None
-    refund_points = int(sell_price_points * 0.5) if sell_price_points is not None else None
+    if owned_max == int(ARMOUR_POINT_STORE_TIER["level"]):
+        refund_money = None
+        refund_points = int(ARMOUR_POINT_STORE_TIER["cost_points"] * 0.5)
+    else:
+        sell_price_money = int(armour["cost_money"] * ARMOUR_WEAPON_MARGIN) if armour.get("cost_money") is not None else None
+        sell_price_points = int(armour["cost_points"] * ARMOUR_WEAPON_MARGIN) if armour.get("cost_points") is not None else None
+        refund_money = int(sell_price_money * 0.5) if sell_price_money is not None else None
+        refund_points = int(sell_price_points * 0.5) if sell_price_points is not None else None
     new_owned_max = owned_max - 1
     equipped = int(current_user.get("armour_level", 0) or 0)
     updates = {"$set": {"armour_owned_level_max": new_owned_max}}
@@ -1668,6 +1725,7 @@ class WeaponResponse(BaseModel):
     required_weapon_name: Optional[str] = None
     armoury_stock: int = 0  # produced stock in state's armoury (available to buy)
     loot_exclusive: bool = False
+    store_exclusive: bool = False
 
 
 class WeaponBuyRequest(BaseModel):
@@ -1692,7 +1750,7 @@ async def get_weapons(request: Request, current_user: dict = Depends(get_current
     weapons = await db.weapons.find({}, {"_id": 0}).sort([("damage", 1), ("id", 1)]).to_list(100)
     weapons.sort(
         key=lambda w: (
-            1 if w.get("loot_exclusive") else 0,
+            2 if w.get("loot_exclusive") else (1 if w.get("store_exclusive") else 0),
             int(w.get("damage") or 0),
             str(w.get("id") or ""),
         )
@@ -1738,13 +1796,17 @@ async def get_weapons(request: Request, current_user: dict = Depends(get_current
                 prev_quantity = weapons_map.get(prev_weapon_id, 0)
                 if prev_quantity < 1:
                     locked = True
-        if unowned_armoury and weapon["id"] != ARMOURY_UNOWNED_ONLY_WEAPON_ID:
+        if unowned_armoury and weapon["id"] != ARMOURY_UNOWNED_ONLY_WEAPON_ID and not weapon.get("store_exclusive"):
             locked = True
             required_weapon_name = "Claim an owned armoury for better weapons"
         armoury_stock = int(weapon_stock.get(weapon["id"], 0) or 0)
         ff = factory if state and factory else None
-        efm = _effective_weapon_money_sell(weapon, ff, mult)
-        efp = int(pp * ARMOUR_WEAPON_MARGIN * mult) if pp is not None else None
+        if weapon.get("store_exclusive"):
+            efm = None
+            efp = int(WEAPON_POINT_STORE_TIER["cost_points"])
+        else:
+            efm = _effective_weapon_money_sell(weapon, ff, mult)
+            efp = int(pp * ARMOUR_WEAPON_MARGIN * mult) if pp is not None else None
         result.append(WeaponResponse(
             id=weapon["id"],
             name=weapon["name"],
@@ -1763,6 +1825,7 @@ async def get_weapons(request: Request, current_user: dict = Depends(get_current
             required_weapon_name=required_weapon_name,
             armoury_stock=armoury_stock,
             loot_exclusive=bool(weapon.get("loot_exclusive")),
+            store_exclusive=bool(weapon.get("store_exclusive")),
         ))
     if use_cache:
         if len(_get_weapons_cache) >= _GET_WEAPONS_CACHE_MAX_ENTRIES:
@@ -1805,6 +1868,8 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
         raise HTTPException(status_code=404, detail="Weapon not found")
     if weapon.get("loot_exclusive"):
         raise HTTPException(status_code=400, detail="This weapon is loot-exclusive and cannot be bought")
+    if weapon.get("store_exclusive"):
+        raise HTTPException(status_code=400, detail="This weapon is only available from the Points Store")
     weapon_num = int(weapon_id.replace("weapon", "")) if weapon_id.startswith("weapon") else 0
     if weapon_num > 1:
         prev_weapon_id = f"weapon{weapon_num - 1}"
@@ -1896,11 +1961,17 @@ async def sell_weapon(weapon_id: str, current_user: dict = Depends(get_current_u
     quantity = (uw or {}).get("quantity", 0) or 0
     if quantity < 1:
         raise HTTPException(status_code=400, detail="You do not own this weapon")
-    # Refund 50% of sell price (production * 1.35)
-    sell_money = int(weapon["price_money"] * ARMOUR_WEAPON_MARGIN) if weapon.get("price_money") is not None else None
-    sell_points = int(weapon["price_points"] * ARMOUR_WEAPON_MARGIN) if weapon.get("price_points") is not None else None
-    refund_money = int(sell_money * 0.5) if sell_money is not None else None
-    refund_points = int(sell_points * 0.5) if sell_points is not None else None
+    if weapon.get("loot_exclusive"):
+        raise HTTPException(status_code=400, detail="Loot-exclusive weapons cannot be sold")
+    if weapon.get("store_exclusive"):
+        refund_money = None
+        refund_points = int(WEAPON_POINT_STORE_TIER["cost_points"] * 0.5)
+    else:
+        # Refund 50% of sell price (production * 1.35)
+        sell_money = int(weapon["price_money"] * ARMOUR_WEAPON_MARGIN) if weapon.get("price_money") is not None else None
+        sell_points = int(weapon["price_points"] * ARMOUR_WEAPON_MARGIN) if weapon.get("price_points") is not None else None
+        refund_money = int(sell_money * 0.5) if sell_money is not None else None
+        refund_points = int(sell_points * 0.5) if sell_points is not None else None
     if refund_money is None and refund_points is None:
         raise HTTPException(status_code=400, detail="Weapon has no sell value")
     if refund_money is not None:

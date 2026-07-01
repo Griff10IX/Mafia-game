@@ -9,7 +9,9 @@ import styles from '../../styles/noir.module.css';
 const VS_DEALER_MAX_SMALL_BLIND = 25000;
 const TOURNAMENT_REMINDER_COOLDOWN_MS = 600 * 1000;
 /** Server cap for points-denominated tournament buy-in (see mp_poker.MP_POKER_TOURNAMENT_MAX_POINTS_BUY_IN). */
-const TOURNAMENT_MAX_POINTS_BUY_IN = 1000;
+const TOURNAMENT_MAX_POINTS_BUY_IN = 5_000;
+/** Entertainer fund: max points (buy-in + all place prizes) per tournament create. */
+const ENTERTAINER_TOURNAMENT_MAX_POINTS_DEBIT = 5_000;
 
 function tournamentListReminderCooldownMs(sentAtIso) {
   if (!sentAtIso) return 0;
@@ -58,6 +60,10 @@ export default function MPPokerPage() {
   const [tournamentBuyIn, setTournamentBuyIn] = useState('100000');
   const [tournamentWinnerBonusCash, setTournamentWinnerBonusCash] = useState('');
   const [tournamentWinnerBonusPoints, setTournamentWinnerBonusPoints] = useState('');
+  const [tournamentSecondBonusCash, setTournamentSecondBonusCash] = useState('');
+  const [tournamentSecondBonusPoints, setTournamentSecondBonusPoints] = useState('');
+  const [tournamentThirdBonusCash, setTournamentThirdBonusCash] = useState('');
+  const [tournamentThirdBonusPoints, setTournamentThirdBonusPoints] = useState('');
   const [tournamentBuyInCurrency, setTournamentBuyInCurrency] = useState('money');
   const [tournamentCreating, setTournamentCreating] = useState(false);
   const [joiningTournamentId, setJoiningTournamentId] = useState(null);
@@ -207,12 +213,23 @@ export default function MPPokerPage() {
 
   const handleCreateTournament = async () => {
     const buyIn = parseInt(String(tournamentBuyIn).replace(/\D/g, ''), 10) || 0;
-    const winnerBonusCash = parseInt(String(tournamentWinnerBonusCash).replace(/\D/g, ''), 10) || 0;
-    const winnerBonusPoints = parseInt(String(tournamentWinnerBonusPoints).replace(/\D/g, ''), 10) || 0;
+    const winnerBonusCash = previewTour1stCash;
+    const winnerBonusPoints = previewTour1stPoints;
+    const secondBonusCash = previewTour2ndCash;
+    const secondBonusPoints = previewTour2ndPoints;
+    const thirdBonusCash = previewTour3rdCash;
+    const thirdBonusPoints = previewTour3rdPoints;
     if (buyIn <= 0) { toast.error('Tournament buy-in must be positive'); return; }
     if (tournamentBuyInCurrency === 'points' && buyIn > TOURNAMENT_MAX_POINTS_BUY_IN) {
       toast.error(`Points buy-in cannot exceed ${TOURNAMENT_MAX_POINTS_BUY_IN.toLocaleString()} pts`);
       return;
+    }
+    if (entFund.is_entertainer && tournamentBuyInCurrency === 'points') {
+      const totalPts = buyIn + winnerBonusPoints + secondBonusPoints + thirdBonusPoints;
+      if (totalPts > ENTERTAINER_TOURNAMENT_MAX_POINTS_DEBIT) {
+        toast.error(`Entertainer fund: buy-in + all place point prizes cannot exceed ${ENTERTAINER_TOURNAMENT_MAX_POINTS_DEBIT.toLocaleString()} pts`);
+        return;
+      }
     }
     setTournamentCreating(true);
     try {
@@ -221,6 +238,10 @@ export default function MPPokerPage() {
         buy_in: buyIn,
         winner_bonus_cash: winnerBonusCash,
         winner_bonus_points: winnerBonusPoints,
+        second_place_bonus_cash: secondBonusCash,
+        second_place_bonus_points: secondBonusPoints,
+        third_place_bonus_cash: thirdBonusCash,
+        third_place_bonus_points: thirdBonusPoints,
         buy_in_currency: tournamentBuyInCurrency === 'points' ? 'points' : 'money',
       });
       await refreshUser();
@@ -412,8 +433,14 @@ export default function MPPokerPage() {
     entFund.is_entertainer && createOpen && previewCashTableDebit > entFund.cash;
 
   const previewTourBuyIn = parseInt(String(tournamentBuyIn).replace(/\D/g, ''), 10) || 0;
-  const previewTourBonusCash = parseInt(String(tournamentWinnerBonusCash).replace(/\D/g, ''), 10) || 0;
-  const previewTourBonusPoints = parseInt(String(tournamentWinnerBonusPoints).replace(/\D/g, ''), 10) || 0;
+  const previewTour1stCash = parseInt(String(tournamentWinnerBonusCash).replace(/\D/g, ''), 10) || 0;
+  const previewTour1stPoints = parseInt(String(tournamentWinnerBonusPoints).replace(/\D/g, ''), 10) || 0;
+  const previewTour2ndCash = parseInt(String(tournamentSecondBonusCash).replace(/\D/g, ''), 10) || 0;
+  const previewTour2ndPoints = parseInt(String(tournamentSecondBonusPoints).replace(/\D/g, ''), 10) || 0;
+  const previewTour3rdCash = parseInt(String(tournamentThirdBonusCash).replace(/\D/g, ''), 10) || 0;
+  const previewTour3rdPoints = parseInt(String(tournamentThirdBonusPoints).replace(/\D/g, ''), 10) || 0;
+  const previewTourBonusCash = previewTour1stCash + previewTour2ndCash + previewTour3rdCash;
+  const previewTourBonusPoints = previewTour1stPoints + previewTour2ndPoints + previewTour3rdPoints;
   const previewTourDebitCash = (tournamentBuyInCurrency === 'money' ? previewTourBuyIn : 0) + previewTourBonusCash;
   const previewTourDebitPoints = (tournamentBuyInCurrency === 'points' ? previewTourBuyIn : 0) + previewTourBonusPoints;
   const tournamentFundInsufficientMoney =
@@ -683,7 +710,7 @@ export default function MPPokerPage() {
             <p className="text-[9px] text-mutedForeground font-heading mt-0.5">
               4–9 players · freezeout · escalating blinds · cash or points buy-in (points max {TOURNAMENT_MAX_POINTS_BUY_IN.toLocaleString()} pts)
               {entFund.is_entertainer ? (
-                <> · Entertainer creators pay the <strong className="text-violet-300/95">buy-in + winner bonus</strong> from entertainer fund (cash and/or points by currency).</>
+                <> · Entertainer creators pay the <strong className="text-violet-300/95">buy-in + 1st/2nd/3rd place prizes</strong> from entertainer fund (cash and/or points by currency; points total max {ENTERTAINER_TOURNAMENT_MAX_POINTS_DEBIT.toLocaleString()}).</>
               ) : null}
             </p>
           </div>
@@ -712,7 +739,7 @@ export default function MPPokerPage() {
                   </span>
                 </div>
                 <p className="text-[8px] text-zinc-400 font-heading leading-snug">
-                  Buy-in + winner bonus are split by currency and debited from entertainer fund (cash and/or points). Joiners pay from their normal wallets.
+                  Buy-in + optional 1st/2nd/3rd place prizes are split by currency and debited from entertainer fund (cash and/or points). Joiners pay from their normal wallets.
                 </p>
                 {(previewTourDebitCash > 0 || previewTourDebitPoints > 0) && (
                   <p className="text-[9px] font-heading border-t border-violet-500/20 pt-1.5 text-zinc-300">
@@ -773,29 +800,38 @@ export default function MPPokerPage() {
                 style={inputStyle}
               />
             </div>
-            <div className="flex items-center gap-2">
-              <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-20 shrink-0">Winner bonus</label>
-              <FormattedNumberInput
-                value={tournamentWinnerBonusCash}
-                onChange={setTournamentWinnerBonusCash}
-                placeholder="Cash $ (optional)"
-                className="flex-1 min-w-0 px-2 py-1.5 rounded-lg font-heading text-sm focus:outline-none"
-                style={inputStyle}
-              />
-              <FormattedNumberInput
-                value={tournamentWinnerBonusPoints}
-                onChange={setTournamentWinnerBonusPoints}
-                placeholder="Points (optional)"
-                className="flex-1 min-w-0 px-2 py-1.5 rounded-lg font-heading text-sm focus:outline-none"
-                style={inputStyle}
-              />
+            <div className="space-y-2">
+              <div className="text-[8px] font-heading text-mutedForeground uppercase tracking-wider">Place prizes (optional, from creator fund)</div>
+              {[
+                { label: '1st place', cash: tournamentWinnerBonusCash, setCash: setTournamentWinnerBonusCash, points: tournamentWinnerBonusPoints, setPoints: setTournamentWinnerBonusPoints },
+                { label: '2nd place', cash: tournamentSecondBonusCash, setCash: setTournamentSecondBonusCash, points: tournamentSecondBonusPoints, setPoints: setTournamentSecondBonusPoints },
+                { label: '3rd place', cash: tournamentThirdBonusCash, setCash: setTournamentThirdBonusCash, points: tournamentThirdBonusPoints, setPoints: setTournamentThirdBonusPoints },
+              ].map(({ label, cash, setCash, points, setPoints }) => (
+                <div key={label} className="flex items-center gap-2">
+                  <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-20 shrink-0">{label}</label>
+                  <FormattedNumberInput
+                    value={cash}
+                    onChange={setCash}
+                    placeholder="Cash $"
+                    className="flex-1 min-w-0 px-2 py-1.5 rounded-lg font-heading text-sm focus:outline-none"
+                    style={inputStyle}
+                  />
+                  <FormattedNumberInput
+                    value={points}
+                    onChange={setPoints}
+                    placeholder="Points"
+                    className="flex-1 min-w-0 px-2 py-1.5 rounded-lg font-heading text-sm focus:outline-none"
+                    style={inputStyle}
+                  />
+                </div>
+              ))}
             </div>
             {(() => {
               const buyInN = parseInt(String(tournamentBuyIn).replace(/\D/g, ''), 10) || 0;
               const hint = tournamentPrizeLabel(buyInN, tournamentMaxPlayers, tournamentBuyInCurrency);
               const bonusBits = [];
-              if (previewTourBonusCash > 0) bonusBits.push(`${formatMoney(previewTourBonusCash)} cash winner bonus`);
-              if (previewTourBonusPoints > 0) bonusBits.push(`${previewTourBonusPoints.toLocaleString()} pts winner bonus`);
+              if (previewTourBonusCash > 0) bonusBits.push(`${formatMoney(previewTourBonusCash)} cash place prizes`);
+              if (previewTourBonusPoints > 0) bonusBits.push(`${previewTourBonusPoints.toLocaleString()} pts place prizes`);
               if (!hint && bonusBits.length === 0) return null;
               return (
                 <p className="text-[8px] font-heading text-mutedForeground pl-[5.5rem]">
@@ -898,12 +934,23 @@ export default function MPPokerPage() {
                       <div className="text-[9px] text-mutedForeground font-heading mt-0.5 flex items-center gap-3 flex-wrap">
                         <span>Buy-in <span className="text-primary font-bold">{fmtEntry(t.buy_in)}</span></span>
                         <span>Prize <span className="text-primary font-bold">{fmtEntry(t.prize_pool)}</span></span>
-                        {(Number(t.winner_bonus_cash || 0) > 0 || Number(t.winner_bonus_points || 0) > 0) && (
+                        {(Number(t.winner_bonus_cash || 0) > 0 || Number(t.winner_bonus_points || 0) > 0
+                          || Number(t.second_place_bonus_cash || 0) > 0 || Number(t.second_place_bonus_points || 0) > 0
+                          || Number(t.third_place_bonus_cash || 0) > 0 || Number(t.third_place_bonus_points || 0) > 0) && (
                           <span>
-                            Winner bonus <span className="text-primary font-bold">
-                              {Number(t.winner_bonus_cash || 0) > 0 ? formatMoney(t.winner_bonus_cash) : '$0'}
-                              {' / '}
-                              {Number(t.winner_bonus_points || 0).toLocaleString()} pts
+                            Place prizes{' '}
+                            <span className="text-primary font-bold">
+                              {[
+                                Number(t.winner_bonus_cash || 0) > 0 || Number(t.winner_bonus_points || 0) > 0
+                                  ? `1st ${Number(t.winner_bonus_cash || 0) > 0 ? formatMoney(t.winner_bonus_cash) : '$0'} / ${Number(t.winner_bonus_points || 0).toLocaleString()} pts`
+                                  : null,
+                                Number(t.second_place_bonus_cash || 0) > 0 || Number(t.second_place_bonus_points || 0) > 0
+                                  ? `2nd ${Number(t.second_place_bonus_cash || 0) > 0 ? formatMoney(t.second_place_bonus_cash) : '$0'} / ${Number(t.second_place_bonus_points || 0).toLocaleString()} pts`
+                                  : null,
+                                Number(t.third_place_bonus_cash || 0) > 0 || Number(t.third_place_bonus_points || 0) > 0
+                                  ? `3rd ${Number(t.third_place_bonus_cash || 0) > 0 ? formatMoney(t.third_place_bonus_cash) : '$0'} / ${Number(t.third_place_bonus_points || 0).toLocaleString()} pts`
+                                  : null,
+                              ].filter(Boolean).join(' · ')}
                             </span>
                           </span>
                         )}

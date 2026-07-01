@@ -16,6 +16,15 @@ function formatMoney(n) {
   return `$${Math.trunc(Number(n ?? 0)).toLocaleString()}`;
 }
 
+function formatWinRewards(data) {
+  const parts = [`You win! ${formatMoney(data.money_won)}`];
+  if (data.cars_won?.length) parts.push(data.cars_won.join(', '));
+  if (Number(data.loot_box_pieces) > 0) {
+    parts.push(`${Number(data.loot_box_pieces).toLocaleString()} loot pieces`);
+  }
+  return parts.join(' — ');
+}
+
 function formatNextPlay(iso) {
   if (!iso) return null;
   try {
@@ -81,9 +90,7 @@ export default function DailyRewardsWidget({ onRefresh, userId }) {
         return next;
       });
       if (res.data.result === 'win') {
-        const parts = [`You win! ${formatMoney(res.data.money_won)}`];
-        if (res.data.cars_won?.length) parts.push(res.data.cars_won.join(', '));
-        toast.success(parts.join(' — '));
+        toast.success(formatWinRewards(res.data));
         onRefresh?.();
         window.dispatchEvent(new CustomEvent('app:refresh-user'));
       } else if (res.data.result === 'lose') {

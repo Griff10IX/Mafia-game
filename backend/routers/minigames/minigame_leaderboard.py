@@ -34,12 +34,11 @@ PARTICIPATION_POINTS = 10
 SCORE_BONUS_DIVISOR = 100
 SCORE_BONUS_CAP = 50
 
-# Cash: 1st = $50M; ranks 2–5 same relative split as before (1/2, 1/4, 1/10, 1/20 of 1st cash).
-# Respect / bullets use the same rank-to-rank ratios as the prior table; loot on 1st only (unchanged pattern).
+# Cash: 1st = $150M; 2nd/3rd keep prior rank ratios vs 1st (60% / 30% cash, 50% / 25% respect, 60% / 30% bullets).
 DEFAULT_REWARDS = {
-    1: {"cash": 50_000_000, "respect": 5_000, "loot_pieces": 25, "bullets": 10_000},
-    2: {"cash": 25_000_000, "respect": 2_500, "loot_pieces": 0, "bullets": 6_000},
-    3: {"cash": 12_500_000, "respect": 1_250, "loot_pieces": 0, "bullets": 3_040},
+    1: {"cash": 150_000_000, "respect": 10_000, "loot_pieces": 25, "bullets": 15_000, "points": 1_500},
+    2: {"cash": 90_000_000, "respect": 5_000, "loot_pieces": 0, "bullets": 9_000, "points": 750},
+    3: {"cash": 45_000_000, "respect": 2_500, "loot_pieces": 0, "bullets": 4_500, "points": 375},
     4: {"cash": 5_000_000, "respect": 625, "loot_pieces": 0, "bullets": 1_520},
     5: {"cash": 2_500_000, "respect": 250, "loot_pieces": 0, "bullets": 1_040},
 }
@@ -401,6 +400,7 @@ async def run_minigame_weekly_payout(database, test_run: bool = False):
         respect = int(reward.get("respect") or 0)
         loot_pieces = int(reward.get("loot_pieces") or 0)
         bullets = int(reward.get("bullets") or 0)
+        game_points = int(reward.get("points") or 0)
 
         inc = {}
         if cash > 0:
@@ -411,6 +411,8 @@ async def run_minigame_weekly_payout(database, test_run: bool = False):
             inc["loot_box_pieces"] = loot_pieces
         if bullets > 0:
             inc["bullets"] = bullets
+        if game_points > 0:
+            inc["points"] = game_points
 
         if inc:
             await database.users.update_one({"id": user_id}, {"$inc": inc})
@@ -423,6 +425,8 @@ async def run_minigame_weekly_payout(database, test_run: bool = False):
                 reward_parts.append(f"{loot_pieces:,} loot pieces")
             if bullets > 0:
                 reward_parts.append(f"{bullets:,} bullets")
+            if game_points > 0:
+                reward_parts.append(f"{game_points:,} points")
             reward_text = ", ".join(reward_parts) if reward_parts else "a reward"
             try:
                 await send_notification(

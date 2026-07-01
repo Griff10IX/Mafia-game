@@ -132,6 +132,48 @@ async def mint_purchase_lot_if_missing(
     return inserted
 
 
+async def mint_store_points_cash_lot_if_missing(
+    db,
+    *,
+    user_id: str,
+    purchase_id: str,
+    points: int,
+) -> bool:
+    """Idempotent mint for store cash → points purchases."""
+    if not user_id or not purchase_id or points <= 0:
+        return False
+    now_iso = _now_iso()
+    lot_id = f"store_points_cash:{purchase_id}"
+    doc = {
+        "id": lot_id,
+        "owner_user_id": user_id,
+        "origin_type": "store_points_cash",
+        "origin_ref": purchase_id,
+        "remaining_points": int(points),
+        "root_purchase_ref": purchase_id,
+        "parent_lot_id": None,
+        "created_at": now_iso,
+        "updated_at": now_iso,
+    }
+    res = await db.point_lots.update_one({"id": lot_id}, {"$setOnInsert": doc}, upsert=True)
+    inserted = bool(getattr(res, "upserted_id", None))
+    if inserted:
+        await db.point_ledger_events.insert_one(
+            {
+                "id": str(uuid.uuid4()),
+                "event_type": "mint_store_points_cash",
+                "user_id": user_id,
+                "points": int(points),
+                "lot_id": lot_id,
+                "origin_ref": purchase_id,
+                "root_purchase_ref": purchase_id,
+                "meta": {"source": "store_points_cash"},
+                "created_at": now_iso,
+            }
+        )
+    return inserted
+
+
 async def consume_points_fifo(
     db,
     *,

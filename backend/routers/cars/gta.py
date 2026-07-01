@@ -185,7 +185,7 @@ from routers.account.objectives import update_objectives_progress
 from routers.admin.airport import _invalidate_travel_info_cache
 from routers.game.families import resolve_family_id
 from utils.family_vault_log import log_family_vault_tx
-from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.location_climate import get_location_climate, rank_multiplier_for_actor, success_multiplier_for_actor
 from utils.rolling_event_stats import rolling_event_stats_pipeline, rolling_stats_response_from_doc
 
@@ -633,7 +633,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
             for c in CARS
             if c["min_difficulty"] <= option["difficulty"]
             and c["rarity"] != "exclusive"
-            and c.get("rarity") != "loot_exclusive"
+            and c.get("rarity") not in ("loot_exclusive", "vip_exclusive")
             and c.get("id") != "car_custom"
         ]
         if not pool_cars:
@@ -753,7 +753,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
                 {"$set": {"released": False}},
                 upsert=True,
             )
-        if (car.get("rarity") or "") in ("exclusive", "loot_exclusive"):
+        if (car.get("rarity") or "") in _MARKET_EXCLUSIVE_RARITIES:
             await maybe_revoke_civilian_protection(db, current_user.get("id") or "", "exclusive_car")
             from utils.exclusive_car_events import log_exclusive_car_event
 
@@ -777,9 +777,10 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         respect_drop = maybe_respect_points_drop()
         if respect_drop:
             gta_inc["respect_points"] = max(0, int(respect_drop * RESPECT_FROM_GTA_MULT * _fm_gta * pass_mult))
+        gta_update = apply_season_rp_mirror_to_update({"$inc": gta_inc}, user=current_user)
         await db.users.update_one(
             {"id": current_user.get("id") or ""},
-            apply_season_rp_mirror_to_update({"$inc": gta_inc}),
+            gta_update,
         )
         if gta_inc.get("respect_points"):
             await log_respect_earned(current_user.get("id") or "", gta_inc["respect_points"], "gta")
@@ -790,7 +791,13 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         await _award_gta_milestones(current_user.get("id") or "", new_total_gta, claimed, bonus_mult=_fm_gta)
         respect_earned = max(0, int((respect_drop or 0) * RESPECT_FROM_GTA_MULT * _fm_gta)) + max(0, int(milestone_respect * RESPECT_FROM_GTA_MULT * _fm_gta))
         try:
-            await maybe_process_rank_up(current_user.get("id") or "", rp_before, rp_granted, current_user.get("username", ""), user_prestige_rank_mult(current_user))
+            await maybe_process_rank_up(
+                current_user.get("id") or "",
+                rp_before,
+                rank_points_in_update(gta_update),
+                current_user.get("username", ""),
+                user_prestige_rank_mult(current_user),
+            )
         except Exception as e:
             logger.exception("Rank-up notification (GTA): %s", e)
         try:
@@ -957,8 +964,10 @@ GARAGE_FETCH_LIMIT = 250_000
 # Catalog exclusives / loot exclusives (not car_custom). Kept separate from customs so 500+ immune cars
 # never crowd out every `car_custom` row (customs are fetched in their own slice up to GARAGE_FETCH_LIMIT).
 GARAGE_SPECIAL_ROWS_MAX = 500
+_MARKET_EXCLUSIVE_RARITIES = frozenset({"exclusive", "loot_exclusive", "vip_exclusive"})
+_CUSTOM_IMAGE_CAR_IDS = frozenset({"car_custom", "car22"})
 _VALID_GARAGE_RARITIES = frozenset(
-    {"common", "uncommon", "rare", "ultra_rare", "legendary", "custom", "loot_exclusive", "exclusive"}
+    {"common", "uncommon", "rare", "ultra_rare", "legendary", "custom", "loot_exclusive", "exclusive", "vip_exclusive"}
 )
 
 
@@ -968,6 +977,8 @@ def _normalize_garage_rarity_str(raw: object) -> str:
     s = str(raw).strip().lower().replace(" ", "_").replace("-", "_")
     if s == "lootexclusive":
         s = "loot_exclusive"
+    if s == "vipexclusive":
+        s = "vip_exclusive"
     if s == "ultrarare":
         s = "ultra_rare"
     return s if s in _VALID_GARAGE_RARITIES else "common"
@@ -981,7 +992,7 @@ def _is_damage_immune_car(car_id: Optional[str], rarity_hint: Optional[str] = No
     if not rarity and car_id:
         car_info = next((c for c in CARS if c.get("id") == car_id), None)
         rarity = str((car_info or {}).get("rarity") or "").strip().lower()
-    return rarity in ("exclusive", "loot_exclusive")
+    return rarity in ("exclusive", "loot_exclusive", "vip_exclusive")
 
 
 def _effective_catalog_value_for_melt_bullets(
@@ -1027,7 +1038,7 @@ def _garage_entry_from_user_car(user_car: Dict[str, Any]) -> Optional[dict]:
         }
         if car_id == "car_custom":
             entry["name"] = display_name or car_info.get("name")
-        if car_id == "car_custom" and user_car.get("custom_image_url"):
+        if car_id in _CUSTOM_IMAGE_CAR_IDS and user_car.get("custom_image_url"):
             entry["image"] = user_car.get("custom_image_url")
         if user_car.get("listed_for_sale"):
             entry["listed_for_sale"] = True
@@ -1200,7 +1211,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
             if not uc:
                 continue
             car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
-            if car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive"):
+            if car_info and car_info.get("rarity") in _MARKET_EXCLUSIVE_RARITIES:
                 return {
                     "success": False,
                     "message": EXCLUSIVE_CAR_WAR_LOCK_DETAIL,
@@ -1288,8 +1299,8 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
                             car_bullets = 5
                         elif car_bullets > 7:
                             car_bullets = 7
-                    if rarity not in ("exclusive", "loot_exclusive"):
-                        # +25% bullets for all but exclusive / loot_exclusive (floor-rounded).
+                    if rarity not in _MARKET_EXCLUSIVE_RARITIES:
+                        # +25% bullets for all but exclusive / loot_exclusive / vip_exclusive (floor-rounded).
                         car_bullets = (int(car_bullets) * 125) // 100
                     total_bullets += car_bullets
                 else:
@@ -1665,7 +1676,7 @@ async def melt_cars(
 
 # Dealer: buy cars for cash (price = value * multiplier). Custom, exclusive, and loot_exclusive are not for sale.
 # Stock per model and price multiplier vary by rarity: rarer = less stock, more overpriced.
-DEALER_EXCLUDED_IDS = {"car_custom", "car20"}
+DEALER_EXCLUDED_IDS = {"car_custom", "car20", "car22"}
 # Replenish at random intervals so restocks are spread throughout the day
 DEALER_REPLENISH_MIN_SEC = 1 * 3600   # 1 hour
 DEALER_REPLENISH_MAX_SEC = 4 * 3600   # 4 hours
@@ -1718,7 +1729,7 @@ def _dealer_sellable_cars() -> List[dict]:
     return [
         c
         for c in CARS
-        if c.get("id") not in DEALER_EXCLUDED_IDS and c.get("rarity") != "loot_exclusive"
+        if c.get("id") not in DEALER_EXCLUDED_IDS and c.get("rarity") not in ("loot_exclusive", "vip_exclusive")
     ]
 
 
@@ -1929,7 +1940,7 @@ async def _fill_dealer_stock_full() -> None:
     now = datetime.now(timezone.utc).isoformat()
     to_insert = []
     for c in CARS:
-        if c.get("id") in DEALER_EXCLUDED_IDS or c.get("rarity") == "loot_exclusive":
+        if c.get("id") in DEALER_EXCLUDED_IDS or c.get("rarity") in ("loot_exclusive", "vip_exclusive"):
             continue
         max_stock = _dealer_max_stock(c)
         for _ in range(max_stock):
@@ -1961,7 +1972,7 @@ async def get_cars_for_sale(current_user: dict = Depends(get_current_user)):
     stock_by_car = {d["_id"]: d["count"] for d in counts}
     out = []
     for c in CARS:
-        if c.get("id") in DEALER_EXCLUDED_IDS or c.get("rarity") == "loot_exclusive":
+        if c.get("id") in DEALER_EXCLUDED_IDS or c.get("rarity") in ("loot_exclusive", "vip_exclusive"):
             continue
         car_id = c.get("id")
         in_stock = stock_by_car.get(car_id, 0)
@@ -2036,7 +2047,7 @@ async def buy_car(
     car_info = next((c for c in CARS if c.get("id") == request.car_id), None)
     if not car_info:
         raise HTTPException(status_code=400, detail="Car not found")
-    if car_info.get("id") in DEALER_EXCLUDED_IDS or car_info.get("rarity") == "loot_exclusive":
+    if car_info.get("id") in DEALER_EXCLUDED_IDS or car_info.get("rarity") in ("loot_exclusive", "vip_exclusive"):
         raise HTTPException(status_code=400, detail="That car is not for sale")
     price = int(car_info.get("value", 0) * _dealer_price_multiplier(car_info))
     result = await db.users.update_one(
@@ -2139,7 +2150,7 @@ async def buy_cars_bulk(
         car_info = next((c for c in CARS if c.get("id") == car_id), None)
         if not car_info:
             raise HTTPException(status_code=400, detail=f"Car not found: {car_id}")
-        if car_info.get("id") in DEALER_EXCLUDED_IDS or car_info.get("rarity") == "loot_exclusive":
+        if car_info.get("id") in DEALER_EXCLUDED_IDS or car_info.get("rarity") in ("loot_exclusive", "vip_exclusive"):
             raise HTTPException(status_code=400, detail=f"That car is not for sale: {car_info.get('name') or car_id}")
         price = int(car_info.get("value", 0) * _dealer_price_multiplier(car_info))
         catalog_value = int(car_info.get("value", 0))
@@ -2340,7 +2351,7 @@ async def list_car(
     list_family_id = await resolve_family_id(current_user.get("id") or "")
     if list_family_id and await _family_in_active_war(list_family_id):
         car_info = next((c for c in CARS if c.get("id") == user_car.get("car_id")), None)
-        if car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive"):
+        if car_info and car_info.get("rarity") in _MARKET_EXCLUSIVE_RARITIES:
             raise HTTPException(status_code=403, detail=EXCLUSIVE_CAR_WAR_LOCK_DETAIL)
     now = datetime.now(timezone.utc).isoformat()
     if user_car.get("_id") is not None:
@@ -2355,7 +2366,7 @@ async def list_car(
         {"user_car_id": request.user_car_id, "car_id": user_car.get("car_id"), "car_name": user_car.get("car_name"), "sale_price": request.price},
     )
     car_info = next((c for c in CARS if c.get("id") == user_car.get("car_id")), None)
-    if car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive"):
+    if car_info and car_info.get("rarity") in _MARKET_EXCLUSIVE_RARITIES:
         from utils.exclusive_car_events import log_exclusive_car_event
 
         await log_exclusive_car_event(
@@ -2396,7 +2407,7 @@ async def delist_car(
     await db.user_cars.update_one(q, {"$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""}})
     car_info = next((c for c in CARS if c.get("id") == user_car.get("car_id")), None)
     await log_activity(current_user.get("id", ""), current_user.get("username", "?"), "gta_delist", {"car_id": user_car.get("car_id")})
-    if car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive"):
+    if car_info and car_info.get("rarity") in _MARKET_EXCLUSIVE_RARITIES:
         from utils.exclusive_car_events import log_exclusive_car_event
 
         await log_exclusive_car_event(
@@ -2452,7 +2463,7 @@ async def buy_listed_car(
         )
 
     car_info = next((c for c in CARS if c.get("id") == user_car.get("car_id")), None)
-    if car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive"):
+    if car_info and car_info.get("rarity") in _MARKET_EXCLUSIVE_RARITIES:
         seller_family_id = await resolve_family_id(seller_id)
         if seller_family_id and await _family_in_active_war(seller_family_id):
             await _rollback_car()
@@ -2531,7 +2542,7 @@ async def buy_listed_car(
         "garage_buy_listed_car",
         {"car_id": user_car.get("car_id"), "car_name": car_name, "price": price, "seller_id": seller_id, "seller_username": (seller or {}).get("username", "?")},
     )
-    if car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive"):
+    if car_info and car_info.get("rarity") in _MARKET_EXCLUSIVE_RARITIES:
         from utils.exclusive_car_events import log_exclusive_car_event
 
         await log_exclusive_car_event(
@@ -2718,8 +2729,8 @@ async def update_custom_car_image(
             user_car = None
     if not user_car:
         raise HTTPException(status_code=404, detail="Car not found in your garage")
-    if user_car.get("car_id") != "car_custom":
-        raise HTTPException(status_code=400, detail="Only custom cars can have a custom picture")
+    if user_car.get("car_id") not in _CUSTOM_IMAGE_CAR_IDS:
+        raise HTTPException(status_code=400, detail="Only custom or VIP Pass cars can have a custom picture")
 
     value = (request.image_url or "").strip() or None
 
@@ -2766,7 +2777,7 @@ async def get_view_car(
     damage_percent = 0 if _is_damage_immune_car(car_id, rarity) else min(100, max(0, float(user_car.get("damage_percent", 0))))
     name = user_car.get("custom_name") or user_car.get("car_name") or car_info.get("name")
     image = car_info.get("image")
-    if car_id == "car_custom" and user_car.get("custom_image_url"):
+    if car_id in _CUSTOM_IMAGE_CAR_IDS and user_car.get("custom_image_url"):
         image = user_car.get("custom_image_url")
     out = {
         **{k: v for k, v in car_info.items()},
@@ -2813,7 +2824,7 @@ async def run_dealer_replenish_loop():
             db = srv.db
             now = datetime.now(timezone.utc).isoformat()
             for c in CARS:
-                if c.get("id") in DEALER_EXCLUDED_IDS or c.get("rarity") == "loot_exclusive":
+                if c.get("id") in DEALER_EXCLUDED_IDS or c.get("rarity") in ("loot_exclusive", "vip_exclusive"):
                     continue
                 car_id = c["id"]
                 max_stock = _dealer_max_stock(c)

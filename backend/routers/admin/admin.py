@@ -73,6 +73,14 @@ from utils.bank_economy_settings import (
     KEY_INTEREST_MAX,
     KEY_INTEREST_OPTIONS,
 )
+from utils.store_points_cash import (
+    POINTS_CASH_MONTHLY_LIMIT,
+    STORE_POINTS_CASH_EMAIL_MONTHLY,
+    STORE_POINTS_CASH_IP_MONTHLY,
+    STORE_POINTS_CASH_LOGS,
+    monthly_cash_spent,
+)
+from utils.game_timezone import game_month_start_date_str
 from utils.email_sender import is_email_configured, send_inactivity_reminder_email
 from utils.staff_portal import staff_portal_password_configured, staff_portal_session_minutes
 from utils.sustained_page_ratelimit import (
@@ -2114,6 +2122,78 @@ def register(router):
 
         return {"spends": spends, "count": len(spends)}
 
+    @router.get("/admin/store/points-cash-logs")
+    async def admin_store_points_cash_logs(
+        limit: int = Query(200, ge=1, le=1000),
+        username: Optional[str] = Query(None),
+        ip: Optional[str] = Query(None),
+        email: Optional[str] = Query(None),
+        month_key: Optional[str] = Query(None, description="London calendar month start YYYY-MM-DD"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Recent store cash → points purchases with optional IP/email month summaries."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        filt: Dict[str, Any] = {}
+        if username and str(username).strip():
+            filt["username"] = _username_pattern(str(username).strip())
+        if ip and str(ip).strip():
+            n = normalize_ip_string(str(ip).strip())
+            if n:
+                filt["client_ip"] = n
+        if email and str(email).strip():
+            from utils.auto_rank_email_entitlement import normalize_entitlement_email
+
+            em = normalize_entitlement_email(str(email).strip())
+            if em:
+                filt["email"] = em
+        if month_key and str(month_key).strip():
+            filt["month_key"] = str(month_key).strip()[:10]
+
+        logs = (
+            await db[STORE_POINTS_CASH_LOGS]
+            .find(filt, {"_id": 0})
+            .sort("created_at", -1)
+            .limit(int(limit))
+            .to_list(int(limit))
+        )
+
+        mk = (month_key or "").strip()[:10] or game_month_start_date_str()
+        ip_summary = None
+        email_summary = None
+        if ip and str(ip).strip():
+            nip = normalize_ip_string(str(ip).strip())
+            if nip:
+                spent = await monthly_cash_spent(db, STORE_POINTS_CASH_IP_MONTHLY, "ip", nip, mk)
+                ip_summary = {
+                    "ip": nip,
+                    "month_key": mk,
+                    "cash_spent": spent,
+                    "monthly_limit": POINTS_CASH_MONTHLY_LIMIT,
+                    "remaining": max(0, POINTS_CASH_MONTHLY_LIMIT - spent),
+                }
+        if email and str(email).strip():
+            from utils.auto_rank_email_entitlement import normalize_entitlement_email
+
+            em = normalize_entitlement_email(str(email).strip())
+            if em:
+                spent = await monthly_cash_spent(db, STORE_POINTS_CASH_EMAIL_MONTHLY, "email", em, mk)
+                email_summary = {
+                    "email": em,
+                    "month_key": mk,
+                    "cash_spent": spent,
+                    "monthly_limit": POINTS_CASH_MONTHLY_LIMIT,
+                    "remaining": max(0, POINTS_CASH_MONTHLY_LIMIT - spent),
+                }
+
+        return {
+            "logs": logs,
+            "count": len(logs),
+            "ip_summary": ip_summary,
+            "email_summary": email_summary,
+        }
+
     @router.post("/admin/points/refund-store-spend")
     async def admin_refund_store_spend(
         user_id: str,
@@ -3269,6 +3349,7 @@ def register(router):
             raise HTTPException(status_code=403, detail="Admin access required")
 
         from utils.game_pass_micro_rewards import (
+            MAX_MICRO_TIER,
             micro_tier_for_vip_game_pass,
             vip_rewards_after_free_dedupe,
         )
@@ -3310,6 +3391,11 @@ def register(router):
             update["$inc"] = total_inc
 
         await db.users.update_one({"id": uid}, update)
+
+        if current_micro >= MAX_MICRO_TIER:
+            from utils.game_pass_vip_car import grant_game_pass_vip_car_if_eligible
+
+            await grant_game_pass_vip_car_if_eligible(db, user_id=uid)
 
         return {
             "message": f"Force-granted {un}: tiers 1–{current_micro} rewards credited. Old cursor was {old_last_granted}, now {current_micro}.",
@@ -6869,6 +6955,20 @@ def register(router):
         seize_summary = None
         if not target.get("is_npc"):
             try:
+                from utils.death_revive_snapshot import capture_death_revive_snapshot
+
+                death_snap = await capture_death_revive_snapshot(
+                    db,
+                    victim_id=target["id"],
+                    killer_id=current_user.get("id"),
+                    victim_username=target.get("username") or target_username,
+                    victim_user=target,
+                    staff_kill=True,
+                )
+                await db.users.update_one({"id": target["id"]}, {"$set": {"death_revive_snapshot": death_snap}})
+            except Exception:
+                logging.exception("death_revive_snapshot capture (admin kill) victim=%s", target.get("id"))
+            try:
                 from utils.admin_kill_asset_transfer import transfer_staff_kill_seizures
 
                 seize_summary = await transfer_staff_kill_seizures(db, target["id"], current_user)
@@ -7867,8 +7967,8 @@ def register(router):
         cursor = db.user_weapons.find({"weapon_id": "weapon_loot", "quantity": {"$gte": 1}}, {"_id": 0, "user_id": 1})
         async for uw in cursor:
             await _add_user(uw["user_id"], "weapon", "Colt Monitor")
-        # Armour level 6 (Steel Plate Vest 1922)
-        cursor = db.users.find({"$or": [{"armour_level": 6}, {"armour_owned_level_max": {"$gte": 6}}]}, {"_id": 0, "id": 1, "username": 1})
+        # Armour level 7 (Steel Plate Vest 1922)
+        cursor = db.users.find({"$or": [{"armour_level": 7}, {"armour_owned_level_max": {"$gte": 7}}]}, {"_id": 0, "id": 1, "username": 1})
         async for u in cursor:
             uid = u["id"]
             if uid not in users_by_id:
@@ -20600,7 +20700,7 @@ def register(router):
 
     @router.post("/admin/minigame-leaderboard/config")
     async def update_minigame_lb_config(body: MinigameLBRewardsUpdate, current_user: dict = Depends(get_current_user)):
-        """Update mini games weekly leaderboard rewards. rewards = {1: {cash, respect, loot_pieces, bullets}, ...}"""
+        """Update mini games weekly leaderboard rewards. rewards = {1: {cash, respect, loot_pieces, bullets, points}, ...}"""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
         rewards = body.rewards or {}
@@ -20612,6 +20712,7 @@ def register(router):
                 "respect": int(r.get("respect") or 0),
                 "loot_pieces": int(r.get("loot_pieces") or 0),
                 "bullets": int(r.get("bullets") or 0),
+                "points": int(r.get("points") or 0),
             }
         await db.game_config.update_one(
             {"id": MINIGAME_LB_CONFIG_ID},
