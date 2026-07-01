@@ -301,6 +301,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Interest bank by player', categoryId: 'admin-analytics', collapseKey: 'interestBankPlayers', keywords: ['interest', 'bank', 'deposits', 'holders'] },
   { label: 'Swiss Bank Overview', categoryId: 'admin-analytics', collapseKey: 'swissBank', keywords: ['swiss', 'bank', 'balance', 'hidden', 'money', 'wipe'] },
   { label: 'Points purchases (store spends)', categoryId: 'admin-analytics', collapseKey: 'pointsStoreSpends', keywords: ['points', 'store', 'spend', 'bought', 'purchases', 'refund'] },
+  { label: 'Store points purchase log', categoryId: 'admin-analytics', collapseKey: 'storePointsPurchaseLogs', keywords: ['points', 'store', 'robot', 'auto-search', 'bodyguard', 'silencer', 'armour', 'token', 'purchase log'], adminOnly: true },
   { label: 'Analytics V2 workspace', categoryId: 'admin-analytics-monitoring', collapseKey: 'analyticsWorkspaceV2', keywords: ['analytics', 'v2', 'workspace', 'rollup', 'rollups', 'stats', 'users', 'events'] },
   { label: 'Economy overview', categoryId: 'admin-analytics-monitoring', collapseKey: 'economyOverview', keywords: ['economy', 'overview', 'gdp', 'money', 'circulation', 'cash', 'holders', 'wallet', 'distribution', 'drill', 'accounts'] },
   { label: 'Cash gain threshold audit', categoryId: 'admin-analytics-monitoring', collapseKey: 'economySpikeAudit', keywords: ['spike', 'inflation', 'cash jump', 'cash increase', 'wallet', 'threshold', '50 million', 'points', 'audit', 'ledger', 'gambling', 'payout', 'suspicious', 'economy'] },
@@ -1090,6 +1091,11 @@ export default function Admin() {
   const [pointsStoreBoughtTotalLoading, setPointsStoreBoughtTotalLoading] = useState(false);
   const [pointsStoreRetractingKey, setPointsStoreRetractingKey] = useState(null);
   const [pointsStoreSpendsUsernameQuery, setPointsStoreSpendsUsernameQuery] = useState('');
+  const [storePointsPurchaseLogs, setStorePointsPurchaseLogs] = useState(null);
+  const [storePointsPurchaseLogsLoading, setStorePointsPurchaseLogsLoading] = useState(false);
+  const [storePointsPurchaseLogsUsername, setStorePointsPurchaseLogsUsername] = useState('');
+  const [storePointsPurchaseLogsUserId, setStorePointsPurchaseLogsUserId] = useState('');
+  const [storePointsPurchaseLogsItemRef, setStorePointsPurchaseLogsItemRef] = useState('');
   const [tradesAnalyticsDays, setTradesAnalyticsDays] = useState(7);
   const [tradesAnalytics, setTradesAnalytics] = useState(null);
   const [tradesAnalyticsLoading, setTradesAnalyticsLoading] = useState(false);
@@ -6204,6 +6210,23 @@ export default function Admin() {
       setPointsCashLogs({ logs: [], count: 0 });
     } finally {
       setPointsCashLogsLoading(false);
+    }
+  };
+
+  const handleFetchStorePointsPurchaseLogs = async () => {
+    setStorePointsPurchaseLogsLoading(true);
+    try {
+      const params = { limit: 300 };
+      if ((storePointsPurchaseLogsUsername || '').trim()) params.username = storePointsPurchaseLogsUsername.trim();
+      if ((storePointsPurchaseLogsUserId || '').trim()) params.user_id = storePointsPurchaseLogsUserId.trim();
+      if ((storePointsPurchaseLogsItemRef || '').trim()) params.store_event_ref = storePointsPurchaseLogsItemRef.trim();
+      const res = await api.get('/admin/store/points-purchase-logs', { params });
+      setStorePointsPurchaseLogs(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load store points purchase log');
+      setStorePointsPurchaseLogs({ logs: [], count: 0 });
+    } finally {
+      setStorePointsPurchaseLogsLoading(false);
     }
   };
 
@@ -20661,6 +20684,129 @@ export default function Admin() {
                                   {pointsStoreRetractingKey === refundKey ? '...' : 'Remove'}
                                 </button>
                               </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-violet-500/30 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-violet-500/50 to-transparent" />
+          <SectionHeader
+            icon={Coins}
+            title="Store points purchase log"
+            color="text-violet-300"
+            badge={storePointsPurchaseLogs?.logs ? <span className="text-[10px] font-heading text-mutedForeground">{storePointsPurchaseLogs.count} rows</span> : null}
+            toolAnchor="storePointsPurchaseLogs"
+            isCollapsed={collapsed.storePointsPurchaseLogs}
+            onToggle={() => toggleSection('storePointsPurchaseLogs')}
+          />
+          {!collapsed.storePointsPurchaseLogs && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground">
+                Every store purchase paid with points and/or respect — one row per transaction. Filter by item (e.g. <code className="text-[9px]">buy-robot-bg-auto-search</code> for robot auto-search).
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                <Input value={storePointsPurchaseLogsUsername} onChange={(e) => setStorePointsPurchaseLogsUsername(e.target.value)} placeholder="Username" className="text-[11px]" />
+                <Input value={storePointsPurchaseLogsUserId} onChange={(e) => setStorePointsPurchaseLogsUserId(e.target.value)} placeholder="User ID" className="text-[11px]" />
+                <select
+                  value={storePointsPurchaseLogsItemRef}
+                  onChange={(e) => setStorePointsPurchaseLogsItemRef(e.target.value)}
+                  className="text-[11px] rounded border border-zinc-700/60 bg-zinc-900/80 px-2 py-1.5 text-foreground"
+                >
+                  <option value="">All items</option>
+                  <option value="buy-robot-bg-auto-search">Robot BG auto-search</option>
+                  <option value="buy-auto-rank">Auto Rank</option>
+                  <option value="buy-armour-point-store">Point-store armour</option>
+                  <option value="buy-weapon-point-store">Point-store weapon</option>
+                  <option value="buy-silencer">Silencer</option>
+                  <option value="buy-anti-snitch">Anti-snitch</option>
+                  <option value="buy-oc-timer">OC timer</option>
+                  <option value="buy-crew-oc-timer">Crew OC timer</option>
+                  <option value="buy-rank-bar">Premium rank bar</option>
+                  <option value="buy-bullets">Bullets</option>
+                  <option value="buy-booze-capacity">Booze capacity</option>
+                  <option value="buy-custom-car">Custom car</option>
+                  <option value="buy-health">Full health</option>
+                  <option value="buy-hitlist-npc-bonus-slot">Hitlist NPC slot</option>
+                  <option value="buy-shooting-range-bonus">Shooting range bonus</option>
+                  <option value="buy-token-selectable-bundle">Selectable token bundle</option>
+                  <option value="upgrade-garage-batch">Garage batch upgrade</option>
+                </select>
+              </div>
+              <BtnPrimary onClick={handleFetchStorePointsPurchaseLogs} disabled={storePointsPurchaseLogsLoading}>
+                {storePointsPurchaseLogsLoading ? 'Loading…' : 'Load log'}
+              </BtnPrimary>
+              {storePointsPurchaseLogs?.summary_by_item && Object.keys(storePointsPurchaseLogs.summary_by_item).length > 0 && (
+                <p className="text-[10px] text-mutedForeground font-heading">
+                  Page totals: {Number(storePointsPurchaseLogs.total_points_in_page || 0).toLocaleString()} pts
+                  {storePointsPurchaseLogs.total_respect_in_page ? ` · ${Number(storePointsPurchaseLogs.total_respect_in_page).toLocaleString()} respect` : ''}
+                  {' · '}
+                  {Object.entries(storePointsPurchaseLogs.summary_by_item).map(([k, v]) => (
+                    <span key={k} className="mr-2">{k.replace('buy-', '')} ({v.count})</span>
+                  ))}
+                </p>
+              )}
+              {storePointsPurchaseLogs && (
+                <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
+                  {(!storePointsPurchaseLogs.logs || storePointsPurchaseLogs.logs.length === 0) ? (
+                    <p className="text-[10px] text-mutedForeground">No matching purchases.</p>
+                  ) : (
+                    <table className="w-full text-[9px] font-heading min-w-[880px]">
+                      <thead>
+                        <tr className="text-left text-mutedForeground border-b border-zinc-700/40 sticky top-0 bg-zinc-900">
+                          <th className="py-1 pr-2">Time</th>
+                          <th className="py-1 pr-2">User</th>
+                          <th className="py-1 pr-2">Item</th>
+                          <th className="py-1 pr-2 text-right">Pts</th>
+                          <th className="py-1 pr-2 text-right">RSP</th>
+                          <th className="py-1 pr-2 text-right">Price</th>
+                          <th className="py-1 pr-2">Balances</th>
+                          <th className="py-1">Details</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {storePointsPurchaseLogs.logs.map((row) => {
+                          const extra = row.extra || {};
+                          const detailBits = [];
+                          if (extra.robot_bg_auto_search_until) detailBits.push(`until ${extra.robot_bg_auto_search_until}`);
+                          if (extra.car_name) detailBits.push(extra.car_name);
+                          if (extra.bullets) detailBits.push(`+${Number(extra.bullets).toLocaleString()} bullets`);
+                          if (extra.armour_level) detailBits.push(`Lv.${extra.armour_level}`);
+                          if (extra.weapon_id) detailBits.push(extra.weapon_id);
+                          if (extra.selected_tokens?.length) {
+                            detailBits.push(extra.selected_tokens.map((t) => `${t.amount}× ${(t.token_type || '').replace(/_/g, ' ')}`).join(', '));
+                          }
+                          const balBits = [];
+                          if (row.points_before != null && row.points_after != null) {
+                            balBits.push(`${Number(row.points_before).toLocaleString()}→${Number(row.points_after).toLocaleString()} pts`);
+                          }
+                          if (row.respect_spent > 0 && row.respect_before != null) {
+                            balBits.push(`${Number(row.respect_before).toLocaleString()}→${Number(row.respect_after).toLocaleString()} rsp`);
+                          }
+                          if (row.prestige_level != null) balBits.push(`P${row.prestige_level}`);
+                          return (
+                            <tr key={row.id || `${row.created_at}-${row.username}`} className="border-b border-zinc-800/50 align-top">
+                              <td className="py-1 pr-2 whitespace-nowrap">{formatAdminDateTime(row.created_at)}</td>
+                              <td className="py-1 pr-2">
+                                <div>{row.username || '?'}</div>
+                                {row.user_id ? <div className="text-[8px] text-mutedForeground font-mono truncate max-w-[88px]" title={row.user_id}>{row.user_id}</div> : null}
+                              </td>
+                              <td className="py-1 pr-2 max-w-[180px]" title={row.store_event_ref}>
+                                <div>{row.item_label || row.store_event_ref}</div>
+                                <div className="text-[8px] text-mutedForeground font-mono">{row.store_event_ref}</div>
+                              </td>
+                              <td className="py-1 pr-2 text-right">{Number(row.points_spent || 0).toLocaleString()}</td>
+                              <td className="py-1 pr-2 text-right">{Number(row.respect_spent || 0).toLocaleString()}</td>
+                              <td className="py-1 pr-2 text-right text-mutedForeground">{Number(row.cost_points || 0).toLocaleString()}</td>
+                              <td className="py-1 pr-2 text-[8px] text-mutedForeground max-w-[140px]">{balBits.join(' · ') || '—'}</td>
+                              <td className="py-1 text-[8px] text-mutedForeground max-w-[160px]">{detailBits.join(' · ') || '—'}</td>
                             </tr>
                           );
                         })}

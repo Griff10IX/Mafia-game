@@ -42,6 +42,11 @@ def store_purchase_item_label(store_event_ref: str, extra: Optional[dict] = None
         label = f"Token bundle: {bid}"
     else:
         label = ref or "store purchase"
+    if ref == "buy-token-selectable-bundle-cash" or ref == "buy-token-selectable-bundle":
+        sel = extra.get("selected_tokens")
+        if sel:
+            parts = [f"{int(t.get('amount') or 0)}× {(t.get('token_type') or '?').replace('_', ' ')}" for t in sel]
+            return "Selectable bundle: " + ", ".join(parts)
     if ref == "buy-robot-bg-auto-search" and extra.get("robot_bg_auto_search_until"):
         return f"{label} (until {extra['robot_bg_auto_search_until']})"
     if ref == "buy-custom-car" and extra.get("car_name"):

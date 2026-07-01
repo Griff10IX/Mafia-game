@@ -83,6 +83,7 @@ from utils.store_points_cash import (
     monthly_cash_spent,
     store_cash_item_label,
 )
+from utils.store_purchase_audit import STORE_POINTS_PURCHASE_LOGS
 from utils.game_timezone import game_month_start_date_str
 from utils.email_sender import is_email_configured, send_inactivity_reminder_email
 from utils.staff_portal import staff_portal_password_configured, staff_portal_session_minutes
@@ -2262,6 +2263,77 @@ def register(router):
             "purchase_kinds": list(STORE_CASH_PURCHASE_KINDS),
             "ip_summary": ip_summary,
             "email_summary": email_summary,
+        }
+
+    @router.get("/admin/store/points-purchase-logs")
+    async def admin_store_points_purchase_logs(
+        limit: int = Query(300, ge=1, le=1000),
+        username: Optional[str] = Query(None),
+        user_id: Optional[str] = Query(None),
+        store_event_ref: Optional[str] = Query(None, description="e.g. buy-robot-bg-auto-search, buy-silencer"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Per-transaction log for store purchases paid with points and/or respect."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        filt: Dict[str, Any] = {}
+        if username and str(username).strip():
+            filt["username"] = _username_pattern(str(username).strip())
+        if user_id and str(user_id).strip():
+            filt["user_id"] = str(user_id).strip()
+        ref = (store_event_ref or "").strip()
+        if ref:
+            filt["store_event_ref"] = ref
+
+        lim = int(limit)
+        logs = (
+            await db[STORE_POINTS_PURCHASE_LOGS]
+            .find(filt, {"_id": 0})
+            .sort("created_at", -1)
+            .limit(lim)
+            .to_list(lim)
+        )
+
+        summary_by_item: Dict[str, Dict[str, Any]] = {}
+        total_points = 0
+        total_respect = 0
+        for row in logs:
+            key = str(row.get("store_event_ref") or "unknown")
+            pts = int(row.get("points_spent") or 0)
+            rsp = int(row.get("respect_spent") or 0)
+            total_points += pts
+            total_respect += rsp
+            bucket = summary_by_item.setdefault(key, {"count": 0, "points_total": 0, "respect_total": 0})
+            bucket["count"] += 1
+            bucket["points_total"] += pts
+            bucket["respect_total"] += rsp
+
+        return {
+            "logs": logs,
+            "count": len(logs),
+            "total_points_in_page": total_points,
+            "total_respect_in_page": total_respect,
+            "summary_by_item": summary_by_item,
+            "store_event_refs": [
+                "buy-robot-bg-auto-search",
+                "buy-auto-rank",
+                "buy-armour-point-store",
+                "buy-weapon-point-store",
+                "buy-silencer",
+                "buy-anti-snitch",
+                "buy-oc-timer",
+                "buy-crew-oc-timer",
+                "buy-rank-bar",
+                "buy-bullets",
+                "buy-booze-capacity",
+                "buy-custom-car",
+                "buy-health",
+                "buy-hitlist-npc-bonus-slot",
+                "buy-shooting-range-bonus",
+                "buy-token-selectable-bundle",
+                "upgrade-garage-batch",
+            ],
         }
 
     @router.post("/admin/points/refund-store-spend")

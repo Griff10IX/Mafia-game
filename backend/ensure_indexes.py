@@ -461,6 +461,11 @@ async def ensure_all_indexes(db):
         await db.store_points_cash_logs.create_index("id", unique=True)
         await db.store_points_cash_logs.create_index([("created_at", -1)])
         await db.store_points_cash_logs.create_index([("user_id", 1), ("created_at", -1)])
+        await db.store_points_purchase_logs.create_index("id", unique=True)
+        await db.store_points_purchase_logs.create_index([("created_at", -1)])
+        await db.store_points_purchase_logs.create_index([("user_id", 1), ("created_at", -1)])
+        await db.store_points_purchase_logs.create_index([("username", 1), ("created_at", -1)])
+        await db.store_points_purchase_logs.create_index([("store_event_ref", 1), ("created_at", -1)])
         await db.referral_weekly_grants.create_index(
             [("week_start", 1), ("beneficiary_id", 1), ("role", 1), ("referee_id", 1)],
             unique=True,

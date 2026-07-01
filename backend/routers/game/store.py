@@ -1118,7 +1118,9 @@ async def buy_hitlist_npc_bonus_slot(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await _record_store_points_spend(current_user, inc, "buy-hitlist-npc-bonus-slot")
+    await _record_store_points_spend(
+        current_user, inc, "buy-hitlist-npc-bonus-slot", cost_used=cost_used, extra={"bonus_slot": next_bonus_slot},
+    )
     new_bonus = cur_bonus + 1
     new_limit = HITLIST_NPC_BONUS_SLOTS_BASE + new_bonus
     return {
