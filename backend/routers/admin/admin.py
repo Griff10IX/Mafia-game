@@ -75,10 +75,13 @@ from utils.bank_economy_settings import (
 )
 from utils.store_points_cash import (
     POINTS_CASH_MONTHLY_LIMIT,
+    STORE_CASH_PURCHASE_LOGS,
+    STORE_CASH_PURCHASE_KINDS,
     STORE_POINTS_CASH_EMAIL_MONTHLY,
     STORE_POINTS_CASH_IP_MONTHLY,
     STORE_POINTS_CASH_LOGS,
     monthly_cash_spent,
+    store_cash_item_label,
 )
 from utils.game_timezone import game_month_start_date_str
 from utils.email_sender import is_email_configured, send_inactivity_reminder_email
@@ -965,6 +968,7 @@ def _activity_log_extract_spike_amounts(action: str, details: Any) -> Tuple[Opti
     elif a == "admin_swiss_bank_wipe":
         take_cash("old_balance")
     elif a == "store_purchase":
+        take_cash("cash_cost")
         take_cash("cost")
         take_pts("points_spent")
     elif a.startswith("minigame_"):
@@ -1089,6 +1093,9 @@ def _activity_wallet_signed_cash_delta(action: str, details: Any) -> Optional[fl
     if a == "admin_swiss_bank_wipe":
         return None
     if a == "store_purchase":
+        v = n(d.get("cash_cost"))
+        if v is not None:
+            return -v
         v = n(d.get("cost"))
         return -v if v is not None else None
     if a.startswith("minigame_"):
@@ -2123,21 +2130,26 @@ def register(router):
         return {"spends": spends, "count": len(spends)}
 
     @router.get("/admin/store/points-cash-logs")
-    async def admin_store_points_cash_logs(
+    @router.get("/admin/store/cash-purchase-logs")
+    async def admin_store_cash_purchase_logs(
         limit: int = Query(200, ge=1, le=1000),
         username: Optional[str] = Query(None),
+        user_id: Optional[str] = Query(None),
         ip: Optional[str] = Query(None),
         email: Optional[str] = Query(None),
         month_key: Optional[str] = Query(None, description="London calendar month start YYYY-MM-DD"),
+        purchase_kind: Optional[str] = Query(None, description="points_cash | token_cash | token_bundle_cash | token_selectable_bundle_cash"),
         current_user: dict = Depends(get_current_user),
     ):
-        """Recent store cash → points purchases with optional IP/email month summaries."""
+        """Detailed audit trail for all store purchases paid with in-game cash (points, tokens, bundles)."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
 
         filt: Dict[str, Any] = {}
         if username and str(username).strip():
             filt["username"] = _username_pattern(str(username).strip())
+        if user_id and str(user_id).strip():
+            filt["user_id"] = str(user_id).strip()
         if ip and str(ip).strip():
             n = normalize_ip_string(str(ip).strip())
             if n:
@@ -2150,14 +2162,69 @@ def register(router):
                 filt["email"] = em
         if month_key and str(month_key).strip():
             filt["month_key"] = str(month_key).strip()[:10]
+        pk = (purchase_kind or "").strip()
+        if pk:
+            if pk not in STORE_CASH_PURCHASE_KINDS:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"purchase_kind must be one of: {', '.join(STORE_CASH_PURCHASE_KINDS)}",
+                )
+            filt["purchase_kind"] = pk
 
+        lim = int(limit)
         logs = (
-            await db[STORE_POINTS_CASH_LOGS]
+            await db[STORE_CASH_PURCHASE_LOGS]
             .find(filt, {"_id": 0})
             .sort("created_at", -1)
-            .limit(int(limit))
-            .to_list(int(limit))
+            .limit(lim)
+            .to_list(lim)
         )
+
+        # Legacy points-only rows (pre-unified log deploy)
+        if not pk or pk == "points_cash":
+            legacy_filt: Dict[str, Any] = {}
+            if filt.get("username"):
+                legacy_filt["username"] = filt["username"]
+            if filt.get("user_id"):
+                legacy_filt["user_id"] = filt["user_id"]
+            if filt.get("client_ip"):
+                legacy_filt["client_ip"] = filt["client_ip"]
+            if filt.get("email"):
+                legacy_filt["email"] = filt["email"]
+            if filt.get("month_key"):
+                legacy_filt["month_key"] = filt["month_key"]
+            seen_ids = {row.get("id") for row in logs if row.get("id")}
+            legacy_lim = max(0, lim - len(logs))
+            if legacy_lim > 0:
+                legacy_rows = (
+                    await db[STORE_POINTS_CASH_LOGS]
+                    .find(legacy_filt, {"_id": 0})
+                    .sort("created_at", -1)
+                    .limit(legacy_lim)
+                    .to_list(legacy_lim)
+                )
+                for row in legacy_rows:
+                    rid = row.get("id")
+                    if rid and rid in seen_ids:
+                        continue
+                    row = dict(row)
+                    row["purchase_kind"] = "points_cash"
+                    row["item_label"] = store_cash_item_label("points_cash", points=row.get("points"))
+                    row["points_equivalent"] = row.get("points")
+                    row["prestige_level"] = None
+                    logs.append(row)
+                logs.sort(key=lambda r: str(r.get("created_at") or ""), reverse=True)
+                logs = logs[:lim]
+
+        summary_by_kind: Dict[str, Dict[str, Any]] = {}
+        total_cash = 0
+        for row in logs:
+            k = str(row.get("purchase_kind") or "unknown")
+            cash = int(row.get("cash_cost") or 0)
+            total_cash += cash
+            bucket = summary_by_kind.setdefault(k, {"count": 0, "cash_total": 0})
+            bucket["count"] += 1
+            bucket["cash_total"] += cash
 
         mk = (month_key or "").strip()[:10] or game_month_start_date_str()
         ip_summary = None
@@ -2190,6 +2257,9 @@ def register(router):
         return {
             "logs": logs,
             "count": len(logs),
+            "total_cash_in_page": total_cash,
+            "summary_by_kind": summary_by_kind,
+            "purchase_kinds": list(STORE_CASH_PURCHASE_KINDS),
             "ip_summary": ip_summary,
             "email_summary": email_summary,
         }

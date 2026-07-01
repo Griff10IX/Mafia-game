@@ -1,6 +1,7 @@
 # Store endpoints: rank bar, silencer, OC timer, garage batch, booze capacity, bullets, custom car, send points
 import logging
 from datetime import date, datetime, timezone
+from typing import Optional
 import uuid
 
 logger = logging.getLogger(__name__)
@@ -106,15 +107,16 @@ from utils.store_points_cash import (
     POINTS_CASH_MONTHLY_LIMIT,
     STORE_POINTS_CASH_EMAIL_MONTHLY,
     STORE_POINTS_CASH_IP_MONTHLY,
-    STORE_POINTS_CASH_LOGS,
     points_cash_prestige_eligible,
     cap_allowance_summary,
     client_ip_from_request,
     increment_email_cap,
     increment_ip_cap,
+    record_store_cash_purchase,
     rollback_cap,
     verified_email_for_user,
 )
+from utils.store_purchase_audit import record_store_points_purchase_log
 from utils.store_qt_cash_price import QT_CASH_AVG_SELL_OFFER_COUNT, qt_cash_price_per_point
 from utils.game_timezone import game_month_start_date_str
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_STORE
@@ -157,8 +159,16 @@ BUY_HEALTH_COST_POINTS = 15
 FULL_HEALTH = 100
 
 
-async def _record_store_points_spend(user_id: str, inc: dict, event_ref: str):
+async def _record_store_points_spend(
+    current_user: dict,
+    inc: dict,
+    event_ref: str,
+    *,
+    cost_used: int = 0,
+    extra: Optional[dict] = None,
+):
     """FIFO point lots for store + respect_events row when part of price was paid in respect (admin audit)."""
+    user_id = current_user["id"]
     spend_points = max(0, int(-(inc or {}).get("points", 0)))
     if spend_points > 0:
         try:
@@ -179,6 +189,17 @@ async def _record_store_points_spend(user_id: str, inc: dict, event_ref: str):
             await log_respect_delta(user_id, rp_delta, f"store:{event_ref}")
         except Exception:
             logger.exception("respect audit log failed user_id=%s event_ref=%s", user_id, event_ref)
+    try:
+        await record_store_points_purchase_log(
+            db,
+            current_user,
+            event_ref,
+            inc,
+            cost_points=int(cost_used or 0),
+            extra=extra,
+        )
+    except Exception:
+        logger.exception("store points purchase audit log failed user_id=%s event_ref=%s", user_id, event_ref)
 
 
 async def _rollback_transfer_out_slices(sender_id: str, transfer_id: str, slices: list):
@@ -355,7 +376,7 @@ async def buy_premium_rank_bar(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await _record_store_points_spend(current_user["id"], inc, "buy-rank-bar")
+    await _record_store_points_spend(current_user, inc, "buy-rank-bar", cost_used=cost_used)
     await log_activity(current_user["id"], current_user.get("username", "?"), "store_purchase", {"item": "premium_rank_bar", "cost": cost_used})
     return {"message": "Premium rank bar purchased!", "cost": cost_used}
 
@@ -378,7 +399,7 @@ async def buy_silencer(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await _record_store_points_spend(current_user["id"], inc, "buy-silencer")
+    await _record_store_points_spend(current_user, inc, "buy-silencer", cost_used=cost_used)
     return {"message": "Silencer purchased! Fewer witness statements will go out when you kill.", "cost": cost_used}
 
 
@@ -398,7 +419,7 @@ async def buy_anti_snitch(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await _record_store_points_spend(current_user["id"], inc, "buy-anti-snitch")
+    await _record_store_points_spend(current_user, inc, "buy-anti-snitch", cost_used=cost_used)
     return {"message": "Anti Snitch purchased! You cannot be snitched on.", "cost": cost_used}
 
 
@@ -417,7 +438,7 @@ async def buy_oc_timer(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await _record_store_points_spend(current_user["id"], inc, "buy-oc-timer")
+    await _record_store_points_spend(current_user, inc, "buy-oc-timer", cost_used=cost_used)
     return {"message": "OC timer reduced! Heist cooldown is now 4 hours.", "cost": cost_used}
 
 
@@ -437,7 +458,7 @@ async def buy_crew_oc_timer(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await _record_store_points_spend(current_user["id"], inc, "buy-crew-oc-timer")
+    await _record_store_points_spend(current_user, inc, "buy-crew-oc-timer", cost_used=cost_used)
     return {"message": "Crew OC timer purchased! When your crew commits, cooldown is 6h instead of 8h (5h with the family −1h perk). Applies while any Don, Underboss, or Capo who can commit holds this upgrade.", "cost": cost_used}
 
 
@@ -458,7 +479,7 @@ async def upgrade_garage_batch_limit(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await _record_store_points_spend(current_user["id"], inc, "upgrade-garage-batch")
+    await _record_store_points_spend(current_user, inc, "upgrade-garage-batch", cost_used=cost_used)
     return {"message": f"Garage batch limit upgraded to {new_limit}", "new_limit": new_limit, "cost": cost_used}
 
 
@@ -483,7 +504,7 @@ async def buy_booze_capacity(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await _record_store_points_spend(current_user["id"], inc, "buy-booze-capacity")
+    await _record_store_points_spend(current_user, inc, "buy-booze-capacity", cost_used=cost_used)
     from routers.money.booze_run import _booze_vip_pass_car_owned
     fam_extra = 0
     vip_car = await _booze_vip_pass_car_owned(db, current_user.get("id") or "")
@@ -520,7 +541,7 @@ async def store_buy_bullets(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await _record_store_points_spend(current_user["id"], inc, "buy-bullets")
+    await _record_store_points_spend(current_user, inc, "buy-bullets", cost_used=cost_used, extra={"bullets": bullets})
     return {"message": f"Bought {bullets:,} bullets for {cost_used} points", "bullets": bullets, "cost": cost_used}
 
 
@@ -540,7 +561,7 @@ async def buy_auto_rank(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await _record_store_points_spend(current_user["id"], inc, "buy-auto-rank")
+    await _record_store_points_spend(current_user, inc, "buy-auto-rank", cost_used=cost_used)
     try:
         from routers.account.auto_rank import wake_auto_rank_if_idle
 
@@ -574,7 +595,13 @@ async def buy_robot_bg_auto_search(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await _record_store_points_spend(current_user["id"], inc, "buy-robot-bg-auto-search")
+    await _record_store_points_spend(
+        current_user,
+        inc,
+        "buy-robot-bg-auto-search",
+        cost_used=cost_used,
+        extra={"robot_bg_auto_search_until": new_until},
+    )
     await log_activity(
         current_user["id"],
         current_user.get("username") or "?",
@@ -640,7 +667,9 @@ async def buy_weapon_point_store_tier(
         _invalidate_weapons_cache(current_user["id"])
     except Exception:
         pass
-    await _record_store_points_spend(current_user["id"], inc, "buy-weapon-point-store")
+    await _record_store_points_spend(
+        current_user, inc, "buy-weapon-point-store", cost_used=cost_used, extra={"weapon_id": weapon_id},
+    )
     await log_activity(
         current_user["id"],
         current_user.get("username") or "?",
@@ -687,7 +716,9 @@ async def buy_armour_point_store_tier(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await _record_store_points_spend(current_user["id"], inc, "buy-armour-point-store")
+    await _record_store_points_spend(
+        current_user, inc, "buy-armour-point-store", cost_used=cost_used, extra={"armour_level": level},
+    )
     await log_activity(
         current_user["id"],
         current_user.get("username") or "?",
@@ -720,7 +751,7 @@ async def buy_health(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await _record_store_points_spend(current_user["id"], inc, "buy-health")
+    await _record_store_points_spend(current_user, inc, "buy-health", cost_used=cost_used)
     return {"message": "Full health restored!", "health": FULL_HEALTH, "cost": cost_used}
 
 
@@ -744,7 +775,9 @@ async def buy_custom_car(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await _record_store_points_spend(current_user["id"], inc, "buy-custom-car")
+    await _record_store_points_spend(
+        current_user, inc, "buy-custom-car", cost_used=cost_used, extra={"car_name": request.car_name},
+    )
     await db.user_cars.insert_one({
         "id": str(uuid.uuid4()),
         "user_id": current_user["id"],
@@ -947,7 +980,9 @@ async def buy_store_token(
     result = await db.users.update_one(filt, {"$inc": inc})
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Purchase failed. Try again.")
-    await _record_store_points_spend(current_user["id"], inc, f"buy-token:{tt}")
+    await _record_store_points_spend(
+        current_user, inc, f"buy-token:{tt}", cost_used=cost_used, extra={"amount": amt, "token_type": tt},
+    )
     await log_activity(current_user["id"], current_user.get("username", "?"), "store_purchase", {"item": f"token:{tt}", "amount": amt, "cost": cost_used})
     return {"message": f"+{amt} {tt.replace('_', ' ')} token(s) for {cost_used} points", "cost": cost_used, "token_type": tt, "amount": amt}
 
@@ -979,7 +1014,9 @@ async def buy_store_token_bundle(
     result = await db.users.update_one(filt, {"$inc": inc})
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Purchase failed. Try again.")
-    await _record_store_points_spend(current_user["id"], inc, f"buy-token-bundle:{bid}")
+    await _record_store_points_spend(
+        current_user, inc, f"buy-token-bundle:{bid}", cost_used=cost_used, extra={"bundle_id": bid},
+    )
     return {"message": f"Bundle '{bid}' purchased for {cost_used} points", "cost": cost_used, "bundle_id": bid}
 
 
@@ -1013,8 +1050,14 @@ async def buy_store_token_selectable_bundle(
     result = await db.users.update_one(filt, {"$inc": inc})
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Purchase failed. Try again.")
-    await _record_store_points_spend(current_user["id"], inc, "buy-token-selectable-bundle")
     selected = [{"token_type": e["token_type"], "amount": int(e["qty"])} for e in entries]
+    await _record_store_points_spend(
+        current_user,
+        inc,
+        "buy-token-selectable-bundle",
+        cost_used=cost_used,
+        extra={"selected_tokens": selected},
+    )
     return {
         "message": f"Selectable bundle purchased for {cost_used} points",
         "cost": cost_used,
@@ -1044,7 +1087,7 @@ async def buy_shooting_range_bonus(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await _record_store_points_spend(current_user["id"], inc, "buy-shooting-range-bonus")
+    await _record_store_points_spend(current_user, inc, "buy-shooting-range-bonus", cost_used=cost_used, extra={"bonus_plays_added": add})
     new_bonus = cur + add
     base = 10  # SHOOTING_RANGE_MAX_PLAYS_PER_HOUR in armoury
     return {
@@ -1075,7 +1118,7 @@ async def buy_hitlist_npc_bonus_slot(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await _record_store_points_spend(current_user["id"], inc, "buy-hitlist-npc-bonus-slot")
+    await _record_store_points_spend(current_user, inc, "buy-hitlist-npc-bonus-slot")
     new_bonus = cur_bonus + 1
     new_limit = HITLIST_NPC_BONUS_SLOTS_BASE + new_bonus
     return {
@@ -1159,7 +1202,7 @@ async def get_token_cash_price(current_user: dict = Depends(get_current_user)):
         "price_per_point": round(price_per_point, 2) if available else 0,
         "offer_count": offers_in_avg,
         "min_price_per_point": TOKEN_CASH_MIN_PRICE_PER_POINT,
-        "used_qt_average": offers_in_avg >= TOKEN_CASH_AVG_SELL_OFFER_COUNT,
+        "used_qt_average": offers_in_avg >= QT_CASH_AVG_SELL_OFFER_COUNT,
         "cash_purchases_today": used,
         "cash_purchases_limit": TOKEN_CASH_DAILY_LIMIT,
     }
@@ -1167,6 +1210,7 @@ async def get_token_cash_price(current_user: dict = Depends(get_current_user)):
 
 async def buy_store_token_cash(
     body: BuyStoreTokenBody,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES
@@ -1188,7 +1232,7 @@ async def buy_store_token_cash(
             detail=f"Daily cash purchase limit reached ({TOKEN_CASH_DAILY_LIMIT}/day; {used} used today).",
         )
 
-    _available, price_per_point, _ = await _get_cash_price_per_point()
+    _available, price_per_point, offers_in_avg = await _get_cash_price_per_point()
     if price_per_point <= 0:
         raise HTTPException(status_code=400, detail="Cash price unavailable. Try again.")
 
@@ -1222,6 +1266,29 @@ async def buy_store_token_cash(
         current_user["id"], current_user.get("username", "?"), "store_purchase",
         {"item": f"token-cash:{tt}", "amount": amt, "cash_cost": cash_cost, "price_per_point": round(price_per_point, 2)},
     )
+    purchase_id = str(uuid.uuid4())
+    try:
+        await record_store_cash_purchase(
+            db,
+            purchase_id=purchase_id,
+            purchase_kind="token_cash",
+            user=current_user,
+            cash_cost=cash_cost,
+            price_per_point=price_per_point,
+            money_before=money_balance,
+            money_after=money_balance - cash_cost,
+            client_ip=client_ip_from_request(request),
+            email=verified_email_for_user(current_user),
+            qt_offers_used=offers_in_avg,
+            used_qt_average=offers_in_avg >= QT_CASH_AVG_SELL_OFFER_COUNT,
+            points_equivalent=unit_pts * amt,
+            token_type=tt,
+            amount=amt,
+            token_cash_day_before=used,
+            token_cash_day_after=used + amt,
+        )
+    except Exception:
+        logger.exception("store token cash audit log failed purchase_id=%s", purchase_id)
     return {
         "message": f"+{amt} {tt.replace('_', ' ')} token(s) for ${cash_cost:,.0f}",
         "cost_cash": cash_cost,
@@ -1233,6 +1300,7 @@ async def buy_store_token_cash(
 
 async def buy_store_token_bundle_cash(
     body: BuyStoreTokenBundleBody,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     bid = (body.bundle_id or "").strip()
@@ -1248,7 +1316,7 @@ async def buy_store_token_bundle_cash(
             detail=f"Daily cash purchase limit reached ({TOKEN_CASH_DAILY_LIMIT}/day; {used} used today).",
         )
 
-    _available, price_per_point, _ = await _get_cash_price_per_point()
+    _available, price_per_point, offers_in_avg = await _get_cash_price_per_point()
     if price_per_point <= 0:
         raise HTTPException(status_code=400, detail="Cash price unavailable. Try again.")
 
@@ -1281,6 +1349,28 @@ async def buy_store_token_bundle_cash(
         current_user["id"], current_user.get("username", "?"), "store_purchase",
         {"item": f"token-bundle-cash:{bid}", "cash_cost": cash_cost, "price_per_point": round(price_per_point, 2)},
     )
+    purchase_id = str(uuid.uuid4())
+    try:
+        await record_store_cash_purchase(
+            db,
+            purchase_id=purchase_id,
+            purchase_kind="token_bundle_cash",
+            user=current_user,
+            cash_cost=cash_cost,
+            price_per_point=price_per_point,
+            money_before=money_balance,
+            money_after=money_balance - cash_cost,
+            client_ip=client_ip_from_request(request),
+            email=verified_email_for_user(current_user),
+            qt_offers_used=offers_in_avg,
+            used_qt_average=offers_in_avg >= QT_CASH_AVG_SELL_OFFER_COUNT,
+            points_equivalent=cost_pts,
+            bundle_id=bid,
+            token_cash_day_before=used,
+            token_cash_day_after=used + 1,
+        )
+    except Exception:
+        logger.exception("store token bundle cash audit log failed purchase_id=%s", purchase_id)
     return {
         "message": f"Bundle '{bid}' purchased for ${cash_cost:,.0f}",
         "cost_cash": cash_cost,
@@ -1291,6 +1381,7 @@ async def buy_store_token_bundle_cash(
 
 async def buy_store_token_selectable_bundle_cash(
     body: BuyStoreSelectableTokenBundleBody,
+    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     from routers.kill.armoury import TOKEN_CONFIG
@@ -1305,7 +1396,7 @@ async def buy_store_token_selectable_bundle_cash(
             status_code=400,
             detail=f"Daily cash purchase limit reached ({TOKEN_CASH_DAILY_LIMIT}/day; {used} used today).",
         )
-    _available, price_per_point, _ = await _get_cash_price_per_point()
+    _available, price_per_point, offers_in_avg = await _get_cash_price_per_point()
     if price_per_point <= 0:
         raise HTTPException(status_code=400, detail="Cash price unavailable. Try again.")
     cash_cost = round(final_cost_pts * price_per_point)
@@ -1335,6 +1426,38 @@ async def buy_store_token_selectable_bundle_cash(
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Purchase failed. Try again.")
     selected = [{"token_type": e["token_type"], "amount": int(e["qty"])} for e in entries]
+    purchase_id = str(uuid.uuid4())
+    try:
+        await record_store_cash_purchase(
+            db,
+            purchase_id=purchase_id,
+            purchase_kind="token_selectable_bundle_cash",
+            user=current_user,
+            cash_cost=cash_cost,
+            price_per_point=price_per_point,
+            money_before=money_balance,
+            money_after=money_balance - cash_cost,
+            client_ip=client_ip_from_request(request),
+            email=verified_email_for_user(current_user),
+            qt_offers_used=offers_in_avg,
+            used_qt_average=offers_in_avg >= QT_CASH_AVG_SELL_OFFER_COUNT,
+            points_equivalent=final_cost_pts,
+            selected_tokens=selected,
+            token_cash_day_before=used,
+            token_cash_day_after=used + units_selected,
+        )
+    except Exception:
+        logger.exception("store selectable bundle cash audit log failed purchase_id=%s", purchase_id)
+    await log_activity(
+        current_user["id"], current_user.get("username", "?"), "store_purchase",
+        {
+            "item": "token-selectable-bundle-cash",
+            "cash_cost": cash_cost,
+            "price_per_point": round(price_per_point, 2),
+            "selected_tokens": selected,
+            "purchase_id": purchase_id,
+        },
+    )
     return {
         "message": f"Selectable bundle purchased for ${cash_cost:,.0f}",
         "cost_cash": cash_cost,
@@ -1563,31 +1686,32 @@ async def buy_store_points_cash(
         },
     )
 
-    now_iso = datetime.now(timezone.utc).isoformat()
-    await db[STORE_POINTS_CASH_LOGS].insert_one(
-        {
-            "id": purchase_id,
-            "user_id": current_user["id"],
-            "username": current_user.get("username", "?"),
-            "email": email,
-            "client_ip": client_ip,
-            "month_key": month_key,
-            "points": points,
-            "cash_cost": cash_cost,
-            "price_per_point": round(price_per_point, 2),
-            "qt_offers_used": offers_in_avg,
-            "used_qt_average": offers_in_avg >= QT_CASH_AVG_SELL_OFFER_COUNT,
-            "ip_month_spent_before": ip_spent_before,
-            "ip_month_spent_after": ip_spent_after,
-            "email_month_spent_before": email_spent_before,
-            "email_month_spent_after": email_spent_after,
-            "money_before": money_before,
-            "money_after": money_after,
-            "points_before": points_before,
-            "points_after": points_after,
-            "created_at": now_iso,
-        }
-    )
+    try:
+        await record_store_cash_purchase(
+            db,
+            purchase_id=purchase_id,
+            purchase_kind="points_cash",
+            user=current_user,
+            cash_cost=cash_cost,
+            price_per_point=price_per_point,
+            money_before=money_before,
+            money_after=money_after,
+            client_ip=client_ip,
+            email=email,
+            qt_offers_used=offers_in_avg,
+            used_qt_average=offers_in_avg >= QT_CASH_AVG_SELL_OFFER_COUNT,
+            points=points,
+            points_before=points_before,
+            points_after=points_after,
+            points_equivalent=points,
+            month_key=month_key,
+            ip_month_spent_before=ip_spent_before,
+            ip_month_spent_after=ip_spent_after,
+            email_month_spent_before=email_spent_before,
+            email_month_spent_after=email_spent_after,
+        )
+    except Exception:
+        logger.exception("store points cash audit log failed purchase_id=%s", purchase_id)
 
     return {
         "message": f"+{points:,} points for ${cash_cost:,.0f}",

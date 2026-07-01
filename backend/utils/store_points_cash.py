@@ -1,7 +1,8 @@
 """Store cash → points: monthly IP/email caps and audit helpers."""
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import Request
 
@@ -20,6 +21,132 @@ def points_cash_prestige_eligible(user: dict) -> bool:
 STORE_POINTS_CASH_IP_MONTHLY = "store_points_cash_ip_monthly"
 STORE_POINTS_CASH_EMAIL_MONTHLY = "store_points_cash_email_monthly"
 STORE_POINTS_CASH_LOGS = "store_points_cash_logs"
+STORE_CASH_PURCHASE_LOGS = "store_cash_purchase_logs"
+
+STORE_CASH_PURCHASE_KINDS = (
+    "points_cash",
+    "token_cash",
+    "token_bundle_cash",
+    "token_selectable_bundle_cash",
+)
+
+
+def store_cash_item_label(
+    purchase_kind: str,
+    *,
+    points: Optional[int] = None,
+    token_type: Optional[str] = None,
+    amount: Optional[int] = None,
+    bundle_id: Optional[str] = None,
+    selected_tokens: Optional[List[dict]] = None,
+) -> str:
+    k = (purchase_kind or "").strip()
+    if k == "points_cash":
+        return f"+{int(points or 0):,} points"
+    if k == "token_cash":
+        tt = (token_type or "?").replace("_", " ")
+        return f"+{int(amount or 0):,}× {tt}"
+    if k == "token_bundle_cash":
+        return f"Token bundle: {bundle_id or '?'}"
+    if k == "token_selectable_bundle_cash":
+        if selected_tokens:
+            parts = [f"{int(t.get('amount') or 0)}× {(t.get('token_type') or '?').replace('_', ' ')}" for t in selected_tokens]
+            return "Selectable bundle: " + ", ".join(parts)
+        return "Selectable token bundle"
+    return k or "store_cash"
+
+
+async def record_store_cash_purchase(
+    db,
+    *,
+    purchase_id: str,
+    purchase_kind: str,
+    user: dict,
+    cash_cost: int,
+    price_per_point: float,
+    money_before: float,
+    money_after: float,
+    client_ip: str = "",
+    email: Optional[str] = None,
+    qt_offers_used: int = 0,
+    used_qt_average: bool = False,
+    points: Optional[int] = None,
+    points_before: Optional[int] = None,
+    points_after: Optional[int] = None,
+    points_equivalent: Optional[int] = None,
+    token_type: Optional[str] = None,
+    amount: Optional[int] = None,
+    bundle_id: Optional[str] = None,
+    selected_tokens: Optional[List[dict]] = None,
+    month_key: Optional[str] = None,
+    ip_month_spent_before: Optional[int] = None,
+    ip_month_spent_after: Optional[int] = None,
+    email_month_spent_before: Optional[int] = None,
+    email_month_spent_after: Optional[int] = None,
+    token_cash_day_before: Optional[int] = None,
+    token_cash_day_after: Optional[int] = None,
+) -> None:
+    """Detailed audit row for any store purchase paid with in-game cash."""
+    now_iso = datetime.now(timezone.utc).isoformat()
+    item_label = store_cash_item_label(
+        purchase_kind,
+        points=points,
+        token_type=token_type,
+        amount=amount,
+        bundle_id=bundle_id,
+        selected_tokens=selected_tokens,
+    )
+    doc: Dict[str, Any] = {
+        "id": purchase_id,
+        "purchase_kind": purchase_kind,
+        "item_label": item_label,
+        "user_id": user.get("id"),
+        "username": user.get("username", "?"),
+        "prestige_level": int(user.get("prestige_level") or 0),
+        "email": email,
+        "client_ip": client_ip or None,
+        "cash_cost": int(cash_cost),
+        "price_per_point": round(float(price_per_point), 2),
+        "qt_offers_used": int(qt_offers_used or 0),
+        "used_qt_average": bool(used_qt_average),
+        "money_before": float(money_before),
+        "money_after": float(money_after),
+        "created_at": now_iso,
+    }
+    if points is not None:
+        doc["points"] = int(points)
+    if points_before is not None:
+        doc["points_before"] = int(points_before)
+    if points_after is not None:
+        doc["points_after"] = int(points_after)
+    if points_equivalent is not None:
+        doc["points_equivalent"] = int(points_equivalent)
+    if token_type:
+        doc["token_type"] = token_type
+    if amount is not None:
+        doc["amount"] = int(amount)
+    if bundle_id:
+        doc["bundle_id"] = bundle_id
+    if selected_tokens:
+        doc["selected_tokens"] = selected_tokens
+    if month_key:
+        doc["month_key"] = month_key
+    if ip_month_spent_before is not None:
+        doc["ip_month_spent_before"] = int(ip_month_spent_before)
+    if ip_month_spent_after is not None:
+        doc["ip_month_spent_after"] = int(ip_month_spent_after)
+    if email_month_spent_before is not None:
+        doc["email_month_spent_before"] = int(email_month_spent_before)
+    if email_month_spent_after is not None:
+        doc["email_month_spent_after"] = int(email_month_spent_after)
+    if token_cash_day_before is not None:
+        doc["token_cash_day_before"] = int(token_cash_day_before)
+    if token_cash_day_after is not None:
+        doc["token_cash_day_after"] = int(token_cash_day_after)
+    await db[STORE_CASH_PURCHASE_LOGS].insert_one(doc)
+    if purchase_kind == "points_cash":
+        legacy = {k: v for k, v in doc.items() if k != "purchase_kind" and k != "item_label" and k != "points_equivalent" and k != "prestige_level" and k != "token_cash_day_before" and k != "token_cash_day_after"}
+        await db[STORE_POINTS_CASH_LOGS].insert_one(legacy)
 
 
 def client_ip_from_request(request: Request) -> str:

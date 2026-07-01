@@ -247,7 +247,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Donations Payments Log', categoryId: 'admin-donations', collapseKey: 'donationsPayments', keywords: ['donations', 'payments', 'stripe', 'credit'], adminOnly: true },
   { label: 'Store Point Crediting', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['store', 'crediting', 'manual', 'eta', 'payments'], adminOnly: true },
   { label: 'Pre-order Settings', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['preorder', 'points', 'release', 'manual', 'store', 'credit'], adminOnly: true },
-  { label: 'Points cash purchase logs', categoryId: 'admin-donations', collapseKey: 'pointsCashLogs', keywords: ['points', 'cash', 'store', 'ip', 'email', 'monthly', 'quick trade'], adminOnly: true },
+  { label: 'Store cash purchase logs', categoryId: 'admin-donations', collapseKey: 'pointsCashLogs', keywords: ['points', 'cash', 'store', 'ip', 'email', 'monthly', 'quick trade', 'token', 'bundle'], adminOnly: true },
   { label: 'Release Preorder Points', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['release', 'preorder', 'points', 'credit'], adminOnly: true },
   { label: 'Quick Trade admin', categoryId: 'admin-economy-progression', collapseKey: 'quicktradeTool', keywords: ['quicktrade', 'trade', 'offers', 'escrow', 'cancel', 'listings', 'tokens', 'property'], adminOnly: true },
   { label: 'Racket & Distillery progress', categoryId: 'admin-economy-progression', collapseKey: 'racketProgress', scrollToId: 'admin-racket-progress', keywords: ['racket', 'distillery', 'illegal business', 'progress', 'vault', 'guards', 'security', 'ladder', 'booze', 'ibm'], adminOnly: true },
@@ -1466,9 +1466,11 @@ export default function Admin() {
   const [pointsCashLogs, setPointsCashLogs] = useState(null);
   const [pointsCashLogsLoading, setPointsCashLogsLoading] = useState(false);
   const [pointsCashLogsUsername, setPointsCashLogsUsername] = useState('');
+  const [pointsCashLogsUserId, setPointsCashLogsUserId] = useState('');
   const [pointsCashLogsIp, setPointsCashLogsIp] = useState('');
   const [pointsCashLogsEmail, setPointsCashLogsEmail] = useState('');
   const [pointsCashLogsMonthKey, setPointsCashLogsMonthKey] = useState('');
+  const [pointsCashLogsKind, setPointsCashLogsKind] = useState('');
   const [launchSettingsSaving, setLaunchSettingsSaving] = useState(false);
   const [preorderReleaseLoading, setPreorderReleaseLoading] = useState(false);
   const [manualCreditLoading, setManualCreditLoading] = useState(null);
@@ -6188,15 +6190,17 @@ export default function Admin() {
   const handleFetchPointsCashLogs = async () => {
     setPointsCashLogsLoading(true);
     try {
-      const params = { limit: 200 };
+      const params = { limit: 300 };
       if ((pointsCashLogsUsername || '').trim()) params.username = pointsCashLogsUsername.trim();
+      if ((pointsCashLogsUserId || '').trim()) params.user_id = pointsCashLogsUserId.trim();
       if ((pointsCashLogsIp || '').trim()) params.ip = pointsCashLogsIp.trim();
       if ((pointsCashLogsEmail || '').trim()) params.email = pointsCashLogsEmail.trim();
       if ((pointsCashLogsMonthKey || '').trim()) params.month_key = pointsCashLogsMonthKey.trim();
-      const res = await api.get('/admin/store/points-cash-logs', { params });
+      if ((pointsCashLogsKind || '').trim()) params.purchase_kind = pointsCashLogsKind.trim();
+      const res = await api.get('/admin/store/cash-purchase-logs', { params });
       setPointsCashLogs(res.data || null);
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to load points cash logs');
+      toast.error(e.response?.data?.detail || 'Failed to load store cash logs');
       setPointsCashLogs({ logs: [], count: 0 });
     } finally {
       setPointsCashLogsLoading(false);
@@ -11815,7 +11819,7 @@ export default function Admin() {
           <div className="h-0.5 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
           <SectionHeader
             icon={DollarSign}
-            title="Points cash purchase logs"
+            title="Store cash purchase logs"
             color="text-emerald-300"
             badge={pointsCashLogs?.logs ? <span className="text-[10px] font-heading text-mutedForeground">{pointsCashLogs.count} rows</span> : null}
             toolAnchor="pointsCashLogs"
@@ -11825,19 +11829,44 @@ export default function Admin() {
           {!collapsed.pointsCashLogs && (
             <div className="p-3 space-y-3">
               <p className="text-[10px] text-mutedForeground">
-                Audit trail for store cash → points purchases (QT pricing, $2B/month per IP and per verified email).
+                Detailed audit for every store purchase paid with in-game cash: points (Prestige 1+, QT pricing), tokens, and token bundles. Includes user, item, balances, IP, email, and cap usage.
               </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <Input value={pointsCashLogsUsername} onChange={(e) => setPointsCashLogsUsername(e.target.value)} placeholder="Username filter" className="text-[11px]" />
-                <Input value={pointsCashLogsIp} onChange={(e) => setPointsCashLogsIp(e.target.value)} placeholder="IP filter (+ month summary)" className="text-[11px]" />
-                <Input value={pointsCashLogsEmail} onChange={(e) => setPointsCashLogsEmail(e.target.value)} placeholder="Email filter (+ month summary)" className="text-[11px]" />
-                <Input value={pointsCashLogsMonthKey} onChange={(e) => setPointsCashLogsMonthKey(e.target.value)} placeholder="Month key YYYY-MM-DD" className="text-[11px]" />
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                <Input value={pointsCashLogsUsername} onChange={(e) => setPointsCashLogsUsername(e.target.value)} placeholder="Username" className="text-[11px]" />
+                <Input value={pointsCashLogsUserId} onChange={(e) => setPointsCashLogsUserId(e.target.value)} placeholder="User ID" className="text-[11px]" />
+                <select
+                  value={pointsCashLogsKind}
+                  onChange={(e) => setPointsCashLogsKind(e.target.value)}
+                  className="text-[11px] rounded border border-zinc-700/60 bg-zinc-900/80 px-2 py-1.5 text-foreground"
+                >
+                  <option value="">All purchase types</option>
+                  <option value="points_cash">Points (cash → pts)</option>
+                  <option value="token_cash">Single token</option>
+                  <option value="token_bundle_cash">Token bundle</option>
+                  <option value="token_selectable_bundle_cash">Selectable bundle</option>
+                </select>
+                <Input value={pointsCashLogsIp} onChange={(e) => setPointsCashLogsIp(e.target.value)} placeholder="IP (+ monthly cap summary)" className="text-[11px]" />
+                <Input value={pointsCashLogsEmail} onChange={(e) => setPointsCashLogsEmail(e.target.value)} placeholder="Email (+ monthly cap summary)" className="text-[11px]" />
+                <Input value={pointsCashLogsMonthKey} onChange={(e) => setPointsCashLogsMonthKey(e.target.value)} placeholder="Month key YYYY-MM-DD (points cap)" className="text-[11px]" />
               </div>
               <BtnPrimary onClick={handleFetchPointsCashLogs} disabled={pointsCashLogsLoading}>
                 {pointsCashLogsLoading ? 'Loading…' : 'Load logs'}
               </BtnPrimary>
-              {(pointsCashLogs?.ip_summary || pointsCashLogs?.email_summary) && (
+              {(pointsCashLogs?.ip_summary || pointsCashLogs?.email_summary || pointsCashLogs?.summary_by_kind) && (
                 <div className="text-[10px] font-heading text-zinc-400 space-y-1">
+                  {pointsCashLogs.total_cash_in_page != null && (
+                    <p>Page total cash spent: {formatAdminMoneyInt(pointsCashLogs.total_cash_in_page)}</p>
+                  )}
+                  {pointsCashLogs.summary_by_kind && Object.keys(pointsCashLogs.summary_by_kind).length > 0 && (
+                    <p>
+                      By type:{' '}
+                      {Object.entries(pointsCashLogs.summary_by_kind).map(([k, v]) => (
+                        <span key={k} className="mr-2">
+                          {k.replace(/_/g, ' ')} ({v.count} · {formatAdminMoneyInt(v.cash_total)})
+                        </span>
+                      ))}
+                    </p>
+                  )}
                   {pointsCashLogs.ip_summary && (
                     <p>IP {pointsCashLogs.ip_summary.ip}: {formatAdminMoneyInt(pointsCashLogs.ip_summary.cash_spent)} spent · {formatAdminMoneyInt(pointsCashLogs.ip_summary.remaining)} remaining ({pointsCashLogs.ip_summary.month_key})</p>
                   )}
@@ -11851,34 +11880,65 @@ export default function Admin() {
                   {(!pointsCashLogs.logs || pointsCashLogs.logs.length === 0) ? (
                     <p className="text-[10px] text-mutedForeground">No matching purchases.</p>
                   ) : (
-                    <table className="w-full text-[9px] font-heading">
+                    <table className="w-full text-[9px] font-heading min-w-[900px]">
                       <thead>
                         <tr className="text-left text-mutedForeground border-b border-zinc-700/40">
                           <th className="py-1 pr-2">Time</th>
+                          <th className="py-1 pr-2">Type</th>
                           <th className="py-1 pr-2">User</th>
-                          <th className="py-1 pr-2">Email</th>
-                          <th className="py-1 pr-2">IP</th>
-                          <th className="py-1 pr-2 text-right">Pts</th>
+                          <th className="py-1 pr-2">What</th>
                           <th className="py-1 pr-2 text-right">Cash</th>
                           <th className="py-1 pr-2 text-right">$/pt</th>
-                          <th className="py-1 pr-2 text-right">IP mo.</th>
-                          <th className="py-1 text-right">Email mo.</th>
+                          <th className="py-1 pr-2 text-right">Pts</th>
+                          <th className="py-1 pr-2">IP</th>
+                          <th className="py-1 pr-2">Email</th>
+                          <th className="py-1 pr-2">Balances / caps</th>
+                          <th className="py-1">ID</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {pointsCashLogs.logs.map((row) => (
-                          <tr key={row.id} className="border-b border-zinc-800/50">
+                        {pointsCashLogs.logs.map((row) => {
+                          const kind = row.purchase_kind || 'points_cash';
+                          const kindLabel = kind === 'points_cash' ? 'Points' : kind === 'token_cash' ? 'Token' : kind === 'token_bundle_cash' ? 'Bundle' : kind === 'token_selectable_bundle_cash' ? 'Pick bundle' : kind;
+                          const ptsShown = row.points != null ? Number(row.points) : (row.points_equivalent != null ? Number(row.points_equivalent) : 0);
+                          const capBits = [];
+                          if (row.money_before != null && row.money_after != null) {
+                            capBits.push(`$${formatAdminMoneyInt(row.money_before)}→${formatAdminMoneyInt(row.money_after)}`);
+                          }
+                          if (row.points_before != null && row.points_after != null) {
+                            capBits.push(`${Number(row.points_before).toLocaleString()}→${Number(row.points_after).toLocaleString()} pts`);
+                          }
+                          if (row.ip_month_spent_after != null) {
+                            capBits.push(`IP mo. ${formatAdminMoneyInt(row.ip_month_spent_after)}`);
+                          }
+                          if (row.email_month_spent_after != null) {
+                            capBits.push(`Email mo. ${formatAdminMoneyInt(row.email_month_spent_after)}`);
+                          }
+                          if (row.token_cash_day_after != null) {
+                            capBits.push(`Token day ${row.token_cash_day_after}/25`);
+                          }
+                          if (row.prestige_level != null) {
+                            capBits.push(`P${row.prestige_level}`);
+                          }
+                          return (
+                          <tr key={row.id || `${row.created_at}-${row.username}`} className="border-b border-zinc-800/50 align-top">
                             <td className="py-1 pr-2 whitespace-nowrap">{formatAdminDateTime(row.created_at)}</td>
-                            <td className="py-1 pr-2">{row.username || '?'}</td>
-                            <td className="py-1 pr-2 max-w-[120px] truncate" title={row.email}>{row.email || '—'}</td>
-                            <td className="py-1 pr-2 font-mono text-[8px]">{row.client_ip || '—'}</td>
-                            <td className="py-1 pr-2 text-right">{Number(row.points || 0).toLocaleString()}</td>
-                            <td className="py-1 pr-2 text-right">{formatAdminMoneyInt(row.cash_cost)}</td>
+                            <td className="py-1 pr-2 whitespace-nowrap text-emerald-300/90">{kindLabel}</td>
+                            <td className="py-1 pr-2">
+                              <div>{row.username || '?'}</div>
+                              {row.user_id ? <div className="text-[8px] text-mutedForeground font-mono truncate max-w-[88px]" title={row.user_id}>{row.user_id}</div> : null}
+                            </td>
+                            <td className="py-1 pr-2 max-w-[160px]" title={row.item_label}>{row.item_label || row.bundle_id || row.token_type || '—'}</td>
+                            <td className="py-1 pr-2 text-right whitespace-nowrap">{formatAdminMoneyInt(row.cash_cost)}</td>
                             <td className="py-1 pr-2 text-right">{formatAdminMoneyInt(row.price_per_point)}</td>
-                            <td className="py-1 pr-2 text-right">{formatAdminMoneyInt(row.ip_month_spent_after)}</td>
-                            <td className="py-1 text-right">{formatAdminMoneyInt(row.email_month_spent_after)}</td>
+                            <td className="py-1 pr-2 text-right">{ptsShown ? ptsShown.toLocaleString() : '—'}</td>
+                            <td className="py-1 pr-2 font-mono text-[8px] max-w-[90px] truncate" title={row.client_ip}>{row.client_ip || '—'}</td>
+                            <td className="py-1 pr-2 max-w-[110px] truncate" title={row.email}>{row.email || '—'}</td>
+                            <td className="py-1 pr-2 text-[8px] text-mutedForeground max-w-[180px]">{capBits.length ? capBits.join(' · ') : '—'}</td>
+                            <td className="py-1 font-mono text-[7px] text-mutedForeground max-w-[72px] truncate" title={row.id}>{row.id || '—'}</td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   )}
