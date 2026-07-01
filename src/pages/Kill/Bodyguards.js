@@ -276,10 +276,9 @@ export default function Bodyguards() {
       toast.error(`You need ${cost.toLocaleString()} points (you have ${(user?.points ?? 0).toLocaleString()}).`);
       return;
     }
-    const extend = robotBgAutoSearchActive;
     const ok = window.confirm(
-      `${extend ? 'Extend' : 'Buy'} robot auto-search for ${cost.toLocaleString()} points?\n\n`
-      + 'Keeps Attack searches running for your hired robots — starts missing searches and renews when a row has 3 hours or less left. Lasts 30 days (stacks if you extend early).'
+      `Buy robot auto-search for ${cost.toLocaleString()} points?\n\n`
+      + 'Keeps Attack searches running for your hired robots — starts missing searches and renews when a row has 3 hours or less left. Lasts 30 days.'
     );
     if (!ok) return;
     setAutoSearchBuying(true);
@@ -736,6 +735,7 @@ export default function Bodyguards() {
                 </p>
               ) : null}
             </div>
+            {!robotBgAutoSearchActive ? (
             <button
               type="button"
               onClick={buyRobotBgAutoSearch}
@@ -743,8 +743,9 @@ export default function Bodyguards() {
               className="shrink-0 min-h-[40px] px-3 py-2 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30 text-[10px] font-bold uppercase disabled:opacity-50 touch-manipulation"
               data-testid="buy-robot-bg-auto-search"
             >
-              {autoSearchBuying ? '…' : `${robotBgAutoSearchActive ? 'Extend' : 'Buy'} (${robotBgAutoSearchCost.toLocaleString()} pts)`}
+              {autoSearchBuying ? '…' : `Buy (${robotBgAutoSearchCost.toLocaleString()} pts)`}
             </button>
+            ) : null}
           </div>
         </div>
       )}

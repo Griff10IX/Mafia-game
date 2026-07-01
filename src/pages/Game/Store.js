@@ -98,7 +98,7 @@ const UPGRADES = [
   { id: 'health', title: 'Full Health', Icon: Heart, price: 15, path: '/store/buy-health', ownedKey: null, desc: 'Restore health to 100%', extra: (u) => ({ line: 'Health', value: `${Number(u?.health ?? 100).toFixed(0)}%` }) },
   { id: 'rank-bar', title: 'Premium Rank Bar', Icon: Star, price: 50, path: '/store/buy-rank-bar', ownedKey: 'premium_rank_bar', desc: 'Exact numbers & amounts for next rank' },
   { id: 'auto-rank', title: 'Auto Rank', Icon: Bot, price: AUTO_RANK_COST_POINTS, path: '/store/buy-auto-rank', ownedKey: 'auto_rank_purchased', desc: 'Auto-commit crimes, GTA, busts, OC. Optional: set Telegram in Profile for notifications.' },
-  { id: 'robot-bg-auto-search', title: 'Robot Auto-Search', Icon: Crosshair, price: ROBOT_BG_AUTO_SEARCH_COST_POINTS, path: '/store/buy-robot-bg-auto-search', ownedKey: null, desc: '30 days: auto-maintain Attack searches for your hired robot bodyguards (renews when ≤3h left on a row). Buy or extend on Bodyguards too.' },
+  { id: 'robot-bg-auto-search', title: 'Robot Auto-Search', Icon: Crosshair, price: ROBOT_BG_AUTO_SEARCH_COST_POINTS, path: '/store/buy-robot-bg-auto-search', ownedKey: null, desc: '30 days: auto-maintain Attack searches for your hired robot bodyguards (renews when ≤3h left on a row). Buy or extend in Store.' },
   { id: 'armour-tier-6', title: 'Elite Composite Battledress', Icon: Shield, price: ARMOUR_TIER_6_STORE_COST_POINTS, path: '/store/buy-armour-tier-6', ownedKey: null, ownedCheck: (u) => (u?.armour_owned_level_max ?? 0) >= 6, disabledWhen: (u) => (u?.armour_owned_level_max ?? 0) < 5, desc: 'Armour level 6 (60k base bullets). Requires level 5 owned. Auto-equipped on purchase. Also shown on Armour page.' },
   { id: 'weapon11', title: 'Engraved Lewis Gun', Icon: Swords, price: WEAPON11_STORE_COST_POINTS, path: '/store/buy-weapon11', ownedKey: null, ownedCheck: (u) => !!u?.owns_weapon11, disabledWhen: (u) => !u?.owns_weapon10, desc: 'Top store gun (130 dmg). Requires Chicago Typewriter Premium owned. Auto-equipped on purchase. Also on Armour page.' },
   { id: 'silencer', title: 'Silencer', Icon: VolumeX, price: 150, path: '/store/buy-silencer', ownedKey: 'has_silencer', desc: 'Fewer witness statements when you kill' },
@@ -375,7 +375,10 @@ export default function Store() {
     return () => clearTimeout(t);
   }, [activeTab, pointsTabLocked, pointsPaymentMode, pointsCashInput]);
 
-  const pointsCashPrestigeOk = (user?.prestige_level ?? 0) >= 1;
+  const pointsCashPrestigeOk =
+    (user?.prestige_level ?? 0) >= 1
+    || Boolean(pointsCashPriceData?.prestige_eligible)
+    || Boolean(pointsCashQuote?.prestige_eligible);
 
   useEffect(() => {
     if (activeTab === 'points' && !pointsTabLocked && pointsPaymentMode === 'cash' && user?.email_verified && pointsCashPrestigeOk) {

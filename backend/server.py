@@ -781,6 +781,7 @@ class UserResponse(BaseModel):
     money: float
     points: int
     rank_points: int
+    prestige_level: int = 0
     bodyguard_slots: int
     bodyguard_count: int = 0  # current number of hired bodyguards (filled slots)
     bullets: int

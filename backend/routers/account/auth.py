@@ -2080,6 +2080,7 @@ def register(router):
                 money=money_val,
                 points=_safe_int(u.get("points"), 0),
                 rank_points=_safe_int(u.get("rank_points"), 0),
+                prestige_level=_safe_int(u.get("prestige_level"), 0),
                 bodyguard_slots=_safe_int(u.get("bodyguard_slots"), 1),
                 bodyguard_count=bodyguard_count,
                 bullets=_safe_int(u.get("bullets"), 0),
