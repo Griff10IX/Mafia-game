@@ -1974,6 +1974,7 @@ def register(router):
             money_val = _safe_float(current_user.get("money"), 0.0)
             wealth_id, wealth_name, wealth_color = get_wealth_rank(money_val)
             wealth_range = get_wealth_rank_range(money_val)
+            from utils.robot_bg_auto_search import robot_bg_auto_search_active
             # Casino/property loaded separately via GET /user/casino-property to keep auth/me fast
             u = current_user
             equipped_weapon_id = u.get("equipped_weapon_id")
@@ -2200,6 +2201,8 @@ def register(router):
                 rank_xp_pass_rewards_granted=bool(u.get("rank_xp_pass_rewards_granted", False)),
                 shooting_range_bonus_plays=_safe_int(u.get("shooting_range_bonus_plays"), 0),
                 hitlist_npc_bonus_slots=_safe_int(u.get("hitlist_npc_bonus_slots"), 0),
+                robot_bg_auto_search_until=u.get("robot_bg_auto_search_until"),
+                robot_bg_auto_search_active=robot_bg_auto_search_active(u),
                 censor_profanity=bool(u.get("censor_profanity", False)),
                 referred_by=referred_by_legacy,
                 referred_by_username=referred_by_username,

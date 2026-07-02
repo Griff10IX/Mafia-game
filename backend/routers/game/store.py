@@ -583,7 +583,15 @@ async def buy_robot_bg_auto_search(
         ROBOT_BG_AUTO_SEARCH_COST,
         extend_robot_bg_auto_search_until,
         maybe_auto_search_robots_for_user,
+        robot_bg_auto_search_active,
     )
+
+    if robot_bg_auto_search_active(current_user):
+        until = (current_user.get("robot_bg_auto_search_until") or "").strip()
+        raise HTTPException(
+            status_code=400,
+            detail=f"Robot auto-search is already active{f' until {until}' if until else ''}. Buy again after it expires.",
+        )
 
     cost_used, inc, gte_filter = _store_cost_inc(current_user, ROBOT_BG_AUTO_SEARCH_COST, pay_with)
     if not cost_used:

@@ -196,16 +196,26 @@ def _booze_rotation_ends_at():
     return datetime.fromtimestamp(end_ts, tz=timezone.utc).isoformat()
 
 
+def _booze_city_pairs() -> list:
+    """Unordered city index pairs for the current STATES list (adapts when cities are disabled)."""
+    n = len(STATES or [])
+    if n < 2:
+        return []
+    return [(i, j) for i in range(n) for j in range(i + 1, n)]
+
+
 def _booze_round_trip_cities():
-    unordered_pairs = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
+    pairs = _booze_city_pairs()
+    if not pairs:
+        return []
     idx = _booze_rotation_index()
-    i, j = unordered_pairs[idx % len(unordered_pairs)]
+    i, j = pairs[idx % len(pairs)]
     return [STATES[i], STATES[j]]
 
 
 def _booze_prices_for_rotation():
     idx = _booze_rotation_index()
-    n_locs = 4
+    n_locs = max(1, len(STATES or []))
     n_booze = len(BOOZE_TYPES)
     out = {}
     for loc_i in range(n_locs):
@@ -217,8 +227,14 @@ def _booze_prices_for_rotation():
             base = spine + slow + micro
             price = min(2000, max(100, base))
             out[(loc_i, booze_i)] = price
-    unordered_pairs = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
-    locA, locB = unordered_pairs[idx % len(unordered_pairs)]
+    pairs = _booze_city_pairs()
+    if not pairs:
+        mult = get_booze_listed_price_mult()
+        if mult < 1.0:
+            for k in list(out.keys()):
+                out[k] = max(100, min(2000, int(round(out[k] * mult))))
+        return out
+    locA, locB = pairs[idx % len(pairs)]
     profit_min = 40
     booze_ab = idx % n_booze
     price_a_ab = out[(locA, booze_ab)]
@@ -253,9 +269,11 @@ def _effective_jail_chance_bounds() -> tuple[float, float]:
 def _booze_daily_estimate_rough(capacity: int, prices_map: dict, secs_per_leg: int) -> int:
     if capacity <= 0:
         return 0
-    unordered_pairs = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
+    pairs = _booze_city_pairs()
+    if not pairs:
+        return 0
     idx = _booze_rotation_index()
-    locA, locB = unordered_pairs[idx % len(unordered_pairs)]
+    locA, locB = pairs[idx % len(pairs)]
     n_booze = len(BOOZE_TYPES)
     best_ab = max(
         prices_map.get((locB, i), 400) - prices_map.get((locA, i), 400)
@@ -344,8 +362,112 @@ async def _family_booze_cargo_extra(family_id) -> int:
     return max(0, min(FAMILY_PERK_BOOZE_BONUS_CAP, int(rpm.get("booze_cargo_bonus") or 0)))
 
 
-def _booze_user_carrying_total(carrying: dict) -> int:
-    return sum(int(v) for v in (carrying or {}).values())
+def _booze_carrying_dict(raw) -> dict:
+    """Normalize booze_carrying to canonical booze_id -> int amounts."""
+    if not isinstance(raw, dict):
+        return {}
+    out: dict = {}
+    name_to_id = {b["name"].lower(): b["id"] for b in BOOZE_TYPES}
+    id_set = {b["id"] for b in BOOZE_TYPES}
+    for k, v in raw.items():
+        key = str(k).strip()
+        if not key:
+            continue
+        try:
+            amt = int(v or 0)
+        except (TypeError, ValueError):
+            continue
+        if amt <= 0:
+            continue
+        bid = key if key in id_set else name_to_id.get(key.lower())
+        if not bid:
+            continue
+        out[bid] = out.get(bid, 0) + amt
+    return out
+
+
+def _booze_carrying_amount(carrying: dict, booze_id: str) -> int:
+    return int(_booze_carrying_dict(carrying).get(booze_id, 0))
+
+
+def _booze_user_carrying_total(carrying) -> int:
+    return sum(_booze_carrying_dict(carrying).values())
+
+
+async def _booze_reload_user_trade_state(user: dict) -> dict:
+    """Fresh booze inventory from DB (avoids stale auth snapshot / worker cache drift)."""
+    uid = (user or {}).get("id")
+    if not uid:
+        return user
+    fresh = await db.users.find_one(
+        {"id": uid},
+        {
+            "_id": 0,
+            "booze_carrying": 1,
+            "booze_carrying_cost": 1,
+            "booze_buy_location": 1,
+            "current_state": 1,
+            "money": 1,
+            "in_jail": 1,
+            "jail_until": 1,
+            "booze_until": 1,
+            "booze_profit_today": 1,
+            "booze_profit_today_date": 1,
+            "booze_profit_total": 1,
+            "booze_runs_count": 1,
+            "booze_run_history": 1,
+            "username": 1,
+            "family_id": 1,
+            "booze_capacity_bonus": 1,
+            "rank_points": 1,
+            "prestige_level": 1,
+        },
+    )
+    if not fresh:
+        return user
+    return {**user, **fresh}
+
+
+def _booze_overlay_live_config(payload: dict, current_user: dict, prices_map: dict) -> dict:
+    """Merge per-user inventory/stats into a cached config payload (carrying must never be stale)."""
+    out = dict(payload)
+    current_state = current_user.get("current_state", STATES[0] if STATES else "")
+    loc_index = STATES.index(current_state) if current_state in STATES else 0
+    carrying = _booze_carrying_dict(current_user.get("booze_carrying"))
+    booze_until = _parse_iso_datetime(current_user.get("booze_until"))
+    booze_boost_active = bool(booze_until and datetime.now(timezone.utc) < booze_until)
+
+    def _buy_price(listed: int) -> int:
+        return max(1, int(listed * 0.9)) if booze_boost_active else listed
+
+    prices_at_location = []
+    for i, bt in enumerate(BOOZE_TYPES):
+        listed = prices_map.get((loc_index, i), 400)
+        prices_at_location.append({
+            "booze_id": bt["id"],
+            "name": bt["name"],
+            "buy_price": _buy_price(listed),
+            "sell_price": listed,
+            "carrying": int(carrying.get(bt["id"], 0)),
+        })
+    today_utc = game_today_date_str()
+    profit_today = current_user.get("booze_profit_today", 0)
+    profit_today_date = current_user.get("booze_profit_today_date")
+    if profit_today_date != today_utc:
+        profit_today = 0
+    out.update({
+        "current_location": current_state,
+        "prices_at_location": prices_at_location,
+        "carrying": carrying,
+        "booze_buy_location": dict(current_user.get("booze_buy_location") or {}),
+        "carrying_total": _booze_user_carrying_total(carrying),
+        "profit_today": profit_today,
+        "profit_total": current_user.get("booze_profit_total", 0),
+        "runs_count": current_user.get("booze_runs_count", 0),
+        "history": (current_user.get("booze_run_history") or [])[:BOOZE_RUN_HISTORY_MAX],
+        "booze_boost_active": booze_boost_active,
+    })
+    return out
 
 
 async def _booze_top_profit_leader_ids_cached() -> frozenset[str]:
@@ -457,6 +579,7 @@ async def _booze_buy_impl(user: dict, booze_id: str, amount: int, *, via_auto_ra
     """Perform buy for given user (by id). Returns response dict or raises HTTPException. Updates DB."""
     from utils.booze_intake_gate import raise_if_booze_intake_blocked
 
+    user = await _booze_reload_user_trade_state(user)
     raise_if_booze_intake_blocked(user)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
@@ -474,7 +597,7 @@ async def _booze_buy_impl(user: dict, booze_id: str, amount: int, *, via_auto_ra
     if booze_until and datetime.now(timezone.utc) < booze_until:
         price = max(1, int(price * 0.9))
     cost = price * amount
-    carrying = dict(user.get("booze_carrying") or {})
+    carrying = _booze_carrying_dict(user.get("booze_carrying"))
     fam_extra = await _family_booze_cargo_extra(user.get("family_id"))
     vip_car = await _booze_vip_pass_car_owned(db, user.get("id") or "")
     capacity = _booze_user_capacity(user, family_cargo_bonus=fam_extra, vip_pass_car_owned=vip_car)
@@ -573,6 +696,7 @@ async def _booze_sell_impl(
     """
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
+    user = await _booze_reload_user_trade_state(user)
     ib_vault_id = (illegal_business_id or "").strip() or None
     if ib_vault_id and not via_distillery_collect:
         raise HTTPException(status_code=400, detail="Racket vault payout is only valid for distillery collect sells.")
@@ -586,10 +710,16 @@ async def _booze_sell_impl(
     booze_index = booze_ids.index(booze_id)
     prices_map = _booze_prices_for_rotation()
     price = prices_map.get((loc_index, booze_index), 400)
-    carrying = dict(user.get("booze_carrying") or {})
+    carrying = _booze_carrying_dict(user.get("booze_carrying"))
     carrying_cost = dict(user.get("booze_carrying_cost") or {})
-    have = int(carrying.get(booze_id, 0))
+    have = _booze_carrying_amount(carrying, booze_id)
     if have < amount:
+        total_loaded = _booze_user_carrying_total(carrying)
+        if total_loaded > 0 and have == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Only carrying 0 units of this liquor ({total_loaded} total loaded — refresh the page)",
+            )
         raise HTTPException(status_code=400, detail=f"Only carrying {have} units")
     if await _booze_roll_jail(user.get("id", "")):
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=BOOZE_RUN_JAIL_SECONDS)
@@ -781,12 +911,13 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
     if uid in _config_cache:
         payload, expires = _config_cache[uid]
         if now <= expires:
-            return payload
+            prices_map = _booze_prices_for_rotation()
+            return _booze_overlay_live_config(payload, current_user, prices_map)
 
     current_state = current_user.get("current_state", STATES[0] if STATES else "")
     loc_index = STATES.index(current_state) if current_state in STATES else 0
     prices_map = _booze_prices_for_rotation()
-    carrying = current_user.get("booze_carrying") or {}
+    carrying = _booze_carrying_dict(current_user.get("booze_carrying"))
     rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
     pl = _booze_prestige_level_clamped(current_user)
     godfather_total_cap = _booze_godfather_total_cargo_cap(pl)

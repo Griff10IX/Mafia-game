@@ -835,6 +835,7 @@ export default function BoozeRun() {
       }
     } catch (e) {
       toast.error(apiErrorDetail(e, 'Sell failed'));
+      fetchConfig();
     }
   };
 

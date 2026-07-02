@@ -52,6 +52,14 @@ const TOKEN_MAX_STACK_LABEL = '1 week';
 /** Must match backend AUTO_RANK_COST_POINTS / pricing logic (8× token pts ≈ full unlock pts for 16h only). */
 const AUTO_RANK_COST_POINTS = 5000;
 const ROBOT_BG_AUTO_SEARCH_COST_POINTS = 10_000;
+
+function robotBgAutoSearchActive(user) {
+  if (user?.robot_bg_auto_search_active) return true;
+  const until = user?.robot_bg_auto_search_until;
+  if (!until) return false;
+  const t = Date.parse(String(until).replace('Z', '+00:00'));
+  return Number.isFinite(t) && t > Date.now();
+}
 const ARMOUR_TIER_6_STORE_COST_POINTS = 500;
 const WEAPON11_STORE_COST_POINTS = 1000;
 const AUTO_RANK_2H_TOKEN_STORE_PTS = Math.ceil(AUTO_RANK_COST_POINTS / 8);
@@ -98,7 +106,7 @@ const UPGRADES = [
   { id: 'health', title: 'Full Health', Icon: Heart, price: 15, path: '/store/buy-health', ownedKey: null, desc: 'Restore health to 100%', extra: (u) => ({ line: 'Health', value: `${Number(u?.health ?? 100).toFixed(0)}%` }) },
   { id: 'rank-bar', title: 'Premium Rank Bar', Icon: Star, price: 50, path: '/store/buy-rank-bar', ownedKey: 'premium_rank_bar', desc: 'Exact numbers & amounts for next rank' },
   { id: 'auto-rank', title: 'Auto Rank', Icon: Bot, price: AUTO_RANK_COST_POINTS, path: '/store/buy-auto-rank', ownedKey: 'auto_rank_purchased', desc: 'Auto-commit crimes, GTA, busts, OC. Optional: set Telegram in Profile for notifications.' },
-  { id: 'robot-bg-auto-search', title: 'Robot Auto-Search', Icon: Crosshair, price: ROBOT_BG_AUTO_SEARCH_COST_POINTS, path: '/store/buy-robot-bg-auto-search', ownedKey: null, desc: '30 days: auto-maintain Attack searches for your hired robot bodyguards (renews when ≤3h left on a row). Buy or extend in Store.' },
+  { id: 'robot-bg-auto-search', title: 'Robot Auto-Search', Icon: Crosshair, price: ROBOT_BG_AUTO_SEARCH_COST_POINTS, path: '/store/buy-robot-bg-auto-search', ownedKey: null, activeCheck: robotBgAutoSearchActive, desc: '30 days: auto-maintain Attack searches for your hired robot bodyguards (renews when ≤3h left on a row). One purchase per active period — buy again after it expires.', extra: (u) => (robotBgAutoSearchActive(u) && u?.robot_bg_auto_search_until ? { line: 'Active until', value: formatGameDateTime(u.robot_bg_auto_search_until) } : null) },
   { id: 'armour-tier-6', title: 'Elite Composite Battledress', Icon: Shield, price: ARMOUR_TIER_6_STORE_COST_POINTS, path: '/store/buy-armour-tier-6', ownedKey: null, ownedCheck: (u) => (u?.armour_owned_level_max ?? 0) >= 6, disabledWhen: (u) => (u?.armour_owned_level_max ?? 0) < 5, desc: 'Armour level 6 (60k base bullets). Requires level 5 owned. Auto-equipped on purchase. Also shown on Armour page.' },
   { id: 'weapon11', title: 'Engraved Lewis Gun', Icon: Swords, price: WEAPON11_STORE_COST_POINTS, path: '/store/buy-weapon11', ownedKey: null, ownedCheck: (u) => !!u?.owns_weapon11, disabledWhen: (u) => !u?.owns_weapon10, desc: 'Top store gun (130 dmg). Requires Chicago Typewriter Premium owned. Auto-equipped on purchase. Also on Armour page.' },
   { id: 'silencer', title: 'Silencer', Icon: VolumeX, price: 150, path: '/store/buy-silencer', ownedKey: 'has_silencer', desc: 'Fewer witness statements when you kill' },
@@ -215,7 +223,7 @@ function StorePayWithSelect({ value, onChange, showCash = false }) {
   );
 }
 
-const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, onBuy, loading, disabled, user, payWith = 'auto', cashPrice, children }) => (
+const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, ownedLabel, onBuy, loading, disabled, user, payWith = 'auto', cashPrice, children }) => (
   <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
     <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
@@ -226,7 +234,7 @@ const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, onBuy, loadi
       <p className="text-[10px] text-mutedForeground font-heading mb-1.5">{desc}</p>
       {children}
       {owned ? (
-        <div className="py-1.5 text-center text-[10px] font-heading font-bold text-primary uppercase">Owned</div>
+        <div className="py-1.5 text-center text-[10px] font-heading font-bold text-primary uppercase">{ownedLabel || 'Owned'}</div>
       ) : (
         <button
           type="button"
@@ -1421,7 +1429,8 @@ export default function Store() {
                 desc={u.desc}
                 price={priceVal}
                 respectPrice={storeRespectForPoints(priceVal)}
-                owned={false}
+                owned={!!u.activeCheck?.(user)}
+                ownedLabel={u.activeCheck?.(user) ? 'Active' : undefined}
                 loading={loading}
                 disabled={disabled}
                 user={user}
