@@ -2,9 +2,10 @@
 # Call POST /api/auto-rank/cron with CRON_SECRET from backend/.env.
 # Use this from crontab so the secret always matches the backend (no copy-paste).
 #
-# Usage: ./scripts/cron-curl.sh [main|bust]
-#   main = /api/auto-rank/cron  (default)
-#   bust = /api/auto-rank/cron-bust
+# Usage: ./scripts/cron-curl.sh [main|bust|robot-bg]
+#   main     = /api/auto-rank/cron  (default)
+#   bust     = /api/auto-rank/cron-bust
+#   robot-bg = /api/attack/cron/robot-bg-auto-search
 #
 # IMPORTANT: Crontab only runs at most once per minute (* * * * * = every 60s).
 # So if you set "interval" to 5s in admin, it will still only run every 60s when
@@ -44,8 +45,9 @@ fi
 PATH_SUFFIX="api/auto-rank/cron"
 case "${1:-main}" in
   bust) PATH_SUFFIX="api/auto-rank/cron-bust" ;;
+  robot-bg) PATH_SUFFIX="api/attack/cron/robot-bg-auto-search" ;;
   main) ;;
-  *)   echo "Usage: $0 [main|bust]" >&2; exit 1 ;;
+  *)   echo "Usage: $0 [main|bust|robot-bg]" >&2; exit 1 ;;
 esac
 
 curl -s -X POST \

@@ -181,6 +181,10 @@ echo "Done. Both tickers installed and started:"
 echo "  - cron-bust-ticker (every 5s) — jail busts"
 echo "  - cron-cycle-ticker (every 5s) — crimes, GTA, booze, OC"
 echo ""
+echo "Robot bodyguard auto-search (optional, every 15m):"
+echo "  sudo PROJECT=$PROJECT bash $PROJECT/scripts/install-cron-robot-bg-auto-search-on-server.sh"
+echo "  (Set ROBOT_BG_AUTO_SEARCH_USE_CRON=1 in backend/.env and restart mafia-backend)"
+echo ""
 systemctl status cron-bust-ticker --no-pager
 echo ""
 systemctl status cron-cycle-ticker --no-pager

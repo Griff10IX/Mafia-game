@@ -775,7 +775,7 @@ export default function Bodyguards() {
               </div>
               <p className="text-[10px] text-mutedForeground leading-snug">
                 {robotBgAutoSearchActive
-                  ? 'Active — your hired robots stay on the Attack page. New searches start when a row has ≤3h left (or when you hire a robot with no row).'
+                  ? 'Active — your hired robots stay on the Attack page. Missing searches are re-added when you open Attack or Bodyguards; rows renew when ≤3h left.'
                   : 'Pay once per 30 days to auto-maintain Attack searches for your robot bodyguards so you do not have to re-search manually.'}
               </p>
               {robotBgAutoSearchActive && robotBgAutoSearchUntil ? (

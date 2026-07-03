@@ -1895,9 +1895,11 @@ async def get_attack_status(
     return AttackStatusResponse(**payload)
 
 async def list_attacks(current_user: dict = Depends(get_current_user)):
+    from utils.robot_bg_auto_search import maybe_sync_robot_bg_searches_for_owner, robot_bg_auto_search_active
+
+    await maybe_sync_robot_bg_searches_for_owner(db, current_user)
     attacker_id = current_user["id"]
     ac_state = (current_user.get("current_state") or "")
-    from utils.robot_bg_auto_search import robot_bg_auto_search_active
 
     robot_auto_active = robot_bg_auto_search_active(current_user)
     cached = _attack_list_cache_get(attacker_id, ac_state)

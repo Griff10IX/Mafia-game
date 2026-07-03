@@ -14,6 +14,9 @@ ROBOT_BG_AUTO_SEARCH_DAYS = 30
 ROBOT_BG_AUTO_SEARCH_RENEW_THRESHOLD_HOURS = 3
 ROBOT_BG_AUTO_SEARCH_NOTE = "Auto robot bodyguard search"
 ROBOT_BG_AUTO_SEARCH_TICKER_INTERVAL_SEC = 15 * 60
+ROBOT_BG_AUTO_SEARCH_PAGE_SYNC_THROTTLE_SEC = 90
+
+_robot_bg_auto_search_page_sync_at: Dict[str, float] = {}
 
 
 def _parse_iso_utc(raw: Optional[str]) -> Optional[datetime]:
@@ -87,12 +90,26 @@ async def _should_renew_robot_search(
         },
         {"_id": 0, "id": 1, "status": 1, "expires_at": 1, "search_started": 1},
     ).to_list(50)
-    if not attacks:
+    live: List[dict] = []
+    stale_ids: List[str] = []
+    for a in attacks:
+        exp = _parse_iso_utc(a.get("expires_at"))
+        if exp is None:
+            started = _parse_iso_utc(a.get("search_started"))
+            if started:
+                exp = started + timedelta(hours=24)
+        if exp and exp <= now:
+            stale_ids.append(a["id"])
+            continue
+        live.append(a)
+    if stale_ids:
+        await db.attacks.delete_many({"attacker_id": owner_id, "id": {"$in": stale_ids}})
+    if not live:
         return True, "no_active_row"
-    if any(a.get("status") == "searching" for a in attacks):
+    if any(a.get("status") == "searching" for a in live):
         return False, "already_searching"
     latest_expiry: Optional[datetime] = None
-    for a in attacks:
+    for a in live:
         exp = _parse_iso_utc(a.get("expires_at"))
         if exp is None:
             started = _parse_iso_utc(a.get("search_started"))
@@ -155,6 +172,37 @@ async def maybe_auto_search_robots_for_user(db, owner: dict) -> dict:
         else:
             summary["skipped"] += 1
             summary["details"].append({"target_username": uname, "action": "skip", "reason": "search_cap"})
+    return summary
+
+
+async def maybe_sync_robot_bg_searches_for_owner(db, owner: dict) -> Optional[dict]:
+    """Throttled sync on page load — renews missing robot searches if ticker/cron is down."""
+    if not robot_bg_auto_search_active(owner):
+        return None
+    owner_id = owner.get("id") or ""
+    if not owner_id:
+        return None
+    import time
+
+    now = time.monotonic()
+    last = _robot_bg_auto_search_page_sync_at.get(owner_id, 0.0)
+    if now - last < ROBOT_BG_AUTO_SEARCH_PAGE_SYNC_THROTTLE_SEC:
+        return None
+    _robot_bg_auto_search_page_sync_at[owner_id] = now
+    summary = await maybe_auto_search_robots_for_user(db, owner)
+    if summary.get("searched"):
+        try:
+            from routers.kill.attack import _attack_list_cache_invalidate
+
+            _attack_list_cache_invalidate(owner_id)
+        except Exception:
+            logger.exception("robot_bg_auto_search cache invalidate failed owner=%s", owner_id)
+        logger.info(
+            "robot_bg_auto_search page sync owner=%s searched=%s skipped=%s",
+            owner_id,
+            summary.get("searched"),
+            summary.get("skipped"),
+        )
     return summary
 
 

@@ -421,6 +421,9 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
     username = current_user.get("username", "?")
     logger.info("get_bodyguards start uid=%s username=%s", uid, username)
     try:
+        from utils.robot_bg_auto_search import maybe_sync_robot_bg_searches_for_owner
+
+        await maybe_sync_robot_bg_searches_for_owner(db, current_user)
         now = time.monotonic()
         if uid in _bodyguards_cache:
             payload, expires = _bodyguards_cache[uid]
