@@ -50,6 +50,22 @@ const TRAVEL_STYLES = `
   .trv-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
 
+/** Scroll rows / overflow panels can steal taps on mobile; keep actions above row hit targets. */
+const TRV_ACTION_BTN = 'relative z-[2] touch-manipulation';
+
+const AUTO_RANK_TRAVEL_TOAST =
+  'Auto Rank is running booze for you. Manual travel is disabled — turn off "Run booze running" in Account → Auto Rank.';
+
+const AutoRankTravelBanner = () => (
+  <div className="trv-fade-in rounded-md border border-amber-500/35 bg-amber-500/10 px-2.5 py-2 flex items-start gap-2">
+    <Bot size={14} className="text-amber-400 shrink-0 mt-0.5" />
+    <p className="min-w-0 text-[10px] font-heading text-amber-200/95 leading-snug">
+      <span className="font-bold uppercase tracking-wide text-amber-400">Auto Rank booze is on</span>
+      {' — '}manual travel is paused while the bot moves your cargo. Turn off <strong>Run booze running</strong> in Account → Auto Rank to drive or fly yourself.
+    </p>
+  </div>
+);
+
 function getTravelCodePayload(travelInfo) {
   const codeName = String(travelInfo?.travel_code_name || '').trim();
   if (
@@ -169,13 +185,39 @@ const DestinationCard = ({
   const listedAirport = airport ? (airport.price_per_travel ?? 10) : (travelInfo.airport_cost ?? 10);
   const payAirport = airport ? (airport.effective_price ?? listedAirport) : (travelInfo.airport_cost ?? 10);
   const canUse = !travelDisabled && !travelInfo.carrying_booze && (travelInfo.user_points ?? 0) >= payAirport;
+  const tryAirportTravel = (slot) => {
+    if (travelDisabled) {
+      toast.info(AUTO_RANK_TRAVEL_TOAST);
+      return;
+    }
+    if (travelInfo.carrying_booze) {
+      toast.info('You can only use cars while carrying booze. Tap a car option below.');
+      return;
+    }
+    if ((travelInfo.user_points ?? 0) < payAirport) {
+      toast.error('Not enough points for airport travel.');
+      return;
+    }
+    onTravel(destination, 'airport', slot);
+  };
+  const tryCarTravel = (method, canTravel) => {
+    if (travelDisabled) {
+      toast.info(AUTO_RANK_TRAVEL_TOAST);
+      return;
+    }
+    if (!canTravel) {
+      toast.error('This car is too damaged — repair it in your garage first.');
+      return;
+    }
+    onTravel(destination, method);
+  };
   const familyAirportPts = !!travelInfo.family_airport_points_discount;
   const familyAirportTimeRed = (travelInfo.family_airport_travel_reduction_seconds ?? 0) > 0;
 
   const destImgSrc = locationImageSrc(destination);
   const ring = climateDestinationRing(climateBand);
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 trv-card trv-fade-in mobile-panel ${travelDisabled ? 'opacity-70' : ''}${ring ? ` ${ring}` : ''}`} data-testid={`dest-${destination}`}>
+    <div className={`relative ${styles.panel} rounded-md overflow-visible md:overflow-hidden border border-primary/20 trv-card trv-fade-in mobile-panel ${travelDisabled ? 'opacity-70' : ''}${ring ? ` ${ring}` : ''}`} data-testid={`dest-${destination}`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2 flex-wrap">
         {destImgSrc && (
@@ -213,12 +255,12 @@ const DestinationCard = ({
           return (
             <button
               key={airport.slot}
-              onClick={() => canUseAirport && onTravel(destination, 'airport', airport.slot)}
-              disabled={!canUseAirport}
-              className={`w-full flex items-center justify-between px-2 py-1.5 rounded border-2 transition-all touch-manipulation ${
+              type="button"
+              onClick={() => tryAirportTravel(airport.slot)}
+              className={`${TRV_ACTION_BTN} w-full flex items-center justify-between px-2 py-1.5 rounded border-2 transition-all ${
                 canUseAirport
                   ? 'bg-gradient-to-r from-primary/20 via-yellow-600/20 to-primary/20 border-primary/50 hover:from-primary/30 hover:via-yellow-600/30 hover:to-primary/30 active:scale-95'
-                  : 'bg-secondary/50 border-border opacity-50 cursor-not-allowed'
+                  : 'bg-secondary/50 border-border opacity-50'
               }`}
               data-testid={`airport-${destination}-${airport.slot}`}
               title={travelInfo.carrying_booze ? 'Car travel only while carrying booze' : `${airport.owner_username} · ${displayPrice} pts${cheaperThanListed ? ` · listed ${listed}` : ''}${discountHint}`}
@@ -236,12 +278,12 @@ const DestinationCard = ({
           );
         })() : (
           <button
-            onClick={() => canUse && onTravel(destination, 'airport', 1)}
-            disabled={!canUse}
-            className={`w-full flex items-center justify-between px-2 py-1.5 rounded border-2 transition-all ${
+            type="button"
+            onClick={() => tryAirportTravel(1)}
+            className={`${TRV_ACTION_BTN} w-full flex items-center justify-between px-2 py-1.5 rounded border-2 transition-all ${
               canUse
-                ? 'bg-gradient-to-r from-primary/20 via-yellow-600/20 to-primary/20 border-primary/50'
-                : 'bg-secondary/50 border-border opacity-50 cursor-not-allowed'
+                ? 'bg-gradient-to-r from-primary/20 via-yellow-600/20 to-primary/20 border-primary/50 active:scale-95'
+                : 'bg-secondary/50 border-border opacity-50'
             }`}
             data-testid={`airport-${destination}`}
           >
@@ -272,16 +314,17 @@ const DestinationCard = ({
           return combined.slice(0, 5).map((item) => {
             const isCustom = item.travelMethod === 'custom';
             const canTravel = item.can_travel !== false;
+            const carLooksDisabled = travelDisabled || !canTravel;
             const Icon = item.Icon;
             return (
               <button
                 key={isCustom ? 'custom' : item.user_car_id}
-                onClick={() => !travelDisabled && canTravel && onTravel(destination, item.travelMethod)}
-                disabled={travelDisabled || !canTravel}
-                className={`w-full flex items-center justify-between px-2 py-1.5 rounded transition-all touch-manipulation ${
-                  !travelDisabled && canTravel
+                type="button"
+                onClick={() => tryCarTravel(item.travelMethod, canTravel)}
+                className={`${TRV_ACTION_BTN} w-full flex items-center justify-between px-2 py-1.5 rounded transition-all ${
+                  !carLooksDisabled
                     ? 'bg-secondary text-foreground border border-border hover:border-primary/30 hover:bg-secondary/80 active:scale-95'
-                    : 'bg-secondary/50 border border-border opacity-60 cursor-not-allowed'
+                    : 'bg-secondary/50 border border-border opacity-60'
                 }`}
                 title={!canTravel ? 'Too damaged — repair in garage' : undefined}
               >
@@ -375,9 +418,10 @@ const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => (
         </div>
 
         <button
+          type="button"
           onClick={onBuyAirmiles}
           disabled={travelInfo?.user_points < (travelInfo?.extra_airmiles_cost || 25)}
-          className="w-full bg-primary/20 text-primary rounded-md px-2.5 py-2 font-heading font-bold uppercase tracking-wide text-[10px] border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation flex items-center justify-center gap-1"
+          className={`${TRV_ACTION_BTN} w-full bg-primary/20 text-primary rounded-md px-2.5 py-2 font-heading font-bold uppercase tracking-wide text-[10px] border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 flex items-center justify-center gap-1`}
         >
           <ShoppingCart size={12} />
           Buy +5 Airmiles ({travelInfo?.extra_airmiles_cost || 25} pts)
@@ -641,15 +685,9 @@ export default function Travel() {
       {/* Page header */}
       <div className="relative trv-fade-in flex items-center gap-2 flex-wrap">
         <p className="text-[9px] text-zinc-500 font-heading italic">Fly or drive — airports and cars. Move between cities.</p>
-        {autoRankBoozeOn && (
-          <span
-            title="Auto Rank booze running is on. Manual travel is disabled. Turn off booze in Auto Rank to travel."
-            className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-amber-500/40 bg-amber-500/10"
-          >
-            <Bot size={14} className="text-amber-400" />
-          </span>
-        )}
       </div>
+
+      {autoRankBoozeOn && <AutoRankTravelBanner />}
 
       {user?.travel_until && (
         <div className="trv-fade-in">

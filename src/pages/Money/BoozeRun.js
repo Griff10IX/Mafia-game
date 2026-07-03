@@ -65,14 +65,20 @@ const BOOZE_STYLES = `
   .bz-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
 
-// Compact status icon: Auto Rank booze active
-const AutoRankIcon = () => (
-  <span
-    title="Auto Rank Active — Booze running is automated (buy, travel, sell). Manual trading disabled."
-    className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-amber-500/40 bg-amber-500/10 bz-fade-in"
-  >
-    <Bot size={14} className="text-amber-400" />
-  </span>
+/** Scroll rows / overflow panels can steal taps on mobile; keep actions above row hit targets. */
+const BZ_ACTION_BTN = 'relative z-[2] touch-manipulation';
+
+const AUTO_RANK_BOOZE_TOAST =
+  'Auto Rank is running booze for you (buy, travel, sell). Turn off "Run booze running" in Account → Auto Rank to trade manually.';
+
+const AutoRankBoozeBanner = () => (
+  <div className="bz-fade-in rounded-md border border-amber-500/35 bg-amber-500/10 px-2.5 py-2 flex items-start gap-2">
+    <Bot size={14} className="text-amber-400 shrink-0 mt-0.5" />
+    <p className="min-w-0 text-[10px] font-heading text-amber-200/95 leading-snug">
+      <span className="font-bold uppercase tracking-wide text-amber-400">Auto Rank booze is on</span>
+      {' — '}manual buy/sell is paused while the bot runs your route. Turn off <strong>Run booze running</strong> in Account → Auto Rank to trade yourself.
+    </p>
+  </div>
 );
 
 const StatsCard = ({ config, timer }) => {
@@ -325,8 +331,21 @@ const SuppliesCard = ({
   disabled = false,
 }) => {
   const maxBuy = Math.max(0, capacity - carryingTotal);
+  const runTrade = (row, isBuy, amount) => {
+    if (disabled) {
+      toast.info(AUTO_RANK_BOOZE_TOAST);
+      return;
+    }
+    if (!isBuy && !(row.carrying > 0)) {
+      toast.error('You are not carrying any of this liquor here. Switch to Buy or bring stock to this city to sell.');
+      return;
+    }
+    const qty = typeof amount === 'number' ? amount : parseInt(String(amount || ''), 10);
+    const val = (!qty || qty <= 0) ? undefined : qty;
+    isBuy ? handleBuy(row.booze_id, val) : handleSell(row.booze_id, val);
+  };
   return (
-  <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 bz-fade-in mobile-panel`} style={{ animationDelay: '0.15s' }}>
+  <div className={`${styles.panel} rounded-md overflow-visible md:overflow-hidden border border-primary/20 bz-fade-in mobile-panel`} style={{ animationDelay: '0.15s' }}>
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
       <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
         The Warehouse — {location}
@@ -352,7 +371,7 @@ const SuppliesCard = ({
             const maxSell = row.carrying ?? 0;
             const placeholder = tradeMode === 'buy' ? (maxBuy > 0 ? String(maxBuy) : '0') : (maxSell > 0 ? String(maxSell) : '0');
             const isBuy = tradeMode === 'buy';
-            const tradeDisabled = disabled || (isBuy ? false : !(row.carrying > 0));
+            const tradeLooksDisabled = disabled || (isBuy ? false : !(row.carrying > 0));
             return (
             <tr key={row.booze_id} className="bz-row bz-fade-in" style={{ animationDelay: `${idx * 0.03}s` }}>
               <td className="py-1.5 px-2 font-heading font-bold text-foreground tracking-wide">{row.name}</td>
@@ -379,26 +398,22 @@ const SuppliesCard = ({
                     <button
                       type="button"
                       onClick={() => setTradeMode('buy')}
-                      className={`px-1.5 py-0.5 text-[9px] font-heading font-bold uppercase tracking-wider transition-all ${tradeMode === 'buy' ? 'bg-primary/30 border-primary/40 text-primary' : 'bg-zinc-800/60 text-zinc-400 hover:text-zinc-300'}`}
+                      className={`${BZ_ACTION_BTN} px-1.5 py-0.5 text-[9px] font-heading font-bold uppercase tracking-wider transition-all ${tradeMode === 'buy' ? 'bg-primary/30 border-primary/40 text-primary' : 'bg-zinc-800/60 text-zinc-400 hover:text-zinc-300'}`}
                     >
                       Buy
                     </button>
                     <button
                       type="button"
                       onClick={() => setTradeMode('sell')}
-                      className={`px-1.5 py-0.5 text-[9px] font-heading font-bold uppercase tracking-wider transition-all ${tradeMode === 'sell' ? 'bg-primary/30 border-primary/40 text-primary' : 'bg-zinc-800/60 text-zinc-400 hover:text-zinc-300'}`}
+                      className={`${BZ_ACTION_BTN} px-1.5 py-0.5 text-[9px] font-heading font-bold uppercase tracking-wider transition-all ${tradeMode === 'sell' ? 'bg-primary/30 border-primary/40 text-primary' : 'bg-zinc-800/60 text-zinc-400 hover:text-zinc-300'}`}
                     >
                       Sell
                     </button>
                   </div>
                   <button
-                    onClick={() => {
-                      const qty = typeof amount === 'number' ? amount : parseInt(String(amount || ''), 10);
-                      const val = (!qty || qty <= 0) ? undefined : qty;
-                      isBuy ? handleBuy(row.booze_id, val) : handleSell(row.booze_id, val);
-                    }}
-                    disabled={tradeDisabled}
-                    className="px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase tracking-wider border transition-all bg-primary/20 border-primary/40 text-primary hover:bg-primary/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                    type="button"
+                    onClick={() => runTrade(row, isBuy, amount)}
+                    className={`${BZ_ACTION_BTN} px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase tracking-wider border transition-all bg-primary/20 border-primary/40 text-primary hover:bg-primary/30 active:scale-95 ${tradeLooksDisabled ? 'opacity-40' : ''}`}
                   >
                     Trade
                   </button>
@@ -416,9 +431,9 @@ const SuppliesCard = ({
         const amount = tradeAmounts[row.booze_id] ?? '';
         const maxSell = row.carrying ?? 0;
         const isBuy = tradeMode === 'buy';
-        const tradeDisabled = disabled || (isBuy ? false : !(row.carrying > 0));
+        const tradeLooksDisabled = disabled || (isBuy ? false : !(row.carrying > 0));
         return (
-        <div key={row.booze_id} className="p-2 space-y-1 bz-row bz-fade-in" style={{ animationDelay: `${idx * 0.04}s` }}>
+        <div key={row.booze_id} className="p-2 space-y-1 bz-row bz-fade-in relative" style={{ animationDelay: `${idx * 0.04}s` }}>
           <div className="flex items-start justify-between gap-1.5">
             <div>
               <div className="font-heading font-bold text-foreground text-[11px] tracking-wide">{row.name}</div>
@@ -445,26 +460,22 @@ const SuppliesCard = ({
               <button
                 type="button"
                 onClick={() => setTradeMode('buy')}
-                className={`px-2 py-1 text-[9px] font-heading font-bold uppercase tracking-wider transition-all ${tradeMode === 'buy' ? 'bg-primary/30 text-primary' : 'bg-zinc-800/60 text-zinc-400'}`}
+                className={`${BZ_ACTION_BTN} px-2 py-1 text-[9px] font-heading font-bold uppercase tracking-wider transition-all ${tradeMode === 'buy' ? 'bg-primary/30 text-primary' : 'bg-zinc-800/60 text-zinc-400'}`}
               >
                 Buy
               </button>
               <button
                 type="button"
                 onClick={() => setTradeMode('sell')}
-                className={`px-2 py-1 text-[9px] font-heading font-bold uppercase tracking-wider transition-all ${tradeMode === 'sell' ? 'bg-primary/30 text-primary' : 'bg-zinc-800/60 text-zinc-400'}`}
+                className={`${BZ_ACTION_BTN} px-2 py-1 text-[9px] font-heading font-bold uppercase tracking-wider transition-all ${tradeMode === 'sell' ? 'bg-primary/30 text-primary' : 'bg-zinc-800/60 text-zinc-400'}`}
               >
                 Sell
               </button>
             </div>
             <button
-              onClick={() => {
-                const qty = typeof amount === 'number' ? amount : parseInt(String(amount || ''), 10);
-                const val = (!qty || qty <= 0) ? undefined : qty;
-                isBuy ? handleBuy(row.booze_id, val) : handleSell(row.booze_id, val);
-              }}
-              disabled={tradeDisabled}
-              className="py-1 px-2 rounded font-heading font-bold uppercase text-[9px] tracking-wider border transition-all touch-manipulation bg-primary/20 border-primary/40 text-primary hover:bg-primary/30 disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+              type="button"
+              onClick={() => runTrade(row, isBuy, amount)}
+              className={`${BZ_ACTION_BTN} py-1 px-2 rounded font-heading font-bold uppercase text-[9px] tracking-wider border transition-all bg-primary/20 border-primary/40 text-primary hover:bg-primary/30 active:scale-95 shrink-0 ${tradeLooksDisabled ? 'opacity-40' : ''}`}
             >
               Trade
             </button>
@@ -715,6 +726,21 @@ export default function BoozeRun() {
     fetchMountData({ silent: !!boot?.config });
   }, [fetchMountData]);
 
+  useEffect(() => {
+    const refresh = () => fetchMountData({ silent: true });
+    const onVisibility = () => {
+      if (!document.hidden) refresh();
+    };
+    window.addEventListener('focus', refresh);
+    window.addEventListener('pageshow', refresh);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('pageshow', refresh);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [fetchMountData]);
+
   const rotationEndRef = useRef(null);
   useEffect(() => {
     if (!config?.rotation_ends_at) return;
@@ -902,8 +928,9 @@ export default function BoozeRun() {
       {/* ── Page Header ── */}
       <div className="relative bz-fade-in flex items-center gap-2 flex-wrap">
         <p className="text-[9px] text-zinc-500 font-heading italic">Buy low, smuggle fast, sell high — and pray the Feds don't catch you.</p>
-        {autoRankBoozeDisabled && <AutoRankIcon />}
       </div>
+
+      {autoRankBoozeDisabled && <AutoRankBoozeBanner />}
 
       {user?.booze_until && (
         <div className="bz-fade-in">
