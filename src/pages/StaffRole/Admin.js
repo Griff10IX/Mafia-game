@@ -1594,6 +1594,10 @@ export default function Admin() {
   const [wcLoading, setWcLoading] = useState(false);
   const [wcEndedMessage, setWcEndedMessage] = useState('');
   const [wcBannerText, setWcBannerText] = useState('');
+  const [wcForumPicksUsername, setWcForumPicksUsername] = useState('');
+  const [wcForumPicksText, setWcForumPicksText] = useState('');
+  const [wcForumPicksPreview, setWcForumPicksPreview] = useState(null);
+  const [wcForumPicksLoading, setWcForumPicksLoading] = useState(false);
   const [maintenanceMsg, setMaintenanceMsg] = useState('');
   const [maintenanceDuration, setMaintenanceDuration] = useState(60);
   const [bulkUsernames, setBulkUsernames] = useState('');
@@ -8178,6 +8182,65 @@ export default function Admin() {
     }
   };
 
+  const previewWorldCupForumPicks = async () => {
+    const username = wcForumPicksUsername.trim();
+    const picks_text = wcForumPicksText.trim();
+    if (!username) {
+      toast.error('Enter a username');
+      return;
+    }
+    if (!picks_text) {
+      toast.error('Paste group picks first');
+      return;
+    }
+    setWcForumPicksLoading(true);
+    try {
+      const res = await api.post('/admin/world-cup/preview-user-group-picks', { username, picks_text });
+      setWcForumPicksPreview(res.data);
+      const pts = Number(res.data?.total_points_if_settled || 0);
+      toast.success(`Preview: ${res.data?.correct_groups ?? 0} correct · ${pts.toLocaleString()} pts`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Preview failed');
+      setWcForumPicksPreview(null);
+    } finally {
+      setWcForumPicksLoading(false);
+    }
+  };
+
+  const applyWorldCupForumPicks = async (autoApprove = false) => {
+    const username = wcForumPicksUsername.trim();
+    const picks_text = wcForumPicksText.trim();
+    if (!username || !picks_text) {
+      toast.error('Username and picks required');
+      return;
+    }
+    const label = autoApprove ? 'Apply picks and pay out now?' : 'Apply picks and queue payout?';
+    if (!window.confirm(label)) return;
+    setWcForumPicksLoading(true);
+    try {
+      const res = await api.post('/admin/world-cup/restore-user-group-picks', {
+        username,
+        picks_text,
+        re_settle: true,
+        create_missing: true,
+        auto_approve: autoApprove,
+      });
+      const d = res.data || {};
+      const paid = d.payout?.points ?? 0;
+      toast.success(
+        `Updated ${d.groups_updated ?? 0} groups · re-settled ${d.groups_re_settled ?? 0}`
+        + (paid ? ` · paid ${Number(paid).toLocaleString()} pts` : '')
+      );
+      setWcForumPicksPreview(null);
+      await fetchWorldCupOverview(wcUserFilter);
+      if (d.user_id) await fetchWorldCupUserDetail(d.user_id);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Apply failed');
+    } finally {
+      setWcForumPicksLoading(false);
+    }
+  };
+
   const fetchWorldCupAdmin = async () => {
     setWcLoading(true);
     try {
@@ -12771,6 +12834,87 @@ export default function Admin() {
                     {wcOverview.tournament.third_place?.name ? ` · 3rd: ${wcOverview.tournament.third_place.name}` : ''}
                   </div>
                 )}
+                <div className="p-3 rounded border border-emerald-500/25 bg-emerald-950/15 space-y-2">
+                  <p className="text-[10px] font-heading uppercase text-emerald-300 tracking-wide">Forum group picks — paste, preview, pay</p>
+                  <p className="text-[10px] text-mutedForeground">
+                    Paste a forum post (e.g. Group A - Mexico). Preview points vs settled winners, then apply picks and settle.
+                  </p>
+                  <input
+                    type="text"
+                    value={wcForumPicksUsername}
+                    onChange={(e) => setWcForumPicksUsername(e.target.value)}
+                    placeholder="Username (e.g. Meraxes)"
+                    className="w-full px-2 py-1.5 rounded border border-input bg-transparent text-xs"
+                  />
+                  <textarea
+                    value={wcForumPicksText}
+                    onChange={(e) => { setWcForumPicksText(e.target.value); setWcForumPicksPreview(null); }}
+                    placeholder={'Group A - Mexico\nGroup B - Switzerland\n...'}
+                    rows={6}
+                    className="w-full px-2 py-1.5 rounded border border-input bg-transparent text-xs font-mono"
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <BtnSecondary onClick={previewWorldCupForumPicks} disabled={wcForumPicksLoading || wcLoading}>
+                      Preview winnings
+                    </BtnSecondary>
+                    <BtnPrimary onClick={() => applyWorldCupForumPicks(false)} disabled={wcForumPicksLoading || wcLoading}>
+                      Apply &amp; queue payout
+                    </BtnPrimary>
+                    <BtnPrimary onClick={() => applyWorldCupForumPicks(true)} disabled={wcForumPicksLoading || wcLoading}>
+                      Apply &amp; pay now
+                    </BtnPrimary>
+                  </div>
+                  {wcForumPicksPreview?.groups?.length > 0 && (
+                    <div className="text-[10px] space-y-1 pt-1 border-t border-emerald-500/20">
+                      <p className="font-heading text-foreground">
+                        {wcForumPicksPreview.username}: {wcForumPicksPreview.correct_groups}/{wcForumPicksPreview.groups_parsed} correct
+                        {' · '}
+                        <span className="text-emerald-400">{Number(wcForumPicksPreview.total_points_if_settled || 0).toLocaleString()} pts</span>
+                        {wcForumPicksPreview.unsettled_groups > 0 ? (
+                          <span className="text-amber-300"> · {wcForumPicksPreview.unsettled_groups} groups not settled yet</span>
+                        ) : null}
+                        {!wcForumPicksPreview.has_entry ? (
+                          <span className="text-amber-300"> · will create WC entry</span>
+                        ) : null}
+                      </p>
+                      <div className="overflow-x-auto max-h-[200px] overflow-y-auto rounded border border-primary/10">
+                        <table className="w-full text-[9px] min-w-[520px]">
+                          <thead>
+                            <tr className="border-b border-primary/10 text-left text-mutedForeground font-heading uppercase">
+                              <th className="p-1">Grp</th>
+                              <th className="p-1">Pick</th>
+                              <th className="p-1">Winner</th>
+                              <th className="p-1">Result</th>
+                              <th className="p-1 text-right">Pts</th>
+                              <th className="p-1">DB</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {wcForumPicksPreview.groups.map((g) => (
+                              <tr key={g.group_id} className="border-b border-primary/5">
+                                <td className="p-1 font-heading">{g.group_id}</td>
+                                <td className="p-1">{g.pick}</td>
+                                <td className="p-1">{g.settled ? (g.actual_winner || '—') : <span className="text-amber-300">TBD</span>}</td>
+                                <td className={`p-1 uppercase font-heading ${!g.settled ? 'text-mutedForeground' : g.correct ? 'text-emerald-400' : 'text-red-400'}`}>
+                                  {!g.settled ? 'open' : g.correct ? 'win' : 'loss'}
+                                </td>
+                                <td className="p-1 text-right tabular-nums">{g.points > 0 ? Number(g.points).toLocaleString() : '—'}</td>
+                                <td className="p-1 text-mutedForeground">{g.action}{g.current_db_pick ? ` (${g.current_db_pick})` : ''}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {(wcForumPicksPreview.parse_errors || []).length > 0 && (
+                        <ul className="text-red-400 text-[9px]">
+                          {wcForumPicksPreview.parse_errors.map((err) => (
+                            <li key={err.group_id}>Group {err.group_id}: {err.error}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  )}
+                </div>
                 <div className="flex flex-wrap gap-2 items-end">
                   <input
                     type="text"

@@ -89,6 +89,15 @@
     { "home": "Switzerland", "away": "Algeria", "kickoff_utc": "2026-07-03T03:00:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 85 },
     { "home": "Argentina", "away": "Cape Verde", "kickoff_utc": "2026-07-03T22:00:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 86 },
     { "home": "Colombia", "away": "Ghana", "kickoff_utc": "2026-07-04T01:30:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 87 },
-    { "home": "Australia", "away": "Egypt", "kickoff_utc": "2026-07-03T18:00:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 88 }
+    { "home": "Australia", "away": "Egypt", "kickoff_utc": "2026-07-03T18:00:00Z", "stage": "knockout", "knockout_round": "round_of_32", "match_no": 88 },
+
+    { "home": "Paraguay", "away": "France", "kickoff_utc": "2026-07-04T21:00:00Z", "stage": "knockout", "knockout_round": "round_of_16", "match_no": 89 },
+    { "home": "Canada", "away": "Morocco", "kickoff_utc": "2026-07-04T17:00:00Z", "stage": "knockout", "knockout_round": "round_of_16", "match_no": 90 },
+    { "home": "Brazil", "away": "Norway", "kickoff_utc": "2026-07-05T20:00:00Z", "stage": "knockout", "knockout_round": "round_of_16", "match_no": 91 },
+    { "home": "Mexico", "away": "England", "kickoff_utc": "2026-07-06T00:00:00Z", "stage": "knockout", "knockout_round": "round_of_16", "match_no": 92 },
+    { "home": "Portugal", "away": "Spain", "kickoff_utc": "2026-07-06T19:00:00Z", "stage": "knockout", "knockout_round": "round_of_16", "match_no": 93 },
+    { "home": "United States", "away": "Belgium", "kickoff_utc": "2026-07-07T00:00:00Z", "stage": "knockout", "knockout_round": "round_of_16", "match_no": 94 },
+    { "home": "Argentina", "away": "Egypt", "kickoff_utc": "2026-07-07T16:00:00Z", "stage": "knockout", "knockout_round": "round_of_16", "match_no": 95 },
+    { "home": "Switzerland", "away": "Colombia", "kickoff_utc": "2026-07-07T20:00:00Z", "stage": "knockout", "knockout_round": "round_of_16", "match_no": 96 }
   ]
 }

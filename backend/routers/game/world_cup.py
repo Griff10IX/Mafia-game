@@ -2462,11 +2462,14 @@ async def _resolve_winner_team_in_group(
     return team
 
 
-_GROUP_PICK_LINE_RE = re.compile(r"^\s*Group\s+([A-L])\s*:\s*(.+?)\s*$", re.IGNORECASE)
+_GROUP_PICK_LINE_RE = re.compile(
+    r"^\s*Group\s+([A-L])\s*(?:[:=\-–—]\s*|\s+)\s*(.+?)\s*$",
+    re.IGNORECASE,
+)
 
 
 def _parse_group_picks_text(text: str) -> Dict[str, str]:
-    """Parse Discord-style lines: Group A: Mexico"""
+    """Parse forum/Discord lines: Group A: Mexico, Group A - Mexico"""
     out: Dict[str, str] = {}
     for line in (text or "").splitlines():
         m = _GROUP_PICK_LINE_RE.match(line.strip())
@@ -2497,6 +2500,152 @@ async def _reverse_prediction_payout_if_needed(db, pred: dict) -> bool:
     return True
 
 
+async def _group_winner_id_for_preview(db, cfg: dict, group_id: str, teams_by_id: dict) -> tuple[Optional[str], Optional[str]]:
+    """Return (winner_team_id, winner_name) for a group if known."""
+    gid = (group_id or "").strip().upper()
+    grp = await db.world_cup_groups.find_one({"group_id": gid}, {"_id": 0, "winner_team_id": 1})
+    wid = (grp or {}).get("winner_team_id")
+    if wid:
+        team = teams_by_id.get(str(wid)) or {}
+        return str(wid), team.get("name")
+    sc = (cfg.get("official_group_winners") or {}).get(gid)
+    if sc:
+        tid = await _winner_id_from_short_code(str(sc), teams_by_id)
+        if tid:
+            team = teams_by_id.get(str(tid)) or {}
+            return str(tid), team.get("name")
+    return None, None
+
+
+async def _preview_user_group_picks_from_text(
+    db,
+    *,
+    username: str,
+    picks: Optional[Dict[str, str]] = None,
+    picks_text: Optional[str] = None,
+) -> dict:
+    """Score pasted group-winner picks against settled winners (no DB writes)."""
+    uname = (username or "").strip()
+    if not uname:
+        raise HTTPException(status_code=400, detail="username required")
+    merged = dict(picks or {})
+    merged.update(_parse_group_picks_text(picks_text or ""))
+    if not merged:
+        raise HTTPException(status_code=400, detail="No group picks provided (use picks map or picks_text)")
+
+    user = await db.users.find_one(
+        {"username": {"$regex": f"^{re.escape(uname)}$", "$options": "i"}},
+        {"_id": 0, "id": 1, "username": 1},
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    uid = user["id"]
+    cfg = await _load_config(db)
+    pts_cfg = _points_from_config(cfg)
+    pts_per = int(pts_cfg["group_winner_points"])
+    teams_by_id = await _teams_by_id(db)
+    entry = await db.world_cup_entries.find_one({"user_id": uid}, {"_id": 0, "ghost_entry": 1})
+
+    groups_out: List[dict] = []
+    parse_errors: List[dict] = []
+    total_correct = 0
+    total_points = 0
+    unsettled_groups = 0
+
+    for gid in GROUP_IDS:
+        team_name = (merged.get(gid) or "").strip()
+        if not team_name:
+            continue
+        pred = await db.world_cup_predictions.find_one(
+            {"user_id": uid, "type": PRED_GROUP_WINNER, "target_id": gid},
+            {"_id": 0},
+        )
+        current_val = pred.get("value") if pred and isinstance(pred.get("value"), dict) else {}
+        current_pick = current_val.get("team_name") or (
+            teams_by_id.get(str(current_val.get("team_id") or "")) or {}
+        ).get("name")
+        try:
+            team = await _resolve_winner_team_in_group(db, gid, team_name=team_name)
+        except HTTPException as ex:
+            parse_errors.append({"group_id": gid, "pick": team_name, "error": ex.detail})
+            continue
+        winner_tid, winner_name = await _group_winner_id_for_preview(db, cfg, gid, teams_by_id)
+        settled = bool(winner_tid)
+        correct = settled and str(team.get("id")) == str(winner_tid)
+        points = pts_per if correct else 0
+        if settled:
+            if correct:
+                total_correct += 1
+                total_points += points
+        else:
+            unsettled_groups += 1
+        action = "unchanged"
+        if not pred:
+            action = "create"
+        elif str(current_val.get("team_id") or "") != str(team.get("id")):
+            action = "update"
+        groups_out.append({
+            "group_id": gid,
+            "pick": team.get("name"),
+            "pick_team_id": team.get("id"),
+            "actual_winner": winner_name,
+            "actual_winner_id": winner_tid,
+            "settled": settled,
+            "correct": correct,
+            "points": points,
+            "current_db_pick": current_pick,
+            "action": action,
+            "existing_settled": bool(pred and pred.get("settled")),
+            "existing_payout_status": pred.get("payout_status") if pred else None,
+            "existing_points_awarded": int(pred.get("points_awarded") or 0) if pred else 0,
+        })
+
+    return {
+        "ok": True,
+        "username": user.get("username") or uname,
+        "user_id": uid,
+        "has_entry": bool(entry),
+        "ghost_entry": bool(entry and entry.get("ghost_entry")),
+        "groups_parsed": len(groups_out),
+        "groups_in_text": len(merged),
+        "parse_errors": parse_errors,
+        "unsettled_groups": unsettled_groups,
+        "correct_groups": total_correct,
+        "points_per_correct": pts_per,
+        "total_points_if_settled": total_points,
+        "groups": groups_out,
+    }
+
+
+async def _approve_user_pending_group_payouts(
+    db,
+    send_notification,
+    user_id: str,
+    approver_id: str,
+) -> dict:
+    preds = await db.world_cup_predictions.find(
+        {
+            "user_id": user_id,
+            "type": PRED_GROUP_WINNER,
+            "payout_status": "pending",
+        },
+        {"_id": 0, "id": 1},
+    ).to_list(20)
+    approved = 0
+    points = 0
+    for pred in preds:
+        pid = pred.get("id")
+        if not pid:
+            continue
+        try:
+            result = await _approve_prediction_payout(db, send_notification, pid, approver_id)
+            approved += 1
+            points += int(result.get("points") or 0)
+        except HTTPException:
+            continue
+    return {"predictions_approved": approved, "points": points}
+
+
 async def _staff_restore_user_group_picks(
     db,
     send_notification,
@@ -2505,6 +2654,9 @@ async def _staff_restore_user_group_picks(
     picks: Optional[Dict[str, str]] = None,
     picks_text: Optional[str] = None,
     re_settle: bool = True,
+    create_missing: bool = True,
+    auto_approve: bool = False,
+    approver_id: str = "",
 ) -> dict:
     """Restore a player's group-winner picks from staff-provided team names (e.g. Discord log)."""
     uname = (username or "").strip()
@@ -2536,6 +2688,44 @@ async def _staff_restore_user_group_picks(
             {"_id": 0},
         )
         if not pred:
+            if not create_missing:
+                continue
+            entry = await db.world_cup_entries.find_one({"user_id": uid}, {"_id": 0, "user_id": 1})
+            if not entry:
+                await db.world_cup_entries.insert_one({
+                    "user_id": uid,
+                    "entered_at": _now_iso(),
+                    "drafted_team_ids": [],
+                    "staff_imported": True,
+                })
+            pid = str(uuid.uuid4())
+            now = _now_iso()
+            val = {
+                "team_id": team.get("id"),
+                "team_name": team.get("name"),
+                "short_code": team.get("short_code"),
+            }
+            await db.world_cup_predictions.insert_one({
+                "id": pid,
+                "user_id": uid,
+                "type": PRED_GROUP_WINNER,
+                "target_id": gid,
+                "value": val,
+                "settled": False,
+                "points_awarded": 0,
+                "payout_status": "none",
+                "created_at": now,
+                "updated_at": now,
+                "staff_imported": True,
+            })
+            await _wc_upsert_group_pick_snapshot(db, uid, gid, val, source="staff_import")
+            updated.append({
+                "group_id": gid,
+                "team_name": team.get("name"),
+                "team_id": team.get("id"),
+                "was_settled": False,
+                "created": True,
+            })
             continue
         val = pred.get("value") or {}
         old_tid = val.get("team_id") if isinstance(val, dict) else val
@@ -2595,6 +2785,28 @@ async def _staff_restore_user_group_picks(
             wid = grp.get("winner_team_id") if grp else None
             if wid:
                 re_settled += await _settle_group_predictions(db, send_notification, cfg, gid, wid)
+    elif re_settle:
+        for gid in GROUP_IDS:
+            if gid not in merged:
+                continue
+            pred = await db.world_cup_predictions.find_one(
+                {"user_id": uid, "type": PRED_GROUP_WINNER, "target_id": gid, "settled": {"$ne": True}},
+                {"_id": 0, "id": 1},
+            )
+            if not pred:
+                continue
+            grp = await db.world_cup_groups.find_one({"group_id": gid}, {"_id": 0, "winner_team_id": 1})
+            wid = grp.get("winner_team_id") if grp else None
+            if not wid:
+                sc = (cfg.get("official_group_winners") or {}).get(gid)
+                if sc:
+                    wid = await _winner_id_from_short_code(str(sc), await _teams_by_id(db))
+            if wid:
+                re_settled += await _settle_group_predictions(db, send_notification, cfg, gid, wid)
+
+    payout = None
+    if auto_approve and approver_id:
+        payout = await _approve_user_pending_group_payouts(db, send_notification, uid, approver_id)
 
     return {
         "ok": True,
@@ -2603,6 +2815,7 @@ async def _staff_restore_user_group_picks(
         "groups_updated": len(updated),
         "groups_re_settled": re_settled,
         "details": updated,
+        "payout": payout,
     }
 
 
@@ -4000,6 +4213,14 @@ class GroupPicksRestoreBody(BaseModel):
     picks: Optional[Dict[str, str]] = None
     picks_text: Optional[str] = None
     re_settle: bool = True
+    create_missing: bool = True
+    auto_approve: bool = False
+
+
+class GroupPicksPreviewBody(BaseModel):
+    username: str
+    picks: Optional[Dict[str, str]] = None
+    picks_text: Optional[str] = None
 
 
 class AutoRestoreGroupPicksBody(BaseModel):
@@ -4579,6 +4800,22 @@ def register(router):
         restored = await _restore_group_winners(db, old_to_new, stable_id_set)
         return {"healed": healed, **restored}
 
+    @router.post("/world-cup/staff/preview-user-group-picks")
+    async def wc_staff_preview_user_group_picks(
+        body: GroupPicksPreviewBody,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Preview pasted forum/Discord group-winner picks vs settled winners."""
+        _require_staff(current_user)
+        cfg = await _load_config(db)
+        await _require_enabled_staff(cfg)
+        return await _preview_user_group_picks_from_text(
+            db,
+            username=body.username,
+            picks=body.picks,
+            picks_text=body.picks_text,
+        )
+
     @router.post("/world-cup/staff/restore-user-group-picks")
     async def wc_staff_restore_user_group_picks(
         body: GroupPicksRestoreBody,
@@ -4595,6 +4832,9 @@ def register(router):
             picks=body.picks,
             picks_text=body.picks_text,
             re_settle=bool(body.re_settle),
+            create_missing=bool(body.create_missing),
+            auto_approve=bool(body.auto_approve),
+            approver_id=current_user.get("id") or "",
         )
 
     @router.post("/world-cup/staff/auto-restore-group-picks")
@@ -4797,6 +5037,35 @@ def register(router):
         if body.auto_approve:
             payout = await _approve_all_pending_payouts(db, send_notification, current_user.get("id") or "")
         return {**settled, "payout": payout}
+
+    @router.post("/admin/world-cup/preview-user-group-picks")
+    async def admin_wc_preview_user_group_picks(
+        body: GroupPicksPreviewBody,
+        current_user: dict = Depends(require_admin),
+    ):
+        return await _preview_user_group_picks_from_text(
+            db,
+            username=body.username,
+            picks=body.picks,
+            picks_text=body.picks_text,
+        )
+
+    @router.post("/admin/world-cup/restore-user-group-picks")
+    async def admin_wc_restore_user_group_picks(
+        body: GroupPicksRestoreBody,
+        current_user: dict = Depends(require_admin),
+    ):
+        return await _staff_restore_user_group_picks(
+            db,
+            send_notification,
+            username=body.username,
+            picks=body.picks,
+            picks_text=body.picks_text,
+            re_settle=bool(body.re_settle),
+            create_missing=bool(body.create_missing),
+            auto_approve=bool(body.auto_approve),
+            approver_id=current_user.get("id") or "",
+        )
 
     @router.post("/admin/world-cup/matches/bulk")
     async def admin_wc_bulk_matches(body: BulkMatchImport, current_user: dict = Depends(require_admin)):
