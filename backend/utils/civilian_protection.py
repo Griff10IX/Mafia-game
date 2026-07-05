@@ -1,10 +1,10 @@
-# New account civilian protection: 7 days from created_at, revocable by rules or manual opt-out.
+# New account civilian protection: 14 days from created_at, revocable by rules or manual opt-out.
 from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
-PROTECTION_HOURS = 7 * 24
+PROTECTION_HOURS = 14 * 24
 
 CIVILIAN_PROTECTION_KILL_BLOCKED_DETAIL = (
     "That player still has new-account protection and can't be attacked in normal PvP yet."

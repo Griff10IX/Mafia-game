@@ -158,7 +158,16 @@ def _points_from_config(cfg: dict) -> dict:
     return {k: int(cfg.get(k) or v) for k, v in DEFAULT_POINTS.items()}
 
 
-async def _award_points(db, send_notification, user_id: str, points: int, event_ref: str, label: str) -> bool:
+async def _award_points(
+    db,
+    send_notification,
+    user_id: str,
+    points: int,
+    event_ref: str,
+    label: str,
+    *,
+    pred: Optional[dict] = None,
+) -> bool:
     pts = int(points or 0)
     if not user_id or pts <= 0:
         return False
@@ -169,13 +178,91 @@ async def _award_points(db, send_notification, user_id: str, points: int, event_
         points=pts,
         event_type="world_cup_payout",
         event_ref=event_ref,
-        meta={"label": label},
+        meta={"label": label, "prediction_type": (pred or {}).get("type")},
     )
+    notify_pred = pred if pred else {"user_id": user_id}
+    await _notify_wc_prediction_result(db, send_notification, notify_pred, pts, label, paid=True)
+    return True
+
+
+async def _notify_wc_prediction_result(
+    db,
+    send_notification,
+    pred: dict,
+    points: int,
+    label: str,
+    *,
+    paid: bool,
+) -> None:
+    pts = int(points or 0)
+    if pts <= 0:
+        return
+    uid = pred.get("user_id") or ""
+    if not uid or await _is_ghost_user(db, uid):
+        return
+    ptype = pred.get("type") or ""
+    gid = (pred.get("target_id") or "").strip().upper() if ptype == PRED_GROUP_WINNER else ""
     try:
-        await send_notification(user_id, "World Cup", f"You earned {pts:,} points — {label}.", "reward", category="world_cup")
+        if paid:
+            title = "World Cup — points received"
+            if ptype == PRED_GROUP_WINNER and gid:
+                msg = f"You received {pts:,} points for your correct Group {gid} winner pick."
+            else:
+                msg = f"You received {pts:,} points — {label}."
+            await send_notification(uid, title, msg, "reward", category="world_cup")
+        else:
+            title = "World Cup — correct pick"
+            if ptype == PRED_GROUP_WINNER and gid:
+                msg = f"Correct Group {gid} winner! {pts:,} points are queued for staff approval."
+            else:
+                msg = f"Correct prediction ({label}) — {pts:,} points queued for staff approval."
+            await send_notification(uid, title, msg, "info", category="world_cup")
     except Exception:
         pass
-    return True
+
+
+async def _user_wc_earnings(db, user_id: str, cfg: dict, entry: Optional[dict] = None) -> dict:
+    """Paid / pending / total World Cup points for a player."""
+    paid = 0
+    pending = 0
+    group_paid = 0
+    group_pending = 0
+    if user_id:
+        async for p in db.world_cup_predictions.find(
+            {"user_id": user_id, "settled": True, "points_awarded": {"$gt": 0}},
+            {"_id": 0, "type": 1, "points_awarded": 1, "payout_status": 1},
+        ):
+            pts = int(p.get("points_awarded") or 0)
+            ps = p.get("payout_status")
+            if ps == "pending":
+                pending += pts
+                if p.get("type") == PRED_GROUP_WINNER:
+                    group_pending += pts
+            elif ps != "ghost":
+                paid += pts
+                if p.get("type") == PRED_GROUP_WINNER:
+                    group_paid += pts
+    if entry is None and user_id:
+        entry = await db.world_cup_entries.find_one({"user_id": user_id}, {"_id": 0})
+    jackpot_paid = 0
+    jackpot_pending = 0
+    if entry:
+        jp = _points_from_config(cfg)["jackpot_points"]
+        if entry.get("jackpot_pending"):
+            jackpot_pending = jp
+            pending += jp
+        elif entry.get("jackpot_awarded"):
+            jackpot_paid = jp
+            paid += jp
+    return {
+        "points_paid": paid,
+        "points_pending": pending,
+        "points_earned_total": paid + pending,
+        "group_winner_points_paid": group_paid,
+        "group_winner_points_pending": group_pending,
+        "jackpot_points_paid": jackpot_paid,
+        "jackpot_points_pending": jackpot_pending,
+    }
 
 
 async def _is_ghost_user(db, user_id: str) -> bool:
@@ -1785,6 +1872,15 @@ async def _settle_prediction_doc(db, send_notification, pred: dict, points: int,
             }
         },
     )
+    if res.modified_count > 0 and pts > 0 and payout_status == "pending":
+        await _notify_wc_prediction_result(
+            db,
+            send_notification,
+            {**pred, "settled": True, "points_awarded": pts, "settle_label": label, "payout_status": payout_status},
+            pts,
+            label,
+            paid=False,
+        )
     return res.modified_count > 0
 
 
@@ -1804,7 +1900,7 @@ async def _approve_prediction_payout(db, send_notification, prediction_id: str, 
     if res.modified_count == 0:
         raise HTTPException(status_code=400, detail="Payout already processed")
     if pts > 0 and uid:
-        await _award_points(db, send_notification, uid, pts, prediction_id, label)
+        await _award_points(db, send_notification, uid, pts, prediction_id, label, pred=pred)
     return {"ok": True, "prediction_id": prediction_id, "points": pts}
 
 
@@ -1901,10 +1997,12 @@ async def _list_pending_payouts(db, limit: int = 100) -> dict:
             "user_id": p.get("user_id"),
             "username": usernames.get(p.get("user_id"), "?"),
             "type": p.get("type"),
+            "type_label": _prediction_type_label(p.get("type") or ""),
             "target_id": p.get("target_id"),
             "points": int(p.get("points_awarded") or 0),
             "label": p.get("settle_label") or "",
             "settled_at": p.get("settled_at"),
+            "payout_status": p.get("payout_status"),
         })
     jackpot_rows = []
     for e in jackpots:
@@ -1927,6 +2025,22 @@ def _prediction_type_label(ptype: str) -> str:
         PRED_SECOND_PLACE: "2nd place",
         PRED_THIRD_PLACE: "3rd place",
     }.get(ptype or "", ptype or "?")
+
+
+def _wc_payout_status_label(pred: dict) -> str:
+    ps = pred.get("payout_status")
+    pts = int(pred.get("points_awarded") or 0)
+    if not pred.get("settled"):
+        return "Open"
+    if pts <= 0:
+        return "Lost"
+    if ps == "pending":
+        return "Pending pay"
+    if ps == "paid":
+        return "Paid"
+    if ps == "ghost":
+        return "Ghost"
+    return "Paid"
 
 
 def _team_brief(team: dict) -> dict:
@@ -2101,8 +2215,10 @@ def _enrich_prediction_for_staff(
         "settled": bool(pred.get("settled")),
         "settled_at": pred.get("settled_at"),
         "payout_status": pred.get("payout_status"),
+        "payout_status_label": _wc_payout_status_label(pred),
         "payout_approved_at": pred.get("payout_approved_at"),
         "points_awarded": int(pred.get("points_awarded") or 0),
+        "points_display": int(pred.get("points_awarded") or 0) if pred.get("settled") else int(verification.get("expected_points") or 0),
         "settle_label": pred.get("settle_label") or "",
         "created_at": pred.get("created_at"),
         "updated_at": pred.get("updated_at"),
@@ -4278,6 +4394,7 @@ def register(router):
         draft_timing = _draft_timing_payload(cfg, start)
         tournament_started = _is_tournament_started_at(start)
         can_enter = _can_enter_event(cfg, entry)
+        earnings = await _user_wc_earnings(db, uid, cfg, entry) if uid and entry and not (entry.get("ghost_entry")) else None
         return {
             "enabled": True,
             "config": {k: cfg.get(k) for k in list(DEFAULT_POINTS.keys()) + ["entry_open", "draft_run", "phase", "banner_text"]},
@@ -4299,6 +4416,7 @@ def register(router):
             "tournament_picks_locked": tournament_started,
             "teams_count": await db.world_cup_teams.count_documents({}),
             "pending_payouts": pending_payouts,
+            "earnings": earnings,
             **draft_timing,
         }
 
@@ -4359,8 +4477,12 @@ def register(router):
         cfg = await _load_config(db)
         await _require_enabled(cfg)
         uid = current_user.get("id") or ""
+        entry = await db.world_cup_entries.find_one({"user_id": uid}, {"_id": 0}) if uid else None
         preds = await db.world_cup_predictions.find({"user_id": uid}, {"_id": 0}).to_list(500)
-        return {"predictions": preds}
+        earnings = None
+        if uid and entry and not entry.get("ghost_entry"):
+            earnings = await _user_wc_earnings(db, uid, cfg, entry)
+        return {"predictions": preds, "earnings": earnings}
 
     @router.get("/world-cup/leaderboard", dependencies=_wc_rl)
     async def world_cup_leaderboard(limit: int = Query(50, ge=1, le=100), current_user: dict = Depends(get_current_user)):

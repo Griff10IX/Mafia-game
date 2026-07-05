@@ -13011,6 +13011,14 @@ export default function Admin() {
                                         <p className="text-[10px] font-heading uppercase text-mutedForeground">
                                           All predictions ({wcUserDetail.predictions?.length ?? 0})
                                         </p>
+                                        {wcUserDetail.predictions_summary ? (
+                                          <p className="text-[10px] text-foreground tabular-nums">
+                                            <span className="text-emerald-400">{Number(wcUserDetail.predictions_summary.points_paid || 0).toLocaleString()} pts paid</span>
+                                            {Number(wcUserDetail.predictions_summary.points_pending || 0) > 0 ? (
+                                              <span className="text-amber-300"> · +{Number(wcUserDetail.predictions_summary.points_pending).toLocaleString()} pending</span>
+                                            ) : null}
+                                          </p>
+                                        ) : null}
                                         <div className="overflow-x-auto max-h-[240px] overflow-y-auto rounded border border-primary/10">
                                           <table className="w-full text-[9px] min-w-[600px]">
                                             <thead>
@@ -13020,6 +13028,7 @@ export default function Admin() {
                                                 <th className="p-1.5">Pick</th>
                                                 <th className="p-1.5">Actual</th>
                                                 <th className="p-1.5">Result</th>
+                                                <th className="p-1.5">Payout</th>
                                                 <th className="p-1.5 text-right">Pts</th>
                                               </tr>
                                             </thead>
@@ -13036,6 +13045,13 @@ export default function Admin() {
                                                         : !p.settled ? 'text-mutedForeground' : 'text-amber-400'
                                                   }`}>
                                                     {!p.settled ? 'Open' : p.verdict === 'correct' ? 'Won' : p.verdict === 'result_correct' ? 'Partial' : p.verdict === 'incorrect' ? 'Lost' : p.payout_status === 'pending' ? 'Pending pay' : '—'}
+                                                  </td>
+                                                  <td className={`p-1.5 uppercase font-heading text-[9px] ${
+                                                    p.payout_status === 'pending' ? 'text-amber-400'
+                                                      : p.payout_status === 'paid' ? 'text-emerald-400'
+                                                        : 'text-mutedForeground'
+                                                  }`}>
+                                                    {p.payout_status_label || '—'}
                                                   </td>
                                                   <td className="p-1.5 text-right tabular-nums">
                                                     {Number(p.points_awarded || 0) > 0 ? Number(p.points_awarded).toLocaleString() : '—'}

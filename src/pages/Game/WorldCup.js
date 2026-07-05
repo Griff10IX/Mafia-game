@@ -48,6 +48,49 @@ function WcPointsBadge({ pts }) {
   );
 }
 
+function WcEarningsSummary({ earnings, entered, ghostEntry }) {
+  if (!entered || ghostEntry) return null;
+  const paid = Number(earnings?.points_paid || 0);
+  const pending = Number(earnings?.points_pending || 0);
+  const total = Number(earnings?.points_earned_total ?? paid + pending);
+  const groupPts = Number(earnings?.group_winner_points_paid || 0) + Number(earnings?.group_winner_points_pending || 0);
+  return (
+    <WcPanel accent className="p-3 flex flex-wrap items-center justify-between gap-2">
+      <div>
+        <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Your World Cup earnings</p>
+        {groupPts > 0 ? (
+          <p className="text-[9px] text-mutedForeground mt-0.5">Group winners: {groupPts.toLocaleString()} pts</p>
+        ) : null}
+      </div>
+      <div className="text-right">
+        <p className="text-lg font-heading text-primary tabular-nums">{total.toLocaleString()} pts</p>
+        {paid > 0 && pending > 0 ? (
+          <p className="text-[10px] text-mutedForeground">{paid.toLocaleString()} received · {pending.toLocaleString()} pending</p>
+        ) : pending > 0 ? (
+          <p className="text-[10px] text-amber-300">{pending.toLocaleString()} pending staff approval</p>
+        ) : paid > 0 ? (
+          <p className="text-[10px] text-emerald-400">{paid.toLocaleString()} received</p>
+        ) : (
+          <p className="text-[10px] text-mutedForeground">Correct picks pay out after staff approval</p>
+        )}
+      </div>
+    </WcPanel>
+  );
+}
+
+function GroupPickResult({ pred }) {
+  if (!pred?.settled) return null;
+  const pts = Number(pred.points_awarded || 0);
+  if (pts <= 0) {
+    return <span className="text-[9px] text-red-400 uppercase font-heading">Wrong</span>;
+  }
+  if (pred.payout_status === 'pending') {
+    return <span className="text-[9px] text-amber-300 uppercase font-heading tabular-nums">+{pts.toLocaleString()} pend</span>;
+  }
+  if (pred.payout_status === 'ghost') return null;
+  return <span className="text-[9px] text-emerald-400 uppercase font-heading tabular-nums">+{pts.toLocaleString()} pts</span>;
+}
+
 function WcEnterBanner({ entered, canEnter, lateEntryAvailable, entering, onEnter }) {
   if (entered) return null;
   return (
@@ -158,6 +201,7 @@ export default function WorldCup() {
   const [matches, setMatches] = useState([]);
   const [knockoutRounds, setKnockoutRounds] = useState([]);
   const [predictions, setPredictions] = useState([]);
+  const [earnings, setEarnings] = useState(null);
   const [leaderboard, setLeaderboard] = useState(null);
   const [draftResults, setDraftResults] = useState(null);
   const [tab, setTab] = useState('overview');
@@ -216,6 +260,7 @@ export default function WorldCup() {
       setMatches(mRes.data?.matches || []);
       setKnockoutRounds(mRes.data?.knockout_rounds || []);
       setPredictions(pRes.data?.predictions || []);
+      setEarnings(pRes.data?.earnings ?? st.data?.earnings ?? null);
     } catch (e) {
       if (e.response?.status === 403) {
         setDisabled(true);
@@ -308,6 +353,7 @@ export default function WorldCup() {
       toast.success('Prediction saved');
       const pRes = await api.get('/world-cup/my-predictions');
       setPredictions(pRes.data?.predictions || []);
+      setEarnings(pRes.data?.earnings ?? null);
     } catch (e) {
       toast.error(getApiErrorMessage(e));
     } finally {
@@ -376,6 +422,10 @@ export default function WorldCup() {
           </div>
         </div>
       </div>
+
+      {status?.entered ? (
+        <WcEarningsSummary earnings={earnings} entered={status?.entered} ghostEntry={status?.ghost_entry} />
+      ) : null}
 
       <div className="wc-tab-scroll flex gap-1 p-1 rounded-lg border border-primary/20 bg-primary/5 overflow-x-auto snap-x snap-mandatory">
         {TABS.map(({ id, label, short, Icon }) => (
@@ -563,9 +613,12 @@ export default function WorldCup() {
             const pickId = pred?.value?.team_id || pred?.value;
             return (
               <WcPanel key={gid} className="p-3 wc-group-card">
-                <div className="wc-group-head flex items-center justify-between">
+                <div className="wc-group-head flex items-center justify-between gap-2">
                   <span className="font-heading font-bold text-primary text-base tracking-wide">Group {gid}</span>
-                  <WcPointsBadge pts={points.group_winner_points} />
+                  <div className="flex items-center gap-2 shrink-0">
+                    <GroupPickResult pred={pred} />
+                    <WcPointsBadge pts={points.group_winner_points} />
+                  </div>
                 </div>
                 {locked && !tournamentPicksLocked && <p className="text-[10px] text-amber-400 mb-2 uppercase font-heading">Locked</p>}
                 <div className="space-y-1">
@@ -628,8 +681,11 @@ export default function WorldCup() {
           ) : leaderboard?.my_points != null ? (
             <WcPanel accent className="p-3 flex justify-between items-center sticky top-0 z-10">
               <span className="text-sm font-heading text-foreground">Your rank</span>
-              <span className="text-sm text-primary font-heading tabular-nums">
-                #{leaderboard.my_rank || '—'} · {Number(leaderboard.my_points || 0).toLocaleString()} pts
+              <span className="text-sm text-primary font-heading tabular-nums text-right">
+                #{leaderboard.my_rank || '—'} · {Number(leaderboard.my_points || 0).toLocaleString()} pts paid
+                {Number(earnings?.points_pending || 0) > 0 ? (
+                  <span className="block text-[10px] text-amber-300 font-normal">+{Number(earnings.points_pending).toLocaleString()} pending</span>
+                ) : null}
               </span>
             </WcPanel>
           ) : null}

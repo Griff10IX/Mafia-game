@@ -651,9 +651,13 @@ export default function WorldCupStaff() {
                   <div key={row.id} className="flex items-center gap-2 p-2 rounded border border-primary/10 bg-primary/5">
                     <div className="flex-1 min-w-0">
                       <p className="text-sm truncate">{row.username}</p>
-                      <p className="text-[10px] text-mutedForeground truncate">{row.label || row.type}</p>
+                      <p className="text-[10px] text-mutedForeground truncate">
+                        {row.type_label || row.type}
+                        {row.type === 'group_winner' && row.target_id ? ` · Group ${row.target_id}` : ''}
+                        {row.label ? ` — ${row.label}` : ''}
+                      </p>
                     </div>
-                    <span className="text-sm text-primary tabular-nums shrink-0">{Number(row.points || 0).toLocaleString()}</span>
+                    <span className="text-sm text-primary tabular-nums shrink-0">{Number(row.points || 0).toLocaleString()} pts</span>
                     <button
                       type="button"
                       disabled={approvingId === row.id}
@@ -864,6 +868,7 @@ export default function WorldCupStaff() {
                       <th className="p-2">Pick</th>
                       <th className="p-2">Actual</th>
                       <th className="p-2">Verdict</th>
+                      <th className="p-2">Payout</th>
                       <th className="p-2 text-right">Pts</th>
                     </tr>
                   </thead>
@@ -879,13 +884,31 @@ export default function WorldCupStaff() {
                             <td className="p-2 font-mono">{row.pick || '—'}</td>
                             <td className="p-2 font-mono">{row.actual || '—'}</td>
                             <td className={`p-2 uppercase ${verdictClass(row.verdict)}`}>{verdictLabel(row.verdict)}</td>
-                            <td className="p-2 text-right tabular-nums">{row.settled ? Number(row.points_awarded || 0).toLocaleString() : '—'}</td>
+                            <td className={`p-2 uppercase text-[10px] font-heading ${
+                              row.payout_status === 'pending' ? 'text-amber-400'
+                                : row.payout_status === 'paid' ? 'text-emerald-400'
+                                  : row.settled && Number(row.points_awarded || 0) <= 0 ? 'text-red-400'
+                                    : 'text-mutedForeground'
+                            }`}>
+                              {row.payout_status_label || (row.settled ? '—' : 'Open')}
+                            </td>
+                            <td className="p-2 text-right tabular-nums">
+                              {row.settled && Number(row.points_awarded || 0) > 0
+                                ? Number(row.points_awarded || 0).toLocaleString()
+                                : '—'}
+                            </td>
                           </tr>
                           {expanded && (
                             <tr className="border-b border-primary/10 bg-black/20">
-                              <td colSpan={7} className="p-3 text-[10px] space-y-1">
+                              <td colSpan={8} className="p-3 text-[10px] space-y-1">
                                 <p className="font-mono break-all">ID: {row.id}</p>
                                 <p>{row.summary}</p>
+                                {Number(row.points_awarded || 0) > 0 ? (
+                                  <p className="text-emerald-300 tabular-nums">
+                                    {Number(row.points_awarded).toLocaleString()} pts · {row.payout_status_label || row.payout_status || '—'}
+                                    {row.settle_label ? ` · ${row.settle_label}` : ''}
+                                  </p>
+                                ) : null}
                                 {row.payout_status === 'pending' && (
                                   <button type="button" disabled={approvingId === row.id} onClick={(e) => { e.stopPropagation(); approvePrediction(row.id); }} className="mt-2 min-h-[32px] px-3 rounded border border-emerald-500/40 text-emerald-300 text-[10px] uppercase">
                                     Approve payout
