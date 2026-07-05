@@ -1992,6 +1992,7 @@ async def _build_group_winner_payout_report(db) -> dict:
         for gid in GROUP_IDS
     }
     pending_rows: List[dict] = []
+    paid_rows: List[dict] = []
     paid_count = 0
     paid_points = 0
     pending_count = 0
@@ -2000,7 +2001,8 @@ async def _build_group_winner_payout_report(db) -> dict:
     ghost_points = 0
     paid_users: set = set()
     pending_users: set = set()
-    pending_user_ids: List[str] = []
+    all_user_ids: set = set()
+    paid_prediction_ids: List[str] = []
 
     async for p in db.world_cup_predictions.find(
         {"type": PRED_GROUP_WINNER, "settled": True, "points_awarded": {"$gt": 0}},
@@ -2013,6 +2015,7 @@ async def _build_group_winner_payout_report(db) -> dict:
         grp = by_group.get(gid)
         val = p.get("value") or {}
         pick_name = _prediction_team_label(val, teams_by_id, val.get("team_id") if isinstance(val, dict) else val)
+        pid = p.get("id") or ""
 
         if ps == "ghost" or uid in ghost_ids:
             ghost_count += 1
@@ -2021,23 +2024,27 @@ async def _build_group_winner_payout_report(db) -> dict:
                 grp["ghost_count"] += 1
             continue
 
+        if uid:
+            all_user_ids.add(uid)
+
         if ps == "pending":
             pending_count += 1
             pending_points += pts
             if uid:
                 pending_users.add(uid)
-                pending_user_ids.append(uid)
             if grp:
                 grp["pending_count"] += 1
                 grp["pending_points"] += pts
             pending_rows.append({
-                "prediction_id": p.get("id"),
+                "prediction_id": pid,
                 "user_id": uid,
                 "group_id": gid,
                 "pick": pick_name,
                 "points": pts,
                 "settled_at": p.get("settled_at"),
                 "settle_label": p.get("settle_label") or "",
+                "credit_status": "pending",
+                "points_credited": False,
             })
         elif ps == "paid" or ps not in ("pending", "ghost"):
             paid_count += 1
@@ -2047,15 +2054,110 @@ async def _build_group_winner_payout_report(db) -> dict:
             if grp:
                 grp["paid_count"] += 1
                 grp["paid_points"] += pts
+            if pid:
+                paid_prediction_ids.append(pid)
+            paid_rows.append({
+                "prediction_id": pid,
+                "user_id": uid,
+                "group_id": gid,
+                "pick": pick_name,
+                "points": pts,
+                "settled_at": p.get("settled_at"),
+                "payout_approved_at": p.get("payout_approved_at"),
+                "manual_payout_recorded": bool(p.get("manual_payout_recorded")),
+                "settle_label": p.get("settle_label") or "",
+                "credit_status": "unknown",
+                "points_credited": False,
+            })
 
     usernames: Dict[str, str] = {}
-    if pending_user_ids:
-        async for u in db.users.find({"id": {"$in": list(set(pending_user_ids))}}, {"_id": 0, "id": 1, "username": 1}):
+    if all_user_ids:
+        async for u in db.users.find({"id": {"$in": list(all_user_ids)}}, {"_id": 0, "id": 1, "username": 1}):
             usernames[u["id"]] = u.get("username") or "?"
+
+    ledger_by_ref: Dict[str, dict] = {}
+    if paid_prediction_ids:
+        async for ev in db.point_ledger_events.find(
+            {
+                "event_type": "world_cup_payout",
+                "origin_ref": {"$in": paid_prediction_ids},
+            },
+            {"_id": 0, "origin_ref": 1, "points": 1, "created_at": 1},
+        ):
+            ref = ev.get("origin_ref")
+            if ref:
+                ledger_by_ref[str(ref)] = ev
+
+    for row in paid_rows:
+        pid = str(row.get("prediction_id") or "")
+        ledger = ledger_by_ref.get(pid)
+        if ledger:
+            row["credit_status"] = "credited"
+            row["points_credited"] = True
+            row["ledger_at"] = ledger.get("created_at")
+        elif row.get("manual_payout_recorded"):
+            row["credit_status"] = "manual_only"
+            row["points_credited"] = False
+        else:
+            row["credit_status"] = "paid_no_ledger"
+            row["points_credited"] = False
+        row["username"] = usernames.get(row.get("user_id") or "", "?")
+
     for row in pending_rows:
         row["username"] = usernames.get(row.get("user_id") or "", "?")
 
     pending_rows.sort(key=lambda r: (r.get("group_id") or "", r.get("username") or ""))
+    paid_rows.sort(key=lambda r: (r.get("username") or "", r.get("group_id") or ""))
+
+    by_player_map: Dict[str, dict] = {}
+    for row in paid_rows + pending_rows:
+        uid = row.get("user_id") or ""
+        if not uid:
+            continue
+        player = by_player_map.setdefault(uid, {
+            "user_id": uid,
+            "username": row.get("username") or usernames.get(uid, "?"),
+            "paid_points": 0,
+            "pending_points": 0,
+            "credited_points": 0,
+            "manual_only_points": 0,
+            "paid_no_ledger_points": 0,
+            "pick_count": 0,
+            "picks": [],
+        })
+        pts = int(row.get("points") or 0)
+        player["pick_count"] += 1
+        player["picks"].append({
+            "prediction_id": row.get("prediction_id"),
+            "group_id": row.get("group_id"),
+            "pick": row.get("pick"),
+            "points": pts,
+            "credit_status": row.get("credit_status"),
+            "points_credited": bool(row.get("points_credited")),
+            "payout_approved_at": row.get("payout_approved_at"),
+        })
+        if row.get("credit_status") == "pending":
+            player["pending_points"] += pts
+        else:
+            player["paid_points"] += pts
+            if row.get("credit_status") == "credited":
+                player["credited_points"] += pts
+            elif row.get("credit_status") == "manual_only":
+                player["manual_only_points"] += pts
+            elif row.get("credit_status") == "paid_no_ledger":
+                player["paid_no_ledger_points"] += pts
+
+    by_player = sorted(
+        by_player_map.values(),
+        key=lambda p: (-(p.get("paid_points") or 0), -(p.get("pending_points") or 0), p.get("username") or ""),
+    )
+    for player in by_player:
+        player["picks"].sort(key=lambda r: (r.get("group_id") or ""))
+
+    credited_points = sum(int(r.get("points") or 0) for r in paid_rows if r.get("credit_status") == "credited")
+    manual_only_points = sum(int(r.get("points") or 0) for r in paid_rows if r.get("credit_status") == "manual_only")
+    paid_no_ledger_points = sum(int(r.get("points") or 0) for r in paid_rows if r.get("credit_status") == "paid_no_ledger")
+
     groups_out = [
         by_group[gid]
         for gid in GROUP_IDS
@@ -2073,12 +2175,17 @@ async def _build_group_winner_payout_report(db) -> dict:
         "ghost_points": ghost_points,
         "grand_total_paid": paid_points,
         "grand_total_if_remaining_paid": paid_points + pending_points,
+        "credited_points": credited_points,
+        "manual_only_points": manual_only_points,
+        "paid_no_ledger_points": paid_no_ledger_points,
     }
     return {
         "ok": True,
         "all_paid": pending_count == 0,
         "summary": summary,
         "by_group": groups_out,
+        "by_player": by_player,
+        "paid": paid_rows,
         "pending": pending_rows,
     }
 

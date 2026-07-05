@@ -1600,6 +1600,7 @@ export default function Admin() {
   const [wcForumPicksLoading, setWcForumPicksLoading] = useState(false);
   const [wcGroupPayoutReport, setWcGroupPayoutReport] = useState(null);
   const [wcGroupPayoutLoading, setWcGroupPayoutLoading] = useState(false);
+  const [wcGroupPayoutExpandedPlayer, setWcGroupPayoutExpandedPlayer] = useState(null);
   const [maintenanceMsg, setMaintenanceMsg] = useState('');
   const [maintenanceDuration, setMaintenanceDuration] = useState(60);
   const [bulkUsernames, setBulkUsernames] = useState('');
@@ -12950,6 +12951,154 @@ export default function Admin() {
                             ))}
                           </tbody>
                         </table>
+                      </div>
+                    )}
+                    {(wcGroupPayoutReport.summary?.paid_no_ledger_points > 0) && (
+                      <div className="p-2 rounded border border-red-500/30 bg-red-950/20 text-[10px] font-heading text-red-300">
+                        {Number(wcGroupPayoutReport.summary.paid_no_ledger_points).toLocaleString()} pts marked paid but no point-ledger entry — investigate before paying more.
+                      </div>
+                    )}
+                    {(wcGroupPayoutReport.by_player || []).length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-heading uppercase text-mutedForeground">
+                          Who got what ({wcGroupPayoutReport.by_player.length} players)
+                        </p>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] font-heading mb-1">
+                          <div className="p-2 rounded border border-emerald-500/20 bg-emerald-950/20">
+                            <p className="text-mutedForeground uppercase">Credited (ledger)</p>
+                            <p className="text-emerald-400 tabular-nums">{Number(wcGroupPayoutReport.summary?.credited_points || 0).toLocaleString()} pts</p>
+                          </div>
+                          <div className="p-2 rounded border border-amber-500/20 bg-amber-950/20">
+                            <p className="text-mutedForeground uppercase">Manual only</p>
+                            <p className="text-amber-300 tabular-nums">{Number(wcGroupPayoutReport.summary?.manual_only_points || 0).toLocaleString()} pts</p>
+                            <p className="text-[9px] text-mutedForeground">marked paid off-system</p>
+                          </div>
+                          <div className="p-2 rounded border border-primary/10 bg-primary/5">
+                            <p className="text-mutedForeground uppercase">Still pending</p>
+                            <p className="text-amber-300 tabular-nums">{Number(wcGroupPayoutReport.summary?.pending_points || 0).toLocaleString()} pts</p>
+                          </div>
+                        </div>
+                        <div className="overflow-x-auto max-h-[420px] overflow-y-auto rounded border border-primary/10">
+                          <table className="w-full text-[10px] min-w-[640px]">
+                            <thead className="sticky top-0 bg-zinc-950 z-10">
+                              <tr className="border-b border-primary/10 text-left text-mutedForeground font-heading uppercase">
+                                <th className="p-2">Player</th>
+                                <th className="p-2 text-right">Paid</th>
+                                <th className="p-2 text-right">Credited</th>
+                                <th className="p-2 text-right">Manual</th>
+                                <th className="p-2 text-right">Pending</th>
+                                <th className="p-2">Picks</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(wcGroupPayoutReport.by_player || []).map((player) => {
+                                const expanded = wcGroupPayoutExpandedPlayer === player.user_id;
+                                const hasIssue = (player.paid_no_ledger_points || 0) > 0;
+                                return (
+                                  <Fragment key={player.user_id}>
+                                    <tr
+                                      className={`border-b border-primary/5 cursor-pointer hover:bg-primary/5 ${hasIssue ? 'bg-red-950/10' : ''}`}
+                                      onClick={() => setWcGroupPayoutExpandedPlayer(expanded ? null : player.user_id)}
+                                    >
+                                      <td className="p-2 whitespace-nowrap">
+                                        <span className="text-mutedForeground mr-1">{expanded ? '▼' : '▶'}</span>
+                                        {player.username}
+                                        {hasIssue ? <span className="ml-1 text-red-400">!</span> : null}
+                                      </td>
+                                      <td className="p-2 text-right tabular-nums text-emerald-400">
+                                        {player.paid_points > 0 ? Number(player.paid_points).toLocaleString() : '—'}
+                                      </td>
+                                      <td className="p-2 text-right tabular-nums text-emerald-300">
+                                        {player.credited_points > 0 ? Number(player.credited_points).toLocaleString() : '—'}
+                                      </td>
+                                      <td className="p-2 text-right tabular-nums text-amber-300">
+                                        {player.manual_only_points > 0 ? Number(player.manual_only_points).toLocaleString() : '—'}
+                                      </td>
+                                      <td className="p-2 text-right tabular-nums text-amber-300">
+                                        {player.pending_points > 0 ? Number(player.pending_points).toLocaleString() : '—'}
+                                      </td>
+                                      <td className="p-2 text-mutedForeground">{player.pick_count ?? 0}</td>
+                                    </tr>
+                                    {expanded && (player.picks || []).map((pick) => {
+                                      const status = pick.credit_status;
+                                      const statusLabel = status === 'credited'
+                                        ? 'Credited'
+                                        : status === 'manual_only'
+                                          ? 'Manual only'
+                                          : status === 'paid_no_ledger'
+                                            ? 'No ledger'
+                                            : status === 'pending'
+                                              ? 'Pending'
+                                              : status || '—';
+                                      const statusClass = status === 'credited'
+                                        ? 'text-emerald-400'
+                                        : status === 'manual_only'
+                                          ? 'text-amber-300'
+                                          : status === 'paid_no_ledger'
+                                            ? 'text-red-400'
+                                            : 'text-amber-300';
+                                      return (
+                                        <tr key={`${player.user_id}-${pick.prediction_id}`} className="border-b border-primary/5 bg-primary/5">
+                                          <td className="p-2 pl-6 text-mutedForeground" colSpan={2}>
+                                            {pick.group_id} — {pick.pick}
+                                          </td>
+                                          <td className="p-2 text-right tabular-nums">{Number(pick.points || 0).toLocaleString()}</td>
+                                          <td className={`p-2 ${statusClass}`} colSpan={2}>{statusLabel}</td>
+                                          <td className="p-2 text-mutedForeground whitespace-nowrap">
+                                            {pick.payout_approved_at ? formatAdminDateTime(pick.payout_approved_at) : '—'}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </Fragment>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                    {(wcGroupPayoutReport.paid || []).length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-heading uppercase text-mutedForeground">
+                          Paid picks detail ({wcGroupPayoutReport.paid.length})
+                        </p>
+                        <div className="overflow-x-auto max-h-[320px] overflow-y-auto rounded border border-primary/10">
+                          <table className="w-full text-[10px] min-w-[600px]">
+                            <thead className="sticky top-0 bg-zinc-950 z-10">
+                              <tr className="border-b border-primary/10 text-left text-mutedForeground font-heading uppercase">
+                                <th className="p-2">Player</th>
+                                <th className="p-2">Group</th>
+                                <th className="p-2">Pick</th>
+                                <th className="p-2 text-right">Pts</th>
+                                <th className="p-2">Points landed?</th>
+                                <th className="p-2">Paid at</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(wcGroupPayoutReport.paid || []).map((row) => {
+                                const status = row.credit_status;
+                                const landed = status === 'credited'
+                                  ? { text: 'Yes — ledger', className: 'text-emerald-400' }
+                                  : status === 'manual_only'
+                                    ? { text: 'Manual mark only', className: 'text-amber-300' }
+                                    : { text: 'No ledger entry', className: 'text-red-400' };
+                                return (
+                                  <tr key={row.prediction_id} className={`border-b border-primary/5 ${status === 'paid_no_ledger' ? 'bg-red-950/10' : ''}`}>
+                                    <td className="p-2 whitespace-nowrap">{row.username}</td>
+                                    <td className="p-2 font-heading">{row.group_id}</td>
+                                    <td className="p-2">{row.pick}</td>
+                                    <td className="p-2 text-right tabular-nums text-emerald-400">{Number(row.points || 0).toLocaleString()}</td>
+                                    <td className={`p-2 ${landed.className}`}>{landed.text}</td>
+                                    <td className="p-2 text-mutedForeground whitespace-nowrap">
+                                      {row.payout_approved_at ? formatAdminDateTime(row.payout_approved_at) : '—'}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     )}
                     {(wcGroupPayoutReport.pending || []).length > 0 && (
