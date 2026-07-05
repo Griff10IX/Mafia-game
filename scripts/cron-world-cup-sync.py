@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Call POST .../world-cup/cron/sync-fixtures daily. Header: X-Cron-Secret."""
+"""Call POST .../world-cup/cron/sync-fixtures (nightly fixture pull). Header: X-Cron-Secret."""
 import json
 import os
 import sys

@@ -171,6 +171,18 @@ async def _award_points(
     pts = int(points or 0)
     if not user_id or pts <= 0:
         return False
+    if event_ref:
+        existing = await db.point_ledger_events.find_one(
+            {
+                "event_type": "world_cup_payout",
+                "origin_ref": event_ref,
+                "user_id": user_id,
+                "points": pts,
+            },
+            {"_id": 0, "id": 1},
+        )
+        if existing:
+            return False
     await db.users.update_one({"id": user_id}, {"$inc": {"points": pts}})
     await log_points_event(
         db,
@@ -1961,6 +1973,200 @@ async def _approve_all_pending_payouts(db, send_notification, approver_id: str) 
         "predictions_approved": pred_approved,
         "jackpots_approved": jackpot_approved,
         "total_points": pred_points + jackpot_points,
+    }
+
+
+async def _build_group_winner_payout_report(db) -> dict:
+    """Preview pending group-winner payouts and summary of paid vs outstanding."""
+    ghost_ids = await _ghost_user_ids(db)
+    teams_by_id = await _teams_by_id_resolved(db)
+    by_group: Dict[str, dict] = {
+        gid: {
+            "group_id": gid,
+            "paid_count": 0,
+            "paid_points": 0,
+            "pending_count": 0,
+            "pending_points": 0,
+            "ghost_count": 0,
+        }
+        for gid in GROUP_IDS
+    }
+    pending_rows: List[dict] = []
+    paid_count = 0
+    paid_points = 0
+    pending_count = 0
+    pending_points = 0
+    ghost_count = 0
+    ghost_points = 0
+    paid_users: set = set()
+    pending_users: set = set()
+    pending_user_ids: List[str] = []
+
+    async for p in db.world_cup_predictions.find(
+        {"type": PRED_GROUP_WINNER, "settled": True, "points_awarded": {"$gt": 0}},
+        {"_id": 0},
+    ):
+        uid = p.get("user_id") or ""
+        gid = (p.get("target_id") or "?").strip().upper()
+        pts = int(p.get("points_awarded") or 0)
+        ps = p.get("payout_status")
+        grp = by_group.get(gid)
+        val = p.get("value") or {}
+        pick_name = _prediction_team_label(val, teams_by_id, val.get("team_id") if isinstance(val, dict) else val)
+
+        if ps == "ghost" or uid in ghost_ids:
+            ghost_count += 1
+            ghost_points += pts
+            if grp:
+                grp["ghost_count"] += 1
+            continue
+
+        if ps == "pending":
+            pending_count += 1
+            pending_points += pts
+            if uid:
+                pending_users.add(uid)
+                pending_user_ids.append(uid)
+            if grp:
+                grp["pending_count"] += 1
+                grp["pending_points"] += pts
+            pending_rows.append({
+                "prediction_id": p.get("id"),
+                "user_id": uid,
+                "group_id": gid,
+                "pick": pick_name,
+                "points": pts,
+                "settled_at": p.get("settled_at"),
+                "settle_label": p.get("settle_label") or "",
+            })
+        elif ps == "paid" or ps not in ("pending", "ghost"):
+            paid_count += 1
+            paid_points += pts
+            if uid:
+                paid_users.add(uid)
+            if grp:
+                grp["paid_count"] += 1
+                grp["paid_points"] += pts
+
+    usernames: Dict[str, str] = {}
+    if pending_user_ids:
+        async for u in db.users.find({"id": {"$in": list(set(pending_user_ids))}}, {"_id": 0, "id": 1, "username": 1}):
+            usernames[u["id"]] = u.get("username") or "?"
+    for row in pending_rows:
+        row["username"] = usernames.get(row.get("user_id") or "", "?")
+
+    pending_rows.sort(key=lambda r: (r.get("group_id") or "", r.get("username") or ""))
+    groups_out = [
+        by_group[gid]
+        for gid in GROUP_IDS
+        if by_group[gid]["paid_count"] or by_group[gid]["pending_count"] or by_group[gid]["ghost_count"]
+    ]
+
+    summary = {
+        "paid_predictions": paid_count,
+        "paid_points": paid_points,
+        "paid_players": len(paid_users),
+        "pending_predictions": pending_count,
+        "pending_points": pending_points,
+        "pending_players": len(pending_users),
+        "ghost_predictions": ghost_count,
+        "ghost_points": ghost_points,
+        "grand_total_paid": paid_points,
+        "grand_total_if_remaining_paid": paid_points + pending_points,
+    }
+    return {
+        "ok": True,
+        "all_paid": pending_count == 0,
+        "summary": summary,
+        "by_group": groups_out,
+        "pending": pending_rows,
+    }
+
+
+async def _pay_pending_group_winner_payouts(
+    db,
+    send_notification,
+    approver_id: str,
+    *,
+    dry_run: bool = False,
+) -> dict:
+    report = await _build_group_winner_payout_report(db)
+    if dry_run:
+        return {
+            "ok": True,
+            "dry_run": True,
+            "would_approve": report["summary"]["pending_predictions"],
+            "would_pay_points": report["summary"]["pending_points"],
+            "pending": report["pending"],
+            "summary": report["summary"],
+            "all_paid": report["all_paid"],
+        }
+
+    approved = 0
+    points = 0
+    failed: List[dict] = []
+    for row in report["pending"]:
+        pid = row.get("prediction_id")
+        if not pid:
+            continue
+        try:
+            result = await _approve_prediction_payout(db, send_notification, pid, approver_id)
+            approved += 1
+            points += int(result.get("points") or 0)
+        except HTTPException as ex:
+            failed.append({
+                "prediction_id": pid,
+                "username": row.get("username"),
+                "group_id": row.get("group_id"),
+                "error": ex.detail,
+            })
+
+    final = await _build_group_winner_payout_report(db)
+    return {
+        "ok": True,
+        "dry_run": False,
+        "predictions_approved": approved,
+        "points_paid": points,
+        "failed": failed,
+        "summary": final["summary"],
+        "all_paid": final["all_paid"],
+        "by_group": final["by_group"],
+    }
+
+
+async def _mark_group_winner_payouts_manually_paid(
+    db,
+    approver_id: str,
+    prediction_ids: List[str],
+) -> dict:
+    ids = [str(x or "").strip() for x in (prediction_ids or []) if str(x or "").strip()]
+    if not ids:
+        raise HTTPException(status_code=400, detail="prediction_ids required")
+    now = _now_iso()
+    res = await db.world_cup_predictions.update_many(
+        {
+            "id": {"$in": ids},
+            "type": PRED_GROUP_WINNER,
+            "payout_status": "pending",
+            "settled": True,
+            "points_awarded": {"$gt": 0},
+        },
+        {
+            "$set": {
+                "payout_status": "paid",
+                "payout_approved_at": now,
+                "payout_approved_by": approver_id,
+                "manual_payout_recorded": True,
+                "manual_payout_recorded_at": now,
+            }
+        },
+    )
+    final = await _build_group_winner_payout_report(db)
+    return {
+        "ok": True,
+        "marked_paid": int(res.modified_count or 0),
+        "summary": final["summary"],
+        "all_paid": final["all_paid"],
     }
 
 
@@ -4339,6 +4545,14 @@ class GroupPicksPreviewBody(BaseModel):
     picks_text: Optional[str] = None
 
 
+class GroupPayoutPayBody(BaseModel):
+    dry_run: bool = False
+
+
+class GroupPayoutManualPaidBody(BaseModel):
+    prediction_ids: List[str] = Field(default_factory=list)
+
+
 class AutoRestoreGroupPicksBody(BaseModel):
     re_settle: bool = True
     dry_run: bool = False
@@ -4938,6 +5152,42 @@ def register(router):
             picks_text=body.picks_text,
         )
 
+    @router.get("/world-cup/staff/group-payouts/report")
+    async def wc_staff_group_payouts_report(current_user: dict = Depends(get_current_user)):
+        _require_staff(current_user)
+        cfg = await _load_config(db)
+        await _require_enabled_staff(cfg)
+        return await _build_group_winner_payout_report(db)
+
+    @router.post("/world-cup/staff/group-payouts/pay")
+    async def wc_staff_group_payouts_pay(
+        body: GroupPayoutPayBody,
+        current_user: dict = Depends(get_current_user),
+    ):
+        _require_staff(current_user)
+        cfg = await _load_config(db)
+        await _require_enabled_staff(cfg)
+        return await _pay_pending_group_winner_payouts(
+            db,
+            send_notification,
+            current_user.get("id") or "",
+            dry_run=bool(body.dry_run),
+        )
+
+    @router.post("/world-cup/staff/group-payouts/mark-manual-paid")
+    async def wc_staff_group_payouts_mark_manual_paid(
+        body: GroupPayoutManualPaidBody,
+        current_user: dict = Depends(get_current_user),
+    ):
+        _require_staff(current_user)
+        cfg = await _load_config(db)
+        await _require_enabled_staff(cfg)
+        return await _mark_group_winner_payouts_manually_paid(
+            db,
+            current_user.get("id") or "",
+            body.prediction_ids,
+        )
+
     @router.post("/world-cup/staff/restore-user-group-picks")
     async def wc_staff_restore_user_group_picks(
         body: GroupPicksRestoreBody,
@@ -5159,6 +5409,33 @@ def register(router):
         if body.auto_approve:
             payout = await _approve_all_pending_payouts(db, send_notification, current_user.get("id") or "")
         return {**settled, "payout": payout}
+
+    @router.get("/admin/world-cup/group-payouts/report")
+    async def admin_wc_group_payouts_report(current_user: dict = Depends(require_admin)):
+        return await _build_group_winner_payout_report(db)
+
+    @router.post("/admin/world-cup/group-payouts/pay")
+    async def admin_wc_group_payouts_pay(
+        body: GroupPayoutPayBody,
+        current_user: dict = Depends(require_admin),
+    ):
+        return await _pay_pending_group_winner_payouts(
+            db,
+            send_notification,
+            current_user.get("id") or "",
+            dry_run=bool(body.dry_run),
+        )
+
+    @router.post("/admin/world-cup/group-payouts/mark-manual-paid")
+    async def admin_wc_group_payouts_mark_manual_paid(
+        body: GroupPayoutManualPaidBody,
+        current_user: dict = Depends(require_admin),
+    ):
+        return await _mark_group_winner_payouts_manually_paid(
+            db,
+            current_user.get("id") or "",
+            body.prediction_ids,
+        )
 
     @router.post("/admin/world-cup/preview-user-group-picks")
     async def admin_wc_preview_user_group_picks(

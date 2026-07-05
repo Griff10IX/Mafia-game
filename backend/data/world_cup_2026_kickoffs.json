@@ -98,6 +98,8 @@
     { "home": "Portugal", "away": "Spain", "kickoff_utc": "2026-07-06T19:00:00Z", "stage": "knockout", "knockout_round": "round_of_16", "match_no": 93 },
     { "home": "United States", "away": "Belgium", "kickoff_utc": "2026-07-07T00:00:00Z", "stage": "knockout", "knockout_round": "round_of_16", "match_no": 94 },
     { "home": "Argentina", "away": "Egypt", "kickoff_utc": "2026-07-07T16:00:00Z", "stage": "knockout", "knockout_round": "round_of_16", "match_no": 95 },
-    { "home": "Switzerland", "away": "Colombia", "kickoff_utc": "2026-07-07T20:00:00Z", "stage": "knockout", "knockout_round": "round_of_16", "match_no": 96 }
+    { "home": "Switzerland", "away": "Colombia", "kickoff_utc": "2026-07-07T20:00:00Z", "stage": "knockout", "knockout_round": "round_of_16", "match_no": 96 },
+
+    { "home": "France", "away": "Morocco", "kickoff_utc": "2026-07-09T20:00:00Z", "stage": "knockout", "knockout_round": "quarter_final", "match_no": 97 }
   ]
 }

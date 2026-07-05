@@ -1598,6 +1598,8 @@ export default function Admin() {
   const [wcForumPicksText, setWcForumPicksText] = useState('');
   const [wcForumPicksPreview, setWcForumPicksPreview] = useState(null);
   const [wcForumPicksLoading, setWcForumPicksLoading] = useState(false);
+  const [wcGroupPayoutReport, setWcGroupPayoutReport] = useState(null);
+  const [wcGroupPayoutLoading, setWcGroupPayoutLoading] = useState(false);
   const [maintenanceMsg, setMaintenanceMsg] = useState('');
   const [maintenanceDuration, setMaintenanceDuration] = useState(60);
   const [bulkUsernames, setBulkUsernames] = useState('');
@@ -8207,6 +8209,66 @@ export default function Admin() {
     }
   };
 
+  const fetchWcGroupPayoutReport = async () => {
+    setWcGroupPayoutLoading(true);
+    try {
+      const res = await api.get('/admin/world-cup/group-payouts/report');
+      setWcGroupPayoutReport(res.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load group payout report');
+      setWcGroupPayoutReport(null);
+    } finally {
+      setWcGroupPayoutLoading(false);
+    }
+  };
+
+  const payWcGroupPayouts = async ({ dryRun = false } = {}) => {
+    const pending = wcGroupPayoutReport?.summary?.pending_predictions ?? 0;
+    const pts = wcGroupPayoutReport?.summary?.pending_points ?? 0;
+    if (!dryRun) {
+      if (!pending) {
+        toast.info('No remaining group payouts');
+        return;
+      }
+      if (!window.confirm(`Pay ${pending} remaining group pick(s) — ${Number(pts).toLocaleString()} points total?`)) return;
+    }
+    setWcGroupPayoutLoading(true);
+    try {
+      const res = await api.post('/admin/world-cup/group-payouts/pay', { dry_run: dryRun });
+      const d = res.data || {};
+      if (dryRun) {
+        toast.success(`Preview: ${d.would_approve ?? 0} picks · ${Number(d.would_pay_points || 0).toLocaleString()} pts`);
+      } else {
+        toast.success(`Paid ${d.predictions_approved ?? 0} picks · ${Number(d.points_paid || 0).toLocaleString()} pts`);
+        if (d.all_paid) toast.success('All group winner payouts complete');
+      }
+      setWcGroupPayoutReport(await api.get('/admin/world-cup/group-payouts/report').then((r) => r.data));
+      await fetchWorldCupAdmin();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Group payout failed');
+    } finally {
+      setWcGroupPayoutLoading(false);
+    }
+  };
+
+  const markWcGroupPayoutManualPaid = async (predictionId, username) => {
+    if (!predictionId) return;
+    if (!window.confirm(`Mark ${username || 'this player'} as already manually paid? No points will be credited.`)) return;
+    setWcGroupPayoutLoading(true);
+    try {
+      const res = await api.post('/admin/world-cup/group-payouts/mark-manual-paid', {
+        prediction_ids: [predictionId],
+      });
+      toast.success(`Marked ${res.data?.marked_paid ?? 0} payout as manually paid`);
+      setWcGroupPayoutReport(await api.get('/admin/world-cup/group-payouts/report').then((r) => r.data));
+      await fetchWorldCupAdmin();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to mark manual payout');
+    } finally {
+      setWcGroupPayoutLoading(false);
+    }
+  };
+
   const applyWorldCupForumPicks = async (autoApprove = false) => {
     const username = wcForumPicksUsername.trim();
     const picks_text = wcForumPicksText.trim();
@@ -12703,6 +12765,7 @@ export default function Admin() {
             <div className="flex flex-wrap gap-1.5 border-b border-primary/10 pb-2">
               {[
                 { id: 'setup', label: 'Setup' },
+                { id: 'payouts', label: 'Group payouts' },
                 { id: 'entrants', label: 'Entrants & picks' },
                 { id: 'leaderboard', label: 'Leaderboard' },
               ].map(({ id, label }) => (
@@ -12711,7 +12774,8 @@ export default function Admin() {
                   type="button"
                   onClick={() => {
                     setWcAdminTab(id);
-                    if (id !== 'setup' && !wcOverview) fetchWorldCupOverview(wcUserFilter);
+                    if (id === 'payouts') fetchWcGroupPayoutReport();
+                    else if (id !== 'setup' && !wcOverview) fetchWorldCupOverview(wcUserFilter);
                   }}
                   className={`px-2.5 py-1.5 rounded text-[10px] font-heading uppercase ${
                     wcAdminTab === id ? 'bg-emerald-500/15 text-emerald-300 border border-emerald-500/30' : 'text-mutedForeground border border-transparent hover:border-primary/20'
@@ -12724,7 +12788,7 @@ export default function Admin() {
 
             {wcAdminTab === 'setup' && (
               <>
-            <p className="text-[10px] text-mutedForeground">Predictions event — toggle visibility, seed teams, sync fixtures, auto-settle. Correct predictions queue for staff approval before points send.</p>
+            <p className="text-[10px] text-mutedForeground">Predictions event — toggle visibility, seed teams, sync fixtures, auto-settle. Correct predictions queue for staff approval before points send. On the server, nightly fixture sync runs at <strong className="text-foreground">00:00 UK</strong> when <code className="text-[9px]">install-cron-world-cup-on-server.sh</code> is installed (see scripts/README-cron-world-cup.md).</p>
             <div className="flex flex-wrap gap-2">
               <BtnPrimary
                 onClick={() => patchWorldCupConfig({ enabled: !wcConfig?.enabled, ended_message: wcEndedMessage, banner_text: wcBannerText })}
@@ -12800,6 +12864,135 @@ export default function Admin() {
               </div>
             )}
               </>
+            )}
+
+            {wcAdminTab === 'payouts' && (
+              <div className="space-y-3">
+                <p className="text-[10px] text-mutedForeground">
+                  Pay remaining correct group-winner picks. Already-paid picks are counted in the summary only.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <BtnSecondary onClick={fetchWcGroupPayoutReport} disabled={wcGroupPayoutLoading || wcLoading}>
+                    Refresh report
+                  </BtnSecondary>
+                  <BtnSecondary onClick={() => payWcGroupPayouts({ dryRun: true })} disabled={wcGroupPayoutLoading || wcLoading}>
+                    Preview remaining
+                  </BtnSecondary>
+                  <BtnPrimary
+                    onClick={() => payWcGroupPayouts({ dryRun: false })}
+                    disabled={wcGroupPayoutLoading || wcLoading || !(wcGroupPayoutReport?.summary?.pending_predictions > 0)}
+                  >
+                    Pay remaining group picks
+                  </BtnPrimary>
+                </div>
+                {wcGroupPayoutLoading && !wcGroupPayoutReport ? (
+                  <p className="text-[10px] text-mutedForeground">Loading report…</p>
+                ) : wcGroupPayoutReport?.summary ? (
+                  <>
+                    {wcGroupPayoutReport.all_paid ? (
+                      <div className="p-3 rounded border border-emerald-500/30 bg-emerald-950/20 text-[10px] font-heading space-y-1">
+                        <p className="text-emerald-300 uppercase tracking-wide">All group winner payouts complete</p>
+                        <p className="text-foreground">
+                          {Number(wcGroupPayoutReport.summary.paid_predictions || 0).toLocaleString()} picks paid
+                          {' · '}
+                          <span className="text-emerald-400">{Number(wcGroupPayoutReport.summary.grand_total_paid || 0).toLocaleString()} pts</span>
+                          {' · '}
+                          {Number(wcGroupPayoutReport.summary.paid_players || 0).toLocaleString()} players
+                        </p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-heading">
+                        <div className="p-2 rounded border border-emerald-500/20 bg-emerald-950/20">
+                          <p className="text-mutedForeground uppercase">Already paid</p>
+                          <p className="text-sm text-emerald-400 tabular-nums">{Number(wcGroupPayoutReport.summary.paid_points || 0).toLocaleString()} pts</p>
+                          <p className="text-[9px] text-mutedForeground">{wcGroupPayoutReport.summary.paid_predictions ?? 0} picks · {wcGroupPayoutReport.summary.paid_players ?? 0} players</p>
+                        </div>
+                        <div className="p-2 rounded border border-amber-500/20 bg-amber-950/20">
+                          <p className="text-mutedForeground uppercase">Still pending</p>
+                          <p className="text-sm text-amber-300 tabular-nums">{Number(wcGroupPayoutReport.summary.pending_points || 0).toLocaleString()} pts</p>
+                          <p className="text-[9px] text-mutedForeground">{wcGroupPayoutReport.summary.pending_predictions ?? 0} picks · {wcGroupPayoutReport.summary.pending_players ?? 0} players</p>
+                        </div>
+                        <div className="p-2 rounded border border-primary/10 bg-primary/5">
+                          <p className="text-mutedForeground uppercase">Grand total</p>
+                          <p className="text-sm text-foreground tabular-nums">{Number(wcGroupPayoutReport.summary.grand_total_if_remaining_paid || 0).toLocaleString()} pts</p>
+                          <p className="text-[9px] text-mutedForeground">if all remaining paid</p>
+                        </div>
+                        <div className="p-2 rounded border border-primary/10 bg-primary/5">
+                          <p className="text-mutedForeground uppercase">Ghost (excluded)</p>
+                          <p className="text-sm text-mutedForeground tabular-nums">{wcGroupPayoutReport.summary.ghost_predictions ?? 0}</p>
+                          <p className="text-[9px] text-mutedForeground">{Number(wcGroupPayoutReport.summary.ghost_points || 0).toLocaleString()} pts not paid</p>
+                        </div>
+                      </div>
+                    )}
+                    {(wcGroupPayoutReport.by_group || []).length > 0 && (
+                      <div className="overflow-x-auto rounded border border-primary/10">
+                        <table className="w-full text-[10px] min-w-[480px]">
+                          <thead>
+                            <tr className="border-b border-primary/10 text-left text-mutedForeground font-heading uppercase">
+                              <th className="p-2">Group</th>
+                              <th className="p-2 text-right">Paid</th>
+                              <th className="p-2 text-right">Pending</th>
+                              <th className="p-2 text-right">Ghost</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(wcGroupPayoutReport.by_group || []).map((g) => (
+                              <tr key={g.group_id} className="border-b border-primary/5">
+                                <td className="p-2 font-heading">{g.group_id}</td>
+                                <td className="p-2 text-right tabular-nums text-emerald-400">
+                                  {g.paid_count > 0 ? `${g.paid_count} · ${Number(g.paid_points).toLocaleString()}` : '—'}
+                                </td>
+                                <td className="p-2 text-right tabular-nums text-amber-300">
+                                  {g.pending_count > 0 ? `${g.pending_count} · ${Number(g.pending_points).toLocaleString()}` : '—'}
+                                </td>
+                                <td className="p-2 text-right tabular-nums text-mutedForeground">{g.ghost_count || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    {(wcGroupPayoutReport.pending || []).length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-[10px] font-heading uppercase text-mutedForeground">Still to pay ({wcGroupPayoutReport.pending.length})</p>
+                        <div className="overflow-x-auto max-h-[320px] overflow-y-auto rounded border border-primary/10">
+                          <table className="w-full text-[10px] min-w-[520px]">
+                            <thead className="sticky top-0 bg-zinc-950 z-10">
+                              <tr className="border-b border-primary/10 text-left text-mutedForeground font-heading uppercase">
+                                <th className="p-2">Player</th>
+                                <th className="p-2">Group</th>
+                                <th className="p-2">Pick</th>
+                                <th className="p-2 text-right">Pts</th>
+                                <th className="p-2 text-right">Manual</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(wcGroupPayoutReport.pending || []).map((row) => (
+                                <tr key={row.prediction_id} className="border-b border-primary/5">
+                                  <td className="p-2 whitespace-nowrap">{row.username}</td>
+                                  <td className="p-2 font-heading">{row.group_id}</td>
+                                  <td className="p-2">{row.pick}</td>
+                                  <td className="p-2 text-right tabular-nums text-amber-300">{Number(row.points || 0).toLocaleString()}</td>
+                                  <td className="p-2 text-right">
+                                    <BtnSecondary
+                                      onClick={() => markWcGroupPayoutManualPaid(row.prediction_id, row.username)}
+                                      disabled={wcGroupPayoutLoading || wcLoading}
+                                    >
+                                      Already paid
+                                    </BtnSecondary>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <p className="text-[10px] text-mutedForeground">Open this tab to load the group payout report.</p>
+                )}
+              </div>
             )}
 
             {wcAdminTab === 'entrants' && (
