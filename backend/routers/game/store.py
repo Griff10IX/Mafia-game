@@ -121,6 +121,12 @@ from utils.store_qt_cash_price import QT_CASH_AVG_SELL_OFFER_COUNT, qt_cash_pric
 from utils.game_timezone import game_month_start_date_str
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_STORE
 from utils.transfer_display import redact_quicktrade_party_names
+from utils.founding_member import (
+    FOUNDING_MEMBER_BADGE,
+    FOUNDING_MEMBER_COST_POINTS,
+    FOUNDING_MEMBER_STORE_REF,
+    user_has_founding_member,
+)
 
 
 async def _store_points_sustained_rl_user(current_user: dict = Depends(get_current_user)):
@@ -571,6 +577,30 @@ async def buy_auto_rank(
     return {
         "message": "Auto Rank purchased! Go to Auto Rank to enable it and choose which activities to run.",
         "cost": cost_used,
+    }
+
+
+async def buy_founding_member(
+    pay_with: str = Query("auto"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Founding Member badge (+2.5% core payouts). Account-only — lost on death."""
+    if user_has_founding_member(current_user):
+        raise HTTPException(status_code=400, detail="You already have the Founding Member badge")
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, FOUNDING_MEMBER_COST_POINTS, pay_with)
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    result = await db.users.update_one(
+        {"id": current_user["id"], "founding_member": {"$ne": True}, **gte_filter},
+        {"$inc": inc, "$set": {"founding_member": True}, "$addToSet": {"badges": FOUNDING_MEMBER_BADGE}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points or you already own this upgrade")
+    await _record_store_points_spend(current_user, inc, FOUNDING_MEMBER_STORE_REF, cost_used=cost_used)
+    return {
+        "message": "Founding Member badge purchased! +2.5% on crimes, GTA, OC, hitlist NPCs, properties, rackets, and missions.",
+        "cost": cost_used,
+        "founding_member": True,
     }
 
 
@@ -1765,6 +1795,7 @@ def register(router):
     router.add_api_route("/store/buy-token-selectable-bundle-cash", buy_store_token_selectable_bundle_cash, methods=["POST"])
     router.add_api_route("/store/buy-rank-bar", buy_premium_rank_bar, methods=["POST"])
     router.add_api_route("/store/buy-auto-rank", buy_auto_rank, methods=["POST"])
+    router.add_api_route("/store/buy-founding-member", buy_founding_member, methods=["POST"])
     router.add_api_route("/store/buy-robot-bg-auto-search", buy_robot_bg_auto_search, methods=["POST"])
     router.add_api_route("/store/buy-armour-tier-6", buy_armour_point_store_tier, methods=["POST"])
     router.add_api_route("/store/buy-weapon11", buy_weapon_point_store_tier, methods=["POST"])

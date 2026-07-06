@@ -17,6 +17,7 @@ _STORE_EVENT_LABELS: Dict[str, str] = {
     "buy-booze-capacity": "Booze capacity",
     "buy-bullets": "Bullets",
     "buy-auto-rank": "Auto Rank",
+    "buy-founding-member": "Founding Member badge",
     "buy-robot-bg-auto-search": "Robot bodyguard auto-search",
     "buy-weapon-point-store": "Point-store weapon",
     "buy-armour-point-store": "Point-store armour",

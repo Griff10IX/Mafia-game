@@ -11233,7 +11233,7 @@ export default function Admin() {
               )}
             </div>
 
-            <ActionRow icon={Award} label="Founding Member" description="Grant or remove Founding Member badge">
+            <ActionRow icon={Award} label="Founding Member" description="Grant or remove Founding Member badge (also sold in Store for 5,000 pts; account-only, lost on death)">
               <BtnPrimary onClick={() => handleSetFoundingMember(true)}>Grant</BtnPrimary>
               <BtnDanger onClick={() => handleSetFoundingMember(false)}>Remove</BtnDanger>
             </ActionRow>

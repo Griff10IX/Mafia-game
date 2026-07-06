@@ -2318,6 +2318,7 @@ def register(router):
             "store_event_refs": [
                 "buy-robot-bg-auto-search",
                 "buy-auto-rank",
+                "buy-founding-member",
                 "buy-armour-point-store",
                 "buy-weapon-point-store",
                 "buy-silencer",
@@ -2591,6 +2592,12 @@ def register(router):
                 set_updates["auto_rank_trial"] = False
                 set_updates["auto_rank_enabled"] = False
                 unset_updates["auto_rank_trial_until"] = ""
+            elif store_event_ref == "buy-founding-member":
+                set_updates["founding_member"] = False
+                await db.users.update_one(
+                    {"id": user_id},
+                    {"$pull": {"badges": "Founding Member"}},
+                )
             elif store_event_ref == "buy-booze-capacity":
                 # Best-effort: retract the total capacity bonus added by these purchases.
                 # If purchases hit the cap, the exact previous value may be unknown; we clamp at 0.
@@ -7123,11 +7130,12 @@ def register(router):
         for token_type, cfg in TOKEN_CONFIG.items():
             count_field = cfg["count_field"]
             tokens_at_death[count_field] = int(target.get(count_field, 0) or 0)
-        from utils.auto_rank_death import AUTO_RANK_PAUSE_ON_DEATH
+        from utils.player_death import player_death_pull_fields, player_death_set_fields
 
         await db.users.update_one(
             {"id": target["id"]},
-            {"$set": {
+            {
+                "$set": {
                 "is_dead": True,
                 "dead_at": now_iso,
                 "death_by_staff": True,
@@ -7137,8 +7145,11 @@ def register(router):
                 "money": 0,
                 "points": 0,
                 "health": 0,
-                **AUTO_RANK_PAUSE_ON_DEATH,
-            }, "$inc": {"total_deaths": 1}}
+                **player_death_set_fields(),
+            },
+                "$pull": player_death_pull_fields(),
+                "$inc": {"total_deaths": 1},
+            },
         )
         try:
             from utils.redeem_code_lifecycle import release_redeem_slots_for_deceased_user

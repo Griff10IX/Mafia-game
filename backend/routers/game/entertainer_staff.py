@@ -10,7 +10,9 @@ from utils.entertainer_service import (
     entertainer_perk_label,
     entertainer_utc_today,
     grant_entertainer_perk_tokens,
+    send_entertainer_game_broadcast,
 )
+from utils.sustained_page_ratelimit import PAGE_KEY_ENTERTAINER, check_sustained_page_rl
 
 
 class EntertainerRewardPerkBody(BaseModel):
@@ -19,12 +21,19 @@ class EntertainerRewardPerkBody(BaseModel):
     amount: int = Field(1, ge=1, le=10)
 
 
+class EntertainerBroadcastBody(BaseModel):
+    template: str = Field("custom", description="new_e_games | mdg | mp_poker | word_hunt | forum | custom")
+    title: Optional[str] = Field(None, max_length=120)
+    message: Optional[str] = Field(None, max_length=500)
+
+
 def register(router):
     import server as srv
 
     db = srv.db
     get_current_user = srv.get_current_user
     send_notification = srv.send_notification
+    send_notification_to_all = srv.send_notification_to_all
     log_activity = srv.log_activity
     _is_entertainer = srv._is_entertainer
     require_admin_or_mod = srv.require_admin_or_mod
@@ -96,6 +105,43 @@ def register(router):
             "token_type": token_type,
             "amount": amount,
             "target_username": tgt_name,
+        }
+
+    @router.post("/entertainer/broadcast")
+    async def entertainer_broadcast(body: EntertainerBroadcastBody, current_user: dict = Depends(get_current_user)):
+        """Send a game-wide inbox message about E-Games / Entertainer Forum (max 5 per UTC day)."""
+        if not _is_entertainer(current_user):
+            raise HTTPException(status_code=403, detail="Entertainer access required")
+        await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_ENTERTAINER)
+        ent_name = (current_user.get("username") or "?").strip()
+        try:
+            result = await send_entertainer_game_broadcast(
+                db,
+                send_notification_to_all,
+                entertainer_id=current_user["id"],
+                entertainer_name=ent_name,
+                template=body.template,
+                title=body.title,
+                message=body.message,
+            )
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve)) from ve
+        try:
+            await log_activity(
+                current_user["id"],
+                ent_name,
+                "entertainer_broadcast",
+                {
+                    "template": result.get("template"),
+                    "title": result.get("title"),
+                    "broadcasts_used_today": result.get("broadcasts_used_today"),
+                },
+            )
+        except Exception:
+            pass
+        return {
+            "message": "Game-wide message sent to all players (respects E-Games notification preference).",
+            **result,
         }
 
     @router.get("/entertainer/dashboard")

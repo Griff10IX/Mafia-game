@@ -153,7 +153,7 @@ PREREGISTER_REWARDS = {
     "founding_passive_blurb": (
         "Permanent +2.5% on crime payouts (cash, rank points & respect), GTA car sale value & rare-car luck, "
         "OC heist payouts, hitlist NPC rewards, property income, family racket collects, and mission rewards — "
-        "as long as you have the Founding Member badge."
+        "while this character has the Founding Member badge. Also in Store → Upgrades for 5,000 pts (account-only; lost on death)."
     ),
 }
 
@@ -2107,6 +2107,7 @@ def register(router):
                 location=location,
                 gang_name=gang_name,
                 anti_snitch=bool(u.get("anti_snitch", False)),
+                founding_member=bool(u.get("founding_member", False)),
                 auto_rank_purchased=bool(u.get("auto_rank_purchased", False)),
                 auto_rank_permanent=bool(u.get("auto_rank_permanent", False)),
                 auto_rank_email_entitlement=bool(u.get("auto_rank_email_entitlement", False)),

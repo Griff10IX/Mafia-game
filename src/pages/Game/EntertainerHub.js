@@ -9,7 +9,40 @@ import {
   formatFromEntertainerFund,
   fundedGameHref,
 } from '../../utils/entertainerFundedGameDisplay';
-import { Gift, Mic2, RefreshCw, Trophy } from 'lucide-react';
+import { Gift, Megaphone, Mic2, RefreshCw, Trophy } from 'lucide-react';
+
+const BROADCAST_TEMPLATE_DEFAULTS = {
+  new_e_games: {
+    label: 'New E-Games (dice / gbox / hangman)',
+    title: '🎲 New E-Games',
+    message: 'Dice, gbox & hangman games are open in the Entertainer Forum — join now!',
+  },
+  mdg: {
+    label: 'MDG starting',
+    title: '🃏 MDG starting',
+    message: 'A Murder Death Genocide game is live in the Entertainer Forum. Head over to join!',
+  },
+  mp_poker: {
+    label: 'MP Poker table',
+    title: '♠️ MP Poker',
+    message: 'An MP Poker table is open in the Entertainer Forum — take a seat!',
+  },
+  word_hunt: {
+    label: 'Word hunt',
+    title: '🔎 Word hunt',
+    message: 'Find the hidden word in the Entertainer Forum for a prize!',
+  },
+  forum: {
+    label: 'Entertainer Forum (general)',
+    title: '🎪 Entertainer Forum',
+    message: 'Check the Entertainer Forum for games and events!',
+  },
+  custom: {
+    label: 'Custom message',
+    title: '',
+    message: '',
+  },
+};
 
 const PERK_LABELS = {
   xp_crimes: 'Crime XP',
@@ -34,6 +67,10 @@ export default function EntertainerHub() {
   const [perkType, setPerkType] = useState('xp_crimes');
   const [perkAmt, setPerkAmt] = useState(1);
   const [perkSubmitting, setPerkSubmitting] = useState(false);
+  const [broadcastTemplate, setBroadcastTemplate] = useState('new_e_games');
+  const [broadcastTitle, setBroadcastTitle] = useState(BROADCAST_TEMPLATE_DEFAULTS.new_e_games.title);
+  const [broadcastMessage, setBroadcastMessage] = useState(BROADCAST_TEMPLATE_DEFAULTS.new_e_games.message);
+  const [broadcastSubmitting, setBroadcastSubmitting] = useState(false);
   const [collecting, setCollecting] = useState(false);
   const [worldCupEnabled, setWorldCupEnabled] = useState(false);
   const collectInFlightRef = useRef(false);
@@ -127,6 +164,45 @@ export default function EntertainerHub() {
   const perkTypes = dash.perk_token_types?.length ? dash.perk_token_types : Object.keys(PERK_LABELS);
   const remTotal = Number(dash.perk_tokens_remaining_today ?? 10);
   const remAuto = Number(dash.perk_auto_rank_remaining_today ?? 2);
+  const broadcastsRemaining = Number(dash.broadcasts_remaining_today ?? 5);
+  const broadcastDailyCap = Number(dash.broadcast_daily_cap ?? 5);
+  const broadcastTemplates = (dash.broadcast_templates?.length
+    ? [...dash.broadcast_templates, { id: 'custom', label: 'Custom message', title: '', message: '' }]
+    : Object.entries(BROADCAST_TEMPLATE_DEFAULTS).map(([id, v]) => ({ id, ...v })));
+
+  const applyBroadcastTemplate = (templateId) => {
+    const fromApi = broadcastTemplates.find((t) => t.id === templateId);
+    const fallback = BROADCAST_TEMPLATE_DEFAULTS[templateId] || BROADCAST_TEMPLATE_DEFAULTS.custom;
+    const tpl = fromApi || fallback;
+    setBroadcastTemplate(templateId);
+    setBroadcastTitle(tpl.title || '');
+    setBroadcastMessage(tpl.message || '');
+  };
+
+  const submitBroadcast = async () => {
+    const title = broadcastTitle.trim();
+    const message = broadcastMessage.trim();
+    if (broadcastTemplate === 'custom' && (!title || !message)) {
+      toast.error('Enter a title and message for a custom broadcast');
+      return;
+    }
+    setBroadcastSubmitting(true);
+    try {
+      const res = await api.post('/entertainer/broadcast', {
+        template: broadcastTemplate,
+        title: title || undefined,
+        message: message || undefined,
+      });
+      toast.success(res.data?.message || 'Broadcast sent');
+      await load();
+    } catch (e) {
+      const d = e.response?.data?.detail;
+      toast.error(typeof d === 'string' ? d : 'Could not send broadcast');
+    } finally {
+      setBroadcastSubmitting(false);
+    }
+  };
+
   const maxPerkAmt =
     perkType === 'auto_rank_2h' ? Math.min(remTotal, remAuto, 10) : Math.min(remTotal, 10);
 
@@ -223,6 +299,67 @@ export default function EntertainerHub() {
           <input type="text" value={entColor} onChange={(e) => setEntColor(e.target.value)} className="w-28 bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1.5 text-xs font-mono text-foreground" />
           <button type="button" onClick={saveColor} disabled={colorSaving} className="px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs font-heading font-bold disabled:opacity-50">
             {colorSaving ? 'Saving…' : 'Save colour'}
+          </button>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-violet-500/25 bg-violet-950/15 p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Megaphone className="text-violet-300 shrink-0" size={18} />
+          <h2 className="text-[11px] font-heading uppercase tracking-widest text-violet-200/90">Game-wide announce</h2>
+        </div>
+        <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+          Send an inbox message to every player about E-Games or the Entertainer Forum. Players who turned off E-Games notifications in Profile will not receive it. Link goes to the Entertainer Forum tab.
+        </p>
+        <div className="text-[11px] font-heading text-foreground">
+          <span className="text-mutedForeground">Broadcasts left today (UTC):</span>{' '}
+          <strong>{broadcastsRemaining}</strong> / {broadcastDailyCap}
+        </div>
+        <div className="flex flex-col gap-2">
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] text-mutedForeground font-heading uppercase">Template</span>
+            <select
+              value={broadcastTemplate}
+              onChange={(e) => applyBroadcastTemplate(e.target.value)}
+              className="bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1.5 text-xs font-heading text-foreground"
+              disabled={broadcastsRemaining <= 0}
+            >
+              {broadcastTemplates.map((t) => (
+                <option key={t.id} value={t.id}>{t.label || t.id}</option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] text-mutedForeground font-heading uppercase">Title</span>
+            <input
+              type="text"
+              value={broadcastTitle}
+              onChange={(e) => setBroadcastTitle(e.target.value)}
+              maxLength={120}
+              placeholder="Inbox title"
+              className="bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1.5 text-xs font-heading text-foreground"
+              disabled={broadcastsRemaining <= 0}
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-[10px] text-mutedForeground font-heading uppercase">Message</span>
+            <textarea
+              value={broadcastMessage}
+              onChange={(e) => setBroadcastMessage(e.target.value)}
+              maxLength={500}
+              rows={4}
+              placeholder="What players will see in their inbox"
+              className="bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1.5 text-xs font-heading text-foreground resize-y min-h-[88px]"
+              disabled={broadcastsRemaining <= 0}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => submitBroadcast()}
+            disabled={broadcastSubmitting || broadcastsRemaining <= 0}
+            className="w-full sm:w-auto px-4 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-heading font-bold uppercase tracking-wide disabled:opacity-50"
+          >
+            {broadcastSubmitting ? 'Sending…' : 'Send game-wide message'}
           </button>
         </div>
       </section>

@@ -40,6 +40,40 @@ ENTERTAINER_PERK_TOKEN_FIELDS = {
 ENTERTAINER_PERKS_DAILY_TOTAL_CAP = 10
 ENTERTAINER_PERKS_DAILY_AUTO_RANK_CAP = 2
 
+ENTERTAINER_BROADCASTS_DAILY_CAP = 5
+ENTERTAINER_BROADCAST_MAX_TITLE_LEN = 120
+ENTERTAINER_BROADCAST_MAX_MESSAGE_LEN = 500
+ENTERTAINER_BROADCAST_FORUM_LINK = "/social/forum?tab=entertainer"
+ENTERTAINER_BROADCAST_FORUM_LABEL = "Entertainer Forum"
+
+ENTERTAINER_BROADCAST_TEMPLATES: Dict[str, Dict[str, str]] = {
+    "new_e_games": {
+        "label": "New E-Games (dice / gbox / hangman)",
+        "title": "🎲 New E-Games",
+        "message": "Dice, gbox & hangman games are open in the Entertainer Forum — join now!",
+    },
+    "mdg": {
+        "label": "MDG starting",
+        "title": "🃏 MDG starting",
+        "message": "A Murder Death Genocide game is live in the Entertainer Forum. Head over to join!",
+    },
+    "mp_poker": {
+        "label": "MP Poker table",
+        "title": "♠️ MP Poker",
+        "message": "An MP Poker table is open in the Entertainer Forum — take a seat!",
+    },
+    "word_hunt": {
+        "label": "Word hunt",
+        "title": "🔎 Word hunt",
+        "message": "Find the hidden word in the Entertainer Forum for a prize!",
+    },
+    "forum": {
+        "label": "Entertainer Forum (general)",
+        "title": "🎪 Entertainer Forum",
+        "message": "Check the Entertainer Forum for games and events!",
+    },
+}
+
 ENTERTAINER_PERK_LABELS = {
     "xp_crimes": "Crime XP",
     "xp_gta": "GTA XP",
@@ -555,6 +589,112 @@ async def grant_entertainer_perk_tokens(
             await db.users.update_one({"id": entertainer_id}, {"$inc": rb})
 
 
+async def sync_entertainer_broadcast_utc_day(db, entertainer_id: str, today: str) -> None:
+    await db.users.update_one(
+        {"id": entertainer_id, "entertainer_broadcasts_day": {"$ne": today}},
+        {"$set": {"entertainer_broadcasts_day": today, "entertainer_broadcasts_count": 0}},
+    )
+
+
+def entertainer_broadcast_copy(template: str, *, entertainer_name: str, title: Optional[str], message: Optional[str]) -> tuple:
+    """Resolve title/message for a broadcast. Raises ValueError on invalid input."""
+    key = (template or "custom").strip().lower()
+    ent = (entertainer_name or "Entertainer").strip() or "Entertainer"
+    if key == "custom":
+        out_title = (title or "").strip()
+        out_message = (message or "").strip()
+        if not out_title:
+            raise ValueError("Title is required for a custom broadcast.")
+        if not out_message:
+            raise ValueError("Message is required for a custom broadcast.")
+    elif key in ENTERTAINER_BROADCAST_TEMPLATES:
+        tpl = ENTERTAINER_BROADCAST_TEMPLATES[key]
+        out_title = (title or tpl["title"]).strip() or tpl["title"]
+        base_msg = (message or tpl["message"]).strip() or tpl["message"]
+        out_message = base_msg
+    else:
+        raise ValueError("Unknown broadcast template.")
+    if len(out_title) > ENTERTAINER_BROADCAST_MAX_TITLE_LEN:
+        raise ValueError(f"Title must be at most {ENTERTAINER_BROADCAST_MAX_TITLE_LEN} characters.")
+    if len(out_message) > ENTERTAINER_BROADCAST_MAX_MESSAGE_LEN:
+        raise ValueError(f"Message must be at most {ENTERTAINER_BROADCAST_MAX_MESSAGE_LEN} characters.")
+    if f"— {ent}" not in out_message and f"- {ent}" not in out_message:
+        suffix = f" — Entertainer {ent}"
+        if len(out_message) + len(suffix) <= ENTERTAINER_BROADCAST_MAX_MESSAGE_LEN:
+            out_message = out_message + suffix
+    return out_title, out_message
+
+
+async def send_entertainer_game_broadcast(
+    db,
+    send_notification_to_all,
+    *,
+    entertainer_id: str,
+    entertainer_name: str,
+    template: str,
+    title: Optional[str] = None,
+    message: Optional[str] = None,
+) -> dict:
+    """Game-wide inbox broadcast (category ent_games). Daily cap per entertainer (UTC)."""
+    from utils.profanity import contains_profanity
+
+    today = entertainer_utc_today()
+    out_title, out_message = entertainer_broadcast_copy(
+        template,
+        entertainer_name=entertainer_name,
+        title=title,
+        message=message,
+    )
+    if contains_profanity(out_title) or contains_profanity(out_message):
+        raise ValueError("Broadcast text is not allowed.")
+
+    await sync_entertainer_broadcast_utc_day(db, entertainer_id, today)
+    reserved = await db.users.update_one(
+        {
+            "id": entertainer_id,
+            "entertainer_broadcasts_day": today,
+            "entertainer_broadcasts_count": {"$lt": ENTERTAINER_BROADCASTS_DAILY_CAP},
+        },
+        {"$inc": {"entertainer_broadcasts_count": 1}},
+    )
+    if reserved.modified_count == 0:
+        raise ValueError(
+            f"Daily broadcast limit reached ({ENTERTAINER_BROADCASTS_DAILY_CAP} per UTC day)."
+        )
+
+    ent_name = (entertainer_name or "?").strip()
+    try:
+        await send_notification_to_all(
+            out_title,
+            out_message,
+            "system",
+            category="ent_games",
+            message_link_to=ENTERTAINER_BROADCAST_FORUM_LINK,
+            message_link_label=ENTERTAINER_BROADCAST_FORUM_LABEL,
+            actor_username=ent_name,
+            entertainer_broadcast=True,
+        )
+    except Exception:
+        await db.users.update_one(
+            {"id": entertainer_id, "entertainer_broadcasts_day": today},
+            {"$inc": {"entertainer_broadcasts_count": -1}},
+        )
+        raise
+
+    used = await db.users.find_one(
+        {"id": entertainer_id},
+        {"_id": 0, "entertainer_broadcasts_count": 1},
+    )
+    count = int((used or {}).get("entertainer_broadcasts_count") or 0)
+    return {
+        "title": out_title,
+        "message": out_message,
+        "template": (template or "custom").strip().lower(),
+        "broadcasts_used_today": count,
+        "broadcasts_remaining_today": max(0, ENTERTAINER_BROADCASTS_DAILY_CAP - count),
+    }
+
+
 async def build_entertainer_dashboard(db, entertainer_id: str) -> Dict[str, Any]:
     today = entertainer_utc_today()
     u = await db.users.find_one(
@@ -577,6 +717,8 @@ async def build_entertainer_dashboard(db, entertainer_id: str) -> Dict[str, Any]
             "entertainer_perks_day": 1,
             "entertainer_perks_units": 1,
             "entertainer_perks_auto_rank_units": 1,
+            "entertainer_broadcasts_day": 1,
+            "entertainer_broadcasts_count": 1,
         },
     )
     if not u or not u.get("is_entertainer"):
@@ -614,6 +756,11 @@ async def build_entertainer_dashboard(db, entertainer_id: str) -> Dict[str, Any]
     else:
         perk_units = int(u.get("entertainer_perks_units") or 0)
         perk_auto_units = int(u.get("entertainer_perks_auto_rank_units") or 0)
+    broadcast_day = u.get("entertainer_broadcasts_day")
+    if broadcast_day != today:
+        broadcasts_used = 0
+    else:
+        broadcasts_used = int(u.get("entertainer_broadcasts_count") or 0)
     return {
         "username": u.get("username"),
         "entertainer_fund_cash": float(u.get("entertainer_fund_cash") or 0),
@@ -638,4 +785,11 @@ async def build_entertainer_dashboard(db, entertainer_id: str) -> Dict[str, Any]
         "perk_auto_rank_used_today": perk_auto_units,
         "perk_auto_rank_remaining_today": max(0, ENTERTAINER_PERKS_DAILY_AUTO_RANK_CAP - perk_auto_units),
         "perk_token_types": list(ENTERTAINER_PERK_TOKEN_FIELDS.keys()),
+        "broadcasts_used_today": broadcasts_used,
+        "broadcasts_remaining_today": max(0, ENTERTAINER_BROADCASTS_DAILY_CAP - broadcasts_used),
+        "broadcast_daily_cap": ENTERTAINER_BROADCASTS_DAILY_CAP,
+        "broadcast_templates": [
+            {"id": k, **v}
+            for k, v in ENTERTAINER_BROADCAST_TEMPLATES.items()
+        ],
     }

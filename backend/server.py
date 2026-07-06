@@ -806,6 +806,7 @@ class UserResponse(BaseModel):
     location: Optional[str] = None  # alias for current_state for sidebar
     gang_name: Optional[str] = None  # family name for sidebar
     anti_snitch: bool = False
+    founding_member: bool = False
     auto_rank_purchased: bool = False
     auto_rank_permanent: bool = False
     auto_rank_email_entitlement: bool = False  # Stripe/admin email-tied permanent Auto Rank

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp, Package, Copy, Swords } from 'lucide-react';
+import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp, Package, Copy, Swords, Award } from 'lucide-react';
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { copyTextToClipboard } from '../../utils/copyToClipboard';
 import { toast } from 'sonner';
@@ -102,9 +102,12 @@ const SELECTABLE_BUNDLE_DISCOUNT_PCT = 20;
 const SELECTABLE_BUNDLE_DISALLOWED = new Set(['rank_xp_pass', 'crew_oc_auto_3h']);
 const SELECTABLE_BUNDLE_ITEMS = TOKEN_STORE_ITEMS.filter((t) => !SELECTABLE_BUNDLE_DISALLOWED.has(t.tokenType));
 
+const FOUNDING_MEMBER_COST_POINTS = 5000;
+
 const UPGRADES = [
   { id: 'health', title: 'Full Health', Icon: Heart, price: 15, path: '/store/buy-health', ownedKey: null, desc: 'Restore health to 100%', extra: (u) => ({ line: 'Health', value: `${Number(u?.health ?? 100).toFixed(0)}%` }) },
   { id: 'rank-bar', title: 'Premium Rank Bar', Icon: Star, price: 50, path: '/store/buy-rank-bar', ownedKey: 'premium_rank_bar', desc: 'Exact numbers & amounts for next rank' },
+  { id: 'founding-member', title: 'Founding Member', Icon: Award, price: FOUNDING_MEMBER_COST_POINTS, path: '/store/buy-founding-member', ownedKey: 'founding_member', desc: '+2.5% on crimes, GTA, OC, hitlist NPCs, properties, family rackets, and missions. Account-only — lost on death; buy again on a new life if you want it back.' },
   { id: 'auto-rank', title: 'Auto Rank', Icon: Bot, price: AUTO_RANK_COST_POINTS, path: '/store/buy-auto-rank', ownedKey: 'auto_rank_purchased', desc: 'Auto-commit crimes, GTA, busts, OC. Optional: set Telegram in Profile for notifications.' },
   { id: 'robot-bg-auto-search', title: 'Robot Auto-Search', Icon: Crosshair, price: ROBOT_BG_AUTO_SEARCH_COST_POINTS, path: '/store/buy-robot-bg-auto-search', ownedKey: null, activeCheck: robotBgAutoSearchActive, desc: '30 days: auto-maintain Attack searches for your hired robot bodyguards (renews when ≤3h left on a row). One purchase per active period — buy again after it expires.', extra: (u) => (robotBgAutoSearchActive(u) && u?.robot_bg_auto_search_until ? { line: 'Active until', value: formatGameDateTime(u.robot_bg_auto_search_until) } : null) },
   { id: 'armour-tier-6', title: 'Elite Composite Battledress', Icon: Shield, price: ARMOUR_TIER_6_STORE_COST_POINTS, path: '/store/buy-armour-tier-6', ownedKey: null, ownedCheck: (u) => (u?.armour_owned_level_max ?? 0) >= 6, disabledWhen: (u) => (u?.armour_owned_level_max ?? 0) < 5, desc: 'Armour level 6 (60k base bullets). Requires level 5 owned. Auto-equipped on purchase. Also shown on Armour page.' },
