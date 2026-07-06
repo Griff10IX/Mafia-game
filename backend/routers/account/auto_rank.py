@@ -2823,6 +2823,10 @@ def register(router):
             "auto_rank_trial_until": 1,
             "auto_rank_trial_dismissed": 1,
             "auto_rank_2h_tokens": 1,
+            "auto_rank_email_entitlement": 1,
+            "registration_freed_email_from_user_id": 1,
+            "founding_rewards_claimed": 1,
+            "email_verified": 1,
             "auto_rank_next_run_at": 1,
             "auto_rank_oc_retry_at": 1,
             "auto_rank_last_activity": 1,
@@ -2848,7 +2852,11 @@ def register(router):
         if not doc:
             raise HTTPException(status_code=404, detail="User not found")
 
-        _, doc = await _resolve_permanent_auto_rank(db, doc, heal=True)
+        _, doc = await _resolve_permanent_auto_rank(db, doc, heal=False)
+
+        from utils.auto_rank_entitlement_provenance import build_auto_rank_entitlement_provenance
+
+        provenance = await build_auto_rank_entitlement_provenance(db, doc)
 
         stats = await _get_auto_rank_stats_impl(db, doc)
         selection_labels = await _auto_rank_selection_labels_for_inspect(db, doc)
@@ -2871,6 +2879,8 @@ def register(router):
             "user": {
                 "id": doc.get("id"),
                 "username": doc.get("username"),
+                "email": doc.get("email"),
+                "email_verified": bool(doc.get("email_verified")),
                 "last_seen": doc.get("last_seen"),
                 "forced_online_until": doc.get("forced_online_until"),
                 "is_dead": doc.get("is_dead"),
@@ -2880,11 +2890,14 @@ def register(router):
             },
             "purchase": {
                 "auto_rank_purchased": bool(doc.get("auto_rank_purchased")),
+                "auto_rank_permanent": bool(doc.get("auto_rank_permanent")),
                 "auto_rank_trial": bool(doc.get("auto_rank_trial")),
                 "auto_rank_trial_until": doc.get("auto_rank_trial_until"),
                 "auto_rank_trial_dismissed": bool(doc.get("auto_rank_trial_dismissed")),
                 "auto_rank_2h_tokens": int(doc.get("auto_rank_2h_tokens") or 0),
+                "auto_rank_email_entitlement": bool(doc.get("auto_rank_email_entitlement")),
             },
+            "entitlement_provenance": provenance,
             "diagnostics": diagnostics,
             "preferences": _extract_preferences(doc),
             "selection_ids": {

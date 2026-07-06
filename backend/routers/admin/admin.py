@@ -7123,6 +7123,8 @@ def register(router):
         for token_type, cfg in TOKEN_CONFIG.items():
             count_field = cfg["count_field"]
             tokens_at_death[count_field] = int(target.get(count_field, 0) or 0)
+        from utils.auto_rank_death import AUTO_RANK_PAUSE_ON_DEATH
+
         await db.users.update_one(
             {"id": target["id"]},
             {"$set": {
@@ -7135,6 +7137,7 @@ def register(router):
                 "money": 0,
                 "points": 0,
                 "health": 0,
+                **AUTO_RANK_PAUSE_ON_DEATH,
             }, "$inc": {"total_deaths": 1}}
         )
         try:

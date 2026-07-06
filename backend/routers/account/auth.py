@@ -900,9 +900,10 @@ def register(router):
 
             await db.users.insert_one(user_doc.copy())
             try:
-                from utils.auto_rank_email_entitlement import sync_auto_rank_email_entitlement_to_user
+                if user_doc.get("email_verified"):
+                    from utils.auto_rank_email_entitlement import sync_auto_rank_email_entitlement_to_user
 
-                await sync_auto_rank_email_entitlement_to_user(db, user_id, user_doc.get("email"))
+                    await sync_auto_rank_email_entitlement_to_user(db, user_id, user_doc.get("email"))
             except Exception:
                 pass
             if reg_ip_rep and reg_ip_rep.get("verdict") in ("suspicious", "likely_proxy_service"):

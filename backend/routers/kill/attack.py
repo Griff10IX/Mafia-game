@@ -161,6 +161,7 @@ from routers.game.families import resolve_family_id
 from utils.staff_bot_client_alert import maybe_notify_staff_bot_attack_from_ua, maybe_notify_staff_attack_execute_token_fail
 from utils.sustained_page_ratelimit import PAGE_KEY_KILL, check_sustained_page_rl
 from utils.booze_intake_gate import booze_intake_blocked
+from utils.auto_rank_death import AUTO_RANK_PAUSE_ON_DEATH
 from utils.attack_turnstile_gate import (
     attack_turnstile_config as load_attack_turnstile_config,
     issue_attack_turnstile_nonce,
@@ -2568,7 +2569,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 now_iso = datetime.now(timezone.utc).isoformat()
                 await db.users.update_one(
                     {"id": victim_id},
-                    {"$set": {"is_dead": True, "dead_at": now_iso, "money": 0, "health": 0, "health_regen_last_at": now_iso}, "$inc": {"total_deaths": 1}},
+                    {"$set": {"is_dead": True, "dead_at": now_iso, "money": 0, "health": 0, "health_regen_last_at": now_iso, **AUTO_RANK_PAUSE_ON_DEATH}, "$inc": {"total_deaths": 1}},
                 )
                 try:
                     from utils.redeem_code_lifecycle import release_redeem_slots_for_deceased_user
@@ -2752,6 +2753,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 "killed_by_user_id": current_user["id"],
                 "killed_by_family_name": (killer_family_doc or {}).get("name"),
                 "killer_revealed": False,
+                **AUTO_RANK_PAUSE_ON_DEATH,
             }, "$inc": {"total_deaths": 1}},
         )
         if not death_claim:

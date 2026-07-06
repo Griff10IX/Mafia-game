@@ -11363,10 +11363,41 @@ export default function Admin() {
                     <div className="rounded border border-zinc-700/50 bg-zinc-900/40 p-2 space-y-1">
                       <div className="text-[9px] font-bold text-primary uppercase tracking-wider mb-1">Purchase / trial</div>
                       <div><span className="text-mutedForeground">Purchased:</span> {autoRankInspectData.purchase?.auto_rank_purchased ? 'yes' : 'no'}</div>
+                      <div><span className="text-mutedForeground">Permanent:</span> {autoRankInspectData.purchase?.auto_rank_permanent ? 'yes' : 'no'}</div>
+                      <div><span className="text-mutedForeground">Email-tied (£15):</span> {autoRankInspectData.purchase?.auto_rank_email_entitlement ? 'yes' : 'no'}</div>
                       <div><span className="text-mutedForeground">Trial:</span> {autoRankInspectData.purchase?.auto_rank_trial ? 'yes' : 'no'} {autoRankInspectData.purchase?.auto_rank_trial_until ? <span className="text-mutedForeground"> until </span> : null}{autoRankInspectData.purchase?.auto_rank_trial_until ? formatAdminDateTime(autoRankInspectData.purchase.auto_rank_trial_until) : null}</div>
                       <div><span className="text-mutedForeground">Trial dismissed:</span> {autoRankInspectData.purchase?.auto_rank_trial_dismissed ? 'yes' : 'no'}</div>
                       <div><span className="text-mutedForeground">2h tokens:</span> {autoRankInspectData.purchase?.auto_rank_2h_tokens ?? autoRankInspectData.diagnostics?.auto_rank_2h_tokens ?? 0}</div>
                     </div>
+                    {autoRankInspectData.entitlement_provenance ? (
+                      <div className={`rounded border p-2 space-y-1 ${
+                        autoRankInspectData.entitlement_provenance.primary_source === 'email_stripe_15'
+                          ? 'border-violet-500/40 bg-violet-950/20'
+                          : autoRankInspectData.entitlement_provenance.primary_source === 'store_points_5000'
+                            ? 'border-emerald-500/40 bg-emerald-950/20'
+                            : 'border-amber-500/40 bg-amber-950/20'
+                      }`}>
+                        <div className="text-[9px] font-bold text-primary uppercase tracking-wider mb-1">How they got Auto Rank</div>
+                        <div className="font-bold">{autoRankInspectData.entitlement_provenance.primary_source}</div>
+                        <div className="text-mutedForeground leading-snug">{autoRankInspectData.entitlement_provenance.summary}</div>
+                        <div><span className="text-mutedForeground">5k ledger:</span> {autoRankInspectData.entitlement_provenance.store_points_purchase?.found ? `yes · ${Number(autoRankInspectData.entitlement_provenance.store_points_purchase.points_spent || 0).toLocaleString()} pts` : 'no'}{autoRankInspectData.entitlement_provenance.store_points_purchase?.at ? <span className="text-mutedForeground"> @ {formatAdminDateTime(autoRankInspectData.entitlement_provenance.store_points_purchase.at)}</span> : null}</div>
+                        <div><span className="text-mutedForeground">Email entitlement:</span> {autoRankInspectData.entitlement_provenance.email_entitlement?.active ? `yes (${autoRankInspectData.entitlement_provenance.email_entitlement.source || '?'})` : 'no'}</div>
+                        <div><span className="text-mutedForeground">Survives new account (same email):</span> {autoRankInspectData.entitlement_provenance.survives_new_account_on_same_email ? 'yes' : 'no'}</div>
+                        <div><span className="text-mutedForeground">Survives Dead&gt;Alive (same character):</span> {autoRankInspectData.entitlement_provenance.survives_dead_alive_revive_same_character ? 'yes' : 'no'}</div>
+                        {(autoRankInspectData.entitlement_provenance.prior_accounts_same_email || []).length > 0 ? (
+                          <div className="pt-1 space-y-0.5">
+                            <div className="text-mutedForeground">Other accounts on this email:</div>
+                            {(autoRankInspectData.entitlement_provenance.prior_accounts_same_email || []).map((a) => (
+                              <div key={a.user_id} className="pl-1">
+                                {a.username} {a.is_dead ? '(dead)' : '(alive)'}
+                                {a.store_points_purchase_at ? ` · 5k buy ${formatAdminDateTime(a.store_points_purchase_at)}` : ''}
+                                {a.freed_email_source ? ' · freed email for this reg' : ''}
+                              </div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                     <div className="rounded border border-zinc-700/50 bg-zinc-900/40 p-2 space-y-1">
                       <div className="text-[9px] font-bold text-primary uppercase tracking-wider mb-1">Toggles</div>
                       {autoRankInspectData.preferences && Object.entries(autoRankInspectData.preferences).map(([k, v]) => (
