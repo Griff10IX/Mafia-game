@@ -467,6 +467,288 @@ def _sanitize_funded_game_outcome(raw: Optional[Dict[str, Any]]) -> Dict[str, An
     return out
 
 
+def _forum_funded_game_source(game_type: str) -> str:
+    gt = (game_type or "dice").strip().lower()
+    if gt in ("dice", "gbox", "hangman"):
+        return f"forum_{gt}"
+    return "forum_game"
+
+
+def _completion_bonus_unpaid_clause() -> Dict[str, Any]:
+    return {
+        "$or": [
+            {"completion_bonus_points": {"$exists": False}},
+            {"completion_bonus_points": None},
+        ]
+    }
+
+
+async def _credit_entertainer_completion_bonus(
+    db,
+    entertainer_id: str,
+    points: int,
+    *,
+    bump_today_counters: bool,
+) -> None:
+    if points <= 0:
+        return
+    inc_user: Dict[str, Any] = {
+        "entertainer_pending_completion_bonus_points": points,
+        "entertainer_lifetime_bonus_points_paid": points,
+    }
+    if bump_today_counters:
+        today = entertainer_utc_today()
+        inc_user["entertainer_funded_completions_today"] = 1
+        inc_user["entertainer_completion_bonus_points_today"] = points
+        await db.users.update_one(
+            {"id": entertainer_id},
+            {"$inc": inc_user, "$set": {"entertainer_activity_utc_date": today}},
+        )
+    else:
+        await db.users.update_one({"id": entertainer_id}, {"$inc": inc_user})
+
+
+async def _mark_ledger_completion_bonus_paid(db, row_id: str, points: int) -> bool:
+    now_iso = datetime.now(timezone.utc).isoformat()
+    r = await db.entertainer_funded_games.update_one(
+        {"id": row_id, **_completion_bonus_unpaid_clause()},
+        {"$set": {"completion_bonus_points": points, "completion_bonus_at": now_iso}},
+    )
+    return r.modified_count == 1
+
+
+async def _ledger_row_prior_bonus_points(db, row: Dict[str, Any]) -> int:
+    """Points already logged for this funded game (prevents double-pay on backfill)."""
+    eid = row.get("entertainer_id")
+    source = row.get("source")
+    ref_id = row.get("ref_id")
+    if not eid or not source or not ref_id:
+        return 0
+    origin_ref = f"{source}:{ref_id}"
+    ev = await db.point_ledger_events.find_one(
+        {
+            "user_id": eid,
+            "event_type": "entertainer_completion_bonus",
+            "origin_ref": origin_ref,
+        },
+        {"_id": 0, "points": 1},
+    )
+    if ev:
+        return max(0, int(ev.get("points") or 0))
+    ev2 = await db.point_ledger_events.find_one(
+        {
+            "user_id": eid,
+            "event_type": "entertainer_completion_bonus",
+            "meta.source": source,
+            "meta.ref_id": str(ref_id),
+        },
+        {"_id": 0, "points": 1},
+    )
+    return max(0, int((ev2 or {}).get("points") or 0))
+
+
+async def _pay_completion_bonus_for_ledger_row(
+    db,
+    row: Dict[str, Any],
+    *,
+    bump_today_counters: bool,
+    dry_run: bool = False,
+) -> int:
+    """Idempotent payout for one completed ledger row. Returns points that would be / were accrued."""
+    if not row.get("completed_at") or not row.get("entertainer_id"):
+        return 0
+    if row.get("completion_bonus_points") is not None:
+        return 0
+
+    target = ENTERTAINER_COMPLETION_BONUS_POINTS
+    already = await _ledger_row_prior_bonus_points(db, row)
+    points = max(0, target - already)
+    if points <= 0:
+        if not dry_run:
+            await db.entertainer_funded_games.update_one(
+                {"id": row["id"], **_completion_bonus_unpaid_clause()},
+                {
+                    "$set": {
+                        "completion_bonus_points": max(already, target),
+                        "completion_bonus_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                },
+            )
+        return 0
+
+    if dry_run:
+        return points
+    if not await _mark_ledger_completion_bonus_paid(db, row["id"], target):
+        return 0
+    await _credit_entertainer_completion_bonus(
+        db,
+        row["entertainer_id"],
+        points,
+        bump_today_counters=bump_today_counters,
+    )
+    return points
+
+
+async def _sync_missing_ledger_rows_for_entertainer(db, entertainer_id: str, *, dry_run: bool) -> int:
+    """Create or complete ledger rows for funded games that finished before tracking was wired."""
+    created = 0
+
+    async def _upsert_row(*, source: str, ref_id: str, funded_at: str, completed_at: str, utc_day: str) -> None:
+        nonlocal created
+        existing = await db.entertainer_funded_games.find_one(
+            {"ref_id": ref_id, "source": source},
+            {"_id": 0, "id": 1, "completed_at": 1},
+        )
+        if existing:
+            if not existing.get("completed_at") and completed_at and not dry_run:
+                await db.entertainer_funded_games.update_one(
+                    {"id": existing["id"], "completed_at": None},
+                    {"$set": {"completed_at": completed_at}},
+                )
+            return
+        created += 1
+        if dry_run:
+            return
+        await db.entertainer_funded_games.insert_one(
+            {
+                "id": str(uuid.uuid4()),
+                "entertainer_id": entertainer_id,
+                "source": source,
+                "ref_id": ref_id,
+                "utc_day": utc_day,
+                "funded_at": funded_at,
+                "completed_at": completed_at,
+            }
+        )
+
+    async for game in db.entertainer_games.find(
+        {"creator_id": entertainer_id, "entertainer_funded": True, "status": "completed"},
+        {"_id": 0, "id": 1, "game_type": 1, "created_at": 1, "completed_at": 1},
+    ):
+        gid = str(game.get("id") or "").strip()
+        if not gid:
+            continue
+        completed_at = (game.get("completed_at") or "").strip() or datetime.now(timezone.utc).isoformat()
+        await _upsert_row(
+            source=_forum_funded_game_source(game.get("game_type")),
+            ref_id=gid,
+            funded_at=(game.get("created_at") or completed_at),
+            completed_at=completed_at,
+            utc_day=completed_at[:10] if len(completed_at) >= 10 else entertainer_utc_today(),
+        )
+
+    async for game in db.mdg_games.find(
+        {"created_by": entertainer_id, "entertainer_funded": True, "status": "completed"},
+        {"_id": 0, "id": 1, "created_at": 1, "rolled_at": 1},
+    ):
+        gid = str(game.get("id") or "").strip()
+        if not gid:
+            continue
+        completed_at = (game.get("rolled_at") or game.get("created_at") or "").strip() or datetime.now(timezone.utc).isoformat()
+        await _upsert_row(
+            source="mdg",
+            ref_id=gid,
+            funded_at=(game.get("created_at") or completed_at),
+            completed_at=completed_at,
+            utc_day=completed_at[:10] if len(completed_at) >= 10 else entertainer_utc_today(),
+        )
+
+    async for game in db.mp_poker_games.find(
+        {
+            "creator_id": entertainer_id,
+            "entertainer_funded": True,
+            "$or": [{"status": "completed"}, {"tournament_status": "completed"}],
+        },
+        {"_id": 0, "id": 1, "created_at": 1, "completed_at": 1},
+    ):
+        gid = str(game.get("id") or "").strip()
+        if not gid:
+            continue
+        completed_at = (game.get("completed_at") or game.get("created_at") or "").strip() or datetime.now(timezone.utc).isoformat()
+        await _upsert_row(
+            source="mp_poker",
+            ref_id=gid,
+            funded_at=(game.get("created_at") or completed_at),
+            completed_at=completed_at,
+            utc_day=completed_at[:10] if len(completed_at) >= 10 else entertainer_utc_today(),
+        )
+
+    return created
+
+
+async def backfill_entertainer_completion_bonuses(
+    db,
+    *,
+    entertainer_id: Optional[str] = None,
+    send_notification=None,
+    dry_run: bool = False,
+) -> Dict[str, Any]:
+    """Pay missed completion bonuses for finished sponsored games (idempotent per ledger row)."""
+    rows_created = 0
+    if entertainer_id:
+        rows_created = await _sync_missing_ledger_rows_for_entertainer(
+            db, entertainer_id, dry_run=dry_run
+        )
+    else:
+        async for u in db.users.find({"is_entertainer": True, "is_dead": {"$ne": True}}, {"_id": 0, "id": 1}):
+            uid = u.get("id")
+            if uid:
+                rows_created += await _sync_missing_ledger_rows_for_entertainer(db, uid, dry_run=dry_run)
+
+    filt: Dict[str, Any] = {
+        "completed_at": {"$ne": None},
+        **_completion_bonus_unpaid_clause(),
+    }
+    if entertainer_id:
+        filt["entertainer_id"] = entertainer_id
+
+    rows_paid = 0
+    points_by_entertainer: Dict[str, int] = {}
+    async for row in db.entertainer_funded_games.find(filt, {"_id": 0}):
+        pts = await _pay_completion_bonus_for_ledger_row(
+            db,
+            row,
+            bump_today_counters=False,
+            dry_run=dry_run,
+        )
+        if pts <= 0:
+            continue
+        rows_paid += 1
+        eid = row.get("entertainer_id")
+        if eid:
+            points_by_entertainer[eid] = points_by_entertainer.get(eid, 0) + pts
+
+    if not dry_run and send_notification:
+        for eid, total_pts in points_by_entertainer.items():
+            if total_pts <= 0:
+                continue
+            try:
+                await send_notification(
+                    eid,
+                    "Entertainer completion bonus (backfill)",
+                    (
+                        f"+{total_pts:,} completion bonus added to pending for past sponsored games — "
+                        "collect in Entertainer Hub."
+                    ),
+                    "reward",
+                    category="entertainer",
+                )
+            except Exception as ex:
+                _logger.warning("entertainer completion backfill notify uid=%s: %s", eid, ex)
+
+    points_total = sum(points_by_entertainer.values())
+    return {
+        "ok": True,
+        "dry_run": dry_run,
+        "entertainer_id": entertainer_id,
+        "rows_created": rows_created,
+        "rows_paid": rows_paid,
+        "points_total": points_total,
+        "entertainers_credited": len(points_by_entertainer),
+        "by_entertainer": points_by_entertainer,
+    }
+
+
 async def on_funded_game_completed(
     db,
     *,
@@ -496,15 +778,15 @@ async def on_funded_game_completed(
     completions, _bonus_today = await _ensure_activity_day(db, eid, today)
     points_to_accrue = ENTERTAINER_COMPLETION_BONUS_POINTS
 
-    inc_user: Dict[str, Any] = {
-        "entertainer_funded_completions_today": 1,
-        "entertainer_pending_completion_bonus_points": points_to_accrue,
-        "entertainer_completion_bonus_points_today": points_to_accrue,
-        "entertainer_lifetime_bonus_points_paid": points_to_accrue,
-    }
+    if not await _mark_ledger_completion_bonus_paid(db, doc["id"], points_to_accrue):
+        return
 
-    set_fields: Dict[str, Any] = {"entertainer_activity_utc_date": today}
-    await db.users.update_one({"id": eid}, {"$inc": inc_user, "$set": set_fields})
+    await _credit_entertainer_completion_bonus(
+        db,
+        eid,
+        points_to_accrue,
+        bump_today_counters=True,
+    )
 
     try:
         await send_notification(
@@ -833,4 +1115,285 @@ async def build_entertainer_dashboard(db, entertainer_id: str) -> Dict[str, Any]
             {"id": k, **v}
             for k, v in ENTERTAINER_BROADCAST_TEMPLATES.items()
         ],
+    }
+
+
+def _empty_ledger_admin_stats() -> Dict[str, Any]:
+    return {
+        "ledger_open_count": 0,
+        "ledger_completed_count": 0,
+        "ledger_total_count": 0,
+        "completion_bonus_paid_games": 0,
+        "completion_bonus_unpaid_games": 0,
+        "completion_bonus_accrued_points": 0,
+        "ledger_paid_out_points": 0,
+        "ledger_paid_out_cash": 0.0,
+        "ledger_seed_points": 0,
+        "ledger_seed_cash": 0.0,
+    }
+
+
+def _ledger_admin_stats_from_group(row: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    if not row:
+        return _empty_ledger_admin_stats()
+    return {
+        "ledger_open_count": int(row.get("open_count") or 0),
+        "ledger_completed_count": int(row.get("completed_count") or 0),
+        "ledger_total_count": int(row.get("total_count") or 0),
+        "completion_bonus_paid_games": int(row.get("bonus_paid_games") or 0),
+        "completion_bonus_unpaid_games": int(row.get("bonus_unpaid_games") or 0),
+        "completion_bonus_accrued_points": int(row.get("bonus_accrued_points") or 0),
+        "ledger_paid_out_points": int(row.get("paid_out_points") or 0),
+        "ledger_paid_out_cash": float(row.get("paid_out_cash") or 0.0),
+        "ledger_seed_points": int(row.get("seed_points") or 0),
+        "ledger_seed_cash": float(row.get("seed_cash") or 0.0),
+    }
+
+
+def _entertainer_admin_row_from_user(
+    u: Dict[str, Any],
+    ledger_stats: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    lg = _ledger_admin_stats_from_group(ledger_stats)
+    fund_cash = float(u.get("entertainer_fund_cash") or 0)
+    fund_pts = int(u.get("entertainer_fund_points") or 0)
+    pending_cash = float(u.get("entertainer_pending_fund_cash") or 0)
+    pending_fund_pts = int(u.get("entertainer_pending_fund_points") or 0)
+    pending_bonus = int(u.get("entertainer_pending_completion_bonus_points") or 0)
+    lifetime_bonus = int(u.get("entertainer_lifetime_bonus_points_paid") or 0)
+    lifetime_cash_granted = int(u.get("entertainer_lifetime_fund_cash_granted") or 0)
+    lifetime_pts_granted = int(u.get("entertainer_lifetime_fund_points_granted") or 0)
+    unpaid_games = int(lg["completion_bonus_unpaid_games"])
+    unpaid_pts = unpaid_games * ENTERTAINER_COMPLETION_BONUS_POINTS
+    bonus_collected_est = max(0, lifetime_bonus - pending_bonus)
+    fund_cash_spent_est = max(0.0, lifetime_cash_granted - pending_cash - fund_cash)
+    fund_pts_spent_est = max(0, lifetime_pts_granted - pending_fund_pts - fund_pts)
+    return {
+        "id": u.get("id"),
+        "username": u.get("username"),
+        "email": u.get("email"),
+        "is_dead": bool(u.get("is_dead")),
+        "wallet_points": int(u.get("points") or 0),
+        "entertainer_fund_cash": fund_cash,
+        "entertainer_fund_points": fund_pts,
+        "entertainer_pending_fund_cash": pending_cash,
+        "entertainer_pending_fund_points": pending_fund_pts,
+        "entertainer_pending_completion_bonus_points": pending_bonus,
+        "lifetime_bonus_points_accrued": lifetime_bonus,
+        "lifetime_bonus_points_collected_estimate": bonus_collected_est,
+        "lifetime_fund_cash_granted": lifetime_cash_granted,
+        "lifetime_fund_points_granted": lifetime_pts_granted,
+        "fund_cash_spent_estimate": round(fund_cash_spent_est, 2),
+        "fund_points_spent_estimate": fund_pts_spent_est,
+        "last_refill_utc_date": u.get("entertainer_fund_last_refill_utc_date"),
+        "completion_bonus_per_game": ENTERTAINER_COMPLETION_BONUS_POINTS,
+        "completion_bonus_unpaid_games": unpaid_games,
+        "completion_bonus_unpaid_points": unpaid_pts,
+        "pending_total_points": pending_fund_pts + pending_bonus,
+        **lg,
+    }
+
+
+async def _aggregate_ledger_admin_stats(db, entertainer_ids: list) -> Dict[str, Dict[str, Any]]:
+    if not entertainer_ids:
+        return {}
+    pipeline = [
+        {"$match": {"entertainer_id": {"$in": entertainer_ids}}},
+        {
+            "$group": {
+                "_id": "$entertainer_id",
+                "total_count": {"$sum": 1},
+                "open_count": {
+                    "$sum": {
+                        "$cond": [
+                            {"$in": [{"$ifNull": ["$completed_at", None]}, [None, ""]]},
+                            1,
+                            0,
+                        ]
+                    }
+                },
+                "completed_count": {
+                    "$sum": {
+                        "$cond": [
+                            {"$and": [
+                                {"$ne": [{"$ifNull": ["$completed_at", None]}, None]},
+                                {"$ne": ["$completed_at", ""]},
+                            ]},
+                            1,
+                            0,
+                        ]
+                    }
+                },
+                "bonus_paid_games": {
+                    "$sum": {
+                        "$cond": [
+                            {"$gt": [{"$ifNull": ["$completion_bonus_points", -1]}, 0]},
+                            1,
+                            0,
+                        ]
+                    }
+                },
+                "bonus_unpaid_games": {
+                    "$sum": {
+                        "$cond": [
+                            {
+                                "$and": [
+                                    {"$ne": [{"$ifNull": ["$completed_at", None]}, None]},
+                                    {"$ne": ["$completed_at", ""]},
+                                    {
+                                        "$in": [
+                                            {"$ifNull": ["$completion_bonus_points", "__unset__"]},
+                                            ["__unset__", None],
+                                        ]
+                                    },
+                                ]
+                            },
+                            1,
+                            0,
+                        ]
+                    }
+                },
+                "bonus_accrued_points": {"$sum": {"$ifNull": ["$completion_bonus_points", 0]}},
+                "paid_out_points": {"$sum": {"$ifNull": ["$total_winnings_points", 0]}},
+                "paid_out_cash": {"$sum": {"$ifNull": ["$total_winnings_cash", 0.0]}},
+                "seed_points": {"$sum": {"$ifNull": ["$from_entertainer_fund_points", 0]}},
+                "seed_cash": {"$sum": {"$ifNull": ["$from_entertainer_fund_cash", 0.0]}},
+            }
+        },
+    ]
+    rows = await db.entertainer_funded_games.aggregate(pipeline).to_list(len(entertainer_ids) + 1)
+    return {str(r["_id"]): r for r in rows if r.get("_id")}
+
+
+async def build_entertainer_admin_summary(db, entertainer_id: str) -> Dict[str, Any]:
+    """Full admin snapshot for one entertainer (dashboard + balances + owed)."""
+    dash = await build_entertainer_dashboard(db, entertainer_id)
+    if not dash:
+        return {}
+    u = await db.users.find_one(
+        {"id": entertainer_id},
+        {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "email": 1,
+            "is_dead": 1,
+            "points": 1,
+            "entertainer_fund_cash": 1,
+            "entertainer_fund_points": 1,
+            "entertainer_pending_fund_cash": 1,
+            "entertainer_pending_fund_points": 1,
+            "entertainer_pending_completion_bonus_points": 1,
+            "entertainer_lifetime_bonus_points_paid": 1,
+            "entertainer_lifetime_fund_cash_granted": 1,
+            "entertainer_lifetime_fund_points_granted": 1,
+            "entertainer_fund_last_refill_utc_date": 1,
+        },
+    )
+    if not u:
+        return dash
+    ledger_map = await _aggregate_ledger_admin_stats(db, [entertainer_id])
+    summary = _entertainer_admin_row_from_user(u, ledger_map.get(entertainer_id))
+    return {**dash, **summary}
+
+
+async def build_entertainers_admin_overview(db) -> Dict[str, Any]:
+    """All entertainers: earned, owed, saved (pending), spendable fund, ledger stats."""
+    users = await db.users.find(
+        {"is_entertainer": True},
+        {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "email": 1,
+            "is_dead": 1,
+            "points": 1,
+            "entertainer_fund_cash": 1,
+            "entertainer_fund_points": 1,
+            "entertainer_pending_fund_cash": 1,
+            "entertainer_pending_fund_points": 1,
+            "entertainer_pending_completion_bonus_points": 1,
+            "entertainer_lifetime_bonus_points_paid": 1,
+            "entertainer_lifetime_fund_cash_granted": 1,
+            "entertainer_lifetime_fund_points_granted": 1,
+            "entertainer_fund_last_refill_utc_date": 1,
+        },
+    ).sort("username", 1).to_list(500)
+    ids = [u["id"] for u in users if u.get("id")]
+    ledger_map = await _aggregate_ledger_admin_stats(db, ids)
+    rows = []
+    totals = {
+        "entertainer_count": 0,
+        "alive_count": 0,
+        "wallet_points": 0,
+        "entertainer_fund_cash": 0.0,
+        "entertainer_fund_points": 0,
+        "entertainer_pending_fund_cash": 0.0,
+        "entertainer_pending_fund_points": 0,
+        "entertainer_pending_completion_bonus_points": 0,
+        "pending_total_points": 0,
+        "lifetime_bonus_points_accrued": 0,
+        "lifetime_bonus_points_collected_estimate": 0,
+        "lifetime_fund_cash_granted": 0,
+        "lifetime_fund_points_granted": 0,
+        "fund_cash_spent_estimate": 0.0,
+        "fund_points_spent_estimate": 0,
+        "ledger_open_count": 0,
+        "ledger_completed_count": 0,
+        "completion_bonus_unpaid_games": 0,
+        "completion_bonus_unpaid_points": 0,
+        "completion_bonus_accrued_points": 0,
+        "ledger_paid_out_points": 0,
+        "ledger_paid_out_cash": 0.0,
+        "ledger_seed_points": 0,
+        "ledger_seed_cash": 0.0,
+    }
+    for u in users:
+        uid = u.get("id")
+        if not uid:
+            continue
+        row = _entertainer_admin_row_from_user(u, ledger_map.get(uid))
+        rows.append(row)
+        totals["entertainer_count"] += 1
+        if not row.get("is_dead"):
+            totals["alive_count"] += 1
+        for key in (
+            "wallet_points",
+            "entertainer_fund_points",
+            "entertainer_pending_fund_points",
+            "entertainer_pending_completion_bonus_points",
+            "pending_total_points",
+            "lifetime_bonus_points_accrued",
+            "lifetime_bonus_points_collected_estimate",
+            "lifetime_fund_cash_granted",
+            "lifetime_fund_points_granted",
+            "fund_points_spent_estimate",
+            "ledger_open_count",
+            "ledger_completed_count",
+            "completion_bonus_unpaid_games",
+            "completion_bonus_unpaid_points",
+            "completion_bonus_accrued_points",
+            "ledger_paid_out_points",
+            "ledger_seed_points",
+        ):
+            totals[key] += int(row.get(key) or 0)
+        for key in (
+            "entertainer_fund_cash",
+            "entertainer_pending_fund_cash",
+            "fund_cash_spent_estimate",
+            "ledger_paid_out_cash",
+            "ledger_seed_cash",
+        ):
+            totals[key] += float(row.get(key) or 0.0)
+    return {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "daily_allowance": {
+            "cash": ENTERTAINER_DAILY_FUND_CASH,
+            "points": ENTERTAINER_DAILY_FUND_POINTS,
+            "fund_cash_cap": ENTERTAINER_FUND_CASH_MAX,
+            "fund_points_cap": ENTERTAINER_FUND_POINTS_MAX,
+        },
+        "completion_bonus_per_game": ENTERTAINER_COMPLETION_BONUS_POINTS,
+        "totals": totals,
+        "entertainers": rows,
     }

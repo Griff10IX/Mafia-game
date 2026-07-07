@@ -1541,6 +1541,9 @@ export default function Admin() {
   const [entDashboardUser, setEntDashboardUser] = useState('');
   const [entDashboardData, setEntDashboardData] = useState(null);
   const [entDashboardLoading, setEntDashboardLoading] = useState(false);
+  const [entOverview, setEntOverview] = useState(null);
+  const [entOverviewLoading, setEntOverviewLoading] = useState(false);
+  const [entBackfillLoading, setEntBackfillLoading] = useState(false);
   const [modVisibleCategoriesSaving, setModVisibleCategoriesSaving] = useState(false);
 
   const [economyOverview, setEconomyOverview] = useState(null);
@@ -1912,6 +1915,41 @@ export default function Admin() {
       setEntertainersList([]);
     } finally {
       setEntertainersLoading(false);
+    }
+    fetchEntOverview();
+  };
+
+  const fetchEntOverview = async () => {
+    setEntOverviewLoading(true);
+    try {
+      const res = await api.get('/admin/entertainers-overview');
+      setEntOverview(res.data ?? null);
+    } catch (e) {
+      setEntOverview(null);
+      toast.error(e.response?.data?.detail ?? 'Failed to load entertainer earnings overview');
+    } finally {
+      setEntOverviewLoading(false);
+    }
+  };
+
+  const handleEntBackfillBonuses = async (dryRun, username) => {
+    setEntBackfillLoading(true);
+    try {
+      const params = { dry_run: dryRun };
+      const u = (username || '').trim();
+      if (u) params.target_username = u;
+      const res = await api.post('/admin/entertainer-backfill-completion-bonus', null, { params });
+      const d = res.data || {};
+      const msg = dryRun
+        ? `Dry run: ${d.rows_paid ?? 0} game(s), ${Number(d.points_total || 0).toLocaleString()} pts would be credited to pending.`
+        : `Backfill done: ${d.rows_paid ?? 0} game(s), ${Number(d.points_total || 0).toLocaleString()} pts added to pending.`;
+      toast.success(msg);
+      fetchEntOverview();
+      if (u && entDashboardUser === u) handleViewEntDashboard(u);
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Backfill failed');
+    } finally {
+      setEntBackfillLoading(false);
     }
   };
 
@@ -24934,7 +24972,121 @@ export default function Admin() {
             <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Promote / demote Entertainers</span>
           </div>
           <div className="p-3 space-y-3">
-            <p className="text-[10px] text-mutedForeground font-heading">Entertainers get a daily segregated fund for MDG and MP Poker sponsorship. View dashboard for balances and funded games.</p>
+            <p className="text-[10px] text-mutedForeground font-heading">
+              Entertainers get a daily segregated fund for sponsored games plus personal completion bonus (100 pts/game, collect in Hub).
+              Use the earnings overview to see spendable fund, saved pending pay, wallet, lifetime totals, and unpaid completion bonuses.
+            </p>
+            <div className="rounded border border-primary/20 bg-zinc-900/40 p-2 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wide">Earnings overview (all entertainers)</div>
+                <div className="flex flex-wrap gap-1.5">
+                  <BtnPrimary type="button" className="!py-1 !px-2 text-[10px]" onClick={fetchEntOverview} disabled={entOverviewLoading}>
+                    {entOverviewLoading ? 'Refreshing…' : 'Refresh'}
+                  </BtnPrimary>
+                  <BtnPrimary type="button" className="!py-1 !px-2 text-[10px]" onClick={() => handleEntBackfillBonuses(true)} disabled={entBackfillLoading}>
+                    Dry-run backfill all
+                  </BtnPrimary>
+                  <BtnPrimary type="button" className="!py-1 !px-2 text-[10px]" onClick={() => handleEntBackfillBonuses(false)} disabled={entBackfillLoading}>
+                    {entBackfillLoading ? 'Working…' : 'Backfill owed bonuses'}
+                  </BtnPrimary>
+                </div>
+              </div>
+              {entOverviewLoading && !entOverview ? (
+                <p className="text-[10px] text-mutedForeground font-heading">Loading overview…</p>
+              ) : entOverview?.entertainers?.length ? (
+                <>
+                  {entOverview.totals ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-2 text-[9px] font-heading">
+                      <div className="rounded border border-zinc-700/50 p-2 bg-zinc-950/40">
+                        <div className="text-mutedForeground uppercase">Ents</div>
+                        <div className="text-sm font-bold text-foreground tabular-nums">{entOverview.totals.entertainer_count ?? 0}</div>
+                      </div>
+                      <div className="rounded border border-zinc-700/50 p-2 bg-zinc-950/40">
+                        <div className="text-mutedForeground uppercase">Pending bonus</div>
+                        <div className="text-sm font-bold text-emerald-300 tabular-nums">{(entOverview.totals.entertainer_pending_completion_bonus_points ?? 0).toLocaleString()} pts</div>
+                      </div>
+                      <div className="rounded border border-zinc-700/50 p-2 bg-zinc-950/40">
+                        <div className="text-mutedForeground uppercase">Bonus owed</div>
+                        <div className="text-sm font-bold text-amber-300 tabular-nums">{(entOverview.totals.completion_bonus_unpaid_points ?? 0).toLocaleString()} pts</div>
+                      </div>
+                      <div className="rounded border border-zinc-700/50 p-2 bg-zinc-950/40">
+                        <div className="text-mutedForeground uppercase">Fund cash</div>
+                        <div className="text-sm font-bold text-emerald-400 tabular-nums">${Math.trunc(Number(entOverview.totals.entertainer_fund_cash ?? 0)).toLocaleString()}</div>
+                      </div>
+                      <div className="rounded border border-zinc-700/50 p-2 bg-zinc-950/40">
+                        <div className="text-mutedForeground uppercase">Pending fund $</div>
+                        <div className="text-sm font-bold text-amber-200 tabular-nums">${Math.trunc(Number(entOverview.totals.entertainer_pending_fund_cash ?? 0)).toLocaleString()}</div>
+                      </div>
+                      <div className="rounded border border-zinc-700/50 p-2 bg-zinc-950/40">
+                        <div className="text-mutedForeground uppercase">Completed games</div>
+                        <div className="text-sm font-bold text-sky-300 tabular-nums">{(entOverview.totals.ledger_completed_count ?? 0).toLocaleString()}</div>
+                      </div>
+                    </div>
+                  ) : null}
+                  <div className="overflow-x-auto max-h-[28rem] overflow-y-auto rounded border border-zinc-700/40">
+                    <table className="w-full text-[9px] font-heading text-left min-w-[1100px]">
+                      <thead className="sticky top-0 bg-zinc-900 z-10">
+                        <tr className="border-b border-zinc-700/50 text-mutedForeground uppercase">
+                          <th className="p-1.5">User</th>
+                          <th className="p-1.5">Status</th>
+                          <th className="p-1.5 text-right">Wallet pts</th>
+                          <th className="p-1.5 text-right">Fund $</th>
+                          <th className="p-1.5 text-right">Fund pts</th>
+                          <th className="p-1.5 text-right">Pending $</th>
+                          <th className="p-1.5 text-right">Pending fund pts</th>
+                          <th className="p-1.5 text-right">Pending bonus</th>
+                          <th className="p-1.5 text-right">Done</th>
+                          <th className="p-1.5 text-right">Bonus owed</th>
+                          <th className="p-1.5 text-right">Lifetime bonus</th>
+                          <th className="p-1.5 text-right">Lifetime fund $</th>
+                          <th className="p-1.5">Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {entOverview.entertainers.map((row) => {
+                          const owedPts = Number(row.completion_bonus_unpaid_points || 0);
+                          const pendingBonus = Number(row.entertainer_pending_completion_bonus_points || 0);
+                          return (
+                            <tr key={row.id || row.username} className="border-b border-zinc-800/60 align-top hover:bg-zinc-800/30">
+                              <td className="p-1.5 text-foreground font-medium whitespace-nowrap">{row.username ?? '—'}</td>
+                              <td className="p-1.5 whitespace-nowrap">
+                                {row.is_dead ? <span className="text-red-400">Dead</span> : <span className="text-emerald-400">Alive</span>}
+                              </td>
+                              <td className="p-1.5 text-right text-foreground tabular-nums">{(row.wallet_points ?? 0).toLocaleString()}</td>
+                              <td className="p-1.5 text-right text-emerald-400 tabular-nums">${Math.trunc(Number(row.entertainer_fund_cash ?? 0)).toLocaleString()}</td>
+                              <td className="p-1.5 text-right text-sky-300 tabular-nums">{(row.entertainer_fund_points ?? 0).toLocaleString()}</td>
+                              <td className="p-1.5 text-right text-amber-200 tabular-nums">${Math.trunc(Number(row.entertainer_pending_fund_cash ?? 0)).toLocaleString()}</td>
+                              <td className="p-1.5 text-right text-amber-100 tabular-nums">{(row.entertainer_pending_fund_points ?? 0).toLocaleString()}</td>
+                              <td className="p-1.5 text-right text-emerald-300 tabular-nums">{pendingBonus.toLocaleString()}</td>
+                              <td className="p-1.5 text-right text-foreground tabular-nums">{row.ledger_completed_count ?? 0}</td>
+                              <td className={`p-1.5 text-right tabular-nums ${owedPts > 0 ? 'text-amber-300 font-bold' : 'text-mutedForeground'}`}>
+                                {owedPts > 0 ? `${owedPts.toLocaleString()} (${row.completion_bonus_unpaid_games ?? 0})` : '—'}
+                              </td>
+                              <td className="p-1.5 text-right text-violet-300 tabular-nums">{(row.lifetime_bonus_points_accrued ?? 0).toLocaleString()}</td>
+                              <td className="p-1.5 text-right text-mutedForeground tabular-nums">${(row.lifetime_fund_cash_granted ?? 0).toLocaleString()}</td>
+                              <td className="p-1.5 whitespace-nowrap">
+                                <div className="flex flex-wrap gap-1">
+                                  <button type="button" className="text-primary hover:underline" onClick={() => handleViewEntDashboard(row.username)}>Detail</button>
+                                  {owedPts > 0 ? (
+                                    <button type="button" className="text-amber-300 hover:underline" onClick={() => handleEntBackfillBonuses(false, row.username)} disabled={entBackfillLoading}>Backfill</button>
+                                  ) : null}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="text-[9px] text-mutedForeground font-heading leading-snug">
+                    Pending = saved but not collected in Hub. Bonus owed = completed sponsored games missing completion pay ({entOverview.completion_bonus_per_game ?? 100} pts each).
+                    Lifetime bonus = total ever accrued to pending; wallet pts = personal store points after collect.
+                  </p>
+                </>
+              ) : (
+                <p className="text-[10px] text-mutedForeground font-heading">No entertainers or overview unavailable.</p>
+              )}
+            </div>
             <div className="flex flex-wrap items-center gap-2">
               <input
                 type="text"
@@ -24994,22 +25146,58 @@ export default function Admin() {
                         <div className="text-lg font-bold text-emerald-400 tabular-nums">{entDashboardData.funded_ledger_completed_count ?? 0}</div>
                       </div>
                       <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/50 text-center">
-                        <div className="text-[9px] text-mutedForeground uppercase">Paid pts</div>
+                        <div className="text-[9px] text-mutedForeground uppercase">Bonus owed</div>
+                        <div className="text-lg font-bold text-amber-300 tabular-nums">{(entDashboardData.completion_bonus_unpaid_points ?? 0).toLocaleString()}</div>
+                      </div>
+                      <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/50 text-center">
+                        <div className="text-[9px] text-mutedForeground uppercase">Pending bonus</div>
+                        <div className="text-lg font-bold text-emerald-300 tabular-nums">{(entDashboardData.entertainer_pending_completion_bonus_points ?? 0).toLocaleString()}</div>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/50 text-center">
+                        <div className="text-[9px] text-mutedForeground uppercase">Paid pts (winners)</div>
                         <div className="text-lg font-bold text-sky-400/90 tabular-nums">{(entDashboardData.funded_ledger_paid_out_points_total ?? 0).toLocaleString()}</div>
                       </div>
                       <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/50 text-center">
-                        <div className="text-[9px] text-mutedForeground uppercase">Paid cash</div>
+                        <div className="text-[9px] text-mutedForeground uppercase">Paid cash (winners)</div>
                         <div className="text-lg font-bold text-emerald-400 tabular-nums">${Math.trunc(Number(entDashboardData.funded_ledger_paid_out_cash_total ?? 0)).toLocaleString()}</div>
                       </div>
+                      <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/50 text-center">
+                        <div className="text-[9px] text-mutedForeground uppercase">Wallet pts</div>
+                        <div className="text-lg font-bold text-foreground tabular-nums">{(entDashboardData.wallet_points ?? 0).toLocaleString()}</div>
+                      </div>
+                      <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/50 text-center">
+                        <div className="text-[9px] text-mutedForeground uppercase">Lifetime bonus</div>
+                        <div className="text-lg font-bold text-violet-300 tabular-nums">{(entDashboardData.lifetime_bonus_points_accrued ?? entDashboardData.lifetime_bonus_points_paid ?? 0).toLocaleString()}</div>
+                      </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-mutedForeground max-w-md">
-                      <span>Fund cash</span>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-mutedForeground max-w-lg">
+                      <span>Fund cash (spendable)</span>
                       <span className="text-right text-emerald-400">${Number(entDashboardData.entertainer_fund_cash ?? 0).toLocaleString()}</span>
-                      <span>Fund points</span>
+                      <span>Fund points (spendable)</span>
                       <span className="text-right text-sky-400/90">{Number(entDashboardData.entertainer_fund_points ?? 0).toLocaleString()}</span>
+                      <span>Pending cash (saved)</span>
+                      <span className="text-right text-amber-200">${Math.trunc(Number(entDashboardData.entertainer_pending_fund_cash ?? 0)).toLocaleString()}</span>
+                      <span>Pending fund points (saved)</span>
+                      <span className="text-right text-amber-100">{Number(entDashboardData.entertainer_pending_fund_points ?? 0).toLocaleString()}</span>
+                      <span>Fund cash spent (est.)</span>
+                      <span className="text-right text-zinc-300">${Math.trunc(Number(entDashboardData.fund_cash_spent_estimate ?? 0)).toLocaleString()}</span>
+                      <span>Fund points spent (est.)</span>
+                      <span className="text-right text-zinc-300">{(entDashboardData.fund_points_spent_estimate ?? 0).toLocaleString()}</span>
+                      <span>Lifetime fund cash granted</span>
+                      <span className="text-right text-mutedForeground">${(entDashboardData.lifetime_fund_cash_granted ?? 0).toLocaleString()}</span>
+                      <span>Lifetime fund points granted</span>
+                      <span className="text-right text-mutedForeground">{(entDashboardData.lifetime_fund_points_granted ?? 0).toLocaleString()}</span>
                       <span>Funded games today</span>
                       <span className="text-right text-foreground">{entDashboardData.funded_games_today_count ?? 0}</span>
                     </div>
+                    {(entDashboardData.completion_bonus_unpaid_points ?? 0) > 0 ? (
+                      <div className="flex flex-wrap gap-2">
+                        <BtnPrimary type="button" className="!py-1 !px-2 text-[10px]" onClick={() => handleEntBackfillBonuses(true, entDashboardUser)} disabled={entBackfillLoading}>Dry-run backfill</BtnPrimary>
+                        <BtnPrimary type="button" className="!py-1 !px-2 text-[10px]" onClick={() => handleEntBackfillBonuses(false, entDashboardUser)} disabled={entBackfillLoading}>Backfill owed bonus</BtnPrimary>
+                      </div>
+                    ) : null}
                     {Array.isArray(entDashboardData.recent_funded_games) && entDashboardData.recent_funded_games.length > 0 ? (
                       <div>
                         <div className="text-[9px] uppercase tracking-wide text-mutedForeground mb-1">Recent funded games</div>
