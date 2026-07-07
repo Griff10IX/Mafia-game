@@ -169,6 +169,7 @@ def register(router):
                 {
                     "moved_cash": out.get("moved_cash"),
                     "moved_points": out.get("moved_points"),
+                    "moved_wallet_points": out.get("moved_wallet_points"),
                 },
             )
         except Exception:

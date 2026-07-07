@@ -1,4 +1,5 @@
 # Entertainer Forum: free entry, random prizes (cash/bullets/tokens/cars). Dice/Hangman = one winner; Gbox = one cash pot split randomly + per-player non-cash rewards.
+import logging
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 import uuid
@@ -14,12 +15,16 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, get_current_user_verified, send_notification, send_notification_to_all, _is_admin, _is_entertainer, CARS, require_admin, require_staff_issued_if_staff_capable
 from utils.entertainer_service import (
     ENTERTAINER_GBOX_MAX_POINTS_PER_GAME,
+    insert_funded_game_row,
+    on_funded_game_completed,
     try_debit_entertainer_fund,
 )
 from routers.kill.armoury import TOKEN_TYPES, TOKEN_CONFIG
 from utils.point_provenance import log_points_event
 from utils.sustained_page_ratelimit import PAGE_KEY_ENTERTAINER, check_sustained_page_rl
 from utils.staff_portal import assert_staff_portal_unlocked
+
+logger = logging.getLogger(__name__)
 
 
 async def _entertainer_sustained_rl_user(current_user: dict = Depends(get_current_user)):
@@ -591,6 +596,91 @@ def _roll_summary_after_settle(game: dict) -> str:
     return "Game settled."
 
 
+def _forum_funded_game_source(game_type: str) -> str:
+    gt = (game_type or "dice").strip().lower()
+    if gt in ("dice", "gbox", "hangman"):
+        return f"forum_{gt}"
+    return "forum_game"
+
+
+def _forum_game_payout_totals(game: dict, result: Optional[dict], cash_pot: int) -> dict:
+    """Winner + total paid to players when a forum E-Game settles."""
+    if not result:
+        return {
+            "winner_id": None,
+            "winner_username": None,
+            "total_winnings_points": 0,
+            "total_winnings_cash": 0.0,
+        }
+    gt = game.get("game_type") or "dice"
+    if gt in ("dice", "hangman"):
+        reward = result.get("reward") or {}
+        return {
+            "winner_id": result.get("winner_id"),
+            "winner_username": result.get("winner_username"),
+            "total_winnings_points": int(reward.get("points") or 0),
+            "total_winnings_cash": float(int(cash_pot or 0) + int(reward.get("money") or 0)),
+        }
+    if gt == "gbox":
+        rewards_by_user = result.get("rewards_by_user") or {}
+        total_pts = 0
+        total_cash = 0
+        top_uid = None
+        top_name = None
+        top_score = -1
+        for uid, rw in rewards_by_user.items():
+            if not isinstance(rw, dict):
+                continue
+            m = int(rw.get("money") or 0)
+            p = int(rw.get("points") or 0)
+            total_cash += m
+            total_pts += p
+            score = m + p
+            if score > top_score:
+                top_score = score
+                top_uid = uid
+        if top_uid:
+            for p in game.get("participants") or []:
+                if p.get("user_id") == top_uid:
+                    top_name = p.get("username")
+                    break
+        return {
+            "winner_id": top_uid,
+            "winner_username": top_name,
+            "total_winnings_points": total_pts,
+            "total_winnings_cash": float(total_cash),
+        }
+    return {
+        "winner_id": None,
+        "winner_username": None,
+        "total_winnings_points": 0,
+        "total_winnings_cash": 0.0,
+    }
+
+
+async def _complete_entertainer_funded_forum_game(game: dict, result: Optional[dict], cash_pot: int) -> None:
+    """Ledger + completion bonus when an entertainer-funded forum game settles."""
+    if not game.get("entertainer_funded"):
+        return
+    gid = game.get("id")
+    if not gid:
+        return
+    source = _forum_funded_game_source(game.get("game_type"))
+    payout = _forum_game_payout_totals(game, result, cash_pot)
+    await on_funded_game_completed(
+        db,
+        ref_id=str(gid),
+        source=source,
+        send_notification=send_notification,
+        log_points_event=log_points_event,
+        outcome={
+            **payout,
+            "from_entertainer_fund_points": int(game.get("entertainer_fund_debit_points") or 0),
+            "from_entertainer_fund_cash": float(game.get("entertainer_fund_debit_cash") or 0),
+        },
+    )
+
+
 async def _settle_game(game: dict):
     """Run payout (random rewards + pot) and mark game completed. Idempotent if already completed."""
     if game.get("status") == "completed":
@@ -630,6 +720,10 @@ async def _settle_game(game: dict):
         {"id": game["id"]},
         {"$set": set_doc},
     )
+    try:
+        await _complete_entertainer_funded_forum_game(game, result, cash_pot)
+    except Exception:
+        logger.exception("entertainer funded forum game completion game_id=%s", game.get("id"))
     # Notify each participant with their winnings
     if result and participants:
         game_type = game.get("game_type") or "dice"
@@ -1172,9 +1266,19 @@ async def create_game(
         "topic_id": topic_id,
         "entertainer_funded": funded_via_entertainer,
     }
+    if funded_via_entertainer:
+        doc["entertainer_fund_debit_cash"] = float(total_money_needed)
+        doc["entertainer_fund_debit_points"] = int(reserve_points)
     if request.game_type == "hangman":
         doc["hangman_state"] = _hangman_init_state()
     await db.entertainer_games.insert_one(doc)
+    if funded_via_entertainer:
+        await insert_funded_game_row(
+            db,
+            entertainer_id=uid,
+            source=_forum_funded_game_source(request.game_type),
+            ref_id=game_id,
+        )
     return {"id": game_id, "message": "Game created", "game": _with_public_hangman({**doc, "participants": participants}, current_user.get("id"))}
 
 

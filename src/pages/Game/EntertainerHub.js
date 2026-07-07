@@ -215,19 +215,29 @@ export default function EntertainerHub() {
       const d = res.data || {};
       const mc = Number(d.moved_cash || 0);
       const mp = Number(d.moved_points || 0);
+      const mwp = Number(d.moved_wallet_points || 0);
       if (d.nothing_moved && !d.had_pending_before) {
-        toast.message('No pending allowance to collect.');
+        toast.message('No pending pay to collect.');
       } else if (d.nothing_moved && d.had_pending_before) {
         const pc = Number(d.entertainer_pending_fund_cash || 0);
         const pp = Number(d.entertainer_pending_fund_points || 0);
-        toast.message(
-          `Spendable fund is at the cap. $${Math.trunc(pc).toLocaleString()} cash and ${pp.toLocaleString()} points stay in pending until you spend fund room.`,
-        );
-      } else if (mc > 0 || mp > 0) {
+        const pbonus = Number(d.entertainer_pending_completion_bonus_points || 0);
+        const parts = [];
+        if (pc > 0 || pp > 0) {
+          parts.push(
+            `$${Math.trunc(pc).toLocaleString()} cash and ${pp.toLocaleString()} fund points stay in pending until you spend fund room`,
+          );
+        }
+        if (pbonus > 0) {
+          parts.push(`${pbonus.toLocaleString()} completion bonus points still pending`);
+        }
+        toast.message(parts.length ? parts.join('. ') + '.' : 'Nothing moved right now.');
+      } else if (mc > 0 || mp > 0 || mwp > 0) {
         const parts = [];
         if (mc > 0) parts.push(`$${Math.trunc(mc).toLocaleString()} cash`);
-        if (mp > 0) parts.push(`${mp.toLocaleString()} points`);
-        toast.success(`Collected ${parts.join(' and ')} into your entertainer fund.`);
+        if (mp > 0) parts.push(`${mp.toLocaleString()} fund points`);
+        if (mwp > 0) parts.push(`${mwp.toLocaleString()} wallet points`);
+        toast.success(`Collected ${parts.join(', ')}.`);
       } else {
         toast.message('Nothing to collect right now.');
       }
@@ -369,8 +379,9 @@ export default function EntertainerHub() {
           <Gift className="text-primary shrink-0" size={18} />
           <h2 className="text-[11px] font-heading uppercase tracking-widest text-mutedForeground">Reward perks</h2>
         </div>
-        <p className="text-[11px] text-mutedForeground font-heading">
+        <p className="text-[10px] text-mutedForeground font-heading leading-snug">
           Grant armoury skill tokens to any player (UTC daily limits). Game Pass is not included — staff-only elsewhere.
+          {' '}When you fund forum dice/gbox/hangman or MDG/MP Poker games, every <strong className="text-foreground">5 completed</strong> sponsored games pays <strong className="text-emerald-400">+50 main-wallet points</strong> (max 500/day UTC, collect in Hub — stacks if you skip days).
         </p>
         <div className="flex flex-wrap gap-x-6 gap-y-1 text-[11px] font-heading text-foreground">
           <span>
@@ -433,18 +444,25 @@ export default function EntertainerHub() {
       </section>
 
       <section className="rounded-lg border border-amber-500/25 bg-amber-950/15 p-4 space-y-3">
-        <h2 className="text-[11px] font-heading uppercase tracking-widest text-amber-200/90">Daily allowance (pending)</h2>
+        <h2 className="text-[11px] font-heading uppercase tracking-widest text-amber-200/90">Pending pay (collect)</h2>
         <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-          Each UTC day the server credits your daily allowance here first. Use <strong className="text-foreground">Collect</strong> to move it into your spendable fund (respecting fund caps). Leave it pending to stack across days.
+          Each UTC day the server credits your daily allowance here first. Completion bonuses from sponsored games also land here. Use <strong className="text-foreground">Collect</strong> to move allowance into your spendable fund (respecting fund caps) and bonuses into your main wallet. Leave it pending to stack across days.
         </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="rounded-lg border border-amber-500/20 bg-zinc-950/50 p-3">
             <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Pending cash</div>
             <div className="text-lg font-heading font-bold text-amber-300">${Math.trunc(Number(dash.entertainer_pending_fund_cash || 0)).toLocaleString()}</div>
           </div>
           <div className="rounded-lg border border-amber-500/20 bg-zinc-950/50 p-3">
-            <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Pending points</div>
+            <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Pending fund points</div>
             <div className="text-lg font-heading font-bold text-amber-200/90">{Number(dash.entertainer_pending_fund_points || 0).toLocaleString()}</div>
+          </div>
+          <div className="rounded-lg border border-emerald-500/25 bg-zinc-950/50 p-3">
+            <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Pending completion bonus</div>
+            <div className="text-lg font-heading font-bold text-emerald-300">{Number(dash.entertainer_pending_completion_bonus_points || 0).toLocaleString()}</div>
+            <div className="text-[9px] text-mutedForeground mt-1">
+              Today: {Number(dash.completion_bonus_points_today || 0).toLocaleString()} / {Number(dash.completion_bonus_daily_cap || 500).toLocaleString()} pts
+            </div>
           </div>
         </div>
         <button

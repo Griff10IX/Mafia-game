@@ -16,7 +16,7 @@ ENTERTAINER_FUND_CASH_MAX = 100_000_000
 ENTERTAINER_FUND_POINTS_MAX = 5_000
 ENTERTAINER_COMPLETION_BLOCK = 5
 ENTERTAINER_COMPLETION_BONUS_POINTS = 50
-ENTERTAINER_COMPLETION_BONUS_DAILY_CAP = 250
+ENTERTAINER_COMPLETION_BONUS_DAILY_CAP = 500
 ENTERTAINER_ONLINE_COLOR_DEFAULT = "#7c3aed"  # violet; distinct from mod/HDO
 # Max points an entertainer may put into one game from the entertainer fund (fee + extra combined for MDG; tournament buy-in for MP Poker points).
 ENTERTAINER_MDG_MAX_POINTS_PER_GAME = 1_000
@@ -170,7 +170,12 @@ async def insert_funded_game_row(
 
 
 async def run_entertainer_daily_refills(db, send_notification) -> None:
-    """Accrue daily allowance once per UTC day into pending; entertainers collect into the spendable fund in Hub."""
+    """Accrue daily allowance once per UTC day into pending; entertainers collect into the spendable fund in Hub.
+
+    The full daily amount always accrues to pending (stacks across days). Fund caps are only
+    enforced when collecting pending into the spendable fund — capping accrual by spendable-fund
+    room here silently zeroed pay for anyone at the fund cap (points cap is hit after 2 collects).
+    """
     today = entertainer_utc_today()
     cursor = db.users.find(
         {"is_entertainer": True, "is_dead": {"$ne": True}},
@@ -178,8 +183,6 @@ async def run_entertainer_daily_refills(db, send_notification) -> None:
             "_id": 0,
             "id": 1,
             "username": 1,
-            "entertainer_fund_cash": 1,
-            "entertainer_fund_points": 1,
             "entertainer_fund_last_refill_utc_date": 1,
         },
     )
@@ -190,20 +193,8 @@ async def run_entertainer_daily_refills(db, send_notification) -> None:
         last = u.get("entertainer_fund_last_refill_utc_date")
         if _normalize_entertainer_refill_utc_day(last) == today:
             continue
-        current_cash = float(u.get("entertainer_fund_cash") or 0.0)
-        current_points = int(u.get("entertainer_fund_points") or 0)
-        add_cash = int(
-            min(
-                ENTERTAINER_DAILY_FUND_CASH,
-                max(0, int(ENTERTAINER_FUND_CASH_MAX - current_cash)),
-            )
-        )
-        add_points = int(
-            min(
-                ENTERTAINER_DAILY_FUND_POINTS,
-                max(0, int(ENTERTAINER_FUND_POINTS_MAX - current_points)),
-            )
-        )
+        add_cash = int(ENTERTAINER_DAILY_FUND_CASH)
+        add_points = int(ENTERTAINER_DAILY_FUND_POINTS)
         inc_doc: Dict[str, Any] = {
             "entertainer_lifetime_fund_cash_granted": add_cash,
             "entertainer_lifetime_fund_points_granted": add_points,
@@ -251,8 +242,63 @@ async def run_entertainer_daily_refills(db, send_notification) -> None:
             )
 
 
+async def _collect_pending_completion_bonus_to_wallet(db, entertainer_id: str) -> Dict[str, Any]:
+    """Move pending completion bonus into main wallet points."""
+    before = await db.users.find_one(
+        {"id": entertainer_id, "is_entertainer": True, "is_dead": {"$ne": True}},
+        {"_id": 0, "points": 1, "entertainer_pending_completion_bonus_points": 1},
+    )
+    if not before:
+        return {"moved": 0, "remaining": 0}
+    pending0 = int(before.get("entertainer_pending_completion_bonus_points") or 0)
+    if pending0 <= 0:
+        return {"moved": 0, "remaining": 0}
+    pts_before = int(before.get("points") or 0)
+    after = await db.users.find_one_and_update(
+        {"id": entertainer_id, "entertainer_pending_completion_bonus_points": {"$gt": 0}},
+        [
+            {
+                "$set": {
+                    "_m": {"$toInt": {"$ifNull": ["$entertainer_pending_completion_bonus_points", 0]}},
+                    "_p": {"$toInt": {"$ifNull": ["$points", 0]}},
+                }
+            },
+            {
+                "$set": {
+                    "points": {"$add": ["$_p", "$_m"]},
+                    "entertainer_pending_completion_bonus_points": 0,
+                }
+            },
+            {"$unset": ["_m", "_p"]},
+        ],
+        return_document=ReturnDocument.AFTER,
+        projection={"_id": 0, "points": 1, "entertainer_pending_completion_bonus_points": 1},
+    )
+    if not after:
+        return {"moved": 0, "remaining": pending0}
+    moved = max(0, int(after.get("points") or 0) - pts_before)
+    remaining = int(after.get("entertainer_pending_completion_bonus_points") or 0)
+    if moved > 0:
+        try:
+            from utils.point_provenance import log_points_event
+
+            await log_points_event(
+                db,
+                user_id=entertainer_id,
+                points=moved,
+                event_type="entertainer_completion_bonus",
+                event_ref="collect_pending",
+                meta={"source": "collect_pending"},
+                wallet_points_before=pts_before,
+                wallet_points_after=pts_before + moved,
+            )
+        except Exception as ex:
+            _logger.warning("entertainer completion bonus collect log_points_event: %s", ex)
+    return {"moved": moved, "remaining": remaining}
+
+
 async def collect_entertainer_pending_to_fund(db, entertainer_id: str) -> Dict[str, Any]:
-    """Move pending daily allowance into entertainer_fund_* up to caps. Atomic aggregation pipeline."""
+    """Move pending daily allowance into entertainer_fund_* (up to caps) and completion bonus into wallet."""
     before = await db.users.find_one(
         {"id": entertainer_id, "is_entertainer": True, "is_dead": {"$ne": True}},
         {
@@ -261,12 +307,14 @@ async def collect_entertainer_pending_to_fund(db, entertainer_id: str) -> Dict[s
             "entertainer_fund_points": 1,
             "entertainer_pending_fund_cash": 1,
             "entertainer_pending_fund_points": 1,
+            "entertainer_pending_completion_bonus_points": 1,
         },
     )
     if not before:
         return {"ok": False, "detail": "Entertainer not found"}
     pc0 = float(before.get("entertainer_pending_fund_cash") or 0.0)
     pp0 = int(before.get("entertainer_pending_fund_points") or 0)
+    bonus_pending0 = int(before.get("entertainer_pending_completion_bonus_points") or 0)
     fc0 = float(before.get("entertainer_fund_cash") or 0.0)
     fp0 = int(before.get("entertainer_fund_points") or 0)
     cash_max = float(ENTERTAINER_FUND_CASH_MAX)
@@ -328,16 +376,21 @@ async def collect_entertainer_pending_to_fund(db, entertainer_id: str) -> Dict[s
     pp1 = int((after or {}).get("entertainer_pending_fund_points") or 0)
     moved_cash = max(0.0, round(fc1 - fc0, 2))
     moved_pts = max(0, fp1 - fp0)
+    bonus_out = await _collect_pending_completion_bonus_to_wallet(db, entertainer_id)
+    moved_wallet_pts = int(bonus_out.get("moved") or 0)
+    bonus_pending1 = int(bonus_out.get("remaining") or 0)
     return {
         "ok": True,
         "moved_cash": moved_cash,
         "moved_points": moved_pts,
+        "moved_wallet_points": moved_wallet_pts,
         "entertainer_fund_cash": fc1,
         "entertainer_fund_points": fp1,
         "entertainer_pending_fund_cash": pc1,
         "entertainer_pending_fund_points": pp1,
-        "had_pending_before": pc0 > 0 or pp0 > 0,
-        "nothing_moved": moved_cash <= 0 and moved_pts <= 0,
+        "entertainer_pending_completion_bonus_points": bonus_pending1,
+        "had_pending_before": pc0 > 0 or pp0 > 0 or bonus_pending0 > 0,
+        "nothing_moved": moved_cash <= 0 and moved_pts <= 0 and moved_wallet_pts <= 0,
     }
 
 
@@ -425,9 +478,10 @@ async def on_funded_game_completed(
     log_points_event,
     outcome: Optional[Dict[str, Any]] = None,
 ) -> None:
-    """Mark ledger row completed (first wins) and grant +50 main points per 5 completions, max 250/day.
+    """Mark ledger row completed (first wins) and accrue +50 pending pts per 5 completions, max 500/day.
 
-    Optional ``outcome`` is merged into the ledger row (winner, total payout, amount seeded from fund).
+    Pending completion bonus is collected in the Entertainer Hub (main wallet). Optional ``outcome`` is
+    merged into the ledger row (winner, total payout, amount seeded from fund).
     """
     now_iso = datetime.now(timezone.utc).isoformat()
     set_doc: Dict[str, Any] = {"completed_at": now_iso, **(_sanitize_funded_game_outcome(outcome))}
@@ -446,45 +500,31 @@ async def on_funded_game_completed(
     old_blocks = completions // ENTERTAINER_COMPLETION_BLOCK
     new_blocks = new_completions // ENTERTAINER_COMPLETION_BLOCK
     pay_chunks = new_blocks - old_blocks
-    points_to_pay = 0
+    points_to_accrue = 0
     if pay_chunks > 0 and bonus_today < ENTERTAINER_COMPLETION_BONUS_DAILY_CAP:
-        chunk = min(
-            ENTERTAINER_COMPLETION_BONUS_POINTS,
-            ENTERTAINER_COMPLETION_BONUS_DAILY_CAP - bonus_today,
-        )
-        if chunk > 0:
-            points_to_pay = chunk
+        raw = pay_chunks * ENTERTAINER_COMPLETION_BONUS_POINTS
+        room = max(0, ENTERTAINER_COMPLETION_BONUS_DAILY_CAP - bonus_today)
+        points_to_accrue = min(raw, room)
 
     inc_user: Dict[str, Any] = {"entertainer_funded_completions_today": 1}
-    if points_to_pay:
-        inc_user["points"] = points_to_pay
-        inc_user["entertainer_completion_bonus_points_today"] = points_to_pay
-        inc_user["entertainer_lifetime_bonus_points_paid"] = points_to_pay
+    if points_to_accrue:
+        inc_user["entertainer_pending_completion_bonus_points"] = points_to_accrue
+        inc_user["entertainer_completion_bonus_points_today"] = points_to_accrue
+        inc_user["entertainer_lifetime_bonus_points_paid"] = points_to_accrue
 
-    uread = await db.users.find_one({"id": eid}, {"_id": 0, "points": 1, "username": 1})
-    pts_before = int((uread or {}).get("points") or 0)
     set_fields: Dict[str, Any] = {"entertainer_activity_utc_date": today}
     await db.users.update_one({"id": eid}, {"$inc": inc_user, "$set": set_fields})
 
-    if points_to_pay:
-        try:
-            await log_points_event(
-                db,
-                user_id=eid,
-                points=points_to_pay,
-                event_type="entertainer_completion_bonus",
-                event_ref=f"{source}:{ref_id}",
-                meta={"source": source, "ref_id": ref_id, "completions_today": new_completions},
-                wallet_points_before=pts_before,
-                wallet_points_after=pts_before + points_to_pay,
-            )
-        except Exception as ex:
-            _logger.warning("entertainer bonus log_points_event: %s", ex)
+    if points_to_accrue:
+        bonus_after = bonus_today + points_to_accrue
         try:
             await send_notification(
                 eid,
                 "Entertainer completion bonus",
-                f"+{points_to_pay} points for funded game milestones (5 per block, max {ENTERTAINER_COMPLETION_BONUS_DAILY_CAP}/day UTC).",
+                (
+                    f"+{points_to_accrue} completion bonus pending — collect in Entertainer Hub "
+                    f"({bonus_after}/{ENTERTAINER_COMPLETION_BONUS_DAILY_CAP} earned today UTC)."
+                ),
                 "reward",
                 category="entertainer",
             )
@@ -707,6 +747,7 @@ async def build_entertainer_dashboard(db, entertainer_id: str) -> Dict[str, Any]
             "entertainer_fund_points": 1,
             "entertainer_pending_fund_cash": 1,
             "entertainer_pending_fund_points": 1,
+            "entertainer_pending_completion_bonus_points": 1,
             "entertainer_lifetime_bonus_points_paid": 1,
             "entertainer_lifetime_fund_cash_granted": 1,
             "entertainer_lifetime_fund_points_granted": 1,
@@ -761,12 +802,23 @@ async def build_entertainer_dashboard(db, entertainer_id: str) -> Dict[str, Any]
         broadcasts_used = 0
     else:
         broadcasts_used = int(u.get("entertainer_broadcasts_count") or 0)
+    activity_day = u.get("entertainer_activity_utc_date")
+    if activity_day != today:
+        funded_completions_today = 0
+        completion_bonus_today = 0
+    else:
+        funded_completions_today = int(u.get("entertainer_funded_completions_today") or 0)
+        completion_bonus_today = int(u.get("entertainer_completion_bonus_points_today") or 0)
     return {
         "username": u.get("username"),
         "entertainer_fund_cash": float(u.get("entertainer_fund_cash") or 0),
         "entertainer_fund_points": int(u.get("entertainer_fund_points") or 0),
         "entertainer_pending_fund_cash": float(u.get("entertainer_pending_fund_cash") or 0),
         "entertainer_pending_fund_points": int(u.get("entertainer_pending_fund_points") or 0),
+        "entertainer_pending_completion_bonus_points": int(
+            u.get("entertainer_pending_completion_bonus_points") or 0
+        ),
+        "completion_bonus_daily_cap": ENTERTAINER_COMPLETION_BONUS_DAILY_CAP,
         "funded_games_today_count": funded_today,
         "funded_ledger_open_count": int(funded_ledger_open),
         "funded_ledger_completed_count": int(funded_ledger_completed),
@@ -776,8 +828,12 @@ async def build_entertainer_dashboard(db, entertainer_id: str) -> Dict[str, Any]
         "lifetime_fund_cash_granted": int(u.get("entertainer_lifetime_fund_cash_granted") or 0),
         "lifetime_fund_points_granted": int(u.get("entertainer_lifetime_fund_points_granted") or 0),
         "last_refill_utc_date": u.get("entertainer_fund_last_refill_utc_date"),
-        "funded_completions_today": int(u.get("entertainer_funded_completions_today") or 0),
-        "completion_bonus_points_today": int(u.get("entertainer_completion_bonus_points_today") or 0),
+        "funded_completions_today": funded_completions_today,
+        "completion_bonus_points_today": completion_bonus_today,
+        "completion_bonus_remaining_today": max(
+            0,
+            ENTERTAINER_COMPLETION_BONUS_DAILY_CAP - completion_bonus_today,
+        ),
         "activity_utc_date": u.get("entertainer_activity_utc_date"),
         "recent_funded_games": recent,
         "perk_tokens_used_today": perk_units,
