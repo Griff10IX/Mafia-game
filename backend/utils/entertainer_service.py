@@ -10,13 +10,11 @@ from pymongo import ReturnDocument
 
 _logger = logging.getLogger(__name__)
 
-ENTERTAINER_DAILY_FUND_CASH = 50_000_000
-ENTERTAINER_DAILY_FUND_POINTS = 3_000
-ENTERTAINER_FUND_CASH_MAX = 100_000_000
-ENTERTAINER_FUND_POINTS_MAX = 5_000
-ENTERTAINER_COMPLETION_BLOCK = 5
-ENTERTAINER_COMPLETION_BONUS_POINTS = 50
-ENTERTAINER_COMPLETION_BONUS_DAILY_CAP = 500
+ENTERTAINER_DAILY_FUND_CASH = 500_000_000
+ENTERTAINER_DAILY_FUND_POINTS = 10_000
+ENTERTAINER_FUND_CASH_MAX = 1_000_000_000
+ENTERTAINER_FUND_POINTS_MAX = 20_000
+ENTERTAINER_COMPLETION_BONUS_POINTS = 100
 ENTERTAINER_ONLINE_COLOR_DEFAULT = "#7c3aed"  # violet; distinct from mod/HDO
 # Max points an entertainer may put into one game from the entertainer fund (fee + extra combined for MDG; tournament buy-in for MP Poker points).
 ENTERTAINER_MDG_MAX_POINTS_PER_GAME = 1_000
@@ -478,7 +476,7 @@ async def on_funded_game_completed(
     log_points_event,
     outcome: Optional[Dict[str, Any]] = None,
 ) -> None:
-    """Mark ledger row completed (first wins) and accrue +50 pending pts per 5 completions, max 500/day.
+    """Mark ledger row completed (first wins) and accrue +100 pending pts per completion.
 
     Pending completion bonus is collected in the Entertainer Hub (main wallet). Optional ``outcome`` is
     merged into the ledger row (winner, total payout, amount seeded from fund).
@@ -495,41 +493,32 @@ async def on_funded_game_completed(
     doc = row
     eid = doc["entertainer_id"]
     today = entertainer_utc_today()
-    completions, bonus_today = await _ensure_activity_day(db, eid, today)
-    new_completions = completions + 1
-    old_blocks = completions // ENTERTAINER_COMPLETION_BLOCK
-    new_blocks = new_completions // ENTERTAINER_COMPLETION_BLOCK
-    pay_chunks = new_blocks - old_blocks
-    points_to_accrue = 0
-    if pay_chunks > 0 and bonus_today < ENTERTAINER_COMPLETION_BONUS_DAILY_CAP:
-        raw = pay_chunks * ENTERTAINER_COMPLETION_BONUS_POINTS
-        room = max(0, ENTERTAINER_COMPLETION_BONUS_DAILY_CAP - bonus_today)
-        points_to_accrue = min(raw, room)
+    completions, _bonus_today = await _ensure_activity_day(db, eid, today)
+    points_to_accrue = ENTERTAINER_COMPLETION_BONUS_POINTS
 
-    inc_user: Dict[str, Any] = {"entertainer_funded_completions_today": 1}
-    if points_to_accrue:
-        inc_user["entertainer_pending_completion_bonus_points"] = points_to_accrue
-        inc_user["entertainer_completion_bonus_points_today"] = points_to_accrue
-        inc_user["entertainer_lifetime_bonus_points_paid"] = points_to_accrue
+    inc_user: Dict[str, Any] = {
+        "entertainer_funded_completions_today": 1,
+        "entertainer_pending_completion_bonus_points": points_to_accrue,
+        "entertainer_completion_bonus_points_today": points_to_accrue,
+        "entertainer_lifetime_bonus_points_paid": points_to_accrue,
+    }
 
     set_fields: Dict[str, Any] = {"entertainer_activity_utc_date": today}
     await db.users.update_one({"id": eid}, {"$inc": inc_user, "$set": set_fields})
 
-    if points_to_accrue:
-        bonus_after = bonus_today + points_to_accrue
-        try:
-            await send_notification(
-                eid,
-                "Entertainer completion bonus",
-                (
-                    f"+{points_to_accrue} completion bonus pending — collect in Entertainer Hub "
-                    f"({bonus_after}/{ENTERTAINER_COMPLETION_BONUS_DAILY_CAP} earned today UTC)."
-                ),
-                "reward",
-                category="entertainer",
-            )
-        except Exception as ex:
-            _logger.warning("entertainer bonus notify: %s", ex)
+    try:
+        await send_notification(
+            eid,
+            "Entertainer completion bonus",
+            (
+                f"+{points_to_accrue} completion bonus pending — collect in Entertainer Hub "
+                f"(sponsored game #{completions + 1} today UTC)."
+            ),
+            "reward",
+            category="entertainer",
+        )
+    except Exception as ex:
+        _logger.warning("entertainer bonus notify: %s", ex)
 
 
 def _pipeline_sync_entertainer_perk_day(today: str) -> list:
@@ -818,7 +807,7 @@ async def build_entertainer_dashboard(db, entertainer_id: str) -> Dict[str, Any]
         "entertainer_pending_completion_bonus_points": int(
             u.get("entertainer_pending_completion_bonus_points") or 0
         ),
-        "completion_bonus_daily_cap": ENTERTAINER_COMPLETION_BONUS_DAILY_CAP,
+        "completion_bonus_per_game": ENTERTAINER_COMPLETION_BONUS_POINTS,
         "funded_games_today_count": funded_today,
         "funded_ledger_open_count": int(funded_ledger_open),
         "funded_ledger_completed_count": int(funded_ledger_completed),
@@ -830,10 +819,6 @@ async def build_entertainer_dashboard(db, entertainer_id: str) -> Dict[str, Any]
         "last_refill_utc_date": u.get("entertainer_fund_last_refill_utc_date"),
         "funded_completions_today": funded_completions_today,
         "completion_bonus_points_today": completion_bonus_today,
-        "completion_bonus_remaining_today": max(
-            0,
-            ENTERTAINER_COMPLETION_BONUS_DAILY_CAP - completion_bonus_today,
-        ),
         "activity_utc_date": u.get("entertainer_activity_utc_date"),
         "recent_funded_games": recent,
         "perk_tokens_used_today": perk_units,

@@ -381,7 +381,7 @@ export default function EntertainerHub() {
         </div>
         <p className="text-[10px] text-mutedForeground font-heading leading-snug">
           Grant armoury skill tokens to any player (UTC daily limits). Game Pass is not included — staff-only elsewhere.
-          {' '}When you fund forum dice/gbox/hangman or MDG/MP Poker games, every <strong className="text-foreground">5 completed</strong> sponsored games pays <strong className="text-emerald-400">+50 main-wallet points</strong> (max 500/day UTC, collect in Hub — stacks if you skip days).
+          {' '}When you fund forum dice/gbox/hangman or MDG/MP Poker games, each <strong className="text-foreground">completed</strong> sponsored game pays <strong className="text-emerald-400">+100 main-wallet points</strong> (collect in Hub — stacks if you skip days).
         </p>
         <div className="flex flex-wrap gap-x-6 gap-y-1 text-[11px] font-heading text-foreground">
           <span>
@@ -461,7 +461,7 @@ export default function EntertainerHub() {
             <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Pending completion bonus</div>
             <div className="text-lg font-heading font-bold text-emerald-300">{Number(dash.entertainer_pending_completion_bonus_points || 0).toLocaleString()}</div>
             <div className="text-[9px] text-mutedForeground mt-1">
-              Today: {Number(dash.completion_bonus_points_today || 0).toLocaleString()} / {Number(dash.completion_bonus_daily_cap || 500).toLocaleString()} pts
+              Today: {Number(dash.completion_bonus_points_today || 0).toLocaleString()} pts from {Number(dash.funded_completions_today || 0).toLocaleString()} completed games
             </div>
           </div>
         </div>
