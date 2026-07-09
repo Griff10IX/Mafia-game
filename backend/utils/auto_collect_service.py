@@ -65,11 +65,10 @@ async def run_auto_collect_for_user(db, user_id: str, family_id: Optional[str]) 
 
 
 async def run_auto_collect_tick(db) -> Dict[str, Any]:
-    from utils.store_item_flags import get_store_item_flags, store_item_enabled
+    from utils.store_item_flags import get_store_item_flags, store_item_allowed, store_item_enabled
 
     flags = await get_store_item_flags(db)
-    if not store_item_enabled(flags, "auto_collect"):
-        return {"users": 0, "skipped": "flag_off"}
+    flag_live = store_item_enabled(flags, "auto_collect")
 
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
@@ -78,16 +77,28 @@ async def run_auto_collect_tick(db) -> Dict[str, Any]:
             "auto_collect_until": {"$gt": now_iso},
             "is_dead": {"$ne": True},
         },
-        {"_id": 0, "id": 1, "family_id": 1},
+        {
+            "_id": 0,
+            "id": 1,
+            "family_id": 1,
+            "email": 1,
+            "is_admin": 1,
+            "is_moderator": 1,
+        },
     ).limit(250)
 
     users = await cursor.to_list(250)
     total_props = 0
     total_rackets = 0
+    processed = 0
     for u in users:
         uid = u.get("id")
         if not uid:
             continue
+        # While flag is off, only staff with an active pass are processed (admin testing).
+        if not flag_live and not store_item_allowed(flags, "auto_collect", u):
+            continue
+        processed += 1
         try:
             res = await run_auto_collect_for_user(db, uid, u.get("family_id"))
             total_props += len(res.get("properties") or [])
@@ -95,7 +106,13 @@ async def run_auto_collect_tick(db) -> Dict[str, Any]:
         except Exception as e:
             logger.exception("auto_collect user %s: %s", uid, e)
 
-    return {"users": len(users), "properties_collected": total_props, "rackets_collected": total_rackets}
+    return {
+        "users": processed,
+        "candidates": len(users),
+        "flag_live": flag_live,
+        "properties_collected": total_props,
+        "rackets_collected": total_rackets,
+    }
 
 
 async def run_auto_collect_ticker(db):

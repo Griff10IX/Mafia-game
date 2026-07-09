@@ -40,8 +40,21 @@ TOKEN_TYPE_TO_STORE_FLAG: Dict[str, str] = {
 
 
 def _is_staff(user: Optional[dict]) -> bool:
+    """True for admins/mods who may test store items while flags are off."""
     if not user:
         return False
+    # Prefer server helpers (admin = ADMIN_EMAILS; mod = DB flag / MOD_EMAILS).
+    try:
+        import server as srv
+
+        if getattr(srv, "_is_admin", lambda _u: False)(user):
+            return True
+        if getattr(srv, "_is_moderator", lambda _u: False)(user):
+            return True
+        if getattr(srv, "user_has_admin_list_email", lambda _u: False)(user):
+            return True
+    except Exception:
+        pass
     return bool(user.get("is_admin") or user.get("is_moderator"))
 
 

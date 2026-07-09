@@ -264,7 +264,7 @@ function StorePayWithSelect({ value, onChange, showCash = false }) {
 }
 
 const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, ownedLabel, onBuy, loading, disabled, comingSoon, staffPreview, user, payWith = 'auto', cashPrice, children }) => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel ${comingSoon ? 'opacity-60' : ''}`}>
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel ${comingSoon && !staffPreview ? 'opacity-60' : ''}`}>
     <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
       <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">{title}</span>
@@ -286,7 +286,7 @@ const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, ownedLabel, 
           disabled={
             loading
             || disabled
-            || comingSoon
+            || (comingSoon && !staffPreview)
             || (payWith === 'cash'
               ? (!cashPrice || (user && (user.money ?? 0) < cashPrice))
               : (
@@ -571,8 +571,9 @@ export default function Store() {
       setStorePointsEvent(nextStorePointsEvent);
       const nextIsAdmin = !!adminRes.data?.is_admin;
       const nextIsMod = !!adminRes.data?.is_moderator;
+      const nextHasAdminEmail = !!adminRes.data?.has_admin_email;
       setIsAdmin(nextIsAdmin);
-      setIsStaff(nextIsAdmin || nextIsMod);
+      setIsStaff(nextIsAdmin || nextIsMod || nextHasAdminEmail);
       setStoreItemFlags(flagsRes.data?.flags || {});
       const paths = locksRes?.data?.paths ?? {};
       const pointsLocked = !!paths['/store/points'];
@@ -1417,8 +1418,8 @@ export default function Store() {
               (u.id === 'hitlist-npc-cap' && (Number(user?.hitlist_npc_bonus_slots) || 0) >= 3) ||
               (u.id === 'health' && Number(user?.health ?? 100) >= 100) ||
               !!u.disabledWhen?.(user);
-            const flagBlocked = u.flagKey && !storeFlagAllowed(u.flagKey);
-            const comingSoon = !!flagBlocked;
+            const flagLive = !u.flagKey || !!storeItemFlags?.[u.flagKey];
+            const comingSoon = !flagLive;
             const staffPreview = comingSoon && isStaff;
             return (
               <div key={u.id} id={u.id === 'auto-rank' ? 'store-auto-rank' : undefined}>
@@ -1633,8 +1634,8 @@ export default function Store() {
               {TOKEN_STORE_ITEMS.map((t) => {
                 const held = Number(user?.[t.userKey] ?? 0);
                 const tokenCashPrice = cashPriceAvailable ? Math.round(t.price * cashPricePerPoint) : 0;
-                const flagBlocked = t.flagKey && !storeFlagAllowed(t.flagKey);
-                const comingSoon = !!flagBlocked;
+                const flagLive = !t.flagKey || !!storeItemFlags?.[t.flagKey];
+                const comingSoon = !flagLive;
                 const staffPreview = comingSoon && isStaff;
                 return (
                   <StoreCard

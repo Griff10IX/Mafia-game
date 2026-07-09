@@ -1540,10 +1540,53 @@ async def buy_store_token_cash(
     from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES
 
     tt = (body.token_type or "").strip()
+    if tt in STORE_COUNT_ONLY_TOKEN_FIELDS:
+        if tt not in TOKEN_STORE_UNIT_PRICE_POINTS:
+            raise HTTPException(status_code=400, detail="This token type is not sold in the store")
+        flag = store_flag_for_token_type(tt)
+        if flag:
+            await require_store_item_allowed(db, flag, current_user)
+        amt = int(body.amount)
+        cf = STORE_COUNT_ONLY_TOKEN_FIELDS[tt]
+        used = _cash_purchases_today(current_user)
+        if used + amt > TOKEN_CASH_DAILY_LIMIT:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Daily cash purchase limit reached ({TOKEN_CASH_DAILY_LIMIT}/day; {used} used today).",
+            )
+        _available, price_per_point, offers_in_avg = await _get_cash_price_per_point()
+        if price_per_point <= 0:
+            raise HTTPException(status_code=400, detail="Cash price unavailable. Try again.")
+        unit_pts = TOKEN_STORE_UNIT_PRICE_POINTS[tt]
+        cash_cost = round(unit_pts * amt * price_per_point)
+        if cash_cost <= 0:
+            raise HTTPException(status_code=400, detail="Calculated cash cost is invalid.")
+        money_balance = float(current_user.get("money") or 0)
+        if money_balance < cash_cost:
+            raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${cash_cost:,.0f}, have ${money_balance:,.0f}.")
+        today = game_today_date_str()
+        prev_key = _normalize_token_cash_purchase_date_key(current_user.get("token_cash_purchases_date"))
+        new_day = prev_key != today
+        filt = {"id": current_user["id"], "money": {"$gte": cash_cost}}
+        inc = {"money": -cash_cost, cf: amt, "token_cash_spent": cash_cost}
+        set_doc = {"token_cash_purchases_date": today}
+        if new_day:
+            set_doc["token_cash_purchases_today"] = amt
+        else:
+            inc["token_cash_purchases_today"] = amt
+        result = await db.users.update_one(filt, {"$inc": inc, "$set": set_doc})
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Purchase failed. Try again.")
+        await log_activity(current_user["id"], current_user.get("username", "?"), "store_purchase", {"item": f"token-cash:{tt}", "amount": amt, "cash_cost": cash_cost})
+        return {"message": f"+{amt} {tt.replace('_', ' ')} token(s) for ${cash_cost:,.0f}", "cash_cost": cash_cost, "token_type": tt, "amount": amt}
+
     if tt not in TOKEN_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid token_type. Use one of: {list(TOKEN_TYPES)}")
     if tt not in TOKEN_STORE_UNIT_PRICE_POINTS:
         raise HTTPException(status_code=400, detail="This token type is not sold in the store")
+    flag = store_flag_for_token_type(tt)
+    if flag:
+        await require_store_item_allowed(db, flag, current_user)
 
     amt = int(body.amount)
     cfg = TOKEN_CONFIG[tt]

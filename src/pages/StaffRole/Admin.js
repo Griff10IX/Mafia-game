@@ -246,6 +246,7 @@ const SEARCHABLE_TOOLS = [
   // Donations
   { label: 'Donations Payments Log', categoryId: 'admin-donations', collapseKey: 'donationsPayments', keywords: ['donations', 'payments', 'stripe', 'credit'], adminOnly: true },
   { label: 'Store Point Crediting', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['store', 'crediting', 'manual', 'eta', 'payments'], adminOnly: true },
+  { label: 'Store item rollout', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['store', 'rollout', 'feature flag', 'coming soon', 'auto-collect', 'bailout', 'cooldown skip', 'profile glow', 'family crest', 'safe deposit', 'phase 1', 'enable', 'test'], adminOnly: true },
   { label: 'Pre-order Settings', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['preorder', 'points', 'release', 'manual', 'store', 'credit'], adminOnly: true },
   { label: 'Store cash purchase logs', categoryId: 'admin-donations', collapseKey: 'pointsCashLogs', keywords: ['points', 'cash', 'store', 'ip', 'email', 'monthly', 'quick trade', 'token', 'bundle'], adminOnly: true },
   { label: 'Release Preorder Points', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['release', 'preorder', 'points', 'credit'], adminOnly: true },
@@ -11882,7 +11883,7 @@ export default function Admin() {
           <div className="h-0.5 bg-gradient-to-r from-transparent via-sky-500/50 to-transparent" />
           <SectionHeader
             icon={DollarSign}
-            title="Store Point Crediting & Preorder"
+            title="Store Point Crediting, Preorder & Item Rollout"
             color="text-sky-300"
             toolAnchor="donationsStore"
             isCollapsed={collapsed.donationsStore}
@@ -12007,7 +12008,7 @@ export default function Admin() {
               <div className="space-y-3">
                 <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Store item rollout</p>
                 <p className="text-[10px] text-mutedForeground">
-                  New point-store items ship disabled. Staff can still buy and test while off. Toggle live per item when ready.
+                  New point-store items ship disabled for players. Admins/mods can still buy and use them for testing (Store shows a Staff preview badge). Flip to Live when ready for everyone.
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {Object.entries({
@@ -12038,10 +12039,11 @@ export default function Admin() {
                         className={`shrink-0 px-2 py-1 text-[9px] font-heading font-bold uppercase rounded border disabled:opacity-50 ${
                           storeItemFlags?.[key]
                             ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40'
-                            : 'bg-zinc-700/30 text-zinc-500 border-zinc-600/60'
+                            : 'bg-amber-500/10 text-amber-300 border-amber-500/40'
                         }`}
+                        title={storeItemFlags?.[key] ? 'Live for all players' : 'Disabled for players — staff can still test'}
                       >
-                        {storeItemFlags?.[key] ? 'Live' : 'Disabled'}
+                        {storeItemFlags?.[key] ? 'Live for all' : 'Staff test only'}
                       </button>
                     </div>
                   ))}
