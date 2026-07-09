@@ -8,6 +8,8 @@ CUSTOM_PROFILE_BADGE = "Custom Profile Badge"
 CUSTOM_PROFILE_BADGE_COST_POINTS = 750
 PROFILE_GLOW_7D_COST_POINTS = 120
 PROFILE_GLOW_PERMANENT_COST_POINTS = 800
+# Small badge icon (data URL length); keep well under avatar limits.
+CUSTOM_BADGE_MAX_DATA_URL_BYTES = int(0.35 * 1024 * 1024)
 
 PROFILE_GLOW_PRESETS = (
     {"id": "violet", "color": "#a78bfa", "border": "violet"},
@@ -31,6 +33,13 @@ def user_has_custom_profile_badge(user: Optional[dict]) -> bool:
     return isinstance(badges, list) and CUSTOM_PROFILE_BADGE in badges
 
 
+def custom_profile_badge_image_url(user: Optional[dict]) -> Optional[str]:
+    if not user_has_custom_profile_badge(user):
+        return None
+    url = (user.get("custom_profile_badge_url") or "").strip()
+    return url or None
+
+
 def profile_cosmetic_active(user: Optional[dict]) -> bool:
     if not user:
         return False
@@ -50,8 +59,10 @@ def profile_cosmetic_active(user: Optional[dict]) -> bool:
 
 def profile_cosmetic_public_fields(user: Optional[dict]) -> Dict[str, Any]:
     active = profile_cosmetic_active(user)
+    has_badge = user_has_custom_profile_badge(user)
     return {
-        "custom_profile_badge": user_has_custom_profile_badge(user),
+        "custom_profile_badge": has_badge,
+        "custom_profile_badge_url": custom_profile_badge_image_url(user),
         "profile_cosmetic_active": active,
         "profile_name_glow_color": (user.get("profile_name_glow_color") or None) if active else None,
         "profile_border_style": (user.get("profile_border_style") or None) if active else None,
@@ -61,7 +72,7 @@ def profile_cosmetic_public_fields(user: Optional[dict]) -> Dict[str, Any]:
 
 
 def custom_profile_badge_strip_on_death_set() -> dict:
-    return {"custom_profile_badge": False}
+    return {"custom_profile_badge": False, "custom_profile_badge_url": None}
 
 
 def custom_profile_badge_strip_on_death_pull() -> dict:

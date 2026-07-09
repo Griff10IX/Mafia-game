@@ -125,6 +125,7 @@ def register(router):
     user_has_admin_list_email = srv.user_has_admin_list_email
     PRESTIGE_CONFIGS = srv.PRESTIGE_CONFIGS
     AvatarUpdateRequest = srv.AvatarUpdateRequest
+    CustomBadgeUpdateRequest = srv.CustomBadgeUpdateRequest
     ThemePreferencesRequest = srv.ThemePreferencesRequest
     ChangePasswordRequest = srv.ChangePasswordRequest
     DashboardPreferencesRequest = srv.DashboardPreferencesRequest
@@ -1337,6 +1338,41 @@ def register(router):
             {"$set": {"avatar_url": avatar}},
         )
         return {"message": "Avatar updated"}
+
+    @router.post("/profile/custom-badge")
+    async def update_custom_badge(request: CustomBadgeUpdateRequest, current_user: dict = Depends(get_current_user)):
+        """Upload or clear custom profile badge image. Requires purchased custom_profile_badge entitlement."""
+        from utils.profile_cosmetics import (
+            CUSTOM_BADGE_MAX_DATA_URL_BYTES,
+            user_has_custom_profile_badge,
+        )
+
+        if not user_has_custom_profile_badge(current_user):
+            raise HTTPException(
+                status_code=403,
+                detail="Buy the Custom Profile Badge from the Points Store first.",
+            )
+        badge = (request.badge_data or "").strip()
+        if not badge:
+            await db.users.update_one(
+                {"id": current_user.get("id") or ""},
+                {"$set": {"custom_profile_badge_url": None}},
+            )
+            return {"message": "Custom badge image removed", "custom_profile_badge_url": None}
+
+        if len(badge) > CUSTOM_BADGE_MAX_DATA_URL_BYTES:
+            raise HTTPException(
+                status_code=400,
+                detail="Badge image too large. Use a small PNG/JPEG/WEBP/GIF (under ~250KB).",
+            )
+        is_valid, error_msg = _validate_avatar_data_url(badge)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg)
+        await db.users.update_one(
+            {"id": current_user.get("id") or ""},
+            {"$set": {"custom_profile_badge_url": badge}},
+        )
+        return {"message": "Custom badge updated", "custom_profile_badge_url": badge}
 
     @router.get("/profile/theme")
     async def get_profile_theme(current_user: dict = Depends(get_current_user)):

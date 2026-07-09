@@ -2187,6 +2187,7 @@ def register(router):
                 cooldown_skip_properties_tokens=_safe_int(u.get("cooldown_skip_properties_tokens"), 0),
                 auto_collect_until=u.get("auto_collect_until"),
                 custom_profile_badge=bool(u.get("custom_profile_badge")),
+                custom_profile_badge_url=(u.get("custom_profile_badge_url") or None) if u.get("custom_profile_badge") else None,
                 profile_cosmetic_active=profile_cosmetic_active(u),
                 profile_name_glow_color=u.get("profile_name_glow_color") if profile_cosmetic_active(u) else None,
                 profile_border_style=u.get("profile_border_style") if profile_cosmetic_active(u) else None,

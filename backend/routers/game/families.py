@@ -886,20 +886,43 @@ def _norm_fid(fid):
     return s if s else None
 
 
+async def _family_exists(family_id) -> bool:
+    """True if a families document exists for this id (admin/cap-exempt crews included)."""
+    fid = _norm_fid(family_id)
+    if not fid:
+        return False
+    return bool(await db.families.find_one({"id": fid}, {"_id": 1}))
+
+
 async def resolve_family_id(user_id: str):
-    """Resolve a user's family_id: users.family_id → family_members → families.boss_id."""
+    """Resolve a user's family_id: users.family_id → family_members → families.boss_id.
+
+    Verifies the family document still exists so a stale users.family_id does not
+    block roster/boss fallbacks (common after wipe/delete or admin reassignment).
+    """
     if not user_id:
         return None
-    u = await db.users.find_one({"id": user_id}, {"_id": 0, "family_id": 1})
+    variants = _user_id_variants_for_family_members(user_id)
+    u = await db.users.find_one(_user_id_filter_for_users_collection(user_id), {"_id": 0, "family_id": 1})
     fid = _norm_fid((u or {}).get("family_id"))
-    if fid:
+    if fid and await _family_exists(fid):
         return fid
-    m = await db.family_members.find_one({"user_id": user_id}, {"_id": 0, "family_id": 1})
-    fid = _norm_fid((m or {}).get("family_id"))
-    if fid:
-        return fid
-    fam = await db.families.find_one({"boss_id": user_id}, {"_id": 0, "id": 1})
-    return _norm_fid((fam or {}).get("id"))
+    if variants:
+        m = await db.family_members.find_one(
+            {"user_id": {"$in": variants}},
+            {"_id": 0, "family_id": 1},
+        )
+        fid = _norm_fid((m or {}).get("family_id"))
+        if fid and await _family_exists(fid):
+            return fid
+        fam = await db.families.find_one(
+            {"boss_id": {"$in": variants}, "wiped": {"$ne": True}},
+            {"_id": 0, "id": 1},
+        )
+        if not fam:
+            fam = await db.families.find_one({"boss_id": {"$in": variants}}, {"_id": 0, "id": 1})
+        return _norm_fid((fam or {}).get("id"))
+    return None
 
 
 async def _batch_resolve_family_ids(user_ids: list) -> dict:
@@ -3334,7 +3357,7 @@ async def families_perks_state(current_user: dict = Depends(get_current_user)):
 
 
 async def families_perks_purchase(request: FamilyPerksPurchaseRequest, current_user: dict = Depends(get_current_user)):
-    family_id = current_user.get("family_id")
+    family_id, _role = await _current_family_context(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if await _family_in_active_war(family_id):
@@ -4621,7 +4644,7 @@ async def families_safe_deposit_deposit(body: FamilySafeDepositBody, current_use
     from utils.store_item_flags import require_store_item_allowed
 
     await require_store_item_allowed(db, "family_safe_deposit", current_user)
-    family_id = current_user.get("family_id")
+    family_id, _role = await _current_family_context(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     cash = max(0, int(body.cash or 0))
@@ -4671,7 +4694,7 @@ async def families_safe_deposit_withdraw(body: FamilySafeDepositBody, current_us
     from utils.store_item_flags import require_store_item_allowed
 
     await require_store_item_allowed(db, "family_safe_deposit", current_user)
-    family_id = current_user.get("family_id")
+    family_id, _role = await _current_family_context(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     cash = max(0, int(body.cash or 0))
@@ -5141,6 +5164,8 @@ async def _current_family_context(current_user: dict) -> tuple[Optional[str], Op
     """Resolve current family and role from token first, then live roster membership."""
     uid = current_user.get("id")
     family_id = _norm_fid(current_user.get("family_id"))
+    if family_id and not await _family_exists(family_id):
+        family_id = None
     if not family_id and uid:
         family_id = _norm_fid(await resolve_family_id(uid))
     role = (current_user.get("family_role") or "").strip().lower() or None
@@ -5155,6 +5180,11 @@ async def _current_family_context(current_user: dict) -> tuple[Optional[str], Op
         role = ((member or {}).get("role") or role or "").strip().lower() or None
         if role == "don":
             role = "boss"
+        if role not in ("boss", "underboss") and variants:
+            fam = await db.families.find_one({"id": family_id}, {"_id": 0, "boss_id": 1})
+            bid = _uid_str((fam or {}).get("boss_id"))
+            if bid and any(_uid_str(v) == bid for v in variants):
+                role = "boss"
     return family_id, role
 
 

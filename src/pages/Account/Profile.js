@@ -25,7 +25,7 @@ import {
   setProfileSessionLastMeUsername,
 } from '../../utils/prefetchCache';
 import { getProfileEditWarm } from '../../utils/profilePageWarm';
-import { fileToAvatarDataUrl, validateSafeImageFile, AVATAR_RAW_UPLOAD_MAX_BYTES } from '../../utils/fileToCompressedDataUrl';
+import { fileToAvatarDataUrl, fileToCustomBadgeDataUrl, validateSafeImageFile, AVATAR_RAW_UPLOAD_MAX_BYTES } from '../../utils/fileToCompressedDataUrl';
 import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
 
 const PROFILE_STYLES = `
@@ -515,9 +515,18 @@ const ProfileInfoCard = ({
                 {profile.username}
               </span>
               {isCustomBadge && (
-                <span className="inline-flex items-center px-1 py-0.5 rounded border border-violet-500/40 bg-violet-500/15 text-[8px] md:text-[9px] font-heading font-bold uppercase tracking-wide text-violet-200 shrink-0">
-                  Custom
-                </span>
+                profile.custom_profile_badge_url ? (
+                  <img
+                    src={profile.custom_profile_badge_url}
+                    alt=""
+                    title="Custom badge"
+                    className="h-5 w-5 md:h-6 md:w-6 rounded object-cover border border-violet-500/40 shrink-0"
+                  />
+                ) : (
+                  <span className="inline-flex items-center px-1 py-0.5 rounded border border-violet-500/40 bg-violet-500/15 text-[8px] md:text-[9px] font-heading font-bold uppercase tracking-wide text-violet-200 shrink-0">
+                    Custom
+                  </span>
+                )
               )}
               {isFoundingMember && (
                 <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border border-amber-500/40 bg-amber-500/15 text-[8px] md:text-[9px] font-heading font-bold uppercase tracking-wide text-amber-200 shrink-0">
@@ -1453,6 +1462,7 @@ export default function Profile() {
   /** When true, we're viewing our own profile as a visitor would (no settings, no avatar edit, etc.). */
   const isPublicView = isMe && viewPublic;
   const [savingAvatar, setSavingAvatar] = useState(false);
+  const [savingCustomBadge, setSavingCustomBadge] = useState(false);
   const [avatarLightbox, setAvatarLightbox] = useState(null);
   const spotifyPlayerRef = React.useRef(null);
   const profileRequestIdRef = useRef(0);
@@ -1571,6 +1581,49 @@ export default function Profile() {
       }
     } finally {
       setSavingAvatar(false);
+    }
+  };
+
+  const uploadCustomBadge = async (file) => {
+    if (!file) return;
+    const valid = validateSafeImageFile(file);
+    if (!valid.ok) {
+      toast.error(valid.reason);
+      return;
+    }
+    setSavingCustomBadge(true);
+    try {
+      const result = await fileToCustomBadgeDataUrl(file);
+      if (!result.ok) {
+        if (result.reason === 'gif_too_large' || result.reason === 'too_large') {
+          toast.error('Badge image too large. Use a small square icon (under ~250KB).');
+        } else {
+          toast.error('Please choose a valid image file.');
+        }
+        return;
+      }
+      await api.post('/profile/custom-badge', { badge_data: result.dataUrl });
+      toast.success('Custom badge updated');
+      await refetchMe();
+      await refetchProfile();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Failed to update custom badge');
+    } finally {
+      setSavingCustomBadge(false);
+    }
+  };
+
+  const removeCustomBadge = async () => {
+    setSavingCustomBadge(true);
+    try {
+      await api.post('/profile/custom-badge', { badge_data: '' });
+      toast.success('Custom badge image removed');
+      await refetchMe();
+      await refetchProfile();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Failed to remove custom badge');
+    } finally {
+      setSavingCustomBadge(false);
     }
   };
 
@@ -2346,6 +2399,55 @@ export default function Profile() {
               </div>
               <div className="prof-art-line text-primary mx-3" />
             </div>
+
+            {(me?.custom_profile_badge || (me?.badges || []).includes('Custom Profile Badge')) && (
+              <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`}>
+                <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+                <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+                  <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] text-center">
+                    Custom badge
+                  </h2>
+                </div>
+                <div className="p-3 flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-md overflow-hidden border border-violet-500/40 bg-secondary flex items-center justify-center shrink-0">
+                    {me?.custom_profile_badge_url ? (
+                      <img src={me.custom_profile_badge_url} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-[8px] font-heading font-bold uppercase text-violet-300">Custom</span>
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[11px] text-mutedForeground font-heading">
+                      Small square icon shown next to your name. JPG/PNG/WEBP/GIF; keep it tiny.
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <label className={`inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-xs hover:bg-primary/30 cursor-pointer ${savingCustomBadge ? 'opacity-60 cursor-not-allowed' : ''}`}>
+                        <input
+                          type="file"
+                          accept="image/jpeg,image/png,image/gif,image/webp"
+                          className="hidden"
+                          disabled={savingCustomBadge}
+                          onChange={(e) => {
+                            uploadCustomBadge(e.target.files?.[0]);
+                            e.target.value = '';
+                          }}
+                        />
+                        {savingCustomBadge ? 'Saving…' : 'Upload badge'}
+                      </label>
+                      <button
+                        type="button"
+                        onClick={removeCustomBadge}
+                        disabled={savingCustomBadge || !me?.custom_profile_badge_url}
+                        className="inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-secondary border border-border text-foreground font-heading font-bold text-xs hover:bg-primary/10 disabled:opacity-50"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="prof-art-line text-primary mx-3" />
+              </div>
+            )}
 
             <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />

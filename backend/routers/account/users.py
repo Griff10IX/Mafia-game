@@ -193,6 +193,8 @@ def register(router):
                 "status": user_status,
                 "avatar_url": user.get("avatar_url") or None,
                 "founding_member": bool(user.get("founding_member")),
+                "custom_profile_badge": bool(user.get("custom_profile_badge")),
+                "custom_profile_badge_url": (user.get("custom_profile_badge_url") or None) if user.get("custom_profile_badge") else None,
             }
             raw_cc = (user.get("last_seen_country") or "").strip().upper()
             roster_country_counter[raw_cc if len(raw_cc) == 2 and raw_cc.isalpha() else "__"] += 1

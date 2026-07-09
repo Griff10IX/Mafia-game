@@ -891,6 +891,7 @@ class UserResponse(BaseModel):
     cooldown_skip_properties_tokens: int = 0
     auto_collect_until: Optional[str] = None
     custom_profile_badge: bool = False
+    custom_profile_badge_url: Optional[str] = None
     profile_cosmetic_active: bool = False
     profile_name_glow_color: Optional[str] = None
     profile_border_style: Optional[str] = None
@@ -953,6 +954,12 @@ class DeadAliveReviveRequest(BaseModel):
 
 class AvatarUpdateRequest(BaseModel):
     avatar_data: str  # data URL: data:image/...;base64,...
+
+
+class CustomBadgeUpdateRequest(BaseModel):
+    """Custom profile badge image (data URL). Empty string clears the image."""
+    badge_data: str = ""
+
 
 class NotificationBallPositionRequest(BaseModel):
     """Pixel position for draggable notification ball (synced across devices)."""

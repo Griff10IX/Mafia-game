@@ -662,7 +662,7 @@ async def buy_custom_profile_badge(
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points or you already own this")
     await _record_store_points_spend(current_user, inc, "buy-custom-profile-badge", cost_used=cost_used)
-    return {"message": "Custom profile badge purchased! Account-only — lost on death.", "cost": cost_used}
+    return {"message": "Custom profile badge unlocked! Upload your badge image on Profile.", "cost": cost_used}
 
 
 async def buy_profile_glow_7d(
@@ -742,13 +742,25 @@ async def buy_profile_glow_permanent(
     return {"message": "Permanent profile glow + border purchased!", "cost": cost_used}
 
 
-def _family_don_guard(current_user: dict) -> str:
-    role = (current_user.get("family_role") or "").strip().lower()
-    if role not in ("boss", "underboss", "don"):
-        raise HTTPException(status_code=403, detail="Only the Don or Underboss can purchase family store items")
-    family_id = current_user.get("family_id")
+async def _family_don_guard(current_user: dict) -> str:
+    """Require Don/Underboss and a real families document (not a stale users.family_id)."""
+    from routers.game.families import _current_family_context, _norm_fid, _user_id_filter_for_users_collection
+
+    family_id, role = await _current_family_context(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
+    if role not in ("boss", "underboss", "don"):
+        raise HTTPException(status_code=403, detail="Only the Don or Underboss can purchase family store items")
+    # Heal stale users.family_id / family_role so later requests match the live crew
+    stale_fid = _norm_fid(current_user.get("family_id")) != family_id
+    stale_role = (current_user.get("family_role") or "").strip().lower() != role
+    if stale_fid or stale_role:
+        await db.users.update_one(
+            _user_id_filter_for_users_collection(current_user.get("id")),
+            {"$set": {"family_id": family_id, "family_role": role}},
+        )
+        current_user["family_id"] = family_id
+        current_user["family_role"] = role
     return family_id
 
 
@@ -757,7 +769,7 @@ async def buy_family_crest_upgrade(
     current_user: dict = Depends(get_current_user),
 ):
     await require_store_item_allowed(db, "family_crest_upgrade", current_user)
-    family_id = _family_don_guard(current_user)
+    family_id = await _family_don_guard(current_user)
     fam = await db.families.find_one({"id": family_id}, {"_id": 0, "premium_crest_unlocked": 1})
     if not fam:
         raise HTTPException(status_code=404, detail="Family not found")
@@ -785,7 +797,7 @@ async def buy_family_safe_deposit_tier(
     current_user: dict = Depends(get_current_user),
 ):
     await require_store_item_allowed(db, "family_safe_deposit", current_user)
-    family_id = _family_don_guard(current_user)
+    family_id = await _family_don_guard(current_user)
     fam = await db.families.find_one({"id": family_id}, {"_id": 0, "safe_deposit_tiers": 1})
     if not fam:
         raise HTTPException(status_code=404, detail="Family not found")
@@ -818,7 +830,7 @@ async def buy_family_event_token(
     from datetime import timedelta
 
     await require_store_item_allowed(db, "family_event_token", current_user)
-    family_id = _family_don_guard(current_user)
+    family_id = await _family_don_guard(current_user)
     fam = await db.families.find_one(
         {"id": family_id},
         {"_id": 0, "event_active_until": 1, "event_token_last_at": 1},

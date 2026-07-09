@@ -73,6 +73,8 @@ function rosterPreviewStub(rosterUser) {
     rank_name: rosterUser.rank_name,
     prestige_level: rosterUser.prestige_level ?? 0,
     founding_member: !!rosterUser.founding_member,
+    custom_profile_badge: !!rosterUser.custom_profile_badge,
+    custom_profile_badge_url: rosterUser.custom_profile_badge_url || null,
     status: rosterUser.status,
     in_jail: !!rosterUser.in_jail,
   };
@@ -373,10 +375,19 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-heading font-bold text-foreground text-[13px] truncate leading-tight">{preview.username}</span>
-                      {preview.custom_profile_badge ? (
-                        <span className="inline-flex items-center px-1 py-0.5 rounded border border-violet-500/40 bg-violet-500/15 text-[8px] font-heading font-bold uppercase tracking-wide text-violet-200 shrink-0">
-                          Custom
-                        </span>
+                      {(preview.custom_profile_badge || user.custom_profile_badge) ? (
+                        (preview.custom_profile_badge_url || user.custom_profile_badge_url) ? (
+                          <img
+                            src={preview.custom_profile_badge_url || user.custom_profile_badge_url}
+                            alt=""
+                            title="Custom badge"
+                            className="h-4 w-4 rounded object-cover border border-violet-500/40 shrink-0"
+                          />
+                        ) : (
+                          <span className="inline-flex items-center px-1 py-0.5 rounded border border-violet-500/40 bg-violet-500/15 text-[8px] font-heading font-bold uppercase tracking-wide text-violet-200 shrink-0">
+                            Custom
+                          </span>
+                        )
                       ) : null}
                       {preview.founding_member ? (
                         <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border border-amber-500/40 bg-amber-500/15 text-[8px] font-heading font-bold uppercase tracking-wide text-amber-200 shrink-0">

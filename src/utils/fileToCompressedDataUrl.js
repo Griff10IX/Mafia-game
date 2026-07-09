@@ -83,3 +83,36 @@ export async function fileToAvatarDataUrl(file, maxDim = 512, quality = 0.88) {
   const dataUrl = await fileToCompressedDataUrl(file, maxDim, quality);
   return dataUrl ? { ok: true, dataUrl } : { ok: false, reason: 'invalid' };
 }
+
+/** Must match backend `CUSTOM_BADGE_MAX_DATA_URL_BYTES` (~0.35 MiB data URL). */
+export const CUSTOM_BADGE_MAX_DATA_URL_CHARS = Math.floor(0.35 * 1024 * 1024);
+
+/**
+ * Custom profile badge: small square icon (JPEG/PNG/WebP resized; GIF kept if small enough).
+ * @returns {{ ok: true, dataUrl: string } | { ok: false, reason: string }}
+ */
+export async function fileToCustomBadgeDataUrl(file, maxDim = 96, quality = 0.85) {
+  if (!file) return { ok: false, reason: 'invalid' };
+  const valid = validateSafeImageFile(file);
+  if (!valid.ok) return { ok: false, reason: valid.reason || 'invalid' };
+  const mime = String(file.type || '').toLowerCase();
+  if (mime === 'image/gif') {
+    const dataUrl = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result || ''));
+      r.onerror = () => reject(new Error('Failed to read file'));
+      r.readAsDataURL(file);
+    });
+    if (!dataUrl.startsWith('data:image/gif')) return { ok: false, reason: 'invalid' };
+    if (dataUrl.length > CUSTOM_BADGE_MAX_DATA_URL_CHARS) {
+      return { ok: false, reason: 'gif_too_large' };
+    }
+    return { ok: true, dataUrl };
+  }
+  const dataUrl = await fileToCompressedDataUrl(file, maxDim, quality);
+  if (!dataUrl) return { ok: false, reason: 'invalid' };
+  if (dataUrl.length > CUSTOM_BADGE_MAX_DATA_URL_CHARS) {
+    return { ok: false, reason: 'too_large' };
+  }
+  return { ok: true, dataUrl };
+}
