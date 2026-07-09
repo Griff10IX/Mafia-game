@@ -337,6 +337,10 @@ class BuyStoreTokenBody(BaseModel):
         return v
 
 
+class ProfileGlowPurchaseBody(BaseModel):
+    preset_id: str = "violet"
+
+
 class BuyStoreTokenBundleBody(BaseModel):
     bundle_id: str
 
@@ -1235,10 +1239,6 @@ async def admin_points_transfers(
 async def get_store_item_flags_public():
     flags = await get_store_item_flags(db)
     return {"flags": flags}
-
-
-class ProfileGlowPurchaseBody(BaseModel):
-    preset_id: str = "violet"
 
 
 async def buy_store_token(
