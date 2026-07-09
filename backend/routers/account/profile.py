@@ -47,6 +47,7 @@ import httpx
 from fastapi import Body, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
+from utils.profile_cosmetics import profile_cosmetic_public_fields
 from utils.civilian_protection import civilian_protection_status_payload, maybe_revoke_civilian_protection
 from utils.hitlist_resolution import resolve_user_hitlist_kill
 from utils.bbcode_normalize import normalize_bbcode_media_typos
@@ -668,6 +669,7 @@ def register(router):
             "prestige_level": _prestige_level,
             "prestige_name": _prestige_name or None,
             "founding_member": bool(user.get("founding_member")),
+            **profile_cosmetic_public_fields(user),
         }
 
     @router.get("/users/{username}/profile")
@@ -954,6 +956,7 @@ def register(router):
             "profile_notepad_color": _notepad_color_for_api_response(user.get("profile_notepad_color")),
             "badges": user.get("badges") or [],
             "founding_member": bool(user.get("founding_member")),
+            **profile_cosmetic_public_fields(user),
             "achievement_badges": achievement_badges,
         }
         wr_until = user.get("war_rat_badge_until")

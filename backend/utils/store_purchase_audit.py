@@ -26,6 +26,13 @@ _STORE_EVENT_LABELS: Dict[str, str] = {
     "buy-token-selectable-bundle": "Selectable token bundle",
     "buy-shooting-range-bonus": "Shooting range bonus plays",
     "buy-hitlist-npc-bonus-slot": "Hitlist practice NPC slot",
+    "buy-custom-profile-badge": "Custom profile badge",
+    "buy-profile-glow-7d": "Profile glow + border (7 days)",
+    "buy-profile-glow-permanent": "Profile glow + border (permanent)",
+    "buy-family-crest-upgrade": "Family crest upgrade",
+    "buy-family-safe-deposit-tier": "Family safe deposit tier",
+    "buy-family-event-token": "Family event token",
+    "buy-jail-bailout-token": "Jail bailout token",
 }
 
 

@@ -731,7 +731,29 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         {"$set": {"cooldown_until": cooldown_until}},
     )
     if claim.matched_count == 0:
-        raise HTTPException(status_code=400, detail="Crime on cooldown")
+        from utils.cooldown_skip import has_skip_credit, consume_skip_credit
+
+        if has_skip_credit(current_user, "crime"):
+            if await consume_skip_credit(db, uid, "crime"):
+                await db.user_crimes.update_many(
+                    {"user_id": uid, "crime_id": crime_id},
+                    {"$set": {"cooldown_until": now_iso}},
+                )
+                claim = await db.user_crimes.update_many(
+                    {
+                        "user_id": uid,
+                        "crime_id": crime_id,
+                        "$or": [
+                            {"cooldown_until": {"$exists": False}},
+                            {"cooldown_until": None},
+                            {"cooldown_until": {"$lte": now_iso}},
+                            {"cooldown_until": {"$lte": now}},
+                        ],
+                    },
+                    {"$set": {"cooldown_until": cooldown_until}},
+                )
+        if claim.matched_count == 0:
+            raise HTTPException(status_code=400, detail="Crime on cooldown")
     user_crime = await db.user_crimes.find_one(
         {"user_id": uid, "crime_id": crime_id},
         {"_id": 0},

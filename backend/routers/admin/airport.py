@@ -549,7 +549,18 @@ async def _start_travel_impl(
     if user.get("travel_arrives_at"):
         arrives_dt = _parse_iso_datetime(user.get("travel_arrives_at"))
         if arrives_dt and now_utc < arrives_dt:
-            raise HTTPException(status_code=400, detail="You are already traveling. Wait for arrival.")
+            from utils.cooldown_skip import has_skip_credit, consume_skip_credit
+
+            if has_skip_credit(user, "booze") and await consume_skip_credit(db, user.get("id") or "", "booze"):
+                dest = user.get("traveling_to") or user.get("current_state")
+                await db.users.update_one(
+                    {"id": user.get("id") or ""},
+                    {"$set": {"current_state": dest}, "$unset": {"traveling_to": "", "travel_arrives_at": ""}},
+                )
+                user = await db.users.find_one({"id": user.get("id") or ""}, {"_id": 0})
+                current_location = (user or {}).get("current_state")
+            else:
+                raise HTTPException(status_code=400, detail="You are already traveling. Wait for arrival.")
 
     travel_time = 45
     method_name = "Walking"

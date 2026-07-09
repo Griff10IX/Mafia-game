@@ -1888,6 +1888,8 @@ def register(router):
         dependencies=[Depends(_presence_sustained_rl_user)],
     )
     async def get_me(request: Request, current_user: dict = Depends(get_current_user)):
+        from utils.profile_cosmetics import profile_cosmetic_active
+
         user_id = current_user.get("id") or "unknown"
         username = current_user.get("username") or user_id
         try:
@@ -2176,6 +2178,20 @@ def register(router):
                 travel_tokens=_safe_int(u.get("travel_tokens"), 0),
                 properties_tokens=_safe_int(u.get("properties_tokens"), 0),
                 jailbust_tokens=_safe_int(u.get("jailbust_tokens"), 0),
+                auto_collect_12h_tokens=_safe_int(u.get("auto_collect_12h_tokens"), 0),
+                auto_collect_24h_tokens=_safe_int(u.get("auto_collect_24h_tokens"), 0),
+                jail_bailout_tokens=_safe_int(u.get("jail_bailout_tokens"), 0),
+                cooldown_skip_crime_tokens=_safe_int(u.get("cooldown_skip_crime_tokens"), 0),
+                cooldown_skip_gta_tokens=_safe_int(u.get("cooldown_skip_gta_tokens"), 0),
+                cooldown_skip_booze_tokens=_safe_int(u.get("cooldown_skip_booze_tokens"), 0),
+                cooldown_skip_properties_tokens=_safe_int(u.get("cooldown_skip_properties_tokens"), 0),
+                auto_collect_until=u.get("auto_collect_until"),
+                custom_profile_badge=bool(u.get("custom_profile_badge")),
+                profile_cosmetic_active=profile_cosmetic_active(u),
+                profile_name_glow_color=u.get("profile_name_glow_color") if profile_cosmetic_active(u) else None,
+                profile_border_style=u.get("profile_border_style") if profile_cosmetic_active(u) else None,
+                profile_cosmetic_until=u.get("profile_cosmetic_until"),
+                profile_cosmetic_permanent=bool(u.get("profile_cosmetic_permanent")),
                 crew_oc_auto_apply_tokens=_safe_int(u.get("crew_oc_auto_apply_tokens"), 0),
                 crew_oc_auto_apply_until=u.get("crew_oc_auto_apply_until"),
                 crew_oc_auto_apply_max_fee=(

@@ -90,6 +90,13 @@ const TOKEN_STORE_ITEMS = [
     userKey: 'crew_oc_auto_apply_tokens',
     desc: `Activate in My Inventory — you must set a max join fee; auto-apply only runs after that. 3h per token, stack to ${TOKEN_MAX_STACK_LABEL}.`,
   },
+  { tokenType: 'auto_collect_12h', title: 'Auto-Collect (12h)', price: 85, userKey: 'auto_collect_12h_tokens', flagKey: 'auto_collect', desc: 'Auto-collect properties + family rackets when cooldowns allow. Activate in My Inventory (12h, stacks to 168h).' },
+  { tokenType: 'auto_collect_24h', title: 'Auto-Collect (24h)', price: 150, userKey: 'auto_collect_24h_tokens', flagKey: 'auto_collect', desc: 'Same as 12h pass but 24h per activation (stacks to 168h).' },
+  { tokenType: 'jail_bailout', title: 'Jail Bailout Token', price: 25, userKey: 'jail_bailout_tokens', flagKey: 'jail_bailout', desc: 'Instant leave jail from the Jail page (3 uses/day UTC; does not bypass OC lockdown).' },
+  { tokenType: 'cooldown_skip_crime', title: 'Crime Cooldown Skip', price: 35, userKey: 'cooldown_skip_crime_tokens', flagKey: 'cooldown_skip_crime', desc: 'Activate in My Inventory — skips one crime cooldown (max 5 skip activations/day across all skip types).' },
+  { tokenType: 'cooldown_skip_gta', title: 'GTA Cooldown Skip', price: 35, userKey: 'cooldown_skip_gta_tokens', flagKey: 'cooldown_skip_gta', desc: 'Skips one GTA cooldown when activated (shared 5/day cap).' },
+  { tokenType: 'cooldown_skip_booze', title: 'Booze Travel Skip', price: 35, userKey: 'cooldown_skip_booze_tokens', flagKey: 'cooldown_skip_booze', desc: 'Skips one booze-run travel wait when activated (shared 5/day cap).' },
+  { tokenType: 'cooldown_skip_properties', title: 'Properties Collect Skip', price: 35, userKey: 'cooldown_skip_properties_tokens', flagKey: 'cooldown_skip_properties', desc: 'Skips one property collect cooldown when activated (shared 5/day cap).' },
 ];
 
 const TOKEN_BUNDLES = [
@@ -104,10 +111,40 @@ const SELECTABLE_BUNDLE_ITEMS = TOKEN_STORE_ITEMS.filter((t) => !SELECTABLE_BUND
 
 const FOUNDING_MEMBER_COST_POINTS = 5000;
 
+const PROFILE_GLOW_PRESETS = [
+  { id: 'violet', label: 'Violet' },
+  { id: 'gold', label: 'Gold' },
+  { id: 'emerald', label: 'Emerald' },
+  { id: 'sky', label: 'Sky' },
+  { id: 'rose', label: 'Rose' },
+];
+
+const STORE_ITEM_FLAG_LABELS = {
+  auto_collect: 'Auto-collect passes',
+  jail_bailout: 'Jail bailout tokens',
+  cooldown_skip_crime: 'Crime cooldown skip',
+  cooldown_skip_gta: 'GTA cooldown skip',
+  cooldown_skip_booze: 'Booze travel skip',
+  cooldown_skip_properties: 'Properties collect skip',
+  profile_badge: 'Custom profile badge',
+  profile_glow_7d: 'Profile glow (7-day)',
+  profile_glow_permanent: 'Profile glow (permanent)',
+  family_crest_upgrade: 'Family crest upgrade',
+  crew_oc_insurance: 'Crew OC insurance',
+  family_safe_deposit: 'Family safe deposit',
+  family_event_token: 'Family event token',
+};
+
 const UPGRADES = [
   { id: 'health', title: 'Full Health', Icon: Heart, price: 15, path: '/store/buy-health', ownedKey: null, desc: 'Restore health to 100%', extra: (u) => ({ line: 'Health', value: `${Number(u?.health ?? 100).toFixed(0)}%` }) },
   { id: 'rank-bar', title: 'Premium Rank Bar', Icon: Star, price: 50, path: '/store/buy-rank-bar', ownedKey: 'premium_rank_bar', desc: 'Exact numbers & amounts for next rank' },
   { id: 'founding-member', title: 'Founding Member', Icon: Award, price: FOUNDING_MEMBER_COST_POINTS, path: '/store/buy-founding-member', ownedKey: 'founding_member', desc: '+2.5% on crimes, GTA, OC, hitlist NPCs, properties, family rackets, and missions. Account-only — lost on death; buy again on a new life if you want it back.' },
+  { id: 'custom-profile-badge', title: 'Custom Profile Badge', Icon: Award, price: 750, path: '/store/buy-custom-profile-badge', ownedKey: 'custom_profile_badge', flagKey: 'profile_badge', desc: 'Unique badge on your profile and Users Online. Account-only — lost on death.' },
+  { id: 'profile-glow-7d', title: 'Name Glow + Border (7d)', Icon: Star, price: 120, path: '/store/buy-profile-glow-7d', ownedKey: null, flagKey: 'profile_glow_7d', needsGlowPreset: true, desc: 'Timed username glow and dossier border (7 days, stacks).' },
+  { id: 'profile-glow-permanent', title: 'Name Glow + Border (Permanent)', Icon: Star, price: 800, path: '/store/buy-profile-glow-permanent', ownedKey: 'profile_cosmetic_permanent', flagKey: 'profile_glow_permanent', needsGlowPreset: true, desc: 'Permanent username glow and profile border.' },
+  { id: 'family-crest-upgrade', title: 'Family Crest Upgrade', Icon: Shield, price: 1500, path: '/store/buy-family-crest-upgrade', ownedKey: null, flagKey: 'family_crest_upgrade', familyDonOnly: true, desc: 'Don/Underboss: unlock premium crest presets for your crew (one-time per family).' },
+  { id: 'family-safe-deposit-tier', title: 'Family Safe Deposit Tier', Icon: Shield, price: 600, path: '/store/buy-family-safe-deposit-tier', ownedKey: null, flagKey: 'family_safe_deposit', familyDonOnly: true, desc: 'Don/Underboss: +$50M personal safe cap per member in the family vault (max 3 tiers).' },
+  { id: 'family-event-token', title: 'Family Event Token', Icon: Zap, price: 250, path: '/store/buy-family-event-token', ownedKey: null, flagKey: 'family_event_token', familyDonOnly: true, desc: 'Don/Underboss: 3-day +10% family racket income (1 per 7 days).' },
   { id: 'auto-rank', title: 'Auto Rank', Icon: Bot, price: AUTO_RANK_COST_POINTS, path: '/store/buy-auto-rank', ownedKey: 'auto_rank_purchased', desc: 'Auto-commit crimes, GTA, busts, OC. Optional: set Telegram in Profile for notifications.' },
   { id: 'robot-bg-auto-search', title: 'Robot Auto-Search', Icon: Crosshair, price: ROBOT_BG_AUTO_SEARCH_COST_POINTS, path: '/store/buy-robot-bg-auto-search', ownedKey: null, activeCheck: robotBgAutoSearchActive, desc: '30 days: auto-maintain Attack searches for your hired robot bodyguards (renews when ≤3h left on a row). One purchase per active period — buy again after it expires.', extra: (u) => (robotBgAutoSearchActive(u) && u?.robot_bg_auto_search_until ? { line: 'Active until', value: formatGameDateTime(u.robot_bg_auto_search_until) } : null) },
   { id: 'armour-tier-6', title: 'Elite Composite Battledress', Icon: Shield, price: ARMOUR_TIER_6_STORE_COST_POINTS, path: '/store/buy-armour-tier-6', ownedKey: null, ownedCheck: (u) => (u?.armour_owned_level_max ?? 0) >= 6, disabledWhen: (u) => (u?.armour_owned_level_max ?? 0) < 5, desc: 'Armour level 6 (60k base bullets). Requires level 5 owned. Auto-equipped on purchase. Also shown on Armour page.' },
@@ -226,12 +263,16 @@ function StorePayWithSelect({ value, onChange, showCash = false }) {
   );
 }
 
-const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, ownedLabel, onBuy, loading, disabled, user, payWith = 'auto', cashPrice, children }) => (
-  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, ownedLabel, onBuy, loading, disabled, comingSoon, staffPreview, user, payWith = 'auto', cashPrice, children }) => (
+  <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel ${comingSoon ? 'opacity-60' : ''}`}>
     <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
       <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">{title}</span>
-      {Icon && <Icon className="text-primary shrink-0" size={14} />}
+      <div className="flex items-center gap-1 shrink-0">
+        {comingSoon && !staffPreview && <span className="text-[8px] font-heading uppercase text-zinc-500 border border-zinc-600/50 rounded px-1 py-0.5">Coming soon</span>}
+        {staffPreview && <span className="text-[8px] font-heading uppercase text-amber-400/90 border border-amber-500/40 rounded px-1 py-0.5">Staff preview</span>}
+        {Icon && <Icon className="text-primary shrink-0" size={14} />}
+      </div>
     </div>
     <div className="p-2.5">
       <p className="text-[10px] text-mutedForeground font-heading mb-1.5">{desc}</p>
@@ -245,6 +286,7 @@ const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, ownedLabel, 
           disabled={
             loading
             || disabled
+            || comingSoon
             || (payWith === 'cash'
               ? (!cashPrice || (user && (user.money ?? 0) < cashPrice))
               : (
@@ -316,6 +358,9 @@ export default function Store() {
   const [pointsCashPriceData, setPointsCashPriceData] = useState(null);
   const [pointsCashQuote, setPointsCashQuote] = useState(null);
   const [isAdmin, setIsAdmin] = useState(() => !!storeBoot?.isAdmin);
+  const [isStaff, setIsStaff] = useState(() => !!storeBoot?.isStaff);
+  const [storeItemFlags, setStoreItemFlags] = useState(() => storeBoot?.storeItemFlags ?? {});
+  const [glowPresetId, setGlowPresetId] = useState('violet');
   const [pointsTabLocked, setPointsTabLocked] = useState(() => !!storeBoot?.pointsTabLocked);
   const [pointsTabLockMessage, setPointsTabLockMessage] = useState(() => storeBoot?.pointsTabLockMessage ?? '');
   const [paymentTransactions, setPaymentTransactions] = useState(() => storeBoot?.paymentTransactions ?? []);
@@ -335,6 +380,12 @@ export default function Store() {
   const [selectableBundleQtyByToken, setSelectableBundleQtyByToken] = useState(() =>
     Object.fromEntries(SELECTABLE_BUNDLE_ITEMS.map((t) => [t.tokenType, 0])),
   );
+
+  const storeFlagAllowed = useCallback((flagKey) => {
+    if (!flagKey) return true;
+    if (storeItemFlags?.[flagKey]) return true;
+    return isStaff;
+  }, [storeItemFlags, isStaff]);
 
   const fetchTokenCashPrice = useCallback(() => {
     api.get('/store/token-cash-price').then(({ data }) => {
@@ -499,7 +550,7 @@ export default function Store() {
 
   const fetchData = useCallback(async ({ silent = false } = {}) => {
     try {
-      const [userRes, boozeRes, eventsRes, storePointsEventRes, adminRes, locksRes, pendingRes] = await Promise.all([
+      const [userRes, boozeRes, eventsRes, storePointsEventRes, adminRes, locksRes, pendingRes, flagsRes] = await Promise.all([
         api.get('/auth/me'),
         api.get('/booze-run/config').catch(() => ({ data: null })),
         apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: { event: null, events_enabled: false } })),
@@ -507,6 +558,7 @@ export default function Store() {
         api.get('/auth/staff-flags').catch(() => ({ data: { is_admin: false } })),
         api.get('/page-locks').catch(() => ({ data: { paths: {} } })),
         api.get('/payments/pending-points').catch(() => ({ data: { pending_points: 0 } })),
+        api.get('/store/item-flags').catch(() => ({ data: { flags: {} } })),
       ]);
       setUser(userRes.data);
       const nextBooze = boozeRes?.data || null;
@@ -518,7 +570,10 @@ export default function Store() {
       const nextStorePointsEvent = storePointsEventRes.data?.event ?? null;
       setStorePointsEvent(nextStorePointsEvent);
       const nextIsAdmin = !!adminRes.data?.is_admin;
+      const nextIsMod = !!adminRes.data?.is_moderator;
       setIsAdmin(nextIsAdmin);
+      setIsStaff(nextIsAdmin || nextIsMod);
+      setStoreItemFlags(flagsRes.data?.flags || {});
       const paths = locksRes?.data?.paths ?? {};
       const pointsLocked = !!paths['/store/points'];
       const pointsLockMsg = paths['/store/points'] || 'Points purchase temporarily unavailable';
@@ -1362,6 +1417,9 @@ export default function Store() {
               (u.id === 'hitlist-npc-cap' && (Number(user?.hitlist_npc_bonus_slots) || 0) >= 3) ||
               (u.id === 'health' && Number(user?.health ?? 100) >= 100) ||
               !!u.disabledWhen?.(user);
+            const flagBlocked = u.flagKey && !storeFlagAllowed(u.flagKey);
+            const comingSoon = !!flagBlocked;
+            const staffPreview = comingSoon && isStaff;
             return (
               <div key={u.id} id={u.id === 'auto-rank' ? 'store-auto-rank' : undefined}>
               {u.id === 'auto-rank' ? (
@@ -1432,14 +1490,33 @@ export default function Store() {
                 desc={u.desc}
                 price={priceVal}
                 respectPrice={storeRespectForPoints(priceVal)}
-                owned={!!u.activeCheck?.(user)}
+                owned={!!u.activeCheck?.(user) || !!(u.ownedKey && user?.[u.ownedKey])}
                 ownedLabel={u.activeCheck?.(user) ? 'Active' : undefined}
                 loading={loading}
                 disabled={disabled}
+                comingSoon={comingSoon}
+                staffPreview={staffPreview}
                 user={user}
                 payWith={storePayWith}
-                onBuy={() => apiBuy(`${u.path}?pay_with=${encodeURIComponent(storePayWith)}`, {}, 'Purchased')}
+                onBuy={() => {
+                  const body = u.needsGlowPreset ? { preset_id: glowPresetId } : {};
+                  apiBuy(`${u.path}?pay_with=${encodeURIComponent(storePayWith)}`, body, 'Purchased');
+                }}
               >
+                {u.needsGlowPreset && (
+                  <div className="mb-1.5 flex flex-wrap gap-1">
+                    {PROFILE_GLOW_PRESETS.map((p) => (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setGlowPresetId(p.id)}
+                        className={`text-[8px] px-1.5 py-0.5 rounded border ${glowPresetId === p.id ? 'border-primary text-primary' : 'border-zinc-700 text-zinc-500'}`}
+                      >
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {extra && (
                   <p className="text-[10px] text-mutedForeground mb-1">Current: {extra.value}</p>
                 )}
@@ -1556,6 +1633,9 @@ export default function Store() {
               {TOKEN_STORE_ITEMS.map((t) => {
                 const held = Number(user?.[t.userKey] ?? 0);
                 const tokenCashPrice = cashPriceAvailable ? Math.round(t.price * cashPricePerPoint) : 0;
+                const flagBlocked = t.flagKey && !storeFlagAllowed(t.flagKey);
+                const comingSoon = !!flagBlocked;
+                const staffPreview = comingSoon && isStaff;
                 return (
                   <StoreCard
                     key={t.tokenType}
@@ -1567,6 +1647,8 @@ export default function Store() {
                     owned={false}
                     loading={loading}
                     disabled={storePayWith === 'cash' && cashPurchasesToday >= cashPurchasesLimit}
+                    comingSoon={comingSoon}
+                    staffPreview={staffPreview}
                     user={user}
                     payWith={storePayWith}
                     cashPrice={storePayWith === 'cash' ? tokenCashPrice : undefined}

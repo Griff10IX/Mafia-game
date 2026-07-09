@@ -408,6 +408,22 @@ async def run_heist(
     else:
         # Failure — 50% jail, 50% escape
         goes_to_jail = _rng.random() < OC_JAIL_CHANCE_ON_FAIL
+
+        refund_msg = ""
+        family_id = current_user.get("family_id")
+        if family_id:
+            try:
+                from utils.family_perks import clean_family_perks, family_has_crew_oc_insurance
+
+                fam = await db.families.find_one({"id": family_id}, {"_id": 0, "family_perks": 1})
+                perks = clean_family_perks((fam or {}).get("family_perks"), now)
+                if family_has_crew_oc_insurance(perks):
+                    refund = int(total_cost * 0.5)
+                    if refund > 0:
+                        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": refund}})
+                        refund_msg = f" Crew OC insurance refunded ${refund:,} (50% setup)."
+            except Exception:
+                pass
         
         # Track failed heist
         await db.user_organised_crime.update_one(
@@ -437,6 +453,8 @@ async def run_heist(
             )
             
             msg = _rng.choice(OC_HEIST_FAIL_CAUGHT_MESSAGES).format(jail_time=jail_time_sec)
+            if refund_msg:
+                msg = f"{msg}{refund_msg}"
             return HeistResponse(
                 success=False,
                 message=msg,
@@ -452,6 +470,8 @@ async def run_heist(
                 {"$inc": {"total_heists": 1}}
             )
             msg = _rng.choice(OC_HEIST_FAIL_ESCAPED_MESSAGES)
+            if refund_msg:
+                msg = f"{msg}{refund_msg}"
             return HeistResponse(
                 success=False,
                 message=msg,

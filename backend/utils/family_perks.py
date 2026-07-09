@@ -14,6 +14,7 @@ FAMILY_PERK_COST_GTA = 250
 FAMILY_PERK_COST_HITLIST = 300
 FAMILY_PERK_COST_RACKET = 2000
 FAMILY_PERK_COST_BOOZE_STEP = 50  # +15 cargo per step, max total bonus 300
+FAMILY_PERK_COST_CREW_OC_INSURANCE = 400
 
 FAMILY_PERK_CREW_OC_HOURS_OFF = 1
 FAMILY_PERK_MELT_SECONDS_OFF = 5
@@ -23,7 +24,7 @@ FAMILY_PERK_RACKET_BONUS_PERCENT = 50
 FAMILY_PERK_BOOZE_STEP_AMOUNT = 15
 FAMILY_PERK_BOOZE_BONUS_CAP = 300
 
-PERK_IDS = frozenset({"crew_oc", "crew_oc_auto_commit", "melt", "gta", "hitlist", "racket", "booze"})
+PERK_IDS = frozenset({"crew_oc", "crew_oc_auto_commit", "crew_oc_insurance", "melt", "gta", "hitlist", "racket", "booze"})
 
 
 def utc_calendar_month_end(now: Optional[datetime] = None) -> datetime:
@@ -65,7 +66,7 @@ def clean_family_perks(perks: Optional[Dict[str, Any]], now: datetime) -> Dict[s
         return {}
     out: Dict[str, Any] = {}
     now = now.astimezone(timezone.utc) if now.tzinfo else now.replace(tzinfo=timezone.utc)
-    for key in ("crew_oc", "crew_oc_auto_commit", "melt", "gta", "hitlist", "racket"):
+    for key in ("crew_oc", "crew_oc_auto_commit", "crew_oc_insurance", "melt", "gta", "hitlist", "racket"):
         row = perks.get(key)
         if isinstance(row, dict) and valid_until_active(row.get("valid_until"), now):
             out[key] = dict(row)
@@ -105,7 +106,13 @@ async def family_perk_modifiers(db, family_id: Optional[str]) -> Dict[str, Any]:
         out["racket_bonus_percent"] = int(perks["racket"].get("bonus_percent") or FAMILY_PERK_RACKET_BONUS_PERCENT)
     if perks.get("booze"):
         out["booze_cargo_bonus"] = int(perks["booze"].get("cargo_bonus") or 0)
+    if perks.get("crew_oc_insurance"):
+        out["crew_oc_insurance_active"] = True
     return out
+
+
+def family_has_crew_oc_insurance(perks: dict) -> bool:
+    return bool((perks or {}).get("crew_oc_insurance"))
 
 
 def perk_catalog_prices() -> Dict[str, Any]:
@@ -114,6 +121,10 @@ def perk_catalog_prices() -> Dict[str, Any]:
         "crew_oc_auto_commit": {
             "cost": FAMILY_PERK_COST_CREW_OC_AUTO_COMMIT,
             "label": "Auto-commit Crew OC (posts ad + commit, 2d)",
+        },
+        "crew_oc_insurance": {
+            "cost": FAMILY_PERK_COST_CREW_OC_INSURANCE,
+            "label": "Crew OC insurance — 50% solo OC setup refund on fail (monthly)",
         },
         "melt": {"cost": FAMILY_PERK_COST_MELT, "label": "Family melt cooldown −5s"},
         "gta": {"cost": FAMILY_PERK_COST_GTA, "label": "Family GTA cooldown −5s"},

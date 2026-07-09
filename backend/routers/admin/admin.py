@@ -307,6 +307,12 @@ class AdminSettingsUpdate(BaseModel):
     bank_interest_options: Optional[List[AdminBankInterestOptionIn]] = None  # Term structure: hours + rate (fractional, e.g. 0.025 = 2.5%)
 
 
+class AdminStoreItemFlagsPatch(BaseModel):
+    flags: Optional[dict] = None
+    enable_phase1: Optional[bool] = None
+    disable_all: Optional[bool] = None
+
+
 class AdminMissionProgressSetRequest(BaseModel):
     """1-based ladder index of the next mission to complete (same order as in-game missions UI). 101 = all 100 done."""
 
@@ -8927,6 +8933,7 @@ def register(router):
         msg_doc = await db.game_settings.find_one({"key": "landing_banner_message"}, {"_id": 0, "value": 1})
         landing_banner_message = (msg_doc.get("value") or "") if msg_doc and msg_doc.get("value") is not None else ""
         main_doc = await db.game_settings.find_one({"_id": "main"})
+        from utils.store_item_flags import normalize_store_item_flags
         login_lock_from = main_doc.get("login_lock_from") if main_doc else None
         login_lock_until = main_doc.get("login_lock_until") if main_doc else None
         login_lock_message = main_doc.get("login_lock_message") if main_doc else None
@@ -9089,6 +9096,7 @@ def register(router):
             "store_points_manual_credit_eta": store_points_manual_credit_eta,
             "store_points_event_enabled": bool(store_points_event_enabled),
             "store_points_event_force_until": store_points_event_force_until,
+            "store_item_flags": normalize_store_item_flags((main_doc or {}).get("store_item_flags")) if main_doc else normalize_store_item_flags(None),
             "casino_global_max_bet": casino_global_max_bet,
             "casino_buyback_max_points": casino_buyback_max_points,
             "mp_poker_max_blind": mp_poker_max_blind,
@@ -9621,6 +9629,7 @@ def register(router):
         msg_doc = await db.game_settings.find_one({"key": "landing_banner_message"}, {"_id": 0, "value": 1})
         landing_banner_message = (msg_doc.get("value") or "") if msg_doc and msg_doc.get("value") is not None else ""
         main_doc = await db.game_settings.find_one({"_id": "main"})
+        from utils.store_item_flags import normalize_store_item_flags
         login_lock_from = main_doc.get("login_lock_from") if main_doc else None
         login_lock_until = main_doc.get("login_lock_until") if main_doc else None
         login_lock_message = main_doc.get("login_lock_message") if main_doc else None
@@ -9777,6 +9786,7 @@ def register(router):
             "store_points_manual_credit_eta": store_points_manual_credit_eta,
             "store_points_event_enabled": bool(store_points_event_enabled),
             "store_points_event_force_until": store_points_event_force_until,
+            "store_item_flags": normalize_store_item_flags((main_doc or {}).get("store_item_flags")) if main_doc else normalize_store_item_flags(None),
             "casino_global_max_bet": casino_global_max_bet,
             "casino_buyback_max_points": casino_buyback_max_points,
             "mp_poker_max_blind": mp_poker_max_blind,
@@ -10835,6 +10845,39 @@ def register(router):
             raise HTTPException(status_code=403, detail="Admin access required")
         max_bet = await load_keno_max_bet(db, ttl_sec=0.0)
         return {"max_bet": max_bet, "default_max_bet": DEFAULT_KENO_MAX_BET}
+
+    @router.patch("/admin/store-item-flags")
+    async def admin_patch_store_item_flags(
+        body: AdminStoreItemFlagsPatch,
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.store_item_flags import (
+            STORE_ITEM_FLAG_DEFAULTS,
+            PHASE1_STORE_ITEM_FLAGS,
+            normalize_store_item_flags,
+            get_store_item_flags,
+        )
+
+        doc = await db.game_settings.find_one({"_id": "main"}, {"_id": 0, "store_item_flags": 1})
+        current = normalize_store_item_flags((doc or {}).get("store_item_flags"))
+        if body.disable_all:
+            current = {k: False for k in STORE_ITEM_FLAG_DEFAULTS}
+        elif body.enable_phase1:
+            for k in PHASE1_STORE_ITEM_FLAGS:
+                current[k] = True
+        if isinstance(body.flags, dict):
+            for k in STORE_ITEM_FLAG_DEFAULTS:
+                if k in body.flags:
+                    current[k] = bool(body.flags[k])
+        await db.game_settings.update_one(
+            {"_id": "main"},
+            {"$set": {"store_item_flags": current}},
+            upsert=True,
+        )
+        flags = await get_store_item_flags(db)
+        return {"store_item_flags": flags}
 
     @router.patch("/admin/casinos/keno-settings")
     async def admin_casinos_keno_settings_patch(

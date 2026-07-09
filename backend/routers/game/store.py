@@ -127,6 +127,32 @@ from utils.founding_member import (
     FOUNDING_MEMBER_STORE_REF,
     user_has_founding_member,
 )
+from utils.store_item_flags import (
+    get_store_item_flags,
+    normalize_store_item_flags,
+    store_flag_for_token_type,
+    require_store_item_allowed,
+    PHASE1_STORE_ITEM_FLAGS,
+    STORE_ITEM_FLAG_DEFAULTS,
+)
+from utils.profile_cosmetics import (
+    CUSTOM_PROFILE_BADGE,
+    CUSTOM_PROFILE_BADGE_COST_POINTS,
+    PROFILE_GLOW_7D_COST_POINTS,
+    PROFILE_GLOW_PERMANENT_COST_POINTS,
+    PROFILE_GLOW_PRESETS,
+    sanitize_glow_preset,
+    user_has_custom_profile_badge,
+    profile_cosmetic_active,
+)
+
+FAMILY_CREST_UPGRADE_COST_POINTS = 1500
+FAMILY_SAFE_DEPOSIT_TIER_COST_POINTS = 600
+FAMILY_SAFE_DEPOSIT_CAP_PER_TIER = 50_000_000
+FAMILY_SAFE_DEPOSIT_MAX_TIERS = 3
+FAMILY_EVENT_TOKEN_COST_POINTS = 250
+FAMILY_EVENT_DURATION_DAYS = 3
+FAMILY_EVENT_COOLDOWN_DAYS = 7
 
 
 async def _store_points_sustained_rl_user(current_user: dict = Depends(get_current_user)):
@@ -266,6 +292,17 @@ TOKEN_STORE_UNIT_PRICE_POINTS = {
     "jailbust_bonus": 48,
     "auto_rank_2h": AUTO_RANK_2H_TOKEN_STORE_POINTS,
     "crew_oc_auto_3h": CREW_OC_AUTO_3H_TOKEN_STORE_POINTS,
+    "auto_collect_12h": 85,
+    "auto_collect_24h": 150,
+    "jail_bailout": 25,
+    "cooldown_skip_crime": 35,
+    "cooldown_skip_gta": 35,
+    "cooldown_skip_booze": 35,
+    "cooldown_skip_properties": 35,
+}
+# Store-only count tokens (not activated via Armoury)
+STORE_COUNT_ONLY_TOKEN_FIELDS = {
+    "jail_bailout": "jail_bailout_tokens",
 }
 # bundle_id -> points cost, { count_field: amount }
 TOKEN_STORE_BUNDLES = {
@@ -602,6 +639,217 @@ async def buy_founding_member(
         "cost": cost_used,
         "founding_member": True,
     }
+
+
+async def buy_custom_profile_badge(
+    pay_with: str = Query("auto"),
+    current_user: dict = Depends(get_current_user),
+):
+    await require_store_item_allowed(db, "profile_badge", current_user)
+    if user_has_custom_profile_badge(current_user):
+        raise HTTPException(status_code=400, detail="You already have the custom profile badge")
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, CUSTOM_PROFILE_BADGE_COST_POINTS, pay_with)
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    result = await db.users.update_one(
+        {"id": current_user["id"], "custom_profile_badge": {"$ne": True}, **gte_filter},
+        {"$inc": inc, "$set": {"custom_profile_badge": True}, "$addToSet": {"badges": CUSTOM_PROFILE_BADGE}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points or you already own this")
+    await _record_store_points_spend(current_user, inc, "buy-custom-profile-badge", cost_used=cost_used)
+    return {"message": "Custom profile badge purchased! Account-only — lost on death.", "cost": cost_used}
+
+
+async def buy_profile_glow_7d(
+    body: ProfileGlowPurchaseBody,
+    pay_with: str = Query("auto"),
+    current_user: dict = Depends(get_current_user),
+):
+    from datetime import timedelta
+
+    await require_store_item_allowed(db, "profile_glow_7d", current_user)
+    preset = sanitize_glow_preset(body.preset_id)
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, PROFILE_GLOW_7D_COST_POINTS, pay_with)
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    now = datetime.now(timezone.utc)
+    existing = current_user.get("profile_cosmetic_until")
+    base = now
+    if existing and not current_user.get("profile_cosmetic_permanent"):
+        try:
+            ex = datetime.fromisoformat(str(existing).replace("Z", "+00:00"))
+            if ex.tzinfo is None:
+                ex = ex.replace(tzinfo=timezone.utc)
+            if ex > now:
+                base = ex
+        except Exception:
+            pass
+    new_until = (base + timedelta(days=7)).isoformat()
+    result = await db.users.update_one(
+        {"id": current_user["id"], **gte_filter},
+        {
+            "$inc": inc,
+            "$set": {
+                "profile_name_glow_color": preset["color"],
+                "profile_border_style": preset["border"],
+                "profile_cosmetic_until": new_until,
+                "profile_cosmetic_permanent": False,
+            },
+        },
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    await _record_store_points_spend(
+        current_user, inc, "buy-profile-glow-7d", cost_used=cost_used, extra={"preset_id": preset["id"]},
+    )
+    return {"message": "Profile glow + border active for 7 days.", "cost": cost_used, "until": new_until}
+
+
+async def buy_profile_glow_permanent(
+    body: ProfileGlowPurchaseBody,
+    pay_with: str = Query("auto"),
+    current_user: dict = Depends(get_current_user),
+):
+    await require_store_item_allowed(db, "profile_glow_permanent", current_user)
+    if current_user.get("profile_cosmetic_permanent"):
+        raise HTTPException(status_code=400, detail="You already have permanent profile cosmetics")
+    preset = sanitize_glow_preset(body.preset_id)
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, PROFILE_GLOW_PERMANENT_COST_POINTS, pay_with)
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    result = await db.users.update_one(
+        {"id": current_user["id"], "profile_cosmetic_permanent": {"$ne": True}, **gte_filter},
+        {
+            "$inc": inc,
+            "$set": {
+                "profile_name_glow_color": preset["color"],
+                "profile_border_style": preset["border"],
+                "profile_cosmetic_permanent": True,
+            },
+            "$unset": {"profile_cosmetic_until": ""},
+        },
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points or already owned")
+    await _record_store_points_spend(
+        current_user, inc, "buy-profile-glow-permanent", cost_used=cost_used, extra={"preset_id": preset["id"]},
+    )
+    return {"message": "Permanent profile glow + border purchased!", "cost": cost_used}
+
+
+def _family_don_guard(current_user: dict) -> str:
+    role = (current_user.get("family_role") or "").strip().lower()
+    if role not in ("boss", "underboss", "don"):
+        raise HTTPException(status_code=403, detail="Only the Don or Underboss can purchase family store items")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    return family_id
+
+
+async def buy_family_crest_upgrade(
+    pay_with: str = Query("auto"),
+    current_user: dict = Depends(get_current_user),
+):
+    await require_store_item_allowed(db, "family_crest_upgrade", current_user)
+    family_id = _family_don_guard(current_user)
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "premium_crest_unlocked": 1})
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    if fam.get("premium_crest_unlocked"):
+        raise HTTPException(status_code=400, detail="Premium crests already unlocked for your family")
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, FAMILY_CREST_UPGRADE_COST_POINTS, pay_with)
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    user_result = await db.users.update_one({"id": current_user["id"], **gte_filter}, {"$inc": inc})
+    if user_result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    fam_result = await db.families.update_one(
+        {"id": family_id, "premium_crest_unlocked": {"$ne": True}},
+        {"$set": {"premium_crest_unlocked": True}},
+    )
+    if fam_result.modified_count == 0:
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": cost_used, "lifetime_points_spent": -inc.get("lifetime_points_spent", 0)}})
+        raise HTTPException(status_code=400, detail="Premium crests already unlocked")
+    await _record_store_points_spend(current_user, inc, "buy-family-crest-upgrade", cost_used=cost_used)
+    return {"message": "Premium family crest presets unlocked for your crew!", "cost": cost_used}
+
+
+async def buy_family_safe_deposit_tier(
+    pay_with: str = Query("auto"),
+    current_user: dict = Depends(get_current_user),
+):
+    await require_store_item_allowed(db, "family_safe_deposit", current_user)
+    family_id = _family_don_guard(current_user)
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "safe_deposit_tiers": 1})
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    tiers = int(fam.get("safe_deposit_tiers") or 0)
+    if tiers >= FAMILY_SAFE_DEPOSIT_MAX_TIERS:
+        raise HTTPException(status_code=400, detail=f"Safe deposit already at max ({FAMILY_SAFE_DEPOSIT_MAX_TIERS} tiers)")
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, FAMILY_SAFE_DEPOSIT_TIER_COST_POINTS, pay_with)
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    user_result = await db.users.update_one({"id": current_user["id"], **gte_filter}, {"$inc": inc})
+    if user_result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    new_tiers = tiers + 1
+    new_cap = new_tiers * FAMILY_SAFE_DEPOSIT_CAP_PER_TIER
+    fam_result = await db.families.update_one(
+        {"id": family_id, "$or": [{"safe_deposit_tiers": {"$lt": FAMILY_SAFE_DEPOSIT_MAX_TIERS}}, {"safe_deposit_tiers": {"$exists": False}}]},
+        {"$set": {"safe_deposit_tiers": new_tiers, "safe_deposit_cap": new_cap}},
+    )
+    if fam_result.modified_count == 0:
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": cost_used}})
+        raise HTTPException(status_code=400, detail="Safe deposit tier purchase failed")
+    await _record_store_points_spend(current_user, inc, "buy-family-safe-deposit-tier", cost_used=cost_used, extra={"tier": new_tiers})
+    return {"message": f"Safe deposit cap increased to ${new_cap:,} per member.", "cost": cost_used, "safe_deposit_cap": new_cap}
+
+
+async def buy_family_event_token(
+    pay_with: str = Query("auto"),
+    current_user: dict = Depends(get_current_user),
+):
+    from datetime import timedelta
+
+    await require_store_item_allowed(db, "family_event_token", current_user)
+    family_id = _family_don_guard(current_user)
+    fam = await db.families.find_one(
+        {"id": family_id},
+        {"_id": 0, "event_active_until": 1, "event_token_last_at": 1},
+    )
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    now = datetime.now(timezone.utc)
+    last_at = fam.get("event_token_last_at")
+    if last_at:
+        try:
+            last_dt = datetime.fromisoformat(str(last_at).replace("Z", "+00:00"))
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            if (now - last_dt).total_seconds() < FAMILY_EVENT_COOLDOWN_DAYS * 86400:
+                raise HTTPException(status_code=400, detail=f"Family events can be started once every {FAMILY_EVENT_COOLDOWN_DAYS} days")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, FAMILY_EVENT_TOKEN_COST_POINTS, pay_with)
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    event_until = (now + timedelta(days=FAMILY_EVENT_DURATION_DAYS)).isoformat()
+    user_result = await db.users.update_one({"id": current_user["id"], **gte_filter}, {"$inc": inc})
+    if user_result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    fam_result = await db.families.update_one(
+        {"id": family_id},
+        {"$set": {"event_active_until": event_until, "event_type": "bonus_day", "event_token_last_at": now.isoformat()}},
+    )
+    if fam_result.modified_count == 0:
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": cost_used}})
+        raise HTTPException(status_code=400, detail="Failed to activate family event")
+    await _record_store_points_spend(current_user, inc, "buy-family-event-token", cost_used=cost_used, extra={"until": event_until})
+    return {"message": f"Family bonus day active for {FAMILY_EVENT_DURATION_DAYS} days (+10% racket income).", "cost": cost_used, "event_active_until": event_until}
 
 
 async def buy_robot_bg_auto_search(
@@ -984,6 +1232,15 @@ async def admin_points_transfers(
     return {"transfers": items, "count": len(items)}
 
 
+async def get_store_item_flags_public():
+    flags = await get_store_item_flags(db)
+    return {"flags": flags}
+
+
+class ProfileGlowPurchaseBody(BaseModel):
+    preset_id: str = "violet"
+
+
 async def buy_store_token(
     body: BuyStoreTokenBody,
     pay_with: str = Query("auto"),
@@ -992,10 +1249,37 @@ async def buy_store_token(
     from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES
 
     tt = (body.token_type or "").strip()
+    if tt in STORE_COUNT_ONLY_TOKEN_FIELDS:
+        if tt not in TOKEN_STORE_UNIT_PRICE_POINTS:
+            raise HTTPException(status_code=400, detail="This token type is not sold in the store")
+        flag = store_flag_for_token_type(tt)
+        if flag:
+            await require_store_item_allowed(db, flag, current_user)
+        amt = int(body.amount)
+        cf = STORE_COUNT_ONLY_TOKEN_FIELDS[tt]
+        unit = TOKEN_STORE_UNIT_PRICE_POINTS[tt]
+        total_cost = unit * amt
+        cost_used, inc, gte_filter = _store_cost_inc(current_user, total_cost, pay_with)
+        if not cost_used:
+            raise HTTPException(status_code=400, detail="Insufficient points")
+        inc[cf] = inc.get(cf, 0) + amt
+        filt = {"id": current_user["id"], **gte_filter}
+        result = await db.users.update_one(filt, {"$inc": inc})
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Purchase failed. Try again.")
+        await _record_store_points_spend(
+            current_user, inc, f"buy-token:{tt}", cost_used=cost_used, extra={"amount": amt, "token_type": tt},
+        )
+        await log_activity(current_user["id"], current_user.get("username", "?"), "store_purchase", {"item": f"token:{tt}", "amount": amt, "cost": cost_used})
+        return {"message": f"+{amt} {tt.replace('_', ' ')} token(s) for {cost_used} points", "cost": cost_used, "token_type": tt, "amount": amt}
+
     if tt not in TOKEN_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid token_type. Use one of: {list(TOKEN_TYPES)}")
     if tt not in TOKEN_STORE_UNIT_PRICE_POINTS:
         raise HTTPException(status_code=400, detail="This token type is not sold in the store")
+    flag = store_flag_for_token_type(tt)
+    if flag:
+        await require_store_item_allowed(db, flag, current_user)
     amt = int(body.amount)
     cfg = TOKEN_CONFIG[tt]
     cf = cfg["count_field"]
@@ -1795,7 +2079,14 @@ def register(router):
     router.add_api_route("/store/buy-token-selectable-bundle-cash", buy_store_token_selectable_bundle_cash, methods=["POST"])
     router.add_api_route("/store/buy-rank-bar", buy_premium_rank_bar, methods=["POST"])
     router.add_api_route("/store/buy-auto-rank", buy_auto_rank, methods=["POST"])
+    router.add_api_route("/store/item-flags", get_store_item_flags_public, methods=["GET"])
     router.add_api_route("/store/buy-founding-member", buy_founding_member, methods=["POST"])
+    router.add_api_route("/store/buy-custom-profile-badge", buy_custom_profile_badge, methods=["POST"])
+    router.add_api_route("/store/buy-profile-glow-7d", buy_profile_glow_7d, methods=["POST"])
+    router.add_api_route("/store/buy-profile-glow-permanent", buy_profile_glow_permanent, methods=["POST"])
+    router.add_api_route("/store/buy-family-crest-upgrade", buy_family_crest_upgrade, methods=["POST"])
+    router.add_api_route("/store/buy-family-safe-deposit-tier", buy_family_safe_deposit_tier, methods=["POST"])
+    router.add_api_route("/store/buy-family-event-token", buy_family_event_token, methods=["POST"])
     router.add_api_route("/store/buy-robot-bg-auto-search", buy_robot_bg_auto_search, methods=["POST"])
     router.add_api_route("/store/buy-armour-tier-6", buy_armour_point_store_tier, methods=["POST"])
     router.add_api_route("/store/buy-weapon11", buy_weapon_point_store_tier, methods=["POST"])

@@ -882,6 +882,20 @@ class UserResponse(BaseModel):
     travel_tokens: int = 0
     properties_tokens: int = 0
     jailbust_tokens: int = 0
+    auto_collect_12h_tokens: int = 0
+    auto_collect_24h_tokens: int = 0
+    jail_bailout_tokens: int = 0
+    cooldown_skip_crime_tokens: int = 0
+    cooldown_skip_gta_tokens: int = 0
+    cooldown_skip_booze_tokens: int = 0
+    cooldown_skip_properties_tokens: int = 0
+    auto_collect_until: Optional[str] = None
+    custom_profile_badge: bool = False
+    profile_cosmetic_active: bool = False
+    profile_name_glow_color: Optional[str] = None
+    profile_border_style: Optional[str] = None
+    profile_cosmetic_until: Optional[str] = None
+    profile_cosmetic_permanent: bool = False
     crew_oc_auto_apply_tokens: int = 0
     crew_oc_auto_apply_until: Optional[str] = None
     crew_oc_auto_apply_max_fee: Optional[int] = None
@@ -3855,6 +3869,9 @@ async def startup_db():
             await asyncio.sleep(60)
 
     asyncio.create_task(entertainer_refill_ticker())
+    from utils.auto_collect_service import run_auto_collect_ticker
+
+    asyncio.create_task(run_auto_collect_ticker(db))
     async def daily_event_inbox_ticker():
         while True:
             try:

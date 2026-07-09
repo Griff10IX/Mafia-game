@@ -75,6 +75,9 @@ const JailStatusCard = ({
   setRewardLoading,
   onLeaveJail,
   leavingJail,
+  onBailoutToken,
+  bailingOut,
+  bailoutTokens,
   currentReward,
   onSnitchClick,
   snitching,
@@ -121,6 +124,16 @@ const JailStatusCard = ({
               <DoorOpen size={10} />
               {leavingJail ? 'Leaving...' : 'Leave Jail (3 pts)'}
             </button>
+            {bailoutTokens > 0 && (
+              <button
+                type="button"
+                onClick={onBailoutToken}
+                disabled={bailingOut}
+                className="bg-violet-500/20 text-violet-300 rounded px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide border border-violet-500/40 hover:bg-violet-500/30 disabled:opacity-50 transition-all touch-manipulation inline-flex items-center gap-1 font-heading"
+              >
+                {bailingOut ? '...' : `Bailout token (${bailoutTokens})`}
+              </button>
+            )}
             <button
               type="button"
               onClick={onSnitchClick}
@@ -361,6 +374,7 @@ export default function Jail() {
   const [bustRewardInput, setBustRewardInput] = useState('');
   const [setRewardLoading, setSetRewardLoading] = useState(false);
   const [leavingJail, setLeavingJail] = useState(false);
+  const [bailingOut, setBailingOut] = useState(false);
   const [showSnitchModal, setShowSnitchModal] = useState(false);
   const [snitchTargetInput, setSnitchTargetInput] = useState('');
   const [snitching, setSnitching] = useState(false);
@@ -544,6 +558,22 @@ export default function Jail() {
     }
   };
 
+  const bailoutWithToken = async () => {
+    setBailingOut(true);
+    try {
+      const response = await api.post('/jail/bailout-token');
+      if (response.data.success) {
+        toast.success(response.data.message);
+        window.dispatchEvent(new CustomEvent('app:refresh-user'));
+      }
+      fetchJailData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Bailout failed');
+    } finally {
+      setBailingOut(false);
+    }
+  };
+
   const bustOut = async (username) => {
     setLoading(true);
     try {
@@ -692,6 +722,9 @@ export default function Jail() {
         setRewardLoading={setRewardLoading}
         onLeaveJail={leaveJail}
         leavingJail={leavingJail}
+        onBailoutToken={bailoutWithToken}
+        bailingOut={bailingOut}
+        bailoutTokens={Number(user?.jail_bailout_tokens || 0)}
         currentReward={jailStatus.bust_reward_cash ?? 0}
         onSnitchClick={() => setShowSnitchModal(true)}
         snitching={snitching}

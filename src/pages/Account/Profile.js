@@ -458,7 +458,14 @@ const ProfileInfoCard = ({
   
   // Check if user is a founding member
   const isFoundingMember = profile.founding_member || (profile.badges || []).includes('Founding Member');
+  const isCustomBadge = profile.custom_profile_badge || (profile.badges || []).includes('Custom Profile Badge');
   const isWarRat = Boolean(profile.show_war_rat_badge) || (profile.badges || []).includes('Rat');
+  const nameGlowStyle = profile.profile_cosmetic_active && profile.profile_name_glow_color
+    ? { color: profile.profile_name_glow_color, textShadow: `0 0 8px ${profile.profile_name_glow_color}88` }
+    : undefined;
+  const dossierBorderClass = profile.profile_cosmetic_active && profile.profile_border_style
+    ? `border-2 prof-border-${profile.profile_border_style}`
+    : 'border-2 border-primary/35';
   
   let profileRows = isStaffProfile
     ? allRows.filter((r) => r.label !== 'Status' && r.label !== 'Messages' && r.label !== 'Jailbusts')
@@ -477,7 +484,7 @@ const ProfileInfoCard = ({
     : undefined;
 
   return (
-    <div className={`relative ${styles.panel} rounded-lg overflow-hidden border-2 border-primary/35 shadow-2xl backdrop-blur-sm prof-card prof-dossier-enter mobile-panel`}>
+    <div className={`relative ${styles.panel} rounded-lg overflow-hidden ${dossierBorderClass} shadow-2xl backdrop-blur-sm prof-card prof-dossier-enter mobile-panel`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/45 to-transparent" />
       <div className="px-2.5 py-2 md:px-3 md:py-2.5 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent border-b border-primary/25 flex items-start justify-between gap-2">
         <div className="flex items-start gap-2.5 md:gap-3 min-w-0 flex-1">
@@ -504,9 +511,14 @@ const ProfileInfoCard = ({
               Dossier
             </span>
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[12px] sm:text-[13px] md:text-sm font-heading font-bold text-foreground truncate leading-tight">
+              <span className="text-[12px] sm:text-[13px] md:text-sm font-heading font-bold text-foreground truncate leading-tight" style={nameGlowStyle}>
                 {profile.username}
               </span>
+              {isCustomBadge && (
+                <span className="inline-flex items-center px-1 py-0.5 rounded border border-violet-500/40 bg-violet-500/15 text-[8px] md:text-[9px] font-heading font-bold uppercase tracking-wide text-violet-200 shrink-0">
+                  Custom
+                </span>
+              )}
               {isFoundingMember && (
                 <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border border-amber-500/40 bg-amber-500/15 text-[8px] md:text-[9px] font-heading font-bold uppercase tracking-wide text-amber-200 shrink-0">
                   <Crown size={10} className="text-amber-300 shrink-0" aria-hidden />

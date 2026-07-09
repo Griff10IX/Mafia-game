@@ -902,10 +902,24 @@ async def attempt_gta(
         if cooldown_doc:
             until = _parse_iso_datetime(cooldown_doc.get("cooldown_until"))
             if until and until > now:
-                secs = int((until - now).total_seconds())
-                raise HTTPException(
-                    status_code=400, detail=f"GTA cooldown: try again in {secs}s"
-                )
+                from utils.cooldown_skip import has_skip_credit, consume_skip_credit
+
+                if has_skip_credit(current_user, "gta"):
+                    if await consume_skip_credit(db, current_user.get("id") or "", "gta"):
+                        await db.gta_cooldowns.update_one(
+                            {"user_id": current_user.get("id") or ""},
+                            {"$set": {"cooldown_until": now_iso}},
+                        )
+                    else:
+                        secs = int((until - now).total_seconds())
+                        raise HTTPException(
+                            status_code=400, detail=f"GTA cooldown: try again in {secs}s"
+                        )
+                else:
+                    secs = int((until - now).total_seconds())
+                    raise HTTPException(
+                        status_code=400, detail=f"GTA cooldown: try again in {secs}s"
+                    )
         result = await _attempt_gta_impl(request.option_id, current_user)
         now = datetime.now(timezone.utc)
         success = getattr(result, "success", False)

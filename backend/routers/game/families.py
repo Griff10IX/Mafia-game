@@ -160,7 +160,24 @@ FAMILY_EMBLEM_PRESETS_PUBLIC = [
     {"id": "iron_rose", "label": "Iron rose"},
     {"id": "boss_throne", "label": "Boss throne"},
 ]
+FAMILY_EMBLEM_PRESETS_PREMIUM = [
+    {"id": "premium_gilded_crest", "label": "Gilded crest"},
+    {"id": "premium_obsidian_seal", "label": "Obsidian seal"},
+    {"id": "premium_blood_oath", "label": "Blood oath banner"},
+    {"id": "premium_imperial_eagle", "label": "Imperial eagle"},
+    {"id": "premium_vault_crown", "label": "Vault crown"},
+]
 FAMILY_EMBLEM_PRESET_IDS = frozenset(p["id"] for p in FAMILY_EMBLEM_PRESETS_PUBLIC)
+FAMILY_EMBLEM_PREMIUM_PRESET_IDS = frozenset(p["id"] for p in FAMILY_EMBLEM_PRESETS_PREMIUM)
+FAMILY_SAFE_DEPOSIT_DEFAULT_CAP = 0
+
+
+def _valid_emblem_preset_for_family(preset: str, fam: Optional[dict]) -> bool:
+    if preset in FAMILY_EMBLEM_PRESET_IDS:
+        return True
+    if preset in FAMILY_EMBLEM_PREMIUM_PRESET_IDS and (fam or {}).get("premium_crest_unlocked"):
+        return True
+    return False
 
 # Per-crew garage melt contribution (user doc); reset when leaving/kick/join — not global bullets_melted
 def _family_melt_stats_reset_fields() -> dict:
@@ -3330,6 +3347,10 @@ async def families_perks_purchase(request: FamilyPerksPurchaseRequest, current_u
     if not boss_id or uid != boss_id:
         raise HTTPException(status_code=403, detail="Only the Don can purchase family perks")
     perk_id = (request.perk_id or "").strip().lower()
+    if perk_id == "crew_oc_insurance":
+        from utils.store_item_flags import require_store_item_allowed
+
+        await require_store_item_allowed(db, "crew_oc_insurance", current_user)
     if perk_id not in PERK_IDS:
         raise HTTPException(status_code=400, detail="Invalid perk")
     now = datetime.now(timezone.utc)
@@ -3351,6 +3372,13 @@ async def families_perks_purchase(request: FamilyPerksPurchaseRequest, current_u
         vu = (now + timedelta(days=FAMILY_PERK_CREW_OC_AUTO_COMMIT_DAYS)).isoformat()
         new_perks["crew_oc_auto_commit"] = {"valid_until": vu}
         valid_iso = vu
+    elif perk_id == "crew_oc_insurance":
+        from utils.family_perks import FAMILY_PERK_COST_CREW_OC_INSURANCE
+
+        cost = FAMILY_PERK_COST_CREW_OC_INSURANCE
+        if new_perks.get("crew_oc_insurance"):
+            raise HTTPException(status_code=400, detail="Crew OC insurance is already active this month")
+        new_perks["crew_oc_insurance"] = {"valid_until": valid_iso}
     elif perk_id == "melt":
         cost = FAMILY_PERK_COST_MELT
         if new_perks.get("melt"):
@@ -3699,7 +3727,8 @@ async def families_update_avatar(request: FamilyAvatarRequest, current_user: dic
         return {"message": "Family emblem removed.", "avatar_url": None, "emblem_preset_id": None}
 
     if preset:
-        if preset not in FAMILY_EMBLEM_PRESET_IDS:
+        fam = await db.families.find_one({"id": family_id}, {"_id": 0, "premium_crest_unlocked": 1})
+        if not _valid_emblem_preset_for_family(preset, fam):
             raise HTTPException(status_code=400, detail="Invalid emblem preset")
         ek = f"p:{preset}"
         if await _family_emblem_key_taken(ek, family_id):
@@ -4492,7 +4521,7 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
     family_id = current_user.get("family_id")
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
-    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "treasury": 1, "rackets": 1, "racket_income_bonus_percent": 1})
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "treasury": 1, "rackets": 1, "racket_income_bonus_percent": 1, "event_active_until": 1})
     if not fam:
         raise HTTPException(status_code=404, detail="Family not found")
     rackets = (fam.get("rackets") or {}).copy()
@@ -4510,6 +4539,16 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
     perk_racket_pct = float(rpm.get("racket_bonus_percent") or 0)
     bonus_pct += perk_racket_pct
     income_final = int(income * (1 + bonus_pct / 100.0) * founding_member_income_mult(current_user))
+    event_until = fam.get("event_active_until")
+    if event_until:
+        try:
+            ev_dt = datetime.fromisoformat(str(event_until).replace("Z", "+00:00"))
+            if ev_dt.tzinfo is None:
+                ev_dt = ev_dt.replace(tzinfo=timezone.utc)
+            if ev_dt > now:
+                income_final = int(income_final * 1.1)
+        except Exception:
+            pass
     last_at = state.get("last_collected_at")
     now = datetime.now(timezone.utc)
     today_utc = now.date().isoformat()
@@ -4571,6 +4610,101 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
         msg = f"{msg} +{bullets_bonus} bullets."
     _invalidate_my_cache(current_user["id"])
     return {"message": msg, "amount": income_final, "bullets": bullets_bonus}
+
+
+class FamilySafeDepositBody(BaseModel):
+    cash: int = 0
+    bullets: int = 0
+
+
+async def families_safe_deposit_deposit(body: FamilySafeDepositBody, current_user: dict = Depends(get_current_user)):
+    from utils.store_item_flags import require_store_item_allowed
+
+    await require_store_item_allowed(db, "family_safe_deposit", current_user)
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    cash = max(0, int(body.cash or 0))
+    bullets = max(0, int(body.bullets or 0))
+    if cash <= 0 and bullets <= 0:
+        raise HTTPException(status_code=400, detail="Deposit amount required")
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "safe_deposit_cap": 1, "safe_deposits_by_user": 1})
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    cap = int(fam.get("safe_deposit_cap") or 0)
+    if cap <= 0:
+        raise HTTPException(status_code=400, detail="Family safe deposit not unlocked — buy a tier from the Points Store")
+    uid = current_user["id"]
+    deposits = dict(fam.get("safe_deposits_by_user") or {})
+    row = dict(deposits.get(uid) or {})
+    cur_cash = int(row.get("cash") or 0)
+    cur_bullets = int(row.get("bullets") or 0)
+    if cur_cash + cash > cap:
+        raise HTTPException(status_code=400, detail=f"Safe deposit cash cap is ${cap:,} per member")
+    user_filt = {"id": uid}
+    if cash:
+        user_filt["money"] = {"$gte": cash}
+    if bullets:
+        user_filt["bullets"] = {"$gte": bullets}
+    inc_user = {}
+    if cash:
+        inc_user["money"] = -cash
+    if bullets:
+        inc_user["bullets"] = -bullets
+    if inc_user:
+        ur = await db.users.update_one(user_filt, {"$inc": inc_user})
+        if ur.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Insufficient cash or bullets")
+    row["cash"] = cur_cash + cash
+    row["bullets"] = cur_bullets + bullets
+    row["updated_at"] = datetime.now(timezone.utc).isoformat()
+    deposits[uid] = row
+    await db.families.update_one({"id": family_id}, {"$set": {f"safe_deposits_by_user.{uid}": row}})
+    await log_family_vault_tx(
+        db, family_id, "safe_deposit_deposit", uid, current_user.get("username") or "?",
+        cash_delta=cash, bullets_delta=bullets, meta={},
+    )
+    return {"message": "Deposited to your family safe.", "safe_deposit": row, "cap": cap}
+
+
+async def families_safe_deposit_withdraw(body: FamilySafeDepositBody, current_user: dict = Depends(get_current_user)):
+    from utils.store_item_flags import require_store_item_allowed
+
+    await require_store_item_allowed(db, "family_safe_deposit", current_user)
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    cash = max(0, int(body.cash or 0))
+    bullets = max(0, int(body.bullets or 0))
+    if cash <= 0 and bullets <= 0:
+        raise HTTPException(status_code=400, detail="Withdraw amount required")
+    uid = current_user["id"]
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "safe_deposits_by_user": 1})
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    deposits = dict(fam.get("safe_deposits_by_user") or {})
+    row = dict(deposits.get(uid) or {})
+    cur_cash = int(row.get("cash") or 0)
+    cur_bullets = int(row.get("bullets") or 0)
+    if cash > cur_cash or bullets > cur_bullets:
+        raise HTTPException(status_code=400, detail="Insufficient safe deposit balance")
+    row["cash"] = cur_cash - cash
+    row["bullets"] = cur_bullets - bullets
+    row["updated_at"] = datetime.now(timezone.utc).isoformat()
+    deposits[uid] = row
+    await db.families.update_one({"id": family_id}, {"$set": {f"safe_deposits_by_user.{uid}": row}})
+    inc_user = {}
+    if cash:
+        inc_user["money"] = cash
+    if bullets:
+        inc_user["bullets"] = bullets
+    if inc_user:
+        await db.users.update_one({"id": uid}, {"$inc": inc_user})
+    await log_family_vault_tx(
+        db, family_id, "safe_deposit_withdraw", uid, current_user.get("username") or "?",
+        cash_delta=-cash, bullets_delta=-bullets, meta={},
+    )
+    return {"message": "Withdrawn from your family safe.", "safe_deposit": row}
 
 
 async def families_racket_unlock(racket_id: str, current_user: dict = Depends(get_current_user)):
@@ -5745,6 +5879,8 @@ def register(router):
     router.add_api_route("/families/crew-oc/applications/{application_id}/reject", families_crew_oc_reject, methods=["POST"])
     router.add_api_route("/families/crew-oc/applications/{application_id}/kick", families_crew_oc_kick, methods=["POST"])
     router.add_api_route("/families/crew-oc/commit", families_crew_oc_commit, methods=["POST"])
+    router.add_api_route("/families/safe-deposit/deposit", families_safe_deposit_deposit, methods=["POST"])
+    router.add_api_route("/families/safe-deposit/withdraw", families_safe_deposit_withdraw, methods=["POST"])
     router.add_api_route("/families/rackets/{racket_id}/collect", families_racket_collect, methods=["POST"])
     router.add_api_route("/families/rackets/{racket_id}/unlock", families_racket_unlock, methods=["POST"])
     router.add_api_route("/families/rackets/{racket_id}/upgrade", families_racket_upgrade, methods=["POST"])

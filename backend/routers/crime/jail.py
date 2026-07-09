@@ -1088,6 +1088,58 @@ async def leave_jail(
     }
 
 
+async def jail_bailout_token(current_user: dict = Depends(get_current_user_verified)):
+    """Consume 1 jail bailout token to leave jail (max 3/day UTC; does not bypass unbreakable_until)."""
+    from utils.store_item_flags import require_store_item_allowed
+
+    await require_store_item_allowed(db, "jail_bailout", current_user)
+    if not current_user.get("in_jail"):
+        raise HTTPException(status_code=400, detail="You are not in jail")
+    unbreakable = current_user.get("unbreakable_until")
+    if unbreakable:
+        try:
+            ub = datetime.fromisoformat(str(unbreakable).replace("Z", "+00:00"))
+            if ub.tzinfo is None:
+                ub = ub.replace(tzinfo=timezone.utc)
+            if ub > datetime.now(timezone.utc):
+                raise HTTPException(status_code=400, detail="You cannot bail out during OC lockdown")
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+    today = datetime.now(timezone.utc).date().isoformat()
+    uses_today = int(current_user.get("jail_bailout_uses_today") or 0)
+    if current_user.get("jail_bailout_day") == today and uses_today >= 3:
+        raise HTTPException(status_code=400, detail="Jail bailout limit reached (3 per UTC day)")
+    inc_uses = 1
+    set_doc = {"jail_bailout_day": today}
+    if current_user.get("jail_bailout_day") != today:
+        set_doc["jail_bailout_uses_today"] = 1
+        inc_uses = 1 - uses_today
+    result = await db.users.update_one(
+        {
+            "id": current_user["id"],
+            "in_jail": True,
+            "jail_bailout_tokens": {"$gte": 1},
+        },
+        {
+            "$set": {
+                "in_jail": False,
+                "jail_until": None,
+                "snitch_attempted_this_term": False,
+                **set_doc,
+            },
+            "$inc": {"jail_bailout_tokens": -1, "jail_bailout_uses_today": inc_uses},
+            "$unset": {"auto_rank_next_run_at": ""},
+        },
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="No jail bailout tokens available")
+    _invalidate_all_jail_players_cache()
+    await log_activity(current_user["id"], current_user.get("username", "?"), "jail_bailout_token", {})
+    return {"success": True, "message": "You used a jail bailout token and left jail!"}
+
+
 # Snitch: when in jail, name someone (or pick random online). 10–20% success chance. On success you're released and they serve time; they can't be snitched on again for 5 mins.
 SNITCH_JAIL_SECONDS = 45
 SNITCH_SUCCESS_CHANCE_MIN = 0.10
@@ -1374,5 +1426,6 @@ def register(router):
     router.add_api_route("/jail/bootstrap", get_jail_bootstrap, methods=["GET"], dependencies=_jail_rl_u)
     router.add_api_route("/jail/set-bust-reward", set_bust_reward, methods=["POST"])
     router.add_api_route("/jail/leave", leave_jail, methods=["POST"])
+    router.add_api_route("/jail/bailout-token", jail_bailout_token, methods=["POST"])
     router.add_api_route("/jail/snitch", snitch, methods=["POST"])
     router.add_api_route("/npcs/list", list_npcs_for_attack, methods=["GET"])

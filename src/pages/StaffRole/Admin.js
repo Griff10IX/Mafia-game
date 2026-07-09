@@ -1469,6 +1469,8 @@ export default function Admin() {
   const [storePointsManualCreditEta, setStorePointsManualCreditEta] = useState('');
   const [storePointsEventEnabled, setStorePointsEventEnabled] = useState(true);
   const [storePointsEventForceUntil, setStorePointsEventForceUntil] = useState('');
+  const [storeItemFlags, setStoreItemFlags] = useState({});
+  const [storeItemFlagsSaving, setStoreItemFlagsSaving] = useState(false);
   const [pointsCashLogs, setPointsCashLogs] = useState(null);
   const [pointsCashLogsLoading, setPointsCashLogsLoading] = useState(false);
   const [pointsCashLogsUsername, setPointsCashLogsUsername] = useState('');
@@ -2409,7 +2411,7 @@ export default function Admin() {
       setStorePointsManualCreditEta(res.data?.store_points_manual_credit_eta || '');
       setStorePointsEventEnabled(res.data?.store_points_event_enabled !== false);
       setStorePointsEventForceUntil(res.data?.store_points_event_force_until || '');
-      setCasinoGlobalMaxBet(res.data?.casino_global_max_bet || 1000000000);
+      setStoreItemFlags(res.data?.store_item_flags || {});
       setCasinoBuybackMaxPoints(res.data?.casino_buyback_max_points || 15000);
       setMpPokerMaxBlind(res.data?.mp_poker_max_blind || 2500000);
       if (Array.isArray(res.data?.mod_visible_category_ids)) {
@@ -2944,6 +2946,19 @@ export default function Admin() {
       toast.error(e.response?.data?.detail ?? 'Failed to save store sale event');
     } finally {
       setLaunchSettingsSaving(false);
+    }
+  };
+
+  const handleSaveStoreItemFlags = async (patch) => {
+    setStoreItemFlagsSaving(true);
+    try {
+      const res = await api.patch('/admin/store-item-flags', patch);
+      setStoreItemFlags(res.data?.store_item_flags || {});
+      toast.success('Store item rollout saved');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to save store item flags');
+    } finally {
+      setStoreItemFlagsSaving(false);
     }
   };
 
@@ -11983,6 +11998,70 @@ export default function Admin() {
                     className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-zinc-700/30 text-zinc-300 border border-zinc-600/60 hover:bg-zinc-700/50 disabled:opacity-50"
                   >
                     Clear forced sale
+                  </button>
+                </div>
+              </div>
+
+              <div className="h-px bg-zinc-700/30" />
+
+              <div className="space-y-3">
+                <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Store item rollout</p>
+                <p className="text-[10px] text-mutedForeground">
+                  New point-store items ship disabled. Staff can still buy and test while off. Toggle live per item when ready.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {Object.entries({
+                    auto_collect: 'Auto-collect passes',
+                    jail_bailout: 'Jail bailout tokens',
+                    cooldown_skip_crime: 'Crime cooldown skip',
+                    cooldown_skip_gta: 'GTA cooldown skip',
+                    cooldown_skip_booze: 'Booze travel skip',
+                    cooldown_skip_properties: 'Properties collect skip',
+                    profile_badge: 'Custom profile badge',
+                    profile_glow_7d: 'Profile glow (7d)',
+                    profile_glow_permanent: 'Profile glow (permanent)',
+                    family_crest_upgrade: 'Family crest upgrade',
+                    crew_oc_insurance: 'Crew OC insurance',
+                    family_safe_deposit: 'Family safe deposit',
+                    family_event_token: 'Family event token',
+                  }).map(([key, label]) => (
+                    <div key={key} className="flex items-center justify-between gap-2 rounded border border-zinc-700/40 px-2 py-1.5">
+                      <span className="text-[10px] text-zinc-300 font-heading">{label}</span>
+                      <button
+                        type="button"
+                        disabled={storeItemFlagsSaving}
+                        onClick={() => {
+                          const next = { ...storeItemFlags, [key]: !storeItemFlags?.[key] };
+                          setStoreItemFlags(next);
+                          handleSaveStoreItemFlags({ flags: { [key]: next[key] } });
+                        }}
+                        className={`shrink-0 px-2 py-1 text-[9px] font-heading font-bold uppercase rounded border disabled:opacity-50 ${
+                          storeItemFlags?.[key]
+                            ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/40'
+                            : 'bg-zinc-700/30 text-zinc-500 border-zinc-600/60'
+                        }`}
+                      >
+                        {storeItemFlags?.[key] ? 'Live' : 'Disabled'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={storeItemFlagsSaving}
+                    onClick={() => handleSaveStoreItemFlags({ enable_phase1: true })}
+                    className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+                  >
+                    Enable all Phase 1
+                  </button>
+                  <button
+                    type="button"
+                    disabled={storeItemFlagsSaving}
+                    onClick={() => handleSaveStoreItemFlags({ disable_all: true })}
+                    className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-zinc-700/30 text-zinc-300 border border-zinc-600/60 hover:bg-zinc-700/50 disabled:opacity-50"
+                  >
+                    Disable all
                   </button>
                 </div>
               </div>

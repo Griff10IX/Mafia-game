@@ -188,9 +188,17 @@ TOKEN_TYPES = (
     "travel",
     "properties",
     "jailbust_bonus",
+    "auto_collect_12h",
+    "auto_collect_24h",
+    "cooldown_skip_crime",
+    "cooldown_skip_gta",
+    "cooldown_skip_booze",
+    "cooldown_skip_properties",
     # Rank-XP (£9.99) pass token: 24h window granted only when activated via Armoury/My Inventory.
     "rank_xp_pass",
 )
+# Store-only count tokens (not activated in Armoury)
+STORE_COUNT_ONLY_TOKENS = frozenset({"jail_bailout"})
 # count_field: user doc key for token count
 # until_field: active-until ISO timestamp
 # duration_hours: effect duration per token (overrides global TOKEN_DURATION_HOURS)
@@ -208,6 +216,12 @@ TOKEN_CONFIG = {
     "travel":        {"count_field": "travel_tokens",        "until_field": "travel_until",        "max_stack_hours": TOKEN_MAX_STACK_HOURS},
     "properties":    {"count_field": "properties_tokens",    "until_field": "properties_until",    "max_stack_hours": TOKEN_MAX_STACK_HOURS},
     "jailbust_bonus": {"count_field": "jailbust_tokens",     "until_field": "jailbust_bonus_until", "max_stack_hours": TOKEN_MAX_STACK_HOURS},
+    "auto_collect_12h": {"count_field": "auto_collect_12h_tokens", "until_field": "auto_collect_until", "duration_hours": 12, "max_stack_hours": TOKEN_MAX_STACK_HOURS},
+    "auto_collect_24h": {"count_field": "auto_collect_24h_tokens", "until_field": "auto_collect_until", "duration_hours": 24, "max_stack_hours": TOKEN_MAX_STACK_HOURS},
+    "cooldown_skip_crime": {"count_field": "cooldown_skip_crime_tokens", "until_field": "cooldown_skip_crime_dummy_until", "max_stack_hours": 1},
+    "cooldown_skip_gta": {"count_field": "cooldown_skip_gta_tokens", "until_field": "cooldown_skip_gta_dummy_until", "max_stack_hours": 1},
+    "cooldown_skip_booze": {"count_field": "cooldown_skip_booze_tokens", "until_field": "cooldown_skip_booze_dummy_until", "max_stack_hours": 1},
+    "cooldown_skip_properties": {"count_field": "cooldown_skip_properties_tokens", "until_field": "cooldown_skip_properties_dummy_until", "max_stack_hours": 1},
     # 24h multiplier window, only when the token is activated.
     "rank_xp_pass": {
         "count_field": "rank_xp_pass_tokens",
@@ -2415,6 +2429,41 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
     """Use one consumable token, or many with use_all (stack up to max_stack_hours without wasting)."""
     if req.token_type not in TOKEN_TYPES:
         raise HTTPException(status_code=400, detail=f"Invalid token_type. Use one of: {list(TOKEN_TYPES)}")
+    from utils.store_item_flags import require_store_item_allowed, store_flag_for_token_type
+    flag = store_flag_for_token_type(req.token_type)
+    if flag:
+        await require_store_item_allowed(db, flag, current_user)
+
+    from utils.cooldown_skip import (
+        TOKEN_TYPE_TO_SKIP_KIND,
+        activation_inc_fields,
+        can_activate_cooldown_skip_token,
+    )
+
+    if req.token_type in TOKEN_TYPE_TO_SKIP_KIND:
+        if req.use_all:
+            raise HTTPException(status_code=400, detail="Cooldown skip vouchers activate one at a time.")
+        if not can_activate_cooldown_skip_token(current_user):
+            raise HTTPException(status_code=400, detail="Daily cooldown skip limit reached (5 per UTC day).")
+        kind = TOKEN_TYPE_TO_SKIP_KIND[req.token_type]
+        cfg = TOKEN_CONFIG[req.token_type]
+        count_field = cfg["count_field"]
+        count = int(current_user.get(count_field) or 0)
+        if count < 1:
+            raise HTTPException(status_code=400, detail="No tokens of this type available.")
+        inc_fields, set_fields = activation_inc_fields(kind, current_user)
+        result = await db.users.update_one(
+            {"id": current_user["id"], count_field: {"$gte": 1}},
+            {"$inc": {count_field: -1, **inc_fields}, "$set": set_fields},
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="No tokens available or race condition.")
+        tokens = _tokens_from_user({**current_user, count_field: count - 1})
+        return {
+            "message": f"Activated 1 cooldown skip for {kind}. Use it on your next {kind} cooldown.",
+            "tokens": tokens,
+        }
+
     cfg = TOKEN_CONFIG[req.token_type]
     count_field = cfg["count_field"]
     until_field = cfg["until_field"]

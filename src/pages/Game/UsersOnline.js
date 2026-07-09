@@ -271,7 +271,10 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
   const modColor = (modDefaultOnlineColor && modDefaultOnlineColor.trim()) || DEFAULT_MOD_COLOR;
   const displayColor =
     user.online_color ||
-    (user.is_admin ? adminColor : user.is_moderator ? modColor : user.is_entertainer ? DEFAULT_ENTERTAINER_COLOR : user.is_help_desk_operator ? DEFAULT_HDO_COLOR : undefined);
+    (user.is_admin ? adminColor : user.is_moderator ? modColor : user.is_entertainer ? DEFAULT_ENTERTAINER_COLOR : user.is_help_desk_operator ? DEFAULT_HDO_COLOR : undefined) ||
+    ((preview?.profile_cosmetic_active || user.profile_cosmetic_active) && (preview?.profile_name_glow_color || user.profile_name_glow_color)
+      ? (preview?.profile_name_glow_color || user.profile_name_glow_color)
+      : undefined);
   const userStatus = user.status || 'online';
   const selfFromRoster =
     myUsername &&
@@ -370,6 +373,11 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="font-heading font-bold text-foreground text-[13px] truncate leading-tight">{preview.username}</span>
+                      {preview.custom_profile_badge ? (
+                        <span className="inline-flex items-center px-1 py-0.5 rounded border border-violet-500/40 bg-violet-500/15 text-[8px] font-heading font-bold uppercase tracking-wide text-violet-200 shrink-0">
+                          Custom
+                        </span>
+                      ) : null}
                       {preview.founding_member ? (
                         <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border border-amber-500/40 bg-amber-500/15 text-[8px] font-heading font-bold uppercase tracking-wide text-amber-200 shrink-0">
                           <Crown size={10} className="text-amber-300" aria-hidden />
