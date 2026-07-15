@@ -58,7 +58,9 @@ _TRAVEL_CODE_PREFIX = "tc_"
 
 # Catalog ids for rarities that must always appear in /travel/info (bulk query is capped).
 _TRAVEL_ALWAYS_INCLUDE_CAR_IDS = frozenset(
-    c["id"] for c in (CARS or []) if c.get("rarity") in ("exclusive", "loot_exclusive")
+    c["id"]
+    for c in (CARS or [])
+    if c.get("rarity") in ("exclusive", "loot_exclusive", "vip_exclusive")
 )
 
 
@@ -371,7 +373,14 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
             user_car_id = uc.get("id") or str(uc["_id"])
             name = car_info["name"]
             image = car_info.get("image", "")
+            # VIP Pass car supports garage custom name/image (same as store custom car).
+            if car_info.get("id") == "car22" or car_info.get("rarity") == "vip_exclusive":
+                name = (uc.get("custom_name") or "").strip() or name
+                image = (uc.get("custom_image_url") or "").strip() or image
             damage_percent = min(100, max(0, float(uc.get("damage_percent", 0))))
+            # Damage-immune rarities never block travel from wear.
+            if car_info.get("rarity") in ("exclusive", "loot_exclusive", "vip_exclusive"):
+                damage_percent = 0
             cars_with_travel_times.append({
                 "user_car_id": user_car_id,
                 "car_id": car_info["id"],
@@ -661,8 +670,10 @@ async def _start_travel_impl(
         if car_info:
             travel_time = TRAVEL_TIMES.get(car_info["rarity"], 45)
             method_name = car_info["name"]
-        # Custom, exclusive, and loot_exclusive cars never take damage (manual or booze)
-        if car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive"):
+            if car_info.get("id") == "car22" or car_info.get("rarity") == "vip_exclusive":
+                method_name = (user_car.get("custom_name") or "").strip() or method_name
+        # Custom, exclusive, loot_exclusive, and VIP Pass cars never take damage (manual or booze)
+        if car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive", "vip_exclusive"):
             car_to_damage = None
         else:
             car_to_damage = user_car

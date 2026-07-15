@@ -379,6 +379,7 @@ const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => (
           {[
             { name: 'Loot Exclusive', time: '5s', color: 'text-amber-400' },
             { name: 'Exclusive', time: '7s', color: 'text-purple-400' },
+            { name: 'VIP Pass', time: '8s', color: 'text-cyan-400' },
             { name: 'Custom', time: '12s', color: 'text-primary' },
             { name: 'Legendary', time: '15s', color: 'text-orange-400' },
             { name: 'Ultra Rare', time: '18s', color: 'text-pink-400' },
