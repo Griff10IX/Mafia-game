@@ -578,6 +578,27 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
         disabled={savingPrefs || p.passive_booze_paused || (!p.auto_rank_enabled && !p.auto_rank_booze)}
         onToggle={() => onUpdatePref('auto_rank_booze', !p.auto_rank_booze)}
       />
+
+      <ToggleRow
+        icon={Search}
+        label="Robot bodyguard auto-search"
+        description={
+          !p.robot_bg_auto_search_subscription_active
+            ? (
+              <>
+                Requires Robot Auto-Search from the{' '}
+                <Link to="/game/store?tab=upgrades" className="text-primary hover:underline">Points Store</Link>
+                {' '}(30-day pass). Renews Attack searches for your hired robots when ≤3h left.
+              </>
+            )
+            : p.robot_bg_auto_search_enabled
+              ? 'Maintains Attack searches for your robot bodyguards (independent of the Auto Rank master switch).'
+              : 'Paused — your store pass is still active; turn on to resume auto-searches.'
+        }
+        checked={!!p.robot_bg_auto_search_subscription_active && p.robot_bg_auto_search_enabled !== false}
+        disabled={savingPrefs || !p.robot_bg_auto_search_subscription_active}
+        onToggle={() => onUpdatePref('robot_bg_auto_search_enabled', p.robot_bg_auto_search_enabled === false)}
+      />
     </div>
   </div>
   );
@@ -1360,6 +1381,9 @@ export default function AutoRank() {
     auto_rank_scrap_rarity_ids: [],
     auto_rank_email_entitled: false,
     auto_rank_stripe_purchasable: false,
+    robot_bg_auto_search_subscription_active: false,
+    robot_bg_auto_search_enabled: true,
+    robot_bg_auto_search_until: null,
   });
   const [autoRankStripeLoading, setAutoRankStripeLoading] = useState(false);
   const [savingPrefs, setSavingPrefs] = useState(false);
@@ -1609,6 +1633,9 @@ export default function AutoRank() {
             auto_rank_scrap_rarity_ids: meRes.data.auto_rank_scrap_rarity_ids ?? [],
             auto_rank_email_entitled: !!meRes.data.auto_rank_email_entitled,
             auto_rank_stripe_purchasable: !!meRes.data.auto_rank_stripe_purchasable,
+            robot_bg_auto_search_subscription_active: !!meRes.data.robot_bg_auto_search_subscription_active,
+            robot_bg_auto_search_enabled: meRes.data.robot_bg_auto_search_enabled !== false,
+            robot_bg_auto_search_until: meRes.data.robot_bg_auto_search_until || null,
           });
         }
         const hasFeature = meRes?.data?.auto_rank_has_access || meRes?.data?.auto_rank_purchased || meRes?.data?.auto_rank_enabled;
@@ -1780,6 +1807,9 @@ export default function AutoRank() {
         auto_rank_melt_action_ids: res.data?.auto_rank_melt_action_ids ?? p.auto_rank_melt_action_ids,
         auto_rank_melt_rarity_ids: res.data?.auto_rank_melt_rarity_ids ?? p.auto_rank_melt_rarity_ids,
         auto_rank_scrap_rarity_ids: res.data?.auto_rank_scrap_rarity_ids ?? p.auto_rank_scrap_rarity_ids,
+        robot_bg_auto_search_subscription_active: res.data?.robot_bg_auto_search_subscription_active ?? p.robot_bg_auto_search_subscription_active,
+        robot_bg_auto_search_enabled: res.data?.robot_bg_auto_search_enabled !== false,
+        robot_bg_auto_search_until: res.data?.robot_bg_auto_search_until ?? p.robot_bg_auto_search_until,
       }));
       toast.success('Saved');
     } catch (e) {

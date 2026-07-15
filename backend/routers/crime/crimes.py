@@ -462,7 +462,10 @@ from routers.kill.armoury import (
 )
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.point_provenance import log_points_event
-from utils.rolling_event_stats import rolling_event_stats_pipeline, rolling_stats_response_from_doc
+from utils.rolling_event_stats import (
+    fetch_rolling_event_stats,
+    invalidate_rolling_event_stats_cache,
+)
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_CRIMES
 from utils.booze_intake_gate import booze_intake_blocked
 
@@ -1075,6 +1078,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
             "city": city,
         }
     )
+    invalidate_rolling_event_stats_cache("crime_events", current_user["id"])
     crime_details = {"crime_id": crime_id, "crime_name": crime.get("name"), "success": success, "reward": reward}
     if via_auto_rank:
         crime_details["via_auto_rank"] = True
@@ -1098,19 +1102,9 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
 
 async def get_crime_stats(current_user: dict = Depends(get_current_user)):
     """Return crimes today/week, successful crimes, profit today / 24h / week."""
-    now = datetime.now(timezone.utc)
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    last_24h_start = now - timedelta(hours=24)
-    seven_days_start = now - timedelta(days=7)
-    pipeline = rolling_event_stats_pipeline(
-        current_user["id"],
-        seven_days_start=seven_days_start,
-        today_start=today_start,
-        last_24h_start=last_24h_start,
+    out = await fetch_rolling_event_stats(
+        db.crime_events, current_user["id"], collection_name="crime_events"
     )
-    cursor = db.crime_events.aggregate(pipeline)
-    result = await cursor.to_list(1)
-    out = rolling_stats_response_from_doc(result[0] if result else None)
     out["profit_last_hour"] = out["profit_24h"]
     out["profit_last_7_days"] = out["profit_week"]
     return out

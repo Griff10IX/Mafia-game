@@ -2001,7 +2001,12 @@ def register(router):
                 ids = {str(r.get("weapon_id") or "") for r in rows}
                 return ("weapon10" in ids, "weapon11" in ids)
 
-            admin_color_doc, weapon_doc, fam, bodyguard_count, witness_nav_green_n, gp_season_pub, premium_weapon_flags = await asyncio.gather(
+            async def _owns_vip_pass_car_flag():
+                from utils.game_pass_vip_car import user_owns_game_pass_vip_car
+
+                return await user_owns_game_pass_vip_car(db, u["id"])
+
+            admin_color_doc, weapon_doc, fam, bodyguard_count, witness_nav_green_n, gp_season_pub, premium_weapon_flags, owns_vip_pass_car = await asyncio.gather(
                 db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1}),
                 db.weapons.find_one({"id": equipped_weapon_id}, {"_id": 0, "name": 1}) if equipped_weapon_id else _noop(),
                 db.families.find_one({"id": family_id}, {"_id": 0, "name": 1}) if family_id else _noop(),
@@ -2015,6 +2020,7 @@ def register(router):
                 _witness_nav_green_count(),
                 get_game_pass_season_public(db),
                 _owned_premium_weapon_flags(),
+                _owns_vip_pass_car_flag(),
             )
             owns_weapon10, owns_weapon11 = premium_weapon_flags
             gp_current_sid = str((gp_season_pub or {}).get("game_pass_season_id") or "1")
@@ -2097,6 +2103,7 @@ def register(router):
                 armour_owned_level_max=owned_armour_max,
                 owns_weapon10=bool(owns_weapon10),
                 owns_weapon11=bool(owns_weapon11),
+                owns_vip_pass_car=bool(owns_vip_pass_car),
                 current_state=str(u.get("current_state") or ""),
                 total_kills=effective_player_kill_count(u),
                 total_deaths=_safe_int(u.get("total_deaths"), 0),

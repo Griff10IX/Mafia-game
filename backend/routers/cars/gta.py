@@ -187,7 +187,10 @@ from routers.game.families import resolve_family_id
 from utils.family_vault_log import log_family_vault_tx
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.location_climate import get_location_climate, rank_multiplier_for_actor, success_multiplier_for_actor
-from utils.rolling_event_stats import rolling_event_stats_pipeline, rolling_stats_response_from_doc
+from utils.rolling_event_stats import (
+    fetch_rolling_event_stats,
+    invalidate_rolling_event_stats_cache,
+)
 
 # Family members in an active war cannot liquidate exclusive / loot-exclusive cars (list, scrap, melt).
 EXCLUSIVE_CAR_WAR_LOCK_DETAIL = (
@@ -943,6 +946,7 @@ async def attempt_gta(
             "jail_seconds": jail_seconds,
         }
         await db.gta_events.insert_one(event_doc)
+        invalidate_rolling_event_stats_cache("gta_events", current_user.get("id") or "")
         await log_activity(current_user.get("id", ""), current_user.get("username", "?"), "gta_attempt", {
             "option": (option or {}).get("name", request.option_id), "success": success,
             "car": car.get("name") if car else None, "jailed": jailed,
@@ -952,19 +956,9 @@ async def attempt_gta(
 
 async def get_gta_stats(current_user: dict = Depends(get_current_user)):
     """Return GTAs today/week, successful GTAs, profit today / 24h / week."""
-    now = datetime.now(timezone.utc)
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    last_24h_start = now - timedelta(hours=24)
-    seven_days_start = now - timedelta(days=7)
-    pipeline = rolling_event_stats_pipeline(
-        current_user.get("id") or "",
-        seven_days_start=seven_days_start,
-        today_start=today_start,
-        last_24h_start=last_24h_start,
+    return await fetch_rolling_event_stats(
+        db.gta_events, current_user.get("id") or "", collection_name="gta_events"
     )
-    cursor = db.gta_events.aggregate(pipeline)
-    result = await cursor.to_list(1)
-    return rolling_stats_response_from_doc(result[0] if result else None)
 
 
 MELT_BULLETS_COOLDOWN_SECONDS = 45  # Only 1 car can be melted for bullets every 45s. Scrap has no cooldown.

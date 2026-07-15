@@ -794,6 +794,7 @@ class UserResponse(BaseModel):
     armour_owned_level_max: int = 0
     owns_weapon10: bool = False
     owns_weapon11: bool = False
+    owns_vip_pass_car: bool = False
     current_state: str
     total_kills: int
     total_deaths: int

@@ -115,6 +115,7 @@ from server import (
     _is_hdo,
     _is_moderator,
     user_has_admin_list_email,
+    _user_excluded_from_stat_leaderboards,
     CAPO_RANK_ID,
     GODFATHER_RANK_ID,
     get_rank_info,
@@ -1535,6 +1536,8 @@ _BULLET_CALC_TARGET_PROJECTION = {
     "_id": 0,
     "id": 1,
     "username": 1,
+    "email": 1,
+    "is_moderator": 1,
     "is_npc": 1,
     "is_dead": 1,
     "rank_points": 1,
@@ -1551,6 +1554,7 @@ _SEARCH_TARGET_PROJECTION = {
     "id": 1,
     "username": 1,
     "email": 1,
+    "is_moderator": 1,
     "is_npc": 1,
     "is_bodyguard": 1,
     "is_dead": 1,
@@ -1558,6 +1562,13 @@ _SEARCH_TARGET_PROJECTION = {
     "civilian_protection_revoked_at": 1,
     "created_at": 1,
 }
+
+
+def _staff_unattackable_target(user: Optional[dict]) -> bool:
+    """Admin/mod accounts cannot be attack-searched or bullet-calced (generic not-found to clients)."""
+    if not user or user.get("is_npc"):
+        return False
+    return _user_excluded_from_stat_leaderboards(user)
 
 _ATTACK_STATUS_ROW_PROJECTION = {
     "_id": 0,
@@ -1668,6 +1679,10 @@ async def insert_attack_search_row(
     raise_on_cap: bool = False,
 ) -> Optional[dict]:
     """Insert a searching attack row (no Turnstile). Returns None if at active-search cap."""
+    if not target.get("is_npc") and _staff_unattackable_target(target):
+        if raise_on_cap:
+            raise HTTPException(status_code=404, detail="Target user not found")
+        return None
     attacker_id = attacker["id"]
     active_count = await db.attacks.count_documents({
         "attacker_id": attacker_id,
@@ -1752,7 +1767,7 @@ async def search_target(payload: AttackSearchRequest, req: Request, current_user
     target = await db.users.find_one(user_filter, _SEARCH_TARGET_PROJECTION)
     if not target:
         raise HTTPException(status_code=404, detail="Target user not found")
-    if user_has_admin_list_email(target) or _is_moderator(target):
+    if _staff_unattackable_target(target):
         raise HTTPException(status_code=404, detail="Target user not found")
     if target.get("is_dead"):
         raise HTTPException(status_code=400, detail="That account is dead and cannot be attacked")
@@ -1896,13 +1911,13 @@ async def get_attack_status(
     return AttackStatusResponse(**payload)
 
 async def list_attacks(current_user: dict = Depends(get_current_user)):
-    from utils.robot_bg_auto_search import maybe_sync_robot_bg_searches_for_owner, robot_bg_auto_search_active
+    from utils.robot_bg_auto_search import maybe_sync_robot_bg_searches_for_owner, robot_bg_auto_search_running
 
     await maybe_sync_robot_bg_searches_for_owner(db, current_user)
     attacker_id = current_user["id"]
     ac_state = (current_user.get("current_state") or "")
 
-    robot_auto_active = robot_bg_auto_search_active(current_user)
+    robot_auto_active = robot_bg_auto_search_running(current_user)
     cached = _attack_list_cache_get(attacker_id, ac_state)
     if cached is not None:
         # Inflation is already memoized for 3s in _get_kill_inflation_cached; the extra await is cheap.
@@ -2017,6 +2032,8 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
         return _soft_err("Target username required", 400)
     target = await db.users.find_one(user_filter, _BULLET_CALC_TARGET_PROJECTION)
     if not target:
+        return _soft_err("Target user not found", 404)
+    if _staff_unattackable_target(target):
         return _soft_err("Target user not found", 404)
     if not target.get("is_npc") and is_civilian_protected(target):
         return _soft_err(CIVILIAN_PROTECTION_KILL_BLOCKED_DETAIL, 403)
@@ -2346,7 +2363,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         )
     if not target.get("is_npc"):
         await apply_passive_health_regen(target["id"], target)
-    if user_has_admin_list_email(target) or _is_moderator(target):
+    if _staff_unattackable_target(target):
         _fire_and_forget(_log_attack_error(current_user["id"], current_user.get("username"), "Target cannot be attacked", req), label="log_target_unattackable")
         raise HTTPException(status_code=403, detail="Target cannot be attacked")
     target_armour = target.get("armour_level", 0)

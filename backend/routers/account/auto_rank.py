@@ -2351,6 +2351,7 @@ def register(router):
         auto_rank_melt_rarity_ids: Optional[list] = None
         auto_rank_scrap_rarity_ids: Optional[list] = None
         auto_rank_trial_dismissed: Optional[bool] = None
+        robot_bg_auto_search_enabled: Optional[bool] = None
 
     from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_AUTO_RANK
 
@@ -2399,6 +2400,11 @@ def register(router):
                 and not prefs["auto_rank_email_entitled"]
             )
             prefs["passive_booze_paused"] = bool(user.get("passive_booze_paused"))
+            from utils.robot_bg_auto_search import robot_bg_auto_search_active, robot_bg_auto_search_enabled
+
+            prefs["robot_bg_auto_search_subscription_active"] = robot_bg_auto_search_active(user)
+            prefs["robot_bg_auto_search_enabled"] = robot_bg_auto_search_enabled(user)
+            prefs["robot_bg_auto_search_until"] = user.get("robot_bg_auto_search_until")
             logger.debug("Auto rank GET /me ok user_id=%s", user_id)
             return prefs
         except Exception as e:
@@ -2677,6 +2683,15 @@ def register(router):
             updates["auto_rank_scrap_rarity_ids"] = scrap_ids
         if body.auto_rank_trial_dismissed is not None:
             updates["auto_rank_trial_dismissed"] = bool(body.auto_rank_trial_dismissed)
+        if body.robot_bg_auto_search_enabled is not None:
+            from utils.robot_bg_auto_search import robot_bg_auto_search_active
+
+            if body.robot_bg_auto_search_enabled and not robot_bg_auto_search_active(user_row):
+                raise HTTPException(
+                    status_code=400,
+                    detail="Buy Robot Auto-Search from the Points Store first (Upgrades tab).",
+                )
+            updates["robot_bg_auto_search_enabled"] = bool(body.robot_bg_auto_search_enabled)
         if not updates:
             return {"message": "No changes", **_extract_preferences(current_user)}
         op = {"$set": updates}
@@ -2685,7 +2700,7 @@ def register(router):
         await db.users.update_one({"id": user_id}, op)
         updated = await db.users.find_one(
             {"id": user_id},
-            {"_id": 0, **{f: 1 for f in _PREFERENCE_FIELDS}, "auto_rank_crime_ids": 1, "auto_rank_gta_option_ids": 1, "auto_rank_melt_action_ids": 1, "auto_rank_melt_rarity_ids": 1, "auto_rank_scrap_rarity_ids": 1, "passive_booze_paused": 1},
+            {"_id": 0, **{f: 1 for f in _PREFERENCE_FIELDS}, "auto_rank_crime_ids": 1, "auto_rank_gta_option_ids": 1, "auto_rank_melt_action_ids": 1, "auto_rank_melt_rarity_ids": 1, "auto_rank_scrap_rarity_ids": 1, "passive_booze_paused": 1, "robot_bg_auto_search_enabled": 1, "robot_bg_auto_search_until": 1},
         )
         out = {"message": "Preferences saved", **_extract_preferences(updated)}
         out["auto_rank_has_access"] = _user_has_auto_rank_access(updated or {})
@@ -2696,6 +2711,11 @@ def register(router):
         out["auto_rank_melt_rarity_ids"] = updated.get("auto_rank_melt_rarity_ids") if isinstance(updated.get("auto_rank_melt_rarity_ids"), list) else []
         out["auto_rank_scrap_rarity_ids"] = updated.get("auto_rank_scrap_rarity_ids") if isinstance(updated.get("auto_rank_scrap_rarity_ids"), list) else []
         out["passive_booze_paused"] = bool((updated or {}).get("passive_booze_paused"))
+        from utils.robot_bg_auto_search import robot_bg_auto_search_active, robot_bg_auto_search_enabled
+
+        out["robot_bg_auto_search_subscription_active"] = robot_bg_auto_search_active(updated or {})
+        out["robot_bg_auto_search_enabled"] = robot_bg_auto_search_enabled(updated or {})
+        out["robot_bg_auto_search_until"] = (updated or {}).get("robot_bg_auto_search_until")
         return out
 
     @router.get("/auto-rank/interval")

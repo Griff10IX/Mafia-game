@@ -39,6 +39,18 @@ def robot_bg_auto_search_active(user: dict, now: Optional[datetime] = None) -> b
     return until > ref
 
 
+def robot_bg_auto_search_enabled(user: Optional[dict]) -> bool:
+    """User preference from Auto Rank settings; default on when unset."""
+    if not user:
+        return True
+    return user.get("robot_bg_auto_search_enabled") is not False
+
+
+def robot_bg_auto_search_running(user: dict, now: Optional[datetime] = None) -> bool:
+    """Subscription active and user has not disabled robot bodyguard auto-search."""
+    return robot_bg_auto_search_active(user, now) and robot_bg_auto_search_enabled(user)
+
+
 def extend_robot_bg_auto_search_until(current_until: Optional[str], now: Optional[datetime] = None) -> str:
     ref = now or datetime.now(timezone.utc)
     parsed = _parse_iso_utc(current_until)
@@ -138,8 +150,8 @@ async def maybe_auto_search_robots_for_user(db, owner: dict) -> dict:
     if not owner_id or owner.get("is_dead"):
         summary["skipped_reason"] = "dead_or_missing"
         return summary
-    if not robot_bg_auto_search_active(owner):
-        summary["skipped_reason"] = "subscription_inactive"
+    if not robot_bg_auto_search_running(owner):
+        summary["skipped_reason"] = "subscription_inactive_or_disabled"
         return summary
 
     now = datetime.now(timezone.utc)
@@ -177,7 +189,7 @@ async def maybe_auto_search_robots_for_user(db, owner: dict) -> dict:
 
 async def maybe_sync_robot_bg_searches_for_owner(db, owner: dict) -> Optional[dict]:
     """Throttled sync on page load — renews missing robot searches if ticker/cron is down."""
-    if not robot_bg_auto_search_active(owner):
+    if not robot_bg_auto_search_running(owner):
         return None
     owner_id = owner.get("id") or ""
     if not owner_id:
@@ -214,7 +226,7 @@ async def run_robot_bg_auto_search_cron(db) -> dict:
             "robot_bg_auto_search_until": {"$gt": now_iso},
             "is_dead": {"$ne": True},
         },
-        {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "robot_bg_auto_search_until": 1, "search_minutes_override": 1},
+        {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "robot_bg_auto_search_until": 1, "robot_bg_auto_search_enabled": 1, "search_minutes_override": 1},
     ).to_list(5000)
     totals = {"users": len(subscribers), "searched": 0, "skipped": 0, "user_summaries": []}
     for user in subscribers:

@@ -426,15 +426,16 @@ export default function GTA() {
     let nextUser = null;
     let nextGtaStats = { ...DEFAULT_GTA_STATS };
     try {
-      const [optionsRes, recentStolenRes, eventsRes, statsRes, autoRankRes, lootStatusRes, meRes] = await Promise.allSettled([
+      const settled = await Promise.allSettled([
         api.get('/gta/options'),
         api.get('/gta/recent-stolen'),
         apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: { event: null, events_enabled: false } })),
-        api.get('/gta/stats').catch(() => ({ data: {} })),
+        silent ? Promise.resolve({ data: null }) : api.get('/gta/stats').catch(() => ({ data: {} })),
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
         api.get('/loot-box/status').catch(() => ({ data: {} })),
         api.get('/auth/me').catch(() => ({ data: null })),
       ]);
+      const [optionsRes, recentStolenRes, eventsRes, statsRes, autoRankRes, lootStatusRes, meRes] = settled;
       
       if (optionsRes.status === 'fulfilled' && Array.isArray(optionsRes.value?.data)) {
         nextOptions = optionsRes.value.data;
@@ -444,7 +445,7 @@ export default function GTA() {
           toast.error('Failed to load GTA options');
         }
       }
-      if (statsRes.status === 'fulfilled' && statsRes.value?.data && typeof statsRes.value.data === 'object') {
+      if (!silent && statsRes.status === 'fulfilled' && statsRes.value?.data && typeof statsRes.value.data === 'object') {
         nextGtaStats = { ...DEFAULT_GTA_STATS, ...statsRes.value.data };
         setGtaStats(nextGtaStats);
       }
@@ -481,7 +482,7 @@ export default function GTA() {
         recentStolen: nextRecentStolen,
         event: nextEvent,
         eventsEnabled: nextEventsEnabled,
-        gtaStats: nextGtaStats,
+        gtaStats: silent ? (readSessionJson(GTA_SESSION_CACHE_KEY)?.gtaStats ?? nextGtaStats) : nextGtaStats,
         autoRankGtaDisabled: nextAutoRankGtaDisabled,
         activeLootPerks: nextActiveLootPerks,
         user: nextUser,

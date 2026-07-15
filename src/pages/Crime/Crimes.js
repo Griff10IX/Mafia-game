@@ -458,7 +458,10 @@ export default function Crimes() {
   const [autoRankCrimesDisabled, setAutoRankCrimesDisabled] = useState(null); // null = unknown/loading, true = disabled, false = enabled
   const [activeLootPerks, setActiveLootPerks] = useState([]);
 
-  const fetchCrimes = useCallback(async (silent = false) => {
+  // silent=true (cooldown sync / focus): skip /crimes/stats — that aggregate scans 7d of crime_events.
+  // includeStats overrides: needed when silently refreshing after prefetch still wants the footer numbers.
+  const fetchCrimes = useCallback(async (silent = false, { includeStats } = {}) => {
+    const wantStats = includeStats ?? !silent;
     try {
       const prefetched = getCrimesPrefetch();
       const [crimesRes, autoRankRes] = await Promise.all([
@@ -470,15 +473,22 @@ export default function Crimes() {
       const ar = autoRankRes.data || {};
       setAutoRankCrimesDisabled(!!(ar.auto_rank_enabled && ar.auto_rank_crimes));
 
-      Promise.all([
+      const extras = [
         apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: { event: null, events_enabled: false } })),
-        api.get('/crimes/stats').catch(() => ({ data: {} })),
         api.get('/loot-box/status').catch(() => ({ data: {} })),
-      ])
-        .then(([eventsRes, statsRes, lootStatusRes]) => {
+      ];
+      if (wantStats) {
+        extras.splice(1, 0, api.get('/crimes/stats').catch(() => ({ data: {} })));
+      }
+
+      Promise.all(extras)
+        .then((results) => {
+          const eventsRes = results[0];
+          const statsRes = wantStats ? results[1] : null;
+          const lootStatusRes = wantStats ? results[2] : results[1];
           setEvent(eventsRes.data?.event ?? null);
           setEventsEnabled(!!eventsRes.data?.events_enabled);
-          setCrimeStats(statsRes.data || {});
+          if (statsRes) setCrimeStats(statsRes.data || {});
           if (Array.isArray(lootStatusRes?.data?.active_rewards)) {
             const rewards = lootStatusRes.data.active_rewards.filter((r) => r.type === 'rp_10');
             setActiveLootPerks(rewards);
@@ -499,7 +509,7 @@ export default function Crimes() {
   }, []);
 
   useEffect(() => {
-    fetchCrimes(!!bootPrefetchedCrimes);
+    fetchCrimes(!!bootPrefetchedCrimes, { includeStats: true });
   }, [fetchCrimes, bootPrefetchedCrimes]);
 
   useEffect(() => {

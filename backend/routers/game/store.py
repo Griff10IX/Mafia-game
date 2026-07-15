@@ -187,6 +187,7 @@ def _bullet_cost(bullets: int) -> int:
     import math
     return 100 + math.ceil((bullets - 5000) * 75 / 5000)
 CUSTOM_CAR_COST = 500
+VIP_PASS_CAR_STORE_COST_POINTS = 1000
 BUY_HEALTH_COST_POINTS = 15
 FULL_HEALTH = 100
 
@@ -893,7 +894,7 @@ async def buy_robot_bg_auto_search(
     new_until = extend_robot_bg_auto_search_until(current_user.get("robot_bg_auto_search_until"))
     result = await db.users.update_one(
         {"id": current_user["id"], **gte_filter},
-        {"$inc": inc, "$set": {"robot_bg_auto_search_until": new_until}},
+        {"$inc": inc, "$set": {"robot_bg_auto_search_until": new_until, "robot_bg_auto_search_enabled": True}},
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
@@ -1097,6 +1098,52 @@ async def buy_custom_car(
         "reward"
     )
     return {"message": f"Custom car '{request.car_name}' purchased for {cost_used} points"}
+
+
+async def buy_vip_pass_car(
+    pay_with: str = Query("auto"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Purchase the VIP Pass Car (car22) from the Points Store — once per account."""
+    from utils.game_pass_vip_car import grant_vip_pass_car_to_user, user_owns_game_pass_vip_car
+
+    if await user_owns_game_pass_vip_car(db, current_user["id"]):
+        raise HTTPException(status_code=400, detail="You already own the VIP Pass Car")
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, VIP_PASS_CAR_STORE_COST_POINTS, pay_with)
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    result = await db.users.update_one({"id": current_user["id"], **gte_filter}, {"$inc": inc})
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    granted = await grant_vip_pass_car_to_user(
+        db,
+        user_id=current_user["id"],
+        username=current_user.get("username"),
+        event_type="store_purchase",
+        notify=True,
+    )
+    if not granted:
+        refund = {"points": cost_used}
+        if inc.get("lifetime_points_spent"):
+            refund["lifetime_points_spent"] = -int(inc["lifetime_points_spent"])
+        if inc.get("respect_points"):
+            refund["respect_points"] = -int(inc["respect_points"])
+        if inc.get("lifetime_respect_points_spent"):
+            refund["lifetime_respect_points_spent"] = -int(inc["lifetime_respect_points_spent"])
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": refund})
+        raise HTTPException(status_code=400, detail="You already own the VIP Pass Car")
+    _invalidate_travel_info_cache(current_user["id"])
+    await _record_store_points_spend(current_user, inc, "buy-vip-pass-car", cost_used=cost_used)
+    await log_activity(
+        current_user["id"],
+        current_user.get("username") or "?",
+        "store_purchase",
+        {"item": "vip_pass_car", "cost": cost_used},
+    )
+    return {
+        "message": "VIP Pass Car purchased! 8s travel, +50% booze cargo while owned, custom image from Garage.",
+        "cost": cost_used,
+    }
 
 
 async def send_points(request: SendPointsRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -2154,6 +2201,7 @@ def register(router):
     router.add_api_route("/store/buy-bullets", store_buy_bullets, methods=["POST"])
     router.add_api_route("/store/buy-health", buy_health, methods=["POST"])
     router.add_api_route("/store/buy-custom-car", buy_custom_car, methods=["POST"])
+    router.add_api_route("/store/buy-vip-pass-car", buy_vip_pass_car, methods=["POST"])
     router.add_api_route("/store/buy-token", buy_store_token, methods=["POST"])
     router.add_api_route("/store/buy-token-bundle", buy_store_token_bundle, methods=["POST"])
     router.add_api_route("/store/buy-token-selectable-bundle", buy_store_token_selectable_bundle, methods=["POST"])

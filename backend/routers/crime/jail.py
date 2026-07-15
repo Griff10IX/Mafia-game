@@ -51,7 +51,10 @@ from server import (
 from routers.account.objectives import update_objectives_progress
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.point_provenance import log_points_event
-from utils.rolling_event_stats import rolling_event_stats_pipeline, rolling_stats_response_from_doc
+from utils.rolling_event_stats import (
+    fetch_rolling_event_stats,
+    invalidate_rolling_event_stats_cache,
+)
 from utils.sustained_page_ratelimit import check_jail_sustained_page_rl
 from utils.entertainer_service import ENTERTAINER_ONLINE_COLOR_DEFAULT
 
@@ -615,6 +618,7 @@ async def _record_bust_event(user_id: str, success: bool, profit: int, target_us
             "target_username": target_username or "",
             "is_npc": is_npc,
         })
+        invalidate_rolling_event_stats_cache("bust_events", user_id)
     except Exception as e:
         logger.exception("Record bust event: %s", e)
 
@@ -959,19 +963,9 @@ async def bust_out_of_jail(
 
 async def get_jail_stats(current_user: dict = Depends(get_current_user)):
     """Return busts today/week, successful busts, profit today / 24h / week."""
-    now = datetime.now(timezone.utc)
-    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    last_24h_start = now - timedelta(hours=24)
-    seven_days_start = now - timedelta(days=7)
-    pipeline = rolling_event_stats_pipeline(
-        current_user["id"],
-        seven_days_start=seven_days_start,
-        today_start=today_start,
-        last_24h_start=last_24h_start,
+    return await fetch_rolling_event_stats(
+        db.bust_events, current_user["id"], collection_name="bust_events"
     )
-    cursor = db.bust_events.aggregate(pipeline)
-    result = await cursor.to_list(1)
-    return rolling_stats_response_from_doc(result[0] if result else None)
 
 
 async def get_jail_bootstrap(current_user: dict = Depends(get_current_user)):
