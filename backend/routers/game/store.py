@@ -187,7 +187,7 @@ def _bullet_cost(bullets: int) -> int:
     import math
     return 100 + math.ceil((bullets - 5000) * 75 / 5000)
 CUSTOM_CAR_COST = 500
-VIP_PASS_CAR_STORE_COST_POINTS = 1000
+VIP_PASS_CAR_STORE_COST_POINTS = 5000
 BUY_HEALTH_COST_POINTS = 15
 FULL_HEALTH = 100
 
@@ -311,7 +311,7 @@ TOKEN_STORE_BUNDLES = {
     "racket_runner": (78, {"racket_tokens": 1, "booze_tokens": 1}),
     "builder": (100, {"travel_tokens": 1, "properties_tokens": 1}),
 }
-TOKEN_SELECTABLE_BUNDLE_SIZE = 10
+TOKEN_SELECTABLE_BUNDLE_SIZE = 250
 TOKEN_SELECTABLE_BUNDLE_DISCOUNT_PCT = 20
 TOKEN_SELECTABLE_BUNDLE_DISALLOWED = frozenset({"rank_xp_pass", "crew_oc_auto_3h"})
 SHOOTING_RANGE_BONUS_STEP = 2

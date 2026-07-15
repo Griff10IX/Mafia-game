@@ -34,7 +34,9 @@ const BULLET_PACKS = [
   { bullets: 50000, cost: 775 },
   { bullets: 100000, cost: 1525 },
 ];
-const VIP_PASS_CAR_COST_POINTS = 1000;
+/** Must match backend store.CUSTOM_BULLETS_MAX */
+const CUSTOM_BULLETS_MAX = 250_000;
+const VIP_PASS_CAR_COST_POINTS = 5000;
 
 const VALID_TABS = ['points', 'sendpts', 'upgrades', 'tokens', 'bullets'];
 const bulletCost = (bullets) => bullets < 5000 ? Math.max(1, Math.floor(bullets * 0.02)) : 100 + Math.ceil((bullets - 5000) * 75 / 5000);
@@ -104,7 +106,7 @@ const TOKEN_BUNDLES = [
   { id: 'racket_runner', title: 'Racket Runner Pack', price: 78, desc: '+1 Racket token and +1 Booze token.' },
   { id: 'builder', title: 'Builder Pack', price: 100, desc: '+1 Travel token and +1 Properties token.' },
 ];
-const SELECTABLE_BUNDLE_SIZE = 10;
+const SELECTABLE_BUNDLE_SIZE = 250;
 const SELECTABLE_BUNDLE_DISCOUNT_PCT = 20;
 const SELECTABLE_BUNDLE_DISALLOWED = new Set(['rank_xp_pass', 'crew_oc_auto_3h']);
 const SELECTABLE_BUNDLE_ITEMS = TOKEN_STORE_ITEMS.filter((t) => !SELECTABLE_BUNDLE_DISALLOWED.has(t.tokenType));
