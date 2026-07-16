@@ -594,7 +594,7 @@ const HistoryCard = ({ history }) => (
   </div>
 );
 
-const InfoCard = ({ rotationHours, rotationSeconds, dailyEstimateRough, cargoDerivedMax }) => (
+const InfoCard = ({ rotationHours, rotationSeconds, dailyEstimateRough, cargoDerivedMax, vipPassCarBonus, travelLegSeconds, travelCarName }) => (
   <div className={`${styles.panel} rounded-md overflow-hidden border border-zinc-700/30 bz-fade-in mobile-panel`} style={{ animationDelay: '0.25s' }}>
     <div className="px-2.5 py-1.5 border-b border-zinc-700/30">
       <h3 className="text-[9px] font-heading font-bold text-zinc-400 uppercase tracking-[0.12em]">
@@ -622,12 +622,25 @@ const InfoCard = ({ rotationHours, rotationSeconds, dailyEstimateRough, cargoDer
                 <strong className="text-foreground">{Number(cargoDerivedMax).toLocaleString()}</strong>.
               </>
             )}
+            {vipPassCarBonus && (
+              <>{' '}<strong className="text-cyan-400">VIP Pass car: +50% cargo</strong> (above that cap).</>
+            )}
           </span>
         </li>
         {dailyEstimateRough != null && dailyEstimateRough > 0 && (
           <li className="flex items-start gap-1">
             <TrendingUp size={8} className="text-emerald-400 shrink-0 mt-0.5" />
-            <span>24h estimate (best car you have in your garage, best route, non-stop): <strong className="text-emerald-400">~${Number(dailyEstimateRough).toLocaleString()}</strong></span>
+            <span>
+              24h estimate (
+              {travelCarName ? (
+                <>using <strong className="text-foreground">{travelCarName}</strong></>
+              ) : (
+                'fastest garage car'
+              )}
+              {travelLegSeconds != null ? ` · ${travelLegSeconds}s/leg` : ''}
+              {vipPassCarBonus ? ', VIP +50% cargo' : ''}
+              , best route, non-stop): <strong className="text-emerald-400">~${Number(dailyEstimateRough).toLocaleString()}</strong>
+            </span>
           </li>
         )}
         <li className="flex items-start gap-1 md:col-span-2">
@@ -972,6 +985,9 @@ export default function BoozeRun() {
         rotationSeconds={config.rotation_seconds}
         dailyEstimateRough={config.daily_estimate_rough}
         cargoDerivedMax={config.cargo_derived_absolute_max}
+        vipPassCarBonus={!!config.vip_pass_car_bonus}
+        travelLegSeconds={config.travel_leg_seconds}
+        travelCarName={config.travel_car_name}
       />
 
       {captchaModal}

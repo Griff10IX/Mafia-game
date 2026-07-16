@@ -38,7 +38,9 @@ TOTAL_TRIBUTE_TOKEN_CREDITS_DAILY = 20
 # Auto-rank 2h tokens credited daily to balance (not tribute bank); split only across missions that used to grant this bonus.
 TOTAL_TRIBUTE_AUTO_RANK_2H_DAILY = 10
 # Loot box pieces per day from completed missions only (100 missions sum to this when ladder complete).
-TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY = 150
+# Was 150; raised to 200 so every mission can receive ≥1 piece with remainder weighted by difficulty.
+PREVIOUS_TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY = 150
+TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY = 200
 
 WEIGHT_P = 1.6
 WEIGHT_BASE = 12.0
@@ -60,6 +62,26 @@ def _allocate_exact_int(total: int, weights: List[float]) -> List[int]:
     for j in range(diff):
         vals[frac_idx[j % len(frac_idx)]] += 1
     return vals
+
+
+def _allocate_loot_pieces_daily(total: int, weights: List[float]) -> List[int]:
+    """Spread loot across all missions: ≥1 each when total ≥ mission count, then weight the rest."""
+    n = len(weights)
+    if n <= 0:
+        return []
+    if total >= n:
+        base = [1] * n
+        rem = total - n
+        if rem > 0:
+            extra = _allocate_exact_int(rem, weights)
+            return [base[i] + extra[i] for i in range(n)]
+        return base
+    return _allocate_exact_int(total, weights)
+
+
+def legacy_loot_pieces_daily_by_order() -> List[int]:
+    """How loot was split when the ladder total was 150 (weighted only — early missions could be 0)."""
+    return _allocate_exact_int(PREVIOUS_TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY, _weights_100())
 
 
 def _mission_has_random_token(order: int) -> bool:
@@ -185,7 +207,7 @@ def build_missions() -> List[Dict[str, Any]]:
     cash = _allocate_exact_int(TOTAL_CASH_IMMEDIATE, w)
     resp_d = _allocate_exact_int(TOTAL_RESPECT_DAILY, w)
     bull_d = _allocate_exact_int(TOTAL_BULLETS_DAILY, w)
-    loot_d = _allocate_exact_int(TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY, w)
+    loot_d = _allocate_loot_pieces_daily(TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY, w)
 
     # Token daily credits for orders 4..99 only (m_5–m_100)
     w_tok = w[4:100]

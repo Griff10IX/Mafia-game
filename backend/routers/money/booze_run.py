@@ -336,8 +336,10 @@ def _booze_user_capacity_sync(current_user: dict, *, family_cargo_bonus: int = 0
     subtotal = max(1, subtotal)
     if current_user.get("completed_it_booze_capacity"):
         subtotal = min(int(cap_total) * 2, int(subtotal) * 2)
+    # VIP Pass car: +50% cargo while owned. Apply after other caps so the perk is real even at
+    # Godfather max (do not re-clamp to cap_total — that made VIP a no-op for maxed accounts).
     if vip_pass_car_owned:
-        subtotal = min(int(cap_total), max(1, int(subtotal * 1.5)))
+        subtotal = max(1, int(subtotal * 1.5))
     return int(subtotal)
 
 
@@ -966,9 +968,11 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
     runs_count = current_user.get("booze_runs_count", 0)
     history = (current_user.get("booze_run_history") or [])[:BOOZE_RUN_HISTORY_MAX]
     capacity_bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
-    from routers.account.auto_rank import booze_travel_seconds_per_leg
+    from routers.account.auto_rank import booze_travel_leg_info
 
-    travel_leg_sec = await booze_travel_seconds_per_leg(db, uid)
+    travel_info = await booze_travel_leg_info(db, uid)
+    travel_leg_sec = int(travel_info.get("seconds") or 45)
+    travel_car_name = travel_info.get("car_name")
     daily_estimate_rough = _booze_daily_estimate_rough(capacity, prices_map, travel_leg_sec)
 
     _lpm = get_booze_listed_price_mult()
@@ -1004,6 +1008,8 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
         "runs_count": runs_count,
         "history": history,
         "daily_estimate_rough": daily_estimate_rough,
+        "travel_leg_seconds": travel_leg_sec,
+        "travel_car_name": travel_car_name,
         "booze_boost_active": booze_boost_active,
     }
     if len(_config_cache) >= _CONFIG_MAX_ENTRIES:
