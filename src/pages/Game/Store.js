@@ -1550,10 +1550,10 @@ export default function Store() {
               </div>
               <div className="p-2.5">
                 <p className="text-[10px] text-mutedForeground font-heading mb-1.5">
-                  8s travel, +50% booze cargo while owned, custom image, survives death. Only {Number(user?.vip_pass_car_purchase_limit ?? 5)} exist game-wide — also free at VIP Game Pass tier 100 while stock lasts.
+                  8s travel, +50% booze cargo while owned, custom image, survives death. Only {Number(user?.vip_pass_car_purchase_limit ?? 5)} store copies game-wide — VIP Game Pass tier 100 still grants one free (does not use store stock).
                 </p>
                 <p className="text-[10px] text-mutedForeground mb-1.5">
-                  In game: <span className="text-cyan-300 font-bold">{Number(user?.vip_pass_car_in_game ?? 0)}</span>
+                  Store stock: <span className="text-cyan-300 font-bold">{Number(user?.vip_pass_car_in_game ?? 0)}</span>
                   /{Number(user?.vip_pass_car_purchase_limit ?? 5)}
                   {Number(user?.vip_pass_car_count ?? 0) > 0 ? (
                     <span className="text-mutedForeground"> · You own {Number(user?.vip_pass_car_count ?? 0)}</span>

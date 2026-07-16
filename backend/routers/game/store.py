@@ -1106,20 +1106,20 @@ async def buy_vip_pass_car(
     pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
-    """Purchase a VIP Pass Car (car22) from the Points Store — limited game-wide (not per account)."""
+    """Purchase a VIP Pass Car (car22) from the Points Store — limited store stock game-wide (Game Pass free cars excluded)."""
     from utils.game_pass_vip_car import (
-        count_global_vip_pass_cars,
+        count_store_limited_vip_pass_cars,
         count_user_vip_pass_cars,
         get_vip_pass_car_purchase_limit,
         grant_vip_pass_car_to_user,
     )
 
     limit = await get_vip_pass_car_purchase_limit(db)
-    in_game = await count_global_vip_pass_cars(db)
+    in_game = await count_store_limited_vip_pass_cars(db)
     if in_game >= limit:
         raise HTTPException(
             status_code=400,
-            detail=f"VIP Pass Car sold out ({in_game}/{limit} in game)",
+            detail=f"VIP Pass Car store stock sold out ({in_game}/{limit})",
         )
     cost_used, inc, gte_filter = _store_cost_inc(current_user, VIP_PASS_CAR_STORE_COST_POINTS, pay_with)
     if not cost_used:
@@ -1143,10 +1143,10 @@ async def buy_vip_pass_car(
         if inc.get("lifetime_respect_points_spent"):
             refund["lifetime_respect_points_spent"] = -int(inc["lifetime_respect_points_spent"])
         await db.users.update_one({"id": current_user["id"]}, {"$inc": refund})
-        in_game_now = await count_global_vip_pass_cars(db)
+        in_game_now = await count_store_limited_vip_pass_cars(db)
         raise HTTPException(
             status_code=400,
-            detail=f"VIP Pass Car sold out ({in_game_now}/{limit} in game)",
+            detail=f"VIP Pass Car store stock sold out ({in_game_now}/{limit})",
         )
     _invalidate_travel_info_cache(current_user["id"])
     await _record_store_points_spend(current_user, inc, "buy-vip-pass-car", cost_used=cost_used)
@@ -1157,9 +1157,9 @@ async def buy_vip_pass_car(
         {"item": "vip_pass_car", "cost": cost_used},
     )
     owned_after = await count_user_vip_pass_cars(db, current_user["id"])
-    in_game_after = await count_global_vip_pass_cars(db)
+    in_game_after = await count_store_limited_vip_pass_cars(db)
     return {
-        "message": f"VIP Pass Car purchased! ({in_game_after}/{limit} in game) 8s travel, +50% booze cargo while owned, custom image from Garage.",
+        "message": f"VIP Pass Car purchased! (store stock {in_game_after}/{limit}) 8s travel, +50% booze cargo while owned, custom image from Garage.",
         "cost": cost_used,
         "vip_pass_car_count": owned_after,
         "vip_pass_car_in_game": in_game_after,

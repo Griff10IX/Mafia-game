@@ -2003,13 +2003,13 @@ def register(router):
 
             async def _vip_pass_car_info():
                 from utils.game_pass_vip_car import (
-                    count_global_vip_pass_cars,
+                    count_store_limited_vip_pass_cars,
                     count_user_vip_pass_cars,
                     get_vip_pass_car_purchase_limit,
                 )
 
                 count = await count_user_vip_pass_cars(db, u["id"])
-                in_game = await count_global_vip_pass_cars(db)
+                in_game = await count_store_limited_vip_pass_cars(db)
                 limit = await get_vip_pass_car_purchase_limit(db)
                 return count, in_game, limit
 

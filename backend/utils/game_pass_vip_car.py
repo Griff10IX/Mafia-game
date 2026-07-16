@@ -12,7 +12,9 @@ logger = logging.getLogger(__name__)
 
 GAME_PASS_VIP_CAR_ID = "car22"
 VIP_EXCLUSIVE_RARITY = "vip_exclusive"
-# Max VIP Pass Cars that may exist across the whole player base (not per account).
+VIP_PASS_GRANT_SOURCE_GAME_PASS = "game_pass_tier_100"
+VIP_PASS_GRANT_SOURCE_STORE = "store_purchase"
+# Max store / paid VIP Pass Cars game-wide. Game Pass free grants do NOT consume this stock.
 VIP_PASS_CAR_PURCHASE_LIMIT_DEFAULT = 5
 VIP_PASS_CAR_PURCHASE_LIMIT_MIN = 1
 VIP_PASS_CAR_PURCHASE_LIMIT_MAX = 50
@@ -48,13 +50,48 @@ async def set_vip_pass_car_purchase_limit(db, limit: int) -> int:
 
 
 async def count_global_vip_pass_cars(db) -> int:
-    """How many VIP Pass Cars currently exist in all garages (game-wide stock)."""
+    """How many VIP Pass Cars currently exist in all garages (any source)."""
     return int(await db.user_cars.count_documents({"car_id": GAME_PASS_VIP_CAR_ID}))
+
+
+async def _vip_pass_car_ids_from_game_pass_events(db) -> set:
+    """user_car ids originally granted via Game Pass tier 100 (from event log)."""
+    rows = await db.exclusive_car_events.find(
+        {"car_id": GAME_PASS_VIP_CAR_ID, "event_type": VIP_PASS_GRANT_SOURCE_GAME_PASS},
+        {"_id": 0, "user_car_id": 1},
+    ).to_list(500)
+    return {str(r.get("user_car_id")) for r in (rows or []) if r.get("user_car_id")}
+
+
+def _vip_pass_car_is_game_pass_origin(row: dict, gp_event_ids: set) -> bool:
+    src = str(row.get("vip_pass_grant_source") or "").strip()
+    if src == VIP_PASS_GRANT_SOURCE_GAME_PASS:
+        return True
+    if src == VIP_PASS_GRANT_SOURCE_STORE:
+        return False
+    ucid = row.get("id")
+    return bool(ucid and str(ucid) in gp_event_ids)
+
+
+async def count_store_limited_vip_pass_cars(db) -> int:
+    """
+    Cars that consume the game-wide store stock limit.
+    Game Pass free grants are excluded.
+    """
+    rows = await db.user_cars.find(
+        {"car_id": GAME_PASS_VIP_CAR_ID},
+        {"_id": 0, "id": 1, "vip_pass_grant_source": 1},
+    ).to_list(500)
+    if not rows:
+        return 0
+    gp_ids = await _vip_pass_car_ids_from_game_pass_events(db)
+    return sum(1 for r in rows if not _vip_pass_car_is_game_pass_origin(r, gp_ids))
 
 
 async def get_vip_pass_car_stats(db) -> dict:
     """Live VIP Pass Car inventory + grant-source breakdown + per-car owners."""
     cars_in_game = await count_global_vip_pass_cars(db)
+    store_limited_in_game = await count_store_limited_vip_pass_cars(db)
     owner_ids = await db.user_cars.distinct("user_id", {"car_id": GAME_PASS_VIP_CAR_ID})
     owner_accounts = len([x for x in (owner_ids or []) if x])
     game_pass_granted_accounts = int(
@@ -76,6 +113,7 @@ async def get_vip_pass_car_stats(db) -> dict:
         v for k, v in grants_by_type.items() if k not in ("store_purchase", "game_pass_tier_100")
     )
 
+    gp_event_ids = await _vip_pass_car_ids_from_game_pass_events(db)
     garage_rows = await db.user_cars.find(
         {"car_id": GAME_PASS_VIP_CAR_ID},
         {
@@ -86,6 +124,7 @@ async def get_vip_pass_car_stats(db) -> dict:
             "listed_for_sale": 1,
             "damage_percent": 1,
             "custom_image_url": 1,
+            "vip_pass_grant_source": 1,
         },
     ).to_list(200)
     uid_list = sorted({str(r.get("user_id") or "") for r in (garage_rows or []) if r.get("user_id")})
@@ -103,9 +142,13 @@ async def get_vip_pass_car_stats(db) -> dict:
         ).to_list(300)
     user_by_id = {str(u.get("id")): u for u in (users or []) if u.get("id")}
     owners = []
+    game_pass_cars_in_game = 0
     for row in garage_rows or []:
         uid = str(row.get("user_id") or "")
         u = user_by_id.get(uid) or {}
+        is_gp = _vip_pass_car_is_game_pass_origin(row, gp_event_ids)
+        if is_gp:
+            game_pass_cars_in_game += 1
         owners.append(
             {
                 "user_car_id": row.get("id"),
@@ -113,6 +156,10 @@ async def get_vip_pass_car_stats(db) -> dict:
                 "username": u.get("username") or "?",
                 "is_dead": bool(u.get("is_dead")),
                 "game_pass_vip_car_granted": bool(u.get("game_pass_vip_car_granted")),
+                "grant_source": VIP_PASS_GRANT_SOURCE_GAME_PASS if is_gp else (
+                    str(row.get("vip_pass_grant_source") or "").strip() or VIP_PASS_GRANT_SOURCE_STORE
+                ),
+                "counts_toward_limit": not is_gp,
                 "acquired_at": row.get("acquired_at"),
                 "listed_for_sale": bool(row.get("listed_for_sale")),
                 "damage_percent": float(row.get("damage_percent") or 0),
@@ -123,6 +170,8 @@ async def get_vip_pass_car_stats(db) -> dict:
 
     return {
         "cars_in_game": cars_in_game,
+        "store_limited_in_game": store_limited_in_game,
+        "game_pass_cars_in_game": game_pass_cars_in_game,
         "owner_accounts": owner_accounts,
         "game_pass_granted_accounts": game_pass_granted_accounts,
         "store_purchase_grants": store_grants,
@@ -201,6 +250,7 @@ async def admin_remove_vip_pass_cars(
         "removed_count": len(removed),
         "removed": removed,
         "cars_in_game": await count_global_vip_pass_cars(db),
+        "store_limited_in_game": await count_store_limited_vip_pass_cars(db),
         "cleared_game_pass_grant": bool(clear_game_pass_grant and affected_user_ids),
     }
 
@@ -243,6 +293,7 @@ async def _insert_vip_pass_car(
                 "car_name": car_info.get("name") or "VIP Pass Car",
                 "acquired_at": now_iso,
                 "damage_percent": 0,
+                "vip_pass_grant_source": event_type or VIP_PASS_GRANT_SOURCE_STORE,
             }
         )
     except Exception:
@@ -289,14 +340,18 @@ async def grant_vip_pass_car_to_user(
     notify: bool = True,
 ) -> bool:
     """
-    Grant one VIP Pass Car if game-wide stock is under the configured limit.
+    Grant one VIP Pass Car.
+    Store / paid grants respect the game-wide store stock limit.
+    Game Pass free grants do not consume that limit.
     Returns True if a new car row was inserted.
     """
     if not user_id:
         return False
-    limit = await get_vip_pass_car_purchase_limit(db)
-    if await count_global_vip_pass_cars(db) >= limit:
-        return False
+    counts_toward_limit = event_type != VIP_PASS_GRANT_SOURCE_GAME_PASS
+    if counts_toward_limit:
+        limit = await get_vip_pass_car_purchase_limit(db)
+        if await count_store_limited_vip_pass_cars(db) >= limit:
+            return False
     ok = await _insert_vip_pass_car(
         db,
         user_id=user_id,
@@ -306,26 +361,28 @@ async def grant_vip_pass_car_to_user(
     )
     if not ok:
         return False
-    # Soft race guard: if concurrent grants pushed over the global limit, roll back this insert.
-    if await count_global_vip_pass_cars(db) > limit:
-        try:
-            newest = await db.user_cars.find_one(
-                {"user_id": user_id, "car_id": GAME_PASS_VIP_CAR_ID},
-                {"_id": 0, "id": 1},
-                sort=[("acquired_at", -1)],
-            )
-            if newest and newest.get("id"):
-                await db.user_cars.delete_one({"id": newest["id"], "user_id": user_id})
-        except Exception:
-            logger.exception("game_pass_vip_car over-limit rollback failed user_id=%s", user_id)
-        return False
+    # Soft race guard for store stock only.
+    if counts_toward_limit:
+        limit = await get_vip_pass_car_purchase_limit(db)
+        if await count_store_limited_vip_pass_cars(db) > limit:
+            try:
+                newest = await db.user_cars.find_one(
+                    {"user_id": user_id, "car_id": GAME_PASS_VIP_CAR_ID},
+                    {"_id": 0, "id": 1},
+                    sort=[("acquired_at", -1)],
+                )
+                if newest and newest.get("id"):
+                    await db.user_cars.delete_one({"id": newest["id"], "user_id": user_id})
+            except Exception:
+                logger.exception("game_pass_vip_car over-limit rollback failed user_id=%s", user_id)
+            return False
     return True
 
 
 async def grant_game_pass_vip_car_if_eligible(db, *, user_id: str) -> bool:
     """
     Grant one VIP Pass car the first time VIP reaches tier 100 (once per account).
-    Still respects the game-wide stock limit. Idempotent via users.game_pass_vip_car_granted.
+    Does not consume store stock. Idempotent via users.game_pass_vip_car_granted.
     """
     if not user_id:
         return False
@@ -345,10 +402,6 @@ async def grant_game_pass_vip_car_if_eligible(db, *, user_id: str) -> bool:
     if user.get("game_pass_vip_car_granted"):
         return False
 
-    limit = await get_vip_pass_car_purchase_limit(db)
-    if await count_global_vip_pass_cars(db) >= limit:
-        return False
-
     claim = await db.users.update_one(
         {"id": user_id, "game_pass_vip_car_granted": {"$ne": True}},
         {"$set": {"game_pass_vip_car_granted": True}},
@@ -360,7 +413,7 @@ async def grant_game_pass_vip_car_if_eligible(db, *, user_id: str) -> bool:
         db,
         user_id=user_id,
         username=user.get("username"),
-        event_type="game_pass_tier_100",
+        event_type=VIP_PASS_GRANT_SOURCE_GAME_PASS,
         notify=True,
     )
     if not ok:
