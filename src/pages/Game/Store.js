@@ -54,7 +54,7 @@ const TOKEN_MAX_STACK_LABEL = '1 week';
 /** Must match backend AUTO_RANK_COST_POINTS / pricing logic (8× token pts ≈ full unlock pts for 16h only). */
 const AUTO_RANK_COST_POINTS = 5000;
 const ROBOT_BG_AUTO_SEARCH_COST_POINTS = 10_000;
-const BODYGUARD_FIND_TIME_COST_POINTS = 2500;
+const BODYGUARD_FIND_TIME_COST_POINTS = 5000;
 
 function robotBgAutoSearchActive(user) {
   if (user?.robot_bg_auto_search_active) return true;

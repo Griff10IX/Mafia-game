@@ -90,11 +90,15 @@ function travelErrorMessage(error) {
   return detail || 'Travel failed';
 }
 
-const TravelingScreen = ({ destination, timeLeft, pending }) => (
+const TravelingScreen = ({ destination, timeLeft, pending, method }) => {
+  const isAirport = method === 'airport';
+  return (
   <div className="flex flex-col items-center justify-center min-h-[40vh] space-y-3" data-testid="traveling-screen">
-    <div className="text-4xl md:text-5xl animate-bounce">🚗</div>
+    <div className="text-4xl md:text-5xl animate-bounce">{isAirport ? '✈️' : '🚗'}</div>
     <h2 className="text-lg md:text-xl font-heading font-bold text-primary uppercase tracking-wider text-center">
-      Traveling to {destination}...
+      {pending
+        ? (isAirport ? `Flying to ${destination}...` : `Departing for ${destination}...`)
+        : `Traveling to ${destination}...`}
     </h2>
     <div className="text-3xl md:text-4xl font-heading font-bold text-foreground tabular-nums">
       {pending ? '…' : `${Math.max(0, Math.floor(Number(timeLeft) || 0))}s`}
@@ -103,7 +107,8 @@ const TravelingScreen = ({ destination, timeLeft, pending }) => (
       <div className="h-full bg-gradient-to-r from-primary via-yellow-600 to-primary animate-pulse"></div>
     </div>
   </div>
-);
+  );
+};
 
 function CurrentLocationCard({ location, travelsUsed, maxTravels, userPoints, climateBand }) {
   const imgSrc = locationImageSrc(location);
@@ -176,6 +181,7 @@ const DestinationCard = ({
   onTravel, 
   travelInfo,
   travelDisabled = false,
+  travelBusy = false,
   climateBand,
 }) => {
   if (!travelInfo) return null;
@@ -184,8 +190,9 @@ const DestinationCard = ({
   const hasAirports = !!airport;
   const listedAirport = airport ? (airport.price_per_travel ?? 10) : (travelInfo.airport_cost ?? 10);
   const payAirport = airport ? (airport.effective_price ?? listedAirport) : (travelInfo.airport_cost ?? 10);
-  const canUse = !travelDisabled && !travelInfo.carrying_booze && (travelInfo.user_points ?? 0) >= payAirport;
+  const canUse = !travelDisabled && !travelBusy && !travelInfo.carrying_booze && (travelInfo.user_points ?? 0) >= payAirport;
   const tryAirportTravel = (slot) => {
+    if (travelBusy) return;
     if (travelDisabled) {
       toast.info(AUTO_RANK_TRAVEL_TOAST);
       return;
@@ -201,6 +208,7 @@ const DestinationCard = ({
     onTravel(destination, 'airport', slot);
   };
   const tryCarTravel = (method, canTravel) => {
+    if (travelBusy) return;
     if (travelDisabled) {
       toast.info(AUTO_RANK_TRAVEL_TOAST);
       return;
@@ -240,7 +248,7 @@ const DestinationCard = ({
           const displayPrice = airport.effective_price ?? listed;
           const getsOwnerDiscount = !!travelInfo.user_gets_airport_discount;
           const cheaperThanListed = displayPrice < listed;
-          const canUseAirport = !travelDisabled && !travelInfo.carrying_booze && travelInfo.user_points >= displayPrice;
+          const canUseAirport = !travelDisabled && !travelBusy && !travelInfo.carrying_booze && travelInfo.user_points >= displayPrice;
           const discountHint = cheaperThanListed
             ? (getsOwnerDiscount && travelInfo.travel_boost_applies_to_car_times
                 ? ' (owner + travel boost)'
@@ -314,7 +322,7 @@ const DestinationCard = ({
           return combined.slice(0, 5).map((item) => {
             const isCustom = item.travelMethod === 'custom';
             const canTravel = item.can_travel !== false;
-            const carLooksDisabled = travelDisabled || !canTravel;
+            const carLooksDisabled = travelDisabled || travelBusy || !canTravel;
             const Icon = item.Icon;
             return (
               <button
@@ -442,6 +450,7 @@ export default function Travel() {
   const [travelPostPending, setTravelPostPending] = useState(false);
   const [travelTime, setTravelTime] = useState(0);
   const [selectedDest, setSelectedDest] = useState('');
+  const [travelMethod, setTravelMethod] = useState('');
   const [autoRankBoozeOn, setAutoRankBoozeOn] = useState(() => !!bootCached?.autoRankBoozeOn);
   const [user, setUser] = useState(() => bootCached?.user ?? null);
   /** Block travel while single-player or MP blackjack is unfinished */
@@ -571,6 +580,7 @@ export default function Travel() {
 
   const handleTravel = async (destination, method, airportSlot = 1) => {
     setSelectedDest(destination);
+    setTravelMethod(method === 'airport' ? 'airport' : 'car');
     setTravelPostPending(true);
     setTraveling(false);
     setTravelTime(0);
@@ -635,12 +645,14 @@ export default function Travel() {
     }
   };
 
-  if (travelPostPending || (traveling && travelTime > 0)) {
+  // Full-page travel UI only for timed legs (cars). Airport is 0s — don't flash the countdown screen while the API runs.
+  if (traveling && travelTime > 0) {
     return (
       <TravelingScreen
         destination={selectedDest || '…'}
         timeLeft={travelTime}
-        pending={travelPostPending}
+        pending={false}
+        method={travelMethod}
       />
     );
   }
@@ -755,6 +767,7 @@ export default function Travel() {
               onTravel={handleTravel}
               travelInfo={travelInfo}
               travelDisabled={autoRankBoozeOn}
+              travelBusy={travelPostPending}
               climateBand={band}
             />
             );

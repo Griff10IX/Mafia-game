@@ -285,6 +285,7 @@ async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
     rarity = await _get_loot_rarity_config()
     return {
         "loot_box_pieces": pieces,
+        "loot_box_free_rare_opens": int(current_user.get("loot_box_free_rare_opens") or 0),
         "open_cost_by_tier": dict(LOOT_BOX_OPEN_COST_BY_TIER),
         "claimed_counts": claimed,
         "exclusive_caps": {
@@ -659,7 +660,25 @@ async def open_loot_box(
         type(raw_pieces).__name__,
     )
     is_admin_test = _is_admin(current_user)
-    if is_admin_test:
+    used_free_rare = False
+    if (
+        not is_admin_test
+        and paid_tier == "rare"
+        and int(current_user.get("loot_box_free_rare_opens") or 0) > 0
+    ):
+        free_res = await db.users.find_one_and_update(
+            {"id": user_id, "loot_box_free_rare_opens": {"$gte": 1}},
+            {"$inc": {"loot_box_free_rare_opens": -1}},
+            projection={"_id": 0, "id": 1, "loot_box_pieces": 1, "loot_box_free_rare_opens": 1},
+            return_document=True,
+        )
+        if free_res:
+            used_free_rare = True
+            new_pieces = int(free_res.get("loot_box_pieces") or 0)
+            res = free_res
+    if used_free_rare:
+        pass
+    elif is_admin_test:
         res = await db.users.find_one({"id": user_id}, {"_id": 0, "id": 1, "loot_box_pieces": 1})
         new_pieces = int(res.get("loot_box_pieces") or 0) if res else 0
     else:
@@ -1008,15 +1027,32 @@ async def open_loot_box(
             "rewards": rewards,
             "box_quality": box_quality,
             "paid_tier": paid_tier,
-            "pieces_spent": cost,
+            "pieces_spent": 0 if used_free_rare else cost,
+            "used_free_rare_open": used_free_rare,
             "guaranteed_rare_plus": 2 if paid_tier in ("rare", "ultra_rare") else 0,
             "prizes_count": len(rewards),
             "new_pieces": new_pieces + piece_grant,
             "claimed_counts": await _get_claimed_counts(),
         }
     except HTTPException:
+        if used_free_rare:
+            try:
+                await db.users.update_one(
+                    {"id": user_id},
+                    {"$inc": {"loot_box_free_rare_opens": 1}},
+                )
+            except Exception:
+                logger.exception("Failed to refund free rare open user_id=%s", user_id)
         raise
     except Exception as e:
+        if used_free_rare:
+            try:
+                await db.users.update_one(
+                    {"id": user_id},
+                    {"$inc": {"loot_box_free_rare_opens": 1}},
+                )
+            except Exception:
+                logger.exception("Failed to refund free rare open user_id=%s", user_id)
         logger.exception("Loot box open (rewards) user_id=%s: %s", user_id, e)
         raise HTTPException(
             status_code=500,

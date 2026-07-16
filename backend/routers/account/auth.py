@@ -773,6 +773,14 @@ def register(router):
                 "email_verified": not require_verification,
                 "rules_accepted": False,
                 "rules_accepted_at": None,
+                "tutorial_status": "pending",
+                "tutorial_step": None,
+                "tutorial_crime_done": False,
+                "tutorial_gta_done": False,
+                "tutorial_theme_done": False,
+                "tutorial_rewards_granted": False,
+                "tutorial_ineligible_reason": None,
+                "loot_box_free_rare_opens": 0,
                 # Rank-XP pass (£9.99): entitlement is unactivated until used in Armoury.
                 "rank_xp_pass_tokens": 0,
                 "rank_xp_pass_bonus_until": None,
@@ -826,6 +834,35 @@ def register(router):
             if is_founding:
                 user_doc["founding_member"] = True
                 user_doc["badges"] = [PREREGISTER_REWARDS.get("badge", "Founding Member")]
+
+            # Tutorial rewards are once per email + IP — alts auto-skip (no coach / no rewards).
+            # Global flag defaults OFF until Admin enables it for all new players.
+            try:
+                from utils.tutorial import (
+                    email_or_ip_already_claimed,
+                    is_tutorial_globally_enabled,
+                    TUTORIAL_STATUS_PENDING,
+                    TUTORIAL_STATUS_SKIPPED,
+                )
+
+                tutorial_on = await is_tutorial_globally_enabled(db)
+                claimed, reason = await email_or_ip_already_claimed(
+                    db,
+                    email=user_doc.get("email"),
+                    ip=user_doc.get("registration_ip"),
+                )
+                if not tutorial_on:
+                    user_doc["tutorial_status"] = TUTORIAL_STATUS_SKIPPED
+                    user_doc["tutorial_ineligible_reason"] = "disabled"
+                elif claimed:
+                    user_doc["tutorial_status"] = TUTORIAL_STATUS_SKIPPED
+                    user_doc["tutorial_ineligible_reason"] = reason
+                else:
+                    user_doc["tutorial_status"] = TUTORIAL_STATUS_PENDING
+            except Exception:
+                logging.exception("tutorial eligibility at register failed")
+                user_doc["tutorial_status"] = "skipped"
+                user_doc["tutorial_ineligible_reason"] = "disabled"
 
             # Check if beta signup mode is enabled - give bonus resources, Godfather rank, prestige 1, exclusive car, loot exclusive car & weapon
             game_config = await db.game_config.find_one({"id": "main"}, {"_id": 0, "beta_signup_enabled": 1})
@@ -1120,14 +1157,51 @@ def register(router):
         return out
 
     @router.post("/auth/accept-rules")
-    async def accept_rules(current_user: dict = Depends(get_current_user)):
+    async def accept_rules(request: Request, current_user: dict = Depends(get_current_user)):
         """One-time rules acceptance gate for gameplay access."""
         now_iso = datetime.now(timezone.utc).isoformat()
         await db.users.update_one(
             {"id": current_user["id"]},
             {"$set": {"rules_accepted": True, "rules_accepted_at": now_iso}},
         )
-        return {"ok": True, "rules_accepted": True, "rules_accepted_at": now_iso}
+        tutorial_payload = {
+            "tutorial_status": current_user.get("tutorial_status"),
+            "tutorial_step": current_user.get("tutorial_step"),
+            "eligible": False,
+        }
+        try:
+            from utils.tutorial import resolve_tutorial_eligibility
+
+            def _client_ip_local() -> str:
+                try:
+                    forwarded = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
+                    if forwarded:
+                        return forwarded
+                    if request.client and request.client.host:
+                        return str(request.client.host)
+                except Exception:
+                    pass
+                return ""
+
+            fresh = await db.users.find_one({"id": current_user["id"]}, {"_id": 0}) or {
+                **current_user,
+                "rules_accepted": True,
+            }
+            info = await resolve_tutorial_eligibility(db, fresh, request_ip=_client_ip_local())
+            tutorial_payload = {
+                "tutorial_status": info.get("tutorial_status"),
+                "tutorial_step": info.get("tutorial_step"),
+                "eligible": bool(info.get("eligible")),
+                "tutorial_ineligible_reason": info.get("tutorial_ineligible_reason"),
+            }
+        except Exception:
+            logging.exception("tutorial eligibility on accept-rules failed")
+        return {
+            "ok": True,
+            "rules_accepted": True,
+            "rules_accepted_at": now_iso,
+            **tutorial_payload,
+        }
 
     @router.post("/auth/track-login-page-view")
     async def track_login_page_view(request: Request):
@@ -2267,6 +2341,14 @@ def register(router):
                 referral_earnings_melt_bullets=_safe_int(u.get("referral_earnings_melt_bullets"), 0),
                 rules_accepted=bool(u.get("rules_accepted", False)),
                 rules_accepted_at=u.get("rules_accepted_at"),
+                tutorial_status=u.get("tutorial_status"),
+                tutorial_step=u.get("tutorial_step"),
+                tutorial_crime_done=bool(u.get("tutorial_crime_done", False)),
+                tutorial_gta_done=bool(u.get("tutorial_gta_done", False)),
+                tutorial_theme_done=bool(u.get("tutorial_theme_done", False)),
+                tutorial_rewards_granted=bool(u.get("tutorial_rewards_granted", False)),
+                tutorial_ineligible_reason=u.get("tutorial_ineligible_reason"),
+                loot_box_free_rare_opens=_safe_int(u.get("loot_box_free_rare_opens"), 0),
             )
         except HTTPException:
             raise

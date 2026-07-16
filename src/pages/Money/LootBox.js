@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Gift, X, Package, Swords, Car, Shield, Building2, Coins, Zap, Save, Puzzle } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -834,8 +834,12 @@ let _lootLastFetch = 0;
 const LOOT_REFRESH = 30_000;
 
 export default function LootBox() {
+  const [searchParams] = useSearchParams();
   const [status, setStatus] = useState(_cachedLootStatus);
-  const [selectedTier, setSelectedTier] = useState('common');
+  const [selectedTier, setSelectedTier] = useState(() => {
+    const t = (searchParams.get('tier') || '').trim().toLowerCase();
+    return PAID_TIERS.includes(t) ? t : 'common';
+  });
   const [phase, setPhase] = useState('idle'); // idle | shaking | exploding | done
   const [openAnimLevel, setOpenAnimLevel] = useState(0);
   const [result, setResult] = useState(null);
@@ -843,6 +847,12 @@ export default function LootBox() {
   const [rarityConfig, setRarityConfig] = useState(null);
   const [rarityForm, setRarityForm] = useState({ exclusive_chance_pct: 10, common_pct: 55, uncommon_pct: 32, rare_pct: 13 });
   const [raritySaving, setRaritySaving] = useState(false);
+  const tutorialLoot = searchParams.get('tutorial') === '1';
+
+  useEffect(() => {
+    const t = (searchParams.get('tier') || '').trim().toLowerCase();
+    if (PAID_TIERS.includes(t)) setSelectedTier(t);
+  }, [searchParams]);
 
   const loadStatus = async (silent = false) => {
     try {
@@ -948,7 +958,9 @@ export default function LootBox() {
   const handleOpen = async () => {
     const pieces = status?.loot_box_pieces ?? 0;
     const cost = resolveOpenCost(status, selectedTier);
-    if (pieces < cost) return;
+    const freeRare = Number(status?.loot_box_free_rare_opens || 0);
+    const canUseFreeRare = selectedTier === 'rare' && freeRare > 0;
+    if (pieces < cost && !canUseFreeRare) return;
     setResult(null);
     setOpenAnimLevel(0);
     setPhase('shaking');
@@ -989,11 +1001,13 @@ export default function LootBox() {
   const closeModal = () => { setResult(null); setPhase('idle'); setOpenAnimLevel(0); };
 
   const pieces = status?.loot_box_pieces ?? 0;
+  const freeRareOpens = Number(status?.loot_box_free_rare_opens || 0);
   const tierCost = resolveOpenCost(status, selectedTier);
   const tierTheme = LOOT_TIER_THEME[selectedTier] || LOOT_TIER_THEME.common;
   const claimed = status?.claimed_counts ?? { weapon: 0, car: 0, armour: 0, property: 0 };
   const exclusiveCaps = status?.exclusive_caps ?? { weapon: 1, car: 1, armour: 1, property: 1 };
-  const canOpen = pieces >= tierCost && phase === 'idle';
+  const canUseFreeRare = selectedTier === 'rare' && freeRareOpens > 0;
+  const canOpen = (pieces >= tierCost || canUseFreeRare) && phase === 'idle';
 
   if (!status) {
     return (
@@ -1018,6 +1032,13 @@ export default function LootBox() {
                 Earn pieces from <Link to="/account/missions" className="text-primary underline">the Consigliere&apos;s Ledger</Link>.
                 Pick a vault tier below (50–1,000 pieces). Better tiers and jackpots mean bigger reveals.
               </p>
+              {(tutorialLoot || freeRareOpens > 0) ? (
+                <p className="text-[10px] font-heading text-blue-300 mt-1.5">
+                  {freeRareOpens > 0
+                    ? `You have ${freeRareOpens} free Rare open${freeRareOpens === 1 ? '' : 's'} — select Rare and open without spending pieces.`
+                    : 'Tutorial reward: select Rare to open your free box.'}
+                </p>
+              ) : null}
             </div>
 
             <LootRewardGuide rewardInfo={status.reward_info} odds={status.loot_rarity_odds} />
@@ -1042,7 +1063,10 @@ export default function LootBox() {
                     <div className={`text-[10px] font-heading font-bold uppercase tracking-wider ${th.accent}`}>
                       {th.label}
                     </div>
-                    <div className="text-[8px] text-mutedForeground font-heading">{fmtInt(cost)} pieces · {th.prizeHint}</div>
+                    <div className="text-[8px] text-mutedForeground font-heading">
+                      {t === 'rare' && freeRareOpens > 0 ? 'FREE open available · ' : ''}
+                      {fmtInt(cost)} pieces · {th.prizeHint}
+                    </div>
                     <div className="text-[7px] text-mutedForeground/90 font-heading italic mt-0.5 leading-tight">{th.tagline}</div>
                   </button>
                 );
@@ -1093,7 +1117,9 @@ export default function LootBox() {
                     : phase === 'exploding'
                       ? 'THE VAULT OPENS…'
                       : canOpen
-                        ? `OPEN ${tierTheme.label.toUpperCase()} — ${fmtInt(tierCost)} PIECES`
+                        ? (canUseFreeRare
+                          ? `OPEN FREE ${tierTheme.label.toUpperCase()} BOX`
+                          : `OPEN ${tierTheme.label.toUpperCase()} — ${fmtInt(tierCost)} PIECES`)
                         : `${fmtInt(Math.max(0, tierCost - pieces))} PIECES NEEDED`}
                 </button>
               </div>

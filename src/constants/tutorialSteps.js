@@ -1,0 +1,81 @@
+/** Fixed-sequence new-player tutorial step copy + CTAs. */
+export const TUTORIAL_STEPS = [
+  {
+    id: 'theme',
+    title: 'Pick your look',
+    body: 'Choose Default or Modern. You can change this anytime in Theme settings.',
+    gate: 'theme',
+    primaryCta: { label: 'Choose theme', action: 'open_theme' },
+    nextLabel: 'Next',
+  },
+  {
+    id: 'crimes',
+    title: 'Commit a crime',
+    body: 'Crimes are your basic grind — earn cash and respect. Commit one crime to continue.',
+    gate: 'crime',
+    route: '/crime/crimes',
+    primaryCta: { label: 'Go to Crimes', action: 'navigate' },
+    nextLabel: 'Next',
+  },
+  {
+    id: 'gta',
+    title: 'Attempt a GTA',
+    body: 'Steal a car from GTA. Attempt one GTA (success or fail) to continue.',
+    gate: 'gta',
+    route: '/crime/gta',
+    primaryCta: { label: 'Go to GTA', action: 'navigate' },
+    nextLabel: 'Next',
+  },
+  {
+    id: 'auto_rank',
+    title: 'Auto Rank',
+    body: 'Auto Rank can run crimes, GTA, busts, and more for you while you are away. Buy it in the Store or manage it under Account.',
+    gate: 'ack',
+    route: '/game/store',
+    primaryCta: { label: 'Open Store', action: 'navigate' },
+    secondaryCta: { label: 'Auto Rank settings', route: '/account/autorank' },
+    nextLabel: 'Got it',
+  },
+  {
+    id: 'travel',
+    title: 'Travel the map',
+    body: 'Different cities unlock crimes, GTA options, and money makers. Use Travel to move between states.',
+    gate: 'ack',
+    route: '/game/travel',
+    primaryCta: { label: 'Go to Travel', action: 'navigate' },
+    nextLabel: 'Got it',
+  },
+  {
+    id: 'jail',
+    title: 'Jail & busts',
+    body: 'Fail a crime or GTA and you may land in jail. Bust yourself or friends out from the Jail page.',
+    gate: 'ack',
+    route: '/crime/jail',
+    primaryCta: { label: 'Open Jail', action: 'navigate' },
+    nextLabel: 'Got it',
+  },
+  {
+    id: 'distillery',
+    title: 'Distillery (later)',
+    body: 'The Distillery needs Capo rank and the Booze-making racket. You collect, manage heat, and can auto-sell — unlock it when you qualify.',
+    gate: 'ack',
+    route: '/money/racket',
+    primaryCta: { label: 'View Racket', action: 'navigate' },
+    secondaryCta: { label: 'Distillery', route: '/money/distillery' },
+    nextLabel: 'Got it',
+  },
+  {
+    id: 'missions',
+    title: 'Missions & objectives',
+    body: 'Check Missions and Objectives for longer goals and big rewards. Finish the tutorial to claim your starter rewards.',
+    gate: 'ack',
+    route: '/account/missions',
+    primaryCta: { label: 'Open Missions', action: 'navigate' },
+    secondaryCta: { label: 'Objectives', route: '/account/objectives' },
+    nextLabel: 'Complete tutorial',
+  },
+];
+
+export function getTutorialStep(stepId) {
+  return TUTORIAL_STEPS.find((s) => s.id === stepId) || TUTORIAL_STEPS[0];
+}

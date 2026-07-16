@@ -25,6 +25,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/t
 import { useTheme } from '../context/ThemeContext';
 import ThemePicker from './ThemePicker';
 import FirstTimeThemeModal from './FirstTimeThemeModal';
+import TutorialCoach, { markTutorialThemeDoneAndAdvance } from './TutorialCoach';
 import { getThemePreset } from '../constants/themes';
 import ErrorBoundary from './ErrorBoundary';
 import ActiveEventBanner from './ActiveEventBanner';
@@ -523,7 +524,13 @@ export default function Layout({ children }) {
       localStorage.setItem('app_initial_theme_chosen', '1');
     } catch (_) {}
     setShowInitialThemeModal(false);
-  }, [setColour, setTexture, setButtonColour, setAccentLineColour, setWritingColour, setMutedWritingColour, setButtonStyle, setFont, setTextStyle, setToastTextColour, setMobileNavStyle, setThemeVariant]);
+    window.dispatchEvent(new Event('app-initial-theme-chosen'));
+    if (user?.tutorial_status === 'in_progress' && (user?.tutorial_step === 'theme' || !user?.tutorial_theme_done)) {
+      markTutorialThemeDoneAndAdvance().then(() => {
+        window.dispatchEvent(new Event('app:refresh-user'));
+      });
+    }
+  }, [user?.tutorial_status, user?.tutorial_step, user?.tutorial_theme_done, setColour, setTexture, setButtonColour, setAccentLineColour, setWritingColour, setMutedWritingColour, setButtonStyle, setFont, setTextStyle, setToastTextColour, setMobileNavStyle, setThemeVariant]);
 
   const hasCasinoOrProperty = Boolean(user?.has_casino_or_property);
   const staffToolsNavVisible = useMemo(() => {
@@ -3055,6 +3062,25 @@ export default function Layout({ children }) {
         onClose={() => setShowInitialThemeModal(false)}
         onChoose={handleInitialThemeChoose}
       />
+      {user?.rules_accepted && (user?.tutorial_status === 'pending' || user?.tutorial_status === 'in_progress') ? (
+        <TutorialCoach
+          user={user}
+          onOpenTheme={() => setShowInitialThemeModal(true)}
+          onStatusChange={(data) => {
+            if (!data) return;
+            setUser((prev) => (prev ? {
+              ...prev,
+              tutorial_status: data.tutorial_status ?? prev.tutorial_status,
+              tutorial_step: data.tutorial_step ?? prev.tutorial_step,
+              tutorial_crime_done: data.tutorial_crime_done ?? prev.tutorial_crime_done,
+              tutorial_gta_done: data.tutorial_gta_done ?? prev.tutorial_gta_done,
+              tutorial_theme_done: data.tutorial_theme_done ?? prev.tutorial_theme_done,
+              tutorial_rewards_granted: data.tutorial_rewards_granted ?? prev.tutorial_rewards_granted,
+              loot_box_free_rare_opens: data.loot_box_free_rare_opens ?? prev.loot_box_free_rare_opens,
+            } : prev));
+          }}
+        />
+      ) : null}
 
       {cooldownSeconds > 0 && (
         <div style={{

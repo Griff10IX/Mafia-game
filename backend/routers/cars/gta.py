@@ -628,7 +628,13 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         {"$set": set_fields, "$inc": {"attempts": 1, "successes": 1 if success else 0}},
         upsert=True,
     )
-    
+    try:
+        from utils.tutorial import mark_tutorial_gta_done
+
+        await mark_tutorial_gta_done(db, current_user.get("id") or "")
+    except Exception:
+        logging.exception("tutorial gta mark failed user_id=%s", current_user.get("id"))
+
     if success:
         # Store-bought custom car template — not a GTA steal reward (would look like random garage dupes).
         pool_cars = [

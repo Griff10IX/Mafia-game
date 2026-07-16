@@ -948,6 +948,14 @@ class UserResponse(BaseModel):
     referral_earnings_weekly_points: int = 0
     rules_accepted: bool = False
     rules_accepted_at: Optional[str] = None
+    tutorial_status: Optional[str] = None  # pending | in_progress | completed | skipped
+    tutorial_step: Optional[str] = None
+    tutorial_crime_done: bool = False
+    tutorial_gta_done: bool = False
+    tutorial_theme_done: bool = False
+    tutorial_rewards_granted: bool = False
+    tutorial_ineligible_reason: Optional[str] = None
+    loot_box_free_rare_opens: int = 0
 
 class NotificationCreate(BaseModel):
     title: str
@@ -3398,6 +3406,8 @@ armoury.register(api_router)
 objectives.register(api_router)
 from routers.account import missions
 missions.register(api_router)
+from routers.account import tutorial as tutorial_router
+tutorial_router.register(api_router)
 from routers.money import loot_box
 loot_box.register(api_router)
 attack.register(api_router)
@@ -3630,6 +3640,17 @@ async def startup_db():
     from ensure_indexes import ensure_all_indexes
     await ensure_profile_indexes(db)
     await ensure_all_indexes(db)
+    try:
+        from utils.tutorial import ensure_tutorial_indexes, TUTORIAL_STATUS_SKIPPED
+
+        await ensure_tutorial_indexes(db)
+        # Existing accounts without tutorial fields: do not force the new-player tutorial.
+        await db.users.update_many(
+            {"tutorial_status": {"$exists": False}},
+            {"$set": {"tutorial_status": TUTORIAL_STATUS_SKIPPED}},
+        )
+    except Exception as e:
+        logging.warning("Tutorial indexes/migration failed: %s", e)
     try:
         from routers.casinos.sports_betting import ensure_sports_bet_max_total_open_stake_setting
 

@@ -1,6 +1,6 @@
 import { Fragment, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate, useParams } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, ShieldAlert, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Grid3x3, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw, MessagesSquare, Swords, TrendingUp, ClipboardList, CircleDot } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, ShieldAlert, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Grid3x3, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw, MessagesSquare, Swords, TrendingUp, ClipboardList, CircleDot, BookOpen } from 'lucide-react';
 import api, { imageHostPublicUrl, refreshUser } from '../../utils/api';
 import { formatAdminDateTime, formatAdminDateOnly, formatAdminTimeOnly } from '../../utils/adminDateTime';
 import {
@@ -222,6 +222,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Clear pool cue upgrades', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['pool', '8-ball', '8 ball', 'cue', 'upgrades', 'reset', 'minigame'] },
   { label: 'Reset kill inflation', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['kill', 'inflation', 'combat', 'attack', 'bullets', 'reset', 'zero', '0%'], adminOnly: true },
   { label: 'Auto Rank email entitlement', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['auto rank', 'email', 'entitlement', 'stripe', 'permanent', '20'], adminOnly: true },
+  { label: 'New player tutorial', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-new-player-tutorial', keywords: ['tutorial', 'new player', 'onboarding', 'coach', 'reset tutorial', 'start tutorial'], adminOnly: true },
   { label: 'Founding Member', categoryId: 'admin-players', collapseKey: 'founding', keywords: ['founding', 'member', 'badge', 'founder'] },
   { label: 'Add Money', categoryId: 'admin-players', collapseKey: 'money', keywords: ['money', 'cash', 'add', 'give'] },
   { label: 'Remove money (user)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['remove', 'money', 'cash', 'take', 'deduct', 'subtract', 'wallet'] },
@@ -1010,6 +1011,11 @@ export default function Admin() {
   const [autoRankEmailEntitlementEmail, setAutoRankEmailEntitlementEmail] = useState('');
   const [autoRankEmailEntitlementData, setAutoRankEmailEntitlementData] = useState(null);
   const [autoRankEmailEntitlementLoading, setAutoRankEmailEntitlementLoading] = useState(false);
+  const [tutorialResetClearClaims, setTutorialResetClearClaims] = useState(true);
+  const [tutorialAdminBusy, setTutorialAdminBusy] = useState(false);
+  const [tutorialAdminStatus, setTutorialAdminStatus] = useState(null);
+  const [tutorialGloballyEnabled, setTutorialGloballyEnabled] = useState(false);
+  const [tutorialSettingsLoaded, setTutorialSettingsLoaded] = useState(false);
   const [sessionStats, setSessionStats] = useState(null);
   const [sessionStatsLoading, setSessionStatsLoading] = useState(false);
   const [staffAccessDenials, setStaffAccessDenials] = useState(null);
@@ -2053,6 +2059,11 @@ export default function Admin() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { checkAdmin(); }, []);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    loadTutorialSettings();
+  }, [isAdmin]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // When navigating from Profile staff buttons with state (e.g. activity log / gambling log / target user)
   useEffect(() => {
@@ -4562,6 +4573,62 @@ export default function Admin() {
       setAutoRankEmailEntitlementData(null);
     } finally {
       setAutoRankEmailEntitlementLoading(false);
+    }
+  };
+
+  const handleTutorialResetUser = async () => {
+    const u = (formData.targetUsername || '').trim();
+    if (!u) { toast.error('Enter target username'); return; }
+    setTutorialAdminBusy(true);
+    try {
+      const res = await api.post('/admin/tutorial/reset', {
+        username: u,
+        clear_claims: !!tutorialResetClearClaims,
+        auto_start: true,
+      });
+      toast.success(res.data?.message || 'Tutorial reset');
+      setTutorialAdminStatus(res.data);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Tutorial reset failed');
+    } finally {
+      setTutorialAdminBusy(false);
+    }
+  };
+
+  const handleTutorialStartForMe = async () => {
+    setTutorialAdminBusy(true);
+    try {
+      const res = await api.post(`/admin/tutorial/start-for-me?clear_claims=${tutorialResetClearClaims ? 'true' : 'false'}`);
+      toast.success(res.data?.message || 'Tutorial started on your account');
+      setTutorialAdminStatus(res.data);
+      refreshUser();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Could not start tutorial');
+    } finally {
+      setTutorialAdminBusy(false);
+    }
+  };
+
+  const loadTutorialSettings = async () => {
+    try {
+      const res = await api.get('/admin/tutorial/settings');
+      setTutorialGloballyEnabled(!!res.data?.enabled);
+      setTutorialSettingsLoaded(true);
+    } catch (_) {
+      setTutorialSettingsLoaded(true);
+    }
+  };
+
+  const handleTutorialToggleEnabled = async (next) => {
+    setTutorialAdminBusy(true);
+    try {
+      const res = await api.post('/admin/tutorial/settings', { enabled: !!next });
+      setTutorialGloballyEnabled(!!res.data?.enabled);
+      toast.success(res.data?.message || (next ? 'Tutorial enabled' : 'Tutorial disabled'));
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to update tutorial setting');
+    } finally {
+      setTutorialAdminBusy(false);
     }
   };
 
@@ -11458,6 +11525,60 @@ export default function Admin() {
                 ))}
               </div>
             ) : null}
+            <div id="admin-new-player-tutorial" className="pt-1 pl-6">
+              <div className="text-[9px] font-heading font-bold uppercase tracking-wider text-mutedForeground">New player tutorial</div>
+            </div>
+            <ActionRow
+              icon={BookOpen}
+              label="New player tutorial"
+              description="Defaults OFF. Enable for all new players after testing. Reset / Run on my account work while disabled."
+            >
+              <label className="flex items-center gap-1.5 text-[10px] font-heading text-mutedForeground mr-1">
+                <input
+                  type="checkbox"
+                  checked={tutorialGloballyEnabled}
+                  onChange={(e) => handleTutorialToggleEnabled(e.target.checked)}
+                  disabled={tutorialAdminBusy || !tutorialSettingsLoaded}
+                />
+                Enabled for new players
+              </label>
+              <label className="flex items-center gap-1.5 text-[10px] font-heading text-mutedForeground mr-1">
+                <input
+                  type="checkbox"
+                  checked={tutorialResetClearClaims}
+                  onChange={(e) => setTutorialResetClearClaims(e.target.checked)}
+                />
+                Clear claims
+              </label>
+              <BtnPrimary type="button" onClick={handleTutorialResetUser} disabled={tutorialAdminBusy || !(formData.targetUsername || '').trim()}>
+                Reset + start (target)
+              </BtnPrimary>
+              <BtnSecondary type="button" onClick={handleTutorialStartForMe} disabled={tutorialAdminBusy}>
+                Run on my account
+              </BtnSecondary>
+              <BtnSecondary type="button" onClick={loadTutorialSettings} disabled={tutorialAdminBusy}>
+                Refresh
+              </BtnSecondary>
+            </ActionRow>
+            {tutorialAdminStatus ? (
+              <div className="pl-6 pr-2 py-2 space-y-1 border-l-2 border-primary/30 ml-1 max-w-3xl text-[10px] font-heading">
+                <div><span className="text-mutedForeground">Global:</span> {tutorialGloballyEnabled ? 'ON' : 'OFF'}</div>
+                <div><span className="text-mutedForeground">Status:</span> {tutorialAdminStatus.tutorial_status || '—'}</div>
+                {tutorialAdminStatus.tutorial_step ? (
+                  <div><span className="text-mutedForeground">Step:</span> {tutorialAdminStatus.tutorial_step}</div>
+                ) : null}
+                {tutorialAdminStatus.claims_cleared != null ? (
+                  <div><span className="text-mutedForeground">Claims cleared:</span> {tutorialAdminStatus.claims_cleared}</div>
+                ) : null}
+                {tutorialAdminStatus.message ? (
+                  <div className="text-mutedForeground">{tutorialAdminStatus.message}</div>
+                ) : null}
+              </div>
+            ) : (
+              <div className="pl-6 text-[10px] font-heading text-mutedForeground">
+                Global: {tutorialSettingsLoaded ? (tutorialGloballyEnabled ? 'ON' : 'OFF (default)') : '…'}
+              </div>
+            )}
             {(autoRankInspectError || autoRankInspectData) && (
               <div className="pl-6 pr-2 py-2 space-y-2 border-l-2 border-primary/20 ml-1 max-w-3xl">
                 {autoRankInspectError ? (

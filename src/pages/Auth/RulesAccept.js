@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import api from '../../utils/api';
+import api, { refreshUser } from '../../utils/api';
 
 const RULES_PREVIEW = [
   'No bots, scripts, macros, or third-party tools that perform gameplay actions for you.',
@@ -63,8 +63,13 @@ export default function RulesAccept() {
     if (!confirmed || submitting) return;
     setSubmitting(true);
     try {
-      await api.post('/auth/accept-rules');
+      const res = await api.post('/auth/accept-rules');
       toast.success('Rules accepted. Welcome.');
+      refreshUser({
+        rules_accepted: true,
+        tutorial_status: res.data?.tutorial_status,
+        tutorial_step: res.data?.tutorial_step,
+      });
       navigate('/account/dashboard', { replace: true });
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Could not record acceptance');
