@@ -20,6 +20,8 @@ _STORE_EVENT_LABELS: Dict[str, str] = {
     "buy-founding-member": "Founding Member badge",
     "buy-robot-bg-auto-search": "Robot bodyguard auto-search",
     "buy-bodyguard-find-time": "Bodyguard find clock (7 days)",
+    "buy-slow-kill-inflation": "Slow Kill Inflation (30 days)",
+    "buy-slow-bodyguard-hire-inflation": "Slow Bodyguard Hire Inflation (30 days)",
     "buy-weapon-point-store": "Point-store weapon",
     "buy-armour-point-store": "Point-store armour",
     "buy-health": "Full health",
@@ -60,6 +62,10 @@ def store_purchase_item_label(store_event_ref: str, extra: Optional[dict] = None
         return f"{label} (until {extra['robot_bg_auto_search_until']})"
     if ref == "buy-bodyguard-find-time" and extra.get("bodyguard_find_time_until"):
         return f"{label} (until {extra['bodyguard_find_time_until']})"
+    if ref == "buy-slow-kill-inflation" and extra.get("slow_kill_inflation_until"):
+        return f"{label} (until {extra['slow_kill_inflation_until']})"
+    if ref == "buy-slow-bodyguard-hire-inflation" and extra.get("slow_bodyguard_hire_inflation_until"):
+        return f"{label} (until {extra['slow_bodyguard_hire_inflation_until']})"
     if ref == "buy-custom-car" and extra.get("car_name"):
         return f"{label}: {extra['car_name']}"
     if ref == "buy-bullets" and extra.get("bullets"):

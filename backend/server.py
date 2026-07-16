@@ -935,6 +935,10 @@ class UserResponse(BaseModel):
     robot_bg_auto_search_active: bool = False
     bodyguard_find_time_until: Optional[str] = None
     bodyguard_find_time_active: bool = False
+    slow_kill_inflation_until: Optional[str] = None
+    slow_kill_inflation_active: bool = False
+    slow_bodyguard_hire_inflation_until: Optional[str] = None
+    slow_bodyguard_hire_inflation_active: bool = False
     censor_profanity: bool = False  # when true, chat/forum show swear words as ***
     referred_by: Optional[str] = None  # first referrer id (legacy); see referred_by_ids for full list
     referred_by_username: Optional[str] = None  # comma-separated referrer usernames for display
@@ -2940,10 +2944,23 @@ async def _apply_kill_inflation_decay(user_id: str) -> float:
     return new_inflation
 
 async def _increase_kill_inflation_on_kill(user_id: str) -> float:
-    """Increase inflation by 2–4% on a successful kill."""
+    """Increase inflation by ~2–4% on a successful kill (half rate with Slow Kill Inflation perk)."""
     now = datetime.now(timezone.utc)
     inc = random.uniform(0.02, 0.04)
-    user = await db.users.find_one({"id": user_id}, {"_id": 0, "kill_inflation": 1})
+    user = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "kill_inflation": 1, "slow_kill_inflation_until": 1},
+    )
+    until_raw = (user or {}).get("slow_kill_inflation_until")
+    if until_raw:
+        try:
+            until_dt = datetime.fromisoformat(str(until_raw).replace("Z", "+00:00"))
+            if until_dt.tzinfo is None:
+                until_dt = until_dt.replace(tzinfo=timezone.utc)
+            if until_dt > now:
+                inc *= 0.5
+        except (ValueError, TypeError):
+            pass
     cur = float(user.get("kill_inflation", 0.0) or 0.0) if user else 0.0
     new = cur + inc
     await db.users.update_one(

@@ -2064,6 +2064,17 @@ def register(router):
                     return until_dt > datetime.now(timezone.utc)
                 except Exception:
                     return False
+
+            def _timed_perk_active(until_raw) -> bool:
+                if not until_raw:
+                    return False
+                try:
+                    until_dt = datetime.fromisoformat(str(until_raw).replace("Z", "+00:00"))
+                    if until_dt.tzinfo is None:
+                        until_dt = until_dt.replace(tzinfo=timezone.utc)
+                    return until_dt > datetime.now(timezone.utc)
+                except Exception:
+                    return False
             # Casino/property loaded separately via GET /user/casino-property to keep auth/me fast
             u = current_user
             equipped_weapon_id = u.get("equipped_weapon_id")
@@ -2330,6 +2341,10 @@ def register(router):
                 robot_bg_auto_search_active=robot_bg_auto_search_active(u),
                 bodyguard_find_time_until=u.get("bodyguard_find_time_until"),
                 bodyguard_find_time_active=_bodyguard_find_time_active(u),
+                slow_kill_inflation_until=u.get("slow_kill_inflation_until"),
+                slow_kill_inflation_active=_timed_perk_active(u.get("slow_kill_inflation_until")),
+                slow_bodyguard_hire_inflation_until=u.get("slow_bodyguard_hire_inflation_until"),
+                slow_bodyguard_hire_inflation_active=_timed_perk_active(u.get("slow_bodyguard_hire_inflation_until")),
                 censor_profanity=bool(u.get("censor_profanity", False)),
                 referred_by=referred_by_legacy,
                 referred_by_username=referred_by_username,

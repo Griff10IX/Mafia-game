@@ -111,6 +111,7 @@ export default function Bodyguards() {
   const [eventMarkupPct, setEventMarkupPct] = useState(0);
   const [inflationLevel, setInflationLevel] = useState(0);
   const [inflationWindowEndsAt, setInflationWindowEndsAt] = useState(null);
+  const [slowBodyguardHireInflationActive, setSlowBodyguardHireInflationActive] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [expandedSlot, setExpandedSlot] = useState(null);
   const [upgradingSlot, setUpgradingSlot] = useState(null);
@@ -162,6 +163,7 @@ export default function Bodyguards() {
     setEventMarkupPct(infl.event_markup_pct ?? 0);
     setInflationLevel(infl.inflation_level ?? 0);
     setInflationWindowEndsAt(infl.inflation_window_ends_at ?? null);
+    setSlowBodyguardHireInflationActive(!!infl.slow_bodyguard_hire_inflation_active);
     setBgStats(w.stats ?? null);
     setInvites(w.invites ?? { sent: [], received: [] });
     setHasLoaded(true);
@@ -253,6 +255,7 @@ export default function Bodyguards() {
       setEventMarkupPct(inflationRes.data?.event_markup_pct ?? 0);
       setInflationLevel(inflationRes.data?.inflation_level ?? 0);
       setInflationWindowEndsAt(inflationRes.data?.inflation_window_ends_at ?? null);
+      setSlowBodyguardHireInflationActive(!!inflationRes.data?.slow_bodyguard_hire_inflation_active);
       setBgStats(statsRes.data ?? null);
       setInvites(invitesRes.data ?? { sent: [], received: [] });
       writeBodyguardsPageWarm({
@@ -409,6 +412,9 @@ export default function Bodyguards() {
       }
       if (response?.data?.inflation_window_ends_at) {
         setInflationWindowEndsAt(response.data.inflation_window_ends_at);
+      }
+      if (typeof response?.data?.slow_bodyguard_hire_inflation_active === 'boolean') {
+        setSlowBodyguardHireInflationActive(response.data.slow_bodyguard_hire_inflation_active);
       }
       showHireBanner('success', response?.data?.message ?? 'Bodyguard hired');
     } catch (error) {
@@ -802,7 +808,7 @@ export default function Bodyguards() {
       
       {/* Hire + active — inflation on its own row so the hire button does not jump when markup loads */}
       <div className="space-y-2 bg-fade-in" style={{ animationDelay: '0.05s' }}>
-        {(nextHireInflationPct > 0 || eventMarkupPct > 0 || inflationCountdown) && (
+        {(nextHireInflationPct > 0 || eventMarkupPct > 0 || inflationCountdown || slowBodyguardHireInflationActive) && (
           <div className="px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/25 text-[10px] font-heading text-amber-400/90 leading-snug">
             {nextHireInflationPct > 0 && (
               <span>
@@ -818,9 +824,15 @@ export default function Bodyguards() {
                 Event on guards: <strong>+{eventMarkupPct}%</strong>
               </span>
             )}
+            {slowBodyguardHireInflationActive && (
+              <span className="text-emerald-400/90">
+                {(nextHireInflationPct > 0 || eventMarkupPct > 0) ? ' · ' : ''}
+                Slow hire inflation perk · half markup
+              </span>
+            )}
             {inflationCountdown && (
               <span className="text-mutedForeground">
-                {(nextHireInflationPct > 0 || eventMarkupPct > 0) ? ' · ' : ''}
+                {(nextHireInflationPct > 0 || eventMarkupPct > 0 || slowBodyguardHireInflationActive) ? ' · ' : ''}
                 Hire markup resets in {inflationCountdown}
               </span>
             )}

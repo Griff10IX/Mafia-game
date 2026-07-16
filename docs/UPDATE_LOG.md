@@ -6,6 +6,33 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-16 22:58 UTC[/color][/b] — [b]Slow Bodyguard Hire Inflation perk[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]Store → Slow Bodyguard Hire Inflation[/b] — [b]5,000 points[/b] for [b]30 days[/b] ([b]does not stack[/b]). While active, 3h bodyguard hire markup is [b]halved[/b]. Buy again after it expires.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-16 22:55 UTC[/color][/b] — [b]Slow Kill Inflation perk[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]Store → Slow Kill Inflation[/b] — [b]5,000 points[/b] for [b]30 days[/b] (stacks). While active, kill inflation rises at [b]half[/b] the normal rate (~1–2% per kill instead of ~2–4%).[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-16 22:50 UTC[/color][/b] — [b]Kill inflation paid reset[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]Kill → Attack[/b] — pay [b]5,000 points[/b] to reset your [b]kill inflation[/b] to [b]0%[/b] instead of waiting for natural decay. [b]Once every 30 days[/b].[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-16 17:05 UTC[/color][/b] — [b]Airport travel UI[/b][/size]
 [quote]
 [list]

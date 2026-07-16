@@ -50,6 +50,20 @@ function bodyguardFindTimePerkActive(untilIso, activeFlag) {
   return Number.isFinite(t) && t > Date.now();
 }
 
+/** e.g. "ready in 12d" or "ready May 3" for paid inflation reset cooldown. */
+function formatInflationResetReady(availableAtIso) {
+  if (!availableAtIso) return 'on cooldown';
+  const end = Date.parse(String(availableAtIso).replace('Z', '+00:00'));
+  if (!Number.isFinite(end)) return 'on cooldown';
+  const ms = end - Date.now();
+  if (ms <= 0) return 'available';
+  const days = Math.ceil(ms / 86400000);
+  if (days >= 2) return `ready in ${days}d`;
+  const hours = Math.ceil(ms / 3600000);
+  if (hours >= 2) return `ready in ${hours}h`;
+  return `ready ${formatGameDateTime(availableAtIso)}`;
+}
+
 // Shown in toast when caught during booze run (prohibition bust)
 const BOOZE_CAUGHT_IMAGE = 'https://historicipswich.net/wp-content/uploads/2021/12/0a79f-boston-rum-prohibition1.jpg';
 const MOLOTOV_BULLET_EQUIV = 5000;
@@ -279,6 +293,10 @@ const KillUserCard = ({
   useMolotovs,
   setUseMolotovs,
   inflationPct,
+  inflationReset,
+  onResetInflation,
+  resetInflationBusy,
+  slowKillInflationActive,
   userBullets,
   userMolotovs,
   foundAndReady,
@@ -365,20 +383,42 @@ const KillUserCard = ({
       </div>
       
       <div className="space-y-1.5">
-        <div className="flex items-center justify-between bg-secondary/50 border border-border rounded px-2 py-1.5">
-          <div className="text-[10px] text-mutedForeground font-heading">
+        <div className="flex flex-wrap items-center justify-between gap-1.5 bg-secondary/50 border border-border rounded px-2 py-1.5">
+          <div className="text-[10px] text-mutedForeground font-heading min-w-0">
             Inflation: <span className="text-foreground font-bold">{inflationPct}%</span>
+            {slowKillInflationActive ? (
+              <span className="text-emerald-400/90 ml-1">(slow perk · half gain)</span>
+            ) : null}
+            {inflationPct > 0 && inflationReset?.reset_on_cooldown && inflationReset?.reset_available_at ? (
+              <span className="text-mutedForeground/80 ml-1">
+                (paid reset {formatInflationResetReady(inflationReset.reset_available_at)})
+              </span>
+            ) : null}
           </div>
-          <label className="inline-flex items-center gap-1.5 text-[10px] text-foreground font-heading cursor-pointer">
-            <input 
-              type="checkbox" 
-              checked={makePublic} 
-              onChange={(e) => setMakePublic(e.target.checked)} 
-              className="w-3 h-3 accent-primary cursor-pointer" 
-              data-testid="kill-make-public-inline" 
-            />
-            <span>Make Public</span>
-          </label>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {inflationPct > 0 && inflationReset?.reset_available ? (
+              <button
+                type="button"
+                onClick={onResetInflation}
+                disabled={resetInflationBusy}
+                className="text-[9px] font-heading font-bold uppercase tracking-wider px-1.5 py-1 rounded border border-primary/40 text-primary bg-primary/15 hover:bg-primary/25 disabled:opacity-50 min-h-[28px]"
+                data-testid="kill-inflation-reset"
+                title="Pay 5,000 points to set inflation to 0% (once per 30 days)"
+              >
+                {resetInflationBusy ? '…' : `Reset · ${(inflationReset.reset_cost_points || 5000).toLocaleString()} pts`}
+              </button>
+            ) : null}
+            <label className="inline-flex items-center gap-1.5 text-[10px] text-foreground font-heading cursor-pointer">
+              <input 
+                type="checkbox" 
+                checked={makePublic} 
+                onChange={(e) => setMakePublic(e.target.checked)} 
+                className="w-3 h-3 accent-primary cursor-pointer" 
+                data-testid="kill-make-public-inline" 
+              />
+              <span>Make Public</span>
+            </label>
+          </div>
         </div>
         <div className="flex items-center justify-between bg-secondary/40 border border-border rounded px-2 py-1.5">
           <div className="text-[10px] text-mutedForeground font-heading">
@@ -1301,6 +1341,9 @@ export default function Attack() {
     } catch (_) {}
   };
   const [inflationPct, setInflationPct] = useState(0);
+  const [inflationReset, setInflationReset] = useState(null);
+  const [resetInflationBusy, setResetInflationBusy] = useState(false);
+  const [slowKillInflationActive, setSlowKillInflationActive] = useState(false);
   const [bulletsToUse, setBulletsToUseState] = useState(() => {
     try {
       return sessionStorage.getItem('attack-bullets-to-use') || '';
@@ -1354,14 +1397,56 @@ export default function Attack() {
       const res = await api.get('/auth/me');
       setUserBullets(res.data?.bullets ?? 0);
       setUserMolotovs(res.data?.molotovs ?? 0);
+      setSlowKillInflationActive(!!res.data?.slow_kill_inflation_active);
     } catch (e) {}
   };
+
+  const applyInflationPayload = useCallback((data) => {
+    if (!data || typeof data !== 'object') return;
+    if (typeof data.inflation_pct === 'number') {
+      setInflationPct(Number(data.inflation_pct));
+    }
+    if (
+      typeof data.reset_cost_points === 'number'
+      || typeof data.reset_available === 'boolean'
+      || data.reset_available_at != null
+      || typeof data.reset_on_cooldown === 'boolean'
+    ) {
+      setInflationReset({
+        reset_cost_points: Number(data.reset_cost_points ?? 5000),
+        reset_available: !!data.reset_available,
+        reset_on_cooldown: !!data.reset_on_cooldown,
+        reset_available_at: data.reset_available_at || null,
+        reset_cooldown_days: Number(data.reset_cooldown_days ?? 30),
+      });
+    }
+  }, []);
 
   const fetchInflation = async () => {
     try {
       const res = await api.get('/attack/inflation');
-      setInflationPct(Number(res.data?.inflation_pct ?? 0));
+      applyInflationPayload(res.data);
     } catch (e) {}
+  };
+
+  const handleResetInflation = async () => {
+    if (resetInflationBusy) return;
+    const cost = inflationReset?.reset_cost_points || 5000;
+    if (!window.confirm(`Reset kill inflation to 0% for ${Number(cost).toLocaleString()} points?\n\nYou can do this once every 30 days.`)) {
+      return;
+    }
+    setResetInflationBusy(true);
+    try {
+      const res = await api.post('/attack/inflation/reset');
+      applyInflationPayload(res.data);
+      toast.success(res.data?.message || 'Kill inflation reset to 0%');
+      refreshUser();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e, 'Could not reset kill inflation'));
+      await fetchInflation();
+    } finally {
+      setResetInflationBusy(false);
+    }
   };
 
   const refreshAttacks = useCallback(async () => {
@@ -1376,7 +1461,7 @@ export default function Attack() {
       writeCachedAttacks(list);
       // Inflation comes inline now (Tier 3 plan item: drop the dedicated /attack/inflation page-load call).
       if (response.data && typeof response.data.inflation_pct === 'number') {
-        setInflationPct(Number(response.data.inflation_pct));
+        applyInflationPayload(response.data);
       }
       if (typeof response.data?.robot_bg_auto_search_active === 'boolean') {
         setRobotBgAutoSearchActive(response.data.robot_bg_auto_search_active);
@@ -1390,7 +1475,7 @@ export default function Attack() {
       if (canceled) return null;
       return Array.isArray(attacksRef.current) ? attacksRef.current : [];
     }
-  }, []);
+  }, [applyInflationPayload]);
 
   // Pre-fetch /travel/info shortly after the page settles so the modal opens instantly when the user clicks Travel.
   // Backed by sessionStorage cache + 30s TTL so navigation back to Kill is also instant. /travel/info is 5s
@@ -1655,10 +1740,14 @@ export default function Attack() {
         setBodyguardFindTimeActive(
           bodyguardFindTimePerkActive(meRes.data?.bodyguard_find_time_until, meRes.data?.bodyguard_find_time_active),
         );
+        setSlowKillInflationActive(
+          bodyguardFindTimePerkActive(meRes.data?.slow_kill_inflation_until, meRes.data?.slow_kill_inflation_active),
+        );
         setEvent(eventsRes.data?.event ?? null);
         setEventsEnabled(!!eventsRes.data?.events_enabled);
       } catch (_) {
         setInflationPct(0);
+        setInflationReset(null);
         setUserBullets(0);
         setUserMolotovs(0);
         setEvent(null);
@@ -2252,6 +2341,10 @@ export default function Attack() {
             useMolotovs={useMolotovs}
             setUseMolotovs={setUseMolotovs}
             inflationPct={inflationPct}
+            inflationReset={inflationReset}
+            onResetInflation={handleResetInflation}
+            resetInflationBusy={resetInflationBusy}
+            slowKillInflationActive={slowKillInflationActive}
             userBullets={userBullets}
             userMolotovs={userMolotovs}
             foundAndReady={foundAndReady}

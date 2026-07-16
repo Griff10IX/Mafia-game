@@ -170,6 +170,10 @@ AUTO_RANK_COST_POINTS = 5000  # Auto Rank: auto-commit crimes + GTAs, results to
 ROBOT_BG_AUTO_SEARCH_COST_POINTS = 10_000  # 30-day auto-search for owned robot bodyguards on Attack page
 BODYGUARD_FIND_TIME_COST_POINTS = 5000  # 7-day perk: exact find clock on Attack searches
 BODYGUARD_FIND_TIME_DURATION_DAYS = 7
+SLOW_KILL_INFLATION_COST_POINTS = 5000  # 30-day perk: kill inflation rises slower
+SLOW_KILL_INFLATION_DURATION_DAYS = 30
+SLOW_BODYGUARD_HIRE_INFLATION_COST_POINTS = 5000  # 30-day perk: bodyguard hire markup halved
+SLOW_BODYGUARD_HIRE_INFLATION_DURATION_DAYS = 30
 ARMOUR_POINT_STORE_COST_POINTS = 500  # Elite Composite Battledress (armour level 6)
 WEAPON_POINT_STORE_COST_POINTS = 1000  # Engraved Lewis Gun (weapon11)
 # Per 2h token: 8 tokens cost the same points as permanent unlock but only stack 16h — not a cheap bypass
@@ -972,6 +976,133 @@ async def buy_bodyguard_find_time(
         "cost": cost_used,
         "bodyguard_find_time_until": new_until,
         "bodyguard_find_time_active": True,
+    }
+
+
+async def buy_slow_kill_inflation(
+    pay_with: str = Query("auto"),
+    current_user: dict = Depends(get_current_user),
+):
+    """30-day perk: kill inflation increases at half rate on successful kills. Stacks."""
+    from datetime import timedelta
+
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, SLOW_KILL_INFLATION_COST_POINTS, pay_with)
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    now = datetime.now(timezone.utc)
+    base = now
+    existing = current_user.get("slow_kill_inflation_until")
+    if existing:
+        try:
+            ex = datetime.fromisoformat(str(existing).replace("Z", "+00:00"))
+            if ex.tzinfo is None:
+                ex = ex.replace(tzinfo=timezone.utc)
+            if ex > now:
+                base = ex
+        except Exception:
+            pass
+    new_until = (base + timedelta(days=SLOW_KILL_INFLATION_DURATION_DAYS)).isoformat()
+    result = await db.users.update_one(
+        {"id": current_user["id"], **gte_filter},
+        {"$inc": inc, "$set": {"slow_kill_inflation_until": new_until}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    await _record_store_points_spend(
+        current_user,
+        inc,
+        "buy-slow-kill-inflation",
+        cost_used=cost_used,
+        extra={"slow_kill_inflation_until": new_until},
+    )
+    await log_activity(
+        current_user["id"],
+        current_user.get("username") or "?",
+        "store_purchase",
+        {"item": "slow_kill_inflation", "cost": cost_used, "until": new_until},
+    )
+    return {
+        "message": (
+            f"Slow Kill Inflation active for {SLOW_KILL_INFLATION_DURATION_DAYS} days. "
+            "Your kill inflation rises at half the normal rate."
+        ),
+        "cost": cost_used,
+        "slow_kill_inflation_until": new_until,
+        "slow_kill_inflation_active": True,
+    }
+
+
+async def buy_slow_bodyguard_hire_inflation(
+    pay_with: str = Query("auto"),
+    current_user: dict = Depends(get_current_user),
+):
+    """30-day perk: bodyguard 3h hire markup is halved. Does not stack — buy again after it expires."""
+    from datetime import timedelta
+
+    existing = current_user.get("slow_bodyguard_hire_inflation_until")
+    if existing:
+        try:
+            ex = datetime.fromisoformat(str(existing).replace("Z", "+00:00"))
+            if ex.tzinfo is None:
+                ex = ex.replace(tzinfo=timezone.utc)
+            if ex > datetime.now(timezone.utc):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"Slow Bodyguard Hire Inflation is already active until {ex.isoformat()}. "
+                        "Buy again after it expires."
+                    ),
+                )
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+
+    cost_used, inc, gte_filter = _store_cost_inc(
+        current_user, SLOW_BODYGUARD_HIRE_INFLATION_COST_POINTS, pay_with
+    )
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    now = datetime.now(timezone.utc)
+    new_until = (now + timedelta(days=SLOW_BODYGUARD_HIRE_INFLATION_DURATION_DAYS)).isoformat()
+    result = await db.users.update_one(
+        {
+            "id": current_user["id"],
+            **gte_filter,
+            "$or": [
+                {"slow_bodyguard_hire_inflation_until": {"$exists": False}},
+                {"slow_bodyguard_hire_inflation_until": None},
+                {"slow_bodyguard_hire_inflation_until": {"$lte": now.isoformat()}},
+            ],
+        },
+        {"$inc": inc, "$set": {"slow_bodyguard_hire_inflation_until": new_until}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Insufficient points, or Slow Bodyguard Hire Inflation is already active.",
+        )
+    await _record_store_points_spend(
+        current_user,
+        inc,
+        "buy-slow-bodyguard-hire-inflation",
+        cost_used=cost_used,
+        extra={"slow_bodyguard_hire_inflation_until": new_until},
+    )
+    await log_activity(
+        current_user["id"],
+        current_user.get("username") or "?",
+        "store_purchase",
+        {"item": "slow_bodyguard_hire_inflation", "cost": cost_used, "until": new_until},
+    )
+    return {
+        "message": (
+            f"Slow Bodyguard Hire Inflation active for {SLOW_BODYGUARD_HIRE_INFLATION_DURATION_DAYS} days. "
+            "3h hire markup is halved while active."
+        ),
+        "cost": cost_used,
+        "slow_bodyguard_hire_inflation_until": new_until,
+        "slow_bodyguard_hire_inflation_active": True,
     }
 
 
@@ -2272,6 +2403,8 @@ def register(router):
     router.add_api_route("/store/buy-family-event-token", buy_family_event_token, methods=["POST"])
     router.add_api_route("/store/buy-robot-bg-auto-search", buy_robot_bg_auto_search, methods=["POST"])
     router.add_api_route("/store/buy-bodyguard-find-time", buy_bodyguard_find_time, methods=["POST"])
+    router.add_api_route("/store/buy-slow-kill-inflation", buy_slow_kill_inflation, methods=["POST"])
+    router.add_api_route("/store/buy-slow-bodyguard-hire-inflation", buy_slow_bodyguard_hire_inflation, methods=["POST"])
     router.add_api_route("/store/buy-armour-tier-6", buy_armour_point_store_tier, methods=["POST"])
     router.add_api_route("/store/buy-weapon11", buy_weapon_point_store_tier, methods=["POST"])
     router.add_api_route("/store/buy-silencer", buy_silencer, methods=["POST"])

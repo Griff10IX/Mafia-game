@@ -23,6 +23,8 @@ logger = logging.getLogger(__name__)
 
 _KILL_INFLATION_CACHE_TTL_SEC = 3.0
 _kill_inflation_cache: Dict[str, Tuple[float, float]] = {}
+KILL_INFLATION_RESET_COST_POINTS = 5000
+KILL_INFLATION_RESET_COOLDOWN_DAYS = 30
 _ATTACK_MICRO_COOLDOWN_SEC = 1.0 / 8.0
 _ATTACK_MICRO_COOLDOWN_PRUNE_AFTER_SEC = 60.0
 _attack_micro_cooldown_seen: Dict[str, float] = {}
@@ -145,6 +147,7 @@ from server import (
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.hitlist_resolution import resolve_user_hitlist_kill
 from utils.kill_search_duration import KILL_SEARCH_RANDOM_MAX_MINUTES, KILL_SEARCH_RANDOM_MIN_MINUTES
+from utils.point_provenance import log_points_event
 from utils.civilian_protection import (
     CIVILIAN_PROTECTION_KILL_BLOCKED_DETAIL,
     is_civilian_protected,
@@ -393,6 +396,62 @@ async def _get_kill_inflation_cached(user_id: str) -> float:
     value = float(await _apply_kill_inflation_decay(user_id))
     _kill_inflation_cache[user_id] = (value, now + _KILL_INFLATION_CACHE_TTL_SEC)
     return value
+
+
+def _parse_kill_inflation_paid_reset_at(val, *, now: datetime) -> Optional[datetime]:
+    if val is None or val == "":
+        return None
+    if hasattr(val, "year"):
+        dt = val
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+    try:
+        s = str(val).strip().replace("Z", "+00:00")
+        dt = datetime.fromisoformat(s)
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+    except (ValueError, TypeError):
+        return None
+
+
+def _kill_inflation_reset_meta(user: Optional[dict], inflation: float, *, now: Optional[datetime] = None) -> dict:
+    """Paid reset: 5,000 points, once per 30 days, only when inflation > 0."""
+    now = now or datetime.now(timezone.utc)
+    last = _parse_kill_inflation_paid_reset_at(
+        (user or {}).get("kill_inflation_paid_reset_at"),
+        now=now,
+    )
+    cooldown = timedelta(days=KILL_INFLATION_RESET_COOLDOWN_DAYS)
+    if last is None:
+        cooldown_ok = True
+        available_at = None
+    else:
+        nxt = last + cooldown
+        cooldown_ok = now >= nxt
+        available_at = None if cooldown_ok else nxt.isoformat()
+    can_reset = bool(inflation > 0 and cooldown_ok)
+    return {
+        "reset_cost_points": KILL_INFLATION_RESET_COST_POINTS,
+        "reset_cooldown_days": KILL_INFLATION_RESET_COOLDOWN_DAYS,
+        "reset_available": can_reset,
+        "reset_on_cooldown": not cooldown_ok,
+        "reset_available_at": available_at,
+        "kill_inflation_paid_reset_at": last.isoformat() if last else None,
+    }
+
+
+async def _kill_inflation_payload(user_id: str, user: Optional[dict] = None) -> dict:
+    inflation = await _get_kill_inflation_cached(user_id)
+    row = user
+    if row is None:
+        row = await db.users.find_one(
+            {"id": user_id},
+            {"_id": 0, "kill_inflation_paid_reset_at": 1},
+        ) or {}
+    meta = _kill_inflation_reset_meta(row, inflation)
+    return {
+        "inflation": inflation,
+        "inflation_pct": int(round(inflation * 100)),
+        **meta,
+    }
 
 
 def _hunt_location_when_search_timer_fires(target_user: Optional[dict], attack: dict) -> Optional[str]:
@@ -1921,25 +1980,22 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
     robot_auto_active = robot_bg_auto_search_running(current_user)
     cached = _attack_list_cache_get(attacker_id, ac_state)
     if cached is not None:
-        # Inflation is already memoized for 3s in _get_kill_inflation_cached; the extra await is cheap.
-        inflation = await _get_kill_inflation_cached(attacker_id)
+        payload = await _kill_inflation_payload(attacker_id, current_user)
         return {
             "attacks": cached,
-            "inflation": inflation,
-            "inflation_pct": int(round(inflation * 100)),
             "robot_bg_auto_search_active": robot_auto_active,
+            **payload,
         }
     # Run list build and inflation calc concurrently to drop one round-trip from page load.
-    items, inflation = await asyncio.gather(
+    items, payload = await asyncio.gather(
         _build_active_attacks_list(attacker_id, ac_state),
-        _get_kill_inflation_cached(attacker_id),
+        _kill_inflation_payload(attacker_id, current_user),
     )
     _attack_list_cache_set(attacker_id, ac_state, items)
     return {
         "attacks": items,
-        "inflation": inflation,
-        "inflation_pct": int(round(inflation * 100)),
         "robot_bg_auto_search_active": robot_auto_active,
+        **payload,
     }
 
 async def delete_attacks(request: AttackDeleteRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -2120,8 +2176,101 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
     }
 
 async def get_attack_inflation(current_user: dict = Depends(get_current_user)):
-    inflation = await _get_kill_inflation_cached(current_user["id"])
-    return {"inflation": inflation, "inflation_pct": int(round(inflation * 100))}
+    return await _kill_inflation_payload(current_user["id"], current_user)
+
+
+async def reset_kill_inflation(current_user: dict = Depends(get_current_user_verified)):
+    """Pay 5,000 points to set Combat kill inflation to 0%. Once every 30 days."""
+    user_id = current_user["id"]
+    cost = KILL_INFLATION_RESET_COST_POINTS
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    cooldown = timedelta(days=KILL_INFLATION_RESET_COOLDOWN_DAYS)
+    cooldown_threshold = (now - cooldown).isoformat()
+
+    # Apply natural decay first so we don't charge for inflation that already hit 0.
+    inflation = float(await _apply_kill_inflation_decay(user_id))
+    if inflation <= 0:
+        raise HTTPException(status_code=400, detail="Kill inflation is already 0%")
+
+    meta = _kill_inflation_reset_meta(current_user, inflation, now=now)
+    if meta["reset_on_cooldown"]:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Kill inflation reset is on cooldown "
+                f"(once every {KILL_INFLATION_RESET_COOLDOWN_DAYS} days)."
+            ),
+        )
+
+    # Atomic: points + cooldown + inflation > 0
+    res = await db.users.find_one_and_update(
+        {
+            "id": user_id,
+            "points": {"$gte": cost},
+            "kill_inflation": {"$gt": 0},
+            "$or": [
+                {"kill_inflation_paid_reset_at": {"$exists": False}},
+                {"kill_inflation_paid_reset_at": None},
+                {"kill_inflation_paid_reset_at": {"$lte": cooldown_threshold}},
+            ],
+        },
+        {
+            "$set": {
+                "kill_inflation": 0.0,
+                "kill_inflation_updated_at": now_iso,
+                "kill_inflation_paid_reset_at": now_iso,
+            },
+            "$inc": {
+                "points": -cost,
+                "lifetime_points_spent": cost,
+            },
+        },
+        projection={"_id": 0, "id": 1, "points": 1, "kill_inflation_paid_reset_at": 1},
+        return_document=ReturnDocument.AFTER,
+    )
+    if not res:
+        # Distinguish insufficient points vs race / cooldown
+        row = await db.users.find_one(
+            {"id": user_id},
+            {"_id": 0, "points": 1, "kill_inflation": 1, "kill_inflation_paid_reset_at": 1},
+        ) or {}
+        pts = int(row.get("points") or 0)
+        if pts < cost:
+            raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost:,})")
+        infl = float(row.get("kill_inflation") or 0)
+        if infl <= 0:
+            raise HTTPException(status_code=400, detail="Kill inflation is already 0%")
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Kill inflation reset is on cooldown "
+                f"(once every {KILL_INFLATION_RESET_COOLDOWN_DAYS} days)."
+            ),
+        )
+
+    _kill_inflation_cache.pop(user_id, None)
+    await log_points_event(
+        db,
+        user_id=user_id,
+        points=-cost,
+        event_type="kill_inflation_reset",
+        wallet_points_after=int(res.get("points") or 0),
+    )
+    await log_activity(
+        user_id,
+        current_user.get("username") or "?",
+        "kill_inflation_reset",
+        {"cost_points": cost, "inflation_before": inflation},
+    )
+    payload = await _kill_inflation_payload(user_id, res)
+    return {
+        "message": f"Paid {cost:,} points. Kill inflation reset to 0%.",
+        "points_spent": cost,
+        "points": int(res.get("points") or 0),
+        **payload,
+    }
+
 
 async def execute_attack(request: AttackExecuteRequest, req: Request, current_user: dict = Depends(get_current_user_verified)):
   try:
@@ -4021,6 +4170,7 @@ def register(router):
     router.add_api_route("/attack/travel", travel_to_target, methods=["POST"], dependencies=_kill_rl_v)
     router.add_api_route("/attack/bullets/calc", calc_bullets, methods=["POST"], dependencies=_kill_rl_v)
     router.add_api_route("/attack/inflation", get_attack_inflation, methods=["GET"])
+    router.add_api_route("/attack/inflation/reset", reset_kill_inflation, methods=["POST"], dependencies=_kill_rl_v)
     router.add_api_route("/attack/execute", execute_attack, methods=["POST"], response_model=AttackExecuteResponse, dependencies=_attack_button_rl_v)
     router.add_api_route("/attack/attempts", get_attack_attempts, methods=["GET"])
     router.add_api_route("/attack/timeline", get_attack_timeline, methods=["GET"])

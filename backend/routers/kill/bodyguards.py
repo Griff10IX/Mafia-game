@@ -170,6 +170,18 @@ BODYGUARD_INFLATION_HOURS = 3
 # First 4 levels: 2%, 5%, 7%, 12%; then +5% per level (17%, 22%, 27%, ...)
 BODYGUARD_INFLATION_PERCENTS_FIRST = [0.02, 0.05, 0.07, 0.12]
 BODYGUARD_INFLATION_EXTRA_PER_LEVEL = 0.05  # after level 4; no cap on level (keeps +5% per hire in window)
+# Store perk: halves hire markup % while active (does not stack / renew until expired)
+SLOW_BODYGUARD_HIRE_INFLATION_MULT = 0.5
+
+
+def _slow_bodyguard_hire_inflation_active(user: Optional[dict]) -> bool:
+    until_iso = (user or {}).get("slow_bodyguard_hire_inflation_until")
+    if not until_iso:
+        return False
+    until = _parse_iso_datetime(until_iso)
+    if until is None:
+        return False
+    return until > datetime.now(timezone.utc)
 
 
 def _normalize_bodyguard_inflation_level(raw) -> int:
@@ -203,6 +215,14 @@ def _bodyguard_inflation_percent_for_level(level: int) -> float:
     if level <= len(BODYGUARD_INFLATION_PERCENTS_FIRST):
         return BODYGUARD_INFLATION_PERCENTS_FIRST[level - 1]
     return BODYGUARD_INFLATION_PERCENTS_FIRST[-1] + (level - len(BODYGUARD_INFLATION_PERCENTS_FIRST)) * BODYGUARD_INFLATION_EXTRA_PER_LEVEL
+
+
+def _effective_bodyguard_inflation_percent(level: int, user: Optional[dict] = None) -> float:
+    """Hire markup decimal for this level, halved while Slow Bodyguard Hire Inflation perk is active."""
+    pct = _bodyguard_inflation_percent_for_level(level)
+    if pct > 0 and _slow_bodyguard_hire_inflation_active(user):
+        return pct * SLOW_BODYGUARD_HIRE_INFLATION_MULT
+    return pct
 
 
 def _bodyguard_inflation_window_expired(user: dict) -> bool:
@@ -249,8 +269,9 @@ def _bodyguard_inflation_window_ends_at(user: dict) -> Optional[str]:
 async def _bodyguard_inflation_status(user: dict) -> dict:
     """Hire-inflation counter only (separate from global event bodyguard_cost multiplier)."""
     level = _bodyguard_inflation_level_now(user)
-    hire_pct = round(_bodyguard_inflation_percent_for_level(level) * 100)
-    next_pct = round(_bodyguard_inflation_percent_for_level(level + 1) * 100)
+    hire_pct = round(_effective_bodyguard_inflation_percent(level, user) * 100)
+    next_pct = round(_effective_bodyguard_inflation_percent(level + 1, user) * 100)
+    slow_active = _slow_bodyguard_hire_inflation_active(user)
     ev = await get_effective_event()
     event_mult = float(ev.get("bodyguard_cost", 1.0) or 1.0)
     event_markup_pct = round(max(0.0, event_mult - 1.0) * 100)
@@ -262,6 +283,8 @@ async def _bodyguard_inflation_status(user: dict) -> dict:
         "event_bodyguard_cost_mult": event_mult,
         "event_markup_pct": event_markup_pct,
         "window_hours": BODYGUARD_INFLATION_HOURS,
+        "slow_bodyguard_hire_inflation_active": slow_active,
+        "slow_bodyguard_hire_inflation_until": (user or {}).get("slow_bodyguard_hire_inflation_until") if slow_active else None,
         "tier_schedule": "0%, 2%, 5%, 7%, 12%, then +5% per extra hire in window",
     }
 
@@ -406,12 +429,19 @@ async def get_bodyguards_hire_inflation(current_user: dict = Depends(get_current
     """Return hire-inflation tier (3h window) and event markup separately — not the same system."""
     user = await db.users.find_one(
         {"id": current_user["id"]},
-        {"_id": 0, "bodyguard_inflation_until": 1, "bodyguard_inflation_level": 1},
+        {
+            "_id": 0,
+            "bodyguard_inflation_until": 1,
+            "bodyguard_inflation_level": 1,
+            "slow_bodyguard_hire_inflation_until": 1,
+        },
     )
     user = user or {}
     await _persist_bodyguard_inflation_expiry_if_needed(current_user["id"], user)
     if _bodyguard_inflation_window_expired(user):
-        user = {}
+        user = {
+            "slow_bodyguard_hire_inflation_until": user.get("slow_bodyguard_hire_inflation_until"),
+        }
     return await _bodyguard_inflation_status(user)
 
 
@@ -768,15 +798,22 @@ async def _do_hire_bodyguard_reserved(
     # Bodyguard inflation: each hire within 3h adds % (0%, 2%, 5%, 7%, 12%, 17%, ...)
     user_inflation = await db.users.find_one(
         {"id": current_user["id"]},
-        {"_id": 0, "bodyguard_inflation_until": 1, "bodyguard_inflation_level": 1}
+        {
+            "_id": 0,
+            "bodyguard_inflation_until": 1,
+            "bodyguard_inflation_level": 1,
+            "slow_bodyguard_hire_inflation_until": 1,
+        },
     )
     user_for_inflation = user_inflation or {}
     await _persist_bodyguard_inflation_expiry_if_needed(current_user["id"], user_for_inflation)
     if _bodyguard_inflation_window_expired(user_for_inflation):
-        user_for_inflation = {}
+        user_for_inflation = {
+            "slow_bodyguard_hire_inflation_until": user_for_inflation.get("slow_bodyguard_hire_inflation_until"),
+        }
     inflation_level = _bodyguard_inflation_level_now(user_for_inflation)
     new_inflation_level = inflation_level + 1
-    inflation_mult = 1.0 + _bodyguard_inflation_percent_for_level(inflation_level)
+    inflation_mult = 1.0 + _effective_bodyguard_inflation_percent(inflation_level, user_for_inflation)
     total_cost = int(base_cost * event_cost_mult * inflation_mult)
     now = datetime.now(timezone.utc)
     window_end = now + timedelta(hours=BODYGUARD_INFLATION_HOURS)
@@ -871,6 +908,7 @@ async def _do_hire_bodyguard_reserved(
         {
             "bodyguard_inflation_until": window_end.isoformat(),
             "bodyguard_inflation_level": new_inflation_level,
+            "slow_bodyguard_hire_inflation_until": user_for_inflation.get("slow_bodyguard_hire_inflation_until"),
         }
     )
     return {
@@ -879,7 +917,7 @@ async def _do_hire_bodyguard_reserved(
         "slot": slot,
         "cost": total_cost,
         "base_slot_cost": base_cost,
-        "hire_inflation_pct_applied": round(_bodyguard_inflation_percent_for_level(inflation_level) * 100),
+        "hire_inflation_pct_applied": round(_effective_bodyguard_inflation_percent(inflation_level, user_for_inflation) * 100),
         **infl_after,
         "bodyguard": {
             "slot_number": slot,
@@ -1035,14 +1073,23 @@ async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
     base_cost = BODYGUARD_SLOT_COSTS[empty_slot - 1]
     inviter_inflation = await db.users.find_one(
         {"id": inviter["id"]},
-        {"_id": 0, "points": 1, "bodyguard_inflation_until": 1, "bodyguard_inflation_level": 1},
+        {
+            "_id": 0,
+            "points": 1,
+            "bodyguard_inflation_until": 1,
+            "bodyguard_inflation_level": 1,
+            "slow_bodyguard_hire_inflation_until": 1,
+        },
     )
     inviter_for_cost = inviter_inflation or {}
     await _persist_bodyguard_inflation_expiry_if_needed(inviter["id"], inviter_for_cost)
     if _bodyguard_inflation_window_expired(inviter_for_cost):
-        inviter_for_cost = {}
+        inviter_for_cost = {
+            "points": inviter_for_cost.get("points"),
+            "slow_bodyguard_hire_inflation_until": inviter_for_cost.get("slow_bodyguard_hire_inflation_until"),
+        }
     inflation_level = _bodyguard_inflation_level_now(inviter_for_cost)
-    inflation_mult = 1.0 + _bodyguard_inflation_percent_for_level(inflation_level)
+    inflation_mult = 1.0 + _effective_bodyguard_inflation_percent(inflation_level, inviter_for_cost)
     event_bodyguard_cost_mult = float(ev.get("bodyguard_cost", 1.0))
     robot_cost = int(base_cost * event_bodyguard_cost_mult * inflation_mult)
     human_hire_cost = max(1, int(robot_cost * BODYGUARD_HUMAN_HIRE_DISCOUNT))
