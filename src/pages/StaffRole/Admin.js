@@ -246,6 +246,7 @@ const SEARCHABLE_TOOLS = [
   // Donations
   { label: 'Donations Payments Log', categoryId: 'admin-donations', collapseKey: 'donationsPayments', keywords: ['donations', 'payments', 'stripe', 'credit'], adminOnly: true },
   { label: 'Store Point Crediting', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['store', 'crediting', 'manual', 'eta', 'payments'], adminOnly: true },
+  { label: 'VIP Pass Car purchase limit', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['vip', 'pass', 'car', 'limit', 'purchase', 'store'], adminOnly: true },
   { label: 'Store item rollout', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['store', 'rollout', 'feature flag', 'coming soon', 'auto-collect', 'bailout', 'cooldown skip', 'profile glow', 'family crest', 'safe deposit', 'phase 1', 'enable', 'test'], adminOnly: true },
   { label: 'Pre-order Settings', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['preorder', 'points', 'release', 'manual', 'store', 'credit'], adminOnly: true },
   { label: 'Store cash purchase logs', categoryId: 'admin-donations', collapseKey: 'pointsCashLogs', keywords: ['points', 'cash', 'store', 'ip', 'email', 'monthly', 'quick trade', 'token', 'bundle'], adminOnly: true },
@@ -1472,6 +1473,10 @@ export default function Admin() {
   const [storePointsEventForceUntil, setStorePointsEventForceUntil] = useState('');
   const [storeItemFlags, setStoreItemFlags] = useState({});
   const [storeItemFlagsSaving, setStoreItemFlagsSaving] = useState(false);
+  const [vipPassCarPurchaseLimit, setVipPassCarPurchaseLimit] = useState('5');
+  const [vipPassCarLimitSaving, setVipPassCarLimitSaving] = useState(false);
+  const [vipPassCarStats, setVipPassCarStats] = useState(null);
+  const [vipPassCarStatsLoading, setVipPassCarStatsLoading] = useState(false);
   const [pointsCashLogs, setPointsCashLogs] = useState(null);
   const [pointsCashLogsLoading, setPointsCashLogsLoading] = useState(false);
   const [pointsCashLogsUsername, setPointsCashLogsUsername] = useState('');
@@ -2413,6 +2418,7 @@ export default function Admin() {
       setStorePointsEventEnabled(res.data?.store_points_event_enabled !== false);
       setStorePointsEventForceUntil(res.data?.store_points_event_force_until || '');
       setStoreItemFlags(res.data?.store_item_flags || {});
+      setVipPassCarPurchaseLimit(String(res.data?.vip_pass_car_purchase_limit ?? 5));
       setCasinoBuybackMaxPoints(res.data?.casino_buyback_max_points || 15000);
       setMpPokerMaxBlind(res.data?.mp_poker_max_blind || 2500000);
       if (Array.isArray(res.data?.mod_visible_category_ids)) {
@@ -2425,6 +2431,7 @@ export default function Admin() {
         );
         setModVisibleCategoryIds(mapped.length ? mapped : [...MOD_ONLY_CATEGORY_IDS]);
       }
+      fetchVipPassCarStats();
     } catch {
       setAdminOnlineColor('#a78bfa');
       setModDefaultOnlineColor('#1e3a5f');
@@ -2960,6 +2967,35 @@ export default function Admin() {
       toast.error(e.response?.data?.detail ?? 'Failed to save store item flags');
     } finally {
       setStoreItemFlagsSaving(false);
+    }
+  };
+
+  const handleSaveVipPassCarPurchaseLimit = async () => {
+    setVipPassCarLimitSaving(true);
+    try {
+      const n = Math.max(1, Math.min(50, parseInt(String(vipPassCarPurchaseLimit).replace(/\D/g, ''), 10) || 5));
+      const res = await api.patch('/admin/settings', { vip_pass_car_purchase_limit: n });
+      setVipPassCarPurchaseLimit(String(res.data?.vip_pass_car_purchase_limit ?? n));
+      toast.success('VIP Pass Car purchase limit saved');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to save VIP Pass Car limit');
+    } finally {
+      setVipPassCarLimitSaving(false);
+    }
+  };
+
+  const fetchVipPassCarStats = async () => {
+    setVipPassCarStatsLoading(true);
+    try {
+      const res = await api.get('/admin/vip-pass-car-stats');
+      setVipPassCarStats(res.data || null);
+      if (res.data?.purchase_limit != null) {
+        setVipPassCarPurchaseLimit(String(res.data.purchase_limit));
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to load VIP Pass Car stats');
+    } finally {
+      setVipPassCarStatsLoading(false);
     }
   };
 
@@ -12066,6 +12102,64 @@ export default function Admin() {
                     Disable all
                   </button>
                 </div>
+              </div>
+
+              <div className="h-px bg-zinc-700/30" />
+
+              <div className="space-y-3">
+                <p className="text-[10px] font-heading font-bold text-cyan-400 uppercase tracking-wider">VIP Pass Car purchase limit</p>
+                <p className="text-[10px] text-mutedForeground">
+                  Max VIP Pass Cars an account can own (store + Game Pass free grant). Default 5. Range 1–50.
+                </p>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={vipPassCarPurchaseLimit}
+                    onChange={(e) => setVipPassCarPurchaseLimit(e.target.value)}
+                    className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-cyan-500/50 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveVipPassCarPurchaseLimit}
+                    disabled={vipPassCarLimitSaving}
+                    className="px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 hover:bg-cyan-500/30 disabled:opacity-50"
+                  >
+                    {vipPassCarLimitSaving ? 'Saving...' : 'Save limit'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={fetchVipPassCarStats}
+                    disabled={vipPassCarStatsLoading}
+                    className="px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-zinc-700/30 text-zinc-300 border border-zinc-600/60 hover:bg-zinc-700/50 disabled:opacity-50"
+                  >
+                    {vipPassCarStatsLoading ? 'Loading...' : 'Refresh counts'}
+                  </button>
+                </div>
+                {vipPassCarStats && (
+                  <div className="rounded border border-cyan-500/25 bg-cyan-500/5 px-2.5 py-2 space-y-1">
+                    <p className="text-[10px] font-heading text-cyan-300">
+                      In game now: <span className="font-bold text-foreground">{Number(vipPassCarStats.cars_in_game || 0).toLocaleString()}</span>
+                      {' '}cars across{' '}
+                      <span className="font-bold text-foreground">{Number(vipPassCarStats.owner_accounts || 0).toLocaleString()}</span>
+                      {' '}accounts
+                    </p>
+                    <p className="text-[10px] font-heading text-zinc-300">
+                      Game Pass free grants claimed: <span className="font-bold text-foreground">{Number(vipPassCarStats.game_pass_granted_accounts || 0).toLocaleString()}</span>
+                      {' '}accounts
+                    </p>
+                    <p className="text-[10px] font-heading text-zinc-300">
+                      Grant events — Store: <span className="font-bold text-foreground">{Number(vipPassCarStats.store_purchase_grants || 0).toLocaleString()}</span>
+                      {' · '}Game Pass: <span className="font-bold text-foreground">{Number(vipPassCarStats.game_pass_tier_100_grants || 0).toLocaleString()}</span>
+                      {Number(vipPassCarStats.other_grants || 0) > 0 && (
+                        <>
+                          {' · '}Other: <span className="font-bold text-foreground">{Number(vipPassCarStats.other_grants || 0).toLocaleString()}</span>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="h-px bg-zinc-700/30" />

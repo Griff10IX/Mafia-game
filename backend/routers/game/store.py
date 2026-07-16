@@ -1106,11 +1106,20 @@ async def buy_vip_pass_car(
     pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
-    """Purchase the VIP Pass Car (car22) from the Points Store — once per account."""
-    from utils.game_pass_vip_car import grant_vip_pass_car_to_user, user_owns_game_pass_vip_car
+    """Purchase a VIP Pass Car (car22) from the Points Store — up to the admin-configured account limit."""
+    from utils.game_pass_vip_car import (
+        count_user_vip_pass_cars,
+        get_vip_pass_car_purchase_limit,
+        grant_vip_pass_car_to_user,
+    )
 
-    if await user_owns_game_pass_vip_car(db, current_user["id"]):
-        raise HTTPException(status_code=400, detail="You already own the VIP Pass Car")
+    limit = await get_vip_pass_car_purchase_limit(db)
+    owned = await count_user_vip_pass_cars(db, current_user["id"])
+    if owned >= limit:
+        raise HTTPException(
+            status_code=400,
+            detail=f"VIP Pass Car limit reached ({owned}/{limit})",
+        )
     cost_used, inc, gte_filter = _store_cost_inc(current_user, VIP_PASS_CAR_STORE_COST_POINTS, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
@@ -1133,7 +1142,11 @@ async def buy_vip_pass_car(
         if inc.get("lifetime_respect_points_spent"):
             refund["lifetime_respect_points_spent"] = -int(inc["lifetime_respect_points_spent"])
         await db.users.update_one({"id": current_user["id"]}, {"$inc": refund})
-        raise HTTPException(status_code=400, detail="You already own the VIP Pass Car")
+        owned_now = await count_user_vip_pass_cars(db, current_user["id"])
+        raise HTTPException(
+            status_code=400,
+            detail=f"VIP Pass Car limit reached ({owned_now}/{limit})",
+        )
     _invalidate_travel_info_cache(current_user["id"])
     await _record_store_points_spend(current_user, inc, "buy-vip-pass-car", cost_used=cost_used)
     await log_activity(
@@ -1142,9 +1155,12 @@ async def buy_vip_pass_car(
         "store_purchase",
         {"item": "vip_pass_car", "cost": cost_used},
     )
+    owned_after = await count_user_vip_pass_cars(db, current_user["id"])
     return {
-        "message": "VIP Pass Car purchased! 8s travel, +50% booze cargo while owned, custom image from Garage.",
+        "message": f"VIP Pass Car purchased! ({owned_after}/{limit}) 8s travel, +50% booze cargo while owned, custom image from Garage.",
         "cost": cost_used,
+        "vip_pass_car_count": owned_after,
+        "vip_pass_car_purchase_limit": limit,
     }
 
 
@@ -1518,7 +1534,7 @@ async def buy_hitlist_npc_bonus_slot(
     }
 
 
-TOKEN_CASH_DAILY_LIMIT = 25
+TOKEN_CASH_DAILY_LIMIT = 250  # Per London day; each cash token unit counts (matches selectable bundle max)
 # Store token cash buys: never below this $/point; if <3 valid QT sell offers, use this floor only.
 TOKEN_CASH_MIN_PRICE_PER_POINT = 150_000
 

@@ -797,6 +797,8 @@ class UserResponse(BaseModel):
     owns_weapon10: bool = False
     owns_weapon11: bool = False
     owns_vip_pass_car: bool = False
+    vip_pass_car_count: int = 0
+    vip_pass_car_purchase_limit: int = 5
     current_state: str
     total_kills: int
     total_deaths: int

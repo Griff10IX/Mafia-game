@@ -1,4 +1,4 @@
-"""VIP Game Pass tier-100 exclusive car (car22) grant and ownership helpers."""
+"""VIP Pass Car (car22) grant, ownership, and purchase-limit helpers."""
 from __future__ import annotations
 
 import logging
@@ -12,20 +12,86 @@ logger = logging.getLogger(__name__)
 
 GAME_PASS_VIP_CAR_ID = "car22"
 VIP_EXCLUSIVE_RARITY = "vip_exclusive"
+VIP_PASS_CAR_PURCHASE_LIMIT_DEFAULT = 5
+VIP_PASS_CAR_PURCHASE_LIMIT_MIN = 1
+VIP_PASS_CAR_PURCHASE_LIMIT_MAX = 50
 
 
 def _vip_car_catalog() -> Optional[dict]:
     return next((c for c in CARS if c.get("id") == GAME_PASS_VIP_CAR_ID), None)
 
 
-async def user_owns_game_pass_vip_car(db, user_id: str) -> bool:
+def normalize_vip_pass_car_purchase_limit(raw) -> int:
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return VIP_PASS_CAR_PURCHASE_LIMIT_DEFAULT
+    return max(VIP_PASS_CAR_PURCHASE_LIMIT_MIN, min(n, VIP_PASS_CAR_PURCHASE_LIMIT_MAX))
+
+
+async def get_vip_pass_car_purchase_limit(db) -> int:
+    doc = await db.game_settings.find_one({"_id": "main"}, {"_id": 0, "vip_pass_car_purchase_limit": 1})
+    if not doc or doc.get("vip_pass_car_purchase_limit") is None:
+        return VIP_PASS_CAR_PURCHASE_LIMIT_DEFAULT
+    return normalize_vip_pass_car_purchase_limit(doc.get("vip_pass_car_purchase_limit"))
+
+
+async def set_vip_pass_car_purchase_limit(db, limit: int) -> int:
+    n = normalize_vip_pass_car_purchase_limit(limit)
+    await db.game_settings.update_one(
+        {"_id": "main"},
+        {"$set": {"vip_pass_car_purchase_limit": n}},
+        upsert=True,
+    )
+    return n
+
+
+async def get_vip_pass_car_stats(db) -> dict:
+    """Live VIP Pass Car inventory + grant-source breakdown."""
+    cars_in_game = int(await db.user_cars.count_documents({"car_id": GAME_PASS_VIP_CAR_ID}))
+    owner_ids = await db.user_cars.distinct("user_id", {"car_id": GAME_PASS_VIP_CAR_ID})
+    owner_accounts = len([x for x in (owner_ids or []) if x])
+    game_pass_granted_accounts = int(
+        await db.users.count_documents({"game_pass_vip_car_granted": True})
+    )
+    grant_pipeline = [
+        {"$match": {"car_id": GAME_PASS_VIP_CAR_ID}},
+        {"$group": {"_id": "$event_type", "count": {"$sum": 1}}},
+    ]
+    grant_rows = await db.exclusive_car_events.aggregate(grant_pipeline).to_list(100)
+    grants_by_type = {
+        str(r.get("_id") or "unknown"): int(r.get("count") or 0)
+        for r in (grant_rows or [])
+        if r.get("_id") is not None
+    }
+    store_grants = int(grants_by_type.get("store_purchase") or 0)
+    game_pass_grants = int(grants_by_type.get("game_pass_tier_100") or 0)
+    other_grants = sum(
+        v for k, v in grants_by_type.items() if k not in ("store_purchase", "game_pass_tier_100")
+    )
+    return {
+        "cars_in_game": cars_in_game,
+        "owner_accounts": owner_accounts,
+        "game_pass_granted_accounts": game_pass_granted_accounts,
+        "store_purchase_grants": store_grants,
+        "game_pass_tier_100_grants": game_pass_grants,
+        "other_grants": other_grants,
+        "grants_by_type": grants_by_type,
+        "purchase_limit": await get_vip_pass_car_purchase_limit(db),
+    }
+
+
+async def count_user_vip_pass_cars(db, user_id: str) -> int:
     if not user_id:
-        return False
-    n = await db.user_cars.count_documents({"user_id": user_id, "car_id": GAME_PASS_VIP_CAR_ID}, limit=1)
-    return n > 0
+        return 0
+    return int(await db.user_cars.count_documents({"user_id": user_id, "car_id": GAME_PASS_VIP_CAR_ID}))
 
 
-async def grant_vip_pass_car_to_user(
+async def user_owns_game_pass_vip_car(db, user_id: str) -> bool:
+    return await count_user_vip_pass_cars(db, user_id) > 0
+
+
+async def _insert_vip_pass_car(
     db,
     *,
     user_id: str,
@@ -33,16 +99,6 @@ async def grant_vip_pass_car_to_user(
     event_type: str = "store_purchase",
     notify: bool = True,
 ) -> bool:
-    """
-    Grant VIP Pass Car (car22) once per account.
-    Idempotent via user_cars ownership and users.game_pass_vip_car_granted.
-    Returns True if a new car row was inserted.
-    """
-    if not user_id:
-        return False
-    if await user_owns_game_pass_vip_car(db, user_id):
-        return False
-
     car_info = _vip_car_catalog()
     if not car_info:
         logger.error("game_pass_vip_car: car22 missing from CARS catalog")
@@ -54,15 +110,6 @@ async def grant_vip_pass_car_to_user(
 
     now_iso = datetime.now(timezone.utc).isoformat()
     user_car_id = str(uuid.uuid4())
-    claim = await db.users.update_one(
-        {"id": user_id, "game_pass_vip_car_granted": {"$ne": True}},
-        {"$set": {"game_pass_vip_car_granted": True}},
-    )
-    if claim.modified_count == 0:
-        if await user_owns_game_pass_vip_car(db, user_id):
-            return False
-        return False
-
     try:
         await db.user_cars.insert_one(
             {
@@ -75,10 +122,6 @@ async def grant_vip_pass_car_to_user(
             }
         )
     except Exception:
-        await db.users.update_one(
-            {"id": user_id, "game_pass_vip_car_granted": True},
-            {"$unset": {"game_pass_vip_car_granted": ""}},
-        )
         logger.exception("game_pass_vip_car insert failed user_id=%s", user_id)
         return False
 
@@ -113,10 +156,52 @@ async def grant_vip_pass_car_to_user(
     return True
 
 
+async def grant_vip_pass_car_to_user(
+    db,
+    *,
+    user_id: str,
+    username: Optional[str] = None,
+    event_type: str = "store_purchase",
+    notify: bool = True,
+) -> bool:
+    """
+    Grant one VIP Pass Car if the account is under the purchase limit.
+    Returns True if a new car row was inserted.
+    """
+    if not user_id:
+        return False
+    limit = await get_vip_pass_car_purchase_limit(db)
+    if await count_user_vip_pass_cars(db, user_id) >= limit:
+        return False
+    ok = await _insert_vip_pass_car(
+        db,
+        user_id=user_id,
+        username=username,
+        event_type=event_type,
+        notify=notify,
+    )
+    if not ok:
+        return False
+    # Soft race guard: if concurrent grants pushed over the limit, roll back this insert.
+    if await count_user_vip_pass_cars(db, user_id) > limit:
+        try:
+            newest = await db.user_cars.find_one(
+                {"user_id": user_id, "car_id": GAME_PASS_VIP_CAR_ID},
+                {"_id": 0, "id": 1},
+                sort=[("acquired_at", -1)],
+            )
+            if newest and newest.get("id"):
+                await db.user_cars.delete_one({"id": newest["id"], "user_id": user_id})
+        except Exception:
+            logger.exception("game_pass_vip_car over-limit rollback failed user_id=%s", user_id)
+        return False
+    return True
+
+
 async def grant_game_pass_vip_car_if_eligible(db, *, user_id: str) -> bool:
     """
     Grant one VIP Pass car the first time VIP reaches tier 100 (once per account).
-    Idempotent via users.game_pass_vip_car_granted.
+    Still respects the account purchase limit. Idempotent via users.game_pass_vip_car_granted.
     """
     if not user_id:
         return False
@@ -136,10 +221,27 @@ async def grant_game_pass_vip_car_if_eligible(db, *, user_id: str) -> bool:
     if user.get("game_pass_vip_car_granted"):
         return False
 
-    return await grant_vip_pass_car_to_user(
+    limit = await get_vip_pass_car_purchase_limit(db)
+    if await count_user_vip_pass_cars(db, user_id) >= limit:
+        return False
+
+    claim = await db.users.update_one(
+        {"id": user_id, "game_pass_vip_car_granted": {"$ne": True}},
+        {"$set": {"game_pass_vip_car_granted": True}},
+    )
+    if claim.modified_count == 0:
+        return False
+
+    ok = await grant_vip_pass_car_to_user(
         db,
         user_id=user_id,
         username=user.get("username"),
         event_type="game_pass_tier_100",
         notify=True,
     )
+    if not ok:
+        await db.users.update_one(
+            {"id": user_id, "game_pass_vip_car_granted": True},
+            {"$unset": {"game_pass_vip_car_granted": ""}},
+        )
+    return ok

@@ -298,6 +298,7 @@ class AdminSettingsUpdate(BaseModel):
     store_points_manual_credit_eta: Optional[str] = None  # ISO datetime shown to users (informational)
     store_points_event_enabled: Optional[bool] = None  # Random store points sale event toggle (+50% bonus)
     store_points_event_force_today: Optional[bool] = None  # True = force sale until end of current UTC day; False = clear force
+    vip_pass_car_purchase_limit: Optional[int] = None  # Max VIP Pass Cars per account (default 5)
     casino_global_max_bet: Optional[int] = None  # Max bet cap for all casinos (default 1B)
     casino_buyback_max_points: Optional[int] = None  # Max points for buy-back reward (default 15000)
     mp_poker_max_blind: Optional[int] = None  # Max MP poker small blind cap (default 2.5M)
@@ -8934,6 +8935,10 @@ def register(router):
         landing_banner_message = (msg_doc.get("value") or "") if msg_doc and msg_doc.get("value") is not None else ""
         main_doc = await db.game_settings.find_one({"_id": "main"})
         from utils.store_item_flags import normalize_store_item_flags
+        from utils.game_pass_vip_car import (
+            VIP_PASS_CAR_PURCHASE_LIMIT_DEFAULT,
+            normalize_vip_pass_car_purchase_limit,
+        )
         login_lock_from = main_doc.get("login_lock_from") if main_doc else None
         login_lock_until = main_doc.get("login_lock_until") if main_doc else None
         login_lock_message = main_doc.get("login_lock_message") if main_doc else None
@@ -9097,6 +9102,9 @@ def register(router):
             "store_points_event_enabled": bool(store_points_event_enabled),
             "store_points_event_force_until": store_points_event_force_until,
             "store_item_flags": normalize_store_item_flags((main_doc or {}).get("store_item_flags")) if main_doc else normalize_store_item_flags(None),
+            "vip_pass_car_purchase_limit": normalize_vip_pass_car_purchase_limit(
+                (main_doc or {}).get("vip_pass_car_purchase_limit")
+            ),
             "casino_global_max_bet": casino_global_max_bet,
             "casino_buyback_max_points": casino_buyback_max_points,
             "mp_poker_max_blind": mp_poker_max_blind,
@@ -9553,6 +9561,10 @@ def register(router):
                     {"$unset": {"store_points_event_force_until": ""}},
                     upsert=True,
                 )
+        if body.vip_pass_car_purchase_limit is not None:
+            from utils.game_pass_vip_car import set_vip_pass_car_purchase_limit
+
+            await set_vip_pass_car_purchase_limit(db, body.vip_pass_car_purchase_limit)
         if body.casino_global_max_bet is not None:
             await db.game_settings.update_one(
                 {"_id": "main"},
@@ -9630,6 +9642,10 @@ def register(router):
         landing_banner_message = (msg_doc.get("value") or "") if msg_doc and msg_doc.get("value") is not None else ""
         main_doc = await db.game_settings.find_one({"_id": "main"})
         from utils.store_item_flags import normalize_store_item_flags
+        from utils.game_pass_vip_car import (
+            VIP_PASS_CAR_PURCHASE_LIMIT_DEFAULT,
+            normalize_vip_pass_car_purchase_limit,
+        )
         login_lock_from = main_doc.get("login_lock_from") if main_doc else None
         login_lock_until = main_doc.get("login_lock_until") if main_doc else None
         login_lock_message = main_doc.get("login_lock_message") if main_doc else None
@@ -9787,6 +9803,9 @@ def register(router):
             "store_points_event_enabled": bool(store_points_event_enabled),
             "store_points_event_force_until": store_points_event_force_until,
             "store_item_flags": normalize_store_item_flags((main_doc or {}).get("store_item_flags")) if main_doc else normalize_store_item_flags(None),
+            "vip_pass_car_purchase_limit": normalize_vip_pass_car_purchase_limit(
+                (main_doc or {}).get("vip_pass_car_purchase_limit")
+            ),
             "casino_global_max_bet": casino_global_max_bet,
             "casino_buyback_max_points": casino_buyback_max_points,
             "mp_poker_max_blind": mp_poker_max_blind,
@@ -10845,6 +10864,15 @@ def register(router):
             raise HTTPException(status_code=403, detail="Admin access required")
         max_bet = await load_keno_max_bet(db, ttl_sec=0.0)
         return {"max_bet": max_bet, "default_max_bet": DEFAULT_KENO_MAX_BET}
+
+    @router.get("/admin/vip-pass-car-stats")
+    async def admin_vip_pass_car_stats(current_user: dict = Depends(get_current_user)):
+        """VIP Pass Car inventory: cars in garages + grant sources (store vs Game Pass)."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.game_pass_vip_car import get_vip_pass_car_stats
+
+        return await get_vip_pass_car_stats(db)
 
     @router.patch("/admin/store-item-flags")
     async def admin_patch_store_item_flags(
