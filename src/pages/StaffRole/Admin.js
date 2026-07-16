@@ -11654,7 +11654,7 @@ export default function Admin() {
                     {revivePreviewLoading ? '…' : 'Preview'}
                   </BtnSecondary>
                   <BtnPrimary onClick={handleRevivePlayer}>Revive</BtnPrimary>
-                  <BtnSecondary type="button" onClick={handleGrantDeadAliveRevive} title="Clear 50k Revive lock for this email (not Claim Inheritance)">
+                  <BtnSecondary type="button" onClick={handleGrantDeadAliveRevive} title="Clear £10 Revive lock for this email (not Claim Inheritance)">
                     Grant Revive slot
                   </BtnSecondary>
                   <BtnSecondary type="button" onClick={handleGrantDeadAliveInheritance} title="Reset Claim Inheritance on the dead account (retrieval_used)">
@@ -11664,13 +11664,13 @@ export default function Admin() {
               </ActionRow>
               <div className="pl-6 space-y-2 border-l-2 border-primary/25 text-[10px] font-heading">
                 <p className="text-mutedForeground leading-relaxed">
-                  <strong className="text-foreground">Grant Revive slot</strong> — 50k revive on same email.
+                  <strong className="text-foreground">Grant Revive slot</strong> — £10 revive on same email.
                   {' '}
                   <strong className="text-foreground">Reset inheritance</strong> — Claim Inheritance on the <em>dead</em> account (enter fallen username, e.g. K).
                 </p>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={reviveGrantDeadAlive} onChange={(e) => setReviveGrantDeadAlive(e.target.checked)} />
-                  Reset Dead &gt; Alive revive slot on revive (allows 50k revive again)
+                  Reset Dead &gt; Alive revive slot on revive (allows £10 revive again)
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={reviveRestoreBalances} onChange={(e) => setReviveRestoreBalances(e.target.checked)} />

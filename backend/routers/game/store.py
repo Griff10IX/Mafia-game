@@ -626,7 +626,7 @@ async def buy_founding_member(
     pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
-    """Founding Member badge (+2.5% core payouts). Account-only — lost on death."""
+    """Founding Member badge (+15% core payouts). Account-only — lost on death."""
     if user_has_founding_member(current_user):
         raise HTTPException(status_code=400, detail="You already have the Founding Member badge")
     cost_used, inc, gte_filter = _store_cost_inc(current_user, FOUNDING_MEMBER_COST_POINTS, pay_with)
@@ -640,7 +640,7 @@ async def buy_founding_member(
         raise HTTPException(status_code=400, detail="Insufficient points or you already own this upgrade")
     await _record_store_points_spend(current_user, inc, FOUNDING_MEMBER_STORE_REF, cost_used=cost_used)
     return {
-        "message": "Founding Member badge purchased! +2.5% on crimes, GTA, OC, hitlist NPCs, properties, rackets, and missions.",
+        "message": "Founding Member badge purchased! +15% on crimes, GTA, OC, hitlist NPCs, properties, rackets, and missions.",
         "cost": cost_used,
         "founding_member": True,
     }

@@ -5,7 +5,8 @@ import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import { GAME_PASS_DEAD_ALIVE_FINE_PRINT } from '../../constants/gamePassPricing';
 
-const REVIVE_COST = 50000;
+const REVIVE_PACKAGE_ID = 'dead_alive_revive_10';
+const REVIVE_PRICE_GBP_DEFAULT = 10;
 
 const DA_STYLES = `
   .da-fade-in  { animation: da-fade-in 0.5s ease-out both; }
@@ -32,11 +33,69 @@ export default function DeadAlive() {
   const [revivePassword, setRevivePassword] = useState('');
   const [reviveLoading, setReviveLoading] = useState(false);
   const [reviveSuccess, setReviveSuccess] = useState(null);
+  const [reviveFulfilling, setReviveFulfilling] = useState(false);
+
+  const priceGbp = reviveEligibility?.revive_price_gbp ?? REVIVE_PRICE_GBP_DEFAULT;
+  const packageId = reviveEligibility?.revive_package_id || REVIVE_PACKAGE_ID;
 
   useEffect(() => {
     api.get('/dead-alive/revive-eligibility')
       .then((r) => setReviveEligibility(r.data))
       .catch(() => setReviveEligibility({ can_revive: false, reason: 'Could not load.', dead_accounts_same_email: [] }));
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get('session_id');
+    if (!sessionId) return;
+    if (params.get('payment_cancel') === '1') {
+      window.history.replaceState({}, '', '/game/dead-alive');
+      toast.message('Checkout cancelled');
+      return;
+    }
+    let cancelled = false;
+    setReviveFulfilling(true);
+    const poll = async (attempt = 0) => {
+      if (cancelled) return;
+      if (attempt > 40) {
+        setReviveFulfilling(false);
+        toast.error('Payment received but revive is still processing — refresh or contact staff.');
+        return;
+      }
+      try {
+        const res = await api.get(`/payments/status/${encodeURIComponent(sessionId)}`);
+        if (cancelled) return;
+        if (res.data?.fulfillment_blocked || res.data?.status === 'fulfillment_blocked') {
+          setReviveFulfilling(false);
+          toast.error(res.data?.detail || 'Payment received but revive could not complete — contact staff.');
+          window.history.replaceState({}, '', '/game/dead-alive');
+          return;
+        }
+        if (res.data?.dead_alive_revived) {
+          const revived = res.data?.revived_username;
+          setReviveFulfilling(false);
+          window.history.replaceState({}, '', '/game/dead-alive');
+          if (revived) {
+            setReviveSuccess(revived);
+            toast.success(`${revived} revived. Log in as that account to continue.`);
+          } else {
+            toast.success('Payment complete — revive processed.');
+          }
+          setReviveEligibility((prev) =>
+            prev ? { ...prev, can_revive: false, revive_used: true, dead_accounts_same_email: [] } : null
+          );
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('app:refresh-user'));
+          }
+          return;
+        }
+      } catch {
+        /* retry */
+      }
+      setTimeout(() => poll(attempt + 1), 1500);
+    };
+    poll();
+    return () => { cancelled = true; };
   }, []);
 
   const handleRevive = async (e) => {
@@ -47,35 +106,31 @@ export default function DeadAlive() {
       return;
     }
     const balance = reviveEligibility?.points_balance ?? 0;
-    const afterCost = Math.max(0, balance - REVIVE_COST);
     const msg = (
-      `Revive ${toRevive} for ${REVIVE_COST.toLocaleString()} points?\n\n`
-      + `• ${REVIVE_COST.toLocaleString()} points will be deducted from this account\n`
-      + `• Your remaining points and cash will transfer to ${toRevive}\n`
-      + `• This account will become DEAD — you must log in as ${toRevive} to continue\n`
+      `Revive ${toRevive} for £${Number(priceGbp).toFixed(0)}?\n\n`
+      + `• You will pay £${Number(priceGbp).toFixed(0)} by card (Stripe)\n`
+      + `• Your full points and cash transfer to ${toRevive} (no points fee)\n`
+      + `• This account will become DEAD — log in as ${toRevive} to continue\n`
       + `• One revive per email (staff can grant another)\n\n`
-      + `You have ${balance.toLocaleString()} pts → about ${afterCost.toLocaleString()} pts would move to the revived account (plus any estate on the dead account).`
+      + `You have ${balance.toLocaleString()} pts that would move with your cash.`
     );
     if (!window.confirm(msg)) return;
     setReviveLoading(true);
     setReviveSuccess(null);
     try {
-      const response = await api.post('/dead-alive/revive', {
-        dead_username: toRevive,
-        dead_password: revivePassword ? revivePassword : undefined
+      const response = await api.post('/payments/checkout', {
+        package_id: packageId,
+        origin_url: `${window.location.origin}/game/dead-alive`,
+        revive_dead_username: toRevive,
+        revive_dead_password: revivePassword ? revivePassword : undefined,
       });
-      toast.success(response.data.message);
-      setReviveSuccess(response.data.revived_username);
-      setReviveUsername('');
-      setRevivePassword('');
-      setReviveEligibility((prev) => prev ? { ...prev, can_revive: false, revive_used: true, dead_accounts_same_email: [] } : null);
-      // Refetch user so Layout sees is_dead and shows the death screen
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('app:refresh-user'));
+      if (!response.data?.url) {
+        toast.error('Checkout failed');
+        return;
       }
+      window.location.href = response.data.url;
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Revive failed.');
-    } finally {
+      toast.error(error.response?.data?.detail || 'Checkout failed.');
       setReviveLoading(false);
     }
   };
@@ -245,7 +300,7 @@ export default function DeadAlive() {
         </div>
       </div>
 
-      {/* ── Revive a fallen account (50k points, same email, once per email) ── */}
+      {/* ── Revive a fallen account (£10 Stripe, same email, once per email) ── */}
       {reviveEligibility != null && (
         <div className="da-fade-in space-y-3 max-w-3xl">
           <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
@@ -256,9 +311,14 @@ export default function DeadAlive() {
               </h2>
             </div>
             <div className="p-5 space-y-4">
+              {reviveFulfilling && (
+                <p className="text-[11px] font-heading text-primary">
+                  Confirming £{Number(priceGbp).toFixed(0)} payment and completing revive…
+                </p>
+              )}
               <p className="text-[11px] font-heading leading-relaxed" style={{ color: 'var(--noir-muted)' }}>
-                Pay {REVIVE_COST.toLocaleString()} points once to bring back one of your dead accounts (same email, or prove ownership with that account&apos;s password if its email was freed).
-                This account will become dead; your money and points (minus the cost) move to the revived account. If the dead account was PvP-killed with a death snapshot, revive also restores properties, illegal business/distillery, and cars lost to the killer (map mission progress is kept on the dead account). Killer portfolio kill boost and armour/weapons are not reversed. Once per email unless staff grants another revive.
+                Pay £{Number(priceGbp).toFixed(0)} once to bring back one of your dead accounts (same email, or prove ownership with that account&apos;s password if its email was freed).
+                This account will become dead; your money and points move to the revived account in full. If the dead account was PvP-killed with a death snapshot, revive also restores properties, illegal business/distillery, and cars lost to the killer (map mission progress is kept on the dead account). Killer portfolio kill boost and armour/weapons are not reversed. Once per email unless staff grants another revive.
               </p>
               {reviveEligibility.revive_used && (
                 <p className="text-[11px] font-heading text-amber-400" style={{ color: 'var(--noir-foreground)' }}>
@@ -318,17 +378,17 @@ export default function DeadAlive() {
                     />
                   </div>
                   <div className="flex items-center justify-between px-3 py-2 rounded bg-primary/10 border border-primary/20 text-[11px] font-heading" style={{ color: 'var(--noir-foreground)' }}>
-                    <span style={{ color: 'var(--noir-muted)' }}>Your points</span>
-                    <span>{(reviveEligibility.points_balance ?? 0).toLocaleString()} <span style={{ color: 'var(--noir-muted)' }}>(cost {REVIVE_COST.toLocaleString()})</span></span>
+                    <span style={{ color: 'var(--noir-muted)' }}>Your points (transfer in full)</span>
+                    <span>{(reviveEligibility.points_balance ?? 0).toLocaleString()} <span style={{ color: 'var(--noir-muted)' }}>(cost £{Number(priceGbp).toFixed(0)})</span></span>
                   </div>
                   <button
                     type="submit"
-                    disabled={reviveLoading || !reviveUsername.trim()}
+                    disabled={reviveLoading || reviveFulfilling || !reviveUsername.trim()}
                     className="w-full flex items-center justify-center gap-2.5 py-3 rounded border border-primary/40 bg-primary/10 hover:bg-primary/20 text-primary font-heading font-bold uppercase tracking-[0.12em] transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-[11px] active:scale-[0.98]"
                     data-testid="revive-submit"
                   >
                     <Zap size={15} />
-                    {reviveLoading ? 'Reviving…' : `Revive (${REVIVE_COST.toLocaleString()} points)`}
+                    {reviveLoading ? 'Opening checkout…' : `Revive (£${Number(priceGbp).toFixed(0)})`}
                   </button>
                 </form>
               )}

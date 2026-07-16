@@ -278,7 +278,7 @@ GTA_NON_LEGENDARY_RARITY_BOOST_SLOPE = {
     "ultra_rare": 0.70,
 }
 REFERRED_USER_GTA_RARE_BOOST = 0.10  # GTA rare car weight boost for referred signups (pairs with ~10% copy)
-FOUNDING_MEMBER_GTA_RARE_BOOST = 0.025  # Founding Member: extra weight toward rarer cars
+FOUNDING_MEMBER_GTA_RARE_BOOST = 0.15  # Founding Member: extra weight toward rarer cars
 
 
 def _gta_non_legendary_roll_weight(rarity: Optional[str], rare_boost: float) -> float:

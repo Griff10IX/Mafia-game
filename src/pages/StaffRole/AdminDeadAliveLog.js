@@ -221,9 +221,9 @@ export default function AdminDeadAliveLog() {
           <div>
             <h1 className="text-lg font-heading font-bold text-foreground">Dead &gt; Alive transfer log</h1>
             <p className="text-[10px] text-mutedForeground font-heading max-w-2xl">
-              Every retrieve (dead estate → living alt) and revive (50k revive swap). Use{' '}
+              Every retrieve (dead estate → living alt) and revive (£10 Stripe revive swap). Use{' '}
               <strong className="text-foreground font-normal">Revive abuse</strong> to find players who reclaimed
-              points from the account that died in the swap (50k fee refunded).
+              points from the account that died in the swap (£10 fee is Stripe, not points).
             </p>
           </div>
         </div>
@@ -376,7 +376,7 @@ export default function AdminDeadAliveLog() {
           )}
           <p className="p-3 text-[9px] text-mutedForeground font-heading border-t border-zinc-800/80">
             <strong className="text-foreground font-normal">Reclaimed</strong> = points taken back from the reviver corpse
-            after the swap. If it matches or exceeds the 50k fee, revive was effectively free. Post-deploy revives block
+            after the swap. With the £10 Stripe fee there is no points fee to reclaim; large reclaim still flags odd retrieve loops. Post-deploy revives block
             this; this report catches historical abuse.
           </p>
         </section>

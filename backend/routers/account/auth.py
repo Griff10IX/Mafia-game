@@ -148,10 +148,10 @@ PREREGISTER_REWARDS = {
     "badge": "Founding Member",
     "auto_rank_trial_hours": 24,
     "founding_random_tokens": 5,
-    # Shown on pre-register page; mirrors server founding_member_income_mult (1.025)
-    "founding_passive_bonus_pct": 2.5,
+    # Shown on pre-register page; mirrors server founding_member_income_mult (1.15)
+    "founding_passive_bonus_pct": 15,
     "founding_passive_blurb": (
-        "Permanent +2.5% on crime payouts (cash, rank points & respect), GTA car sale value & rare-car luck, "
+        "Permanent +15% on crime payouts (cash, rank points & respect), GTA car sale value & rare-car luck, "
         "OC heist payouts, hitlist NPC rewards, property income, family racket collects, and mission rewards — "
         "while this character has the Founding Member badge. Also in Store → Upgrades for 5,000 pts (account-only; lost on death)."
     ),
@@ -2646,7 +2646,7 @@ def register(router):
         return {
             "message": (
                 "You're in! We'll email you when the game launches. "
-                "Create a full account to earn the Founding Member badge, launch-day respect & cash, and a permanent +2.5% bonus on core payouts."
+                "Create a full account to earn the Founding Member badge, launch-day respect & cash, and a permanent +15% bonus on core payouts."
             ),
             "rewards": PREREGISTER_REWARDS,
         }

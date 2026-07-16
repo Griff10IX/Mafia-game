@@ -36,6 +36,7 @@ STORE_POINTS_EVENT_BONUS_RATE = 0.50
 
 RANK_XP_PASS_PACKAGE_ID = "rank_xp_pass_499"
 AUTO_RANK_PERMANENT_PACKAGE_ID = "auto_rank_permanent_2000"
+DEAD_ALIVE_REVIVE_PACKAGE_ID = "dead_alive_revive_10"
 # No new Game Pass checkout while an active pass is within this many days of rank_xp_pass_token_expires_at.
 GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS = 7
 GAME_PASS_SEASON_END_AT = DEFAULT_GAME_PASS_SEASON_END_AT
@@ -95,6 +96,9 @@ class CheckoutRequest(BaseModel):
     # When package_id is "custom", send exactly one of: integer points in [CUSTOM_POINTS_MIN, CUSTOM_POINTS_MAX], or GBP budget.
     custom_points: Optional[int] = None
     custom_gbp: Optional[float] = None
+    # Dead > Alive revive (£10): dead account to bring back (+ password if email was freed).
+    revive_dead_username: Optional[str] = None
+    revive_dead_password: Optional[str] = None
 
 
 class BuyGamePassWithPointsRequest(BaseModel):
@@ -371,7 +375,7 @@ def _resolve_points_for_stripe_payment(
         if pts <= 0:
             return 0, "invalid_points"
         return pts, None
-    if package_id != RANK_XP_PASS_PACKAGE_ID and package_id != AUTO_RANK_PERMANENT_PACKAGE_ID and txn:
+    if package_id != RANK_XP_PASS_PACKAGE_ID and package_id != AUTO_RANK_PERMANENT_PACKAGE_ID and package_id != DEAD_ALIVE_REVIVE_PACKAGE_ID and txn:
         pts = int(txn.get("points") or 0)
         if pts > 0:
             return pts, None
@@ -537,7 +541,8 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
     """
     is_rank_xp_pass = package_id == RANK_XP_PASS_PACKAGE_ID
     is_auto_rank_permanent = package_id == AUTO_RANK_PERMANENT_PACKAGE_ID
-    if not user_id or (points <= 0 and not is_rank_xp_pass and not is_auto_rank_permanent):
+    is_dead_alive_revive = package_id == DEAD_ALIVE_REVIVE_PACKAGE_ID
+    if not user_id or (points <= 0 and not is_rank_xp_pass and not is_auto_rank_permanent and not is_dead_alive_revive):
         return {"credited": False, "preorder": False}
     
     now = datetime.now(timezone.utc)
@@ -780,6 +785,113 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
             str(email).strip().lower(),
         )
         return {"credited": True, "preorder": False, "auto_rank_entitled": True}
+
+    # Dead > Alive revive (£10 Stripe — no points credited).
+    if is_dead_alive_revive:
+        txn = await db.payment_transactions.find_one(
+            {"session_id": session_id},
+            {"_id": 0, "revive_intent_id": 1, "payment_status": 1},
+        )
+        intent_id = (txn or {}).get("revive_intent_id")
+        if not intent_id:
+            blocked_detail = "Revive payment missing intent id — contact staff with your receipt."
+            await db.payment_transactions.update_one(
+                {"session_id": session_id, "payment_status": "pending"},
+                {
+                    "$set": {
+                        "payment_status": "fulfillment_blocked",
+                        "fulfillment_blocked_at": now.isoformat(),
+                        "fulfillment_blocked_detail": blocked_detail[:1000],
+                    }
+                },
+            )
+            return {"credited": False, "preorder": False, "fulfillment_blocked": True, "detail": blocked_detail}
+
+        from routers.game.dead_alive import execute_paid_revive
+        import server as srv
+
+        claim = await db.payment_transactions.update_one(
+            {
+                "session_id": session_id,
+                "payment_status": {"$nin": ["completed", "preorder_pending", "manual_credit_pending", "fulfillment_blocked"]},
+            },
+            {"$set": {"payment_status": "fulfilling_revive", "revive_fulfill_started_at": now_iso}},
+        )
+        if claim.modified_count == 0:
+            snap = await db.payment_transactions.find_one({"session_id": session_id}, {"payment_status": 1})
+            if (snap or {}).get("payment_status") == "completed":
+                return {"credited": True, "preorder": False, "dead_alive_revived": True}
+            return {"credited": False, "preorder": False}
+
+        try:
+            revive_out = await execute_paid_revive(
+                db,
+                intent_id=intent_id,
+                send_notification=srv.send_notification,
+                default_health=int(getattr(srv, "DEFAULT_HEALTH", 100) or 100),
+            )
+        except HTTPException as he:
+            await db.payment_transactions.update_one(
+                {"session_id": session_id},
+                {
+                    "$set": {
+                        "payment_status": "fulfillment_blocked",
+                        "fulfillment_blocked_at": now.isoformat(),
+                        "fulfillment_blocked_detail": str(he.detail)[:1000],
+                    }
+                },
+            )
+            logger.error(
+                "Dead>Alive revive fulfillment blocked: session_id=%s intent_id=%s detail=%s",
+                session_id,
+                intent_id,
+                he.detail,
+            )
+            return {"credited": False, "preorder": False, "fulfillment_blocked": True, "detail": he.detail}
+        except Exception as e:
+            await db.payment_transactions.update_one(
+                {"session_id": session_id},
+                {
+                    "$set": {
+                        "payment_status": "fulfillment_blocked",
+                        "fulfillment_blocked_at": now.isoformat(),
+                        "fulfillment_blocked_detail": str(e)[:1000],
+                    }
+                },
+            )
+            logger.exception(
+                "Dead>Alive revive fulfillment failed: session_id=%s intent_id=%s",
+                session_id,
+                intent_id,
+            )
+            return {"credited": False, "preorder": False, "fulfillment_blocked": True, "detail": str(e)}
+
+        await db.payment_transactions.update_one(
+            {"session_id": session_id},
+            {
+                "$set": {
+                    "payment_status": "completed",
+                    "points_credited_at": now_iso,
+                    "points_before": 0,
+                    "points_after": 0,
+                    "revive_fulfilled_at": now_iso,
+                    "revived_username": revive_out.get("revived_username"),
+                    "revived_id": revive_out.get("revived_id"),
+                }
+            },
+        )
+        logger.info(
+            "Dead>Alive revive fulfilled: session_id=%s user_id=%s revived=%s",
+            session_id,
+            user_id,
+            revive_out.get("revived_username"),
+        )
+        return {
+            "credited": True,
+            "preorder": False,
+            "dead_alive_revived": True,
+            "revived_username": revive_out.get("revived_username"),
+        }
 
     settings = await db.game_settings.find_one({"_id": "main"})
     auto_credit = settings.get("store_points_auto_credit") if settings else None
@@ -1259,7 +1371,7 @@ def register(router):
             package = POINT_PACKAGES[package_id]
             base_points = int(package["points"])
             points = base_points
-            if package_id not in (RANK_XP_PASS_PACKAGE_ID, AUTO_RANK_PERMANENT_PACKAGE_ID):
+            if package_id not in (RANK_XP_PASS_PACKAGE_ID, AUTO_RANK_PERMANENT_PACKAGE_ID, DEAD_ALIVE_REVIVE_PACKAGE_ID):
                 points, bonus_points, active_store_points_event = _apply_store_points_event_bonus(base_points, store_points_event)
                 store_points_event = active_store_points_event or store_points_event
             price_gbp = float(package["price_gbp"])
@@ -1307,11 +1419,32 @@ def register(router):
                 raise HTTPException(status_code=400, detail="Verify your email before purchasing permanent Auto Rank.")
             if await email_has_auto_rank_entitlement(db, buyer_email):
                 raise HTTPException(status_code=400, detail="Permanent Auto Rank is already entitled for this email.")
+
+        revive_intent_id = None
+        if package_id == DEAD_ALIVE_REVIVE_PACKAGE_ID:
+            from routers.game.dead_alive import create_revive_payment_intent
+            import server as srv
+
+            dead_uname = (request.revive_dead_username or "").strip()
+            if not dead_uname:
+                raise HTTPException(status_code=400, detail="Choose the dead account username to revive.")
+            intent = await create_revive_payment_intent(
+                db,
+                reviver=current_user,
+                dead_username=dead_uname,
+                dead_password=request.revive_dead_password,
+                username_pattern_fn=srv._username_pattern,
+                verify_password_fn=srv.verify_password,
+            )
+            revive_intent_id = intent["id"]
+
         # success_url: frontend sends origin_url like http://localhost:3000/store
         origin = (request.origin_url or "").rstrip("/")
         success_url = f"{origin}?session_id={{CHECKOUT_SESSION_ID}}"
         # Return with session id so we can mark DB row abandoned when user backs out without paying
         cancel_url = f"{origin}?tab=points&payment_cancel=1&session_id={{CHECKOUT_SESSION_ID}}"
+        if package_id == DEAD_ALIVE_REVIVE_PACKAGE_ID:
+            cancel_url = f"{origin}?payment_cancel=1&session_id={{CHECKOUT_SESSION_ID}}"
 
         def _create():
             import stripe
@@ -1323,11 +1456,15 @@ def register(router):
                 product_name = "Game Pass"
             if package_id == AUTO_RANK_PERMANENT_PACKAGE_ID:
                 product_name = "Permanent Auto Rank"
+            if package_id == DEAD_ALIVE_REVIVE_PACKAGE_ID:
+                product_name = "Dead > Alive revive"
             md = {
                 "user_id": current_user["id"],
                 "package_id": package_id,
                 "points": str(points),
             }
+            if revive_intent_id:
+                md["revive_intent_id"] = revive_intent_id
             if bonus_points > 0:
                 md["base_points"] = str(base_points)
                 md["bonus_points"] = str(bonus_points)
@@ -1359,6 +1496,14 @@ def register(router):
             session = await asyncio.to_thread(_create)
         except Exception as e:
             logger.exception("Stripe checkout create failed: %s", e)
+            if revive_intent_id:
+                try:
+                    await db.revive_payment_intents.update_one(
+                        {"id": revive_intent_id},
+                        {"$set": {"status": "checkout_failed"}},
+                    )
+                except Exception:
+                    pass
             raise HTTPException(status_code=500, detail="Checkout failed")
 
         # Record pending transaction so status endpoint can fulfill
@@ -1370,6 +1515,12 @@ def register(router):
             "payment_status": "pending",
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
+        if revive_intent_id:
+            txn_doc["revive_intent_id"] = revive_intent_id
+            await db.revive_payment_intents.update_one(
+                {"id": revive_intent_id},
+                {"$set": {"session_id": session.id, "status": "checkout_pending"}},
+            )
         if base_points and base_points != points:
             txn_doc["base_points"] = base_points
         if bonus_points:
@@ -1512,6 +1663,9 @@ def register(router):
                 out["pass_entitled"] = True
             if pkg == AUTO_RANK_PERMANENT_PACKAGE_ID:
                 out["auto_rank_entitled"] = True
+            if pkg == DEAD_ALIVE_REVIVE_PACKAGE_ID:
+                out["dead_alive_revived"] = True
+                out["revived_username"] = transaction.get("revived_username")
             return out
         
         if transaction and transaction.get("payment_status") == "manual_credit_pending":
@@ -1611,7 +1765,8 @@ def register(router):
                     return {"status": "pending", "payment_status": "unknown"}
                 is_rank_xp_pass = package_id == RANK_XP_PASS_PACKAGE_ID
                 is_auto_rank_permanent = package_id == AUTO_RANK_PERMANENT_PACKAGE_ID
-                if not points and not is_rank_xp_pass and not is_auto_rank_permanent:
+                is_dead_alive_revive = package_id == DEAD_ALIVE_REVIVE_PACKAGE_ID
+                if not points and not is_rank_xp_pass and not is_auto_rank_permanent and not is_dead_alive_revive:
                     logger.warning("GET /payments/status: no points for package session=%s", session_id)
                     return {"status": "pending", "payment_status": "unknown"}
 
@@ -1669,6 +1824,9 @@ def register(router):
                         out["pass_entitled"] = True
                     if credit_result.get("auto_rank_entitled"):
                         out["auto_rank_entitled"] = True
+                    if credit_result.get("dead_alive_revived"):
+                        out["dead_alive_revived"] = True
+                        out["revived_username"] = credit_result.get("revived_username")
                     return out
                     return {
                         "status": "fulfillment_blocked",
@@ -1821,7 +1979,14 @@ def register(router):
                     )
                 else:
                     is_rank_xp_pass = package_id == RANK_XP_PASS_PACKAGE_ID
-                    if not user_id or (points <= 0 and not is_rank_xp_pass):
+                    is_auto_rank_permanent = package_id == AUTO_RANK_PERMANENT_PACKAGE_ID
+                    is_dead_alive_revive = package_id == DEAD_ALIVE_REVIVE_PACKAGE_ID
+                    if not user_id or (
+                        points <= 0
+                        and not is_rank_xp_pass
+                        and not is_auto_rank_permanent
+                        and not is_dead_alive_revive
+                    ):
                         logger.warning("Stripe webhook: missing user_id or invalid package_id, session_id=%s", session.id)
                     else:
                         # Ensure we have a transaction row (status poll may not have run)
@@ -1958,7 +2123,11 @@ def register(router):
                         package_id = txn.get("package_id", "")
                         points = txn.get("points", 0)
                         is_rank_xp_pass = package_id == RANK_XP_PASS_PACKAGE_ID
-                        if user_id and (points > 0 or is_rank_xp_pass):
+                        is_entitlement_pkg = package_id in (
+                            AUTO_RANK_PERMANENT_PACKAGE_ID,
+                            DEAD_ALIVE_REVIVE_PACKAGE_ID,
+                        )
+                        if user_id and (points > 0 or is_rank_xp_pass or is_entitlement_pkg):
                             result = await _credit_payment_if_pending(db, session_id, user_id, package_id, points)
                             if result.get("credited"):
                                 processed_stuck += 1
@@ -2186,7 +2355,11 @@ def register(router):
             if rerr == "stripe_amount_mismatch":
                 result["message"] = "Stripe amount does not match expected custom checkout; not crediting"
             is_rank_xp_pass = package_id == RANK_XP_PASS_PACKAGE_ID
-            if user_id and (points > 0 or is_rank_xp_pass) and rerr != "stripe_amount_mismatch":
+            is_entitlement_pkg = package_id in (
+                AUTO_RANK_PERMANENT_PACKAGE_ID,
+                DEAD_ALIVE_REVIVE_PACKAGE_ID,
+            )
+            if user_id and (points > 0 or is_rank_xp_pass or is_entitlement_pkg) and rerr != "stripe_amount_mismatch":
                 # Ensure transaction exists
                 if not txn:
                     ins_ad = {

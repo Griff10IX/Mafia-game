@@ -3,7 +3,7 @@
 FOUNDING_MEMBER_BADGE = "Founding Member"
 FOUNDING_MEMBER_COST_POINTS = 5000
 FOUNDING_MEMBER_STORE_REF = "buy-founding-member"
-FOUNDING_MEMBER_PASSIVE_BONUS_PCT = 2.5
+FOUNDING_MEMBER_PASSIVE_BONUS_PCT = 15
 
 
 def user_has_founding_member(user: dict) -> bool:

@@ -1,9 +1,9 @@
 # Dead-alive: cash 99.95% to recipient (0.05% state head tax); points 100% to recipient; 50% of tokens restored (one-time)
-# 50% of tokens are also restored
-# Revive: pay 50k points to bring back a dead account (same email, once per email)
+# Revive: pay £10 (Stripe) to bring back a dead account (same email, once per email)
 import logging
-from datetime import datetime, timezone
-from typing import Any, Dict
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional, Tuple
 
 from fastapi import Depends, HTTPException
 from routers.kill.armoury import TOKEN_CONFIG
@@ -13,8 +13,13 @@ from utils.dead_alive_transfer_log import log_dead_alive_transfer
 
 REVEAL_KILLER_COST = 1000
 TOKEN_RESTORE_PERCENT = 0.50  # 50% of tokens restored on Dead > Alive
-REVIVE_COST = 50_000  # points to revive one dead account (same email, once per email unless staff clears slot)
+# Stripe package id (POINT_PACKAGES) — real-money revive fee (no points deducted).
+DEAD_ALIVE_REVIVE_PACKAGE_ID = "dead_alive_revive_10"
+REVIVE_PRICE_GBP = 10.0
+# Legacy field name kept for admin logs (points fee removed; value stays 0).
+REVIVE_COST = 0
 ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL = "Error, this account has been locked for investigation."
+REVIVE_INTENT_TTL_MINUTES = 60
 
 
 async def clear_revive_used_slot_for_email(db, email: str) -> bool:
@@ -61,6 +66,295 @@ def _parse_iso_utc(s):
         return dt
     except Exception:
         return None
+
+
+async def create_revive_payment_intent(
+    db,
+    *,
+    reviver: dict,
+    dead_username: str,
+    dead_password: Optional[str],
+    username_pattern_fn,
+    verify_password_fn,
+) -> Dict[str, Any]:
+    """Validate revive targets and store a short-lived intent for Stripe checkout fulfillment."""
+    email = (reviver.get("email") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="No email linked to this account.")
+    if reviver.get("is_dead"):
+        raise HTTPException(status_code=400, detail="You must be alive to revive another account.")
+    if await revive_slot_used_for_email(db, email):
+        raise HTTPException(
+            status_code=400,
+            detail="This email has already used its revive (staff can grant another from Admin).",
+        )
+    dead_user = await db.users.find_one({"username": username_pattern_fn(dead_username)}, {"_id": 0})
+    if not dead_user:
+        raise HTTPException(status_code=404, detail="No account found with that username.")
+    if not dead_user.get("is_dead"):
+        raise HTTPException(status_code=400, detail="That account is not dead.")
+    if dead_user.get("account_locked"):
+        raise HTTPException(status_code=403, detail=ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL)
+    dead_email = (dead_user.get("email") or "").strip().lower()
+    if dead_email != email:
+        if not (dead_password and str(dead_password).strip()):
+            raise HTTPException(
+                status_code=400,
+                detail="That account is not linked to this email (it may have been freed when you used the same email elsewhere). Enter the dead account's password to revive it.",
+            )
+        if not verify_password_fn(str(dead_password).strip(), dead_user.get("password_hash") or ""):
+            raise HTTPException(status_code=401, detail="Invalid password for that account.")
+
+    intent_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc)
+    doc = {
+        "id": intent_id,
+        "reviver_id": reviver["id"],
+        "reviver_username": reviver.get("username"),
+        "reviver_email": email,
+        "dead_user_id": dead_user["id"],
+        "dead_username": dead_user.get("username"),
+        "status": "pending",
+        "created_at": now.isoformat(),
+        "expires_at": (now + timedelta(minutes=REVIVE_INTENT_TTL_MINUTES)).isoformat(),
+    }
+    await db.revive_payment_intents.insert_one(doc)
+    return doc
+
+
+async def execute_paid_revive(
+    db,
+    *,
+    intent_id: str,
+    send_notification,
+    default_health: int = 100,
+) -> Dict[str, Any]:
+    """
+    Fulfill a paid (£10 Stripe) revive intent: transfer balances, revive dead account, kill reviver.
+    Idempotent on intent status / email revive slot.
+    """
+    intent = await db.revive_payment_intents.find_one({"id": intent_id}, {"_id": 0})
+    if not intent:
+        raise HTTPException(status_code=400, detail="Revive payment intent not found.")
+    if intent.get("status") == "completed":
+        return {
+            "already_completed": True,
+            "revived_username": intent.get("dead_username"),
+            "revived_id": intent.get("dead_user_id"),
+        }
+    if intent.get("status") not in (None, "pending", "paid", "checkout_pending"):
+        raise HTTPException(status_code=400, detail=f"Revive intent is {intent.get('status')}.")
+
+    expires = _parse_iso_utc(intent.get("expires_at"))
+    if expires and datetime.now(timezone.utc) > expires and intent.get("status") == "pending":
+        await db.revive_payment_intents.update_one({"id": intent_id}, {"$set": {"status": "expired"}})
+        raise HTTPException(status_code=400, detail="Revive checkout expired — start again.")
+
+    reviver = await db.users.find_one({"id": intent["reviver_id"]}, {"_id": 0})
+    dead_user = await db.users.find_one({"id": intent["dead_user_id"]}, {"_id": 0})
+    if not reviver or not dead_user:
+        raise HTTPException(status_code=400, detail="Revive accounts no longer available.")
+    if reviver.get("is_dead"):
+        raise HTTPException(status_code=400, detail="Reviver account is already dead.")
+    if not dead_user.get("is_dead"):
+        raise HTTPException(status_code=400, detail="Target account is no longer dead.")
+    if dead_user.get("account_locked"):
+        raise HTTPException(status_code=403, detail=ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL)
+
+    email = (intent.get("reviver_email") or reviver.get("email") or "").strip().lower()
+    points_balance = int(reviver.get("points") or 0)
+    reviver_money = int(reviver.get("money") or 0)
+    # Full points transfer — fee was paid in GBP via Stripe.
+    reviver_points_after = points_balance
+    if dead_user.get("retrieval_used"):
+        dead_carry = max(
+            0,
+            int(dead_user.get("points") or 0) - int(dead_user.get("points_at_death") or 0),
+        )
+    else:
+        dead_carry = max(0, int(dead_user.get("points_at_death") or 0))
+    revived_points = reviver_points_after + dead_carry
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    from pymongo.errors import DuplicateKeyError
+
+    try:
+        await db.revive_used_by_email.insert_one(
+            {"email": email, "used_at": now_iso, "reviver_id": reviver["id"], "intent_id": intent_id}
+        )
+    except (DuplicateKeyError, Exception) as e:
+        if "duplicate" in str(e).lower() or "E11000" in str(e):
+            # Slot already used — if this intent already completed, treat as success.
+            snap = await db.revive_payment_intents.find_one({"id": intent_id}, {"status": 1, "dead_username": 1})
+            if (snap or {}).get("status") == "completed":
+                return {
+                    "already_completed": True,
+                    "revived_username": (snap or {}).get("dead_username") or intent.get("dead_username"),
+                    "revived_id": intent.get("dead_user_id"),
+                }
+            raise HTTPException(
+                status_code=400,
+                detail="This email has already used its revive (staff can grant another from Admin).",
+            )
+        existing = await db.revive_used_by_email.find_one({"email": email})
+        if existing:
+            raise HTTPException(
+                status_code=400,
+                detail="This email has already used its revive (staff can grant another from Admin).",
+            )
+
+    try:
+        revive_result = await db.users.update_one(
+            {"id": dead_user["id"], "is_dead": True, "account_locked": {"$ne": True}},
+            {
+                "$set": {
+                    "is_dead": False,
+                    "dead_at": None,
+                    "money": reviver_money,
+                    "points": revived_points,
+                    "health": default_health,
+                    "health_regen_last_at": now_iso,
+                    "in_jail": False,
+                },
+                "$unset": {
+                    "killed_by_username": "",
+                    "killed_by_user_id": "",
+                    "killed_by_family_name": "",
+                    "death_by_staff": "",
+                    "points_at_death": "",
+                    "money_at_death": "",
+                    "tokens_at_death": "",
+                    "traveling_to": "",
+                    "travel_arrives_at": "",
+                    "jail_until": "",
+                },
+            },
+        )
+        if revive_result.modified_count == 0:
+            locked_now = await db.users.find_one(
+                {"id": dead_user["id"], "account_locked": True}, {"_id": 0, "id": 1}
+            )
+            if locked_now:
+                raise HTTPException(status_code=403, detail=ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL)
+            raise HTTPException(status_code=400, detail="That account could not be revived.")
+        if revived_points > 0:
+            await log_points_event(
+                db,
+                user_id=dead_user["id"],
+                points=revived_points,
+                event_type="dead_alive_reviver_pay",
+                event_ref=reviver["id"],
+            )
+        restore_summary = {}
+        try:
+            from utils.death_revive_snapshot import restore_death_revive_snapshot
+
+            restore_summary = await restore_death_revive_snapshot(db, victim_id=dead_user["id"])
+        except Exception:
+            logging.getLogger(__name__).exception("death_revive_snapshot restore revived=%s", dead_user.get("id"))
+
+        await db.users.update_one(
+            {"id": reviver["id"]},
+            {
+                "$set": {
+                    "is_dead": True,
+                    "dead_at": now_iso,
+                    "death_by_staff": False,
+                    "points_at_death": 0,
+                    "money_at_death": 0,
+                    "tokens_at_death": {},
+                    "revive_sacrifice": True,
+                    "revive_sacrifice_for_user_id": dead_user["id"],
+                    "money": 0,
+                    "points": 0,
+                    "health": 0,
+                },
+            },
+        )
+        try:
+            await release_redeem_slots_for_deceased_user(db, reviver["id"])
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "release_redeem_slots_for_deceased_user (revive reviver death)"
+            )
+
+        notification_body = (
+            f"This account was revived for £{REVIVE_PRICE_GBP:.0f}!\n\n"
+            f"Balance before revive: $0 cash, 0 points\n"
+            f"Balance after revive: ${reviver_money:,} cash, {revived_points:,} points"
+        )
+        estate_text = (restore_summary or {}).get("summary_text") or ""
+        if estate_text:
+            notification_body += f"\n\nEstate restored: {estate_text}."
+        await send_notification(
+            dead_user["id"],
+            "Account revived",
+            notification_body,
+            "system",
+            category="system",
+        )
+        try:
+            await log_dead_alive_transfer(
+                db,
+                {
+                    "event_type": "revive",
+                    "reviver_id": reviver["id"],
+                    "reviver_username": reviver.get("username"),
+                    "revived_id": dead_user["id"],
+                    "revived_username": dead_user.get("username"),
+                    "dead_id": dead_user["id"],
+                    "dead_username": dead_user.get("username"),
+                    "recipient_id": dead_user["id"],
+                    "recipient_username": dead_user.get("username"),
+                    "revive_cost": REVIVE_COST,
+                    "revive_cost_gbp": REVIVE_PRICE_GBP,
+                    "revive_payment": "stripe",
+                    "revive_intent_id": intent_id,
+                    "reviver_points_before": points_balance,
+                    "reviver_points_after_cost": reviver_points_after,
+                    "reviver_points_after_death": 0,
+                    "reviver_money_transferred": reviver_money,
+                    "points_transferred": revived_points,
+                    "dead_carry_points": dead_carry,
+                    "retrieval_used_on_dead": bool(dead_user.get("retrieval_used")),
+                },
+            )
+        except Exception:
+            logging.getLogger(__name__).exception("dead_alive transfer log (revive)")
+
+        await db.revive_payment_intents.update_one(
+            {"id": intent_id},
+            {
+                "$set": {
+                    "status": "completed",
+                    "completed_at": now_iso,
+                    "revived_points": revived_points,
+                    "reviver_money_transferred": reviver_money,
+                }
+            },
+        )
+    except Exception:
+        await db.revive_used_by_email.delete_one({"email": email, "intent_id": intent_id})
+        await db.revive_used_by_email.delete_one({"email": email, "reviver_id": reviver["id"]})
+        raise
+
+    revived_username = dead_user.get("username") or intent.get("dead_username")
+    return {
+        "already_completed": False,
+        "revived_username": revived_username,
+        "revived_id": dead_user["id"],
+        "revived_balance_cash": reviver_money,
+        "revived_balance_points": revived_points,
+        "message": (
+            f"{revived_username} has been revived with your money and points. "
+            f"This account is now dead; log in as {revived_username} to continue."
+        ),
+    }
+
+
+def _parse_iso_datetime(s):
+    """Parse ISO datetime string safely; return timezone-aware datetime or None."""
+    return _parse_iso_utc(s)
 
 
 def _dead_has_rank_xp_pass_carryover(dead_user: dict, now, pass_bonus_until_dt, pass_token_expires_dt) -> bool:
@@ -445,41 +739,37 @@ def register(router):
 
     @router.get("/dead-alive/revive-eligibility")
     async def revive_eligibility(current_user: dict = Depends(get_current_user_verified)):
-        """Return whether current user can revive a dead account (same email, 50k points, once per email) and list dead usernames for that email."""
+        """Return whether current user can revive (same email, £10 Stripe once per email) and list dead usernames for that email."""
         email = (current_user.get("email") or "").strip().lower()
+        points_balance = int(current_user.get("points") or 0)
+        base = {
+            "points_balance": points_balance,
+            "revive_price_gbp": REVIVE_PRICE_GBP,
+            "revive_package_id": DEAD_ALIVE_REVIVE_PACKAGE_ID,
+        }
         if not email:
             return {
+                **base,
                 "can_revive": False,
                 "reason": "No email linked to this account.",
-                "points_balance": int(current_user.get("points") or 0),
                 "revive_used": False,
                 "dead_accounts_same_email": [],
             }
         if current_user.get("is_dead"):
             return {
+                **base,
                 "can_revive": False,
                 "reason": "You must be alive to revive another account.",
-                "points_balance": int(current_user.get("points") or 0),
                 "revive_used": False,
                 "dead_accounts_same_email": [],
             }
-        points_balance = int(current_user.get("points") or 0)
-        revive_used_doc = await db.revive_used_by_email.find_one({"email": email}, {"_id": 0})
-        revive_used = bool(revive_used_doc)
+        revive_used = await revive_slot_used_for_email(db, email)
         if revive_used:
             return {
+                **base,
                 "can_revive": False,
                 "reason": "This email has already used its revive (staff can grant another from Admin).",
-                "points_balance": points_balance,
                 "revive_used": True,
-                "dead_accounts_same_email": [],
-            }
-        if points_balance < REVIVE_COST:
-            return {
-                "can_revive": False,
-                "reason": f"You need {REVIVE_COST:,} points to revive an account (you have {points_balance:,}).",
-                "points_balance": points_balance,
-                "revive_used": False,
                 "dead_accounts_same_email": [],
             }
         dead_same_email = await db.users.find(
@@ -493,208 +783,28 @@ def register(router):
         ]
         if not dead_accounts_same_email and any(bool(u.get("account_locked")) for u in dead_same_email):
             return {
+                **base,
                 "can_revive": False,
                 "reason": ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL,
-                "points_balance": points_balance,
                 "revive_used": False,
                 "dead_accounts_same_email": [],
             }
         return {
+            **base,
             "can_revive": True,
             "reason": None,
-            "points_balance": points_balance,
             "revive_used": False,
             "dead_accounts_same_email": dead_accounts_same_email,
         }
 
     @router.post("/dead-alive/revive")
     async def dead_alive_revive(request: DeadAliveReviveRequest, current_user: dict = Depends(get_current_user_verified)):
-        """Pay 50,000 points to revive one dead account linked to the same email. Reviver's money and points (minus 50k) transfer to revived account; reviver becomes dead. One-time per email."""
-        email = (current_user.get("email") or "").strip().lower()
-        if not email:
-            raise HTTPException(status_code=400, detail="No email linked to this account.")
-        if current_user.get("is_dead"):
-            raise HTTPException(status_code=400, detail="You must be alive to revive another account.")
-        points_balance = int(current_user.get("points") or 0)
-        if points_balance < REVIVE_COST:
-            raise HTTPException(
-                status_code=400,
-                detail=f"You need {REVIVE_COST:,} points to revive (you have {points_balance:,}).",
-            )
-        username_pattern = _username_pattern(request.dead_username)
-        dead_user = await db.users.find_one({"username": username_pattern}, {"_id": 0})
-        if not dead_user:
-            raise HTTPException(status_code=404, detail="No account found with that username.")
-        if not dead_user.get("is_dead"):
-            raise HTTPException(status_code=400, detail="That account is not dead.")
-        if dead_user.get("account_locked"):
-            raise HTTPException(status_code=403, detail=ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL)
-        dead_email = (dead_user.get("email") or "").strip().lower()
-        emails_match = dead_email == email
-        if not emails_match:
-            # Email was freed (e.g. dead_xxx@deleted after registering new account with same email or using Dead > Alive); require password to prove ownership
-            if not (request.dead_password and request.dead_password.strip()):
-                raise HTTPException(
-                    status_code=400,
-                    detail="That account is not linked to this email (it may have been freed when you used the same email elsewhere). Enter the dead account's password to revive it.",
-                )
-            if not verify_password(request.dead_password.strip(), dead_user.get("password_hash") or ""):
-                raise HTTPException(status_code=401, detail="Invalid password for that account.")
-
-        reviver_money = int(current_user.get("money") or 0)
-        reviver_points_after = points_balance - REVIVE_COST
-        if dead_user.get("retrieval_used"):
-            dead_carry = max(
-                0,
-                int(dead_user.get("points") or 0) - int(dead_user.get("points_at_death") or 0),
-            )
-        else:
-            dead_carry = max(0, int(dead_user.get("points_at_death") or 0))
-        revived_points = reviver_points_after + dead_carry
-        now_iso = datetime.now(timezone.utc).isoformat()
-
-        # 1) Atomically claim the one-time revive slot for this email (insert-first gate)
-        from pymongo.errors import DuplicateKeyError
-        try:
-            await db.revive_used_by_email.insert_one({"email": email, "used_at": now_iso, "reviver_id": current_user["id"]})
-        except (DuplicateKeyError, Exception) as e:
-            if "duplicate" in str(e).lower() or "E11000" in str(e):
-                raise HTTPException(status_code=400, detail="This email has already used its revive (staff can grant another from Admin).")
-            existing = await db.revive_used_by_email.find_one({"email": email})
-            if existing:
-                raise HTTPException(status_code=400, detail="This email has already used its revive (staff can grant another from Admin).")
-
-        # 2) Deduct 50k points from current user (atomic)
-        res = await db.users.find_one_and_update(
-            {"id": current_user["id"], "points": {"$gte": REVIVE_COST}},
-            {"$inc": {"points": -REVIVE_COST}},
-            projection={"_id": 0, "id": 1},
+        """
+        Start £10 Stripe checkout to revive a dead account (same email / password proof).
+        Fulfillment runs after payment — full points+cash transfer (no points fee).
+        """
+        raise HTTPException(
+            status_code=400,
+            detail="Revive is now £10 via card checkout. Use the Revive button to pay with Stripe.",
         )
-        if not res:
-            await db.revive_used_by_email.delete_one({"email": email, "reviver_id": current_user["id"]})
-            raise HTTPException(status_code=400, detail="Not enough points (balance may have changed).")
-        await log_points_event(db, user_id=current_user["id"], points=-REVIVE_COST, event_type="dead_alive_revive_cost", event_ref=dead_user["id"])
 
-        try:
-            # 3) Revive dead account: alive, receive reviver's money and points (after 50k deduction)
-            revive_result = await db.users.update_one(
-                {"id": dead_user["id"], "is_dead": True, "account_locked": {"$ne": True}},
-                {
-                    "$set": {
-                        "is_dead": False,
-                        "dead_at": None,
-                        "money": reviver_money,
-                        "points": revived_points,
-                        "health": DEFAULT_HEALTH,
-                        "health_regen_last_at": now_iso,
-                        "in_jail": False,
-                    },
-                    "$unset": {
-                        "killed_by_username": "",
-                        "killed_by_user_id": "",
-                        "killed_by_family_name": "",
-                        "death_by_staff": "",
-                        "points_at_death": "",
-                        "money_at_death": "",
-                        "tokens_at_death": "",
-                        "traveling_to": "",
-                        "travel_arrives_at": "",
-                        "jail_until": "",
-                    },
-                },
-            )
-            if revive_result.modified_count == 0:
-                locked_now = await db.users.find_one({"id": dead_user["id"], "account_locked": True}, {"_id": 0, "id": 1})
-                if locked_now:
-                    raise HTTPException(status_code=403, detail=ACCOUNT_LOCKED_DEAD_ALIVE_BLOCK_DETAIL)
-                raise HTTPException(status_code=400, detail="That account could not be revived.")
-            if revived_points > 0:
-                await log_points_event(db, user_id=dead_user["id"], points=revived_points, event_type="dead_alive_reviver_pay", event_ref=current_user["id"])
-            restore_summary = {}
-            try:
-                from utils.death_revive_snapshot import restore_death_revive_snapshot
-
-                restore_summary = await restore_death_revive_snapshot(db, victim_id=dead_user["id"])
-            except Exception:
-                logging.getLogger(__name__).exception("death_revive_snapshot restore revived=%s", dead_user.get("id"))
-            # 4) Kill reviving account — estate already moved to revived; do not leave retrievable snapshot
-            await db.users.update_one(
-                {"id": current_user["id"]},
-                {
-                    "$set": {
-                        "is_dead": True,
-                        "dead_at": now_iso,
-                        "death_by_staff": False,
-                        "points_at_death": 0,
-                        "money_at_death": 0,
-                        "tokens_at_death": {},
-                        "revive_sacrifice": True,
-                        "revive_sacrifice_for_user_id": dead_user["id"],
-                        "money": 0,
-                        "points": 0,
-                        "health": 0,
-                    },
-                },
-            )
-            try:
-                await release_redeem_slots_for_deceased_user(db, current_user["id"])
-            except Exception:
-                logging.getLogger(__name__).exception("release_redeem_slots_for_deceased_user (revive reviver death)")
-
-            # 5) Notify the revived user with before/after balances so they can verify the transfer
-            notification_body = (
-                f"This account was revived for {REVIVE_COST:,} points!\n\n"
-                f"Balance before revive: $0 cash, 0 points\n"
-                f"Balance after revive: ${reviver_money:,} cash, {revived_points:,} points"
-            )
-            estate_text = (restore_summary or {}).get("summary_text") or ""
-            if estate_text:
-                notification_body += f"\n\nEstate restored: {estate_text}."
-            await send_notification(
-                dead_user["id"],
-                "Account revived",
-                notification_body,
-                "system",
-                category="system",
-            )
-            try:
-                await log_dead_alive_transfer(
-                    db,
-                    {
-                        "event_type": "revive",
-                        "reviver_id": current_user["id"],
-                        "reviver_username": current_user.get("username"),
-                        "revived_id": dead_user["id"],
-                        "revived_username": dead_user.get("username"),
-                        "dead_id": dead_user["id"],
-                        "dead_username": dead_user.get("username"),
-                        "recipient_id": dead_user["id"],
-                        "recipient_username": dead_user.get("username"),
-                        "revive_cost": REVIVE_COST,
-                        "reviver_points_before": points_balance,
-                        "reviver_points_after_cost": reviver_points_after,
-                        "reviver_points_after_death": 0,
-                        "reviver_money_transferred": reviver_money,
-                        "revived_id": dead_user["id"],
-                        "points_transferred": revived_points,
-                        "dead_carry_points": dead_carry,
-                        "retrieval_used_on_dead": bool(dead_user.get("retrieval_used")),
-                    },
-                )
-            except Exception:
-                logging.getLogger(__name__).exception("dead_alive transfer log (revive)")
-        except Exception as e:
-            await db.users.update_one(
-                {"id": current_user["id"]},
-                {"$inc": {"points": REVIVE_COST}},
-            )
-            await db.revive_used_by_email.delete_one({"email": email, "reviver_id": current_user["id"]})
-            raise e
-
-        revived_username = dead_user.get("username") or request.dead_username
-        return {
-            "message": f"{revived_username} has been revived with your money and points. This account is now dead; log in as {revived_username} to continue.",
-            "revived_username": revived_username,
-            "revived_balance_cash": reviver_money,
-            "revived_balance_points": revived_points,
-        }

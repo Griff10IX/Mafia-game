@@ -185,12 +185,12 @@ def get_prestige_bonus(user: dict) -> dict:
     cfg = PRESTIGE_CONFIGS[level]
     return {**{k: cfg[k] for k in ("crime_mult", "oc_mult", "gta_rare_boost", "npc_mult")}, "mission_reward_mult": cfg["mission_reward_mult"], "illegal_business_mult": cfg.get("illegal_business_mult", 1.0)}
 
-# Founding Member: +2.5% on crimes, GTA, OC, hitlist NPC, properties, rackets, missions (see founding_member_income_mult).
-FOUNDING_MEMBER_INCOME_MULT = 1.025
+# Founding Member: +15% on crimes, GTA, OC, hitlist NPC, properties, rackets, missions (see founding_member_income_mult).
+FOUNDING_MEMBER_INCOME_MULT = 1.15
 
 
 def founding_member_income_mult(user: Optional[dict]) -> float:
-    """Return 1.025 if user is a founding member (flag or Founding Member badge), else 1.0."""
+    """Return 1.15 if user is a founding member (flag or Founding Member badge), else 1.0."""
     if not user:
         return 1.0
     if user.get("founding_member"):
@@ -710,6 +710,8 @@ POINT_PACKAGES = {
     "rank_xp_pass_499": {"points": 0, "price_gbp": 9.99},
     # Permanent Auto Rank (email-tied entitlement; no points credited).
     "auto_rank_permanent_2000": {"points": 0, "price_gbp": 15.00},
+    # Dead > Alive revive (no points credited; fulfills revive swap after payment).
+    "dead_alive_revive_10": {"points": 0, "price_gbp": 10.00},
 }
 
 # Travel times based on car rarity (in seconds)
