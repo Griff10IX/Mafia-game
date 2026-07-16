@@ -1,4 +1,4 @@
-"""VIP Pass Car (car22) grant, ownership, and purchase-limit helpers."""
+"""VIP Pass Car (car22) grant, ownership, and game-wide stock helpers."""
 from __future__ import annotations
 
 import logging
@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 GAME_PASS_VIP_CAR_ID = "car22"
 VIP_EXCLUSIVE_RARITY = "vip_exclusive"
+# Max VIP Pass Cars that may exist across the whole player base (not per account).
 VIP_PASS_CAR_PURCHASE_LIMIT_DEFAULT = 5
 VIP_PASS_CAR_PURCHASE_LIMIT_MIN = 1
 VIP_PASS_CAR_PURCHASE_LIMIT_MAX = 50
@@ -46,9 +47,14 @@ async def set_vip_pass_car_purchase_limit(db, limit: int) -> int:
     return n
 
 
+async def count_global_vip_pass_cars(db) -> int:
+    """How many VIP Pass Cars currently exist in all garages (game-wide stock)."""
+    return int(await db.user_cars.count_documents({"car_id": GAME_PASS_VIP_CAR_ID}))
+
+
 async def get_vip_pass_car_stats(db) -> dict:
     """Live VIP Pass Car inventory + grant-source breakdown."""
-    cars_in_game = int(await db.user_cars.count_documents({"car_id": GAME_PASS_VIP_CAR_ID}))
+    cars_in_game = await count_global_vip_pass_cars(db)
     owner_ids = await db.user_cars.distinct("user_id", {"car_id": GAME_PASS_VIP_CAR_ID})
     owner_accounts = len([x for x in (owner_ids or []) if x])
     game_pass_granted_accounts = int(
@@ -165,13 +171,13 @@ async def grant_vip_pass_car_to_user(
     notify: bool = True,
 ) -> bool:
     """
-    Grant one VIP Pass Car if the account is under the purchase limit.
+    Grant one VIP Pass Car if game-wide stock is under the configured limit.
     Returns True if a new car row was inserted.
     """
     if not user_id:
         return False
     limit = await get_vip_pass_car_purchase_limit(db)
-    if await count_user_vip_pass_cars(db, user_id) >= limit:
+    if await count_global_vip_pass_cars(db) >= limit:
         return False
     ok = await _insert_vip_pass_car(
         db,
@@ -182,8 +188,8 @@ async def grant_vip_pass_car_to_user(
     )
     if not ok:
         return False
-    # Soft race guard: if concurrent grants pushed over the limit, roll back this insert.
-    if await count_user_vip_pass_cars(db, user_id) > limit:
+    # Soft race guard: if concurrent grants pushed over the global limit, roll back this insert.
+    if await count_global_vip_pass_cars(db) > limit:
         try:
             newest = await db.user_cars.find_one(
                 {"user_id": user_id, "car_id": GAME_PASS_VIP_CAR_ID},
@@ -201,7 +207,7 @@ async def grant_vip_pass_car_to_user(
 async def grant_game_pass_vip_car_if_eligible(db, *, user_id: str) -> bool:
     """
     Grant one VIP Pass car the first time VIP reaches tier 100 (once per account).
-    Still respects the account purchase limit. Idempotent via users.game_pass_vip_car_granted.
+    Still respects the game-wide stock limit. Idempotent via users.game_pass_vip_car_granted.
     """
     if not user_id:
         return False
@@ -222,7 +228,7 @@ async def grant_game_pass_vip_car_if_eligible(db, *, user_id: str) -> bool:
         return False
 
     limit = await get_vip_pass_car_purchase_limit(db)
-    if await count_user_vip_pass_cars(db, user_id) >= limit:
+    if await count_global_vip_pass_cars(db) >= limit:
         return False
 
     claim = await db.users.update_one(

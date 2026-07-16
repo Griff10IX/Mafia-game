@@ -298,7 +298,7 @@ class AdminSettingsUpdate(BaseModel):
     store_points_manual_credit_eta: Optional[str] = None  # ISO datetime shown to users (informational)
     store_points_event_enabled: Optional[bool] = None  # Random store points sale event toggle (+75% bonus)
     store_points_event_force_today: Optional[bool] = None  # True = force sale until end of current UTC day; False = clear force
-    vip_pass_car_purchase_limit: Optional[int] = None  # Max VIP Pass Cars per account (default 5)
+    vip_pass_car_purchase_limit: Optional[int] = None  # Max VIP Pass Cars game-wide (default 5)
     casino_global_max_bet: Optional[int] = None  # Max bet cap for all casinos (default 1B)
     casino_buyback_max_points: Optional[int] = None  # Max points for buy-back reward (default 15000)
     mp_poker_max_blind: Optional[int] = None  # Max MP poker small blind cap (default 2.5M)

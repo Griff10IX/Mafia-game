@@ -2003,13 +2003,15 @@ def register(router):
 
             async def _vip_pass_car_info():
                 from utils.game_pass_vip_car import (
+                    count_global_vip_pass_cars,
                     count_user_vip_pass_cars,
                     get_vip_pass_car_purchase_limit,
                 )
 
                 count = await count_user_vip_pass_cars(db, u["id"])
+                in_game = await count_global_vip_pass_cars(db)
                 limit = await get_vip_pass_car_purchase_limit(db)
-                return count, limit
+                return count, in_game, limit
 
             admin_color_doc, weapon_doc, fam, bodyguard_count, witness_nav_green_n, gp_season_pub, premium_weapon_flags, vip_pass_car_info = await asyncio.gather(
                 db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1}),
@@ -2028,7 +2030,7 @@ def register(router):
                 _vip_pass_car_info(),
             )
             owns_weapon10, owns_weapon11 = premium_weapon_flags
-            vip_pass_car_count, vip_pass_car_purchase_limit = vip_pass_car_info
+            vip_pass_car_count, vip_pass_car_in_game, vip_pass_car_purchase_limit = vip_pass_car_info
             owns_vip_pass_car = vip_pass_car_count > 0
             gp_current_sid = str((gp_season_pub or {}).get("game_pass_season_id") or "1")
             witness_nav_red = _safe_int(u.get("witness_nav_red"), 0)
@@ -2112,6 +2114,7 @@ def register(router):
                 owns_weapon11=bool(owns_weapon11),
                 owns_vip_pass_car=bool(owns_vip_pass_car),
                 vip_pass_car_count=int(vip_pass_car_count or 0),
+                vip_pass_car_in_game=int(vip_pass_car_in_game or 0),
                 vip_pass_car_purchase_limit=int(vip_pass_car_purchase_limit or 5),
                 current_state=str(u.get("current_state") or ""),
                 total_kills=effective_player_kill_count(u),

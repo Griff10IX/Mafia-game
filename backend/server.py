@@ -800,7 +800,8 @@ class UserResponse(BaseModel):
     owns_weapon11: bool = False
     owns_vip_pass_car: bool = False
     vip_pass_car_count: int = 0
-    vip_pass_car_purchase_limit: int = 5
+    vip_pass_car_in_game: int = 0  # game-wide stock currently in garages
+    vip_pass_car_purchase_limit: int = 5  # max cars across whole player base
     current_state: str
     total_kills: int
     total_deaths: int

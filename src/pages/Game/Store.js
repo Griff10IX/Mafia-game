@@ -1541,7 +1541,7 @@ export default function Store() {
             </div>
           </div>
 
-          {/* VIP Pass Car — up to purchase limit per account */}
+          {/* VIP Pass Car — limited game-wide stock */}
           <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
               <div className="h-0.5 bg-gradient-to-r from-transparent via-cyan-500/40 to-transparent" />
               <div className="px-3 py-2.5 bg-cyan-500/8 border-b border-cyan-500/20 flex items-center justify-between gap-2">
@@ -1550,18 +1550,21 @@ export default function Store() {
               </div>
               <div className="p-2.5">
                 <p className="text-[10px] text-mutedForeground font-heading mb-1.5">
-                  8s travel, +50% booze cargo while owned, custom image, survives death. Up to {Number(user?.vip_pass_car_purchase_limit ?? 5)} per account — also free at VIP Game Pass tier 100.
+                  8s travel, +50% booze cargo while owned, custom image, survives death. Only {Number(user?.vip_pass_car_purchase_limit ?? 5)} exist game-wide — also free at VIP Game Pass tier 100 while stock lasts.
                 </p>
                 <p className="text-[10px] text-mutedForeground mb-1.5">
-                  Owned: <span className="text-cyan-300 font-bold">{Number(user?.vip_pass_car_count ?? 0)}</span>
+                  In game: <span className="text-cyan-300 font-bold">{Number(user?.vip_pass_car_in_game ?? 0)}</span>
                   /{Number(user?.vip_pass_car_purchase_limit ?? 5)}
+                  {Number(user?.vip_pass_car_count ?? 0) > 0 ? (
+                    <span className="text-mutedForeground"> · You own {Number(user?.vip_pass_car_count ?? 0)}</span>
+                  ) : null}
                 </p>
                 <button
                   type="button"
                   onClick={() => apiBuy(`/store/buy-vip-pass-car?pay_with=${encodeURIComponent(storePayWith)}`, {}, 'VIP Pass Car purchased')}
                   disabled={
                     !user
-                    || Number(user?.vip_pass_car_count ?? 0) >= Number(user?.vip_pass_car_purchase_limit ?? 5)
+                    || Number(user?.vip_pass_car_in_game ?? 0) >= Number(user?.vip_pass_car_purchase_limit ?? 5)
                     || (
                       storePayWith === 'points'
                         ? (user.points ?? 0) < VIP_PASS_CAR_COST_POINTS
@@ -1570,8 +1573,8 @@ export default function Store() {
                   }
                   className="w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/35 hover:bg-cyan-500/25 disabled:opacity-50 touch-manipulation"
                 >
-                  {Number(user?.vip_pass_car_count ?? 0) >= Number(user?.vip_pass_car_purchase_limit ?? 5)
-                    ? `Limit reached (${Number(user?.vip_pass_car_count ?? 0)}/${Number(user?.vip_pass_car_purchase_limit ?? 5)})`
+                  {Number(user?.vip_pass_car_in_game ?? 0) >= Number(user?.vip_pass_car_purchase_limit ?? 5)
+                    ? `Sold out (${Number(user?.vip_pass_car_in_game ?? 0)}/${Number(user?.vip_pass_car_purchase_limit ?? 5)})`
                     : storePayWith === 'points'
                       ? `${VIP_PASS_CAR_COST_POINTS.toLocaleString()} pts`
                       : `${storeRespectForPoints(VIP_PASS_CAR_COST_POINTS)} resp`}

@@ -12109,7 +12109,7 @@ export default function Admin() {
               <div className="space-y-3">
                 <p className="text-[10px] font-heading font-bold text-cyan-400 uppercase tracking-wider">VIP Pass Car purchase limit</p>
                 <p className="text-[10px] text-mutedForeground">
-                  Max VIP Pass Cars an account can own (store + Game Pass free grant). Default 5. Range 1–50.
+                  Max VIP Pass Cars that may exist game-wide across all accounts (store + Game Pass free grant). Default 5. Range 1–50.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
