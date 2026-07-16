@@ -296,7 +296,7 @@ class AdminSettingsUpdate(BaseModel):
     preorder_points_release_date: Optional[str] = None  # ISO datetime - points held until this date
     store_points_auto_credit: Optional[bool] = None  # False = staff credits store points manually after payment
     store_points_manual_credit_eta: Optional[str] = None  # ISO datetime shown to users (informational)
-    store_points_event_enabled: Optional[bool] = None  # Random store points sale event toggle (+50% bonus)
+    store_points_event_enabled: Optional[bool] = None  # Random store points sale event toggle (+75% bonus)
     store_points_event_force_today: Optional[bool] = None  # True = force sale until end of current UTC day; False = clear force
     vip_pass_car_purchase_limit: Optional[int] = None  # Max VIP Pass Cars per account (default 5)
     casino_global_max_bet: Optional[int] = None  # Max bet cap for all casinos (default 1B)

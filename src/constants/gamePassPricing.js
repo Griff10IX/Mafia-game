@@ -9,6 +9,12 @@ export const GAME_PASS_PRICE_GBP = '9.99';
 export const SILVER_PACK_POINTS = 10_000;
 export const SILVER_PACK_PRICE_GBP = '21.99';
 
+/** Keep in sync with backend POINT_PACKAGES["game_pass_prestige_10"] + game_pass_prestige.py */
+export const GAME_PASS_PRESTIGE_PACKAGE_ID = 'game_pass_prestige_10';
+export const GAME_PASS_PRESTIGE_PRICE_GBP = '10.00';
+export const GAME_PASS_PRESTIGE_BONUS_PERCENT = 15;
+export const GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES = 500;
+
 /** Fine print: death + Dead > Alive retrieve (see backend dead_alive.py). */
 export const GAME_PASS_DEAD_ALIVE_FINE_PRINT =
   'Game Pass rank-tier progress is not wiped when you die. If you use Dead > Alive to move a dead account’s estate to a new account, your Game Pass state carries over so you can keep progressing.';

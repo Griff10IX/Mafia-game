@@ -2234,6 +2234,7 @@ def register(router):
                 game_pass_current_season_id=gp_current_sid,
                 rank_xp_pass_prestige_carry_rp=_safe_int(u.get("rank_xp_pass_prestige_carry_rp"), 0),
                 rank_xp_pass_rewards_granted=bool(u.get("rank_xp_pass_rewards_granted", False)),
+                game_pass_prestige_count=_safe_int(u.get("game_pass_prestige_count"), 0),
                 shooting_range_bonus_plays=_safe_int(u.get("shooting_range_bonus_plays"), 0),
                 hitlist_npc_bonus_slots=_safe_int(u.get("hitlist_npc_bonus_slots"), 0),
                 robot_bg_auto_search_until=u.get("robot_bg_auto_search_until"),

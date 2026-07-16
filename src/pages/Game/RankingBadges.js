@@ -69,13 +69,13 @@ export const TIER_ORDER = ['bronze', 'silver', 'gold', 'platinum', 'diamond', 'g
 // ─── Milestone → Tier mapping (bronze < silver < gold, gold well above 1K for crimes) ───
 export const MILESTONE_TIERS = {
   crimes:         { 500: 'bronze', 2500: 'silver', 10000: 'gold', 50000: 'platinum', 250000: 'diamond', 500000: 'galaxy', 1000000: 'obsidian', 5000000: 'void' },
-  gta:            { 50: 'bronze', 250: 'silver', 1000: 'gold', 5000: 'platinum', 25000: 'diamond', 100000: 'galaxy', 250000: 'obsidian', 500000: 'void' },
+  gta:            { 50: 'bronze', 250: 'silver', 1000: 'gold', 5000: 'platinum', 25000: 'diamond', 100000: 'galaxy', 250000: 'void' },
   jail_busts:     { 50: 'bronze', 250: 'silver', 1000: 'gold', 5000: 'platinum', 25000: 'diamond', 100000: 'galaxy', 250000: 'obsidian', 500000: 'void' },
-  kills:          { 50: 'bronze', 100: 'silver', 250: 'gold', 500: 'platinum', 750: 'diamond', 1000: 'galaxy', 1500: 'void' },
-  oc_heists:      { 50: 'bronze', 250: 'silver', 1000: 'gold', 5000: 'platinum', 25000: 'diamond', 50000: 'galaxy', 100000: 'obsidian', 250000: 'void' },
+  kills:          { 50: 'bronze', 100: 'silver', 250: 'gold', 500: 'platinum', 750: 'diamond', 1000: 'galaxy', 2000: 'void' },
+  oc_heists:      { 50: 'bronze', 250: 'silver', 500: 'gold', 750: 'platinum', 1000: 'void' },
   bullets_melted: { 5000: 'bronze', 25000: 'silver', 100000: 'gold', 500000: 'platinum', 1000000: 'diamond', 2500000: 'galaxy', 5000000: 'void' },
   booze_runs:     { 50: 'bronze', 250: 'silver', 1000: 'gold', 5000: 'platinum', 25000: 'diamond', 50000: 'galaxy', 100000: 'obsidian', 250000: 'void' },
-  hitlist_npc:    { 50: 'bronze', 250: 'silver', 1000: 'gold', 2500: 'platinum', 5000: 'diamond', 7500: 'galaxy', 10000: 'void' },
+  hitlist_npc:    { 50: 'bronze', 250: 'silver', 500: 'gold', 750: 'platinum', 1000: 'void' },
 };
 
 // Resolve tier for a given target so order is always Bronze → … → Void (no Platinum then Bronze)

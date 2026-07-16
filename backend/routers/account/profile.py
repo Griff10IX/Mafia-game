@@ -20,6 +20,24 @@ _VALID_TOPBAR_STAT_IDS = frozenset(
 _CHIP_SCALE_MIN, _CHIP_SCALE_MAX = 20, 100
 
 
+def _family_member_user_id_variants(user_id) -> list:
+    """String/int variants for family_members.user_id (Mongo matches type strictly)."""
+    out = []
+    if user_id is None:
+        return out
+    s = str(user_id).strip()
+    if s:
+        out.append(s)
+    if isinstance(user_id, int):
+        out.append(user_id)
+    elif isinstance(user_id, str) and user_id.isdigit():
+        try:
+            out.append(int(user_id))
+        except ValueError:
+            pass
+    return list(dict.fromkeys(out))
+
+
 def _theme_legacy_prefs(user: Dict[str, Any]) -> Dict[str, Any]:
     t = user.get("theme_preferences")
     return dict(t) if isinstance(t, dict) else {}
@@ -573,8 +591,9 @@ def register(router):
             )
 
         async def _family():
+            variants = _family_member_user_id_variants(user_id)
             member = await db.family_members.find_one(
-                {"user_id": user_id},
+                {"user_id": {"$in": variants}} if variants else {"user_id": user_id},
                 {"_id": 0, "family_id": 1},
             )
             fid = (member or {}).get("family_id")
@@ -582,7 +601,7 @@ def register(router):
             if not fid:
                 if user.get("family_id"):
                     await db.users.update_one(
-                        {"id": user_id},
+                        {"id": {"$in": variants}} if len(variants) > 1 else {"id": user_id},
                         {"$set": {"family_id": None, "family_role": None}},
                     )
                 return (None, None, None)
@@ -592,6 +611,12 @@ def register(router):
             )
             if not fam:
                 return (None, None, None)
+            # Heal users.family_id when membership exists but user doc is stale/null
+            if str(user.get("family_id") or "").strip() != str(fid).strip():
+                await db.users.update_one(
+                    {"id": {"$in": variants}} if len(variants) > 1 else {"id": user_id},
+                    {"$set": {"family_id": str(fid)}},
+                )
             name = fam.get("name") or "?"
             tag = (fam.get("tag") or "").strip()
             display = f"{name}" + (f" [{tag}]" if tag else "") if name else None
@@ -787,8 +812,9 @@ def register(router):
             return out
 
         async def _family_name_and_tag():
+            variants = _family_member_user_id_variants(user_id)
             member = await db.family_members.find_one(
-                {"user_id": user_id},
+                {"user_id": {"$in": variants}} if variants else {"user_id": user_id},
                 {"_id": 0, "family_id": 1},
             )
             fid = (member or {}).get("family_id")
@@ -796,7 +822,7 @@ def register(router):
             if not fid:
                 if user.get("family_id"):
                     await db.users.update_one(
-                        {"id": user_id},
+                        {"id": {"$in": variants}} if len(variants) > 1 else {"id": user_id},
                         {"$set": {"family_id": None, "family_role": None}},
                     )
                 return (None, None, None, None)
@@ -806,6 +832,11 @@ def register(router):
             )
             if not fam:
                 return (None, None, None, None)
+            if str(user.get("family_id") or "").strip() != str(fid).strip():
+                await db.users.update_one(
+                    {"id": {"$in": variants}} if len(variants) > 1 else {"id": user_id},
+                    {"$set": {"family_id": str(fid)}},
+                )
             pid = fam.get("emblem_preset_id")
             return (
                 fam.get("name"),
@@ -1129,14 +1160,16 @@ def register(router):
         family_name = None
         if user.get("family_id"):
             try:
+                uid = user.get("id")
+                variants = _family_member_user_id_variants(uid)
                 member = await db.family_members.find_one(
-                    {"user_id": user.get("id")},
+                    {"user_id": {"$in": variants}} if variants else {"user_id": uid},
                     {"_id": 0, "family_id": 1},
                 )
                 fid = (member or {}).get("family_id")
                 if not fid:
                     await db.users.update_one(
-                        {"id": user.get("id")},
+                        {"id": {"$in": variants}} if len(variants) > 1 else {"id": uid},
                         {"$set": {"family_id": None, "family_role": None}},
                     )
                     fid = None

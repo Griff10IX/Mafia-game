@@ -13,7 +13,7 @@ export default function StoreWidget({ user, storePointsEvent }) {
   const health = Number(user?.health ?? 100);
   const healthPct = Math.max(0, Math.min(100, Math.round(health)));
   const saleActive = !!storePointsEvent?.active;
-  const saleBonusPct = Math.round(Number(storePointsEvent?.bonus_rate ?? 0.50) * 100);
+  const saleBonusPct = Math.round(Number(storePointsEvent?.bonus_rate ?? 0.75) * 100);
 
   return (
     <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>

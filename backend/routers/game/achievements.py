@@ -1,4 +1,4 @@
-# Ranking Achievements / Badges - tiered milestones from early game to 15M+ crimes
+# Ranking Achievements / Badges - tiered milestones from early game to 5M crimes
 # Badge events are written to db.badge_events for flash news ticker
 
 from datetime import datetime, timezone
@@ -11,13 +11,13 @@ BADGE_CATEGORIES = [
         "id": "crimes",
         "name": "Crimes",
         "progress_key": "total_crimes",
-        "targets": [100, 250, 500, 750, 1000, 1500, 2500, 4000, 5000, 7500, 10000, 15000, 25000, 35000, 50000, 75000, 100000, 150000, 250000, 400000, 500000, 750000, 1_000_000, 1_500_000, 2_500_000, 4_000_000, 5_000_000, 7_500_000, 10_000_000, 15_000_000],
+        "targets": [100, 250, 500, 750, 1000, 1500, 2500, 4000, 5000, 7500, 10000, 15000, 25000, 35000, 50000, 75000, 100000, 150000, 250000, 400000, 500000, 750000, 1_000_000, 1_500_000, 2_500_000, 4_000_000, 5_000_000],
     },
     {
         "id": "gta",
         "name": "GTA",
         "progress_key": "total_gta",
-        "targets": [25, 50, 100, 200, 250, 400, 500, 750, 1000, 1500, 2500, 4000, 5000, 7500, 10000, 15000, 25000, 40000, 50000, 75000, 100000, 150000, 250000, 500000, 1_000_000],
+        "targets": [25, 50, 100, 200, 250, 400, 500, 750, 1000, 1500, 2500, 4000, 5000, 7500, 10000, 15000, 25000, 40000, 50000, 75000, 100000, 150000, 250000],
     },
     {
         "id": "jail_busts",
@@ -29,13 +29,13 @@ BADGE_CATEGORIES = [
         "id": "kills",
         "name": "Kills",
         "progress_key": "total_kills",
-        "targets": [1, 3, 5, 10, 15, 25, 40, 50, 75, 100, 150, 250, 400, 500, 750, 1000, 1500, 2500, 5000, 7500, 10000, 25000, 50000, 100000],
+        "targets": [1, 3, 5, 10, 15, 25, 40, 50, 75, 100, 150, 250, 400, 500, 750, 1000, 1500, 2000],
     },
     {
         "id": "oc_heists",
         "name": "OC Heists",
         "progress_key": "total_oc_heists",  # solo/team OC + family Crew OC
-        "targets": [5, 10, 20, 25, 40, 50, 75, 100, 150, 250, 400, 500, 750, 1000, 1500, 2500, 4000, 5000, 7500, 10000, 25000, 50000, 100000],
+        "targets": [5, 10, 20, 25, 40, 50, 75, 100, 150, 250, 400, 500, 750, 1000],
     },
     {
         "id": "bullets_melted",
@@ -53,7 +53,7 @@ BADGE_CATEGORIES = [
         "id": "hitlist_npc",
         "name": "Hitlist NPC Kills",
         "progress_key": "hitlist_npc_kills",
-        "targets": [5, 10, 15, 25, 40, 50, 75, 100, 150, 250, 400, 500, 750, 1000, 1500, 2500, 4000, 5000, 7500, 10000],
+        "targets": [5, 10, 15, 25, 40, 50, 75, 100, 150, 250, 400, 500, 750, 1000],
     },
 ]
 

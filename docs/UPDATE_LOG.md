@@ -6,6 +6,19 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-16 15:50 UTC[/color][/b] — [b]Game Pass prestige, store, badges, missions, families, distillery[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]Game Pass prestige[/b] (£10) after VIP 1–100 — [b]+15%[/b] season VIP rewards [b]+500 loot pieces[/b], then climb again (VIP stays; no second Pass Car).[/color]
+[*][color=#888888][b]Changed:[/b] Ranking badge caps — Crimes [b]5M[/b], GTA [b]250K[/b], Kills [b]2K[/b], OC [b]1K[/b], Hitlist [b]1K[/b].[/color]
+[*][color=#888888][b]Changed:[/b] [b]Missions[/b] [b]25% easier[/b]. Founding Member income [b]+15%[/b]. Store points event bonus [b]+75%[/b]. Token bundles buy [b]1–250[/b].[/color]
+[*][color=#888888][b]Fixed:[/b] [b]Families[/b] — rosters showing [b]0[/b] or missing members (stale membership cleanup / ID mismatch).[/color]
+[*][color=#888888][b]Fixed:[/b] [b]Distillery[/b] — heat no longer jumps to [b]100%[/b] every collect (stuck booze clock when auto-sell emptied inventory; per-collect heat capped).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-02 18:00 UTC[/color][/b] — [b]July 2 live updates[/b][/size]
 [quote]
 [list]

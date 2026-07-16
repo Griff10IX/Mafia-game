@@ -32,11 +32,12 @@ logger = logging.getLogger(__name__)
 # GBP store points (Stripe): bonus loot box pieces — 50 pieces per whole £1 charged (~5,000 per £100; currency must be GBP).
 STORE_POINTS_LOOT_GBP_MINOR_PER_BLOCK = 100
 STORE_POINTS_LOOT_PIECES_PER_BLOCK = 50
-STORE_POINTS_EVENT_BONUS_RATE = 0.50
+STORE_POINTS_EVENT_BONUS_RATE = 0.75
 
 RANK_XP_PASS_PACKAGE_ID = "rank_xp_pass_499"
 AUTO_RANK_PERMANENT_PACKAGE_ID = "auto_rank_permanent_2000"
 DEAD_ALIVE_REVIVE_PACKAGE_ID = "dead_alive_revive_10"
+GAME_PASS_PRESTIGE_PACKAGE_ID = "game_pass_prestige_10"
 # No new Game Pass checkout while an active pass is within this many days of rank_xp_pass_token_expires_at.
 GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS = 7
 GAME_PASS_SEASON_END_AT = DEFAULT_GAME_PASS_SEASON_END_AT
@@ -375,7 +376,13 @@ def _resolve_points_for_stripe_payment(
         if pts <= 0:
             return 0, "invalid_points"
         return pts, None
-    if package_id != RANK_XP_PASS_PACKAGE_ID and package_id != AUTO_RANK_PERMANENT_PACKAGE_ID and package_id != DEAD_ALIVE_REVIVE_PACKAGE_ID and txn:
+    if (
+        package_id != RANK_XP_PASS_PACKAGE_ID
+        and package_id != AUTO_RANK_PERMANENT_PACKAGE_ID
+        and package_id != DEAD_ALIVE_REVIVE_PACKAGE_ID
+        and package_id != GAME_PASS_PRESTIGE_PACKAGE_ID
+        and txn
+    ):
         pts = int(txn.get("points") or 0)
         if pts > 0:
             return pts, None
@@ -542,7 +549,14 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
     is_rank_xp_pass = package_id == RANK_XP_PASS_PACKAGE_ID
     is_auto_rank_permanent = package_id == AUTO_RANK_PERMANENT_PACKAGE_ID
     is_dead_alive_revive = package_id == DEAD_ALIVE_REVIVE_PACKAGE_ID
-    if not user_id or (points <= 0 and not is_rank_xp_pass and not is_auto_rank_permanent and not is_dead_alive_revive):
+    is_game_pass_prestige = package_id == GAME_PASS_PRESTIGE_PACKAGE_ID
+    if not user_id or (
+        points <= 0
+        and not is_rank_xp_pass
+        and not is_auto_rank_permanent
+        and not is_dead_alive_revive
+        and not is_game_pass_prestige
+    ):
         return {"credited": False, "preorder": False}
     
     now = datetime.now(timezone.utc)
@@ -891,6 +905,98 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
             "preorder": False,
             "dead_alive_revived": True,
             "revived_username": revive_out.get("revived_username"),
+        }
+
+    # Game Pass prestige (£10): +15% VIP season totals, reset track, keep VIP claimed.
+    if is_game_pass_prestige:
+        from utils.game_pass_prestige import execute_game_pass_prestige
+        import server as srv
+
+        claim = await db.payment_transactions.update_one(
+            {
+                "session_id": session_id,
+                "payment_status": {
+                    "$nin": ["completed", "preorder_pending", "manual_credit_pending", "fulfillment_blocked"]
+                },
+            },
+            {"$set": {"payment_status": "fulfilling_prestige", "prestige_fulfill_started_at": now_iso}},
+        )
+        if claim.modified_count == 0:
+            snap = await db.payment_transactions.find_one({"session_id": session_id}, {"payment_status": 1})
+            if (snap or {}).get("payment_status") == "completed":
+                return {"credited": True, "preorder": False, "game_pass_prestiged": True}
+            return {"credited": False, "preorder": False}
+
+        season = await get_game_pass_season_public(db)
+        try:
+            prestige_out = await execute_game_pass_prestige(
+                db,
+                user_id=user_id,
+                send_notification=srv.send_notification,
+                season_end_at=season.get("game_pass_season_end_at"),
+            )
+        except HTTPException as he:
+            await db.payment_transactions.update_one(
+                {"session_id": session_id},
+                {
+                    "$set": {
+                        "payment_status": "fulfillment_blocked",
+                        "fulfillment_blocked_at": now.isoformat(),
+                        "fulfillment_blocked_detail": str(he.detail)[:1000],
+                    }
+                },
+            )
+            logger.error(
+                "Game Pass prestige fulfillment blocked: session_id=%s user_id=%s detail=%s",
+                session_id,
+                user_id,
+                he.detail,
+            )
+            return {"credited": False, "preorder": False, "fulfillment_blocked": True, "detail": he.detail}
+        except Exception as e:
+            await db.payment_transactions.update_one(
+                {"session_id": session_id},
+                {
+                    "$set": {
+                        "payment_status": "fulfillment_blocked",
+                        "fulfillment_blocked_at": now.isoformat(),
+                        "fulfillment_blocked_detail": str(e)[:1000],
+                    }
+                },
+            )
+            logger.exception(
+                "Game Pass prestige fulfillment failed: session_id=%s user_id=%s",
+                session_id,
+                user_id,
+            )
+            return {"credited": False, "preorder": False, "fulfillment_blocked": True, "detail": str(e)}
+
+        await db.payment_transactions.update_one(
+            {"session_id": session_id},
+            {
+                "$set": {
+                    "payment_status": "completed",
+                    "points_credited_at": now_iso,
+                    "points_before": 0,
+                    "points_after": 0,
+                    "game_pass_prestiged_at": now_iso,
+                    "game_pass_prestige_count": prestige_out.get("prestige_count"),
+                    "game_pass_prestige_bonus_summary": (prestige_out.get("bonus_summary") or "")[:500],
+                }
+            },
+        )
+        logger.info(
+            "Game Pass prestige fulfilled: session_id=%s user_id=%s count=%s",
+            session_id,
+            user_id,
+            prestige_out.get("prestige_count"),
+        )
+        return {
+            "credited": True,
+            "preorder": False,
+            "game_pass_prestiged": True,
+            "prestige_count": prestige_out.get("prestige_count"),
+            "bonus_summary": prestige_out.get("bonus_summary"),
         }
 
     settings = await db.game_settings.find_one({"_id": "main"})
@@ -1294,6 +1400,17 @@ def register(router):
             "game_pass_purchase_close_window_days": GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS,
         }
 
+    @router.get("/payments/game-pass-prestige")
+    async def get_game_pass_prestige_status(current_user: dict = Depends(get_current_user)):
+        """Prestige availability, £10 package id, and +15% bonus preview for the Game Pass UI."""
+        from utils.game_pass_prestige import prestige_status_payload
+
+        season = await get_game_pass_season_public(db)
+        return prestige_status_payload(
+            current_user,
+            season_id=season.get("game_pass_season_id"),
+        )
+
     @router.post("/payments/buy-game-pass-with-points")
     async def buy_game_pass_with_points(_request: BuyGamePassWithPointsRequest, current_user: dict = Depends(get_current_user)):
         """Deprecated: points purchase removed; use card checkout on Game Pass page."""
@@ -1371,7 +1488,12 @@ def register(router):
             package = POINT_PACKAGES[package_id]
             base_points = int(package["points"])
             points = base_points
-            if package_id not in (RANK_XP_PASS_PACKAGE_ID, AUTO_RANK_PERMANENT_PACKAGE_ID, DEAD_ALIVE_REVIVE_PACKAGE_ID):
+            if package_id not in (
+                RANK_XP_PASS_PACKAGE_ID,
+                AUTO_RANK_PERMANENT_PACKAGE_ID,
+                DEAD_ALIVE_REVIVE_PACKAGE_ID,
+                GAME_PASS_PRESTIGE_PACKAGE_ID,
+            ):
                 points, bonus_points, active_store_points_event = _apply_store_points_event_bonus(base_points, store_points_event)
                 store_points_event = active_store_points_event or store_points_event
             price_gbp = float(package["price_gbp"])
@@ -1438,12 +1560,21 @@ def register(router):
             )
             revive_intent_id = intent["id"]
 
+        if package_id == GAME_PASS_PRESTIGE_PACKAGE_ID:
+            from utils.game_pass_prestige import prestige_eligibility_error
+
+            err = prestige_eligibility_error(current_user)
+            if err:
+                raise HTTPException(status_code=400, detail=err)
+
         # success_url: frontend sends origin_url like http://localhost:3000/store
         origin = (request.origin_url or "").rstrip("/")
         success_url = f"{origin}?session_id={{CHECKOUT_SESSION_ID}}"
         # Return with session id so we can mark DB row abandoned when user backs out without paying
         cancel_url = f"{origin}?tab=points&payment_cancel=1&session_id={{CHECKOUT_SESSION_ID}}"
         if package_id == DEAD_ALIVE_REVIVE_PACKAGE_ID:
+            cancel_url = f"{origin}?payment_cancel=1&session_id={{CHECKOUT_SESSION_ID}}"
+        if package_id == GAME_PASS_PRESTIGE_PACKAGE_ID:
             cancel_url = f"{origin}?payment_cancel=1&session_id={{CHECKOUT_SESSION_ID}}"
 
         def _create():
@@ -1458,6 +1589,8 @@ def register(router):
                 product_name = "Permanent Auto Rank"
             if package_id == DEAD_ALIVE_REVIVE_PACKAGE_ID:
                 product_name = "Dead > Alive revive"
+            if package_id == GAME_PASS_PRESTIGE_PACKAGE_ID:
+                product_name = "Game Pass Prestige"
             md = {
                 "user_id": current_user["id"],
                 "package_id": package_id,
@@ -1666,6 +1799,10 @@ def register(router):
             if pkg == DEAD_ALIVE_REVIVE_PACKAGE_ID:
                 out["dead_alive_revived"] = True
                 out["revived_username"] = transaction.get("revived_username")
+            if pkg == GAME_PASS_PRESTIGE_PACKAGE_ID:
+                out["game_pass_prestiged"] = True
+                out["game_pass_prestige_count"] = transaction.get("game_pass_prestige_count")
+                out["bonus_summary"] = transaction.get("game_pass_prestige_bonus_summary")
             return out
         
         if transaction and transaction.get("payment_status") == "manual_credit_pending":
@@ -1766,7 +1903,14 @@ def register(router):
                 is_rank_xp_pass = package_id == RANK_XP_PASS_PACKAGE_ID
                 is_auto_rank_permanent = package_id == AUTO_RANK_PERMANENT_PACKAGE_ID
                 is_dead_alive_revive = package_id == DEAD_ALIVE_REVIVE_PACKAGE_ID
-                if not points and not is_rank_xp_pass and not is_auto_rank_permanent and not is_dead_alive_revive:
+                is_game_pass_prestige = package_id == GAME_PASS_PRESTIGE_PACKAGE_ID
+                if (
+                    not points
+                    and not is_rank_xp_pass
+                    and not is_auto_rank_permanent
+                    and not is_dead_alive_revive
+                    and not is_game_pass_prestige
+                ):
                     logger.warning("GET /payments/status: no points for package session=%s", session_id)
                     return {"status": "pending", "payment_status": "unknown"}
 
@@ -1827,6 +1971,10 @@ def register(router):
                     if credit_result.get("dead_alive_revived"):
                         out["dead_alive_revived"] = True
                         out["revived_username"] = credit_result.get("revived_username")
+                    if credit_result.get("game_pass_prestiged"):
+                        out["game_pass_prestiged"] = True
+                        out["game_pass_prestige_count"] = credit_result.get("prestige_count")
+                        out["bonus_summary"] = credit_result.get("bonus_summary")
                     return out
                     return {
                         "status": "fulfillment_blocked",
@@ -1860,6 +2008,10 @@ def register(router):
                             out["pass_entitled"] = True
                         if (package_id or "") == AUTO_RANK_PERMANENT_PACKAGE_ID:
                             out["auto_rank_entitled"] = True
+                        if (package_id or "") == DEAD_ALIVE_REVIVE_PACKAGE_ID:
+                            out["dead_alive_revived"] = True
+                        if (package_id or "") == GAME_PASS_PRESTIGE_PACKAGE_ID:
+                            out["game_pass_prestiged"] = True
                         return out
                     if t2.get("payment_status") == "manual_credit_pending":
                         settings = await db.game_settings.find_one({"_id": "main"})
@@ -1981,11 +2133,13 @@ def register(router):
                     is_rank_xp_pass = package_id == RANK_XP_PASS_PACKAGE_ID
                     is_auto_rank_permanent = package_id == AUTO_RANK_PERMANENT_PACKAGE_ID
                     is_dead_alive_revive = package_id == DEAD_ALIVE_REVIVE_PACKAGE_ID
+                    is_game_pass_prestige = package_id == GAME_PASS_PRESTIGE_PACKAGE_ID
                     if not user_id or (
                         points <= 0
                         and not is_rank_xp_pass
                         and not is_auto_rank_permanent
                         and not is_dead_alive_revive
+                        and not is_game_pass_prestige
                     ):
                         logger.warning("Stripe webhook: missing user_id or invalid package_id, session_id=%s", session.id)
                     else:
@@ -2126,6 +2280,7 @@ def register(router):
                         is_entitlement_pkg = package_id in (
                             AUTO_RANK_PERMANENT_PACKAGE_ID,
                             DEAD_ALIVE_REVIVE_PACKAGE_ID,
+                            GAME_PASS_PRESTIGE_PACKAGE_ID,
                         )
                         if user_id and (points > 0 or is_rank_xp_pass or is_entitlement_pkg):
                             result = await _credit_payment_if_pending(db, session_id, user_id, package_id, points)
@@ -2358,6 +2513,7 @@ def register(router):
             is_entitlement_pkg = package_id in (
                 AUTO_RANK_PERMANENT_PACKAGE_ID,
                 DEAD_ALIVE_REVIVE_PACKAGE_ID,
+                GAME_PASS_PRESTIGE_PACKAGE_ID,
             )
             if user_id and (points > 0 or is_rank_xp_pass or is_entitlement_pkg) and rerr != "stripe_amount_mismatch":
                 # Ensure transaction exists

@@ -1022,6 +1022,56 @@ def _user_belongs_on_family_roster(u: Optional[dict], family_id: str) -> bool:
     return _norm_fid(u.get("family_id")) == _norm_fid(family_id)
 
 
+async def _include_family_roster_member(
+    u: Optional[dict],
+    family_id: str,
+    member_user_id: Any,
+) -> tuple[bool, Optional[dict], int]:
+    """
+    Decide whether a family_members row belongs on the live roster.
+
+    Source of truth for "is in this crew" is the membership row. If users.family_id is
+    null/stale/points at a deleted family, heal it. Only delete the membership row when
+    the user clearly belongs to a different existing family (left/joined elsewhere).
+
+    Returns (include, user_doc, deleted_membership_count).
+    """
+    if not u:
+        return False, None, 0
+    fid_crew = _norm_fid(family_id)
+    if not fid_crew:
+        return False, u, 0
+    fid_user = _norm_fid(u.get("family_id"))
+    if fid_user == fid_crew:
+        return True, u, 0
+
+    deleted = 0
+    if fid_user and await _family_exists(fid_user):
+        v = _user_id_variants_for_family_members(member_user_id)
+        if v:
+            r = await db.family_members.delete_many({"family_id": family_id, "user_id": {"$in": v}})
+            deleted = int(r.deleted_count or 0)
+        return False, u, deleted
+
+    # Null family_id or pointer to a missing/wiped family — heal toward this membership.
+    role = None
+    variants = _user_id_variants_for_family_members(member_user_id)
+    if variants:
+        mrow = await db.family_members.find_one(
+            {"family_id": family_id, "user_id": {"$in": variants}},
+            {"_id": 0, "role": 1},
+        )
+        role = str((mrow or {}).get("role") or "").strip().lower() or None
+        if role == "don":
+            role = "boss"
+    set_doc = {"family_id": fid_crew}
+    if role:
+        set_doc["family_role"] = role
+    await db.users.update_one(_user_id_filter_for_users_collection(member_user_id), {"$set": set_doc})
+    u = {**u, **set_doc}
+    return True, u, 0
+
+
 async def _users_map_by_ids(user_ids: list, projection: Optional[dict] = None) -> dict:
     """Return dict id -> user doc for non-empty unique ids (keys are normalized string ids)."""
     if not user_ids:
@@ -1055,7 +1105,7 @@ async def _users_map_by_ids(user_ids: list, projection: Optional[dict] = None) -
                     or_clauses.append({"id": n})
             except ValueError:
                 pass
-    docs = await db.users.find({"$or": or_clauses}, proj).to_list(200) if or_clauses else []
+    docs = await db.users.find({"$or": or_clauses}, proj).to_list(max(500, len(or_clauses) + 50)) if or_clauses else []
     out = {}
     for d in docs:
         k = _uid_str(d.get("id"))
@@ -1566,7 +1616,7 @@ async def families_list(current_user: dict = Depends(get_current_user)):
         all_members = await db.family_members.find(
             {"family_id": {"$in": family_ids}},
             {"_id": 0, "family_id": 1, "user_id": 1},
-        ).to_list(500)
+        ).to_list(max(5000, FAMILY_LIST_QUERY_LIMIT * 40))
         members_by_family: dict = defaultdict(list)
         user_ids = set()
         for m in all_members:
@@ -1577,17 +1627,19 @@ async def families_list(current_user: dict = Depends(get_current_user)):
                 user_ids.add(uid)
         alive_by_user_id: dict = {}
         if user_ids:
-            ucursor = db.users.find(
-                {"id": {"$in": list(user_ids)}},
-                {"_id": 0, "id": 1, "is_dead": 1},
+            users_by_id = await _users_map_by_ids(
+                list(user_ids),
+                projection={"_id": 0, "id": 1, "is_dead": 1},
             )
-            async for u in ucursor:
-                uid = u.get("id")
-                if uid:
-                    alive_by_user_id[uid] = not u.get("is_dead", False)
+            for uid_s, u in users_by_id.items():
+                alive_by_user_id[uid_s] = not u.get("is_dead", False)
         for f in fams:
             fid = f["id"]
-            living_count = sum(1 for uid in members_by_family.get(fid, ()) if alive_by_user_id.get(uid))
+            living_count = sum(
+                1
+                for uid in members_by_family.get(fid, ())
+                if alive_by_user_id.get(_uid_str(uid))
+            )
             if living_count > 0:
                 out.append({
                     "id": fid, "name": f["name"], "tag": f["tag"],
@@ -1647,9 +1699,21 @@ async def families_my(current_user: dict = Depends(get_current_user)):
     entry = _my_cache.get(uid)
     if entry is not None and entry[1] > now_ts:
         return entry[0]
-    family_id = current_user.get("family_id")
+    family_id, ctx_role = await _current_family_context(current_user)
     if not family_id:
         return {"family": None, "members": [], "rackets": [], "my_role": None, "quicktrade_family_listing_id": None}
+    # Heal stale token family_id so later requests match live membership
+    if _norm_fid(current_user.get("family_id")) != family_id:
+        heal_set = {"family_id": family_id}
+        if ctx_role:
+            heal_set["family_role"] = ctx_role
+        await db.users.update_one(
+            _user_id_filter_for_users_collection(uid),
+            {"$set": heal_set},
+        )
+        current_user["family_id"] = family_id
+        if ctx_role:
+            current_user["family_role"] = ctx_role
     fam = await db.families.find_one({"id": family_id}, {"_id": 0})
     if not fam:
         await db.users.update_one(
@@ -1657,11 +1721,16 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             {"$set": {"family_id": None, "family_role": None, **_family_melt_stats_reset_fields()}},
         )
         return {"family": None, "members": [], "rackets": [], "my_role": None, "quicktrade_family_listing_id": None}
-    members_docs = await db.family_members.find({"family_id": family_id}, {"_id": 0}).to_list(100)
-    my_role = current_user.get("family_role")
-    my_member = next((m for m in members_docs if m["user_id"] == current_user["id"]), None)
+    members_docs = await db.family_members.find({"family_id": family_id}, {"_id": 0}).to_list(200)
+    my_role = ctx_role or current_user.get("family_role")
+    my_member = next(
+        (m for m in members_docs if _uid_str(m.get("user_id")) == _uid_str(current_user["id"])),
+        None,
+    )
     if my_member and my_member.get("role"):
         my_role = str(my_member["role"]).strip().lower() or my_role
+        if my_role == "don":
+            my_role = "boss"
         if my_role and current_user.get("family_role") != my_role:
             await db.users.update_one(
                 _user_id_filter_for_users_collection(current_user["id"]),
@@ -1669,6 +1738,8 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             )
     if my_role:
         my_role = str(my_role).strip().lower()
+        if my_role == "don":
+            my_role = "boss"
     ev = await get_effective_event()
     member_uids = [m["user_id"] for m in members_docs if m.get("user_id")]
     users_by_id = await _users_map_by_ids(member_uids)
@@ -1677,12 +1748,9 @@ async def families_my(current_user: dict = Depends(get_current_user)):
     stale_member_rows_removed = 0
     for m in members_docs:
         u = users_by_id.get(_uid_str(m["user_id"]))
-        if not _user_belongs_on_family_roster(u, family_id):
-            if u is not None:
-                v = _user_id_variants_for_family_members(m.get("user_id"))
-                if v:
-                    r = await db.family_members.delete_many({"family_id": family_id, "user_id": {"$in": v}})
-                    stale_member_rows_removed += int(r.deleted_count or 0)
+        include, u, deleted = await _include_family_roster_member(u, family_id, m.get("user_id"))
+        stale_member_rows_removed += deleted
+        if not include:
             continue
         rank_name = "—"
         if u:
@@ -1927,7 +1995,7 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
         fam = await db.families.find_one({"$or": [{"tag": tag_clean.upper()}, {"id": tag_clean}]}, {"_id": 0})
     if not fam:
         raise HTTPException(status_code=404, detail="Family not found")
-    members_docs = await db.family_members.find({"family_id": fam["id"]}, {"_id": 0}).to_list(100)
+    members_docs = await db.family_members.find({"family_id": fam["id"]}, {"_id": 0}).to_list(200)
     lookup_uids = [m["user_id"] for m in members_docs if m.get("user_id")]
     bid = _uid_str(fam.get("boss_id"))
     if bid and all(_uid_str(x) != bid for x in lookup_uids):
@@ -1967,14 +2035,14 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
                 if RANKS:
                     rank_name = next((x["name"] for x in RANKS if x.get("id") == u.get("rank", 1)), str(u.get("rank", 1)))
                 uname = ((u.get("username") if u else None) or "").strip() or "?"
-        if not _user_belongs_on_family_roster(u, fam["id"]):
-            # Stale family_members row: user account's family_id does not match this crew (e.g. id type mismatch on leave/join)
-            if u is not None:
-                v = _user_id_variants_for_family_members(m.get("user_id"))
-                if v:
-                    r = await db.family_members.delete_many({"family_id": fam["id"], "user_id": {"$in": v}})
-                    stale_member_rows_removed += int(r.deleted_count or 0)
+        include, u, deleted = await _include_family_roster_member(u, fam["id"], m.get("user_id"))
+        stale_member_rows_removed += deleted
+        if not include:
             continue
+        if u:
+            uname = ((u.get("username") if u else None) or "").strip() or uname
+            if RANKS:
+                rank_name = next((x["name"] for x in RANKS if x.get("id") == u.get("rank", 1)), str(u.get("rank", 1)))
         entry = {
             "user_id": m["user_id"],
             "username": uname,
@@ -2712,7 +2780,8 @@ async def families_assign_role(request: FamilyRoleRequest, current_user: dict = 
         _user_id_filter_for_users_collection(request.user_id),
         {"_id": 0, "id": 1, "family_id": 1, "is_dead": 1},
     )
-    if not _user_belongs_on_family_roster(target_user, family_id):
+    include, target_user, _deleted = await _include_family_roster_member(target_user, family_id, request.user_id)
+    if not include or not target_user:
         raise HTTPException(status_code=404, detail="Member not found")
     if target_user.get("is_dead"):
         raise HTTPException(status_code=400, detail="Cannot assign roles to dead members")
@@ -2726,7 +2795,7 @@ async def families_assign_role(request: FamilyRoleRequest, current_user: dict = 
     members_for_count = await db.family_members.find(
         {"family_id": family_id},
         {"_id": 0, "user_id": 1, "role": 1},
-    ).to_list(100)
+    ).to_list(200)
     users_by_id = await _users_map_by_ids(
         [m.get("user_id") for m in members_for_count if m.get("user_id")],
         {"_id": 0, "id": 1, "family_id": 1, "is_dead": 1},
@@ -2734,7 +2803,8 @@ async def families_assign_role(request: FamilyRoleRequest, current_user: dict = 
     by_role = defaultdict(int)
     for m in members_for_count:
         u = users_by_id.get(_uid_str(m.get("user_id")))
-        if not _user_belongs_on_family_roster(u, family_id) or u.get("is_dead"):
+        include_u, u, _ = await _include_family_roster_member(u, family_id, m.get("user_id"))
+        if not include_u or not u or u.get("is_dead"):
             continue
         role = (m.get("role") or "").strip().lower()
         if role:

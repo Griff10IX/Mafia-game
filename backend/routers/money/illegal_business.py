@@ -99,8 +99,11 @@ DISTILLERY_MAINTENANCE_DEGRADE_BASE_CHANCE = 0.22
 DISTILLERY_MAINTENANCE_DEGRADE_MELTDOWN_BONUS = 0.24
 DISTILLERY_HEAT_DECAY_PER_HOUR = 1.35
 DISTILLERY_HEAT_THRESHOLDS = {"warm": 25, "hot": 50, "critical": 75}
-DISTILLERY_HEAT_GAIN_PER_BOOZE = 0.06
-DISTILLERY_HEAT_GAIN_PER_AUTO_SELL = 0.12
+# Per-unit gain is intentionally low; high-end stills produce thousands of units per full cap.
+DISTILLERY_HEAT_GAIN_PER_BOOZE = 0.012
+DISTILLERY_HEAT_GAIN_PER_AUTO_SELL = 0.02
+# Hard cap so one collect (or a stuck booze clock) cannot slam heat 0 → 100.
+DISTILLERY_HEAT_GAIN_PER_COLLECT_MAX = 22.0
 DISTILLERY_HEAT_BOOZE_LOSS_THRESHOLDS = {"hot": 55, "critical": 78, "meltdown": 92}
 DISTILLERY_ENFORCEMENT_MAX_CHANCE = 0.30
 DISTILLERY_ENFORCEMENT_SHUTDOWN_HOURS = (2, 8)
@@ -2403,8 +2406,10 @@ async def _collect_illegal_business_impl(current_user: dict) -> dict:
             # During shutdown, booze_earned is 0 — do not charge heat from theoretical booze_raw or each collect re-adds heat and masks passive decay.
             booze_raw_for_heat = 0.0 if (status and status.get("is_shutdown")) else float(booze_raw)
             heat_gain = ((booze_raw_for_heat * DISTILLERY_HEAT_GAIN_PER_BOOZE) + (auto_sold_units * DISTILLERY_HEAT_GAIN_PER_AUTO_SELL)) * float(mods.get("heat_gain_mult") or 1.0)
+            heat_gain = min(max(0.0, heat_gain), float(DISTILLERY_HEAT_GAIN_PER_COLLECT_MAX))
             heat_mitigation = int(workers.get("security") or 0) * 0.35 + int(equipment.get("tunnel") or 0) * 0.25 + int(equipment.get("bribe_office") or 0) * 0.2
             distillery["heat"] = _clamp(float(distillery.get("heat") or 0.0) + max(0.0, heat_gain - heat_mitigation), 0.0, 100.0)
+            distillery["last_heat_at"] = now.isoformat()
 
             booze_lost_units = 0
             booze_loss_cash = 0
@@ -2490,8 +2495,12 @@ async def _collect_illegal_business_impl(current_user: dict) -> dict:
         carry_inc = booze_earned
         if distillery and auto_sold_units > 0 and auto_sell_mode == "booze_run":
             carry_inc = booze_earned + auto_sold_units
+        # Always advance the booze accrual clock when this collect evaluated production.
+        # Previously this only ran when carry_inc > 0, so full auto-sell (or blocked intake)
+        # left last_collected_booze_at stuck — every later collect recharged heat for a full
+        # capped backlog and slammed heat to 100%.
+        updates["last_collected_booze_at"] = now.isoformat()
         if carry_inc > 0 and not booze_intake_blocked(current_user):
-            updates["last_collected_booze_at"] = now.isoformat()
             await db.users.update_one(
                 {"id": current_user["id"]},
                 {"$inc": {f"booze_carrying.{default_booze_id}": carry_inc}},

@@ -45,6 +45,83 @@ TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY = 200
 WEIGHT_P = 1.6
 WEIGHT_BASE = 12.0
 
+# 25% easier: all numeric mission targets are 75% of prior values (min 1).
+MISSION_REQUIREMENT_MULT = 0.75
+
+
+def _ease_amount(v: int) -> int:
+    return max(1, int(round(int(v) * MISSION_REQUIREMENT_MULT)))
+
+
+def ease_mission_requirements(req: Dict[str, Any]) -> Dict[str, Any]:
+    """Scale countable requirement targets; leave flags / city / mission lists alone."""
+    out: Dict[str, Any] = {}
+    for k, v in req.items():
+        if k in ("in_state", "complete_missions") or isinstance(v, (str, list, bool)):
+            out[k] = v
+        elif isinstance(v, (int, float)):
+            out[k] = _ease_amount(v)
+        else:
+            out[k] = v
+    return out
+
+
+def _format_requirements_description(req: Dict[str, Any]) -> str:
+    """Human-readable requirement line(s) from the eased requirements dict."""
+    parts: List[str] = []
+    if req.get("in_state"):
+        parts.append(f"Travel to {req['in_state']}")
+    order = (
+        "crimes",
+        "jail_busts_npc",
+        "jail_busts",
+        "gta",
+        "booze_sells",
+        "cars_melted",
+        "bullets_melted",
+        "bullets_purchased_armoury",
+        "uncommon_cars_stolen",
+        "uncommon_cars_scrapped",
+        "hitlist_npc_kills",
+        "deposit_interest",
+    )
+    seen = set()
+    for k in order:
+        if k not in req:
+            continue
+        seen.add(k)
+        v = int(req[k])
+        if k == "crimes":
+            parts.append(f"Commit {v:,} crimes")
+        elif k == "jail_busts_npc":
+            parts.append(f"Bust {v:,} NPC from jail" if v == 1 else f"Bust {v:,} NPCs from jail")
+        elif k == "jail_busts":
+            parts.append(f"Bust {v:,} from jail")
+        elif k == "gta":
+            parts.append(f"Steal {v:,} cars")
+        elif k == "booze_sells":
+            parts.append(f"Do {v:,} booze runs")
+        elif k == "cars_melted":
+            parts.append(f"Melt {v:,} car" if v == 1 else f"Melt {v:,} cars")
+        elif k == "bullets_melted":
+            parts.append(f"Melt {v:,} bullets")
+        elif k == "bullets_purchased_armoury":
+            parts.append(f"Buy {v:,} bullets from the armoury")
+        elif k == "uncommon_cars_stolen":
+            parts.append(f"Steal {v:,} uncommon cars")
+        elif k == "uncommon_cars_scrapped":
+            parts.append(f"Scrap {v:,} uncommon cars")
+        elif k == "hitlist_npc_kills":
+            parts.append(f"Kill {v:,} hitlist NPCs")
+        elif k == "deposit_interest":
+            parts.append(f"Add ${v:,} to the interest bank")
+    for k, v in req.items():
+        if k in seen or k in ("in_state", "complete_missions"):
+            continue
+        if isinstance(v, (int, float)):
+            parts.append(f"{int(v):,} {k.replace('_', ' ')}")
+    return (". ".join(parts) + ".") if parts else ""
+
 
 def _weights_100() -> List[float]:
     return [WEIGHT_BASE + (i + 1) ** WEIGHT_P for i in range(100)]
@@ -115,7 +192,7 @@ def _requirements_for_extended(difficulty: int) -> Dict[str, int]:
     m_dep = 1.0 + t * 0.038
 
     def x(v: float) -> int:
-        return max(1, int(round(v)))
+        return _ease_amount(int(round(v)))
 
     archetype = (d - 26) % 8
     if archetype == 0:
@@ -189,14 +266,7 @@ def _title_extended(difficulty: int) -> Tuple[str, str]:
     base = titles[(difficulty - 26) % len(titles)]
     title = f"{base} {tier}"
     req = _requirements_for_extended(difficulty)
-    parts = []
-    for k, v in req.items():
-        label = k.replace("_", " ")
-        if k == "deposit_interest":
-            parts.append(f"Add ${v:,} to the interest bank")
-        else:
-            parts.append(f"{v:,} {label}")
-    desc = ". ".join(parts) + "."
+    desc = _format_requirements_description(req)
     return title, desc
 
 
@@ -230,6 +300,7 @@ def build_missions() -> List[Dict[str, Any]]:
 
     # --- order 0 m_first
     o = 0
+    m1_req = ease_mission_requirements({"crimes": 15, "jail_busts_npc": 1})
     missions.append(
         {
             "id": FIRST_MISSION_ID,
@@ -237,9 +308,9 @@ def build_missions() -> List[Dict[str, Any]]:
             "area": "—",
             "order": o,
             "type": "starter",
-            "requirements": {"crimes": 15, "jail_busts_npc": 1},
+            "requirements": m1_req,
             "title": "Prove Yourself",
-            "description": "Commit 15 crimes and bust 1 NPC from jail. The outfit wants to see what you're made of.",
+            "description": f"{_format_requirements_description(m1_req)} The outfit wants to see what you're made of.",
             "reward_money": 50_000,
             "reward_cash_immediate": cash[o],
             "reward_points": pts[o],
@@ -261,6 +332,14 @@ def build_missions() -> List[Dict[str, Any]]:
 
     # --- order 1 m_second
     o = 1
+    m2_req = ease_mission_requirements(
+        {
+            "in_state": "New York",
+            "jail_busts": 2,
+            "crimes": 200,
+            "cars_melted": 1,
+        }
+    )
     missions.append(
         {
             "id": SECOND_MISSION_ID,
@@ -268,14 +347,9 @@ def build_missions() -> List[Dict[str, Any]]:
             "area": "—",
             "order": o,
             "type": "special",
-            "requirements": {
-                "in_state": "New York",
-                "jail_busts": 2,
-                "crimes": 200,
-                "cars_melted": 1,
-            },
+            "requirements": m2_req,
             "title": "New York Run",
-            "description": "Travel to New York. Bust 2 people from jail (NPC or player). Commit 200 crimes. Melt 1 car.",
+            "description": _format_requirements_description(m2_req),
             "reward_cash_immediate": cash[o],
             "reward_tribute_daily": trib[o],
             "reward_respect": 3,
@@ -296,6 +370,17 @@ def build_missions() -> List[Dict[str, Any]]:
 
     # --- order 2 m_third
     o = 2
+    m3_req = ease_mission_requirements(
+        {
+            "booze_sells": 25,
+            "crimes": 150,
+            "gta": 10,
+            "jail_busts": 15,
+            "bullets_melted": 5000,
+            "bullets_purchased_armoury": 300,
+            "uncommon_cars_scrapped": 3,
+        }
+    )
     missions.append(
         {
             "id": THIRD_MISSION_ID,
@@ -303,17 +388,9 @@ def build_missions() -> List[Dict[str, Any]]:
             "area": "—",
             "order": o,
             "type": "special",
-            "requirements": {
-                "booze_sells": 25,
-                "crimes": 150,
-                "gta": 10,
-                "jail_busts": 15,
-                "bullets_melted": 5000,
-                "bullets_purchased_armoury": 300,
-                "uncommon_cars_scrapped": 3,
-            },
+            "requirements": m3_req,
             "title": "Making Moves",
-            "description": "Do 25 booze runs. Commit 150 crimes. Steal 10 cars. Bust 15 from jail. Melt 5,000 bullets (from cars). Buy 300 bullets from the armoury. Scrap 3 uncommon cars.",
+            "description": _format_requirements_description(m3_req),
             "reward_money": 0,
             "reward_cash_immediate": cash[o],
             "reward_points": pts[o],
@@ -334,6 +411,16 @@ def build_missions() -> List[Dict[str, Any]]:
 
     # --- order 3 m_fourth
     o = 3
+    m4_req = ease_mission_requirements(
+        {
+            "uncommon_cars_stolen": 5,
+            "hitlist_npc_kills": 7,
+            "jail_busts": 15,
+            "bullets_purchased_armoury": 500,
+            "bullets_melted": 5000,
+            "deposit_interest": 1_000_000,
+        }
+    )
     missions.append(
         {
             "id": FOURTH_MISSION_ID,
@@ -341,16 +428,9 @@ def build_missions() -> List[Dict[str, Any]]:
             "area": "—",
             "order": o,
             "type": "special",
-            "requirements": {
-                "uncommon_cars_stolen": 5,
-                "hitlist_npc_kills": 7,
-                "jail_busts": 15,
-                "bullets_purchased_armoury": 500,
-                "bullets_melted": 5000,
-                "deposit_interest": 1_000_000,
-            },
+            "requirements": m4_req,
             "title": "Big League",
-            "description": "Steal 5 uncommon cars. Kill 7 hitlist NPCs. Bust 15 from jail (NPC or player). Buy 500 bullets from the armoury. Melt 5,000 bullets. Add $1,000,000 to the interest bank.",
+            "description": _format_requirements_description(m4_req),
             "reward_money": 1_000_000,
             "reward_cash_immediate": cash[o],
             "reward_points": pts[o],
@@ -582,9 +662,10 @@ def build_missions() -> List[Dict[str, Any]]:
         ),
     ]
 
-    for i, (mid, req, ttl, desc) in enumerate(legacy):
+    for i, (mid, req_raw, ttl, _desc) in enumerate(legacy):
         o = 4 + i
         diff = o + 1
+        req = ease_mission_requirements(req_raw)
         row: Dict[str, Any] = {
             "id": mid,
             "city": "Start",
@@ -593,7 +674,7 @@ def build_missions() -> List[Dict[str, Any]]:
             "type": "special",
             "requirements": req,
             "title": ttl,
-            "description": desc,
+            "description": _format_requirements_description(req),
             "reward_cash_immediate": cash[o],
             "reward_points": pts[o],
             "reward_respect": min(8 + i * 5, 130),

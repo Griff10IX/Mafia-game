@@ -10,6 +10,10 @@ import {
   GAME_PASS_DURATION_FINE_PRINT,
   GAME_PASS_DURATION_LABEL,
   GAME_PASS_PACKAGE_ID,
+  GAME_PASS_PRESTIGE_BONUS_PERCENT,
+  GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES,
+  GAME_PASS_PRESTIGE_PACKAGE_ID,
+  GAME_PASS_PRESTIGE_PRICE_GBP,
   GAME_PASS_PURCHASE_FINAL_DAYS_BLOCK,
   GAME_PASS_PRICE_GBP,
   GAME_PASS_SEASON_END_AT_ISO,
@@ -463,6 +467,8 @@ export default function GamePass() {
   const [seasonEndAtIso, setSeasonEndAtIso] = useState(GAME_PASS_SEASON_END_AT_ISO);
   const [currentSeasonId, setCurrentSeasonId] = useState('2');
   const [seasonCloseWindowDays, setSeasonCloseWindowDays] = useState(GAME_PASS_PURCHASE_FINAL_DAYS_BLOCK);
+  const [prestigeStatus, setPrestigeStatus] = useState(null);
+  const [prestigeLoading, setPrestigeLoading] = useState(false);
 
   const [selectedBandIndex, setSelectedBandIndex] = useState(null);
   const [selectedMicroTier, setSelectedMicroTier] = useState(null);
@@ -470,10 +476,11 @@ export default function GamePass() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [userRes, adminRes, seasonRes] = await Promise.all([
+      const [userRes, adminRes, seasonRes, prestigeRes] = await Promise.all([
         api.get('/auth/me'),
         api.get('/auth/staff-flags').catch(() => ({ data: { is_admin: false } })),
         api.get('/payments/game-pass-season').catch(() => ({ data: null })),
+        api.get('/payments/game-pass-prestige').catch(() => ({ data: null })),
       ]);
       setUser(userRes.data);
       setIsAdmin(!!adminRes.data?.is_admin);
@@ -487,6 +494,7 @@ export default function GamePass() {
         const n = Number(seasonRes.data.game_pass_purchase_close_window_days);
         if (Number.isFinite(n) && n > 0) setSeasonCloseWindowDays(Math.floor(n));
       }
+      setPrestigeStatus(prestigeRes?.data || null);
     } catch {
       toast.error('Failed to load data');
     } finally {
@@ -595,6 +603,22 @@ export default function GamePass() {
     }
   };
 
+  const handlePrestigePurchase = async () => {
+    if (!user) return;
+    setPrestigeLoading(true);
+    try {
+      const res = await api.post('/payments/checkout', {
+        package_id: GAME_PASS_PRESTIGE_PACKAGE_ID,
+        origin_url: window.location.origin + '/game-pass',
+      });
+      window.location.href = res.data.url;
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setPrestigeLoading(false);
+    }
+  };
+
   const checkPaymentStatus = async (sessionId, attempt = 0) => {
     if (attempt >= 5) {
       toast.error('Payment verification timed out.');
@@ -606,13 +630,18 @@ export default function GamePass() {
     try {
       const res = await api.get(`/payments/status/${sessionId}`);
       if (res.data.status === 'fulfillment_blocked' || res.data.payment_status === 'fulfillment_blocked') {
-        toast.error(res.data.detail || 'This purchase could not deliver Game Pass. If you were charged, contact support.');
+        toast.error(res.data.detail || 'This purchase could not be completed. If you were charged, contact support.');
         refreshUser();
         await fetchData();
       } else if (res.data.payment_status === 'paid') {
-        const pts = Number(res.data.points_added || 0);
-        if (pts === 0) toast.success('Game Pass purchased — token delivered. Activate in My Inventory.');
-        else toast.success(`${pts} points added.`);
+        if (res.data.game_pass_prestiged) {
+          const summary = res.data.bonus_summary ? ` (${res.data.bonus_summary})` : '';
+          toast.success(`Game Pass prestiged — +${GAME_PASS_PRESTIGE_BONUS_PERCENT}% VIP rewards credited${summary}. Track reset to tier 1.`);
+        } else {
+          const pts = Number(res.data.points_added || 0);
+          if (pts === 0) toast.success('Game Pass purchased — token delivered. Activate in My Inventory.');
+          else toast.success(`${pts} points added.`);
+        }
 
         refreshUser();
         await fetchData();
@@ -878,21 +907,52 @@ export default function GamePass() {
               <div className="w-full h-2 bg-zinc-900/30 border border-primary/10 rounded-full overflow-hidden">
                 <div className="h-full bg-gradient-to-r from-primary via-primary to-primary" style={{ width: `${seasonLevel}%` }} />
               </div>
-              {vipGrantingActive &&
-                (vipRewardTrackComplete ? (
+              {vipGrantingActive && !vipRewardTrackComplete && (
+                <>
+                  <p className="text-[9px] text-zinc-500 font-heading leading-relaxed">
+                    VIP rewards are applied automatically: when you activate the pass, anything you already earned this season (season rank XP) is granted immediately; after that, each new tier credits on its own as soon as you pass the next milestone (you don’t need to buy again).
+                  </p>
+                  <p className="text-[9px] text-emerald-400/90 font-heading leading-relaxed">
+                    While VIP is active: <span className="text-emerald-300 font-bold">+10% rank points</span> from all sources (crimes, kills, GTA, missions, objectives, and more).
+                  </p>
+                </>
+              )}
+              {vipRewardTrackComplete && (
+                <div className="space-y-2">
                   <p className="text-[9px] text-emerald-400/95 font-heading leading-relaxed">
                     VIP Game Pass tier rewards are complete — all payouts through tier {MAX_MICRO_TIER} have been credited.
                   </p>
-                ) : (
-                  <>
-                    <p className="text-[9px] text-zinc-500 font-heading leading-relaxed">
-                      VIP rewards are applied automatically: when you activate the pass, anything you already earned this season (season rank XP) is granted immediately; after that, each new tier credits on its own as soon as you pass the next milestone (you don’t need to buy again).
+                  <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2.5 py-2.5 space-y-2">
+                    <div className="text-[10px] font-heading font-bold text-amber-300/95 uppercase tracking-wider">
+                      Prestige Game Pass — £{GAME_PASS_PRESTIGE_PRICE_GBP}
+                    </div>
+                    <p className="text-[9px] text-zinc-400 font-heading leading-relaxed">
+                      Get +{GAME_PASS_PRESTIGE_BONUS_PERCENT}% of this season&apos;s VIP rewards
+                      {prestigeStatus?.bonus_summary ? (
+                        <>
+                          {' '}
+                          (<span className="text-zinc-300">{prestigeStatus.bonus_summary}</span>)
+                        </>
+                      ) : null}
+                      , plus {GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES.toLocaleString()} extra loot pieces, then start the track again from tier 1 (VIP stays active).
                     </p>
-                    <p className="text-[9px] text-emerald-400/90 font-heading leading-relaxed">
-                      While VIP is active: <span className="text-emerald-300 font-bold">+10% rank points</span> from all sources (crimes, kills, GTA, missions, objectives, and more).
-                    </p>
-                  </>
-                ))}
+                    {(Number(user?.game_pass_prestige_count) > 0 || Number(prestigeStatus?.prestige_count) > 0) && (
+                      <p className="text-[8px] text-zinc-500 font-heading">
+                        Prestiged {Number(user?.game_pass_prestige_count ?? prestigeStatus?.prestige_count ?? 0)} time
+                        {Number(user?.game_pass_prestige_count ?? prestigeStatus?.prestige_count ?? 0) === 1 ? '' : 's'} this account.
+                      </p>
+                    )}
+                    <button
+                      type="button"
+                      onClick={handlePrestigePurchase}
+                      disabled={!user || prestigeLoading || loading}
+                      className="w-full min-h-[40px] py-2 text-[10px] font-heading font-bold uppercase rounded bg-amber-500/20 text-amber-200 border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-50 touch-manipulation"
+                    >
+                      {prestigeLoading ? '...' : `Prestige for £${GAME_PASS_PRESTIGE_PRICE_GBP}`}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             <div className="store-art-line text-primary mx-3" />
           </div>
