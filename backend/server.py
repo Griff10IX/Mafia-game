@@ -933,6 +933,8 @@ class UserResponse(BaseModel):
     hitlist_npc_bonus_slots: int = 0  # store upgrade: +1 NPC slot per 3h window (max +3)
     robot_bg_auto_search_until: Optional[str] = None
     robot_bg_auto_search_active: bool = False
+    bodyguard_find_time_until: Optional[str] = None
+    bodyguard_find_time_active: bool = False
     censor_profanity: bool = False  # when true, chat/forum show swear words as ***
     referred_by: Optional[str] = None  # first referrer id (legacy); see referred_by_ids for full list
     referred_by_username: Optional[str] = None  # comma-separated referrer usernames for display

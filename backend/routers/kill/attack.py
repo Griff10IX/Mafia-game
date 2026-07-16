@@ -1390,6 +1390,7 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
             "message": msg,
             "target_is_npc": bool((tu_row or {}).get("is_npc")) if tid else False,
             "target_is_robot_bodyguard": bool(tu_row and tu_row.get("is_npc") and tu_row.get("is_bodyguard")),
+            "target_is_bodyguard": bool(tu_row and tu_row.get("is_bodyguard")),
         }
         if tid:
             tu_bg = users_map.get(tid)

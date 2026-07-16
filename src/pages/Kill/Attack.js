@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 import { useAttackTurnstile } from '../../hooks/useAttackTurnstile';
+import { formatGameDateTime } from '../../utils/gameDateTime';
 
 const ATTACK_STYLES = `
   @keyframes atk-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -35,6 +36,17 @@ function formatCountdown(expiresAtIso) {
   if (h > 0) return `${h}h ${m}m ${s}s`;
   if (m > 0) return `${m}m ${s}s`;
   return `${s}s`;
+}
+
+function isBodyguardSearchRow(a) {
+  return !!(a?.target_is_bodyguard || a?.target_is_robot_bodyguard || a?.bodyguard_owner_username);
+}
+
+function bodyguardFindTimePerkActive(untilIso, activeFlag) {
+  if (activeFlag) return true;
+  if (!untilIso) return false;
+  const t = Date.parse(String(untilIso).replace('Z', '+00:00'));
+  return Number.isFinite(t) && t > Date.now();
 }
 
 // Shown in toast when caught during booze run (prohibition bust)
@@ -484,6 +496,7 @@ const SearchesCard = ({
   onTravel,
   onFillKillTarget,
   robotBgAutoSearchActive,
+  bodyguardFindTimeActive = false,
 }) => {
   const [isDesktop, setIsDesktop] = useState(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
@@ -734,10 +747,25 @@ const SearchesCard = ({
                     </div>
 
                     <div className="col-span-4 text-right text-[9px] text-mutedForeground font-heading">
-                      <span className="inline-flex items-center gap-1 justify-end">
-                        <Clock size={12} />
-                        {formatCountdown(a.expires_at || a.search_started)}
-                      </span>
+                      {bodyguardFindTimeActive && a.status === 'searching' && isBodyguardSearchRow(a) && a.found_at ? (
+                        <span className="inline-flex flex-col items-end gap-0.5">
+                          <span className="inline-flex items-center gap-1 text-cyan-300 font-bold">
+                            <Clock size={12} />
+                            Finds in {formatCountdown(a.found_at)}
+                          </span>
+                          <span className="text-[8px] text-cyan-400/80 tabular-nums" title={a.found_at}>
+                            {formatGameDateTime(a.found_at)}
+                          </span>
+                          <span className="text-[8px] text-mutedForeground/70">
+                            Row expires {formatCountdown(a.expires_at || a.search_started)}
+                          </span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 justify-end">
+                          <Clock size={12} />
+                          {formatCountdown(a.expires_at || a.search_started)}
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -862,9 +890,27 @@ const SearchesCard = ({
                     )}
                   </div>
 
-                  <div className="text-[9px] text-mutedForeground font-heading flex items-center gap-1">
-                    <Clock size={10} />
-                    Expires: {formatCountdown(a.expires_at || a.search_started)}
+                  <div className="text-[9px] text-mutedForeground font-heading flex flex-col gap-0.5">
+                    {bodyguardFindTimeActive && a.status === 'searching' && isBodyguardSearchRow(a) && a.found_at ? (
+                      <>
+                        <span className="inline-flex items-center gap-1 text-cyan-300 font-bold">
+                          <Clock size={10} />
+                          Finds in {formatCountdown(a.found_at)}
+                        </span>
+                        <span className="text-[8px] text-cyan-400/80 tabular-nums pl-3.5">
+                          {formatGameDateTime(a.found_at)}
+                        </span>
+                        <span className="inline-flex items-center gap-1 text-mutedForeground/70">
+                          <Clock size={10} />
+                          Row expires: {formatCountdown(a.expires_at || a.search_started)}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="inline-flex items-center gap-1">
+                        <Clock size={10} />
+                        Expires: {formatCountdown(a.expires_at || a.search_started)}
+                      </span>
+                    )}
                   </div>
                 </div>
               ))}
@@ -885,6 +931,9 @@ const SearchesCard = ({
         {attacks.length > 0 && (
           <p className="text-[9px] text-mutedForeground font-heading italic pt-1">
             💡 Searches complete automatically. Typical find time ~2h 15m–2h 45m; the timer above is the 24h row expiry from search start.
+            {bodyguardFindTimeActive ? (
+              <span className="block mt-1 text-cyan-400/90">Bodyguard Find Clock is active — bodyguard hunts show the exact find time.</span>
+            ) : null}
             {robotBgAutoSearchActive ? (
               <span className="block mt-1 text-cyan-400/90">Robot auto-search is active — your hired robots are re-searched when a row has ≤3h left.</span>
             ) : null}
@@ -1160,6 +1209,7 @@ export default function Attack() {
   const [targetFilter, setTargetFilter] = useState('all');
   const [favoriteTargets, setFavoriteTargets] = useState(() => readKillFavoriteMirror());
   const [robotBgAutoSearchActive, setRobotBgAutoSearchActive] = useState(false);
+  const [bodyguardFindTimeActive, setBodyguardFindTimeActive] = useState(false);
 
   const isFavoriteTarget = useCallback(
     (a) => !!(a?.target_username && favoriteTargets.has(normKillFavUser(a.target_username))),
@@ -1601,6 +1651,9 @@ export default function Attack() {
         const eventsRes = all[1];
         setUserBullets(meRes.data?.bullets ?? 0);
         setUserMolotovs(meRes.data?.molotovs ?? 0);
+        setBodyguardFindTimeActive(
+          bodyguardFindTimePerkActive(meRes.data?.bodyguard_find_time_until, meRes.data?.bodyguard_find_time_active),
+        );
         setEvent(eventsRes.data?.event ?? null);
         setEventsEnabled(!!eventsRes.data?.events_enabled);
       } catch (_) {
@@ -2239,6 +2292,7 @@ export default function Attack() {
           onTravel={openTravelModal}
           onFillKillTarget={setKillUsername}
           robotBgAutoSearchActive={robotBgAutoSearchActive}
+          bodyguardFindTimeActive={bodyguardFindTimeActive}
         />
       </div>
 

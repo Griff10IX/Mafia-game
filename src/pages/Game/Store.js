@@ -54,10 +54,19 @@ const TOKEN_MAX_STACK_LABEL = '1 week';
 /** Must match backend AUTO_RANK_COST_POINTS / pricing logic (8× token pts ≈ full unlock pts for 16h only). */
 const AUTO_RANK_COST_POINTS = 5000;
 const ROBOT_BG_AUTO_SEARCH_COST_POINTS = 10_000;
+const BODYGUARD_FIND_TIME_COST_POINTS = 2500;
 
 function robotBgAutoSearchActive(user) {
   if (user?.robot_bg_auto_search_active) return true;
   const until = user?.robot_bg_auto_search_until;
+  if (!until) return false;
+  const t = Date.parse(String(until).replace('Z', '+00:00'));
+  return Number.isFinite(t) && t > Date.now();
+}
+
+function bodyguardFindTimeActive(user) {
+  if (user?.bodyguard_find_time_active) return true;
+  const until = user?.bodyguard_find_time_until;
   if (!until) return false;
   const t = Date.parse(String(until).replace('Z', '+00:00'));
   return Number.isFinite(t) && t > Date.now();
@@ -149,6 +158,7 @@ const UPGRADES = [
   { id: 'family-event-token', title: 'Family Event Token', Icon: Zap, price: 250, path: '/store/buy-family-event-token', ownedKey: null, flagKey: 'family_event_token', familyDonOnly: true, desc: 'Don/Underboss: 3-day +10% family racket income (1 per 7 days).' },
   { id: 'auto-rank', title: 'Auto Rank', Icon: Bot, price: AUTO_RANK_COST_POINTS, path: '/store/buy-auto-rank', ownedKey: 'auto_rank_purchased', desc: 'Auto-commit crimes, GTA, busts, OC. Optional: set Telegram in Profile for notifications.' },
   { id: 'robot-bg-auto-search', title: 'Robot Auto-Search', Icon: Crosshair, price: ROBOT_BG_AUTO_SEARCH_COST_POINTS, path: '/store/buy-robot-bg-auto-search', ownedKey: null, activeCheck: robotBgAutoSearchActive, desc: '30 days: auto-maintain Attack searches for your hired robot bodyguards (renews when ≤3h left on a row). One purchase per active period — buy again after it expires.', extra: (u) => (robotBgAutoSearchActive(u) && u?.robot_bg_auto_search_until ? { line: 'Active until', value: formatGameDateTime(u.robot_bg_auto_search_until) } : null) },
+  { id: 'bodyguard-find-time', title: 'Bodyguard Find Clock', Icon: Clock, price: BODYGUARD_FIND_TIME_COST_POINTS, path: '/store/buy-bodyguard-find-time', ownedKey: null, activeCheck: bodyguardFindTimeActive, stackWhileActive: true, desc: 'Weekly (7 days, stacks): when searching a bodyguard on Attack, see the exact find time instead of only the ~2h15m–2h45m range.', extra: (u) => (bodyguardFindTimeActive(u) && u?.bodyguard_find_time_until ? { line: 'Active until', value: formatGameDateTime(u.bodyguard_find_time_until) } : null) },
   { id: 'armour-tier-6', title: 'Elite Composite Battledress', Icon: Shield, price: ARMOUR_TIER_6_STORE_COST_POINTS, path: '/store/buy-armour-tier-6', ownedKey: null, ownedCheck: (u) => (u?.armour_owned_level_max ?? 0) >= 6, disabledWhen: (u) => (u?.armour_owned_level_max ?? 0) < 5, desc: 'Armour level 6 (60k base bullets). Requires level 5 owned. Auto-equipped on purchase. Also shown on Armour page.' },
   { id: 'weapon11', title: 'Engraved Lewis Gun', Icon: Swords, price: WEAPON11_STORE_COST_POINTS, path: '/store/buy-weapon11', ownedKey: null, ownedCheck: (u) => !!u?.owns_weapon11, disabledWhen: (u) => !u?.owns_weapon10, desc: 'Top store gun (130 dmg). Requires Chicago Typewriter Premium owned. Auto-equipped on purchase. Also on Armour page.' },
   { id: 'silencer', title: 'Silencer', Icon: VolumeX, price: 150, path: '/store/buy-silencer', ownedKey: 'has_silencer', desc: 'Fewer witness statements when you kill' },
@@ -1503,7 +1513,7 @@ export default function Store() {
                 desc={u.desc}
                 price={priceVal}
                 respectPrice={storeRespectForPoints(priceVal)}
-                owned={!!u.activeCheck?.(user) || !!(u.ownedKey && user?.[u.ownedKey])}
+                owned={u.stackWhileActive ? false : (!!u.activeCheck?.(user) || !!(u.ownedKey && user?.[u.ownedKey]))}
                 ownedLabel={u.activeCheck?.(user) ? 'Active' : undefined}
                 loading={loading}
                 disabled={disabled}
@@ -1531,7 +1541,7 @@ export default function Store() {
                   </div>
                 )}
                 {extra && (
-                  <p className="text-[10px] text-mutedForeground mb-1">Current: {extra.value}</p>
+                  <p className="text-[10px] text-mutedForeground mb-1">{extra.line ? `${extra.line}: ` : 'Current: '}{extra.value}</p>
                 )}
               </StoreCard>
               )}

@@ -168,6 +168,8 @@ OC_TIMER_COST_POINTS = 300
 CREW_OC_TIMER_COST_POINTS = 350  # Family Crew OC: 6h cooldown instead of 8h
 AUTO_RANK_COST_POINTS = 5000  # Auto Rank: auto-commit crimes + GTAs, results to Telegram
 ROBOT_BG_AUTO_SEARCH_COST_POINTS = 10_000  # 30-day auto-search for owned robot bodyguards on Attack page
+BODYGUARD_FIND_TIME_COST_POINTS = 2500  # 7-day perk: exact find clock on bodyguard Attack searches
+BODYGUARD_FIND_TIME_DURATION_DAYS = 7
 ARMOUR_POINT_STORE_COST_POINTS = 500  # Elite Composite Battledress (armour level 6)
 WEAPON_POINT_STORE_COST_POINTS = 1000  # Engraved Lewis Gun (weapon11)
 # Per 2h token: 8 tokens cost the same points as permanent unlock but only stack 16h — not a cheap bypass
@@ -920,6 +922,56 @@ async def buy_robot_bg_auto_search(
         "cost": cost_used,
         "robot_bg_auto_search_until": new_until,
         "seed_summary": seed,
+    }
+
+
+async def buy_bodyguard_find_time(
+    pay_with: str = Query("auto"),
+    current_user: dict = Depends(get_current_user),
+):
+    """7-day weekly perk: show exact find time on bodyguard Attack searches."""
+    from datetime import timedelta
+
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, BODYGUARD_FIND_TIME_COST_POINTS, pay_with)
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    now = datetime.now(timezone.utc)
+    base = now
+    existing = current_user.get("bodyguard_find_time_until")
+    if existing:
+        try:
+            ex = datetime.fromisoformat(str(existing).replace("Z", "+00:00"))
+            if ex.tzinfo is None:
+                ex = ex.replace(tzinfo=timezone.utc)
+            if ex > now:
+                base = ex
+        except Exception:
+            pass
+    new_until = (base + timedelta(days=BODYGUARD_FIND_TIME_DURATION_DAYS)).isoformat()
+    result = await db.users.update_one(
+        {"id": current_user["id"], **gte_filter},
+        {"$inc": inc, "$set": {"bodyguard_find_time_until": new_until}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    await _record_store_points_spend(
+        current_user,
+        inc,
+        "buy-bodyguard-find-time",
+        cost_used=cost_used,
+        extra={"bodyguard_find_time_until": new_until},
+    )
+    await log_activity(
+        current_user["id"],
+        current_user.get("username") or "?",
+        "store_purchase",
+        {"item": "bodyguard_find_time", "cost": cost_used, "until": new_until},
+    )
+    return {
+        "message": f"Bodyguard Find Clock active for {BODYGUARD_FIND_TIME_DURATION_DAYS} days. Attack searches on bodyguards show the exact find time.",
+        "cost": cost_used,
+        "bodyguard_find_time_until": new_until,
+        "bodyguard_find_time_active": True,
     }
 
 
@@ -2219,6 +2271,7 @@ def register(router):
     router.add_api_route("/store/buy-family-safe-deposit-tier", buy_family_safe_deposit_tier, methods=["POST"])
     router.add_api_route("/store/buy-family-event-token", buy_family_event_token, methods=["POST"])
     router.add_api_route("/store/buy-robot-bg-auto-search", buy_robot_bg_auto_search, methods=["POST"])
+    router.add_api_route("/store/buy-bodyguard-find-time", buy_bodyguard_find_time, methods=["POST"])
     router.add_api_route("/store/buy-armour-tier-6", buy_armour_point_store_tier, methods=["POST"])
     router.add_api_route("/store/buy-weapon11", buy_weapon_point_store_tier, methods=["POST"])
     router.add_api_route("/store/buy-silencer", buy_silencer, methods=["POST"])

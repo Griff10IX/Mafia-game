@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-16 16:30 UTC[/color][/b] — [b]VIP Pass Car stock, Find Clock, Challenge the House[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]VIP Pass Car[/b] — store stock is [b]5 game-wide[/b] (not per account). [b]VIP Game Pass[/b] tier [b]100[/b] free car does [b]not[/b] use store stock.[/color]
+[*][color=#888888][b]New:[/b] [b]Store → Bodyguard Find Clock[/b] — [b]2,500 points[/b] for [b]7 days[/b] (stacks). On [b]Kill → Attack[/b], bodyguard searches show the [b]exact find time[/b].[/color]
+[*][color=#888888][b]Changed:[/b] [b]Casino → Challenge the House[/b] — house pots now seed [b]$50M–$150M[/b] (was $5M–$25M). Applies to new batches.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-16 16:15 UTC[/color][/b] — [b]Kill page travel[/b][/size]
 [quote]
 [list]
