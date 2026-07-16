@@ -53,7 +53,7 @@ async def count_global_vip_pass_cars(db) -> int:
 
 
 async def get_vip_pass_car_stats(db) -> dict:
-    """Live VIP Pass Car inventory + grant-source breakdown."""
+    """Live VIP Pass Car inventory + grant-source breakdown + per-car owners."""
     cars_in_game = await count_global_vip_pass_cars(db)
     owner_ids = await db.user_cars.distinct("user_id", {"car_id": GAME_PASS_VIP_CAR_ID})
     owner_accounts = len([x for x in (owner_ids or []) if x])
@@ -75,6 +75,52 @@ async def get_vip_pass_car_stats(db) -> dict:
     other_grants = sum(
         v for k, v in grants_by_type.items() if k not in ("store_purchase", "game_pass_tier_100")
     )
+
+    garage_rows = await db.user_cars.find(
+        {"car_id": GAME_PASS_VIP_CAR_ID},
+        {
+            "_id": 0,
+            "id": 1,
+            "user_id": 1,
+            "acquired_at": 1,
+            "listed_for_sale": 1,
+            "damage_percent": 1,
+            "custom_image_url": 1,
+        },
+    ).to_list(200)
+    uid_list = sorted({str(r.get("user_id") or "") for r in (garage_rows or []) if r.get("user_id")})
+    users = []
+    if uid_list:
+        users = await db.users.find(
+            {"id": {"$in": uid_list}},
+            {
+                "_id": 0,
+                "id": 1,
+                "username": 1,
+                "is_dead": 1,
+                "game_pass_vip_car_granted": 1,
+            },
+        ).to_list(300)
+    user_by_id = {str(u.get("id")): u for u in (users or []) if u.get("id")}
+    owners = []
+    for row in garage_rows or []:
+        uid = str(row.get("user_id") or "")
+        u = user_by_id.get(uid) or {}
+        owners.append(
+            {
+                "user_car_id": row.get("id"),
+                "user_id": uid,
+                "username": u.get("username") or "?",
+                "is_dead": bool(u.get("is_dead")),
+                "game_pass_vip_car_granted": bool(u.get("game_pass_vip_car_granted")),
+                "acquired_at": row.get("acquired_at"),
+                "listed_for_sale": bool(row.get("listed_for_sale")),
+                "damage_percent": float(row.get("damage_percent") or 0),
+                "has_custom_image": bool(row.get("custom_image_url")),
+            }
+        )
+    owners.sort(key=lambda o: ((o.get("username") or "").lower(), str(o.get("acquired_at") or "")))
+
     return {
         "cars_in_game": cars_in_game,
         "owner_accounts": owner_accounts,
@@ -84,6 +130,78 @@ async def get_vip_pass_car_stats(db) -> dict:
         "other_grants": other_grants,
         "grants_by_type": grants_by_type,
         "purchase_limit": await get_vip_pass_car_purchase_limit(db),
+        "owners": owners,
+    }
+
+
+async def admin_remove_vip_pass_cars(
+    db,
+    *,
+    user_id: Optional[str] = None,
+    user_car_id: Optional[str] = None,
+    clear_game_pass_grant: bool = False,
+    admin_username: Optional[str] = None,
+) -> dict:
+    """
+    Remove VIP Pass Car(s) from inventory.
+    Prefer user_car_id for a single row; otherwise remove all for user_id.
+    """
+    if not user_car_id and not user_id:
+        return {"removed_count": 0, "removed": []}
+
+    query: dict = {"car_id": GAME_PASS_VIP_CAR_ID}
+    if user_car_id:
+        query["id"] = str(user_car_id)
+    if user_id:
+        query["user_id"] = str(user_id)
+
+    rows = await db.user_cars.find(
+        query,
+        {"_id": 0, "id": 1, "user_id": 1, "car_name": 1},
+    ).to_list(50)
+    if not rows:
+        return {"removed_count": 0, "removed": []}
+
+    removed = []
+    affected_user_ids = set()
+    for row in rows:
+        ucid = row.get("id")
+        uid = row.get("user_id")
+        if not ucid or not uid:
+            continue
+        del_res = await db.user_cars.delete_one({"id": ucid, "user_id": uid, "car_id": GAME_PASS_VIP_CAR_ID})
+        if int(del_res.deleted_count or 0) <= 0:
+            continue
+        affected_user_ids.add(uid)
+        removed.append({"user_car_id": ucid, "user_id": uid})
+        try:
+            from utils.exclusive_car_events import log_exclusive_car_event
+
+            u = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1})
+            await log_exclusive_car_event(
+                db,
+                event_type="admin_remove",
+                car_id=GAME_PASS_VIP_CAR_ID,
+                user_car_id=ucid,
+                from_user_id=uid,
+                from_username=(u or {}).get("username"),
+                car_name=row.get("car_name") or "VIP Pass Car",
+                extra={"admin_username": admin_username or "?", "clear_game_pass_grant": bool(clear_game_pass_grant)},
+            )
+        except Exception:
+            logger.exception("admin_remove vip pass car event log failed user_car_id=%s", ucid)
+
+    if clear_game_pass_grant and affected_user_ids:
+        await db.users.update_many(
+            {"id": {"$in": list(affected_user_ids)}},
+            {"$unset": {"game_pass_vip_car_granted": ""}},
+        )
+
+    return {
+        "removed_count": len(removed),
+        "removed": removed,
+        "cars_in_game": await count_global_vip_pass_cars(db),
+        "cleared_game_pass_grant": bool(clear_game_pass_grant and affected_user_ids),
     }
 
 

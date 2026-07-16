@@ -314,6 +314,13 @@ class AdminStoreItemFlagsPatch(BaseModel):
     disable_all: Optional[bool] = None
 
 
+class AdminVipPassCarRemoveRequest(BaseModel):
+    """Remove VIP Pass Car(s). Prefer user_car_id; username removes all for that player."""
+    username: Optional[str] = None
+    user_car_id: Optional[str] = None
+    clear_game_pass_grant: bool = False
+
+
 class AdminMissionProgressSetRequest(BaseModel):
     """1-based ladder index of the next mission to complete (same order as in-game missions UI). 101 = all 100 done."""
 
@@ -4200,7 +4207,7 @@ def register(router):
             raise HTTPException(status_code=404, detail="Car not found")
         result = await db.user_cars.delete_many({"user_id": target["id"], "car_id": car_id})
         removed = int(result.deleted_count or 0)
-        if removed > 0 and car.get("rarity") in ("exclusive", "loot_exclusive"):
+        if removed > 0 and car.get("rarity") in ("exclusive", "loot_exclusive", "vip_exclusive"):
             from utils.exclusive_car_events import log_exclusive_car_event
 
             await log_exclusive_car_event(
@@ -10867,12 +10874,59 @@ def register(router):
 
     @router.get("/admin/vip-pass-car-stats")
     async def admin_vip_pass_car_stats(current_user: dict = Depends(get_current_user)):
-        """VIP Pass Car inventory: cars in garages + grant sources (store vs Game Pass)."""
+        """VIP Pass Car inventory: cars in garages + owners + grant sources."""
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         from utils.game_pass_vip_car import get_vip_pass_car_stats
 
         return await get_vip_pass_car_stats(db)
+
+    @router.post("/admin/vip-pass-car-remove")
+    async def admin_vip_pass_car_remove(
+        body: AdminVipPassCarRemoveRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Remove one VIP Pass Car by garage id, or all VIP Pass Cars from a username."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.game_pass_vip_car import admin_remove_vip_pass_cars
+
+        user_id = None
+        username = (body.username or "").strip()
+        user_car_id = (body.user_car_id or "").strip() or None
+        if username:
+            target = await db.users.find_one(
+                {"username": _username_pattern(username)},
+                {"_id": 0, "id": 1, "username": 1},
+            )
+            if not target:
+                raise HTTPException(status_code=404, detail="User not found")
+            user_id = target["id"]
+            username = target.get("username") or username
+        if not user_id and not user_car_id:
+            raise HTTPException(status_code=400, detail="Provide username and/or user_car_id")
+
+        result = await admin_remove_vip_pass_cars(
+            db,
+            user_id=user_id,
+            user_car_id=user_car_id,
+            clear_game_pass_grant=bool(body.clear_game_pass_grant),
+            admin_username=current_user.get("username"),
+        )
+        removed = int(result.get("removed_count") or 0)
+        if removed <= 0:
+            raise HTTPException(status_code=404, detail="No VIP Pass Car found to remove")
+        if not username and result.get("removed"):
+            uid0 = (result["removed"][0] or {}).get("user_id")
+            if uid0:
+                u0 = await db.users.find_one({"id": uid0}, {"_id": 0, "username": 1})
+                username = (u0 or {}).get("username") or uid0
+        who = username or "target"
+        return {
+            "message": f"Removed {removed} VIP Pass Car(s) from {who}",
+            **result,
+            "username": username,
+        }
 
     @router.patch("/admin/store-item-flags")
     async def admin_patch_store_item_flags(

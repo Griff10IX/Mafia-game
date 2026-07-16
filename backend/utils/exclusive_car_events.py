@@ -19,6 +19,7 @@ EVENT_LABELS = {
     "war_family_wipe": "Family war wipe (exclusive → winner boss)",
     "gta_won": "GTA steal",
     "loot_box": "Loot box reward",
+    "admin_remove": "Admin remove",
     "admin_grant": "Admin grant",
     "store_purchase": "Store purchase",
     "game_pass_tier_100": "Game Pass tier 100 reward",

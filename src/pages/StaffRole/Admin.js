@@ -246,7 +246,7 @@ const SEARCHABLE_TOOLS = [
   // Donations
   { label: 'Donations Payments Log', categoryId: 'admin-donations', collapseKey: 'donationsPayments', keywords: ['donations', 'payments', 'stripe', 'credit'], adminOnly: true },
   { label: 'Store Point Crediting', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['store', 'crediting', 'manual', 'eta', 'payments'], adminOnly: true },
-  { label: 'VIP Pass Car purchase limit', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['vip', 'pass', 'car', 'limit', 'purchase', 'store'], adminOnly: true },
+  { label: 'VIP Pass Car owners', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['vip', 'pass', 'car', 'limit', 'purchase', 'store', 'owners', 'remove', 'sold out'], adminOnly: true },
   { label: 'Store item rollout', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['store', 'rollout', 'feature flag', 'coming soon', 'auto-collect', 'bailout', 'cooldown skip', 'profile glow', 'family crest', 'safe deposit', 'phase 1', 'enable', 'test'], adminOnly: true },
   { label: 'Pre-order Settings', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['preorder', 'points', 'release', 'manual', 'store', 'credit'], adminOnly: true },
   { label: 'Store cash purchase logs', categoryId: 'admin-donations', collapseKey: 'pointsCashLogs', keywords: ['points', 'cash', 'store', 'ip', 'email', 'monthly', 'quick trade', 'token', 'bundle'], adminOnly: true },
@@ -1477,6 +1477,8 @@ export default function Admin() {
   const [vipPassCarLimitSaving, setVipPassCarLimitSaving] = useState(false);
   const [vipPassCarStats, setVipPassCarStats] = useState(null);
   const [vipPassCarStatsLoading, setVipPassCarStatsLoading] = useState(false);
+  const [vipPassCarRemovingId, setVipPassCarRemovingId] = useState(null);
+  const [vipPassCarClearGrant, setVipPassCarClearGrant] = useState(false);
   const [pointsCashLogs, setPointsCashLogs] = useState(null);
   const [pointsCashLogsLoading, setPointsCashLogsLoading] = useState(false);
   const [pointsCashLogsUsername, setPointsCashLogsUsername] = useState('');
@@ -2996,6 +2998,57 @@ export default function Admin() {
       toast.error(e.response?.data?.detail ?? 'Failed to load VIP Pass Car stats');
     } finally {
       setVipPassCarStatsLoading(false);
+    }
+  };
+
+  const handleRemoveVipPassCar = async (owner) => {
+    const userCarId = owner?.user_car_id;
+    const username = owner?.username || '?';
+    if (!userCarId) {
+      toast.error('Missing car id');
+      return;
+    }
+    const clearGrant = !!vipPassCarClearGrant;
+    const confirmMsg = clearGrant
+      ? `Remove VIP Pass Car from ${username} and clear their Game Pass free-grant flag?`
+      : `Remove VIP Pass Car from ${username}? This frees one slot in the game-wide stock.`;
+    if (!window.confirm(confirmMsg)) return;
+    setVipPassCarRemovingId(userCarId);
+    try {
+      const res = await api.post('/admin/vip-pass-car-remove', {
+        user_car_id: userCarId,
+        username,
+        clear_game_pass_grant: clearGrant,
+      });
+      toast.success(res.data?.message || 'VIP Pass Car removed');
+      await fetchVipPassCarStats();
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to remove VIP Pass Car');
+    } finally {
+      setVipPassCarRemovingId(null);
+    }
+  };
+
+  const handleRemoveAllVipPassCarsForUser = async (username) => {
+    const name = String(username || '').trim();
+    if (!name) return;
+    const clearGrant = !!vipPassCarClearGrant;
+    const confirmMsg = clearGrant
+      ? `Remove ALL VIP Pass Cars from ${name} and clear their Game Pass free-grant flag?`
+      : `Remove ALL VIP Pass Cars from ${name}?`;
+    if (!window.confirm(confirmMsg)) return;
+    setVipPassCarRemovingId(`user:${name}`);
+    try {
+      const res = await api.post('/admin/vip-pass-car-remove', {
+        username: name,
+        clear_game_pass_grant: clearGrant,
+      });
+      toast.success(res.data?.message || 'VIP Pass Cars removed');
+      await fetchVipPassCarStats();
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to remove VIP Pass Cars');
+    } finally {
+      setVipPassCarRemovingId(null);
     }
   };
 
@@ -12107,9 +12160,9 @@ export default function Admin() {
               <div className="h-px bg-zinc-700/30" />
 
               <div className="space-y-3">
-                <p className="text-[10px] font-heading font-bold text-cyan-400 uppercase tracking-wider">VIP Pass Car purchase limit</p>
+                <p className="text-[10px] font-heading font-bold text-cyan-400 uppercase tracking-wider">VIP Pass Car stock & owners</p>
                 <p className="text-[10px] text-mutedForeground">
-                  Max VIP Pass Cars that may exist game-wide across all accounts (store + Game Pass free grant). Default 5. Range 1–50.
+                  Max VIP Pass Cars that may exist game-wide across all accounts (store + Game Pass free grant). Default 5. Range 1–50. Use the owner list below to see who holds them and remove if needed.
                 </p>
                 <div className="flex flex-col sm:flex-row gap-2">
                   <input
@@ -12134,14 +12187,15 @@ export default function Admin() {
                     disabled={vipPassCarStatsLoading}
                     className="px-3 py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-zinc-700/30 text-zinc-300 border border-zinc-600/60 hover:bg-zinc-700/50 disabled:opacity-50"
                   >
-                    {vipPassCarStatsLoading ? 'Loading...' : 'Refresh counts'}
+                    {vipPassCarStatsLoading ? 'Loading...' : 'Refresh owners'}
                   </button>
                 </div>
                 {vipPassCarStats && (
-                  <div className="rounded border border-cyan-500/25 bg-cyan-500/5 px-2.5 py-2 space-y-1">
+                  <div className="rounded border border-cyan-500/25 bg-cyan-500/5 px-2.5 py-2 space-y-2">
                     <p className="text-[10px] font-heading text-cyan-300">
                       In game now: <span className="font-bold text-foreground">{Number(vipPassCarStats.cars_in_game || 0).toLocaleString()}</span>
-                      {' '}cars across{' '}
+                      /{Number(vipPassCarStats.purchase_limit || vipPassCarPurchaseLimit || 5).toLocaleString()}
+                      {' '}across{' '}
                       <span className="font-bold text-foreground">{Number(vipPassCarStats.owner_accounts || 0).toLocaleString()}</span>
                       {' '}accounts
                     </p>
@@ -12158,6 +12212,81 @@ export default function Admin() {
                         </>
                       )}
                     </p>
+                    <label className="flex items-center gap-2 text-[10px] font-heading text-zinc-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={vipPassCarClearGrant}
+                        onChange={(e) => setVipPassCarClearGrant(e.target.checked)}
+                        className="rounded border-zinc-600"
+                      />
+                      Also clear Game Pass free-grant flag on remove (lets them earn the free car again if stock allows)
+                    </label>
+                    <div className="overflow-x-auto rounded border border-cyan-500/20">
+                      <table className="w-full text-left text-[10px] font-heading">
+                        <thead className="bg-zinc-900/60 text-cyan-300 uppercase tracking-wider">
+                          <tr>
+                            <th className="px-2 py-1.5 font-bold">Player</th>
+                            <th className="px-2 py-1.5 font-bold">Acquired</th>
+                            <th className="px-2 py-1.5 font-bold">Flags</th>
+                            <th className="px-2 py-1.5 font-bold text-right">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(Array.isArray(vipPassCarStats.owners) ? vipPassCarStats.owners : []).length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="px-2 py-3 text-zinc-500">No VIP Pass Cars in any garage.</td>
+                            </tr>
+                          ) : (
+                            (vipPassCarStats.owners || []).map((o) => {
+                              const busy = vipPassCarRemovingId === o.user_car_id || vipPassCarRemovingId === `user:${o.username}`;
+                              const acquired = o.acquired_at
+                                ? (() => {
+                                    try {
+                                      return new Date(o.acquired_at).toLocaleString();
+                                    } catch {
+                                      return String(o.acquired_at);
+                                    }
+                                  })()
+                                : '—';
+                              const flags = [
+                                o.is_dead ? 'dead' : null,
+                                o.listed_for_sale ? 'listed' : null,
+                                o.game_pass_vip_car_granted ? 'GP claimed' : null,
+                                o.has_custom_image ? 'custom img' : null,
+                              ].filter(Boolean);
+                              return (
+                                <tr key={o.user_car_id || `${o.user_id}-${o.acquired_at}`} className="border-t border-zinc-800/60 text-zinc-200">
+                                  <td className="px-2 py-1.5">
+                                    <span className="font-bold text-foreground">{o.username || '?'}</span>
+                                  </td>
+                                  <td className="px-2 py-1.5 text-zinc-400 whitespace-nowrap">{acquired}</td>
+                                  <td className="px-2 py-1.5 text-zinc-400">{flags.length ? flags.join(' · ') : '—'}</td>
+                                  <td className="px-2 py-1.5 text-right whitespace-nowrap">
+                                    <button
+                                      type="button"
+                                      disabled={!!vipPassCarRemovingId || busy}
+                                      onClick={() => handleRemoveVipPassCar(o)}
+                                      className="px-2 py-1 text-[9px] font-heading font-bold uppercase rounded bg-red-500/15 text-red-300 border border-red-500/35 hover:bg-red-500/25 disabled:opacity-50"
+                                    >
+                                      {busy ? '…' : 'Remove'}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      disabled={!!vipPassCarRemovingId || busy}
+                                      onClick={() => handleRemoveAllVipPassCarsForUser(o.username)}
+                                      className="ml-1 px-2 py-1 text-[9px] font-heading font-bold uppercase rounded bg-zinc-700/40 text-zinc-300 border border-zinc-600/50 hover:bg-zinc-700/60 disabled:opacity-50"
+                                      title="Remove every VIP Pass Car this account owns"
+                                    >
+                                      Remove all
+                                    </button>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
               </div>
