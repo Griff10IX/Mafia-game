@@ -276,8 +276,12 @@ def _is_car_usable(uc: dict) -> bool:
 
 
 async def _booze_garage_travel_leg_seconds(db, user_id: str) -> tuple[Optional[str], int]:
-    """Travel method id and seconds per leg for booze: fastest usable garage car by TRAVEL_TIMES (including custom)."""
+    """Travel method id and seconds per leg for booze: fastest usable garage car by TRAVEL_TIMES (including custom + VIP).
+
+    Uses the same exclusive/VIP dedicated fetch as /travel/info so large garages do not drop car22.
+    """
     import server as srv
+    from routers.admin.airport import _fetch_travel_user_cars, _merge_user_cars_for_travel
 
     CARS = getattr(srv, "CARS", None) or []
     TRAVEL_TIMES = getattr(srv, "TRAVEL_TIMES", None) or {}
@@ -285,8 +289,17 @@ async def _booze_garage_travel_leg_seconds(db, user_id: str) -> tuple[Optional[s
     user_id = (user_id or "").strip()
     if not user_id:
         return None, default_leg
-    cursor = db.user_cars.find({"user_id": user_id}, {"_id": 1, "id": 1, "car_id": 1, "damage_percent": 1})
-    all_cars = await cursor.to_list(5000)
+
+    bulk, custom_rows, immune_rows = await _fetch_travel_user_cars(user_id)
+    all_cars = _merge_user_cars_for_travel(bulk, immune_rows)
+    # Customs are fetched separately (same as Travel); include them for booze method selection.
+    seen = {str(uc.get("id") or uc.get("_id") or "") for uc in all_cars}
+    for uc in custom_rows:
+        k = str(uc.get("id") or uc.get("_id") or "")
+        if k and k not in seen:
+            seen.add(k)
+            all_cars.append(uc)
+
     usable = [uc for uc in all_cars if _is_car_usable(uc)]
     if not usable:
         return None, default_leg
@@ -299,7 +312,8 @@ async def _booze_garage_travel_leg_seconds(db, user_id: str) -> tuple[Optional[s
             method = "custom"
         else:
             car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
-            travel_time = int(TRAVEL_TIMES.get(car_info.get("rarity", "common"), 45) if car_info else 45)
+            rarity = (car_info or {}).get("rarity", "common")
+            travel_time = int(TRAVEL_TIMES.get(rarity, 45) if car_info else 45)
             method = uc.get("id") or str(uc.get("_id", ""))
             if not method:
                 continue
