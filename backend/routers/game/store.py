@@ -394,12 +394,14 @@ def _validate_selectable_bundle_purchase(current_user: dict, selections: dict, t
     for tt, qty in norm.items():
         if tt in TOKEN_SELECTABLE_BUNDLE_DISALLOWED:
             raise HTTPException(status_code=400, detail=f"{tt} cannot be included in selectable bundles")
-        if tt not in token_config:
-            raise HTTPException(status_code=400, detail=f"Invalid token_type: {tt}")
         if tt not in TOKEN_STORE_UNIT_PRICE_POINTS:
             raise HTTPException(status_code=400, detail=f"This token type is not sold in the store: {tt}")
-        cfg = token_config[tt]
-        cf = cfg["count_field"]
+        if tt in STORE_COUNT_ONLY_TOKEN_FIELDS:
+            cf = STORE_COUNT_ONLY_TOKEN_FIELDS[tt]
+        elif tt in token_config:
+            cf = token_config[tt]["count_field"]
+        else:
+            raise HTTPException(status_code=400, detail=f"Invalid token_type: {tt}")
         unit = int(TOKEN_STORE_UNIT_PRICE_POINTS[tt])
         subtotal_pts += unit * qty
         entries.append({"token_type": tt, "count_field": cf, "qty": qty, "unit_price": unit})
@@ -1411,6 +1413,10 @@ async def buy_store_token_selectable_bundle(
     entries, subtotal_pts, final_cost_pts = _validate_selectable_bundle_purchase(
         current_user, body.selections or {}, TOKEN_CONFIG
     )
+    for e in entries:
+        flag = store_flag_for_token_type(e["token_type"])
+        if flag:
+            await require_store_item_allowed(db, flag, current_user)
     cost_used, inc, gte_filter = _store_cost_inc(current_user, final_cost_pts, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
@@ -1815,6 +1821,10 @@ async def buy_store_token_selectable_bundle_cash(
     entries, subtotal_pts, final_cost_pts = _validate_selectable_bundle_purchase(
         current_user, body.selections or {}, TOKEN_CONFIG
     )
+    for e in entries:
+        flag = store_flag_for_token_type(e["token_type"])
+        if flag:
+            await require_store_item_allowed(db, flag, current_user)
     units_selected = sum(int(e["qty"]) for e in entries)
     used = _cash_purchases_today(current_user)
     if used + units_selected > TOKEN_CASH_DAILY_LIMIT:
