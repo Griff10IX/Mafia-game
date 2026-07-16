@@ -977,6 +977,19 @@ export default function LootBox() {
       await new Promise((r) => setTimeout(r, explodeDurationMs(level)));
       setPhase('done');
       setResult(apiData);
+      // Clear FREE UI immediately when voucher burned (don't wait on status round-trip).
+      if (apiData?.used_free_rare_open || typeof apiData?.loot_box_free_rare_opens === 'number') {
+        setStatus((prev) => {
+          if (!prev) return prev;
+          const next = {
+            ...prev,
+            loot_box_pieces: apiData.new_pieces ?? prev.loot_box_pieces,
+            loot_box_free_rare_opens: Number(apiData.loot_box_free_rare_opens ?? 0),
+          };
+          _cachedLootStatus = next;
+          return next;
+        });
+      }
       await refreshUser();
       await loadStatus();
       toast.success('The don smiles upon you.');
@@ -1033,11 +1046,23 @@ export default function LootBox() {
                 Pick a vault tier below (50–1,000 pieces). Better tiers and jackpots mean bigger reveals.
               </p>
               {(tutorialLoot || freeRareOpens > 0) ? (
-                <p className="text-[10px] font-heading text-blue-300 mt-1.5">
-                  {freeRareOpens > 0
-                    ? `You have ${freeRareOpens} free Rare open${freeRareOpens === 1 ? '' : 's'} — select Rare and open without spending pieces.`
-                    : 'Tutorial reward: select Rare to open your free box.'}
-                </p>
+                <div
+                  className="mt-2 rounded-md border px-2.5 py-2"
+                  style={{
+                    borderColor: freeRareOpens > 0 ? 'rgba(96,165,250,0.45)' : 'rgba(161,161,170,0.35)',
+                    background: freeRareOpens > 0 ? 'rgba(59,130,246,0.12)' : 'rgba(39,39,42,0.5)',
+                  }}
+                  data-testid="lootbox-free-rare-callout"
+                >
+                  <p className="text-[10px] font-heading font-bold uppercase tracking-wider text-blue-300">
+                    {freeRareOpens > 0 ? 'Free Rare box ready' : 'Tutorial loot'}
+                  </p>
+                  <p className="text-[10px] font-heading text-zinc-300 mt-0.5 leading-snug">
+                    {freeRareOpens > 0
+                      ? `Open Rare once for free (${freeRareOpens} voucher${freeRareOpens === 1 ? '' : 's'}). After that, Rare costs ${fmtInt(resolveOpenCost(status, 'rare'))} pieces.`
+                      : 'Your free Rare voucher was already used. Select Rare and spend pieces for another open.'}
+                  </p>
+                </div>
               ) : null}
             </div>
 

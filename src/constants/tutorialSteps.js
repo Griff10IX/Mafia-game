@@ -3,7 +3,8 @@ export const TUTORIAL_STEPS = [
   {
     id: 'theme',
     title: 'Pick your look',
-    body: 'Choose Default or Modern. You can change this anytime in Theme settings.',
+    body: 'Choose Default or Modern for the game UI. You can change this anytime under Theme.',
+    tips: 'Default is the classic noir look. Modern uses a cleaner layout and colours.',
     gate: 'theme',
     primaryCta: { label: 'Choose theme', action: 'open_theme' },
     nextLabel: 'Next',
@@ -11,7 +12,8 @@ export const TUTORIAL_STEPS = [
   {
     id: 'crimes',
     title: 'Commit a crime',
-    body: 'Crimes are your basic grind — earn cash and respect. Commit one crime to continue.',
+    body: 'Crimes are your main cash and respect loop. Commit one successful crime to continue.',
+    tips: 'Each crime has a cooldown and progress bar. Higher progress means better odds.',
     gate: 'crime',
     route: '/crime/crimes',
     primaryCta: { label: 'Go to Crimes', action: 'navigate' },
@@ -20,7 +22,8 @@ export const TUTORIAL_STEPS = [
   {
     id: 'gta',
     title: 'Attempt a GTA',
-    body: 'Steal a car from GTA. Attempt one GTA (success or fail) to continue.',
+    body: 'GTA steals cars into your garage. Attempt one GTA (success or fail counts) to continue.',
+    tips: 'Cars let you travel for free. Damaged cars need repair before they can drive.',
     gate: 'gta',
     route: '/crime/gta',
     primaryCta: { label: 'Go to GTA', action: 'navigate' },
@@ -29,7 +32,8 @@ export const TUTORIAL_STEPS = [
   {
     id: 'auto_rank',
     title: 'Auto Rank',
-    body: 'Auto Rank can run crimes, GTA, busts, and more for you while you are away. Buy it in the Store or manage it under Account.',
+    body: 'Auto Rank is a paid Store perk that can run crimes, GTA, busts, and more while you are away.',
+    tips: 'Buy it in the Store, then toggle options under Account → Auto Rank.',
     gate: 'ack',
     route: '/game/store',
     primaryCta: { label: 'Open Store', action: 'navigate' },
@@ -39,7 +43,8 @@ export const TUTORIAL_STEPS = [
   {
     id: 'travel',
     title: 'Travel the map',
-    body: 'Different cities unlock crimes, GTA options, and money makers. Use Travel to move between states.',
+    body: 'Move between cities for booze runs, Kill targets, properties and casinos. Hot/cold cities also tweak crime and GTA odds.',
+    tips: 'Crimes and GTA options are the same everywhere. Airport travel is instant (costs points); cars take time.',
     gate: 'ack',
     route: '/game/travel',
     primaryCta: { label: 'Go to Travel', action: 'navigate' },
@@ -49,6 +54,7 @@ export const TUTORIAL_STEPS = [
     id: 'jail',
     title: 'Jail & busts',
     body: 'Fail a crime or GTA and you may land in jail. Bust yourself or friends out from the Jail page.',
+    tips: 'While jailed, many actions pause. Busts earn respect and help your crew.',
     gate: 'ack',
     route: '/crime/jail',
     primaryCta: { label: 'Open Jail', action: 'navigate' },
@@ -57,7 +63,8 @@ export const TUTORIAL_STEPS = [
   {
     id: 'distillery',
     title: 'Distillery (later)',
-    body: 'The Distillery needs Capo rank and the Booze-making racket. You collect, manage heat, and can auto-sell — unlock it when you qualify.',
+    body: 'The Distillery needs Capo rank and the Booze-making racket. Collect, manage heat, and auto-sell when you unlock it.',
+    tips: 'Start with Rackets when you qualify. Distillery is a longer-term money engine.',
     gate: 'ack',
     route: '/money/racket',
     primaryCta: { label: 'View Racket', action: 'navigate' },
@@ -67,14 +74,24 @@ export const TUTORIAL_STEPS = [
   {
     id: 'missions',
     title: 'Missions & objectives',
-    body: 'Check Missions and Objectives for longer goals and big rewards. Finish the tutorial to claim your starter rewards.',
+    body: 'The Consigliere’s Ledger (Missions) and Objectives give longer goals and big rewards. Finish the tutorial to claim your starter pack.',
+    tips: 'Rewards: 3,000 respect, 2 robot bodyguards, and 1 free Rare loot box.',
     gate: 'ack',
     route: '/account/missions',
     primaryCta: { label: 'Open Missions', action: 'navigate' },
     secondaryCta: { label: 'Objectives', route: '/account/objectives' },
     nextLabel: 'Complete tutorial',
+    showRewards: true,
   },
 ];
+
+export const TUTORIAL_REWARD_CHIPS = [
+  '3,000 respect',
+  '2 robot bodyguards',
+  '1 free Rare box',
+];
+
+export const TUTORIAL_LOOT_REDIRECT = '/money/loot-box?tier=rare&tutorial=1';
 
 export function getTutorialStep(stepId) {
   return TUTORIAL_STEPS.find((s) => s.id === stepId) || TUTORIAL_STEPS[0];

@@ -1,10 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, ChevronRight, SkipForward } from 'lucide-react';
+import { X, ChevronRight, SkipForward, GripHorizontal } from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
-import { getTutorialStep, TUTORIAL_STEPS } from '../constants/tutorialSteps';
+import {
+  getTutorialStep,
+  TUTORIAL_STEPS,
+  TUTORIAL_REWARD_CHIPS,
+  TUTORIAL_LOOT_REDIRECT,
+} from '../constants/tutorialSteps';
 import styles from '../styles/noir.module.css';
+
+const POS_KEY = 'tutorial_coach_pos';
+const PANEL_W = 380;
+const PANEL_H_EST = 320;
 
 function statusSnapshot(data) {
   if (!data) return '';
@@ -36,9 +45,62 @@ function seedFromUser(user) {
   };
 }
 
+function readPos() {
+  try {
+    const raw = sessionStorage.getItem(POS_KEY);
+    if (!raw) return { x: 0, y: 0 };
+    const p = JSON.parse(raw);
+    const x = Number(p?.x);
+    const y = Number(p?.y);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return { x: 0, y: 0 };
+    return { x, y };
+  } catch (_) {
+    return { x: 0, y: 0 };
+  }
+}
+
+function writePos(pos) {
+  try {
+    sessionStorage.setItem(POS_KEY, JSON.stringify(pos));
+  } catch (_) { /* ignore */ }
+}
+
+function clampPos(x, y, panelEl) {
+  const w = panelEl?.offsetWidth || PANEL_W;
+  const h = panelEl?.offsetHeight || PANEL_H_EST;
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 800;
+  const vh = typeof window !== 'undefined' ? window.innerHeight : 600;
+  // Position is offset from centered default (translate from center).
+  const maxX = Math.max(0, (vw - w) / 2 - 8);
+  const maxY = Math.max(0, (vh - h) / 2 - 8);
+  return {
+    x: Math.max(-maxX, Math.min(maxX, x)),
+    y: Math.max(-maxY, Math.min(maxY, y)),
+  };
+}
+
+function RewardChips({ compact = false }) {
+  return (
+    <div className={`flex flex-wrap gap-1.5 ${compact ? 'mt-1' : 'mt-2'}`}>
+      {TUTORIAL_REWARD_CHIPS.map((label) => (
+        <span
+          key={label}
+          className="text-[9px] font-heading font-bold uppercase tracking-wide px-2 py-1 rounded border"
+          style={{
+            borderColor: 'rgba(var(--noir-primary-rgb), 0.35)',
+            background: 'rgba(var(--noir-primary-rgb), 0.12)',
+            color: 'var(--noir-primary)',
+          }}
+        >
+          {label}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /**
- * Centered new-player tutorial coach.
- * Mount after rules_accepted when status is pending/in_progress.
+ * Centered, draggable new-player tutorial coach.
  */
 export default function TutorialCoach({
   user,
@@ -50,6 +112,8 @@ export default function TutorialCoach({
   const [status, setStatus] = useState(() => seedFromUser(user));
   const [busy, setBusy] = useState(false);
   const [finishPanel, setFinishPanel] = useState(null);
+  const [pos, setPos] = useState(readPos);
+  const [dragging, setDragging] = useState(false);
   const startedRef = useRef(false);
   const pollRef = useRef(null);
   const redirectTimerRef = useRef(null);
@@ -57,6 +121,9 @@ export default function TutorialCoach({
   const onStatusChangeRef = useRef(onStatusChange);
   const loadInFlightRef = useRef(null);
   const refreshDebounceRef = useRef(null);
+  const panelRef = useRef(null);
+  const dragRef = useRef({ active: false, startX: 0, startY: 0, origX: 0, origY: 0 });
+  const themeSessionDoneRef = useRef(false);
 
   useEffect(() => {
     onStatusChangeRef.current = onStatusChange;
@@ -66,6 +133,18 @@ export default function TutorialCoach({
     if (pollRef.current) clearInterval(pollRef.current);
     if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
     if (refreshDebounceRef.current) clearTimeout(refreshDebounceRef.current);
+  }, []);
+
+  useEffect(() => {
+    const onResize = () => {
+      setPos((prev) => {
+        const next = clampPos(prev.x, prev.y, panelRef.current);
+        writePos(next);
+        return next;
+      });
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
   }, []);
 
   const applyStatus = useCallback((data, { notifyParent = true } = {}) => {
@@ -95,7 +174,6 @@ export default function TutorialCoach({
     return loadInFlightRef.current;
   }, [applyStatus]);
 
-  // Start once if pending + eligible
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -127,7 +205,6 @@ export default function TutorialCoach({
     return () => { cancelled = true; };
   }, [loadStatus, applyStatus]);
 
-  // Poll crime/GTA gates only while tab is visible
   useEffect(() => {
     const step = status?.tutorial_step;
     const needsPoll = status?.tutorial_status === 'in_progress'
@@ -163,7 +240,6 @@ export default function TutorialCoach({
     };
   }, [status?.tutorial_status, status?.tutorial_step, finishPanel, loadStatus]);
 
-  // Debounced refresh only on gated action steps (crime/GTA)
   useEffect(() => {
     const step = status?.tutorial_step;
     const gated = status?.tutorial_status === 'in_progress'
@@ -172,9 +248,7 @@ export default function TutorialCoach({
 
     const onRefresh = () => {
       if (refreshDebounceRef.current) clearTimeout(refreshDebounceRef.current);
-      refreshDebounceRef.current = setTimeout(() => {
-        loadStatus();
-      }, 400);
+      refreshDebounceRef.current = setTimeout(() => { loadStatus(); }, 400);
     };
     window.addEventListener('app:refresh-user', onRefresh);
     return () => {
@@ -182,6 +256,66 @@ export default function TutorialCoach({
       if (refreshDebounceRef.current) clearTimeout(refreshDebounceRef.current);
     };
   }, [status?.tutorial_status, status?.tutorial_step, loadStatus]);
+
+  // Theme modal choose advances tutorial — mark this session so Next unlocks after choose.
+  useEffect(() => {
+    const onChosen = () => {
+      themeSessionDoneRef.current = true;
+      loadStatus();
+    };
+    window.addEventListener('app-initial-theme-chosen', onChosen);
+    return () => window.removeEventListener('app-initial-theme-chosen', onChosen);
+  }, [loadStatus]);
+
+  const onDragPointerDown = (e) => {
+    if (e.button != null && e.button !== 0) return;
+    // Don't start drag from the close button
+    if (e.target?.closest?.('[data-tutorial-no-drag]')) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    dragRef.current = {
+      active: true,
+      startX: e.clientX,
+      startY: e.clientY,
+      origX: pos.x,
+      origY: pos.y,
+    };
+    setDragging(true);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (_) { /* ignore */ }
+    e.preventDefault();
+  };
+
+  const onDragPointerMove = (e) => {
+    if (!dragRef.current.active) return;
+    const dx = e.clientX - dragRef.current.startX;
+    const dy = e.clientY - dragRef.current.startY;
+    const next = clampPos(
+      dragRef.current.origX + dx,
+      dragRef.current.origY + dy,
+      panelRef.current,
+    );
+    setPos(next);
+  };
+
+  const onDragPointerUp = (e) => {
+    if (!dragRef.current.active) return;
+    dragRef.current.active = false;
+    setDragging(false);
+    setPos((prev) => {
+      const next = clampPos(prev.x, prev.y, panelRef.current);
+      writePos(next);
+      return next;
+    });
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch (_) { /* ignore */ }
+  };
+
+  const goLootBox = useCallback(() => {
+    navigate(TUTORIAL_LOOT_REDIRECT);
+  }, [navigate]);
 
   const handleSkip = async () => {
     if (busy) return;
@@ -216,7 +350,6 @@ export default function TutorialCoach({
         } else {
           toast.message('Tutorial complete');
         }
-        // Keep parent in_progress until redirect so finish panel stays mounted.
         applyStatus({
           ...(status || {}),
           tutorial_status: 'in_progress',
@@ -226,16 +359,19 @@ export default function TutorialCoach({
             ?? status?.loot_box_free_rare_opens,
         });
         refreshUser();
-        const redirect = data.redirect || rewards.redirect || '/loot-box?tier=rare&tutorial=1';
+        const redirect = data.redirect || rewards.redirect || TUTORIAL_LOOT_REDIRECT;
         if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
+        // Navigate quickly so query flags aren't lost / coach unmount races.
         redirectTimerRef.current = setTimeout(() => {
           applyStatus({
             tutorial_status: 'completed',
             tutorial_step: 'missions',
             eligible: false,
           });
-          navigate(redirect);
-        }, 1100);
+          navigate(redirect.startsWith('/loot-box')
+            ? TUTORIAL_LOOT_REDIRECT
+            : redirect);
+        }, 280);
         return;
       }
       applyStatus({
@@ -245,7 +381,7 @@ export default function TutorialCoach({
         tutorial_theme_done: extra.theme_done ? true : status?.tutorial_theme_done,
         eligible: true,
       });
-      // Soft refresh parent money/points only when leaving gated steps
+      if (extra.theme_done) themeSessionDoneRef.current = true;
       if (status?.tutorial_step === 'crimes' || status?.tutorial_step === 'gta') {
         refreshUser();
       }
@@ -267,9 +403,14 @@ export default function TutorialCoach({
   };
 
   if (!user?.rules_accepted) return null;
-
-  // Theme picker sits above the coach — hide coach so they don't stack/fight.
   if (themeModalOpen && !finishPanel) return null;
+
+  const panelStyle = {
+    borderColor: 'rgba(var(--noir-primary-rgb), 0.35)',
+    backgroundColor: 'var(--noir-content)',
+    transform: `translate(${pos.x}px, ${pos.y}px)`,
+    boxShadow: '0 12px 40px rgba(0,0,0,0.55), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.08)',
+  };
 
   if (finishPanel) {
     return (
@@ -278,26 +419,32 @@ export default function TutorialCoach({
         role="status"
       >
         <div
-          className={`${styles.panel} pointer-events-auto w-full max-w-[min(380px,100%)] rounded-xl border shadow-2xl p-4`}
-          style={{
-            borderColor: 'rgba(var(--noir-primary-rgb), 0.35)',
-            backgroundColor: 'var(--noir-content)',
-          }}
+          ref={panelRef}
+          className={`${styles.panel} pointer-events-auto w-full max-w-[min(380px,100%)] rounded-xl border overflow-hidden`}
+          style={panelStyle}
         >
-          <h3 className="text-sm font-heading font-bold uppercase tracking-wider text-primary">
-            Rewards granted
-          </h3>
-          <p className="text-[11px] text-mutedForeground font-heading mt-1.5 leading-relaxed">
-            Open your free Rare loot box — redirecting you now.
-          </p>
-          <button
-            type="button"
-            className="mt-3 w-full py-2.5 rounded-lg text-xs font-heading font-bold uppercase border min-h-[44px]"
-            style={{ borderColor: 'var(--noir-primary)', color: 'var(--noir-primary)' }}
-            onClick={() => navigate('/loot-box?tier=rare&tutorial=1')}
-          >
-            Open Rare box
-          </button>
+          <div className="h-1 w-full" style={{ background: 'var(--noir-primary)' }} />
+          <div className="p-4 space-y-3">
+            <h3 className="text-sm font-heading font-bold uppercase tracking-wider text-primary">
+              Rewards granted
+            </h3>
+            <p className="text-[11px] text-mutedForeground font-heading leading-relaxed">
+              Open your free Rare loot box now — one free open only.
+            </p>
+            <RewardChips />
+            <button
+              type="button"
+              className="w-full py-2.5 rounded-lg text-xs font-heading font-bold uppercase border min-h-[44px]"
+              style={{
+                backgroundColor: 'rgba(var(--noir-primary-rgb), 0.22)',
+                borderColor: 'var(--noir-primary)',
+                color: 'var(--noir-primary)',
+              }}
+              onClick={goLootBox}
+            >
+              Open free Rare box
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -308,14 +455,10 @@ export default function TutorialCoach({
   if (status && status.eligible === false && st !== 'in_progress') return null;
 
   const step = getTutorialStep(status?.tutorial_step || 'theme');
-  let themeAlreadyChosen = false;
-  try {
-    themeAlreadyChosen = typeof localStorage !== 'undefined'
-      && localStorage.getItem('app_initial_theme_chosen') === '1';
-  } catch (_) { /* ignore */ }
-
   const gateOk = (() => {
-    if (step.gate === 'theme') return Boolean(status?.tutorial_theme_done) || themeAlreadyChosen;
+    if (step.gate === 'theme') {
+      return Boolean(status?.tutorial_theme_done) || themeSessionDoneRef.current;
+    }
     if (step.gate === 'crime') return Boolean(status?.tutorial_crime_done);
     if (step.gate === 'gta') return Boolean(status?.tutorial_gta_done);
     return true;
@@ -330,32 +473,44 @@ export default function TutorialCoach({
       data-testid="tutorial-coach"
     >
       <div
-        className={`${styles.panel} pointer-events-auto w-full max-w-[min(380px,100%)] rounded-xl border shadow-2xl overflow-hidden`}
-        style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.3)' }}
+        ref={panelRef}
+        className={`${styles.panel} pointer-events-auto w-full max-w-[min(380px,100%)] rounded-xl border overflow-hidden`}
+        style={panelStyle}
         role="dialog"
         aria-modal="false"
         aria-label="New player tutorial"
       >
+        <div className="h-1 w-full shrink-0" style={{ background: 'var(--noir-primary)' }} />
         <div
-          className="px-3 py-2 border-b flex items-center justify-between gap-2"
+          className={`px-3 py-2 border-b flex items-center justify-between gap-2 select-none ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
           style={{
             borderColor: 'rgba(var(--noir-primary-rgb), 0.15)',
-            background: 'rgba(var(--noir-primary-rgb), 0.06)',
+            background: 'rgba(var(--noir-primary-rgb), 0.08)',
+            touchAction: 'none',
           }}
+          onPointerDown={onDragPointerDown}
+          onPointerMove={onDragPointerMove}
+          onPointerUp={onDragPointerUp}
+          onPointerCancel={onDragPointerUp}
+          title="Drag to move"
         >
-          <div className="min-w-0">
-            <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-primary block truncate">
-              Tutorial · {step.title}
-            </span>
-            <span className="text-[9px] font-heading text-mutedForeground tabular-nums">
-              Step {stepIndex + 1} of {stepCount}
-            </span>
+          <div className="min-w-0 flex items-start gap-2">
+            <GripHorizontal size={14} className="text-primary/70 shrink-0 mt-0.5" aria-hidden />
+            <div className="min-w-0">
+              <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-primary block truncate">
+                Tutorial · {step.title}
+              </span>
+              <span className="text-[9px] font-heading text-mutedForeground tabular-nums">
+                Step {stepIndex + 1} of {stepCount}
+              </span>
+            </div>
           </div>
           <button
             type="button"
+            data-tutorial-no-drag
             onClick={handleSkip}
             disabled={busy}
-            className="p-1.5 rounded text-mutedForeground hover:text-foreground disabled:opacity-50 shrink-0 min-h-[32px] min-w-[32px] flex items-center justify-center"
+            className="p-1.5 rounded text-mutedForeground hover:text-foreground disabled:opacity-50 shrink-0 min-h-[32px] min-w-[32px] flex items-center justify-center cursor-pointer"
             title="Skip tutorial"
             aria-label="Skip tutorial"
           >
@@ -366,6 +521,14 @@ export default function TutorialCoach({
           <p className="text-[11px] font-heading leading-relaxed" style={{ color: 'var(--noir-foreground)' }}>
             {step.body}
           </p>
+          {step.tips ? (
+            <p className="text-[10px] font-heading leading-snug text-mutedForeground border-l-2 pl-2"
+              style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.35)' }}
+            >
+              {step.tips}
+            </p>
+          ) : null}
+          {step.showRewards ? <RewardChips compact /> : null}
           {!gateOk && (step.gate === 'crime' || step.gate === 'gta') ? (
             <p className="text-[10px] font-heading text-amber-400/90">
               {step.gate === 'crime' ? 'Commit a crime to unlock Next.' : 'Attempt a GTA to unlock Next.'}
@@ -383,7 +546,7 @@ export default function TutorialCoach({
                 onClick={handlePrimary}
                 className="flex-1 min-w-[7rem] py-2.5 px-3 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border min-h-[44px]"
                 style={{
-                  backgroundColor: 'rgba(var(--noir-primary-rgb), 0.18)',
+                  backgroundColor: 'rgba(var(--noir-primary-rgb), 0.2)',
                   borderColor: 'var(--noir-primary)',
                   color: 'var(--noir-primary)',
                 }}
@@ -419,6 +582,7 @@ export default function TutorialCoach({
               disabled={busy || !gateOk}
               className="flex-1 flex items-center justify-center gap-1 py-2.5 px-3 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border disabled:opacity-40 min-h-[44px]"
               style={{
+                backgroundColor: gateOk ? 'rgba(var(--noir-primary-rgb), 0.18)' : 'transparent',
                 borderColor: gateOk ? 'var(--noir-primary)' : 'var(--noir-border-mid)',
                 color: gateOk ? 'var(--noir-primary)' : 'var(--noir-muted)',
               }}

@@ -6,6 +6,12 @@ function RedirectStoreToGameStore() {
   const { search } = useLocation();
   return <Navigate to={`/game/store${search}`} replace />;
 }
+
+/** Legacy `/loot-box?...` keeps query (tier/tutorial) when redirecting. */
+function RedirectLootBoxToMoney() {
+  const { search } = useLocation();
+  return <Navigate to={`/money/loot-box${search}`} replace />;
+}
 import { ThemedToaster } from "./components/ThemedToaster";
 import Landing from "./pages/Auth/Landing";
 import PreRegister from "./pages/Auth/PreRegister";
@@ -441,7 +447,7 @@ function App() {
               )
             }
           />
-          <Route path="/loot-box" element={<Navigate to="/money/loot-box" replace />} />
+          <Route path="/loot-box" element={<RedirectLootBoxToMoney />} />
           <Route
             path="/game/ranking"
             element={

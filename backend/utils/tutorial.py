@@ -26,7 +26,7 @@ TUTORIAL_STATUS_SKIPPED = "skipped"
 TUTORIAL_RESPECT_REWARD = 3000
 TUTORIAL_ROBOT_COUNT = 2
 TUTORIAL_CLAIMS_COLLECTION = "tutorial_reward_claims"
-TUTORIAL_REDIRECT = "/loot-box?tier=rare&tutorial=1"
+TUTORIAL_REDIRECT = "/money/loot-box?tier=rare&tutorial=1"
 # game_config id — default OFF so staff can test via Admin before enabling for all new players.
 TUTORIAL_CONFIG_ID = "new_player_tutorial"
 TUTORIAL_ENABLED_DEFAULT = False
@@ -218,6 +218,7 @@ async def mark_tutorial_crime_done(db, user_id: str) -> None:
         {
             "id": user_id,
             "tutorial_status": TUTORIAL_STATUS_IN_PROGRESS,
+            "tutorial_step": "crimes",
             "tutorial_crime_done": {"$ne": True},
         },
         {"$set": {"tutorial_crime_done": True}},
@@ -231,6 +232,7 @@ async def mark_tutorial_gta_done(db, user_id: str) -> None:
         {
             "id": user_id,
             "tutorial_status": TUTORIAL_STATUS_IN_PROGRESS,
+            "tutorial_step": "gta",
             "tutorial_gta_done": {"$ne": True},
         },
         {"$set": {"tutorial_gta_done": True}},

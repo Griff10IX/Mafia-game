@@ -661,11 +661,8 @@ async def open_loot_box(
     )
     is_admin_test = _is_admin(current_user)
     used_free_rare = False
-    if (
-        not is_admin_test
-        and paid_tier == "rare"
-        and int(current_user.get("loot_box_free_rare_opens") or 0) > 0
-    ):
+    # Burn free Rare voucher for everyone (including admins) so FREE cannot be reused.
+    if paid_tier == "rare" and int(current_user.get("loot_box_free_rare_opens") or 0) > 0:
         free_res = await db.users.find_one_and_update(
             {"id": user_id, "loot_box_free_rare_opens": {"$gte": 1}},
             {"$inc": {"loot_box_free_rare_opens": -1}},
@@ -1023,12 +1020,17 @@ async def open_loot_box(
             "types": [r.get("type") for r in rewards if r.get("type")],
         })
         piece_grant = int(merged_inc.get("loot_box_pieces", 0))
+        if used_free_rare:
+            free_opens_left = int((res or {}).get("loot_box_free_rare_opens") or 0)
+        else:
+            free_opens_left = int(current_user.get("loot_box_free_rare_opens") or 0)
         return {
             "rewards": rewards,
             "box_quality": box_quality,
             "paid_tier": paid_tier,
             "pieces_spent": 0 if used_free_rare else cost,
             "used_free_rare_open": used_free_rare,
+            "loot_box_free_rare_opens": free_opens_left,
             "guaranteed_rare_plus": 2 if paid_tier in ("rare", "ultra_rare") else 0,
             "prizes_count": len(rewards),
             "new_pieces": new_pieces + piece_grant,
