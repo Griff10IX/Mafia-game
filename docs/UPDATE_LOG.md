@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-16 16:15 UTC[/color][/b] — [b]Kill page travel[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] [b]Kill → Attack[/b] — traveling to a target’s city now updates your [b]location[/b] and unlocks [b]Kill[/b] when you arrive (no refresh needed). Travel buttons no longer freeze while a kill is in progress.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-16 15:50 UTC[/color][/b] — [b]Game Pass prestige, store, badges, missions, families, distillery[/b][/size]
 [quote]
 [list]

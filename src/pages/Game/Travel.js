@@ -539,9 +539,11 @@ export default function Travel() {
           if (prev <= 1) {
             clearInterval(timer);
             setTraveling(false);
+            const arrived = selectedDest || '';
             fetchTravelInfo({ silent: true });
-            refreshUser();
-            toast.success(`Arrived at ${selectedDest}!`);
+            if (arrived) refreshUser({ current_state: arrived });
+            else refreshUser();
+            toast.success(`Arrived at ${arrived || 'destination'}!`);
             return 0;
           }
           return prev - 1;
@@ -598,12 +600,20 @@ export default function Travel() {
         setTraveling(false);
         setTravelTime(0);
         fetchTravelInfo({ silent: true });
-        refreshUser();
+        refreshUser({ current_state: destination });
         toast.success(`Arrived at ${destination}!`);
       } else {
         setTravelTime(sec);
         setTraveling(true);
-        refreshUser();
+        const arrivesRaw = response.data?.travel_arrives_at;
+        let endsAtMs = arrivesRaw ? Date.parse(arrivesRaw) : NaN;
+        if (!Number.isFinite(endsAtMs)) {
+          endsAtMs = Date.now() + sec * 1000;
+        }
+        const arrivesIso = Number.isFinite(Date.parse(arrivesRaw))
+          ? arrivesRaw
+          : new Date(endsAtMs).toISOString();
+        refreshUser({ traveling_to: destination, travel_arrives_at: arrivesIso });
         toast.info(response.data?.message || `Traveling to ${destination}…`);
       }
     } catch (error) {

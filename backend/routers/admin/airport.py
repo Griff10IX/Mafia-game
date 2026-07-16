@@ -683,6 +683,7 @@ async def _start_travel_impl(
 
     # Only count airport travel against the hourly limit; car travel is unlimited
     inc_travels = {} if booze_run or travel_method != "airport" else {"travels_this_hour": 1}
+    arrives_at = None
     if travel_time <= 0:
         await db.users.update_one(
             {"id": user["id"]},
@@ -708,11 +709,16 @@ async def _start_travel_impl(
             await db.user_cars.update_one(q, {"$set": {"damage_percent": new_damage}})
 
     _invalidate_travel_info_cache(user["id"])
-    return {
+    out = {
         "message": f"Traveling to {destination} via {method_name}",
         "travel_time": travel_time,
-        "destination": destination
+        "destination": destination,
     }
+    if travel_time > 0 and arrives_at:
+        out["travel_arrives_at"] = arrives_at
+    else:
+        out["current_state"] = destination
+    return out
 
 
 async def travel(request: TravelRequest, req: Request, current_user: dict = Depends(get_current_user)):

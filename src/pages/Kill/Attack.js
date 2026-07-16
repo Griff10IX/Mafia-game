@@ -479,6 +479,7 @@ const SearchesCard = ({
   toggleSelectAll,
   allSelected,
   loading,
+  travelBusy = false,
   onDelete,
   onTravel,
   onFillKillTarget,
@@ -697,7 +698,7 @@ const SearchesCard = ({
                         {a.can_travel && (
                           <button
                             type="button"
-                            disabled={loading}
+                            disabled={travelBusy}
                             onClick={() => onTravel(a.location_state)}
                             className="inline-flex items-center gap-0.5 text-primary hover:text-primary/80 font-heading font-bold transition-colors disabled:opacity-50"
                             data-testid={`attack-travel-${a.attack_id}`}
@@ -840,7 +841,7 @@ const SearchesCard = ({
                     {a.can_travel && (
                       <button
                         type="button"
-                        disabled={loading}
+                        disabled={travelBusy}
                         onClick={() => onTravel(a.location_state)}
                         className="flex-1 bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 rounded px-2 py-1 text-[10px] font-heading font-bold uppercase transition-all disabled:opacity-50 active:scale-95 touch-manipulation inline-flex items-center justify-center gap-1"
                       >
@@ -1276,6 +1277,8 @@ export default function Attack() {
   const [travelInfo, setTravelInfo] = useState(() => readCachedTravelInfo());
   const [travelSubmitLoading, setTravelSubmitLoading] = useState(false);
   const [travelCountdown, setTravelCountdown] = useState(null);
+  /** Active timed travel from kill page: { dest, endsAtMs } */
+  const [killTravelTrip, setKillTravelTrip] = useState(null);
   const [pendingResend, setPendingResend] = useState(null);
   const [killBannerMessage, setKillBannerMessage] = useState(null);
 
@@ -1640,22 +1643,72 @@ export default function Attack() {
     };
   }, [refreshAttacks]);
 
+  // Timed travel from kill page: tick from endsAtMs (not countdown state) so the effect
+  // does not reset every second. On arrival, settle location + can_attack with retries —
+  // server only applies current_state when travel_arrives_at elapses in get_current_user.
   useEffect(() => {
-    if (travelCountdown == null || travelCountdown <= 0) return;
-    const t = setInterval(() => {
-      setTravelCountdown((c) => {
-        if (c <= 1) {
-          clearInterval(t);
-          refreshUser();
-          refreshAttacks();
-          setTravelModalDestination(null);
-          return null;
-        }
-        return c - 1;
+    if (!killTravelTrip?.endsAtMs) return;
+    let cancelled = false;
+    let settleTimer = null;
+    let settled = false;
+    const dest = killTravelTrip.dest;
+    const endsAtMs = killTravelTrip.endsAtMs;
+
+    const markArrivedLocally = (arrivedAt) => {
+      refreshUser({ current_state: arrivedAt });
+      setAttacks((prev) => {
+        if (!Array.isArray(prev)) return prev;
+        return prev.map((a) => {
+          if (a.status !== 'found' || !a.location_state) return a;
+          if (a.location_state === arrivedAt) {
+            return { ...a, can_attack: true, can_travel: false };
+          }
+          return { ...a, can_attack: false, can_travel: true };
+        });
       });
-    }, 1000);
-    return () => clearInterval(t);
-  }, [travelCountdown, refreshAttacks]);
+    };
+
+    const settleArrival = async () => {
+      if (cancelled || settled) return;
+      settled = true;
+      await new Promise((resolve) => {
+        settleTimer = setTimeout(resolve, 280);
+      });
+      if (cancelled) return;
+      setKillTravelTrip(null);
+      setTravelCountdown(null);
+      setTravelModalDestination(null);
+      markArrivedLocally(dest);
+      for (let i = 0; i < 4 && !cancelled; i += 1) {
+        await refreshAttacks();
+        if (cancelled) return;
+        if (i < 3) {
+          await new Promise((resolve) => {
+            settleTimer = setTimeout(resolve, 350);
+          });
+        }
+      }
+    };
+
+    const tick = () => {
+      if (cancelled || settled) return;
+      const remaining = Math.max(0, Math.ceil((endsAtMs - Date.now()) / 1000));
+      if (remaining <= 0) {
+        setTravelCountdown(null);
+        settleArrival();
+        return;
+      }
+      setTravelCountdown(remaining);
+    };
+
+    tick();
+    const interval = setInterval(tick, 1000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      if (settleTimer) clearTimeout(settleTimer);
+    };
+  }, [killTravelTrip, refreshAttacks]);
 
   // Resend last submit after F5 (search or kill)
   useEffect(() => {
@@ -1800,23 +1853,47 @@ export default function Attack() {
 
   const handleTravelFromModal = async (method) => {
     if (!travelModalDestination) return;
+    const dest = travelModalDestination;
     setTravelSubmitLoading(true);
     try {
       const response = await api.post('/travel', {
-        destination: travelModalDestination,
+        destination: dest,
         travel_method: method,
         ...getTravelCodePayload(travelInfo),
       });
-      const travelTime = response.data?.travel_time ?? 0;
+      const travelTime = Number(response.data?.travel_time ?? 0);
       if (travelTime <= 0) {
-        toast.success(response.data?.message || `Traveled to ${travelModalDestination}`);
+        const arrived = (response.data?.current_state || dest || '').trim() || dest;
+        toast.success(response.data?.message || `Traveled to ${arrived}`);
         setTravelModalDestination(null);
-        refreshUser();
+        setKillTravelTrip(null);
+        setTravelCountdown(null);
+        refreshUser({ current_state: arrived });
+        setAttacks((prev) => {
+          if (!Array.isArray(prev)) return prev;
+          return prev.map((a) => {
+            if (a.status !== 'found' || !a.location_state) return a;
+            if (a.location_state === arrived) {
+              return { ...a, can_attack: true, can_travel: false };
+            }
+            return { ...a, can_attack: false, can_travel: true };
+          });
+        });
         await refreshAttacks();
       } else {
-        toast.success(response.data?.message || `Traveling to ${travelModalDestination}`);
+        toast.success(response.data?.message || `Traveling to ${dest}`);
+        const arrivesRaw = response.data?.travel_arrives_at;
+        let endsAtMs = arrivesRaw ? Date.parse(arrivesRaw) : NaN;
+        if (!Number.isFinite(endsAtMs)) {
+          endsAtMs = Date.now() + Math.max(1, travelTime) * 1000;
+        }
+        const arrivesIso = Number.isFinite(Date.parse(arrivesRaw))
+          ? arrivesRaw
+          : new Date(endsAtMs).toISOString();
+        setKillTravelTrip({ dest, endsAtMs });
+        setTravelCountdown(Math.max(1, Math.ceil((endsAtMs - Date.now()) / 1000)));
+        refreshUser({ traveling_to: dest, travel_arrives_at: arrivesIso });
         refreshAttacks();
-        setTravelCountdown(travelTime);
       }
     } catch (error) {
       const detail = error.response?.data?.detail;
@@ -2157,6 +2234,7 @@ export default function Attack() {
           toggleSelectAll={() => toggleSelectAllFiltered(filteredIds)}
           allSelected={allFilteredSelected}
           loading={loading}
+          travelBusy={travelSubmitLoading || killTravelTrip != null}
           onDelete={deleteSelected}
           onTravel={openTravelModal}
           onFillKillTarget={setKillUsername}

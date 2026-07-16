@@ -778,6 +778,27 @@ export default function Layout({ children }) {
       if (detail.pointsDelta != null) {
         setUser((prev) => (prev ? { ...prev, points: Number(prev.points || 0) + Number(detail.pointsDelta) } : null));
       }
+      if (detail.current_state != null) {
+        const state = String(detail.current_state || '').trim();
+        if (state) {
+          setUser((prev) => (prev ? {
+            ...prev,
+            current_state: state,
+            location: state,
+            traveling_to: null,
+            travel_arrives_at: null,
+          } : null));
+          setTravelStatus(null);
+        }
+      }
+      if (detail.traveling_to != null && detail.travel_arrives_at != null) {
+        const dest = String(detail.traveling_to || '').trim();
+        const arrivesMs = Date.parse(detail.travel_arrives_at);
+        if (dest && Number.isFinite(arrivesMs)) {
+          const secs = Math.max(1, Math.ceil((arrivesMs - Date.now()) / 1000));
+          setTravelStatus({ traveling: true, destination: dest, seconds_remaining: secs });
+        }
+      }
       if (refreshUserDebounceRef.current) clearTimeout(refreshUserDebounceRef.current);
       refreshUserDebounceRef.current = setTimeout(() => runRefresh(), 500);
     };
@@ -1262,7 +1283,7 @@ export default function Layout({ children }) {
   }, []);
 
   useEffect(() => {
-    const isTravelPage = location.pathname === '/travel';
+    const isTravelPage = location.pathname === '/travel' || location.pathname === '/game/travel';
     const isTraveling = travelStatus?.traveling === true;
     if (!isTravelPage && !isTraveling) { fetchTravelStatus(); return () => {}; }
     fetchTravelStatus();
