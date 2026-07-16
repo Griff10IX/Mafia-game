@@ -433,6 +433,8 @@ export default function Layout({ children }) {
   const notificationDragRef = useRef({ isDragging: false, startX: 0, startY: 0, ballX: 0, ballY: 0 });
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [showInitialThemeModal, setShowInitialThemeModal] = useState(false);
+  /** Tutorial "Choose theme" must stay open even if localStorage already has a theme pick. */
+  const tutorialThemeForceOpenRef = useRef(false);
   const [topBarCustomizeOpen, setTopBarCustomizeOpen] = useState(false);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [findUserQuery, setFindUserQuery] = useState('');
@@ -484,10 +486,15 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     if (!user || typeof localStorage === 'undefined') {
-      setShowInitialThemeModal(false);
+      if (!tutorialThemeForceOpenRef.current) setShowInitialThemeModal(false);
       return;
     }
     if (!themeServerHydrated) return;
+    // Tutorial forced the picker open — don't auto-close on user refresh / status polls.
+    if (tutorialThemeForceOpenRef.current) {
+      setShowInitialThemeModal(true);
+      return;
+    }
     if (localStorage.getItem('app_initial_theme_chosen') === '1') {
       setShowInitialThemeModal(false);
       return;
@@ -497,10 +504,47 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     if (!showInitialThemeModal) return;
-    const onChosen = () => setShowInitialThemeModal(false);
+    const onChosen = () => {
+      tutorialThemeForceOpenRef.current = false;
+      setShowInitialThemeModal(false);
+    };
     window.addEventListener('app-initial-theme-chosen', onChosen);
     return () => window.removeEventListener('app-initial-theme-chosen', onChosen);
   }, [showInitialThemeModal]);
+
+  const openTutorialThemeModal = useCallback(() => {
+    tutorialThemeForceOpenRef.current = true;
+    setShowInitialThemeModal(true);
+  }, []);
+
+  const handleTutorialStatusChange = useCallback((data) => {
+    if (!data) return;
+    setUser((prev) => {
+      if (!prev) return prev;
+      const next = {
+        ...prev,
+        tutorial_status: data.tutorial_status ?? prev.tutorial_status,
+        tutorial_step: data.tutorial_step ?? prev.tutorial_step,
+        tutorial_crime_done: data.tutorial_crime_done ?? prev.tutorial_crime_done,
+        tutorial_gta_done: data.tutorial_gta_done ?? prev.tutorial_gta_done,
+        tutorial_theme_done: data.tutorial_theme_done ?? prev.tutorial_theme_done,
+        tutorial_rewards_granted: data.tutorial_rewards_granted ?? prev.tutorial_rewards_granted,
+        loot_box_free_rare_opens: data.loot_box_free_rare_opens ?? prev.loot_box_free_rare_opens,
+      };
+      if (
+        next.tutorial_status === prev.tutorial_status
+        && next.tutorial_step === prev.tutorial_step
+        && next.tutorial_crime_done === prev.tutorial_crime_done
+        && next.tutorial_gta_done === prev.tutorial_gta_done
+        && next.tutorial_theme_done === prev.tutorial_theme_done
+        && next.tutorial_rewards_granted === prev.tutorial_rewards_granted
+        && next.loot_box_free_rare_opens === prev.loot_box_free_rare_opens
+      ) {
+        return prev;
+      }
+      return next;
+    });
+  }, []);
 
   const handleInitialThemeChoose = useCallback((presetId) => {
     const p = getThemePreset(presetId);
@@ -523,6 +567,7 @@ export default function Layout({ children }) {
     try {
       localStorage.setItem('app_initial_theme_chosen', '1');
     } catch (_) {}
+    tutorialThemeForceOpenRef.current = false;
     setShowInitialThemeModal(false);
     window.dispatchEvent(new Event('app-initial-theme-chosen'));
     if (user?.tutorial_status === 'in_progress' && (user?.tutorial_step === 'theme' || !user?.tutorial_theme_done)) {
@@ -3059,26 +3104,18 @@ export default function Layout({ children }) {
       <ThemePicker open={themePickerOpen} onClose={() => setThemePickerOpen(false)} />
       <FirstTimeThemeModal
         open={showInitialThemeModal}
-        onClose={() => setShowInitialThemeModal(false)}
+        onClose={() => {
+          tutorialThemeForceOpenRef.current = false;
+          setShowInitialThemeModal(false);
+        }}
         onChoose={handleInitialThemeChoose}
       />
       {user?.rules_accepted && (user?.tutorial_status === 'pending' || user?.tutorial_status === 'in_progress') ? (
         <TutorialCoach
           user={user}
-          onOpenTheme={() => setShowInitialThemeModal(true)}
-          onStatusChange={(data) => {
-            if (!data) return;
-            setUser((prev) => (prev ? {
-              ...prev,
-              tutorial_status: data.tutorial_status ?? prev.tutorial_status,
-              tutorial_step: data.tutorial_step ?? prev.tutorial_step,
-              tutorial_crime_done: data.tutorial_crime_done ?? prev.tutorial_crime_done,
-              tutorial_gta_done: data.tutorial_gta_done ?? prev.tutorial_gta_done,
-              tutorial_theme_done: data.tutorial_theme_done ?? prev.tutorial_theme_done,
-              tutorial_rewards_granted: data.tutorial_rewards_granted ?? prev.tutorial_rewards_granted,
-              loot_box_free_rare_opens: data.loot_box_free_rare_opens ?? prev.loot_box_free_rare_opens,
-            } : prev));
-          }}
+          onOpenTheme={openTutorialThemeModal}
+          onStatusChange={handleTutorialStatusChange}
+          themeModalOpen={showInitialThemeModal}
         />
       ) : null}
 
