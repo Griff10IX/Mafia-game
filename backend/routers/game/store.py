@@ -382,13 +382,13 @@ def _normalize_selectable_bundle_entries(selections: dict) -> dict[str, int]:
 def _validate_selectable_bundle_purchase(current_user: dict, selections: dict, token_config: dict) -> tuple[list[dict], int, int]:
     norm = _normalize_selectable_bundle_entries(selections)
     total_qty = sum(norm.values())
-    if total_qty != TOKEN_SELECTABLE_BUNDLE_SIZE:
+    if not norm or total_qty < 1:
+        raise HTTPException(status_code=400, detail="No tokens selected")
+    if total_qty > TOKEN_SELECTABLE_BUNDLE_SIZE:
         raise HTTPException(
             status_code=400,
-            detail=f"Selectable bundle must contain exactly {TOKEN_SELECTABLE_BUNDLE_SIZE} tokens.",
+            detail=f"Selectable bundle can contain at most {TOKEN_SELECTABLE_BUNDLE_SIZE} tokens.",
         )
-    if not norm:
-        raise HTTPException(status_code=400, detail="No tokens selected")
     entries: list[dict] = []
     subtotal_pts = 0
     for tt, qty in norm.items():

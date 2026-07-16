@@ -785,7 +785,8 @@ export default function Store() {
   const selectableBundleSubtotalCash = cashPriceAvailable ? Math.round(selectableBundleSubtotalPoints * cashPricePerPoint) : 0;
   const selectableBundleDiscountCash = cashPriceAvailable ? Math.round(selectableBundleDiscountPoints * cashPricePerPoint) : 0;
   const selectableBundleFinalCash = cashPriceAvailable ? Math.round(selectableBundleFinalPoints * cashPricePerPoint) : 0;
-  const selectableBundleCanBuy = selectableBundlePickedTotal === SELECTABLE_BUNDLE_SIZE;
+  const selectableBundleCanBuy =
+    selectableBundlePickedTotal >= 1 && selectableBundlePickedTotal <= SELECTABLE_BUNDLE_SIZE;
   const selectableBundleSelectionPayload = Object.fromEntries(
     Object.entries(selectableBundleQtyByToken).filter(([, qty]) => Number(qty) > 0),
   );
@@ -1708,9 +1709,9 @@ export default function Store() {
           </div>
 
           <div className="space-y-2">
-            <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Build your bundle (10 tokens)</h2>
+            <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Build your bundle (up to {SELECTABLE_BUNDLE_SIZE})</h2>
             <p className="text-[9px] text-zinc-500 font-heading italic max-w-2xl">
-              Pick exactly {SELECTABLE_BUNDLE_SIZE} eligible tokens (duplicates allowed). Game Pass token is excluded.
+              Pick 1–{SELECTABLE_BUNDLE_SIZE} eligible tokens (duplicates allowed). {SELECTABLE_BUNDLE_DISCOUNT_PCT}% off the subtotal. Game Pass token is excluded.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
               {SELECTABLE_BUNDLE_ITEMS.map((t) => {
@@ -1784,7 +1785,7 @@ export default function Store() {
                   type="button"
                   onClick={() => {
                     if (!selectableBundleCanBuy) {
-                      toast.error(`Pick exactly ${SELECTABLE_BUNDLE_SIZE} tokens`);
+                      toast.error(`Pick 1–${SELECTABLE_BUNDLE_SIZE} tokens`);
                       return;
                     }
                     if (storePayWith === 'cash') {
