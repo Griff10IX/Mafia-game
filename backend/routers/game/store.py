@@ -968,7 +968,7 @@ async def buy_bodyguard_find_time(
         {"item": "bodyguard_find_time", "cost": cost_used, "until": new_until},
     )
     return {
-        "message": f"Bodyguard Find Clock active for {BODYGUARD_FIND_TIME_DURATION_DAYS} days. Attack searches on bodyguards show the exact find time.",
+        "message": f"Bodyguard Find Clock active for {BODYGUARD_FIND_TIME_DURATION_DAYS} days. Attack searches show the exact find time.",
         "cost": cost_used,
         "bodyguard_find_time_until": new_until,
         "bodyguard_find_time_active": True,

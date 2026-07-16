@@ -38,8 +38,9 @@ function formatCountdown(expiresAtIso) {
   return `${s}s`;
 }
 
-function isBodyguardSearchRow(a) {
-  return !!(a?.target_is_bodyguard || a?.target_is_robot_bodyguard || a?.bodyguard_owner_username);
+/** Show exact find clock for any searching row while the weekly perk is active. */
+function showExactFindClock(a, perkActive) {
+  return !!(perkActive && a?.status === 'searching' && a?.found_at);
 }
 
 function bodyguardFindTimePerkActive(untilIso, activeFlag) {
@@ -747,7 +748,7 @@ const SearchesCard = ({
                     </div>
 
                     <div className="col-span-4 text-right text-[9px] text-mutedForeground font-heading">
-                      {bodyguardFindTimeActive && a.status === 'searching' && isBodyguardSearchRow(a) && a.found_at ? (
+                      {showExactFindClock(a, bodyguardFindTimeActive) ? (
                         <span className="inline-flex flex-col items-end gap-0.5">
                           <span className="inline-flex items-center gap-1 text-cyan-300 font-bold">
                             <Clock size={12} />
@@ -891,7 +892,7 @@ const SearchesCard = ({
                   </div>
 
                   <div className="text-[9px] text-mutedForeground font-heading flex flex-col gap-0.5">
-                    {bodyguardFindTimeActive && a.status === 'searching' && isBodyguardSearchRow(a) && a.found_at ? (
+                    {showExactFindClock(a, bodyguardFindTimeActive) ? (
                       <>
                         <span className="inline-flex items-center gap-1 text-cyan-300 font-bold">
                           <Clock size={10} />
@@ -932,7 +933,7 @@ const SearchesCard = ({
           <p className="text-[9px] text-mutedForeground font-heading italic pt-1">
             💡 Searches complete automatically. Typical find time ~2h 15m–2h 45m; the timer above is the 24h row expiry from search start.
             {bodyguardFindTimeActive ? (
-              <span className="block mt-1 text-cyan-400/90">Bodyguard Find Clock is active — bodyguard hunts show the exact find time.</span>
+              <span className="block mt-1 text-cyan-400/90">Find Clock is active — searching rows show the exact find time.</span>
             ) : null}
             {robotBgAutoSearchActive ? (
               <span className="block mt-1 text-cyan-400/90">Robot auto-search is active — your hired robots are re-searched when a row has ≤3h left.</span>
