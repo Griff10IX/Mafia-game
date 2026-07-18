@@ -850,7 +850,7 @@ def register(router):
                         {"id": {"$in": variants}} if len(variants) > 1 else {"id": user_id},
                         {"$set": {"family_id": None, "family_role": None}},
                     )
-                return (None, None, None, None)
+                return (None, None, None, None, None)
             fid = str(fam.get("id") or "").strip()
             if str(user.get("family_id") or "").strip() != str(fid).strip():
                 await db.users.update_one(
@@ -859,6 +859,7 @@ def register(router):
                 )
             pid = fam.get("emblem_preset_id")
             return (
+                fid,
                 fam.get("name"),
                 fam.get("tag"),
                 pid,
@@ -926,7 +927,13 @@ def register(router):
         )
         messages_received, messages_sent_count = message_counts
 
-        family_name, family_tag, family_emblem_preset_id, family_emblem_avatar_url = family_name_tag or (None, None, None, None)
+        (
+            family_id,
+            family_name,
+            family_tag,
+            family_emblem_preset_id,
+            family_emblem_avatar_url,
+        ) = family_name_tag or (None, None, None, None, None)
 
         from routers.game.achievements import compute_profile_badges
         achievement_badges = compute_profile_badges(user)
@@ -987,6 +994,7 @@ def register(router):
             "online": online,
             "status": status,  # "online", "idle", "offline", or "dead"
             "last_seen": last_seen,
+            "family_id": family_id,
             "family_name": family_name,
             "family_tag": family_tag,
             "family_emblem_preset_id": family_emblem_preset_id,

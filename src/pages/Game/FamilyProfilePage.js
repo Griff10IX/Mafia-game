@@ -221,9 +221,6 @@ export default function FamilyProfilePage() {
         setFamilyProfilePrefetch(id, res.data);
         if (res.data?.id) setFamilyProfilePrefetch(res.data.id, res.data);
         if (res.data?.tag) setFamilyProfilePrefetch(res.data.tag, res.data);
-        if (isUuid && res.data?.tag) {
-          navigate(`/game/family/${encodeURIComponent(res.data.tag)}`, { replace: true });
-        }
       } catch (e) {
         toast.error(e.response?.data?.detail ?? e.message ?? 'Family not found');
         setFamily(null);

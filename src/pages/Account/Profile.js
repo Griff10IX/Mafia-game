@@ -734,7 +734,7 @@ const ProfileInfoCard = ({
                       <span className="text-zinc-500">Alive (Offline)</span>
                     )}
                   </span>
-                ) : row.label === 'Family' && profile.family_tag && profile.family_name ? (
+                ) : row.label === 'Family' && (profile.family_id || profile.family_tag) && profile.family_name ? (
                   <div className="flex items-center justify-end gap-2 min-w-0">
                     <FamilyEmblem
                       emblemPresetId={profile.family_emblem_preset_id}
@@ -742,7 +742,7 @@ const ProfileInfoCard = ({
                       size={32}
                     />
                     <Link
-                      to={`/families/${encodeURIComponent(profile.family_tag)}`}
+                      to={`/families/${encodeURIComponent(profile.family_id || profile.family_tag)}`}
                       className={`${row.valueClass} hover:underline hover:text-primary transition-colors truncate`}
                     >
                       {row.value}
