@@ -813,25 +813,45 @@ def register(router):
 
         async def _family_name_and_tag():
             variants = _family_member_user_id_variants(user_id)
-            member = await db.family_members.find_one(
+            memberships = await db.family_members.find(
                 {"user_id": {"$in": variants}} if variants else {"user_id": user_id},
                 {"_id": 0, "family_id": 1},
-            )
-            fid = (member or {}).get("family_id")
-            # Self-heal stale user doc if membership row is gone.
-            if not fid:
+            ).to_list(100)
+            member_fids = list(dict.fromkeys(
+                str(m.get("family_id") or "").strip()
+                for m in memberships
+                if str(m.get("family_id") or "").strip()
+            ))
+            stored_fid = str(user.get("family_id") or "").strip()
+
+            # Wiped crews retain family_members rows for their In Memoriam roster.
+            # Only an active crew belongs on a live player profile. Prefer the
+            # users.family_id row when valid, then recover from another active
+            # membership if a historical wiped row was returned first.
+            family_candidates = []
+            if stored_fid and stored_fid in member_fids:
+                family_candidates.append(stored_fid)
+            family_candidates.extend(fid for fid in member_fids if fid not in family_candidates)
+
+            fam = None
+            for candidate_fid in family_candidates:
+                fam = await db.families.find_one(
+                    {"id": candidate_fid, "wiped": {"$ne": True}},
+                    {"_id": 0, "id": 1, "name": 1, "tag": 1, "emblem_preset_id": 1, "avatar_url": 1},
+                )
+                if fam:
+                    break
+
+            # Self-heal stale active-family fields while preserving historical
+            # family_members rows used by wiped crew memorial pages.
+            if not fam:
                 if user.get("family_id"):
                     await db.users.update_one(
                         {"id": {"$in": variants}} if len(variants) > 1 else {"id": user_id},
                         {"$set": {"family_id": None, "family_role": None}},
                     )
                 return (None, None, None, None)
-            fam = await db.families.find_one(
-                {"id": str(fid)},
-                {"_id": 0, "name": 1, "tag": 1, "emblem_preset_id": 1, "avatar_url": 1},
-            )
-            if not fam:
-                return (None, None, None, None)
+            fid = str(fam.get("id") or "").strip()
             if str(user.get("family_id") or "").strip() != str(fid).strip():
                 await db.users.update_one(
                     {"id": {"$in": variants}} if len(variants) > 1 else {"id": user_id},

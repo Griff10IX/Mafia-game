@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-18 17:40 UTC[/color][/b] — [b]Profile family links[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] Player profiles no longer show a wiped crew as the player’s current family. Historical membership remains on the wiped crew’s memorial page.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-16 22:58 UTC[/color][/b] — [b]Slow Bodyguard Hire Inflation perk[/b][/size]
 [quote]
 [list]
