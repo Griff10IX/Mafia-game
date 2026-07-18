@@ -14,6 +14,7 @@ import {
   MapPin,
   Clock,
   RefreshCw,
+  ListChecks,
 } from 'lucide-react';
 import api from '../utils/api';
 import { getFamiliesPrefetch, setFamiliesPrefetch } from '../utils/prefetchCache';
@@ -91,6 +92,8 @@ export default function FamilyCommandCenter({ onCloseSidebar, hasFamily }) {
   const [refreshing, setRefreshing] = useState(false);
   const [myFamily, setMyFamily] = useState(() => getFamiliesPrefetch()?.myFamily ?? null);
   const [activeWars, setActiveWars] = useState([]);
+  const [dailyTask, setDailyTask] = useState(null);
+  const [dailyTaskUnavailable, setDailyTaskUnavailable] = useState(false);
 
   const toggleMinimized = () => {
     setIsMinimized((prev) => {
@@ -106,13 +109,18 @@ export default function FamilyCommandCenter({ onCloseSidebar, hasFamily }) {
     if (!silent) setLoading(true);
     else setRefreshing(true);
     try {
-      const [myRes, warRes] = await Promise.all([
+      const [myRes, warRes, taskRes] = await Promise.all([
         api.get('/families/my'),
         hasFamily !== false ? api.get('/families/war').catch(() => ({ data: { wars: [] } })) : Promise.resolve({ data: { wars: [] } }),
+        hasFamily !== false
+          ? api.get('/families/daily-objective', { params: { _: Date.now() } }).catch(() => null)
+          : Promise.resolve(null),
       ]);
       const payload = myRes.data || {};
       setMyFamily(payload);
       setActiveWars(warRes.data?.wars || []);
+      setDailyTask(taskRes?.data || null);
+      setDailyTaskUnavailable(!taskRes);
       const prev = getFamiliesPrefetch() || {};
       setFamiliesPrefetch({ ...prev, myFamily: payload });
     } catch (_) {
@@ -144,6 +152,18 @@ export default function FamilyCommandCenter({ onCloseSidebar, hasFamily }) {
   const crewOcCd = cooldownRemaining(family?.crew_oc_cooldown_until);
   const vaultLocked = !!myFamily?.vault_and_rackets_locked;
   const warCount = activeWars.length;
+  const dailyObjective = dailyTask?.objective ?? dailyTask?.task ?? dailyTask?.daily_objective ?? dailyTask;
+  const dailyTitle = dailyObjective?.title ?? dailyObjective?.name ?? dailyObjective?.label ?? dailyObjective?.objective_name;
+  const dailyProgress = dailyTask?.personal_progress ?? dailyObjective?.personal_progress ?? dailyTask?.my_progress ?? {};
+  const dailyCurrent = Number(dailyProgress.current ?? dailyProgress.progress ?? dailyProgress.value ?? dailyTask?.personal_progress_current ?? 0);
+  const dailyTarget = Number(dailyProgress.target ?? dailyProgress.required ?? dailyObjective?.target ?? dailyObjective?.target_value ?? dailyTask?.personal_progress_target ?? 1);
+  const dailyEligible = dailyTask?.my_eligible !== false;
+  const dailyComplete = !!(
+    dailyTask?.completed
+    ?? dailyObjective?.completed
+    ?? dailyProgress.completed
+    ?? (dailyTarget > 0 && dailyCurrent >= dailyTarget)
+  );
 
   const handleOpenFamily = () => {
     onCloseSidebar?.();
@@ -273,6 +293,28 @@ export default function FamilyCommandCenter({ onCloseSidebar, hasFamily }) {
 
               <div className="space-y-1">
                 <StatRow icon={<Users size={10} />} label="Members" value={formatInt(members.length)} />
+                {dailyTitle && (
+                  <Link
+                    to="/families"
+                    onClick={handleOpenFamily}
+                    className={`flex items-center justify-between gap-2 py-2 px-2 rounded-sm border transition-colors hover:opacity-90 ${dailyComplete ? 'border-emerald-500/25 bg-emerald-500/8' : 'border-primary/15 bg-black/25'}`}
+                    title={dailyTitle}
+                  >
+                    <span className="flex items-center gap-1.5 min-w-0">
+                      <ListChecks size={10} className={dailyComplete ? 'text-emerald-400' : 'text-primary'} />
+                      <span className="min-w-0">
+                        <span className="block text-[9px] font-heading uppercase tracking-wide text-zinc-500">Daily objective</span>
+                        <span className="block text-[9px] font-heading text-zinc-300 truncate">{dailyTitle}</span>
+                      </span>
+                    </span>
+                    <span className={`text-[9px] font-heading font-bold tabular-nums shrink-0 ${dailyComplete ? 'text-emerald-400' : 'text-primary'}`}>
+                      {dailyComplete ? 'DONE' : dailyEligible ? `${formatInt(dailyCurrent)}/${formatInt(dailyTarget)}` : 'TOMORROW'}
+                    </span>
+                  </Link>
+                )}
+                {!dailyTitle && dailyTaskUnavailable && (
+                  <StatRow icon={<ListChecks size={10} />} label="Daily objective" value="Unavailable" />
+                )}
                 <StatRow
                   icon={<DollarSign size={10} />}
                   label="Rackets"

@@ -1066,7 +1066,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
     # Lightweight per-crime event for analytics and anti-cheat (no public exposure).
     # Stored as a single small document per attempt.
     city = (current_user.get("current_state") or "").strip() or None
-    await db.crime_events.insert_one(
+    crime_event_result = await db.crime_events.insert_one(
         {
             "user_id": current_user["id"],
             "crime_id": crime_id,
@@ -1079,6 +1079,19 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         }
     )
     invalidate_rolling_event_stats_cache("crime_events", current_user["id"])
+    if success:
+        try:
+            from utils.family_daily_tasks import record_family_daily_activity
+
+            await record_family_daily_activity(
+                db,
+                current_user["id"],
+                "crime",
+                source_id=f"crime:{crime_event_result.inserted_id}",
+                now=now,
+            )
+        except Exception:
+            logger.exception("Family daily crime progress failed user_id=%s", current_user["id"])
     crime_details = {"crime_id": crime_id, "crime_name": crime.get("name"), "success": success, "reward": reward}
     if via_auto_rank:
         crime_details["via_auto_rank"] = True

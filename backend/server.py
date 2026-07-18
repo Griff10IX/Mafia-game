@@ -1876,7 +1876,12 @@ async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_
     ev = await get_effective_event()
 
     # Calculate racket cash prize: uncollected income + upgrade costs
-    prize_racket_income = compute_loser_racket_cash(loser_rackets, ev, now=now_dt, war_doc=war)
+    prize_racket_income = await compute_loser_racket_cash_effective(
+        loser_family or {},
+        loser_id,
+        ev,
+        now=now_dt,
+    )
     prize_racket_upgrade_cost = 0
     for racket_id, state in loser_rackets.items():
         level = int(state.get("level", 0) or 0)
@@ -3419,7 +3424,7 @@ from routers.money import bank, stock_market, properties, quicktrade, crack_safe
 from routers.social import forum, game_chat, giphy, image_host, designer_auctions
 from routers.account import objectives
 from routers.account.objectives import update_objectives_progress  # re-export for server.py callers (e.g. booze sell)
-from routers.game.families import FAMILY_RACKETS, compute_loser_racket_cash, WAR_WIN_RACKET_INCOME_BONUS_PERCENT, RACKET_INCOME_BONUS_CAP_PERCENT, RACKET_UNLOCK_COST, RACKET_UPGRADE_COST  # used by _family_war_check_wipe_and_award and seed
+from routers.game.families import FAMILY_RACKETS, compute_loser_racket_cash_effective, WAR_WIN_RACKET_INCOME_BONUS_PERCENT, RACKET_INCOME_BONUS_CAP_PERCENT, RACKET_UNLOCK_COST, RACKET_UPGRADE_COST  # used by _family_war_check_wipe_and_award and seed
 from routers.kill.bodyguards import _create_robot_bodyguard_user  # used by seed
 from routers.money.booze_run import get_booze_rotation_interval_seconds, get_booze_rotation_index  # flash news
 CASINO_GAMES = [
@@ -3689,6 +3694,9 @@ async def startup_db():
     except Exception as e:
         logging.warning("Family memorial migration failed: %s", e)
     asyncio.create_task(families.run_family_wipe_cleanup_ticker())
+    from utils.family_daily_tasks import run_family_daily_tasks_worker
+
+    asyncio.create_task(run_family_daily_tasks_worker(db))
     try:
         from utils.tutorial import ensure_tutorial_indexes, TUTORIAL_STATUS_SKIPPED
 

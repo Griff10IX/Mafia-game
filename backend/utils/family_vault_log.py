@@ -21,12 +21,13 @@ async def log_family_vault_tx(
     target_user_id: Optional[str] = None,
     target_username: Optional[str] = None,
     meta: Optional[Dict[str, Any]] = None,
+    event_id: Optional[str] = None,
 ) -> None:
     """Record a vault change. Deltas are from the vault's perspective (positive = in, negative = out)."""
     if not family_id or not kind:
         return
     doc: Dict[str, Any] = {
-        "id": str(uuid.uuid4()),
+        "id": str(event_id or uuid.uuid4()),
         "family_id": family_id,
         "at": datetime.now(timezone.utc).isoformat(),
         "kind": kind,

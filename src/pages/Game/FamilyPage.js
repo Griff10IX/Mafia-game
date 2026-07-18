@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, Building2, DollarSign, TrendingUp, TrendingDown, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw, Clock, ChevronRight, ChevronDown, MessageSquare, UserPlus, Lock, Unlock, ArrowUpCircle, Flame, MapPin, Plane, Sparkles, Search } from 'lucide-react';
+import { Users, Building2, DollarSign, TrendingUp, TrendingDown, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw, Clock, ChevronRight, ChevronDown, MessageSquare, UserPlus, Lock, Unlock, ArrowUpCircle, Flame, MapPin, Plane, Sparkles, Search, ListChecks, Gift } from 'lucide-react';
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import { getRacketAccent } from '../../constants';
@@ -266,6 +266,11 @@ const formatMoneyFull = (n) => {
   return Number.isNaN(num) ? '$0' : `$${Math.trunc(num).toLocaleString()}`;
 };
 
+const formatInt = (n) => {
+  const num = Number(n ?? 0);
+  return Number.isFinite(num) ? Math.trunc(num).toLocaleString() : '0';
+};
+
 const formatTimeLeft = (isoUntil) => {
   if (!isoUntil) return null;
   try {
@@ -490,7 +495,47 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, canCollect = true, onCollect
   const timeLeft = formatTimeLeft(racket.next_collect_at);
   const isReady = racket.level > 0 && isRacketReadyAt(racket.next_collect_at);
   const onCooldown = racket.level > 0 && !isReady;
-  const income = racket.effective_income_per_collect ?? racket.income_per_collect;
+  const payout = racket.payout_breakdown || {};
+  const baseIncome = Number(
+    payout.base_income_per_collect
+      ?? payout.base_income
+      ?? racket.base_income_per_collect
+      ?? racket.income_per_collect
+      ?? 0,
+  );
+  const income = Number(
+    payout.effective_income_per_collect
+      ?? payout.effective_income
+      ?? payout.total
+      ?? racket.effective_income_per_collect
+      ?? racket.income_per_collect
+      ?? 0,
+  );
+  const payoutMultiplier = Number(
+    payout.multiplier
+      ?? payout.total_multiplier
+      ?? payout.payout_multiplier
+      ?? racket.payout_multiplier
+      ?? (baseIncome > 0 ? income / baseIncome : 1),
+  );
+  const payoutUpliftPct = Number(
+    payout.uplift_percent
+      ?? payout.uplift_pct
+      ?? payout.bonus_percent
+      ?? ((payoutMultiplier - 1) * 100),
+  );
+  const baseCooldown = Number(
+    payout.base_cooldown_hours
+      ?? racket.base_cooldown_hours
+      ?? racket.cooldown_hours
+      ?? 0,
+  );
+  const effectiveCooldown = Number(
+    payout.effective_cooldown_hours
+      ?? racket.effective_cooldown_hours
+      ?? racket.cooldown_hours
+      ?? baseCooldown,
+  );
   const tillAtRisk = Number(racket.till_at_risk || 0);
   const locked = racket.locked || racket.level <= 0;
   const isMax = racket.level >= maxLevel;
@@ -568,10 +613,38 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, canCollect = true, onCollect
             {locked ? (racket.required_racket_name ? `Needs ${racket.required_racket_name}` : 'Locked')
               : isReady ? '● COLLECT' : onCooldown ? `⏱ ${timeLeft}` : ''}
           </span>
-          <span className={`font-heading font-bold text-sm ${locked ? 'text-zinc-600' : isReady ? 'fam-shimmer-text' : 'text-primary'}`}>
-            {locked ? '—' : formatMoney(income)}
-          </span>
+          {!locked && <span className="text-[8px] font-heading uppercase tracking-wider text-zinc-600">Racket terms</span>}
         </div>
+
+        {!locked && (
+          <div className="grid grid-cols-2 gap-1 mb-2 text-[9px] font-heading">
+            <div className="rounded bg-zinc-950/45 border border-zinc-700/30 px-2 py-1.5">
+              <span className="block text-zinc-500 uppercase tracking-wide">Per collection</span>
+              <span className={`block text-[12px] font-bold tabular-nums ${isReady ? 'text-emerald-400' : 'text-primary'}`}>{formatMoney(income)}</span>
+            </div>
+            <div className="rounded bg-zinc-950/45 border border-zinc-700/30 px-2 py-1.5">
+              <span className="block text-zinc-500 uppercase tracking-wide">Before bonuses</span>
+              <span className="block text-[12px] font-bold text-zinc-300 tabular-nums">{formatMoney(baseIncome)}</span>
+            </div>
+            <div className="rounded bg-zinc-950/45 border border-zinc-700/30 px-2 py-1.5">
+              <span className="block text-zinc-500 uppercase tracking-wide">Multiplier / uplift</span>
+              <span className={`block font-bold tabular-nums ${payoutUpliftPct > 0 ? 'text-emerald-400' : 'text-zinc-300'}`}>
+                ×{payoutMultiplier.toFixed(2)}{payoutUpliftPct ? ` · ${payoutUpliftPct > 0 ? '+' : ''}${Math.round(payoutUpliftPct)}%` : ''}
+              </span>
+            </div>
+            <div className="rounded bg-zinc-950/45 border border-zinc-700/30 px-2 py-1.5">
+              <span className="block text-zinc-500 uppercase tracking-wide">Cooldown</span>
+              <span className="block font-bold text-zinc-300 tabular-nums">
+                {effectiveCooldown ? `${effectiveCooldown.toLocaleString()}h` : '—'}
+                {baseCooldown > 0 && effectiveCooldown !== baseCooldown ? <span className="text-zinc-600"> · base {baseCooldown.toLocaleString()}h</span> : null}
+              </span>
+            </div>
+            <div className={`col-span-2 rounded border px-2 py-1.5 flex items-center justify-between ${tillAtRisk > 0 ? 'bg-amber-500/8 border-amber-500/25' : 'bg-zinc-950/45 border-zinc-700/30'}`}>
+              <span className={`uppercase tracking-wide ${tillAtRisk > 0 ? 'text-amber-400/90' : 'text-zinc-500'}`}>Till at risk</span>
+              <span className={`font-bold tabular-nums ${tillAtRisk > 0 ? 'text-amber-300' : 'text-zinc-500'}`}>{formatMoney(tillAtRisk)}</span>
+            </div>
+          </div>
+        )}
 
         <div className="flex gap-1.5" onClick={(e) => e.stopPropagation()}>
           {racket.level > 0 && (
@@ -1129,6 +1202,166 @@ const RacketsTab = ({
           </button>
         </div>
       )}
+    </div>
+  );
+};
+
+// ============================================================================
+// DAILY FAMILY TASKS TAB
+// ============================================================================
+
+const taskNumber = (value, fallback = 0) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : fallback;
+};
+
+const taskRewards = (payload) => {
+  const raw = payload?.rewards ?? payload?.reward_types ?? payload?.objective?.rewards ?? payload?.task?.rewards ?? [];
+  const rows = Array.isArray(raw)
+    ? raw
+    : Object.entries(raw || {}).map(([type, value]) => (
+      value && typeof value === 'object' ? { type, ...value } : { type, amount: value }
+    ));
+  return rows.slice(0, 3);
+};
+
+const rewardLabel = (reward) => String(reward.label ?? reward.name ?? reward.type ?? reward.reward_type ?? 'Reward')
+  .replace(/_/g, ' ')
+  .replace(/\b\w/g, (letter) => letter.toUpperCase());
+
+const formatTaskReward = (value, reward) => {
+  const type = String(reward?.type ?? reward?.reward_type ?? '').toLowerCase();
+  if (type === 'cash') return formatMoney(taskNumber(value));
+  const suffix = type === 'points' ? ' pts' : type === 'loot' ? ' pieces' : type === 'tokens' ? ' tokens' : '';
+  return `${formatInt(taskNumber(value))}${suffix}`;
+};
+
+const DailyTasksTab = ({ data, loading, refreshing, error, onRefresh }) => {
+  if (loading && !data) {
+    return (
+      <div className="py-14 flex flex-col items-center gap-3 text-zinc-500">
+        <RefreshCw size={20} className="animate-spin text-primary/60" />
+        <p className="text-[10px] font-heading uppercase tracking-widest">Loading today’s objective…</p>
+      </div>
+    );
+  }
+
+  if (error && !data) {
+    return (
+      <div className="py-12 rounded-lg border border-red-500/25 bg-red-500/5 text-center space-y-3">
+        <p className="text-[11px] font-heading text-red-300">{error}</p>
+        <button type="button" onClick={() => onRefresh(false)} className="px-3 py-2 rounded-md border border-primary/40 bg-primary/10 text-primary text-[10px] font-heading font-bold uppercase">
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  const objective = data?.objective ?? data?.task ?? data?.daily_objective ?? data;
+  const title = objective?.title ?? objective?.name ?? objective?.label ?? objective?.objective_name;
+  if (!objective || !title) {
+    return (
+      <div className="py-12 rounded-lg border border-dashed border-zinc-700/50 text-center">
+        <ListChecks size={28} className="mx-auto text-zinc-700 mb-2" />
+        <p className="text-xs font-heading uppercase tracking-wider text-zinc-500">No family objective today</p>
+        <p className="text-[9px] text-zinc-600 mt-1">Check back after the next UTC reset.</p>
+      </div>
+    );
+  }
+
+  const progress = data?.personal_progress ?? objective?.personal_progress ?? data?.my_progress ?? {};
+  const progressCurrent = taskNumber(progress.current ?? progress.progress ?? progress.value ?? data?.personal_progress_current);
+  const progressTarget = taskNumber(progress.target ?? progress.required ?? objective?.target ?? objective?.target_value ?? data?.personal_progress_target, 1);
+  const progressPct = Math.min(100, Math.max(0, progressTarget > 0 ? (progressCurrent / progressTarget) * 100 : 0));
+  const eligibleCount = taskNumber(data?.eligible_member_count ?? data?.eligible_members_count ?? objective?.eligible_member_count);
+  const completedCount = taskNumber(data?.completed_member_count ?? data?.completed_members_count ?? objective?.completed_member_count);
+  const contributors = data?.contributors ?? objective?.contributors ?? data?.member_progress ?? [];
+  const resetAt = data?.reset_at ?? data?.resets_at ?? data?.utc_reset_at ?? objective?.reset_at;
+  const rewards = taskRewards(data);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-start justify-between gap-3 rounded-lg border border-primary/25 bg-primary/5 p-3 sm:p-4">
+        <div className="min-w-0">
+          <p className="text-[9px] font-heading uppercase tracking-[0.18em] text-primary/70">Daily family objective</p>
+          <h3 className="font-heading font-bold text-base text-foreground mt-1">{title}</h3>
+          {(objective.description ?? objective.details) && <p className="text-[10px] text-zinc-500 leading-relaxed mt-1">{objective.description ?? objective.details}</p>}
+        </div>
+        <button type="button" onClick={() => onRefresh(true)} disabled={refreshing} className="min-w-[40px] min-h-[40px] rounded-md flex items-center justify-center text-primary/70 hover:bg-primary/10 disabled:opacity-50" aria-label="Refresh daily objective">
+          <RefreshCw size={14} className={refreshing ? 'animate-spin' : ''} />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="rounded-lg border border-zinc-700/40 bg-zinc-900/40 p-3">
+          <div className="flex items-center justify-between text-[10px] font-heading mb-2">
+            <span className="text-zinc-500 uppercase tracking-wider">Your progress</span>
+            <span className={progressPct >= 100 ? 'text-emerald-400 font-bold' : 'text-zinc-300'}>{formatInt(progressCurrent)} / {formatInt(progressTarget)}</span>
+          </div>
+          <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all ${progressPct >= 100 ? 'bg-emerald-500' : 'bg-primary'}`} style={{ width: `${progressPct}%` }} />
+          </div>
+          {data?.my_completed && <p className="text-[9px] text-emerald-400 font-heading mt-2">Completed — today’s crew reward was credited automatically.</p>}
+          {data?.my_eligible === false && <p className="text-[9px] text-amber-400/80 font-heading mt-2">You joined after today’s UTC reset and become eligible tomorrow.</p>}
+        </div>
+        <div className="rounded-lg border border-zinc-700/40 bg-zinc-900/40 p-3 grid grid-cols-2 gap-2 text-center">
+          <div>
+            <span className="block text-[9px] font-heading uppercase tracking-wide text-zinc-500">Completed</span>
+            <span className="text-lg font-heading font-bold text-emerald-400">{formatInt(completedCount)}</span>
+          </div>
+          <div className="border-l border-zinc-700/40">
+            <span className="block text-[9px] font-heading uppercase tracking-wide text-zinc-500">Eligible</span>
+            <span className="text-lg font-heading font-bold text-zinc-300">{formatInt(eligibleCount)}</span>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <p className="text-[10px] font-heading font-bold uppercase tracking-wider text-zinc-500 mb-2 flex items-center gap-1.5"><Gift size={11} /> Today’s rewards</p>
+        {rewards.length ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {rewards.map((reward, index) => {
+              const amount = reward.amount ?? reward.value ?? reward.per_completion ?? reward.reward;
+              const cap = reward.cap ?? reward.daily_cap ?? reward.max;
+              const accrued = reward.accrued ?? reward.total_accrued ?? reward.earned ?? 0;
+              return (
+                <div key={`${reward.type ?? reward.name ?? 'reward'}-${index}`} className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-[10px] font-heading font-bold text-emerald-300">{rewardLabel(reward)}</span>
+                    {amount != null && <span className="text-[10px] font-heading text-zinc-300 tabular-nums">{formatTaskReward(amount, reward)} each</span>}
+                  </div>
+                  <p className="text-[9px] text-zinc-500 mt-1 tabular-nums">
+                    Accrued {formatTaskReward(accrued, reward)}{cap != null ? ` / ${formatTaskReward(cap, reward)} cap` : ' · no cap reported'}
+                  </p>
+                  {reward.destination && <p className="text-[8px] text-zinc-600 mt-0.5 font-heading">{reward.destination}</p>}
+                </div>
+              );
+            })}
+          </div>
+        ) : <p className="text-[10px] text-zinc-600">No reward breakdown was reported.</p>}
+      </div>
+
+      <div className="rounded-lg border border-zinc-700/35 bg-zinc-900/30 p-3">
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <p className="text-[10px] font-heading font-bold uppercase tracking-wider text-zinc-500">Contributors</p>
+          <span className="text-[9px] text-zinc-600"><Clock size={9} className="inline mr-1" />Reset {resetAt ? `${new Date(resetAt).toLocaleString()} (${new Date(resetAt).toLocaleTimeString([], { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' })} UTC)` : '00:00 UTC'}</span>
+        </div>
+        {contributors.length ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-64 overflow-y-auto">
+            {contributors.map((member, index) => {
+              const memberCurrent = taskNumber(member.progress ?? member.current ?? member.value);
+              const memberTarget = taskNumber(member.target ?? progressTarget, progressTarget);
+              const done = member.completed ?? member.complete ?? memberCurrent >= memberTarget;
+              return (
+                <div key={member.user_id ?? member.id ?? `${member.username}-${index}`} className="flex items-center justify-between gap-2 rounded-md border border-zinc-800 bg-zinc-950/35 px-2.5 py-2">
+                  <span className="text-[10px] text-zinc-300 truncate">{member.username ?? member.name ?? 'Family member'}</span>
+                  <span className={`text-[9px] font-heading font-bold tabular-nums ${done ? 'text-emerald-400' : 'text-zinc-500'}`}>{formatInt(memberCurrent)} / {formatInt(memberTarget)}{done ? ' ✓' : ''}</span>
+                </div>
+              );
+            })}
+          </div>
+        ) : <p className="text-[10px] text-zinc-600">No contributions recorded yet.</p>}
+      </div>
     </div>
   );
 };
@@ -3354,6 +3587,10 @@ export default function FamilyPage() {
   const [defenceSheetRacket, setDefenceSheetRacket] = useState(null);
   const [armoryBusy, setArmoryBusy] = useState(null);
   const [familiesRefreshing, setFamiliesRefreshing] = useState(false);
+  const [dailyTask, setDailyTask] = useState(null);
+  const [dailyTaskLoading, setDailyTaskLoading] = useState(false);
+  const [dailyTaskRefreshing, setDailyTaskRefreshing] = useState(false);
+  const [dailyTaskError, setDailyTaskError] = useState('');
   /** False until we have a /families/my-shaped payload (prefetch or first fetch). Avoids one frame of join/create UI while myFamily is still null. */
   const [familyMembershipResolved, setFamilyMembershipResolved] = useState(() => getFamiliesPrefetch()?.myFamily != null);
 
@@ -3375,6 +3612,28 @@ export default function FamilyPage() {
   const tillAtRiskTotal = sumTillAtRisk(rackets);
   const offenceWeight = Number(myFamily?.racket_offence_weight ?? armoryCatalog?.offence_weight ?? 0);
   const raidOffenceWeight = racketAttackTargets[0]?.offence_weight ?? offenceWeight;
+
+  const fetchDailyTask = useCallback(async (silent = false) => {
+    if (silent) setDailyTaskRefreshing(true);
+    else setDailyTaskLoading(true);
+    try {
+      const res = await apiRequestWith429Retry(() => api.get('/families/daily-objective', { params: { _: Date.now() } }));
+      setDailyTask(res.data || null);
+      setDailyTaskError('');
+      return res.data || null;
+    } catch (error) {
+      if (error?.response?.status === 404) {
+        setDailyTask(null);
+        setDailyTaskError('');
+      } else {
+        setDailyTaskError(apiDetail(error) || 'Could not load today’s family objective.');
+      }
+      return null;
+    } finally {
+      setDailyTaskLoading(false);
+      setDailyTaskRefreshing(false);
+    }
+  }, []);
 
   const fetchArmoryCatalog = useCallback(async () => {
     if (!myFamily?.family) return;
@@ -3449,8 +3708,11 @@ export default function FamilyPage() {
       });
       if (nextMyFamily?.family) {
         fetchWarStats().catch(() => {});
+        fetchDailyTask(true).catch(() => {});
       } else {
         setWarStats({ wars: [] });
+        setDailyTask(null);
+        setDailyTaskError('');
       }
     } catch (e) {
       if (!silent) toast.error(apiDetail(e));
@@ -3458,7 +3720,7 @@ export default function FamilyPage() {
       setFamilyMembershipResolved(true);
       setFamiliesRefreshing(false);
     }
-  }, [fetchWarStats]);
+  }, [fetchDailyTask, fetchWarStats]);
 
   const fetchRacketAttackTargets = useCallback(async () => {
     if (!myFamily?.family) return;
@@ -3905,6 +4167,24 @@ export default function FamilyPage() {
   useEffect(() => {
     if ((activeTab === 'war' || showWarModal) && myFamily?.family) fetchWarStats();
   }, [activeTab, showWarModal, myFamily?.family, fetchWarStats]);
+  useEffect(() => {
+    if (!myFamily?.family) return undefined;
+    const refresh = () => {
+      if (document.visibilityState !== 'hidden') fetchDailyTask(true);
+    };
+    if (activeTab === 'tasks' && !dailyTask) fetchDailyTask(false);
+    const intervalId = setInterval(refresh, activeTab === 'tasks' ? 30000 : 60000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refresh();
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [activeTab, dailyTask, fetchDailyTask, myFamily?.family]);
 
   return (
     <div className={`space-y-2 sm:space-y-3 ${styles.pageContent} mobile-page-root px-3 sm:px-4 pb-6 fam-page-safe-bottom`} data-testid="families-page">
@@ -4123,6 +4403,14 @@ export default function FamilyPage() {
             <div className="sticky top-0 z-20 border-b border-zinc-700/40 bg-zinc-950/95 backdrop-blur-md">
               <div className="flex overflow-x-auto overflow-y-hidden scrollbar-hide scroll-smooth px-1 sm:px-0 snap-x snap-mandatory sm:border-0">
               <Tab active={activeTab === 'rackets'} onClick={() => setActiveTab('rackets')} icon={<TrendingUp size={10} />}>Rackets</Tab>
+              <Tab
+                active={activeTab === 'tasks'}
+                onClick={() => setActiveTab('tasks')}
+                icon={<ListChecks size={10} />}
+                subline={(dailyTask?.completed ?? dailyTask?.objective?.completed) ? <span className="text-emerald-400">Ready</span> : undefined}
+              >
+                Tasks
+              </Tab>
               <Tab active={activeTab === 'raid'} onClick={() => setActiveTab('raid')} icon={<Swords size={10} />}>Hit Jobs</Tab>
               <Tab
                 active={activeTab === 'war'}
@@ -4179,6 +4467,15 @@ export default function FamilyPage() {
                   onBuyOffence={buyRacketOffence}
                   event={event}
                   eventsEnabled={eventsEnabled}
+                />
+              )}
+              {activeTab === 'tasks' && (
+                <DailyTasksTab
+                  data={dailyTask}
+                  loading={dailyTaskLoading}
+                  refreshing={dailyTaskRefreshing}
+                  error={dailyTaskError}
+                  onRefresh={fetchDailyTask}
                 />
               )}
               {activeTab === 'crewoc' && (

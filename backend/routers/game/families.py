@@ -555,11 +555,95 @@ def _racket_income_and_cooldown(racket_id: str, level: int, ev: dict):
     r = next((x for x in FAMILY_RACKETS if x["id"] == racket_id), None)
     if not r or level <= 0:
         return 0, 0
-    base_income = r["base_income"] * level * FAMILY_RACKET_BASE_INCOME_MULT
+    racket_index = next((i for i, row in enumerate(FAMILY_RACKETS) if row["id"] == racket_id), 0)
+    max_position = max(1, len(FAMILY_RACKETS) * RACKET_MAX_LEVEL - 1)
+    position = racket_index * RACKET_MAX_LEVEL + max(0, min(RACKET_MAX_LEVEL, int(level)) - 1)
+    progression_mult = 2.0 + (2.0 * position / max_position)
+    base_income = r["base_income"] * level * FAMILY_RACKET_BASE_INCOME_MULT * progression_mult
     cooldown = r["cooldown_hours"]
     payout_mult = ev.get("racket_payout", 1.0)
     cooldown_mult = ev.get("racket_cooldown", 1.0)
     return int(base_income * payout_mult), cooldown * cooldown_mult
+
+
+def _racket_progression_multiplier(racket_id: str, level: int) -> float:
+    if level <= 0:
+        return 0.0
+    racket_index = next((i for i, row in enumerate(FAMILY_RACKETS) if row["id"] == racket_id), 0)
+    max_position = max(1, len(FAMILY_RACKETS) * RACKET_MAX_LEVEL - 1)
+    position = racket_index * RACKET_MAX_LEVEL + max(0, min(RACKET_MAX_LEVEL, int(level)) - 1)
+    return 2.0 + (2.0 * position / max_position)
+
+
+def _active_family_event_multiplier(fam: dict, now: datetime) -> float:
+    raw = (fam or {}).get("event_active_until")
+    if not raw:
+        return 1.0
+    try:
+        until = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        if until.tzinfo is None:
+            until = until.replace(tzinfo=timezone.utc)
+        return 1.1 if until > now else 1.0
+    except Exception:
+        return 1.0
+
+
+async def _racket_payout_breakdown(
+    racket_id: str,
+    level: int,
+    last_collected_at: Optional[str],
+    ev: dict,
+    fam: dict,
+    family_id: str,
+    *,
+    now: Optional[datetime] = None,
+    actor: Optional[dict] = None,
+) -> Dict[str, Any]:
+    """Single source of truth for previews, collections, raid tills and auto-collect."""
+    now = now or datetime.now(timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    income_after_global_event, cooldown_h = _racket_income_and_cooldown(racket_id, level, ev)
+    war_seconds = 0.0
+    if last_collected_at and family_id:
+        try:
+            last_dt = datetime.fromisoformat(str(last_collected_at).replace("Z", "+00:00"))
+            war_seconds = await _family_war_duration_seconds(family_id, last_dt, now)
+        except Exception:
+            pass
+    available = _racket_available_income(
+        racket_id,
+        level,
+        last_collected_at,
+        ev,
+        now=now,
+        war_duration_seconds=war_seconds,
+    )
+    war_bonus_pct = float((fam.get("racket_income_bonus_percent") or 0) or 0)
+    perk_mods = await family_perk_modifiers(db, family_id)
+    perk_bonus_pct = float(perk_mods.get("racket_bonus_percent") or 0)
+    family_bonus_mult = 1.0 + (war_bonus_pct + perk_bonus_pct) / 100.0
+    founding_mult = founding_member_income_mult(actor) if actor else 1.0
+    family_event_mult = _active_family_event_multiplier(fam, now)
+    final_income = int(income_after_global_event * family_bonus_mult * founding_mult * family_event_mult)
+    return {
+        "base_income": int(
+            next((r["base_income"] for r in FAMILY_RACKETS if r["id"] == racket_id), 0)
+            * max(0, level)
+            * FAMILY_RACKET_BASE_INCOME_MULT
+        ),
+        "progression_multiplier": round(_racket_progression_multiplier(racket_id, level), 6),
+        "global_event_multiplier": float(ev.get("racket_payout", 1.0) or 1.0),
+        "income_after_global_event": income_after_global_event,
+        "war_win_bonus_percent": war_bonus_pct,
+        "perk_bonus_percent": perk_bonus_pct,
+        "founding_member_multiplier": founding_mult,
+        "family_event_multiplier": family_event_mult,
+        "final_income": final_income,
+        "available_income": final_income if available > 0 else 0,
+        "cooldown_hours": cooldown_h,
+        "war_paused_seconds": int(war_seconds),
+    }
 
 
 def _racket_defence_weight(upgrade_ids: Optional[List[str]]) -> int:
@@ -603,23 +687,19 @@ async def _racket_effective_till_amount(
     family_id: str,
     now=None,
 ) -> int:
-    """Uncollected till including war-win and monthly perk bonuses (not founding-member mult)."""
+    """Uncollected till using the shared payout rules (no collector-specific founding bonus)."""
     if now is None:
         now = datetime.now(timezone.utc)
-    war_sec = 0.0
-    if last_collected_at and family_id:
-        try:
-            last_dt = datetime.fromisoformat(str(last_collected_at).replace("Z", "+00:00"))
-            war_sec = await _family_war_duration_seconds(family_id, last_dt, now)
-        except Exception:
-            pass
-    base = _racket_available_income(racket_id, level, last_collected_at, ev, now=now, war_duration_seconds=war_sec)
-    if base <= 0:
-        return 0
-    bonus_pct = float((fam.get("racket_income_bonus_percent") or 0) or 0)
-    rpm = await family_perk_modifiers(db, family_id)
-    bonus_pct += float(rpm.get("racket_bonus_percent") or 0)
-    return int(base * (1 + bonus_pct / 100.0))
+    breakdown = await _racket_payout_breakdown(
+        racket_id,
+        level,
+        last_collected_at,
+        ev,
+        fam,
+        family_id,
+        now=now,
+    )
+    return int(breakdown["available_income"])
 
 
 # When a family wins a war (enemy wiped), winner gets this % extra on all racket income (passive, permanent stack).
@@ -685,6 +765,33 @@ def compute_loser_racket_cash(rackets: dict, ev: dict, now=None, war_doc: Option
     return total
 
 
+async def compute_loser_racket_cash_effective(
+    fam: dict,
+    family_id: str,
+    ev: dict,
+    *,
+    now: Optional[datetime] = None,
+) -> int:
+    """Wipe-transfer till value through the same modifiers used by raid previews."""
+    now = now or datetime.now(timezone.utc)
+    total = 0
+    for racket_id, state in ((fam or {}).get("rackets") or {}).items():
+        level = int((state or {}).get("level") or 0)
+        if level <= 0:
+            continue
+        breakdown = await _racket_payout_breakdown(
+            racket_id,
+            level,
+            (state or {}).get("last_collected_at"),
+            ev,
+            fam,
+            family_id,
+            now=now,
+        )
+        total += int(breakdown["available_income"])
+    return total
+
+
 def _racket_previous_id(racket_id: str):
     ids = [x["id"] for x in FAMILY_RACKETS]
     if racket_id not in ids:
@@ -745,7 +852,12 @@ async def cleanup_dead_families():
             compound_points = int(fam.get("compound_points", 0) or 0)
             compound_loot_pieces = int(fam.get("compound_loot_pieces", 0) or 0)
             ev = await get_effective_event()
-            prize_racket_cash = compute_loser_racket_cash(rackets, ev, now=now_dt)
+            prize_racket_cash = await compute_loser_racket_cash_effective(
+                fam,
+                family_id,
+                ev,
+                now=now_dt,
+            )
             total_cash_prize = treasury + prize_racket_cash + compound_cash
             claimed_fam = await claim_family_wipe(
                 family_id,
@@ -2002,11 +2114,20 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             elif locked and idx == 0:
                 can_unlock = True
             last_at = state.get("last_collected_at")
-            income_per, cooldown_h = _racket_income_and_cooldown(rid, level, ev)
-            effective_income = int(income_per * (1 + total_bonus_pct / 100.0))
-            till_available = 0
-            if level > 0:
-                till_available = await _racket_effective_till_amount(rid, level, last_at, ev, fam, family_id, now=now)
+            payout_breakdown = await _racket_payout_breakdown(
+                rid,
+                level,
+                last_at,
+                ev,
+                fam,
+                family_id,
+                now=now,
+                actor=current_user,
+            )
+            income_per = int(payout_breakdown["income_after_global_event"])
+            cooldown_h = float(payout_breakdown["cooldown_hours"])
+            effective_income = int(payout_breakdown["final_income"])
+            till_available = int(payout_breakdown["available_income"]) if level > 0 else 0
             till_at_risk = till_available if till_available > 0 else 0
             defence_upgrades = list(state.get("defence_upgrades") or [])
             defence_weight = _racket_defence_weight(defence_upgrades)
@@ -2027,6 +2148,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
                 "unlock_cost": RACKET_UNLOCK_COST if locked else None,
                 "cooldown_hours": r["cooldown_hours"], "effective_cooldown_hours": cooldown_h,
                 "income_per_collect": income_per, "effective_income_per_collect": effective_income,
+                "payout_breakdown": payout_breakdown,
                 "till_available": till_available, "till_at_risk": till_at_risk,
                 "defence_upgrades": defence_upgrades, "defence_weight": defence_weight,
                 "next_collect_at": next_collect_at,
@@ -4876,7 +4998,10 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
     family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
-    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "treasury": 1, "rackets": 1, "racket_income_bonus_percent": 1, "event_active_until": 1})
+    fam = await db.families.find_one(
+        {"id": family_id, **ACTIVE_FAMILY_FILTER},
+        {"_id": 0, "treasury": 1, "rackets": 1, "racket_income_bonus_percent": 1, "event_active_until": 1},
+    )
     if not fam:
         raise HTTPException(status_code=404, detail="Family not found")
     rackets = (fam.get("rackets") or {}).copy()
@@ -4888,24 +5013,20 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
     if not r_def:
         raise HTTPException(status_code=404, detail="Racket not found")
     ev = await get_effective_event()
-    income, cooldown_h = _racket_income_and_cooldown(racket_id, level, ev)
-    bonus_pct = float((fam.get("racket_income_bonus_percent") or 0) or 0)
-    rpm = await family_perk_modifiers(db, family_id)
-    perk_racket_pct = float(rpm.get("racket_bonus_percent") or 0)
-    bonus_pct += perk_racket_pct
-    income_final = int(income * (1 + bonus_pct / 100.0) * founding_member_income_mult(current_user))
-    event_until = fam.get("event_active_until")
-    if event_until:
-        try:
-            ev_dt = datetime.fromisoformat(str(event_until).replace("Z", "+00:00"))
-            if ev_dt.tzinfo is None:
-                ev_dt = ev_dt.replace(tzinfo=timezone.utc)
-            if ev_dt > now:
-                income_final = int(income_final * 1.1)
-        except Exception:
-            pass
     last_at = state.get("last_collected_at")
     now = datetime.now(timezone.utc)
+    payout_breakdown = await _racket_payout_breakdown(
+        racket_id,
+        level,
+        last_at,
+        ev,
+        fam,
+        family_id,
+        now=now,
+        actor=current_user,
+    )
+    income_final = int(payout_breakdown["final_income"])
+    cooldown_h = float(payout_breakdown["cooldown_hours"])
     today_utc = now.date().isoformat()
     last_bullet_payout_day = str(state.get("last_bullet_payout_day") or "")
     bullets_bonus = 0
@@ -4934,7 +5055,7 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
     if bullets_bonus > 0:
         next_state["last_bullet_payout_day"] = today_utc
     rackets[racket_id] = next_state
-    filter_cond: dict = {"id": family_id}
+    filter_cond: dict = {"id": family_id, **ACTIVE_FAMILY_FILTER}
     if last_at:
         filter_cond[f"rackets.{racket_id}.last_collected_at"] = last_at
     else:
@@ -4958,13 +5079,70 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
         current_user.get("username") or "?",
         cash_delta=income_final,
         bullets_delta=bullets_bonus,
-        meta={"racket_id": racket_id},
+        meta={"racket_id": racket_id, "payout_breakdown": payout_breakdown},
     )
+    try:
+        from utils.family_daily_tasks import record_family_daily_activity
+
+        await record_family_daily_activity(
+            db,
+            current_user["id"],
+            "racket_collect",
+            source_id=f"racket-collect:{family_id}:{racket_id}:{now_iso}",
+            now=now,
+        )
+    except Exception:
+        logger.exception("Family daily racket progress failed user_id=%s", current_user.get("id"))
     msg = _rng.choice(FAMILY_RACKET_COLLECT_SUCCESS_MESSAGES).format(income=income_final)
     if bullets_bonus > 0:
         msg = f"{msg} +{bullets_bonus} bullets."
     _invalidate_my_cache(current_user["id"])
-    return {"message": msg, "amount": income_final, "bullets": bullets_bonus}
+    return {
+        "message": msg,
+        "amount": income_final,
+        "bullets": bullets_bonus,
+        "payout_breakdown": payout_breakdown,
+    }
+
+
+async def _family_daily_payload(current_user: dict) -> dict:
+    family_id = await _live_family_id_for_user(current_user)
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in an active family")
+    from utils.family_daily_tasks import get_today_family_objective
+
+    payload = await get_today_family_objective(db, family_id, current_user["id"])
+    if not payload:
+        raise HTTPException(status_code=404, detail="Active family not found")
+    return payload
+
+
+async def families_daily_objective(current_user: dict = Depends(get_current_user)):
+    return await _family_daily_payload(current_user)
+
+
+async def families_daily_progress(current_user: dict = Depends(get_current_user)):
+    payload = await _family_daily_payload(current_user)
+    return {
+        "family_id": payload["family_id"],
+        "period": payload["period"],
+        "objective_type": payload["objective_type"],
+        "target": payload["target"],
+        "my_progress": payload["my_progress"],
+        "my_completed": payload["my_completed"],
+        "my_eligible": payload["my_eligible"],
+        "completion_count": payload["completion_count"],
+        "eligible_count": payload["eligible_count"],
+    }
+
+
+async def families_daily_contributors(current_user: dict = Depends(get_current_user)):
+    payload = await _family_daily_payload(current_user)
+    return {
+        "family_id": payload["family_id"],
+        "period": payload["period"],
+        "contributors": payload["contributors"],
+    }
 
 
 class FamilySafeDepositBody(BaseModel):
@@ -5274,7 +5452,10 @@ async def families_racket_attack_targets(debug: bool = False, current_user: dict
     atk_fam = await db.families.find_one({"id": my_family_id}, {"_id": 0, "racket_offence_upgrades": 1})
     offence_weight = _racket_offence_weight((atk_fam or {}).get("racket_offence_upgrades"))
     offence_take_mult = _compute_racket_raid_take_mult(offence_weight)
-    all_other = await db.families.find({"id": {"$ne": my_family_id}, "wiped": {"$ne": True}}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1, "rackets": 1, "racket_income_bonus_percent": 1}).to_list(50)
+    all_other = await db.families.find(
+        {"id": {"$ne": my_family_id}, **ACTIVE_FAMILY_FILTER},
+        {"_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1, "rackets": 1, "racket_income_bonus_percent": 1, "event_active_until": 1},
+    ).to_list(50)
     ev = await get_effective_event()
     now = datetime.now(timezone.utc)
     targets = []
@@ -5353,7 +5534,7 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
         raise HTTPException(status_code=403, detail="Target crew is at war — rackets are locked")
     target_fam = await db.families.find_one(
         {"id": request.family_id, **ACTIVE_FAMILY_FILTER},
-        {"_id": 0, "name": 1, "tag": 1, "treasury": 1, "rackets": 1, "racket_income_bonus_percent": 1},
+        {"_id": 0, "name": 1, "tag": 1, "treasury": 1, "rackets": 1, "racket_income_bonus_percent": 1, "event_active_until": 1},
     )
     if not target_fam or request.family_id == my_family_id:
         raise HTTPException(status_code=404, detail="Family not found")
@@ -5369,7 +5550,7 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
             raise HTTPException(status_code=400, detail="Only 2 raids per family every 3 hours. You've used your raids on this crew.")
         target_fam = await db.families.find_one(
             {"id": request.family_id, **ACTIVE_FAMILY_FILTER},
-            {"_id": 0, "name": 1, "tag": 1, "treasury": 1, "rackets": 1, "racket_income_bonus_percent": 1},
+            {"_id": 0, "name": 1, "tag": 1, "treasury": 1, "rackets": 1, "racket_income_bonus_percent": 1, "event_active_until": 1},
         )
         if not target_fam:
             raise HTTPException(status_code=404, detail="Family not found")
@@ -6256,6 +6437,9 @@ def register(router):
     router.add_api_route("/families/crew-oc/commit", families_crew_oc_commit, methods=["POST"])
     router.add_api_route("/families/safe-deposit/deposit", families_safe_deposit_deposit, methods=["POST"])
     router.add_api_route("/families/safe-deposit/withdraw", families_safe_deposit_withdraw, methods=["POST"])
+    router.add_api_route("/families/daily-objective", families_daily_objective, methods=["GET"], dependencies=_families_rl_u)
+    router.add_api_route("/families/daily-objective/progress", families_daily_progress, methods=["GET"], dependencies=_families_rl_u)
+    router.add_api_route("/families/daily-objective/contributors", families_daily_contributors, methods=["GET"], dependencies=_families_rl_u)
     router.add_api_route("/families/rackets/{racket_id}/collect", families_racket_collect, methods=["POST"])
     router.add_api_route("/families/rackets/{racket_id}/unlock", families_racket_unlock, methods=["POST"])
     router.add_api_route("/families/rackets/{racket_id}/upgrade", families_racket_upgrade, methods=["POST"])

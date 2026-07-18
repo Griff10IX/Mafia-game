@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-18 18:42 UTC[/color][/b] — [b]Daily family objectives and racket rewards[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] Every active family now receives one daily UTC objective. Eligible members complete the same crime, GTA, jail bust, booze run, car melt, OC, or racket target to grow the crew’s reward.[/color]
+[*][color=#888888][b]Rewards:[/b] Each day rolls two or three reward types. Member completions can add up to [b]$25,000,000[/b], [b]50 points[/b], and [b]20 loot pieces[/b] to the crew vault. Normal Store tokens are split among qualifying contributors after the reset; Game Pass and premium tokens are excluded.[/color]
+[*][color=#888888][b]Improved:[/b] Racket income now scales from roughly [b]2×[/b] on early operations to [b]4×[/b] on late max-level operations. Racket cards now explain the effective payout, bonuses, cooldown, and till at risk.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-18 18:04 UTC[/color][/b] — [b]Family identity and list reliability[/b][/size]
 [quote]
 [list]

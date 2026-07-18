@@ -951,8 +951,21 @@ async def attempt_gta(
             "jailed": jailed,
             "jail_seconds": jail_seconds,
         }
-        await db.gta_events.insert_one(event_doc)
+        gta_event_result = await db.gta_events.insert_one(event_doc)
         invalidate_rolling_event_stats_cache("gta_events", current_user.get("id") or "")
+        if success:
+            try:
+                from utils.family_daily_tasks import record_family_daily_activity
+
+                await record_family_daily_activity(
+                    db,
+                    current_user.get("id") or "",
+                    "gta",
+                    source_id=f"gta:{gta_event_result.inserted_id}",
+                    now=now,
+                )
+            except Exception:
+                logging.exception("Family daily GTA progress failed user_id=%s", current_user.get("id"))
         await log_activity(current_user.get("id", ""), current_user.get("username", "?"), "gta_attempt", {
             "option": (option or {}).get("name", request.option_id), "success": success,
             "car": car.get("name") if car else None, "jailed": jailed,
@@ -1327,6 +1340,19 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
     if melted_car20:
         await _sync_gta_exclusive_pool_release_state()
     if deleted_count > 0:
+        try:
+            from utils.family_daily_tasks import record_family_daily_activity
+
+            await record_family_daily_activity(
+                db,
+                user.get("id") or "",
+                "car_melt",
+                deleted_count,
+                source_id=f"car-melt:{user.get('id')}:{now.isoformat()}:{action}:{','.join(sorted(car_ids[:limit]))}",
+                now=now,
+            )
+        except Exception:
+            logging.exception("Family daily car melt progress failed user_id=%s", user.get("id"))
         if action == "bullets":
             total_bullets = (int(total_bullets or 0) * MELT_BULLETS_TOTAL_PAYOUT_MULT_NUM) // MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN
             base_cooldown = int(MELT_BULLETS_COOLDOWN_SECONDS * 0.5) if melt_token_active else MELT_BULLETS_COOLDOWN_SECONDS

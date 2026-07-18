@@ -152,6 +152,27 @@ async def ensure_all_indexes(db):
         await db.family_crew_oc_applications.create_index([("id", 1), ("family_id", 1)])
         await db.family_racket_attacks.create_index([("attacker_family_id", 1), ("target_family_id", 1), ("last_at", -1)])
         await db.family_vault_transactions.create_index([("family_id", 1), ("at", -1)])
+        await db.family_vault_transactions.create_index("id", unique=True)
+        await db.family_daily_objectives.create_index(
+            [("family_id", 1), ("period", 1)],
+            unique=True,
+            name="family_daily_objective_unique",
+        )
+        await db.family_daily_objectives.create_index([("period", 1), ("tokens_rolled_over", 1)])
+        await db.family_daily_progress.create_index(
+            [("family_id", 1), ("period", 1), ("user_id", 1)],
+            unique=True,
+            name="family_daily_progress_unique",
+        )
+        await db.family_daily_progress.create_index([("family_id", 1), ("period", 1), ("completed", 1)])
+        await db.family_daily_reward_events.create_index("event_id", unique=True)
+        await db.family_daily_reward_events.create_index([("family_id", 1), ("period", 1)])
+        await db.family_daily_reward_events.create_index([("status", 1), ("created_at", 1)])
+        await db.family_daily_activity_receipts.create_index(
+            [("family_id", 1), ("period", 1), ("user_id", 1), ("source_id", 1)],
+            unique=True,
+            name="family_daily_activity_source_unique",
+        )
         await db.family_war_stats.create_index("war_id")
         await db.family_war_stats.create_index([("war_id", 1), ("user_id", 1)], unique=True)
         await db.families.create_index("id", unique=True)

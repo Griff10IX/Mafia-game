@@ -390,6 +390,18 @@ async def run_heist(
             },
             upsert=True
         )
+        try:
+            from utils.family_daily_tasks import record_family_daily_activity
+
+            await record_family_daily_activity(
+                db,
+                current_user["id"],
+                "oc",
+                source_id=f"oc:{current_user['id']}:{now.isoformat()}:{request.job_id}",
+                now=now,
+            )
+        except Exception:
+            logger.exception("Family daily OC progress failed user_id=%s", current_user["id"])
         
         if rp_added:
             msg = _rng.choice(OC_HEIST_SUCCESS_MESSAGES).format(

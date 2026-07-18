@@ -866,8 +866,9 @@ async def _booze_sell_impl(
             )
             await db.users.update_one({"id": user["id"]}, {"$inc": {"money": int(revenue)}})
     if is_run:
-        await db.economy_events.insert_one({
-            "at": datetime.now(timezone.utc),
+        booze_event_at = datetime.now(timezone.utc)
+        booze_event_result = await db.economy_events.insert_one({
+            "at": booze_event_at,
             "type": "booze_run_sell",
             "user_id": user["id"],
             "username": user.get("username") or "",
@@ -877,6 +878,18 @@ async def _booze_sell_impl(
             "revenue": revenue,
             "profit": profit,
         })
+        try:
+            from utils.family_daily_tasks import record_family_daily_activity
+
+            await record_family_daily_activity(
+                db,
+                user["id"],
+                "booze_run",
+                source_id=f"booze-run:{booze_event_result.inserted_id}",
+                now=booze_event_at,
+            )
+        except Exception:
+            logger.exception("Family daily booze progress failed user_id=%s", user.get("id"))
     if is_run:
         try:
             from routers.account.objectives import update_objectives_progress

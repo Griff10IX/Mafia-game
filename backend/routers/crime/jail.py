@@ -610,7 +610,7 @@ async def _record_bust_event(user_id: str, success: bool, profit: int, target_us
     """Record a bust attempt for stats (today/week, profit). Called from _attempt_bust_impl so both manual and Auto Rank busts are counted."""
     now = datetime.now(timezone.utc)
     try:
-        await db.bust_events.insert_one({
+        result = await db.bust_events.insert_one({
             "user_id": user_id,
             "at": now,
             "success": success,
@@ -619,6 +619,16 @@ async def _record_bust_event(user_id: str, success: bool, profit: int, target_us
             "is_npc": is_npc,
         })
         invalidate_rolling_event_stats_cache("bust_events", user_id)
+        if success:
+            from utils.family_daily_tasks import record_family_daily_activity
+
+            await record_family_daily_activity(
+                db,
+                user_id,
+                "jail_bust",
+                source_id=f"jail-bust:{result.inserted_id}",
+                now=now,
+            )
     except Exception as e:
         logger.exception("Record bust event: %s", e)
 
