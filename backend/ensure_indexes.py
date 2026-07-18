@@ -140,6 +140,7 @@ async def ensure_all_indexes(db):
         # --- Families ---
         await db.family_members.create_index("family_id")
         await db.family_members.create_index([("family_id", 1), ("user_id", 1)])
+        await db.family_members.create_index([("user_id", 1), ("joined_at", -1), ("id", 1)])
         await db.family_wars.create_index("id", unique=True)
         await db.family_wars.create_index([("family_a_id", 1), ("family_b_id", 1)])
         await db.family_wars.create_index([("status", 1), ("created_at", -1)])
@@ -157,6 +158,32 @@ async def ensure_all_indexes(db):
         await db.families.create_index("name")
         await db.families.create_index("tag")
         await db.families.create_index("wiped")  # list non-wiped families
+        await db.families.create_index([("wiped", 1), ("id", 1)])
+        await db.families.create_index([("wiped", 1), ("tag", 1), ("created_at", -1)])
+        active_family_partial = {
+            "$or": [
+                {"wiped": {"$exists": False}},
+                {"wiped": False},
+            ],
+        }
+        await db.families.create_index(
+            "name",
+            name="uniq_active_family_name",
+            unique=True,
+            partialFilterExpression={
+                "name": {"$exists": True, "$type": "string"},
+                **active_family_partial,
+            },
+        )
+        await db.families.create_index(
+            "tag",
+            name="uniq_active_family_tag",
+            unique=True,
+            partialFilterExpression={
+                "tag": {"$exists": True, "$type": "string"},
+                **active_family_partial,
+            },
+        )
         await db.families.create_index([("crew_oc_join_fee", 1)], sparse=True)
         await db.families.create_index([("crew_oc_auto_commit_due_at", 1)], sparse=True)
         # Partial filters cannot use $ne (server rewrites to $not). Match non-wiped docs only.

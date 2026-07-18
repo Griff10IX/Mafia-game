@@ -138,6 +138,26 @@ async def _game_chat_sustained_rl_user(current_user: dict = Depends(get_current_
 _game_chat_rl_u = [Depends(_game_chat_sustained_rl_user)]
 
 
+async def _active_family_id_for_chat(user: dict) -> Optional[str]:
+    """Return a live family id; memorial ids cannot power family chat."""
+    family_id = (user.get("family_id") or "").strip()
+    if not family_id:
+        return None
+    family = await db.families.find_one(
+        {"id": family_id, "wiped": {"$ne": True}},
+        {"_id": 1},
+    )
+    if family:
+        return family_id
+    await db.users.update_one(
+        {"id": user["id"], "family_id": family_id},
+        {"$set": {"family_id": None, "family_role": None}},
+    )
+    user["family_id"] = None
+    user["family_role"] = None
+    return None
+
+
 def register(router):
     @router.get("/game-chat/messages", dependencies=_game_chat_rl_u)
     async def get_game_chat_messages(
@@ -152,7 +172,7 @@ def register(router):
 
         query = {}
         if family_only:
-            my_family = (current_user.get("family_id") or "").strip()
+            my_family = await _active_family_id_for_chat(current_user)
             if not my_family:
                 return {"messages": [], "has_more": False}
             query["family_id"] = my_family
@@ -187,7 +207,7 @@ def register(router):
 
         user_id = current_user["id"]
         username = (current_user.get("username") or "").strip() or "Unknown"
-        family_id = (current_user.get("family_id") or "").strip() or None
+        family_id = await _active_family_id_for_chat(current_user)
 
         if _is_user_muted_from_game_chat(current_user):
             raise HTTPException(
@@ -226,6 +246,7 @@ def register(router):
     @router.get("/game-chat/prefs", dependencies=_game_chat_rl_u)
     async def get_game_chat_prefs(current_user: dict = Depends(get_current_user)):
         """Get current user's game chat preferences (family_only, blocked_user_ids)."""
+        active_family_id = await _active_family_id_for_chat(current_user)
         blocked_ids = current_user.get("game_chat_blocked_user_ids") or []
         block_list_with_names = []
         if blocked_ids:
@@ -239,7 +260,7 @@ def register(router):
             "family_only": current_user.get("game_chat_family_only") is True,
             "blocked_user_ids": blocked_ids,
             "block_list_with_names": block_list_with_names,
-            "in_family": bool((current_user.get("family_id") or "").strip()),
+            "in_family": bool(active_family_id),
             "muted": _is_user_muted_from_game_chat(current_user),
             "muted_until": current_user.get("game_chat_muted_until"),
         }

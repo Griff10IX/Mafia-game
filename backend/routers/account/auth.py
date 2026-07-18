@@ -2113,7 +2113,10 @@ def register(router):
             admin_color_doc, weapon_doc, fam, bodyguard_count, witness_nav_green_n, gp_season_pub, premium_weapon_flags, vip_pass_car_info = await asyncio.gather(
                 db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1}),
                 db.weapons.find_one({"id": equipped_weapon_id}, {"_id": 0, "name": 1}) if equipped_weapon_id else _noop(),
-                db.families.find_one({"id": family_id}, {"_id": 0, "name": 1}) if family_id else _noop(),
+                db.families.find_one(
+                    {"id": family_id, "wiped": {"$ne": True}},
+                    {"_id": 0, "name": 1},
+                ) if family_id else _noop(),
                 db.bodyguards.count_documents({
                     "user_id": u["id"],
                     "$or": [
@@ -2178,6 +2181,13 @@ def register(router):
             if fam:
                 gang_name = fam.get("name")
                 family_name = fam.get("name")
+            elif family_id:
+                await db.users.update_one(
+                    {"id": u["id"], "family_id": family_id},
+                    {"$set": {"family_id": None, "family_role": None}},
+                )
+                u["family_id"] = None
+                u["family_role"] = None
             referred_by_username = None
             referred_by_legacy = None
             if ref_ids:

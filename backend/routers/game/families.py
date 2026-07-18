@@ -27,6 +27,7 @@ from fastapi import Depends, HTTPException, Body, Header, Query
 from pydantic import BaseModel
 from bson.objectid import ObjectId
 from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 from utils.game_timezone import game_week_range_utc
 from utils.notepad_color import notepad_color_for_api_response, normalize_notepad_color_for_set
@@ -101,6 +102,10 @@ FAMILY_ROLE_LIMITS = {"boss": 1, "underboss": 1, "consigliere": 1, "capo": 4, "s
 FAMILY_ROLE_ORDER = {"boss": 0, "underboss": 1, "consigliere": 2, "capo": 3, "soldier": 4, "associate": 5}
 FAMILY_WAR_RECRUITMENT_WINDOW_HOURS = 24
 WAR_RAT_BADGE_UNSET = {"war_rat_badge_until": "", "war_rat_family_id": "", "war_rat_war_ids": ""}
+ACTIVE_FAMILY_FILTER = {
+    "wiped": {"$ne": True},
+    "provisioning": {"$ne": True},
+}
 
 # High command (chain of command top 3) + legacy "don" role stored on some crews
 TOP3_FAMILY_ROLES = ("boss", "don", "underboss", "consigliere")
@@ -691,14 +696,20 @@ def _racket_previous_id(racket_id: str):
 async def cleanup_dead_families():
     """Mark families where all members are dead as wiped (soft-delete); transfer assets to war winners.
     Returns True if any family was marked as wiped (caller should invalidate list cache)."""
-    families = await db.families.find({"wiped": {"$ne": True}}, {"_id": 0}).to_list(50)
+    families = [
+        family
+        async for family in db.families.find(ACTIVE_FAMILY_FILTER, {"_id": 0})
+    ]
     if not families:
         return False
     family_ids = [f["id"] for f in families]
-    all_members = await db.family_members.find(
-        {"family_id": {"$in": family_ids}},
-        {"_id": 0, "family_id": 1, "user_id": 1},
-    ).to_list(500)
+    all_members = [
+        member
+        async for member in db.family_members.find(
+            {"family_id": {"$in": family_ids}},
+            {"_id": 0, "id": 1, "family_id": 1, "user_id": 1, "role": 1, "joined_at": 1},
+        )
+    ]
     members_by_family: dict = defaultdict(list)
     user_ids = set()
     for m in all_members:
@@ -736,6 +747,14 @@ async def cleanup_dead_families():
             ev = await get_effective_event()
             prize_racket_cash = compute_loser_racket_cash(rackets, ev, now=now_dt)
             total_cash_prize = treasury + prize_racket_cash + compound_cash
+            claimed_fam = await claim_family_wipe(
+                family_id,
+                wiped_at=now,
+                member_rows=members,
+            )
+            if not claimed_fam:
+                continue
+            fam = claimed_fam
             assets_transferred = False
             winner_id = None
             winner_family_name = None
@@ -751,7 +770,10 @@ async def cleanup_dead_families():
                     winner_id = ended.get("winner_family_id")
                     winner_family_name = (ended.get("winner_family_name") or "?").strip() or "?"
                     if winner_id:
-                        winner_fam_doc = await db.families.find_one({"id": winner_id}, {"_id": 0, "name": 1, "tag": 1})
+                        winner_fam_doc = await db.families.find_one(
+                            {"id": winner_id, **ACTIVE_FAMILY_FILTER},
+                            {"_id": 0, "name": 1, "tag": 1},
+                        )
                         if winner_fam_doc:
                             winner_family_name = (winner_fam_doc.get("name") or winner_fam_doc.get("tag") or winner_id).strip() or winner_id
             for active_war in active_wars:
@@ -762,7 +784,10 @@ async def cleanup_dead_families():
                 prize_racket_cash_record = 0
                 if not assets_transferred:
                     total_crew_bank = 0
-                    winner_fam = await db.families.find_one({"id": winner_id}, {"_id": 0, "treasury": 1, "racket_income_bonus_percent": 1, "boss_id": 1})
+                    winner_fam = await db.families.find_one(
+                        {"id": winner_id, **ACTIVE_FAMILY_FILTER},
+                        {"_id": 0, "treasury": 1, "racket_income_bonus_percent": 1, "boss_id": 1},
+                    )
                     if winner_fam is not None:
                         if total_cash_prize > 0:
                             await db.families.update_one({"id": winner_id}, {"$inc": {"treasury": total_cash_prize}})
@@ -811,7 +836,10 @@ async def cleanup_dead_families():
                         msg += f" Crew bank seized: ${total_crew_bank:,}."
                     await send_notification_to_family(winner_id, "🏆 WAR VICTORY!", msg, "system")
                     assets_transferred = True
-                winner_fam_doc = await db.families.find_one({"id": winner_id}, {"_id": 0, "name": 1, "tag": 1})
+                winner_fam_doc = await db.families.find_one(
+                    {"id": winner_id, **ACTIVE_FAMILY_FILTER},
+                    {"_id": 0, "name": 1, "tag": 1},
+                )
                 winner_family_name = (winner_fam_doc or {}).get("name") or (winner_fam_doc or {}).get("tag") or winner_id
                 loser_family_name = fam.get("name") or fam.get("tag") or loser_id
                 await db.family_wars.update_one(
@@ -841,6 +869,7 @@ async def cleanup_dead_families():
                     "$set": {
                         "wiped": True,
                         "wiped_at": now,
+                        "wipe_settlement_completed_at": now,
                         "wiped_by_family_id": winner_id,
                         "wiped_by_family_name": winner_family_name,
                         "boss_id": None,
@@ -865,6 +894,18 @@ async def cleanup_dead_families():
     return marked_any
 
 
+async def run_family_wipe_cleanup_ticker() -> None:
+    """Finalize dead-family wipes outside request/GET traffic."""
+    while True:
+        try:
+            await cleanup_dead_families()
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("Family wipe cleanup ticker failed")
+        await asyncio.sleep(30)
+
+
 _family_raid_locks: Dict[tuple, asyncio.Lock] = {}
 _family_raid_locks_guard = asyncio.Lock()
 
@@ -887,11 +928,157 @@ def _norm_fid(fid):
 
 
 async def _family_exists(family_id) -> bool:
-    """True if a families document exists for this id (admin/cap-exempt crews included)."""
+    """True if an active families document exists for this id."""
     fid = _norm_fid(family_id)
     if not fid:
         return False
-    return bool(await db.families.find_one({"id": fid}, {"_id": 1}))
+    return bool(await db.families.find_one({"id": fid, **ACTIVE_FAMILY_FILTER}, {"_id": 1}))
+
+
+async def _active_family(family_id: Any, projection: Optional[dict] = None) -> Optional[dict]:
+    """Load one live family. Historical memorials are deliberately excluded."""
+    fid = _norm_fid(family_id)
+    if not fid:
+        return None
+    return await db.families.find_one(
+        {"id": fid, **ACTIVE_FAMILY_FILTER},
+        projection or {"_id": 0},
+    )
+
+
+async def _build_memorial_roster(family_id: str, member_rows: Optional[list] = None) -> list:
+    """Create the immutable roster embedded in a wiped family memorial."""
+    rows = member_rows
+    if rows is None:
+        rows = await db.family_members.find(
+            {"family_id": family_id},
+            {"_id": 0},
+        ).sort([("joined_at", 1), ("id", 1)]).to_list(500)
+    user_map = await _users_map_by_ids(
+        [r.get("user_id") for r in rows if r.get("user_id")],
+        {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "rank": 1,
+            "is_dead": 1,
+            "dead_at": 1,
+        },
+    )
+    snapshot = []
+    seen = set()
+    for row in rows:
+        uid = _uid_str(row.get("user_id"))
+        if not uid or uid in seen:
+            continue
+        seen.add(uid)
+        user = user_map.get(uid) or {}
+        role = str(row.get("role") or "associate").strip().lower()
+        snapshot.append(
+            {
+                "user_id": uid,
+                "username": (user.get("username") or "?").strip() or "?",
+                "role": "boss" if role == "don" else role,
+                "rank": int(user.get("rank") or 1),
+                "is_dead": bool(user.get("is_dead")),
+                "dead_at": user.get("dead_at"),
+                "joined_at": row.get("joined_at"),
+            }
+        )
+    return snapshot
+
+
+async def claim_family_wipe(
+    family_id: str,
+    *,
+    wiped_at: str,
+    member_rows: Optional[list] = None,
+) -> Optional[dict]:
+    """Atomically claim wipe settlement, freeze its roster, and detach live identities.
+
+    The returned document is the pre-wipe family state used to calculate settlement.
+    A duplicate wipe path receives ``None`` and must not award assets again.
+    """
+    fid = _norm_fid(family_id)
+    if not fid:
+        return None
+    memorial_roster = await _build_memorial_roster(fid, member_rows)
+    claimed = await db.families.find_one_and_update(
+        {"id": fid, **ACTIVE_FAMILY_FILTER},
+        {
+            "$set": {
+                "wiped": True,
+                "wiped_at": wiped_at,
+                "wipe_settlement_started_at": wiped_at,
+                "memorial_roster": memorial_roster,
+            }
+        },
+        projection={"_id": 0},
+        return_document=ReturnDocument.BEFORE,
+    )
+    if not claimed:
+        return None
+    member_ids = [r["user_id"] for r in memorial_roster if r.get("user_id")]
+    if member_ids:
+        for uid in member_ids:
+            await db.users.update_one(
+                {**_user_id_filter_for_users_collection(uid), "family_id": fid},
+                {
+                    "$set": {
+                        "family_id": None,
+                        "family_role": None,
+                        **_family_melt_stats_reset_fields(),
+                    }
+                },
+            )
+            _invalidate_my_cache(uid)
+    await db.family_members.delete_many({"family_id": fid})
+    await db.family_join_applications.delete_many({"family_id": fid})
+    await db.family_crew_oc_applications.delete_many({"family_id": fid})
+    await db.properties.delete_many({"type": "family", "family_id": fid})
+    _invalidate_list_cache()
+    _invalidate_quicktrade_property_cache()
+    return claimed
+
+
+async def migrate_wiped_family_memorials() -> int:
+    """Freeze legacy wiped rosters and remove their rows from live membership."""
+    migrated = 0
+    cursor = db.families.find(
+        {"wiped": True, "memorial_roster": {"$exists": False}},
+        {"_id": 0, "id": 1},
+    )
+    async for family in cursor:
+        fid = _norm_fid(family.get("id"))
+        if not fid:
+            continue
+        rows = await db.family_members.find({"family_id": fid}, {"_id": 0}).to_list(500)
+        snapshot = await _build_memorial_roster(fid, rows)
+        result = await db.families.update_one(
+            {"id": fid, "wiped": True, "memorial_roster": {"$exists": False}},
+            {"$set": {"memorial_roster": snapshot}},
+        )
+        if not result.modified_count:
+            continue
+        ids = [r["user_id"] for r in snapshot if r.get("user_id")]
+        if ids:
+            for uid in ids:
+                await db.users.update_one(
+                    {**_user_id_filter_for_users_collection(uid), "family_id": fid},
+                    {
+                        "$set": {
+                            "family_id": None,
+                            "family_role": None,
+                            **_family_melt_stats_reset_fields(),
+                        }
+                    },
+                )
+                _invalidate_my_cache(uid)
+        await db.family_members.delete_many({"family_id": fid})
+        migrated += 1
+    if migrated:
+        _invalidate_list_cache()
+    return migrated
 
 
 async def resolve_family_id(user_id: str):
@@ -908,19 +1095,26 @@ async def resolve_family_id(user_id: str):
     if fid and await _family_exists(fid):
         return fid
     if variants:
-        m = await db.family_members.find_one(
-            {"user_id": {"$in": variants}},
-            {"_id": 0, "family_id": 1},
+        active_rows = await db.families.find(
+            ACTIVE_FAMILY_FILTER,
+            {"_id": 0, "id": 1},
+        ).to_list(FAMILY_LIST_QUERY_LIMIT)
+        active_ids = sorted(
+            {_norm_fid(row.get("id")) for row in active_rows if _norm_fid(row.get("id"))}
         )
+        m = await db.family_members.find_one(
+            {"user_id": {"$in": variants}, "family_id": {"$in": active_ids}},
+            {"_id": 0, "family_id": 1},
+            sort=[("joined_at", -1), ("id", 1)],
+        ) if active_ids else None
         fid = _norm_fid((m or {}).get("family_id"))
-        if fid and await _family_exists(fid):
+        if fid:
             return fid
         fam = await db.families.find_one(
-            {"boss_id": {"$in": variants}, "wiped": {"$ne": True}},
+            {"boss_id": {"$in": variants}, **ACTIVE_FAMILY_FILTER},
             {"_id": 0, "id": 1},
+            sort=[("created_at", -1), ("id", 1)],
         )
-        if not fam:
-            fam = await db.families.find_one({"boss_id": {"$in": variants}}, {"_id": 0, "id": 1})
         return _norm_fid((fam or {}).get("id"))
     return None
 
@@ -931,6 +1125,8 @@ async def _batch_resolve_family_ids(user_ids: list) -> dict:
     if not user_ids:
         return out
     user_ids = list(dict.fromkeys([u for u in user_ids if u]))
+    active_docs = await db.families.find(ACTIVE_FAMILY_FILTER, {"_id": 0, "id": 1}).to_list(FAMILY_LIST_QUERY_LIMIT)
+    active_ids = {_norm_fid(f.get("id")) for f in active_docs if _norm_fid(f.get("id"))}
     udocs = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "family_id": 1}).to_list(len(user_ids))
     seen = {u.get("id") for u in udocs}
     need_member = []
@@ -939,7 +1135,7 @@ async def _batch_resolve_family_ids(user_ids: list) -> dict:
         if not uid:
             continue
         fid = _norm_fid(u.get("family_id"))
-        if fid:
+        if fid in active_ids:
             out[uid] = fid
         else:
             need_member.append(uid)
@@ -948,22 +1144,30 @@ async def _batch_resolve_family_ids(user_ids: list) -> dict:
             need_member.append(uid)
     need_member = list(dict.fromkeys([u for u in need_member if u not in out]))
     if need_member:
-        mdocs = await db.family_members.find({"user_id": {"$in": need_member}}, {"_id": 0, "user_id": 1, "family_id": 1}).to_list(200)
-        mby = {m["user_id"]: m for m in mdocs}
+        mdocs = await db.family_members.find(
+            {"user_id": {"$in": need_member}, "family_id": {"$in": list(active_ids)}},
+            {"_id": 0, "user_id": 1, "family_id": 1, "joined_at": 1, "id": 1},
+        ).sort([("joined_at", -1), ("id", 1)]).to_list(500)
+        mby = {}
+        for m in mdocs:
+            mby.setdefault(m.get("user_id"), m)
         need_boss = []
         for uid in need_member:
             if uid in out:
                 continue
             m = mby.get(uid)
             fid = _norm_fid((m or {}).get("family_id")) if m else None
-            if fid:
+            if fid in active_ids:
                 out[uid] = fid
             else:
                 need_boss.append(uid)
     else:
         need_boss = []
     if need_boss:
-        fdocs = await db.families.find({"boss_id": {"$in": need_boss}}, {"_id": 0, "id": 1, "boss_id": 1}).to_list(50)
+        fdocs = await db.families.find(
+            {"boss_id": {"$in": need_boss}, **ACTIVE_FAMILY_FILTER},
+            {"_id": 0, "id": 1, "boss_id": 1, "created_at": 1},
+        ).sort([("created_at", -1), ("id", 1)]).to_list(50)
         for f in fdocs:
             bid = f.get("boss_id")
             if bid and bid not in out:
@@ -1492,7 +1696,7 @@ async def families_set_airport_crew_perk(
     perk = (request.airport_crew_perk or "").strip().lower()
     if perk not in AIRPORT_CREW_PERK_VALUES:
         raise HTTPException(status_code=400, detail="Invalid airport_crew_perk")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     role = (current_user.get("family_role") or "").strip().lower()
@@ -1597,12 +1801,9 @@ def _invalidate_my_cache(user_id: str):
 
 # ============ Routes ============
 async def families_list(current_user: dict = Depends(get_current_user)):
-    marked = await cleanup_dead_families()
-    if marked:
-        _invalidate_list_cache()
     # No in-memory cache: multi-worker setups would show stale data (e.g. deleted families) until TTL
     cursor = db.families.find(
-        {"wiped": {"$ne": True}},
+        ACTIVE_FAMILY_FILTER,
         {
             "_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1, "join_mode": 1, "crew_oc_cooldown_until": 1,
             "emblem_preset_id": 1, "avatar_url": 1,
@@ -1714,7 +1915,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
         current_user["family_id"] = family_id
         if ctx_role:
             current_user["family_role"] = ctx_role
-    fam = await db.families.find_one({"id": family_id}, {"_id": 0})
+    fam = await _active_family(family_id)
     if not fam:
         await db.users.update_one(
             _user_id_filter_for_users_collection(current_user["id"]),
@@ -1992,9 +2193,53 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
     if lookup_id:
         fam = await db.families.find_one({"id": lookup_id}, {"_id": 0})
     else:
-        fam = await db.families.find_one({"$or": [{"tag": tag_clean.upper()}, {"id": tag_clean}]}, {"_id": 0})
+        fam = await db.families.find_one(
+            {"tag": tag_clean.upper(), **ACTIVE_FAMILY_FILTER},
+            {"_id": 0},
+            sort=[("created_at", -1), ("id", 1)],
+        )
     if not fam:
         raise HTTPException(status_code=404, detail="Family not found")
+    if fam.get("wiped"):
+        memorial_members = []
+        memorial_fallen = []
+        for row in fam.get("memorial_roster") or []:
+            rank_id = int(row.get("rank") or 1)
+            entry = {
+                "user_id": row.get("user_id"),
+                "username": row.get("username") or "?",
+                "role": row.get("role") or "associate",
+                "rank_name": next((x["name"] for x in RANKS if x.get("id") == rank_id), str(rank_id)),
+                "dead_at": row.get("dead_at"),
+            }
+            if row.get("is_dead"):
+                memorial_fallen.append(entry)
+            else:
+                memorial_members.append(entry)
+        return {
+            "id": fam["id"],
+            "name": fam.get("name") or "?",
+            "tag": fam.get("tag") or "?",
+            "treasury": 0,
+            "treasury_bullets": 0,
+            "head_of_state": None,
+            "profile_text": (fam.get("profile_text") or "").strip() or None,
+            "profile_notepad_color": notepad_color_for_api_response(fam.get("profile_notepad_color")),
+            "avatar_url": fam.get("avatar_url"),
+            "emblem_preset_id": fam.get("emblem_preset_id"),
+            "member_count": 0,
+            "members": memorial_members,
+            "fallen": memorial_fallen,
+            "rackets": [],
+            "my_role": None,
+            "crew_oc_crew": [],
+            "wiped": True,
+            "wiped_at": fam.get("wiped_at"),
+            "wiped_by_family_id": fam.get("wiped_by_family_id"),
+            "wiped_by_family_name": (fam.get("wiped_by_family_name") or "").strip() or None,
+            "wiped_by_killer_id": fam.get("wiped_by_killer_id"),
+            "wiped_by_killer_username": (fam.get("wiped_by_killer_username") or "").strip() or None,
+        }
     members_docs = await db.family_members.find({"family_id": fam["id"]}, {"_id": 0}).to_list(200)
     lookup_uids = [m["user_id"] for m in members_docs if m.get("user_id")]
     bid = _uid_str(fam.get("boss_id"))
@@ -2138,14 +2383,13 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
 
 
 async def families_create(request: FamilyCreateRequest, current_user: dict = Depends(get_current_user)):
-    if current_user.get("family_id"):
+    if await resolve_family_id(current_user.get("id")):
         raise HTTPException(status_code=400, detail="Already in a family")
     is_admin = _is_admin(current_user)
     name = (request.name or "").strip()[:30]
     tag = (request.tag or "").strip().upper().replace(" ", "")[:4]
     if len(name) < 2 or len(tag) < 2:
         raise HTTPException(status_code=400, detail="Name and tag must be at least 2 characters")
-    await cleanup_dead_families()
     if not is_admin and await count_families_toward_player_cap() >= MAX_FAMILIES:
         raise HTTPException(status_code=400, detail="Maximum number of families reached")
     if await db.families.find_one({"wiped": {"$ne": True}, "$or": [{"name": name}, {"tag": tag}]}):
@@ -2183,6 +2427,7 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
     first_racket_id = FAMILY_RACKETS[0]["id"]
     fam_doc = {
         "id": family_id, "name": name, "tag": tag, "boss_id": current_user["id"],
+        "provisioning": True,
         "treasury": 0, "treasury_bullets": 0, "treasury_points": 0, "treasury_loot_pieces": 0, "created_at": now,
         "rackets": {first_racket_id: {"level": 1, "last_collected_at": None}},
         "compound_cash": 0, "compound_points": 0, "compound_loot_pieces": 0,
@@ -2202,7 +2447,13 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
         fam_doc["avatar_url"] = avatar_url_set
     if emblem_key:
         fam_doc["emblem_key"] = emblem_key
-    await db.families.insert_one(fam_doc)
+    try:
+        await db.families.insert_one(fam_doc)
+    except DuplicateKeyError:
+        raise HTTPException(
+            status_code=409,
+            detail="That active family name, tag, or emblem was just taken. Choose another.",
+        )
     await _delete_family_memberships_for_user(current_user["id"])
     await db.family_members.insert_one({
         "id": str(uuid.uuid4()), "family_id": family_id, "user_id": current_user["id"],
@@ -2238,6 +2489,10 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
                 else f"You need ${FAMILY_CREATE_COST:,} to create a family."
             ),
         )
+    await db.families.update_one(
+        {"id": family_id, "provisioning": True},
+        {"$set": {"provisioning": False}},
+    )
     _invalidate_list_cache()
     _invalidate_my_cache(current_user["id"])
     await maybe_revoke_civilian_protection(db, current_user["id"], "crew_create")
@@ -2294,19 +2549,26 @@ async def _resolve_family_id(identifier: str):
     if not identifier or not str(identifier).strip():
         return None, None
     ident = str(identifier).strip()
-    fam = await db.families.find_one({"id": ident}, {"_id": 0, "id": 1, "join_mode": 1, "join_auto_accept": 1, "join_auto_accept_rank_min": 1})
+    fam = await db.families.find_one(
+        {"id": ident, **ACTIVE_FAMILY_FILTER},
+        {"_id": 0, "id": 1, "join_mode": 1, "join_auto_accept": 1, "join_auto_accept_rank_min": 1},
+    )
     if fam:
         return fam, fam["id"]
     tag_clean = ident.upper().replace(" ", "")[:4]
     if tag_clean:
-        fam = await db.families.find_one({"tag": tag_clean, "wiped": {"$ne": True}}, {"_id": 0, "id": 1, "join_mode": 1, "join_auto_accept": 1, "join_auto_accept_rank_min": 1})
+        fam = await db.families.find_one(
+            {"tag": tag_clean, **ACTIVE_FAMILY_FILTER},
+            {"_id": 0, "id": 1, "join_mode": 1, "join_auto_accept": 1, "join_auto_accept_rank_min": 1},
+            sort=[("created_at", -1), ("id", 1)],
+        )
         if fam:
             return fam, fam["id"]
     return None, None
 
 
 async def families_join(request: FamilyJoinRequest, current_user: dict = Depends(get_current_user)):
-    if current_user.get("family_id"):
+    if await resolve_family_id(current_user.get("id")):
         raise HTTPException(status_code=400, detail="Already in a family")
     fam, family_id = await _resolve_family_id(request.family_id)
     if not fam or not family_id:
@@ -2324,7 +2586,7 @@ async def families_join(request: FamilyJoinRequest, current_user: dict = Depends
 
 async def families_apply(request: FamilyApplyRequest, current_user: dict = Depends(get_current_user)):
     """Apply to join a family when join_mode is approval. May auto-accept if family settings allow."""
-    if current_user.get("family_id"):
+    if await resolve_family_id(current_user.get("id")):
         raise HTTPException(status_code=400, detail="Already in a family")
     fam, family_id = await _resolve_family_id(request.family_id)
     if not fam or not family_id:
@@ -2367,7 +2629,7 @@ async def families_apply(request: FamilyApplyRequest, current_user: dict = Depen
 
 async def families_join_applications_list(current_user: dict = Depends(get_current_user)):
     """List pending join applications for the current user's family. Boss/Underboss only."""
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if current_user.get("family_role") not in ("boss", "underboss"):
@@ -2389,7 +2651,7 @@ async def families_join_applications_list(current_user: dict = Depends(get_curre
 
 
 async def families_join_application_accept(application_id: str, current_user: dict = Depends(get_current_user)):
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if current_user.get("family_role") not in ("boss", "underboss"):
@@ -2414,7 +2676,7 @@ async def families_join_application_accept(application_id: str, current_user: di
 
 
 async def families_join_application_deny(application_id: str, current_user: dict = Depends(get_current_user)):
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if current_user.get("family_role") not in ("boss", "underboss"):
@@ -2432,7 +2694,7 @@ async def families_join_settings(request: FamilyJoinSettingsRequest, current_use
     """Update family join mode and auto-accept settings. Boss only."""
     if current_user.get("family_role") != "boss":
         raise HTTPException(status_code=403, detail="Only Don can change join settings")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     updates = {}
@@ -2485,7 +2747,7 @@ def _normalize_melt_reward_tiers(tiers_raw: list) -> list:
 
 
 async def families_melt_settings(request: FamilyMeltSettingsRequest, current_user: dict = Depends(get_current_user)):
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     role = (current_user.get("family_role") or "").lower()
@@ -2512,7 +2774,7 @@ MIN_HEALTH_PCT = 1  # Health can never drop below 1% (e.g. if user leaves multip
 
 
 async def families_leave(current_user: dict = Depends(get_current_user)):
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     fam = await db.families.find_one({"id": family_id}, {"_id": 0, "boss_id": 1})
@@ -2563,7 +2825,7 @@ async def families_leave(current_user: dict = Depends(get_current_user)):
 
 
 async def families_kick(request: FamilyKickRequest, current_user: dict = Depends(get_current_user)):
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if current_user.get("family_role") not in ("boss", "underboss"):
@@ -2713,7 +2975,7 @@ async def families_sell_on_trade(
     pts = int(request.points or 0)
     if pts <= 0:
         raise HTTPException(status_code=400, detail="Points must be positive")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="You are not in a family")
     my_role = (current_user.get("family_role") or "").strip().lower()
@@ -2765,7 +3027,7 @@ async def families_assign_role(request: FamilyRoleRequest, current_user: dict = 
     my_role = (current_user.get("family_role") or "").strip().lower()
     if my_role not in ("boss", "underboss"):
         raise HTTPException(status_code=403, detail="Only Boss or Underboss can assign roles")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if request.role not in FAMILY_ROLES:
@@ -2828,7 +3090,7 @@ async def families_assign_role(request: FamilyRoleRequest, current_user: dict = 
 
 
 async def families_deposit(request: FamilyDepositRequest, current_user: dict = Depends(get_current_user)):
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if await _family_in_active_war(family_id):
@@ -2869,7 +3131,7 @@ async def families_deposit(request: FamilyDepositRequest, current_user: dict = D
 async def families_withdraw(request: FamilyWithdrawRequest, current_user: dict = Depends(get_current_user)):
     if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
         raise HTTPException(status_code=403, detail="Insufficient role")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if await _family_in_active_war(family_id):
@@ -2910,7 +3172,7 @@ async def families_withdraw(request: FamilyWithdrawRequest, current_user: dict =
 async def families_give_bullets(request: FamilyGiveBulletsRequest, current_user: dict = Depends(get_current_user)):
     if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
         raise HTTPException(status_code=403, detail="Insufficient role")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if await _family_in_active_war(family_id):
@@ -2953,7 +3215,7 @@ async def families_give_bullets(request: FamilyGiveBulletsRequest, current_user:
 async def families_split_all_bullets(current_user: dict = Depends(get_current_user)):
     if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
         raise HTTPException(status_code=403, detail="Insufficient role")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if await _family_in_active_war(family_id):
@@ -3020,7 +3282,7 @@ async def families_split_all_bullets(current_user: dict = Depends(get_current_us
 async def families_give_loot(request: FamilyGiveLootRequest, current_user: dict = Depends(get_current_user)):
     if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
         raise HTTPException(status_code=403, detail="Insufficient role")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if await _family_in_active_war(family_id):
@@ -3063,7 +3325,7 @@ async def families_give_loot(request: FamilyGiveLootRequest, current_user: dict 
 async def families_split_all_loot(current_user: dict = Depends(get_current_user)):
     if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
         raise HTTPException(status_code=403, detail="Insufficient role")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if await _family_in_active_war(family_id):
@@ -3132,7 +3394,7 @@ async def families_vault_transactions(
     skip: int = Query(0, ge=0),
     current_user: dict = Depends(get_current_user),
 ):
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     q = {"family_id": family_id}
@@ -3143,7 +3405,7 @@ async def families_vault_transactions(
 
 
 async def families_compound_deposit(request: CompoundDepositRequest, current_user: dict = Depends(get_current_user)):
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if await _family_in_active_war(family_id):
@@ -3186,7 +3448,7 @@ async def families_compound_deposit(request: CompoundDepositRequest, current_use
 async def families_compound_withdraw(request: CompoundWithdrawRequest, current_user: dict = Depends(get_current_user)):
     if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
         raise HTTPException(status_code=403, detail="Insufficient role")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if await _family_in_active_war(family_id):
@@ -3250,7 +3512,7 @@ async def families_compound_withdraw(request: CompoundWithdrawRequest, current_u
 async def families_compound_return_to_member(request: CompoundReturnToMemberRequest, current_user: dict = Depends(get_current_user)):
     if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
         raise HTTPException(status_code=403, detail="Insufficient role")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     target_id = (request.user_id or "").strip()
@@ -3310,7 +3572,7 @@ async def families_compound_return_to_member(request: CompoundReturnToMemberRequ
 async def families_compound_claim_for_family(request: CompoundClaimForFamilyRequest, current_user: dict = Depends(get_current_user)):
     if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
         raise HTTPException(status_code=403, detail="Insufficient role")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     target_id = (request.user_id or "").strip()
@@ -3384,7 +3646,7 @@ async def families_compound_claim_for_family(request: CompoundClaimForFamilyRequ
 
 
 async def families_perks_state(current_user: dict = Depends(get_current_user)):
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     fam = await db.families.find_one({"id": family_id}, {"_id": 0, "boss_id": 1, "family_perks": 1})
@@ -3566,7 +3828,7 @@ async def families_perks_contribute(request: FamilyPerksContributeRequest, curre
         raise HTTPException(status_code=400, detail="Enter at least 1 point")
     if amt > FAMILY_PERK_CONTRIBUTE_POINTS_MAX:
         raise HTTPException(status_code=400, detail="Amount too large")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if await _family_in_active_war(family_id):
@@ -3642,7 +3904,7 @@ async def families_perks_contribute(request: FamilyPerksContributeRequest, curre
 async def families_crew_oc_set_fee(request: FamilyCrewOCSetFeeRequest, current_user: dict = Depends(get_current_user)):
     if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
         raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can set Crew OC fee")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     fee = int(request.fee or 0)
@@ -3656,7 +3918,7 @@ async def families_crew_oc_set_fee(request: FamilyCrewOCSetFeeRequest, current_u
 async def families_crew_oc_set_auto_accept(request: FamilyCrewOCSetAutoAcceptRequest, current_user: dict = Depends(get_current_user)):
     if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
         raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can set Crew OC auto-accept")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     auto_accept = bool(request.auto_accept)
@@ -3699,7 +3961,7 @@ async def families_update_profile_text(request: FamilyProfileTextRequest, curren
     """Update your family's profile text and/or notepad background colour (hex). Only Boss, Underboss, or Capo."""
     if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
         raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can edit family profile")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     updates = {}
@@ -3797,7 +4059,7 @@ async def families_update_avatar(request: FamilyAvatarRequest, current_user: dic
     """Set crew emblem: preset_id, custom avatar_data (data URL), or clear. Each emblem is unique across active crews."""
     if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
         raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can set family emblem")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
 
@@ -3968,7 +4230,7 @@ async def schedule_crew_oc_auto_commit_for_family(family_id: str) -> None:
         return
     now = datetime.now(timezone.utc)
     fam = await db.families.find_one(
-        {"id": fid},
+        {"id": fid, **ACTIVE_FAMILY_FILTER},
         {"_id": 0, "family_perks": 1, "crew_oc_forum_topic_id": 1, "crew_oc_cooldown_until": 1, "name": 1, "tag": 1, "boss_id": 1},
     )
     if not fam:
@@ -4180,7 +4442,7 @@ async def run_crew_oc_auto_commit_tick_once(db) -> Dict[str, Any]:
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
     cursor = db.families.find(
-        {"crew_oc_auto_commit_due_at": {"$lte": now_iso}},
+        {"crew_oc_auto_commit_due_at": {"$lte": now_iso}, **ACTIVE_FAMILY_FILTER},
         {"_id": 0, "id": 1},
     ).sort("crew_oc_auto_commit_due_at", 1).limit(CREW_OC_AUTO_COMMIT_MAX_FAMILIES_PER_TICK)
     rows = await cursor.to_list(CREW_OC_AUTO_COMMIT_MAX_FAMILIES_PER_TICK)
@@ -4193,7 +4455,7 @@ async def run_crew_oc_auto_commit_tick_once(db) -> Dict[str, Any]:
             if await _family_in_active_war(fid):
                 continue
             fam = await db.families.find_one(
-                {"id": fid},
+                {"id": fid, **ACTIVE_FAMILY_FILTER},
                 {"_id": 0, "boss_id": 1, "family_perks": 1, "crew_oc_forum_topic_id": 1, "crew_oc_auto_commit_topic_id": 1},
             )
             if not fam:
@@ -4289,11 +4551,11 @@ async def families_cron_crew_oc_auto_commit(_: None = Depends(verify_cron_secret
 async def families_crew_oc_advertise(current_user: dict = Depends(get_current_user)):
     if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
         raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can advertise Crew OC")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     fam = await db.families.find_one(
-        {"id": family_id},
+        {"id": family_id, **ACTIVE_FAMILY_FILTER},
         {"_id": 0, "name": 1, "tag": 1, "crew_oc_forum_topic_id": 1, "crew_oc_cooldown_until": 1},
     )
     if not fam:
@@ -4359,7 +4621,7 @@ async def families_crew_oc_apply(request: FamilyCrewOCApplyRequest, current_user
 
 
 async def families_crew_oc_applications(current_user: dict = Depends(get_current_user)):
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     role = (current_user.get("family_role") or "").strip().lower()
@@ -4370,7 +4632,7 @@ async def families_crew_oc_applications(current_user: dict = Depends(get_current
 async def families_crew_oc_accept(application_id: str, current_user: dict = Depends(get_current_user)):
     if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
         raise HTTPException(status_code=403, detail="Insufficient role")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     app = await db.family_crew_oc_applications.find_one({"id": application_id, "family_id": family_id}, {"_id": 0})
@@ -4390,7 +4652,7 @@ async def families_crew_oc_accept(application_id: str, current_user: dict = Depe
 async def families_crew_oc_reject(application_id: str, current_user: dict = Depends(get_current_user)):
     if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
         raise HTTPException(status_code=403, detail="Insufficient role")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     app = await db.family_crew_oc_applications.find_one({"id": application_id, "family_id": family_id}, {"_id": 0})
@@ -4430,7 +4692,7 @@ async def families_crew_oc_reject(application_id: str, current_user: dict = Depe
 async def families_crew_oc_kick(application_id: str, current_user: dict = Depends(get_current_user)):
     if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
         raise HTTPException(status_code=403, detail="Insufficient role")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     app = await db.family_crew_oc_applications.find_one({"id": application_id, "family_id": family_id}, {"_id": 0})
@@ -4591,7 +4853,7 @@ async def _execute_crew_oc_commit(
 async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)):
     if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
         raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can commit Crew OC")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     await db.families.update_one(
@@ -4611,7 +4873,7 @@ async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)
 
 
 async def families_racket_collect(racket_id: str, current_user: dict = Depends(get_current_user)):
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     fam = await db.families.find_one({"id": family_id}, {"_id": 0, "treasury": 1, "rackets": 1, "racket_income_bonus_percent": 1, "event_active_until": 1})
@@ -4803,7 +5065,7 @@ async def families_safe_deposit_withdraw(body: FamilySafeDepositBody, current_us
 async def families_racket_unlock(racket_id: str, current_user: dict = Depends(get_current_user)):
     if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
         raise HTTPException(status_code=403, detail="Insufficient role")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if await _family_in_active_war(family_id):
@@ -4850,7 +5112,7 @@ async def families_racket_unlock(racket_id: str, current_user: dict = Depends(ge
 async def families_racket_upgrade(racket_id: str, current_user: dict = Depends(get_current_user)):
     if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
         raise HTTPException(status_code=403, detail="Insufficient role")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if await _family_in_active_war(family_id):
@@ -4891,7 +5153,7 @@ async def families_racket_upgrade(racket_id: str, current_user: dict = Depends(g
 
 
 async def families_racket_armory_catalog(current_user: dict = Depends(get_current_user)):
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         return {"defence_catalog": FAMILY_RACKET_DEFENCE_UPGRADES, "offence_catalog": FAMILY_RACKET_OFFENCE_UPGRADES, "rackets": {}, "offence_upgrades": [], "offence_weight": 0}
     fam = await db.families.find_one({"id": family_id}, {"_id": 0, "rackets": 1, "racket_offence_upgrades": 1})
@@ -4918,7 +5180,7 @@ async def families_racket_armory_catalog(current_user: dict = Depends(get_curren
 async def families_racket_buy_defence(racket_id: str, request: FamilyRacketBuyDefenceRequest, current_user: dict = Depends(get_current_user)):
     if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
         raise HTTPException(status_code=403, detail="Insufficient role")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if await _family_in_active_war(family_id):
@@ -4967,7 +5229,7 @@ async def families_racket_buy_defence(racket_id: str, request: FamilyRacketBuyDe
 async def families_racket_buy_offence(request: FamilyRacketBuyOffenceRequest, current_user: dict = Depends(get_current_user)):
     if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
         raise HTTPException(status_code=403, detail="Insufficient role")
-    family_id = current_user.get("family_id")
+    family_id = await _live_family_id_for_user(current_user)
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if await _family_in_active_war(family_id):
@@ -5006,7 +5268,7 @@ async def families_racket_buy_offence(request: FamilyRacketBuyOffenceRequest, cu
 
 
 async def families_racket_attack_targets(debug: bool = False, current_user: dict = Depends(get_current_user)):
-    my_family_id = current_user.get("family_id")
+    my_family_id = await _live_family_id_for_user(current_user)
     if not my_family_id:
         return {"targets": []}
     atk_fam = await db.families.find_one({"id": my_family_id}, {"_id": 0, "racket_offence_upgrades": 1})
@@ -5082,7 +5344,7 @@ async def families_racket_attack_targets(debug: bool = False, current_user: dict
 
 
 async def families_attack_racket(request: FamilyAttackRacketRequest, current_user: dict = Depends(get_current_user)):
-    my_family_id = current_user.get("family_id")
+    my_family_id = await _live_family_id_for_user(current_user)
     if not my_family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if await _family_in_active_war(my_family_id):
@@ -5090,7 +5352,7 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
     if await _family_in_active_war(request.family_id):
         raise HTTPException(status_code=403, detail="Target crew is at war — rackets are locked")
     target_fam = await db.families.find_one(
-        {"id": request.family_id},
+        {"id": request.family_id, **ACTIVE_FAMILY_FILTER},
         {"_id": 0, "name": 1, "tag": 1, "treasury": 1, "rackets": 1, "racket_income_bonus_percent": 1},
     )
     if not target_fam or request.family_id == my_family_id:
@@ -5106,7 +5368,7 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
         if raids_on_crew >= FAMILY_RACKET_ATTACK_MAX_PER_CREW:
             raise HTTPException(status_code=400, detail="Only 2 raids per family every 3 hours. You've used your raids on this crew.")
         target_fam = await db.families.find_one(
-            {"id": request.family_id},
+            {"id": request.family_id, **ACTIVE_FAMILY_FILTER},
             {"_id": 0, "name": 1, "tag": 1, "treasury": 1, "rackets": 1, "racket_income_bonus_percent": 1},
         )
         if not target_fam:
@@ -5116,7 +5378,7 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
         if level < 1:
             raise HTTPException(status_code=400, detail="Racket not active")
         last_at = state.get("last_collected_at")
-        atk_fam = await db.families.find_one({"id": my_family_id}, {"_id": 0, "name": 1, "tag": 1, "racket_offence_upgrades": 1})
+        atk_fam = await db.families.find_one({"id": my_family_id, **ACTIVE_FAMILY_FILTER}, {"_id": 0, "name": 1, "tag": 1, "racket_offence_upgrades": 1})
         offence_weight = _racket_offence_weight((atk_fam or {}).get("racket_offence_upgrades"))
         defence_upgrades = list(state.get("defence_upgrades") or [])
         defence_weight = _racket_defence_weight(defence_upgrades)
@@ -5235,6 +5497,13 @@ async def _current_family_context(current_user: dict) -> tuple[Optional[str], Op
     uid = current_user.get("id")
     family_id = _norm_fid(current_user.get("family_id"))
     if family_id and not await _family_exists(family_id):
+        await db.users.update_one(
+            _user_id_filter_for_users_collection(uid),
+            {"$set": {"family_id": None, "family_role": None}},
+        )
+        current_user["family_id"] = None
+        current_user["family_role"] = None
+        _invalidate_my_cache(str(uid or ""))
         family_id = None
     if not family_id and uid:
         family_id = _norm_fid(await resolve_family_id(uid))
@@ -5256,6 +5525,12 @@ async def _current_family_context(current_user: dict) -> tuple[Optional[str], Op
             if bid and any(_uid_str(v) == bid for v in variants):
                 role = "boss"
     return family_id, role
+
+
+async def _live_family_id_for_user(current_user: dict) -> Optional[str]:
+    """Return only live membership, clearing a stale memorial pointer."""
+    family_id, _role = await _current_family_context(current_user)
+    return family_id
 
 
 async def families_war(current_user: dict = Depends(get_current_user)):

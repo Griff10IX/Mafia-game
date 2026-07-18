@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, Building2, DollarSign, TrendingUp, TrendingDown, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw, Clock, ChevronRight, ChevronDown, MessageSquare, UserPlus, Lock, Unlock, ArrowUpCircle, Flame, MapPin, Plane, Sparkles } from 'lucide-react';
+import { Users, Building2, DollarSign, TrendingUp, TrendingDown, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw, Clock, ChevronRight, ChevronDown, MessageSquare, UserPlus, Lock, Unlock, ArrowUpCircle, Flame, MapPin, Plane, Sparkles, Search } from 'lucide-react';
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import { getRacketAccent } from '../../constants';
@@ -1963,27 +1963,83 @@ function FamilyListCrewOCHint({ isoUntil }) {
   );
 }
 
-const FamiliesTab = ({ families, myFamilyId }) => {
+const FamiliesTab = ({ families, myFamilyId, onRefresh, refreshing = false }) => {
   const [, setFamiliesOcTick] = useState(0);
+  const [query, setQuery] = useState('');
   useEffect(() => {
     if (!families?.length) return undefined;
     const id = setInterval(() => setFamiliesOcTick((x) => x + 1), 1000);
     return () => clearInterval(id);
   }, [families]);
 
+  const activeFamilies = useMemo(
+    () => (families || []).filter((f) => f?.id && f.wiped !== true),
+    [families],
+  );
+  const visibleFamilies = useMemo(() => {
+    const needle = query.trim().toLowerCase();
+    const filtered = needle
+      ? activeFamilies.filter((f) => (
+        String(f.name || '').toLowerCase().includes(needle)
+        || String(f.tag || '').toLowerCase().includes(needle)
+      ))
+      : activeFamilies;
+    return [...filtered].sort((a, b) => {
+      if (a.id === myFamilyId) return -1;
+      if (b.id === myFamilyId) return 1;
+      return String(a.name || '').localeCompare(String(b.name || ''));
+    });
+  }, [activeFamilies, myFamilyId, query]);
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 max-h-80 overflow-y-auto pr-1">
-      {families.length === 0 ? (
-        <div className="text-center py-10 col-span-2">
+    <div className="space-y-2">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+        <div className="flex items-center justify-between gap-2 sm:min-w-[11rem]">
+          <div>
+            <p className="text-[9px] text-mutedForeground font-heading uppercase tracking-widest">Active crews</p>
+            <p className="text-sm text-primary font-heading font-bold tabular-nums">{activeFamilies.length}</p>
+          </div>
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={refreshing}
+            className="inline-flex items-center justify-center gap-1 min-h-[36px] px-2.5 rounded-md border border-primary/25 bg-primary/8 text-[9px] text-primary font-heading font-bold uppercase tracking-wider hover:bg-primary/15 disabled:opacity-50"
+            title="Refresh active families"
+          >
+            <RefreshCw size={11} className={refreshing ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+        </div>
+        <label className="relative flex-1">
+          <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
+          <input
+            type="search"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search crew name or tag"
+            className="w-full min-h-[38px] rounded-md border border-zinc-700/50 bg-zinc-900/45 pl-8 pr-3 text-[10px] text-foreground font-heading placeholder:text-zinc-600 focus:outline-none focus:border-primary/40"
+            aria-label="Search families"
+          />
+        </label>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 max-h-80 overflow-y-auto pr-1">
+      {activeFamilies.length === 0 ? (
+        <div className="text-center py-10 col-span-2 rounded-lg border border-dashed border-zinc-700/40 bg-zinc-900/20">
           <Building2 size={28} className="mx-auto text-zinc-700 mb-2" />
-          <p className="text-xs text-zinc-500 font-heading tracking-wider uppercase">No known families</p>
-          <p className="text-[9px] text-zinc-600 font-heading mt-1 italic">The underworld awaits its first Don</p>
+          <p className="text-xs text-zinc-500 font-heading tracking-wider uppercase">No active families</p>
+          <p className="text-[9px] text-zinc-600 font-heading mt-1 italic">Wiped crews remain available only through memorial links.</p>
+        </div>
+      ) : visibleFamilies.length === 0 ? (
+        <div className="text-center py-8 col-span-2 rounded-lg border border-dashed border-zinc-700/40 bg-zinc-900/20">
+          <Search size={24} className="mx-auto text-zinc-700 mb-2" />
+          <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-wider">No crews match “{query.trim()}”</p>
         </div>
       ) : (
-        families.map((f, idx) => (
+        visibleFamilies.map((f, idx) => (
           <Link
             key={f.id}
-            to={`/families/${encodeURIComponent(f.tag || f.id)}`}
+            to={`/families/${encodeURIComponent(f.id)}`}
             className={`relative flex items-center justify-between gap-2 px-2.5 sm:px-3 py-2 min-h-[44px] sm:min-h-0 rounded-lg transition-all group fam-member-row fam-fade-in overflow-hidden touch-manipulation ${myFamilyId === f.id ? 'bg-primary/5 border border-primary/25' : 'bg-zinc-800/30 border border-zinc-700/30 hover:border-zinc-600/50'}`}
             style={{ animationDelay: `${idx * 0.03}s` }}
           >
@@ -2008,7 +2064,15 @@ const FamiliesTab = ({ families, myFamilyId }) => {
                 )}
               </div>
               <div className="mt-0.5">
-                <FamilyListCrewOCHint isoUntil={f.crew_oc_cooldown_until} />
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <FamilyListCrewOCHint isoUntil={f.crew_oc_cooldown_until} />
+                  <span className={`inline-flex items-center gap-0.5 text-[8px] font-heading font-bold ${
+                    f.join_mode === 'approval' ? 'text-amber-400/85' : 'text-emerald-400/85'
+                  }`}>
+                    {f.join_mode === 'approval' ? <Lock size={8} /> : <Unlock size={8} />}
+                    {f.join_mode === 'approval' ? 'Apply to join' : 'Open'}
+                  </span>
+                </div>
               </div>
               </div>
             </div>
@@ -2020,6 +2084,7 @@ const FamiliesTab = ({ families, myFamilyId }) => {
           </Link>
         ))
       )}
+      </div>
     </div>
   );
 };
@@ -3087,6 +3152,7 @@ const StateHeadTab = ({
 const NoFamilyView = ({
   families, config, createName, setCreateName, createTag, setCreateTag, onCreate, joinId, setJoinId, onJoin, joinModeForSelected, warHistory, onDetails,
   emblemPresets, createEmblemPreset, setCreateEmblemPreset, createEmblemDataUrl, setCreateEmblemDataUrl,
+  onFamiliesRefresh, familiesRefreshing,
 }) => {
   const maxFamilies = config?.max_families ?? 6;
   const towardCap = config?.player_cap_families_count ?? 0;
@@ -3211,7 +3277,12 @@ const NoFamilyView = ({
         <span className="text-xs font-heading font-bold text-zinc-400 uppercase tracking-widest">Known Families</span>
       </div>
       <div className="p-2 sm:p-2.5">
-        <FamiliesTab families={families} myFamilyId={null} />
+        <FamiliesTab
+          families={families}
+          myFamilyId={null}
+          onRefresh={onFamiliesRefresh}
+          refreshing={familiesRefreshing}
+        />
       </div>
     </div>
 
@@ -3282,6 +3353,7 @@ export default function FamilyPage() {
   const [armoryCatalog, setArmoryCatalog] = useState(null);
   const [defenceSheetRacket, setDefenceSheetRacket] = useState(null);
   const [armoryBusy, setArmoryBusy] = useState(null);
+  const [familiesRefreshing, setFamiliesRefreshing] = useState(false);
   /** False until we have a /families/my-shaped payload (prefetch or first fetch). Avoids one frame of join/create UI while myFamily is still null. */
   const [familyMembershipResolved, setFamilyMembershipResolved] = useState(() => getFamiliesPrefetch()?.myFamily != null);
 
@@ -3344,11 +3416,14 @@ export default function FamilyPage() {
     }
   }, []);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async ({ silent = false } = {}) => {
+    setFamiliesRefreshing(true);
     try {
-      const dashRes = await apiRequestWith429Retry(() => api.get('/families/dashboard'));
+      const dashRes = await apiRequestWith429Retry(() => api.get('/families/dashboard', {
+        params: { _: Date.now() },
+      }));
       const dash = dashRes.data || {};
-      const nextFamilies = dash.families || [];
+      const nextFamilies = (dash.families || []).filter((f) => f?.id && f.wiped !== true);
       const nextMyFamily = dash.my_family ?? null;
       const nextConfig = dash.config ?? null;
       const nextWarHistory = dash.war_history || [];
@@ -3377,8 +3452,12 @@ export default function FamilyPage() {
       } else {
         setWarStats({ wars: [] });
       }
-    } catch (e) { toast.error(apiDetail(e)); }
-    finally { setFamilyMembershipResolved(true); }
+    } catch (e) {
+      if (!silent) toast.error(apiDetail(e));
+    } finally {
+      setFamilyMembershipResolved(true);
+      setFamiliesRefreshing(false);
+    }
   }, [fetchWarStats]);
 
   const fetchRacketAttackTargets = useCallback(async () => {
@@ -3795,6 +3874,24 @@ export default function FamilyPage() {
   };
 
   useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    if (family?.id && activeTab !== 'families') return undefined;
+    const refreshSilently = () => {
+      if (document.visibilityState !== 'hidden') fetchData({ silent: true });
+    };
+    refreshSilently();
+    const intervalId = setInterval(refreshSilently, 30000);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refreshSilently();
+    };
+    window.addEventListener('focus', refreshSilently);
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('focus', refreshSilently);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
+  }, [activeTab, family?.id, fetchData]);
   useEffect(() => { const id = setInterval(() => setTick((t) => t + 1), 1000); return () => clearInterval(id); }, []);
   useEffect(() => {
     if (activeTab === 'treasury' && myFamily?.family) fetchVaultTransactions();
@@ -4223,7 +4320,14 @@ export default function FamilyPage() {
                   onAcceptTruce={handleAcceptTruceAtIndex}
                 />
               )}
-              {activeTab === 'families' && <FamiliesTab families={families} myFamilyId={family?.id} />}
+              {activeTab === 'families' && (
+                <FamiliesTab
+                  families={families}
+                  myFamilyId={family?.id}
+                  onRefresh={() => fetchData()}
+                  refreshing={familiesRefreshing}
+                />
+              )}
               {activeTab === 'history' && <WarHistoryTab wars={warHistory} onDetails={handleWarDetails} />}
             </div>
           </div>
@@ -4253,6 +4357,8 @@ export default function FamilyPage() {
           setCreateEmblemPreset={setCreateEmblemPreset}
           createEmblemDataUrl={createEmblemDataUrl}
           setCreateEmblemDataUrl={setCreateEmblemDataUrl}
+          onFamiliesRefresh={() => fetchData()}
+          familiesRefreshing={familiesRefreshing}
         />
       )}
 

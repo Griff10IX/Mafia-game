@@ -338,9 +338,10 @@ export default function HelpDesk() {
 
   const handleChangeFamilyName = async (e) => {
     e.preventDefault();
+    const familyId = (selectedRenameFamily?.id || '').trim();
     const tag = (selectedRenameFamily?.tag || '').trim().toUpperCase();
     const name = (newFamilyName || '').trim();
-    if (!tag) { toast.error('Select a crew from the list'); return; }
+    if (!familyId) { toast.error('Select a crew from the list'); return; }
     if (name.length < 2 || name.length > 30) { toast.error('New name must be 2–30 characters'); return; }
     const tagVal = (newFamilyTag || '').trim();
     if (tagVal && (tagVal.length < 2 || tagVal.length > 4)) {
@@ -351,6 +352,7 @@ export default function HelpDesk() {
     setChangingFamily(true);
     try {
       await api.post('/help-desk/change-family-name', {
+        family_id: familyId,
         family_tag: tag,
         new_name: name,
         new_tag: tagVal || undefined,

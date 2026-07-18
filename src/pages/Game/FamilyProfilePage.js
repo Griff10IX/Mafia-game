@@ -204,7 +204,8 @@ export default function FamilyProfilePage() {
     const id = (familyId && String(familyId).trim()) || '';
     if (!id || id === 'undefined' || id === 'null') { setFamily(null); setHasLoaded(true); return; }
     const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id);
-    const cached = getFamilyProfilePrefetch(id);
+    // Tags can be reused after a crew is wiped. Only immutable IDs are safe cache keys.
+    const cached = isUuid ? getFamilyProfilePrefetch(id) : null;
     if (cached) {
       setFamily(cached);
       setProfileTextEdit((cached?.profile_text || '').trim() || '');
@@ -218,9 +219,7 @@ export default function FamilyProfilePage() {
         setFamily(res.data);
         setProfileTextEdit((res.data?.profile_text || '').trim() || '');
         setNotepadColorEdit(res.data?.profile_notepad_color ?? '');
-        setFamilyProfilePrefetch(id, res.data);
         if (res.data?.id) setFamilyProfilePrefetch(res.data.id, res.data);
-        if (res.data?.tag) setFamilyProfilePrefetch(res.data.tag, res.data);
       } catch (e) {
         toast.error(e.response?.data?.detail ?? e.message ?? 'Family not found');
         setFamily(null);
@@ -276,7 +275,7 @@ export default function FamilyProfilePage() {
     try {
       const res = await api.post('/families/crew-oc/apply', { family_id: family.id });
       toast.success(res.data?.message || 'Applied.');
-      const r = await apiRequestWith429Retry(() => api.get('/families/lookup', { params: { tag: family.tag } }));
+      const r = await apiRequestWith429Retry(() => api.get('/families/lookup', { params: { id: family.id } }));
       setFamily(r.data);
       setProfileTextEdit((r.data?.profile_text || '').trim() || '');
       setNotepadColorEdit(r.data?.profile_notepad_color ?? '');
@@ -309,7 +308,7 @@ export default function FamilyProfilePage() {
         notepad_color: (notepadColorEdit || '').trim() === '' ? '' : notepadColorEdit.trim(),
       });
       toast.success('Family profile updated.');
-      const r = await apiRequestWith429Retry(() => api.get('/families/lookup', { params: { tag: family.tag } }));
+      const r = await apiRequestWith429Retry(() => api.get('/families/lookup', { params: { id: family.id } }));
       setFamily(r.data);
       setProfileTextEdit((r.data?.profile_text || '').trim() || '');
       setNotepadColorEdit(r.data?.profile_notepad_color ?? '');
@@ -319,12 +318,11 @@ export default function FamilyProfilePage() {
   };
 
   const refreshFamilyLookup = async () => {
-    const r = await apiRequestWith429Retry(() => api.get('/families/lookup', { params: { tag: family.tag } }));
+    const r = await apiRequestWith429Retry(() => api.get('/families/lookup', { params: { id: family.id } }));
     setFamily(r.data);
     setProfileTextEdit((r.data?.profile_text || '').trim() || '');
     setNotepadColorEdit(r.data?.profile_notepad_color ?? '');
     if (r.data?.id) setFamilyProfilePrefetch(r.data.id, r.data);
-    if (r.data?.tag) setFamilyProfilePrefetch(r.data.tag, r.data);
   };
 
   const applyEmblemPreset = async (presetId) => {

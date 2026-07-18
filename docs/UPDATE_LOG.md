@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-18 18:04 UTC[/color][/b] — [b]Family identity and list reliability[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] Wiped crews now leave the active Families list, cannot use live crew features, and keep a read-only memorial roster at their permanent crew link.[/color]
+[*][color=#888888][b]Fixed:[/b] Reused crew tags now resolve to the active crew, while permanent ID links always open the exact crew intended.[/color]
+[*][color=#888888][b]Improved:[/b] The Families list now refreshes automatically, supports name/tag search and manual refresh, and shows active crew, war, joining, and Crew OC statuses more clearly.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-18 17:40 UTC[/color][/b] — [b]Profile family links[/b][/size]
 [quote]
 [list]

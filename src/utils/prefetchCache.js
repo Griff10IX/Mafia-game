@@ -1,5 +1,6 @@
 const CRIMES_PREFETCH_MAX_AGE_MS = 30000;
 const PROFILE_PREFETCH_MAX_AGE_MS = 60000;
+const IMMUTABLE_FAMILY_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Last /auth/me username in this tab — lets /profile/:user render before /auth/me finishes when viewing someone else. */
 const PROFILE_SESSION_LAST_ME_USERNAME_KEY = 'mafia_last_me_username_v1';
@@ -87,17 +88,32 @@ export function clearProfilePrefetch(username) {
 
 export function getFamiliesPrefetch() {
   if (!familiesPrefetch?.data) return null;
-  const age = Date.now() - (familiesPrefetch.timestamp || 0);
-  if (age > FAMILIES_PREFETCH_MAX_AGE_MS) {
+  const now = Date.now();
+  const timestamps = familiesPrefetch.timestamps || {};
+  const fresh = {};
+  Object.entries(familiesPrefetch.data).forEach(([key, value]) => {
+    const timestamp = timestamps[key] || familiesPrefetch.timestamp || 0;
+    if (now - timestamp <= FAMILIES_PREFETCH_MAX_AGE_MS) fresh[key] = value;
+  });
+  if (Object.keys(fresh).length === 0) {
     familiesPrefetch = null;
     return null;
   }
-  return familiesPrefetch.data;
+  return fresh;
 }
 
 export function setFamiliesPrefetch(data) {
   if (!data) return;
-  familiesPrefetch = { data, timestamp: Date.now() };
+  const previousData = familiesPrefetch?.data || {};
+  const previousTimestamps = familiesPrefetch?.timestamps || {};
+  const now = Date.now();
+  const timestamps = {};
+  Object.entries(data).forEach(([key, value]) => {
+    timestamps[key] = previousData[key] === value
+      ? (previousTimestamps[key] || familiesPrefetch?.timestamp || now)
+      : now;
+  });
+  familiesPrefetch = { data, timestamps };
 }
 
 export function clearFamiliesPrefetch() {
@@ -106,7 +122,7 @@ export function clearFamiliesPrefetch() {
 
 export function getFamilyProfilePrefetch(familyIdOrTag) {
   const key = String(familyIdOrTag || '').trim().toLowerCase();
-  if (!key) return null;
+  if (!IMMUTABLE_FAMILY_ID_RE.test(key)) return null;
   const row = familyProfilePrefetch[key];
   if (!row?.data) return null;
   const age = Date.now() - (row.timestamp || 0);
@@ -119,13 +135,13 @@ export function getFamilyProfilePrefetch(familyIdOrTag) {
 
 export function setFamilyProfilePrefetch(familyIdOrTag, data) {
   const key = String(familyIdOrTag || '').trim().toLowerCase();
-  if (!key || !data) return;
+  if (!IMMUTABLE_FAMILY_ID_RE.test(key) || !data) return;
   familyProfilePrefetch[key] = { data, timestamp: Date.now() };
 }
 
 export function clearFamilyProfilePrefetch(familyIdOrTag) {
   const key = String(familyIdOrTag || '').trim().toLowerCase();
-  if (!key) return;
+  if (!IMMUTABLE_FAMILY_ID_RE.test(key)) return;
   delete familyProfilePrefetch[key];
 }
 

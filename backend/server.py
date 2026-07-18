@@ -1739,8 +1739,10 @@ async def _family_war_start(family_a_id: str, family_b_id: str):
     """Start or ensure an active war between two families. Idempotent."""
     if not family_a_id or not family_b_id or family_a_id == family_b_id:
         return
-    fa = await db.families.find_one({"id": family_a_id}, {"_id": 0, "name": 1, "tag": 1})
-    fb = await db.families.find_one({"id": family_b_id}, {"_id": 0, "name": 1, "tag": 1})
+    fa = await db.families.find_one({"id": family_a_id, "wiped": {"$ne": True}}, {"_id": 0, "name": 1, "tag": 1})
+    fb = await db.families.find_one({"id": family_b_id, "wiped": {"$ne": True}}, {"_id": 0, "name": 1, "tag": 1})
+    if not fa or not fb:
+        return
     family_a_name = (fa or {}).get("name") or (fa or {}).get("tag") or family_a_id
     family_b_name = (fb or {}).get("name") or (fb or {}).get("tag") or family_b_id
     now = datetime.now(timezone.utc).isoformat()
@@ -1800,7 +1802,10 @@ async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_
     if not active_wars:
         return
     war = active_wars[0]
-    members = await db.family_members.find({"family_id": victim_family_id}, {"_id": 0, "user_id": 1}).to_list(100)
+    members = await db.family_members.find(
+        {"family_id": victim_family_id},
+        {"_id": 0, "id": 1, "family_id": 1, "user_id": 1, "role": 1, "joined_at": 1},
+    ).to_list(100)
     alive = 0
     for m in members:
         u = await db.users.find_one({"id": m["user_id"]}, {"_id": 0, "id": 1, "is_dead": 1})
@@ -1822,17 +1827,36 @@ async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_
     now_dt = datetime.now(timezone.utc)
     now = now_dt.isoformat()
     loser_family = await db.families.find_one({"id": loser_id}, {"_id": 0, "name": 1, "tag": 1, "rackets": 1, "treasury": 1, "compound_cash": 1, "compound_points": 1, "compound_loot_pieces": 1})
-    winner_family = await db.families.find_one({"id": winner_id}, {"_id": 0, "name": 1, "tag": 1, "boss_id": 1, "racket_income_bonus_percent": 1, "rackets": 1})
+    winner_family = await db.families.find_one(
+        {"id": winner_id, "wiped": {"$ne": True}},
+        {"_id": 0, "name": 1, "tag": 1, "boss_id": 1, "racket_income_bonus_percent": 1, "rackets": 1},
+    )
     winner_family_name = (winner_family or {}).get("name") or (winner_family or {}).get("tag") or winner_id or "?"
     loser_family_name = (loser_family or {}).get("name") or (loser_family or {}).get("tag") or loser_id
     killer_user = await db.users.find_one({"id": killer_id}, {"_id": 0, "username": 1}) if solo_killer and killer_id else None
     killer_username = (killer_user or {}).get("username") or "?" if solo_killer else None
+    from routers.game.families import claim_family_wipe
+
+    claimed_family = await claim_family_wipe(
+        loser_id,
+        wiped_at=now,
+        member_rows=members,
+    )
+    if not claimed_family:
+        return
+    loser_family = claimed_family
     if not winner_family:
         await clear_or_transfer_state_head_on_wipe(loser_id, winner_id)
         await db.families.update_one(
             {"id": loser_id},
             {
-                "$set": {"wiped": True, "wiped_at": now, "boss_id": None, "head_of_state": None},
+                "$set": {
+                    "wiped": True,
+                    "wiped_at": now,
+                    "wipe_settlement_completed_at": now,
+                    "boss_id": None,
+                    "head_of_state": None,
+                },
                 "$unset": {"pending_state_takeover": "", "pending_state_takeover_at": ""},
             },
         )
@@ -2023,6 +2047,7 @@ async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_
     family_wiped_set = {
         "wiped": True,
         "wiped_at": now,
+        "wipe_settlement_completed_at": now,
         "boss_id": None,
         "head_of_state": None,
         "rackets": {},
@@ -3657,6 +3682,13 @@ async def startup_db():
     from ensure_indexes import ensure_all_indexes
     await ensure_profile_indexes(db)
     await ensure_all_indexes(db)
+    try:
+        migrated_memorials = await families.migrate_wiped_family_memorials()
+        if migrated_memorials:
+            logging.info("Frozen %s legacy family memorial roster(s)", migrated_memorials)
+    except Exception as e:
+        logging.warning("Family memorial migration failed: %s", e)
+    asyncio.create_task(families.run_family_wipe_cleanup_ticker())
     try:
         from utils.tutorial import ensure_tutorial_indexes, TUTORIAL_STATUS_SKIPPED
 
