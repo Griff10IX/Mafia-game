@@ -147,7 +147,6 @@ from utils.profile_cosmetics import (
 )
 
 FAMILY_SAFE_DEPOSIT_TIER_COST_POINTS = 600
-FAMILY_SAFE_DEPOSIT_CAP_PER_TIER = 50_000_000
 FAMILY_SAFE_DEPOSIT_MAX_TIERS = 3
 FAMILY_EVENT_TOKEN_COST_POINTS = 250
 FAMILY_EVENT_DURATION_DAYS = 3
@@ -793,8 +792,10 @@ async def buy_family_safe_deposit_tier(
     user_result = await db.users.update_one({"id": current_user["id"], **gte_filter}, {"$inc": inc})
     if user_result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    from routers.game.families import FAMILY_SAFE_DEPOSIT_TIER_CAPS
+
     new_tiers = tiers + 1
-    new_cap = new_tiers * FAMILY_SAFE_DEPOSIT_CAP_PER_TIER
+    new_cap = FAMILY_SAFE_DEPOSIT_TIER_CAPS[min(new_tiers, len(FAMILY_SAFE_DEPOSIT_TIER_CAPS)) - 1]
     fam_result = await db.families.update_one(
         {"id": family_id, "$or": [{"safe_deposit_tiers": {"$lt": FAMILY_SAFE_DEPOSIT_MAX_TIERS}}, {"safe_deposit_tiers": {"$exists": False}}]},
         {"$set": {"safe_deposit_tiers": new_tiers, "safe_deposit_cap": new_cap}},

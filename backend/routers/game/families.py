@@ -175,6 +175,17 @@ FAMILY_EMBLEM_PRESETS_PREMIUM = [
 FAMILY_EMBLEM_PRESET_IDS = frozenset(p["id"] for p in FAMILY_EMBLEM_PRESETS_PUBLIC)
 FAMILY_EMBLEM_PREMIUM_PRESET_IDS = frozenset(p["id"] for p in FAMILY_EMBLEM_PRESETS_PREMIUM)
 FAMILY_SAFE_DEPOSIT_DEFAULT_CAP = 0
+# Personal safe cash cap per member by owned tier (1-3). Derived from tiers at read time so
+# cap raises apply to families that already bought tiers (stored safe_deposit_cap is legacy).
+FAMILY_SAFE_DEPOSIT_TIER_CAPS = (250_000_000, 500_000_000, 1_000_000_000)
+
+
+def family_safe_deposit_cap(fam: Optional[dict]) -> int:
+    tiers = int((fam or {}).get("safe_deposit_tiers") or 0)
+    if tiers <= 0:
+        # Legacy: some families have a stored cap without tiers recorded.
+        return int((fam or {}).get("safe_deposit_cap") or 0)
+    return FAMILY_SAFE_DEPOSIT_TIER_CAPS[min(tiers, len(FAMILY_SAFE_DEPOSIT_TIER_CAPS)) - 1]
 
 
 def _valid_emblem_preset_for_family(preset: str, fam: Optional[dict]) -> bool:
@@ -2258,7 +2269,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "treasury_bullets": int(fam.get("treasury_bullets") or 0),
             "treasury_points": int(fam.get("treasury_points") or 0),
             "treasury_loot_pieces": int(fam.get("treasury_loot_pieces") or 0),
-            "safe_deposit_cap": int(fam.get("safe_deposit_cap") or 0),
+            "safe_deposit_cap": family_safe_deposit_cap(fam),
             "safe_deposit_tiers": int(fam.get("safe_deposit_tiers") or 0),
             "melt_treasury_pct": int(fam.get("melt_treasury_pct") or 0),
             "melt_reward_tiers": fam.get("melt_reward_tiers") or [],
@@ -5178,10 +5189,10 @@ async def families_safe_deposit_deposit(body: FamilySafeDepositBody, current_use
     bullets = max(0, int(body.bullets or 0))
     if cash <= 0 and bullets <= 0:
         raise HTTPException(status_code=400, detail="Deposit amount required")
-    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "safe_deposit_cap": 1, "safe_deposits_by_user": 1})
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "safe_deposit_cap": 1, "safe_deposit_tiers": 1, "safe_deposits_by_user": 1})
     if not fam:
         raise HTTPException(status_code=404, detail="Family not found")
-    cap = int(fam.get("safe_deposit_cap") or 0)
+    cap = family_safe_deposit_cap(fam)
     if cap <= 0:
         raise HTTPException(status_code=400, detail="Family safe deposit not unlocked — buy a tier from the Points Store")
     uid = current_user["id"]

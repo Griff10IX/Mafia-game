@@ -438,6 +438,30 @@ export default function Properties() {
                         })()}
                       </p>
                     )}
+                    {(Number(autoCollect.vault_cash_total || 0) > 0 || Number(autoCollect.upkeep_paid_total || 0) > 0 || Number(autoCollect.heat_bribes_total || 0) > 0) && (
+                      <p className="text-[9px] font-heading tabular-nums">
+                        <span className="text-emerald-400 font-bold">${Number(autoCollect.vault_cash_total || 0).toLocaleString()}</span>
+                        <span className="text-zinc-500"> sent to racket vault so far</span>
+                        {Number(autoCollect.upkeep_paid_total || 0) > 0 && (
+                          <span className="text-zinc-500"> · ${Number(autoCollect.upkeep_paid_total).toLocaleString()} upkeep paid</span>
+                        )}
+                        {Number(autoCollect.heat_bribes_total || 0) > 0 && (
+                          <span className="text-zinc-500"> · ${Number(autoCollect.heat_bribes_total).toLocaleString()} heat bribes</span>
+                        )}
+                        {autoCollect.last_collected_at && (
+                          <span className="text-zinc-600">
+                            {' '}· last collect{' '}
+                            {(() => {
+                              try {
+                                return new Date(autoCollect.last_collected_at).toLocaleString();
+                              } catch {
+                                return autoCollect.last_collected_at;
+                              }
+                            })()}
+                          </span>
+                        )}
+                      </p>
+                    )}
                   </>
                 ) : (
                   <>

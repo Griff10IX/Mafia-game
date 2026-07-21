@@ -58,6 +58,7 @@ async def run_auto_collect_for_user(
     out: Dict[str, Any] = {"properties": [], "rackets": [], "upkeep": None, "heat": None}
     prop_cash = 0.0
     racket_cash = 0
+    vault_cash = 0
     if collect_properties:
         prop_ids = await db.user_properties.distinct("property_id", {"user_id": user_id})
         for pid in prop_ids:
@@ -83,6 +84,7 @@ async def run_auto_collect_for_user(
                             {"$inc": {"vault": vault_amt, "vault_lifetime_earned": vault_amt}},
                         )
                         out["property_cash_to_vault"] = vault_amt
+                        vault_cash = vault_amt
             except Exception as e:
                 logger.warning("auto_collect vault routing for %s: %s", user_id, e)
 
@@ -141,6 +143,9 @@ async def run_auto_collect_for_user(
             inc["auto_collect_stats.property_cash"] = int(prop_cash)
             inc["auto_collect_stats.racket_cash"] = int(racket_cash)
             inc["auto_collect_stats.collects"] = collects
+            if vault_cash:
+                # Portion of property_cash the perk banked into the racket vault (not the wallet).
+                inc["auto_collect_stats.vault_cash"] = int(vault_cash)
             set_doc["auto_collect_stats.last_collected_at"] = now_iso
             set_doc["auto_collect_stats.last_cash"] = int(prop_cash) + int(racket_cash)
         if upkeep_paid:

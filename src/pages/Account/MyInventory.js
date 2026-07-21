@@ -560,14 +560,34 @@ export default function MyInventory() {
       key === 'crew_oc_auto_3h' && untilLive && !t.auto_apply_ready;
     const expired = key === 'rank_xp_pass' && t.expires_at ? new Date(t.expires_at) <= new Date() : false;
     return (
-      <div key={key} className="inv-item flex flex-wrap items-center justify-between gap-2 py-2">
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5">
-            <Icon size={12} className="text-primary shrink-0" />
-            <span className="text-[11px] font-heading font-medium text-foreground">{name}</span>
-            <span className="text-[9px] text-mutedForeground">×{t.count}</span>
+      <div key={key} className="rounded-lg border border-primary/20 bg-zinc-900/40 p-2.5 space-y-2 inv-fade-in">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/25 flex items-center justify-center shrink-0">
+              <Icon size={14} className="text-primary" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-heading font-bold text-foreground truncate">{name}</span>
+                <span className="text-[9px] text-mutedForeground shrink-0">×{t.count} held</span>
+              </div>
+              {desc && <div className="text-[9px] text-mutedForeground mt-0.5 leading-snug">{desc}</div>}
+            </div>
           </div>
-          {desc && <div className="text-[9px] text-mutedForeground mt-0.5">{desc}</div>}
+          {untilLive && t.active_until && (
+            <span
+              className={`shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-heading font-bold ${
+                crewWindowNoCap
+                  ? 'border-amber-500/45 bg-amber-500/10 text-amber-300'
+                  : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+              }`}
+            >
+              <Clock size={9} className="shrink-0" />
+              {countdownLabel(t.active_until)}
+            </span>
+          )}
+        </div>
+        <div className="min-w-0">
           {crewWindowNoCap && t.active_until && (
             <div className="text-[9px] text-amber-300/90 mt-0.5">
               Window until {new Date(t.active_until).toLocaleString(undefined, { timeZone: 'UTC' })} UTC — set a
@@ -644,6 +664,51 @@ export default function MyInventory() {
       </div>
     );
   };
+
+  const renderGearCard = ({ key, Icon, name, badge, equipped, chips, onAction, actionBusy, actionLabel }) => (
+    <div key={key} className="rounded-lg border border-primary/20 bg-zinc-900/40 p-2.5 space-y-2 inv-fade-in">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/25 flex items-center justify-center shrink-0">
+            <Icon size={14} className="text-primary" />
+          </div>
+          <div className="min-w-0">
+            <span className="text-[11px] font-heading font-bold text-foreground truncate block">{name}</span>
+            {badge && (
+              <span className="text-[8px] font-heading font-bold uppercase tracking-wider text-amber-300 border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 rounded-full inline-block mt-0.5">
+                {badge}
+              </span>
+            )}
+          </div>
+        </div>
+        {equipped && (
+          <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-heading font-bold text-emerald-300">
+            ✓ Equipped
+          </span>
+        )}
+      </div>
+      {chips.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+          {chips.map((c) => (
+            <div key={c.label} className="rounded-md border border-zinc-700/40 bg-zinc-950/40 px-2.5 py-2 min-w-0">
+              <div className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground truncate">{c.label}</div>
+              <div className={`text-[11px] font-heading font-bold truncate ${c.cls || 'text-foreground'}`}>{c.value}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="flex justify-end">
+        <button
+          type="button"
+          disabled={actionBusy}
+          onClick={onAction}
+          className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50"
+        >
+          {actionLabel}
+        </button>
+      </div>
+    </div>
+  );
 
   const renderTokenActions = (key, t, { active, untilLive, crewWindowNoCap, expired }) => (
     <div className="flex flex-wrap items-center justify-end gap-1 shrink-0">
@@ -866,29 +931,31 @@ export default function MyInventory() {
               <Swords size={12} className="text-primary shrink-0" />
               <h2 className="text-[9px] sm:text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Weapons</h2>
             </div>
-            <div className="p-2 sm:p-2.5 divide-y divide-zinc-700/30">
+            <div className="p-2 sm:p-2.5 space-y-2">
               {weapons.length === 0 ? (
                 <div className="py-3 text-[9px] text-mutedForeground font-heading text-center">No weapons owned</div>
               ) : (
-                weapons.map((w) => (
-                  <div key={w.id} className="inv-item flex items-center justify-between py-1.5 gap-1">
-                    <div className="min-w-0 flex-1">
-                      <span className="text-[10px] font-heading font-medium text-foreground truncate block">
-                        {w.name}
-                        {w.equipped && <span className="text-primary ml-1">✓</span>}
-                      </span>
-                      {w.loot_exclusive && <span className="text-[8px] text-amber-400 block">Loot Exclusive</span>}
-                    </div>
-                    <button
-                      type="button"
-                      disabled={equipping.weapon !== null}
-                      onClick={() => (w.equipped ? unequipWeapon() : equipWeapon(w.id))}
-                      className="px-1.5 py-1 rounded text-[8px] sm:text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 shrink-0"
-                    >
-                      {equipping.weapon === w.id || (equipping.weapon === '' && w.equipped) ? '...' : w.equipped ? 'Unequip' : 'Equip'}
-                    </button>
-                  </div>
-                ))
+                weapons.map((w) =>
+                  renderGearCard({
+                    key: w.id,
+                    Icon: Swords,
+                    name: w.name,
+                    badge: w.loot_exclusive ? 'Loot exclusive' : w.store_exclusive ? 'Store exclusive' : null,
+                    equipped: w.equipped,
+                    chips: [
+                      { label: 'Damage', value: fmtNum(w.damage), cls: 'text-red-300' },
+                      ...(Number(w.quantity) > 1 ? [{ label: 'Owned', value: `×${fmtNum(w.quantity)}` }] : []),
+                    ],
+                    onAction: () => (w.equipped ? unequipWeapon() : equipWeapon(w.id)),
+                    actionBusy: equipping.weapon !== null,
+                    actionLabel:
+                      equipping.weapon === w.id || (equipping.weapon === '' && w.equipped)
+                        ? '...'
+                        : w.equipped
+                          ? 'Unequip'
+                          : 'Equip',
+                  })
+                )
               )}
             </div>
           </div>
@@ -901,29 +968,28 @@ export default function MyInventory() {
               <Shield size={12} className="text-primary shrink-0" />
               <h2 className="text-[9px] sm:text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Armour</h2>
             </div>
-            <div className="p-2 sm:p-2.5 divide-y divide-zinc-700/30">
+            <div className="p-2 sm:p-2.5 space-y-2">
               {armourOptions.length === 0 ? (
                 <div className="py-3 text-[9px] text-mutedForeground font-heading text-center">No armour owned</div>
               ) : (
-                armourOptions.map((o) => (
-                  <div key={o.level} className="inv-item flex items-center justify-between py-1.5 gap-1">
-                    <div className="min-w-0 flex-1">
-                      <span className="text-[10px] font-heading font-medium text-foreground truncate block">
-                        Lv.{o.level} {o.name}
-                        {o.equipped && <span className="text-primary ml-1">✓</span>}
-                      </span>
-                      {o.loot_exclusive && <span className="text-[8px] text-amber-400 block">Loot Exclusive</span>}
-                    </div>
-                    <button
-                      type="button"
-                      disabled={equipping.armour !== null}
-                      onClick={() => (o.equipped ? unequipArmour() : equipArmour(o.level))}
-                      className="px-1.5 py-1 rounded text-[8px] sm:text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 shrink-0"
-                    >
-                      {equipping.armour === o.level || (equipping.armour === 0 && o.equipped) ? '...' : o.equipped ? 'Unequip' : 'Equip'}
-                    </button>
-                  </div>
-                ))
+                armourOptions.map((o) =>
+                  renderGearCard({
+                    key: o.level,
+                    Icon: Shield,
+                    name: o.name,
+                    badge: o.loot_exclusive ? 'Loot exclusive' : o.store_exclusive ? 'Store exclusive' : null,
+                    equipped: o.equipped,
+                    chips: [{ label: 'Level', value: `Lv. ${o.level}`, cls: 'text-sky-300' }],
+                    onAction: () => (o.equipped ? unequipArmour() : equipArmour(o.level)),
+                    actionBusy: equipping.armour !== null,
+                    actionLabel:
+                      equipping.armour === o.level || (equipping.armour === 0 && o.equipped)
+                        ? '...'
+                        : o.equipped
+                          ? 'Unequip'
+                          : 'Equip',
+                  })
+                )
               )}
             </div>
           </div>

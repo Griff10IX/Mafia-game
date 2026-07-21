@@ -758,6 +758,7 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
             "property_auto_collect_until": 1,
             "property_auto_collect_enabled": 1,
             "illegal_business_mission_completions": 1,
+            "auto_collect_stats": 1,
         },
     )
     ticked_heat, _ = _properties_heat_tick(
@@ -952,6 +953,7 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
     }
     ac_missions = _business_progress_missions_completed(user_row or {})
     ac_active = property_auto_collect_active(user_row or {})
+    ac_stats = (user_row or {}).get("auto_collect_stats") or {}
     auto_collect_block = {
         "unlocked": ac_missions >= PROPERTY_AUTO_COLLECT_UNLOCK_MISSIONS,
         "unlock_missions": PROPERTY_AUTO_COLLECT_UNLOCK_MISSIONS,
@@ -961,6 +963,11 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
         "active": ac_active,
         "until": (user_row or {}).get("property_auto_collect_until") if ac_active else None,
         "enabled": bool((user_row or {}).get("property_auto_collect_enabled")) if ac_active else False,
+        # Lifetime totals from the auto-collect ticker (shared with the store pass stats).
+        "vault_cash_total": int(ac_stats.get("vault_cash") or 0),
+        "upkeep_paid_total": int(ac_stats.get("upkeep_paid") or 0),
+        "heat_bribes_total": int(ac_stats.get("heat_bribes_paid") or 0),
+        "last_collected_at": ac_stats.get("last_collected_at"),
     }
     return PropertiesListResponse(
         properties=result,
