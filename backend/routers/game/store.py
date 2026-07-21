@@ -21,11 +21,11 @@ def _normalize_store_pay_with(pay_with: str) -> str:
 
 
 def _store_respect_cost_for_points(k: int) -> int:
-    """Respect spent to cover k 'points' of store price using respect (+35% vs old 5*k: ceil(6.75*k))."""
+    """Respect spent to cover k 'points' of store price using respect: ceil(20.25*k) (3x the old 6.75 rate)."""
     k = int(k)
     if k <= 0:
         return 0
-    return (k * 27 + 3) // 4
+    return (k * 81 + 3) // 4
 
 
 def _store_max_points_coverable_by_respect(respect_balance: int, points_cost: int) -> int:
@@ -34,12 +34,12 @@ def _store_max_points_coverable_by_respect(respect_balance: int, points_cost: in
     p = int(points_cost)
     if r <= 0 or p <= 0:
         return 0
-    return min(p, (4 * r) // 27)
+    return min(p, (4 * r) // 81)
 
 
 def _store_cost_inc(current_user: dict, points_cost: int, pay_with: str = "auto"):
     """Return (cost_used, $inc dict, $gte filter dict) for atomic store purchases.
-    Uses respect first at ceil(6.75 respect per point of price) vs old 5:1, then points for the remainder.
+    Uses respect first at ceil(20.25 respect per point of price), then points for the remainder.
     Returns (None, None, None) if insufficient funds."""
     mode = _normalize_store_pay_with(pay_with)
     respect_balance = int(current_user.get("respect_points") or 0)
@@ -152,6 +152,7 @@ FAMILY_EVENT_TOKEN_COST_POINTS = 250
 FAMILY_EVENT_DURATION_DAYS = 3
 FAMILY_EVENT_COOLDOWN_DAYS = 7
 RAID_CAPACITY_COST_POINTS = 100
+RAID_RESET_COST_POINTS = 2000  # points only (no respect)
 
 
 async def _store_points_sustained_rl_user(current_user: dict = Depends(get_current_user)):
@@ -1026,6 +1027,57 @@ async def buy_raid_capacity(
     }
 
 
+async def buy_raid_reset(current_user: dict = Depends(get_current_user)):
+    """Reset today's used illegal business raids to 0 (points only, once per game day)."""
+    from routers.money.illegal_business import game_today_date_str
+
+    await require_store_item_allowed(db, "raid_reset", current_user)
+    now = datetime.now(timezone.utc)
+    today_key = game_today_date_str(now)
+    if current_user.get("raid_reset_day") == today_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Raid Reset can only be bought once a day — you've already used today's.",
+        )
+    used_today = int(current_user.get("illegal_business_raids_today") or 0)
+    if used_today <= 0 or current_user.get("illegal_business_raids_date") != today_key:
+        raise HTTPException(status_code=400, detail="You haven't used any raids today — nothing to reset.")
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, RAID_RESET_COST_POINTS, "points")
+    if not cost_used:
+        raise HTTPException(status_code=400, detail=f"Insufficient points ({RAID_RESET_COST_POINTS} required — points only).")
+    result = await db.users.update_one(
+        {"id": current_user["id"], "raid_reset_day": {"$ne": today_key}, **gte_filter},
+        {
+            "$inc": inc,
+            "$set": {
+                "illegal_business_raids_today": 0,
+                "raid_reset_day": today_key,
+                "raid_reset_last_at": now.isoformat(),
+            },
+        },
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    await _record_store_points_spend(
+        current_user,
+        inc,
+        "buy-raid-reset",
+        cost_used=cost_used,
+        extra={"raids_reset": used_today},
+    )
+    await log_activity(
+        current_user["id"],
+        current_user.get("username") or "?",
+        "store_purchase",
+        {"item": "raid_reset", "cost": cost_used, "raids_reset": used_today},
+    )
+    return {
+        "message": f"Raid counter reset — {used_today} used raid{'s' if used_today != 1 else ''} wiped, you can raid again.",
+        "cost": cost_used,
+        "raid_reset_last_at": now.isoformat(),
+    }
+
+
 async def buy_slow_kill_inflation(
     pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
@@ -1277,7 +1329,7 @@ async def buy_health(
     pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
-    """Restore health to 100% for 15 points (or 102 respect if paid fully with respect)."""
+    """Restore health to 100% for 15 points (or 304 respect if paid fully with respect)."""
     current_health = float(current_user.get("health", FULL_HEALTH))
     if current_health >= FULL_HEALTH:
         raise HTTPException(status_code=400, detail="You already have full health")
@@ -2461,6 +2513,7 @@ def register(router):
     router.add_api_route("/store/buy-robot-bg-auto-search", buy_robot_bg_auto_search, methods=["POST"])
     router.add_api_route("/store/buy-bodyguard-find-time", buy_bodyguard_find_time, methods=["POST"])
     router.add_api_route("/store/buy-raid-capacity", buy_raid_capacity, methods=["POST"])
+    router.add_api_route("/store/buy-raid-reset", buy_raid_reset, methods=["POST"])
     router.add_api_route("/store/buy-slow-kill-inflation", buy_slow_kill_inflation, methods=["POST"])
     router.add_api_route("/store/buy-slow-bodyguard-hire-inflation", buy_slow_bodyguard_hire_inflation, methods=["POST"])
     router.add_api_route("/store/buy-armour-tier-6", buy_armour_point_store_tier, methods=["POST"])

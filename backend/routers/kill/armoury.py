@@ -1434,7 +1434,7 @@ def _calculate_bullet_cost(bullets: int) -> int:
     return 100 + ((bullets - 5000) * 75 + 4999) // 5000
 
 async def store_buy_bullets(bullets: int, current_user: dict = Depends(get_current_user)):
-    """Buy bullets from store: respect first at ceil(6.75 respect per point of price) via store._store_cost_inc, then points."""
+    """Buy bullets from store: respect first at ceil(20.25 respect per point of price) via store._store_cost_inc, then points."""
     if bullets < 1 or bullets > CUSTOM_BULLETS_MAX:
         raise HTTPException(status_code=400, detail=f"Bullet amount must be between 1 and {CUSTOM_BULLETS_MAX:,}")
     cost = _calculate_bullet_cost(bullets)
@@ -2331,6 +2331,8 @@ async def get_shooting_range_leaderboard(period: str = "all", current_user: dict
 
 def _tokens_from_user(user: dict) -> dict:
     """Build tokens dict for inventory: count and active_until per token type."""
+    from utils.cooldown_skip import TOKEN_TYPE_TO_SKIP_KIND
+
     now = datetime.now(timezone.utc)
     out = {}
     perk_stats_all = user.get("token_perk_stats") or {}
@@ -2356,6 +2358,9 @@ def _tokens_from_user(user: dict) -> dict:
                 if expires_dt:
                     expires_at = expires_dt.isoformat()
         row: Dict[str, Any] = {"count": count, "active_until": active_until, "expires_at": expires_at}
+        if t in TOKEN_TYPE_TO_SKIP_KIND:
+            # Activated-but-unspent skip credits, so My Inventory can show them as "in use".
+            row["credits"] = int(user.get(f"{t}_credits") or 0)
         ps = perk_stats_all.get(t)
         if isinstance(ps, dict) and ps:
             row["perk_stats"] = {k: int(v) for k, v in ps.items() if isinstance(v, (int, float))}
@@ -2454,10 +2459,10 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
         await require_store_item_allowed(db, flag, current_user)
 
     from utils.cooldown_skip import (
-        COOLDOWN_SKIP_DAILY_CAP,
         TOKEN_TYPE_TO_SKIP_KIND,
         activation_inc_fields,
         can_activate_cooldown_skip_token,
+        cooldown_skip_daily_cap,
     )
 
     if req.token_type in TOKEN_TYPE_TO_SKIP_KIND:
@@ -2467,7 +2472,7 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
         if not can_activate_cooldown_skip_token(current_user, kind):
             raise HTTPException(
                 status_code=400,
-                detail=f"Daily {kind} cooldown skip limit reached ({COOLDOWN_SKIP_DAILY_CAP} per UTC day).",
+                detail=f"Daily {kind} cooldown skip limit reached ({cooldown_skip_daily_cap(kind)} per UTC day).",
             )
         cfg = TOKEN_CONFIG[req.token_type]
         count_field = cfg["count_field"]

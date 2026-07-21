@@ -756,18 +756,18 @@ CARS = [
     # ?v=2 busts CDN/browser caches that stored a bad response for these two files.
     {"id": "car2", "name": "Chevrolet Series AB", "rarity": "common", "min_difficulty": 1, "value": 269, "travel_bonus": 5, "image": "/images/gta/car2.jpg?v=2"},
     {"id": "car6", "name": "Durant Star", "rarity": "common", "min_difficulty": 1, "value": 292, "travel_bonus": 5, "image": "/images/gta/car6.jpg?v=2"},
-    {"id": "car4", "name": "Ford Model A", "rarity": "common", "min_difficulty": 1, "value": 314, "travel_bonus": 5, "image": "/images/gta/car4.jpg"},
+    {"id": "car4", "name": "Ford Model A", "rarity": "common", "min_difficulty": 1, "value": 314, "travel_bonus": 5, "image": "/images/gta/car4.jpg?v=2"},
     {"id": "car3", "name": "Dodge Brothers", "rarity": "common", "min_difficulty": 1, "value": 338, "travel_bonus": 5, "image": "/images/gta/car3.jpg"},
     # Uncommon (difficulty 2) - 4 cars; melt scales with MELT_VALUE_PER_BULLET
     {"id": "car7", "name": "Oakland", "rarity": "uncommon", "min_difficulty": 2, "value": 2695, "travel_bonus": 10, "image": "/images/gta/car7.jpg"},
     {"id": "car8", "name": "Willys-Knight", "rarity": "uncommon", "min_difficulty": 2, "value": 4044, "travel_bonus": 10, "image": "/images/gta/car8.jpg"},
-    {"id": "car10", "name": "Buick Master Six", "rarity": "uncommon", "min_difficulty": 2, "value": 5390, "travel_bonus": 12, "image": "/images/gta/car10.jpg"},
+    {"id": "car10", "name": "Buick Master Six", "rarity": "uncommon", "min_difficulty": 2, "value": 5390, "travel_bonus": 12, "image": "/images/gta/car10.jpg?v=2"},
     {"id": "car9", "name": "Cadillac V-8", "rarity": "uncommon", "min_difficulty": 2, "value": 6919, "travel_bonus": 15, "image": "/images/gta/car9.jpg"},
     # Rare (difficulty 3) - 4 cars
-    {"id": "car11", "name": "Packard Eight", "rarity": "rare", "min_difficulty": 3, "value": 7188, "travel_bonus": 20, "image": "/images/gta/car11.jpg"},
+    {"id": "car11", "name": "Packard Eight", "rarity": "rare", "min_difficulty": 3, "value": 7188, "travel_bonus": 20, "image": "/images/gta/car11.jpg?v=2"},
     {"id": "car12", "name": "Lincoln Model L", "rarity": "rare", "min_difficulty": 3, "value": 9882, "travel_bonus": 20, "image": "/images/gta/car12.jpg"},
     {"id": "car13", "name": "Pierce-Arrow", "rarity": "rare", "min_difficulty": 3, "value": 12578, "travel_bonus": 25, "image": "/images/gta/car13.jpg"},
-    {"id": "car14", "name": "Stutz Bearcat", "rarity": "rare", "min_difficulty": 3, "value": 15274, "travel_bonus": 25, "image": "/images/gta/car14.jpg"},
+    {"id": "car14", "name": "Stutz Bearcat", "rarity": "rare", "min_difficulty": 3, "value": 15274, "travel_bonus": 25, "image": "/images/gta/car14.jpg?v=2"},
     # Ultra Rare (difficulty 4) - 3 cars
     {"id": "car15", "name": "Duesenberg Model J", "rarity": "ultra_rare", "min_difficulty": 4, "value": 17070, "travel_bonus": 35, "image": "/images/gta/car15.jpeg"},
     {"id": "car16", "name": "Cord L-29", "rarity": "ultra_rare", "min_difficulty": 4, "value": 22461, "travel_bonus": 35, "image": "/images/gta/car16.jpg"},

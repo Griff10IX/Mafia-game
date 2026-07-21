@@ -1059,6 +1059,209 @@ async def booze_run_sell(
     return await _booze_sell_impl(current_user, body.booze_id, body.amount)
 
 
+async def booze_run_skip_run(current_user: dict = Depends(get_current_user)):
+    """One-tap best-profit booze run: picks the most profitable direction on this rotation's
+    route, drives there instantly (1 skip credit per drive; tokens auto-activate when credits
+    run out), buys the best-margin booze, skips the drive back, and sells everything.
+    Bust risk applies at every phase, same as a manual run."""
+    from utils.cooldown_skip import (
+        has_skip_credit,
+        consume_skip_credit,
+        can_activate_cooldown_skip_token,
+        activation_inc_fields,
+    )
+    from utils.booze_intake_gate import raise_if_booze_intake_blocked
+    from routers.account.auto_rank import _get_travel_method
+    from routers.admin.airport import _start_travel_impl
+
+    uid = current_user.get("id") or ""
+    user = await db.users.find_one({"id": uid}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    raise_if_booze_intake_blocked(user)
+    if _booze_user_in_jail(user):
+        raise HTTPException(status_code=400, detail="You are in jail!")
+
+    now = datetime.now(timezone.utc)
+    steps: list = []
+    credits_used = 0
+
+    async def _ensure_skip_credit() -> bool:
+        """True when a credit is available, auto-activating a held token if needed (daily cap applies)."""
+        nonlocal user
+        if has_skip_credit(user, "booze"):
+            return True
+        if int(user.get("cooldown_skip_booze_tokens") or 0) < 1:
+            return False
+        if not can_activate_cooldown_skip_token(user, "booze"):
+            return False
+        inc, set_doc = activation_inc_fields("booze", user)
+        inc["cooldown_skip_booze_tokens"] = -1
+        r = await db.users.update_one(
+            {"id": uid, "cooldown_skip_booze_tokens": {"$gte": 1}},
+            {"$inc": inc, "$set": set_doc},
+        )
+        if r.modified_count != 1:
+            return False
+        user = await db.users.find_one({"id": uid}, {"_id": 0})
+        return has_skip_credit(user, "booze")
+
+    async def _arrive_now(dest_state: str):
+        await db.users.update_one(
+            {"id": uid},
+            {"$set": {"current_state": dest_state}, "$unset": {"traveling_to": "", "travel_arrives_at": ""}},
+        )
+
+    async def _skip_drive_to(dest_city: str):
+        """Start a real booze-run travel (car checks, damage, casino blocks) then fast-forward it."""
+        nonlocal user, credits_used
+        if not await _ensure_skip_credit():
+            raise HTTPException(
+                status_code=400,
+                detail="Out of Booze Travel Skip tokens/credits (or you hit the daily cap).",
+            )
+        travel_method = await _get_travel_method(db, uid)
+        if not travel_method:
+            raise HTTPException(status_code=400, detail="You need a working car to run booze.")
+        await _start_travel_impl(user, dest_city, travel_method, airport_slot=None, booze_run=True)
+        if not await consume_skip_credit(db, uid, "booze"):
+            raise HTTPException(
+                status_code=400,
+                detail="Skip credit was used up — travel started normally, wait for arrival.",
+            )
+        credits_used += 1
+        await _arrive_now(dest_city)
+        steps.append(f"Skipped the drive to {dest_city}")
+        user = await db.users.find_one({"id": uid}, {"_id": 0})
+
+    # Resolve any pending travel first: overdue legs land for free, active legs cost a credit.
+    if user.get("travel_arrives_at") and user.get("traveling_to"):
+        arrives = _parse_iso_datetime(user.get("travel_arrives_at"))
+        if arrives and now < arrives:
+            if not await _ensure_skip_credit() or not await consume_skip_credit(db, uid, "booze"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="You're mid-travel and out of skip tokens/credits.",
+                )
+            credits_used += 1
+            steps.append(f"Skipped the current drive to {user['traveling_to']}")
+        await _arrive_now(user["traveling_to"])
+        user = await db.users.find_one({"id": uid}, {"_id": 0})
+
+    round_trip = _booze_round_trip_cities()
+    if not round_trip or len(round_trip) != 2:
+        raise HTTPException(status_code=400, detail="No booze route available right now.")
+    city_a, city_b = round_trip
+    current_state = (user.get("current_state") or "").strip()
+    prices = _booze_prices_for_rotation()
+
+    def _best_margin(buy_city: str, sell_city: str):
+        """(margin, booze, buy_price) for the best booze on buy_city -> sell_city."""
+        bi_ = STATES.index(buy_city) if buy_city in STATES else 0
+        si_ = STATES.index(sell_city) if sell_city in STATES else 0
+        best = None
+        for booze_i, booze in enumerate(BOOZE_TYPES):
+            buy_p = int(prices.get((bi_, booze_i), 400))
+            margin = int(prices.get((si_, booze_i), 400)) - buy_p
+            if best is None or margin > best[0]:
+                best = (margin, booze, buy_p)
+        return best
+
+    def _cargo_value_at(city: str, cargo: dict) -> int:
+        ci = STATES.index(city) if city in STATES else 0
+        booze_ids = [b["id"] for b in BOOZE_TYPES]
+        return sum(
+            int(prices.get((ci, booze_ids.index(bid)), 400)) * int(amt or 0)
+            for bid, amt in cargo.items()
+            if bid in booze_ids
+        )
+
+    carrying = _booze_carrying_dict(user.get("booze_carrying"))
+    spent = 0
+    bought_label = None
+    if _booze_user_carrying_total(carrying) > 0:
+        # Already loaded from an earlier leg: just sell wherever the cargo is worth more.
+        sell_city = city_a if _cargo_value_at(city_a, carrying) >= _cargo_value_at(city_b, carrying) else city_b
+        steps.append("Already carrying cargo — selling it at the better city")
+    else:
+        # Pick the most profitable direction; tie-break to the one starting where we already are.
+        best_ab = _best_margin(city_a, city_b)
+        best_ba = _best_margin(city_b, city_a)
+        candidates = []
+        if best_ab and best_ab[0] > 0:
+            candidates.append((best_ab[0], 1 if current_state == city_a else 0, city_a, city_b, best_ab[1], best_ab[2]))
+        if best_ba and best_ba[0] > 0:
+            candidates.append((best_ba[0], 1 if current_state == city_b else 0, city_b, city_a, best_ba[1], best_ba[2]))
+        if not candidates:
+            raise HTTPException(status_code=400, detail="No profitable route right now — wait for the next rotation.")
+        candidates.sort(reverse=True)
+        _, _, buy_city, sell_city, booze, buy_price = candidates[0]
+
+        if current_state != buy_city:
+            await _skip_drive_to(buy_city)
+            current_state = buy_city
+
+        fam_extra = await _family_booze_cargo_extra(user.get("family_id"))
+        vip_car = await _booze_vip_pass_car_owned(db, uid)
+        capacity = _booze_user_capacity(user, family_cargo_bonus=fam_extra, vip_pass_car_owned=vip_car)
+        amount = min(int(capacity), int(user.get("money") or 0) // max(1, buy_price))
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="Not enough cash (or cargo space) to buy booze.")
+        buy_res = await _booze_buy_impl(user, booze["id"], amount)
+        if buy_res.get("caught"):
+            return {**buy_res, "phase": "buy", "steps": steps, "credits_used": credits_used}
+        spent = int(buy_res.get("spent") or 0)
+        bought_label = f"{amount} {booze['name']}"
+        steps.append(f"Bought {bought_label} in {buy_city} for ${spent:,}")
+        user = await db.users.find_one({"id": uid}, {"_id": 0})
+
+    if (user.get("current_state") or "").strip() != sell_city:
+        await _skip_drive_to(sell_city)
+
+    # Sell phase: everything in the trunk, one booze type at a time.
+    carrying = _booze_carrying_dict(user.get("booze_carrying"))
+    total_revenue = 0
+    total_profit = 0
+    sold_units = 0
+    for booze in BOOZE_TYPES:
+        amt = int(carrying.get(booze["id"]) or 0)
+        if amt <= 0:
+            continue
+        sell_res = await _booze_sell_impl(user, booze["id"], amt)
+        if sell_res.get("caught"):
+            return {**sell_res, "phase": "sell", "steps": steps, "credits_used": credits_used}
+        total_revenue += int(sell_res.get("revenue") or 0)
+        total_profit += int(sell_res.get("profit") or 0)
+        sold_units += amt
+    if sold_units:
+        steps.append(f"Sold {sold_units} units in {sell_city} for ${total_revenue:,}")
+    _invalidate_config_cache(uid)
+    # Lifetime earnings for the My Inventory token card.
+    try:
+        from utils.token_perk_stats import bump_token_perk_stats
+        await bump_token_perk_stats(
+            db, uid, "cooldown_skip_booze",
+            profit_cash=total_profit, runs=1, uses=credits_used,
+        )
+    except Exception:
+        pass
+    await log_activity(uid, user.get("username", ""), "booze_skip_run", {
+        "bought": bought_label, "sold_units": sold_units, "revenue": total_revenue,
+        "profit": total_profit, "credits_used": credits_used, "sell_city": sell_city,
+    })
+    return {
+        "success": True,
+        "caught": False,
+        "message": f"Run complete — sold {sold_units} units in {sell_city} (+${total_profit:,} profit)",
+        "steps": steps,
+        "spent": spent,
+        "revenue": total_revenue,
+        "profit": total_profit,
+        "credits_used": credits_used,
+        "location": sell_city,
+    }
+
+
 async def buy_booze_capacity(current_user: dict = Depends(get_current_user)):
     if int(current_user.get("points") or 0) < BOOZE_CAPACITY_UPGRADE_COST:
         raise HTTPException(status_code=400, detail="Insufficient points")
@@ -1283,6 +1486,7 @@ def register(router):
     router.add_api_route("/booze-run/config", booze_run_config, methods=["GET"], dependencies=_booze_rl_u)
     router.add_api_route("/booze-run/buy", booze_run_buy, methods=["POST"])
     router.add_api_route("/booze-run/sell", booze_run_sell, methods=["POST"])
+    router.add_api_route("/booze-run/skip-run", booze_run_skip_run, methods=["POST"])
     # buy-booze-capacity route is registered in store.py (uses respect-first logic)
     router.add_api_route("/admin/booze-rotation", admin_get_booze_rotation, methods=["GET"])
     router.add_api_route("/admin/booze-rotation", admin_set_booze_rotation, methods=["POST"])

@@ -4,7 +4,16 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 
-COOLDOWN_SKIP_DAILY_CAP = 200  # per skip type per UTC day
+COOLDOWN_SKIP_DAILY_CAP = 200  # default per skip type per UTC day
+COOLDOWN_SKIP_DAILY_CAPS = {
+    "crime": 5_000,  # crime cooldowns are short, so far more skips fit in a day
+    "gta": 1_000,
+    "properties": 3,  # property collects are big payouts, keep skips scarce
+}
+
+
+def cooldown_skip_daily_cap(kind: str) -> int:
+    return COOLDOWN_SKIP_DAILY_CAPS.get(kind, COOLDOWN_SKIP_DAILY_CAP)
 
 SKIP_CREDIT_FIELDS = {
     "crime": "cooldown_skip_crime_credits",
@@ -36,7 +45,7 @@ def cooldown_skip_uses_today(user: dict, kind: str) -> int:
 
 
 def can_activate_cooldown_skip_token(user: dict, kind: str) -> bool:
-    return cooldown_skip_uses_today(user, kind) < COOLDOWN_SKIP_DAILY_CAP
+    return cooldown_skip_uses_today(user, kind) < cooldown_skip_daily_cap(kind)
 
 
 def skip_credit_field(kind: str) -> str:
@@ -59,7 +68,7 @@ async def consume_skip_credit(db, user_id: str, kind: str) -> bool:
 def activation_inc_fields(kind: str, user: dict) -> Tuple[dict, dict]:
     """Return ($inc, extra $set) for activating one skip token.
 
-    Daily usage is tracked per skip type (200/day each). A field may appear in $inc or
+    Daily usage is tracked per skip type (see cooldown_skip_daily_cap). A field may appear in $inc or
     $set but never both (Mongo rejects path conflicts), so on day rollover all per-type
     counters are reset via $set only.
     """

@@ -53,11 +53,11 @@ const tokenLabels = {
   jailbust_bonus: { name: 'Jailbust bonus', icon: Target, desc: `+10% jail bust success, less chance of jail on fail, 1h per token (stack up to ${TOKEN_MAX_STACK_LABEL})` },
   auto_collect_12h: { name: 'Auto-collect (12h)', icon: Building2, desc: `Auto-collect family rackets when cooldowns allow (properties have their own Auto Collect perk). 12h per token (stack up to ${TOKEN_MAX_STACK_LABEL})` },
   auto_collect_24h: { name: 'Auto-collect (24h)', icon: Building2, desc: `Auto-collect family rackets when cooldowns allow (properties have their own Auto Collect perk). 24h per token (stack up to ${TOKEN_MAX_STACK_LABEL})` },
-  cooldown_skip_crime: { name: 'Crime cooldown skip', icon: Zap, desc: 'Activate to skip one crime cooldown (max 200 activations/day per skip type).' },
-  cooldown_skip_gta: { name: 'GTA cooldown skip', icon: Zap, desc: 'Activate to skip one GTA cooldown (200/day cap).' },
+  cooldown_skip_crime: { name: 'Crime cooldown skip', icon: Zap, desc: 'Activate to skip one crime cooldown (max 5,000 activations/day; other skip types 200/day).' },
+  cooldown_skip_gta: { name: 'GTA cooldown skip', icon: Zap, desc: 'Activate to skip one GTA cooldown (1,000/day cap).' },
   cooldown_skip_booze: { name: 'Booze travel skip', icon: Zap, desc: 'Activate to skip one booze-run travel wait (200/day cap).' },
-  cooldown_skip_properties: { name: 'Properties collect skip', icon: Zap, desc: 'Activate to skip one property collect cooldown (200/day cap).' },
-  jail_bailout: { name: 'Jail bailout token', icon: Target, desc: 'Instant leave jail — use it from the Jail page (3 uses/day UTC; does not bypass OC lockdown).' },
+  cooldown_skip_properties: { name: 'Properties collect skip', icon: Zap, desc: 'Activate to skip one property collect cooldown (3/day cap).' },
+  jail_bailout: { name: 'Jail bailout token', icon: Target, desc: 'Instant leave jail — use it from the Jail page (500 uses/day UTC; does not bypass OC lockdown).' },
   rank_xp_pass: { name: 'Game Pass', icon: Package, desc: 'Activate in Armoury/My Inventory to claim one-time Game Pass rewards. Expires in 1 month if unused.' },
 };
 
@@ -132,6 +132,11 @@ const PERK_STAT_CHIPS = {
   ],
   crew_oc_auto_3h: [
     { field: 'applies', label: 'Auto-joins', format: 'num' },
+  ],
+  cooldown_skip_booze: [
+    { field: 'profit_cash', label: 'Skip Run profit', format: 'money' },
+    { field: 'runs', label: 'Skip runs done', format: 'num' },
+    { field: 'uses', label: 'Drives skipped', format: 'num' },
   ],
 };
 const countdownLabel = (until) => {
@@ -531,6 +536,8 @@ export default function MyInventory() {
   );
   const activeTokenKeys = TOKEN_TYPES.filter((key) => {
     if (key === 'rank_xp_pass') return false;
+    // Cooldown skip tokens count as "in use" while activated credits are waiting to be spent.
+    if ((tokens[key]?.credits ?? 0) > 0) return true;
     const until = tokens[key]?.active_until;
     return until && new Date(until) > nowDate;
   });
@@ -660,6 +667,25 @@ export default function MyInventory() {
             <div className="text-[9px] text-emerald-300 mt-0.5">Rewards claimed</div>
           )}
         </div>
+        {(() => {
+          const ps = t.perk_stats || {};
+          const chips = [];
+          (PERK_STAT_CHIPS[key] || []).forEach(({ field, label, format }) => {
+            const v = Number(ps[field] || 0);
+            if (v > 0) chips.push({ label, value: formatChipValue(format, v), cls: CHIP_VALUE_CLASS[format] || 'text-foreground' });
+          });
+          if (chips.length === 0) return null;
+          return (
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+              {chips.map((c) => (
+                <div key={c.label} className="rounded-md border border-zinc-700/40 bg-zinc-950/40 px-2.5 py-2 min-w-0">
+                  <div className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground truncate">{c.label}</div>
+                  <div className={`text-[11px] font-heading font-bold truncate ${c.cls}`}>{c.value}</div>
+                </div>
+              ))}
+            </div>
+          );
+        })()}
         {renderTokenActions(key, t, { active, untilLive, crewWindowNoCap, expired })}
       </div>
     );
@@ -823,7 +849,7 @@ export default function MyInventory() {
               )}
             </div>
           </div>
-          {t.active_until && (
+          {t.active_until ? (
             <span
               className={`shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-heading font-bold ${
                 crewWindowNoCap
@@ -834,7 +860,12 @@ export default function MyInventory() {
               <Clock size={9} className="shrink-0" />
               {countdownLabel(t.active_until)}
             </span>
-          )}
+          ) : Number(t.credits || 0) > 0 ? (
+            <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-heading font-bold text-emerald-300">
+              <Zap size={9} className="shrink-0" />
+              {Number(t.credits)} credit{Number(t.credits) === 1 ? '' : 's'} ready
+            </span>
+          ) : null}
         </div>
         {crewWindowNoCap && (
           <p className="text-[9px] text-amber-300/90 leading-snug">

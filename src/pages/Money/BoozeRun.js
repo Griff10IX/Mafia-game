@@ -823,6 +823,57 @@ export default function BoozeRun() {
     }
   };
 
+  const skipTokens = Number(user?.cooldown_skip_booze_tokens || 0);
+  const skipCredits = Number(user?.cooldown_skip_booze_credits || 0);
+  const canSkipRun = skipTokens > 0 || skipCredits > 0;
+  const [skipRunBusy, setSkipRunBusy] = useState(false);
+
+  const handleSkipRun = async () => {
+    if (skipRunBusy) return;
+    setSkipRunBusy(true);
+    try {
+      // Backend auto-activates held tokens into credits as each drive needs one.
+      const r = await api.post('/booze-run/skip-run');
+      if (r.data?.caught) {
+        toast.error(r.data.message || 'Busted! Prohibition agents got you.', {
+          duration: 7000,
+          description: (
+            <div className="mt-2 overflow-hidden isolate max-w-[280px]" style={{ contain: 'layout paint' }}>
+              <div className="relative w-full aspect-[4/3] rounded-sm overflow-hidden border border-red-500/50 bg-black">
+                <img src={BOOZE_CAUGHT_IMAGE} alt="Busted by prohibition agents" className="absolute inset-0 w-full h-full object-cover pointer-events-none select-none" />
+                <div className="absolute inset-0 bg-black/40 pointer-events-auto" aria-hidden />
+              </div>
+              {r.data.jail_seconds && <p className="text-xs text-mutedForeground mt-1">{r.data.jail_seconds}s in jail</p>}
+            </div>
+          ),
+        });
+        refreshUser();
+        window.setTimeout(() => {
+          window.location.replace('/crime/jail');
+        }, BOOZE_CAUGHT_JAIL_REDIRECT_MS);
+        return;
+      }
+      toast.success(r.data?.message || 'Run complete', {
+        duration: 7000,
+        description: Array.isArray(r.data?.steps) && r.data.steps.length > 0 ? (
+          <div className="mt-1 space-y-0.5">
+            {r.data.steps.map((s, i) => (
+              <p key={i} className="text-xs text-mutedForeground">• {s}</p>
+            ))}
+          </div>
+        ) : undefined,
+      });
+      refreshUser();
+      fetchConfig({ silent: true });
+    } catch (e) {
+      toast.error(apiErrorDetail(e, 'Skip run failed'));
+      refreshUser();
+      fetchConfig({ silent: true });
+    } finally {
+      setSkipRunBusy(false);
+    }
+  };
+
   const handleSell = async (boozeId, amountOverride) => {
     const row = config?.prices_at_location?.find((p) => p.booze_id === boozeId);
     const maxSell = row?.carrying ?? 0;
@@ -948,6 +999,26 @@ export default function BoozeRun() {
       {user?.booze_until && (
         <div className="bz-fade-in">
           <ActiveTokenBadge tokenType="booze" untilIso={user.booze_until} />
+        </div>
+      )}
+
+      {canSkipRun && !autoRankBoozeDisabled && (
+        <div className="bz-fade-in rounded-md border border-primary/30 bg-primary/5 px-2.5 py-2 flex items-center justify-between gap-2 flex-wrap">
+          <div className="min-w-0">
+            <p className="text-[10px] font-heading font-bold uppercase tracking-wider text-primary">⚡ Skip Run</p>
+            <p className="text-[9px] text-zinc-500 font-heading">
+              One tap: runs the most profitable direction on the route — drives you there instantly if needed, buys the best booze, skips the drive back and sells. 1 skip token per drive — bust risk still applies.
+              {' '}<span className="text-zinc-400 tabular-nums">{skipCredits > 0 ? `${skipCredits} credit${skipCredits === 1 ? '' : 's'} active` : `${skipTokens} token${skipTokens === 1 ? '' : 's'} held`}</span>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={handleSkipRun}
+            disabled={skipRunBusy}
+            className={`${BZ_ACTION_BTN} px-4 py-2 bg-primary/20 text-primary font-heading font-bold uppercase tracking-wider text-[10px] rounded border border-primary/40 hover:bg-primary/30 disabled:opacity-40 transition-all whitespace-nowrap`}
+          >
+            {skipRunBusy ? 'Running…' : '⚡ Run Now'}
+          </button>
         </div>
       )}
 

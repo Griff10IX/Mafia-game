@@ -42,11 +42,11 @@ const VIP_PASS_CAR_COST_POINTS = 5000;
 const VALID_TABS = ['points', 'sendpts', 'upgrades', 'tokens', 'bullets'];
 const bulletCost = (bullets) => bullets < 5000 ? Math.max(1, Math.floor(bullets * 0.02)) : 100 + Math.ceil((bullets - 5000) * 75 / 5000);
 
-/** Match backend store._store_respect_cost_for_points: +35% vs old 5:1 → ceil(6.75×pts) = (pts×27+3)//4 */
+/** Match backend store._store_respect_cost_for_points: ceil(20.25×pts) = (pts×81+3)//4 */
 function storeRespectForPoints(pts) {
   const p = Math.max(0, Math.floor(Number(pts) || 0));
   if (p <= 0) return 0;
-  return Math.floor((p * 27 + 3) / 4);
+  return Math.floor((p * 81 + 3) / 4);
 }
 
 /** Keep in sync with backend armoury.TOKEN_MAX_STACK_HOURS (7 × 24 = 1 week). */
@@ -59,6 +59,7 @@ const BODYGUARD_FIND_TIME_COST_POINTS = 5000;
 const SLOW_KILL_INFLATION_COST_POINTS = 5000;
 const SLOW_BODYGUARD_HIRE_INFLATION_COST_POINTS = 5000;
 const RAID_CAPACITY_COST_POINTS = 100; // +5 raids/day per pack, 30 days, stacks to 20/day total
+const RAID_RESET_COST_POINTS = 2000; // points only, once per day
 
 function robotBgAutoSearchActive(user) {
   if (user?.robot_bg_auto_search_active) return true;
@@ -135,11 +136,11 @@ const TOKEN_STORE_ITEMS = [
   },
   { tokenType: 'auto_collect_12h', title: 'Auto-Collect (12h)', price: 85, userKey: 'auto_collect_12h_tokens', flagKey: 'auto_collect', desc: 'Auto-collect family rackets when cooldowns allow (properties have their own Auto Collect perk). Activate in My Inventory (12h, stacks to 168h).' },
   { tokenType: 'auto_collect_24h', title: 'Auto-Collect (24h)', price: 150, userKey: 'auto_collect_24h_tokens', flagKey: 'auto_collect', desc: 'Same as 12h pass but 24h per activation (stacks to 168h).' },
-  { tokenType: 'jail_bailout', title: 'Jail Bailout Token', price: 25, userKey: 'jail_bailout_tokens', flagKey: 'jail_bailout', desc: 'Instant leave jail from the Jail page (3 uses/day UTC; does not bypass OC lockdown).' },
-  { tokenType: 'cooldown_skip_crime', title: 'Crime Cooldown Skip', price: 35, userKey: 'cooldown_skip_crime_tokens', flagKey: 'cooldown_skip_crime', desc: 'Activate in My Inventory or tap Skip on a crime row — skips one crime cooldown (max 200 activations/day per skip type).' },
-  { tokenType: 'cooldown_skip_gta', title: 'GTA Cooldown Skip', price: 35, userKey: 'cooldown_skip_gta_tokens', flagKey: 'cooldown_skip_gta', desc: 'Skips one GTA cooldown when activated (200/day cap).' },
+  { tokenType: 'jail_bailout', title: 'Jail Bailout Token', price: 25, userKey: 'jail_bailout_tokens', flagKey: 'jail_bailout', desc: 'Instant leave jail from the Jail page (500 uses/day UTC; does not bypass OC lockdown).' },
+  { tokenType: 'cooldown_skip_crime', title: 'Crime Cooldown Skip', price: 35, userKey: 'cooldown_skip_crime_tokens', flagKey: 'cooldown_skip_crime', desc: 'Activate in My Inventory or tap Skip on a crime row — skips one crime cooldown (max 5,000 activations/day).' },
+  { tokenType: 'cooldown_skip_gta', title: 'GTA Cooldown Skip', price: 35, userKey: 'cooldown_skip_gta_tokens', flagKey: 'cooldown_skip_gta', desc: 'Skips one GTA cooldown when activated (1,000/day cap).' },
   { tokenType: 'cooldown_skip_booze', title: 'Booze Travel Skip', price: 35, userKey: 'cooldown_skip_booze_tokens', flagKey: 'cooldown_skip_booze', desc: 'Skips one booze-run travel wait when activated (200/day cap).' },
-  { tokenType: 'cooldown_skip_properties', title: 'Properties Collect Skip', price: 35, userKey: 'cooldown_skip_properties_tokens', flagKey: 'cooldown_skip_properties', desc: 'Skips one property collect cooldown when activated (200/day cap).' },
+  { tokenType: 'cooldown_skip_properties', title: 'Properties Collect Skip', price: 35, userKey: 'cooldown_skip_properties_tokens', flagKey: 'cooldown_skip_properties', desc: 'Skips one property collect cooldown when activated (3/day cap).' },
 ];
 
 const TOKEN_BUNDLES = [
@@ -267,6 +268,7 @@ const STORE_ITEM_FLAG_LABELS = {
   family_safe_deposit: 'Family safe deposit',
   family_event_token: 'Family event token',
   raid_capacity: 'Raid capacity (+5 raids/day)',
+  raid_reset: 'Raid reset (once/day)',
 };
 
 const UPGRADES = [
@@ -284,6 +286,7 @@ const UPGRADES = [
   { id: 'slow-kill-inflation', title: 'Slow Kill Inflation', Icon: Gauge, price: SLOW_KILL_INFLATION_COST_POINTS, path: '/store/buy-slow-kill-inflation', ownedKey: null, activeCheck: slowKillInflationActive, stackWhileActive: true, desc: '7 days (stacks up to 14 days max): kill inflation rises at half the normal rate (~1–2% per kill instead of ~2–4%).', extra: (u) => (slowKillInflationActive(u) && u?.slow_kill_inflation_until ? { line: 'Active until', value: formatGameDateTime(u.slow_kill_inflation_until) } : null) },
   { id: 'slow-bodyguard-hire-inflation', title: 'Slow Bodyguard Hire Inflation', Icon: Shield, price: SLOW_BODYGUARD_HIRE_INFLATION_COST_POINTS, path: '/store/buy-slow-bodyguard-hire-inflation', ownedKey: null, activeCheck: slowBodyguardHireInflationActive, stackWhileActive: true, desc: '7 days (stacks up to 14 days max): 3h bodyguard hire markup is halved while active.', extra: (u) => (slowBodyguardHireInflationActive(u) && u?.slow_bodyguard_hire_inflation_until ? { line: 'Active until', value: formatGameDateTime(u.slow_bodyguard_hire_inflation_until) } : null) },
   { id: 'raid-capacity', title: 'Raid Capacity +5/day', Icon: Crosshair, price: RAID_CAPACITY_COST_POINTS, path: '/store/buy-raid-capacity', ownedKey: null, flagKey: 'raid_capacity', activeCheck: raidCapacityBoostActive, stackWhileActive: true, disabledWhen: (u) => raidCapacityBoostAdd(u) >= 15, desc: '30 days: +5 illegal business raids per day per pack. Stacks up to +15 (20 raids/day total); buying again adds +5 and restarts the 30 days.', extra: (u) => (raidCapacityBoostActive(u) && u?.raid_capacity_boost_until ? { line: `Boost +${raidCapacityBoostAdd(u)}/day until`, value: formatGameDateTime(u.raid_capacity_boost_until) } : null) },
+  { id: 'raid-reset', title: 'Raid Reset', Icon: Crosshair, price: RAID_RESET_COST_POINTS, path: '/store/buy-raid-reset', ownedKey: null, flagKey: 'raid_reset', pointsOnly: true, stackWhileActive: true, desc: 'Wipes today\'s used raid count back to 0 so you can hit joints again up to your daily cap. Points only — can be bought once per day.' },
   { id: 'armour-tier-6', title: 'Elite Composite Battledress', Icon: Shield, price: ARMOUR_TIER_6_STORE_COST_POINTS, path: '/store/buy-armour-tier-6', ownedKey: null, ownedCheck: (u) => (u?.armour_owned_level_max ?? 0) >= 6, disabledWhen: (u) => (u?.armour_owned_level_max ?? 0) < 5, desc: 'Armour level 6 (60k base bullets). Requires level 5 owned. Auto-equipped on purchase. Also shown on Armour page.' },
   { id: 'weapon11', title: 'Engraved Lewis Gun', Icon: Swords, price: WEAPON11_STORE_COST_POINTS, path: '/store/buy-weapon11', ownedKey: null, ownedCheck: (u) => !!u?.owns_weapon11, disabledWhen: (u) => !u?.owns_weapon10, desc: 'Top store gun (130 dmg). Requires Chicago Typewriter Premium owned. Auto-equipped on purchase. Also on Armour page.' },
   { id: 'silencer', title: 'Silencer', Icon: VolumeX, price: 150, path: '/store/buy-silencer', ownedKey: 'has_silencer', desc: 'Fewer witness statements when you kill' },
@@ -427,14 +430,18 @@ const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, ownedLabel, 
             || (payWith === 'cash'
               ? (!cashPrice || (user && (user.money ?? 0) < cashPrice))
               : (
-                user
-                && respectPrice != null
+                !!user
                 && (
-                  payWith === 'points'
-                    ? (user.points ?? 0) < price
-                    : payWith === 'respect'
-                      ? (user.respect_points ?? 0) < respectPrice
-                      : ((user.points ?? 0) < price && (user.respect_points ?? 0) < respectPrice)
+                  respectPrice != null
+                    ? (
+                      payWith === 'points'
+                        ? (user.points ?? 0) < price
+                        : payWith === 'respect'
+                          ? (user.respect_points ?? 0) < respectPrice
+                          : ((user.points ?? 0) < price && (user.respect_points ?? 0) < respectPrice)
+                    )
+                    // Points-only items ignore the pay-with toggle.
+                    : (user.points ?? 0) < price
                 )
               )
             )
@@ -1637,7 +1644,7 @@ export default function Store() {
                 Icon={u.Icon}
                 desc={u.desc}
                 price={priceVal}
-                respectPrice={storeRespectForPoints(priceVal)}
+                respectPrice={u.pointsOnly ? null : storeRespectForPoints(priceVal)}
                 owned={u.stackWhileActive ? false : (!!u.activeCheck?.(user) || !!(u.ownedKey && user?.[u.ownedKey]))}
                 ownedLabel={u.activeCheck?.(user) ? 'Active' : undefined}
                 loading={loading}

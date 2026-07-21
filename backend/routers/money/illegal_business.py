@@ -308,7 +308,7 @@ RAID_INCOMING_LOOT_MULT_MIN = 0.50  # victim: min multiplier on cash lost to rai
 
 # Raid
 RAID_COOLDOWN_HOURS = 12  # legacy (pre per-day hit counting); kept for old imports
-RAID_PER_TARGET_DAILY_HITS = 2  # same joint can be hit at most twice per game day
+RAID_PER_TARGET_DAILY_HITS = 20  # same joint can be hit at most 20 times per game day
 RAID_DAILY_LIMIT_DEFAULT = 5
 RAID_DAILY_LIMIT_MAX = 10
 RAID_DAILY_LIMIT = RAID_DAILY_LIMIT_DEFAULT  # backward compat for imports
@@ -3248,11 +3248,15 @@ async def hire_illegal_business_guard(req: HireGuardRequest, current_user: dict 
     existing = await db.illegal_business_guards.find({"business_id": business["id"]}, {"_id": 0}).to_list(slots + 1)
     if len(existing) >= slots:
         raise HTTPException(status_code=400, detail="No guard slots left. Buy another slot to add more guards.")
+    occupied = {int(g.get("slot_number") or 0) for g in existing}
     slot = req.slot_number
-    if slot < 1 or slot > slots:
-        raise HTTPException(status_code=400, detail="Invalid slot.")
-    if any(g.get("slot_number") == slot for g in existing):
-        raise HTTPException(status_code=400, detail="Slot already filled.")
+    if slot < 1 or slot > slots or slot in occupied:
+        # Auto-assign the first free slot — e.g. after a raid kills a mid-list guard,
+        # the frontend's "count + 1" guess points at a still-occupied slot.
+        free = next((s for s in range(1, slots + 1) if s not in occupied), None)
+        if free is None:
+            raise HTTPException(status_code=400, detail="No guard slots left. Buy another slot to add more guards.")
+        slot = free
     armour_max, weapon_max = _guard_level_caps(business)
     armour = max(0, min(armour_max, req.armour_level))
     weapon = max(0, min(weapon_max, req.weapon_level))

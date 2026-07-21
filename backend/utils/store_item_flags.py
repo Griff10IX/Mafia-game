@@ -17,6 +17,7 @@ STORE_ITEM_FLAG_DEFAULTS: Dict[str, bool] = {
     "family_safe_deposit": False,
     "family_event_token": False,
     "raid_capacity": False,
+    "raid_reset": False,
 }
 
 PHASE1_STORE_ITEM_FLAGS = (

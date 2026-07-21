@@ -405,17 +405,18 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repai
       } : undefined}
     >
       <div className="w-full aspect-[4/3] rounded overflow-hidden bg-secondary border border-border mb-1.5 relative">
-        {car.image ? (
+        {/* Icon sits underneath; if the image 404s we hide it so the icon shows instead of broken alt text. */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <Car size={32} className="text-primary/30" />
+        </div>
+        {car.image && (
           <img
             src={car.image}
-            alt={displayName}
-            className="w-full h-full object-cover"
+            alt=""
+            className="absolute inset-0 w-full h-full object-cover"
             loading="lazy"
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Car size={32} className="text-primary/30" />
-          </div>
         )}
         {isListed && (
           <div className="absolute top-1 left-1 px-1 rounded bg-amber-500/90 text-[8px] font-heading font-bold text-black uppercase">

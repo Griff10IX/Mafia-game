@@ -6,6 +6,21 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-21 23:30 UTC[/color][/b] — [b]Booze Run: one-tap Skip Run[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] If you hold [b]Booze Travel Skip tokens[/b], a [b]⚡ Skip Run[/b] panel now appears on the Booze Run page. One tap runs the [b]most profitable direction[/b] on this rotation's route: it drives you to the buy city instantly if you're not already there, buys the best-margin booze, skips the drive to the sell city and sells the lot. Each skipped drive costs [b]1 token[/b] (tokens auto-activate as needed) and bust risk still applies on buy and sell, exactly like a manual run.[/color]
+[*][color=#888888][b]New:[/b] [b]My Inventory[/b] now shows what your [b]Booze Travel Skip[/b] tokens have earned you — total Skip Run profit, runs done and drives skipped appear on the token card, and activated credits show under the [b]In use[/b] tab until they're spent.[/color]
+[*][color=#888888][b]New:[/b] [b]Raid Reset[/b] in the Points Store — [b]2,000 points[/b] wipes today's used raid count back to 0 so you can hit joints again up to your daily cap. [b]Points only[/b] (no respect) and can be bought [b]once per day[/b].[/color]
+[*][color=#888888][b]Changed:[/b] Paying for Store items [b]with respect[/b] now costs [b]3× as much respect[/b] (≈20.25 respect per point of price, up from 6.75). Point prices are unchanged — this only affects the respect-paid option.[/color]
+[*][color=#888888][b]Fixed:[/b] Hiring a replacement guard after one was [b]killed in a raid[/b] no longer errors with "Slot already filled" — the hire now automatically fills the first empty slot.[/color]
+[*][color=#888888][b]Fixed:[/b] More [b]broken car pictures[/b] (Ford Model A, Buick Master Six, Packard Eight, Stutz Bearcat) now reload properly in the Garage, GTA and travel pickers — and if a picture ever fails to load, a placeholder icon shows instead of broken text.[/color]
+[*][color=#888888][b]Fixed:[/b] The [b]GTA ⚡ Skip[/b] button no longer errors with "500" — skips now go through first time.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-21 23:00 UTC[/color][/b] — [b]Store goes fully live + today's smaller changes and fixes[/b][/size]
 [quote]
 [list]
@@ -23,11 +38,11 @@
 
 [hr]
 
-[size=1.5][b][color=#2ECC71]2026-07-21 22:45 UTC[/color][/b] — [b]Hit a Joint: cleaner target pool + 2 hits per joint per day[/b][/size]
+[size=1.5][b][color=#2ECC71]2026-07-21 22:45 UTC[/color][/b] — [b]Hit a Joint: cleaner target pool + 20 hits per joint per day[/b][/size]
 [quote]
 [list]
 [*][color=#888888][b]Fixed:[/b] You can no longer raid [b]dead or locked accounts[/b] — they're rejected on direct raids and excluded from the [b]Random[/b] target pool (along with NPCs and bodyguards), so random raids stop landing on dud targets.[/color]
-[*][color=#888888][b]Changed:[/b] The per-target rule is now [b]max 2 hits on the same joint per day[/b] (was a flat 12h cooldown) — so with a raised daily cap you can double-tap a target back-to-back if you want. Random raids skip joints you've already maxed today.[/color]
+[*][color=#888888][b]Changed:[/b] The per-target rule is now [b]max 20 hits on the same joint per day[/b] (was a flat 12h cooldown) — so you can hammer the same target back-to-back if you want. Random raids skip joints you've already maxed today.[/color]
 [/list]
 [/quote]
 
@@ -58,7 +73,7 @@
 [quote]
 [list]
 [*][color=#888888][b]Improved:[/b] If you hold [b]Crime / GTA cooldown skip tokens[/b], a [b]⚡ Skip[/b] button now appears right on the crime row (including prestige crimes) or GTA row while it's on cooldown — one tap uses a token and commits/attempts immediately. No more going via My Inventory first.[/color]
-[*][color=#888888][b]Changed:[/b] The cooldown skip daily cap is now [b]200 activations per day for each skip type[/b] (crime, GTA, booze travel, properties collect) — up from 5 shared across all types.[/color]
+[*][color=#888888][b]Changed:[/b] The cooldown skip daily cap is now per skip type — [b]5,000/day for crime skips[/b], [b]1,000/day for GTA[/b], [b]200/day for booze travel[/b], and [b]3/day[/b] for properties collect — up from 5 shared across all types. [b]Jail bailout tokens[/b] can now be used up to [b]500 times a day[/b] (was 3).[/color]
 [/list]
 [/quote]
 

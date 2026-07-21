@@ -1118,8 +1118,11 @@ async def leave_jail(
     }
 
 
+JAIL_BAILOUT_DAILY_CAP = 500
+
+
 async def jail_bailout_token(current_user: dict = Depends(get_current_user_verified)):
-    """Consume 1 jail bailout token to leave jail (max 3/day UTC; does not bypass unbreakable_until)."""
+    """Consume 1 jail bailout token to leave jail (max 500/day UTC; does not bypass unbreakable_until)."""
     from utils.store_item_flags import require_store_item_allowed
 
     await require_store_item_allowed(db, "jail_bailout", current_user)
@@ -1139,8 +1142,8 @@ async def jail_bailout_token(current_user: dict = Depends(get_current_user_verif
             pass
     today = datetime.now(timezone.utc).date().isoformat()
     uses_today = int(current_user.get("jail_bailout_uses_today") or 0)
-    if current_user.get("jail_bailout_day") == today and uses_today >= 3:
-        raise HTTPException(status_code=400, detail="Jail bailout limit reached (3 per UTC day)")
+    if current_user.get("jail_bailout_day") == today and uses_today >= JAIL_BAILOUT_DAILY_CAP:
+        raise HTTPException(status_code=400, detail=f"Jail bailout limit reached ({JAIL_BAILOUT_DAILY_CAP} per UTC day)")
     inc_uses = 1
     set_doc = {"jail_bailout_day": today}
     if current_user.get("jail_bailout_day") != today:
