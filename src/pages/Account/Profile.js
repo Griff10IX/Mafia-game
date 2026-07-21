@@ -40,6 +40,12 @@ const PROFILE_STYLES = `
   .prof-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
   @keyframes prof-dossier-enter { from { opacity: 0.88; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .prof-dossier-enter { animation: prof-dossier-enter 0.34s ease-out both; }
+  /* Store "Name Glow + Border" cosmetic: colored dossier border + soft glow matching the name color */
+  .prof-border-violet { border-color: rgba(167, 139, 250, 0.7) !important; box-shadow: 0 0 16px rgba(167, 139, 250, 0.4), inset 0 0 12px rgba(167, 139, 250, 0.08) !important; }
+  .prof-border-gold { border-color: rgba(251, 191, 36, 0.7) !important; box-shadow: 0 0 16px rgba(251, 191, 36, 0.4), inset 0 0 12px rgba(251, 191, 36, 0.08) !important; }
+  .prof-border-emerald { border-color: rgba(52, 211, 153, 0.7) !important; box-shadow: 0 0 16px rgba(52, 211, 153, 0.4), inset 0 0 12px rgba(52, 211, 153, 0.08) !important; }
+  .prof-border-sky { border-color: rgba(56, 189, 248, 0.7) !important; box-shadow: 0 0 16px rgba(56, 189, 248, 0.4), inset 0 0 12px rgba(56, 189, 248, 0.08) !important; }
+  .prof-border-rose { border-color: rgba(251, 113, 133, 0.7) !important; box-shadow: 0 0 16px rgba(251, 113, 133, 0.4), inset 0 0 12px rgba(251, 113, 133, 0.08) !important; }
   /* Forum BBCode [img]/[gif] use inline max-height 300–400px — tall art shrinks to a narrow strip; override on profile only */
   .prof-banner-content .forum-content-media {
     max-width: 100% !important;
@@ -510,8 +516,8 @@ const ProfileInfoCard = ({
             <span className="text-[8px] md:text-[9px] font-heading font-bold text-primary uppercase tracking-[0.16em]">
               Dossier
             </span>
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="text-[12px] sm:text-[13px] md:text-sm font-heading font-bold text-foreground truncate leading-tight" style={nameGlowStyle}>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[13px] sm:text-sm md:text-base font-heading font-bold text-foreground truncate leading-tight" style={nameGlowStyle}>
                 {profile.username}
               </span>
               {isCustomBadge && (
@@ -520,23 +526,23 @@ const ProfileInfoCard = ({
                     src={profile.custom_profile_badge_url}
                     alt=""
                     title="Custom badge"
-                    className="h-5 w-5 md:h-6 md:w-6 rounded object-cover border border-violet-500/40 shrink-0"
+                    className="h-7 w-7 md:h-8 md:w-8 rounded-md object-cover border border-violet-500/40 shrink-0 shadow-sm"
                   />
                 ) : (
-                  <span className="inline-flex items-center px-1 py-0.5 rounded border border-violet-500/40 bg-violet-500/15 text-[8px] md:text-[9px] font-heading font-bold uppercase tracking-wide text-violet-200 shrink-0">
+                  <span className="inline-flex items-center h-6 md:h-7 px-2 rounded-md border border-violet-500/40 bg-violet-500/15 text-[9px] md:text-[10px] font-heading font-bold uppercase tracking-wide text-violet-200 shrink-0">
                     Custom
                   </span>
                 )
               )}
               {isFoundingMember && (
-                <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded border border-amber-500/40 bg-amber-500/15 text-[8px] md:text-[9px] font-heading font-bold uppercase tracking-wide text-amber-200 shrink-0">
-                  <Crown size={10} className="text-amber-300 shrink-0" aria-hidden />
+                <span className="inline-flex items-center h-6 md:h-7 gap-1 px-2 rounded-md border border-amber-500/40 bg-amber-500/15 text-[9px] md:text-[10px] font-heading font-bold uppercase tracking-wide text-amber-200 shrink-0">
+                  <Crown size={12} className="text-amber-300 shrink-0" aria-hidden />
                   Founder
                 </span>
               )}
               {isWarRat && (
                 <span
-                  className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded text-[8px] md:text-[9px] font-heading font-bold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/45 shrink-0"
+                  className="inline-flex items-center h-6 md:h-7 gap-1 px-2 rounded-md text-[9px] md:text-[10px] font-heading font-bold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/45 shrink-0"
                   title="Left a family during an active family war"
                 >
                   Rat
