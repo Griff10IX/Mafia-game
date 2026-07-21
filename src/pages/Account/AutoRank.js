@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity, Settings2, Flame, CircleDot, Search, AlertTriangle, CheckCircle2, Info, PauseCircle } from 'lucide-react';
+import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity, Settings2, Flame, CircleDot, Search, AlertTriangle, CheckCircle2, Info, PauseCircle, Zap } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -502,6 +502,15 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
         checked={p.auto_rank_telegram_notify !== false}
         disabled={savingPrefs}
         onToggle={() => onUpdatePref('auto_rank_telegram_notify', !(p.auto_rank_telegram_notify !== false))}
+      />
+
+      <ToggleRow
+        icon={Zap}
+        label="Use cooldown skip tokens"
+        description="When on, Auto Rank burns held Crime / GTA / Booze Travel Skip tokens to bypass timers (respects each type's daily cap). Turn off to only act when cooldowns are naturally ready."
+        checked={!!p.auto_rank_use_skip_tokens}
+        disabled={savingPrefs}
+        onToggle={() => onUpdatePref('auto_rank_use_skip_tokens', !p.auto_rank_use_skip_tokens)}
       />
       
       <div className="py-1.5 px-0">
@@ -1628,6 +1637,7 @@ export default function AutoRank() {
             auto_rank_melt: meRes.data.auto_rank_melt === true,
             auto_rank_scrap: meRes.data.auto_rank_scrap === true,
             auto_rank_telegram_notify: meRes.data.auto_rank_telegram_notify !== false,
+            auto_rank_use_skip_tokens: !!meRes.data.auto_rank_use_skip_tokens,
             auto_rank_melt_action_ids: meRes.data.auto_rank_melt_action_ids ?? [],
             auto_rank_melt_rarity_ids: meRes.data.auto_rank_melt_rarity_ids ?? [],
             auto_rank_scrap_rarity_ids: meRes.data.auto_rank_scrap_rarity_ids ?? [],
@@ -1802,6 +1812,7 @@ export default function AutoRank() {
         auto_rank_melt: res.data?.auto_rank_melt === true,
         auto_rank_scrap: res.data?.auto_rank_scrap === true,
         auto_rank_telegram_notify: res.data?.auto_rank_telegram_notify !== false,
+        auto_rank_use_skip_tokens: !!res.data?.auto_rank_use_skip_tokens,
         auto_rank_crime_ids: res.data?.auto_rank_crime_ids ?? p.auto_rank_crime_ids,
         auto_rank_gta_option_ids: res.data?.auto_rank_gta_option_ids ?? p.auto_rank_gta_option_ids,
         auto_rank_melt_action_ids: res.data?.auto_rank_melt_action_ids ?? p.auto_rank_melt_action_ids,

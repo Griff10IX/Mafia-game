@@ -58,6 +58,8 @@ export default function Properties() {
   const [properties, setProperties] = useState(() => propertiesBoot.properties ?? []);
   const [propertyIncomePerkUntil, setPropertyIncomePerkUntil] = useState(() => propertiesBoot.propertyIncomePerkUntil ?? null);
   const [collectAllLoading, setCollectAllLoading] = useState(false);
+  const [skipBusyId, setSkipBusyId] = useState(null);
+  const [skipAllBusy, setSkipAllBusy] = useState(false);
   const [propertyUpkeep, setPropertyUpkeep] = useState(() => propertiesBoot.propertyUpkeep ?? null);
   const [upkeepPayLoading, setUpkeepPayLoading] = useState(false);
   const [portfolioUpgrades, setPortfolioUpgrades] = useState(() => propertiesBoot.portfolioUpgrades ?? null);
@@ -242,10 +244,40 @@ export default function Properties() {
     }
   };
 
+  // Matches backend COLLECT_COOLDOWN_MINUTES = 10
+  const COLLECT_COOLDOWN_HOURS = 10 / 60;
+  const skipTokens = Number(authUser?.cooldown_skip_properties_tokens || 0);
+  const skipCredits = Number(authUser?.cooldown_skip_properties_credits || 0);
+  const canSkipCollect = skipTokens > 0 || skipCredits > 0;
+  const propertyOnCollectCooldown = (p) =>
+    p?.owned && (Number(p.hours_since_collect) || 0) < COLLECT_COOLDOWN_HOURS;
+
+  const ensurePropertiesSkipCredit = async () => {
+    if (skipCredits >= 1) return;
+    await api.post('/inventory/tokens/use', { token_type: 'cooldown_skip_properties' });
+  };
+
+  const skipCooldownAndCollect = async (propertyId) => {
+    if (skipBusyId || skipAllBusy) return;
+    setSkipBusyId(propertyId);
+    try {
+      await ensurePropertiesSkipCredit();
+      await collectIncome(propertyId);
+      refreshUser();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to use properties collect skip');
+      refreshUser();
+    } finally {
+      setSkipBusyId(null);
+    }
+  };
+
   const heatBlocksPropertyCollect = Boolean(propertiesHeat?.blocked);
   const collectibleProperties = properties.filter(
     (p) => p.owned && !p.locked && !p.income_collection_blocked && !heatBlocksPropertyCollect,
   );
+  const onCooldownCollectible = collectibleProperties.filter(propertyOnCollectCooldown);
+  const canSkipCollectAll = canSkipCollect && onCooldownCollectible.length > 0;
 
   const payPropertyUpkeep = async () => {
     if (upkeepPayLoading || propertyUpkeep?.can_pay === false) return;
@@ -261,13 +293,29 @@ export default function Properties() {
       setUpkeepPayLoading(false);
     }
   };
-  const collectAll = async () => {
-    if (collectibleProperties.length === 0 || collectAllLoading) return;
-    setCollectAllLoading(true);
+  const collectAll = async ({ useSkip = false } = {}) => {
+    if (collectibleProperties.length === 0 || collectAllLoading || skipAllBusy) return;
+    if (useSkip) setSkipAllBusy(true);
+    else setCollectAllLoading(true);
     let collected = 0;
     let total = 0;
     const softFailures = [];
     const hardFailures = [];
+    let tokensLeft = skipTokens;
+    if (useSkip) {
+      try {
+        // Activate one held token into a credit if needed; further on-cooldown collects
+        // consume additional credits already held (daily activate cap is 3).
+        await ensurePropertiesSkipCredit();
+        if (skipCredits < 1) tokensLeft = Math.max(0, tokensLeft - 1);
+      } catch (e) {
+        toast.error(e.response?.data?.detail || 'Failed to activate properties collect skip');
+        setCollectAllLoading(false);
+        setSkipAllBusy(false);
+        refreshUser();
+        return;
+      }
+    }
     for (const prop of collectibleProperties) {
       try {
         const res = await api.post(`/properties/${prop.id}/collect`);
@@ -277,6 +325,25 @@ export default function Properties() {
         if (match) total += parseFloat(match[1].replace(/,/g, '')) || 0;
       } catch (e) {
         const detail = formatApiDetail(e.response?.data?.detail);
+        // Mid-loop: if this one needs a skip and we still hold tokens, activate and retry once.
+        if (useSkip && isCollectCooldownOrWaitMessage(detail) && tokensLeft > 0) {
+          try {
+            await api.post('/inventory/tokens/use', { token_type: 'cooldown_skip_properties' });
+            tokensLeft -= 1;
+            const retry = await api.post(`/properties/${prop.id}/collect`);
+            collected++;
+            const msg = retry.data?.message || '';
+            const match = msg.match(/\$([\d,]+(?:\.\d+)?)/);
+            if (match) total += parseFloat(match[1].replace(/,/g, '')) || 0;
+            continue;
+          } catch (e2) {
+            const d2 = formatApiDetail(e2.response?.data?.detail);
+            const line = d2 ? `${prop.name}: ${d2}` : `Failed to collect from ${prop.name}`;
+            if (isCollectCooldownOrWaitMessage(d2) || isNoIncomeCollectMessage(d2)) softFailures.push(line);
+            else hardFailures.push(line);
+            continue;
+          }
+        }
         const line = detail ? `${prop.name}: ${detail}` : `Failed to collect from ${prop.name}`;
         if (isCollectCooldownOrWaitMessage(detail) || isNoIncomeCollectMessage(detail)) softFailures.push(line);
         else hardFailures.push(line);
@@ -287,15 +354,22 @@ export default function Properties() {
       toast.success(total > 0 ? `Collected $${Math.trunc(total).toLocaleString()} from ${collected} propert${collected === 1 ? 'y' : 'ies'}` : `Collected from ${collected} propert${collected === 1 ? 'y' : 'ies'}`);
     }
     if (softFailures.length === 1) {
-      toast.warning(softFailures[0]);
+      toast.warning(
+        canSkipCollect && !useSkip
+          ? `${softFailures[0]} — tap ⚡ Skip on the card (or Skip Collect) if you hold Properties Collect Skip tokens.`
+          : softFailures[0],
+      );
     } else if (softFailures.length > 1) {
       toast.warning(
-        `${softFailures.length} businesses not ready yet. ${softFailures[0]} (+${softFailures.length - 1} more — open each card for details or wait for the timer).`,
+        canSkipCollect && !useSkip
+          ? `${softFailures.length} businesses not ready yet. Use ⚡ Skip Collect if you hold Properties Collect Skip tokens (3/day).`
+          : `${softFailures.length} businesses not ready yet. ${softFailures[0]} (+${softFailures.length - 1} more — open each card for details or wait for the timer).`,
       );
     }
     hardFailures.forEach((line) => toast.error(line));
     if (collected > 0 || softFailures.length || hardFailures.length) fetchProperties();
     setCollectAllLoading(false);
+    setSkipAllBusy(false);
   };
 
   if (!authUser && properties.length === 0) {
@@ -574,15 +648,29 @@ export default function Properties() {
           }
         })()}
         {collectibleProperties.length > 0 && (
-          <button
-            type="button"
-            onClick={collectAll}
-            disabled={collectAllLoading}
-            className="text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/40 hover:bg-primary/10 rounded px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation flex items-center gap-1.5"
-          >
-            <DollarSign size={12} />
-            {collectAllLoading ? '...' : `Collect all (${collectibleProperties.length})`}
-          </button>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => collectAll()}
+              disabled={collectAllLoading || skipAllBusy}
+              className="text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/40 hover:bg-primary/10 rounded px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation flex items-center gap-1.5"
+            >
+              <DollarSign size={12} />
+              {collectAllLoading ? '...' : `Collect all (${collectibleProperties.length})`}
+            </button>
+            {canSkipCollectAll && (
+              <button
+                type="button"
+                onClick={() => collectAll({ useSkip: true })}
+                disabled={collectAllLoading || skipAllBusy}
+                title="Use Properties Collect Skip tokens to collect businesses still on the 10m timer (3 activations/day)"
+                className="text-[9px] font-heading font-bold uppercase tracking-wider text-amber-300 border border-amber-500/45 bg-amber-500/10 hover:bg-amber-500/20 rounded px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation flex items-center gap-1.5"
+              >
+                <Zap size={12} />
+                {skipAllBusy ? '...' : `⚡ Skip Collect (${onCooldownCollectible.length})`}
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -669,19 +757,36 @@ export default function Properties() {
               <div className="space-y-1.5">
                 {property.owned ? (
                   <>
-                    <button
-                      onClick={() => collectIncome(property.id)}
-                      data-testid={`collect-income-${property.id}`}
-                      disabled={property.income_collection_blocked || heatBlocksPropertyCollect}
-                      className="w-full bg-primary/20 text-primary rounded font-heading font-bold uppercase tracking-wider py-1.5 text-[10px] border border-primary/40 hover:bg-primary/30 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <DollarSign size={12} />{' '}
-                      {property.income_collection_blocked
-                        ? 'Pay upkeep to collect'
-                        : heatBlocksPropertyCollect
-                          ? 'Bribe police to collect'
-                          : 'Collect'}
-                    </button>
+                    {canSkipCollect
+                      && propertyOnCollectCooldown(property)
+                      && !property.income_collection_blocked
+                      && !heatBlocksPropertyCollect ? (
+                      <button
+                        type="button"
+                        onClick={() => skipCooldownAndCollect(property.id)}
+                        data-testid={`skip-collect-${property.id}`}
+                        disabled={skipBusyId === property.id || skipAllBusy}
+                        title="Use a Properties Collect Skip token to collect now (max 3/day)"
+                        className="w-full bg-amber-500/15 text-amber-300 rounded font-heading font-bold uppercase tracking-wider py-1.5 text-[10px] border border-amber-500/45 hover:bg-amber-500/25 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <Zap size={12} />
+                        {skipBusyId === property.id ? '...' : '⚡ Skip Collect'}
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => collectIncome(property.id)}
+                        data-testid={`collect-income-${property.id}`}
+                        disabled={property.income_collection_blocked || heatBlocksPropertyCollect}
+                        className="w-full bg-primary/20 text-primary rounded font-heading font-bold uppercase tracking-wider py-1.5 text-[10px] border border-primary/40 hover:bg-primary/30 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        <DollarSign size={12} />{' '}
+                        {property.income_collection_blocked
+                          ? 'Pay upkeep to collect'
+                          : heatBlocksPropertyCollect
+                            ? 'Bribe police to collect'
+                            : 'Collect'}
+                      </button>
+                    )}
                     {property.can_upgrade && (
                       <button
                         onClick={() => buyProperty(property.id)}

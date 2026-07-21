@@ -5,7 +5,7 @@ import logging
 import os
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 # Ensure backend/.env is loaded (e.g. when process cwd is not the backend dir)
 try:
@@ -869,7 +869,23 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
     if user.get("travel_arrives_at"):
         adt = _parse_iso(user["travel_arrives_at"])
         if adt and now < adt:
-            return False
+            # Optional: burn a Booze Travel Skip to finish the drive now (same as Skip Run).
+            if user.get("auto_rank_use_skip_tokens") is True and _can_use_skip(user, "booze"):
+                from utils.cooldown_skip import consume_skip_credit
+
+                dest = (user.get("traveling_to") or "").strip()
+                ok, user = await _ensure_skip_credit(db, user_id, user, "booze")
+                if ok and dest and await consume_skip_credit(db, user_id, "booze"):
+                    await db.users.update_one(
+                        {"id": user_id},
+                        {"$set": {"current_state": dest}, "$unset": {"traveling_to": "", "travel_arrives_at": ""}},
+                    )
+                    user = await db.users.find_one({"id": user_id}, {"_id": 0}) or user
+                    lines.append(f"**Booze** — Skipped the drive to {dest} (1 skip).")
+                else:
+                    return False
+            else:
+                return False
 
     round_trip = _booze_round_trip_cities()
     if not round_trip or len(round_trip) < 2:
@@ -1053,6 +1069,9 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     lines = [f"**Auto Rank** — {username}", ""]
     has_success = False
     respect_before = int(user.get("respect_points") or 0)
+    use_skips = user.get("auto_rank_use_skip_tokens") is True
+    skip_crime_used = 0
+    skip_gta_used = 0
 
     # --- Crimes: only those off cooldown (same rules as manual play; _commit_crime_impl also enforces) ---
     if _auto_rank_task_enabled(user, "auto_rank_crimes"):
@@ -1096,11 +1115,12 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             user = await db.users.find_one({"id": user_id}, {"_id": 0})
             if not user or user.get("in_jail"):
                 break
+            use_skips = user.get("auto_rank_use_skip_tokens") is True
             user_crimes = await db.user_crimes.find({"user_id": user_id}, {"_id": 0, "crime_id": 1, "cooldown_until": 1}).to_list(5000)
             cooldown_by_crime = {uc["crime_id"]: _parse_iso(uc.get("cooldown_until")) for uc in user_crimes}
             rank_id, _ = get_rank_info(int(user.get("rank_points") or 0), user_prestige_rank_mult(user))
             user_prestige = int(user.get("prestige_level") or 0)
-            # Only crimes whose cooldown_until has passed (or never set); _commit_crime_impl will re-check and set next cooldown
+            # Only crimes whose cooldown_until has passed (or never set); skip tokens can unlock on-cooldown ones.
             available = []
             for c in crimes:
                 try:
@@ -1121,7 +1141,12 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                     continue
                 until = cooldown_by_crime.get(cid)
                 if until is not None and until > now:
-                    continue
+                    if (
+                        not use_skips
+                        or skip_crime_used >= AUTO_RANK_CRIME_SKIP_CAP
+                        or not _can_use_skip(user, "crime")
+                    ):
+                        continue
                 available.append(c)
             # Prestige crimes first when ready (same min_rank as petty; old sort used id so "crime1" always beat "prestige_crime_1").
             # Within prestige: lower prestige tier first; within normal: lower min_rank then id.
@@ -1147,6 +1172,14 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                     await asyncio.sleep(AUTO_RANK_CRIME_COMMIT_INTERVAL_SEC)
                 _first_crime_in_cycle = False
                 chosen = available[0]
+                until = cooldown_by_crime.get(chosen.get("id"))
+                if until is not None and until > now:
+                    if skip_crime_used >= AUTO_RANK_CRIME_SKIP_CAP:
+                        break
+                    ok, user = await _ensure_skip_credit(db, user_id, user, "crime")
+                    if not ok:
+                        break
+                    skip_crime_used += 1
                 out = await commit_crime_locked(chosen["id"], user, via_auto_rank=True)
                 if out.success:
                     crime_success_count += 1
@@ -1175,8 +1208,9 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 if len(crime_names) > 6:
                     disp += f" (+{len(crime_names) - 6} more)"
                 names_part = f" — {disp}"
+            skip_note = f" ({skip_crime_used} skip{'s' if skip_crime_used != 1 else ''})" if skip_crime_used else ""
             lines.append(
-                f"**Crimes** — Committed {crime_success_count} crime(s){names_part}. "
+                f"**Crimes** — Committed {crime_success_count} crime(s){names_part}{skip_note}. "
                 f"Earned ${crime_total_cash:,} and {crime_total_rp} rank points."
             )
             if crime_extra_summaries:
@@ -1197,12 +1231,26 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         return
     if user.get("in_jail"):
         return
+    use_skips = user.get("auto_rank_use_skip_tokens") is True
 
-    # --- GTA: only if global GTA cooldown has passed. Rotate through all unlocked options (by rank), not just the first. ---
+    # --- GTA: only if global GTA cooldown has passed (or skip tokens enabled). Rotate through unlocked options. ---
     if _auto_rank_task_enabled(user, "auto_rank_gta"):
         cooldown_doc = await db.gta_cooldowns.find_one({"user_id": user_id}, {"_id": 0, "cooldown_until": 1})
         until = _parse_iso(cooldown_doc.get("cooldown_until")) if cooldown_doc else None
-        if not (until and until > now):
+        on_cooldown = bool(until and until > now)
+        gta_ready = not on_cooldown
+        if on_cooldown and use_skips and _can_use_skip(user, "gta"):
+            from utils.cooldown_skip import consume_skip_credit
+
+            ok, user = await _ensure_skip_credit(db, user_id, user, "gta")
+            if ok and await consume_skip_credit(db, user_id, "gta"):
+                await db.gta_cooldowns.update_one(
+                    {"user_id": user_id},
+                    {"$set": {"cooldown_until": now.isoformat()}},
+                )
+                skip_gta_used += 1
+                gta_ready = True
+        if gta_ready:
             rank_id, _ = get_rank_info(int(user.get("rank_points") or 0), user_prestige_rank_mult(user))
             unlocked = [opt for opt in GTA_OPTIONS if rank_id >= opt["min_rank"]]
             allowed_gta_ids = user.get("auto_rank_gta_option_ids")
@@ -1224,7 +1272,8 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                         car_name = out.car.get("name", "Car") if out.car else "Car"
                         await _update_auto_rank_stats_gta(db, user_id, out.car or {}, now, option_id=opt.get("id"), option_name=opt.get("name"))
                         await _set_last_activity(db, user_id, "gta", now)
-                        lines.append(f"**GTA** — Success: {car_name}! +{out.rank_points_earned} RP.")
+                        skip_note = " (1 skip)" if skip_gta_used else ""
+                        lines.append(f"**GTA** — Success: {car_name}! +{out.rank_points_earned} RP.{skip_note}")
                     else:
                         await _inc_failed_today(db, user_id, "auto_rank_failed_gtas_today", "auto_rank_failed_gtas_date", now)
                 except HTTPException:
@@ -1860,6 +1909,7 @@ _PREFERENCE_FIELDS = [
     "auto_rank_melt",
     "auto_rank_scrap",
     "auto_rank_telegram_notify",
+    "auto_rank_use_skip_tokens",
 ]
 _PREFERENCE_DEFAULTS = {
     "auto_rank_enabled": False,
@@ -1871,7 +1921,64 @@ _PREFERENCE_DEFAULTS = {
     "auto_rank_melt": False,
     "auto_rank_scrap": False,
     "auto_rank_telegram_notify": True,
+    "auto_rank_use_skip_tokens": False,
 }
+
+# Soft cap so one Auto Rank cycle can't burn unbounded crime skips.
+AUTO_RANK_CRIME_SKIP_CAP = 200
+
+_SKIP_TOKEN_COUNT_FIELDS = {
+    "crime": "cooldown_skip_crime_tokens",
+    "gta": "cooldown_skip_gta_tokens",
+    "booze": "cooldown_skip_booze_tokens",
+    "properties": "cooldown_skip_properties_tokens",
+}
+
+
+def _can_use_skip(user: Optional[dict], kind: str) -> bool:
+    """True if user already has a skip credit or can activate a held token (daily cap applies)."""
+    if not user:
+        return False
+    from utils.cooldown_skip import has_skip_credit, can_activate_cooldown_skip_token
+
+    if has_skip_credit(user, kind):
+        return True
+    token_field = _SKIP_TOKEN_COUNT_FIELDS.get(kind)
+    if not token_field or int(user.get(token_field) or 0) < 1:
+        return False
+    return can_activate_cooldown_skip_token(user, kind)
+
+
+async def _ensure_skip_credit(db, user_id: str, user: dict, kind: str) -> Tuple[bool, dict]:
+    """Ensure one skip credit is available for kind, auto-activating a held token if needed.
+
+    Returns (ok, refreshed_user). Does not consume the credit — callers / commit paths do that.
+    """
+    from utils.cooldown_skip import (
+        has_skip_credit,
+        can_activate_cooldown_skip_token,
+        activation_inc_fields,
+    )
+
+    if not user or not user_id:
+        return False, user or {}
+    if has_skip_credit(user, kind):
+        return True, user
+    token_field = _SKIP_TOKEN_COUNT_FIELDS.get(kind)
+    if not token_field or int(user.get(token_field) or 0) < 1:
+        return False, user
+    if not can_activate_cooldown_skip_token(user, kind):
+        return False, user
+    inc, set_doc = activation_inc_fields(kind, user)
+    inc[token_field] = -1
+    r = await db.users.update_one(
+        {"id": user_id, token_field: {"$gte": 1}},
+        {"$inc": inc, "$set": set_doc},
+    )
+    if r.modified_count != 1:
+        return False, user
+    refreshed = await db.users.find_one({"id": user_id}, {"_id": 0}) or user
+    return has_skip_credit(refreshed, kind), refreshed
 
 
 def _auto_rank_task_enabled(user: Optional[dict], field: str) -> bool:
@@ -1899,8 +2006,9 @@ def _extract_preferences(user: dict) -> dict:
     out = dict(_PREFERENCE_DEFAULTS)
     out["auto_rank_enabled"] = user.get("auto_rank_enabled") is True
     out["auto_rank_telegram_notify"] = user.get("auto_rank_telegram_notify") is not False
+    out["auto_rank_use_skip_tokens"] = user.get("auto_rank_use_skip_tokens") is True
     for k in _PREFERENCE_FIELDS:
-        if k in ("auto_rank_enabled", "auto_rank_telegram_notify"):
+        if k in ("auto_rank_enabled", "auto_rank_telegram_notify", "auto_rank_use_skip_tokens"):
             continue
         out[k] = _auto_rank_task_enabled(user, k)
     return out
@@ -2256,6 +2364,7 @@ def register(router):
                     f"Crimes: {'on' if user.get('auto_rank_crimes') else 'off'} · GTA: {'on' if user.get('auto_rank_gta') else 'off'} · Melt: {'on' if user.get('auto_rank_melt') else 'off'} · Scrap: {'on' if user.get('auto_rank_scrap') else 'off'}",
                     f"Bust 5s: {'on' if user.get('auto_rank_bust_every_5_sec') else 'off'} · OC: {'on' if user.get('auto_rank_oc') else 'off'} · Booze: {'on' if user.get('auto_rank_booze') else 'off'}",
                     f"TG alerts: {'on' if _auto_rank_telegram_notify(user) else 'off'} (game → Auto Rank)",
+                    f"Skip tokens: {'on' if user.get('auto_rank_use_skip_tokens') is True else 'off'}",
                     "",
                     f"Total: {stats.get('total_crimes', 0)} crimes, {stats.get('total_gtas', 0)} GTAs, {stats.get('total_busts', 0)} busts",
                     f"Cash: ${stats.get('total_cash', 0):,} · Booze: {stats.get('total_booze_runs', 0)} runs (${stats.get('total_booze_profit', 0):,})",
@@ -2370,6 +2479,7 @@ def register(router):
         auto_rank_melt: Optional[bool] = None
         auto_rank_scrap: Optional[bool] = None
         auto_rank_telegram_notify: Optional[bool] = None
+        auto_rank_use_skip_tokens: Optional[bool] = None
         passive_booze_paused: Optional[bool] = None
         auto_rank_crime_ids: Optional[list] = None
         auto_rank_gta_option_ids: Optional[list] = None
@@ -2683,6 +2793,8 @@ def register(router):
                 updates[field] = val
         if body.auto_rank_telegram_notify is not None:
             updates["auto_rank_telegram_notify"] = bool(body.auto_rank_telegram_notify)
+        if body.auto_rank_use_skip_tokens is not None:
+            updates["auto_rank_use_skip_tokens"] = bool(body.auto_rank_use_skip_tokens)
         if body.passive_booze_paused is not None:
             updates["passive_booze_paused"] = bool(body.passive_booze_paused)
             if body.passive_booze_paused:

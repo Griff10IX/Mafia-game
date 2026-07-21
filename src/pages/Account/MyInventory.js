@@ -56,7 +56,7 @@ const tokenLabels = {
   cooldown_skip_crime: { name: 'Crime cooldown skip', icon: Zap, desc: 'Activate to skip one crime cooldown (max 5,000 activations/day; other skip types 200/day).' },
   cooldown_skip_gta: { name: 'GTA cooldown skip', icon: Zap, desc: 'Activate to skip one GTA cooldown (1,000/day cap).' },
   cooldown_skip_booze: { name: 'Booze travel skip', icon: Zap, desc: 'Activate to skip one booze-run travel wait (200/day cap).' },
-  cooldown_skip_properties: { name: 'Properties collect skip', icon: Zap, desc: 'Activate to skip one property collect cooldown (3/day cap).' },
+  cooldown_skip_properties: { name: 'Properties collect skip', icon: Zap, desc: 'Activate to skip one property collect cooldown — or tap ⚡ Skip Collect on the Properties page (3/day cap).' },
   jail_bailout: { name: 'Jail bailout token', icon: Target, desc: 'Instant leave jail — use it from the Jail page (500 uses/day UTC; does not bypass OC lockdown).' },
   rank_xp_pass: { name: 'Game Pass', icon: Package, desc: 'Activate in Armoury/My Inventory to claim one-time Game Pass rewards. Expires in 1 month if unused.' },
 };

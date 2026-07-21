@@ -341,8 +341,8 @@ class BuyStoreTokenBody(BaseModel):
     @field_validator("amount")
     @classmethod
     def amount_ok(cls, v):
-        if v is None or v < 1 or v > 3:
-            raise ValueError("amount must be 1–3")
+        if v is None or v < 1 or v > 100:
+            raise ValueError("amount must be 1–100")
         return v
 
 

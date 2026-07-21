@@ -1443,6 +1443,37 @@ def register(router):
         )
         return {"message": "Custom badge updated", "custom_profile_badge_url": badge}
 
+    class ProfileGlowUpdateRequest(BaseModel):
+        preset_id: str = "violet"
+
+    @router.patch("/profile/glow")
+    async def update_profile_glow(request: ProfileGlowUpdateRequest, current_user: dict = Depends(get_current_user)):
+        """Free colour change for permanent Name Glow + Border owners (no points)."""
+        from utils.profile_cosmetics import sanitize_glow_preset
+
+        if not current_user.get("profile_cosmetic_permanent"):
+            raise HTTPException(
+                status_code=403,
+                detail="Buy permanent Name Glow + Border from the Points Store first. Timed glows pick colour when purchased.",
+            )
+        preset = sanitize_glow_preset(request.preset_id)
+        await db.users.update_one(
+            {"id": current_user.get("id") or "", "profile_cosmetic_permanent": True},
+            {
+                "$set": {
+                    "profile_name_glow_color": preset["color"],
+                    "profile_border_style": preset["border"],
+                }
+            },
+        )
+        return {
+            "message": "Glow colour updated",
+            "profile_name_glow_color": preset["color"],
+            "profile_border_style": preset["border"],
+            "profile_cosmetic_permanent": True,
+            "profile_cosmetic_active": True,
+        }
+
     @router.get("/profile/theme")
     async def get_profile_theme(current_user: dict = Depends(get_current_user)):
         """Get current user's theme preferences (PC vs mobile stored separately; legacy theme_preferences is fallback)."""

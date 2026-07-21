@@ -109,7 +109,8 @@ const WEAPON11_STORE_COST_POINTS = 1000;
 const AUTO_RANK_2H_TOKEN_STORE_PTS = Math.ceil(AUTO_RANK_COST_POINTS / 8);
 const CREW_OC_AUTO_3H_TOKEN_STORE_PTS = 48; // match backend jailbust_bonus / crew_oc_auto_3h store price
 
-/** Single consumable tokens (armoury); activate from My Inventory */
+/** Max qty per single consumable-token purchase (must match backend BuyStoreTokenBody). */
+const TOKEN_BUY_MAX_QTY = 100;
 const TOKEN_STORE_ITEMS = [
   { tokenType: 'xp_crimes', title: 'Crimes XP Token', price: 42, userKey: 'xp_crimes_tokens', desc: `2× crime XP for 1h when activated (stack up to ${TOKEN_MAX_STACK_LABEL}).` },
   { tokenType: 'xp_gta', title: 'GTA XP Token', price: 42, userKey: 'xp_gta_tokens', desc: `2× GTA XP for 1h when activated (stack up to ${TOKEN_MAX_STACK_LABEL}).` },
@@ -140,7 +141,7 @@ const TOKEN_STORE_ITEMS = [
   { tokenType: 'cooldown_skip_crime', title: 'Crime Cooldown Skip', price: 35, userKey: 'cooldown_skip_crime_tokens', flagKey: 'cooldown_skip_crime', desc: 'Activate in My Inventory or tap Skip on a crime row — skips one crime cooldown (max 5,000 activations/day).' },
   { tokenType: 'cooldown_skip_gta', title: 'GTA Cooldown Skip', price: 35, userKey: 'cooldown_skip_gta_tokens', flagKey: 'cooldown_skip_gta', desc: 'Skips one GTA cooldown when activated (1,000/day cap).' },
   { tokenType: 'cooldown_skip_booze', title: 'Booze Travel Skip', price: 35, userKey: 'cooldown_skip_booze_tokens', flagKey: 'cooldown_skip_booze', desc: 'Skips one booze-run travel wait when activated (200/day cap).' },
-  { tokenType: 'cooldown_skip_properties', title: 'Properties Collect Skip', price: 35, userKey: 'cooldown_skip_properties_tokens', flagKey: 'cooldown_skip_properties', desc: 'Skips one property collect cooldown when activated (3/day cap).' },
+  { tokenType: 'cooldown_skip_properties', title: 'Properties Collect Skip', price: 35, userKey: 'cooldown_skip_properties_tokens', flagKey: 'cooldown_skip_properties', desc: 'Skips one property collect cooldown when activated — tap ⚡ Skip Collect on the Properties page (3/day cap).' },
 ];
 
 const TOKEN_BUNDLES = [
@@ -277,7 +278,7 @@ const UPGRADES = [
   { id: 'founding-member', title: 'Founding Member', Icon: Award, price: FOUNDING_MEMBER_COST_POINTS, path: '/store/buy-founding-member', ownedKey: 'founding_member', desc: '+15% on crimes, GTA, OC, hitlist NPCs, properties, family rackets, and missions. Account-only — lost on death; buy again on a new life if you want it back.' },
   { id: 'custom-profile-badge', title: 'Custom Profile Badge', Icon: Award, price: 750, path: '/store/buy-custom-profile-badge', ownedKey: 'custom_profile_badge', flagKey: 'profile_badge', desc: 'Unlock a custom badge image next to your name. After purchase, upload your image on Profile. Account-only — lost on death.' },
   { id: 'profile-glow-7d', title: 'Name Glow + Border (7d)', Icon: Star, price: 120, path: '/store/buy-profile-glow-7d', ownedKey: null, flagKey: 'profile_glow_7d', needsGlowPreset: true, desc: 'Timed username glow and dossier border (7 days, stacks).' },
-  { id: 'profile-glow-permanent', title: 'Name Glow + Border (Permanent)', Icon: Star, price: 800, path: '/store/buy-profile-glow-permanent', ownedKey: 'profile_cosmetic_permanent', flagKey: 'profile_glow_permanent', needsGlowPreset: true, desc: 'Permanent username glow and profile border.' },
+  { id: 'profile-glow-permanent', title: 'Name Glow + Border (Permanent)', Icon: Star, price: 800, path: '/store/buy-profile-glow-permanent', ownedKey: 'profile_cosmetic_permanent', flagKey: 'profile_glow_permanent', needsGlowPreset: true, desc: 'Permanent username glow and profile border. After purchase, change colour anytime for free on Edit Profile.' },
   { id: 'family-safe-deposit-tier', title: 'Family Safe Deposit Tier', Icon: Shield, price: 600, path: '/store/buy-family-safe-deposit-tier', ownedKey: null, flagKey: 'family_safe_deposit', familyDonOnly: true, desc: 'Don/Underboss: raises the personal safe cash cap per member in the family vault — $250M / $500M / $1B (max 3 tiers).' },
   { id: 'family-event-token', title: 'Family Event Token', Icon: Zap, price: 250, path: '/store/buy-family-event-token', ownedKey: null, flagKey: 'family_event_token', familyDonOnly: true, desc: 'Don/Underboss: 3-day +10% family racket income (1 per 7 days).' },
   { id: 'auto-rank', title: 'Auto Rank', Icon: Bot, price: AUTO_RANK_COST_POINTS, path: '/store/buy-auto-rank', ownedKey: 'auto_rank_purchased', desc: 'Auto-commit crimes, GTA, busts, OC. Optional: set Telegram in Profile for notifications.' },
@@ -524,6 +525,14 @@ export default function Store() {
   const [selectableBundleQtyByToken, setSelectableBundleQtyByToken] = useState(() =>
     Object.fromEntries(SELECTABLE_BUNDLE_ITEMS.map((t) => [t.tokenType, 0])),
   );
+  const [tokenBuyQtyByType, setTokenBuyQtyByType] = useState(() =>
+    Object.fromEntries(TOKEN_STORE_ITEMS.map((t) => [t.tokenType, 1])),
+  );
+
+  const setTokenBuyQty = (tokenType, next) => {
+    const n = Math.max(1, Math.min(TOKEN_BUY_MAX_QTY, Math.floor(Number(next) || 1)));
+    setTokenBuyQtyByType((prev) => ({ ...prev, [tokenType]: n }));
+  };
 
   const storeFlagAllowed = useCallback((flagKey) => {
     if (!flagKey) return true;
@@ -1818,7 +1827,11 @@ export default function Store() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
               {TOKEN_STORE_ITEMS.map((t) => {
                 const held = Number(user?.[t.userKey] ?? 0);
+                const qty = Math.max(1, Math.min(TOKEN_BUY_MAX_QTY, Number(tokenBuyQtyByType[t.tokenType] || 1)));
+                const totalPts = t.price * qty;
+                const totalRespect = storeRespectForPoints(totalPts);
                 const tokenCashPrice = cashPriceAvailable ? Math.round(t.price * cashPricePerPoint) : 0;
+                const totalCash = cashPriceAvailable ? Math.round(tokenCashPrice * qty) : 0;
                 const flagLive = !t.flagKey || !!storeItemFlags?.[t.flagKey];
                 const comingSoon = !flagLive;
                 const staffPreview = comingSoon && isStaff;
@@ -1828,8 +1841,8 @@ export default function Store() {
                     title={t.title}
                     Icon={Package}
                     desc={t.desc}
-                    price={t.price}
-                    respectPrice={storeRespectForPoints(t.price)}
+                    price={totalPts}
+                    respectPrice={totalRespect}
                     owned={false}
                     loading={loading}
                     disabled={storePayWith === 'cash' && cashPurchasesToday >= cashPurchasesLimit}
@@ -1837,18 +1850,74 @@ export default function Store() {
                     staffPreview={staffPreview}
                     user={user}
                     payWith={storePayWith}
-                    cashPrice={storePayWith === 'cash' ? tokenCashPrice : undefined}
+                    cashPrice={storePayWith === 'cash' ? totalCash : undefined}
                     onBuy={() => {
+                      const buyQty = qty;
+                      const okMsg = buyQty === 1 ? `+1 ${t.title}` : `+${buyQty} ${t.title}`;
                       if (storePayWith === 'cash') {
-                        apiBuy('/store/buy-token-cash', { token_type: t.tokenType, amount: 1 }, `+1 ${t.title}`, (d) => {
+                        apiBuy('/store/buy-token-cash', { token_type: t.tokenType, amount: buyQty }, okMsg, (d) => {
                           if (d?.cash_purchases_today != null) setCashPurchasesToday(d.cash_purchases_today);
                         });
                       } else {
-                        apiBuy(`/store/buy-token?pay_with=${encodeURIComponent(storePayWith)}`, { token_type: t.tokenType, amount: 1 }, `+1 ${t.title}`);
+                        apiBuy(`/store/buy-token?pay_with=${encodeURIComponent(storePayWith)}`, { token_type: t.tokenType, amount: buyQty }, okMsg);
                       }
                     }}
                   >
-                    <p className="text-[10px] text-mutedForeground mb-1">Held: {held.toLocaleString()}</p>
+                    <p className="text-[10px] text-mutedForeground mb-1.5">Held: {held.toLocaleString()} · {t.price} pts each</p>
+                    <div className="flex items-center gap-1.5 mb-1.5">
+                      <button
+                        type="button"
+                        onClick={() => setTokenBuyQty(t.tokenType, qty - 10)}
+                        disabled={qty <= 1}
+                        className="min-h-[32px] min-w-[32px] rounded border border-primary/30 bg-primary/10 text-primary text-[9px] font-bold disabled:opacity-40"
+                        title="−10"
+                      >
+                        −10
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTokenBuyQty(t.tokenType, qty - 1)}
+                        disabled={qty <= 1}
+                        className="min-h-[32px] min-w-[32px] rounded border border-primary/30 bg-primary/10 text-primary font-bold disabled:opacity-40"
+                      >
+                        −
+                      </button>
+                      <input
+                        type="number"
+                        min={1}
+                        max={TOKEN_BUY_MAX_QTY}
+                        value={qty}
+                        onChange={(e) => setTokenBuyQty(t.tokenType, e.target.value)}
+                        className="flex-1 min-w-0 h-8 rounded border border-primary/30 bg-background/80 px-2 text-center text-[11px] font-heading font-bold text-foreground tabular-nums"
+                        aria-label={`${t.title} quantity`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setTokenBuyQty(t.tokenType, qty + 1)}
+                        disabled={qty >= TOKEN_BUY_MAX_QTY}
+                        className="min-h-[32px] min-w-[32px] rounded border border-primary/30 bg-primary/10 text-primary font-bold disabled:opacity-40"
+                      >
+                        +
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setTokenBuyQty(t.tokenType, qty + 10)}
+                        disabled={qty >= TOKEN_BUY_MAX_QTY}
+                        className="min-h-[32px] min-w-[32px] rounded border border-primary/30 bg-primary/10 text-primary text-[9px] font-bold disabled:opacity-40"
+                        title="+10"
+                      >
+                        +10
+                      </button>
+                    </div>
+                    <p className="text-[9px] text-zinc-500 font-heading mb-0.5 tabular-nums">
+                      {qty} × {t.price} pts = <span className="text-primary font-bold">{totalPts.toLocaleString()} pts</span>
+                      {storePayWith === 'respect' || storePayWith === 'auto' ? (
+                        <> · <span className="text-zinc-400">{totalRespect.toLocaleString()} resp</span></>
+                      ) : null}
+                      {storePayWith === 'cash' && cashPriceAvailable ? (
+                        <> · <span className="text-zinc-400">${totalCash.toLocaleString()}</span></>
+                      ) : null}
+                    </p>
                   </StoreCard>
                 );
               })}
