@@ -94,6 +94,7 @@ class PropertiesListResponse(BaseModel):
     properties_heat: Optional[dict] = None
     properties_heat_bribe_quote: Optional[dict] = None
     property_portfolio_kill_income_boost_percent: int = 0
+    property_auto_collect: Optional[dict] = None
 
 
 class PropertiesHeatBribeRequest(BaseModel):
@@ -250,6 +251,27 @@ PROPERTIES_HEAT_DECAY_PER_HOUR = 1.0
 # Kept below property-income scale so upkeep/bribes do not dominate ROI.
 PROPERTIES_HEAT_BRIBE_DOLLARS_PER_HEAT = 100_000
 PROPERTIES_HEAT_BRIBE_MIN_CASH = 100_000
+
+# --- Property Auto Collect perk (unlocked via Business progress missions) ---
+PROPERTY_AUTO_COLLECT_COST_POINTS = 2500
+PROPERTY_AUTO_COLLECT_DURATION_DAYS = 7
+PROPERTY_AUTO_COLLECT_UNLOCK_MISSIONS = 15
+# Auto-bribe kicks in once heat reaches this level (clears to 0, charging only what's needed).
+PROPERTY_AUTO_COLLECT_HEAT_TRIGGER = 5.0
+
+
+def property_auto_collect_active(user: dict) -> bool:
+    """True while the Property Auto Collect perk is active (regardless of the enabled toggle)."""
+    until = _parse_iso_datetime((user or {}).get("property_auto_collect_until"))
+    return bool(until and until > datetime.now(timezone.utc))
+
+
+def _business_progress_missions_completed(user: dict) -> int:
+    rows = (user or {}).get("illegal_business_mission_completions") or []
+    try:
+        return len({r.get("mission_id") for r in rows if isinstance(r, dict) and r.get("mission_id")})
+    except Exception:
+        return 0
 
 
 def _clamp_float(v: float, lo: float, hi: float) -> float:
@@ -545,6 +567,179 @@ async def _ensure_property_upkeep_paid_until(user_id: str) -> None:
     await db.users.update_one({"id": user_id}, {"$set": {"property_upkeep_paid_until": until.isoformat()}})
 
 
+async def auto_pay_property_upkeep(user: dict) -> Optional[dict]:
+    """Auto Collect perk: pay the weekly upkeep bill from the user's cash when payable.
+    Returns {"amount": int, "paid_until": iso} when a payment was made, None otherwise."""
+    uid = (user or {}).get("id")
+    if not uid:
+        return None
+    det = await _compute_property_upkeep_details(uid)
+    amount = int(det["weekly_amount"])
+    if amount <= 0:
+        return None
+    await _ensure_property_upkeep_paid_until(uid)
+    now_utc = datetime.now(timezone.utc)
+    fresh = await db.users.find_one({"id": uid}, {"_id": 0, "property_upkeep_paid_until": 1})
+    paid_until_dt = _parse_iso_datetime((fresh or {}).get("property_upkeep_paid_until"))
+    overdue = bool(paid_until_dt and now_utc > paid_until_dt)
+    can_pay, _eligible = _upkeep_pay_eligibility(paid_until_dt, now_utc, overdue)
+    if not can_pay:
+        return None
+    base = max(paid_until_dt or now_utc, now_utc)
+    new_until = base + timedelta(days=PROPERTY_UPKEEP_BILLING_DAYS)
+    result = await db.users.update_one(
+        {"id": uid, "money": {"$gte": amount}},
+        {"$inc": {"money": -amount}, "$set": {"property_upkeep_paid_until": new_until.isoformat()}},
+    )
+    if result.modified_count == 0:
+        # Not enough cash — warn once per billing cycle so coverage doesn't lapse silently.
+        from server import send_notification
+
+        cycle_key = (paid_until_dt or now_utc).isoformat()
+        marked = await db.users.update_one(
+            {"id": uid, "property_auto_collect_upkeep_warned_for": {"$ne": cycle_key}},
+            {"$set": {"property_auto_collect_upkeep_warned_for": cycle_key}},
+        )
+        if marked.modified_count:
+            try:
+                await send_notification(
+                    uid,
+                    "Auto Collect: upkeep not paid",
+                    f"Your Auto Collect perk tried to pay the ${amount:,} weekly property upkeep but you don't have the cash on hand. "
+                    "Top up your cash or income collection will be blocked when coverage lapses.",
+                    "system",
+                    category="properties",
+                )
+            except Exception:
+                pass
+        return None
+    now_iso = now_utc.isoformat()
+    try:
+        await db.economy_events.insert_one(
+            {
+                "at": now_iso,
+                "type": "property_upkeep_pay",
+                "user_id": uid,
+                "username": user.get("username") or "",
+                "amount": amount,
+                "paid_until": new_until.isoformat(),
+                "auto_collect": True,
+            }
+        )
+    except Exception:
+        pass
+    try:
+        await log_activity(uid, user.get("username") or "?", "property_upkeep_pay", {"amount": amount, "paid_until": new_until.isoformat(), "auto": True})
+    except Exception:
+        pass
+    return {"amount": amount, "paid_until": new_until.isoformat()}
+
+
+async def auto_clear_properties_heat(user: dict) -> Optional[dict]:
+    """Auto Collect perk: once heat reaches the trigger, bribe it to 0 from the user's cash
+    (charges exactly what's needed). Returns {"amount": int} when a bribe was paid, None otherwise."""
+    uid = (user or {}).get("id")
+    if not uid:
+        return None
+    now_utc = datetime.now(timezone.utc)
+    ticked_heat, ticked_last = _properties_heat_tick(
+        float(user.get("properties_heat") or 0.0),
+        user.get("properties_heat_last_at"),
+        now_utc,
+    )
+    if float(ticked_heat) < float(PROPERTY_AUTO_COLLECT_HEAT_TRIGGER):
+        return None
+    charge = _heat_max_dollars_to_clear(ticked_heat)
+    if charge <= 0:
+        return None
+    res = await db.users.update_one(
+        {"id": uid, "money": {"$gte": charge}},
+        {
+            "$inc": {"money": -charge, "properties_heat_bribes_paid": charge},
+            "$set": {"properties_heat": 0.0, "properties_heat_last_at": ticked_last},
+        },
+    )
+    if res.modified_count == 0:
+        return None
+    return {"amount": charge}
+
+
+async def buy_property_auto_collect(current_user: dict = Depends(get_current_user)):
+    """Buy the Property Auto Collect perk: 2,500 points for 7 days (repurchase extends from current expiry).
+    Requires 15 completed Business progress missions. Auto-collects property income, pays upkeep, clears heat."""
+    uid = current_user["id"]
+    fresh = await db.users.find_one(
+        {"id": uid},
+        {"_id": 0, "illegal_business_mission_completions": 1, "property_auto_collect_until": 1},
+    )
+    completed = _business_progress_missions_completed(fresh or {})
+    if completed < PROPERTY_AUTO_COLLECT_UNLOCK_MISSIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Auto Collect unlocks at Business progress {PROPERTY_AUTO_COLLECT_UNLOCK_MISSIONS} "
+                f"(you have completed {completed})."
+            ),
+        )
+    now = datetime.now(timezone.utc)
+    base = now
+    existing = _parse_iso_datetime((fresh or {}).get("property_auto_collect_until"))
+    if existing and existing > now:
+        base = existing
+    new_until_dt = base + timedelta(days=PROPERTY_AUTO_COLLECT_DURATION_DAYS)
+    new_until = new_until_dt.isoformat()
+    result = await db.users.update_one(
+        {"id": uid, "points": {"$gte": PROPERTY_AUTO_COLLECT_COST_POINTS}},
+        {
+            "$inc": {"points": -PROPERTY_AUTO_COLLECT_COST_POINTS},
+            "$set": {"property_auto_collect_until": new_until, "property_auto_collect_enabled": True},
+        },
+    )
+    if result.modified_count == 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"You need {PROPERTY_AUTO_COLLECT_COST_POINTS:,} points for Auto Collect.",
+        )
+    await log_points_event(
+        db,
+        user_id=uid,
+        points=-PROPERTY_AUTO_COLLECT_COST_POINTS,
+        event_type="property_auto_collect_buy",
+        meta={"until": new_until},
+    )
+    await log_activity(
+        uid,
+        current_user.get("username", "?"),
+        "property_auto_collect_buy",
+        {"cost_points": PROPERTY_AUTO_COLLECT_COST_POINTS, "until": new_until},
+    )
+    return {
+        "message": (
+            f"Auto Collect active until {_format_utc_datetime_friendly(new_until_dt)}. "
+            "It collects your property income, pays weekly upkeep, and clears heat automatically."
+        ),
+        "property_auto_collect_until": new_until,
+        "enabled": True,
+    }
+
+
+async def toggle_property_auto_collect(current_user: dict = Depends(get_current_user)):
+    """Enable/disable the active Property Auto Collect perk (the timer keeps running either way)."""
+    uid = current_user["id"]
+    fresh = await db.users.find_one(
+        {"id": uid},
+        {"_id": 0, "property_auto_collect_until": 1, "property_auto_collect_enabled": 1},
+    )
+    if not property_auto_collect_active(fresh or {}):
+        raise HTTPException(status_code=400, detail="Auto Collect is not active. Buy it first.")
+    new_enabled = not bool((fresh or {}).get("property_auto_collect_enabled"))
+    await db.users.update_one({"id": uid}, {"$set": {"property_auto_collect_enabled": new_enabled}})
+    return {
+        "message": f"Auto Collect {'enabled' if new_enabled else 'disabled'}.",
+        "enabled": new_enabled,
+    }
+
+
 async def get_properties(current_user: dict = Depends(get_current_user)):
     # db.properties also stores sell-on-trade listings (casinos/airports/armouries).
     # The properties page should only use canonical progression properties.
@@ -560,6 +755,9 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
             "properties_heat": 1,
             "properties_heat_last_at": 1,
             "property_portfolio_kill_income_boost_percent": 1,
+            "property_auto_collect_until": 1,
+            "property_auto_collect_enabled": 1,
+            "illegal_business_mission_completions": 1,
         },
     )
     ticked_heat, _ = _properties_heat_tick(
@@ -752,6 +950,18 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
         "threshold": float(PROPERTIES_HEAT_BLOCK_THRESHOLD),
         "heat_max": float(PROPERTIES_HEAT_MAX),
     }
+    ac_missions = _business_progress_missions_completed(user_row or {})
+    ac_active = property_auto_collect_active(user_row or {})
+    auto_collect_block = {
+        "unlocked": ac_missions >= PROPERTY_AUTO_COLLECT_UNLOCK_MISSIONS,
+        "unlock_missions": PROPERTY_AUTO_COLLECT_UNLOCK_MISSIONS,
+        "missions_completed": ac_missions,
+        "cost_points": PROPERTY_AUTO_COLLECT_COST_POINTS,
+        "duration_days": PROPERTY_AUTO_COLLECT_DURATION_DAYS,
+        "active": ac_active,
+        "until": (user_row or {}).get("property_auto_collect_until") if ac_active else None,
+        "enabled": bool((user_row or {}).get("property_auto_collect_enabled")) if ac_active else False,
+    }
     return PropertiesListResponse(
         properties=result,
         property_income_perk_until=current_user.get("property_income_perk_until"),
@@ -760,6 +970,7 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
         properties_heat=heat_block,
         properties_heat_bribe_quote=_properties_heat_bribe_quote(ticked_heat),
         property_portfolio_kill_income_boost_percent=kill_pct,
+        property_auto_collect=auto_collect_block,
     )
 
 
@@ -1381,6 +1592,8 @@ def register(router):
     )
     router.add_api_route("/properties/upkeep/pay", pay_property_upkeep, methods=["POST"])
     router.add_api_route("/properties/heat/bribe", bribe_properties_heat, methods=["POST"])
+    router.add_api_route("/properties/auto-collect/buy", buy_property_auto_collect, methods=["POST"])
+    router.add_api_route("/properties/auto-collect/toggle", toggle_property_auto_collect, methods=["POST"])
     router.add_api_route("/properties/upgrades/buy", buy_property_portfolio_upgrade, methods=["POST"])
     router.add_api_route("/properties/{property_id}/buy", buy_property, methods=["POST"])
     router.add_api_route("/properties/{property_id}/collect", collect_property_income, methods=["POST"])

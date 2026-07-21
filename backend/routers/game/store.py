@@ -1320,7 +1320,7 @@ async def buy_vip_pass_car(
     owned_after = await count_user_vip_pass_cars(db, current_user["id"])
     in_game_after = await count_store_limited_vip_pass_cars(db)
     return {
-        "message": f"VIP Pass Car purchased! (store stock {in_game_after}/{limit}) 8s travel, +50% booze cargo while owned, custom image from Garage.",
+        "message": f"VIP Pass Car purchased! (store stock {in_game_after}/{limit}) 9s travel, +50% booze cargo while owned, custom image from Garage.",
         "cost": cost_used,
         "vip_pass_car_count": owned_after,
         "vip_pass_car_in_game": in_game_after,

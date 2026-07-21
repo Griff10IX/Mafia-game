@@ -720,7 +720,7 @@ POINT_PACKAGES = {
 TRAVEL_TIMES = {
     "loot_exclusive": 5,
     "exclusive": 7,
-    "vip_exclusive": 8,
+    "vip_exclusive": 9,
     "legendary": 15,
     "ultra_rare": 18,
     "rare": 25,

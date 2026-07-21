@@ -10,6 +10,7 @@ import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import { parseForumContent, insertAtCursor, FORUM_INLINE_SMILEY_PX } from '../../utils/forumContent';
 import styles from '../../styles/noir.module.css';
 import FamilyEmblem from '../../components/FamilyEmblem';
+import { useEntJoinTurnstile } from '../../hooks/useEntJoinTurnstile';
 
 const FORUM_STYLES = `
   @keyframes f-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -1090,6 +1091,8 @@ export default function Forum() {
   const [updatingId, setUpdatingId] = useState(null);
   const [joiningId, setJoiningId] = useState(null);
   const joiningInFlightRef = useRef(new Set());
+  const entJoinTokenRef = useRef(null);
+  const { getCaptchaToken: getEntJoinCaptchaToken, captchaModal: entJoinCaptchaModal } = useEntJoinTurnstile();
   const [rollingId, setRollingId] = useState(null);
   const [configSaving, setConfigSaving] = useState(false);
   const [creatingGames, setCreatingGames] = useState(false);
@@ -1203,6 +1206,7 @@ export default function Forum() {
     try {
       const res = await api.get('/forum/entertainer/games');
       setEntertainerGames(res.data?.games ?? []);
+      if (res.data?.join_token) entJoinTokenRef.current = res.data.join_token;
     } catch {
       setEntertainerGames([]);
     } finally {
@@ -1601,13 +1605,30 @@ export default function Forum() {
     joiningInFlightRef.current.add(gameId);
     setJoiningId(gameId);
     try {
-      await api.post(`/forum/entertainer/games/${gameId}/join`);
+      let captchaToken = null;
+      try {
+        captchaToken = await getEntJoinCaptchaToken();
+      } catch {
+        return; // captcha cancelled/failed — user can tap Join again
+      }
+      await api.post(`/forum/entertainer/games/${gameId}/join`, {
+        join_token: entJoinTokenRef.current,
+        captcha_token: captchaToken,
+      });
       toast.success('Joined');
       fetchEntertainerGames();
       fetchEntertainerHistory();
       window.dispatchEvent(new CustomEvent('app:refresh-user'));
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to join');
+      const detail = err.response?.data?.detail || '';
+      // Anti-bot join token expired/stale: silently refresh the list (issues a fresh token) and ask for another tap.
+      if (typeof detail === 'string' && (detail.includes('refresh the games list') || detail.includes('Too fast'))) {
+        skipEntertainerGamesLoadSpinnerRef.current = true;
+        fetchEntertainerGames();
+        toast.warning(detail.includes('Too fast') ? 'Too fast — tap Join again.' : 'Session refreshed — tap Join again.');
+      } else {
+        toast.error(detail || 'Failed to join');
+      }
     } finally {
       joiningInFlightRef.current.delete(gameId);
       setJoiningId(null);
@@ -1790,6 +1811,7 @@ export default function Forum() {
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="forum-page">
       <style>{FORUM_STYLES}</style>
+      {entJoinCaptchaModal}
 
       {/* Page header */}
       <div className="relative f-fade-in flex flex-wrap items-end justify-between gap-4">

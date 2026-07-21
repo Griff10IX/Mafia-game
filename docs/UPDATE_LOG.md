@@ -6,6 +6,18 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-21 18:30 UTC[/color][/b] — [b]Property Auto Collect perk, travel rarity glows, VIP Pass Car 9s, E-Game join anti-bot[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]Property Auto Collect[/b] perk on the Properties page — unlocks at [b]Business progress 15[/b] (racket missions), costs [b]2,500 points[/b] for [b]7 days[/b] (buy again to extend). While enabled it auto-collects your business income every few minutes, pays the weekly upkeep bill from your cash, and bribes heat back to 0 before it ever blocks income. Comes with an Enable/Disable toggle.[/color]
+[*][color=#888888][b]Improved:[/b] Car rows in the travel picker (Travel page and the Kill page travel window) now [b]glow by rarity[/b] like the Garage and GTA pages — your custom car shows the orange custom glow.[/color]
+[*][color=#888888][b]Changed:[/b] [b]VIP Pass Car[/b] travel time is now [b]9 seconds[/b] (was 8).[/color]
+[*][color=#888888][b]Security:[/b] Joining E-Games in the entertainer forum now has anti-bot protection. Scripts that snipe Join the instant games open get blocked and reported to staff — normal players won't notice anything.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-21 17:50 UTC[/color][/b] — [b]Inflation perk durations rebalanced[/b][/size]
 [quote]
 [list]

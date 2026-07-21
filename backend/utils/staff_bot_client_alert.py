@@ -608,6 +608,121 @@ async def maybe_notify_staff_bodyguard_hire_code_fail(
         logger.exception("maybe_notify_staff_bodyguard_hire_code_fail failed")
 
 
+_last_ent_join_alert: dict[str, float] = {}
+_last_ent_join_telegram_alert: dict[str, float] = {}
+
+
+async def maybe_notify_staff_ent_join_token_fail(
+    *,
+    db,
+    request,
+    user_id: str,
+    username: str,
+    game_id: str,
+    reason: str,
+) -> None:
+    """Staff inbox + Telegram when an entertainer game join fails the anti-bot join token.
+
+    reason: missing | invalid | expired | too_fresh
+    """
+    now = time.monotonic()
+    uid = (user_id or "").strip()
+    if not uid:
+        return
+
+    ip = client_ip_from_request(request)
+    ua = (request.headers.get("user-agent") or "").strip()
+    ua_short = (ua[:200] + "…") if len(ua) > 200 else ua
+    event_id = await record_bot_client_block_event(
+        db=db,
+        user_id=uid,
+        username=username,
+        source="ent_join_token_fail",
+        internal_reason=f"ent_join_token_{reason}",
+        request=request,
+        extra={
+            "game_id": game_id,
+            "reason": reason,
+            "path": str(getattr(request, "url", "")),
+        },
+    )
+
+    lines = [
+        "— E-Game join: invalid / missing join token (anti-bot) —",
+        "The client POSTed /forum/entertainer/games/{id}/join without a valid join_token "
+        f"(failure: {reason}).",
+        "Legitimate clients receive this token from the games list and need a human-speed delay before joining; "
+        "scripts that fetch-then-join instantly fail.",
+        f"User: {username or '?'} (id {uid})",
+        f"Game id: {game_id or '?'}",
+        f"IP: {ip or '—'}",
+        f"User-Agent: {ua_short or '—'}",
+    ]
+    if event_id:
+        lines.append(f"Persisted event id (Mongo bot_client_block_events): {event_id}")
+    lines.append("— Request metadata —")
+    lines.extend(_request_intel_lines(request))
+    acc = await _account_intel_lines(db, uid)
+    if acc:
+        lines.append("— Account —")
+        lines.extend(acc)
+
+    try:
+        from middleware.security import flush_telegram_alerts, send_telegram_alert
+
+        tg_cooldown = _execute_token_telegram_cooldown_sec()
+        tg_key = f"tgentjoin|{uid}"
+        if _last_ent_join_telegram_alert.get(tg_key, 0) + tg_cooldown <= now:
+            _last_ent_join_telegram_alert[tg_key] = now
+            _prune(_last_ent_join_telegram_alert)
+            await send_telegram_alert(
+                "\n".join([
+                    "E-Game join token failed (possible bot)",
+                    f"User: {username or '?'} (id {uid})",
+                    f"Game: {game_id or '?'}",
+                    f"Failure: {reason}",
+                    f"IP: {ip or '—'}",
+                    f"UA: {ua_short or '—'}",
+                    f"Stored event id: {event_id or '—'}",
+                ]),
+                "warning",
+                use_markdown=False,
+            )
+            await flush_telegram_alerts()
+    except Exception:
+        logger.exception("ent join token fail telegram alert failed")
+
+    key = f"entjoin|{uid}"
+    if _last_ent_join_alert.get(key, 0) + _EXECUTE_TOKEN_ALERT_TTL_SEC > now:
+        return
+    _last_ent_join_alert[key] = now
+    _prune(_last_ent_join_alert)
+
+    try:
+        from server import _get_admin_user_ids, _get_staff_user_ids, send_notification
+
+        mode = (os.environ.get("BOT_BLOCK_ALERT_RECIPIENTS") or "staff").strip().lower()
+        if mode == "admins":
+            recipient_ids = await _get_admin_user_ids()
+            if not recipient_ids:
+                recipient_ids = await _get_staff_user_ids()
+        else:
+            recipient_ids = await _get_staff_user_ids()
+
+        title = "Security: E-Game join token failed (possible bot)"
+        msg = "\n".join(lines)
+        extra = {"staff_alert_kind": "ent_join_token_fail"}
+        if event_id:
+            extra["staff_alert_event_id"] = event_id
+        for rid in recipient_ids:
+            try:
+                await send_notification(rid, title, msg, "staff_bot_client", **extra)
+            except Exception as e:
+                logger.warning("staff ent-join-token notify %s: %s", rid, e)
+    except Exception:
+        logger.exception("maybe_notify_staff_ent_join_token_fail failed")
+
+
 async def maybe_notify_staff_travel_code_fail(
     *,
     db,

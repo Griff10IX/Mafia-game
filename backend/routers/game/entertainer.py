@@ -58,6 +58,12 @@ async def _entertainer_join_spam_guard(current_user: dict = Depends(get_current_
         upsert=True,
     )
 
+# --- Anti-bot join tokens (layer 1, always on) ---
+# Issued per-user with the games list; joins must echo the token back. A minimum age check
+# means a script that fetches the list and joins in the same instant fails; single-use per join.
+ENT_JOIN_TOKEN_TTL_SECONDS = 600
+ENT_JOIN_TOKEN_MIN_AGE_SECONDS = 1.5
+
 # E-Games prizes: Rank-XP Pass is shop-only (not listed in "what you can win" and never rolled here).
 ENTERTAINER_TOKEN_TYPES = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
 
@@ -1112,7 +1118,21 @@ async def list_games(
     if status and status in ("open", "full", "completed"):
         query["status"] = status
     games = await db.entertainer_games.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
-    return {"games": [_with_public_hangman(g, current_user.get("id")) for g in games]}
+    # Anti-bot: hand out a fresh single-use join token with the list (consumed by the next join).
+    join_token = None
+    try:
+        uid = str(current_user.get("id") or "")
+        if uid:
+            join_token = secrets.token_urlsafe(24)
+            await db.ent_join_tokens.update_one(
+                {"user_id": uid},
+                {"$set": {"token": join_token, "issued_at": datetime.now(timezone.utc).isoformat()}},
+                upsert=True,
+            )
+    except Exception:
+        logger.exception("ent join token issue failed")
+        join_token = None
+    return {"games": [_with_public_hangman(g, current_user.get("id")) for g in games], "join_token": join_token}
 
 
 async def games_history(current_user: dict = Depends(get_current_user)):
@@ -1402,14 +1422,96 @@ async def create_game(
     return {"id": game_id, "message": "Game created", "game": _with_public_hangman({**doc, "participants": participants}, current_user.get("id"))}
 
 
-async def join_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
-    """Join an open game. Pay join_fee if set (added to pot). If full after join, run payout automatically."""
+class EntJoinRequest(BaseModel):
+    join_token: Optional[str] = None
+    captcha_token: Optional[str] = None
+
+
+async def _require_ent_join_token(
+    http_request: Request,
+    current_user: dict,
+    game_id: str,
+    join_token: Optional[str],
+) -> None:
+    """Layer-1 anti-bot: validate + consume the single-use join token issued with the games list.
+    Enforces a minimum human delay between the list fetch and the join click."""
+    uid = str(current_user.get("id") or "")
+    token = (join_token or "").strip()
+    fail_reason = None
+    if not token:
+        fail_reason = "missing"
+    else:
+        row = await db.ent_join_tokens.find_one({"user_id": uid}, {"_id": 0, "token": 1, "issued_at": 1})
+        stored = str((row or {}).get("token") or "")
+        if not stored or not secrets.compare_digest(stored, token):
+            fail_reason = "invalid"
+        else:
+            issued_at = _parse_iso((row or {}).get("issued_at"))
+            age = (datetime.now(timezone.utc) - issued_at).total_seconds() if issued_at else None
+            if age is None or age > ENT_JOIN_TOKEN_TTL_SECONDS:
+                fail_reason = "expired"
+            elif age < ENT_JOIN_TOKEN_MIN_AGE_SECONDS:
+                fail_reason = "too_fresh"
+            else:
+                consumed = await db.ent_join_tokens.delete_one({"user_id": uid, "token": token})
+                if consumed.deleted_count == 0:
+                    fail_reason = "invalid"
+    if not fail_reason:
+        return
+    try:
+        from utils.captcha_failure_log import log_captcha_turnstile_failure
+
+        await log_captcha_turnstile_failure(
+            db,
+            request=http_request,
+            current_user=current_user,
+            reason=f"ent_join_token_{fail_reason}",
+            detail=f"game_id={game_id}",
+        )
+    except Exception:
+        logger.exception("ent join token failure log failed")
+    try:
+        from utils.staff_bot_client_alert import maybe_notify_staff_ent_join_token_fail
+
+        await maybe_notify_staff_ent_join_token_fail(
+            db=db,
+            request=http_request,
+            user_id=uid,
+            username=current_user.get("username") or "?",
+            game_id=game_id,
+            reason=fail_reason,
+        )
+    except Exception:
+        logger.exception("ent join token staff alert failed")
+    if fail_reason == "too_fresh":
+        raise HTTPException(status_code=400, detail="Too fast — wait a moment and tap Join again.")
+    raise HTTPException(status_code=400, detail="Join check failed — refresh the games list and try again. No bots.")
+
+
+async def join_game(
+    game_id: str,
+    http_request: Request,
+    body: Optional[EntJoinRequest] = None,
+    current_user: dict = Depends(get_current_user_verified),
+):
+    """Join an open game. Pay join_fee if set (added to pot). If full after join, run payout automatically.
+    Anti-bot: requires the single-use join_token from the games list (+ optional Turnstile when enabled)."""
     game = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     if game.get("status") != "open":
         raise HTTPException(status_code=400, detail="Game is not open to join")
     uid = current_user["id"]
+    await _require_ent_join_token(http_request, current_user, game_id, (body.join_token if body else None))
+    from utils.minigame_captcha_gate import require_turnstile_for_ent_join
+
+    await require_turnstile_for_ent_join(
+        db,
+        request=http_request,
+        current_user=current_user,
+        captcha_token=(body.captcha_token if body else None),
+        is_admin=_is_admin(current_user),
+    )
     max_players = game.get("max_players", 10)
     join_fee = int(game.get("join_fee") or 0)
     if game.get("game_type") == "hangman" and not game.get("hangman_state"):
@@ -2061,10 +2163,24 @@ async def _try_auto_create_find_word_round():
         )
 
 
+async def ent_join_turnstile_config(current_user: dict = Depends(get_current_user)):
+    """Public site key for Turnstile when ent_join_turnstile_enabled (E-Game joins); reuses minigame site key."""
+    main = await db.game_settings.find_one(
+        {"_id": "main"},
+        {"_id": 0, "ent_join_turnstile_enabled": 1, "minigame_turnstile_site_key": 1},
+    )
+    enabled = bool(main.get("ent_join_turnstile_enabled")) if main else False
+    site_key = ((main or {}).get("minigame_turnstile_site_key") or os.environ.get("TURNSTILE_SITE_KEY") or "").strip()
+    secret_ok = bool((os.environ.get("TURNSTILE_SECRET_KEY") or "").strip())
+    effective = enabled and bool(site_key) and secret_ok
+    return {"enabled": effective, "site_key": site_key if effective else None}
+
+
 def register(router):
     _ent_rl_u = [Depends(_entertainer_sustained_rl_user)]
     _ent_rl_v = [Depends(_entertainer_sustained_rl_verified)]
     _ent_rl_join = [Depends(_entertainer_sustained_rl_verified), Depends(_entertainer_join_spam_guard)]
+    router.add_api_route("/forum/entertainer/join-turnstile-config", ent_join_turnstile_config, methods=["GET"], dependencies=_ent_rl_u)
     router.add_api_route("/forum/entertainer/find-word/active", find_word_active, methods=["GET"], dependencies=_ent_rl_u)
     router.add_api_route("/forum/entertainer/find-word/history", find_word_history, methods=["GET"], dependencies=_ent_rl_u)
     router.add_api_route("/forum/entertainer/find-word/claim", find_word_claim, methods=["POST"], dependencies=_ent_rl_v)

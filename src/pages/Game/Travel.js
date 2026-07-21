@@ -5,6 +5,7 @@ import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import ActiveTokenBadge from '../../components/ActiveTokenBadge';
+import { RARITY_GLOW_HEX, rarityRowStyle } from '../../constants/carRarityGlows';
 import { getTravelPrefetch, clearTravelPrefetch } from '../../utils/prefetchCache';
 import {
   readTravelBoot,
@@ -316,7 +317,7 @@ const DestinationCard = ({
           const custom = travelInfo?.custom_car;
           const cars = travelInfo?.cars || [];
           const combined = [
-            ...(custom ? [{ ...custom, travelMethod: 'custom', user_car_id: 'custom', Icon: Zap }] : []),
+            ...(custom ? [{ ...custom, travelMethod: 'custom', user_car_id: 'custom', Icon: Zap, rarity: 'custom' }] : []),
             ...cars.map(c => ({ ...c, travelMethod: c.user_car_id, Icon: Car })),
           ].sort((a, b) => (a.travel_time ?? 999) - (b.travel_time ?? 999));
           return combined.slice(0, 5).map((item) => {
@@ -324,21 +325,23 @@ const DestinationCard = ({
             const canTravel = item.can_travel !== false;
             const carLooksDisabled = travelDisabled || travelBusy || !canTravel;
             const Icon = item.Icon;
+            const glowHex = RARITY_GLOW_HEX[item.rarity] || RARITY_GLOW_HEX.common;
             return (
               <button
                 key={isCustom ? 'custom' : item.user_car_id}
                 type="button"
                 onClick={() => tryCarTravel(item.travelMethod, canTravel)}
+                style={!carLooksDisabled ? rarityRowStyle(item.rarity) : undefined}
                 className={`${TRV_ACTION_BTN} w-full flex items-center justify-between px-2 py-1.5 rounded transition-all ${
                   !carLooksDisabled
-                    ? 'bg-secondary text-foreground border border-border hover:border-primary/30 hover:bg-secondary/80 active:scale-95'
+                    ? 'bg-secondary text-foreground border border-border hover:bg-secondary/80 active:scale-95'
                     : 'bg-secondary/50 border border-border opacity-60'
                 }`}
                 title={!canTravel ? 'Too damaged — repair in garage' : undefined}
               >
                 <span className="flex items-center gap-1 min-w-0 flex-1">
-                  <Icon size={12} className="text-primary shrink-0" />
-                  <span className="text-[11px] font-heading truncate">{item.name}</span>
+                  <Icon size={12} className="shrink-0" style={{ color: glowHex }} />
+                  <span className="text-[11px] font-heading truncate" style={{ color: glowHex }}>{item.name}</span>
                 </span>
                 <span className={`text-[9px] font-heading whitespace-nowrap ml-1 ${!canTravel ? 'text-red-400' : 'text-mutedForeground'}`}>
                   {item.travel_time}s

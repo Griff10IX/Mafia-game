@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 import { useAttackTurnstile } from '../../hooks/useAttackTurnstile';
+import { RARITY_GLOW_HEX, rarityRowStyle } from '../../constants/carRarityGlows';
 import { formatGameDateTime } from '../../utils/gameDateTime';
 
 const ATTACK_STYLES = `
@@ -1059,21 +1060,24 @@ const TravelModal = ({
               const custom = travelInfo?.custom_car;
               const cars = travelInfo?.cars || [];
               const combined = [
-                ...(custom ? [{ ...custom, travelMethod: 'custom', user_car_id: 'custom' }] : []),
+                ...(custom ? [{ ...custom, travelMethod: 'custom', user_car_id: 'custom', rarity: 'custom' }] : []),
                 ...cars.map(c => ({ ...c, travelMethod: c.user_car_id })),
               ].sort((a, b) => (a.travel_time ?? 999) - (b.travel_time ?? 999));
               return combined.slice(0, 5).map((item) => {
                 const isCustom = item.travelMethod === 'custom';
+                const glowHex = RARITY_GLOW_HEX[item.rarity] || RARITY_GLOW_HEX.common;
+                const carDisabled = loading || item.can_travel === false;
                 return (
                   <button
                     key={isCustom ? 'custom' : item.user_car_id}
                     onClick={() => onTravel(item.travelMethod)}
-                    disabled={loading || item.can_travel === false}
-                    className="w-full flex items-center justify-between bg-secondary hover:bg-secondary/80 border border-border hover:border-primary/30 px-2 py-2 rounded transition-all disabled:opacity-50 active:scale-95 touch-manipulation"
+                    disabled={carDisabled}
+                    style={!carDisabled ? rarityRowStyle(item.rarity) : undefined}
+                    className="w-full flex items-center justify-between bg-secondary hover:bg-secondary/80 border border-border px-2 py-2 rounded transition-all disabled:opacity-50 active:scale-95 touch-manipulation"
                   >
                     <span className="flex items-center gap-1.5 min-w-0 flex-1">
-                      {isCustom ? <Zap size={14} className="text-primary shrink-0" /> : <Car size={14} className="text-primary shrink-0" />}
-                      <span className="text-[10px] font-heading truncate text-foreground">{item.name}</span>
+                      {isCustom ? <Zap size={14} className="shrink-0" style={{ color: glowHex }} /> : <Car size={14} className="shrink-0" style={{ color: glowHex }} />}
+                      <span className="text-[10px] font-heading truncate" style={{ color: glowHex }}>{item.name}</span>
                     </span>
                     <span className="text-[9px] text-mutedForeground font-heading whitespace-nowrap ml-1">
                       {item.travel_time}s

@@ -1426,6 +1426,7 @@ export default function Admin() {
   const [blockScriptGameActionsSaving, setBlockScriptGameActionsSaving] = useState(false);
   const [gameActionsClientStrict, setGameActionsClientStrict] = useState(false);
   const [gameActionsTurnstileEnabled, setGameActionsTurnstileEnabled] = useState(false);
+  const [entJoinTurnstileEnabled, setEntJoinTurnstileEnabled] = useState(false);
   const [attackTurnstileEnabled, setAttackTurnstileEnabled] = useState(false);
   const [attackTurnstileMasterDisabled, setAttackTurnstileMasterDisabled] = useState(false);
   const [attackTurnstileMode, setAttackTurnstileMode] = useState('execute_only');
@@ -2360,6 +2361,7 @@ export default function Admin() {
       setBlockScriptUserAgentGameActions(res.data?.block_script_user_agent_game_actions !== false);
       setGameActionsClientStrict(!!res.data?.game_actions_client_strict);
       setGameActionsTurnstileEnabled(!!res.data?.game_actions_turnstile_enabled);
+      setEntJoinTurnstileEnabled(!!res.data?.ent_join_turnstile_enabled);
       setAttackTurnstileEnabled(!!res.data?.attack_turnstile_enabled);
       setAttackTurnstileMasterDisabled(!!res.data?.attack_turnstile_master_disabled);
       setAttackTurnstileMode(['execute_only', 'search_and_execute', 'risk_based'].includes(res.data?.attack_turnstile_mode) ? res.data.attack_turnstile_mode : 'execute_only');
@@ -2454,6 +2456,7 @@ export default function Admin() {
       setBlockScriptUserAgentGameActions(true);
       setGameActionsClientStrict(false);
       setGameActionsTurnstileEnabled(false);
+      setEntJoinTurnstileEnabled(false);
       setAttackTurnstileEnabled(false);
       setAttackTurnstileMasterDisabled(false);
       setAttackTurnstileMode('execute_only');
@@ -2596,6 +2599,7 @@ export default function Admin() {
         block_script_user_agent_game_actions: blockScriptUserAgentGameActions,
         game_actions_client_strict: gameActionsClientStrict,
         game_actions_turnstile_enabled: gameActionsTurnstileEnabled,
+        ent_join_turnstile_enabled: entJoinTurnstileEnabled,
         attack_turnstile_enabled: attackTurnstileEnabled,
         attack_turnstile_master_disabled: attackTurnstileMasterDisabled,
         attack_turnstile_mode: attackTurnstileMode,
@@ -2647,6 +2651,9 @@ export default function Admin() {
       if (res.data?.game_actions_client_strict !== undefined) setGameActionsClientStrict(!!res.data.game_actions_client_strict);
       if (res.data?.game_actions_turnstile_enabled !== undefined) {
         setGameActionsTurnstileEnabled(!!res.data.game_actions_turnstile_enabled);
+      }
+      if (res.data?.ent_join_turnstile_enabled !== undefined) {
+        setEntJoinTurnstileEnabled(!!res.data.ent_join_turnstile_enabled);
       }
       if (res.data?.attack_turnstile_enabled !== undefined) {
         setAttackTurnstileEnabled(!!res.data.attack_turnstile_enabled);
@@ -15691,6 +15698,18 @@ export default function Admin() {
                 <span>
                   Require Turnstile before GTA melt/scrap and booze sell (same public site key as minigames; not used on crime
                   commits)
+                </span>
+              </label>
+              <label className="flex items-start gap-2 cursor-pointer text-sm font-heading">
+                <input
+                  type="checkbox"
+                  checked={entJoinTurnstileEnabled}
+                  onChange={(e) => setEntJoinTurnstileEnabled(e.target.checked)}
+                  className="rounded border-input mt-0.5"
+                />
+                <span>
+                  Require Turnstile before joining E-Games in the entertainer forum (anti-bot layer 2; the always-on join token
+                  layer stays active either way). Same public site key as minigames.
                 </span>
               </label>
               <div className="rounded border border-red-500/20 bg-red-500/5 p-2 space-y-2">

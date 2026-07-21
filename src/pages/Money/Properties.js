@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { Building, TrendingUp, DollarSign, Lock, Zap, Martini, Factory, Crown, AlertTriangle, Wallet, Skull } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Building, TrendingUp, DollarSign, Lock, Zap, Martini, Factory, Crown, AlertTriangle, Wallet, Skull, Bot } from 'lucide-react';
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -68,6 +69,8 @@ export default function Properties() {
   );
   const [bribeInput, setBribeInput] = useState('');
   const [bribing, setBribing] = useState(false);
+  const [autoCollect, setAutoCollect] = useState(() => propertiesBoot.autoCollect ?? null);
+  const [autoCollectBusy, setAutoCollectBusy] = useState(false);
 
   useEffect(() => {
     const cached = getPropertiesPrefetch();
@@ -79,6 +82,7 @@ export default function Properties() {
     setPropertiesHeat(cached.propertiesHeat ?? null);
     setPropertiesHeatQuote(cached.propertiesHeatQuote ?? null);
     setPortfolioKillBoostPercent(Math.min(20, Math.max(0, Number(cached.portfolioKillBoostPercent ?? 0) || 0)));
+    setAutoCollect(cached.autoCollect ?? null);
   }, []);
 
   useEffect(() => {
@@ -97,6 +101,7 @@ export default function Properties() {
       const nextPropertiesHeat = data?.properties_heat ?? null;
       const nextPropertiesHeatQuote = data?.properties_heat_bribe_quote ?? null;
       const nextKillBoost = Math.min(20, Math.max(0, Number(data?.property_portfolio_kill_income_boost_percent ?? 0) || 0));
+      const nextAutoCollect = data?.property_auto_collect ?? null;
       setProperties(nextProperties);
       setPropertyIncomePerkUntil(nextPropertyIncomePerkUntil);
       setPropertyUpkeep(nextPropertyUpkeep);
@@ -104,6 +109,7 @@ export default function Properties() {
       setPropertiesHeat(nextPropertiesHeat);
       setPropertiesHeatQuote(nextPropertiesHeatQuote);
       setPortfolioKillBoostPercent(nextKillBoost);
+      setAutoCollect(nextAutoCollect);
       setPropertiesPrefetch({
         properties: nextProperties,
         propertyIncomePerkUntil: nextPropertyIncomePerkUntil,
@@ -112,6 +118,7 @@ export default function Properties() {
         propertiesHeat: nextPropertiesHeat,
         propertiesHeatQuote: nextPropertiesHeatQuote,
         portfolioKillBoostPercent: nextKillBoost,
+        autoCollect: nextAutoCollect,
       });
       writeSessionJson('mafia_properties_v1', {
         properties: nextProperties,
@@ -121,6 +128,7 @@ export default function Properties() {
         propertiesHeat: nextPropertiesHeat,
         propertiesHeatQuote: nextPropertiesHeatQuote,
         portfolioKillBoostPercent: nextKillBoost,
+        autoCollect: nextAutoCollect,
       });
     } catch (error) {
       const detail = error.response?.data?.detail || error.message || 'Unknown error';
@@ -132,6 +140,39 @@ export default function Properties() {
       setPropertiesHeat(null);
       setPropertiesHeatQuote(null);
       setPortfolioKillBoostPercent(0);
+      setAutoCollect(null);
+    }
+  };
+
+  const buyAutoCollect = async () => {
+    if (autoCollectBusy) return;
+    const cost = Number(autoCollect?.cost_points ?? 2500);
+    if (!window.confirm(`Buy Auto Collect for ${cost.toLocaleString()} points? It runs for ${Number(autoCollect?.duration_days ?? 7)} days and auto-collects income, pays upkeep, and clears heat from your cash.`)) return;
+    setAutoCollectBusy(true);
+    try {
+      const res = await api.post('/properties/auto-collect/buy');
+      toast.success(res.data?.message || 'Auto Collect purchased');
+      refreshUser();
+      fetchProperties({ silent: true });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to buy Auto Collect');
+    } finally {
+      setAutoCollectBusy(false);
+    }
+  };
+
+  const toggleAutoCollect = async () => {
+    if (autoCollectBusy) return;
+    setAutoCollectBusy(true);
+    try {
+      const res = await api.post('/properties/auto-collect/toggle');
+      toast.success(res.data?.message || 'Auto Collect updated');
+      setAutoCollect((prev) => (prev ? { ...prev, enabled: !!res.data?.enabled } : prev));
+      fetchProperties({ silent: true });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to toggle Auto Collect');
+    } finally {
+      setAutoCollectBusy(false);
     }
   };
 
@@ -345,6 +386,108 @@ export default function Properties() {
             >
               {upkeepPayLoading ? 'Paying…' : propertyUpkeep.can_pay === false ? 'Not due yet' : `Pay ${formatMoney(propertyUpkeep.weekly_amount)}`}
             </button>
+          </div>
+        </div>
+      )}
+
+      {autoCollect && (
+        <div
+          className={`relative ${styles.panel} rounded-lg overflow-hidden border prop-fade-in mobile-panel ${
+            autoCollect.active ? 'border-emerald-500/40' : 'border-primary/20'
+          }`}
+        >
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="flex items-start gap-2 min-w-0">
+              <Bot className={`shrink-0 mt-0.5 ${autoCollect.active ? 'text-emerald-400' : 'text-primary/80'}`} size={16} />
+              <div className="min-w-0 space-y-0.5">
+                <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">
+                  Auto Collect
+                  {autoCollect.active && (
+                    <span className={`ml-2 normal-case tracking-normal font-bold ${autoCollect.enabled ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {autoCollect.enabled ? 'Active' : 'Paused'}
+                    </span>
+                  )}
+                </p>
+                {!autoCollect.unlocked ? (
+                  <>
+                    <p className="text-[10px] text-mutedForeground font-heading">
+                      Unlocks at <Link to="/money/racket" className="text-primary hover:underline">Business progress {autoCollect.unlock_missions}</Link>
+                      {' '}— you&apos;re at {Number(autoCollect.missions_completed ?? 0)}/{autoCollect.unlock_missions}.
+                    </p>
+                    <p className="text-[9px] text-zinc-500 font-heading">
+                      Auto-collects your business income, pays weekly upkeep, and clears heat from your cash — checked every few minutes.
+                    </p>
+                  </>
+                ) : autoCollect.active ? (
+                  <>
+                    <p className="text-[10px] text-mutedForeground font-heading">
+                      {autoCollect.enabled
+                        ? 'Collecting your business income, paying weekly upkeep, and clearing heat from your cash automatically.'
+                        : 'Paused — nothing is collected or paid while disabled. The timer keeps running.'}
+                    </p>
+                    {autoCollect.until && (
+                      <p className="text-[9px] text-zinc-500 font-heading tabular-nums">
+                        Active until{' '}
+                        {(() => {
+                          try {
+                            return new Date(autoCollect.until).toLocaleString();
+                          } catch {
+                            return autoCollect.until;
+                          }
+                        })()}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[10px] text-mutedForeground font-heading">
+                      Auto-collects your business income, pays the weekly upkeep bill, and bribes heat back to 0 from your cash — checked every few minutes.
+                    </p>
+                    <p className="text-[9px] text-zinc-500 font-heading">
+                      {Number(autoCollect.cost_points ?? 2500).toLocaleString()} points · lasts {Number(autoCollect.duration_days ?? 7)} days · buy again to extend.
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="shrink-0 flex items-center gap-2">
+              {autoCollect.unlocked && !autoCollect.active && (
+                <button
+                  type="button"
+                  onClick={buyAutoCollect}
+                  disabled={autoCollectBusy}
+                  className="text-[10px] font-heading font-bold uppercase tracking-wider rounded px-3 py-1.5 border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50"
+                >
+                  {autoCollectBusy ? '…' : `Buy — ${Number(autoCollect.cost_points ?? 2500).toLocaleString()} pts`}
+                </button>
+              )}
+              {autoCollect.active && (
+                <>
+                  <button
+                    type="button"
+                    onClick={toggleAutoCollect}
+                    disabled={autoCollectBusy}
+                    className={`text-[10px] font-heading font-bold uppercase tracking-wider rounded px-3 py-1.5 border disabled:opacity-50 ${
+                      autoCollect.enabled
+                        ? 'border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+                        : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
+                    }`}
+                  >
+                    {autoCollectBusy ? '…' : autoCollect.enabled ? 'Disable' : 'Enable'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={buyAutoCollect}
+                    disabled={autoCollectBusy}
+                    title="Extend by another 7 days"
+                    className="text-[10px] font-heading font-bold uppercase tracking-wider rounded px-3 py-1.5 border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50"
+                  >
+                    Extend
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

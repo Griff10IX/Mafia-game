@@ -30,7 +30,7 @@ const RARITY_ORDER = [...GTA_RARITIES].reverse();
 const TRAVEL_TIMES = {
   exclusive: 7,
   loot_exclusive: 7,
-  vip_exclusive: 8,
+  vip_exclusive: 9,
   legendary: 12,
   ultra_rare: 18,
   rare: 25,

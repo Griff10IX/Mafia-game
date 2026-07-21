@@ -238,6 +238,7 @@ class AdminSettingsUpdate(BaseModel):
     block_script_user_agent_game_actions: Optional[bool] = None  # UA checks: crimes, GTA, jail, OC, bodyguards, attack
     game_actions_client_strict: Optional[bool] = None  # Stricter Sec-Fetch / Accept on game-action API writes (main doc)
     game_actions_turnstile_enabled: Optional[bool] = None  # Turnstile on selected gameplay POSTs (GTA melt, booze sell); uses minigame site key
+    ent_join_turnstile_enabled: Optional[bool] = None  # Turnstile on entertainer E-Game joins (anti-bot layer 2); uses minigame site key
     attack_turnstile_enabled: Optional[bool] = None  # Attack-page-only Turnstile gate
     attack_turnstile_master_disabled: Optional[bool] = None  # Emergency off switch without deploy
     attack_turnstile_mode: Optional[str] = None  # execute_only | search_and_execute | risk_based
@@ -8959,6 +8960,7 @@ def register(router):
         block_script_user_agent_game_actions = True if not main_doc else bool(main_doc.get("block_script_user_agent_game_actions", True))
         game_actions_client_strict = bool(main_doc.get("game_actions_client_strict")) if main_doc else False
         game_actions_turnstile_enabled = bool(main_doc.get("game_actions_turnstile_enabled")) if main_doc else False
+        ent_join_turnstile_enabled = bool(main_doc.get("ent_join_turnstile_enabled")) if main_doc else False
         attack_turnstile_enabled = bool(main_doc.get("attack_turnstile_enabled")) if main_doc else False
         attack_turnstile_master_disabled = bool(main_doc.get("attack_turnstile_master_disabled")) if main_doc else False
         attack_turnstile_mode = (main_doc.get("attack_turnstile_mode") or "execute_only") if main_doc else "execute_only"
@@ -9049,6 +9051,7 @@ def register(router):
             "block_script_user_agent_game_actions": block_script_user_agent_game_actions,
             "game_actions_client_strict": game_actions_client_strict,
             "game_actions_turnstile_enabled": game_actions_turnstile_enabled,
+            "ent_join_turnstile_enabled": ent_join_turnstile_enabled,
             "attack_turnstile_enabled": attack_turnstile_enabled,
             "attack_turnstile_master_disabled": attack_turnstile_master_disabled,
             "attack_turnstile_mode": attack_turnstile_mode,
@@ -9179,6 +9182,12 @@ def register(router):
             await db.game_settings.update_one(
                 {"_id": "main"},
                 {"$set": {"game_actions_turnstile_enabled": bool(body.game_actions_turnstile_enabled)}},
+                upsert=True,
+            )
+        if body.ent_join_turnstile_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"ent_join_turnstile_enabled": bool(body.ent_join_turnstile_enabled)}},
                 upsert=True,
             )
         if body.attack_turnstile_enabled is not None:
@@ -9666,6 +9675,7 @@ def register(router):
         block_script_user_agent_game_actions = True if not main_doc else bool(main_doc.get("block_script_user_agent_game_actions", True))
         game_actions_client_strict = bool(main_doc.get("game_actions_client_strict")) if main_doc else False
         game_actions_turnstile_enabled = bool(main_doc.get("game_actions_turnstile_enabled")) if main_doc else False
+        ent_join_turnstile_enabled = bool(main_doc.get("ent_join_turnstile_enabled")) if main_doc else False
         attack_turnstile_enabled = bool(main_doc.get("attack_turnstile_enabled")) if main_doc else False
         attack_turnstile_master_disabled = bool(main_doc.get("attack_turnstile_master_disabled")) if main_doc else False
         attack_turnstile_mode = (main_doc.get("attack_turnstile_mode") or "execute_only") if main_doc else "execute_only"
@@ -9750,6 +9760,7 @@ def register(router):
             "block_script_user_agent_game_actions": block_script_user_agent_game_actions,
             "game_actions_client_strict": game_actions_client_strict,
             "game_actions_turnstile_enabled": game_actions_turnstile_enabled,
+            "ent_join_turnstile_enabled": ent_join_turnstile_enabled,
             "attack_turnstile_enabled": attack_turnstile_enabled,
             "attack_turnstile_master_disabled": attack_turnstile_master_disabled,
             "attack_turnstile_mode": attack_turnstile_mode,

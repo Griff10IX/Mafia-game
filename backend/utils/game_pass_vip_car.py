@@ -334,7 +334,7 @@ async def _insert_vip_pass_car(
             await send_notification(
                 user_id,
                 "VIP Pass Car",
-                "You received the VIP Pass Car (8s travel, +50% booze cargo while owned, custom image). Set your picture from Garage.",
+                "You received the VIP Pass Car (9s travel, +50% booze cargo while owned, custom image). Set your picture from Garage.",
                 "reward",
             )
         except Exception:

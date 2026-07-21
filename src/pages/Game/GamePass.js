@@ -389,7 +389,7 @@ function TierRewards({ rewards, isFreeMembership, isTierCompleted, microTier, re
         ))}
       {microTier === 100 && !isFreeMembership && (
         <div className="text-[9px] font-heading text-cyan-400/95">
-          VIP Pass Car — 8s travel, +50% booze cargo while owned, custom image, survives death (one-time tier 100 reward)
+          VIP Pass Car — 9s travel, +50% booze cargo while owned, custom image, survives death (one-time tier 100 reward)
         </div>
       )}
       {REWARD_DISPLAY_ORDER.map((k) => {
@@ -879,7 +879,7 @@ export default function GamePass() {
                 </li>
                 <li>
                   <span className="text-zinc-100 font-bold">VIP tier 100</span> —{' '}
-                  <span className="text-cyan-400/95">VIP Pass Car</span> (8s travel, custom image, +50% booze cargo while owned, not lost on death; sellable on marketplace). One-time reward when you first complete VIP tier 100.
+                  <span className="text-cyan-400/95">VIP Pass Car</span> (9s travel, custom image, +50% booze cargo while owned, not lost on death; sellable on marketplace). One-time reward when you first complete VIP tier 100.
                 </li>
                 <li>
                   <span className="text-zinc-100 font-bold">24h VIP perks</span> — At micro-tiers 25, 50, 75, and 100: stacked loot-style boosts —{' '}
