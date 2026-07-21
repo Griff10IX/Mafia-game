@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Zap, PlusCircle, Dices, Bot, TrendingUp, TrendingDown, Clock, Users, Trophy, Skull, Mic2 } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
+import { useEntJoinTurnstile } from '../../hooks/useEntJoinTurnstile';
 import styles from '../../styles/noir.module.css';
 
 const MDG_STYLES = `
@@ -292,8 +293,14 @@ export default function MDGPage() {
     return () => clearInterval(t);
   }, [fetchAutoStats]);
 
+  const joinTokenRef = useRef(null);
+  const { getCaptchaToken: getJoinCaptchaToken, captchaModal: joinCaptchaModal } = useEntJoinTurnstile();
+
   const fetchGames = useCallback(() => {
-    api.get('/casino/mdg/games').then((r) => setGames(r.data?.games || [])).catch(() => setGames([])).finally(() => setLoading(false));
+    api.get('/casino/mdg/games').then((r) => {
+      setGames(r.data?.games || []);
+      if (r.data?.join_token) joinTokenRef.current = r.data.join_token;
+    }).catch(() => setGames([])).finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
@@ -310,7 +317,17 @@ export default function MDGPage() {
     }
     setJoiningId(gameId);
     try {
-      const res = await api.post('/casino/mdg/join', { game_id: gameId });
+      let captchaToken = null;
+      try {
+        captchaToken = await getJoinCaptchaToken();
+      } catch {
+        return; // captcha cancelled/failed — user can tap Join again
+      }
+      const res = await api.post('/casino/mdg/join', {
+        game_id: gameId,
+        join_token: joinTokenRef.current,
+        captcha_token: captchaToken,
+      });
       await refreshUser();
       if (res.data?.winner_username != null) {
         toast.success(formatMdgResultToast(res.data));
@@ -319,7 +336,14 @@ export default function MDGPage() {
       }
       fetchGames();
     } catch (e) {
-      toast.error(getApiErrorMessage(e) || 'Could not join');
+      const detail = e.response?.data?.detail || '';
+      // Anti-bot join token expired/stale: silently refresh the list (issues a fresh token) and ask for another tap.
+      if (typeof detail === 'string' && (detail.includes('refresh the games list') || detail.includes('Too fast'))) {
+        fetchGames();
+        toast.warning(detail.includes('Too fast') ? 'Too fast — tap Join again.' : 'Session refreshed — tap Join again.');
+      } else {
+        toast.error(getApiErrorMessage(e) || 'Could not join');
+      }
     } finally {
       setJoiningId(null);
     }
@@ -410,6 +434,7 @@ export default function MDGPage() {
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="mdg-page">
       <style>{MDG_STYLES}</style>
+      {joinCaptchaModal}
 
       <div className="relative mdg-fade-in flex items-center justify-between">
         <div>

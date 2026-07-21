@@ -5042,6 +5042,79 @@ def register(router):
             **draft_timing,
         }
 
+    @router.get("/world-cup/staff/tournament-picks")
+    async def wc_staff_tournament_picks(current_user: dict = Depends(get_current_user)):
+        """Who picked what for tournament 2nd and 3rd place: per-team counts + per-user picks."""
+        _require_staff(current_user)
+        cfg = await _load_config(db)
+        await _require_enabled_staff(cfg)
+        preds = await db.world_cup_predictions.find(
+            {"type": {"$in": [PRED_SECOND_PLACE, PRED_THIRD_PLACE]}},
+            {"_id": 0, "user_id": 1, "type": 1, "value": 1, "settled": 1, "points_awarded": 1, "updated_at": 1},
+        ).to_list(20000)
+        user_ids = sorted({p.get("user_id") for p in preds if p.get("user_id")})
+        usernames: Dict[str, str] = {}
+        if user_ids:
+            async for u in db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "username": 1}):
+                usernames[u["id"]] = u.get("username") or ""
+        ghost_ids = set()
+        if user_ids:
+            async for e in db.world_cup_entries.find(
+                {"user_id": {"$in": user_ids}, "ghost_entry": True}, {"_id": 0, "user_id": 1}
+            ):
+                ghost_ids.add(e["user_id"])
+        teams_by_id: Dict[str, dict] = {}
+        async for t in db.world_cup_teams.find({}, {"_id": 0, "id": 1, "name": 1, "short_code": 1, "flag_emoji": 1}):
+            teams_by_id[t["id"]] = t
+
+        def _team_row(tid: str, val: dict) -> dict:
+            t = teams_by_id.get(tid or "") or {}
+            return {
+                "team_id": tid,
+                "team_name": t.get("name") or (val or {}).get("team_name") or "?",
+                "short_code": t.get("short_code") or (val or {}).get("short_code") or "",
+                "flag_emoji": t.get("flag_emoji") or "",
+            }
+
+        by_user: Dict[str, dict] = {}
+        counts = {PRED_SECOND_PLACE: {}, PRED_THIRD_PLACE: {}}
+        for p in preds:
+            uid = p.get("user_id") or ""
+            val = p.get("value") if isinstance(p.get("value"), dict) else {}
+            tid = val.get("team_id") or ""
+            row = by_user.setdefault(uid, {
+                "user_id": uid,
+                "username": usernames.get(uid) or f"{uid[:8]}…",
+                "ghost": uid in ghost_ids,
+                "second_place": None,
+                "third_place": None,
+            })
+            pick = {**_team_row(tid, val), "settled": bool(p.get("settled")), "won": int(p.get("points_awarded") or 0) > 0, "updated_at": p.get("updated_at")}
+            if p.get("type") == PRED_SECOND_PLACE:
+                row["second_place"] = pick
+            else:
+                row["third_place"] = pick
+            bucket = counts[p.get("type")]
+            c = bucket.setdefault(tid, {**_team_row(tid, val), "count": 0, "users": []})
+            c["count"] += 1
+            c["users"].append(row["username"])
+
+        def _sorted_counts(kind: str) -> list:
+            rows = sorted(counts[kind].values(), key=lambda r: (-r["count"], r["team_name"]))
+            for r in rows:
+                r["users"] = sorted(r["users"], key=str.lower)
+            return rows
+
+        users_out = sorted(by_user.values(), key=lambda r: r["username"].lower())
+        return {
+            "total_users": len(users_out),
+            "actual_second_place_team": _team_row(cfg.get("runner_up_team_id") or "", {}) if cfg.get("runner_up_team_id") else None,
+            "actual_third_place_team": _team_row(cfg.get("third_place_team_id") or "", {}) if cfg.get("third_place_team_id") else None,
+            "second_place_counts": _sorted_counts(PRED_SECOND_PLACE),
+            "third_place_counts": _sorted_counts(PRED_THIRD_PLACE),
+            "users": users_out,
+        }
+
     @router.post("/world-cup/staff/run-draft")
     async def wc_staff_run_draft(current_user: dict = Depends(get_current_user)):
         _require_ent(current_user)

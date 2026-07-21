@@ -288,9 +288,11 @@ GUARD_HIRE_COST_CASH = 2_500
 GUARD_HIRE_COST_POINTS = 0
 GUARD_SLOTS_MAX = 1000
 # Cost to add one more guard slot: base * (mult ** (current_slots - GUARD_SLOTS_INITIAL)).
+# 1.075 keeps the ~97 mission-required buys at ~$440M total (1.5 compounded into the trillions
+# and made missions ibm_48+ impossible).
 GUARD_SLOT_BASE_CASH = 12_500  # 75% reduction
 GUARD_SLOT_BASE_POINTS = 0
-GUARD_SLOT_MULT = 1.5
+GUARD_SLOT_MULT = 1.075
 GUARD_ARMOUR_MAX = 20
 GUARD_WEAPON_MAX = 20
 GUARD_WEAPON_BASE_MAX = 3  # missions add +1 via guard_weapon_max_unlock on business
@@ -309,6 +311,11 @@ RAID_COOLDOWN_HOURS = 12
 RAID_DAILY_LIMIT_DEFAULT = 5
 RAID_DAILY_LIMIT_MAX = 10
 RAID_DAILY_LIMIT = RAID_DAILY_LIMIT_DEFAULT  # backward compat for imports
+# Purchasable raid capacity (Points Store): +5 raids/day per pack (100 pts), stacks to +15, 30 days.
+RAID_CAPACITY_BOOST_ADD = 5
+RAID_CAPACITY_BOOST_MAX_ADD = 15
+RAID_CAPACITY_BOOST_DAYS = 30
+RAID_DAILY_LIMIT_BOOSTED_MAX = 20  # hard ceiling with boost (missions cap at 10 without it)
 RAID_LOOT_PERCENT = 0.25  # attacker gets 25% of target's uncollected income (capped)
 RAID_VARIANCE = 0.15  # random +/- 15% on strength for drama
 DEFENDER_BASE_STRENGTH = 10
@@ -1354,9 +1361,26 @@ def _raid_win_probability(attacker_str: float, defender_str: float) -> float:
     return a / (a + d)
 
 
+def _raid_capacity_boost_add(user: dict, now: Optional[datetime] = None) -> int:
+    """Active purchased raid capacity (+5/pack, max +15), 0 when expired/absent."""
+    until_raw = user.get("raid_capacity_boost_until")
+    if not until_raw:
+        return 0
+    try:
+        until = datetime.fromisoformat(str(until_raw).replace("Z", "+00:00"))
+        if until.tzinfo is None:
+            until = until.replace(tzinfo=timezone.utc)
+    except Exception:
+        return 0
+    if (now or datetime.now(timezone.utc)) >= until:
+        return 0
+    return max(0, min(RAID_CAPACITY_BOOST_MAX_ADD, int(user.get("raid_capacity_boost_add") or 0)))
+
+
 def _effective_raid_daily_limit(user: dict) -> int:
     raw = int(user.get("illegal_business_raid_daily_limit") or RAID_DAILY_LIMIT_DEFAULT)
-    return max(RAID_DAILY_LIMIT_DEFAULT, min(RAID_DAILY_LIMIT_MAX, raw))
+    base = max(RAID_DAILY_LIMIT_DEFAULT, min(RAID_DAILY_LIMIT_MAX, raw))
+    return min(RAID_DAILY_LIMIT_BOOSTED_MAX, base + _raid_capacity_boost_add(user))
 
 
 def _is_moderately_upgraded(business: dict) -> bool:
@@ -3415,6 +3439,7 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
     now = datetime.now(timezone.utc).isoformat()
     cooldowns_new = dict(cooldowns)
     cooldowns_new[target_id] = now
+    _raid_boost = _raid_capacity_boost_add(current_user)
     claim_result = await db.users.find_one_and_update(
         {
             "id": current_user["id"],
@@ -3426,11 +3451,21 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
                             {"$ifNull": ["$illegal_business_raids_today", 0]},
                             {
                                 "$min": [
-                                    RAID_DAILY_LIMIT_MAX,
+                                    RAID_DAILY_LIMIT_BOOSTED_MAX,
                                     {
-                                        "$max": [
-                                            RAID_DAILY_LIMIT_DEFAULT,
-                                            {"$ifNull": ["$illegal_business_raid_daily_limit", RAID_DAILY_LIMIT_DEFAULT]},
+                                        "$add": [
+                                            {
+                                                "$min": [
+                                                    RAID_DAILY_LIMIT_MAX,
+                                                    {
+                                                        "$max": [
+                                                            RAID_DAILY_LIMIT_DEFAULT,
+                                                            {"$ifNull": ["$illegal_business_raid_daily_limit", RAID_DAILY_LIMIT_DEFAULT]},
+                                                        ]
+                                                    },
+                                                ]
+                                            },
+                                            _raid_boost,
                                         ]
                                     },
                                 ]

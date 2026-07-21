@@ -58,6 +58,7 @@ const ROBOT_BG_AUTO_SEARCH_COST_POINTS = 10_000;
 const BODYGUARD_FIND_TIME_COST_POINTS = 5000;
 const SLOW_KILL_INFLATION_COST_POINTS = 5000;
 const SLOW_BODYGUARD_HIRE_INFLATION_COST_POINTS = 5000;
+const RAID_CAPACITY_COST_POINTS = 100; // +5 raids/day per pack, 30 days, stacks to 20/day total
 
 function robotBgAutoSearchActive(user) {
   if (user?.robot_bg_auto_search_active) return true;
@@ -89,6 +90,18 @@ function slowBodyguardHireInflationActive(user) {
   if (!until) return false;
   const t = Date.parse(String(until).replace('Z', '+00:00'));
   return Number.isFinite(t) && t > Date.now();
+}
+
+function raidCapacityBoostAdd(user) {
+  const until = user?.raid_capacity_boost_until;
+  if (!until) return 0;
+  const t = Date.parse(String(until).replace('Z', '+00:00'));
+  if (!Number.isFinite(t) || t <= Date.now()) return 0;
+  return Math.max(0, Math.min(15, Number(user?.raid_capacity_boost_add) || 0));
+}
+
+function raidCapacityBoostActive(user) {
+  return raidCapacityBoostAdd(user) > 0;
 }
 const ARMOUR_TIER_6_STORE_COST_POINTS = 500;
 const WEAPON11_STORE_COST_POINTS = 1000;
@@ -253,6 +266,7 @@ const STORE_ITEM_FLAG_LABELS = {
   crew_oc_insurance: 'Crew OC insurance',
   family_safe_deposit: 'Family safe deposit',
   family_event_token: 'Family event token',
+  raid_capacity: 'Raid capacity (+5 raids/day)',
 };
 
 const UPGRADES = [
@@ -269,6 +283,7 @@ const UPGRADES = [
   { id: 'bodyguard-find-time', title: 'Bodyguard Find Clock', Icon: Clock, price: BODYGUARD_FIND_TIME_COST_POINTS, path: '/store/buy-bodyguard-find-time', ownedKey: null, activeCheck: bodyguardFindTimeActive, stackWhileActive: true, desc: 'Weekly (7 days, stacks): on Kill → Attack, searching rows show the exact find time (not only the ~2h15m–2h45m range).', extra: (u) => (bodyguardFindTimeActive(u) && u?.bodyguard_find_time_until ? { line: 'Active until', value: formatGameDateTime(u.bodyguard_find_time_until) } : null) },
   { id: 'slow-kill-inflation', title: 'Slow Kill Inflation', Icon: Gauge, price: SLOW_KILL_INFLATION_COST_POINTS, path: '/store/buy-slow-kill-inflation', ownedKey: null, activeCheck: slowKillInflationActive, stackWhileActive: true, desc: '7 days (stacks up to 14 days max): kill inflation rises at half the normal rate (~1–2% per kill instead of ~2–4%).', extra: (u) => (slowKillInflationActive(u) && u?.slow_kill_inflation_until ? { line: 'Active until', value: formatGameDateTime(u.slow_kill_inflation_until) } : null) },
   { id: 'slow-bodyguard-hire-inflation', title: 'Slow Bodyguard Hire Inflation', Icon: Shield, price: SLOW_BODYGUARD_HIRE_INFLATION_COST_POINTS, path: '/store/buy-slow-bodyguard-hire-inflation', ownedKey: null, activeCheck: slowBodyguardHireInflationActive, stackWhileActive: true, desc: '7 days (stacks up to 14 days max): 3h bodyguard hire markup is halved while active.', extra: (u) => (slowBodyguardHireInflationActive(u) && u?.slow_bodyguard_hire_inflation_until ? { line: 'Active until', value: formatGameDateTime(u.slow_bodyguard_hire_inflation_until) } : null) },
+  { id: 'raid-capacity', title: 'Raid Capacity +5/day', Icon: Crosshair, price: RAID_CAPACITY_COST_POINTS, path: '/store/buy-raid-capacity', ownedKey: null, flagKey: 'raid_capacity', activeCheck: raidCapacityBoostActive, stackWhileActive: true, disabledWhen: (u) => raidCapacityBoostAdd(u) >= 15, desc: '30 days: +5 illegal business raids per day per pack. Stacks up to +15 (20 raids/day total); buying again adds +5 and restarts the 30 days.', extra: (u) => (raidCapacityBoostActive(u) && u?.raid_capacity_boost_until ? { line: `Boost +${raidCapacityBoostAdd(u)}/day until`, value: formatGameDateTime(u.raid_capacity_boost_until) } : null) },
   { id: 'armour-tier-6', title: 'Elite Composite Battledress', Icon: Shield, price: ARMOUR_TIER_6_STORE_COST_POINTS, path: '/store/buy-armour-tier-6', ownedKey: null, ownedCheck: (u) => (u?.armour_owned_level_max ?? 0) >= 6, disabledWhen: (u) => (u?.armour_owned_level_max ?? 0) < 5, desc: 'Armour level 6 (60k base bullets). Requires level 5 owned. Auto-equipped on purchase. Also shown on Armour page.' },
   { id: 'weapon11', title: 'Engraved Lewis Gun', Icon: Swords, price: WEAPON11_STORE_COST_POINTS, path: '/store/buy-weapon11', ownedKey: null, ownedCheck: (u) => !!u?.owns_weapon11, disabledWhen: (u) => !u?.owns_weapon10, desc: 'Top store gun (130 dmg). Requires Chicago Typewriter Premium owned. Auto-equipped on purchase. Also on Armour page.' },
   { id: 'silencer', title: 'Silencer', Icon: VolumeX, price: 150, path: '/store/buy-silencer', ownedKey: 'has_silencer', desc: 'Fewer witness statements when you kill' },
@@ -1775,7 +1790,7 @@ export default function Store() {
                     <span className="text-zinc-600 ml-1">
                       {cashPriceUsesQtAvg
                         ? `(avg of cheapest 3 QT sell offers; min $${Math.round(cashMinPricePerPoint).toLocaleString()}/pt)`
-                        : `($${Math.round(cashMinPricePerPoint).toLocaleString()}/pt — fewer than 3 QT sell offers)`}
+                        : `(default $${Math.round(cashPricePerPoint).toLocaleString()}/pt — fewer than 3 QT sell offers)`}
                     </span>
                   </span>
                   <span className="text-[9px] font-heading text-zinc-500">

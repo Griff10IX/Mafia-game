@@ -10,7 +10,7 @@ import uuid
 
 from bson import ObjectId
 from pydantic import BaseModel
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 
 from utils.point_provenance import log_points_event
 
@@ -30,6 +30,12 @@ MDG_MAX_FEE_POINTS = 100_000_000
 MDG_MAX_FEE_MONEY = 1_000_000_000
 MDG_MAX_EXTRA_POT_POINTS = 100_000_000
 MDG_MAX_EXTRA_POT_MONEY = 1_000_000_000
+
+# --- Anti-bot join tokens (layer 1, always on) — same scheme as entertainer E-Game joins. ---
+# Issued per-user with the games list; joins must echo the token back. A minimum age check
+# means a script that fetches the list and joins in the same instant fails; single-use per join.
+MDG_JOIN_TOKEN_TTL_SECONDS = 600
+MDG_JOIN_TOKEN_MIN_AGE_SECONDS = 1.5
 
 # ── Automated MDG constants ──
 AUTO_MDG_CYCLE_HOURS = 3
@@ -69,10 +75,86 @@ class MDGCreateRequest(BaseModel):
 
 class MDGJoinRequest(BaseModel):
     game_id: str
+    join_token: Optional[str] = None
+    captcha_token: Optional[str] = None
 
 
 class MDGRollRequest(BaseModel):
     game_id: str
+
+
+def _mdg_parse_iso(raw) -> Optional[datetime]:
+    if not raw:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+    except Exception:
+        return None
+
+
+async def _require_mdg_join_token(
+    http_request: Request,
+    current_user: dict,
+    game_id: str,
+    join_token: Optional[str],
+) -> None:
+    """Layer-1 anti-bot (same as entertainer E-Game joins): validate + consume the single-use
+    join token issued with the games list. Enforces a minimum human delay between list fetch and join."""
+    uid = str(current_user.get("id") or "")
+    token = (join_token or "").strip()
+    fail_reason = None
+    if not token:
+        fail_reason = "missing"
+    else:
+        row = await db.mdg_join_tokens.find_one({"user_id": uid}, {"_id": 0, "token": 1, "issued_at": 1})
+        stored = str((row or {}).get("token") or "")
+        if not stored or not secrets.compare_digest(stored, token):
+            fail_reason = "invalid"
+        else:
+            issued_at = _mdg_parse_iso((row or {}).get("issued_at"))
+            age = (datetime.now(timezone.utc) - issued_at).total_seconds() if issued_at else None
+            if age is None or age > MDG_JOIN_TOKEN_TTL_SECONDS:
+                fail_reason = "expired"
+            elif age < MDG_JOIN_TOKEN_MIN_AGE_SECONDS:
+                fail_reason = "too_fresh"
+            else:
+                consumed = await db.mdg_join_tokens.delete_one({"user_id": uid, "token": token})
+                if consumed.deleted_count == 0:
+                    fail_reason = "invalid"
+    if not fail_reason:
+        return
+    try:
+        from utils.captcha_failure_log import log_captcha_turnstile_failure
+
+        await log_captcha_turnstile_failure(
+            db,
+            request=http_request,
+            current_user=current_user,
+            reason=f"mdg_join_token_{fail_reason}",
+            detail=f"game_id={game_id}",
+        )
+    except Exception:
+        _logger.exception("mdg join token failure log failed")
+    try:
+        from utils.staff_bot_client_alert import maybe_notify_staff_ent_join_token_fail
+
+        await maybe_notify_staff_ent_join_token_fail(
+            db=db,
+            request=http_request,
+            user_id=uid,
+            username=current_user.get("username") or "?",
+            game_id=game_id,
+            reason=fail_reason,
+            context_label="MDG",
+            endpoint_desc="/casino/mdg/join",
+            source="mdg_join_token_fail",
+        )
+    except Exception:
+        _logger.exception("mdg join token staff alert failed")
+    if fail_reason == "too_fresh":
+        raise HTTPException(status_code=400, detail="Too fast — wait a moment and tap Join again.")
+    raise HTTPException(status_code=400, detail="Join check failed — refresh the games list and try again. No bots.")
 
 
 # ── Automated MDG helpers (module-level so ticker can call them) ──
@@ -324,7 +406,21 @@ def register(router):
             {"_id": 0, "id": 1, "created_by": 1, "created_by_username": 1, "created_at": 1, "fee_points": 1, "fee_money": 1, "max_players": 1, "auto_roll_at": 1, "extra_pot_points": 1, "extra_pot_money": 1, "entries": 1, "pot_points": 1, "pot_money": 1, "status": 1, "is_automated": 1, "house_pot": 1, "auto_roll_deadline": 1},
         ).sort("created_at", -1)
         games = await cursor.to_list(100)
-        return {"games": [_mdg_sanitize_for_json(g) for g in games]}
+        # Anti-bot: hand out a fresh single-use join token with the list (consumed by the next join).
+        join_token = None
+        try:
+            uid = str(current_user.get("id") or "")
+            if uid:
+                join_token = secrets.token_urlsafe(24)
+                await db.mdg_join_tokens.update_one(
+                    {"user_id": uid},
+                    {"$set": {"token": join_token, "issued_at": datetime.now(timezone.utc).isoformat()}},
+                    upsert=True,
+                )
+        except Exception:
+            _logger.exception("mdg join token issue failed")
+            join_token = None
+        return {"games": [_mdg_sanitize_for_json(g) for g in games], "join_token": join_token}
 
     @router.get("/casino/mdg/auto-stats")
     async def mdg_auto_stats(current_user: dict = Depends(get_current_user_verified)):
@@ -464,12 +560,23 @@ def register(router):
         return {"message": "Game created and you are in it", "game_id": game_id, "game": _mdg_sanitize_for_json(doc)}
 
     @router.post("/casino/mdg/join")
-    async def mdg_join(request: MDGJoinRequest, current_user: dict = Depends(get_current_user_verified)):
-        """Join an open game. Pay fee (points/money); if auto_roll_at is reached, roll runs and one winner takes the pot."""
+    async def mdg_join(request: MDGJoinRequest, http_request: Request, current_user: dict = Depends(get_current_user_verified)):
+        """Join an open game. Pay fee (points/money); if auto_roll_at is reached, roll runs and one winner takes the pot.
+        Anti-bot: requires the single-use join_token from the games list (+ optional Turnstile when enabled)."""
         game = await db.mdg_games.find_one({"id": request.game_id, "status": "open"}, {"_id": 0})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found or already closed")
         uid = current_user["id"]
+        await _require_mdg_join_token(http_request, current_user, request.game_id, request.join_token)
+        from utils.minigame_captcha_gate import require_turnstile_for_ent_join
+
+        await require_turnstile_for_ent_join(
+            db,
+            request=http_request,
+            current_user=current_user,
+            captcha_token=request.captcha_token,
+            is_admin=_is_admin(current_user),
+        )
         if any(e.get("user_id") == uid for e in game.get("entries") or []):
             raise HTTPException(status_code=400, detail="You are already in this game")
         fee_pts = int(game.get("fee_points") or 0)

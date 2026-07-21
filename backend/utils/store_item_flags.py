@@ -16,6 +16,7 @@ STORE_ITEM_FLAG_DEFAULTS: Dict[str, bool] = {
     "crew_oc_insurance": False,
     "family_safe_deposit": False,
     "family_event_token": False,
+    "raid_capacity": False,
 }
 
 PHASE1_STORE_ITEM_FLAGS = (

@@ -127,6 +127,10 @@ export default function WorldCupStaff() {
   const [autoApproveResult, setAutoApproveResult] = useState(true);
   const [savingResult, setSavingResult] = useState(false);
   const [groupsSetup, setGroupsSetup] = useState([]);
+  const [tournamentPicks, setTournamentPicks] = useState(null);
+  const [tournamentPicksOpen, setTournamentPicksOpen] = useState(false);
+  const [tournamentPicksLoading, setTournamentPicksLoading] = useState(false);
+  const [tournamentPicksView, setTournamentPicksView] = useState('teams'); // teams | users
   const [groupWinners, setGroupWinners] = useState({});
   const [groupWinnersSaving, setGroupWinnersSaving] = useState(false);
   const [settlingAndPaying, setSettlingAndPaying] = useState(false);
@@ -163,6 +167,25 @@ export default function WorldCupStaff() {
       setGroupsSetup([]);
     }
   }, []);
+
+  const loadTournamentPicks = useCallback(async () => {
+    setTournamentPicksLoading(true);
+    try {
+      const r = await api.get('/world-cup/staff/tournament-picks');
+      setTournamentPicks(r.data || null);
+    } catch (err) {
+      toast.error(getApiErrorMessage(err));
+      setTournamentPicks(null);
+    } finally {
+      setTournamentPicksLoading(false);
+    }
+  }, []);
+
+  const toggleTournamentPicks = () => {
+    const next = !tournamentPicksOpen;
+    setTournamentPicksOpen(next);
+    if (next && !tournamentPicks) loadTournamentPicks();
+  };
 
   const loadPredictions = useCallback(async (filters) => {
     try {
@@ -740,6 +763,114 @@ export default function WorldCupStaff() {
             >
               {restoringWinners ? 'Restoring…' : 'Restore saved group winners'}
             </button>
+          </div>
+
+          <div className={`${styles.panel} mobile-panel rounded-lg border border-primary/20 p-4 space-y-3`}>
+            <button
+              type="button"
+              onClick={toggleTournamentPicks}
+              className="w-full flex items-center gap-2 text-left"
+            >
+              <h2 className="text-sm font-heading text-primary uppercase">4 · 2nd &amp; 3rd place picks</h2>
+              <span className="ml-auto text-mutedForeground">
+                {tournamentPicksOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+              </span>
+            </button>
+            {tournamentPicksOpen && (
+              tournamentPicksLoading ? (
+                <p className="text-sm text-mutedForeground">Loading…</p>
+              ) : !tournamentPicks ? (
+                <p className="text-sm text-mutedForeground">Could not load picks.</p>
+              ) : (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] text-mutedForeground">{tournamentPicks.total_users} player(s) with picks</span>
+                    <div className="ml-auto flex gap-1">
+                      {['teams', 'users'].map((v) => (
+                        <button
+                          key={v}
+                          type="button"
+                          onClick={() => setTournamentPicksView(v)}
+                          className={`px-2.5 py-1 rounded text-[9px] font-heading uppercase border ${tournamentPicksView === v ? 'bg-primary/20 text-primary border-primary/40' : 'border-primary/10 text-mutedForeground'}`}
+                        >
+                          {v === 'teams' ? 'By team' : 'By player'}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={loadTournamentPicks}
+                        className="px-2.5 py-1 rounded text-[9px] font-heading uppercase border border-primary/10 text-mutedForeground"
+                      >
+                        Refresh
+                      </button>
+                    </div>
+                  </div>
+                  {(tournamentPicks.actual_second_place_team || tournamentPicks.actual_third_place_team) && (
+                    <p className="text-[10px] text-emerald-300">
+                      Actual:
+                      {tournamentPicks.actual_second_place_team ? ` 2nd — ${tournamentPicks.actual_second_place_team.flag_emoji || ''} ${tournamentPicks.actual_second_place_team.team_name}` : ''}
+                      {tournamentPicks.actual_third_place_team ? ` · 3rd — ${tournamentPicks.actual_third_place_team.flag_emoji || ''} ${tournamentPicks.actual_third_place_team.team_name}` : ''}
+                    </p>
+                  )}
+                  {tournamentPicksView === 'teams' ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      {[['2nd place', tournamentPicks.second_place_counts], ['3rd place', tournamentPicks.third_place_counts]].map(([label, rows]) => (
+                        <div key={label} className="space-y-1.5">
+                          <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">{label}</p>
+                          {!(rows || []).length ? (
+                            <p className="text-[10px] text-mutedForeground">No picks yet.</p>
+                          ) : (
+                            (rows || []).map((r) => (
+                              <div key={`${label}-${r.team_id}`} className="p-2 rounded border border-primary/10 bg-primary/5">
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs">{r.flag_emoji ? `${r.flag_emoji} ` : ''}{r.team_name}</span>
+                                  <span className="ml-auto text-xs text-primary tabular-nums font-bold">{r.count}</span>
+                                </div>
+                                <p className="text-[9px] text-mutedForeground break-words mt-0.5">{(r.users || []).join(', ')}</p>
+                              </div>
+                            ))
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-primary/10 text-left text-mutedForeground font-heading uppercase">
+                            <th className="p-2">Player</th>
+                            <th className="p-2">2nd place</th>
+                            <th className="p-2">3rd place</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(tournamentPicks.users || []).map((u) => (
+                            <tr key={u.user_id} className="border-b border-primary/5">
+                              <td className="p-2">
+                                {u.username}
+                                {u.ghost && <span className="ml-1 text-[9px] text-amber-400">(ghost)</span>}
+                              </td>
+                              {[u.second_place, u.third_place].map((pick, i) => (
+                                <td key={i} className="p-2">
+                                  {pick ? (
+                                    <span className={pick.settled ? (pick.won ? 'text-emerald-400' : 'text-red-400/80') : ''}>
+                                      {pick.flag_emoji ? `${pick.flag_emoji} ` : ''}{pick.team_name}
+                                      {pick.settled ? (pick.won ? ' ✓' : ' ✗') : ''}
+                                    </span>
+                                  ) : (
+                                    <span className="text-mutedForeground">—</span>
+                                  )}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )
+            )}
           </div>
         </>
       ) : (

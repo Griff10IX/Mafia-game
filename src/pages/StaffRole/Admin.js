@@ -12353,6 +12353,7 @@ export default function Admin() {
                     crew_oc_insurance: 'Crew OC insurance',
                     family_safe_deposit: 'Family safe deposit',
                     family_event_token: 'Family event token',
+                    raid_capacity: 'Raid capacity (+5 raids/day)',
                   }).map(([key, label]) => (
                     <div key={key} className="flex items-center justify-between gap-2 rounded border border-zinc-700/40 px-2 py-1.5">
                       <span className="text-[10px] text-zinc-300 font-heading">{label}</span>

@@ -6,6 +6,34 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-21 21:00 UTC[/color][/b] — [b]MDG joins: anti-bot protection[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Security:[/b] Joining [b]MDG pot games[/b] (House Games and player-created tables) now has the same anti-bot protection as E-Game joins. Scripts that snipe Join the instant games open get blocked and reported to staff — normal players won't notice anything.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-21 20:50 UTC[/color][/b] — [b]Buyable raid capacity: up to 20 raids/day[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]Raid Capacity +5/day[/b] in the Points Store upgrades tab — [b]100 points[/b] adds [b]+5 illegal business raids per day[/b] for [b]a month (30 days)[/b]. Stack up to three packs for [b]+15[/b], taking you from the usual 5 to a maximum of [b]20 raids per day[/b]. Buying another pack while active adds +5 and restarts the 30 days.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-21 20:35 UTC[/color][/b] — [b]Racket rebalance: guard slot prices + mission ladder payoff[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Guard slot prices rebalanced[/b] — each extra slot now gets ~7.5% more expensive instead of 50%. Late-ladder slots that used to cost billions are now in the millions, so the [b]full 100-mission racket ladder is actually achievable[/b]. Early slot prices barely change.[/color]
+[*][color=#888888][b]Improved:[/b] The [b]mission 100 finale[/b] reward is now massive — completing all 100 racket missions turns your racket into roughly a [b]$800M/week[/b] operation, earning back everything the full build costs (~$565M in slots, security and guards) about every 5 days. Keep collecting at least every 2 days — the till still caps.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-21 19:15 UTC[/color][/b] — [b]Perks in use: lifetime stats cards[/b][/size]
 [quote]
 [list]

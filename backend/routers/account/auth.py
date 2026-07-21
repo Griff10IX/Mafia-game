@@ -2351,6 +2351,12 @@ def register(router):
                 robot_bg_auto_search_active=robot_bg_auto_search_active(u),
                 bodyguard_find_time_until=u.get("bodyguard_find_time_until"),
                 bodyguard_find_time_active=_bodyguard_find_time_active(u),
+                raid_capacity_boost_until=u.get("raid_capacity_boost_until"),
+                raid_capacity_boost_add=(
+                    _safe_int(u.get("raid_capacity_boost_add"), 0)
+                    if _timed_perk_active(u.get("raid_capacity_boost_until"))
+                    else 0
+                ),
                 slow_kill_inflation_until=u.get("slow_kill_inflation_until"),
                 slow_kill_inflation_active=_timed_perk_active(u.get("slow_kill_inflation_until")),
                 slow_bodyguard_hire_inflation_until=u.get("slow_bodyguard_hire_inflation_until"),

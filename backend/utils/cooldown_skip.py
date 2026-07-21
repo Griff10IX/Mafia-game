@@ -53,11 +53,16 @@ async def consume_skip_credit(db, user_id: str, kind: str) -> bool:
 
 
 def activation_inc_fields(kind: str, user: dict) -> Tuple[dict, dict]:
-    """Return ($inc, extra $set) for activating one skip token."""
+    """Return ($inc, extra $set) for activating one skip token.
+
+    A field may appear in $inc or $set but never both (Mongo rejects path conflicts),
+    so on day rollover the counter is reset via $set only.
+    """
     today = _utc_today()
-    inc = {skip_credit_field(kind): 1, "cooldown_skip_uses_today": 1}
+    inc = {skip_credit_field(kind): 1}
     set_doc = {"cooldown_skip_day": today}
     if user.get("cooldown_skip_day") != today:
         set_doc["cooldown_skip_uses_today"] = 1
-        inc["cooldown_skip_uses_today"] = 1 - int(user.get("cooldown_skip_uses_today") or 0)
+    else:
+        inc["cooldown_skip_uses_today"] = 1
     return inc, set_doc

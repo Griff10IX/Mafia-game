@@ -13,8 +13,9 @@ RANK_GODFATHER = 13
 
 # Missions 31–99: target sum of income_per_hour_add (plan: ~60k–90k; use 76_000)
 _IPH_SUM_31_99 = 76_000
-# Mission 100 finale add (plan: ~18k–28k)
-_IPH_FINALE_100 = 23_000
+# Mission 100 finale add: takes total income to ~$4.69M/h (~$800M/week) so 100% completion
+# pays back the full ~$565M ladder cost roughly every 5 days.
+_IPH_FINALE_100 = 4_000_000
 
 # Vault at order 31 / 100 (plan: ~$1.05M start, ~$6.5M finale)
 _VAULT_START = 1_050_000

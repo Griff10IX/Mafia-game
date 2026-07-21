@@ -1023,6 +1023,7 @@ async def get_jail_bootstrap(current_user: dict = Depends(get_current_user)):
         "me": {
             "id": current_user.get("id"),
             "jailbust_bonus_until": current_user.get("jailbust_bonus_until"),
+            "jail_bailout_tokens": int(current_user.get("jail_bailout_tokens") or 0),
         },
     }
 

@@ -935,6 +935,8 @@ class UserResponse(BaseModel):
     robot_bg_auto_search_active: bool = False
     bodyguard_find_time_until: Optional[str] = None
     bodyguard_find_time_active: bool = False
+    raid_capacity_boost_until: Optional[str] = None
+    raid_capacity_boost_add: int = 0  # active purchased raids/day bonus (+5 per pack, max +15)
     slow_kill_inflation_until: Optional[str] = None
     slow_kill_inflation_active: bool = False
     slow_bodyguard_hire_inflation_until: Optional[str] = None

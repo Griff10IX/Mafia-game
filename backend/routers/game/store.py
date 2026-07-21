@@ -152,6 +152,7 @@ FAMILY_SAFE_DEPOSIT_MAX_TIERS = 3
 FAMILY_EVENT_TOKEN_COST_POINTS = 250
 FAMILY_EVENT_DURATION_DAYS = 3
 FAMILY_EVENT_COOLDOWN_DAYS = 7
+RAID_CAPACITY_COST_POINTS = 100
 
 
 async def _store_points_sustained_rl_user(current_user: dict = Depends(get_current_user)):
@@ -952,6 +953,64 @@ async def buy_bodyguard_find_time(
     }
 
 
+async def buy_raid_capacity(
+    pay_with: str = Query("auto"),
+    current_user: dict = Depends(get_current_user),
+):
+    """+5 illegal business raids/day per pack (30 days). Stacks to +15 (20/day total); re-buying restarts the 30 days."""
+    from datetime import timedelta
+    from routers.money.illegal_business import (
+        RAID_CAPACITY_BOOST_ADD,
+        RAID_CAPACITY_BOOST_MAX_ADD,
+        RAID_CAPACITY_BOOST_DAYS,
+        RAID_DAILY_LIMIT_BOOSTED_MAX,
+        _raid_capacity_boost_add,
+    )
+
+    await require_store_item_allowed(db, "raid_capacity", current_user)
+    fresh = await db.users.find_one(
+        {"id": current_user["id"]},
+        {"_id": 0, "raid_capacity_boost_add": 1, "raid_capacity_boost_until": 1},
+    ) or {}
+    now = datetime.now(timezone.utc)
+    active_add = _raid_capacity_boost_add(fresh, now)
+    if active_add >= RAID_CAPACITY_BOOST_MAX_ADD:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Raid capacity is already maxed (+{RAID_CAPACITY_BOOST_MAX_ADD}/day, {RAID_DAILY_LIMIT_BOOSTED_MAX} raids total).",
+        )
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, RAID_CAPACITY_COST_POINTS, pay_with)
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    new_add = min(RAID_CAPACITY_BOOST_MAX_ADD, active_add + RAID_CAPACITY_BOOST_ADD)
+    new_until = (now + timedelta(days=RAID_CAPACITY_BOOST_DAYS)).isoformat()
+    result = await db.users.update_one(
+        {"id": current_user["id"], **gte_filter},
+        {"$inc": inc, "$set": {"raid_capacity_boost_add": new_add, "raid_capacity_boost_until": new_until}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    await _record_store_points_spend(
+        current_user,
+        inc,
+        "buy-raid-capacity",
+        cost_used=cost_used,
+        extra={"raid_capacity_boost_add": new_add, "raid_capacity_boost_until": new_until},
+    )
+    await log_activity(
+        current_user["id"],
+        current_user.get("username") or "?",
+        "store_purchase",
+        {"item": "raid_capacity", "cost": cost_used, "add": new_add, "until": new_until},
+    )
+    return {
+        "message": f"Raid capacity boosted: +{new_add} raids/day for {RAID_CAPACITY_BOOST_DAYS} days.",
+        "cost": cost_used,
+        "raid_capacity_boost_add": new_add,
+        "raid_capacity_boost_until": new_until,
+    }
+
+
 async def buy_slow_kill_inflation(
     pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
@@ -1699,13 +1758,19 @@ async def buy_hitlist_npc_bonus_slot(
 
 
 TOKEN_CASH_DAILY_LIMIT = 250  # Per London day; each cash token unit counts (matches selectable bundle max)
-# Store token cash buys: never below this $/point; if <3 valid QT sell offers, use this floor only.
+# Store token cash buys: never below this $/point when QT pricing applies (3+ sell offers).
 TOKEN_CASH_MIN_PRICE_PER_POINT = 150_000
+# With fewer than 3 valid QT sell offers, use this default $/point instead.
+TOKEN_CASH_FALLBACK_PRICE_PER_POINT = 500_000
 
 
 async def _get_cash_price_per_point() -> tuple:
-    """Token cash buys — QT pricing with $150k/pt floor."""
-    return await qt_cash_price_per_point(db, min_price_per_point=TOKEN_CASH_MIN_PRICE_PER_POINT)
+    """Token cash buys — QT pricing with $150k/pt floor; $500k/pt default when <3 QT sell offers."""
+    return await qt_cash_price_per_point(
+        db,
+        min_price_per_point=TOKEN_CASH_MIN_PRICE_PER_POINT,
+        fallback_price_per_point=TOKEN_CASH_FALLBACK_PRICE_PER_POINT,
+    )
 
 
 async def _get_points_cash_price_per_point() -> tuple:
@@ -2380,6 +2445,7 @@ def register(router):
     router.add_api_route("/store/buy-family-event-token", buy_family_event_token, methods=["POST"])
     router.add_api_route("/store/buy-robot-bg-auto-search", buy_robot_bg_auto_search, methods=["POST"])
     router.add_api_route("/store/buy-bodyguard-find-time", buy_bodyguard_find_time, methods=["POST"])
+    router.add_api_route("/store/buy-raid-capacity", buy_raid_capacity, methods=["POST"])
     router.add_api_route("/store/buy-slow-kill-inflation", buy_slow_kill_inflation, methods=["POST"])
     router.add_api_route("/store/buy-slow-bodyguard-hire-inflation", buy_slow_bodyguard_hire_inflation, methods=["POST"])
     router.add_api_route("/store/buy-armour-tier-6", buy_armour_point_store_tier, methods=["POST"])
