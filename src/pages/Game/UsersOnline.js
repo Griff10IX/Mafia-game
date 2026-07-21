@@ -308,6 +308,10 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
   const showKills = preview && !isStub && typeof preview.kills === 'number';
   const showJail = preview && !isStub && typeof preview.jail_busts === 'number';
   const wealthColor = preview?.wealth_rank_color && String(preview.wealth_rank_color).trim() ? preview.wealth_rank_color : undefined;
+  // Store "Name Glow + Border" cosmetic carries into the hover card (name color + card border glow)
+  const cosmeticGlowHex = (preview?.profile_cosmetic_active ?? user.profile_cosmetic_active)
+    ? (preview?.profile_name_glow_color || user.profile_name_glow_color || null)
+    : null;
 
   const hoverPreview = profileHoverEnabled ? (
     <HoverCard
@@ -337,7 +341,11 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
         <HoverCardContent
           align="start"
           sideOffset={8}
-          className={`z-[9999] w-[20rem] max-w-[92vw] ${styles.panel} border-2 border-primary/35 rounded-lg shadow-2xl p-0 overflow-hidden backdrop-blur-sm`}
+          className={`z-[9999] w-[20rem] max-w-[92vw] ${styles.panel} border-2 ${cosmeticGlowHex ? '' : 'border-primary/35'} rounded-lg shadow-2xl p-0 overflow-hidden backdrop-blur-sm`}
+          style={cosmeticGlowHex ? {
+            borderColor: `${cosmeticGlowHex}b3`,
+            boxShadow: `0 0 16px ${cosmeticGlowHex}66, 0 25px 50px -12px rgba(0,0,0,0.6)`,
+          } : undefined}
         >
           {preview?.error ? (
             <div className="p-3 text-[10px] text-mutedForeground font-heading text-center">Couldn&apos;t load preview — tap name for full profile</div>
@@ -374,7 +382,12 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
                   </div>
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-heading font-bold text-foreground text-[13px] truncate leading-tight">{preview.username}</span>
+                      <span
+                        className="font-heading font-bold text-foreground text-[13px] truncate leading-tight"
+                        style={cosmeticGlowHex ? { color: cosmeticGlowHex, textShadow: `0 0 8px ${cosmeticGlowHex}88` } : undefined}
+                      >
+                        {preview.username}
+                      </span>
                       {(preview.custom_profile_badge || user.custom_profile_badge) ? (
                         (preview.custom_profile_badge_url || user.custom_profile_badge_url) ? (
                           <img

@@ -188,12 +188,15 @@ async def admin_remove_vip_pass_cars(
     *,
     user_id: Optional[str] = None,
     user_car_id: Optional[str] = None,
+    count: Optional[int] = None,
     clear_game_pass_grant: bool = False,
     admin_username: Optional[str] = None,
 ) -> dict:
     """
     Remove VIP Pass Car(s) from inventory.
-    Prefer user_car_id for a single row; otherwise remove all for user_id.
+    Prefer user_car_id for a single row; otherwise remove for user_id.
+    count limits how many are removed for a user (newest acquired first);
+    None/0 means remove all matching.
     """
     if not user_car_id and not user_id:
         return {"removed_count": 0, "removed": []}
@@ -206,10 +209,19 @@ async def admin_remove_vip_pass_cars(
 
     rows = await db.user_cars.find(
         query,
-        {"_id": 0, "id": 1, "user_id": 1, "car_name": 1},
+        {"_id": 0, "id": 1, "user_id": 1, "car_name": 1, "acquired_at": 1},
     ).to_list(50)
     if not rows:
         return {"removed_count": 0, "removed": []}
+
+    try:
+        n = int(count or 0)
+    except (TypeError, ValueError):
+        n = 0
+    if n > 0 and not user_car_id:
+        # Remove the most recently acquired first, preserving the earliest grant.
+        rows.sort(key=lambda r: str(r.get("acquired_at") or ""), reverse=True)
+        rows = rows[:n]
 
     removed = []
     affected_user_ids = set()

@@ -314,6 +314,33 @@ def _gta_pool_max_car_difficulty(option_difficulty: int) -> int:
     return int(option_difficulty or 1)
 
 
+_GTA_RARITY_SORT_ORDER = {"common": 0, "uncommon": 1, "rare": 2, "ultra_rare": 3, "legendary": 4}
+
+
+def _gta_possible_cars_for_option(option: dict) -> List[dict]:
+    """Public list of cars this option can steal (matches the attempt pool filter; no odds exposed)."""
+    max_difficulty = _gta_pool_max_car_difficulty(option.get("difficulty", 1))
+    cars = [
+        c
+        for c in CARS
+        if c["min_difficulty"] <= max_difficulty
+        and c["rarity"] != "exclusive"
+        and c.get("rarity") not in ("loot_exclusive", "vip_exclusive")
+        and c.get("id") != "car_custom"
+    ]
+    cars.sort(key=lambda c: (_GTA_RARITY_SORT_ORDER.get(c.get("rarity") or "common", 0), c.get("value", 0)))
+    return [
+        {
+            "id": c["id"],
+            "name": c["name"],
+            "rarity": c["rarity"],
+            "value": c.get("value", 0),
+            "image": c.get("image"),
+        }
+        for c in cars
+    ]
+
+
 # One-time respect_points rewards when total_gta crosses milestones (same progression as busts/crimes)
 GTA_MILESTONES = [
     100, 500, 1000, 2000, 5000,
@@ -532,6 +559,7 @@ async def get_gta_options(current_user: dict = Depends(get_current_user)):
         row["attempts"] = attempts
         row["successes"] = successes
         row["progress"] = progress
+        row["possible_cars"] = _gta_possible_cars_for_option(opt)
         result.append(row)
     return result
 

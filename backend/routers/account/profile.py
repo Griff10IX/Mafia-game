@@ -567,6 +567,14 @@ def register(router):
                 "is_help_desk_operator": 1,
                 "is_entertainer": 1,
                 "email": 1,
+                # Needed by profile_cosmetic_public_fields (glow/border/custom badge in the hover card)
+                "badges": 1,
+                "custom_profile_badge": 1,
+                "custom_profile_badge_url": 1,
+                "profile_cosmetic_permanent": 1,
+                "profile_cosmetic_until": 1,
+                "profile_name_glow_color": 1,
+                "profile_border_style": 1,
             },
         )
         if not user:

@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { UserPlus, Copy, Crosshair, DollarSign, Car, Building2, BarChart3, Link2, Wine, KeyRound, Gift, RefreshCw } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
-import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
@@ -171,7 +170,6 @@ export default function Referral() {
             <UserPlus size={20} className="shrink-0" style={{ color: 'var(--gm-gold)' }} />
             <h1 className={`text-sm sm:text-base font-heading font-bold ${styles.gmTitle}`}>Referral & Redeem</h1>
           </div>
-          <AutoRefreshNote seconds={60} className="pl-0 sm:pl-0" />
           <button
             type="button"
             onClick={() => fetchData('manual')}

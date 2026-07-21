@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-21 15:40 UTC[/color][/b] — [b]GTA possible-car preview + Crew OC payout buff[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] Every GTA option now has a [b]?[/b] icon next to its name — hover on desktop or tap on mobile to see exactly which cars that option can steal, grouped by rarity.[/color]
+[*][color=#888888][b]Improved:[/b] Crew OC member payouts doubled — each member now receives [b]500 RP[/b] and [b]$500,000[/b] cash per committed Crew OC (bullets, respect, booze, and treasury lump unchanged).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-21 14:15 UTC[/color][/b] — [b]GTA loot pools and rank point rewards[/b][/size]
 [quote]
 [list]

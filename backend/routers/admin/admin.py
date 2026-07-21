@@ -315,9 +315,10 @@ class AdminStoreItemFlagsPatch(BaseModel):
 
 
 class AdminVipPassCarRemoveRequest(BaseModel):
-    """Remove VIP Pass Car(s). Prefer user_car_id; username removes all for that player."""
+    """Remove VIP Pass Car(s). Prefer user_car_id; username removes count (or all) for that player."""
     username: Optional[str] = None
     user_car_id: Optional[str] = None
+    count: Optional[int] = None  # only with username: remove this many (newest first); None/0 = all
     clear_game_pass_grant: bool = False
 
 
@@ -10906,10 +10907,22 @@ def register(router):
         if not user_id and not user_car_id:
             raise HTTPException(status_code=400, detail="Provide username and/or user_car_id")
 
+        count = None
+        if body.count is not None:
+            try:
+                count = int(body.count)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="count must be a number")
+            if count < 0:
+                raise HTTPException(status_code=400, detail="count must be 0 or more")
+            if count and not user_id:
+                raise HTTPException(status_code=400, detail="count requires a username")
+
         result = await admin_remove_vip_pass_cars(
             db,
             user_id=user_id,
             user_car_id=user_car_id,
+            count=count,
             clear_game_pass_grant=bool(body.clear_game_pass_grant),
             admin_username=current_user.get("username"),
         )

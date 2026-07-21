@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { Car, Lock, ChevronDown, ChevronRight, Bot, Zap } from 'lucide-react';
+import { Car, Lock, ChevronDown, ChevronRight, Bot, Zap, HelpCircle } from 'lucide-react';
 import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 
 const RARITY_COLORS = {
@@ -122,6 +123,125 @@ const AutoRankIcon = () => (
   </span>
 );
 
+const RARITY_ORDER = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary'];
+
+/** "?" info popover listing which cars an option can steal (no odds). Hover on desktop, tap on mobile. */
+const PossibleCarsInfo = ({ optionName, cars }) => {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const btnRef = useRef(null);
+  const panelRef = useRef(null);
+  const closeTimerRef = useRef(null);
+
+  const cancelClose = () => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  };
+
+  const openNow = () => {
+    cancelClose();
+    const r = btnRef.current?.getBoundingClientRect();
+    if (!r) return;
+    const width = 232;
+    const flipUp = window.innerHeight - r.bottom < 300 && r.top > window.innerHeight - r.bottom;
+    setPos({
+      ...(flipUp ? { bottom: window.innerHeight - r.top + 6 } : { top: r.bottom + 6 }),
+      left: Math.max(8, Math.min(r.left - 8, window.innerWidth - width - 8)),
+      width,
+    });
+    setOpen(true);
+  };
+
+  const closeSoon = () => {
+    cancelClose();
+    closeTimerRef.current = setTimeout(() => setOpen(false), 160);
+  };
+
+  useEffect(() => () => cancelClose(), []);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onOutside = (e) => {
+      if (panelRef.current?.contains(e.target) || btnRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    const onScrollOrResize = () => setOpen(false);
+    const onKey = (e) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('pointerdown', onOutside);
+    window.addEventListener('scroll', onScrollOrResize, true);
+    window.addEventListener('resize', onScrollOrResize);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onOutside);
+      window.removeEventListener('scroll', onScrollOrResize, true);
+      window.removeEventListener('resize', onScrollOrResize);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  if (!Array.isArray(cars) || cars.length === 0) return null;
+
+  const grouped = {};
+  for (const c of cars) {
+    const key = String(c?.rarity || 'common').toLowerCase();
+    (grouped[key] = grouped[key] || []).push(c);
+  }
+  const hoverCapable = typeof window !== 'undefined'
+    && typeof window.matchMedia === 'function'
+    && window.matchMedia('(hover: hover)').matches;
+
+  return (
+    <>
+      <button
+        ref={btnRef}
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (open) setOpen(false);
+          else openNow();
+        }}
+        onMouseEnter={() => { if (hoverCapable) openNow(); }}
+        onMouseLeave={() => { if (hoverCapable) closeSoon(); }}
+        className="inline-flex items-center justify-center w-5 h-5 -my-0.5 rounded-full text-mutedForeground hover:text-primary transition-colors shrink-0 touch-manipulation"
+        title="Possible cars"
+        aria-label={`Possible cars from ${optionName}`}
+        aria-expanded={open}
+      >
+        <HelpCircle size={12} />
+      </button>
+      {open && pos ? createPortal(
+        <div
+          ref={panelRef}
+          className="fixed z-[9999] rounded-lg border-2 border-primary/35 shadow-2xl p-2.5 space-y-1.5 max-h-[45vh] overflow-y-auto"
+          style={{ ...pos, backgroundColor: 'var(--noir-content, #0a0a0a)' }}
+          onMouseEnter={cancelClose}
+          onMouseLeave={closeSoon}
+          role="tooltip"
+        >
+          <p className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
+            {optionName} — possible cars
+          </p>
+          {RARITY_ORDER.filter((r) => grouped[r]?.length).map((r) => (
+            <div key={r}>
+              <p className={`text-[8px] font-heading font-bold uppercase tracking-wider ${getRarityColor(r)}`}>
+                {r.replace(/_/g, ' ')}
+              </p>
+              <p className="text-[10px] font-heading text-foreground leading-snug">
+                {grouped[r].map((c) => c.name).join(', ')}
+              </p>
+            </div>
+          ))}
+        </div>,
+        document.body,
+      ) : null}
+    </>
+  );
+};
+
 // Compact GTA row
 const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, manualPlayDisabled }) => {
   const onCooldown = option.cooldown_until && formatCooldown(option.cooldown_until);
@@ -153,8 +273,11 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
         )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-col gap-1 min-w-0 sm:flex-row sm:items-center sm:flex-wrap sm:gap-x-1 sm:gap-y-0.5">
-            <span className="text-[11px] font-heading font-bold text-foreground truncate min-w-0">
-              {option.name}
+            <span className="inline-flex items-center gap-1 min-w-0">
+              <span className="text-[11px] font-heading font-bold text-foreground truncate min-w-0">
+                {option.name}
+              </span>
+              <PossibleCarsInfo optionName={option.name} cars={option.possible_cars} />
             </span>
             {!unlocked && option.min_rank_name && (
               <span
@@ -286,7 +409,7 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
                 >
                   <div
                     className="w-full aspect-[4/3] rounded overflow-hidden bg-secondary mb-0.5 sm:mb-1 relative shrink-0"
-                    style={{ border: `1px solid ${glowHex}88`, boxShadow: `0 0 6px ${glowHex}55` }}
+                    style={{ border: `2px solid ${glowHex}`, boxShadow: `0 0 12px ${glowHex}aa, inset 0 0 8px ${glowHex}33` }}
                   >
                     {car.image ? (
                       <img

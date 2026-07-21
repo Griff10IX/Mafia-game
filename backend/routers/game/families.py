@@ -321,8 +321,8 @@ async def _state_head_casino_week_stats(state_name: str):
     except Exception:
         pass
     return result
-CREW_OC_REWARD_RP = 250
-CREW_OC_REWARD_CASH = 250_000
+CREW_OC_REWARD_RP = 500
+CREW_OC_REWARD_CASH = 500_000
 CREW_OC_REWARD_BULLETS = 500
 CREW_OC_REWARD_POINTS_MIN = 5
 CREW_OC_REWARD_POINTS_MAX = 25  # rolled per crew member on commit

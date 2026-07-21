@@ -1502,6 +1502,7 @@ export default function Layout({ children }) {
     { path: '/tjjeujr3wa/dead-alive-log', icon: Skull, label: 'Dead > Alive log' },
     { path: '/tjjeujr3wa/account-compare', icon: ArrowLeftRight, label: 'Account compare' },
     { path: '/tjjeujr3wa/exclusive-cars', icon: Car, label: 'Exclusive cars' },
+    { path: '/tjjeujr3wa/vip-cars', icon: Car, label: 'VIP Pass cars' },
     { path: '/tjjeujr3wa/crew-recovery', icon: Building2, label: 'Crew recovery' },
     { path: '/tjjeujr3wa/property-transfer', icon: Landmark, label: 'Armoury / airport' },
   ] : [];
