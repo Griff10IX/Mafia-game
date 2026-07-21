@@ -1,4 +1,4 @@
-import { Activity, ArrowLeftRight, BarChart3, Building2, Car, Crosshair, FileText, Globe, History, Landmark, Layers, Lock, LockKeyhole, Radio, Shield, Skull, UserCog, Users, Wrench, Coins, Zap, Wine } from 'lucide-react';
+import { Activity, ArrowLeftRight, BarChart3, Building2, Car, Crosshair, Dices, FileText, Globe, History, Landmark, Layers, Lock, LockKeyhole, Radio, Shield, Skull, UserCog, Users, Wrench, Coins, Zap, Wine } from 'lucide-react';
 
 export const ADMIN_CATEGORIES = [
   { id: 'admin-operations', label: 'Operations', icon: UserCog },
@@ -86,6 +86,7 @@ export const ADMIN_ROUTE_GROUPS = [
   { id: 'account-compare', label: 'Account compare', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: ArrowLeftRight, description: 'Compare two accounts: shared IPs, devices, and direct transfers.' },
   { id: 'exclusive-cars', label: 'Exclusive cars', categoryId: 'admin-world-systems', anchorId: 'admin-gameworld', icon: Car, description: 'Remove, transfer, or grant Al Capone / loot-exclusive cars.' },
   { id: 'vip-cars', label: 'VIP Pass cars', categoryId: 'admin-world-systems', anchorId: 'admin-gameworld', icon: Car, description: 'See every VIP Pass Car owner and remove one, several, or all from a player.' },
+  { id: 'ent-games', label: 'E-Games audit', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: Dices, description: 'Entertainer Forum dice/gbox/hangman audit: creators, rewards, and whose points funded each game.' },
   { id: 'crew-recovery', label: 'Crew recovery', categoryId: 'admin-operations', anchorId: 'admin-moderation', icon: Building2, description: 'Revive families and restore illegal businesses from kill snapshots.' },
   { id: 'racket-progress', label: 'Racket progress', categoryId: 'admin-economy-progression', anchorId: 'admin-donations', icon: Wine, description: 'Set player racket business progress (ladder, vault, guards, security).' },
   { id: 'distillery-progress', label: 'Distillery progress', categoryId: 'admin-economy-progression', anchorId: 'admin-donations', icon: Wine, description: 'Set distillery progress % or grant equipment levels and special track unlocks (booze rackets).' },
@@ -119,6 +120,7 @@ export const ADMIN_ROUTE_GROUP_MOBILE_SHORT = {
   'account-compare': 'Compare',
   'exclusive-cars': 'Cars',
   'vip-cars': 'VIP',
+  'ent-games': 'E-Games',
   'crew-recovery': 'Crew',
   'racket-progress': 'Racket',
   'distillery-progress': 'Still',

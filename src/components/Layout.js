@@ -588,6 +588,18 @@ export default function Layout({ children }) {
     }
   }, [user?.tutorial_status, user?.tutorial_step, user?.tutorial_theme_done, setColour, setTexture, setButtonColour, setAccentLineColour, setWritingColour, setMutedWritingColour, setButtonStyle, setFont, setTextStyle, setToastTextColour, setMobileNavStyle, setThemeVariant]);
 
+  const replayTutorial = useCallback(async () => {
+    try {
+      const res = await api.post('/tutorial/replay');
+      toast.success(res.data?.message || 'Tutorial restarted. Completion rewards are one-time — you won\'t receive them again.');
+      try { sessionStorage.setItem('tutorial_coach_collapsed', '0'); } catch (_) {}
+      window.dispatchEvent(new Event('tutorial:replay'));
+      window.dispatchEvent(new Event('app:refresh-user'));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to restart tutorial');
+    }
+  }, []);
+
   const hasCasinoOrProperty = Boolean(user?.has_casino_or_property);
   const staffToolsNavVisible = useMemo(() => {
     void portalNavTick;
@@ -1416,7 +1428,7 @@ export default function Layout({ children }) {
   const isCategorizedClassic = sidebarLayout === 'categorized_classic';
   const PATH_TO_CATEGORY = isCategorizedClassic
     ? {
-        '/account/dashboard': 'information', '/verify-email': 'information', '/account/objectives': 'information', '/account/missions': 'information',
+        '/account/dashboard': 'information', '/verify-email': 'information', '/account/objectives': 'information', '/account/missions': 'information', '__tutorial__': 'information',
         '/account/profile': 'information', '/account/referral': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information',
         '/game/users-online': 'information', '/money/property': 'information', '/game/help-desk': 'information', '/game/help-desk-hub': 'information', '/game/leaderboard': 'information',
         '/game/ranking': 'ranking', '/account/prestige': 'ranking',
@@ -1430,7 +1442,7 @@ export default function Layout({ children }) {
         '/mini-games': 'minigames',
       }
     : {
-        '/account/dashboard': 'information', '/verify-email': 'information', '/account/objectives': 'information', '/account/missions': 'information',
+        '/account/dashboard': 'information', '/verify-email': 'information', '/account/objectives': 'information', '/account/missions': 'information', '__tutorial__': 'information',
         '/account/inventory': 'information', '/account/profile': 'information', '/account/referral': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information',
         '/game/users-online': 'information', '/money/property': 'information', '/game/help-desk': 'information', '/game/help-desk-hub': 'information',
         '/game/ranking': 'ranking', '/account/prestige': 'ranking',
@@ -1460,6 +1472,7 @@ export default function Layout({ children }) {
     ...(needsEmailVerification ? [{ path: '/verify-email', icon: Mail, label: 'Verify email' }] : []),
     { path: '/account/objectives', icon: ListChecks, label: 'Objectives' },
     { path: '/account/missions', icon: Map, label: 'Missions' },
+    { path: '__tutorial__', icon: Lightbulb, label: 'Tutorial' },
     { path: '/account/inventory', icon: Package, label: 'My Inventory' },
     { path: '/account/profile', icon: User, label: 'Edit Profile' },
     { path: '/account/referral', icon: UserPlus, label: 'Referral & Redeem' },
@@ -1512,6 +1525,7 @@ export default function Layout({ children }) {
     { path: '/tjjeujr3wa/account-compare', icon: ArrowLeftRight, label: 'Account compare' },
     { path: '/tjjeujr3wa/exclusive-cars', icon: Car, label: 'Exclusive cars' },
     { path: '/tjjeujr3wa/vip-cars', icon: Car, label: 'VIP Pass cars' },
+    { path: '/tjjeujr3wa/ent-games', icon: Dice5, label: 'E-Games audit' },
     { path: '/tjjeujr3wa/crew-recovery', icon: Building2, label: 'Crew recovery' },
     { path: '/tjjeujr3wa/property-transfer', icon: Landmark, label: 'Armoury / airport' },
   ] : [];
@@ -1847,6 +1861,25 @@ export default function Layout({ children }) {
     if (item.path === '/game/ranking') return <Fragment key="nav-ranking-group">{navDivider}{rankingNavBlock}</Fragment>;
     if (item.path === '__combat__') return <Fragment key="nav-combat-group">{navDivider}{combatNavBlock}</Fragment>;
     if (item.path === '__messaging__') return <Fragment key="nav-messaging-group">{navDivider}{messagingNavBlock}</Fragment>;
+    if (item.path === '__tutorial__') {
+      const TutIcon = item.icon;
+      const tutSizeClass = compact ? 'py-0.5 min-h-[22px]' : 'py-2 md:py-1 min-h-[44px] md:min-h-[26px]';
+      return (
+        <Fragment key="nav-tutorial">
+          {navDivider}
+          <button
+            type="button"
+            data-testid="nav-tutorial"
+            title="Replay the new-player tutorial. Completion rewards are one-time — you won't receive them again."
+            className={`w-full text-left flex items-center gap-1 px-2 ${tutSizeClass} rounded-sm transition-smooth touch-manipulation ${styles.sidebarNavLink}`}
+            onClick={() => { setSidebarOpen(false); replayTutorial(); }}
+          >
+            <TutIcon size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
+            <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">{item.label}</span>
+          </button>
+        </Fragment>
+      );
+    }
     if (item.path === '/casino') return <Fragment key="nav-casino-group">{navDivider}{casinoNavBlock}</Fragment>;
     if (item.path === '/mini-games') return <Fragment key="nav-minigames-group">{navDivider}{miniGamesNavBlock}</Fragment>;
     const Icon = item.icon;

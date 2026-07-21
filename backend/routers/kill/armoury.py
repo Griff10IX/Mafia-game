@@ -2355,6 +2355,15 @@ def _tokens_from_user(user: dict) -> dict:
                 if expires_dt:
                     expires_at = expires_dt.isoformat()
         row: Dict[str, Any] = {"count": count, "active_until": active_until, "expires_at": expires_at}
+        if t in ("auto_collect_12h", "auto_collect_24h"):
+            s = user.get("auto_collect_stats") or {}
+            row["auto_collect_stats"] = {
+                "property_cash": int(s.get("property_cash") or 0),
+                "racket_cash": int(s.get("racket_cash") or 0),
+                "collects": int(s.get("collects") or 0),
+                "last_collected_at": s.get("last_collected_at"),
+                "last_cash": int(s.get("last_cash") or 0),
+            }
         if t == "crew_oc_auto_3h":
             cap_raw = user.get("crew_oc_auto_apply_max_fee")
             # Auto-apply ticker only runs when a cap is set; UI treats the perk as inactive until then.
@@ -3109,6 +3118,26 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
     fresh_user = await db.users.find_one({"id": uid}, {"_id": 0})
     udoc = fresh_user or current_user
     tokens = _tokens_from_user(udoc)
+    # Next auto-collect check time (global ticker runs every AUTO_COLLECT_TICKER_SECONDS).
+    auto_collect_info = None
+    if tokens.get("auto_collect_12h", {}).get("active_until") or tokens.get("auto_collect_24h", {}).get("active_until"):
+        from utils.auto_collect_service import AUTO_COLLECT_TICKER_SECONDS
+
+        next_check_at = None
+        try:
+            gs = await db.game_settings.find_one({"_id": "main"}, {"_id": 0, "auto_collect_last_tick_at": 1})
+            last_tick = _parse_utc((gs or {}).get("auto_collect_last_tick_at"))
+            if last_tick:
+                from datetime import timedelta
+
+                next_dt = last_tick + timedelta(seconds=AUTO_COLLECT_TICKER_SECONDS)
+                next_check_at = next_dt.isoformat()
+        except Exception:
+            pass
+        auto_collect_info = {
+            "next_check_at": next_check_at,
+            "interval_seconds": AUTO_COLLECT_TICKER_SECONDS,
+        }
     return {
         "weapons": [w.model_dump() if hasattr(w, "model_dump") else w for w in weapons],
         "armour": armour,
@@ -3118,6 +3147,7 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
             "speakeasy": speakeasy_info,
         },
         "tokens": tokens,
+        "auto_collect": auto_collect_info,
         "token_gift_daily": _token_gift_daily_from_user(udoc),
         "is_admin": _is_admin(current_user),
     }

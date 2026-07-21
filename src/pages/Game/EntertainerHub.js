@@ -57,9 +57,12 @@ const PERK_LABELS = {
   jailbust_bonus: 'Jailbust',
 };
 
+// Session cache so revisiting the hub shows content instantly (silent refresh in background).
+let _cachedDash = null;
+
 export default function EntertainerHub() {
-  const [dash, setDash] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [dash, setDash] = useState(_cachedDash);
+  const [loading, setLoading] = useState(!_cachedDash);
   const [loadErr, setLoadErr] = useState(null);
   const [entColor, setEntColor] = useState('#7c3aed');
   const [colorSaving, setColorSaving] = useState(false);
@@ -76,10 +79,13 @@ export default function EntertainerHub() {
   const collectInFlightRef = useRef(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    // Only show the blocking loader when we have nothing to display yet;
+    // otherwise refresh silently so the page doesn't flash/"reload".
+    if (!_cachedDash?.username) setLoading(true);
     setLoadErr(null);
     try {
       const res = await api.get('/entertainer/dashboard');
+      _cachedDash = res.data;
       setDash(res.data);
     } catch (e) {
       const status = e?.response?.status;
@@ -131,7 +137,19 @@ export default function EntertainerHub() {
 
   if (loading) {
     return (
-      <div className="p-4 text-mutedForeground font-heading text-sm">Loading Entertainer hub…</div>
+      <div className="p-3 sm:p-4 max-w-3xl mx-auto space-y-3" aria-busy="true" aria-label="Loading Entertainer hub">
+        <div className="flex items-center gap-2">
+          <Mic2 size={16} className="text-primary animate-pulse" />
+          <span className="text-sm font-heading text-mutedForeground">Loading Entertainer hub…</span>
+        </div>
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="rounded-lg border border-primary/15 bg-primary/5 animate-pulse"
+            style={{ height: i === 0 ? 88 : 140, animationDelay: `${i * 120}ms` }}
+          />
+        ))}
+      </div>
     );
   }
 

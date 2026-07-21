@@ -322,6 +322,7 @@ async def _state_head_casino_week_stats(state_name: str):
         pass
     return result
 CREW_OC_REWARD_RP = 500
+CREW_OC_REWARD_RP_PER_PARTICIPANT = 50  # every participant adds this to everyone's RP payout
 CREW_OC_REWARD_CASH = 500_000
 CREW_OC_REWARD_BULLETS = 500
 CREW_OC_REWARD_POINTS_MIN = 5
@@ -2257,6 +2258,8 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "treasury_bullets": int(fam.get("treasury_bullets") or 0),
             "treasury_points": int(fam.get("treasury_points") or 0),
             "treasury_loot_pieces": int(fam.get("treasury_loot_pieces") or 0),
+            "safe_deposit_cap": int(fam.get("safe_deposit_cap") or 0),
+            "safe_deposit_tiers": int(fam.get("safe_deposit_tiers") or 0),
             "melt_treasury_pct": int(fam.get("melt_treasury_pct") or 0),
             "melt_reward_tiers": fam.get("melt_reward_tiers") or [],
             "crew_oc_cooldown_until": fam.get("crew_oc_cooldown_until"),
@@ -2283,6 +2286,10 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "property_holdings": _ph,
             "crew_bonuses": _cb,
             "family_perks": clean_family_perks(fam.get("family_perks"), datetime.now(timezone.utc)),
+        },
+        "my_safe_deposit": {
+            "cash": int(((fam.get("safe_deposits_by_user") or {}).get(uid) or {}).get("cash") or 0),
+            "bullets": int(((fam.get("safe_deposits_by_user") or {}).get(uid) or {}).get("bullets") or 0),
         },
         "members": members, "fallen": fallen, "rackets": rackets, "my_role": my_role,
         "racket_offence_upgrades": offence_upgrades,
@@ -4895,6 +4902,9 @@ async def _execute_crew_oc_commit(
     if not living_ids:
         return {"ok": False, "reason": "no_crew", "detail": "No living crew members"}
     fam_name = (fam.get("name") or fam.get("tag") or "Crew").strip() or "Crew"
+    # Bigger crews pay better: +50 RP per participating member, for everyone.
+    participant_rp_bonus = CREW_OC_REWARD_RP_PER_PARTICIPANT * len(living_ids)
+    rp_reward = CREW_OC_REWARD_RP + participant_rp_bonus
     for u in living:
         uid = u["id"]
         rp_before = int(u.get("rank_points") or 0)
@@ -4903,7 +4913,7 @@ async def _execute_crew_oc_commit(
         crew_oc_update = apply_season_rp_mirror_to_update(
             {
                 "$inc": {
-                    "rank_points": CREW_OC_REWARD_RP,
+                    "rank_points": rp_reward,
                     "money": CREW_OC_REWARD_CASH,
                     "bullets": CREW_OC_REWARD_BULLETS,
                     "respect_points": respect_roll,
@@ -4929,7 +4939,7 @@ async def _execute_crew_oc_commit(
         await send_notification(
             uid,
             "Crew OC committed",
-            f"{fam_name} committed the Organised Crime. You received +{rp_awarded} RP, +${CREW_OC_REWARD_CASH:,} cash, +{CREW_OC_REWARD_BULLETS} bullets, +{respect_roll} respect points, +{CREW_OC_REWARD_BOOZE} booze. Family Treasury +${CREW_OC_TREASURY_LUMP:,}.",
+            f"{fam_name} committed the Organised Crime. You received +{rp_awarded} RP (incl. +{participant_rp_bonus} crew bonus for {len(living_ids)} participants), +${CREW_OC_REWARD_CASH:,} cash, +{CREW_OC_REWARD_BULLETS} bullets, +{respect_roll} respect points, +{CREW_OC_REWARD_BOOZE} booze. Family Treasury +${CREW_OC_TREASURY_LUMP:,}.",
             "reward",
             category="crew_oc",
         )

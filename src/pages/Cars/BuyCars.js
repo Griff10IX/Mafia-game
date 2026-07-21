@@ -8,13 +8,20 @@ import styles from '../../styles/noir.module.css';
 
 const BUY_STYLES = `
   @keyframes bc-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-  .bc-fade-in { animation: bc-fade-in 0.4s ease-out both; }
   .bc-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
   .bc-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
   @media (max-width: 767px) {
     .bc-row td { padding-top: 3px !important; padding-bottom: 3px !important; }
   }
 `;
+// Entrance fade only runs on the first visit per session so revisits don't
+// look like a full page reload.
+const BUY_FADE_STYLES = `
+  .bc-fade-in { animation: bc-fade-in 0.4s ease-out both; }
+`;
+let _bcIntroPlayed = false;
+// Session cache so revisits paint instantly while a fresh fetch runs.
+let _cachedBuyCars = null;
 
 // Rarities and travel times – must match backend GTA (server CARS + gta.py TRAVEL_TIMES)
 const GTA_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'loot_exclusive', 'exclusive', 'vip_exclusive'];
@@ -76,9 +83,11 @@ const RARITY_COLOR = {
 
 export default function BuyCars() {
   const authUser = useAuthUser();
-  const [dealerCars, setDealerCars] = useState([]);
-  const [marketplaceListings, setMarketplaceListings] = useState([]);
-  const [dealership, setDealership] = useState(null);
+  const animateIn = useState(() => !_bcIntroPlayed)[0];
+  useEffect(() => { _bcIntroPlayed = true; }, []);
+  const [dealerCars, setDealerCars] = useState(() => _cachedBuyCars?.dealerCars ?? []);
+  const [marketplaceListings, setMarketplaceListings] = useState(() => _cachedBuyCars?.marketplaceListings ?? []);
+  const [dealership, setDealership] = useState(() => _cachedBuyCars?.dealership ?? null);
   const [dealershipSaving, setDealershipSaving] = useState(false);
   const [dealershipTransferUsername, setDealershipTransferUsername] = useState('');
   const [dealershipSellPoints, setDealershipSellPoints] = useState('');
@@ -89,7 +98,7 @@ export default function BuyCars() {
   const [autoStockRarity, setAutoStockRarity] = useState('legendary');
   const [autoStockTarget, setAutoStockTarget] = useState('100');
   const [userMoney, setUserMoney] = useState(() => (authUser?.money != null ? authUser.money : null));
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(_cachedBuyCars != null);
   const [selectedRarity, setSelectedRarity] = useState(null);
   const [sourceFilter, setSourceFilter] = useState('all'); // 'all' | 'dealer' | 'listing'
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -103,14 +112,17 @@ export default function BuyCars() {
         api.get('/gta/cars-for-sale').catch(() => ({ data: { cars: [] } })),
         api.get('/gta/marketplace').catch(() => ({ data: { listings: [] } })),
       ]);
-      setDealerCars(Array.isArray(saleRes.data?.cars) ? saleRes.data.cars : []);
-      setDealership(saleRes.data?.dealership || null);
-      const d = saleRes.data?.dealership;
+      const cars = Array.isArray(saleRes.data?.cars) ? saleRes.data.cars : [];
+      const listings = Array.isArray(marketRes.data?.listings) ? marketRes.data.listings : [];
+      const d = saleRes.data?.dealership || null;
+      setDealerCars(cars);
+      setDealership(d);
+      _cachedBuyCars = { dealerCars: cars, marketplaceListings: listings, dealership: d };
       if (d?.auto_stock?.rarity) setAutoStockRarity(d.auto_stock.rarity);
       if (d?.auto_stock?.target_per_model) setAutoStockTarget(String(d.auto_stock.target_per_model));
       if (d?.stock_default_target) setStockTarget(String(d.stock_default_target));
       if (authUser?.money != null) setUserMoney(authUser.money);
-      setMarketplaceListings(Array.isArray(marketRes.data?.listings) ? marketRes.data.listings : []);
+      setMarketplaceListings(listings);
     } catch (_) {}
     finally { setHasLoaded(true); }
   };
@@ -533,7 +545,7 @@ export default function BuyCars() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
-      <style>{BUY_STYLES}</style>
+      <style>{BUY_STYLES + (animateIn ? BUY_FADE_STYLES : '')}</style>
 
       <div className="relative bc-fade-in flex flex-wrap items-end justify-between gap-2">
         <div>

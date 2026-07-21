@@ -141,8 +141,17 @@ function applyRoundToStats(prev, round) {
   };
 }
 
+// Entrance animation only on the first visit per session — replaying it on every
+// navigation makes the page look like it fully reloaded.
+let _coinFlipIntroPlayed = false;
+// Session caches so revisits render the last-known config/stats instantly (silent refresh follows).
+let _cachedCoinFlipConfig = null;
+let _cachedCoinFlipStats = null;
+
 export default function CoinFlipPage() {
-  const [config, setConfig] = useState({
+  const animateIn = useRef(!_coinFlipIntroPlayed).current;
+  useEffect(() => { _coinFlipIntroPlayed = true; }, []);
+  const [config, setConfig] = useState(_cachedCoinFlipConfig || {
     current_state: '',
     max_bet: 5_000_000,
     choices: ['heads', 'tails'],
@@ -155,7 +164,7 @@ export default function CoinFlipPage() {
   const [isFlipping, setIsFlipping] = useState(false);
   const [skipAnimation, setSkipAnimation] = useState(false);
   const [lastRound, setLastRound] = useState(null);
-  const [stats, setStats] = useState(null);
+  const [stats, setStats] = useState(_cachedCoinFlipStats);
   const lastBetRef = useRef('100000');
   /** Blocks a second play() before React re-renders (double-click / touch+click races). */
   const playInFlightRef = useRef(false);
@@ -167,14 +176,23 @@ export default function CoinFlipPage() {
 
   const fetchConfig = useCallback(() => {
     apiRequestWith429Retry(() => api.get('/casino/coin-flip/config'))
-      .then((r) => setConfig((prev) => ({ ...prev, ...(r.data || {}) })))
+      .then((r) => {
+        setConfig((prev) => {
+          const next = { ...prev, ...(r.data || {}) };
+          _cachedCoinFlipConfig = next;
+          return next;
+        });
+      })
       .catch(() => toast.error('Could not load Coin Flip config'));
   }, []);
 
   const fetchStats = useCallback(() => {
     apiRequestWith429Retry(() => api.get('/casino/coin-flip/stats'))
-      .then((r) => setStats(r.data || null))
-      .catch(() => setStats(null));
+      .then((r) => {
+        _cachedCoinFlipStats = r.data || null;
+        setStats(r.data || null);
+      })
+      .catch(() => setStats((prev) => prev ?? null));
   }, []);
 
   useEffect(() => {
@@ -244,7 +262,7 @@ export default function CoinFlipPage() {
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-0`} data-testid="coin-flip-page">
       <style>{COIN_FLIP_STYLES}</style>
 
-      <div className="coinflip-fade-in space-y-4">
+      <div className={`${animateIn ? 'coinflip-fade-in' : ''} space-y-4`}>
         <header className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div className="space-y-1">
             <p className="text-[9px] sm:text-[10px] text-zinc-500 font-heading italic flex items-center gap-1.5 tracking-wide">

@@ -106,9 +106,16 @@ function LevelCard({ row, isCurrent, isUnlocked }) {
   );
 }
 
+// Session cache + once-per-session entrance animation, so revisits don't blank the
+// page with a loader and replay the fade like a full reload.
+let _cachedPrestigeInfo = null;
+let _prestigeIntroPlayed = false;
+
 export default function Prestige() {
-  const [info, setInfo]           = useState(null);
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const animateIn = useRef(!_prestigeIntroPlayed).current;
+  useEffect(() => { _prestigeIntroPlayed = true; }, []);
+  const [info, setInfo]           = useState(_cachedPrestigeInfo);
+  const [hasLoaded, setHasLoaded] = useState(_cachedPrestigeInfo != null);
   const [activating, setActivating] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const levelsScrollRef = useRef(null);
@@ -116,10 +123,14 @@ export default function Prestige() {
   const fetchInfo = useCallback(async () => {
     try {
       const res = await api.get('/prestige/info');
+      _cachedPrestigeInfo = res.data;
       setInfo(res.data);
     } catch {
-      toast.error('Failed to load prestige info');
-      setInfo(null);
+      // Keep showing cached info on a failed silent refresh.
+      if (!_cachedPrestigeInfo) {
+        toast.error('Failed to load prestige info');
+        setInfo(null);
+      }
     } finally {
       setHasLoaded(true);
     }
@@ -172,6 +183,7 @@ export default function Prestige() {
   // Real climb: max(Godfather effective ladder, prestige RP gate) — not the smaller gate alone (e.g. 510k vs 1.02M).
   const pathTargetNum = Number(info.prestige_path_target_effective ?? godReqNum) || 0;
   const prestigePathMet = pathTargetNum > 0 && effRpNum >= pathTargetNum;
+  const fadeClass = animateIn ? 'prestige-fade' : '';
 
   return (
     <div className={`space-y-3 md:space-y-4 ${styles.pageContent} mobile-page-root`}>
@@ -186,7 +198,7 @@ export default function Prestige() {
 
       {/* ── HERO CARD ──────────────────────────────────────────────────── */}
       <div
-        className={`relative ${styles.panel} rounded-xl overflow-hidden prestige-fade mobile-panel`}
+        className={`relative ${styles.panel} rounded-xl overflow-hidden ${fadeClass} mobile-panel`}
         style={{ borderColor: `${color}30`, borderWidth: 1, borderStyle: 'solid' }}
       >
         <div className="h-0.5" style={{ background: `linear-gradient(90deg, transparent, ${color}80, transparent)` }} />
@@ -279,7 +291,7 @@ export default function Prestige() {
       {/* ── PROGRESS — full-width on mobile ────────────────────────────── */}
       {!info.at_max_prestige && (
         <div
-          className={`${styles.panel} rounded-xl overflow-hidden prestige-fade mobile-panel`}
+          className={`${styles.panel} rounded-xl overflow-hidden ${fadeClass} mobile-panel`}
           style={{ animationDelay: '0.05s' }}
         >
           <div className="px-4 py-3 border-b border-zinc-800/40 flex items-center gap-2">
@@ -335,7 +347,7 @@ export default function Prestige() {
       {/* MAX PRESTIGE reached */}
       {info.at_max_prestige && (
         <div
-          className={`${styles.panel} rounded-xl overflow-hidden prestige-fade mobile-panel`}
+          className={`${styles.panel} rounded-xl overflow-hidden ${fadeClass} mobile-panel`}
           style={{ animationDelay: '0.05s' }}
         >
           <div className="px-4 py-3 border-b border-zinc-800/40 flex items-center gap-2">
@@ -352,7 +364,7 @@ export default function Prestige() {
 
       {/* ── BENEFITS — 2×2 grid on mobile, list on desktop ─────────────── */}
       <div
-        className={`${styles.panel} rounded-xl overflow-hidden prestige-fade mobile-panel`}
+        className={`${styles.panel} rounded-xl overflow-hidden ${fadeClass} mobile-panel`}
         style={{ animationDelay: '0.1s' }}
       >
         <div className="px-4 py-3 border-b border-zinc-800/40 flex items-center gap-2">
@@ -406,7 +418,7 @@ export default function Prestige() {
 
       {/* ── PRESTIGE CRIMES ────────────────────────────────────────────── */}
       <div
-        className={`${styles.panel} rounded-xl overflow-hidden prestige-fade mobile-panel`}
+        className={`${styles.panel} rounded-xl overflow-hidden ${fadeClass} mobile-panel`}
         style={{ animationDelay: '0.12s', border: '1px solid rgba(184,145,68,0.18)' }}
       >
         <div className="px-4 py-3 border-b flex items-center gap-2" style={{ borderColor: 'rgba(184,145,68,0.15)', background: 'rgba(184,145,68,0.05)' }}>
@@ -487,7 +499,7 @@ export default function Prestige() {
            Desktop: traditional table
       ─────────────────────────────────────────────────────────────────── */}
       <div
-        className={`${styles.panel} rounded-xl overflow-hidden prestige-fade mobile-panel`}
+        className={`${styles.panel} rounded-xl overflow-hidden ${fadeClass} mobile-panel`}
         style={{ animationDelay: '0.15s' }}
       >
         <div className="px-4 py-3 border-b border-zinc-800/40 flex items-center gap-2">

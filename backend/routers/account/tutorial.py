@@ -122,6 +122,42 @@ async def tutorial_start(
     }
 
 
+async def tutorial_replay(
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Replay the tutorial from the start (sidebar → Information → Tutorial).
+    Never clears reward claims or tutorial_rewards_granted — completion rewards
+    are one-time and are not granted again.
+    """
+    if effective_tutorial_status(current_user) == TUTORIAL_STATUS_IN_PROGRESS:
+        return {
+            "tutorial_status": TUTORIAL_STATUS_IN_PROGRESS,
+            "tutorial_step": current_user.get("tutorial_step") or "theme",
+            "message": "Tutorial is already running",
+        }
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {
+            "$set": {
+                "tutorial_status": TUTORIAL_STATUS_IN_PROGRESS,
+                "tutorial_step": "theme",
+                "tutorial_crime_done": False,
+                "tutorial_gta_done": False,
+                "tutorial_theme_done": False,
+                "tutorial_ineligible_reason": None,
+                "tutorial_replay": True,
+                "tutorial_started_at": datetime.now(timezone.utc).isoformat(),
+            }
+        },
+    )
+    return {
+        "tutorial_status": TUTORIAL_STATUS_IN_PROGRESS,
+        "tutorial_step": "theme",
+        "message": "Tutorial restarted. Completion rewards are one-time — you won't receive them again.",
+    }
+
+
 async def tutorial_skip(
     request: Request,
     current_user: dict = Depends(get_current_user),
@@ -345,6 +381,7 @@ def register(router):
     router.add_api_route("/tutorial/status", tutorial_status, methods=["GET"])
     router.add_api_route("/tutorial/start", tutorial_start, methods=["POST"])
     router.add_api_route("/tutorial/skip", tutorial_skip, methods=["POST"])
+    router.add_api_route("/tutorial/replay", tutorial_replay, methods=["POST"])
     router.add_api_route("/tutorial/advance", tutorial_advance, methods=["POST"])
     router.add_api_route("/admin/tutorial/reset", admin_tutorial_reset, methods=["POST"])
     router.add_api_route("/admin/tutorial/start-for-me", admin_tutorial_start_for_me, methods=["POST"])

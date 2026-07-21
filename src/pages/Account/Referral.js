@@ -57,11 +57,18 @@ const StatCard = ({ label, value, title, valueColor = 'text-foreground', icon: I
   </div>
 );
 
+// Play the entrance animation only on the first visit per session — replaying it on
+// every navigation makes the page look like it fully reloaded.
+let _refIntroPlayed = false;
+
 export default function Referral() {
   const initialRef = readSessionJson(REF_CACHE_KEY);
   const cacheOk = isValidReferralCache(initialRef);
   const [data, setData] = useState(() => (cacheOk ? initialRef.data : null));
   const [loading, setLoading] = useState(() => !cacheOk);
+  const introRef = useRef(!_refIntroPlayed);
+  useEffect(() => { _refIntroPlayed = true; }, []);
+  const animateIn = introRef.current;
   const [refreshing, setRefreshing] = useState(false);
   const [redeemCodeInput, setRedeemCodeInput] = useState('');
   const [redeemLoading, setRedeemLoading] = useState(false);
@@ -157,7 +164,7 @@ export default function Referral() {
   const earnings = data?.earnings || {};
   const weeklyPoints = data?.weekly_points || {};
 
-  const cardClass = `relative ${styles.panel} rounded-lg overflow-hidden ref-fade-in mobile-panel`;
+  const cardClass = `relative ${styles.panel} rounded-lg overflow-hidden ${animateIn ? 'ref-fade-in' : ''} mobile-panel`;
   const cardHeaderClass = `${styles.panelHeader} px-2.5 sm:px-3 py-2`;
   const cardTitleClass = `${styles.gmTitle} text-[10px] sm:text-xs font-heading font-bold uppercase tracking-wider flex items-center gap-1.5`;
 

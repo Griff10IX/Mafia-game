@@ -11,10 +11,18 @@ const DEFAULT_MOD_COLOR = '#1e3a5f';
 
 const JAIL_STYLES = `
   @keyframes j-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-  .j-fade-in { animation: j-fade-in 0.4s ease-out both; }
   .j-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
   .j-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
+// Applied only on the first visit per session — replaying the fade on every
+// navigation makes the page look like it fully reloaded.
+const JAIL_FADE_STYLES = `
+  .j-fade-in { animation: j-fade-in 0.4s ease-out both; }
+`;
+let _jailIntroPlayed = false;
+// In-memory bootstrap (no TTL) so route revisits paint instantly even after the
+// sessionStorage cache expires; a fresh fetch always follows on mount.
+let _memJailBoot = null;
 
 // Card background (jail cell). Override: REACT_APP_JAIL_BACKGROUND_IMAGE in .env
 const JAIL_BACKGROUND_IMAGE =
@@ -57,6 +65,7 @@ function readCachedJailBootstrap() {
 }
 
 function writeCachedJailBootstrap(data) {
+  if (data) _memJailBoot = data;
   try {
     if (typeof window === 'undefined' || !data) return;
     window.sessionStorage.setItem(
@@ -345,7 +354,7 @@ const InfoSection = () => (
         </li>
         <li className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
-          <span>Failed bust = 30s in jail (jailbust token can sometimes avoid the penalty)</span>
+          <span>Failed bust = 30s in jail (with a jailbust token active: 50% chance you slip away)</span>
         </li>
         <li className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
@@ -359,7 +368,9 @@ const InfoSection = () => (
 
 // Main component
 export default function Jail() {
-  const cachedBoot = readCachedJailBootstrap();
+  const cachedBoot = readCachedJailBootstrap() || _memJailBoot;
+  const animateIn = useRef(!_jailIntroPlayed).current;
+  useEffect(() => { _jailIntroPlayed = true; }, []);
   const cachedPlayers = cachedBoot?.players || {};
   const [jailStatus, setJailStatus] = useState(cachedBoot?.status || { in_jail: false });
   const [jailedPlayers, setJailedPlayers] = useState(() => (
@@ -701,7 +712,7 @@ export default function Jail() {
 
   return (
     <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="jail-page">
-      <style>{JAIL_STYLES}</style>
+      <style>{JAIL_STYLES + (animateIn ? JAIL_FADE_STYLES : '')}</style>
 
       {user?.jailbust_bonus_until && (
         <div className="j-fade-in">

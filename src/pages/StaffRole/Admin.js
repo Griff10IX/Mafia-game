@@ -12231,7 +12231,6 @@ export default function Admin() {
                     profile_badge: 'Custom profile badge',
                     profile_glow_7d: 'Profile glow (7d)',
                     profile_glow_permanent: 'Profile glow (permanent)',
-                    family_crest_upgrade: 'Family crest upgrade',
                     crew_oc_insurance: 'Crew OC insurance',
                     family_safe_deposit: 'Family safe deposit',
                     family_event_token: 'Family event token',

@@ -44,6 +44,8 @@ const VAULT_TX_KIND_LABELS = {
   crew_oc_join_fee: 'Crew OC join fee',
   crew_oc_refund: 'Crew OC refund',
   crew_oc_commit: 'Crew OC commit',
+  safe_deposit_deposit: 'Personal safe deposit',
+  safe_deposit_withdraw: 'Personal safe withdraw',
   racket_collect: 'Racket income',
   racket_unlock: 'Racket unlock',
   racket_upgrade: 'Racket upgrade',
@@ -813,6 +815,10 @@ const TreasuryTab = ({
   compoundDepositCash, setCompoundDepositCash, compoundDepositPoints, setCompoundDepositPoints, compoundDepositLootPieces, setCompoundDepositLootPieces,
   compoundWithdrawCash, setCompoundWithdrawCash, compoundWithdrawPoints, setCompoundWithdrawPoints, compoundWithdrawLootPieces, setCompoundWithdrawLootPieces,
   onCompoundDeposit, onCompoundWithdraw,
+  safeDepositCap, safeDepositTiers, mySafeDeposit,
+  safeDepositCash, setSafeDepositCash, safeDepositBullets, setSafeDepositBullets,
+  safeWithdrawCash, setSafeWithdrawCash, safeWithdrawBullets, setSafeWithdrawBullets,
+  onSafeDeposit, onSafeWithdraw,
   returningMembersWithBalance, onCompoundReturnToMember, onCompoundClaimForFamily,
   vaultTransactions, vaultTxTotal,
 }) => (
@@ -971,6 +977,64 @@ const TreasuryTab = ({
             title="Split all vault loot box pieces across living members (requires at least one piece per member)"
           >
             {splitAllLootLoading ? '...' : 'Split loot box pieces'}
+          </button>
+        </form>
+      </div>
+    )}
+
+    {/* Personal safe deposit (unlocked via Points Store: Family Safe Deposit Tier) */}
+    {(safeDepositCap ?? 0) > 0 && (
+      <div className={`bg-zinc-800/30 rounded-lg border border-emerald-500/25 p-2.5 sm:p-3 fam-fade-in ${vaultAndRacketsLocked ? 'opacity-60 pointer-events-none' : ''}`} style={{ animationDelay: '0.18s' }}>
+        <p className="text-[10px] text-emerald-300/90 font-heading uppercase tracking-[0.15em] mb-1 flex items-center gap-1.5">
+          <Shield size={10} /> Personal Safe
+          <span className="text-[9px] normal-case tracking-normal text-zinc-500">
+            Tier {safeDepositTiers ?? 0}/3 — cap {formatMoney(safeDepositCap ?? 0)} cash per member
+          </span>
+        </p>
+        <p className="text-[9px] text-zinc-600 mb-2">Your private stash inside the family vault. Only you can deposit or withdraw here.</p>
+        <div className="grid grid-cols-2 gap-2 mb-2 text-center">
+          <div className="bg-zinc-800/50 rounded border border-zinc-700/40 px-2 py-1.5">
+            <span className="text-[9px] text-zinc-500 block">Your cash</span>
+            <span className="text-sm font-heading font-bold text-emerald-400">{formatMoney(mySafeDeposit?.cash ?? 0)}</span>
+            <span className="text-[8px] text-zinc-600 block">of {formatMoney(safeDepositCap ?? 0)}</span>
+          </div>
+          <div className="bg-zinc-800/50 rounded border border-zinc-700/40 px-2 py-1.5">
+            <span className="text-[9px] text-zinc-500 block">Your bullets</span>
+            <span className="text-sm font-heading font-bold text-amber-300">{(mySafeDeposit?.bullets ?? 0).toLocaleString()}</span>
+          </div>
+        </div>
+        <form onSubmit={onSafeDeposit} className="flex gap-2 mb-2">
+          <FormattedNumberInput
+            value={safeDepositCash}
+            onChange={setSafeDepositCash}
+            placeholder="Cash amount"
+            className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-emerald-500/50 focus:outline-none min-w-0 transition-colors"
+          />
+          <FormattedNumberInput
+            value={safeDepositBullets}
+            onChange={setSafeDepositBullets}
+            placeholder="Bullets"
+            className="w-28 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-emerald-500/50 focus:outline-none transition-colors"
+          />
+          <button type="submit" className="px-4 py-2 min-h-[44px] sm:min-h-0 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-emerald-500/15 border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/25 transition-all shrink-0 touch-manipulation">
+            Deposit
+          </button>
+        </form>
+        <form onSubmit={onSafeWithdraw} className="flex gap-2">
+          <FormattedNumberInput
+            value={safeWithdrawCash}
+            onChange={setSafeWithdrawCash}
+            placeholder="Cash amount"
+            className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-emerald-500/50 focus:outline-none min-w-0 transition-colors"
+          />
+          <FormattedNumberInput
+            value={safeWithdrawBullets}
+            onChange={setSafeWithdrawBullets}
+            placeholder="Bullets"
+            className="w-28 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-emerald-500/50 focus:outline-none transition-colors"
+          />
+          <button type="submit" className="px-4 py-2 min-h-[44px] sm:min-h-0 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-zinc-700/50 border-zinc-600/50 text-zinc-300 hover:bg-zinc-700/70 transition-all shrink-0 touch-manipulation">
+            Withdraw
           </button>
         </form>
       </div>
@@ -3155,7 +3219,7 @@ const CrewOCTab = ({
   return (
     <div className="space-y-2">
       <p className="text-[10px] text-zinc-500 font-heading leading-relaxed italic">
-        When the Don, Underboss, or Caporegime calls the crew together, every living member and accepted outsiders earn their cut — cash, XP, bullets, points, booze. The family vault takes its share. Once every {cooldownHours}h{timerNote}{perkNote}.
+        When the Don, Underboss, or Caporegime calls the crew together, every living member and accepted outsiders earn their cut — cash, XP, bullets, points, booze. Every participant adds +50 rank points to everyone&apos;s payout, so bigger crews score more. The family vault takes its share. Once every {cooldownHours}h{timerNote}{perkNote}.
       </p>
 
       {/* Set join fee & Advertise */}
@@ -3563,6 +3627,10 @@ export default function FamilyPage() {
   const [compoundWithdrawCash, setCompoundWithdrawCash] = useState('');
   const [compoundWithdrawPoints, setCompoundWithdrawPoints] = useState('');
   const [compoundWithdrawLootPieces, setCompoundWithdrawLootPieces] = useState('');
+  const [safeDepositCash, setSafeDepositCash] = useState('');
+  const [safeDepositBullets, setSafeDepositBullets] = useState('');
+  const [safeWithdrawCash, setSafeWithdrawCash] = useState('');
+  const [safeWithdrawBullets, setSafeWithdrawBullets] = useState('');
   const [warStats, setWarStats] = useState(() => getFamiliesPrefetch()?.warStats ?? null);
   const [warHistory, setWarHistory] = useState(() => getFamiliesPrefetch()?.warHistory ?? []);
   const [showWarModal, setShowWarModal] = useState(false);
@@ -3928,6 +3996,32 @@ export default function FamilyPage() {
       fetchData();
     } catch (e) { toast.error(apiDetail(e)); }
     finally { setSplitAllLootLoading(false); }
+  };
+  const handleSafeDeposit = async (e) => {
+    e.preventDefault();
+    const cash = parseInt(String(safeDepositCash).replace(/\D/g, ''), 10) || 0;
+    const bullets = parseInt(String(safeDepositBullets).replace(/\D/g, ''), 10) || 0;
+    if (cash === 0 && bullets === 0) return;
+    try {
+      const res = await api.post('/families/safe-deposit/deposit', { cash, bullets });
+      toast.success(res?.data?.message || 'Deposited to your family safe');
+      setSafeDepositCash(''); setSafeDepositBullets('');
+      refreshUser();
+      fetchData();
+    } catch (e) { toast.error(apiDetail(e)); }
+  };
+  const handleSafeWithdraw = async (e) => {
+    e.preventDefault();
+    const cash = parseInt(String(safeWithdrawCash).replace(/\D/g, ''), 10) || 0;
+    const bullets = parseInt(String(safeWithdrawBullets).replace(/\D/g, ''), 10) || 0;
+    if (cash === 0 && bullets === 0) return;
+    try {
+      const res = await api.post('/families/safe-deposit/withdraw', { cash, bullets });
+      toast.success(res?.data?.message || 'Withdrawn from your family safe');
+      setSafeWithdrawCash(''); setSafeWithdrawBullets('');
+      refreshUser();
+      fetchData();
+    } catch (e) { toast.error(apiDetail(e)); }
   };
   const handleCompoundDeposit = async (e) => {
     e.preventDefault();
@@ -4563,6 +4657,19 @@ export default function FamilyPage() {
                 setCompoundWithdrawLootPieces={setCompoundWithdrawLootPieces}
                 onCompoundDeposit={handleCompoundDeposit}
                 onCompoundWithdraw={handleCompoundWithdraw}
+                safeDepositCap={family.safe_deposit_cap}
+                safeDepositTiers={family.safe_deposit_tiers}
+                mySafeDeposit={myFamily.my_safe_deposit}
+                safeDepositCash={safeDepositCash}
+                setSafeDepositCash={setSafeDepositCash}
+                safeDepositBullets={safeDepositBullets}
+                setSafeDepositBullets={setSafeDepositBullets}
+                safeWithdrawCash={safeWithdrawCash}
+                setSafeWithdrawCash={setSafeWithdrawCash}
+                safeWithdrawBullets={safeWithdrawBullets}
+                setSafeWithdrawBullets={setSafeWithdrawBullets}
+                onSafeDeposit={handleSafeDeposit}
+                onSafeWithdraw={handleSafeWithdraw}
                 returningMembersWithBalance={myFamily.returning_members_with_balance}
                 onCompoundReturnToMember={handleCompoundReturnToMember}
                 onCompoundClaimForFamily={handleCompoundClaimForFamily}

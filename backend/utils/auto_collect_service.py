@@ -46,11 +46,15 @@ async def try_auto_collect_family_racket(db, user_id: str, racket_id: str) -> Op
 async def run_auto_collect_for_user(db, user_id: str, family_id: Optional[str]) -> Dict[str, Any]:
     """Attempt all eligible property and racket collects for one user."""
     out: Dict[str, Any] = {"properties": [], "rackets": []}
+    prop_cash = 0.0
+    racket_cash = 0
     prop_ids = await db.user_properties.distinct("property_id", {"user_id": user_id})
     for pid in prop_ids:
         res = await try_auto_collect_property(db, user_id, pid)
         if res:
-            out["properties"].append({"property_id": pid, "message": res.get("message")})
+            amt = float(res.get("amount") or 0)
+            prop_cash += amt
+            out["properties"].append({"property_id": pid, "message": res.get("message"), "amount": amt})
 
     if family_id:
         fam = await db.families.find_one({"id": family_id}, {"_id": 0, "rackets": 1})
@@ -60,7 +64,30 @@ async def run_auto_collect_for_user(db, user_id: str, family_id: Optional[str]) 
                 continue
             res = await try_auto_collect_family_racket(db, user_id, racket_id)
             if res:
+                racket_cash += int(res.get("amount") or 0)
                 out["rackets"].append({"racket_id": racket_id, "amount": res.get("amount")})
+
+    # Lifetime pass stats so My Inventory can show what the pass has earned.
+    collects = len(out["properties"]) + len(out["rackets"])
+    if collects:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        try:
+            await db.users.update_one(
+                {"id": user_id},
+                {
+                    "$inc": {
+                        "auto_collect_stats.property_cash": int(prop_cash),
+                        "auto_collect_stats.racket_cash": int(racket_cash),
+                        "auto_collect_stats.collects": collects,
+                    },
+                    "$set": {
+                        "auto_collect_stats.last_collected_at": now_iso,
+                        "auto_collect_stats.last_cash": int(prop_cash) + int(racket_cash),
+                    },
+                },
+            )
+        except Exception as e:
+            logger.debug("auto_collect stats update for %s: %s", user_id, e)
     return out
 
 
@@ -88,6 +115,15 @@ async def run_auto_collect_tick(db) -> Dict[str, Any]:
     ).limit(250)
 
     users = await cursor.to_list(250)
+    # Record the tick time so the UI can show when the next collect check runs.
+    try:
+        await db.game_settings.update_one(
+            {"_id": "main"},
+            {"$set": {"auto_collect_last_tick_at": now_iso}},
+            upsert=True,
+        )
+    except Exception:
+        pass
     total_props = 0
     total_rackets = 0
     processed = 0

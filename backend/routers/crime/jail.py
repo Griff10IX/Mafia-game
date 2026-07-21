@@ -286,6 +286,8 @@ JAIL_BUST_MIN_INTERVAL_SEC = 3
 
 # Jail bust difficulty: raw tier rates multiplied by this (<1.0 = harder).
 JAIL_BUST_DIFFICULTY_MULT = 0.90
+# Applied to the final success rate (after experience curve + flat bonus): 25% harder overall.
+JAIL_BUST_FINAL_RATE_MULT = 0.75
 # Max global (shared) jail NPCs maintained by background spawner.
 JAIL_GLOBAL_NPC_CAP = 3
 # Each wake (60–120s), try to add this many NPCs, up to the cap.
@@ -340,7 +342,8 @@ def _player_bust_success_rate(total_attempts: int, total_successes: int = 0) -> 
     failures = max(0, total_attempts - total_successes)
     penalty = min(failures * JAIL_BUST_FAILURE_PENALTY_PER, JAIL_BUST_MAX_FAILURE_PENALTY)
     rate = max(JAIL_BUST_RATE_FLOOR, base - penalty)
-    return min(1.0, rate + 0.05)  # small flat bonus on top of experience curve
+    # Small flat bonus on top of experience curve, then the global 25%-harder multiplier.
+    return min(1.0, (rate + 0.05) * JAIL_BUST_FINAL_RATE_MULT)
 
 
 def _global_jail_npc_filter() -> dict:

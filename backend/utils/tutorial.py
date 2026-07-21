@@ -156,10 +156,12 @@ async def resolve_tutorial_eligibility(db, user: dict, *, request_ip: Optional[s
             "eligible": False,
         }
 
+    # Voluntary replay (sidebar): keep running even though rewards were already claimed.
+    is_replay = bool(user.get("tutorial_replay")) and status == TUTORIAL_STATUS_IN_PROGRESS
     email = user.get("email")
     ip = normalize_ip(user.get("registration_ip")) or normalize_ip(request_ip)
     claimed, reason = await email_or_ip_already_claimed(db, email=email, ip=ip)
-    if claimed or bool(user.get("tutorial_rewards_granted")):
+    if (claimed or bool(user.get("tutorial_rewards_granted"))) and not is_replay:
         reason = reason or "already_granted"
         await db.users.update_one(
             {"id": user["id"]},
@@ -204,7 +206,7 @@ async def resolve_tutorial_eligibility(db, user: dict, *, request_ip: Optional[s
         "tutorial_crime_done": bool(user.get("tutorial_crime_done")),
         "tutorial_gta_done": bool(user.get("tutorial_gta_done")),
         "tutorial_theme_done": bool(user.get("tutorial_theme_done")),
-        "tutorial_rewards_granted": False,
+        "tutorial_rewards_granted": bool(user.get("tutorial_rewards_granted")),
         "tutorial_ineligible_reason": None,
         "tutorial_enabled": globally_enabled,
         "eligible": status in (TUTORIAL_STATUS_PENDING, TUTORIAL_STATUS_IN_PROGRESS),
@@ -365,15 +367,20 @@ async def grant_tutorial_completion_rewards(
 
     now_iso = datetime.now(timezone.utc).isoformat()
     if fresh.get("tutorial_rewards_granted"):
+        # Replay completion: no rewards again (one-time), just mark completed.
         await db.users.update_one(
             {"id": user_id},
-            {"$set": {"tutorial_status": TUTORIAL_STATUS_COMPLETED, "tutorial_completed_at": now_iso}},
+            {
+                "$set": {"tutorial_status": TUTORIAL_STATUS_COMPLETED, "tutorial_completed_at": now_iso},
+                "$unset": {"tutorial_replay": ""},
+            },
         )
+        free_opens = int((await db.users.find_one({"id": user_id}, {"loot_box_free_rare_opens": 1}) or {}).get("loot_box_free_rare_opens") or 0)
         return {
             "granted": False,
             "reason": "already_granted",
-            "redirect": TUTORIAL_REDIRECT,
-            "loot_box_free_rare_opens": int((await db.users.find_one({"id": user_id}, {"loot_box_free_rare_opens": 1}) or {}).get("loot_box_free_rare_opens") or 0),
+            "redirect": TUTORIAL_REDIRECT if free_opens > 0 else None,
+            "loot_box_free_rare_opens": free_opens,
         }
 
     email_norm = normalize_email(fresh.get("email"))
@@ -387,7 +394,8 @@ async def grant_tutorial_completion_rewards(
                     "tutorial_status": TUTORIAL_STATUS_COMPLETED,
                     "tutorial_completed_at": now_iso,
                     "tutorial_ineligible_reason": reason,
-                }
+                },
+                "$unset": {"tutorial_replay": ""},
             },
         )
         return {"granted": False, "reason": reason or "already_claimed", "redirect": None}

@@ -7,7 +7,6 @@ import styles from '../../styles/noir.module.css';
 
 const LOOT_BOX_STYLES = `
   @keyframes lb-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-  .lb-fade-in { animation: lb-fade-in 0.4s ease-out both; }
   .lb-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
   @keyframes lb-idle-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
   @keyframes lb-shimmer-band { 0% { background-position: -120% 0; } 100% { background-position: 220% 0; } }
@@ -29,6 +28,12 @@ const LOOT_BOX_STYLES = `
     .lb-fade-in, .lb-loot-ready-glow, .lb-jackpot-flash, .lb-reward-glow-3, .lb-reward-glow-4, .lb-reward-glow-5, .lb-vignette-pulse { animation: none !important; }
   }
 `;
+// Entrance fade is injected only on the first visit per session so revisits
+// don't look like a full page reload.
+const LOOT_FADE_STYLES = `
+  .lb-fade-in { animation: lb-fade-in 0.4s ease-out both; }
+`;
+let _lbIntroPlayed = false;
 
 const PAID_TIERS = ['common', 'uncommon', 'rare', 'ultra_rare'];
 const DEFAULT_OPEN_COST_BY_TIER = { common: 50, uncommon: 100, rare: 500, ultra_rare: 1000 };
@@ -834,6 +839,8 @@ let _lootLastFetch = 0;
 const LOOT_REFRESH = 30_000;
 
 export default function LootBox() {
+  const animateIn = useRef(!_lbIntroPlayed).current;
+  useEffect(() => { _lbIntroPlayed = true; }, []);
   const [searchParams] = useSearchParams();
   const [status, setStatus] = useState(_cachedLootStatus);
   const [selectedTier, setSelectedTier] = useState(() => {
@@ -1035,7 +1042,7 @@ export default function LootBox() {
   return (
     <>
       <style>{globalStyles}</style>
-      <style>{LOOT_BOX_STYLES}</style>
+      <style>{LOOT_BOX_STYLES + (animateIn ? LOOT_FADE_STYLES : '')}</style>
 
       <div className={`space-y-1.5 ${styles.pageContent} mobile-page-root flex flex-col items-center`} data-testid="lootbox-page">
         <div className="w-full max-w-xl space-y-1.5">

@@ -14,10 +14,18 @@ import {
 const QT_CACHE_TTL_MS = 90_000;
 
 const QT_STYLES = `
-  .qt-fade-in { animation: qt-fade-in 0.4s ease-out both; }
   @keyframes qt-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .qt-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
+// Entrance fade only runs on the first visit per session so revisits don't
+// look like a full page reload.
+const QT_FADE_STYLES = `
+  .qt-fade-in { animation: qt-fade-in 0.4s ease-out both; }
+`;
+let _qtIntroPlayed = false;
+// In-memory bootstrap (no TTL) so route revisits paint instantly even after the
+// sessionStorage cache expires; a fresh fetch always follows on mount.
+let _memQtBoot = null;
 
 /** Scroll regions can steal taps on mobile; keep actions above row hit targets. */
 const qtActionBtn = 'relative z-[2] touch-manipulation';
@@ -26,13 +34,15 @@ const qtActionBtn = 'relative z-[2] touch-manipulation';
 const qtOffersListScroll = 'max-h-[min(52rem,92vh)] overflow-y-auto';
 
 export default function QuickTrade() {
+  const animateIn = useState(() => !_qtIntroPlayed)[0];
+  useEffect(() => { _qtIntroPlayed = true; }, []);
   const qtBootRef = useRef(null);
   if (qtBootRef.current === null) {
-    qtBootRef.current = readSessionJsonWithTtl(QUICKTRADE_SESSION_CACHE_KEY, QT_CACHE_TTL_MS);
+    qtBootRef.current = readSessionJsonWithTtl(QUICKTRADE_SESSION_CACHE_KEY, QT_CACHE_TTL_MS) || _memQtBoot;
   }
   const qtBoot = qtBootRef.current;
 
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(qtBoot != null);
   const [sellOffers, setSellOffers] = useState(() => qtBoot?.sellOffers ?? []);
   const [buyOffers, setBuyOffers] = useState(() => qtBoot?.buyOffers ?? []);
   const [tokenOffers, setTokenOffers] = useState(() => qtBoot?.tokenOffers ?? []);
@@ -121,7 +131,7 @@ export default function QuickTrade() {
       setProperties(nextProp);
       setTokenBalances(nextBal);
       setLootPieceBalance(nextLootBal);
-      writeSessionJsonWithSavedAt(QUICKTRADE_SESSION_CACHE_KEY, {
+      const boot = {
         sellOffers: nextSell,
         buyOffers: nextBuy,
         tokenOffers: nextToken,
@@ -129,7 +139,9 @@ export default function QuickTrade() {
         properties: nextProp,
         tokenBalances: nextBal,
         lootPieceBalance: nextLootBal,
-      });
+      };
+      _memQtBoot = boot;
+      writeSessionJsonWithSavedAt(QUICKTRADE_SESSION_CACHE_KEY, boot);
     } catch (e) {
       if (!silent) toast.error(e.response?.data?.detail || 'Failed to load trades');
     } finally {
@@ -138,7 +150,7 @@ export default function QuickTrade() {
   }, []);
 
   useEffect(() => {
-    const boot = readSessionJsonWithTtl(QUICKTRADE_SESSION_CACHE_KEY, QT_CACHE_TTL_MS);
+    const boot = readSessionJsonWithTtl(QUICKTRADE_SESSION_CACHE_KEY, QT_CACHE_TTL_MS) || _memQtBoot;
     fetchTrades({ silent: !!boot });
   }, [fetchTrades]);
 
@@ -516,7 +528,7 @@ export default function QuickTrade() {
 
   return (
     <div className={`space-y-6 ${styles.pageContent} mobile-page-root`} data-testid="quicktrade-page">
-      <style>{QT_STYLES}</style>
+      <style>{QT_STYLES + (animateIn ? QT_FADE_STYLES : '')}</style>
       <div className="relative qt-fade-in">
         <p className="text-[10px] text-zinc-500 font-heading italic">Trade points, money, and properties</p>
       </div>

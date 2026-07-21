@@ -13,7 +13,6 @@ STORE_ITEM_FLAG_DEFAULTS: Dict[str, bool] = {
     "profile_badge": False,
     "profile_glow_7d": False,
     "profile_glow_permanent": False,
-    "family_crest_upgrade": False,
     "crew_oc_insurance": False,
     "family_safe_deposit": False,
     "family_event_token": False,

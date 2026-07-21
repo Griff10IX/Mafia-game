@@ -1158,6 +1158,126 @@ async def get_game(game_id: str, current_user: dict = Depends(get_current_user))
     return {"game": _with_public_hangman(game, current_user.get("id"))}
 
 
+def _audit_funding_source(game: dict) -> str:
+    """Who funded this game's rewards.
+    - system: auto batch game (or admin auto game) — prize is a random house reward, never points.
+    - entertainer_fund: staff entertainer fund (game-provided cash/points), debited at create.
+    - creator_wallet: creator's own cash/points, debited at create.
+    """
+    if (game.get("creator_id") or "") == "system":
+        return "system"
+    if game.get("entertainer_funded"):
+        return "entertainer_fund"
+    if game.get("manual_roll"):
+        return "creator_wallet"
+    return "system"
+
+
+async def admin_games_audit(
+    game_type: Optional[str] = Query(None),
+    funding: Optional[str] = Query(None),
+    limit: int = Query(150, ge=1, le=500),
+    current_user: dict = Depends(require_admin),
+):
+    """Admin audit of forum E-Games (dice/gbox/hangman): creator, rewards paid, and whose points/cash funded them."""
+    query = {}
+    if game_type and game_type in ("dice", "gbox", "hangman"):
+        query["game_type"] = game_type
+    games = await db.entertainer_games.find(
+        query, {"_id": 0, "hangman_state": 0}
+    ).sort("created_at", -1).to_list(limit)
+
+    rows = []
+    by_creator: dict[str, dict] = {}
+    totals = {
+        "games": 0,
+        "points_paid": 0,
+        "cash_paid": 0,
+        "points_from_entertainer_fund": 0,
+        "points_from_creator_wallets": 0,
+    }
+    for g in games:
+        src = _audit_funding_source(g)
+        if funding and funding in ("system", "entertainer_fund", "creator_wallet") and src != funding:
+            continue
+        result = g.get("result") or {}
+        pot = int(g.get("pot") or 0)
+        manual_reward = g.get("manual_reward") or {}
+        completed = g.get("status") == "completed"
+        payout = _forum_game_payout_totals(g, result if completed else None, pot)
+        paid_points = int(payout.get("total_winnings_points") or 0)
+        paid_cash = int(payout.get("total_winnings_cash") or 0)
+
+        # Human-readable reward summary (same style as forum history)
+        reward_text = None
+        winners = []
+        if completed:
+            if g.get("game_type") in ("dice", "hangman"):
+                rw = result.get("reward")
+                reward_text = _format_reward_desc(rw) if rw else None
+                if result.get("winner_username"):
+                    winners = [result.get("winner_username")]
+            else:
+                rewards_by_user = result.get("rewards_by_user") or {}
+                parts_summary = []
+                for p in g.get("participants") or []:
+                    p_uid, p_name = p.get("user_id"), p.get("username") or "?"
+                    if p_uid in rewards_by_user:
+                        winners.append(p_name)
+                        parts_summary.append(f"{p_name}: {_format_reward_desc(rewards_by_user[p_uid])}")
+                reward_text = ", ".join(parts_summary) if parts_summary else None
+
+        rows.append({
+            "id": g.get("id"),
+            "game_type": g.get("game_type") or "dice",
+            "status": g.get("status"),
+            "created_at": g.get("created_at"),
+            "completed_at": g.get("completed_at"),
+            "creator_id": g.get("creator_id"),
+            "creator_username": g.get("creator_username") or "?",
+            "manual_roll": bool(g.get("manual_roll")),
+            "funding": src,
+            "join_fee": int(g.get("join_fee") or 0),
+            "pot": pot,
+            "reward_money": int(manual_reward.get("money") or 0),
+            "reward_points": int(manual_reward.get("points") or 0),
+            "participants": [p.get("username") or "?" for p in (g.get("participants") or [])],
+            "winners": winners,
+            "reward_text": reward_text,
+            "paid_points": paid_points if completed else 0,
+            "paid_cash": paid_cash if completed else 0,
+        })
+
+        totals["games"] += 1
+        if completed:
+            totals["points_paid"] += paid_points
+            totals["cash_paid"] += paid_cash
+            if src == "entertainer_fund":
+                totals["points_from_entertainer_fund"] += paid_points
+            elif src == "creator_wallet":
+                totals["points_from_creator_wallets"] += paid_points
+
+        ckey = g.get("creator_id") or g.get("creator_username") or "?"
+        if ckey not in by_creator:
+            by_creator[ckey] = {
+                "creator_id": g.get("creator_id"),
+                "creator_username": g.get("creator_username") or "?",
+                "games": 0,
+                "points_paid": 0,
+                "cash_paid": 0,
+                "funding_counts": {"system": 0, "entertainer_fund": 0, "creator_wallet": 0},
+            }
+        c = by_creator[ckey]
+        c["games"] += 1
+        c["funding_counts"][src] = c["funding_counts"].get(src, 0) + 1
+        if completed:
+            c["points_paid"] += paid_points
+            c["cash_paid"] += paid_cash
+
+    creators = sorted(by_creator.values(), key=lambda x: (-x["points_paid"], -x["games"]))
+    return {"games": rows, "creators": creators, "totals": totals}
+
+
 async def create_game(
     request: CreateGameRequest,
     current_user: dict = Depends(get_current_user_verified),
@@ -1957,6 +2077,7 @@ def register(router):
     router.add_api_route("/forum/entertainer/games/{game_id}/join", join_game, methods=["POST"], dependencies=_ent_rl_join)
     router.add_api_route("/forum/entertainer/games/{game_id}/guess", guess_hangman, methods=["POST"], dependencies=_ent_rl_v)
     router.add_api_route("/forum/entertainer/games/{game_id}/roll", admin_roll_game, methods=["POST"])
+    router.add_api_route("/forum/entertainer/admin/games-audit", admin_games_audit, methods=["GET"])
     router.add_api_route("/forum/entertainer/admin/config", get_entertainer_config, methods=["GET"])
     router.add_api_route("/forum/entertainer/admin/config", update_entertainer_config, methods=["PATCH"])
     router.add_api_route("/forum/entertainer/admin/auto-create", admin_auto_create_now, methods=["POST"])

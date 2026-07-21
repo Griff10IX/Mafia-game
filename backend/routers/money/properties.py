@@ -1078,6 +1078,7 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
         pass
     return {
         "message": message,
+        "amount": round(income, 2),
         "streak_days": streak_days,
         "risk_event": risk_event,
         "buff_active": buff_active,

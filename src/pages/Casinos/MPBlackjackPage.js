@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { PlusCircle, Spade, XCircle, Swords } from 'lucide-react';
@@ -12,10 +12,18 @@ function formatMoney(n) {
   return `$${Math.trunc(num).toLocaleString()}`;
 }
 
+// Entrance animation only on the first visit per session, and session caches for the
+// table lists — otherwise every navigation replays the fade/loader like a full reload.
+let _mpbjIntroPlayed = false;
+let _cachedMpbjGames = null;
+let _cachedMpbjRecent = null;
+
 export default function MPBlackjackPage() {
   const navigate = useNavigate();
-  const [games, setGames] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const animateIn = useRef(!_mpbjIntroPlayed).current;
+  useEffect(() => { _mpbjIntroPlayed = true; }, []);
+  const [games, setGames] = useState(_cachedMpbjGames || []);
+  const [loading, setLoading] = useState(_cachedMpbjGames == null);
   const [joiningId, setJoiningId] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createMaxPlayers, setCreateMaxPlayers] = useState(6);
@@ -31,7 +39,7 @@ export default function MPBlackjackPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [cancellingId, setCancellingId] = useState(null);
-  const [recentGames, setRecentGames] = useState([]);
+  const [recentGames, setRecentGames] = useState(_cachedMpbjRecent || []);
 
   useEffect(() => {
     api.get('/auth/me').then((r) => setMyUserId(r.data?.id ?? null)).catch(() => setMyUserId(null));
@@ -47,13 +55,19 @@ export default function MPBlackjackPage() {
   const fetchGames = useCallback(() => {
     api
       .get('/casino/mp-blackjack/games')
-      .then((r) => setGames(r.data?.games || []))
-      .catch(() => setGames([]))
+      .then((r) => {
+        _cachedMpbjGames = r.data?.games || [];
+        setGames(_cachedMpbjGames);
+      })
+      .catch(() => setGames((prev) => prev ?? []))
       .finally(() => setLoading(false));
     api
       .get('/casino/mp-blackjack/recent-games')
-      .then((r) => setRecentGames(r.data?.games || []))
-      .catch(() => setRecentGames([]));
+      .then((r) => {
+        _cachedMpbjRecent = r.data?.games || [];
+        setRecentGames(_cachedMpbjRecent);
+      })
+      .catch(() => setRecentGames((prev) => prev ?? []));
   }, []);
 
   useEffect(() => {
@@ -135,6 +149,8 @@ export default function MPBlackjackPage() {
     color: 'inherit',
   };
   const selectStyle = { ...inputStyle, background: '#27272a', color: '#e4e4e7', colorScheme: 'dark' };
+  const fadeClass = animateIn ? 'mpbj-fade' : '';
+  const rowClass = animateIn ? 'mpbj-row' : '';
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="mp-blackjack-page">
@@ -147,7 +163,7 @@ export default function MPBlackjackPage() {
       `}</style>
 
       {/* ── Page header ── */}
-      <div className="mpbj-fade">
+      <div className={fadeClass}>
         <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-0.5">Pot game · Casino</p>
         <h1 className="text-xl font-heading font-bold text-primary tracking-wider uppercase">Multiplayer Blackjack</h1>
         <p className="text-[10px] text-mutedForeground font-heading italic mt-1">
@@ -158,7 +174,7 @@ export default function MPBlackjackPage() {
       {/* ── Deal New Game options (above Open Tables when opened) ── */}
       {createOpen && (
         <div
-          className={`relative ${styles.panel} mobile-panel rounded-xl overflow-hidden border-2 mpbj-fade`}
+          className={`relative ${styles.panel} mobile-panel rounded-xl overflow-hidden border-2 ${fadeClass}`}
           style={{ borderColor: '#5a3e1b', animationDelay: '0.02s' }}
         >
           <div style={{ height: 3, background: 'linear-gradient(90deg,#5a3e1b,var(--noir-primary-bright),#8b6914,var(--noir-primary-bright),#5a3e1b)' }} />
@@ -275,7 +291,7 @@ export default function MPBlackjackPage() {
       )}
 
       {/* ── Open games panel ── */}
-      <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 mpbj-fade`} style={{ animationDelay: '0.05s' }}>
+      <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 ${fadeClass}`} style={{ animationDelay: '0.05s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
 
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between flex-wrap gap-2">
@@ -324,8 +340,8 @@ export default function MPBlackjackPage() {
               return (
                 <div
                   key={g.id}
-                  className="mpbj-row px-3 py-3 hover:bg-primary/5 transition-colors"
-                  style={{ animationDelay: `${0.06 + idx * 0.03}s` }}
+                  className={`${rowClass} px-3 py-3 hover:bg-primary/5 transition-colors`}
+                  style={animateIn ? { animationDelay: `${0.06 + idx * 0.03}s` } : undefined}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <div className="min-w-0 flex-1 space-y-1.5">
@@ -442,7 +458,7 @@ export default function MPBlackjackPage() {
       </div>
 
       {/* ── Last 5 games ── */}
-      <div className={`${styles.panel} mobile-panel rounded-xl overflow-hidden border border-primary/20 mpbj-fade`} style={{ animationDelay: '0.04s' }}>
+      <div className={`${styles.panel} mobile-panel rounded-xl overflow-hidden border border-primary/20 ${fadeClass}`} style={{ animationDelay: '0.04s' }}>
         <div className="px-3 py-2 border-b border-primary/20" style={{ background: 'rgba(234,179,8,0.06)' }}>
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-widest">Last 5 Games</span>
         </div>
@@ -471,7 +487,7 @@ export default function MPBlackjackPage() {
       </div>
 
       {/* ── Rules ── */}
-      <div className={`${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 mpbj-fade`} style={{ animationDelay: '0.1s' }}>
+      <div className={`${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 ${fadeClass}`} style={{ animationDelay: '0.1s' }}>
         <div className="px-3 py-2 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-widest">How It Works</span>
         </div>

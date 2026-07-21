@@ -6,6 +6,26 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-21 17:50 UTC[/color][/b] — [b]Inflation perk durations rebalanced[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Slow Kill Inflation[/b] and [b]Slow Bodyguard Hire Inflation[/b] now last [b]7 days[/b] per purchase (was 30 days) and stack up to a [b]14-day max[/b]. Both perks can now be re-bought while active to extend up to the cap. Already-active periods bought before this change keep their original end date.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-21 17:45 UTC[/color][/b] — [b]Crew OC crew-size bonus, Residential Area rares, tutorial replay[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Improved:[/b] Crew OC now pays a [b]crew-size bonus[/b] — every participating member (living crew + accepted outsiders) adds [b]+50 RP[/b] to everyone's payout on top of the 500 RP base. Example: 6 participants = [b]800 RP each[/b], 20 participants = [b]1,500 RP each[/b]. The reward notification shows the bonus breakdown. Bigger crews score more.[/color]
+[*][color=#888888][b]New:[/b] GTA [b]Residential Area[/b] can now drop [b]rare[/b] cars — roughly 60% common, 30% uncommon, 10% rare per successful steal (richer odds than Street Parking). Rare-drop boosts and perks apply there too.[/color]
+[*][color=#888888][b]New:[/b] Replay the tutorial anytime from [b]Information → Tutorial[/b] in the sidebar. Completion rewards are one-time — replaying does not grant them again.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-21 15:40 UTC[/color][/b] — [b]GTA possible-car preview + Crew OC payout buff[/b][/size]
 [quote]
 [list]

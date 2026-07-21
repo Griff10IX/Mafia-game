@@ -18,6 +18,7 @@ import AdminDeadAliveLog from './AdminDeadAliveLog';
 import AdminAccountCompare from './AdminAccountCompare';
 import AdminExclusiveCars from './AdminExclusiveCars';
 import AdminVipCars from './AdminVipCars';
+import AdminEntGames from './AdminEntGames';
 import AdminCrewRecovery from './AdminCrewRecovery';
 import AdminRacketProgress from './AdminRacketProgress';
 import AdminDistilleryProgress from './AdminDistilleryProgress';
@@ -46,6 +47,7 @@ const STANDALONE_ADMIN_SECTIONS = new Set([
   'account-compare',
   'exclusive-cars',
   'vip-cars',
+  'ent-games',
   'crew-recovery',
   'racket-progress',
   'distillery-progress',
@@ -1018,6 +1020,7 @@ export default function AdminShell() {
       {hubSection === 'account-compare' && <AdminAccountCompare />}
       {hubSection === 'exclusive-cars' && <AdminExclusiveCars />}
       {hubSection === 'vip-cars' && <AdminVipCars />}
+      {hubSection === 'ent-games' && <AdminEntGames />}
       {hubSection === 'crew-recovery' && <AdminCrewRecovery />}
       {hubSection === 'racket-progress' && <AdminRacketProgress />}
       {hubSection === 'distillery-progress' && <AdminDistilleryProgress />}

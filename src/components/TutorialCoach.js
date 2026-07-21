@@ -198,6 +198,7 @@ export default function TutorialCoach({
   const [dragging, setDragging] = useState(false);
   const [collapsed, setCollapsed] = useState(readCollapsed);
   const [gatePulse, setGatePulse] = useState(false);
+  const [tipsOpen, setTipsOpen] = useState(false);
   const startedRef = useRef(false);
   const pollRef = useRef(null);
   const redirectTimerRef = useRef(null);
@@ -352,6 +353,24 @@ export default function TutorialCoach({
     return () => window.removeEventListener('app-initial-theme-chosen', onChosen);
   }, [loadStatus]);
 
+  // Collapse the tip line again whenever the step changes (mobile keeps panel short).
+  useEffect(() => {
+    setTipsOpen(false);
+  }, [status?.tutorial_step]);
+
+  // Sidebar "Tutorial" replay: reload status and reopen the coach.
+  useEffect(() => {
+    const onReplay = () => {
+      themeSessionDoneRef.current = false;
+      statusKeyRef.current = null;
+      setFinishPanel(null);
+      setCollapsed(false);
+      loadStatus();
+    };
+    window.addEventListener('tutorial:replay', onReplay);
+    return () => window.removeEventListener('tutorial:replay', onReplay);
+  }, [loadStatus]);
+
   const step = getTutorialStep(status?.tutorial_step || 'theme');
   const gateOk = (() => {
     if (step.gate === 'theme') {
@@ -498,7 +517,8 @@ export default function TutorialCoach({
             ?? status?.loot_box_free_rare_opens,
         });
         refreshUser();
-        const redirect = data.redirect || rewards.redirect || TUTORIAL_LOOT_REDIRECT;
+        // Replay runs have no redirect (rewards are one-time) — stay put and show the finish panel.
+        const redirect = data.redirect || rewards.redirect || (rewards.granted ? TUTORIAL_LOOT_REDIRECT : null);
         if (redirectTimerRef.current) clearTimeout(redirectTimerRef.current);
         // Navigate quickly so query flags aren't lost / coach unmount races.
         redirectTimerRef.current = setTimeout(() => {
@@ -507,9 +527,11 @@ export default function TutorialCoach({
             tutorial_step: 'missions',
             eligible: false,
           });
-          navigate(redirect.startsWith('/loot-box')
-            ? TUTORIAL_LOOT_REDIRECT
-            : redirect);
+          if (redirect) {
+            navigate(redirect.startsWith('/loot-box')
+              ? TUTORIAL_LOOT_REDIRECT
+              : redirect);
+          }
         }, 280);
         return;
       }
@@ -563,6 +585,7 @@ export default function TutorialCoach({
   };
 
   if (finishPanel) {
+    const rewardsGranted = finishPanel.granted !== false;
     return (
       <div
         className="fixed z-[105] inset-0 flex items-center justify-center p-4 pointer-events-none"
@@ -587,25 +610,45 @@ export default function TutorialCoach({
                 <Gift size={16} style={{ color: 'var(--noir-primary)' }} aria-hidden />
               </span>
               <h3 className="text-sm font-heading font-bold uppercase tracking-wider text-primary">
-                Rewards granted
+                {rewardsGranted ? 'Rewards granted' : 'Tutorial complete'}
               </h3>
             </div>
             <p className="text-xs text-mutedForeground font-heading leading-relaxed">
-              Open your free Rare loot box now — one free open only.
+              {rewardsGranted
+                ? 'Open your free Rare loot box now — one free open only.'
+                : 'Nice refresher! Completion rewards are one-time, so there are no new rewards for replaying.'}
             </p>
-            <RewardChips />
-            <button
-              type="button"
-              className="tut-btn w-full py-2.5 rounded-lg text-xs font-heading font-bold uppercase tracking-wider border min-h-[44px]"
-              style={{
-                backgroundColor: 'var(--noir-primary)',
-                borderColor: 'var(--noir-primary)',
-                color: '#141414',
-              }}
-              onClick={goLootBox}
-            >
-              Open free Rare box
-            </button>
+            {rewardsGranted && <RewardChips />}
+            {rewardsGranted ? (
+              <button
+                type="button"
+                className="tut-btn w-full py-2.5 rounded-lg text-xs font-heading font-bold uppercase tracking-wider border min-h-[44px]"
+                style={{
+                  backgroundColor: 'var(--noir-primary)',
+                  borderColor: 'var(--noir-primary)',
+                  color: '#141414',
+                }}
+                onClick={goLootBox}
+              >
+                Open free Rare box
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="tut-btn w-full py-2.5 rounded-lg text-xs font-heading font-bold uppercase tracking-wider border min-h-[44px]"
+                style={{
+                  backgroundColor: 'var(--noir-primary)',
+                  borderColor: 'var(--noir-primary)',
+                  color: '#141414',
+                }}
+                onClick={() => {
+                  setFinishPanel(null);
+                  applyStatus({ tutorial_status: 'completed', tutorial_step: 'missions', eligible: false });
+                }}
+              >
+                Close
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -751,17 +794,28 @@ export default function TutorialCoach({
         <ProgressSegments stepIndex={stepIndex} stepCount={stepCount} />
         <div
           key={step.id}
-          className={`tut-step-in p-3 space-y-3 overflow-y-auto overscroll-contain ${isMobile ? 'max-h-[55vh]' : 'max-h-[70vh]'}`}
+          className={`tut-step-in overflow-y-auto overscroll-contain ${isMobile ? 'p-2.5 space-y-2 max-h-[45vh]' : 'p-3 space-y-3 max-h-[70vh]'}`}
         >
-          <p className="text-xs font-heading leading-relaxed" style={{ color: 'var(--noir-foreground)' }}>
+          <p className={`${isMobile ? 'text-[11px]' : 'text-xs'} font-heading leading-relaxed`} style={{ color: 'var(--noir-foreground)' }}>
             {step.body}
           </p>
           {step.tips ? (
-            <p className="text-[11px] font-heading leading-snug text-mutedForeground border-l-2 pl-2"
-              style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.35)' }}
-            >
-              {step.tips}
-            </p>
+            isMobile && !tipsOpen ? (
+              <button
+                type="button"
+                onClick={() => setTipsOpen(true)}
+                className="text-[10px] font-heading uppercase tracking-wider text-primary/80 flex items-center gap-1"
+              >
+                <ChevronRight size={11} className="shrink-0" aria-hidden />
+                Show tip
+              </button>
+            ) : (
+              <p className="text-[11px] font-heading leading-snug text-mutedForeground border-l-2 pl-2"
+                style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.35)' }}
+              >
+                {step.tips}
+              </p>
+            )
           ) : null}
           {step.showRewards ? <RewardChips compact /> : null}
           {gateHint ? (
@@ -776,64 +830,126 @@ export default function TutorialCoach({
               {gateDoneLine}
             </p>
           ) : null}
-          <div className="flex flex-wrap gap-2">
-            {step.primaryCta ? (
+          {isMobile ? (
+            /* Single compact action row on mobile: [skip] [primary] [next] */
+            <div className="flex flex-wrap gap-1.5 pt-0.5">
               <button
                 type="button"
-                onClick={handlePrimary}
-                className="tut-btn flex-1 min-w-[7rem] py-2.5 px-3 rounded-lg text-[11px] font-heading font-bold uppercase tracking-wider border min-h-[44px]"
-                style={!gateOk && isActionGate
-                  ? {
-                    backgroundColor: 'var(--noir-primary)',
-                    borderColor: 'var(--noir-primary)',
-                    color: '#141414',
-                  }
-                  : {
-                    backgroundColor: 'rgba(var(--noir-primary-rgb), 0.2)',
-                    borderColor: 'var(--noir-primary)',
-                    color: 'var(--noir-primary)',
-                  }}
-              >
-                {step.primaryCta.label}
-              </button>
-            ) : null}
-            {step.secondaryCta?.route ? (
-              <button
-                type="button"
-                onClick={() => navigate(step.secondaryCta.route)}
-                className="tut-btn py-2.5 px-3 rounded-lg text-[11px] font-heading font-bold uppercase tracking-wider border min-h-[44px]"
+                onClick={handleSkip}
+                disabled={busy}
+                className="tut-btn flex items-center justify-center rounded-lg border disabled:opacity-50 min-h-[42px] min-w-[42px] shrink-0"
                 style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-muted)' }}
+                title="Skip tutorial"
+                aria-label="Skip tutorial"
               >
-                {step.secondaryCta.label}
+                <SkipForward size={13} />
               </button>
-            ) : null}
-          </div>
-          <div className="flex gap-2 pt-1">
-            <button
-              type="button"
-              onClick={handleSkip}
-              disabled={busy}
-              className="tut-btn flex items-center gap-1 py-2.5 px-2.5 rounded-lg text-[11px] font-heading uppercase tracking-wider border disabled:opacity-50 min-h-[44px]"
-              style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-muted)' }}
-            >
-              <SkipForward size={12} />
-              Skip
-            </button>
-            <button
-              type="button"
-              onClick={() => handleAdvance(step.gate === 'theme' ? { theme_done: true } : {})}
-              disabled={busy || !gateOk}
-              className="tut-btn flex-1 flex items-center justify-center gap-1 py-2.5 px-3 rounded-lg text-[11px] font-heading font-bold uppercase tracking-wider border disabled:opacity-40 min-h-[44px]"
-              style={{
-                backgroundColor: gateOk ? 'var(--noir-primary)' : 'transparent',
-                borderColor: gateOk ? 'var(--noir-primary)' : 'var(--noir-border-mid)',
-                color: gateOk ? '#141414' : 'var(--noir-muted)',
-              }}
-            >
-              {busy ? '…' : (step.nextLabel || 'Next')}
-              {!busy ? <ChevronRight size={12} /> : null}
-            </button>
-          </div>
+              {step.primaryCta ? (
+                <button
+                  type="button"
+                  onClick={handlePrimary}
+                  className="tut-btn flex-1 min-w-[6rem] py-2 px-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border min-h-[42px]"
+                  style={!gateOk && isActionGate
+                    ? {
+                      backgroundColor: 'var(--noir-primary)',
+                      borderColor: 'var(--noir-primary)',
+                      color: '#141414',
+                    }
+                    : {
+                      backgroundColor: 'rgba(var(--noir-primary-rgb), 0.2)',
+                      borderColor: 'var(--noir-primary)',
+                      color: 'var(--noir-primary)',
+                    }}
+                >
+                  {step.primaryCta.label}
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => handleAdvance(step.gate === 'theme' ? { theme_done: true } : {})}
+                disabled={busy || !gateOk}
+                className="tut-btn flex-1 min-w-[6rem] flex items-center justify-center gap-1 py-2 px-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border disabled:opacity-40 min-h-[42px]"
+                style={{
+                  backgroundColor: gateOk ? 'var(--noir-primary)' : 'transparent',
+                  borderColor: gateOk ? 'var(--noir-primary)' : 'var(--noir-border-mid)',
+                  color: gateOk ? '#141414' : 'var(--noir-muted)',
+                }}
+              >
+                {busy ? '…' : (step.nextLabel || 'Next')}
+                {!busy ? <ChevronRight size={11} /> : null}
+              </button>
+              {step.secondaryCta?.route ? (
+                <button
+                  type="button"
+                  onClick={() => navigate(step.secondaryCta.route)}
+                  className="w-full text-left text-[10px] font-heading uppercase tracking-wider text-mutedForeground underline underline-offset-2 pt-0.5"
+                >
+                  {step.secondaryCta.label} →
+                </button>
+              ) : null}
+            </div>
+          ) : (
+            <>
+              <div className="flex flex-wrap gap-2">
+                {step.primaryCta ? (
+                  <button
+                    type="button"
+                    onClick={handlePrimary}
+                    className="tut-btn flex-1 min-w-[7rem] py-2.5 px-3 rounded-lg text-[11px] font-heading font-bold uppercase tracking-wider border min-h-[44px]"
+                    style={!gateOk && isActionGate
+                      ? {
+                        backgroundColor: 'var(--noir-primary)',
+                        borderColor: 'var(--noir-primary)',
+                        color: '#141414',
+                      }
+                      : {
+                        backgroundColor: 'rgba(var(--noir-primary-rgb), 0.2)',
+                        borderColor: 'var(--noir-primary)',
+                        color: 'var(--noir-primary)',
+                      }}
+                  >
+                    {step.primaryCta.label}
+                  </button>
+                ) : null}
+                {step.secondaryCta?.route ? (
+                  <button
+                    type="button"
+                    onClick={() => navigate(step.secondaryCta.route)}
+                    className="tut-btn py-2.5 px-3 rounded-lg text-[11px] font-heading font-bold uppercase tracking-wider border min-h-[44px]"
+                    style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-muted)' }}
+                  >
+                    {step.secondaryCta.label}
+                  </button>
+                ) : null}
+              </div>
+              <div className="flex gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={handleSkip}
+                  disabled={busy}
+                  className="tut-btn flex items-center gap-1 py-2.5 px-2.5 rounded-lg text-[11px] font-heading uppercase tracking-wider border disabled:opacity-50 min-h-[44px]"
+                  style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-muted)' }}
+                >
+                  <SkipForward size={12} />
+                  Skip
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleAdvance(step.gate === 'theme' ? { theme_done: true } : {})}
+                  disabled={busy || !gateOk}
+                  className="tut-btn flex-1 flex items-center justify-center gap-1 py-2.5 px-3 rounded-lg text-[11px] font-heading font-bold uppercase tracking-wider border disabled:opacity-40 min-h-[44px]"
+                  style={{
+                    backgroundColor: gateOk ? 'var(--noir-primary)' : 'transparent',
+                    borderColor: gateOk ? 'var(--noir-primary)' : 'var(--noir-border-mid)',
+                    color: gateOk ? '#141414' : 'var(--noir-muted)',
+                  }}
+                >
+                  {busy ? '…' : (step.nextLabel || 'Next')}
+                  {!busy ? <ChevronRight size={12} /> : null}
+                </button>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>
