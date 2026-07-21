@@ -15,10 +15,78 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, _is_admin, _is_moderator, _is_hdo, log_activity, send_notification, ADMIN_EMAILS, require_staff_issued_if_staff_capable
 from utils.text import strip_emoji
 from utils.sustained_page_ratelimit import PAGE_KEY_FORUM, check_sustained_page_rl
+from utils.ensure_update_log_topic import (
+    current_update_log_hashes,
+    parse_update_log_entries,
+    unread_update_log_count,
+)
 
 
 async def _forum_sustained_rl_user(current_user: dict = Depends(get_current_user)):
     await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_FORUM)
+
+
+def _is_update_log_topic(topic: Optional[dict]) -> bool:
+    if not topic:
+        return False
+    title = (topic.get("title") or "").strip()
+    return bool(re.match(r"^update\s*log$", title, re.IGNORECASE))
+
+
+async def _get_update_log_topic_doc() -> Optional[dict]:
+    return await db.forum_topics.find_one(
+        {"title": {"$regex": r"^update\s*log$", "$options": "i"}},
+        {"_id": 0, "id": 1, "title": 1, "content": 1, "update_log_entries": 1, "updated_at": 1},
+    )
+
+
+def _entries_for_topic(topic: Optional[dict]) -> list:
+    if not topic:
+        return []
+    entries = topic.get("update_log_entries")
+    if isinstance(entries, list) and entries:
+        return entries
+    return parse_update_log_entries(topic.get("content") or "")
+
+
+async def _resolve_update_log_unread(current_user: dict, *, mark_seen: bool = False) -> dict:
+    """
+    Return { topic_id, unread_count }. Seeds seen hashes on first visit (unread 0).
+    When mark_seen=True, stores all current hashes so the badge clears.
+    """
+    topic = await _get_update_log_topic_doc()
+    if not topic or not topic.get("id"):
+        return {"topic_id": None, "unread_count": 0}
+    entries = _entries_for_topic(topic)
+    hashes = current_update_log_hashes(entries)
+    uid = current_user.get("id") or ""
+    if not uid:
+        return {"topic_id": topic["id"], "unread_count": 0}
+
+    user = await db.users.find_one({"id": uid}, {"_id": 0, "update_log_seen_hashes": 1})
+    seen = None if not user or "update_log_seen_hashes" not in user else (user.get("update_log_seen_hashes") or [])
+
+    if mark_seen or seen is None:
+        await db.users.update_one(
+            {"id": uid},
+            {"$set": {"update_log_seen_hashes": hashes}},
+        )
+        return {"topic_id": topic["id"], "unread_count": 0}
+
+    return {
+        "topic_id": topic["id"],
+        "unread_count": unread_update_log_count(entries, seen),
+    }
+
+
+async def get_update_log_status(current_user: dict = Depends(get_current_user)):
+    """Unread Update Log entry count for nav / forum badge."""
+    return await _resolve_update_log_unread(current_user, mark_seen=False)
+
+
+async def mark_update_log_seen(current_user: dict = Depends(get_current_user)):
+    """Clear Update Log unread badge (e.g. after opening the topic)."""
+    return await _resolve_update_log_unread(current_user, mark_seen=True)
 
 
 def _parse_iso_datetime(s):
@@ -542,6 +610,14 @@ async def get_topics(
                     "winner_username": auc.get("winner_username"),
                 }
         out.append(item)
+    update_log_status = await _resolve_update_log_unread(current_user, mark_seen=False)
+    update_log_unread = int(update_log_status.get("unread_count") or 0)
+    update_log_topic_id = update_log_status.get("topic_id")
+    if update_log_unread > 0 and update_log_topic_id:
+        for item in out:
+            if item.get("id") == update_log_topic_id:
+                item["update_log_unread"] = update_log_unread
+                break
     can_view_page_2 = _is_admin(current_user) or _is_moderator(current_user)
     return {
         "topics": out,
@@ -549,6 +625,8 @@ async def get_topics(
         "page": page,
         "can_view_page_2": can_view_page_2,
         "topics_per_page": per_page,
+        "update_log_unread": update_log_unread,
+        "update_log_topic_id": update_log_topic_id,
     }
 
 
@@ -562,6 +640,10 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
         {"$inc": {"views": 1}},
     )
     topic["views"] = topic.get("views", 0) + 1
+    # Opening the Update Log clears the unread badge.
+    if _is_update_log_topic(topic):
+        await _resolve_update_log_unread(current_user, mark_seen=True)
+        topic["update_log_unread"] = 0
     comments = await db.forum_comments.find({"topic_id": topic_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
     author_ids = [topic.get("author_id")] + [c.get("author_id") for c in comments if c.get("author_id")]
     # Resolve every displayed username so staff colors match author_username when author_id is stale.
@@ -1375,6 +1457,8 @@ async def delete_comment(
 
 def register(router):
     _forum_rl = [Depends(_forum_sustained_rl_user)]
+    router.add_api_route("/forum/update-log/status", get_update_log_status, methods=["GET"], dependencies=_forum_rl)
+    router.add_api_route("/forum/update-log/seen", mark_update_log_seen, methods=["POST"], dependencies=_forum_rl)
     router.add_api_route("/forum/topics", get_topics, methods=["GET"], dependencies=_forum_rl)
     router.add_api_route("/forum/topics", create_topic, methods=["POST"], dependencies=_forum_rl)
     router.add_api_route("/forum/topics/{topic_id}", get_topic, methods=["GET"], dependencies=_forum_rl)

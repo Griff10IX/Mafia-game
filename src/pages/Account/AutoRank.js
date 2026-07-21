@@ -876,6 +876,12 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
   if (activeBooze && liveCountdown?.nextBoozeSeconds != null) items.push({ label: 'Booze', sec: liveCountdown.nextBoozeSeconds });
   if (activeScrap && liveCountdown?.nextScrapSeconds != null) items.push({ label: 'Scrap', sec: liveCountdown.nextScrapSeconds });
   const nextUp = items.filter((x) => x.sec !== null && x.sec >= 0).sort((a, b) => a.sec - b.sec)[0];
+  const skip = stats?.skip_tokens || {};
+  const skipOn = !!(prefs?.auto_rank_use_skip_tokens || stats?.auto_rank_use_skip_tokens);
+  const crimeReadyLabel = stats?.crime_skips_ready ? 'Ready (skips)' : 'Ready';
+  const gtaReadyLabel = stats?.gta_skips_ready ? 'Ready (skips)' : 'Ready';
+  const boozeReadyLabel = stats?.booze_skips_ready ? 'Ready (skips)' : 'Ready';
+  const fmtMoney = (n) => `$${Number(n || 0).toLocaleString()}`;
 
   return (
     <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel} mobile-panel`} style={{ animationDelay: '0.15s' }}>
@@ -913,6 +919,7 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
               {activeBust5 && <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[9px] font-heading text-zinc-300">Bust 5s</span>}
               {activeOc && <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[9px] font-heading text-zinc-300">OC</span>}
               {activeBooze && <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 text-[9px] font-heading text-zinc-300">Booze</span>}
+              {skipOn && <span className="rounded bg-sky-500/15 border border-sky-500/30 px-1.5 py-0.5 text-[9px] font-heading text-sky-300">Skip tokens</span>}
               {!activeCrimes && !activeGta && !activeMelt && !activeScrap && !activeBust5 && !activeOc && !activeBooze && (
                 <span className="text-zinc-500 text-[9px] font-heading">None (turn on toggles below)</span>
               )}
@@ -959,15 +966,74 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
                   Last: <span className="text-foreground/90">{lastLabel}{lastAt ? ` at ${lastAt}` : ''}</span>
                 </div>
               )}
-              <div className="text-[10px] sm:text-xs font-heading text-emerald-400/90">
-                Successful today: {stats.successful_crimes_today ?? 0} crimes, {stats.successful_gtas_today ?? 0} GTAs, {stats.successful_busts_today ?? 0} busts
-                {(stats?.bullets_from_melt_today ?? 0) > 0 && (
-                  <>, {(stats.bullets_from_melt_today).toLocaleString()} bullets</>
+              <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-2 space-y-1.5 text-[10px] sm:text-xs font-heading">
+                <div className="text-[9px] font-bold text-emerald-300/90 uppercase tracking-wider">Earned today</div>
+                <div className="text-emerald-400/90">
+                  {stats.successful_crimes_today ?? 0} crimes
+                  {(stats?.crime_cash_today ?? 0) > 0 && <> ({fmtMoney(stats.crime_cash_today)})</>}
+                  {', '}
+                  {stats.successful_gtas_today ?? 0} GTAs
+                  {(stats?.gta_value_today ?? 0) > 0 && <> ({fmtMoney(stats.gta_value_today)} cars)</>}
+                  {', '}
+                  {stats.successful_busts_today ?? 0} busts
+                  {(stats?.bust_cash_today ?? 0) > 0 && <> ({fmtMoney(stats.bust_cash_today)})</>}
+                </div>
+                {(activeBooze || (stats?.booze_runs_today ?? 0) > 0 || (stats?.booze_profit_today ?? 0) > 0 || (stats?.total_booze_profit ?? 0) > 0) && (
+                  <div className="text-emerald-400/90">
+                    Booze: {stats.booze_runs_today ?? 0} run{(stats.booze_runs_today ?? 0) === 1 ? '' : 's'}
+                    {' · '}
+                    {fmtMoney(stats.booze_profit_today ?? 0)} today
+                    {(stats?.total_booze_profit ?? 0) > 0 && (
+                      <span className="text-zinc-500"> · {fmtMoney(stats.total_booze_profit)} lifetime</span>
+                    )}
+                  </div>
                 )}
-                {(stats?.cash_from_scrap_today ?? 0) > 0 && (
-                  <>, ${(stats.cash_from_scrap_today).toLocaleString()} scrap</>
+                {((stats?.bullets_from_melt_today ?? 0) > 0 || (stats?.cars_melted_today ?? 0) > 0) && (
+                  <div className="text-emerald-400/90">
+                    Melt: {(stats.cars_melted_today ?? 0).toLocaleString()} cars · {(stats.bullets_from_melt_today ?? 0).toLocaleString()} bullets
+                  </div>
+                )}
+                {((stats?.cash_from_scrap_today ?? 0) > 0 || (stats?.cars_scrapped_today ?? 0) > 0) && (
+                  <div className="text-emerald-400/90">
+                    Scrap: {(stats.cars_scrapped_today ?? 0).toLocaleString()} cars · {fmtMoney(stats.cash_from_scrap_today ?? 0)}
+                  </div>
                 )}
               </div>
+              {skipOn && (
+                <div className="rounded border border-sky-500/25 bg-sky-500/5 p-2 space-y-1.5 text-[10px] sm:text-xs font-heading">
+                  <div className="text-[9px] font-bold text-sky-300/90 uppercase tracking-wider">Cooldown skips</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+                    <div className="text-zinc-300">
+                      <span className="text-zinc-500">Crime:</span>{' '}
+                      {skip.crime?.tokens ?? 0} held · {skip.crime?.credits ?? 0} ready
+                      <div className="text-zinc-500 text-[9px]">
+                        AR used today: {skip.crime?.auto_rank_used_today ?? 0}
+                        {(skip.crime?.auto_rank_cash_today ?? 0) > 0 && <> · {fmtMoney(skip.crime.auto_rank_cash_today)} from skips</>}
+                        {(skip.crime?.lifetime_cash ?? 0) > 0 && <> · life {fmtMoney(skip.crime.lifetime_cash)}</>}
+                      </div>
+                    </div>
+                    <div className="text-zinc-300">
+                      <span className="text-zinc-500">GTA:</span>{' '}
+                      {skip.gta?.tokens ?? 0} held · {skip.gta?.credits ?? 0} ready
+                      <div className="text-zinc-500 text-[9px]">
+                        AR used today: {skip.gta?.auto_rank_used_today ?? 0}
+                        {(skip.gta?.lifetime_uses ?? 0) > 0 && <> · life {skip.gta.lifetime_uses} uses</>}
+                      </div>
+                    </div>
+                    <div className="text-zinc-300">
+                      <span className="text-zinc-500">Booze:</span>{' '}
+                      {skip.booze?.tokens ?? 0} held · {skip.booze?.credits ?? 0} ready
+                      <div className="text-zinc-500 text-[9px]">
+                        AR used today: {skip.booze?.auto_rank_used_today ?? 0}
+                        {(skip.booze?.lifetime_profit ?? 0) > 0 && <> · life {fmtMoney(skip.booze.lifetime_profit)}</>}
+                      </div>
+                    </div>
+                  </div>
+                  {(skip.crime?.tokens ?? 0) + (skip.crime?.credits ?? 0) + (skip.gta?.tokens ?? 0) + (skip.gta?.credits ?? 0) + (skip.booze?.tokens ?? 0) + (skip.booze?.credits ?? 0) === 0 && (
+                    <div className="text-amber-300/90 text-[9px]">No skip tokens or credits held — buy Crime / GTA / Booze Travel Skip in the Store, or turn the toggle off.</div>
+                  )}
+                </div>
+              )}
               {(stats?.failed_crimes_today > 0 || stats?.failed_gtas_today > 0 || stats?.failed_busts_today > 0) && (
                 <div className="text-[10px] sm:text-xs font-heading text-amber-300/90">
                   Unsuccessful today: {stats.failed_crimes_today ?? 0} crimes, {stats.failed_gtas_today ?? 0} GTAs, {stats.failed_busts_today ?? 0} busts
@@ -995,19 +1061,19 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
                 {prefs?.auto_rank_crimes && (
                   <div className="flex justify-between gap-2">
                     <span className="text-zinc-500">Crimes</span>
-                    <span className="text-foreground font-medium tabular-nums">{liveLine(liveCountdown?.nextCrimeSeconds)}</span>
+                    <span className="text-foreground font-medium tabular-nums">{liveLine(liveCountdown?.nextCrimeSeconds, crimeReadyLabel)}</span>
                   </div>
                 )}
                 {prefs?.auto_rank_gta && (
                   <div className="flex justify-between gap-2">
                     <span className="text-zinc-500">GTA</span>
-                    <span className="text-foreground font-medium tabular-nums">{liveLine(liveCountdown?.nextGtaSeconds)}</span>
+                    <span className="text-foreground font-medium tabular-nums">{liveLine(liveCountdown?.nextGtaSeconds, gtaReadyLabel)}</span>
                   </div>
                 )}
                 {prefs?.auto_rank_booze && (
                   <div className="flex justify-between gap-2">
                     <span className="text-zinc-500">Booze</span>
-                    <span className="text-foreground font-medium tabular-nums">{liveLine(liveCountdown?.nextBoozeSeconds)}</span>
+                    <span className="text-foreground font-medium tabular-nums">{liveLine(liveCountdown?.nextBoozeSeconds, boozeReadyLabel)}</span>
                   </div>
                 )}
                 <div className="flex justify-between gap-2 col-span-full sm:col-span-1">
@@ -1018,6 +1084,7 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
             </div>
             <p className="text-[9px] sm:text-[10px] text-zinc-500 font-heading leading-relaxed ">
               <strong className="text-zinc-400">Cycle order:</strong> busts → crimes → GTA. <strong className="text-zinc-400">OC</strong> and <strong className="text-zinc-400">booze</strong> run on their own timers. Interval: {interval}s; in jail, cycles pause until you’re out.
+              {skipOn ? ' With skip tokens on, Auto Rank burns held Crime/GTA/Booze skips to bypass those timers.' : ''}
             </p>
           </>
         )}
@@ -1567,6 +1634,11 @@ export default function AutoRank() {
           next_crime_at: d.next_crime_at ?? null,
           next_gta_at: d.next_gta_at ?? null,
           next_booze_arrival_at: d.next_booze_arrival_at ?? null,
+          crime_skips_ready: !!d.crime_skips_ready,
+          gta_skips_ready: !!d.gta_skips_ready,
+          booze_skips_ready: !!d.booze_skips_ready,
+          auto_rank_use_skip_tokens: !!d.auto_rank_use_skip_tokens,
+          skip_tokens: d.skip_tokens ?? prev.skip_tokens ?? null,
           activity_detail: d.activity_detail ?? null,
           last_activity: d.last_activity ?? null,
           last_activity_at: d.last_activity_at ?? null,
@@ -1580,6 +1652,13 @@ export default function AutoRank() {
           cars_melted_today: d.cars_melted_today ?? 0,
           cars_scrapped_today: d.cars_scrapped_today ?? 0,
           cash_from_scrap_today: d.cash_from_scrap_today ?? 0,
+          booze_runs_today: d.booze_runs_today ?? 0,
+          booze_profit_today: d.booze_profit_today ?? 0,
+          crime_cash_today: d.crime_cash_today ?? 0,
+          gta_value_today: d.gta_value_today ?? 0,
+          bust_cash_today: d.bust_cash_today ?? 0,
+          total_booze_runs: d.total_booze_runs ?? prev.total_booze_runs,
+          total_booze_profit: d.total_booze_profit ?? prev.total_booze_profit,
         }));
         setLastStatsAt(Date.now());
       }).catch(() => {});
@@ -1698,6 +1777,11 @@ export default function AutoRank() {
             next_crime_at: statsRes.data.next_crime_at ?? null,
             next_gta_at: statsRes.data.next_gta_at ?? null,
             next_booze_arrival_at: statsRes.data.next_booze_arrival_at ?? null,
+            crime_skips_ready: !!statsRes.data.crime_skips_ready,
+            gta_skips_ready: !!statsRes.data.gta_skips_ready,
+            booze_skips_ready: !!statsRes.data.booze_skips_ready,
+            auto_rank_use_skip_tokens: !!statsRes.data.auto_rank_use_skip_tokens,
+            skip_tokens: statsRes.data.skip_tokens ?? null,
             activity_detail: statsRes.data.activity_detail ?? null,
             last_activity: statsRes.data.last_activity ?? null,
             last_activity_at: statsRes.data.last_activity_at ?? null,
@@ -1711,6 +1795,11 @@ export default function AutoRank() {
             cars_melted_today: statsRes.data.cars_melted_today ?? 0,
             cars_scrapped_today: statsRes.data.cars_scrapped_today ?? 0,
             cash_from_scrap_today: statsRes.data.cash_from_scrap_today ?? 0,
+            booze_runs_today: statsRes.data.booze_runs_today ?? 0,
+            booze_profit_today: statsRes.data.booze_profit_today ?? 0,
+            crime_cash_today: statsRes.data.crime_cash_today ?? 0,
+            gta_value_today: statsRes.data.gta_value_today ?? 0,
+            bust_cash_today: statsRes.data.bust_cash_today ?? 0,
             attempted_busts_today: statsRes.data.attempted_busts_today ?? 0,
           });
           setLastStatsAt(Date.now());

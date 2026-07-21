@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
-import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink, X, Crown, Star } from 'lucide-react';
+import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink, X, Crown, Star } from 'lucide-react';
 import api, { apiGetWithResumeRetries, getApiErrorMessage, isTransientResumeLoadError } from '../../utils/api';
 import {
   getOrCreateStaffPortalDeviceId,
@@ -28,6 +28,7 @@ import { getProfileEditWarm } from '../../utils/profilePageWarm';
 import { fileToAvatarDataUrl, fileToCustomBadgeDataUrl, validateSafeImageFile, AVATAR_RAW_UPLOAD_MAX_BYTES } from '../../utils/fileToCompressedDataUrl';
 import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
 import { PROFILE_GLOW_BORDER_CSS, customGlowBorderStyle, PROFILE_GLOW_PRESETS } from '../../constants/profileGlowPresets';
+import GlowPresetPicker from '../../components/GlowPresetPicker';
 
 const PROFILE_STYLES = `
   @keyframes prof-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -1472,8 +1473,6 @@ export default function Profile() {
   const [savingAvatar, setSavingAvatar] = useState(false);
   const [savingCustomBadge, setSavingCustomBadge] = useState(false);
   const [savingGlow, setSavingGlow] = useState(false);
-  const [glowPickerOpen, setGlowPickerOpen] = useState(false);
-  const [glowCustomHex, setGlowCustomHex] = useState('#a78bfa');
   const [avatarLightbox, setAvatarLightbox] = useState(null);
   const spotifyPlayerRef = React.useRef(null);
   const profileRequestIdRef = useRef(0);
@@ -1639,17 +1638,16 @@ export default function Profile() {
   };
 
   const currentGlowHex = (me?.profile_name_glow_color || '').toLowerCase();
-  const currentGlowPreset = useMemo(() => {
-    if (!currentGlowHex) return PROFILE_GLOW_PRESETS[0];
+  const currentGlowPresetId = useMemo(() => {
+    if (!currentGlowHex) return 'violet';
     const match = PROFILE_GLOW_PRESETS.find((p) => p.hex.toLowerCase() === currentGlowHex);
-    if (match) return match;
-    return { id: 'custom', label: `Custom ${currentGlowHex}`, hex: currentGlowHex };
+    if (match) return match.id;
+    return currentGlowHex.startsWith('#') ? currentGlowHex : `#${currentGlowHex}`;
   }, [currentGlowHex]);
 
   const saveGlowColour = async (presetId) => {
     if (!me?.profile_cosmetic_permanent || savingGlow) return;
     setSavingGlow(true);
-    setGlowPickerOpen(false);
     try {
       await api.patch('/profile/glow', { preset_id: presetId });
       toast.success('Glow colour updated');
@@ -2484,7 +2482,7 @@ export default function Profile() {
               </div>
             )}
 
-            {me?.profile_cosmetic_permanent && (
+            {me?.profile_cosmetic_permanent ? (
               <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`}>
                 <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
                 <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1.5">
@@ -2495,95 +2493,35 @@ export default function Profile() {
                 </div>
                 <div className="p-3 space-y-2">
                   <p className="text-[11px] text-mutedForeground font-heading">
-                    Permanent glow — change colour anytime for free. Applies to your name and profile border.
+                    Permanent Name Glow + Border owners only — change colour anytime for free (same presets &amp; custom picker as the Store). Applies to your name and profile border.
                   </p>
-                  <button
-                    type="button"
+                  <GlowPresetPicker
+                    value={currentGlowPresetId}
+                    onChange={saveGlowColour}
                     disabled={savingGlow}
-                    onClick={() => {
-                      const isCustom = !PROFILE_GLOW_PRESETS.some((p) => p.hex.toLowerCase() === currentGlowHex);
-                      setGlowCustomHex(isCustom && currentGlowHex ? currentGlowHex : (currentGlowPreset.hex || '#a78bfa'));
-                      setGlowPickerOpen(true);
-                    }}
-                    className="text-[11px] font-heading px-3 py-1.5 rounded-md border border-primary/40 bg-primary/10 flex items-center gap-2 hover:bg-primary/20 disabled:opacity-50"
-                    style={{ color: currentGlowPreset.hex }}
-                  >
-                    <span
-                      className="inline-block w-3 h-3 rounded-full"
-                      style={{ backgroundColor: currentGlowPreset.hex, boxShadow: `0 0 6px ${currentGlowPreset.hex}` }}
-                    />
-                    {savingGlow ? 'Saving…' : `Colour: ${currentGlowPreset.label}`}
-                    <ChevronDown size={12} />
-                  </button>
-                  {glowPickerOpen && (
-                    <div
-                      className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-                      onClick={() => setGlowPickerOpen(false)}
-                      role="dialog"
-                      aria-modal="true"
-                    >
-                      <div
-                        className={`${styles.panel} w-full max-w-sm rounded-xl border border-primary/25 overflow-hidden`}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <div className="px-3 py-2 border-b border-primary/15 bg-primary/5 flex items-center justify-between">
-                          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Glow colour</span>
-                          <button type="button" onClick={() => setGlowPickerOpen(false)} aria-label="Close" className="text-mutedForeground hover:text-foreground">
-                            <X size={14} />
-                          </button>
-                        </div>
-                        <div className="p-3 space-y-3">
-                          <div className="grid grid-cols-8 gap-2">
-                            {PROFILE_GLOW_PRESETS.map((p) => {
-                              const selected = currentGlowHex === p.hex.toLowerCase();
-                              return (
-                                <button
-                                  key={p.id}
-                                  type="button"
-                                  title={p.label}
-                                  disabled={savingGlow}
-                                  onClick={() => saveGlowColour(p.id)}
-                                  className={`aspect-square rounded-full flex items-center justify-center border-2 transition-transform hover:scale-110 disabled:opacity-50 ${selected ? 'scale-110 border-white' : 'border-transparent'}`}
-                                >
-                                  <span className="w-4 h-4 rounded-full" style={{ backgroundColor: p.hex, boxShadow: `0 0 6px ${p.hex}aa` }} />
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <div className="pt-2 border-t border-zinc-700/40 space-y-1.5">
-                            <p className="text-[9px] font-heading uppercase tracking-wider text-mutedForeground">Custom colour</p>
-                            <div className="flex items-center gap-2">
-                              <input
-                                type="color"
-                                value={glowCustomHex}
-                                onChange={(e) => setGlowCustomHex(e.target.value)}
-                                className="w-9 h-9 rounded-lg border-2 border-zinc-600 cursor-pointer p-0.5 bg-transparent shrink-0"
-                                aria-label="Custom glow colour"
-                              />
-                              <span
-                                className="text-[10px] font-heading font-bold px-2 py-1 rounded border border-zinc-700"
-                                style={{ color: glowCustomHex, textShadow: `0 0 8px ${glowCustomHex}88` }}
-                              >
-                                {glowCustomHex}
-                              </span>
-                              <button
-                                type="button"
-                                disabled={savingGlow}
-                                onClick={() => saveGlowColour(glowCustomHex.toLowerCase())}
-                                className="ml-auto px-2.5 py-1.5 rounded text-[9px] font-heading font-bold uppercase border border-primary/50 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50"
-                              >
-                                Use custom
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
+                    savingLabel="Saving…"
+                  />
                 </div>
                 <div className="prof-art-line text-primary mx-3" />
               </div>
-            )}
+            ) : me?.profile_cosmetic_active ? (
+              <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-zinc-700/40 prof-card prof-fade-in mobile-panel`}>
+                <div className="h-px bg-gradient-to-r from-transparent via-zinc-600/40 to-transparent" />
+                <div className="px-2.5 py-1.5 bg-zinc-800/40 border-b border-zinc-700/40 flex items-center justify-center gap-1.5">
+                  <Star size={10} className="text-zinc-500" />
+                  <h2 className="text-[10px] font-heading font-bold text-zinc-400 uppercase tracking-[0.12em] text-center">
+                    Name glow colour
+                  </h2>
+                </div>
+                <div className="p-3 space-y-2">
+                  <p className="text-[11px] text-mutedForeground font-heading">
+                    Your 7-day glow is locked to the colour you bought. Free recolour anytime requires{' '}
+                    <Link to="/game/store" className="text-primary hover:underline">Name Glow + Border (Permanent)</Link> from the Points Store.
+                  </p>
+                </div>
+                <div className="prof-art-line text-zinc-600 mx-3" />
+              </div>
+            ) : null}
 
             <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />

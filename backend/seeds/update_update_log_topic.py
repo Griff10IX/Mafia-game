@@ -26,6 +26,7 @@ load_dotenv(BACKEND_DIR / ".env")
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 from utils.faq_topic_author import resolve_faq_topic_author_sync
+from utils.ensure_update_log_topic import parse_update_log_entries
 
 TOPIC_TITLE = "Update Log"
 UPDATE_LOG_MD_PATH = PROJECT_ROOT / "docs" / "UPDATE_LOG.md"
@@ -54,20 +55,33 @@ def main():
     db = client[db_name]
 
     body = _load_update_log_content()
+    entries = parse_update_log_entries(body)
     now = datetime.now(timezone.utc).isoformat()
     existing = db.forum_topics.find_one(
         {"title": {"$regex": r"^update\s*log$", "$options": "i"}},
-        {"_id": 1},
+        {"_id": 1, "content": 1},
     )
+    set_fields = {
+        "title": TOPIC_TITLE,
+        "content": body,
+        "category": "general",
+        "is_locked": True,
+        "is_sticky": True,
+        "is_important": True,
+        "update_log_entries": entries,
+    }
     if existing:
+        if (existing.get("content") or "") != body:
+            set_fields["updated_at"] = now
         result = db.forum_topics.update_one(
             {"_id": existing["_id"]},
-            {"$set": {"title": TOPIC_TITLE, "content": body, "updated_at": now, "category": "general", "is_locked": True}},
+            {"$set": set_fields},
         )
     else:
+        set_fields["updated_at"] = now
         result = db.forum_topics.update_one(
             {"title": TOPIC_TITLE},
-            {"$set": {"content": body, "updated_at": now, "category": "general", "is_locked": True}},
+            {"$set": set_fields},
         )
     if result.matched_count == 0:
         author_id, author_username = resolve_faq_topic_author_sync(db)
@@ -85,6 +99,7 @@ def main():
             "is_sticky": True,
             "is_important": True,
             "is_locked": True,
+            "update_log_entries": entries,
         }
         db.forum_topics.insert_one(doc)
         print(f"Created '{TOPIC_TITLE}' (was missing) from docs/UPDATE_LOG.md at {now}")
@@ -92,7 +107,7 @@ def main():
     if result.modified_count == 0:
         print(f"Topic '{TOPIC_TITLE}' found but content unchanged (or same bytes).")
     else:
-        print(f"Updated '{TOPIC_TITLE}' from docs/UPDATE_LOG.md at {now}")
+        print(f"Updated '{TOPIC_TITLE}' from docs/UPDATE_LOG.md at {now} ({len(entries)} entries)")
 
 
 if __name__ == "__main__":

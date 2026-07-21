@@ -12,6 +12,16 @@ import styles from '../../styles/noir.module.css';
 import FamilyEmblem from '../../components/FamilyEmblem';
 import { useEntJoinTurnstile } from '../../hooks/useEntJoinTurnstile';
 
+/** Show "Update Log: N" when there are unread dated entries. */
+function forumTopicTitleForDisplay(topic) {
+  const base = topic?.title || '';
+  const n = Number(topic?.update_log_unread) || 0;
+  if (n > 0 && /^update\s*log$/i.test(String(base).trim())) {
+    return `Update Log: ${n}`;
+  }
+  return base;
+}
+
 const FORUM_STYLES = `
   @keyframes f-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .f-fade-in { animation: f-fade-in 0.4s ease-out both; }
@@ -798,7 +808,7 @@ const TopicRowDesktop = ({ topic, canStickyImportant, onUpdate, updating, design
   const showDesignerSubmit = designerCompId && isMyTopic;
   const alreadySubmitted = showDesignerSubmit && (myEntryTopicIds || []).includes(topic.id);
   const isSubmitting = submittingTopicId === topic.id;
-  const titleHtml = parseForumContent(topic.title || '', { censorProfanity });
+  const titleHtml = parseForumContent(forumTopicTitleForDisplay(topic), { censorProfanity });
 
   return (
     <div 
@@ -910,7 +920,7 @@ const TopicRowMobile = ({ topic, canStickyImportant, onUpdate, updating, designe
   const showDesignerSubmit = designerCompId && isMyTopic;
   const alreadySubmitted = showDesignerSubmit && (myEntryTopicIds || []).includes(topic.id);
   const isSubmitting = submittingTopicId === topic.id;
-  const titleHtml = parseForumContent(topic.title || '', { censorProfanity });
+  const titleHtml = parseForumContent(forumTopicTitleForDisplay(topic), { censorProfanity });
 
   return (
   <Link to={`/forum/topic/${topic.id}`} className="sm:hidden block px-3 py-2 f-row transition-colors active:bg-zinc-800/50">

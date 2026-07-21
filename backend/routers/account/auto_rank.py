@@ -395,6 +395,8 @@ async def _update_auto_rank_stats_bust(db, user_id: str, cash: int, now: datetim
     await _ensure_stats_since(db, user_id, now)
     await db.users.update_one({"id": user_id}, {"$inc": {"auto_rank_total_busts": 1, "auto_rank_total_cash": cash}})
     await _inc_successful_busts_today(db, user_id, now, 1)
+    if cash:
+        await _inc_failed_today(db, user_id, "auto_rank_bust_cash_today", "auto_rank_bust_cash_date", now, int(cash))
 
 
 async def _update_auto_rank_stats_crimes(db, user_id: str, count: int, cash: int, now: datetime):
@@ -404,6 +406,40 @@ async def _update_auto_rank_stats_crimes(db, user_id: str, count: int, cash: int
     await db.users.update_one({"id": user_id}, {"$inc": {"auto_rank_total_crimes": count, "auto_rank_total_cash": cash}})
     if count > 0:
         await _inc_successful_crimes_today(db, user_id, now, count)
+    if cash:
+        await _inc_failed_today(db, user_id, "auto_rank_crime_cash_today", "auto_rank_crime_cash_date", now, int(cash))
+
+
+async def _inc_auto_rank_skip_stats(
+    db,
+    user_id: str,
+    now: datetime,
+    *,
+    kind: str,
+    used: int = 0,
+    cash: int = 0,
+):
+    """Track Auto Rank cooldown-skip usage for the status panel (UTC day)."""
+    if used <= 0 and cash <= 0:
+        return
+    today = _today_utc(now)
+    used_field = f"auto_rank_skip_{kind}_used_today"
+    cash_field = f"auto_rank_skip_{kind}_cash_today"
+    date_field = f"auto_rank_skip_{kind}_date"
+    u = await db.users.find_one({"id": user_id}, {"_id": 0, date_field: 1})
+    if (u or {}).get(date_field) != today:
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {date_field: today, used_field: max(0, int(used)), cash_field: max(0, int(cash))}},
+        )
+    else:
+        inc = {}
+        if used:
+            inc[used_field] = int(used)
+        if cash:
+            inc[cash_field] = int(cash)
+        if inc:
+            await db.users.update_one({"id": user_id}, {"$inc": inc})
 
 
 async def _update_auto_rank_stats_gta(db, user_id: str, car: dict, now: datetime, option_id: Optional[str] = None, option_name: Optional[str] = None):
@@ -421,6 +457,8 @@ async def _update_auto_rank_stats_gta(db, user_id: str, car: dict, now: datetime
         {"$inc": {"auto_rank_total_gtas": 1, "total_gta": 1}, "$set": {"auto_rank_best_cars": best[:3]}},
     )
     await _inc_successful_gtas_today(db, user_id, now, 1)
+    if car_value > 0:
+        await _inc_failed_today(db, user_id, "auto_rank_gta_value_today", "auto_rank_gta_value_date", now, car_value)
     # Insert gta_event so weekly leaderboard and stats include auto-rank GTAs
     try:
         event_doc = {
@@ -446,6 +484,9 @@ async def _update_auto_rank_stats_booze(db, user_id: str, now: datetime, profit:
     """Record Auto Rank booze stats. Do not increment booze_run_profit_total here — _booze_sell_impl already does."""
     await _ensure_stats_since(db, user_id, now)
     await db.users.update_one({"id": user_id}, {"$inc": {"auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": int(profit)}})
+    await _inc_failed_today(db, user_id, "auto_rank_booze_runs_today", "auto_rank_booze_runs_date", now, 1)
+    if profit:
+        await _inc_failed_today(db, user_id, "auto_rank_booze_profit_today", "auto_rank_booze_profit_date", now, int(profit))
 
 
 async def _update_auto_rank_stats_melt(db, user_id: str, melted_count: int = 0, total_bullets: int = 0, scrapped_count: int = 0, total_cash: int = 0):
@@ -881,6 +922,12 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
                         {"$set": {"current_state": dest}, "$unset": {"traveling_to": "", "travel_arrives_at": ""}},
                     )
                     user = await db.users.find_one({"id": user_id}, {"_id": 0}) or user
+                    await _inc_auto_rank_skip_stats(db, user_id, now, kind="booze", used=1, cash=0)
+                    try:
+                        from utils.token_perk_stats import bump_token_perk_stats
+                        await bump_token_perk_stats(db, user_id, "cooldown_skip_booze", uses=1, via_auto_rank=1)
+                    except Exception:
+                        pass
                     lines.append(f"**Booze** — Skipped the drive to {dest} (1 skip).")
                 else:
                     return False
@@ -1108,6 +1155,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         crime_fail_count = 0
         crime_total_cash = 0
         crime_total_rp = 0
+        crime_skip_cash = 0
         crime_names: list[str] = []
         crime_extra_summaries: list[str] = []
         _first_crime_in_cycle = True
@@ -1148,9 +1196,10 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                     ):
                         continue
                 available.append(c)
-            # Prestige crimes first when ready (same min_rank as petty; old sort used id so "crime1" always beat "prestige_crime_1").
-            # Within prestige: lower prestige tier first; within normal: lower min_rank then id.
+            # Ready crimes first (don't burn skips while something is free), then prestige, then lower ranks.
             def _crime_sort_key(x):
+                until = cooldown_by_crime.get(x.get("id"))
+                needs_skip = 1 if (until is not None and until > now) else 0
                 is_p = str(x.get("crime_type") or "").lower() == "prestige"
                 try:
                     min_r = int(x.get("min_rank") or 1)
@@ -1162,8 +1211,8 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 except (TypeError, ValueError):
                     pr_i = 0
                 if is_p:
-                    return (0, pr_i, min_r, x.get("id") or "")
-                return (1, min_r, 0, x.get("id") or "")
+                    return (needs_skip, 0, pr_i, min_r, x.get("id") or "")
+                return (needs_skip, 1, min_r, 0, x.get("id") or "")
             available.sort(key=_crime_sort_key)
             if not available:
                 break
@@ -1173,17 +1222,23 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 _first_crime_in_cycle = False
                 chosen = available[0]
                 until = cooldown_by_crime.get(chosen.get("id"))
+                used_skip_this = False
                 if until is not None and until > now:
                     if skip_crime_used >= AUTO_RANK_CRIME_SKIP_CAP:
                         break
                     ok, user = await _ensure_skip_credit(db, user_id, user, "crime")
                     if not ok:
                         break
-                    skip_crime_used += 1
+                    used_skip_this = True
                 out = await commit_crime_locked(chosen["id"], user, via_auto_rank=True)
+                if used_skip_this:
+                    skip_crime_used += 1
                 if out.success:
                     crime_success_count += 1
-                    crime_total_cash += out.reward if out.reward is not None else 0
+                    cash_got = out.reward if out.reward is not None else 0
+                    crime_total_cash += cash_got
+                    if used_skip_this:
+                        crime_skip_cash += cash_got
                     crime_total_rp += int(getattr(out, "rank_points_earned", 0) or 0)
                     crime_names.append(str(chosen.get("name") or chosen.get("id") or "?"))
                     extra = _format_crime_prestige_bonus_telegram(getattr(out, "prestige_bonus_earned", None))
@@ -1201,6 +1256,10 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         if crime_success_count > 0:
             has_success = True
             await _update_auto_rank_stats_crimes(db, user_id, crime_success_count, crime_total_cash, now)
+            if skip_crime_used > 0:
+                await _inc_auto_rank_skip_stats(
+                    db, user_id, now, kind="crime", used=skip_crime_used, cash=crime_skip_cash
+                )
             await _set_last_activity(db, user_id, "crimes", now)
             names_part = ""
             if crime_names:
@@ -1271,6 +1330,15 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                         has_success = True
                         car_name = out.car.get("name", "Car") if out.car else "Car"
                         await _update_auto_rank_stats_gta(db, user_id, out.car or {}, now, option_id=opt.get("id"), option_name=opt.get("name"))
+                        if skip_gta_used:
+                            await _inc_auto_rank_skip_stats(db, user_id, now, kind="gta", used=skip_gta_used, cash=0)
+                            try:
+                                from utils.token_perk_stats import bump_token_perk_stats
+                                await bump_token_perk_stats(
+                                    db, user_id, "cooldown_skip_gta", uses=skip_gta_used, via_auto_rank=skip_gta_used
+                                )
+                            except Exception:
+                                pass
                         await _set_last_activity(db, user_id, "gta", now)
                         skip_note = " (1 skip)" if skip_gta_used else ""
                         lines.append(f"**GTA** — Success: {car_name}! +{out.rank_points_earned} RP.{skip_note}")
@@ -2601,7 +2669,7 @@ def register(router):
     async def _get_auto_rank_stats_impl(db, current_user: dict):
         u = await db.users.find_one(
             {"id": current_user["id"]},
-            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "auto_rank_total_cars_melted": 1, "auto_rank_total_bullets_from_melt": 1, "auto_rank_total_cars_scrapped": 1, "auto_rank_total_cash_from_scrap": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_melt": 1, "auto_rank_oc": 1, "auto_rank_bust_every_5_sec": 1, "travel_arrives_at": 1, "traveling_to": 1, "current_state": 1, "booze_carrying": 1, "auto_rank_last_activity": 1, "auto_rank_last_activity_at": 1, "auto_rank_failed_crimes_today": 1, "auto_rank_failed_crimes_date": 1, "auto_rank_failed_gtas_today": 1, "auto_rank_failed_gtas_date": 1, "auto_rank_failed_busts_today": 1, "auto_rank_failed_busts_date": 1, "auto_rank_successful_busts_today": 1, "auto_rank_successful_busts_date": 1, "auto_rank_successful_crimes_today": 1, "auto_rank_successful_crimes_date": 1, "auto_rank_successful_gtas_today": 1, "auto_rank_successful_gtas_date": 1, "auto_rank_bullets_from_melt_today": 1, "auto_rank_bullets_from_melt_date": 1, "auto_rank_cars_melted_today": 1, "auto_rank_cars_melted_date": 1, "auto_rank_cars_scrapped_today": 1, "auto_rank_cars_scrapped_date": 1, "auto_rank_cash_from_scrap_today": 1, "auto_rank_cash_from_scrap_date": 1, "auto_rank_idle": 1, "last_seen": 1, "auto_rank_scrap": 1, "auto_rank_next_scrap_at": 1},
+            {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "auto_rank_total_cars_melted": 1, "auto_rank_total_bullets_from_melt": 1, "auto_rank_total_cars_scrapped": 1, "auto_rank_total_cash_from_scrap": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_melt": 1, "auto_rank_oc": 1, "auto_rank_bust_every_5_sec": 1, "travel_arrives_at": 1, "traveling_to": 1, "current_state": 1, "booze_carrying": 1, "auto_rank_last_activity": 1, "auto_rank_last_activity_at": 1, "auto_rank_failed_crimes_today": 1, "auto_rank_failed_crimes_date": 1, "auto_rank_failed_gtas_today": 1, "auto_rank_failed_gtas_date": 1, "auto_rank_failed_busts_today": 1, "auto_rank_failed_busts_date": 1, "auto_rank_successful_busts_today": 1, "auto_rank_successful_busts_date": 1, "auto_rank_successful_crimes_today": 1, "auto_rank_successful_crimes_date": 1, "auto_rank_successful_gtas_today": 1, "auto_rank_successful_gtas_date": 1, "auto_rank_bullets_from_melt_today": 1, "auto_rank_bullets_from_melt_date": 1, "auto_rank_cars_melted_today": 1, "auto_rank_cars_melted_date": 1, "auto_rank_cars_scrapped_today": 1, "auto_rank_cars_scrapped_date": 1, "auto_rank_cash_from_scrap_today": 1, "auto_rank_cash_from_scrap_date": 1, "auto_rank_booze_runs_today": 1, "auto_rank_booze_runs_date": 1, "auto_rank_booze_profit_today": 1, "auto_rank_booze_profit_date": 1, "auto_rank_crime_cash_today": 1, "auto_rank_crime_cash_date": 1, "auto_rank_gta_value_today": 1, "auto_rank_gta_value_date": 1, "auto_rank_bust_cash_today": 1, "auto_rank_bust_cash_date": 1, "auto_rank_idle": 1, "last_seen": 1, "auto_rank_scrap": 1, "auto_rank_next_scrap_at": 1, "auto_rank_use_skip_tokens": 1, "cooldown_skip_crime_tokens": 1, "cooldown_skip_crime_credits": 1, "cooldown_skip_gta_tokens": 1, "cooldown_skip_gta_credits": 1, "cooldown_skip_booze_tokens": 1, "cooldown_skip_booze_credits": 1, "cooldown_skip_day": 1, "cooldown_skip_uses_today_crime": 1, "cooldown_skip_uses_today_gta": 1, "cooldown_skip_uses_today_booze": 1, "auto_rank_skip_crime_used_today": 1, "auto_rank_skip_crime_cash_today": 1, "auto_rank_skip_crime_date": 1, "auto_rank_skip_gta_used_today": 1, "auto_rank_skip_gta_cash_today": 1, "auto_rank_skip_gta_date": 1, "auto_rank_skip_booze_used_today": 1, "auto_rank_skip_booze_cash_today": 1, "auto_rank_skip_booze_date": 1, "token_perk_stats": 1},
         )
         now = datetime.now(timezone.utc)
         since = _parse_iso((u or {}).get("auto_rank_stats_since"))
@@ -2672,7 +2740,32 @@ def register(router):
         cars_melted_today = int((u or {}).get("auto_rank_cars_melted_today") or 0) if (u or {}).get("auto_rank_cars_melted_date") == today else 0
         cars_scrapped_today = int((u or {}).get("auto_rank_cars_scrapped_today") or 0) if (u or {}).get("auto_rank_cars_scrapped_date") == today else 0
         cash_from_scrap_today = int((u or {}).get("auto_rank_cash_from_scrap_today") or 0) if (u or {}).get("auto_rank_cash_from_scrap_date") == today else 0
+        booze_runs_today = int((u or {}).get("auto_rank_booze_runs_today") or 0) if (u or {}).get("auto_rank_booze_runs_date") == today else 0
+        booze_profit_today = int((u or {}).get("auto_rank_booze_profit_today") or 0) if (u or {}).get("auto_rank_booze_profit_date") == today else 0
+        crime_cash_today = int((u or {}).get("auto_rank_crime_cash_today") or 0) if (u or {}).get("auto_rank_crime_cash_date") == today else 0
+        gta_value_today = int((u or {}).get("auto_rank_gta_value_today") or 0) if (u or {}).get("auto_rank_gta_value_date") == today else 0
+        bust_cash_today = int((u or {}).get("auto_rank_bust_cash_today") or 0) if (u or {}).get("auto_rank_bust_cash_date") == today else 0
         attempted_busts_today = successful_busts_today + failed_busts_today
+        skip_crime_used_today = int((u or {}).get("auto_rank_skip_crime_used_today") or 0) if (u or {}).get("auto_rank_skip_crime_date") == today else 0
+        skip_crime_cash_today = int((u or {}).get("auto_rank_skip_crime_cash_today") or 0) if (u or {}).get("auto_rank_skip_crime_date") == today else 0
+        skip_gta_used_today = int((u or {}).get("auto_rank_skip_gta_used_today") or 0) if (u or {}).get("auto_rank_skip_gta_date") == today else 0
+        skip_booze_used_today = int((u or {}).get("auto_rank_skip_booze_used_today") or 0) if (u or {}).get("auto_rank_skip_booze_date") == today else 0
+        skip_booze_cash_today = int((u or {}).get("auto_rank_skip_booze_cash_today") or 0) if (u or {}).get("auto_rank_skip_booze_date") == today else 0
+        from utils.cooldown_skip import cooldown_skip_uses_today, cooldown_skip_daily_cap
+        use_skip_tokens = (u or {}).get("auto_rank_use_skip_tokens") is True
+        crime_tokens = int((u or {}).get("cooldown_skip_crime_tokens") or 0)
+        crime_credits = int((u or {}).get("cooldown_skip_crime_credits") or 0)
+        gta_tokens = int((u or {}).get("cooldown_skip_gta_tokens") or 0)
+        gta_credits = int((u or {}).get("cooldown_skip_gta_credits") or 0)
+        booze_tokens = int((u or {}).get("cooldown_skip_booze_tokens") or 0)
+        booze_credits = int((u or {}).get("cooldown_skip_booze_credits") or 0)
+        can_skip_crime = use_skip_tokens and _can_use_skip(u or {}, "crime")
+        can_skip_gta = use_skip_tokens and _can_use_skip(u or {}, "gta")
+        can_skip_booze = use_skip_tokens and _can_use_skip(u or {}, "booze")
+        perk = ((u or {}).get("token_perk_stats") or {}) if isinstance((u or {}).get("token_perk_stats"), dict) else {}
+        crime_perk = perk.get("cooldown_skip_crime") if isinstance(perk.get("cooldown_skip_crime"), dict) else {}
+        gta_perk = perk.get("cooldown_skip_gta") if isinstance(perk.get("cooldown_skip_gta"), dict) else {}
+        booze_perk = perk.get("cooldown_skip_booze") if isinstance(perk.get("cooldown_skip_booze"), dict) else {}
         is_idle = bool((u or {}).get("auto_rank_idle"))
         activity_detail = None
         if is_idle:
@@ -2740,9 +2833,43 @@ def register(router):
             "interval_scrap_seconds": SCRAP_INTERVAL_SECONDS,
             "interval_bust_seconds": interval_bust_seconds,
             "interval_oc_seconds": interval_oc_seconds,
-            "next_crime_at": next_crime_at,
-            "next_gta_at": next_gta_at,
-            "next_booze_arrival_at": next_booze_arrival_at,
+            "next_crime_at": None if can_skip_crime else next_crime_at,
+            "next_gta_at": None if can_skip_gta else next_gta_at,
+            "next_booze_arrival_at": None if (can_skip_booze and next_booze_arrival_at) else next_booze_arrival_at,
+            "crime_skips_ready": can_skip_crime,
+            "gta_skips_ready": can_skip_gta,
+            "booze_skips_ready": can_skip_booze,
+            "auto_rank_use_skip_tokens": use_skip_tokens,
+            "skip_tokens": {
+                "crime": {
+                    "tokens": crime_tokens,
+                    "credits": crime_credits,
+                    "uses_today": cooldown_skip_uses_today(u or {}, "crime"),
+                    "daily_cap": cooldown_skip_daily_cap("crime"),
+                    "auto_rank_used_today": skip_crime_used_today,
+                    "auto_rank_cash_today": skip_crime_cash_today,
+                    "lifetime_cash": int(crime_perk.get("cash_earned") or 0),
+                    "lifetime_uses": int(crime_perk.get("uses") or 0),
+                },
+                "gta": {
+                    "tokens": gta_tokens,
+                    "credits": gta_credits,
+                    "uses_today": cooldown_skip_uses_today(u or {}, "gta"),
+                    "daily_cap": cooldown_skip_daily_cap("gta"),
+                    "auto_rank_used_today": skip_gta_used_today,
+                    "lifetime_uses": int(gta_perk.get("uses") or 0),
+                },
+                "booze": {
+                    "tokens": booze_tokens,
+                    "credits": booze_credits,
+                    "uses_today": cooldown_skip_uses_today(u or {}, "booze"),
+                    "daily_cap": cooldown_skip_daily_cap("booze"),
+                    "auto_rank_used_today": skip_booze_used_today,
+                    "auto_rank_cash_today": skip_booze_cash_today,
+                    "lifetime_profit": int(booze_perk.get("profit_cash") or 0),
+                    "lifetime_uses": int(booze_perk.get("uses") or 0),
+                },
+            },
             "activity_detail": activity_detail,
             "last_activity": last_activity,
             "last_activity_at": last_activity_at,
@@ -2756,6 +2883,11 @@ def register(router):
             "cars_melted_today": cars_melted_today,
             "cars_scrapped_today": cars_scrapped_today,
             "cash_from_scrap_today": cash_from_scrap_today,
+            "booze_runs_today": booze_runs_today,
+            "booze_profit_today": booze_profit_today,
+            "crime_cash_today": crime_cash_today,
+            "gta_value_today": gta_value_today,
+            "bust_cash_today": bust_cash_today,
             "attempted_busts_today": attempted_busts_today,
             "auto_rank_idle": is_idle,
         }

@@ -377,6 +377,8 @@ export default function Layout({ children }) {
   const [user, setUser] = useState(() => layoutBootRef.current.user);
   const [rankProgress, setRankProgress] = useState(() => layoutBootRef.current.rankProgress);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [updateLogUnread, setUpdateLogUnread] = useState(0);
+  const [updateLogTopicId, setUpdateLogTopicId] = useState(null);
   const [helpDeskOpenCount, setHelpDeskOpenCount] = useState(0);
   /** Sidebar: total from GET /users/online (null = unknown / failed). */
   const [usersOnlineCount, setUsersOnlineCount] = useState(null);
@@ -621,6 +623,9 @@ export default function Layout({ children }) {
         return { ...i, items: i.items.map((sub) => {
           if (sub.path === '/game/help-desk') return { ...sub, badge: helpDeskOpenCount };
           if (sub.path === '/social/inbox') return { ...sub, badge: unreadCount };
+          if (sub.path === '/social/forum' && !sub.search && updateLogUnread > 0) {
+            return { ...sub, badge: updateLogUnread };
+          }
           if (sub.path === '/game/users-online') return { ...sub, onlineCountBadge: usersOnlineCount };
           return sub;
         }) };
@@ -671,7 +676,7 @@ export default function Layout({ children }) {
       }
       return i;
     });
-  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, storePointsEventActive, worldCupEnabled, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
+  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, updateLogUnread, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, storePointsEventActive, worldCupEnabled, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
 
   useEffect(() => onCooldownChange(setCooldownSeconds), []);
 
@@ -1046,7 +1051,6 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     let intervalId;
-    // Random 0–45s so clients do not all hit /help-desk/open-count on the same wall-clock second every minute.
     const jitterMs = Math.floor(Math.random() * 45000);
     const deferred = setTimeout(() => {
       fetchHelpDeskOpenCount();
@@ -1054,6 +1058,25 @@ export default function Layout({ children }) {
     }, 300 + jitterMs);
     return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
   }, []); // eslint-disable-line
+
+  useEffect(() => {
+    let intervalId;
+    const jitterMs = Math.floor(Math.random() * 30000);
+    const deferred = setTimeout(() => {
+      fetchUpdateLogUnread();
+      intervalId = setInterval(fetchUpdateLogUnread, 60000);
+    }, 800 + jitterMs);
+    return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
+  }, []); // eslint-disable-line
+
+  // Clear Update Log badge as soon as the player opens that topic.
+  useEffect(() => {
+    if (!updateLogTopicId || updateLogUnread <= 0) return;
+    const m = location.pathname.match(/^\/forum\/topic\/([^/]+)/);
+    if (m && m[1] === updateLogTopicId) {
+      setUpdateLogUnread(0);
+    }
+  }, [location.pathname, updateLogTopicId, updateLogUnread]);
 
   useEffect(() => {
     let intervalId;
@@ -1242,6 +1265,15 @@ export default function Layout({ children }) {
   };
   const fetchHelpDeskOpenCount = async () => {
     try { const res = await api.get('/help-desk/open-count'); setHelpDeskOpenCount(res.data?.open_tickets_count ?? 0); } catch { setHelpDeskOpenCount(0); }
+  };
+  const fetchUpdateLogUnread = async () => {
+    try {
+      const res = await api.get('/forum/update-log/status');
+      setUpdateLogUnread(Number(res.data?.unread_count) || 0);
+      setUpdateLogTopicId(res.data?.topic_id || null);
+    } catch {
+      /* keep previous */
+    }
   };
   const fetchUsersOnlineCount = async () => {
     try {
@@ -1708,9 +1740,9 @@ export default function Layout({ children }) {
           >
             Forum & inbox
           </span>
-          {!messagingMenuOpen && unreadCount > 0 && (
+          {!messagingMenuOpen && (unreadCount > 0 || updateLogUnread > 0) && (
             <span className="shrink-0 rounded border border-red-500/30 bg-red-600/20 px-1.5 py-0.5 font-heading text-[10px] font-bold text-red-400">
-              {unreadCount > 9 ? '9+' : unreadCount}
+              {(unreadCount + updateLogUnread) > 9 ? '9+' : (unreadCount + updateLogUnread)}
             </span>
           )}
           {messagingMenuOpen ? <ChevronDown size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" /> : <ChevronRight size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" />}
@@ -1744,6 +1776,9 @@ export default function Layout({ children }) {
                   >
                     <IconComp size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
                     <span className="uppercase tracking-widest font-heading flex-1">{row.label}</span>
+                    {row.key === 'forum-general' && updateLogUnread > 0 && (
+                      <span className="shrink-0 rounded border border-red-500/30 bg-red-600/20 px-1.5 py-0.5 font-heading text-[10px] font-bold text-red-400" title="Unread Update Log entries">{updateLogUnread > 9 ? '9+' : updateLogUnread}</span>
+                    )}
                     {row.kind === 'inbox' && unreadCount > 0 && (
                       <span className="shrink-0 rounded border border-red-500/30 bg-red-600/20 px-1.5 py-0.5 font-heading text-[10px] font-bold text-red-400">{unreadCount > 9 ? '9+' : unreadCount}</span>
                     )}

@@ -759,10 +759,10 @@ CARS = [
     {"id": "car4", "name": "Ford Model A", "rarity": "common", "min_difficulty": 1, "value": 314, "travel_bonus": 5, "image": "/images/gta/car4.jpg?v=2"},
     {"id": "car3", "name": "Dodge Brothers", "rarity": "common", "min_difficulty": 1, "value": 338, "travel_bonus": 5, "image": "/images/gta/car3.jpg"},
     # Uncommon (difficulty 2) - 4 cars; melt scales with MELT_VALUE_PER_BULLET
-    {"id": "car7", "name": "Oakland", "rarity": "uncommon", "min_difficulty": 2, "value": 2695, "travel_bonus": 10, "image": "/images/gta/car7.jpg"},
+    {"id": "car7", "name": "Oakland", "rarity": "uncommon", "min_difficulty": 2, "value": 2695, "travel_bonus": 10, "image": "/images/gta/car7.jpg?v=2"},
     {"id": "car8", "name": "Willys-Knight", "rarity": "uncommon", "min_difficulty": 2, "value": 4044, "travel_bonus": 10, "image": "/images/gta/car8.jpg"},
     {"id": "car10", "name": "Buick Master Six", "rarity": "uncommon", "min_difficulty": 2, "value": 5390, "travel_bonus": 12, "image": "/images/gta/car10.jpg?v=2"},
-    {"id": "car9", "name": "Cadillac V-8", "rarity": "uncommon", "min_difficulty": 2, "value": 6919, "travel_bonus": 15, "image": "/images/gta/car9.jpg"},
+    {"id": "car9", "name": "Cadillac V-8", "rarity": "uncommon", "min_difficulty": 2, "value": 6919, "travel_bonus": 15, "image": "/images/gta/car9.jpg?v=2"},
     # Rare (difficulty 3) - 4 cars
     {"id": "car11", "name": "Packard Eight", "rarity": "rare", "min_difficulty": 3, "value": 7188, "travel_bonus": 20, "image": "/images/gta/car11.jpg?v=2"},
     {"id": "car12", "name": "Lincoln Model L", "rarity": "rare", "min_difficulty": 3, "value": 9882, "travel_bonus": 20, "image": "/images/gta/car12.jpg"},

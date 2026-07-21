@@ -1023,7 +1023,7 @@ export default function IllegalBusiness() {
           <CardHead icon={Crosshair} title="Hit a Joint" />
           <div className="p-4">
             <p className="text-[11px] text-mutedForeground font-body italic mb-3">
-              Send your crew to knock over a rival&apos;s operation. Come back with their green — or come back with nothing.
+              Send your crew to knock over a rival&apos;s operation. Successful hits pay $50,000–$2,000,000 straight into your racket vault.
             </p>
             <p className="text-[10px] font-heading text-zinc-500 mb-3">
               Raids today: <span className="text-primary font-bold">{raidsToday}</span>
@@ -1062,7 +1062,7 @@ export default function IllegalBusiness() {
                     {raidResult.success ? 'Success' : 'Failed'}
                   </span>
                   {raidResult.loot_cash > 0 && (
-                    <span className="text-[10px] text-emerald-400 font-heading">· {formatMoney(raidResult.loot_cash)} taken</span>
+                    <span className="text-[10px] text-emerald-400 font-heading">· {formatMoney(raidResult.loot_cash)} to vault</span>
                   )}
                 </div>
                 <p className="text-xs text-foreground">{raidResult.message}</p>

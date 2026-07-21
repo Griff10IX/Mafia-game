@@ -318,6 +318,8 @@ RAID_CAPACITY_BOOST_MAX_ADD = 15
 RAID_CAPACITY_BOOST_DAYS = 30
 RAID_DAILY_LIMIT_BOOSTED_MAX = 20  # hard ceiling with boost (missions cap at 10 without it)
 RAID_LOOT_PERCENT = 0.25  # attacker gets 25% of target's uncollected income (capped)
+RAID_LOOT_CASH_MIN = 50_000  # successful raid always pays at least this into attacker's racket vault
+RAID_LOOT_CASH_MAX = 2_000_000  # hard cap on raid cash credited to vault
 RAID_VARIANCE = 0.15  # random +/- 15% on strength for drama
 # Shootouts have consequences: win or lose, chance one defender guard dies (slot stays; re-hire + re-gear).
 RAID_GUARD_KILL_CHANCE = 0.50
@@ -3449,6 +3451,12 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
         raise HTTPException(status_code=400, detail="Target is dead — nothing left to raid.")
     if target_user.get("account_locked") or target_user.get("locked"):
         raise HTTPException(status_code=400, detail="Target's account is locked and can't be raided.")
+    attacker_biz = await db.illegal_businesses.find_one(
+        {"user_id": current_user["id"]},
+        {"_id": 0, "id": 1},
+    )
+    if not attacker_biz:
+        raise HTTPException(status_code=400, detail="You need an illegal business — raid loot goes into your racket vault.")
     business = await db.illegal_businesses.find_one({"user_id": target_id}, {"_id": 0})
     if not business:
         raise HTTPException(status_code=400, detail="Target has no illegal business.")
@@ -3565,33 +3573,49 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
         victim_mult = float(business.get("raid_incoming_loot_mult") or 1.0)
         victim_mult = max(RAID_INCOMING_LOOT_MULT_MIN, min(1.0, victim_mult))
         loot_cash = int(available * RAID_LOOT_PERCENT * victim_mult)
-        loot_cash_credited = loot_cash
-        if loot_cash > 0:
-            ev = await get_effective_event()
-            prestige = get_prestige_bonus(current_user)
-            loot_cash_credited = int(loot_cash * float(ev.get("racket_payout", 1.0)) * float(prestige.get("illegal_business_mult", 1.0)))
-            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": loot_cash_credited}})
-            hours_to_skip = loot_cash / iph if iph else 0
-            if hours_to_skip > 0:
-                new_last = last_dt + timedelta(hours=hours_to_skip)
+        ev = await get_effective_event()
+        prestige = get_prestige_bonus(current_user)
+        loot_cash_credited = int(loot_cash * float(ev.get("racket_payout", 1.0)) * float(prestige.get("illegal_business_mult", 1.0)))
+        loot_cash_credited = max(RAID_LOOT_CASH_MIN, min(RAID_LOOT_CASH_MAX, loot_cash_credited))
+        # Drain uncollected till first, then the victim's vault for any shortfall.
+        till_taken = min(int(available), loot_cash_credited)
+        vault_taken = 0
+        shortfall = loot_cash_credited - till_taken
+        if shortfall > 0:
+            victim_vault = int(business.get("vault") or 0)
+            vault_taken = min(victim_vault, shortfall)
+            if vault_taken > 0:
                 await db.illegal_businesses.update_one(
-                    {"id": business["id"]},
-                    {"$set": {"last_collected_at": new_last.isoformat()}},
+                    {"id": business["id"], "vault": {"$gte": vault_taken}},
+                    {"$inc": {"vault": -vault_taken}},
                 )
+        if till_taken > 0 and iph > 0:
+            hours_to_skip = till_taken / iph
+            new_last = last_dt + timedelta(hours=hours_to_skip)
+            await db.illegal_businesses.update_one(
+                {"id": business["id"]},
+                {"$set": {"last_collected_at": new_last.isoformat()}},
+            )
+        await db.illegal_businesses.update_one(
+            {"id": attacker_biz["id"]},
+            {"$inc": {"vault": loot_cash_credited, "vault_lifetime_earned": loot_cash_credited}},
+        )
+        victim_lost = till_taken + vault_taken
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"illegal_business_raids_won": 1}})
         target_username = target_user.get("username") or "?"
         await send_notification(
             current_user["id"],
             "Raid",
-            f"You hit {target_username}'s joint. Took ${loot_cash_credited:,}.{guard_killed_txt}",
+            f"You hit {target_username}'s joint. Took ${loot_cash_credited:,} — added to your racket vault.{guard_killed_txt}",
             "attack",
             category="attacks",
             actor_username=target_username,
         )
+        victim_loss_txt = f"You lost ${victim_lost:,}." if victim_lost > 0 else "Your till was light — they still walked with a score."
         await send_notification(
             target_id,
             "Raid",
-            f"Your joint was hit by {attacker_username}. You lost ${loot_cash:,}.{victim_guard_txt}",
+            f"Your joint was hit by {attacker_username}. {victim_loss_txt}{victim_guard_txt}",
             "attack",
             category="attacks",
             actor_username=attacker_username,
@@ -3625,7 +3649,7 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
         "guard_killed_slot": guard_killed_slot,
         "message": (
             (
-                f"You hit {target_user.get('username') or '?'}'s joint. Took ${loot_cash_credited:,}."
+                f"You hit {target_user.get('username') or '?'}'s joint. Took ${loot_cash_credited:,} — added to your racket vault."
                 if won
                 else f"You tried to hit {target_user.get('username') or '?'}'s joint. They were ready—you got nothing."
             )

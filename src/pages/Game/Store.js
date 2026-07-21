@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp, Package, Copy, Swords, Award, Gauge, X } from 'lucide-react';
+import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp, Package, Copy, Swords, Award, Gauge } from 'lucide-react';
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { copyTextToClipboard } from '../../utils/copyToClipboard';
 import { toast } from 'sonner';
@@ -19,7 +19,7 @@ import {
 import { formatGameDateTime, formatGameDateTimeShort, formatGameDateOnly } from '../../utils/gameDateTime';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import { STORE_PAGE_CACHE_KEY } from '../../utils/sessionStaleCache';
-import { PROFILE_GLOW_PRESETS, isCustomGlowValue } from '../../constants/profileGlowPresets';
+import GlowPresetPicker from '../../components/GlowPresetPicker';
 
 const STORE_STYLES = `
   .store-fade-in { animation: store-fade-in 0.4s ease-out both; }
@@ -155,105 +155,6 @@ const SELECTABLE_BUNDLE_DISALLOWED = new Set(['rank_xp_pass', 'crew_oc_auto_3h']
 const SELECTABLE_BUNDLE_ITEMS = TOKEN_STORE_ITEMS.filter((t) => !SELECTABLE_BUNDLE_DISALLOWED.has(t.tokenType));
 
 const FOUNDING_MEMBER_COST_POINTS = 5000;
-
-/** Compact colour picker: shows the chosen colour, opens a popup palette (presets + custom hex). */
-function GlowPresetPicker({ value, onChange }) {
-  const [open, setOpen] = useState(false);
-  const isCustom = isCustomGlowValue(value);
-  const customHexValue = isCustom ? (value.startsWith('#') ? value : `#${value}`) : null;
-  const [customHex, setCustomHex] = useState(customHexValue || '#a78bfa');
-  const current = isCustom
-    ? { id: 'custom', label: `Custom ${customHexValue}`, hex: customHexValue }
-    : (PROFILE_GLOW_PRESETS.find((p) => p.id === value) || PROFILE_GLOW_PRESETS[0]);
-  return (
-    <div className="mb-1.5">
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="text-[9px] font-heading px-2 py-1 rounded border border-zinc-700 flex items-center gap-1.5 hover:border-zinc-500"
-        style={{ color: current.hex }}
-      >
-        <span
-          className="inline-block w-2.5 h-2.5 rounded-full"
-          style={{ backgroundColor: current.hex, boxShadow: `0 0 5px ${current.hex}` }}
-        />
-        Colour: {current.label}
-        <ChevronDown size={10} />
-      </button>
-      {open && (
-        <div
-          className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-          onClick={() => setOpen(false)}
-          role="dialog"
-          aria-modal="true"
-        >
-          <div
-            className={`${styles.panel} w-full max-w-sm rounded-xl border border-primary/25 overflow-hidden`}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-3 py-2 border-b border-primary/15 bg-primary/5 flex items-center justify-between">
-              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Glow colour</span>
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                aria-label="Close"
-                className="text-mutedForeground hover:text-foreground"
-              >
-                <X size={14} />
-              </button>
-            </div>
-            <div className="p-3 space-y-3">
-              <div className="grid grid-cols-8 gap-2">
-                {PROFILE_GLOW_PRESETS.map((p) => {
-                  const selected = !isCustom && value === p.id;
-                  return (
-                    <button
-                      key={p.id}
-                      type="button"
-                      title={p.label}
-                      onClick={() => { onChange(p.id); setOpen(false); }}
-                      className={`aspect-square rounded-full flex items-center justify-center border-2 transition-transform hover:scale-110 ${selected ? 'scale-110 border-white' : 'border-transparent'}`}
-                    >
-                      <span
-                        className="w-4 h-4 rounded-full"
-                        style={{ backgroundColor: p.hex, boxShadow: `0 0 6px ${p.hex}aa` }}
-                      />
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="pt-2 border-t border-zinc-700/40 space-y-1.5">
-                <p className="text-[9px] font-heading uppercase tracking-wider text-mutedForeground">Custom colour — pick any shade</p>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    value={customHex}
-                    onChange={(e) => setCustomHex(e.target.value)}
-                    className="w-9 h-9 rounded-lg border-2 border-zinc-600 cursor-pointer p-0.5 bg-transparent shrink-0"
-                    aria-label="Custom glow colour"
-                  />
-                  <span
-                    className="text-[10px] font-heading font-bold px-2 py-1 rounded border border-zinc-700"
-                    style={{ color: customHex, textShadow: `0 0 8px ${customHex}88` }}
-                  >
-                    {customHex} preview
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => { onChange(customHex.toLowerCase()); setOpen(false); }}
-                    className="ml-auto px-2.5 py-1.5 rounded text-[9px] font-heading font-bold uppercase border border-primary/50 bg-primary/15 text-primary hover:bg-primary/25"
-                  >
-                    Use custom
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 const STORE_ITEM_FLAG_LABELS = {
   auto_collect: 'Auto-collect passes',
@@ -1668,7 +1569,11 @@ export default function Store() {
                 }}
               >
                 {u.needsGlowPreset && (
-                  <GlowPresetPicker value={glowPresetId} onChange={setGlowPresetId} />
+                  <GlowPresetPicker
+                    value={glowPresetId}
+                    onChange={setGlowPresetId}
+                    buttonClassName="mb-1.5 text-[9px] font-heading px-2 py-1 rounded border border-zinc-700 flex items-center gap-1.5 hover:border-zinc-500"
+                  />
                 )}
                 {extra && (
                   <p className="text-[10px] text-mutedForeground mb-1">{extra.line ? `${extra.line}: ` : 'Current: '}{extra.value}</p>

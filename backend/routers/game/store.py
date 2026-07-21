@@ -684,6 +684,11 @@ async def buy_profile_glow_7d(
     from datetime import timedelta
 
     await require_store_item_allowed(db, "profile_glow_7d", current_user)
+    if current_user.get("profile_cosmetic_permanent"):
+        raise HTTPException(
+            status_code=400,
+            detail="You already have permanent Name Glow + Border — change colour for free on Edit Profile.",
+        )
     preset = sanitize_glow_preset(body.preset_id)
     cost_used, inc, gte_filter = _store_cost_inc(current_user, PROFILE_GLOW_7D_COST_POINTS, pay_with)
     if not cost_used:
@@ -691,7 +696,7 @@ async def buy_profile_glow_7d(
     now = datetime.now(timezone.utc)
     existing = current_user.get("profile_cosmetic_until")
     base = now
-    if existing and not current_user.get("profile_cosmetic_permanent"):
+    if existing:
         try:
             ex = datetime.fromisoformat(str(existing).replace("Z", "+00:00"))
             if ex.tzinfo is None:
@@ -702,7 +707,7 @@ async def buy_profile_glow_7d(
             pass
     new_until = (base + timedelta(days=7)).isoformat()
     result = await db.users.update_one(
-        {"id": current_user["id"], **gte_filter},
+        {"id": current_user["id"], "profile_cosmetic_permanent": {"$ne": True}, **gte_filter},
         {
             "$inc": inc,
             "$set": {

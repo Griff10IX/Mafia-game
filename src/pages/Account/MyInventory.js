@@ -138,6 +138,15 @@ const PERK_STAT_CHIPS = {
     { field: 'runs', label: 'Skip runs done', format: 'num' },
     { field: 'uses', label: 'Drives skipped', format: 'num' },
   ],
+  cooldown_skip_crime: [
+    { field: 'cash_earned', label: 'Cash from skipped crimes', format: 'money' },
+    { field: 'uses', label: 'Crime skips used', format: 'num' },
+    { field: 'via_auto_rank', label: 'Used by Auto Rank', format: 'num' },
+  ],
+  cooldown_skip_gta: [
+    { field: 'uses', label: 'GTA skips used', format: 'num' },
+    { field: 'via_auto_rank', label: 'Used by Auto Rank', format: 'num' },
+  ],
 };
 const countdownLabel = (until) => {
   const diff = new Date(until) - Date.now();

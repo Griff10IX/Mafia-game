@@ -762,29 +762,26 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         )
         if seed.upserted_id is not None:
             claim = await _claim_cooldown()
+    used_crime_skip = False
     if claim.matched_count == 0:
         from utils.cooldown_skip import has_skip_credit, consume_skip_credit
 
-        if has_skip_credit(current_user, "crime"):
+        # Re-read credits — Auto Rank may have just activated a held token into a credit.
+        fresh_credits = await db.users.find_one(
+            {"id": uid},
+            {"_id": 0, "cooldown_skip_crime_credits": 1},
+        )
+        credit_user = {**(current_user or {}), **(fresh_credits or {})}
+        if has_skip_credit(credit_user, "crime"):
             if await consume_skip_credit(db, uid, "crime"):
+                # Skip vouchers bypass the old timer — set the new cooldown directly.
+                # (Do not rely on $lte reclaim; string/Date type mismatches used to fail here.)
                 await db.user_crimes.update_many(
                     {"user_id": uid, "crime_id": crime_id},
-                    {"$set": {"cooldown_until": now_iso}},
-                )
-                claim = await db.user_crimes.update_many(
-                    {
-                        "user_id": uid,
-                        "crime_id": crime_id,
-                        "$or": [
-                            {"cooldown_until": {"$exists": False}},
-                            {"cooldown_until": None},
-                            {"cooldown_until": {"$lte": now_iso}},
-                            {"cooldown_until": {"$lte": now}},
-                        ],
-                    },
                     {"$set": {"cooldown_until": cooldown_until}},
                 )
-        if claim.matched_count == 0:
+                used_crime_skip = True
+        if claim.matched_count == 0 and not used_crime_skip:
             raise HTTPException(status_code=400, detail="Crime on cooldown")
     user_crime = await db.user_crimes.find_one(
         {"user_id": uid, "crime_id": crime_id},
@@ -978,6 +975,19 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
                 try:
                     from utils.token_perk_stats import bump_token_perk_stats
                     await bump_token_perk_stats(db, current_user["id"], "xp_crimes", bonus_rp=xp_crimes_bonus_rp, uses=1)
+                except Exception:
+                    pass
+            if used_crime_skip:
+                try:
+                    from utils.token_perk_stats import bump_token_perk_stats
+                    await bump_token_perk_stats(
+                        db,
+                        current_user["id"],
+                        "cooldown_skip_crime",
+                        cash_earned=int(reward or 0),
+                        uses=1,
+                        via_auto_rank=1 if via_auto_rank else 0,
+                    )
                 except Exception:
                     pass
             # Referral: referrers split 10% of crime profit evenly (game-paid)

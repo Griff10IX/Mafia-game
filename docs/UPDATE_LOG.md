@@ -13,7 +13,7 @@
 [*][color=#888888][b]New:[/b] [b]Auto Rank → Use cooldown skip tokens[/b] toggle (off by default). When on, Auto Rank burns Crime / GTA / Booze Travel Skip tokens to bypass timers within each type's daily cap.[/color]
 [*][color=#888888][b]New:[/b] [b]⚡ Skip[/b] on Crimes & GTA rows while on cooldown; [b]⚡ Skip Collect[/b] on the Properties page (per business + Skip Collect for ones still on the 10m timer).[/color]
 [*][color=#888888][b]New:[/b] [b]Raid Reset[/b] in the Points Store — [b]2,000 points only[/b], once per day, wipes today's used raid count back to 0.[/color]
-[*][color=#888888][b]New:[/b] Permanent [b]Name Glow + Border[/b] owners can change colour anytime for free on [b]Edit Profile[/b] (no re-buy).[/color]
+[*][color=#888888][b]New:[/b] Permanent [b]Name Glow + Border[/b] owners can change colour anytime for free on [b]Edit Profile[/b] — full Store presets + custom hex (7-day glow stays locked to the colour bought).[/color]
 [*][color=#888888][b]Changed:[/b] Skip daily caps are per type — [b]crime 5,000[/b] · [b]GTA 1,000[/b] · [b]booze travel 200[/b] · [b]properties collect 3[/b]. [b]Jail bailout[/b] up to [b]500/day[/b] (was 3).[/color]
 [*][color=#888888][b]Changed:[/b] Paying Store items [b]with respect[/b] now costs [b]3×[/b] as much (≈20.25 respect per point of price). Point prices unchanged.[/color]
 [*][color=#888888][b]Changed:[/b] Hit a Joint — [b]max 20 hits on the same joint per day[/b] (was 2).[/color]
