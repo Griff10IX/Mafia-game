@@ -1,7 +1,19 @@
+import {
+  Palette,
+  Zap,
+  Car,
+  Bot,
+  Plane,
+  Lock,
+  FlaskConical,
+  Target,
+} from 'lucide-react';
+
 /** Fixed-sequence new-player tutorial step copy + CTAs. */
 export const TUTORIAL_STEPS = [
   {
     id: 'theme',
+    icon: Palette,
     title: 'Pick your look',
     body: 'Choose Default or Modern for the game UI. You can change this anytime under Theme.',
     tips: 'Default is the classic noir look. Modern uses a cleaner layout and colours.',
@@ -11,6 +23,7 @@ export const TUTORIAL_STEPS = [
   },
   {
     id: 'crimes',
+    icon: Zap,
     title: 'Commit a crime',
     body: 'Crimes are your main cash and respect loop. Commit one successful crime to continue.',
     tips: 'Each crime has a cooldown and progress bar. Higher progress means better odds.',
@@ -21,6 +34,7 @@ export const TUTORIAL_STEPS = [
   },
   {
     id: 'gta',
+    icon: Car,
     title: 'Attempt a GTA',
     body: 'GTA steals cars into your garage. Attempt one GTA (success or fail counts) to continue.',
     tips: 'Cars let you travel for free. Damaged cars need repair before they can drive.',
@@ -31,6 +45,7 @@ export const TUTORIAL_STEPS = [
   },
   {
     id: 'auto_rank',
+    icon: Bot,
     title: 'Auto Rank',
     body: 'Auto Rank is a paid Store perk that can run crimes, GTA, busts, and more while you are away.',
     tips: 'Buy it in the Store, then toggle options under Account → Auto Rank.',
@@ -42,6 +57,7 @@ export const TUTORIAL_STEPS = [
   },
   {
     id: 'travel',
+    icon: Plane,
     title: 'Travel the map',
     body: 'Move between cities for booze runs, Kill targets, properties and casinos. Hot/cold cities also tweak crime and GTA odds.',
     tips: 'Crimes and GTA options are the same everywhere. Airport travel is instant (costs points); cars take time.',
@@ -52,6 +68,7 @@ export const TUTORIAL_STEPS = [
   },
   {
     id: 'jail',
+    icon: Lock,
     title: 'Jail & busts',
     body: 'Fail a crime or GTA and you may land in jail. Bust yourself or friends out from the Jail page.',
     tips: 'While jailed, many actions pause. Busts earn respect and help your crew.',
@@ -62,6 +79,7 @@ export const TUTORIAL_STEPS = [
   },
   {
     id: 'distillery',
+    icon: FlaskConical,
     title: 'Distillery (later)',
     body: 'The Distillery needs Capo rank and the Booze-making racket. Collect, manage heat, and auto-sell when you unlock it.',
     tips: 'Start with Rackets when you qualify. Distillery is a longer-term money engine.',
@@ -73,6 +91,7 @@ export const TUTORIAL_STEPS = [
   },
   {
     id: 'missions',
+    icon: Target,
     title: 'Missions & objectives',
     body: 'The Consigliere’s Ledger (Missions) and Objectives give longer goals and big rewards. Finish the tutorial to claim your starter pack.',
     tips: 'Rewards: 3,000 respect, 2 robot bodyguards, and 1 free Rare loot box.',

@@ -1,6 +1,15 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { X, ChevronRight, SkipForward, GripHorizontal } from 'lucide-react';
+import {
+  X,
+  ChevronRight,
+  SkipForward,
+  GripHorizontal,
+  Minus,
+  GraduationCap,
+  CheckCircle2,
+  Gift,
+} from 'lucide-react';
 import api, { refreshUser } from '../utils/api';
 import { toast } from 'sonner';
 import {
@@ -12,8 +21,24 @@ import {
 import styles from '../styles/noir.module.css';
 
 const POS_KEY = 'tutorial_coach_pos';
+const COLLAPSE_KEY = 'tutorial_coach_collapsed';
 const PANEL_W = 380;
 const PANEL_H_EST = 320;
+const MOBILE_QUERY = '(max-width: 640px)';
+
+const TUTORIAL_COACH_STYLES = `
+  @keyframes tut-enter { from { opacity: 0; transform: translateY(12px) scale(0.97); } }
+  .tut-enter { animation: tut-enter 0.28s ease-out backwards; }
+  @keyframes tut-step-in { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+  .tut-step-in { animation: tut-step-in 0.22s ease-out both; }
+  @keyframes tut-pulse-dot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.75); } }
+  .tut-pulse-dot { animation: tut-pulse-dot 1.2s ease-in-out infinite; }
+  @keyframes tut-pill-pulse { 0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.5); } 70% { box-shadow: 0 0 0 10px rgba(52, 211, 153, 0); } 100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); } }
+  .tut-pill-pulse { animation: tut-pill-pulse 1.4s ease-out infinite; }
+  .tut-btn { transition: filter 0.15s ease, transform 0.1s ease, background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease; }
+  .tut-btn:hover:not(:disabled) { filter: brightness(1.12); }
+  .tut-btn:active:not(:disabled) { transform: scale(0.98); }
+`;
 
 function statusSnapshot(data) {
   if (!data) return '';
@@ -65,6 +90,20 @@ function writePos(pos) {
   } catch (_) { /* ignore */ }
 }
 
+function readCollapsed() {
+  try {
+    return sessionStorage.getItem(COLLAPSE_KEY) === '1';
+  } catch (_) {
+    return false;
+  }
+}
+
+function writeCollapsed(v) {
+  try {
+    sessionStorage.setItem(COLLAPSE_KEY, v ? '1' : '0');
+  } catch (_) { /* ignore */ }
+}
+
 function clampPos(x, y, panelEl) {
   const w = panelEl?.offsetWidth || PANEL_W;
   const h = panelEl?.offsetHeight || PANEL_H_EST;
@@ -79,13 +118,33 @@ function clampPos(x, y, panelEl) {
   };
 }
 
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => (
+    typeof window !== 'undefined' && typeof window.matchMedia === 'function'
+      ? window.matchMedia(MOBILE_QUERY).matches
+      : false
+  ));
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return undefined;
+    const mq = window.matchMedia(MOBILE_QUERY);
+    const onChange = (e) => setIsMobile(e.matches);
+    if (typeof mq.addEventListener === 'function') {
+      mq.addEventListener('change', onChange);
+      return () => mq.removeEventListener('change', onChange);
+    }
+    mq.addListener(onChange);
+    return () => mq.removeListener(onChange);
+  }, []);
+  return isMobile;
+}
+
 function RewardChips({ compact = false }) {
   return (
     <div className={`flex flex-wrap gap-1.5 ${compact ? 'mt-1' : 'mt-2'}`}>
       {TUTORIAL_REWARD_CHIPS.map((label) => (
         <span
           key={label}
-          className="text-[9px] font-heading font-bold uppercase tracking-wide px-2 py-1 rounded border"
+          className="text-[10px] font-heading font-bold uppercase tracking-wide px-2 py-1 rounded border"
           style={{
             borderColor: 'rgba(var(--noir-primary-rgb), 0.35)',
             background: 'rgba(var(--noir-primary-rgb), 0.12)',
@@ -99,8 +158,30 @@ function RewardChips({ compact = false }) {
   );
 }
 
+function ProgressSegments({ stepIndex, stepCount }) {
+  return (
+    <div className="flex items-center gap-1 px-3 pt-2" aria-hidden>
+      {Array.from({ length: stepCount }).map((_, i) => (
+        <span
+          key={i}
+          className="h-1 flex-1 rounded-full transition-colors duration-300"
+          style={{
+            background: i < stepIndex
+              ? 'rgba(var(--noir-primary-rgb), 0.8)'
+              : i === stepIndex
+                ? 'var(--noir-primary)'
+                : 'rgba(var(--noir-primary-rgb), 0.18)',
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
 /**
- * Centered, draggable new-player tutorial coach.
+ * New-player tutorial coach.
+ * Desktop: centered draggable panel. Mobile: docked bottom card above the nav bar.
+ * Both collapse to a compact pill so the page behind stays usable.
  */
 export default function TutorialCoach({
   user,
@@ -109,11 +190,14 @@ export default function TutorialCoach({
   themeModalOpen = false,
 }) {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [status, setStatus] = useState(() => seedFromUser(user));
   const [busy, setBusy] = useState(false);
   const [finishPanel, setFinishPanel] = useState(null);
   const [pos, setPos] = useState(readPos);
   const [dragging, setDragging] = useState(false);
+  const [collapsed, setCollapsed] = useState(readCollapsed);
+  const [gatePulse, setGatePulse] = useState(false);
   const startedRef = useRef(false);
   const pollRef = useRef(null);
   const redirectTimerRef = useRef(null);
@@ -124,6 +208,7 @@ export default function TutorialCoach({
   const panelRef = useRef(null);
   const dragRef = useRef({ active: false, startX: 0, startY: 0, origX: 0, origY: 0 });
   const themeSessionDoneRef = useRef(false);
+  const prevGateOkRef = useRef(null);
 
   useEffect(() => {
     onStatusChangeRef.current = onStatusChange;
@@ -267,9 +352,58 @@ export default function TutorialCoach({
     return () => window.removeEventListener('app-initial-theme-chosen', onChosen);
   }, [loadStatus]);
 
+  const step = getTutorialStep(status?.tutorial_step || 'theme');
+  const gateOk = (() => {
+    if (step.gate === 'theme') {
+      return Boolean(status?.tutorial_theme_done) || themeSessionDoneRef.current;
+    }
+    if (step.gate === 'crime') return Boolean(status?.tutorial_crime_done);
+    if (step.gate === 'gta') return Boolean(status?.tutorial_gta_done);
+    return true;
+  })();
+  const isActionGate = step.gate === 'crime' || step.gate === 'gta' || step.gate === 'theme';
+  const stepIndex = Math.max(0, TUTORIAL_STEPS.findIndex((s) => s.id === step.id));
+  const stepCount = TUTORIAL_STEPS.length;
+
+  // Pulse the collapsed pill when a gate unlocks so the player notices Next is ready.
+  useEffect(() => {
+    if (prevGateOkRef.current === false && gateOk && isActionGate) {
+      setGatePulse(true);
+    }
+    prevGateOkRef.current = gateOk;
+  }, [gateOk, isActionGate]);
+
+  useEffect(() => {
+    setGatePulse(false);
+    prevGateOkRef.current = null;
+  }, [step.id]);
+
+  const statusVisible = !!status;
+
+  // Re-clamp the restored position once the panel has a real measured size
+  // (PANEL_H_EST is only a guess before first layout).
+  useLayoutEffect(() => {
+    if (isMobile || collapsed || !statusVisible) return;
+    const panel = panelRef.current;
+    if (!panel) return;
+    setPos((prev) => {
+      const next = clampPos(prev.x, prev.y, panel);
+      if (next.x === prev.x && next.y === prev.y) return prev;
+      writePos(next);
+      return next;
+    });
+  }, [isMobile, collapsed, statusVisible]);
+
+  const setCollapsedPersist = (v) => {
+    setCollapsed(v);
+    writeCollapsed(v);
+    if (!v) setGatePulse(false);
+  };
+
   const onDragPointerDown = (e) => {
+    if (isMobile) return;
     if (e.button != null && e.button !== 0) return;
-    // Don't start drag from the close button
+    // Don't start drag from the header buttons
     if (e.target?.closest?.('[data-tutorial-no-drag]')) return;
     const panel = panelRef.current;
     if (!panel) return;
@@ -394,12 +528,12 @@ export default function TutorialCoach({
   };
 
   const handlePrimary = () => {
-    const step = getTutorialStep(status?.tutorial_step);
-    if (step.primaryCta?.action === 'open_theme') {
+    const s = getTutorialStep(status?.tutorial_step);
+    if (s.primaryCta?.action === 'open_theme') {
       if (typeof onOpenTheme === 'function') onOpenTheme();
       return;
     }
-    if (step.route) navigate(step.route);
+    if (s.route) navigate(s.route);
   };
 
   if (!user?.rules_accepted) return null;
@@ -408,8 +542,8 @@ export default function TutorialCoach({
   const panelStyle = {
     borderColor: 'rgba(var(--noir-primary-rgb), 0.35)',
     backgroundColor: 'var(--noir-content)',
-    transform: `translate(${pos.x}px, ${pos.y}px)`,
     boxShadow: '0 12px 40px rgba(0,0,0,0.55), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.08)',
+    ...(isMobile ? {} : { transform: `translate(${pos.x}px, ${pos.y}px)` }),
   };
 
   if (finishPanel) {
@@ -418,27 +552,39 @@ export default function TutorialCoach({
         className="fixed z-[105] inset-0 flex items-center justify-center p-4 pointer-events-none"
         role="status"
       >
+        <style>{TUTORIAL_COACH_STYLES}</style>
         <div
           ref={panelRef}
-          className={`${styles.panel} pointer-events-auto w-full max-w-[min(380px,100%)] rounded-xl border overflow-hidden`}
-          style={panelStyle}
+          className={`${styles.panel} tut-enter pointer-events-auto w-full max-w-[min(380px,100%)] rounded-xl border overflow-hidden`}
+          style={{ ...panelStyle, transform: undefined }}
         >
           <div className="h-1 w-full" style={{ background: 'var(--noir-primary)' }} />
           <div className="p-4 space-y-3">
-            <h3 className="text-sm font-heading font-bold uppercase tracking-wider text-primary">
-              Rewards granted
-            </h3>
-            <p className="text-[11px] text-mutedForeground font-heading leading-relaxed">
+            <div className="flex items-center gap-2">
+              <span
+                className="w-9 h-9 rounded-lg border flex items-center justify-center shrink-0"
+                style={{
+                  borderColor: 'rgba(var(--noir-primary-rgb), 0.4)',
+                  background: 'rgba(var(--noir-primary-rgb), 0.14)',
+                }}
+              >
+                <Gift size={16} style={{ color: 'var(--noir-primary)' }} aria-hidden />
+              </span>
+              <h3 className="text-sm font-heading font-bold uppercase tracking-wider text-primary">
+                Rewards granted
+              </h3>
+            </div>
+            <p className="text-xs text-mutedForeground font-heading leading-relaxed">
               Open your free Rare loot box now — one free open only.
             </p>
             <RewardChips />
             <button
               type="button"
-              className="w-full py-2.5 rounded-lg text-xs font-heading font-bold uppercase border min-h-[44px]"
+              className="tut-btn w-full py-2.5 rounded-lg text-xs font-heading font-bold uppercase tracking-wider border min-h-[44px]"
               style={{
-                backgroundColor: 'rgba(var(--noir-primary-rgb), 0.22)',
+                backgroundColor: 'var(--noir-primary)',
                 borderColor: 'var(--noir-primary)',
-                color: 'var(--noir-primary)',
+                color: '#141414',
               }}
               onClick={goLootBox}
             >
@@ -454,89 +600,164 @@ export default function TutorialCoach({
   if (st !== 'pending' && st !== 'in_progress') return null;
   if (status && status.eligible === false && st !== 'in_progress') return null;
 
-  const step = getTutorialStep(status?.tutorial_step || 'theme');
-  const gateOk = (() => {
-    if (step.gate === 'theme') {
-      return Boolean(status?.tutorial_theme_done) || themeSessionDoneRef.current;
-    }
-    if (step.gate === 'crime') return Boolean(status?.tutorial_crime_done);
-    if (step.gate === 'gta') return Boolean(status?.tutorial_gta_done);
-    return true;
-  })();
+  const StepIcon = step.icon || GraduationCap;
 
-  const stepIndex = Math.max(0, TUTORIAL_STEPS.findIndex((s) => s.id === step.id));
-  const stepCount = TUTORIAL_STEPS.length;
+  // Keep the pill and the mobile sheet clear of the fixed mobile bottom nav.
+  const mobileBottomOffset = 'calc(4.75rem + env(safe-area-inset-bottom, 0px))';
+
+  if (collapsed) {
+    const waiting = isActionGate && !gateOk;
+    return (
+      <div
+        className="fixed z-[105] right-3 pointer-events-none"
+        style={{ bottom: isMobile ? mobileBottomOffset : '1rem' }}
+        data-testid="tutorial-coach"
+      >
+        <style>{TUTORIAL_COACH_STYLES}</style>
+        <button
+          type="button"
+          onClick={() => setCollapsedPersist(false)}
+          className={`tut-btn tut-enter pointer-events-auto flex items-center gap-2 pl-3 pr-3.5 rounded-full border min-h-[44px] shadow-xl ${gatePulse ? 'tut-pill-pulse' : ''}`}
+          style={{
+            backgroundColor: 'var(--noir-content)',
+            borderColor: gatePulse ? 'rgba(52, 211, 153, 0.6)' : 'rgba(var(--noir-primary-rgb), 0.45)',
+            boxShadow: '0 8px 28px rgba(0,0,0,0.5)',
+          }}
+          aria-label={`Expand tutorial — step ${stepIndex + 1} of ${stepCount}`}
+        >
+          <GraduationCap size={16} style={{ color: 'var(--noir-primary)' }} aria-hidden />
+          <span className="text-[11px] font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>
+            Tutorial {stepIndex + 1}/{stepCount}
+          </span>
+          {gatePulse || (isActionGate && gateOk) ? (
+            <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" aria-hidden />
+          ) : waiting ? (
+            <span className="tut-pulse-dot w-2 h-2 rounded-full bg-amber-400 shrink-0" aria-hidden />
+          ) : null}
+        </button>
+      </div>
+    );
+  }
+
+  const gateHint = !gateOk
+    ? (step.gate === 'crime'
+      ? 'Commit a crime to unlock Next.'
+      : step.gate === 'gta'
+        ? 'Attempt a GTA to unlock Next.'
+        : step.gate === 'theme'
+          ? 'Pick Default or Modern to unlock Next.'
+          : null)
+    : null;
+  const gateDoneLine = gateOk && isActionGate
+    ? (step.gate === 'crime'
+      ? 'Crime committed — Next unlocked.'
+      : step.gate === 'gta'
+        ? 'GTA attempted — Next unlocked.'
+        : 'Theme chosen — Next unlocked.')
+    : null;
 
   return (
     <div
-      className="fixed z-[105] inset-0 flex items-center justify-center p-4 pointer-events-none"
+      className={isMobile
+        ? 'fixed z-[105] inset-x-0 flex justify-center px-2 pointer-events-none'
+        : 'fixed z-[105] inset-0 flex items-center justify-center p-4 pointer-events-none'}
+      style={isMobile ? { bottom: mobileBottomOffset } : undefined}
       data-testid="tutorial-coach"
     >
+      <style>{TUTORIAL_COACH_STYLES}</style>
       <div
         ref={panelRef}
-        className={`${styles.panel} pointer-events-auto w-full max-w-[min(380px,100%)] rounded-xl border overflow-hidden`}
+        className={`${styles.panel} tut-enter pointer-events-auto w-full ${isMobile ? 'max-w-[420px] rounded-xl' : 'max-w-[min(380px,100%)] rounded-xl'} border overflow-hidden flex flex-col`}
         style={panelStyle}
         role="dialog"
         aria-modal="false"
         aria-label="New player tutorial"
       >
-        <div className="h-1 w-full shrink-0" style={{ background: 'var(--noir-primary)' }} />
         <div
-          className={`px-3 py-2 border-b flex items-center justify-between gap-2 select-none ${dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
+          className={`pl-3 pr-1.5 py-1.5 border-b flex items-center justify-between gap-2 select-none ${isMobile ? '' : dragging ? 'cursor-grabbing' : 'cursor-grab'}`}
           style={{
             borderColor: 'rgba(var(--noir-primary-rgb), 0.15)',
             background: 'rgba(var(--noir-primary-rgb), 0.08)',
-            touchAction: 'none',
+            ...(isMobile ? {} : { touchAction: 'none' }),
           }}
-          onPointerDown={onDragPointerDown}
-          onPointerMove={onDragPointerMove}
-          onPointerUp={onDragPointerUp}
-          onPointerCancel={onDragPointerUp}
-          title="Drag to move"
+          onPointerDown={isMobile ? undefined : onDragPointerDown}
+          onPointerMove={isMobile ? undefined : onDragPointerMove}
+          onPointerUp={isMobile ? undefined : onDragPointerUp}
+          onPointerCancel={isMobile ? undefined : onDragPointerUp}
+          title={isMobile ? undefined : 'Drag to move'}
         >
-          <div className="min-w-0 flex items-start gap-2">
-            <GripHorizontal size={14} className="text-primary/70 shrink-0 mt-0.5" aria-hidden />
+          <div className="min-w-0 flex items-center gap-2">
+            {!isMobile && (
+              <GripHorizontal size={14} className="text-primary/70 shrink-0" aria-hidden />
+            )}
+            <span
+              className="w-7 h-7 rounded-md border flex items-center justify-center shrink-0"
+              style={{
+                borderColor: 'rgba(var(--noir-primary-rgb), 0.4)',
+                background: 'rgba(var(--noir-primary-rgb), 0.14)',
+              }}
+            >
+              <StepIcon size={14} style={{ color: 'var(--noir-primary)' }} aria-hidden />
+            </span>
             <div className="min-w-0">
-              <span className="text-[10px] font-heading font-bold uppercase tracking-wider text-primary block truncate">
-                Tutorial · {step.title}
+              <span className="text-[11px] font-heading font-bold uppercase tracking-wider text-primary block truncate leading-tight">
+                {step.title}
               </span>
-              <span className="text-[9px] font-heading text-mutedForeground tabular-nums">
-                Step {stepIndex + 1} of {stepCount}
+              <span className="text-[10px] font-heading text-mutedForeground tabular-nums leading-tight">
+                Tutorial · Step {stepIndex + 1} of {stepCount}
               </span>
             </div>
           </div>
-          <button
-            type="button"
-            data-tutorial-no-drag
-            onClick={handleSkip}
-            disabled={busy}
-            className="p-1.5 rounded text-mutedForeground hover:text-foreground disabled:opacity-50 shrink-0 min-h-[32px] min-w-[32px] flex items-center justify-center cursor-pointer"
-            title="Skip tutorial"
-            aria-label="Skip tutorial"
-          >
-            <X size={14} />
-          </button>
+          <div className="flex items-center shrink-0">
+            <button
+              type="button"
+              data-tutorial-no-drag
+              onClick={() => setCollapsedPersist(true)}
+              className="rounded text-mutedForeground hover:text-foreground min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer"
+              title="Minimize tutorial"
+              aria-label="Minimize tutorial"
+            >
+              <Minus size={15} />
+            </button>
+            <button
+              type="button"
+              data-tutorial-no-drag
+              onClick={handleSkip}
+              disabled={busy}
+              className="rounded text-mutedForeground hover:text-foreground disabled:opacity-50 min-h-[40px] min-w-[40px] flex items-center justify-center cursor-pointer"
+              title="Skip tutorial"
+              aria-label="Skip tutorial"
+            >
+              <X size={15} />
+            </button>
+          </div>
         </div>
-        <div className="p-3 space-y-3">
-          <p className="text-[11px] font-heading leading-relaxed" style={{ color: 'var(--noir-foreground)' }}>
+        <ProgressSegments stepIndex={stepIndex} stepCount={stepCount} />
+        <div
+          key={step.id}
+          className={`tut-step-in p-3 space-y-3 overflow-y-auto overscroll-contain ${isMobile ? 'max-h-[55vh]' : 'max-h-[70vh]'}`}
+        >
+          <p className="text-xs font-heading leading-relaxed" style={{ color: 'var(--noir-foreground)' }}>
             {step.body}
           </p>
           {step.tips ? (
-            <p className="text-[10px] font-heading leading-snug text-mutedForeground border-l-2 pl-2"
+            <p className="text-[11px] font-heading leading-snug text-mutedForeground border-l-2 pl-2"
               style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.35)' }}
             >
               {step.tips}
             </p>
           ) : null}
           {step.showRewards ? <RewardChips compact /> : null}
-          {!gateOk && (step.gate === 'crime' || step.gate === 'gta') ? (
-            <p className="text-[10px] font-heading text-amber-400/90">
-              {step.gate === 'crime' ? 'Commit a crime to unlock Next.' : 'Attempt a GTA to unlock Next.'}
+          {gateHint ? (
+            <p className="text-[11px] font-heading text-amber-400/90 flex items-center gap-1.5">
+              <span className="tut-pulse-dot w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" aria-hidden />
+              {gateHint}
             </p>
           ) : null}
-          {!gateOk && step.gate === 'theme' ? (
-            <p className="text-[10px] font-heading text-amber-400/90">
-              Pick Default or Modern to unlock Next.
+          {gateDoneLine ? (
+            <p className="text-[11px] font-heading text-emerald-400 flex items-center gap-1.5">
+              <CheckCircle2 size={13} className="shrink-0" aria-hidden />
+              {gateDoneLine}
             </p>
           ) : null}
           <div className="flex flex-wrap gap-2">
@@ -544,7 +765,7 @@ export default function TutorialCoach({
               <button
                 type="button"
                 onClick={handlePrimary}
-                className="flex-1 min-w-[7rem] py-2.5 px-3 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border min-h-[44px]"
+                className="tut-btn flex-1 min-w-[7rem] py-2.5 px-3 rounded-lg text-[11px] font-heading font-bold uppercase tracking-wider border min-h-[44px]"
                 style={{
                   backgroundColor: 'rgba(var(--noir-primary-rgb), 0.2)',
                   borderColor: 'var(--noir-primary)',
@@ -558,7 +779,7 @@ export default function TutorialCoach({
               <button
                 type="button"
                 onClick={() => navigate(step.secondaryCta.route)}
-                className="py-2.5 px-3 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border min-h-[44px]"
+                className="tut-btn py-2.5 px-3 rounded-lg text-[11px] font-heading font-bold uppercase tracking-wider border min-h-[44px]"
                 style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-muted)' }}
               >
                 {step.secondaryCta.label}
@@ -570,7 +791,7 @@ export default function TutorialCoach({
               type="button"
               onClick={handleSkip}
               disabled={busy}
-              className="flex items-center gap-1 py-2.5 px-2.5 rounded-lg text-[10px] font-heading uppercase tracking-wider border disabled:opacity-50 min-h-[44px]"
+              className="tut-btn flex items-center gap-1 py-2.5 px-2.5 rounded-lg text-[11px] font-heading uppercase tracking-wider border disabled:opacity-50 min-h-[44px]"
               style={{ borderColor: 'var(--noir-border-mid)', color: 'var(--noir-muted)' }}
             >
               <SkipForward size={12} />
@@ -580,11 +801,11 @@ export default function TutorialCoach({
               type="button"
               onClick={() => handleAdvance(step.gate === 'theme' ? { theme_done: true } : {})}
               disabled={busy || !gateOk}
-              className="flex-1 flex items-center justify-center gap-1 py-2.5 px-3 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border disabled:opacity-40 min-h-[44px]"
+              className="tut-btn flex-1 flex items-center justify-center gap-1 py-2.5 px-3 rounded-lg text-[11px] font-heading font-bold uppercase tracking-wider border disabled:opacity-40 min-h-[44px]"
               style={{
-                backgroundColor: gateOk ? 'rgba(var(--noir-primary-rgb), 0.18)' : 'transparent',
+                backgroundColor: gateOk ? 'var(--noir-primary)' : 'transparent',
                 borderColor: gateOk ? 'var(--noir-primary)' : 'var(--noir-border-mid)',
-                color: gateOk ? 'var(--noir-primary)' : 'var(--noir-muted)',
+                color: gateOk ? '#141414' : 'var(--noir-muted)',
               }}
             >
               {busy ? '…' : (step.nextLabel || 'Next')}

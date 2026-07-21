@@ -15,6 +15,18 @@ const RARITY_COLORS = {
 function getRarityColor(rarity) {
   return RARITY_COLORS[rarity] || 'text-foreground';
 }
+/** Hex versions of RARITY_COLORS for inline border/glow styling (toast card). */
+const RARITY_GLOW_HEX = {
+  common: '#9ca3af',
+  uncommon: '#4ade80',
+  rare: '#60a5fa',
+  ultra_rare: '#c084fc',
+  legendary: '#facc15',
+  custom: '#fb923c',
+  exclusive: '#f87171',
+  loot_exclusive: '#fbbf24',
+  vip_exclusive: '#06b6d4',
+};
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -260,7 +272,9 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
           <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
             {recentStolen.map((car, index) => {
               const displayName = car.car_name || car.name || 'Car';
-              const rarity = (car.rarity || 'common').replace(/_/g, ' ');
+              const rarityKey = String(car.rarity || 'common').toLowerCase();
+              const rarity = rarityKey.replace(/_/g, ' ');
+              const glowHex = RARITY_GLOW_HEX[rarityKey] || RARITY_GLOW_HEX.common;
               const value = car.value ?? 0;
               const damage = Math.min(100, Math.max(0, Number(car.damage_percent) ?? 0));
               return (
@@ -270,7 +284,10 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
                   data-testid={`recent-stolen-car-${index}`}
                   className={`${styles.panel} rounded-lg border border-border hover:border-primary/30 p-1 sm:p-1.5 transition-all overflow-hidden block text-left min-w-0`}
                 >
-                  <div className="w-full aspect-[4/3] rounded overflow-hidden bg-secondary border border-border mb-0.5 sm:mb-1 relative shrink-0">
+                  <div
+                    className="w-full aspect-[4/3] rounded overflow-hidden bg-secondary mb-0.5 sm:mb-1 relative shrink-0"
+                    style={{ border: `1px solid ${glowHex}88`, boxShadow: `0 0 6px ${glowHex}55` }}
+                  >
                     {car.image ? (
                       <img
                         src={car.image}
@@ -514,16 +531,28 @@ export default function GTA() {
       if (response.data.success) {
         const car = response.data.car;
         const img = car?.image;
+        const rarityKey = String(car?.rarity || 'common').toLowerCase();
+        const glowHex = RARITY_GLOW_HEX[rarityKey] || RARITY_GLOW_HEX.common;
+        const rarityLabel = rarityKey.replace(/_/g, ' ');
         toast.success(response.data.message, {
           description: car ? (
             <div className="flex items-center gap-3">
               {img ? (
-                <div className="w-12 h-12 rounded-sm overflow-hidden border border-border bg-secondary shrink-0">
+                <div
+                  className="w-12 h-12 rounded-sm overflow-hidden bg-secondary shrink-0"
+                  style={{
+                    border: `2px solid ${glowHex}`,
+                    boxShadow: `0 0 10px ${glowHex}99, inset 0 0 6px ${glowHex}33`,
+                  }}
+                >
                   <img src={img} alt={car?.name || 'car'} className="w-full h-full object-cover" loading="lazy" />
                 </div>
               ) : null}
               <div className="text-xs text-mutedForeground">
                 <div className="text-foreground font-semibold">{car?.name || 'Car'}</div>
+                <div className={`mt-0.5 text-[10px] font-bold uppercase tracking-wider ${getRarityColor(rarityKey)}`}>
+                  {rarityLabel}
+                </div>
                 {typeof response.data.respect_points === 'number' && response.data.respect_points > 0 ? (
                   <div className="mt-0.5">Respect: +{response.data.respect_points}</div>
                 ) : null}

@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-21 14:15 UTC[/color][/b] — [b]GTA loot pools and rank point rewards[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] Street Parking can now drop [b]uncommon[/b] and [b]rare[/b] cars — roughly 65% common, 26.5% uncommon, 8.5% rare per successful steal. Rare-drop boosts and perks apply there too.[/color]
+[*][color=#888888][b]Improved:[/b] Harder GTA options now pay more rank points on top of car rarity: from [b]×1.25[/b] at Residential Area up to [b]×2[/b] at Private Estate. Street Parking payouts are unchanged.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-18 18:42 UTC[/color][/b] — [b]Daily family objectives and racket rewards[/b][/size]
 [quote]
 [list]

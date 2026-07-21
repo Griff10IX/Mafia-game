@@ -149,7 +149,17 @@ const WorldCup = lazy(() => import("./pages/Game/WorldCup"));
 const WorldCupStaff = lazy(() => import("./pages/Game/WorldCupStaff"));
 
 const PageLoader = () => (
-  <div className="min-h-[200px] flex items-center justify-center text-primary text-sm font-heading">Loading...</div>
+  <div className="min-h-[45vh] flex flex-col items-center justify-center gap-3">
+    <div
+      className="w-8 h-8 rounded-full border-2 animate-spin"
+      style={{
+        borderColor: 'rgba(var(--noir-primary-rgb, 212, 175, 55), 0.2)',
+        borderTopColor: 'var(--noir-primary, #d4af37)',
+      }}
+      aria-hidden
+    />
+    <span className="text-primary text-[11px] font-heading font-bold uppercase tracking-[0.2em]">Loading</span>
+  </div>
 );
 
 // Redirect helpers for parameterized routes
@@ -242,7 +252,7 @@ function App() {
   return (
     <div className="App">
       <ServerUnavailableOverlay />
-      <BrowserRouter>
+      <BrowserRouter future={{ v7_startTransition: true }}>
         <ThemeProvider>
         <DashboardPrefetchGate isAuthenticated={isAuthenticated} />
         <RouteChunkPreloadGate />

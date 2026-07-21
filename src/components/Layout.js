@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate, useLocation, useNavigationType } from 'react-router-dom';
 import { SAME_ROUTE_NAV_CLICK } from '../constants/navigationEvents';
 import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Grid3x3, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb } from 'lucide-react';
 import api, {
@@ -461,8 +461,10 @@ export default function Layout({ children }) {
   notificationPanelOpenRef.current = notificationPanelOpen;
   const fetchDataRef = useRef(async () => {});
   const mobileBottomNavRef = useRef(null);
+  const mainContentRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const navigationType = useNavigationType();
   const {
     mobileNavStyle,
     themeVariant,
@@ -1085,6 +1087,34 @@ export default function Layout({ children }) {
     window.addEventListener(SAME_ROUTE_NAV_CLICK, onSameRoute);
     return () => window.removeEventListener(SAME_ROUTE_NAV_CLICK, onSameRoute);
   }, []);
+
+  /** Smooth page transition: fade/slide the new page in on route change (no remount, so page state and fetches are untouched). */
+  const routeTransitionLastPathRef = useRef(null);
+  useEffect(() => {
+    const prevPath = routeTransitionLastPathRef.current;
+    routeTransitionLastPathRef.current = location.pathname;
+    if (prevPath === null || prevPath === location.pathname) return;
+    // Fresh top-of-page on forward navigation; browser handles back/forward restore.
+    if (navigationType !== 'POP') {
+      try {
+        window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+      } catch (_) {
+        window.scrollTo(0, 0);
+      }
+    }
+    const el = mainContentRef.current;
+    if (!el || typeof el.animate !== 'function') return;
+    try {
+      if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
+      el.animate(
+        [
+          { opacity: 0.3, transform: 'translateY(10px)' },
+          { opacity: 1, transform: 'none' },
+        ],
+        { duration: 240, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+      );
+    } catch (_) { /* ignore */ }
+  }, [location.pathname, navigationType]);
 
   useEffect(() => {
     if (flashNews.length <= 1) return;
@@ -2495,7 +2525,7 @@ export default function Layout({ children }) {
           }
           return (
             <ErrorBoundary>
-              <div className="relative">
+              <div ref={mainContentRef} className="relative">
                 <Fragment key={contentResumeKey}>{children}</Fragment>
                 {user ? <FindWordHuntLayer /> : null}
               </div>

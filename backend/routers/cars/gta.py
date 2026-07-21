@@ -277,18 +277,41 @@ GTA_NON_LEGENDARY_RARITY_BOOST_SLOPE = {
     "rare": 0.55,
     "ultra_rare": 0.70,
 }
+# Street Parking (difficulty 1) rolls uncommon/rare too, but leaner than the global
+# weights: with 6 common / 4 uncommon / 4 rare cars this lands ~65% / ~26.5% / ~8.5%.
+GTA_STREET_PARKING_RARITY_BASE_WEIGHT = {
+    "common": 1.0,
+    "uncommon": 0.61,
+    "rare": 0.19,
+}
+# Difficulty-1 options can steal cars up to this catalog min_difficulty (pulls uncommon + rare in).
+GTA_STREET_PARKING_MAX_CAR_DIFFICULTY = 3
+# Better heists pay better rank points on top of car rarity.
+GTA_DIFFICULTY_RANK_POINTS_MULT = {1: 1.0, 2: 1.25, 3: 1.5, 4: 1.75, 5: 2.0}
 REFERRED_USER_GTA_RARE_BOOST = 0.10  # GTA rare car weight boost for referred signups (pairs with ~10% copy)
 FOUNDING_MEMBER_GTA_RARE_BOOST = 0.15  # Founding Member: extra weight toward rarer cars
 
 
-def _gta_non_legendary_roll_weight(rarity: Optional[str], rare_boost: float) -> float:
+def _gta_non_legendary_roll_weight(
+    rarity: Optional[str],
+    rare_boost: float,
+    base_weights: Optional[Dict[str, float]] = None,
+) -> float:
     r = (rarity or "common").strip() or "common"
-    base = GTA_NON_LEGENDARY_RARITY_BASE_WEIGHT.get(r)
+    weights = base_weights if base_weights is not None else GTA_NON_LEGENDARY_RARITY_BASE_WEIGHT
+    base = weights.get(r)
     if base is None:
         base = 1.0
     slope = GTA_NON_LEGENDARY_RARITY_BOOST_SLOPE.get(r, 0.0)
     w = base + slope * max(rare_boost, 0.0)
     return max(w, 0.001)
+
+
+def _gta_pool_max_car_difficulty(option_difficulty: int) -> int:
+    """Difficulty-1 options roll bonus uncommon/rare tiers; others use their own difficulty."""
+    if int(option_difficulty or 1) == 1:
+        return GTA_STREET_PARKING_MAX_CAR_DIFFICULTY
+    return int(option_difficulty or 1)
 
 
 # One-time respect_points rewards when total_gta crosses milestones (same progression as busts/crimes)
@@ -637,10 +660,14 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
 
     if success:
         # Store-bought custom car template — not a GTA steal reward (would look like random garage dupes).
+        pool_max_difficulty = _gta_pool_max_car_difficulty(option["difficulty"])
+        pool_weight_override = (
+            GTA_STREET_PARKING_RARITY_BASE_WEIGHT if int(option["difficulty"]) == 1 else None
+        )
         pool_cars = [
             c
             for c in CARS
-            if c["min_difficulty"] <= option["difficulty"]
+            if c["min_difficulty"] <= pool_max_difficulty
             and c["rarity"] != "exclusive"
             and c.get("rarity") not in ("loot_exclusive", "vip_exclusive")
             and c.get("id") != "car_custom"
@@ -703,7 +730,10 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         else:
             base_pool = non_legendary_cars if non_legendary_cars else pool_cars
             # Scale exclusive weight by sum of non-exclusive weights so P(exclusive | success) = w/(1+w) for all tiers
-            pool_weights = [_gta_non_legendary_roll_weight(c.get("rarity"), _rare_boost) for c in base_pool]
+            pool_weights = [
+                _gta_non_legendary_roll_weight(c.get("rarity"), _rare_boost, pool_weight_override)
+                for c in base_pool
+            ]
             weight_sum = float(sum(pool_weights))
             if exclusive_in_roll and weight_sum > 0:
                 ex_w = exclusive_drop_weight * weight_sum
@@ -726,6 +756,9 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
             "exclusive": 100,
         }
         rank_points = rank_points_map.get(car["rarity"], 3)
+        rank_points = int(
+            rank_points * GTA_DIFFICULTY_RANK_POINTS_MULT.get(int(option["difficulty"]), 1.0)
+        )
         rank_points = int(rank_points * ev.get("rank_points", 1.0))
         now_utc = datetime.now(timezone.utc)
         rp_perk_until = _parse_iso_datetime(current_user.get("rp_perk_until"))
