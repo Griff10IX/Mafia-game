@@ -12377,7 +12377,15 @@ export default function Admin() {
                     </div>
                   ))}
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    disabled={storeItemFlagsSaving}
+                    onClick={() => handleSaveStoreItemFlags({ enable_all: true })}
+                    className="w-full py-2 text-[10px] font-heading font-bold uppercase rounded bg-emerald-500/15 text-emerald-400 border border-emerald-500/40 hover:bg-emerald-500/25 disabled:opacity-50"
+                  >
+                    Enable all (live)
+                  </button>
                   <button
                     type="button"
                     disabled={storeItemFlagsSaving}

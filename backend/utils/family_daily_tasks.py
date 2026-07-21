@@ -14,14 +14,16 @@ from utils.family_vault_log import log_family_vault_tx
 
 logger = logging.getLogger(__name__)
 
+# Per-member daily targets: rolled deterministically per family+day from target_range
+# (inclusive), snapped to step. car_melt counts bullets earned from melts, not cars.
 OBJECTIVES = {
-    "crime": {"label": "Successful crimes", "target": 20},
-    "gta": {"label": "Successful GTAs", "target": 5},
-    "jail_bust": {"label": "Successful jail busts", "target": 3},
-    "booze_run": {"label": "Completed booze runs", "target": 2},
-    "car_melt": {"label": "Cars melted", "target": 5},
-    "oc": {"label": "Organised crime participation", "target": 1},
-    "racket_collect": {"label": "Racket collections", "target": 2},
+    "crime": {"label": "Successful crimes", "target_range": (1_000, 5_000), "step": 100},
+    "gta": {"label": "Successful GTAs", "target_range": (50, 200), "step": 10},
+    "jail_bust": {"label": "Successful jail busts", "target_range": (25, 75), "step": 5},
+    "booze_run": {"label": "Completed booze runs", "target_range": (10, 30), "step": 2},
+    "car_melt": {"label": "Bullets earned melting cars", "target_range": (15_000, 30_000), "step": 1_000},
+    "oc": {"label": "Organised crime participation", "target_range": (1, 3), "step": 1},
+    "racket_collect": {"label": "Racket collections", "target_range": (4, 12), "step": 2},
 }
 OBJECTIVE_TYPES = tuple(OBJECTIVES)
 
@@ -87,10 +89,14 @@ def objective_spec(family_id: str, period: str) -> Dict[str, Any]:
     )
     reward_types = ranked_rewards[:reward_count]
     definition = OBJECTIVES[objective_type]
+    lo, hi = definition["target_range"]
+    step = max(1, int(definition.get("step") or 1))
+    slots = (int(hi) - int(lo)) // step + 1
+    target = int(lo) + step * (int.from_bytes(digest[5:9], "big") % slots)
     return {
         "objective_type": objective_type,
         "label": definition["label"],
-        "target": int(definition["target"]),
+        "target": int(target),
         "reward_types": reward_types,
     }
 

@@ -312,6 +312,7 @@ class AdminSettingsUpdate(BaseModel):
 class AdminStoreItemFlagsPatch(BaseModel):
     flags: Optional[dict] = None
     enable_phase1: Optional[bool] = None
+    enable_all: Optional[bool] = None
     disable_all: Optional[bool] = None
 
 
@@ -10970,6 +10971,8 @@ def register(router):
         current = normalize_store_item_flags((doc or {}).get("store_item_flags"))
         if body.disable_all:
             current = {k: False for k in STORE_ITEM_FLAG_DEFAULTS}
+        elif body.enable_all:
+            current = {k: True for k in STORE_ITEM_FLAG_DEFAULTS}
         elif body.enable_phase1:
             for k in PHASE1_STORE_ITEM_FLAGS:
                 current[k] = True

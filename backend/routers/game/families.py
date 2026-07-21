@@ -237,6 +237,8 @@ FAMILY_RACKET_DEFENCE_SUCCESS_PER_POINT = 0.02
 FAMILY_RACKET_OFFENCE_TAKE_BONUS_PER_POINT = 0.01
 FAMILY_RACKET_ATTACK_MAX_PER_CREW = 2
 FAMILY_RACKET_ATTACK_CREW_WINDOW_HOURS = 3
+# Even a failed raid roughs the place up: chance one defence upgrade is destroyed anyway.
+FAMILY_RACKET_RAID_FAIL_SABOTAGE_CHANCE = 0.50
 
 FAMILY_RACKET_DEFENCE_UPGRADES = [
     {"id": "reinforced_door", "name": "Reinforced door", "cost": 50_000, "defence_weight": 8},
@@ -5693,10 +5695,44 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
                 "success_chance_pct": int(round(success_chance * 100)),
             }
         fail_msg = _rng.choice(FAMILY_RACKET_RAID_FAIL_MESSAGES).format(family_name=family_name, racket_name=racket_name)
+        # Failed raids still cause damage: 50% chance one defence upgrade gets wrecked anyway,
+        # so the defenders have to buy it again from the treasury.
+        fail_destroyed_name = None
+        if defence_upgrades and _rng.random() < FAMILY_RACKET_RAID_FAIL_SABOTAGE_CHANCE:
+            fail_destroyed_id = _rng.choice(defence_upgrades)
+            pull_result = await db.families.update_one(
+                {"id": request.family_id},
+                {"$pull": {f"rackets.{request.racket_id}.defence_upgrades": fail_destroyed_id}},
+            )
+            if pull_result.modified_count > 0:
+                destroyed_row = _FAMILY_RACKET_DEFENCE_BY_ID.get(fail_destroyed_id)
+                fail_destroyed_name = (destroyed_row or {}).get("name") or fail_destroyed_id
+                await log_family_vault_tx(
+                    db,
+                    request.family_id,
+                    "racket_defence_destroyed",
+                    current_user["id"],
+                    current_user.get("username") or "?",
+                    cash_delta=0,
+                    meta={
+                        "attacker_family_id": my_family_id,
+                        "attacker_family_name": atk_label,
+                        "racket_id": request.racket_id,
+                        "racket_name": racket_name,
+                        "upgrade_id": fail_destroyed_id,
+                        "upgrade_name": fail_destroyed_name,
+                        "raid_failed": True,
+                    },
+                )
+                _invalidate_list_cache()
+                _invalidate_my_cache(current_user["id"])
+        if fail_destroyed_name:
+            fail_msg = f"{fail_msg} You still wrecked their {fail_destroyed_name} on the way out — they'll have to buy it again."
         return {
             "success": False,
             "message": fail_msg,
             "amount": 0,
+            "defence_destroyed": fail_destroyed_name,
             "success_chance_pct": int(round(success_chance * 100)),
         }
 

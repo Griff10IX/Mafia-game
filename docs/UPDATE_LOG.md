@@ -6,10 +6,59 @@
 
 [hr]
 
-[size=1.5][b][color=#2ECC71]2026-07-21 21:55 UTC[/color][/b] — [b]Skip buttons on Crimes & GTA[/b][/size]
+[size=1.5][b][color=#2ECC71]2026-07-21 23:00 UTC[/color][/b] — [b]Store goes fully live + today's smaller changes and fixes[/b][/size]
 [quote]
 [list]
-[*][color=#888888][b]Improved:[/b] If you hold [b]Crime / GTA cooldown skip tokens[/b], a [b]⚡ Skip[/b] button now appears right on the crime row (including prestige crimes) or GTA row while it's on cooldown — one tap uses a token and commits/attempts immediately. No more going via My Inventory first. The usual [b]5 skips/day[/b] cap (shared across all skip types) still applies.[/color]
+[*][color=#888888][b]New:[/b] [b]All Points Store items are now live for everyone[/b] — everything that was staff-preview (auto-collect tokens, cooldown skip tokens, jail bailout tokens, raid capacity packs, Property Auto Collect and more) can now be bought and used by all players.[/color]
+[*][color=#888888][b]Changed:[/b] Buying [b]Store tokens with cash[/b] — when fewer than [b]3 Quick Trade sell offers[/b] are live, the price per point now defaults to [b]$500,000[/b] instead of the old $150,000 floor. With 3+ offers it still averages the cheapest three.[/color]
+[*][color=#888888][b]Changed:[/b] The [b]family safe[/b] deposit cap is now tiered: [b]$250M / $500M / $1B[/b] by safe upgrade level (max [b]$1,000,000,000[/b]). Existing families automatically get the new caps.[/color]
+[*][color=#888888][b]Improved:[/b] [b]My Inventory[/b] — the [b]Weapons, Armour and Tokens[/b] tabs now use the same card layout as the "In use" tab (icons, counts, descriptions and actions on tidy cards instead of long text rows).[/color]
+[*][color=#888888][b]Improved:[/b] The [b]Property Auto Collect[/b] panel on the Properties page now shows running totals: how much it has [b]sent to your racket vault[/b], upkeep paid, heat bribes, and when it last collected.[/color]
+[*][color=#888888][b]Improved:[/b] The entertainer forum's [b]Last 10 Games[/b] list now shows [b]who hosted[/b] each game.[/color]
+[*][color=#888888][b]Improved:[/b] Buying a [b]Family Event Token[/b] now tells you clearly whether your family's event is [b]already active[/b] (with hours left) or [b]on cooldown[/b] (with time until the next one), instead of a generic error.[/color]
+[*][color=#888888][b]Fixed:[/b] [b]Crime cooldown skip tokens[/b] no longer fail with "Failed to use token" on the first activation of the day.[/color]
+[*][color=#888888][b]Fixed:[/b] The [b]bailout token[/b] button now appears on the Jail page when you're locked up and actually hold tokens.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-21 22:45 UTC[/color][/b] — [b]Hit a Joint: cleaner target pool + 2 hits per joint per day[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] You can no longer raid [b]dead or locked accounts[/b] — they're rejected on direct raids and excluded from the [b]Random[/b] target pool (along with NPCs and bodyguards), so random raids stop landing on dud targets.[/color]
+[*][color=#888888][b]Changed:[/b] The per-target rule is now [b]max 2 hits on the same joint per day[/b] (was a flat 12h cooldown) — so with a raised daily cap you can double-tap a target back-to-back if you want. Random raids skip joints you've already maxed today.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-21 22:30 UTC[/color][/b] — [b]Daily family objectives: proper crew-sized targets[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Daily family objective targets are now [b]randomised each day[/b] and much bigger — e.g. [b]1,000–5,000 crimes[/b], [b]50–200 GTAs[/b], [b]25–75 jail busts[/b], [b]10–30 booze runs[/b] and [b]4–12 racket collections[/b] per member. Each family rolls its own target at the UTC reset.[/color]
+[*][color=#888888][b]Changed:[/b] The car melting objective now counts [b]bullets earned from melting[/b] (target [b]15,000–30,000 bullets[/b]) instead of cars melted — melting for cash doesn't count.[/color]
+[*][color=#888888]Today's objective keeps its current target; the new numbers kick in from the next UTC reset.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-21 22:15 UTC[/color][/b] — [b]Raids got meaner: defences break even on failure[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Family [b]Hit Jobs[/b] (racket raids) — even when a raid [b]fails[/b], there's now a [b]50% chance you destroy one of the defender's racket defence upgrades[/b] on the way out, so they have to buy it again from the treasury. Successful raids still steal from the till and break a defence as before. Defenders see it in the vault log.[/color]
+[*][color=#888888][b]Changed:[/b] Illegal business [b]Hit a Joint[/b] raids — [b]win or lose, there's a 50% chance one of the defender's guards is killed in the shootout[/b]. The slot survives, but they'll have to hire and re-gear a replacement. Both sides are told which slot went down.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-21 21:55 UTC[/color][/b] — [b]Skip buttons on Crimes & GTA + bigger daily cap[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Improved:[/b] If you hold [b]Crime / GTA cooldown skip tokens[/b], a [b]⚡ Skip[/b] button now appears right on the crime row (including prestige crimes) or GTA row while it's on cooldown — one tap uses a token and commits/attempts immediately. No more going via My Inventory first.[/color]
+[*][color=#888888][b]Changed:[/b] The cooldown skip daily cap is now [b]200 activations per day for each skip type[/b] (crime, GTA, booze travel, properties collect) — up from 5 shared across all types.[/color]
 [/list]
 [/quote]
 

@@ -822,18 +822,32 @@ async def buy_family_event_token(
     if fam is None:
         raise HTTPException(status_code=404, detail="Family not found")
     now = datetime.now(timezone.utc)
-    last_at = fam.get("event_token_last_at")
-    if last_at:
+
+    def _parse_dt(raw):
         try:
-            last_dt = datetime.fromisoformat(str(last_at).replace("Z", "+00:00"))
-            if last_dt.tzinfo is None:
-                last_dt = last_dt.replace(tzinfo=timezone.utc)
-            if (now - last_dt).total_seconds() < FAMILY_EVENT_COOLDOWN_DAYS * 86400:
-                raise HTTPException(status_code=400, detail=f"Family events can be started once every {FAMILY_EVENT_COOLDOWN_DAYS} days")
-        except HTTPException:
-            raise
+            dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+            return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
         except Exception:
-            pass
+            return None
+
+    # Distinguish "still running" from "on cooldown" so the error isn't confusing.
+    active_until = _parse_dt(fam.get("event_active_until"))
+    if active_until and active_until > now:
+        left_h = max(1, int((active_until - now).total_seconds() // 3600))
+        raise HTTPException(
+            status_code=400,
+            detail=f"Your family's event is already active (+10% racket income) — about {left_h}h left.",
+        )
+    last_dt = _parse_dt(fam.get("event_token_last_at"))
+    if last_dt:
+        cooldown_ends = last_dt + timedelta(days=FAMILY_EVENT_COOLDOWN_DAYS)
+        if cooldown_ends > now:
+            left_h = max(1, int((cooldown_ends - now).total_seconds() // 3600))
+            left = f"{left_h // 24}d {left_h % 24}h" if left_h >= 24 else f"{left_h}h"
+            raise HTTPException(
+                status_code=400,
+                detail=f"Family events can be started once every {FAMILY_EVENT_COOLDOWN_DAYS} days — next one available in ~{left}.",
+            )
     cost_used, inc, gte_filter = _store_cost_inc(current_user, FAMILY_EVENT_TOKEN_COST_POINTS, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")

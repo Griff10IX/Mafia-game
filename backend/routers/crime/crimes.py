@@ -26,12 +26,34 @@ logger = logging.getLogger(__name__)
 _crime_commit_locks: Dict[str, asyncio.Lock] = {}
 _crime_commit_locks_guard = asyncio.Lock()
 
+# Post-commit bookkeeping (analytics, logs, objectives, family progress) runs in background
+# tasks so the commit response isn't blocked on ~15 extra DB round-trips. A per-user lock keeps
+# those tasks in commit order (objective counters do read-modify-write).
+_crime_bookkeeping_locks: Dict[str, asyncio.Lock] = {}
+_crime_bookkeeping_tasks: set = set()
+
 
 async def _get_crime_commit_lock(user_id: str) -> asyncio.Lock:
     async with _crime_commit_locks_guard:
         if user_id not in _crime_commit_locks:
             _crime_commit_locks[user_id] = asyncio.Lock()
         return _crime_commit_locks[user_id]
+
+
+def _spawn_crime_bookkeeping(user_id: str, coro_factory) -> None:
+    """Run coro_factory() in the background, serialized per user, keeping a strong task ref."""
+    lock = _crime_bookkeeping_locks.setdefault(user_id, asyncio.Lock())
+
+    async def _runner():
+        async with lock:
+            try:
+                await coro_factory()
+            except Exception:
+                logger.exception("crime post-commit bookkeeping failed user_id=%s", user_id)
+
+    task = asyncio.create_task(_runner())
+    _crime_bookkeeping_tasks.add(task)
+    task.add_done_callback(_crime_bookkeeping_tasks.discard)
 
 
 # Progress bar: 25-92%. Success +6-8%. Fail -1-3%; once you've hit max, floor is 77% (never drop more than 15% from max)
@@ -715,24 +737,31 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
     # find_one_and_update only updated one document. Duplicate user_crimes rows (from the old
     # upsert bug) each looked "off cooldown" in parallel — four rows => four commits. Claim with
     # update_many so every matching row gets the new cooldown in one write; only one request wins.
-    await db.user_crimes.update_one(
-        {"user_id": uid, "crime_id": crime_id},
-        {"$setOnInsert": {"attempts": 0, "successes": 0}},
-        upsert=True,
-    )
-    claim = await db.user_crimes.update_many(
-        {
-            "user_id": uid,
-            "crime_id": crime_id,
-            "$or": [
-                {"cooldown_until": {"$exists": False}},
-                {"cooldown_until": None},
-                {"cooldown_until": {"$lte": now_iso}},
-                {"cooldown_until": {"$lte": now}},
-            ],
-        },
-        {"$set": {"cooldown_until": cooldown_until}},
-    )
+    async def _claim_cooldown():
+        return await db.user_crimes.update_many(
+            {
+                "user_id": uid,
+                "crime_id": crime_id,
+                "$or": [
+                    {"cooldown_until": {"$exists": False}},
+                    {"cooldown_until": None},
+                    {"cooldown_until": {"$lte": now_iso}},
+                    {"cooldown_until": {"$lte": now}},
+                ],
+            },
+            {"$set": {"cooldown_until": cooldown_until}},
+        )
+
+    claim = await _claim_cooldown()
+    if claim.matched_count == 0:
+        # Row may not exist yet (first commit of this crime) — seed it and retry once.
+        seed = await db.user_crimes.update_one(
+            {"user_id": uid, "crime_id": crime_id},
+            {"$setOnInsert": {"attempts": 0, "successes": 0}},
+            upsert=True,
+        )
+        if seed.upserted_id is not None:
+            claim = await _claim_cooldown()
     if claim.matched_count == 0:
         from utils.cooldown_skip import has_skip_credit, consume_skip_credit
 
@@ -781,6 +810,9 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
     )
     success = _rng.random() < min(1.0, success_rate)
     rank_points_earned_out = 0
+    xp_crimes_bonus_rp = 0
+    # Non-response-affecting DB work queued here runs in a background task after we respond.
+    deferred_ops: list = []
 
     if success:
         gain = _rng.randint(CRIME_PROGRESS_GAIN_MIN, CRIME_PROGRESS_GAIN_MAX)
@@ -832,23 +864,34 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
                 if until.tzinfo is None:
                     until = until.replace(tzinfo=timezone.utc)
                 if now_utc < until:
-                    _xp_token_bonus = int(rank_points)  # the doubled slice equals the pre-double RP
+                    xp_crimes_bonus_rp = int(rank_points)  # the doubled slice equals the pre-double RP
                     rank_points = rank_points * 2
-                    try:
-                        from utils.token_perk_stats import bump_token_perk_stats
-                        await bump_token_perk_stats(db, current_user["id"], "xp_crimes", bonus_rp=_xp_token_bonus, uses=1)
-                    except Exception:
-                        pass
             except Exception:
                 pass
         # Prestige bonus: boost crime cash payout
         from server import get_prestige_bonus
         reward = int(reward * get_prestige_bonus(current_user)["crime_mult"])
-        # Badge bonus: 0.1% per crimes badge; prestige: 0.5% boost per level
+        # Badge bonus (0.1% per crimes badge; prestige 0.5%/level) and the racket in-state
+        # lookup are independent reads — run them concurrently to save a round-trip.
+        from routers.game.achievements import get_badge_bonuses
+
+        async def _biz_state_row():
+            return await db.illegal_businesses.find_one(
+                {"user_id": current_user["id"]},
+                {"_id": 0, "state": 1},
+            )
+
+        bb = {}
+        biz = None
         try:
-            from routers.game.achievements import get_badge_bonuses
-            bb = await get_badge_bonuses(current_user.get("id") or "")
-            reward = int(reward * (1 + bb.get("crimes", 0) * 0.001) * bb.get("prestige_badge_mult", 1))
+            bb, biz = await asyncio.gather(
+                get_badge_bonuses(current_user.get("id") or ""),
+                _biz_state_row(),
+            )
+        except Exception:
+            pass
+        try:
+            reward = int(reward * (1 + (bb or {}).get("crimes", 0) * 0.001) * (bb or {}).get("prestige_badge_mult", 1))
         except Exception:
             pass
         from server import founding_member_income_mult
@@ -869,10 +912,6 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         # Racket / illegal-business missions: crimes in the business's state (doc.state set at start)
         ib_crimes_in_state_inc = 0
         try:
-            biz = await db.illegal_businesses.find_one(
-                {"user_id": current_user["id"]},
-                {"_id": 0, "state": 1},
-            )
             if biz:
                 bstate = (biz.get("state") or "").strip()
                 here = (current_user.get("current_state") or "").strip()
@@ -922,42 +961,52 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
             {"id": current_user["id"]},
             crime_update,
         )
-        # Exploit check: flag impossible single-action gains (e.g. >$50M from one crime)
-        try:
-            import middleware.security as sec
-            if getattr(sec, "DETECT_IMPOSSIBLE_GAIN", 0) > 0:
-                prev = int(current_user.get("money") or 0)
-                await sec.check_impossible_wealth_gain(
-                    db, current_user["id"], current_user.get("username", "?"),
-                    prev, prev + reward, "crime"
-                )
-        except Exception:
-            pass
-        # Referral: referrers split 10% of crime profit evenly (game-paid)
-        _rb = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "referred_by": 1})
-        ref_ids = normalize_referred_by_ids((_rb or current_user).get("referred_by"))
-        if ref_ids and reward > 0:
-            pool = referral_pool_int(reward, 0.10)
-            for rid, amt in split_referral_pool(pool, ref_ids, self_id=current_user["id"]):
-                if amt > 0:
-                    await apply_referrer_referral_increment(
-                        db, rid, {"money": amt, "referral_earnings_crime": amt}, context="crime"
-                    )
-        if inc.get("respect_points"):
-            await log_respect_earned(current_user["id"], inc["respect_points"], "crimes")
-        if inc.get("loot_box_pieces"):
+        # Exploit check, referral split, respect log and economy event are bookkeeping —
+        # they don't affect the response, so they run in the deferred background batch.
+        async def _post_success_bookkeeping():
             try:
-                await db.economy_events.insert_one({
-                    "at": now_utc.isoformat(),
-                    "type": "loot_piece_drop",
-                    "user_id": current_user["id"],
-                    "username": current_user.get("username") or "",
-                    "crime_id": crime.get("id"),
-                    "crime_name": crime.get("name"),
-                    "pieces": inc.get("loot_box_pieces"),
-                })
-            except Exception as e:
-                logger.warning("economy_events loot_piece_drop insert: %s", e)
+                import middleware.security as sec
+                if getattr(sec, "DETECT_IMPOSSIBLE_GAIN", 0) > 0:
+                    prev = int(current_user.get("money") or 0)
+                    await sec.check_impossible_wealth_gain(
+                        db, current_user["id"], current_user.get("username", "?"),
+                        prev, prev + reward, "crime"
+                    )
+            except Exception:
+                pass
+            if xp_crimes_bonus_rp:
+                try:
+                    from utils.token_perk_stats import bump_token_perk_stats
+                    await bump_token_perk_stats(db, current_user["id"], "xp_crimes", bonus_rp=xp_crimes_bonus_rp, uses=1)
+                except Exception:
+                    pass
+            # Referral: referrers split 10% of crime profit evenly (game-paid)
+            _rb = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "referred_by": 1})
+            ref_ids = normalize_referred_by_ids((_rb or current_user).get("referred_by"))
+            if ref_ids and reward > 0:
+                pool = referral_pool_int(reward, 0.10)
+                for rid, amt in split_referral_pool(pool, ref_ids, self_id=current_user["id"]):
+                    if amt > 0:
+                        await apply_referrer_referral_increment(
+                            db, rid, {"money": amt, "referral_earnings_crime": amt}, context="crime"
+                        )
+            if inc.get("respect_points"):
+                await log_respect_earned(current_user["id"], inc["respect_points"], "crimes")
+            if inc.get("loot_box_pieces"):
+                try:
+                    await db.economy_events.insert_one({
+                        "at": now_utc.isoformat(),
+                        "type": "loot_piece_drop",
+                        "user_id": current_user["id"],
+                        "username": current_user.get("username") or "",
+                        "crime_id": crime.get("id"),
+                        "crime_name": crime.get("name"),
+                        "pieces": inc.get("loot_box_pieces"),
+                    })
+                except Exception as e:
+                    logger.warning("economy_events loot_piece_drop insert: %s", e)
+
+        deferred_ops.append(_post_success_bookkeeping)
 
         # Prestige bonus rewards (separate update so they're always applied cleanly)
         if crime.get("prestige_bonus"):
@@ -1002,28 +1051,32 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         claimed = current_user.get("respect_points_crime_milestones_claimed") or []
         new_claimed = [m for m in CRIME_MILESTONES if m <= new_total_crimes and m not in claimed]
         milestone_respect = sum(CRIME_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
-        await _award_crime_milestones(current_user["id"], new_total_crimes, claimed)
         respect_earned = max(0, int((respect_drop or 0) * RESPECT_FROM_CRIMES_MULT)) + max(0, int(milestone_respect * RESPECT_FROM_CRIMES_MULT))
-        try:
-            await maybe_process_rank_up(
-                current_user["id"],
-                rp_before,
-                rank_points_in_update(crime_update),
-                current_user.get("username", ""),
-                user_prestige_rank_mult(current_user),
+
+        async def _post_success_progress():
+            await _award_crime_milestones(current_user["id"], new_total_crimes, claimed)
+            try:
+                await maybe_process_rank_up(
+                    current_user["id"],
+                    rp_before,
+                    rank_points_in_update(crime_update),
+                    current_user.get("username", ""),
+                    user_prestige_rank_mult(current_user),
+                )
+            except Exception as e:
+                logger.exception("Rank-up notification (crimes): %s", e)
+            await db.crime_earnings.insert_one(
+                {"user_id": current_user["id"], "amount": reward, "at": now}
             )
-        except Exception as e:
-            logger.exception("Rank-up notification (crimes): %s", e)
-        await db.crime_earnings.insert_one(
-            {"user_id": current_user["id"], "amount": reward, "at": now}
-        )
-        try:
-            await update_objectives_progress(current_user["id"], "crimes", 1)
-            city = (current_user.get("current_state") or "").strip()
-            if city:
-                await update_objectives_progress(current_user["id"], "crimes_in_city", 1, city=city)
-        except Exception:
-            pass
+            try:
+                await update_objectives_progress(current_user["id"], "crimes", 1)
+                obj_city = (current_user.get("current_state") or "").strip()
+                if obj_city:
+                    await update_objectives_progress(current_user["id"], "crimes_in_city", 1, city=obj_city)
+            except Exception:
+                pass
+
+        deferred_ops.append(_post_success_progress)
         if rank_points:
             message = _rng.choice(CRIME_SUCCESS_MESSAGES).format(reward=reward, rank_points=rank_points)
         else:
@@ -1068,52 +1121,62 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         {"user_id": current_user["id"], "crime_id": crime_id},
         {"$set": set_fields},
     )
-    await _dedup_user_crimes(current_user["id"], crime_id)
-    # Lightweight per-crime event for analytics and anti-cheat (no public exposure).
-    # Stored as a single small document per attempt.
-    city = (current_user.get("current_state") or "").strip() or None
-    crime_event_result = await db.crime_events.insert_one(
-        {
-            "user_id": current_user["id"],
-            "crime_id": crime_id,
-            "crime_name": crime.get("name"),
-            "crime_type": crime.get("crime_type") or "normal",
-            "at": now,
-            "success": success,
-            "profit": int(reward or 0) if success and reward is not None else 0,
-            "city": city,
-        }
-    )
-    invalidate_rolling_event_stats_cache("crime_events", current_user["id"])
-    if success:
-        try:
-            from utils.family_daily_tasks import record_family_daily_activity
 
-            await record_family_daily_activity(
-                db,
-                current_user["id"],
-                "crime",
-                source_id=f"crime:{crime_event_result.inserted_id}",
-                now=now,
-            )
-        except Exception:
-            logger.exception("Family daily crime progress failed user_id=%s", current_user["id"])
-    crime_details = {"crime_id": crime_id, "crime_name": crime.get("name"), "success": success, "reward": reward}
-    if via_auto_rank:
-        crime_details["via_auto_rank"] = True
-    await log_activity(
-        current_user["id"],
-        current_user.get("username") or "?",
-        "crime",
-        crime_details,
-    )
-    if success:
-        try:
-            from utils.tutorial import mark_tutorial_crime_done
+    async def _post_commit_common():
+        await _dedup_user_crimes(current_user["id"], crime_id)
+        # Lightweight per-crime event for analytics and anti-cheat (no public exposure).
+        # Stored as a single small document per attempt.
+        city = (current_user.get("current_state") or "").strip() or None
+        crime_event_result = await db.crime_events.insert_one(
+            {
+                "user_id": current_user["id"],
+                "crime_id": crime_id,
+                "crime_name": crime.get("name"),
+                "crime_type": crime.get("crime_type") or "normal",
+                "at": now,
+                "success": success,
+                "profit": int(reward or 0) if success and reward is not None else 0,
+                "city": city,
+            }
+        )
+        invalidate_rolling_event_stats_cache("crime_events", current_user["id"])
+        if success:
+            try:
+                from utils.family_daily_tasks import record_family_daily_activity
 
-            await mark_tutorial_crime_done(db, current_user["id"])
-        except Exception:
-            logging.exception("tutorial crime mark failed user_id=%s", current_user.get("id"))
+                await record_family_daily_activity(
+                    db,
+                    current_user["id"],
+                    "crime",
+                    source_id=f"crime:{crime_event_result.inserted_id}",
+                    now=now,
+                )
+            except Exception:
+                logger.exception("Family daily crime progress failed user_id=%s", current_user["id"])
+        crime_details = {"crime_id": crime_id, "crime_name": crime.get("name"), "success": success, "reward": reward}
+        if via_auto_rank:
+            crime_details["via_auto_rank"] = True
+        await log_activity(
+            current_user["id"],
+            current_user.get("username") or "?",
+            "crime",
+            crime_details,
+        )
+        if success:
+            try:
+                from utils.tutorial import mark_tutorial_crime_done
+
+                await mark_tutorial_crime_done(db, current_user["id"])
+            except Exception:
+                logging.exception("tutorial crime mark failed user_id=%s", current_user.get("id"))
+
+    deferred_ops.append(_post_commit_common)
+
+    async def _run_deferred():
+        for op in deferred_ops:
+            await op()
+
+    _spawn_crime_bookkeeping(current_user["id"], _run_deferred)
     return CommitCrimeResponse(
         success=success,
         message=message,

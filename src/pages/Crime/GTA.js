@@ -356,7 +356,7 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
             type="button"
             disabled={skipBusy || attemptingOptionId !== null}
             onClick={() => onSkip(option.id)}
-            title="Use a GTA cooldown skip token to attempt now (max 5 skips/day across all skip types)"
+            title="Use a GTA cooldown skip token to attempt now (max 200 skips/day per type)"
             className="bg-amber-500/15 text-amber-300 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide border border-amber-500/45 hover:bg-amber-500/25 transition-all touch-manipulation font-heading disabled:opacity-50"
             data-testid={`skip-gta-${option.id}`}
           >
@@ -423,17 +423,18 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
                     className="w-full aspect-[4/3] rounded overflow-hidden bg-secondary mb-0.5 sm:mb-1 relative shrink-0"
                     style={{ border: `2px solid ${glowHex}`, boxShadow: `0 0 12px ${glowHex}aa, inset 0 0 8px ${glowHex}33` }}
                   >
-                    {car.image ? (
+                    {/* Icon sits underneath; if the image 404s we hide it so the icon shows instead of broken alt text. */}
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <Car size={20} className="text-primary/30 shrink-0" />
+                    </div>
+                    {car.image && (
                       <img
                         src={car.image}
-                        alt={displayName}
+                        alt=""
                         className="absolute inset-0 w-full h-full object-cover object-center"
                         loading="lazy"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       />
-                    ) : (
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <Car size={20} className="text-primary/30 shrink-0" />
-                      </div>
                     )}
                   </div>
                   <div className={`text-[8px] sm:text-[9px] font-heading font-bold uppercase tracking-wider truncate ${getRarityColor(car.rarity)} mb-0.5`}>

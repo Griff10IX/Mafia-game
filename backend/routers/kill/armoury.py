@@ -2454,6 +2454,7 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
         await require_store_item_allowed(db, flag, current_user)
 
     from utils.cooldown_skip import (
+        COOLDOWN_SKIP_DAILY_CAP,
         TOKEN_TYPE_TO_SKIP_KIND,
         activation_inc_fields,
         can_activate_cooldown_skip_token,
@@ -2462,9 +2463,12 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
     if req.token_type in TOKEN_TYPE_TO_SKIP_KIND:
         if req.use_all:
             raise HTTPException(status_code=400, detail="Cooldown skip vouchers activate one at a time.")
-        if not can_activate_cooldown_skip_token(current_user):
-            raise HTTPException(status_code=400, detail="Daily cooldown skip limit reached (5 per UTC day).")
         kind = TOKEN_TYPE_TO_SKIP_KIND[req.token_type]
+        if not can_activate_cooldown_skip_token(current_user, kind):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Daily {kind} cooldown skip limit reached ({COOLDOWN_SKIP_DAILY_CAP} per UTC day).",
+            )
         cfg = TOKEN_CONFIG[req.token_type]
         count_field = cfg["count_field"]
         count = int(current_user.get(count_field) or 0)

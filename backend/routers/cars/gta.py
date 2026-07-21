@@ -1154,8 +1154,8 @@ def _garage_entry_from_user_car(user_car: Dict[str, Any]) -> Optional[dict]:
             entry["listed_at"] = user_car.get("listed_at")
         return entry
     display_name = user_car.get("car_name") or user_car.get("custom_name") or str(car_id)
-    damage = 0 if _is_damage_immune_car(car_id, rarity) else min(100, max(0, float(user_car.get("damage_percent", 0))))
     rarity = _normalize_garage_rarity_str(user_car.get("rarity"))
+    damage = 0 if _is_damage_immune_car(car_id, rarity) else min(100, max(0, float(user_car.get("damage_percent", 0))))
     try:
         value = int(user_car.get("value") or 0)
     except (TypeError, ValueError):
@@ -1421,21 +1421,23 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
     if melted_car20:
         await _sync_gta_exclusive_pool_release_state()
     if deleted_count > 0:
+        if action == "bullets":
+            total_bullets = (int(total_bullets or 0) * MELT_BULLETS_TOTAL_PAYOUT_MULT_NUM) // MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN
         try:
             from utils.family_daily_tasks import record_family_daily_activity
 
+            # Daily crew objective counts bullets earned from melts (cash melts don't progress it).
             await record_family_daily_activity(
                 db,
                 user.get("id") or "",
                 "car_melt",
-                deleted_count,
+                int(total_bullets or 0) if action == "bullets" else 0,
                 source_id=f"car-melt:{user.get('id')}:{now.isoformat()}:{action}:{','.join(sorted(car_ids[:limit]))}",
                 now=now,
             )
         except Exception:
             logging.exception("Family daily car melt progress failed user_id=%s", user.get("id"))
         if action == "bullets":
-            total_bullets = (int(total_bullets or 0) * MELT_BULLETS_TOTAL_PAYOUT_MULT_NUM) // MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN
             base_cooldown = int(MELT_BULLETS_COOLDOWN_SECONDS * 0.5) if melt_token_active else MELT_BULLETS_COOLDOWN_SECONDS
             cooldown_seconds = base_cooldown * deleted_count
             if melt_token_active:

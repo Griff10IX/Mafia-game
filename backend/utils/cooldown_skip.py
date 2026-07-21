@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 
-COOLDOWN_SKIP_DAILY_CAP = 5
+COOLDOWN_SKIP_DAILY_CAP = 200  # per skip type per UTC day
 
 SKIP_CREDIT_FIELDS = {
     "crime": "cooldown_skip_crime_credits",
@@ -25,14 +25,18 @@ def _utc_today() -> str:
     return datetime.now(timezone.utc).date().isoformat()
 
 
-def cooldown_skip_uses_today(user: dict) -> int:
+def _uses_field(kind: str) -> str:
+    return f"cooldown_skip_uses_today_{kind}"
+
+
+def cooldown_skip_uses_today(user: dict, kind: str) -> int:
     if user.get("cooldown_skip_day") != _utc_today():
         return 0
-    return int(user.get("cooldown_skip_uses_today") or 0)
+    return int(user.get(_uses_field(kind)) or 0)
 
 
-def can_activate_cooldown_skip_token(user: dict) -> bool:
-    return cooldown_skip_uses_today(user) < COOLDOWN_SKIP_DAILY_CAP
+def can_activate_cooldown_skip_token(user: dict, kind: str) -> bool:
+    return cooldown_skip_uses_today(user, kind) < COOLDOWN_SKIP_DAILY_CAP
 
 
 def skip_credit_field(kind: str) -> str:
@@ -55,14 +59,16 @@ async def consume_skip_credit(db, user_id: str, kind: str) -> bool:
 def activation_inc_fields(kind: str, user: dict) -> Tuple[dict, dict]:
     """Return ($inc, extra $set) for activating one skip token.
 
-    A field may appear in $inc or $set but never both (Mongo rejects path conflicts),
-    so on day rollover the counter is reset via $set only.
+    Daily usage is tracked per skip type (200/day each). A field may appear in $inc or
+    $set but never both (Mongo rejects path conflicts), so on day rollover all per-type
+    counters are reset via $set only.
     """
     today = _utc_today()
     inc = {skip_credit_field(kind): 1}
     set_doc = {"cooldown_skip_day": today}
     if user.get("cooldown_skip_day") != today:
-        set_doc["cooldown_skip_uses_today"] = 1
+        for k in SKIP_CREDIT_FIELDS:
+            set_doc[_uses_field(k)] = 1 if k == kind else 0
     else:
-        inc["cooldown_skip_uses_today"] = 1
+        inc[_uses_field(kind)] = 1
     return inc, set_doc

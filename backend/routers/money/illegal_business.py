@@ -307,7 +307,8 @@ DEFENDER_STRENGTH_BONUS_CAP = 400
 RAID_INCOMING_LOOT_MULT_MIN = 0.50  # victim: min multiplier on cash lost to raiders
 
 # Raid
-RAID_COOLDOWN_HOURS = 12
+RAID_COOLDOWN_HOURS = 12  # legacy (pre per-day hit counting); kept for old imports
+RAID_PER_TARGET_DAILY_HITS = 2  # same joint can be hit at most twice per game day
 RAID_DAILY_LIMIT_DEFAULT = 5
 RAID_DAILY_LIMIT_MAX = 10
 RAID_DAILY_LIMIT = RAID_DAILY_LIMIT_DEFAULT  # backward compat for imports
@@ -318,6 +319,8 @@ RAID_CAPACITY_BOOST_DAYS = 30
 RAID_DAILY_LIMIT_BOOSTED_MAX = 20  # hard ceiling with boost (missions cap at 10 without it)
 RAID_LOOT_PERCENT = 0.25  # attacker gets 25% of target's uncollected income (capped)
 RAID_VARIANCE = 0.15  # random +/- 15% on strength for drama
+# Shootouts have consequences: win or lose, chance one defender guard dies (slot stays; re-hire + re-gear).
+RAID_GUARD_KILL_CHANCE = 0.50
 DEFENDER_BASE_STRENGTH = 10
 ATTACKER_BASE_STRENGTH = 5
 GUARD_STRENGTH_PER_LEVEL = 4  # armour_level + weapon_level each contribute
@@ -3411,34 +3414,58 @@ async def patch_illegal_business(req: PatchBusinessRequest, current_user: dict =
     return {"message": "Updated."}
 
 
+def _raid_target_hits_today(entry, today_key: str) -> int:
+    """Hits already landed on one target today. Supports the legacy ISO-timestamp format."""
+    if isinstance(entry, dict):
+        return int(entry.get("count") or 0) if entry.get("date") == today_key else 0
+    if entry:
+        try:
+            last_dt = datetime.fromisoformat(str(entry).replace("Z", "+00:00"))
+            if last_dt.tzinfo is None:
+                last_dt = last_dt.replace(tzinfo=timezone.utc)
+            if game_today_date_str(last_dt) == today_key:
+                return 1
+        except Exception:
+            pass
+    return 0
+
+
 async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(get_current_user)):
     safe = re.escape(req.target_username.strip())
-    target_user = await db.users.find_one({"username": {"$regex": f"^{safe}$", "$options": "i"}}, {"_id": 0, "id": 1, "username": 1})
+    target_user = await db.users.find_one(
+        {"username": {"$regex": f"^{safe}$", "$options": "i"}},
+        {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "account_locked": 1, "locked": 1},
+    )
     if not target_user:
         raise HTTPException(status_code=404, detail="Target not found.")
     target_id = target_user["id"]
     if target_id == current_user["id"]:
         raise HTTPException(status_code=400, detail="You can't raid yourself.")
+    if target_user.get("is_dead"):
+        raise HTTPException(status_code=400, detail="Target is dead — nothing left to raid.")
+    if target_user.get("account_locked") or target_user.get("locked"):
+        raise HTTPException(status_code=400, detail="Target's account is locked and can't be raided.")
     business = await db.illegal_businesses.find_one({"user_id": target_id}, {"_id": 0})
     if not business:
         raise HTTPException(status_code=400, detail="Target has no illegal business.")
     state = (req.state or business.get("state") or "").strip()
     if state and business.get("state") != state:
         raise HTTPException(status_code=400, detail="Target's business is in a different state.")
-    # Cooldown: raid_cooldowns: { target_id: last_raid_at }
-    cooldowns = current_user.get("illegal_business_raid_cooldowns") or {}
-    last = cooldowns.get(target_id)
-    if last:
-        try:
-            last_dt = datetime.fromisoformat(last.replace("Z", "+00:00"))
-            if (datetime.now(timezone.utc) - last_dt).total_seconds() < RAID_COOLDOWN_HOURS * 3600:
-                raise HTTPException(status_code=400, detail=f"Raid cooldown. Try again in {RAID_COOLDOWN_HOURS}h.")
-        except Exception:
-            pass
     today_key = game_today_date_str()
+    # Per-target limit: same joint can be hit at most RAID_PER_TARGET_DAILY_HITS times per game day.
+    cooldowns = current_user.get("illegal_business_raid_cooldowns") or {}
+    hits_today = _raid_target_hits_today(cooldowns.get(target_id), today_key)
+    if hits_today >= RAID_PER_TARGET_DAILY_HITS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"You've already hit {target_user.get('username') or 'them'} {RAID_PER_TARGET_DAILY_HITS} times today. Pick another joint.",
+        )
     now = datetime.now(timezone.utc).isoformat()
-    cooldowns_new = dict(cooldowns)
-    cooldowns_new[target_id] = now
+    cooldowns_new = {
+        tid: entry for tid, entry in cooldowns.items()
+        if _raid_target_hits_today(entry, today_key) > 0
+    }
+    cooldowns_new[target_id] = {"date": today_key, "count": hits_today + 1, "last_at": now}
     _raid_boost = _raid_capacity_boost_add(current_user)
     claim_result = await db.users.find_one_and_update(
         {
@@ -3498,6 +3525,24 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
     win_prob = _raid_win_probability(attacker_str, defender_str)
     won = _rng.random() < win_prob
     attacker_username = current_user.get("username", "?")
+    # Win or lose, the shootout can kill one of the defender's guards — they keep the slot
+    # but have to hire and re-gear a replacement.
+    guard_killed_slot = None
+    if guards and _rng.random() < RAID_GUARD_KILL_CHANCE:
+        dead_guard = _rng.choice(guards)
+        del_res = await db.illegal_business_guards.delete_one({"id": dead_guard.get("id")})
+        if del_res.deleted_count:
+            guard_killed_slot = int(dead_guard.get("slot_number") or 0)
+    guard_killed_txt = (
+        f" One of their guards (slot {guard_killed_slot}) was killed in the shootout."
+        if guard_killed_slot
+        else ""
+    )
+    victim_guard_txt = (
+        f" Your guard in slot {guard_killed_slot} was killed — hire a replacement."
+        if guard_killed_slot
+        else ""
+    )
     loot_cash = 0
     loot_points = 0
     loot_cash_credited = 0
@@ -3534,7 +3579,7 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
         await send_notification(
             current_user["id"],
             "Raid",
-            f"You hit {target_username}'s joint. Took ${loot_cash_credited:,}.",
+            f"You hit {target_username}'s joint. Took ${loot_cash_credited:,}.{guard_killed_txt}",
             "attack",
             category="attacks",
             actor_username=target_username,
@@ -3542,7 +3587,7 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
         await send_notification(
             target_id,
             "Raid",
-            f"Your joint was hit by {attacker_username}. You lost ${loot_cash:,}.",
+            f"Your joint was hit by {attacker_username}. You lost ${loot_cash:,}.{victim_guard_txt}",
             "attack",
             category="attacks",
             actor_username=attacker_username,
@@ -3552,7 +3597,7 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
         await send_notification(
             current_user["id"],
             "Raid",
-            f"You tried to hit {target_username}'s joint. They were ready—you got nothing.",
+            f"You tried to hit {target_username}'s joint. They were ready—you got nothing.{guard_killed_txt}",
             "attack",
             category="attacks",
             actor_username=target_username,
@@ -3560,22 +3605,27 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
         await send_notification(
             target_id,
             "Raid",
-            f"Someone tried to hit your joint ({attacker_username}). They were turned away.",
+            f"Someone tried to hit your joint ({attacker_username}). They were turned away.{victim_guard_txt}",
             "attack",
             category="attacks",
             actor_username=attacker_username,
         )
     await log_activity(current_user["id"], current_user.get("username", "?"), "illegal_biz_raid", {
         "target": target_user.get("username"), "success": won, "cash": loot_cash_credited if won else 0,
+        "guard_killed_slot": guard_killed_slot,
     })
     return {
         "success": won,
         "loot_cash": loot_cash_credited if won else loot_cash,
         "loot_points": loot_points,
+        "guard_killed_slot": guard_killed_slot,
         "message": (
-            f"You hit {target_user.get('username') or '?'}'s joint. Took ${loot_cash_credited:,}."
-            if won
-            else f"You tried to hit {target_user.get('username') or '?'}'s joint. They were ready—you got nothing."
+            (
+                f"You hit {target_user.get('username') or '?'}'s joint. Took ${loot_cash_credited:,}."
+                if won
+                else f"You tried to hit {target_user.get('username') or '?'}'s joint. They were ready—you got nothing."
+            )
+            + guard_killed_txt
         ),
         "target_username": target_user.get("username"),
     }
@@ -3594,9 +3644,15 @@ async def raid_random_illegal_business(current_user: dict = Depends(get_current_
         raise HTTPException(status_code=400, detail=f"Daily raid limit ({lim_rr}) reached.")
     # Sample only businesses whose owner still exists with a usable username (avoids orphaned
     # illegal_businesses rows → intermittent "Target not found" on $sample + lookup mismatch).
+    # Dead/locked owners and joints already hit the max times today are excluded up front.
     me_id = current_user["id"]
+    cooldowns = current_user.get("illegal_business_raid_cooldowns") or {}
+    maxed_today = [
+        tid for tid, entry in cooldowns.items()
+        if _raid_target_hits_today(entry, today_key) >= RAID_PER_TARGET_DAILY_HITS
+    ]
     pipeline = [
-        {"$match": {"user_id": {"$ne": me_id}}},
+        {"$match": {"user_id": {"$nin": [me_id, *maxed_today]}}},
         {
             "$lookup": {
                 "from": "users",
@@ -3605,12 +3661,17 @@ async def raid_random_illegal_business(current_user: dict = Depends(get_current_
                     {"$match": {"$expr": {"$eq": ["$id", "$$uid"]}}},
                     {
                         "$match": {
+                            "is_dead": {"$ne": True},
+                            "account_locked": {"$ne": True},
+                            "locked": {"$ne": True},
+                            "is_npc": {"$ne": True},
+                            "is_bodyguard": {"$ne": True},
                             "$expr": {
                                 "$gt": [
                                     {"$strLenCP": {"$trim": {"input": {"$ifNull": ["$username", ""]}}}},
                                     0,
                                 ]
-                            }
+                            },
                         }
                     },
                     {"$project": {"_id": 0, "id": 1, "username": 1}},

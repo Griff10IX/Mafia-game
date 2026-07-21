@@ -1029,7 +1029,7 @@ export default function IllegalBusiness() {
               Raids today: <span className="text-primary font-bold">{raidsToday}</span>
               <span className="text-zinc-600"> / </span>
               <span className="text-foreground">{raidDailyLimit}</span>
-              <span className="text-zinc-600 ml-1">(advance business progress to raise the cap up to 10)</span>
+              <span className="text-zinc-600 ml-1">(advance business progress to raise the cap up to 10 · max 2 hits on the same joint per day)</span>
             </p>
             <div className="flex flex-wrap gap-2 items-end">
               <div className="flex-1 min-w-[120px]">

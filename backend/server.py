@@ -623,13 +623,26 @@ async def get_events_enabled() -> bool:
     return bool(doc.get("events_enabled", True))
 
 
+# Short TTL cache: get_effective_event is on the hot path of every crime/GTA commit,
+# and each uncached call costs two game_config round-trips.
+_effective_event_cache = {"at": 0.0, "value": None}
+_EFFECTIVE_EVENT_TTL_SECONDS = 5.0
+
+
 async def get_effective_event():
     """Current event multipliers if events enabled, else NO_EVENT. Auto-rotates random events. Never raises."""
     try:
+        nowm = time.monotonic()
+        if _effective_event_cache["value"] is not None and nowm - _effective_event_cache["at"] < _EFFECTIVE_EVENT_TTL_SECONDS:
+            return dict(_effective_event_cache["value"])
         if not await get_events_enabled():
-            return NO_EVENT.copy()
-        result = await get_or_rotate_random_events()
-        return result["event"]
+            value = NO_EVENT.copy()
+        else:
+            result = await get_or_rotate_random_events()
+            value = dict(result["event"])
+        _effective_event_cache["value"] = dict(value)
+        _effective_event_cache["at"] = nowm
+        return value
     except Exception:
         return NO_EVENT.copy()
 
@@ -740,8 +753,9 @@ CARS = [
     # Common (difficulty 1) - 6 cars
     {"id": "car1", "name": "Model T Ford", "rarity": "common", "min_difficulty": 1, "value": 225, "travel_bonus": 0, "image": "/images/gta/car1.jpg"},
     {"id": "car5", "name": "Essex Coach", "rarity": "common", "min_difficulty": 1, "value": 249, "travel_bonus": 0, "image": "/images/gta/car5.jpg"},
-    {"id": "car2", "name": "Chevrolet Series AB", "rarity": "common", "min_difficulty": 1, "value": 269, "travel_bonus": 5, "image": "/images/gta/car2.jpg"},
-    {"id": "car6", "name": "Durant Star", "rarity": "common", "min_difficulty": 1, "value": 292, "travel_bonus": 5, "image": "/images/gta/car6.jpg"},
+    # ?v=2 busts CDN/browser caches that stored a bad response for these two files.
+    {"id": "car2", "name": "Chevrolet Series AB", "rarity": "common", "min_difficulty": 1, "value": 269, "travel_bonus": 5, "image": "/images/gta/car2.jpg?v=2"},
+    {"id": "car6", "name": "Durant Star", "rarity": "common", "min_difficulty": 1, "value": 292, "travel_bonus": 5, "image": "/images/gta/car6.jpg?v=2"},
     {"id": "car4", "name": "Ford Model A", "rarity": "common", "min_difficulty": 1, "value": 314, "travel_bonus": 5, "image": "/images/gta/car4.jpg"},
     {"id": "car3", "name": "Dodge Brothers", "rarity": "common", "min_difficulty": 1, "value": 338, "travel_bonus": 5, "image": "/images/gta/car3.jpg"},
     # Uncommon (difficulty 2) - 4 cars; melt scales with MELT_VALUE_PER_BULLET
