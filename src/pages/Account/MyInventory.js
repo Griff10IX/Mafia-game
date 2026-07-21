@@ -61,6 +61,92 @@ const tokenLabels = {
   rank_xp_pass: { name: 'Game Pass', icon: Package, desc: 'Activate in Armoury/My Inventory to claim one-time Game Pass rewards. Expires in 1 month if unused.' },
 };
 
+/* ---- Perks-in-use card helpers ---- */
+const fmtMoney = (n) => `$${Number(n || 0).toLocaleString('en-US')}`;
+const fmtNum = (n) => Number(n || 0).toLocaleString('en-US');
+const fmtDuration = (secs) => {
+  const s = Math.max(0, Math.floor(Number(secs) || 0));
+  if (s < 60) return `${s}s`;
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+};
+const formatChipValue = (format, v) => {
+  if (format === 'money') return fmtMoney(v);
+  if (format === 'rp') return `+${fmtNum(v)} RP`;
+  if (format === 'points') return `${fmtNum(v)} pts`;
+  if (format === 'dur') return fmtDuration(v);
+  return fmtNum(v);
+};
+const CHIP_VALUE_CLASS = {
+  money: 'text-emerald-300',
+  rp: 'text-violet-300',
+  points: 'text-amber-300',
+  dur: 'text-sky-300',
+  num: 'text-foreground',
+};
+/** Lifetime stat chips per token type — fields come from backend token_perk_stats (perk_stats on /inventory). */
+const PERK_STAT_CHIPS = {
+  xp_crimes: [
+    { field: 'bonus_rp', label: 'RP earned from boost', format: 'rp' },
+    { field: 'uses', label: 'Boosted crimes', format: 'num' },
+  ],
+  xp_gta: [
+    { field: 'bonus_rp', label: 'RP earned from boost', format: 'rp' },
+    { field: 'uses', label: 'Boosted GTAs', format: 'num' },
+  ],
+  melt: [
+    { field: 'cooldown_saved_sec', label: 'Cooldown saved', format: 'dur' },
+    { field: 'cars_melted', label: 'Cars melted', format: 'num' },
+  ],
+  oc_reduced: [
+    { field: 'setup_saved_cash', label: 'Saved on setup', format: 'money' },
+    { field: 'bonus_cash', label: 'Extra payout', format: 'money' },
+    { field: 'bonus_rp', label: 'Extra payout RP', format: 'rp' },
+    { field: 'uses', label: 'Boosted heists', format: 'num' },
+  ],
+  booze: [
+    { field: 'saved_cash', label: 'Saved buying booze', format: 'money' },
+    { field: 'bonus_cash', label: 'Distillery bonus', format: 'money' },
+    { field: 'uses', label: 'Discounted buys', format: 'num' },
+  ],
+  racket: [
+    { field: 'bonus_cash', label: 'Extra racket profit', format: 'money' },
+    { field: 'uses', label: 'Boosted collects', format: 'num' },
+  ],
+  travel: [
+    { field: 'points_saved', label: 'Points saved', format: 'points' },
+    { field: 'time_saved_sec', label: 'Travel time saved', format: 'dur' },
+    { field: 'uses', label: 'Boosted trips', format: 'num' },
+  ],
+  properties: [
+    { field: 'bonus_cash', label: 'Extra income', format: 'money' },
+    { field: 'uses', label: 'Boosted collects', format: 'num' },
+  ],
+  jailbust_bonus: [
+    { field: 'busts_won', label: 'Busts won with boost', format: 'num' },
+    { field: 'jail_avoided', label: 'Jail trips avoided', format: 'num' },
+  ],
+  crew_oc_auto_3h: [
+    { field: 'applies', label: 'Auto-joins', format: 'num' },
+  ],
+};
+const countdownLabel = (until) => {
+  const diff = new Date(until) - Date.now();
+  if (diff <= 0) return 'Expired';
+  const mins = Math.floor(diff / 60000);
+  const d = Math.floor(mins / 1440);
+  const h = Math.floor((mins % 1440) / 60);
+  const m = mins % 60;
+  if (d > 0) return `${d}d ${h}h left`;
+  if (h > 0) return `${h}h ${m}m left`;
+  if (m > 0) return `${m}m left`;
+  return '<1m left';
+};
+
 export default function MyInventory() {
   const [hasLoaded, setHasLoaded] = useState(Boolean(_cachedInventory));
   const [data, setData] = useState(_cachedInventory);
@@ -106,6 +192,13 @@ export default function MyInventory() {
     if (!_cachedInventory) fetchInventory(false);
     else if (stale) fetchInventory(true);
     const id = setInterval(() => fetchInventory(true), INV_REFRESH);
+    return () => clearInterval(id);
+  }, []);
+
+  // Re-render every 30s so the In-use countdown pills stay fresh.
+  const [, setNowTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setNowTick((n) => n + 1), 30_000);
     return () => clearInterval(id);
   }, []);
 
@@ -547,65 +640,157 @@ export default function MyInventory() {
             <div className="text-[9px] text-emerald-300 mt-0.5">Rewards claimed</div>
           )}
         </div>
-        <div className="flex flex-wrap items-center justify-end gap-1 shrink-0">
-          {key === 'crew_oc_auto_3h' && active && (
-            <button
-              type="button"
-              disabled={usingToken !== null || crewOcModal}
-              onClick={() => openCrewOcEditModal(t.max_join_fee)}
-              className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-zinc-500/50 bg-zinc-800/40 text-zinc-200 hover:bg-zinc-700/50 disabled:opacity-50"
+        {renderTokenActions(key, t, { active, untilLive, crewWindowNoCap, expired })}
+      </div>
+    );
+  };
+
+  const renderTokenActions = (key, t, { active, untilLive, crewWindowNoCap, expired }) => (
+    <div className="flex flex-wrap items-center justify-end gap-1 shrink-0">
+      {key === 'crew_oc_auto_3h' && active && (
+        <button
+          type="button"
+          disabled={usingToken !== null || crewOcModal}
+          onClick={() => openCrewOcEditModal(t.max_join_fee)}
+          className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-zinc-500/50 bg-zinc-800/40 text-zinc-200 hover:bg-zinc-700/50 disabled:opacity-50"
+        >
+          Edit cap
+        </button>
+      )}
+      {key === 'crew_oc_auto_3h' && crewWindowNoCap && (
+        <button
+          type="button"
+          disabled={usingToken !== null || crewOcModal}
+          onClick={() => openCrewOcEditModal(null)}
+          className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-amber-500/45 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
+        >
+          Set max fee
+        </button>
+      )}
+      {key === 'auto_rank_2h' && untilLive && (
+        <button
+          type="button"
+          disabled={usingToken !== null || autoRankRunning === null}
+          onClick={() => setAutoRankMaster(!autoRankRunning)}
+          className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-amber-500/45 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
+        >
+          {usingToken === 'auto_rank_pause' ? '…' : autoRankRunning ? 'Pause' : 'Resume'}
+        </button>
+      )}
+      {COUNT_ONLY_TOKEN_TYPES.has(key) ? (
+        <Link
+          to="/crime/jail"
+          className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+        >
+          Use on Jail page →
+        </Link>
+      ) : (
+        <button
+          type="button"
+          disabled={t.count < 1 || usingToken !== null || expired || (key === 'crew_oc_auto_3h' && crewOcModal)}
+          onClick={() => (key === 'crew_oc_auto_3h' ? openCrewOcModal(false) : activateToken(key, false))}
+          className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50"
+        >
+          {usingToken === key ? '...' : 'Use'}
+        </button>
+      )}
+      {key !== 'rank_xp_pass' && !NO_USE_ALL_TOKEN_TYPES.has(key) && !COUNT_ONLY_TOKEN_TYPES.has(key) && (
+        <button
+          type="button"
+          disabled={t.count < 1 || usingToken !== null || (key === 'crew_oc_auto_3h' && crewOcModal)}
+          onClick={() => (key === 'crew_oc_auto_3h' ? openCrewOcModal(true) : activateToken(key, true))}
+          className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-teal-500/40 bg-teal-500/10 text-teal-400 hover:bg-teal-500/20 disabled:opacity-50"
+        >
+          {usingToken === `${key}:all` ? '...' : 'Use all'}
+        </button>
+      )}
+    </div>
+  );
+
+  const renderActivePerkCard = (key) => {
+    const t = tokens[key] || { count: 0, active_until: null, expires_at: null };
+    const { name, icon: Icon } = tokenLabels[key] || { name: key, icon: Zap };
+    const untilLive = t.active_until ? new Date(t.active_until) > new Date() : false;
+    const active = untilLive && (key !== 'crew_oc_auto_3h' || t.auto_apply_ready);
+    const crewWindowNoCap = key === 'crew_oc_auto_3h' && untilLive && !t.auto_apply_ready;
+
+    const chips = [];
+    const ps = t.perk_stats || {};
+    (PERK_STAT_CHIPS[key] || []).forEach(({ field, label, format }) => {
+      const v = Number(ps[field] || 0);
+      if (v > 0) chips.push({ label, value: formatChipValue(format, v), cls: CHIP_VALUE_CLASS[format] || 'text-foreground' });
+    });
+    if (key === 'auto_collect_12h' || key === 'auto_collect_24h') {
+      const s = t.auto_collect_stats || {};
+      if (Number(s.property_cash) > 0) chips.push({ label: 'Collected to you', value: fmtMoney(s.property_cash), cls: 'text-emerald-300' });
+      if (Number(s.racket_cash) > 0) chips.push({ label: 'To family vault', value: fmtMoney(s.racket_cash), cls: 'text-emerald-300' });
+      if (Number(s.collects) > 0) chips.push({ label: 'Collects', value: fmtNum(s.collects), cls: 'text-foreground' });
+      const nextAt = data?.auto_collect?.next_check_at;
+      chips.push({
+        label: 'Next check',
+        value:
+          nextAt && new Date(nextAt) > new Date()
+            ? `${new Date(nextAt).toLocaleTimeString(undefined, { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' })} UTC`
+            : `≤${Math.max(1, Math.round((data?.auto_collect?.interval_seconds || 300) / 60))} min`,
+        cls: 'text-sky-300',
+      });
+    }
+    if (key === 'crew_oc_auto_3h' && active && t.max_join_fee != null) {
+      chips.push({ label: 'Max join fee cap', value: fmtMoney(t.max_join_fee), cls: 'text-amber-300' });
+    }
+
+    return (
+      <div key={key} className="rounded-lg border border-primary/20 bg-zinc-900/40 p-2.5 space-y-2 inv-fade-in">
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/25 flex items-center justify-center shrink-0">
+              <Icon size={14} className="text-primary" />
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5">
+                <span className="text-[11px] font-heading font-bold text-foreground truncate">{name}</span>
+                {t.count > 0 && <span className="text-[9px] text-mutedForeground shrink-0">×{t.count} held</span>}
+              </div>
+              {t.active_until && (
+                <div className="text-[8px] text-mutedForeground mt-0.5">
+                  Until {new Date(t.active_until).toLocaleString(undefined, { timeZone: 'UTC' })} UTC
+                </div>
+              )}
+            </div>
+          </div>
+          {t.active_until && (
+            <span
+              className={`shrink-0 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-heading font-bold ${
+                crewWindowNoCap
+                  ? 'border-amber-500/45 bg-amber-500/10 text-amber-300'
+                  : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+              }`}
             >
-              Edit cap
-            </button>
-          )}
-          {key === 'crew_oc_auto_3h' && crewWindowNoCap && (
-            <button
-              type="button"
-              disabled={usingToken !== null || crewOcModal}
-              onClick={() => openCrewOcEditModal(null)}
-              className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-amber-500/45 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
-            >
-              Set max fee
-            </button>
-          )}
-          {key === 'auto_rank_2h' && untilLive && (
-            <button
-              type="button"
-              disabled={usingToken !== null || autoRankRunning === null}
-              onClick={() => setAutoRankMaster(!autoRankRunning)}
-              className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-amber-500/45 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
-            >
-              {usingToken === 'auto_rank_pause' ? '…' : autoRankRunning ? 'Pause' : 'Resume'}
-            </button>
-          )}
-          {COUNT_ONLY_TOKEN_TYPES.has(key) ? (
-            <Link
-              to="/crime/jail"
-              className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
-            >
-              Use on Jail page →
-            </Link>
-          ) : (
-            <button
-              type="button"
-              disabled={t.count < 1 || usingToken !== null || expired || (key === 'crew_oc_auto_3h' && crewOcModal)}
-              onClick={() => (key === 'crew_oc_auto_3h' ? openCrewOcModal(false) : activateToken(key, false))}
-              className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50"
-            >
-              {usingToken === key ? '...' : 'Use'}
-            </button>
-          )}
-          {key !== 'rank_xp_pass' && !NO_USE_ALL_TOKEN_TYPES.has(key) && !COUNT_ONLY_TOKEN_TYPES.has(key) && (
-            <button
-              type="button"
-              disabled={t.count < 1 || usingToken !== null || (key === 'crew_oc_auto_3h' && crewOcModal)}
-              onClick={() => (key === 'crew_oc_auto_3h' ? openCrewOcModal(true) : activateToken(key, true))}
-              className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-teal-500/40 bg-teal-500/10 text-teal-400 hover:bg-teal-500/20 disabled:opacity-50"
-            >
-              {usingToken === `${key}:all` ? '...' : 'Use all'}
-            </button>
+              <Clock size={9} className="shrink-0" />
+              {countdownLabel(t.active_until)}
+            </span>
           )}
         </div>
+        {crewWindowNoCap && (
+          <p className="text-[9px] text-amber-300/90 leading-snug">
+            Set a max join fee to enable auto-apply — no extra token is consumed.
+          </p>
+        )}
+        {chips.length > 0 ? (
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+            {chips.map((c) => (
+              <div key={c.label} className="rounded-md border border-zinc-700/40 bg-zinc-950/40 px-2.5 py-2 min-w-0">
+                <div className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground truncate">{c.label}</div>
+                <div className={`text-[11px] font-heading font-bold truncate ${c.cls}`}>{c.value}</div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-md border border-zinc-700/40 bg-zinc-950/40 px-2.5 py-2 inline-block">
+            <div className="text-[9px] font-heading text-mutedForeground">Builds as you play</div>
+          </div>
+        )}
+        {renderTokenActions(key, t, { active, untilLive, crewWindowNoCap, expired: false })}
       </div>
     );
   };
@@ -766,7 +951,7 @@ export default function MyInventory() {
                   No perks active right now — activate one from the Tokens tab.
                 </p>
               ) : (
-                activeTokenKeys.map(renderTokenRow)
+                activeTokenKeys.map(renderActivePerkCard)
               )}
             </div>
           </div>

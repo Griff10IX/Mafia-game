@@ -832,7 +832,13 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
                 if until.tzinfo is None:
                     until = until.replace(tzinfo=timezone.utc)
                 if now_utc < until:
+                    _xp_token_bonus = int(rank_points)  # the doubled slice equals the pre-double RP
                     rank_points = rank_points * 2
+                    try:
+                        from utils.token_perk_stats import bump_token_perk_stats
+                        await bump_token_perk_stats(db, current_user["id"], "xp_crimes", bonus_rp=_xp_token_bonus, uses=1)
+                    except Exception:
+                        pass
             except Exception:
                 pass
         # Prestige bonus: boost crime cash payout

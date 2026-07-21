@@ -793,6 +793,12 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             except Exception:
                 pass
             await _record_bust_event(current_user["id"], True, bust_reward_cash, target_username=target_username, is_npc=True)
+            if _jailbust_bonus_active(current_user):
+                try:
+                    from utils.token_perk_stats import bump_token_perk_stats
+                    await bump_token_perk_stats(db, current_user["id"], "jailbust_bonus", busts_won=1)
+                except Exception:
+                    pass
             new_total = total_successes + 1
             claimed = current_user.get("respect_points_bust_milestones_claimed") or []
             new_claimed = [m for m in BUST_MILESTONES if m <= new_total and m not in claimed]
@@ -823,6 +829,11 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                 {"id": current_user["id"]},
                 {"$set": {"jail_bust_attempts": next_attempts, "current_consecutive_busts": 0}},
             )
+            try:
+                from utils.token_perk_stats import bump_token_perk_stats
+                await bump_token_perk_stats(db, current_user["id"], "jailbust_bonus", jail_avoided=1)
+            except Exception:
+                pass
         await _record_bust_event(current_user["id"], False, 0, target_username=target_username, is_npc=True)
         msg = _rng.choice(JAIL_BUST_FAIL_MESSAGES if go_to_jail else JAIL_BUST_FAIL_AVOID_JAIL_MESSAGES)
         return {"success": False, "message": msg, "jail_time": 30 if go_to_jail else 0}
@@ -928,6 +939,12 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         except Exception:
             pass
         await _record_bust_event(current_user["id"], True, cash_to_pay, target_username=target.get("username") or "", is_npc=False)
+        if _jailbust_bonus_active(current_user):
+            try:
+                from utils.token_perk_stats import bump_token_perk_stats
+                await bump_token_perk_stats(db, current_user["id"], "jailbust_bonus", busts_won=1)
+            except Exception:
+                pass
         new_total = total_successes + 1
         claimed = current_user.get("respect_points_bust_milestones_claimed") or []
         new_claimed = [m for m in BUST_MILESTONES if m <= new_total and m not in claimed]
@@ -949,6 +966,11 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             {"id": current_user["id"]},
             {"$set": {"jail_bust_attempts": next_attempts, "current_consecutive_busts": 0}},
         )
+        try:
+            from utils.token_perk_stats import bump_token_perk_stats
+            await bump_token_perk_stats(db, current_user["id"], "jailbust_bonus", jail_avoided=1)
+        except Exception:
+            pass
     await _record_bust_event(current_user["id"], False, 0, target_username=target.get("username") or "", is_npc=False)
     msg = _rng.choice(JAIL_BUST_FAIL_MESSAGES if go_to_jail else JAIL_BUST_FAIL_AVOID_JAIL_MESSAGES)
     return {"success": False, "message": msg, "jail_time": 30 if go_to_jail else 0}

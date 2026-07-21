@@ -1016,6 +1016,10 @@ export default function Admin() {
   const [tutorialAdminStatus, setTutorialAdminStatus] = useState(null);
   const [tutorialGloballyEnabled, setTutorialGloballyEnabled] = useState(false);
   const [tutorialSettingsLoaded, setTutorialSettingsLoaded] = useState(false);
+  const [tutorialUsersData, setTutorialUsersData] = useState(null);
+  const [tutorialUsersBusy, setTutorialUsersBusy] = useState(false);
+  const [tutorialUsersFilter, setTutorialUsersFilter] = useState('all');
+  const [tutorialUsersSearch, setTutorialUsersSearch] = useState('');
   const [sessionStats, setSessionStats] = useState(null);
   const [sessionStatsLoading, setSessionStatsLoading] = useState(false);
   const [staffAccessDenials, setStaffAccessDenials] = useState(null);
@@ -4636,6 +4640,22 @@ export default function Admin() {
       toast.error(error.response?.data?.detail || 'Failed to update tutorial setting');
     } finally {
       setTutorialAdminBusy(false);
+    }
+  };
+
+  const loadTutorialUsers = async (filterOverride) => {
+    setTutorialUsersBusy(true);
+    try {
+      const status = filterOverride ?? tutorialUsersFilter;
+      const params = new URLSearchParams({ status, limit: '100' });
+      const q = tutorialUsersSearch.trim();
+      if (q) params.set('q', q);
+      const res = await api.get(`/admin/tutorial/users?${params.toString()}`);
+      setTutorialUsersData(res.data || null);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to load tutorial progress');
+    } finally {
+      setTutorialUsersBusy(false);
     }
   };
 
@@ -11586,6 +11606,98 @@ export default function Admin() {
                 Global: {tutorialSettingsLoaded ? (tutorialGloballyEnabled ? 'ON' : 'OFF (default)') : '…'}
               </div>
             )}
+            <ActionRow
+              icon={BookOpen}
+              label="Tutorial progress"
+              description="See who has completed, is doing, or skipped the tutorial (accounts with a tutorial record)."
+            >
+              <select
+                value={tutorialUsersFilter}
+                onChange={(e) => { setTutorialUsersFilter(e.target.value); loadTutorialUsers(e.target.value); }}
+                disabled={tutorialUsersBusy}
+                className="rounded border border-primary/30 bg-background/80 px-2 py-1 text-[10px] font-heading text-foreground"
+              >
+                <option value="all">All</option>
+                <option value="completed">Completed</option>
+                <option value="in_progress">In progress</option>
+                <option value="skipped">Skipped</option>
+                <option value="pending">Pending</option>
+              </select>
+              <input
+                type="text"
+                placeholder="Username filter"
+                value={tutorialUsersSearch}
+                onChange={(e) => setTutorialUsersSearch(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') loadTutorialUsers(); }}
+                className="rounded border border-primary/30 bg-background/80 px-2 py-1 text-[10px] font-heading text-foreground w-32"
+              />
+              <BtnPrimary type="button" onClick={() => loadTutorialUsers()} disabled={tutorialUsersBusy}>
+                {tutorialUsersBusy ? '…' : tutorialUsersData ? 'Refresh' : 'Load'}
+              </BtnPrimary>
+            </ActionRow>
+            {tutorialUsersData ? (
+              <div className="pl-6 pr-2 py-2 space-y-2 border-l-2 border-primary/30 ml-1 max-w-4xl">
+                <div className="flex flex-wrap gap-1.5 text-[9px] font-heading">
+                  {[
+                    ['completed', 'Completed', 'border-emerald-500/40 text-emerald-300'],
+                    ['in_progress', 'In progress', 'border-sky-500/40 text-sky-300'],
+                    ['skipped', 'Skipped', 'border-amber-500/40 text-amber-300'],
+                    ['pending', 'Pending', 'border-zinc-500/40 text-zinc-300'],
+                    ['no_record', 'No record (old accounts)', 'border-zinc-600/40 text-zinc-500'],
+                  ].map(([k, label, cls]) => (
+                    <span key={k} className={`rounded-full border px-2 py-0.5 ${cls}`}>
+                      {label}: <span className="font-bold">{Number(tutorialUsersData.counts?.[k] ?? 0).toLocaleString('en-US')}</span>
+                    </span>
+                  ))}
+                </div>
+                <div className="text-[9px] font-heading text-mutedForeground">
+                  Showing {tutorialUsersData.shown ?? 0} of {Number(tutorialUsersData.total_matching ?? 0).toLocaleString('en-US')} matching
+                </div>
+                {(tutorialUsersData.users || []).length === 0 ? (
+                  <div className="text-[10px] font-heading text-mutedForeground">No users match this filter.</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[10px] font-heading">
+                      <thead>
+                        <tr className="text-left text-[9px] font-bold uppercase tracking-wider text-mutedForeground border-b border-zinc-700/40">
+                          <th className="px-2 py-1.5">User</th>
+                          <th className="px-2 py-1.5">Status</th>
+                          <th className="px-2 py-1.5">Step</th>
+                          <th className="px-2 py-1.5">Started</th>
+                          <th className="px-2 py-1.5">Completed</th>
+                          <th className="px-2 py-1.5">Rewards</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(tutorialUsersData.users || []).map((u) => (
+                          <tr key={u.username} className="border-b border-zinc-700/20">
+                            <td className="px-2 py-1 text-foreground">{u.username}</td>
+                            <td className={`px-2 py-1 capitalize ${
+                              u.status === 'completed' ? 'text-emerald-300'
+                                : u.status === 'in_progress' ? 'text-sky-300'
+                                : u.status === 'skipped' ? 'text-amber-300'
+                                : 'text-mutedForeground'
+                            }`}>
+                              {String(u.status).replace('_', ' ')}
+                            </td>
+                            <td className="px-2 py-1 text-mutedForeground capitalize">{u.status === 'in_progress' ? (u.step || '—') : '—'}</td>
+                            <td className="px-2 py-1 text-mutedForeground">{u.started_at ? new Date(u.started_at).toLocaleString(undefined, { timeZone: 'UTC' }) : '—'}</td>
+                            <td className="px-2 py-1 text-mutedForeground">
+                              {u.completed_at
+                                ? new Date(u.completed_at).toLocaleString(undefined, { timeZone: 'UTC' })
+                                : u.skipped_at
+                                  ? `skipped ${new Date(u.skipped_at).toLocaleString(undefined, { timeZone: 'UTC' })}`
+                                  : '—'}
+                            </td>
+                            <td className="px-2 py-1">{u.rewards_granted ? <span className="text-emerald-300">✓</span> : <span className="text-mutedForeground">—</span>}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            ) : null}
             {(autoRankInspectError || autoRankInspectData) && (
               <div className="pl-6 pr-2 py-2 space-y-2 border-l-2 border-primary/20 ml-1 max-w-3xl">
                 {autoRankInspectError ? (

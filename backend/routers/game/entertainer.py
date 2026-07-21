@@ -1139,19 +1139,20 @@ async def games_history(current_user: dict = Depends(get_current_user)):
     """Last 10 completed games with pot and winners for the entertainer forum."""
     games = await db.entertainer_games.find(
         {"status": "completed"},
-        {"_id": 0, "id": 1, "game_type": 1, "pot": 1, "completed_at": 1, "result": 1, "participants": 1},
+        {"_id": 0, "id": 1, "game_type": 1, "pot": 1, "completed_at": 1, "result": 1, "participants": 1, "creator_username": 1},
     ).sort("completed_at", -1).limit(10).to_list(10)
     out = []
     for g in games:
         r = g.get("result") or {}
         pot = g.get("pot") or 0
+        host = g.get("creator_username") or "—"
         if g.get("game_type") in ("dice", "hangman"):
             winner = r.get("winner_username") or "—"
             reward = r.get("reward")
             reward_text = _format_reward_desc(reward) if reward else None
             out.append({
                 "id": g["id"], "game_type": g.get("game_type") or "dice", "pot": pot, "completed_at": g.get("completed_at"),
-                "winner": winner, "reward_text": reward_text,
+                "winner": winner, "reward_text": reward_text, "host": host,
             })
         else:
             rewards = r.get("rewards_by_user") or {}
@@ -1166,6 +1167,7 @@ async def games_history(current_user: dict = Depends(get_current_user)):
             out.append({
                 "id": g["id"], "game_type": "gbox", "pot": pot, "completed_at": g.get("completed_at"),
                 "winners": winner_names, "reward_text": ", ".join(reward_summaries) if reward_summaries else None,
+                "host": host,
             })
     return {"games": out}
 

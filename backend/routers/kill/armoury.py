@@ -2333,6 +2333,7 @@ def _tokens_from_user(user: dict) -> dict:
     """Build tokens dict for inventory: count and active_until per token type."""
     now = datetime.now(timezone.utc)
     out = {}
+    perk_stats_all = user.get("token_perk_stats") or {}
     for t in TOKEN_TYPES:
         cfg = TOKEN_CONFIG.get(t)
         if not cfg:
@@ -2355,6 +2356,9 @@ def _tokens_from_user(user: dict) -> dict:
                 if expires_dt:
                     expires_at = expires_dt.isoformat()
         row: Dict[str, Any] = {"count": count, "active_until": active_until, "expires_at": expires_at}
+        ps = perk_stats_all.get(t)
+        if isinstance(ps, dict) and ps:
+            row["perk_stats"] = {k: int(v) for k, v in ps.items() if isinstance(v, (int, float))}
         if t in ("auto_collect_12h", "auto_collect_24h"):
             s = user.get("auto_collect_stats") or {}
             row["auto_collect_stats"] = {

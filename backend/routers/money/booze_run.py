@@ -595,8 +595,10 @@ async def _booze_buy_impl(user: dict, booze_id: str, amount: int, *, via_auto_ra
     booze_index = booze_ids.index(booze_id)
     prices_map = _booze_prices_for_rotation()
     price = prices_map.get((loc_index, booze_index), 400)
+    base_price = price
     booze_until = _parse_iso_datetime(user.get("booze_until"))
-    if booze_until and datetime.now(timezone.utc) < booze_until:
+    booze_token_live = bool(booze_until and datetime.now(timezone.utc) < booze_until)
+    if booze_token_live:
         price = max(1, int(price * 0.9))
     cost = price * amount
     carrying = _booze_carrying_dict(user.get("booze_carrying"))
@@ -676,6 +678,12 @@ async def _booze_buy_impl(user: dict, booze_id: str, amount: int, *, via_auto_ra
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient money")
+    if booze_token_live and base_price > price:
+        try:
+            from utils.token_perk_stats import bump_token_perk_stats
+            await bump_token_perk_stats(db, user["id"], "booze", saved_cash=(base_price - price) * amount, uses=1)
+        except Exception:
+            pass
     new_carrying = carrying.get(booze_id, 0) + amount
     _invalidate_config_cache(user["id"])
     return {"message": f"Purchased {amount} {booze_name}", "new_carrying": new_carrying, "spent": cost}

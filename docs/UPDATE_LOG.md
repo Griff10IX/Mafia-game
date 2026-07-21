@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-21 19:15 UTC[/color][/b] — [b]Perks in use: lifetime stats cards[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Improved:[/b] [b]My Inventory → In use[/b] is now proper perk cards instead of text rows — each active perk shows a live [b]countdown pill[/b] ("6d 23h left") and [b]stat chips[/b] with what it's actually done for you: RP earned from XP boosts, melt cooldown saved, OC setup savings and extra payouts, booze buying savings and distillery bonuses, extra racket profit, travel points/time saved, extra property income, jail busts won and jail trips avoided with the boost, and Crew OC auto-joins. Stats are lifetime totals and start counting from this update.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-21 18:30 UTC[/color][/b] — [b]Property Auto Collect perk, travel rarity glows, VIP Pass Car 9s, E-Game join anti-bot[/b][/size]
 [quote]
 [list]

@@ -377,6 +377,80 @@ async def admin_tutorial_set_settings(
     }
 
 
+async def admin_tutorial_users(
+    status: str = "all",
+    q: str = "",
+    limit: int = 100,
+    current_user: dict = Depends(get_current_user),
+):
+    """Admin overview: who has done / is doing / skipped the tutorial, with per-status counts."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    import re as _re
+
+    try:
+        limit = max(1, min(500, int(limit)))
+    except (TypeError, ValueError):
+        limit = 100
+
+    counts = {
+        TUTORIAL_STATUS_COMPLETED: 0,
+        TUTORIAL_STATUS_IN_PROGRESS: 0,
+        TUTORIAL_STATUS_PENDING: 0,
+        TUTORIAL_STATUS_SKIPPED: 0,
+        "no_record": 0,
+    }
+    try:
+        async for row in db.users.aggregate(
+            [{"$group": {"_id": {"$ifNull": ["$tutorial_status", "no_record"]}, "n": {"$sum": 1}}}]
+        ):
+            key = str(row.get("_id") or "no_record")
+            counts[key if key in counts else "no_record"] = counts.get(key if key in counts else "no_record", 0) + int(row.get("n") or 0)
+    except Exception:
+        logger.exception("tutorial status counts failed")
+
+    s = (status or "all").strip().lower()
+    query: dict = {}
+    if s in (
+        TUTORIAL_STATUS_PENDING,
+        TUTORIAL_STATUS_IN_PROGRESS,
+        TUTORIAL_STATUS_COMPLETED,
+        TUTORIAL_STATUS_SKIPPED,
+    ):
+        query["tutorial_status"] = s
+    else:
+        # "all" = everyone with a tutorial record (old accounts without the field are excluded)
+        query["tutorial_status"] = {"$exists": True, "$ne": None}
+    qs = (q or "").strip()
+    if qs:
+        query["username"] = {"$regex": _re.escape(qs), "$options": "i"}
+
+    total_matching = await db.users.count_documents(query)
+    rows = await db.users.find(
+        query,
+        {
+            "_id": 0, "id": 1, "username": 1, "tutorial_status": 1, "tutorial_step": 1,
+            "tutorial_started_at": 1, "tutorial_completed_at": 1, "tutorial_skipped_at": 1,
+            "tutorial_rewards_granted": 1, "created_at": 1,
+        },
+    ).sort([("tutorial_completed_at", -1), ("tutorial_started_at", -1), ("created_at", -1)]).limit(limit).to_list(limit)
+
+    users = [
+        {
+            "username": u.get("username") or "?",
+            "status": u.get("tutorial_status") or "—",
+            "step": u.get("tutorial_step"),
+            "started_at": u.get("tutorial_started_at"),
+            "completed_at": u.get("tutorial_completed_at"),
+            "skipped_at": u.get("tutorial_skipped_at"),
+            "rewards_granted": bool(u.get("tutorial_rewards_granted")),
+            "created_at": u.get("created_at"),
+        }
+        for u in rows
+    ]
+    return {"counts": counts, "users": users, "total_matching": total_matching, "shown": len(users)}
+
+
 def register(router):
     router.add_api_route("/tutorial/status", tutorial_status, methods=["GET"])
     router.add_api_route("/tutorial/start", tutorial_start, methods=["POST"])
@@ -387,3 +461,4 @@ def register(router):
     router.add_api_route("/admin/tutorial/start-for-me", admin_tutorial_start_for_me, methods=["POST"])
     router.add_api_route("/admin/tutorial/settings", admin_tutorial_get_settings, methods=["GET"])
     router.add_api_route("/admin/tutorial/settings", admin_tutorial_set_settings, methods=["POST"])
+    router.add_api_route("/admin/tutorial/users", admin_tutorial_users, methods=["GET"])

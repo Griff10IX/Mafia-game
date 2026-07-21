@@ -1157,6 +1157,28 @@ def _distillery_cash_token_mult(user: Optional[dict], now: datetime) -> float:
     return _racket_token_income_mult(user, now) * _booze_token_distillery_mult(user, now)
 
 
+async def _bump_distillery_token_bonus_stats(user: Optional[dict], amount: int, now: datetime) -> None:
+    """Attribute the racket/booze token slices of a final distillery cash amount to lifetime perk stats."""
+    if not user or int(amount or 0) <= 0:
+        return
+    racket_mult = _racket_token_income_mult(user, now)
+    booze_mult = _booze_token_distillery_mult(user, now)
+    combined = racket_mult * booze_mult
+    if combined <= 1.0:
+        return
+    base = float(amount) / combined
+    try:
+        from utils.token_perk_stats import bump_token_perk_stats
+
+        uid = (user.get("id") or "").strip()
+        if racket_mult > 1.0:
+            await bump_token_perk_stats(db, uid, "racket", bonus_cash=int(base * (racket_mult - 1.0)))
+        if booze_mult > 1.0:
+            await bump_token_perk_stats(db, uid, "booze", bonus_cash=int(base * (booze_mult - 1.0)))
+    except Exception:
+        pass
+
+
 def _distillery_roi_snapshot(
     distillery: dict,
     business: dict,
@@ -2213,6 +2235,7 @@ async def distillery_process_automation(user_id: str) -> None:
         inc_doc["vault_lifetime_earned"] = max(0, vault_add)
     if inc_doc:
         await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": set_doc, "$inc": inc_doc})
+        await _bump_distillery_token_bonus_stats(user, int(inc_doc.get("vault") or 0), now)
     else:
         await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": set_doc})
     if booze_intake_blocked(user):
@@ -2552,6 +2575,21 @@ async def _collect_illegal_business_impl(current_user: dict) -> dict:
         {"id": business["id"]},
         {"$set": updates, "$inc": {"vault": vault_delta, "vault_lifetime_earned": max(0, vault_income)}},
     )
+    # Lifetime perk stats: racket token slice of the till take + racket/booze slices of worker auto-sell cash.
+    if racket_mult > 1.0 and income > 0:
+        try:
+            from utils.token_perk_stats import bump_token_perk_stats
+            await bump_token_perk_stats(
+                db,
+                current_user["id"],
+                "racket",
+                bonus_cash=int(float(income) - float(income) / racket_mult),
+                uses=1,
+            )
+        except Exception:
+            pass
+    if auto_sell_cash > 0:
+        await _bump_distillery_token_bonus_stats(current_user, auto_sell_cash, now)
     msg = f"The till's been cleared. ${income:,.2f} added to vault."
     if carry_inc > 0:
         msg += f" and {carry_inc} booze."
@@ -2985,6 +3023,7 @@ async def distillery_claim_aged_batch(req: DistilleryClaimBatchRequest, current_
         {"id": business["id"]},
         {"$set": {"distillery": distillery}, "$inc": {"vault": cash, "vault_lifetime_earned": max(0, cash)}},
     )
+    await _bump_distillery_token_bonus_stats(current_user, cash, now)
     return {
         "message": f"Batch sold for ${cash:,}.",
         "cash": cash,

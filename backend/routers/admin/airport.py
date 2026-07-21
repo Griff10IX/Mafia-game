@@ -610,6 +610,17 @@ async def _start_travel_impl(
         )
         if result.modified_count == 0:
             raise HTTPException(status_code=400, detail=f"Insufficient points for airport ({airport_price} pts)")
+        if _travel_token_active(user, now_utc):
+            try:
+                from utils.token_perk_stats import bump_token_perk_stats
+                _no_token_price = _effective_airport_points(
+                    listed, {**user, "travel_until": None}, now_utc, bool(user_owns_any_airport), family_crew_pts
+                )
+                await bump_token_perk_stats(
+                    db, user["id"], "travel", points_saved=max(0, _no_token_price - airport_price), uses=1
+                )
+            except Exception:
+                pass
         await log_points_event(
             db,
             user_id=user["id"],
@@ -679,7 +690,19 @@ async def _start_travel_impl(
             car_to_damage = user_car
 
     if travel_method != "airport" and travel_time > 0:
+        _base_car_seconds = travel_time
         travel_time = _effective_car_travel_seconds(travel_time, user, now_utc, fam_time_red)
+        if _travel_token_active(user, now_utc):
+            try:
+                from utils.token_perk_stats import bump_token_perk_stats
+                _no_token_time = _effective_car_travel_seconds(
+                    _base_car_seconds, {**user, "travel_until": None}, now_utc, fam_time_red
+                )
+                await bump_token_perk_stats(
+                    db, user["id"], "travel", time_saved_sec=max(0, _no_token_time - travel_time), uses=1
+                )
+            except Exception:
+                pass
 
     # Only count airport travel against the hourly limit; car travel is unlimited
     inc_travels = {} if booze_run or travel_method != "airport" else {"travels_this_hour": 1}

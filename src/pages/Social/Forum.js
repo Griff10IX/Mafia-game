@@ -2519,6 +2519,7 @@ export default function Forum() {
                   <thead>
                     <tr className="border-b border-zinc-700/30 text-left text-[10px] font-heading font-bold text-primary uppercase tracking-wider">
                       <th className="px-3 py-2">Type</th>
+                      <th className="px-3 py-2">Hosted by</th>
                       <th className="px-3 py-2">Winner(s)</th>
                       <th className="px-3 py-2">Rewards</th>
                       <th className="px-3 py-2 text-right">When</th>
@@ -2528,6 +2529,7 @@ export default function Forum() {
                     {entertainerHistory.map((h) => (
                       <tr key={h.id} className="border-b border-zinc-700/20 f-row">
                         <td className="px-3 py-1.5 font-heading capitalize">{h.game_type}</td>
+                        <td className="px-3 py-1.5 text-mutedForeground">{h.host || '—'}</td>
                         <td className="px-3 py-1.5 text-mutedForeground">
                           {h.winner != null ? h.winner : (h.winners && h.winners.length ? h.winners.join(', ') : '—')}
                         </td>

@@ -4545,6 +4545,11 @@ async def run_crew_oc_auto_apply_tick_once(db) -> Dict[str, Any]:
                 if not res.get("ok"):
                     continue
                 applies += 1
+                try:
+                    from utils.token_perk_stats import bump_token_perk_stats
+                    await bump_token_perk_stats(db, str(uid), "crew_oc_auto_3h", applies=1)
+                except Exception:
+                    pass
                 fresh = await db.users.find_one({"id": uid}, {"_id": 0, "money": 1})
                 money = int((fresh or {}).get("money") or 0)
         except Exception:

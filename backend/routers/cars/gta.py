@@ -808,7 +808,13 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
             rank_points = int(rank_points * 1.1)
         xp_gta_until = _parse_iso_datetime(current_user.get("xp_gta_until"))
         if xp_gta_until and now_utc < xp_gta_until:
+            _xp_token_bonus = int(rank_points)  # the doubled slice equals the pre-double RP
             rank_points = rank_points * 2
+            try:
+                from utils.token_perk_stats import bump_token_perk_stats
+                await bump_token_perk_stats(db, current_user.get("id") or "", "xp_gta", bonus_rp=_xp_token_bonus, uses=1)
+            except Exception:
+                pass
         from server import rank_xp_pass_multiplier
         pass_mult = float(rank_xp_pass_multiplier(current_user))
         rank_points = int(rank_points * pass_mult)
@@ -1432,6 +1438,19 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
             total_bullets = (int(total_bullets or 0) * MELT_BULLETS_TOTAL_PAYOUT_MULT_NUM) // MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN
             base_cooldown = int(MELT_BULLETS_COOLDOWN_SECONDS * 0.5) if melt_token_active else MELT_BULLETS_COOLDOWN_SECONDS
             cooldown_seconds = base_cooldown * deleted_count
+            if melt_token_active:
+                try:
+                    from utils.token_perk_stats import bump_token_perk_stats
+                    await bump_token_perk_stats(
+                        db,
+                        user.get("id") or "",
+                        "melt",
+                        cooldown_saved_sec=(MELT_BULLETS_COOLDOWN_SECONDS - base_cooldown) * deleted_count,
+                        cars_melted=deleted_count,
+                        uses=1,
+                    )
+                except Exception:
+                    pass
             # Badge bonus: 0.1% per bullets melted badge reduces cooldown (min 50%); prestige: 0.5% boost per level
             try:
                 from routers.game.achievements import get_badge_bonuses

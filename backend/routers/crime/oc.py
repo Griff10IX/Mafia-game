@@ -559,7 +559,8 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     user_oc = await db.user_organised_crime.find_one({"user_id": uid}, {"_id": 0, "selected_equipment": 1})
     selected_id = (user_oc or {}).get("selected_equipment", "basic")
     equip = OC_EQUIPMENT_BY_ID.get(selected_id, OC_EQUIPMENT_BY_ID["basic"])
-    total_cost = OC_SETUP_COST + equip["cost"]
+    full_cost = OC_SETUP_COST + equip["cost"]
+    total_cost = full_cost
     if oc_reduced:
         total_cost = int(total_cost * 0.8)
     new_cooldown_until = now + timedelta(hours=cooldown_hours)
@@ -587,6 +588,12 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
             "cooldown_until": None,
             "skipped_afford": True,
         }
+    if oc_reduced:
+        try:
+            from utils.token_perk_stats import bump_token_perk_stats
+            await bump_token_perk_stats(db, uid, "oc_reduced", setup_saved_cash=full_cost - total_cost, uses=1)
+        except Exception:
+            pass
     ev = await get_effective_event()
     rank_mult = float(ev.get("rank_points", 1.0))
     cash_mult = float(ev.get("kill_cash", 1.0))
@@ -620,8 +627,14 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     cash_pool = int(job["cash"] * (total_shares / 4.0) * cash_mult)
     rp_pool = int(job["rp"] * (total_shares / 4.0) * rank_mult)
     if oc_reduced:
+        _pre_cash, _pre_rp = cash_pool, rp_pool
         cash_pool = int(cash_pool * 1.1)
         rp_pool = int(rp_pool * 1.1)
+        try:
+            from utils.token_perk_stats import bump_token_perk_stats
+            await bump_token_perk_stats(db, uid, "oc_reduced", bonus_cash=cash_pool - _pre_cash, bonus_rp=rp_pool - _pre_rp)
+        except Exception:
+            pass
     # Prestige bonus: boost OC cash payout for the initiating user
     from server import get_prestige_bonus
     _prestige_user = await db.users.find_one({"id": uid}, {"_id": 0, "prestige_level": 1})

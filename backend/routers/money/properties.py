@@ -1228,6 +1228,15 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
         {"id": current_user["id"]},
         {"$inc": {"money": income}}
     )
+    if properties_until and now_utc < properties_until:
+        # All later multipliers are linear, so the token's slice of the final amount is 2/3.
+        try:
+            from utils.token_perk_stats import bump_token_perk_stats
+            await bump_token_perk_stats(
+                db, current_user["id"], "properties", bonus_cash=int(income - income / 3.0), uses=1
+            )
+        except Exception:
+            pass
     await db.user_properties.update_many(
         {"user_id": current_user["id"], "property_id": property_id},
         {"$set": {"collection_streak_days": streak_days}}
