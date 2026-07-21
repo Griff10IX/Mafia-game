@@ -133,7 +133,7 @@ const TOKEN_STORE_ITEMS = [
     userKey: 'crew_oc_auto_apply_tokens',
     desc: `Activate in My Inventory — you must set a max join fee; auto-apply only runs after that. 3h per token, stack to ${TOKEN_MAX_STACK_LABEL}.`,
   },
-  { tokenType: 'auto_collect_12h', title: 'Auto-Collect (12h)', price: 85, userKey: 'auto_collect_12h_tokens', flagKey: 'auto_collect', desc: 'Auto-collect properties + family rackets when cooldowns allow. Activate in My Inventory (12h, stacks to 168h).' },
+  { tokenType: 'auto_collect_12h', title: 'Auto-Collect (12h)', price: 85, userKey: 'auto_collect_12h_tokens', flagKey: 'auto_collect', desc: 'Auto-collect family rackets when cooldowns allow (properties have their own Auto Collect perk). Activate in My Inventory (12h, stacks to 168h).' },
   { tokenType: 'auto_collect_24h', title: 'Auto-Collect (24h)', price: 150, userKey: 'auto_collect_24h_tokens', flagKey: 'auto_collect', desc: 'Same as 12h pass but 24h per activation (stacks to 168h).' },
   { tokenType: 'jail_bailout', title: 'Jail Bailout Token', price: 25, userKey: 'jail_bailout_tokens', flagKey: 'jail_bailout', desc: 'Instant leave jail from the Jail page (3 uses/day UTC; does not bypass OC lockdown).' },
   { tokenType: 'cooldown_skip_crime', title: 'Crime Cooldown Skip', price: 35, userKey: 'cooldown_skip_crime_tokens', flagKey: 'cooldown_skip_crime', desc: 'Activate in My Inventory — skips one crime cooldown (max 5 skip activations/day across all skip types).' },

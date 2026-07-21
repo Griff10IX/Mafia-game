@@ -897,6 +897,11 @@ class UserResponse(BaseModel):
     cooldown_skip_gta_tokens: int = 0
     cooldown_skip_booze_tokens: int = 0
     cooldown_skip_properties_tokens: int = 0
+    # Activated-but-unused skip credits (auto-consumed on the next commit while on cooldown).
+    cooldown_skip_crime_credits: int = 0
+    cooldown_skip_gta_credits: int = 0
+    cooldown_skip_booze_credits: int = 0
+    cooldown_skip_properties_credits: int = 0
     auto_collect_until: Optional[str] = None
     custom_profile_badge: bool = False
     custom_profile_badge_url: Optional[str] = None

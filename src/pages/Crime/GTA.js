@@ -243,9 +243,10 @@ const PossibleCarsInfo = ({ optionName, cars }) => {
 };
 
 // Compact GTA row
-const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, manualPlayDisabled }) => {
+const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, manualPlayDisabled, canSkip, onSkip, skipBusy }) => {
   const onCooldown = option.cooldown_until && formatCooldown(option.cooldown_until);
   const unlocked = option.unlocked;
+  const showSkip = Boolean(onCooldown && unlocked && canSkip && !manualPlayDisabled);
   const defaultCooldown = formatDefaultCooldown(option.cooldown ?? 0);
   const progress = Math.min(92, Math.max(10, Number(option.progress) ?? 10));
   const successRateDisplay = eventsEnabled && event?.gta_success
@@ -349,6 +350,17 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
             data-testid={`attempt-gta-${option.id}`}
           >
             {attemptingOptionId === option.id ? '...' : '🚗 Steal'}
+          </button>
+        ) : showSkip ? (
+          <button
+            type="button"
+            disabled={skipBusy || attemptingOptionId !== null}
+            onClick={() => onSkip(option.id)}
+            title="Use a GTA cooldown skip token to attempt now (max 5 skips/day across all skip types)"
+            className="bg-amber-500/15 text-amber-300 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide border border-amber-500/45 hover:bg-amber-500/25 transition-all touch-manipulation font-heading disabled:opacity-50"
+            data-testid={`skip-gta-${option.id}`}
+          >
+            {skipBusy ? '...' : '⚡ Skip'}
           </button>
         ) : onCooldown ? (
           <button
@@ -531,6 +543,7 @@ export default function GTA() {
     return gs && typeof gs === 'object' ? { ...DEFAULT_GTA_STATS, ...gs } : { ...DEFAULT_GTA_STATS };
   });
   const [attemptingOptionId, setAttemptingOptionId] = useState(null);
+  const [skipBusyId, setSkipBusyId] = useState(null);
   const [event, setEvent] = useState(() => gtaBoot?.event ?? null);
   const [eventsEnabled, setEventsEnabled] = useState(() => !!gtaBoot?.eventsEnabled);
   const [recentStolenCollapsed, setRecentStolenCollapsed] = useState(() => {
@@ -718,6 +731,28 @@ export default function GTA() {
     }
   };
 
+  // Skip tokens: activating one grants a credit /gta/attempt auto-consumes when on cooldown.
+  const skipTokens = Number(user?.cooldown_skip_gta_tokens || 0);
+  const skipCredits = Number(user?.cooldown_skip_gta_credits || 0);
+  const canSkipCooldown = skipTokens > 0 || skipCredits > 0;
+
+  const skipCooldownAndAttempt = async (optionId) => {
+    if (skipBusyId || attemptingOptionId) return;
+    setSkipBusyId(optionId);
+    try {
+      if (skipCredits < 1) {
+        await api.post('/inventory/tokens/use', { token_type: 'cooldown_skip_gta' });
+      }
+      await attemptGTA(optionId);
+      refreshUser();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to use cooldown skip token');
+      refreshUser();
+    } finally {
+      setSkipBusyId(null);
+    }
+  };
+
   return (
     <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="gta-page">
       <style>{GTA_STYLES}</style>
@@ -777,6 +812,9 @@ export default function GTA() {
               event={event}
               eventsEnabled={eventsEnabled}
               manualPlayDisabled={autoRankGtaDisabled}
+              canSkip={canSkipCooldown}
+              onSkip={skipCooldownAndAttempt}
+              skipBusy={skipBusyId === option.id}
             />
           ))}
         </div>

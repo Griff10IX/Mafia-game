@@ -6,6 +6,24 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-21 21:55 UTC[/color][/b] — [b]Skip buttons on Crimes & GTA[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Improved:[/b] If you hold [b]Crime / GTA cooldown skip tokens[/b], a [b]⚡ Skip[/b] button now appears right on the crime row (including prestige crimes) or GTA row while it's on cooldown — one tap uses a token and commits/attempts immediately. No more going via My Inventory first. The usual [b]5 skips/day[/b] cap (shared across all skip types) still applies.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-21 21:40 UTC[/color][/b] — [b]Auto-Collect pass: rackets only[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] The [b]Auto-Collect (12h/24h)[/b] pass now auto-collects [b]family rackets only[/b] — property income is no longer collected by the pass. Properties have their own dedicated [b]Property Auto Collect[/b] perk (unlocked at 15 Business progress missions), which collects income into the racket vault, pays upkeep and clears heat.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-21 21:00 UTC[/color][/b] — [b]MDG joins: anti-bot protection[/b][/size]
 [quote]
 [list]

@@ -221,11 +221,12 @@ const CrimeProgressBar = ({ progress }) => {
 };
 
 // Compact crime row
-const CrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
+const CrimeRow = ({ crime, onCommit, manualPlayDisabled, canSkip, onSkip, skipBusy }) => {
   const unavailable = !crime.can_commit && (!crime.remaining || crime.remaining <= 0);
   const onCooldown = !crime.can_commit && crime.remaining && crime.remaining > 0;
   // Only lock when auto-rank/manual-play-disabled is confirmed true.
   const showLocked = manualPlayDisabled === true && crime.can_commit;
+  const showSkip = onCooldown && canSkip && manualPlayDisabled !== true && !crime.in_jail;
 
   return (
     <div
@@ -301,6 +302,17 @@ const CrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
           >
             💰 Commit
           </button>
+        ) : showSkip ? (
+          <button
+            type="button"
+            disabled={skipBusy}
+            onClick={() => onSkip(crime.id)}
+            title="Use a cooldown skip token to commit now (max 5 skips/day across all skip types)"
+            className="bg-amber-500/15 text-amber-300 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide border border-amber-500/45 hover:bg-amber-500/25 transition-all touch-manipulation font-heading disabled:opacity-50"
+            data-testid={`skip-crime-${crime.id}`}
+          >
+            {skipBusy ? '...' : '⚡ Skip'}
+          </button>
         ) : onCooldown ? (
           <button
             type="button"
@@ -320,11 +332,12 @@ const CrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
 };
 
 // Prestige crime row — separate styled row for prestige-exclusive crimes
-const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
+const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled, canSkip, onSkip, skipBusy }) => {
   const level = crime.prestige_required;
   const color = PRESTIGE_COLORS[level] || '#71717a';
   const isLocked = crime.unlocked === false;
   const onCooldown = !crime.can_commit && crime.remaining && crime.remaining > 0;
+  const showSkip = onCooldown && canSkip && manualPlayDisabled !== true && !crime.in_jail;
   const isGuaranteed = level >= 4;
   const bonusLines = describePrestigeBonusLines(crime);
 
@@ -410,6 +423,16 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
               style={{ color, borderColor: color + '60', background: color + '15' }}
             >
               ★ Commit
+            </button>
+          ) : showSkip ? (
+            <button
+              type="button"
+              disabled={skipBusy}
+              onClick={() => onSkip(crime.id)}
+              title="Use a cooldown skip token to commit now (max 5 skips/day across all skip types)"
+              className="bg-amber-500/15 text-amber-300 rounded px-1.5 py-0.5 text-[9px] font-heading font-bold uppercase border border-amber-500/45 hover:bg-amber-500/25 transition-all touch-manipulation disabled:opacity-50"
+            >
+              {skipBusy ? '...' : '⚡ Skip'}
             </button>
           ) : onCooldown ? (
             <button type="button" disabled className="bg-zinc-700/50 text-zinc-500 rounded px-1.5 py-0.5 text-[9px] font-heading font-bold uppercase border border-zinc-600/50 cursor-not-allowed">Wait</button>
@@ -551,6 +574,29 @@ export default function Crimes() {
   const tick = useCooldownTicker(crimes, () => fetchCrimes(true));
 
   const [commitAllLoading, setCommitAllLoading] = useState(false);
+  const [skipBusyId, setSkipBusyId] = useState(null);
+
+  // Skip tokens: activating one grants a credit the commit endpoint auto-consumes when on cooldown.
+  const skipTokens = Number(authUser?.cooldown_skip_crime_tokens || 0);
+  const skipCredits = Number(authUser?.cooldown_skip_crime_credits || 0);
+  const canSkipCooldown = skipTokens > 0 || skipCredits > 0;
+
+  const skipCooldownAndCommit = async (crimeId) => {
+    if (skipBusyId) return;
+    setSkipBusyId(crimeId);
+    try {
+      if (skipCredits < 1) {
+        await api.post('/inventory/tokens/use', { token_type: 'cooldown_skip_crime' });
+      }
+      await commitCrime(crimeId);
+      refreshUser();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to use cooldown skip token');
+      refreshUser();
+    } finally {
+      setSkipBusyId(null);
+    }
+  };
 
   const commitCrime = async (crimeId) => {
     try {
@@ -738,7 +784,15 @@ export default function Crimes() {
 
         <div className="p-1.5 space-y-0.5">
           {regularCrimeRows.map((crime) => (
-            <CrimeRow key={crime.id} crime={crime} onCommit={commitCrime} manualPlayDisabled={autoRankCrimesDisabled} />
+            <CrimeRow
+              key={crime.id}
+              crime={crime}
+              onCommit={commitCrime}
+              manualPlayDisabled={autoRankCrimesDisabled}
+              canSkip={canSkipCooldown}
+              onSkip={skipCooldownAndCommit}
+              skipBusy={skipBusyId === crime.id}
+            />
           ))}
         </div>
         <div className="cr-art-line text-primary mx-2.5" />
@@ -757,7 +811,15 @@ export default function Crimes() {
           </div>
           <div className="p-1.5 space-y-1.5">
             {prestigeCrimeRows.map((crime) => (
-              <PrestigeCrimeRow key={crime.id} crime={crime} onCommit={commitCrime} manualPlayDisabled={autoRankCrimesDisabled} />
+              <PrestigeCrimeRow
+                key={crime.id}
+                crime={crime}
+                onCommit={commitCrime}
+                manualPlayDisabled={autoRankCrimesDisabled}
+                canSkip={canSkipCooldown}
+                onSkip={skipCooldownAndCommit}
+                skipBusy={skipBusyId === crime.id}
+              />
             ))}
           </div>
           <div className="cr-art-line mx-2.5" style={{ color: 'rgba(184,145,68,0.3)' }} />

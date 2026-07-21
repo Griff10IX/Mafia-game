@@ -1,4 +1,4 @@
-"""Auto-collect pass ticker: properties + family rackets when cooldowns allow."""
+"""Auto-collect ticker: store pass collects family rackets; the Property Auto Collect perk handles properties."""
 from __future__ import annotations
 
 import asyncio
@@ -212,7 +212,7 @@ async def run_auto_collect_tick(db) -> Dict[str, Any]:
         uid = u.get("id")
         if not uid:
             continue
-        # Store auto-collect pass (properties + rackets); flag gating applies to the pass only.
+        # Store auto-collect pass (family rackets only); flag gating applies to the pass only.
         has_pass = str(u.get("auto_collect_until") or "") > now_iso
         if has_pass and not flag_live and not store_item_allowed(flags, "auto_collect", u):
             has_pass = False
@@ -229,7 +229,9 @@ async def run_auto_collect_tick(db) -> Dict[str, Any]:
                 db,
                 uid,
                 u.get("family_id"),
-                collect_properties=True,
+                # Properties are only auto-collected by the Property Auto Collect perk;
+                # the store pass is rackets-only (properties have their own perk).
+                collect_properties=has_perk,
                 collect_rackets=has_pass,
                 pay_upkeep=has_perk,
                 clear_heat=has_perk,
