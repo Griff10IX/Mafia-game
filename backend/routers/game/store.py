@@ -798,7 +798,12 @@ async def buy_family_crest_upgrade(
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": cost_used, "lifetime_points_spent": -inc.get("lifetime_points_spent", 0)}})
         raise HTTPException(status_code=400, detail="Premium crests already unlocked")
     await _record_store_points_spend(current_user, inc, "buy-family-crest-upgrade", cost_used=cost_used)
-    return {"message": "Premium family crest presets unlocked for your crew!", "cost": cost_used}
+    try:
+        from routers.game.families import _invalidate_my_cache
+        _invalidate_my_cache(current_user["id"])
+    except Exception:
+        pass
+    return {"message": "Premium family crest presets unlocked for your crew! Pick them in your crew profile's emblem editor.", "cost": cost_used}
 
 
 async def buy_family_safe_deposit_tier(

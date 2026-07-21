@@ -2364,6 +2364,12 @@ def _tokens_from_user(user: dict) -> dict:
             except (TypeError, ValueError):
                 row["max_join_fee"] = None
         out[t] = row
+    # Count-only tokens (no Armoury activation; used elsewhere, e.g. Jail page).
+    out["jail_bailout"] = {
+        "count": int(user.get("jail_bailout_tokens") or 0),
+        "active_until": None,
+        "expires_at": None,
+    }
     return out
 
 

@@ -388,6 +388,7 @@ export default function ThemePicker({ open, onClose }) {
     (p.toastTextColourId === undefined || (p.toastTextColourId == null ? toastTextColourId == null : toastTextColourId === p.toastTextColourId)) &&
     (p.mobileNavStyle == null || mobileNavStyle === p.mobileNavStyle) &&
     (p.mobileStatsDisplay == null || mobileStatsDisplay === p.mobileStatsDisplay) &&
+    (p.sidebarLayout == null || sidebarLayout === p.sidebarLayout) &&
     (p.themeVariant == null || themeVariant === p.themeVariant);
 
   const applyPreset = (p) => {
@@ -404,6 +405,10 @@ export default function ThemePicker({ open, onClose }) {
     if (p.mobileStatsDisplay != null) {
       lsSet(KEYS.statsDisplay, p.mobileStatsDisplay, 'mobile-stats-display-changed');
       api.patch('/profile/theme', { mobile_stats_display: p.mobileStatsDisplay, theme_platform: getThemeUiPlatform() }).catch(() => {});
+    }
+    if (p.sidebarLayout != null) {
+      lsSet(KEYS.sidebarLayout, p.sidebarLayout, 'sidebar-layout-changed');
+      api.patch('/profile/theme', { sidebar_layout: p.sidebarLayout, theme_platform: getThemeUiPlatform() }).catch(() => {});
     }
   };
 

@@ -161,29 +161,26 @@ function GlowPresetPicker({ value, onChange }) {
         <ChevronDown size={10} className={`transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <>
-          <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} aria-hidden />
-          <div className="absolute z-50 mt-1 p-2 rounded-lg border border-zinc-700 bg-zinc-900 shadow-xl grid grid-cols-7 gap-1.5 w-max max-w-[240px]">
-            {PROFILE_GLOW_PRESETS.map((p) => {
-              const selected = value === p.id;
-              return (
-                <button
-                  key={p.id}
-                  type="button"
-                  title={p.label}
-                  onClick={() => { onChange(p.id); setOpen(false); }}
-                  className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition-transform hover:scale-110 ${selected ? 'scale-110' : 'border-transparent'}`}
-                  style={{ borderColor: selected ? '#fff' : undefined }}
-                >
-                  <span
-                    className="w-4 h-4 rounded-full"
-                    style={{ backgroundColor: p.hex, boxShadow: `0 0 6px ${p.hex}aa` }}
-                  />
-                </button>
-              );
-            })}
-          </div>
-        </>
+        <div className="mt-1 p-2 rounded-lg border border-zinc-700 bg-zinc-900/60 flex flex-wrap gap-1.5">
+          {PROFILE_GLOW_PRESETS.map((p) => {
+            const selected = value === p.id;
+            return (
+              <button
+                key={p.id}
+                type="button"
+                title={p.label}
+                onClick={() => { onChange(p.id); setOpen(false); }}
+                className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition-transform hover:scale-110 shrink-0 ${selected ? 'scale-110' : 'border-transparent'}`}
+                style={{ borderColor: selected ? '#fff' : undefined }}
+              >
+                <span
+                  className="w-4 h-4 rounded-full"
+                  style={{ backgroundColor: p.hex, boxShadow: `0 0 6px ${p.hex}aa` }}
+                />
+              </button>
+            );
+          })}
+        </div>
       )}
     </div>
   );

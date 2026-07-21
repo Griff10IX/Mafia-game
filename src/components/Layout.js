@@ -567,6 +567,15 @@ export default function Layout({ children }) {
       window.dispatchEvent(new Event('mobile-stats-display-changed'));
     } catch (_) {}
     try {
+      localStorage.setItem(SIDEBAR_LAYOUT_KEY, p.sidebarLayout ?? 'categorized_classic');
+      window.dispatchEvent(new Event('sidebar-layout-changed'));
+    } catch (_) {}
+    api.patch('/profile/theme', {
+      mobile_stats_display: p.mobileStatsDisplay ?? 'right_sidebar',
+      sidebar_layout: p.sidebarLayout ?? 'categorized_classic',
+      theme_platform: getThemeUiPlatform(),
+    }).catch(() => {});
+    try {
       localStorage.setItem('app_initial_theme_chosen', '1');
     } catch (_) {}
     tutorialThemeForceOpenRef.current = false;

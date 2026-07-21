@@ -16,8 +16,21 @@ let _cachedInventory = null;
 let _invLastFetch = 0;
 const INV_REFRESH = 30_000;
 
-const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'auto_rank_2h', 'crew_oc_auto_3h', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus', 'rank_xp_pass'];
-const GIFTABLE_TOKEN_TYPES = TOKEN_TYPES.filter((k) => k !== 'rank_xp_pass' && k !== 'crew_oc_auto_3h');
+/** Keep in sync with backend armoury.TOKEN_TYPES (+ jail_bailout which is count-only, used on the Jail page). */
+const TOKEN_TYPES = [
+  'xp_crimes', 'xp_gta', 'auto_rank_2h', 'crew_oc_auto_3h', 'melt', 'oc_reduced', 'booze', 'racket',
+  'travel', 'properties', 'jailbust_bonus',
+  'auto_collect_12h', 'auto_collect_24h',
+  'cooldown_skip_crime', 'cooldown_skip_gta', 'cooldown_skip_booze', 'cooldown_skip_properties',
+  'jail_bailout',
+  'rank_xp_pass',
+];
+// Backend: all TOKEN_TYPES except rank_xp_pass / crew_oc_auto_3h; jail_bailout is not giftable either.
+const GIFTABLE_TOKEN_TYPES = TOKEN_TYPES.filter((k) => !['rank_xp_pass', 'crew_oc_auto_3h', 'jail_bailout'].includes(k));
+// Cooldown skip vouchers activate one at a time (backend rejects use_all).
+const NO_USE_ALL_TOKEN_TYPES = new Set(['cooldown_skip_crime', 'cooldown_skip_gta', 'cooldown_skip_booze', 'cooldown_skip_properties']);
+// Count-only tokens have no Use button here (spent from their own page).
+const COUNT_ONLY_TOKEN_TYPES = new Set(['jail_bailout']);
 const TOKEN_GIFT_DAILY_DEFAULT = { sent: 0, limit: 20 };
 /** Keep in sync with backend armoury.TOKEN_MAX_STACK_HOURS (7 × 24 = 1 week). */
 const TOKEN_MAX_STACK_LABEL = '1 week';
@@ -38,6 +51,13 @@ const tokenLabels = {
   travel: { name: 'Travel', icon: Zap, desc: `Lower airport cost & 2% car travel time reduction, 1h per token (stack up to ${TOKEN_MAX_STACK_LABEL})` },
   properties: { name: 'Properties', icon: Building2, desc: `3× property income, 1h per token (stack up to ${TOKEN_MAX_STACK_LABEL})` },
   jailbust_bonus: { name: 'Jailbust bonus', icon: Target, desc: `+10% jail bust success, less chance of jail on fail, 1h per token (stack up to ${TOKEN_MAX_STACK_LABEL})` },
+  auto_collect_12h: { name: 'Auto-collect (12h)', icon: Building2, desc: `Auto-collect properties + family rackets when cooldowns allow. 12h per token (stack up to ${TOKEN_MAX_STACK_LABEL})` },
+  auto_collect_24h: { name: 'Auto-collect (24h)', icon: Building2, desc: `Auto-collect properties + family rackets when cooldowns allow. 24h per token (stack up to ${TOKEN_MAX_STACK_LABEL})` },
+  cooldown_skip_crime: { name: 'Crime cooldown skip', icon: Zap, desc: 'Activate to skip one crime cooldown (max 5 skip activations/day across all skip types).' },
+  cooldown_skip_gta: { name: 'GTA cooldown skip', icon: Zap, desc: 'Activate to skip one GTA cooldown (shared 5/day cap).' },
+  cooldown_skip_booze: { name: 'Booze travel skip', icon: Zap, desc: 'Activate to skip one booze-run travel wait (shared 5/day cap).' },
+  cooldown_skip_properties: { name: 'Properties collect skip', icon: Zap, desc: 'Activate to skip one property collect cooldown (shared 5/day cap).' },
+  jail_bailout: { name: 'Jail bailout token', icon: Target, desc: 'Instant leave jail — use it from the Jail page (3 uses/day UTC; does not bypass OC lockdown).' },
   rank_xp_pass: { name: 'Game Pass', icon: Package, desc: 'Activate in Armoury/My Inventory to claim one-time Game Pass rewards. Expires in 1 month if unused.' },
 };
 
@@ -702,15 +722,24 @@ export default function MyInventory() {
                           {usingToken === 'auto_rank_pause' ? '…' : autoRankRunning ? 'Pause' : 'Resume'}
                         </button>
                       )}
-                      <button
-                        type="button"
-                        disabled={t.count < 1 || usingToken !== null || expired || (key === 'crew_oc_auto_3h' && crewOcModal)}
-                        onClick={() => (key === 'crew_oc_auto_3h' ? openCrewOcModal(false) : activateToken(key, false))}
-                        className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50"
-                      >
-                        {usingToken === key ? '...' : 'Use'}
-                      </button>
-                      {key !== 'rank_xp_pass' && (
+                      {COUNT_ONLY_TOKEN_TYPES.has(key) ? (
+                        <Link
+                          to="/crime/jail"
+                          className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                        >
+                          Use on Jail page →
+                        </Link>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={t.count < 1 || usingToken !== null || expired || (key === 'crew_oc_auto_3h' && crewOcModal)}
+                          onClick={() => (key === 'crew_oc_auto_3h' ? openCrewOcModal(false) : activateToken(key, false))}
+                          className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50"
+                        >
+                          {usingToken === key ? '...' : 'Use'}
+                        </button>
+                      )}
+                      {key !== 'rank_xp_pass' && !NO_USE_ALL_TOKEN_TYPES.has(key) && !COUNT_ONLY_TOKEN_TYPES.has(key) && (
                         <button
                           type="button"
                           disabled={t.count < 1 || usingToken !== null || (key === 'crew_oc_auto_3h' && crewOcModal)}

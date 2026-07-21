@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { parseForumContent, insertAtCursor } from '../../utils/forumContent';
 import styles from '../../styles/noir.module.css';
 import { getFamilyProfilePrefetch, setFamilyProfilePrefetch } from '../../utils/prefetchCache';
-import FamilyEmblem, { FAMILY_EMBLEM_PRESETS, groupFamilyEmblemPresets } from '../../components/FamilyEmblem';
+import FamilyEmblem, { FAMILY_EMBLEM_PRESETS, FAMILY_EMBLEM_PRESETS_PREMIUM, groupFamilyEmblemPresets } from '../../components/FamilyEmblem';
 import { fileToCompressedDataUrl, validateSafeImageFile } from '../../utils/fileToCompressedDataUrl';
 
 /** Preset notepad backgrounds (dark greys) — same options as player profile. */
@@ -911,9 +911,15 @@ export default function FamilyProfilePage() {
                   Preset or custom image. Each design is unique — another active family cannot copy it. Wiped crews release their emblem for reuse.
                 </p>
                 <div className="space-y-2">
-                  {groupFamilyEmblemPresets(FAMILY_EMBLEM_PRESETS).map(({ group, items }) => (
+                  {groupFamilyEmblemPresets(
+                    family.premium_crest_unlocked
+                      ? [...FAMILY_EMBLEM_PRESETS_PREMIUM, ...FAMILY_EMBLEM_PRESETS]
+                      : FAMILY_EMBLEM_PRESETS,
+                  ).map(({ group, items }) => (
                     <div key={group}>
-                      <p className="text-[9px] font-heading text-zinc-500 uppercase tracking-wider mb-1">{group}</p>
+                      <p className={`text-[9px] font-heading uppercase tracking-wider mb-1 ${group === 'Premium' ? 'text-yellow-400' : 'text-zinc-500'}`}>
+                        {group === 'Premium' ? 'Premium (crest upgrade)' : group}
+                      </p>
                       <div className="flex flex-wrap gap-1.5">
                         {items.map((p) => (
                           <button

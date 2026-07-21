@@ -29,6 +29,10 @@ import {
   Building2,
   Dice5,
   HandCoins,
+  Medal,
+  Stamp,
+  Flag,
+  Bird,
 } from 'lucide-react';
 
 /** Must match backend FAMILY_EMBLEM_PRESETS_PUBLIC ids (families.py). */
@@ -81,6 +85,15 @@ export const FAMILY_EMBLEM_PRESETS = [
   { id: 'boss_throne', label: 'Boss throne' },
 ];
 
+/** Must match backend FAMILY_EMBLEM_PRESETS_PREMIUM ids (families.py). Requires the Family Crest Upgrade store item. */
+export const FAMILY_EMBLEM_PRESETS_PREMIUM = [
+  { id: 'premium_gilded_crest', label: 'Gilded crest' },
+  { id: 'premium_obsidian_seal', label: 'Obsidian seal' },
+  { id: 'premium_blood_oath', label: 'Blood oath banner' },
+  { id: 'premium_imperial_eagle', label: 'Imperial eagle' },
+  { id: 'premium_vault_crown', label: 'Vault crown' },
+];
+
 const PRESET_GROUP_BY_ID = {
   skull_bones: 'Violence',
   wolf_strike: 'Violence',
@@ -128,9 +141,14 @@ const PRESET_GROUP_BY_ID = {
   hourglass: 'Operations',
   getaway: 'Operations',
   safehouse: 'Operations',
+  premium_gilded_crest: 'Premium',
+  premium_obsidian_seal: 'Premium',
+  premium_blood_oath: 'Premium',
+  premium_imperial_eagle: 'Premium',
+  premium_vault_crown: 'Premium',
 };
 
-export const FAMILY_EMBLEM_GROUPS = ['Violence', 'Power', 'Stealth', 'Money', 'Operations'];
+export const FAMILY_EMBLEM_GROUPS = ['Premium', 'Violence', 'Power', 'Stealth', 'Money', 'Operations'];
 
 export function groupFamilyEmblemPresets(presets = FAMILY_EMBLEM_PRESETS) {
   const byId = new Map((presets || []).map((p) => [p.id, p]));
@@ -181,7 +199,14 @@ const PRESET_ICON = {
   silent_contract: Lock,
   war_crest: Shield,
   empire_mark: Landmark,
+  premium_gilded_crest: Medal,
+  premium_obsidian_seal: Stamp,
+  premium_blood_oath: Flag,
+  premium_imperial_eagle: Bird,
+  premium_vault_crown: Crown,
 };
+
+const PREMIUM_PRESET_IDS = new Set(FAMILY_EMBLEM_PRESETS_PREMIUM.map((p) => p.id));
 
 const ART_PRESET_IDS = new Set([
   'don_regalia',
@@ -270,9 +295,16 @@ export default function FamilyEmblem({ emblemPresetId, avatarUrl, size = 40, cla
   const Icon = emblemPresetId ? PRESET_ICON[emblemPresetId] : null;
   if (!Icon) return null;
   const iconSize = Math.max(14, Math.round(size * 0.46));
+  const isPremium = PREMIUM_PRESET_IDS.has(emblemPresetId);
   return (
-    <div className={combined} style={dim} aria-hidden>
-      <Icon size={iconSize} className="text-amber-400/95" strokeWidth={2.2} />
+    <div
+      className={combined}
+      style={isPremium
+        ? { ...dim, boxShadow: '0 0 10px rgba(212,175,95,0.55), inset 0 0 6px rgba(212,175,95,0.25)', borderColor: '#d4af5f' }
+        : dim}
+      aria-hidden
+    >
+      <Icon size={iconSize} className={isPremium ? 'text-yellow-300' : 'text-amber-400/95'} strokeWidth={2.2} />
     </div>
   );
 }
