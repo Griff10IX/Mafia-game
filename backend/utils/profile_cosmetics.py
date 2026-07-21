@@ -1,6 +1,7 @@
 """Profile cosmetic store items (badge, glow, border)."""
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -32,9 +33,23 @@ PROFILE_GLOW_PRESETS = (
     {"id": "sky", "color": "#38bdf8", "border": "sky"},
     {"id": "blue", "color": "#60a5fa", "border": "blue"},
     {"id": "indigo", "color": "#818cf8", "border": "indigo"},
+    {"id": "magenta", "color": "#d946ef", "border": "magenta"},
+    {"id": "crimson", "color": "#e11d48", "border": "crimson"},
+    {"id": "coral", "color": "#ff8a65", "border": "coral"},
+    {"id": "peach", "color": "#fdba74", "border": "peach"},
+    {"id": "amber", "color": "#f59e0b", "border": "amber"},
+    {"id": "chartreuse", "color": "#bef264", "border": "chartreuse"},
+    {"id": "mint", "color": "#6ee7b7", "border": "mint"},
+    {"id": "ice", "color": "#bae6fd", "border": "ice"},
+    {"id": "cobalt", "color": "#3b82f6", "border": "cobalt"},
+    {"id": "lavender", "color": "#c4b5fd", "border": "lavender"},
+    {"id": "orchid", "color": "#f0abfc", "border": "orchid"},
+    {"id": "white", "color": "#f8fafc", "border": "white"},
     {"id": "silver", "color": "#d1d5db", "border": "silver"},
     {"id": "steel", "color": "#94a3b8", "border": "steel"},
 )
+
+_CUSTOM_HEX_RE = re.compile(r"^#?([0-9a-f]{6})$")
 
 
 def _now() -> datetime:
@@ -97,7 +112,11 @@ def custom_profile_badge_strip_on_death_pull() -> dict:
 
 
 def sanitize_glow_preset(preset_id: Optional[str]) -> dict:
+    """Resolve a preset id, or a custom hex colour ('#rrggbb') for a fully custom glow."""
     pid = (preset_id or "violet").strip().lower()
+    m = _CUSTOM_HEX_RE.match(pid)
+    if m:
+        return {"id": "custom", "color": f"#{m.group(1)}", "border": "custom"}
     for p in PROFILE_GLOW_PRESETS:
         if p["id"] == pid:
             return p

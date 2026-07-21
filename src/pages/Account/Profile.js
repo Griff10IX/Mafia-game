@@ -27,7 +27,7 @@ import {
 import { getProfileEditWarm } from '../../utils/profilePageWarm';
 import { fileToAvatarDataUrl, fileToCustomBadgeDataUrl, validateSafeImageFile, AVATAR_RAW_UPLOAD_MAX_BYTES } from '../../utils/fileToCompressedDataUrl';
 import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
-import { PROFILE_GLOW_BORDER_CSS } from '../../constants/profileGlowPresets';
+import { PROFILE_GLOW_BORDER_CSS, customGlowBorderStyle } from '../../constants/profileGlowPresets';
 
 const PROFILE_STYLES = `
   @keyframes prof-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -466,9 +466,14 @@ const ProfileInfoCard = ({
   const nameGlowStyle = profile.profile_cosmetic_active && profile.profile_name_glow_color
     ? { color: profile.profile_name_glow_color, textShadow: `0 0 8px ${profile.profile_name_glow_color}88` }
     : undefined;
-  const dossierBorderClass = profile.profile_cosmetic_active && profile.profile_border_style
-    ? `border-2 prof-border-${profile.profile_border_style}`
+  const hasCosmeticBorder = profile.profile_cosmetic_active && profile.profile_border_style;
+  const isCustomBorder = hasCosmeticBorder && profile.profile_border_style === 'custom';
+  const dossierBorderClass = hasCosmeticBorder
+    ? (isCustomBorder ? 'border-2' : `border-2 prof-border-${profile.profile_border_style}`)
     : 'border-2 border-primary/35';
+  const dossierBorderStyle = isCustomBorder
+    ? customGlowBorderStyle(profile.profile_name_glow_color)
+    : undefined;
   
   let profileRows = isStaffProfile
     ? allRows.filter((r) => r.label !== 'Status' && r.label !== 'Messages' && r.label !== 'Jailbusts')
@@ -487,7 +492,7 @@ const ProfileInfoCard = ({
     : undefined;
 
   return (
-    <div className={`relative ${styles.panel} rounded-lg overflow-hidden ${dossierBorderClass} shadow-2xl backdrop-blur-sm prof-card prof-dossier-enter mobile-panel`}>
+    <div className={`relative ${styles.panel} rounded-lg overflow-hidden ${dossierBorderClass} shadow-2xl backdrop-blur-sm prof-card prof-dossier-enter mobile-panel`} style={dossierBorderStyle}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/45 to-transparent" />
       <div className="px-2.5 py-2 md:px-3 md:py-2.5 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent border-b border-primary/25 flex items-start justify-between gap-2">
         <div className="flex items-start gap-2.5 md:gap-3 min-w-0 flex-1">
