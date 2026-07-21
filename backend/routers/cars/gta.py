@@ -998,7 +998,7 @@ async def attempt_gta(
                     if await consume_skip_credit(db, current_user.get("id") or "", "gta"):
                         await db.gta_cooldowns.update_one(
                             {"user_id": current_user.get("id") or ""},
-                            {"$set": {"cooldown_until": now_iso}},
+                            {"$set": {"cooldown_until": now.isoformat()}},
                         )
                     else:
                         secs = int((until - now).total_seconds())
