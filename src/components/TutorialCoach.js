@@ -365,10 +365,15 @@ export default function TutorialCoach({
   const stepIndex = Math.max(0, TUTORIAL_STEPS.findIndex((s) => s.id === step.id));
   const stepCount = TUTORIAL_STEPS.length;
 
-  // Pulse the collapsed pill when a gate unlocks so the player notices Next is ready.
+  // Pulse when a gate unlocks so the player notices Next is ready; if the coach
+  // was minimized, reopen it so the unlocked Next button is impossible to miss.
   useEffect(() => {
     if (prevGateOkRef.current === false && gateOk && isActionGate) {
       setGatePulse(true);
+      setCollapsed((prev) => {
+        if (prev) writeCollapsed(false);
+        return false;
+      });
     }
     prevGateOkRef.current = gateOk;
   }, [gateOk, isActionGate]);
@@ -535,9 +540,15 @@ export default function TutorialCoach({
     }
     if (s.route) {
       navigate(s.route);
-      // Get out of the way so the destination page is usable; the pill pulses
-      // green when the gate unlocks and Next is ready.
-      if (isActionGate && !gateOk) setCollapsedPersist(true);
+      // Slide to the bottom-right corner so the destination page stays usable
+      // while the coach remains fully visible.
+      if (!isMobile && isActionGate && !gateOk) {
+        setPos(() => {
+          const next = clampPos(1e9, 1e9, panelRef.current);
+          writePos(next);
+          return next;
+        });
+      }
     }
   };
 
