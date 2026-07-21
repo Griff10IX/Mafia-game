@@ -258,7 +258,7 @@ function loadSidebarSpacing() {
 }
 function loadSidebarLayout() {
   try { const v = localStorage.getItem(SIDEBAR_LAYOUT_KEY); if (v === 'categorized' || v === 'categorized_classic' || v === 'default') return v; } catch (_) {}
-  return 'default';
+  return 'categorized_classic';
 }
 function loadBottomNavShowDividers() {
   try { const v = localStorage.getItem(BOTTOM_NAV_SHOW_DIVIDERS_KEY); if (v === 'true') return true; } catch (_) {}
@@ -266,7 +266,7 @@ function loadBottomNavShowDividers() {
 }
 function loadMobileStatsDisplay() {
   try { const v = localStorage.getItem(MOBILE_STATS_DISPLAY_KEY); if (v === 'top_bar' || v === 'touch_ball' || v === 'right_sidebar') return v; } catch (_) {}
-  return 'touch_ball';
+  return 'right_sidebar';
 }
 function loadNotificationBallPosition() {
   try {
@@ -563,7 +563,7 @@ export default function Layout({ children }) {
     if (p.mobileNavStyle != null) setMobileNavStyle(p.mobileNavStyle);
     if (p.themeVariant != null) setThemeVariant(p.themeVariant);
     try {
-      localStorage.setItem(MOBILE_STATS_DISPLAY_KEY, p.mobileStatsDisplay ?? 'touch_ball');
+      localStorage.setItem(MOBILE_STATS_DISPLAY_KEY, p.mobileStatsDisplay ?? 'right_sidebar');
       window.dispatchEvent(new Event('mobile-stats-display-changed'));
     } catch (_) {}
     try {
@@ -2093,7 +2093,11 @@ export default function Layout({ children }) {
                   {SIDEBAR_CATEGORIES.map((cat) => {
                     let items = navItems.filter((i) => (PATH_TO_CATEGORY[i.path] || 'other') === cat.id);
                     if (cat.id === 'money' && items.length) {
-                      items = [...items].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+                      // Alphabetical, but related pairs share a sort key so they stay adjacent
+                      // (e.g. Buy Cars + Sell Cars sort together under "Cars").
+                      const moneySortKey = { 'Buy Cars': 'Cars 1 buy', 'Sell Cars': 'Cars 2 sell' };
+                      items = [...items].sort((a, b) => (moneySortKey[a.label] || a.label)
+                        .localeCompare(moneySortKey[b.label] || b.label, undefined, { sensitivity: 'base' }));
                     }
                     if (!items.length) return null;
                     const useClassicHeader = sidebarLayout === 'categorized_classic';

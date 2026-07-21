@@ -131,6 +131,18 @@ const RARITY_COLORS = {
   vip_exclusive: 'text-cyan-500',
 };
 
+// Card glow per rarity (matches RARITY_COLORS hues; common stays plain).
+const RARITY_GLOWS = {
+  uncommon: 'shadow-[0_0_8px_rgba(74,222,128,0.3)]',
+  rare: 'shadow-[0_0_9px_rgba(96,165,250,0.35)]',
+  ultra_rare: 'shadow-[0_0_10px_rgba(192,132,252,0.4)]',
+  legendary: 'shadow-[0_0_12px_rgba(250,204,21,0.45)]',
+  custom: 'shadow-[0_0_10px_rgba(251,146,60,0.4)]',
+  loot_exclusive: 'shadow-[0_0_10px_rgba(251,191,36,0.45)]',
+  exclusive: 'shadow-[0_0_10px_rgba(251,191,36,0.45)]',
+  vip_exclusive: 'shadow-[0_0_10px_rgba(6,182,212,0.45)]',
+};
+
 const EmptyGarageCard = () => (
   <div className={`relative ${styles.panel} rounded-lg border border-primary/20 py-12 text-center gar-fade-in overflow-hidden mobile-panel`}>
     <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -377,7 +389,6 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repai
   const handleClick = () => {
     if (!isListed) onToggle(car.user_car_id);
   };
-  const isExclusive = car.rarity === 'exclusive' || car.rarity === 'loot_exclusive' || car.rarity === 'vip_exclusive';
   return (
     <div
       onClick={handleClick}
@@ -385,7 +396,7 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repai
         isListed ? 'border-amber-500/40 opacity-90' : 'cursor-pointer'
       } ${
         !isListed && (isSelected ? 'border-primary shadow-md shadow-primary/20' : 'border-border hover:border-primary/30')
-      } ${isExclusive ? (car.rarity === 'vip_exclusive' ? 'shadow-[0_0_10px_rgba(6,182,212,0.45)]' : 'shadow-[0_0_10px_rgba(251,191,36,0.45)]') : ''}`}
+      } ${(!isSelected && RARITY_GLOWS[car.rarity]) || ''}`}
     >
       <div className="w-full aspect-[4/3] rounded overflow-hidden bg-secondary border border-border mb-1.5 relative">
         {car.image ? (

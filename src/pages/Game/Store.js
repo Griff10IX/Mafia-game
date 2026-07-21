@@ -19,6 +19,7 @@ import {
 import { formatGameDateTime, formatGameDateTimeShort, formatGameDateOnly } from '../../utils/gameDateTime';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import { STORE_PAGE_CACHE_KEY } from '../../utils/sessionStaleCache';
+import { PROFILE_GLOW_PRESETS } from '../../constants/profileGlowPresets';
 
 const STORE_STYLES = `
   .store-fade-in { animation: store-fade-in 0.4s ease-out both; }
@@ -139,14 +140,6 @@ const SELECTABLE_BUNDLE_DISALLOWED = new Set(['rank_xp_pass', 'crew_oc_auto_3h']
 const SELECTABLE_BUNDLE_ITEMS = TOKEN_STORE_ITEMS.filter((t) => !SELECTABLE_BUNDLE_DISALLOWED.has(t.tokenType));
 
 const FOUNDING_MEMBER_COST_POINTS = 5000;
-
-const PROFILE_GLOW_PRESETS = [
-  { id: 'violet', label: 'Violet' },
-  { id: 'gold', label: 'Gold' },
-  { id: 'emerald', label: 'Emerald' },
-  { id: 'sky', label: 'Sky' },
-  { id: 'rose', label: 'Rose' },
-];
 
 const STORE_ITEM_FLAG_LABELS = {
   auto_collect: 'Auto-collect passes',
@@ -1548,16 +1541,30 @@ export default function Store() {
               >
                 {u.needsGlowPreset && (
                   <div className="mb-1.5 flex flex-wrap gap-1">
-                    {PROFILE_GLOW_PRESETS.map((p) => (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() => setGlowPresetId(p.id)}
-                        className={`text-[8px] px-1.5 py-0.5 rounded border ${glowPresetId === p.id ? 'border-primary text-primary' : 'border-zinc-700 text-zinc-500'}`}
-                      >
-                        {p.label}
-                      </button>
-                    ))}
+                    {PROFILE_GLOW_PRESETS.map((p) => {
+                      const selected = glowPresetId === p.id;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => setGlowPresetId(p.id)}
+                          title={p.label}
+                          className={`text-[8px] px-1.5 py-0.5 rounded border flex items-center gap-1 ${selected ? 'border-2' : 'border-zinc-700'}`}
+                          style={{
+                            color: p.hex,
+                            borderColor: selected ? p.hex : undefined,
+                            textShadow: selected ? `0 0 6px ${p.hex}88` : undefined,
+                            backgroundColor: selected ? `${p.hex}1a` : undefined,
+                          }}
+                        >
+                          <span
+                            className="inline-block w-2 h-2 rounded-full"
+                            style={{ backgroundColor: p.hex, boxShadow: `0 0 4px ${p.hex}` }}
+                          />
+                          {p.label}
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
                 {extra && (

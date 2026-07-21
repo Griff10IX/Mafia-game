@@ -11,12 +11,29 @@ PROFILE_GLOW_PERMANENT_COST_POINTS = 800
 # Small badge icon (data URL length); keep well under avatar limits.
 CUSTOM_BADGE_MAX_DATA_URL_BYTES = int(0.35 * 1024 * 1024)
 
+# Keep ids/colors in sync with src/constants/profileGlowPresets.js
 PROFILE_GLOW_PRESETS = (
     {"id": "violet", "color": "#a78bfa", "border": "violet"},
-    {"id": "gold", "color": "#fbbf24", "border": "gold"},
-    {"id": "emerald", "color": "#34d399", "border": "emerald"},
-    {"id": "sky", "color": "#38bdf8", "border": "sky"},
+    {"id": "purple", "color": "#c084fc", "border": "purple"},
+    {"id": "fuchsia", "color": "#e879f9", "border": "fuchsia"},
+    {"id": "pink", "color": "#f472b6", "border": "pink"},
     {"id": "rose", "color": "#fb7185", "border": "rose"},
+    {"id": "red", "color": "#f87171", "border": "red"},
+    {"id": "blood", "color": "#dc2626", "border": "blood"},
+    {"id": "orange", "color": "#fb923c", "border": "orange"},
+    {"id": "copper", "color": "#d97706", "border": "copper"},
+    {"id": "gold", "color": "#fbbf24", "border": "gold"},
+    {"id": "yellow", "color": "#facc15", "border": "yellow"},
+    {"id": "lime", "color": "#a3e635", "border": "lime"},
+    {"id": "green", "color": "#4ade80", "border": "green"},
+    {"id": "emerald", "color": "#34d399", "border": "emerald"},
+    {"id": "teal", "color": "#2dd4bf", "border": "teal"},
+    {"id": "cyan", "color": "#22d3ee", "border": "cyan"},
+    {"id": "sky", "color": "#38bdf8", "border": "sky"},
+    {"id": "blue", "color": "#60a5fa", "border": "blue"},
+    {"id": "indigo", "color": "#818cf8", "border": "indigo"},
+    {"id": "silver", "color": "#d1d5db", "border": "silver"},
+    {"id": "steel", "color": "#94a3b8", "border": "steel"},
 )
 
 

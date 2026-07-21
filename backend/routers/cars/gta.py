@@ -286,6 +286,14 @@ GTA_STREET_PARKING_RARITY_BASE_WEIGHT = {
 }
 # Difficulty-1 options can steal cars up to this catalog min_difficulty (pulls uncommon + rare in).
 GTA_STREET_PARKING_MAX_CAR_DIFFICULTY = 3
+# Residential Area (difficulty 2) also rolls rare, richer than Street Parking but leaner
+# than difficulty-3 options: with 6 common / 4 uncommon / 4 rare this lands ~60% / ~30.4% / ~9.6%.
+GTA_RESIDENTIAL_RARITY_BASE_WEIGHT = {
+    "common": 1.0,
+    "uncommon": 0.76,
+    "rare": 0.24,
+}
+GTA_RESIDENTIAL_MAX_CAR_DIFFICULTY = 3
 # Better heists pay better rank points on top of car rarity.
 GTA_DIFFICULTY_RANK_POINTS_MULT = {1: 1.0, 2: 1.25, 3: 1.5, 4: 1.75, 5: 2.0}
 REFERRED_USER_GTA_RARE_BOOST = 0.10  # GTA rare car weight boost for referred signups (pairs with ~10% copy)
@@ -308,10 +316,13 @@ def _gta_non_legendary_roll_weight(
 
 
 def _gta_pool_max_car_difficulty(option_difficulty: int) -> int:
-    """Difficulty-1 options roll bonus uncommon/rare tiers; others use their own difficulty."""
-    if int(option_difficulty or 1) == 1:
+    """Difficulty-1/2 options roll bonus uncommon/rare tiers; others use their own difficulty."""
+    d = int(option_difficulty or 1)
+    if d == 1:
         return GTA_STREET_PARKING_MAX_CAR_DIFFICULTY
-    return int(option_difficulty or 1)
+    if d == 2:
+        return GTA_RESIDENTIAL_MAX_CAR_DIFFICULTY
+    return d
 
 
 _GTA_RARITY_SORT_ORDER = {"common": 0, "uncommon": 1, "rare": 2, "ultra_rare": 3, "legendary": 4}
@@ -689,8 +700,11 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
     if success:
         # Store-bought custom car template — not a GTA steal reward (would look like random garage dupes).
         pool_max_difficulty = _gta_pool_max_car_difficulty(option["difficulty"])
+        _option_difficulty = int(option["difficulty"])
         pool_weight_override = (
-            GTA_STREET_PARKING_RARITY_BASE_WEIGHT if int(option["difficulty"]) == 1 else None
+            GTA_STREET_PARKING_RARITY_BASE_WEIGHT if _option_difficulty == 1
+            else GTA_RESIDENTIAL_RARITY_BASE_WEIGHT if _option_difficulty == 2
+            else None
         )
         pool_cars = [
             c

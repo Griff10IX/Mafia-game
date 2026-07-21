@@ -533,7 +533,12 @@ export default function TutorialCoach({
       if (typeof onOpenTheme === 'function') onOpenTheme();
       return;
     }
-    if (s.route) navigate(s.route);
+    if (s.route) {
+      navigate(s.route);
+      // Get out of the way so the destination page is usable; the pill pulses
+      // green when the gate unlocks and Next is ready.
+      if (isActionGate && !gateOk) setCollapsedPersist(true);
+    }
   };
 
   if (!user?.rules_accepted) return null;
@@ -766,11 +771,17 @@ export default function TutorialCoach({
                 type="button"
                 onClick={handlePrimary}
                 className="tut-btn flex-1 min-w-[7rem] py-2.5 px-3 rounded-lg text-[11px] font-heading font-bold uppercase tracking-wider border min-h-[44px]"
-                style={{
-                  backgroundColor: 'rgba(var(--noir-primary-rgb), 0.2)',
-                  borderColor: 'var(--noir-primary)',
-                  color: 'var(--noir-primary)',
-                }}
+                style={!gateOk && isActionGate
+                  ? {
+                    backgroundColor: 'var(--noir-primary)',
+                    borderColor: 'var(--noir-primary)',
+                    color: '#141414',
+                  }
+                  : {
+                    backgroundColor: 'rgba(var(--noir-primary-rgb), 0.2)',
+                    borderColor: 'var(--noir-primary)',
+                    color: 'var(--noir-primary)',
+                  }}
               >
                 {step.primaryCta.label}
               </button>

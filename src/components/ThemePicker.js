@@ -278,12 +278,12 @@ export default function ThemePicker({ open, onClose }) {
 
   const topBarGap = ls(KEYS.gap, 'normal');
   const topBarSize = ls(KEYS.size, 'medium');
-  const mobileStatsDisplay = ls(KEYS.statsDisplay, 'touch_ball');
+  const mobileStatsDisplay = ls(KEYS.statsDisplay, 'right_sidebar');
   const sidebarShowDividers = ls(KEYS.sidebarDividers) === 'true';
   const bottomNavShowDividers = ls(KEYS.bottomDividers) === 'true';
   const sidebarDividerStyle = ls(KEYS.dividerStyle, 'solid');
   const sidebarSpacing = ls(KEYS.sidebarSpacing, 'normal');
-  const sidebarLayout = ls(KEYS.sidebarLayout, 'default');
+  const sidebarLayout = ls(KEYS.sidebarLayout, 'categorized_classic');
   const toastPosition = ls(KEYS.toastPosition, 'bottom-center');
   const toastCloseButton = ls(KEYS.toastCloseButton) !== 'false';
   const killToastStyle = ls(KEYS.killToastStyle, 'popup');

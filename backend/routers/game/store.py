@@ -780,7 +780,7 @@ async def buy_family_crest_upgrade(
     await require_store_item_allowed(db, "family_crest_upgrade", current_user)
     family_id = await _family_don_guard(current_user)
     fam = await db.families.find_one({"id": family_id}, {"_id": 0, "premium_crest_unlocked": 1})
-    if not fam:
+    if fam is None:
         raise HTTPException(status_code=404, detail="Family not found")
     if fam.get("premium_crest_unlocked"):
         raise HTTPException(status_code=400, detail="Premium crests already unlocked for your family")
@@ -808,7 +808,7 @@ async def buy_family_safe_deposit_tier(
     await require_store_item_allowed(db, "family_safe_deposit", current_user)
     family_id = await _family_don_guard(current_user)
     fam = await db.families.find_one({"id": family_id}, {"_id": 0, "safe_deposit_tiers": 1})
-    if not fam:
+    if fam is None:
         raise HTTPException(status_code=404, detail="Family not found")
     tiers = int(fam.get("safe_deposit_tiers") or 0)
     if tiers >= FAMILY_SAFE_DEPOSIT_MAX_TIERS:
@@ -844,7 +844,7 @@ async def buy_family_event_token(
         {"id": family_id},
         {"_id": 0, "event_active_until": 1, "event_token_last_at": 1},
     )
-    if not fam:
+    if fam is None:
         raise HTTPException(status_code=404, detail="Family not found")
     now = datetime.now(timezone.utc)
     last_at = fam.get("event_token_last_at")

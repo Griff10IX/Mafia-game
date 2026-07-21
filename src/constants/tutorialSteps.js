@@ -71,7 +71,7 @@ export const TUTORIAL_STEPS = [
     icon: Lock,
     title: 'Jail & busts',
     body: 'Fail a crime or GTA and you may land in jail. Bust yourself or friends out from the Jail page.',
-    tips: 'While jailed, many actions pause. Busts earn respect and help your crew.',
+    tips: 'While jailed, many actions pause. Busts earn respect and help your crew. No one in jail? Use Private Cell to summon 5 inmates only you can bust (every 5 minutes).',
     gate: 'ack',
     route: '/crime/jail',
     primaryCta: { label: 'Open Jail', action: 'navigate' },

@@ -27,6 +27,7 @@ import {
 import { getProfileEditWarm } from '../../utils/profilePageWarm';
 import { fileToAvatarDataUrl, fileToCustomBadgeDataUrl, validateSafeImageFile, AVATAR_RAW_UPLOAD_MAX_BYTES } from '../../utils/fileToCompressedDataUrl';
 import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
+import { PROFILE_GLOW_BORDER_CSS } from '../../constants/profileGlowPresets';
 
 const PROFILE_STYLES = `
   @keyframes prof-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -41,11 +42,7 @@ const PROFILE_STYLES = `
   @keyframes prof-dossier-enter { from { opacity: 0.88; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .prof-dossier-enter { animation: prof-dossier-enter 0.34s ease-out both; }
   /* Store "Name Glow + Border" cosmetic: colored dossier border + soft glow matching the name color */
-  .prof-border-violet { border-color: rgba(167, 139, 250, 0.7) !important; box-shadow: 0 0 16px rgba(167, 139, 250, 0.4), inset 0 0 12px rgba(167, 139, 250, 0.08) !important; }
-  .prof-border-gold { border-color: rgba(251, 191, 36, 0.7) !important; box-shadow: 0 0 16px rgba(251, 191, 36, 0.4), inset 0 0 12px rgba(251, 191, 36, 0.08) !important; }
-  .prof-border-emerald { border-color: rgba(52, 211, 153, 0.7) !important; box-shadow: 0 0 16px rgba(52, 211, 153, 0.4), inset 0 0 12px rgba(52, 211, 153, 0.08) !important; }
-  .prof-border-sky { border-color: rgba(56, 189, 248, 0.7) !important; box-shadow: 0 0 16px rgba(56, 189, 248, 0.4), inset 0 0 12px rgba(56, 189, 248, 0.08) !important; }
-  .prof-border-rose { border-color: rgba(251, 113, 133, 0.7) !important; box-shadow: 0 0 16px rgba(251, 113, 133, 0.4), inset 0 0 12px rgba(251, 113, 133, 0.08) !important; }
+  ${PROFILE_GLOW_BORDER_CSS}
   /* Forum BBCode [img]/[gif] use inline max-height 300–400px — tall art shrinks to a narrow strip; override on profile only */
   .prof-banner-content .forum-content-media {
     max-width: 100% !important;

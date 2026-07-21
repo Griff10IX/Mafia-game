@@ -694,7 +694,7 @@ def register(router):
                 "themeVariant": "modern",
                 "sidebarLayout": "categorized_classic",
                 "mobileNavStyle": "bottom",
-                "mobileStatsDisplay": "touch_ball",
+                "mobileStatsDisplay": "right_sidebar",
                 "fontId": "clean",
             }
             user_doc = {

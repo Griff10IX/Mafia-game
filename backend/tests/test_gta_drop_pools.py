@@ -22,12 +22,30 @@ class GtaDropPoolTests(unittest.TestCase):
         rarities = {c["rarity"] for c in pool}
         self.assertEqual(rarities, {"common", "uncommon", "rare"})
 
+    def test_residential_pool_includes_rare(self):
+        self.assertEqual(gta._gta_pool_max_car_difficulty(2), 3)
+        self.assertEqual({c["rarity"] for c in _pool_for_difficulty(2)}, {"common", "uncommon", "rare"})
+
+    def test_residential_weight_shares(self):
+        pool = _pool_for_difficulty(2)
+        weights = {
+            c["id"]: gta._gta_non_legendary_roll_weight(
+                c["rarity"], 0.0, gta.GTA_RESIDENTIAL_RARITY_BASE_WEIGHT
+            )
+            for c in pool
+        }
+        total = sum(weights.values())
+        share_by_rarity = {}
+        for c in pool:
+            share_by_rarity[c["rarity"]] = share_by_rarity.get(c["rarity"], 0.0) + weights[c["id"]] / total
+        self.assertAlmostEqual(share_by_rarity["common"], 0.60, delta=0.01)
+        self.assertAlmostEqual(share_by_rarity["uncommon"], 0.304, delta=0.01)
+        self.assertAlmostEqual(share_by_rarity["rare"], 0.096, delta=0.01)
+
     def test_higher_difficulty_pools_are_unchanged(self):
-        self.assertEqual(gta._gta_pool_max_car_difficulty(2), 2)
         self.assertEqual(gta._gta_pool_max_car_difficulty(3), 3)
         self.assertEqual(gta._gta_pool_max_car_difficulty(4), 4)
         self.assertEqual(gta._gta_pool_max_car_difficulty(5), 5)
-        self.assertEqual({c["rarity"] for c in _pool_for_difficulty(2)}, {"common", "uncommon"})
 
     def test_street_parking_weight_shares(self):
         pool = _pool_for_difficulty(1)
