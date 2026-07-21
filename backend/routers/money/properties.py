@@ -716,7 +716,7 @@ async def buy_property_auto_collect(current_user: dict = Depends(get_current_use
     return {
         "message": (
             f"Auto Collect active until {_format_utc_datetime_friendly(new_until_dt)}. "
-            "It collects your property income, pays weekly upkeep, and clears heat automatically."
+            "It collects your property income into your racket vault, pays weekly upkeep, and clears heat automatically."
         ),
         "property_auto_collect_until": new_until,
         "enabled": True,

@@ -416,14 +416,14 @@ export default function Properties() {
                       {' '}— you&apos;re at {Number(autoCollect.missions_completed ?? 0)}/{autoCollect.unlock_missions}.
                     </p>
                     <p className="text-[9px] text-zinc-500 font-heading">
-                      Auto-collects your business income, pays weekly upkeep, and clears heat from your cash — checked every few minutes.
+                      Auto-collects your business income into your racket vault, pays weekly upkeep, and clears heat from your cash — checked every few minutes.
                     </p>
                   </>
                 ) : autoCollect.active ? (
                   <>
                     <p className="text-[10px] text-mutedForeground font-heading">
                       {autoCollect.enabled
-                        ? 'Collecting your business income, paying weekly upkeep, and clearing heat from your cash automatically.'
+                        ? 'Collecting your business income into your racket vault, paying weekly upkeep, and clearing heat from your cash automatically.'
                         : 'Paused — nothing is collected or paid while disabled. The timer keeps running.'}
                     </p>
                     {autoCollect.until && (
@@ -442,7 +442,7 @@ export default function Properties() {
                 ) : (
                   <>
                     <p className="text-[10px] text-mutedForeground font-heading">
-                      Auto-collects your business income, pays the weekly upkeep bill, and bribes heat back to 0 from your cash — checked every few minutes.
+                      Auto-collects your business income into your racket vault, pays the weekly upkeep bill, and bribes heat back to 0 from your cash — checked every few minutes.
                     </p>
                     <p className="text-[9px] text-zinc-500 font-heading">
                       {Number(autoCollect.cost_points ?? 2500).toLocaleString()} points · lasts {Number(autoCollect.duration_days ?? 7)} days · buy again to extend.

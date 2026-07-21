@@ -52,6 +52,7 @@ async def run_auto_collect_for_user(
     collect_rackets: bool = True,
     pay_upkeep: bool = False,
     clear_heat: bool = False,
+    route_property_cash_to_vault: bool = False,
 ) -> Dict[str, Any]:
     """Attempt all eligible property/racket collects (and optionally upkeep + heat) for one user."""
     out: Dict[str, Any] = {"properties": [], "rackets": [], "upkeep": None, "heat": None}
@@ -65,6 +66,25 @@ async def run_auto_collect_for_user(
                 amt = float(res.get("amount") or 0)
                 prop_cash += amt
                 out["properties"].append({"property_id": pid, "message": res.get("message"), "amount": amt})
+        # Property Auto Collect perk: deposit collected income into the racket vault instead of the
+        # wallet (the collect call above already credited user.money; move it over atomically).
+        if route_property_cash_to_vault and prop_cash > 0:
+            vault_amt = int(prop_cash)
+            try:
+                biz = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0, "id": 1})
+                if biz and vault_amt > 0:
+                    moved = await db.users.update_one(
+                        {"id": user_id, "money": {"$gte": vault_amt}},
+                        {"$inc": {"money": -vault_amt}},
+                    )
+                    if moved.modified_count:
+                        await db.illegal_businesses.update_one(
+                            {"id": biz["id"]},
+                            {"$inc": {"vault": vault_amt, "vault_lifetime_earned": vault_amt}},
+                        )
+                        out["property_cash_to_vault"] = vault_amt
+            except Exception as e:
+                logger.warning("auto_collect vault routing for %s: %s", user_id, e)
 
     if collect_rackets and family_id:
         fam = await db.families.find_one({"id": family_id}, {"_id": 0, "rackets": 1})
@@ -208,6 +228,8 @@ async def run_auto_collect_tick(db) -> Dict[str, Any]:
                 collect_rackets=has_pass,
                 pay_upkeep=has_perk,
                 clear_heat=has_perk,
+                # Perk-collected property income banks into the racket vault, not the wallet.
+                route_property_cash_to_vault=has_perk,
             )
             total_props += len(res.get("properties") or [])
             total_rackets += len(res.get("rackets") or [])
