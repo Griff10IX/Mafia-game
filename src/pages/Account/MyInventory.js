@@ -88,6 +88,67 @@ const CHIP_VALUE_CLASS = {
   dur: 'text-sky-300',
   num: 'text-foreground',
 };
+
+const autoCollectStatChips = (t, data, { active = false } = {}) => {
+  const chips = [];
+  const s = t?.auto_collect_stats || {};
+  if (Number(s.property_cash) > 0) {
+    chips.push({ label: 'Collected to you', value: fmtMoney(s.property_cash), cls: 'text-emerald-300' });
+  }
+  if (Number(s.racket_cash) > 0) {
+    chips.push({ label: 'To family vault', value: fmtMoney(s.racket_cash), cls: 'text-emerald-300' });
+  }
+  if (Number(s.collects) > 0) {
+    chips.push({ label: 'Collects', value: fmtNum(s.collects), cls: 'text-foreground' });
+  }
+  if (s.last_collected_at) {
+    chips.push({
+      label: 'Last collect',
+      value: `${new Date(s.last_collected_at).toLocaleTimeString(undefined, {
+        timeZone: 'UTC',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      })} UTC`,
+      cls: 'text-zinc-300',
+    });
+  }
+  if (Number(s.last_cash) > 0) {
+    chips.push({ label: 'Last payout', value: `+${fmtMoney(s.last_cash).slice(1)}`, cls: 'text-emerald-300' });
+  }
+  if (active) {
+    const nextAt = data?.auto_collect?.next_check_at;
+    const mins = Math.max(1, Math.round((data?.auto_collect?.interval_seconds || 300) / 60));
+    chips.push({
+      label: 'Next check',
+      value:
+        nextAt && new Date(nextAt) > new Date()
+          ? `${new Date(nextAt).toLocaleTimeString(undefined, { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', second: '2-digit' })} UTC`
+          : `≤${mins} min`,
+      cls: 'text-sky-300',
+    });
+    chips.push({ label: 'Check every', value: `${mins} min`, cls: 'text-zinc-400' });
+  }
+  if (chips.length === 0 && active) {
+    chips.push({ label: 'Status', value: 'Waiting for first collect', cls: 'text-zinc-400' });
+  }
+  return chips;
+};
+
+const renderStatChips = (chips) => {
+  if (!chips?.length) return null;
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+      {chips.map((c) => (
+        <div key={c.label} className="rounded-md border border-zinc-700/40 bg-zinc-950/40 px-2.5 py-2 min-w-0">
+          <div className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground truncate">{c.label}</div>
+          <div className={`text-[11px] font-heading font-bold truncate ${c.cls || 'text-foreground'}`}>{c.value}</div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 /** Lifetime stat chips per token type — fields come from backend token_perk_stats (perk_stats on /inventory). */
 const PERK_STAT_CHIPS = {
   xp_crimes: [
@@ -623,48 +684,9 @@ export default function MyInventory() {
               Active until {new Date(t.active_until).toLocaleString(undefined, { timeZone: 'UTC' })} UTC
             </div>
           )}
-          {(key === 'auto_collect_12h' || key === 'auto_collect_24h') && t.auto_collect_stats && (active || t.auto_collect_stats.collects > 0) && (
-            <div className="text-[9px] text-mutedForeground mt-0.5 space-y-0.5">
-              {t.auto_collect_stats.collects > 0 ? (
-                <>
-                  <div>
-                    Auto-collected so far:{' '}
-                    <span className="text-emerald-400 font-medium">
-                      ${Number(t.auto_collect_stats.property_cash).toLocaleString('en-US')}
-                    </span>{' '}
-                    to you
-                    {t.auto_collect_stats.racket_cash > 0 && (
-                      <>
-                        {' '}+{' '}
-                        <span className="text-emerald-400 font-medium">
-                          ${Number(t.auto_collect_stats.racket_cash).toLocaleString('en-US')}
-                        </span>{' '}
-                        to family vault
-                      </>
-                    )}{' '}
-                    ({t.auto_collect_stats.collects} collect{t.auto_collect_stats.collects === 1 ? '' : 's'})
-                  </div>
-                  {t.auto_collect_stats.last_collected_at && (
-                    <div>
-                      Last collect: {new Date(t.auto_collect_stats.last_collected_at).toLocaleString(undefined, { timeZone: 'UTC' })} UTC
-                      {t.auto_collect_stats.last_cash > 0 && (
-                        <> (+${Number(t.auto_collect_stats.last_cash).toLocaleString('en-US')})</>
-                      )}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div>Nothing collected yet — it checks automatically while active.</div>
-              )}
-              {active && (
-                <div>
-                  Next check:{' '}
-                  {data?.auto_collect?.next_check_at && new Date(data.auto_collect.next_check_at) > new Date()
-                    ? `${new Date(data.auto_collect.next_check_at).toLocaleTimeString(undefined, { timeZone: 'UTC', hour: '2-digit', minute: '2-digit', second: '2-digit' })} UTC`
-                    : `within ${Math.max(1, Math.round((data?.auto_collect?.interval_seconds || 300) / 60))} minutes`}
-                  {' '}— collects whatever is off cooldown, every {Math.max(1, Math.round((data?.auto_collect?.interval_seconds || 300) / 60))} min
-                </div>
-              )}
+          {(key === 'auto_collect_12h' || key === 'auto_collect_24h') && (active || Number(t.auto_collect_stats?.collects || 0) > 0) && (
+            <div className="mt-1.5">
+              {renderStatChips(autoCollectStatChips(t, data, { active }))}
             </div>
           )}
           {active && t.max_join_fee != null && (
@@ -691,17 +713,7 @@ export default function MyInventory() {
             const v = Number(ps[field] || 0);
             if (v > 0) chips.push({ label, value: formatChipValue(format, v), cls: CHIP_VALUE_CLASS[format] || 'text-foreground' });
           });
-          if (chips.length === 0) return null;
-          return (
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-              {chips.map((c) => (
-                <div key={c.label} className="rounded-md border border-zinc-700/40 bg-zinc-950/40 px-2.5 py-2 min-w-0">
-                  <div className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground truncate">{c.label}</div>
-                  <div className={`text-[11px] font-heading font-bold truncate ${c.cls}`}>{c.value}</div>
-                </div>
-              ))}
-            </div>
-          );
+          return renderStatChips(chips);
         })()}
         {renderTokenActions(key, t, { active, untilLive, crewWindowNoCap, expired })}
       </div>
@@ -829,19 +841,7 @@ export default function MyInventory() {
       if (v > 0) chips.push({ label, value: formatChipValue(format, v), cls: CHIP_VALUE_CLASS[format] || 'text-foreground' });
     });
     if (key === 'auto_collect_12h' || key === 'auto_collect_24h') {
-      const s = t.auto_collect_stats || {};
-      if (Number(s.property_cash) > 0) chips.push({ label: 'Collected to you', value: fmtMoney(s.property_cash), cls: 'text-emerald-300' });
-      if (Number(s.racket_cash) > 0) chips.push({ label: 'To family vault', value: fmtMoney(s.racket_cash), cls: 'text-emerald-300' });
-      if (Number(s.collects) > 0) chips.push({ label: 'Collects', value: fmtNum(s.collects), cls: 'text-foreground' });
-      const nextAt = data?.auto_collect?.next_check_at;
-      chips.push({
-        label: 'Next check',
-        value:
-          nextAt && new Date(nextAt) > new Date()
-            ? `${new Date(nextAt).toLocaleTimeString(undefined, { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' })} UTC`
-            : `≤${Math.max(1, Math.round((data?.auto_collect?.interval_seconds || 300) / 60))} min`,
-        cls: 'text-sky-300',
-      });
+      chips.push(...autoCollectStatChips(t, data, { active }));
     }
     if (key === 'crew_oc_auto_3h' && active && t.max_join_fee != null) {
       chips.push({ label: 'Max join fee cap', value: fmtMoney(t.max_join_fee), cls: 'text-amber-300' });
@@ -890,14 +890,7 @@ export default function MyInventory() {
           </p>
         )}
         {chips.length > 0 ? (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-            {chips.map((c) => (
-              <div key={c.label} className="rounded-md border border-zinc-700/40 bg-zinc-950/40 px-2.5 py-2 min-w-0">
-                <div className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground truncate">{c.label}</div>
-                <div className={`text-[11px] font-heading font-bold truncate ${c.cls}`}>{c.value}</div>
-              </div>
-            ))}
-          </div>
+          renderStatChips(chips)
         ) : (
           <div className="rounded-md border border-zinc-700/40 bg-zinc-950/40 px-2.5 py-2 inline-block">
             <div className="text-[9px] font-heading text-mutedForeground">Builds as you play</div>
