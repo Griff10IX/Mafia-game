@@ -2217,6 +2217,19 @@ async def _auto_rank_try_jail_bailout(db, user_id: str, user: dict, lines: list)
         _invalidate_all_jail_players_cache()
     except Exception:
         pass
+    try:
+        from utils.token_perk_stats import bump_token_perk_stats
+
+        await bump_token_perk_stats(db, user_id, "jail_bailout", uses=1, via_auto_rank=1)
+    except Exception:
+        pass
+    try:
+        now = datetime.now(timezone.utc)
+        await _inc_failed_today(
+            db, user_id, "auto_rank_bailout_used_today", "auto_rank_bailout_date", now, 1
+        )
+    except Exception:
+        pass
     refreshed = await db.users.find_one({"id": user_id}, {"_id": 0}) or user
     lines.append("**Jail** — Used a bailout token to get out.")
     return True, refreshed
@@ -2911,7 +2924,7 @@ def register(router):
 
     async def _get_auto_rank_stats_impl(db, current_user: dict):
         u = await db.users.find_one(
-            {"id": current_user["id"]},
+            {"id": current_user["id"], "jail_bailout_tokens": 1, "jail_bailout_uses_today": 1, "jail_bailout_day": 1, "auto_rank_bailout_used_today": 1, "auto_rank_bailout_date": 1},
             {"_id": 0, "auto_rank_stats_since": 1, "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1, "auto_rank_total_cash": 1, "auto_rank_best_cars": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1, "auto_rank_total_cars_melted": 1, "auto_rank_total_bullets_from_melt": 1, "auto_rank_total_cars_scrapped": 1, "auto_rank_total_cash_from_scrap": 1, "oc_cooldown_until": 1, "in_jail": 1, "jail_until": 1, "auto_rank_next_run_at": 1, "auto_rank_booze": 1, "auto_rank_crimes": 1, "auto_rank_gta": 1, "auto_rank_melt": 1, "auto_rank_oc": 1, "auto_rank_bust_every_5_sec": 1, "travel_arrives_at": 1, "traveling_to": 1, "current_state": 1, "booze_carrying": 1, "auto_rank_last_activity": 1, "auto_rank_last_activity_at": 1, "auto_rank_failed_crimes_today": 1, "auto_rank_failed_crimes_date": 1, "auto_rank_failed_gtas_today": 1, "auto_rank_failed_gtas_date": 1, "auto_rank_failed_busts_today": 1, "auto_rank_failed_busts_date": 1, "auto_rank_successful_busts_today": 1, "auto_rank_successful_busts_date": 1, "auto_rank_successful_crimes_today": 1, "auto_rank_successful_crimes_date": 1, "auto_rank_successful_gtas_today": 1, "auto_rank_successful_gtas_date": 1, "auto_rank_bullets_from_melt_today": 1, "auto_rank_bullets_from_melt_date": 1, "auto_rank_cars_melted_today": 1, "auto_rank_cars_melted_date": 1, "auto_rank_cars_scrapped_today": 1, "auto_rank_cars_scrapped_date": 1, "auto_rank_cash_from_scrap_today": 1, "auto_rank_cash_from_scrap_date": 1, "auto_rank_booze_runs_today": 1, "auto_rank_booze_runs_date": 1, "auto_rank_booze_profit_today": 1, "auto_rank_booze_profit_date": 1, "auto_rank_crime_cash_today": 1, "auto_rank_crime_cash_date": 1, "auto_rank_gta_value_today": 1, "auto_rank_gta_value_date": 1, "auto_rank_bust_cash_today": 1, "auto_rank_bust_cash_date": 1, "auto_rank_idle": 1, "last_seen": 1, "auto_rank_scrap": 1, "auto_rank_next_scrap_at": 1, "auto_rank_use_skip_tokens": 1, "cooldown_skip_crime_tokens": 1, "cooldown_skip_crime_credits": 1, "cooldown_skip_gta_tokens": 1, "cooldown_skip_gta_credits": 1, "cooldown_skip_booze_tokens": 1, "cooldown_skip_booze_credits": 1, "cooldown_skip_day": 1, "cooldown_skip_uses_today_crime": 1, "cooldown_skip_uses_today_gta": 1, "cooldown_skip_uses_today_booze": 1, "auto_rank_skip_crime_used_today": 1, "auto_rank_skip_crime_cash_today": 1, "auto_rank_skip_crime_date": 1, "auto_rank_skip_gta_used_today": 1, "auto_rank_skip_gta_cash_today": 1, "auto_rank_skip_gta_date": 1, "auto_rank_skip_booze_used_today": 1, "auto_rank_skip_booze_cash_today": 1, "auto_rank_skip_booze_date": 1, "token_perk_stats": 1},
         )
         now = datetime.now(timezone.utc)
@@ -2994,7 +3007,9 @@ def register(router):
         skip_gta_used_today = int((u or {}).get("auto_rank_skip_gta_used_today") or 0) if (u or {}).get("auto_rank_skip_gta_date") == today else 0
         skip_booze_used_today = int((u or {}).get("auto_rank_skip_booze_used_today") or 0) if (u or {}).get("auto_rank_skip_booze_date") == today else 0
         skip_booze_cash_today = int((u or {}).get("auto_rank_skip_booze_cash_today") or 0) if (u or {}).get("auto_rank_skip_booze_date") == today else 0
+        bailout_used_today = int((u or {}).get("auto_rank_bailout_used_today") or 0) if (u or {}).get("auto_rank_bailout_date") == today else 0
         from utils.cooldown_skip import cooldown_skip_uses_today, cooldown_skip_daily_cap
+        from routers.crime.jail import JAIL_BAILOUT_DAILY_CAP
         use_skip_tokens = (u or {}).get("auto_rank_use_skip_tokens") is True
         crime_tokens = int((u or {}).get("cooldown_skip_crime_tokens") or 0)
         crime_credits = int((u or {}).get("cooldown_skip_crime_credits") or 0)
@@ -3002,6 +3017,12 @@ def register(router):
         gta_credits = int((u or {}).get("cooldown_skip_gta_credits") or 0)
         booze_tokens = int((u or {}).get("cooldown_skip_booze_tokens") or 0)
         booze_credits = int((u or {}).get("cooldown_skip_booze_credits") or 0)
+        bailout_tokens = int((u or {}).get("jail_bailout_tokens") or 0)
+        bailout_uses_today = (
+            int((u or {}).get("jail_bailout_uses_today") or 0)
+            if (u or {}).get("jail_bailout_day") == today
+            else 0
+        )
         if use_skip_tokens and not _has_any_usable_ar_skip(u or {}):
             await db.users.update_one(
                 {"id": current_user["id"], "auto_rank_use_skip_tokens": True},
@@ -3017,12 +3038,18 @@ def register(router):
         crime_perk = perk.get("cooldown_skip_crime") if isinstance(perk.get("cooldown_skip_crime"), dict) else {}
         gta_perk = perk.get("cooldown_skip_gta") if isinstance(perk.get("cooldown_skip_gta"), dict) else {}
         booze_perk = perk.get("cooldown_skip_booze") if isinstance(perk.get("cooldown_skip_booze"), dict) else {}
+        bailout_perk = perk.get("jail_bailout") if isinstance(perk.get("jail_bailout"), dict) else {}
         is_idle = bool((u or {}).get("auto_rank_idle"))
         activity_detail = None
         if is_idle:
             activity_detail = "Idle — no activity for 24h (will wake on next page visit)"
         elif in_jail:
-            activity_detail = "In jail — cycles paused"
+            if use_skip_tokens and bailout_tokens > 0 and bailout_uses_today < JAIL_BAILOUT_DAILY_CAP:
+                activity_detail = "In jail — Auto Rank will use a bailout token"
+            elif use_skip_tokens:
+                activity_detail = "In jail — no usable bailout tokens (cycles paused)"
+            else:
+                activity_detail = "In jail — cycles paused"
         elif (u or {}).get("travel_arrives_at") and (u or {}).get("auto_rank_booze"):
             activity_detail = "Travelling (booze)"
         elif (u or {}).get("auto_rank_booze") and (u or {}).get("booze_carrying") and (u or {}).get("current_state"):
@@ -3120,6 +3147,19 @@ def register(router):
                     "auto_rank_cash_today": skip_booze_cash_today,
                     "lifetime_profit": int(booze_perk.get("profit_cash") or 0),
                     "lifetime_uses": int(booze_perk.get("uses") or 0),
+                },
+                "bailout": {
+                    "tokens": bailout_tokens,
+                    "uses_today": bailout_uses_today,
+                    "daily_cap": JAIL_BAILOUT_DAILY_CAP,
+                    "auto_rank_used_today": bailout_used_today,
+                    "lifetime_uses": int(bailout_perk.get("uses") or 0),
+                    "lifetime_via_auto_rank": int(bailout_perk.get("via_auto_rank") or 0),
+                    "will_auto_bail": bool(
+                        use_skip_tokens
+                        and bailout_tokens > 0
+                        and bailout_uses_today < JAIL_BAILOUT_DAILY_CAP
+                    ),
                 },
             },
             "activity_detail": activity_detail,

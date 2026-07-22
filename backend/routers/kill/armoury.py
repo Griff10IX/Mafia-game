@@ -2403,6 +2403,11 @@ def _tokens_from_user(user: dict) -> dict:
         "active_until": None,
         "expires_at": None,
     }
+    ps = perk_stats_all.get("jail_bailout")
+    if isinstance(ps, dict) and ps:
+        out["jail_bailout"]["perk_stats"] = {
+            k: int(v) for k, v in ps.items() if isinstance(v, (int, float))
+        }
     return out
 
 

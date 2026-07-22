@@ -725,7 +725,7 @@ POINT_PACKAGES = {
     "auto_rank_permanent_2000": {"points": 0, "price_gbp": 15.00},
     # Dead > Alive revive (no points credited; fulfills revive swap after payment).
     "dead_alive_revive_10": {"points": 0, "price_gbp": 10.00},
-    # Game Pass prestige (no points pack; +15% VIP season totals then reset track).
+    # Game Pass prestige (no points pack; +50% VIP season totals then reset track).
     "game_pass_prestige_10": {"points": 0, "price_gbp": 10.00},
 }
 
@@ -946,7 +946,7 @@ class UserResponse(BaseModel):
     rank_xp_pass_prestige_carry_rp: int = 0
     # Idempotency guard for tiered one-time rewards.
     rank_xp_pass_rewards_granted: bool = False
-    # Times this account paid for Game Pass prestige (£10 reset + 15% bonus).
+    # Times this account paid for Game Pass prestige (£10 reset + 50% bonus).
     game_pass_prestige_count: int = 0
     # Queued £10 prestiges (bought early; auto-apply when VIP tiers 1–100 finish).
     game_pass_prestige_pending: int = 0

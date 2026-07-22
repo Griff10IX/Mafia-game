@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity, Settings2, Flame, CircleDot, Search, AlertTriangle, CheckCircle2, Info, PauseCircle, Zap } from 'lucide-react';
+import { Bot, Clock, Play, Square, Shield, Car, Crosshair, Lock, Unlock, Users, Edit2, Ban, RefreshCw, BarChart3, TrendingUp, Briefcase, Wine, DollarSign, MessageSquare, Activity, Settings2, Flame, CircleDot, Search, AlertTriangle, CheckCircle2, Info, PauseCircle, Zap } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -1031,41 +1031,155 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
                   </div>
                 )}
               </div>
-              {skipOn && (
-                <div className="rounded border border-sky-500/25 bg-sky-500/5 p-2 space-y-1.5 text-[10px] sm:text-xs font-heading">
-                  <div className="text-[9px] font-bold text-sky-300/90 uppercase tracking-wider">Cooldown skips</div>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
-                    {[
-                      { key: 'crime', label: 'Crime', life: (s) => (s.lifetime_cash > 0 ? <> · life {fmtMoney(s.lifetime_cash)}</> : null), cash: true },
-                      { key: 'gta', label: 'GTA', life: (s) => (s.lifetime_uses > 0 ? <> · life {s.lifetime_uses} uses</> : null), cash: false },
-                      { key: 'booze', label: 'Booze', life: (s) => (s.lifetime_profit > 0 ? <> · life {fmtMoney(s.lifetime_profit)}</> : null), cash: true },
-                    ].map(({ key, label, life, cash }) => {
+              {(skipOn || stats?.in_jail || (skip.bailout?.tokens ?? 0) > 0 || (skip.bailout?.auto_rank_used_today ?? 0) > 0) && (
+                <div className="space-y-2">
+                  <div className="text-[9px] font-bold text-sky-300/90 uppercase tracking-wider flex items-center gap-1.5">
+                    <Zap size={11} className="text-sky-400" />
+                    {skipOn ? 'Daily skips & bailouts' : 'Jail bailout'}
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                    {skipOn && [
+                      {
+                        key: 'crime',
+                        label: 'Crime skip',
+                        Icon: Crosshair,
+                        chips: (s) => {
+                          const held = s.tokens ?? 0;
+                          const leftToday = Math.max(0, (s.daily_cap ?? 0) - (s.uses_today ?? 0));
+                          const canBurn = (s.credits ?? 0) > 0 || (held > 0 && leftToday > 0);
+                          return [
+                            { label: 'Held', value: held.toLocaleString(), cls: 'text-foreground' },
+                            { label: 'Status', value: canBurn ? 'Usable' : held > 0 ? 'Daily cap' : 'Empty', cls: canBurn ? 'text-emerald-300' : held > 0 ? 'text-amber-300' : 'text-zinc-500' },
+                            { label: 'AR used today', value: String(s.auto_rank_used_today ?? 0), cls: 'text-foreground' },
+                            ...((s.auto_rank_cash_today ?? 0) > 0 ? [{ label: 'Cash from skips', value: fmtMoney(s.auto_rank_cash_today), cls: 'text-emerald-300' }] : []),
+                            { label: 'Left today', value: leftToday.toLocaleString(), cls: 'text-zinc-300' },
+                            ...((s.lifetime_cash ?? 0) > 0 ? [{ label: 'Lifetime cash', value: fmtMoney(s.lifetime_cash), cls: 'text-emerald-300' }] : []),
+                          ];
+                        },
+                      },
+                      {
+                        key: 'gta',
+                        label: 'GTA skip',
+                        Icon: Car,
+                        chips: (s) => {
+                          const held = s.tokens ?? 0;
+                          const leftToday = Math.max(0, (s.daily_cap ?? 0) - (s.uses_today ?? 0));
+                          const canBurn = (s.credits ?? 0) > 0 || (held > 0 && leftToday > 0);
+                          return [
+                            { label: 'Held', value: held.toLocaleString(), cls: 'text-foreground' },
+                            { label: 'Status', value: canBurn ? 'Usable' : held > 0 ? 'Daily cap' : 'Empty', cls: canBurn ? 'text-emerald-300' : held > 0 ? 'text-amber-300' : 'text-zinc-500' },
+                            { label: 'AR used today', value: String(s.auto_rank_used_today ?? 0), cls: 'text-foreground' },
+                            { label: 'Left today', value: leftToday.toLocaleString(), cls: 'text-zinc-300' },
+                            ...((s.lifetime_uses ?? 0) > 0 ? [{ label: 'Lifetime uses', value: String(s.lifetime_uses), cls: 'text-foreground' }] : []),
+                          ];
+                        },
+                      },
+                      {
+                        key: 'booze',
+                        label: 'Booze travel skip',
+                        Icon: Wine,
+                        chips: (s) => {
+                          const held = s.tokens ?? 0;
+                          const leftToday = Math.max(0, (s.daily_cap ?? 0) - (s.uses_today ?? 0));
+                          const canBurn = (s.credits ?? 0) > 0 || (held > 0 && leftToday > 0);
+                          return [
+                            { label: 'Held', value: held.toLocaleString(), cls: 'text-foreground' },
+                            { label: 'Status', value: canBurn ? 'Usable' : held > 0 ? 'Daily cap' : 'Empty', cls: canBurn ? 'text-emerald-300' : held > 0 ? 'text-amber-300' : 'text-zinc-500' },
+                            { label: 'AR used today', value: String(s.auto_rank_used_today ?? 0), cls: 'text-foreground' },
+                            ...((s.auto_rank_cash_today ?? 0) > 0 ? [{ label: 'Profit from skips', value: fmtMoney(s.auto_rank_cash_today), cls: 'text-emerald-300' }] : []),
+                            { label: 'Left today', value: leftToday.toLocaleString(), cls: 'text-zinc-300' },
+                            ...((s.lifetime_profit ?? 0) > 0 ? [{ label: 'Lifetime profit', value: fmtMoney(s.lifetime_profit), cls: 'text-emerald-300' }] : []),
+                          ];
+                        },
+                      },
+                    ].map(({ key, label, Icon, chips }) => {
                       const s = skip[key] || {};
-                      const held = s.tokens ?? 0;
-                      const credits = s.credits ?? 0;
-                      const leftToday = Math.max(0, (s.daily_cap ?? 0) - (s.uses_today ?? 0));
-                      const canBurn = credits > 0 || (held > 0 && leftToday > 0);
+                      const chipList = chips(s);
                       return (
-                        <div key={key} className="text-zinc-300">
-                          <span className="text-zinc-500">{label}:</span>{' '}
-                          {held.toLocaleString()} held
-                          {canBurn ? (
-                            <span className="text-emerald-400/90"> · usable</span>
-                          ) : held > 0 ? (
-                            <span className="text-amber-300/90"> · daily cap</span>
-                          ) : null}
-                          <div className="text-zinc-500 text-[9px]">
-                            AR used today: {s.auto_rank_used_today ?? 0}
-                            {cash && (s.auto_rank_cash_today ?? 0) > 0 && <> · {fmtMoney(s.auto_rank_cash_today)} from skips</>}
-                            {' · '}{leftToday.toLocaleString()} left today
-                            {life(s)}
+                        <div key={key} className="rounded-lg border border-sky-500/20 bg-zinc-900/40 p-2.5 space-y-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-7 h-7 rounded-lg bg-sky-500/10 border border-sky-500/25 flex items-center justify-center shrink-0">
+                              <Icon size={13} className="text-sky-300" />
+                            </div>
+                            <span className="text-[11px] font-heading font-bold text-foreground truncate">{label}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            {chipList.map((c) => (
+                              <div key={c.label} className="rounded-md border border-zinc-700/40 bg-zinc-950/40 px-2 py-1.5 min-w-0">
+                                <div className="text-[8px] font-heading uppercase tracking-wider text-zinc-500 truncate">{c.label}</div>
+                                <div className={`text-[11px] font-heading font-bold truncate ${c.cls}`}>{c.value}</div>
+                              </div>
+                            ))}
                           </div>
                         </div>
                       );
                     })}
+                    {(() => {
+                      const b = skip.bailout || {};
+                      const held = b.tokens ?? 0;
+                      const leftToday = Math.max(0, (b.daily_cap ?? 500) - (b.uses_today ?? 0));
+                      const willAuto = !!b.will_auto_bail && !!stats?.in_jail;
+                      const status = willAuto
+                        ? 'Will bail you out'
+                        : stats?.in_jail && skipOn && held < 1
+                          ? 'No tokens'
+                          : held > 0 && leftToday > 0
+                            ? 'Ready'
+                            : held > 0
+                              ? 'Daily cap'
+                              : 'Empty';
+                      const statusCls = willAuto || (held > 0 && leftToday > 0)
+                        ? 'text-emerald-300'
+                        : held > 0
+                          ? 'text-amber-300'
+                          : 'text-zinc-500';
+                      return (
+                        <div className="rounded-lg border border-amber-500/25 bg-zinc-900/40 p-2.5 space-y-2 sm:col-span-2">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="w-7 h-7 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center shrink-0">
+                                <Unlock size={13} className="text-amber-300" />
+                              </div>
+                              <div className="min-w-0">
+                                <span className="text-[11px] font-heading font-bold text-foreground truncate block">Jail bailout</span>
+                                <span className="text-[9px] text-zinc-500 font-heading">
+                                  {skipOn
+                                    ? 'Auto Rank spends these when you get locked up'
+                                    : 'Turn on Use cooldown skip tokens for Auto Rank bailouts'}
+                                </span>
+                              </div>
+                            </div>
+                            {willAuto && (
+                              <span className="shrink-0 inline-flex items-center gap-1 rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-heading font-bold text-emerald-300">
+                                Auto bail ready
+                              </span>
+                            )}
+                          </div>
+                          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+                            {[
+                              { label: 'Held', value: held.toLocaleString(), cls: 'text-foreground' },
+                              { label: 'Status', value: status, cls: statusCls },
+                              { label: 'AR used today', value: String(b.auto_rank_used_today ?? 0), cls: 'text-foreground' },
+                              { label: 'Left today', value: leftToday.toLocaleString(), cls: 'text-zinc-300' },
+                              ...((b.lifetime_via_auto_rank ?? 0) > 0 || (b.lifetime_uses ?? 0) > 0
+                                ? [
+                                    { label: 'Life (AR)', value: String(b.lifetime_via_auto_rank ?? 0), cls: 'text-foreground' },
+                                    { label: 'Life (all)', value: String(b.lifetime_uses ?? 0), cls: 'text-foreground' },
+                                  ]
+                                : []),
+                            ].map((c) => (
+                              <div key={c.label} className="rounded-md border border-zinc-700/40 bg-zinc-950/40 px-2 py-1.5 min-w-0">
+                                <div className="text-[8px] font-heading uppercase tracking-wider text-zinc-500 truncate">{c.label}</div>
+                                <div className={`text-[11px] font-heading font-bold truncate ${c.cls}`}>{c.value}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
-                  {(skip.crime?.tokens ?? 0) + (skip.gta?.tokens ?? 0) + (skip.booze?.tokens ?? 0) === 0 && (
-                    <div className="text-amber-300/90 text-[9px]">No skip tokens held — buy Crime / GTA / Booze Travel Skip in the Store, or turn the toggle off.</div>
+                  {skipOn && (skip.crime?.tokens ?? 0) + (skip.gta?.tokens ?? 0) + (skip.booze?.tokens ?? 0) === 0 && (
+                    <div className="text-amber-300/90 text-[9px] font-heading">No Crime / GTA / Booze skip tokens held — buy them in the Store, or turn the skip toggle off.</div>
                   )}
                 </div>
               )}

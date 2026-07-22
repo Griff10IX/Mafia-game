@@ -952,7 +952,7 @@ Consumable boosts (from [b]Inventory[/b]): each token adds [b]1 hour[/b] of effe
 [color=#C27C0E][b]Overview[/b][/color]
 [list]
 [*][color=#888888]Open [b]Game → Game Pass[/b] ([i]/game-pass[/i]) to buy, compare tiers, and read the full reward tables.[/color]
-[*][color=#888888]Purchase with [b]Stripe[/b] ([b]£15.00[/b]) (subject to store / unlock rules in-game). Game Pass prestige remains [b]£10.00[/b] — you can buy Prestige while climbing VIP (or right after buying Game Pass); it [b]auto-applies[/b] when you finish tiers 1–100.[/color]
+[*][color=#888888]Purchase with [b]Stripe[/b] ([b]£15.00[/b]) (subject to store / unlock rules in-game). Game Pass prestige remains [b]£10.00[/b] for [b]+50%[/b] of season VIP rewards (+500 loot pieces) — you can buy Prestige while climbing VIP (or right after buying Game Pass); it [b]auto-applies[/b] when you finish tiers 1–100.[/color]
 [*][color=#888888]You get a [b]Game Pass token[/b] with an expiry: [b]one calendar month[/b] from purchase. [b]Activate[/b] it in [b]Armoury / My Inventory[/b] before that time or the token lapses. While VIP is active, tier rewards run until that same end date and time (see the page for your exact end date).[/color]
 [*][color=#888888][b]VIP track (after you activate):[/b] full [b]micro-tier[/b] rewards as you earn rank XP — exact payouts are on the Game Pass page.[/color]
 [*][color=#888888][b]Free track:[/b] if you have [b]not[/b] claimed VIP yet, you can still earn [b]limited[/b] free-tier rewards as you rank up (bands and amounts in-game).[/color]

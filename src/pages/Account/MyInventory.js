@@ -130,6 +130,10 @@ const PERK_STAT_CHIPS = {
     { field: 'busts_won', label: 'Busts won with boost', format: 'num' },
     { field: 'jail_avoided', label: 'Jail trips avoided', format: 'num' },
   ],
+  jail_bailout: [
+    { field: 'uses', label: 'Bailouts used', format: 'num' },
+    { field: 'via_auto_rank', label: 'Used by Auto Rank', format: 'num' },
+  ],
   crew_oc_auto_3h: [
     { field: 'applies', label: 'Auto-joins', format: 'num' },
   ],
@@ -545,6 +549,10 @@ export default function MyInventory() {
   );
   const activeTokenKeys = TOKEN_TYPES.filter((key) => {
     if (key === 'rank_xp_pass') return false;
+    // Count-only tokens (jail bailout): show while held so AR/manual use stats stay visible.
+    if (COUNT_ONLY_TOKEN_TYPES.has(key)) {
+      return (tokens[key]?.count ?? 0) > 0 || Number(tokens[key]?.perk_stats?.uses || 0) > 0;
+    }
     // Cooldown skip tokens count as "in use" while activated credits are waiting to be spent.
     if ((tokens[key]?.credits ?? 0) > 0) return true;
     const until = tokens[key]?.active_until;

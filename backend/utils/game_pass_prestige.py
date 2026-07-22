@@ -1,4 +1,4 @@
-"""Game Pass £10 prestige: +15% of season VIP totals, then reset track to re-complete."""
+"""Game Pass £10 prestige: +50% of season VIP totals, then reset track to re-complete."""
 from __future__ import annotations
 
 import math
@@ -23,9 +23,9 @@ from utils.game_pass_micro_rewards import (
 )
 
 GAME_PASS_PRESTIGE_PACKAGE_ID = "game_pass_prestige_10"
-GAME_PASS_PRESTIGE_BONUS_RATE = 0.15
+GAME_PASS_PRESTIGE_BONUS_RATE = 0.50
 GAME_PASS_PRESTIGE_PRICE_GBP = 10.00
-# Flat bonus on top of the 15% season VIP totals.
+# Flat bonus on top of the 50% season VIP totals.
 GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES = 500
 # Max queued prestiges (buy early while climbing VIP; auto-apply at tier 100).
 GAME_PASS_PRESTIGE_PENDING_CAP = 1
@@ -52,7 +52,7 @@ def season_vip_reward_totals(season_id: Optional[str] = None) -> Dict[str, int]:
 
 
 def prestige_bonus_rewards(season_id: Optional[str] = None) -> Dict[str, int]:
-    """+15% of season VIP totals (ceil per key), plus a flat +500 loot pieces."""
+    """+50% of season VIP totals (ceil per key), plus a flat +500 loot pieces."""
     totals = season_vip_reward_totals(season_id)
     out: Dict[str, int] = {}
     for k, v in totals.items():
@@ -169,7 +169,7 @@ async def queue_game_pass_prestige(db, user_id: str) -> Dict[str, Any]:
             "Game Pass Prestige queued",
             (
                 "Your £10 Prestige is ready. When you finish VIP Game Pass tiers 1–100, "
-                "it will apply automatically (+15% season VIP rewards + loot pieces, then reset the track)."
+                "it will apply automatically (+50% season VIP rewards + loot pieces, then reset the track)."
             ),
             "reward",
         )
@@ -237,7 +237,7 @@ async def execute_game_pass_prestige(
     season_end_at: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Credit +15% season VIP totals, reset season RP + VIP grant cursor, keep VIP claimed,
+    Credit +50% season VIP totals, reset season RP + VIP grant cursor, keep VIP claimed,
     and extend token expiry through season end so re-grants keep working.
     """
     from fastapi import HTTPException

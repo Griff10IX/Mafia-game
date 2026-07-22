@@ -1171,6 +1171,12 @@ async def jail_bailout_token(current_user: dict = Depends(get_current_user_verif
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="No jail bailout tokens available")
     _invalidate_all_jail_players_cache()
+    try:
+        from utils.token_perk_stats import bump_token_perk_stats
+
+        await bump_token_perk_stats(db, current_user["id"], "jail_bailout", uses=1)
+    except Exception:
+        pass
     await log_activity(current_user["id"], current_user.get("username", "?"), "jail_bailout_token", {})
     return {"success": True, "message": "You used a jail bailout token and left jail!"}
 

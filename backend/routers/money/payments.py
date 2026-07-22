@@ -1449,7 +1449,7 @@ def register(router):
 
     @router.get("/payments/game-pass-prestige")
     async def get_game_pass_prestige_status(current_user: dict = Depends(get_current_user)):
-        """Prestige availability, £10 package id, and +15% bonus preview for the Game Pass UI."""
+        """Prestige availability, £10 package id, and +50% bonus preview for the Game Pass UI."""
         from utils.game_pass_prestige import prestige_status_payload
 
         season = await get_game_pass_season_public(db)
