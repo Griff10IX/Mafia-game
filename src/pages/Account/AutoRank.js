@@ -1003,38 +1003,95 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
                   Last: <span className="text-foreground/90">{lastLabel}{lastAt ? ` at ${lastAt}` : ''}</span>
                 </div>
               )}
-              <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-2 space-y-1.5 text-[10px] sm:text-xs font-heading">
+              <div className="space-y-2">
                 <div className="text-[9px] font-bold text-emerald-300/90 uppercase tracking-wider">Earned today</div>
-                <div className="text-emerald-400/90">
-                  {stats.successful_crimes_today ?? 0} crimes
-                  {(stats?.crime_cash_today ?? 0) > 0 && <> ({fmtMoney(stats.crime_cash_today)})</>}
-                  {', '}
-                  {stats.successful_gtas_today ?? 0} GTAs
-                  {(stats?.gta_value_today ?? 0) > 0 && <> ({fmtMoney(stats.gta_value_today)} cars)</>}
-                  {', '}
-                  {stats.successful_busts_today ?? 0} busts
-                  {(stats?.bust_cash_today ?? 0) > 0 && <> ({fmtMoney(stats.bust_cash_today)})</>}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                  {[
+                    {
+                      key: 'crimes',
+                      label: 'Crimes',
+                      Icon: Crosshair,
+                      chips: [
+                        { label: 'Successes', value: String(stats.successful_crimes_today ?? 0), cls: 'text-foreground' },
+                        { label: 'Cash', value: fmtMoney(stats.crime_cash_today ?? 0), cls: 'text-emerald-300' },
+                      ],
+                    },
+                    {
+                      key: 'gta',
+                      label: 'GTA',
+                      Icon: Car,
+                      chips: [
+                        { label: 'Successes', value: String(stats.successful_gtas_today ?? 0), cls: 'text-foreground' },
+                        { label: 'Car value', value: fmtMoney(stats.gta_value_today ?? 0), cls: 'text-emerald-300' },
+                      ],
+                    },
+                    {
+                      key: 'busts',
+                      label: 'Jail busts',
+                      Icon: Unlock,
+                      chips: [
+                        { label: 'Successes', value: String(stats.successful_busts_today ?? 0), cls: 'text-foreground' },
+                        { label: 'Cash', value: fmtMoney(stats.bust_cash_today ?? 0), cls: 'text-emerald-300' },
+                        ...((stats?.attempted_busts_today ?? 0) > 0
+                          ? [{ label: 'Attempts', value: String(stats.attempted_busts_today ?? 0), cls: 'text-zinc-300' }]
+                          : []),
+                      ],
+                    },
+                    ...((activeBooze || (stats?.booze_runs_today ?? 0) > 0 || (stats?.booze_profit_today ?? 0) > 0 || (stats?.total_booze_profit ?? 0) > 0)
+                      ? [{
+                          key: 'booze',
+                          label: 'Booze',
+                          Icon: Wine,
+                          chips: [
+                            { label: 'Runs', value: String(stats.booze_runs_today ?? 0), cls: 'text-foreground' },
+                            { label: 'Profit today', value: fmtMoney(stats.booze_profit_today ?? 0), cls: 'text-emerald-300' },
+                            ...((stats?.total_booze_profit ?? 0) > 0
+                              ? [{ label: 'Lifetime', value: fmtMoney(stats.total_booze_profit), cls: 'text-zinc-400' }]
+                              : []),
+                          ],
+                        }]
+                      : []),
+                    ...(((stats?.bullets_from_melt_today ?? 0) > 0 || (stats?.cars_melted_today ?? 0) > 0)
+                      ? [{
+                          key: 'melt',
+                          label: 'Melt',
+                          Icon: Flame,
+                          chips: [
+                            { label: 'Cars', value: (stats.cars_melted_today ?? 0).toLocaleString(), cls: 'text-foreground' },
+                            { label: 'Bullets', value: (stats.bullets_from_melt_today ?? 0).toLocaleString(), cls: 'text-emerald-300' },
+                          ],
+                        }]
+                      : []),
+                    ...(((stats?.cash_from_scrap_today ?? 0) > 0 || (stats?.cars_scrapped_today ?? 0) > 0)
+                      ? [{
+                          key: 'scrap',
+                          label: 'Scrap',
+                          Icon: DollarSign,
+                          chips: [
+                            { label: 'Cars', value: (stats.cars_scrapped_today ?? 0).toLocaleString(), cls: 'text-foreground' },
+                            { label: 'Cash', value: fmtMoney(stats.cash_from_scrap_today ?? 0), cls: 'text-emerald-300' },
+                          ],
+                        }]
+                      : []),
+                  ].map(({ key, label, Icon, chips }) => (
+                    <div key={key} className="rounded-lg border border-emerald-500/20 bg-zinc-900/40 p-2.5 space-y-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-7 h-7 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-center shrink-0">
+                          <Icon size={13} className="text-emerald-300" />
+                        </div>
+                        <span className="text-[11px] font-heading font-bold text-foreground truncate">{label}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {chips.map((c) => (
+                          <div key={c.label} className="rounded-md border border-zinc-700/40 bg-zinc-950/40 px-2 py-1.5 min-w-0">
+                            <div className="text-[8px] font-heading uppercase tracking-wider text-zinc-500 truncate">{c.label}</div>
+                            <div className={`text-[11px] font-heading font-bold truncate ${c.cls}`}>{c.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                {(activeBooze || (stats?.booze_runs_today ?? 0) > 0 || (stats?.booze_profit_today ?? 0) > 0 || (stats?.total_booze_profit ?? 0) > 0) && (
-                  <div className="text-emerald-400/90">
-                    Booze: {stats.booze_runs_today ?? 0} run{(stats.booze_runs_today ?? 0) === 1 ? '' : 's'}
-                    {' · '}
-                    {fmtMoney(stats.booze_profit_today ?? 0)} today
-                    {(stats?.total_booze_profit ?? 0) > 0 && (
-                      <span className="text-zinc-500"> · {fmtMoney(stats.total_booze_profit)} lifetime</span>
-                    )}
-                  </div>
-                )}
-                {((stats?.bullets_from_melt_today ?? 0) > 0 || (stats?.cars_melted_today ?? 0) > 0) && (
-                  <div className="text-emerald-400/90">
-                    Melt: {(stats.cars_melted_today ?? 0).toLocaleString()} cars · {(stats.bullets_from_melt_today ?? 0).toLocaleString()} bullets
-                  </div>
-                )}
-                {((stats?.cash_from_scrap_today ?? 0) > 0 || (stats?.cars_scrapped_today ?? 0) > 0) && (
-                  <div className="text-emerald-400/90">
-                    Scrap: {(stats.cars_scrapped_today ?? 0).toLocaleString()} cars · {fmtMoney(stats.cash_from_scrap_today ?? 0)}
-                  </div>
-                )}
               </div>
               {(skipOn || stats?.in_jail || (skip.bailout?.tokens ?? 0) > 0 || (skip.bailout?.auto_rank_used_today ?? 0) > 0) && (
                 <div className="space-y-2">
