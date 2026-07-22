@@ -64,6 +64,14 @@ def _build_recent_kills_for_viewer(
 
         is_hitman = attempt_is_hitman_kill(a)
         if is_hitman:
+            # Staff Hitman testing must not appear on the public Last 15 feed
+            try:
+                from server import _user_excluded_from_stat_leaderboards
+
+                if killer and _user_excluded_from_stat_leaderboards(killer):
+                    continue
+            except Exception:
+                pass
             is_public = False
             killer_username = None
         else:
@@ -566,7 +574,18 @@ def register(router):
         if all_user_ids:
             users_list = await db.users.find(
                 {"id": {"$in": list(all_user_ids)}},
-                {"_id": 0, "id": 1, "is_npc": 1, "rank_points": 1, "username": 1, "is_bodyguard": 1, "bodyguard_owner_id": 1, "killer_revealed": 1},
+                {
+                    "_id": 0,
+                    "id": 1,
+                    "is_npc": 1,
+                    "rank_points": 1,
+                    "username": 1,
+                    "is_bodyguard": 1,
+                    "bodyguard_owner_id": 1,
+                    "killer_revealed": 1,
+                    "email": 1,
+                    "is_moderator": 1,
+                },
             ).to_list(None)
             users_batch = {u["id"]: u for u in users_list}
 

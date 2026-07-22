@@ -92,8 +92,33 @@ def _stats_from_user(u: dict) -> dict:
     }
 
 
+def _hirer_is_staff_for_street_stats(user: Optional[dict]) -> bool:
+    """Staff testing must not inflate Street Ledger / public kill feeds."""
+    if not user:
+        return False
+    if _is_staff(user):
+        return True
+    try:
+        from server import _user_excluded_from_stat_leaderboards
+
+        return bool(_user_excluded_from_stat_leaderboards(user))
+    except Exception:
+        return False
+
+
+async def _staff_hirer_ids_for_street_stats() -> List[str]:
+    """User ids that should never count toward Street Ledger (mods + admin emails)."""
+    try:
+        from server import honours_stat_excluded_user_ids
+
+        return list(await honours_stat_excluded_user_ids(_db()))
+    except Exception:
+        logger.exception("hitman staff hirer ids")
+        return []
+
+
 async def _game_wide_stats() -> dict:
-    """Aggregate Hitman for Hire activity from hitman_events."""
+    """Aggregate Hitman for Hire activity from hitman_events (excludes staff testing)."""
     empty = {
         "hires": 0,
         "kills": 0,
@@ -103,8 +128,13 @@ async def _game_wide_stats() -> dict:
         "unique_victims": 0,
     }
     try:
+        staff_ids = await _staff_hirer_ids_for_street_stats()
+        match: Dict[str, Any] = {"staff_hire": {"$ne": True}}
+        if staff_ids:
+            match["hirer_id"] = {"$nin": staff_ids}
         rows = await _db().hitman_events.aggregate(
             [
+                {"$match": match},
                 {
                     "$facet": {
                         "totals": [
@@ -258,8 +288,11 @@ async def _log_hitman_kill_attempt(
     owner_id: str,
     owner_username: str,
     bg: dict,
+    staff_hire: bool = False,
 ) -> None:
-    """Write attack_attempts so Last 15 Kills shows the robot victim with Killer = Hitman."""
+    """Write attack_attempts so Last 15 Kills shows the robot victim with Killer = Hired Hitman."""
+    if staff_hire:
+        return
     db = _db()
     guard_uid = bg.get("bodyguard_user_id")
     guard_name = (bg.get("robot_name") or "").strip()
@@ -585,6 +618,7 @@ async def _hitman_hire_impl(body: HireBody, current_user: dict):
 
     free_token_earned = False
     message = ""
+    staff_hire = _hirer_is_staff_for_street_stats(current_user) or _hirer_is_staff_for_street_stats(hirer)
 
     if success:
         await _remove_robot_bodyguard_slot(target["id"], visible, hirer_id)
@@ -595,6 +629,7 @@ async def _hitman_hire_impl(body: HireBody, current_user: dict):
                 owner_id=target["id"],
                 owner_username=target.get("username") or "",
                 bg=visible,
+                staff_hire=staff_hire,
             )
         except Exception:
             logger.exception("hitman kill attempt log")
@@ -671,6 +706,7 @@ async def _hitman_hire_impl(body: HireBody, current_user: dict):
         "free_token_spent": free_token_spent,
         "free_token_earned": free_token_earned,
         "guard_user_id": visible.get("bodyguard_user_id"),
+        "staff_hire": bool(staff_hire),
     }
     try:
         await db.hitman_events.insert_one(event)

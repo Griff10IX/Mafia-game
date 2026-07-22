@@ -142,7 +142,7 @@ Open [b]Kill → Hitman for Hire[/b] (when the feature is live). Pay points to h
 [*][color=#2ECC71]Owner gets an anonymous strike notice[/color]
 [*][color=#2ECC71]That player cannot be Hitman-targeted again for [b]24 hours[/b][/color]
 [*][color=#2ECC71][b]25%[/b] chance you earn a [b]free hitman token[/b][/color]
-[*][color=#888888]Successful Hitman kills show on [b]Stats → Last 15 Kills[/b] with killer [b]Hitman[/b] (hirer stays anonymous)[/color]
+[*][color=#888888]Successful Hitman kills show on [b]Stats → Last 15 Kills[/b] with killer [b]Hired Hitman[/b] (hirer stays anonymous)[/color]
 [/list]
 
 [b]On fail:[/b]
