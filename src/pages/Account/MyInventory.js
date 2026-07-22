@@ -211,6 +211,13 @@ const PERK_STAT_CHIPS = {
   cooldown_skip_gta: [
     { field: 'uses', label: 'GTA skips used', format: 'num' },
     { field: 'via_auto_rank', label: 'Used by Auto Rank', format: 'num' },
+    { field: 'stolen_legendary', label: 'Legendary stolen', format: 'num' },
+    { field: 'stolen_ultra_rare', label: 'Ultra rare stolen', format: 'num' },
+    { field: 'stolen_rare', label: 'Rare stolen', format: 'num' },
+    { field: 'stolen_uncommon', label: 'Uncommon stolen', format: 'num' },
+    { field: 'stolen_common', label: 'Common stolen', format: 'num' },
+    { field: 'stolen_exclusive', label: 'Exclusive stolen', format: 'num' },
+    { field: 'stolen_custom', label: 'Custom stolen', format: 'num' },
   ],
 };
 const countdownLabel = (until) => {

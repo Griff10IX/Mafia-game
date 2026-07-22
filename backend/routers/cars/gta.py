@@ -594,9 +594,29 @@ async def get_gta_playable_count(current_user: dict = Depends(get_current_user))
     return {"playable_count": playable, "exclusive_in_pool": bool(released)}
 
 
-async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_total_gta: bool = False) -> GTAAttemptResponse:
+_GTA_SKIP_STOLEN_RARITY_FIELDS = {
+    "common": "stolen_common",
+    "uncommon": "stolen_uncommon",
+    "rare": "stolen_rare",
+    "ultra_rare": "stolen_ultra_rare",
+    "legendary": "stolen_legendary",
+    "exclusive": "stolen_exclusive",
+    "loot_exclusive": "stolen_exclusive",
+    "vip_exclusive": "stolen_exclusive",
+    "custom": "stolen_custom",
+}
+
+
+async def _attempt_gta_impl(
+    option_id: str,
+    current_user: dict,
+    caller_updates_total_gta: bool = False,
+    *,
+    used_gta_skip: bool = False,
+) -> GTAAttemptResponse:
     """Run one GTA attempt. Caller must ensure option exists, user rank OK, and cooldown passed. Used by route and auto_rank.
-    When caller_updates_total_gta is True (e.g. auto_rank), total_gta is not incremented here; the caller does it for leaderboard consistency."""
+    When caller_updates_total_gta is True (e.g. auto_rank), total_gta is not incremented here; the caller does it for leaderboard consistency.
+    used_gta_skip: True when the caller already burned a GTA cooldown skip for this attempt."""
     option = next((o for o in GTA_OPTIONS if o["id"] == option_id), None)
     if not option:
         raise ValueError(f"Invalid GTA option: {option_id}")
@@ -638,6 +658,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
                 )
                 credit_user = {**(current_user or {}), **(fresh or {})}
                 if has_skip_credit(credit_user, "gta") and await consume_skip_credit(db, uid, "gta"):
+                    used_gta_skip = True
                     await db.gta_cooldowns.update_one(
                         {"user_id": uid},
                         {"$set": {"cooldown_until": cooldown_iso}},
@@ -908,6 +929,19 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
             await update_objectives_progress(current_user.get("id") or "", "gta", 1)
         except Exception:
             pass
+        if used_gta_skip:
+            try:
+                from utils.token_perk_stats import bump_token_perk_stats
+
+                rarity_field = _GTA_SKIP_STOLEN_RARITY_FIELDS.get(
+                    (car.get("rarity") or "common").strip().lower()
+                )
+                if rarity_field:
+                    await bump_token_perk_stats(
+                        db, current_user.get("id") or "", "cooldown_skip_gta", **{rarity_field: 1}
+                    )
+            except Exception:
+                pass
         msg = _rng.choice(GTA_SUCCESS_MESSAGES).format(car_name=car["name"])
         return GTAAttemptResponse(
             success=True,
@@ -955,12 +989,17 @@ async def attempt_gta_locked(
     option_id: str,
     current_user: dict,
     caller_updates_total_gta: bool = False,
+    *,
+    used_gta_skip: bool = False,
 ) -> GTAAttemptResponse:
     """HTTP route and auto_rank: serialize GTA attempts with melt/scrap for this user."""
     lock = await _get_gta_garage_lock(current_user.get("id") or "")
     async with lock:
         return await _attempt_gta_impl(
-            option_id, current_user, caller_updates_total_gta=caller_updates_total_gta
+            option_id,
+            current_user,
+            caller_updates_total_gta=caller_updates_total_gta,
+            used_gta_skip=used_gta_skip,
         )
 
 
@@ -1003,6 +1042,7 @@ async def attempt_gta(
             {"user_id": current_user.get("id") or ""},
             {"_id": 0, "cooldown_until": 1},
         )
+        used_gta_skip = False
         if cooldown_doc:
             until = _parse_iso_datetime(cooldown_doc.get("cooldown_until"))
             if until and until > now:
@@ -1010,6 +1050,7 @@ async def attempt_gta(
 
                 if has_skip_credit(current_user, "gta"):
                     if await consume_skip_credit(db, current_user.get("id") or "", "gta"):
+                        used_gta_skip = True
                         await db.gta_cooldowns.update_one(
                             {"user_id": current_user.get("id") or ""},
                             {"$set": {"cooldown_until": now.isoformat()}},
@@ -1024,7 +1065,9 @@ async def attempt_gta(
                     raise HTTPException(
                         status_code=400, detail=f"GTA cooldown: try again in {secs}s"
                     )
-        result = await _attempt_gta_impl(request.option_id, current_user)
+        result = await _attempt_gta_impl(
+            request.option_id, current_user, used_gta_skip=used_gta_skip
+        )
         now = datetime.now(timezone.utc)
         success = getattr(result, "success", False)
         profit = int((result.car.get("value", 0) or 0)) if (getattr(result, "car", None) and success) else 0

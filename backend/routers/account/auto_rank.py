@@ -2331,6 +2331,23 @@ def _build_skip_tokens_depleted_inbox_message(user: dict) -> str:
         f"AR used today: {gta_used:,}",
         f"Left today: {gta_left:,}",
         f"Lifetime uses: {int(gta_perk.get('uses') or 0):,}",
+    ]
+    stolen_bits = []
+    for field, label in (
+        ("stolen_legendary", "legendary"),
+        ("stolen_ultra_rare", "ultra rare"),
+        ("stolen_rare", "rare"),
+        ("stolen_uncommon", "uncommon"),
+        ("stolen_common", "common"),
+        ("stolen_exclusive", "exclusive"),
+        ("stolen_custom", "custom"),
+    ):
+        n = int(gta_perk.get(field) or 0)
+        if n > 0:
+            stolen_bits.append(f"{n:,} {label}")
+    if stolen_bits:
+        lines.append(f"Stolen via skips: {', '.join(stolen_bits)}")
+    lines.extend([
         "",
         "── Booze travel skip ──",
         f"Held: {booze_held:,}",
@@ -2348,7 +2365,7 @@ def _build_skip_tokens_depleted_inbox_message(user: dict) -> str:
         "",
         "Buy more Crime / GTA / Booze skip tokens in the Points Store to turn the toggle on again.",
         "Open Auto Rank",
-    ]
+    ])
     return "\n".join(lines)
 
 
@@ -3344,6 +3361,13 @@ def register(router):
                     "daily_cap": cooldown_skip_daily_cap("gta"),
                     "auto_rank_used_today": skip_gta_used_today,
                     "lifetime_uses": int(gta_perk.get("uses") or 0),
+                    "stolen_legendary": int(gta_perk.get("stolen_legendary") or 0),
+                    "stolen_ultra_rare": int(gta_perk.get("stolen_ultra_rare") or 0),
+                    "stolen_rare": int(gta_perk.get("stolen_rare") or 0),
+                    "stolen_uncommon": int(gta_perk.get("stolen_uncommon") or 0),
+                    "stolen_common": int(gta_perk.get("stolen_common") or 0),
+                    "stolen_exclusive": int(gta_perk.get("stolen_exclusive") or 0),
+                    "stolen_custom": int(gta_perk.get("stolen_custom") or 0),
                 },
                 "booze": {
                     "tokens": booze_tokens,

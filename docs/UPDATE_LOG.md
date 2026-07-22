@@ -6,10 +6,20 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-22 02:30 UTC[/color][/b] — [b]Auto Rank page tabs[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Improved:[/b] Auto Rank is split into [b]Summary[/b] / [b]Settings[/b] / [b]Stats[/b] tabs (plus [b]Admin[/b] for staff) so the page is shorter on mobile.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-22 02:10 UTC[/color][/b] — [b]Auto Rank skip-depleted inbox summary[/b][/size]
 [quote]
 [list]
 [*][color=#888888][b]New:[/b] When Auto Rank burns through all usable Crime / GTA / Booze skip tokens (and turns [b]Use cooldown skip tokens[/b] off), you get an [b]inbox summary[/b] of AR skips used today, cash/profit from skips, bailouts, and lifetime totals — same info as the Daily skips & bailouts cards.[/color]
+[*][color=#888888][b]Improved:[/b] [b]GTA cooldown skip[/b] inventory (and Auto Rank GTA skip card) now tracks cars stolen with skips by rarity — legendary, ultra rare, rare, uncommon, common, etc.[/color]
 [/list]
 [/quote]
 

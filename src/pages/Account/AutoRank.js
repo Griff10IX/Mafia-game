@@ -13,6 +13,16 @@ const MIN_INTERVAL = 5;
 const MIN_BUST_INTERVAL = 1;
 const MIN_OC_INTERVAL = 10;
 
+const AR_TAB_IDS = new Set(['summary', 'settings', 'stats', 'admin']);
+const AR_TAB_STORAGE_KEY = 'ar_tab';
+const readStoredArTab = () => {
+  try {
+    const t = sessionStorage.getItem(AR_TAB_STORAGE_KEY);
+    if (t && AR_TAB_IDS.has(t)) return t;
+  } catch (_) {}
+  return 'summary';
+};
+
 const AR_STYLES = `
   @keyframes ar-fade-in { 
     from { opacity: 0; transform: translateY(10px); } 
@@ -1127,12 +1137,28 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
                           const held = s.tokens ?? 0;
                           const leftToday = Math.max(0, (s.daily_cap ?? 0) - (s.uses_today ?? 0));
                           const canBurn = (s.credits ?? 0) > 0 || (held > 0 && leftToday > 0);
+                          const stolenChips = [
+                            ['stolen_legendary', 'Legendary'],
+                            ['stolen_ultra_rare', 'Ultra rare'],
+                            ['stolen_rare', 'Rare'],
+                            ['stolen_uncommon', 'Uncommon'],
+                            ['stolen_common', 'Common'],
+                            ['stolen_exclusive', 'Exclusive'],
+                            ['stolen_custom', 'Custom'],
+                          ]
+                            .filter(([field]) => (s[field] ?? 0) > 0)
+                            .map(([field, label]) => ({
+                              label,
+                              value: String(s[field]),
+                              cls: 'text-emerald-300',
+                            }));
                           return [
                             { label: 'Held', value: held.toLocaleString(), cls: 'text-foreground' },
                             { label: 'Status', value: canBurn ? 'Usable' : held > 0 ? 'Daily cap' : 'Empty', cls: canBurn ? 'text-emerald-300' : held > 0 ? 'text-amber-300' : 'text-zinc-500' },
                             { label: 'AR used today', value: String(s.auto_rank_used_today ?? 0), cls: 'text-foreground' },
                             { label: 'Left today', value: leftToday.toLocaleString(), cls: 'text-zinc-300' },
                             ...((s.lifetime_uses ?? 0) > 0 ? [{ label: 'Lifetime uses', value: String(s.lifetime_uses), cls: 'text-foreground' }] : []),
+                            ...stolenChips,
                           ];
                         },
                       },
@@ -1644,6 +1670,12 @@ const AdminGlobalLoopCard = ({
    ═══════════════════════════════════════════════════════ */
 export default function AutoRank() {
   const [isAdmin, setIsAdmin] = useState(false);
+  const [activeTab, setActiveTab] = useState(readStoredArTab);
+  const switchTab = (id) => {
+    if (!AR_TAB_IDS.has(id)) return;
+    setActiveTab(id);
+    try { sessionStorage.setItem(AR_TAB_STORAGE_KEY, id); } catch (_) {}
+  };
   const [prefs, setPrefs] = useState({
     auto_rank_enabled: false,
     auto_rank_crimes: false,
@@ -1765,6 +1797,18 @@ export default function AutoRank() {
   const permanentPurchased = Boolean(prefs?.auto_rank_permanent || (prefs?.auto_rank_purchased && !prefs?.auto_rank_trial));
   const canEnable = Boolean(prefs?.auto_rank_has_access) || permanentPurchased || trialActive;
   const hasTelegram = Boolean(prefs?.telegram_chat_id_set);
+
+  useEffect(() => {
+    if (activeTab === 'admin' && !isAdmin) switchTab('summary');
+  }, [activeTab, isAdmin]);
+
+  const pageTabs = [
+    { id: 'summary', label: 'Summary', icon: Activity },
+    { id: 'settings', label: 'Settings', icon: Settings2 },
+    { id: 'stats', label: 'Stats', icon: BarChart3 },
+    ...(isAdmin ? [{ id: 'admin', label: 'Admin', icon: Shield }] : []),
+  ];
+  const currentTab = pageTabs.some((t) => t.id === activeTab) ? activeTab : 'summary';
 
   // Refetch stats (used when jail countdown hits 0 so status updates immediately)
   const refetchStatsRef = useRef(null);
@@ -2457,94 +2501,130 @@ export default function AutoRank() {
         </p>
       </div>
 
-      <SetupCard
-        canEnable={canEnable}
-        hasTelegram={hasTelegram}
-        telegramNotifyOn={prefs?.auto_rank_telegram_notify !== false}
-        stripePurchasable={!!prefs?.auto_rank_stripe_purchasable}
-        stripeLoading={autoRankStripeLoading}
-        onBuyStripe={handleBuyAutoRankStripe}
-        emailEntitled={!!prefs?.auto_rank_email_entitled}
-      />
+      <div className="sticky top-0 z-20 -mx-3 sm:mx-0 px-3 sm:px-0 py-1.5 border-b border-zinc-700/40 bg-zinc-950/95 backdrop-blur-md">
+        <div className="flex gap-1 overflow-x-auto pb-0.5 scrollbar-hide">
+          {pageTabs.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => switchTab(id)}
+              className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-heading font-bold uppercase tracking-wider touch-manipulation transition-colors ${
+                currentTab === id
+                  ? 'bg-primary/20 border-primary/50 text-primary'
+                  : 'bg-zinc-800/40 border-zinc-700/40 text-zinc-400 hover:text-foreground hover:border-zinc-600'
+              }`}
+            >
+              <Icon size={12} className="shrink-0" />
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-      {prefs?.auto_rank_trial && prefs?.auto_rank_trial_until && !prefs?.auto_rank_permanent && (
-        <TrialBanner
-          trialUntil={prefs.auto_rank_trial_until}
-          dismissed={prefs.auto_rank_trial_dismissed}
-          onDismiss={() => {
-            setPrefs(p => ({ ...p, auto_rank_trial_dismissed: true }));
-            api.patch('/auto-rank/me', { auto_rank_trial_dismissed: true }).catch(() => {});
-          }}
-        />
-      )}
-      
-      {canEnable && (
-        <AutoRankSummaryCard stats={stats} liveCountdown={liveCountdown} prefs={prefs} />
-      )}
-      
-      <SettingsCard 
-        prefs={prefs}
-        canEnable={canEnable}
-        savingPrefs={savingPrefs}
-        onUpdatePref={updatePref}
-        skipTokens={stats?.skip_tokens}
-        hasUsableArSkips={stats?.has_usable_ar_skips}
-      />
-      
-      {canEnable && (prefs?.auto_rank_crimes || prefs?.auto_rank_gta || prefs?.auto_rank_melt || prefs?.auto_rank_scrap) && (
-        <CrimesGtaSettingsCard
-          crimes={settingsData?.crimes ?? []}
-          gtaOptions={settingsData?.gta_options ?? []}
-          meltOptions={settingsData?.melt_options ?? { actions: [], rarities: [], scrap_rarities: [] }}
-          selectedCrimeIds={selectedCrimeIds}
-          selectedGtaIds={selectedGtaIds}
-          selectedMeltActionIds={selectedMeltActionIds}
-          selectedMeltRarityIds={selectedMeltRarityIds}
-          selectedScrapRarityIds={selectedScrapRarityIds}
-          onToggleCrime={toggleCrimeId}
-          onToggleGta={toggleGtaId}
-          onToggleMeltAction={toggleMeltActionId}
-          onToggleMeltRarity={toggleMeltRarityId}
-          onToggleScrapRarity={toggleScrapRarityId}
-          onSelectAllCrimes={selectAllCrimes}
-          onDeselectAllCrimes={deselectAllCrimes}
-          onSelectAllGta={selectAllGta}
-          onDeselectAllGta={deselectAllGta}
-          onSelectAllMeltActions={selectAllMeltActions}
-          onDeselectAllMeltActions={deselectAllMeltActions}
-          onSelectAllMeltRarities={selectAllMeltRarities}
-          onDeselectAllMeltRarities={deselectAllMeltRarities}
-          onSelectAllScrapRarities={selectAllScrapRarities}
-          onDeselectAllScrapRarities={deselectAllScrapRarities}
-          onSaveSettings={handleSaveSettings}
-          savingSettings={savingSettings}
-          crimesDisabled={savingPrefs || !prefs?.auto_rank_enabled}
-          gtaDisabled={savingPrefs || !prefs?.auto_rank_enabled}
-          meltDisabled={savingPrefs || !prefs?.auto_rank_enabled}
-          scrapDisabled={savingPrefs || !prefs?.auto_rank_enabled}
-        />
+      {currentTab === 'summary' && (
+        <div className="space-y-3 sm:space-y-4 ar-fade-in">
+          <SetupCard
+            canEnable={canEnable}
+            hasTelegram={hasTelegram}
+            telegramNotifyOn={prefs?.auto_rank_telegram_notify !== false}
+            stripePurchasable={!!prefs?.auto_rank_stripe_purchasable}
+            stripeLoading={autoRankStripeLoading}
+            onBuyStripe={handleBuyAutoRankStripe}
+            emailEntitled={!!prefs?.auto_rank_email_entitled}
+          />
+
+          {prefs?.auto_rank_trial && prefs?.auto_rank_trial_until && !prefs?.auto_rank_permanent && (
+            <TrialBanner
+              trialUntil={prefs.auto_rank_trial_until}
+              dismissed={prefs.auto_rank_trial_dismissed}
+              onDismiss={() => {
+                setPrefs(p => ({ ...p, auto_rank_trial_dismissed: true }));
+                api.patch('/auto-rank/me', { auto_rank_trial_dismissed: true }).catch(() => {});
+              }}
+            />
+          )}
+
+          {canEnable && (
+            <AutoRankSummaryCard stats={stats} liveCountdown={liveCountdown} prefs={prefs} />
+          )}
+        </div>
       )}
 
-      {canEnable && prefs?.auto_rank_oc && (
-        <OCOptionsCard
-          equipment={ocEquipment}
-          selectedId={selectedOcEquipmentId}
-          saving={savingOcEquipment}
-          onSelect={handleSelectOcEquipment}
-        />
-      )}
-      
-      {canEnable && <StatsCard stats={stats} liveCountdown={liveCountdown} />}
+      {currentTab === 'settings' && (
+        <div className="space-y-3 sm:space-y-4 ar-fade-in">
+          <SettingsCard
+            prefs={prefs}
+            canEnable={canEnable}
+            savingPrefs={savingPrefs}
+            onUpdatePref={updatePref}
+            skipTokens={stats?.skip_tokens}
+            hasUsableArSkips={stats?.has_usable_ar_skips}
+          />
 
-      {/* ─── Admin (all admin controls at bottom) ─── */}
-      {isAdmin && (
-        <>
-          <div className="pt-4 sm:pt-6 border-t border-zinc-700/50">
-            <h2 className="text-xs sm:text-sm font-heading font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-2 mb-3">
-              <Shield size={16} className="text-primary" />
-              Admin
-            </h2>
-          </div>
+          {canEnable && (prefs?.auto_rank_crimes || prefs?.auto_rank_gta || prefs?.auto_rank_melt || prefs?.auto_rank_scrap) && (
+            <CrimesGtaSettingsCard
+              crimes={settingsData?.crimes ?? []}
+              gtaOptions={settingsData?.gta_options ?? []}
+              meltOptions={settingsData?.melt_options ?? { actions: [], rarities: [], scrap_rarities: [] }}
+              selectedCrimeIds={selectedCrimeIds}
+              selectedGtaIds={selectedGtaIds}
+              selectedMeltActionIds={selectedMeltActionIds}
+              selectedMeltRarityIds={selectedMeltRarityIds}
+              selectedScrapRarityIds={selectedScrapRarityIds}
+              onToggleCrime={toggleCrimeId}
+              onToggleGta={toggleGtaId}
+              onToggleMeltAction={toggleMeltActionId}
+              onToggleMeltRarity={toggleMeltRarityId}
+              onToggleScrapRarity={toggleScrapRarityId}
+              onSelectAllCrimes={selectAllCrimes}
+              onDeselectAllCrimes={deselectAllCrimes}
+              onSelectAllGta={selectAllGta}
+              onDeselectAllGta={deselectAllGta}
+              onSelectAllMeltActions={selectAllMeltActions}
+              onDeselectAllMeltActions={deselectAllMeltActions}
+              onSelectAllMeltRarities={selectAllMeltRarities}
+              onDeselectAllMeltRarities={deselectAllMeltRarities}
+              onSelectAllScrapRarities={selectAllScrapRarities}
+              onDeselectAllScrapRarities={deselectAllScrapRarities}
+              onSaveSettings={handleSaveSettings}
+              savingSettings={savingSettings}
+              crimesDisabled={savingPrefs || !prefs?.auto_rank_enabled}
+              gtaDisabled={savingPrefs || !prefs?.auto_rank_enabled}
+              meltDisabled={savingPrefs || !prefs?.auto_rank_enabled}
+              scrapDisabled={savingPrefs || !prefs?.auto_rank_enabled}
+            />
+          )}
+
+          {canEnable && prefs?.auto_rank_oc && (
+            <OCOptionsCard
+              equipment={ocEquipment}
+              selectedId={selectedOcEquipmentId}
+              saving={savingOcEquipment}
+              onSelect={handleSelectOcEquipment}
+            />
+          )}
+        </div>
+      )}
+
+      {currentTab === 'stats' && (
+        <div className="space-y-3 sm:space-y-4 ar-fade-in">
+          {canEnable ? (
+            <StatsCard stats={stats} liveCountdown={liveCountdown} />
+          ) : (
+            <div className={`relative rounded-lg overflow-hidden ${styles.panel} mobile-panel`}>
+              <div className="p-3 sm:p-4">
+                <p className="text-[10px] sm:text-xs text-zinc-400 font-heading">
+                  Buy or start a trial to see Auto Rank stats.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Admin ─── */}
+      {isAdmin && currentTab === 'admin' && (
+        <div className="space-y-3 sm:space-y-4 ar-fade-in">
           <div ref={adminDiagRef}>
           <AdminDiagnosticsPanel
             inspectData={inspectData}
@@ -2826,7 +2906,7 @@ export default function AutoRank() {
             })()}
           </div>
         </div>
-        </>
+        </div>
       )}
     </div>
   );
