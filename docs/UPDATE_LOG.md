@@ -21,6 +21,7 @@
 [*][color=#888888][b]Fixed:[/b] Broken car pictures (Model A, Buick, Packard, Stutz and earlier Chevy/Durant) reload properly; Garage/GTA show a placeholder icon if an image fails.[/color]
 [*][color=#888888][b]Improved:[/b] Auto Rank shows [b]Jail bailout[/b] alongside Crime/GTA/Booze skips (held, AR uses, ready-to-bail when in jail), in the same tidy perk-card layout. Inventory tracks bailouts used / used by Auto Rank too.[/color]
 [*][color=#888888][b]Fixed:[/b] [b]Jail bailout token[/b] no longer fails on the first use of the day (Mongo path conflict on the daily counter).[/color]
+[*][color=#888888][b]Fixed:[/b] Auto Rank [b]Use cooldown skip tokens[/b] toggle no longer stays locked when you still hold Crime / GTA / Booze skips (stats query was wrongly filtering the user out).[/color]
 [*][color=#888888][b]Changed:[/b] Game Pass [b]Prestige[/b] bonus is now [b]+50%[/b] of season VIP rewards (was +15%), still +500 loot pieces, £10.[/color]
 [*][color=#888888][b]Changed:[/b] [b]Game Pass[/b] card price is now [b]£15.00[/b] (was £9.99). Game Pass prestige / VIP reset stays [b]£10.00[/b]. You can buy Prestige while climbing (or together with Game Pass); it queues and [b]auto-applies[/b] when VIP tiers 1–100 finish.[/color]
 [*][color=#888888][b]Changed:[/b] Auto Rank [b]Use cooldown skip tokens[/b] turns off (and stays disabled) when Crime, GTA, and Booze all have [b]0 usable[/b] skips — e.g. crime 5 + GTA 0 still keeps it available.[/color]

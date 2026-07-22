@@ -470,13 +470,18 @@ const kindHasUsableSkip = (s) => {
 };
 
 const hasAnyUsableArSkip = (skipTokens, statsFlag) => {
-  if (typeof statsFlag === 'boolean') return statsFlag;
   const skip = skipTokens || {};
-  return (
+  const fromTokens = (
     kindHasUsableSkip(skip.crime)
     || kindHasUsableSkip(skip.gta)
     || kindHasUsableSkip(skip.booze)
   );
+  // Prefer live token inventory when present; stats flag alone can lag or be wrong.
+  if (skip.crime != null || skip.gta != null || skip.booze != null) {
+    return fromTokens;
+  }
+  if (typeof statsFlag === 'boolean') return statsFlag;
+  return fromTokens;
 };
 
 const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref, skipTokens, hasUsableArSkips }) => {
