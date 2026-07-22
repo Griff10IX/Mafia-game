@@ -26,6 +26,8 @@ Use this when updating [FORUM_FAQ.md](FORUM_FAQ.md) so numbers stay aligned with
 | Molotov bullet equivalent | `backend/routers/kill/attack.py` → `MOLOTOV_BULLET_EQUIV` |
 | Hitlist hidden / buy-off multipliers | `backend/routers/kill/hitlist.py` → `HITLIST_HIDDEN_MULTIPLIER`, `HITLIST_BUY_OFF_MULTIPLIER` |
 | Bodyguards (slots, costs, hire rules) | `backend/routers/kill/bodyguards.py` → `BODYGUARD_SLOT_COSTS`, `buy_bodyguard_slot`, `_do_hire_bodyguard` |
+| New-account (civilian) protection | `backend/utils/civilian_protection.py` → `PROTECTION_HOURS`, `RULES_BULLETS`, `is_civilian_protected` |
+| Hitman for Hire (tiers, protection, cooldowns) | `backend/routers/kill/hitman.py` → `HITMAN_TIERS`, `HITMAN_*` constants; UI `src/pages/Kill/HitmanForHire.js` |
 | Health restore cost | `backend/routers/game/store.py` → `buy_health` (`BUY_HEALTH_COST_POINTS`); respect leg uses `_store_cost_inc` (~304 respect if 15 pts paid fully with respect) |
 | Passive health regen (lazy tick) | `backend/server.py` → `HEALTH_REGEN_FULL_SECONDS`, `apply_passive_health_regen`; field `health_regen_last_at` on `users` |
 | Silencer / anti-snitch / OC timers / bullets / custom car | `backend/routers/game/store.py` → `SILENCER_COST_POINTS`, `ANTI_SNITCH_COST_POINTS`, `OC_TIMER_COST_POINTS`, `CREW_OC_TIMER_COST_POINTS`, `BULLET_PACKS`, `CUSTOM_CAR_COST`, `upgrade_garage_batch_limit` |

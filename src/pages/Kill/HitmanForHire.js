@@ -1,8 +1,14 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Crosshair, Coins, Skull, Ticket, Search, AlertTriangle, Shield, Target, Clock, Sparkles, Users, XCircle } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+
+const MISSION_PHASE = {
+  DISPATCH: 'dispatch',
+  APPROACH: 'approach',
+  REVEAL: 'reveal',
+};
 
 const HITMAN_STYLES = `
   @keyframes hm-fade-in {
@@ -31,15 +37,52 @@ const HITMAN_STYLES = `
   }
   .hm-stamp { animation: hm-stamp 0.55s cubic-bezier(0.2, 0.8, 0.3, 1) forwards; }
 
+  @keyframes hm-mission-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  .hm-mission-in { animation: hm-mission-in 0.35s ease-out both; }
+
+  @keyframes hm-mission-beat {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .hm-mission-beat { animation: hm-mission-beat 0.5s ease-out both; }
+
+  @keyframes hm-crosshair-pulse {
+    0%, 100% { transform: scale(1); opacity: 0.55; }
+    50% { transform: scale(1.08); opacity: 0.85; }
+  }
+  .hm-crosshair-pulse { animation: hm-crosshair-pulse 1.6s ease-in-out infinite; }
+
+  @keyframes hm-muzzle {
+    0% { opacity: 0; transform: scale(0.4); }
+    20% { opacity: 1; transform: scale(1.15); }
+    100% { opacity: 0; transform: scale(1.6); }
+  }
+  .hm-muzzle { animation: hm-muzzle 0.55s ease-out both; }
+
   .hm-bullet {
     width: 7px; height: 7px; border-radius: 50%;
     background: radial-gradient(circle, #0a0a0a 35%, transparent 70%);
     box-shadow: inset 0 1px 2px rgba(0,0,0,0.85);
   }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hm-fade-in, .hm-smoke, .hm-flicker, .hm-stamp, .hm-mission-in,
+    .hm-mission-beat, .hm-crosshair-pulse, .hm-muzzle {
+      animation: none !important;
+    }
+  }
 `;
 
 const fmtPts = (n) => `${Number(n || 0).toLocaleString()} pts`;
 const fmtRespect = (n) => `${Number(n || 0).toLocaleString()} respect`;
+
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export default function HitmanForHire() {
   const [status, setStatus] = useState(null);
@@ -50,6 +93,8 @@ export default function HitmanForHire() {
   const [hiringTier, setHiringTier] = useState(null);
   const [buyingProtection, setBuyingProtection] = useState(null);
   const [lastResult, setLastResult] = useState(null);
+  const [mission, setMission] = useState(null);
+  const missionAbortRef = useRef(0);
 
   const loadStatus = useCallback(async () => {
     try {
@@ -65,6 +110,12 @@ export default function HitmanForHire() {
   useEffect(() => {
     loadStatus();
   }, [loadStatus]);
+
+  useEffect(() => {
+    return () => {
+      missionAbortRef.current += 1;
+    };
+  }, []);
 
   const available = !!status?.available;
   const staffPreview = !!status?.staff_preview;
@@ -89,6 +140,29 @@ export default function HitmanForHire() {
   const protectionOnRebuyCooldown = !!protectionRebuyCooldownUntil && !protectionActive;
   const protectionCanBuy = status?.protection_can_buy !== false && !protectionActive && !protectionOnRebuyCooldown;
   const protectionRebuyHours = status?.protection_rebuy_cooldown_hours ?? 2;
+
+  const applyHireResult = useCallback(async (d, targetName) => {
+    setLastResult(d);
+    setStatus((prev) =>
+      prev
+        ? {
+            ...prev,
+            free_tokens: d.free_tokens ?? prev.free_tokens,
+            stats: d.stats ?? prev.stats,
+            points: d.points ?? prev.points,
+          }
+        : prev
+    );
+    refreshUser();
+    const again = await api.get('/hitman/lookup', { params: { username: targetName } }).catch(() => null);
+    if (again?.data) setLookup(again.data);
+    loadStatus();
+  }, [loadStatus]);
+
+  const dismissMission = () => {
+    setMission(null);
+    setHiringTier(null);
+  };
 
   const buyProtection = async (payWith = 'points') => {
     if (protectionActive) {
@@ -160,49 +234,89 @@ export default function HitmanForHire() {
   };
 
   const hire = async (tierId) => {
-    if (!lookup?.hireable) return;
+    if (!lookup?.hireable || hiringTier || mission) return;
     const tier = tiers.find((t) => t.id === tierId);
     if (!tier) return;
     const pricing = priceForTier(tier);
+    const targetName = lookup.username || username.trim();
     const ok = window.confirm(
       pricing.free
-        ? `Use 1 free hitman token for a ${tier.success_pct}% shot at ${lookup.username}'s visible robot bodyguard?`
-        : `Pay ${pricing.label} for a ${tier.success_pct}% shot at ${lookup.username}'s visible robot bodyguard?`
+        ? `Use 1 free hitman token for a ${tier.success_pct}% shot at ${targetName}'s visible robot bodyguard?`
+        : `Pay ${pricing.label} for a ${tier.success_pct}% shot at ${targetName}'s visible robot bodyguard?`
     );
     if (!ok) return;
+
+    const runId = ++missionAbortRef.current;
+    const reduced = prefersReducedMotion();
     setHiringTier(tierId);
-    try {
-      const res = await api.post('/hitman/hire', {
-        target_username: lookup.username || username.trim(),
+    setMission({
+      open: true,
+      phase: MISSION_PHASE.DISPATCH,
+      tierLabel: tier.label,
+      targetName,
+      result: null,
+    });
+
+    let hireError = null;
+    let hireRes = null;
+    const hirePromise = api
+      .post('/hitman/hire', {
+        target_username: targetName,
         tier: tierId,
+      })
+      .then((res) => {
+        hireRes = res;
+        return res;
+      })
+      .catch((e) => {
+        hireError = e;
+        return null;
       });
-      const d = res.data || {};
-      setLastResult(d);
-      setStatus((prev) =>
-        prev
-          ? {
-              ...prev,
-              free_tokens: d.free_tokens ?? prev.free_tokens,
-              stats: d.stats ?? prev.stats,
-              points: d.points ?? prev.points,
-            }
-          : prev
-      );
-      if (d.success) {
-        toast.success(d.message || 'Hit landed');
-      } else {
-        toast.error(d.message || 'Hit failed');
-      }
-      if (d.free_token_earned) toast.success('Free hitman token earned');
-      refreshUser();
-      // Refresh hireability after kill / cooldown
-      const again = await api.get('/hitman/lookup', { params: { username: lookup.username || username.trim() } }).catch(() => null);
-      if (again?.data) setLookup(again.data);
-      loadStatus();
-    } catch (e) {
-      toast.error(getApiErrorMessage(e, 'Hire failed'));
-    } finally {
+
+    const stillActive = () => missionAbortRef.current === runId;
+
+    const abortOnHireError = () => {
+      if (!hireError || !stillActive()) return false;
+      setMission(null);
       setHiringTier(null);
+      toast.error(getApiErrorMessage(hireError, 'Hire failed'));
+      return true;
+    };
+
+    try {
+      if (!reduced) {
+        await sleep(1100);
+        if (!stillActive()) return;
+        if (abortOnHireError()) return;
+        setMission((m) => (m ? { ...m, phase: MISSION_PHASE.APPROACH } : m));
+        await sleep(1400);
+        if (!stillActive()) return;
+        if (abortOnHireError()) return;
+      }
+
+      if (!hireRes && !hireError) {
+        await hirePromise;
+      }
+      if (!stillActive()) return;
+      if (abortOnHireError()) return;
+
+      const d = hireRes?.data || {};
+      setMission((m) =>
+        m
+          ? {
+              ...m,
+              phase: MISSION_PHASE.REVEAL,
+              result: d,
+            }
+          : m
+      );
+      await applyHireResult(d, targetName);
+      // Outcome shown in overlay — no success/fail toasts
+    } catch (e) {
+      if (!stillActive()) return;
+      setMission(null);
+      setHiringTier(null);
+      toast.error(getApiErrorMessage(e, 'Hire failed'));
     }
   };
 
@@ -235,9 +349,118 @@ export default function HitmanForHire() {
     );
   }
 
+  const missionPhase = mission?.phase;
+  const missionResult = mission?.result;
+
   return (
     <div className={`min-h-[40vh] px-3 sm:px-4 max-w-3xl mx-auto space-y-3 sm:space-y-4 ${styles.pageContent} mobile-page-root`}>
       <style>{HITMAN_STYLES}</style>
+
+      {mission?.open && (
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center p-4 hm-mission-in"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Hitman mission"
+        >
+          <div className="absolute inset-0 bg-black/88 backdrop-blur-[2px]" />
+          <div
+            className="pointer-events-none absolute inset-0 opacity-[0.07]"
+            style={{
+              backgroundImage:
+                'repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(255,255,255,0.04) 2px, rgba(255,255,255,0.04) 3px)',
+            }}
+          />
+          <div className="pointer-events-none absolute left-[18%] bottom-[22%] text-zinc-500/40">
+            <div className="hm-smoke w-8 h-8" />
+          </div>
+          <div className="pointer-events-none absolute right-[22%] bottom-[28%] text-zinc-500/30">
+            <div className="hm-smoke w-6 h-6" style={{ animationDelay: '0.8s' }} />
+          </div>
+
+          <div className="relative z-10 w-full max-w-sm rounded-lg border border-zinc-700/60 bg-zinc-950/95 shadow-2xl overflow-hidden">
+            <div className="px-4 py-2.5 border-b border-zinc-800 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Crosshair size={14} className="text-red-400 shrink-0 hm-flicker" />
+                <span className="text-[10px] font-heading font-bold uppercase tracking-[0.16em] text-zinc-300 truncate">
+                  Mission in progress
+                </span>
+              </div>
+              <span className="text-[9px] font-heading uppercase tracking-wider text-zinc-500 shrink-0">
+                {mission.tierLabel}
+              </span>
+            </div>
+
+            <div className="relative px-5 py-8 min-h-[220px] flex flex-col items-center justify-center text-center">
+              {missionPhase !== MISSION_PHASE.REVEAL && (
+                <>
+                  <Crosshair size={64} className="text-red-500/50 hm-crosshair-pulse mb-5" />
+                  <div key={missionPhase} className="hm-mission-beat space-y-2">
+                    {missionPhase === MISSION_PHASE.DISPATCH && (
+                      <>
+                        <p className="text-[11px] font-heading font-bold uppercase tracking-[0.18em] text-primary">
+                          Contract accepted
+                        </p>
+                        <p className="text-[12px] font-heading text-zinc-300 leading-snug">
+                          Dispatching the {mission.tierLabel.toLowerCase()}…
+                        </p>
+                      </>
+                    )}
+                    {missionPhase === MISSION_PHASE.APPROACH && (
+                      <>
+                        <p className="text-[11px] font-heading font-bold uppercase tracking-[0.18em] text-amber-300/90">
+                          Closing in
+                        </p>
+                        <p className="text-[12px] font-heading text-zinc-300 leading-snug">
+                          Hitman moving on <span className="text-foreground font-bold">{mission.targetName}</span>…
+                        </p>
+                        <p className="text-[10px] font-heading text-zinc-500 italic">One clean shot. No witnesses.</p>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+
+              {missionPhase === MISSION_PHASE.REVEAL && missionResult && (
+                <div className="hm-mission-beat w-full space-y-4">
+                  <div className="relative flex items-center justify-center py-2">
+                    {missionResult.success ? (
+                      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <div className="hm-muzzle w-16 h-16 rounded-full bg-red-500/25 blur-md" />
+                      </div>
+                    ) : null}
+                    <div
+                      className={`hm-stamp relative text-sm font-heading font-bold uppercase tracking-[0.2em] border-2 px-3 py-1.5 rounded-sm ${
+                        missionResult.success
+                          ? 'text-red-400 border-red-500/60'
+                          : 'text-zinc-400 border-zinc-500/50'
+                      }`}
+                    >
+                      {missionResult.success ? 'HIT' : 'MISS'}
+                    </div>
+                  </div>
+                  <p className="text-[12px] font-heading text-foreground leading-snug px-1">
+                    {missionResult.message || (missionResult.success ? 'The job is done.' : 'The shot went wide.')}
+                  </p>
+                  {missionResult.free_token_earned && (
+                    <p className="text-[10px] font-heading text-emerald-300">Free hitman token earned.</p>
+                  )}
+                  {missionResult.free_retry_used && (
+                    <p className="text-[10px] font-heading text-amber-300/90">Free second attempt used.</p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={dismissMission}
+                    className="w-full mt-1 py-2.5 rounded-md border border-zinc-600/50 bg-zinc-900/80 text-zinc-200 text-[10px] font-heading font-bold uppercase tracking-wider hover:bg-zinc-800 touch-manipulation"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Title */}
       <div className="relative hm-fade-in">
@@ -488,7 +711,7 @@ export default function HitmanForHire() {
           {tiers.map((tier, i) => {
             const pricing = priceForTier(tier);
             const busy = hiringTier === tier.id;
-            const canHire = !!lookup?.hireable && !hiringTier;
+            const canHire = !!lookup?.hireable && !hiringTier && !mission;
             return (
               <div
                 key={tier.id}
@@ -523,7 +746,7 @@ export default function HitmanForHire() {
         </div>
       </div>
 
-      {lastResult && (
+      {lastResult && !mission?.open && (
         <div
           className={`relative rounded-lg border px-3 py-3 hm-fade-in ${
             lastResult.success

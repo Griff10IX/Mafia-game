@@ -15,6 +15,7 @@ Combat is the heart of the game. Attack other players to steal their cash and ea
 [*][color=#888888]Must be in the SAME CITY as your target[/color]
 [*][color=#888888]Need enough bullets based on target's armour level[/color]
 [*][color=#888888]Cannot attack while in jail or traveling[/color]
+[*][color=#888888]Cannot attack (or be attacked by) players under [b]new-account protection[/b] — see below[/color]
 [*][color=#888888]No separate “failed attack” cooldown built into combat; staff may turn on extra throttling behind the scenes if needed[/color]
 [/list]
 
@@ -104,6 +105,58 @@ You can have [b]at most 4 bodyguards at once[/b] — [b]any mix[/b] of [b]robot[
 [*][color=#2ECC71][b]Robot Auto-Search:[/b] [b]10,000 points[/b] for [b]30 days[/b] ([b]Bodyguards[/b] page or [b]Store[/b]) — server keeps [b]Attack → My Searches[/b] rows for [b]your[/b] hired robots; renews when a row has [b]≤3 hours[/b] left until expiry[/color]
 [*][color=#888888][b]Humans[/b] — send a [b]bodyguard invite[/b] to another player; when they accept, they fill a slot. The inviter pays a [b]one-time hire fee in points[/b] (lower than a robot hire at the same moment). Weekly pay (points/cash) and contract length are set in the invite. Human guards use [b]their own armour[/b]; you cannot upgrade their armour from your screen (robots can).[/color]
 [*][color=#888888]Bodyguards die first when you're attacked[/color]
+[/list]
+
+[color=#FFD700][b]New-account protection[/b][/color]
+New characters get a short [b]protection window[/b] (about [b]14 days[/b] from account creation) so they are not jumped in normal PvP right away. Status and the full list of actions that end protection early are shown in-game (Account / protection info).
+
+[list]
+[*][color=#888888]While active: you [b]cannot[/b] attack other players in normal PvP, and others [b]cannot[/b] attack you[/color]
+[*][color=#888888]Also blocks [b]Hitman for Hire[/b] contracts on you (and you cannot hire against someone who still has it)[/color]
+[*][color=#888888]Ends when the timer runs out, or earlier if you break the on-page rules (examples: putting a real player on the hitlist, joining/starting a crew, claiming or accepting a casino/property transfer, buying an exclusive car, searching a real player/bodyguard, rejecting/ignoring a casino buyback after taking one)[/color]
+[/list]
+
+[color=#FFD700][b]Hitman for Hire[/b][/color]
+Open [b]Kill → Hitman for Hire[/b] (when the feature is live). Pay points to hire a contractor who tries to kill a rival’s [b]visible robot bodyguard[/b] — the guard in the [b]highest slot[/b]. Quiet work: [b]no witnesses[/b], and the owner is told a hitman struck — [b]not who paid[/b].
+
+[b]Who you can mark:[/b]
+[list]
+[*][color=#888888]Target needs [b]at least 2[/b] bodyguards — a lone Slot 1 guard cannot be hit[/color]
+[*][color=#888888]The [b]visible[/b] (highest-slot) guard must be a [b]robot[/b] (human visible guards are not valid Hitman targets)[/color]
+[*][color=#888888]Cannot mark yourself, dead players, or NPCs[/color]
+[*][color=#888888]Blocked by [b]new-account protection[/b], [b]anti-hitman protection[/b], or a recent successful Hitman strike on that player ([b]24h[/b] victim cooldown)[/color]
+[*][color=#888888]You can only land [b]one successful[/b] Hitman kill on the [b]same[/b] player per day[/color]
+[/list]
+
+[b]Contractors (tiers):[/b]
+[list]
+[*][color=#888888][b]Street shooter[/b] — [b]1,000[/b] pts · [b]10%[/b] kill chance[/color]
+[*][color=#888888][b]Made man[/b] — [b]2,500[/b] pts · [b]25%[/b] kill chance[/color]
+[*][color=#888888][b]Professional[/b] — [b]5,000[/b] pts · [b]60%[/b] kill chance[/color]
+[*][color=#888888]If you have a [b]free hitman token[/b], the next hire spends the token instead of points[/color]
+[/list]
+
+[b]On success:[/b]
+[list]
+[*][color=#2ECC71]Visible robot bodyguard is removed[/color]
+[*][color=#2ECC71]Owner gets an anonymous strike notice[/color]
+[*][color=#2ECC71]That player cannot be Hitman-targeted again for [b]24 hours[/b][/color]
+[*][color=#2ECC71][b]25%[/b] chance you earn a [b]free hitman token[/b][/color]
+[*][color=#888888]Successful Hitman kills show on [b]Stats → Last 15 Kills[/b] with killer [b]Hitman[/b] (hirer stays anonymous)[/color]
+[/list]
+
+[b]On fail:[/b]
+[list]
+[*][color=#888888][b]10%[/b] chance of a [b]free second attempt[/b] on the same hire[/color]
+[*][color=#888888]The target may get [b]25% off[/b] any Hitman tier [b]against you[/b] for [b]24 hours[/b] (counter-contract)[/color]
+[/list]
+
+[b]Anti-hitman protection:[/b]
+[list]
+[*][color=#888888]Buy on the Hitman page for [b]3,000 points[/b] or [b]5,000 respect[/b][/color]
+[*][color=#888888]Blocks [b]all[/b] Hitman contracts on you for [b]5 days[/b][/color]
+[*][color=#888888]Cannot stack or refresh while active[/color]
+[*][color=#888888]After it ends: [b]2 hour[/b] cooldown before you can buy protection again[/color]
 [/list]
 
 [color=#FFD700][b]Molotovs[/b][/color]
@@ -1293,6 +1346,12 @@ If someone used your card without permission:
 
 [color=#3498DB][b]Q: How do I get bullets?[/b][/color]
 [color=#AAAAAA]A: Melt cars from GTA (legendary cars give the most), buy from armouries with cash, or purchase with points from the store.[/color]
+
+[color=#3498DB][b]Q: What is Hitman for Hire?[/b][/color]
+[color=#AAAAAA]A: [b]Kill → Hitman for Hire[/b] — pay points for a chance to kill a rival’s [b]visible robot bodyguard[/b] (highest slot; needs 2+ guards). No witnesses; the owner is not told who hired. See [b]COMBAT → Hitman for Hire[/b] for tiers, cooldowns, free tokens, and anti-hitman protection.[/color]
+
+[color=#3498DB][b]Q: Why can’t I attack / hire a Hitman on a new player?[/b][/color]
+[color=#AAAAAA]A: They may still have [b]new-account protection[/b] (~14 days from create, or until they break the on-page rules). While it is active they are safe from normal PvP and Hitman contracts. See [b]COMBAT → New-account protection[/b].[/color]
 
 [color=#3498DB][b]Q: What happens when I die?[/b][/color]
 [color=#AAAAAA]A: You lose cash on hand, properties, weapons, armour, and cars; if you had an [b]illegal business[/b] ([b]Distillery[/b] etc.), that is lost too and feeds the killer’s reward. [b]Swiss Bank[/b] and [b]unused points[/b] stay on the dead account. Use [b]Dead > Alive[/b] on a new login to recover most cash/points (one-time, dead password), [b]Revive[/b] (50k pts, same email), or see the full list under [b]COMBAT → What Happens When You Die[/b] above.[/color]

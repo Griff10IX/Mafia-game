@@ -139,6 +139,14 @@ Open [b]Kill → Hitlist[/b] to place or view bounties. Set reward, optional ano
 [color=#FFD700][b]Bodyguards[/b][/color]
 Open [b]Kill → Bodyguards[/b]. Unlock slots, hire robots or invite human players, set pay where the form asks. Guards absorb damage before you in fights.
 
+[color=#FFD700][b]Hitman for Hire[/b][/color]
+[list]
+[*][color=#888888]Open [b]Kill → Hitman for Hire[/b] (when available).[/color]
+[*][color=#888888]Enter a username and [b]Check[/b] — the page tells you if a contract is allowed (robot visible guard, 2+ bodyguards, no protection/cooldown).[/color]
+[*][color=#888888]Pick a contractor tier and [b]Hire[/b]. Watch the mission play out, then see hit or miss. Rules and prices are in [b]FAQs → COMBAT → Hitman for Hire[/b].[/color]
+[*][color=#888888]Optional: buy [b]anti-hitman protection[/b] on the same page so others cannot hire against you for a few days.[/color]
+[/list]
+
 [color=#FFD700][b]Attempt log[/b][/color]
 [b]Kill → Attempts[/b] shows recent combat-related activity so you can see what happened.
 

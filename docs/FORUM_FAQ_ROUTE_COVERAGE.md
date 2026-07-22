@@ -5,7 +5,7 @@ Crosswalk of major authenticated areas ([src/App.js](../src/App.js) routes and s
 | Area / route | FAQ section (anchor topic) |
 |--------------|----------------------------|
 | `/crime/crimes`, `/crime/gta`, `/crime/jail` | CRIMES, JAIL SYSTEM |
-| `/kill/attack`, `/kill/bodyguards`, `/kill/hitlist`, `/kill/armour-weapons`, `/kill/attempts` | COMBAT |
+| `/kill/attack`, `/kill/bodyguards`, `/kill/hitlist`, `/kill/hitman`, `/kill/armour-weapons`, `/kill/attempts` | COMBAT (incl. Hitman for Hire, new-account protection) |
 | `/money/bank`, `/money/stocks`, `/money/property`, `/my-properties`, `/money/booze-run`, `/money/racket`, `/money/crack-safe`, `/money/quick-trade` | MONEY MAKING (incl. **Wealth ranks** — cash on hand) |
 | `/cars/*` (garage, buy, sell, view) | GARAGE & VEHICLES |
 | `/organised-crime` | CRIMES → Organised Crime |
