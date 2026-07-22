@@ -88,6 +88,72 @@ def _stats_from_user(u: dict) -> dict:
     }
 
 
+async def _game_wide_stats() -> dict:
+    """Aggregate Hitman for Hire activity from hitman_events."""
+    empty = {
+        "hires": 0,
+        "kills": 0,
+        "fails": 0,
+        "points_spent": 0,
+        "unique_hirers": 0,
+        "unique_victims": 0,
+    }
+    try:
+        rows = await _db().hitman_events.aggregate(
+            [
+                {
+                    "$facet": {
+                        "totals": [
+                            {
+                                "$group": {
+                                    "_id": None,
+                                    "hires": {"$sum": 1},
+                                    "kills": {"$sum": {"$cond": ["$success", 1, 0]}},
+                                    "fails": {
+                                        "$sum": {
+                                            "$cond": [
+                                                {"$eq": ["$success", True]},
+                                                0,
+                                                1,
+                                            ]
+                                        }
+                                    },
+                                    "points_spent": {"$sum": {"$ifNull": ["$cost", 0]}},
+                                }
+                            }
+                        ],
+                        "hirers": [
+                            {"$group": {"_id": "$hirer_id"}},
+                            {"$count": "n"},
+                        ],
+                        "victims": [
+                            {"$match": {"success": True}},
+                            {"$group": {"_id": "$target_id"}},
+                            {"$count": "n"},
+                        ],
+                    }
+                }
+            ]
+        ).to_list(1)
+    except Exception:
+        logger.exception("hitman game-wide stats")
+        return empty
+    if not rows:
+        return empty
+    facet = rows[0] or {}
+    totals = (facet.get("totals") or [{}])[0] or {}
+    hirers = (facet.get("hirers") or [{}])[0] or {}
+    victims = (facet.get("victims") or [{}])[0] or {}
+    return {
+        "hires": int(totals.get("hires") or 0),
+        "kills": int(totals.get("kills") or 0),
+        "fails": int(totals.get("fails") or 0),
+        "points_spent": int(totals.get("points_spent") or 0),
+        "unique_hirers": int(hirers.get("n") or 0),
+        "unique_victims": int(victims.get("n") or 0),
+    }
+
+
 async def _resolve_username(username: str) -> Optional[dict]:
     db = _db()
     uname = (username or "").strip()
@@ -281,6 +347,7 @@ async def _hitman_status_impl(current_user: dict):
         cd_end = protection_until + HITMAN_PROTECTION_REBUY_COOLDOWN
         if cd_end > now:
             rebuy_cooldown_until = cd_end
+    game_stats = await _game_wide_stats()
     return {
         "enabled": enabled,
         "staff_preview": (not enabled) and staff,
@@ -290,6 +357,7 @@ async def _hitman_status_impl(current_user: dict):
         "points": int(u.get("points") or 0),
         "respect_points": int(u.get("respect_points") or 0),
         "stats": _stats_from_user(u),
+        "game_stats": game_stats,
         "my_discount": my_discount,
         "protection_cost": HITMAN_PROTECTION_COST,
         "protection_respect_cost": HITMAN_PROTECTION_RESPECT_COST,
@@ -352,14 +420,12 @@ async def _hitman_lookup_impl(username: str, current_user: dict):
             "ok": True,
             "hireable": False,
             "username": target.get("username"),
-            "bodyguard_count": len(filled),
             "reason": reason,
         }
     return {
         "ok": True,
         "hireable": True,
         "username": target.get("username"),
-        "bodyguard_count": len(filled),
         "reason": None,
     }
 

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Crosshair, Coins, Skull, Ticket, Search, AlertTriangle, Shield, Target, Clock, Sparkles } from 'lucide-react';
+import { Crosshair, Coins, Skull, Ticket, Search, AlertTriangle, Shield, Target, Clock, Sparkles, Users, XCircle } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -72,6 +72,14 @@ export default function HitmanForHire() {
   const discount = status?.my_discount;
   const tiers = status?.tiers || [];
   const stats = status?.stats || { hires: 0, points_spent: 0, kills: 0 };
+  const gameStats = status?.game_stats || {
+    hires: 0,
+    kills: 0,
+    fails: 0,
+    points_spent: 0,
+    unique_hirers: 0,
+    unique_victims: 0,
+  };
   const protectionCost = status?.protection_cost ?? 3000;
   const protectionRespectCost = status?.protection_respect_cost ?? 5000;
   const protectionDays = status?.protection_days ?? 5;
@@ -274,6 +282,31 @@ export default function HitmanForHire() {
         </div>
       </div>
 
+      {/* Game-wide stats */}
+      <div className={`relative rounded-lg overflow-hidden ${styles.panel} mobile-panel hm-fade-in`} style={{ animationDelay: '0.06s' }}>
+        <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
+          <h2 className="text-[10px] sm:text-xs font-heading font-bold text-primary uppercase tracking-wider">Street ledger</h2>
+        </div>
+        <div className="p-2.5 sm:p-3 grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+          {[
+            { label: 'Contracts hired', value: (gameStats.hires || 0).toLocaleString(), Icon: Target, cls: 'text-foreground' },
+            { label: 'Bodyguards killed', value: (gameStats.kills || 0).toLocaleString(), Icon: Skull, cls: 'text-red-400' },
+            { label: 'Misses', value: (gameStats.fails || 0).toLocaleString(), Icon: XCircle, cls: 'text-zinc-400' },
+            { label: 'Players hired', value: (gameStats.unique_hirers || 0).toLocaleString(), Icon: Users, cls: 'text-sky-300' },
+            { label: 'Players hit', value: (gameStats.unique_victims || 0).toLocaleString(), Icon: Crosshair, cls: 'text-amber-300' },
+            { label: 'Points spent', value: (gameStats.points_spent || 0).toLocaleString(), Icon: Coins, cls: 'text-amber-300' },
+          ].map(({ label, value, Icon, cls }) => (
+            <div key={label} className="rounded-md border border-zinc-700/40 bg-zinc-950/50 px-2 py-2 min-w-0">
+              <div className="flex items-center gap-1 text-[8px] font-heading uppercase tracking-wider text-zinc-500 truncate">
+                <Icon size={10} className="shrink-0 opacity-70" />
+                {label}
+              </div>
+              <div className={`text-[13px] font-heading font-bold tabular-nums truncate ${cls}`}>{value}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* Discount banner */}
       {discount && (
         <div className="rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-3 py-2.5 hm-fade-in" style={{ animationDelay: '0.08s' }}>
@@ -429,7 +462,6 @@ export default function HitmanForHire() {
             >
               <div className="font-bold uppercase tracking-wider text-[9px] opacity-80">
                 {lookup.username || username}
-                {lookup.bodyguard_count != null ? ` · ${lookup.bodyguard_count} guards` : ''}
               </div>
               <p className="mt-0.5 leading-snug">{lookup.hireable ? 'Contract available — pick a tier below.' : lookup.reason || 'Not hireable.'}</p>
               {lookup.protected && lookup.protection_until && (

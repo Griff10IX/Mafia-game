@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-22 14:40 UTC[/color][/b] — [b]Safari / AFK resume fix[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] Coming back after going AFK (especially on [b]Safari / iPhone[/b]) no longer blank-screens or spams [b]Connection problem[/b] / force-refresh loops. The game keeps your current page and quietly reconnects instead of remounting everything while the phone network is still waking up.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-22 14:00 UTC[/color][/b] — [b]Anti-hitman protection[/b][/size]
 [quote]
 [list]

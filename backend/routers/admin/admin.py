@@ -6674,6 +6674,112 @@ def register(router):
             "normalized_datetime_fields": norm,
         }
 
+    @router.post("/admin/hitman/reset-cooldown")
+    async def admin_hitman_reset_cooldown(
+        target_username: str = Query(..., description="Username to clear Hitman cooldowns for"),
+        scope: str = Query(
+            "victim",
+            description="victim | protection | discount | day_locks | all",
+        ),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Clear Hitman for Hire locks on a player (victim CD, protection, discount, same-day kill locks)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        raw = (target_username or "").strip()
+        if not raw:
+            raise HTTPException(status_code=400, detail="target_username required")
+        mode = (scope or "victim").strip().lower()
+        if mode not in ("victim", "protection", "discount", "day_locks", "all"):
+            raise HTTPException(
+                status_code=400,
+                detail="scope must be victim, protection, discount, day_locks, or all",
+            )
+        username_pattern = _username_pattern(raw)
+        target = await db.users.find_one(
+            {"username": username_pattern},
+            {
+                "_id": 0,
+                "id": 1,
+                "username": 1,
+                "hitman_victim_cooldown_until": 1,
+                "hitman_protection_until": 1,
+                "hitman_discount_until": 1,
+                "hitman_discount_vs_user_id": 1,
+            },
+        )
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        unset_fields = {}
+        cleared = []
+        if mode in ("victim", "all"):
+            unset_fields["hitman_victim_cooldown_until"] = ""
+            cleared.append("victim_cooldown")
+        if mode in ("protection", "all"):
+            unset_fields["hitman_protection_until"] = ""
+            cleared.append("protection")
+        if mode in ("discount", "all"):
+            unset_fields["hitman_discount_until"] = ""
+            unset_fields["hitman_discount_vs_user_id"] = ""
+            cleared.append("discount")
+
+        modified = 0
+        if unset_fields:
+            res = await db.users.update_one({"id": target["id"]}, {"$unset": unset_fields})
+            modified = int(res.modified_count or 0)
+
+        day_locks_deleted = 0
+        if mode in ("day_locks", "all"):
+            from datetime import datetime, timezone
+
+            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            ev = await db.hitman_events.delete_many(
+                {"target_id": target["id"], "day": today, "success": True}
+            )
+            day_locks_deleted = int(ev.deleted_count or 0)
+            cleared.append("day_locks")
+
+        try:
+            await srv.log_activity(
+                current_user["id"],
+                current_user.get("username") or "?",
+                "admin_hitman_reset_cooldown",
+                {
+                    "target": target.get("username") or raw,
+                    "scope": mode,
+                    "cleared": cleared,
+                    "day_locks_deleted": day_locks_deleted,
+                },
+            )
+        except Exception:
+            pass
+
+        uname = target.get("username") or raw
+        parts = []
+        if "victim_cooldown" in cleared:
+            parts.append("victim cooldown")
+        if "protection" in cleared:
+            parts.append("anti-hitman protection")
+        if "discount" in cleared:
+            parts.append("counter-offer discount")
+        if "day_locks" in cleared:
+            parts.append(f"today's kill locks ({day_locks_deleted} event(s))")
+        detail = ", ".join(parts) if parts else mode
+        return {
+            "message": f"Cleared Hitman {detail} for {uname}.",
+            "username": uname,
+            "scope": mode,
+            "cleared": cleared,
+            "modified_count": modified,
+            "day_locks_deleted": day_locks_deleted,
+            "before": {
+                "victim_cooldown_until": target.get("hitman_victim_cooldown_until"),
+                "protection_until": target.get("hitman_protection_until"),
+                "discount_until": target.get("hitman_discount_until"),
+            },
+        }
+
     @router.get("/admin/crimes/inspect/{target_username}")
     async def admin_crimes_inspect(
         target_username: str,

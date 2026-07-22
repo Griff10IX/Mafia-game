@@ -75,7 +75,7 @@ export async function apiRequestWith429Retry(requestFn, maxAttempts = 3) {
   throw lastErr;
 }
 
-const _RESUME_GET_MAX_ATTEMPTS = 3;
+const _RESUME_GET_MAX_ATTEMPTS = 5;
 
 function _sleepResumeRetry(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -91,15 +91,33 @@ export function isTransientResumeLoadError(error) {
     return msg.includes('network error') || msg.includes('timeout');
   }
   const st = error.response.status;
+  if (st === 0) return true; // normalized network error
   if (st === 401 || st === 403 || st === 404) return false;
   return st === 408 || st === 502 || st === 503 || st === 504;
+}
+
+/** True for ~45s after tab/app returns from background (Safari wake grace). */
+export function isInResumeGracePeriod() {
+  if (_lastForegroundAt <= 0) return false;
+  return (Date.now() - _lastForegroundAt) < _SERVER_UNAVAILABLE_RESUME_GRACE_MS;
+}
+
+/**
+ * Suppress noisy "Connection problem" toasts while the device radio is still waking.
+ * Callers: `if (!shouldSuppressResumeNetworkToast(e)) toast.error(...)`
+ */
+export function shouldSuppressResumeNetworkToast(error) {
+  if (!isInResumeGracePeriod()) return false;
+  if (isTransientResumeLoadError(error)) return true;
+  const detail = String(error?.response?.data?.detail || error?.message || '');
+  return detail === NETWORK_ERROR_MSG || /connection problem|network error|failed to fetch/i.test(detail);
 }
 
 /**
  * GET with 429-aware inner retries plus outer retries for wake-from-idle network/gateway failures.
  * @param {string} path
  * @param {import('axios').AxiosRequestConfig} [config]
- * @param {number} [maxAttempts=3]
+ * @param {number} [maxAttempts=5]
  */
 export async function apiGetWithResumeRetries(path, config, maxAttempts = _RESUME_GET_MAX_ATTEMPTS) {
   let lastErr;
@@ -109,7 +127,8 @@ export async function apiGetWithResumeRetries(path, config, maxAttempts = _RESUM
     } catch (e) {
       lastErr = e;
       if (isTransientResumeLoadError(e) && i < maxAttempts - 1) {
-        await _sleepResumeRetry(450 + i * 550);
+        // Longer backoff — Safari/iOS often needs 1–3s for networking after wake.
+        await _sleepResumeRetry(600 + i * 700);
         continue;
       }
       throw e;
@@ -253,8 +272,9 @@ if (typeof window !== 'undefined') {
   };
   window.addEventListener('pagehide', markUnloading);
   window.addEventListener('beforeunload', markUnloading);
-  window.addEventListener('pageshow', (e) => {
-    if (e.persisted) _pageUnloading = false;
+  window.addEventListener('pageshow', () => {
+    // Always clear — Safari often fires pagehide without bfcache restore (persisted=false).
+    _pageUnloading = false;
     markForeground();
   });
   window.addEventListener('focus', markForeground);
@@ -264,7 +284,10 @@ if (typeof window !== 'undefined') {
   window.addEventListener('touchstart', markUserInteraction, { passive: true });
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden) markForeground();
+      if (!document.hidden) {
+        _pageUnloading = false;
+        markForeground();
+      }
     });
   }
 }

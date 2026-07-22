@@ -352,6 +352,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Reset OC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'timer'] },
   { label: 'Reset Daily Rewards Timer', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['daily', 'rewards', 'timer', 'rps'] },
   { label: 'Bodyguard Tools', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'robot', 'generate', 'sync', 'location', 'hacked', 'replace', 'hire inflation', 'clear inflation'] },
+  { label: 'Hitman Tools', categoryId: 'admin-testing', collapseKey: 'hitman', keywords: ['hitman', 'cooldown', 'protection', 'victim', 'reset', 'for hire'] },
   { label: 'Generate Bodyguards', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'generate', 'robot'] },
   { label: 'Test Bodyguard Payout', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'payout', 'test'] },
   { label: 'GTA exclusive pool & dealer', categoryId: 'admin-world-systems', collapseKey: 'gtaPool', keywords: ['gta', 'exclusive', 'loot exclusive', 'car intel', 'timeline', 'war lock', 'marketplace', 'pool', 'dealer', 'cars', 'values'], adminOnly: true },
@@ -5320,6 +5321,34 @@ export default function Admin() {
       setInspectCrimesData(null);
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
     finally { setClearCrimeTimersLoading(false); }
+  };
+
+  const [hitmanResetLoading, setHitmanResetLoading] = useState(false);
+  const handleHitmanResetCooldown = async (scope = 'victim') => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) {
+      toast.error('Enter target username above');
+      return;
+    }
+    const labels = {
+      victim: 'victim strike cooldown (24h after successful Hitman kill)',
+      protection: 'anti-hitman protection (and its 2h rebuy cooldown)',
+      discount: 'Hitman counter-offer discount',
+      day_locks: "today's successful Hitman kill locks vs this target",
+      all: 'ALL Hitman locks (victim CD, protection, discount, today kill locks)',
+    };
+    if (!window.confirm(`Clear ${labels[scope] || scope} for ${username}?`)) return;
+    setHitmanResetLoading(true);
+    try {
+      const res = await api.post('/admin/hitman/reset-cooldown', null, {
+        params: { target_username: username, scope },
+      });
+      toast.success(res.data?.message || 'Hitman cooldown cleared', { duration: 8000 });
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed', { duration: 8000 });
+    } finally {
+      setHitmanResetLoading(false);
+    }
   };
 
   const handleInspectCrimes = async () => {
@@ -10502,6 +10531,19 @@ export default function Admin() {
               </BtnDanger>
               <BtnSecondary onClick={handleInspectCrimes} disabled={inspectCrimesLoading}>
                 {inspectCrimesLoading ? 'Loading…' : 'Inspect data'}
+              </BtnSecondary>
+            </ActionRow>
+
+            <ActionRow
+              icon={Crosshair}
+              label="Reset Hitman victim cooldown"
+              description="Clears 24h 'recently struck' lock for target username above (Hitman for Hire)."
+            >
+              <BtnPrimary onClick={() => handleHitmanResetCooldown('victim')} disabled={hitmanResetLoading || !(formData.targetUsername || '').trim()}>
+                {hitmanResetLoading ? '…' : 'Clear victim CD'}
+              </BtnPrimary>
+              <BtnSecondary onClick={() => handleHitmanResetCooldown('all')} disabled={hitmanResetLoading || !(formData.targetUsername || '').trim()}>
+                Clear all Hitman locks
               </BtnSecondary>
             </ActionRow>
             {inspectCrimesData && (
@@ -24893,6 +24935,70 @@ export default function Admin() {
                 <BtnPrimary onClick={() => handleSyncRobotBodyguardLocations(false)} disabled={syncRobotBgLoading} className="ml-1">
                   {syncRobotBgLoading ? '…' : 'Apply'}
                 </BtnPrimary>
+              </ActionRow>
+            </div>
+          )}
+        </div>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Crosshair}
+            title="Hitman Tools"
+            toolAnchor="hitman"
+            isCollapsed={collapsed.hitman}
+            onToggle={() => toggleSection('hitman')}
+          />
+          {!collapsed.hitman && (
+            <div className="p-2 space-y-1">
+              <p className="text-[10px] text-mutedForeground font-heading px-1 pb-1">
+                Uses Target Username above. Victim cooldown is the 24h lock after a successful Hitman strike.
+              </p>
+              <ActionRow
+                icon={Clock}
+                label="Clear victim cooldown"
+                description="Remove hitman_victim_cooldown_until so the mark can be contracted again"
+              >
+                <BtnPrimary onClick={() => handleHitmanResetCooldown('victim')} disabled={hitmanResetLoading || !(formData.targetUsername || '').trim()}>
+                  {hitmanResetLoading ? '…' : 'Clear victim CD'}
+                </BtnPrimary>
+              </ActionRow>
+              <ActionRow
+                icon={Shield}
+                label="Clear anti-hitman protection"
+                description="Removes active protection and the 2h rebuy cooldown derived from it"
+              >
+                <BtnPrimary onClick={() => handleHitmanResetCooldown('protection')} disabled={hitmanResetLoading || !(formData.targetUsername || '').trim()}>
+                  {hitmanResetLoading ? '…' : 'Clear protection'}
+                </BtnPrimary>
+              </ActionRow>
+              <ActionRow
+                icon={Ticket}
+                label="Clear counter-offer discount"
+                description="Removes 25% off Hitman discount granted after a failed contract"
+              >
+                <BtnPrimary onClick={() => handleHitmanResetCooldown('discount')} disabled={hitmanResetLoading || !(formData.targetUsername || '').trim()}>
+                  {hitmanResetLoading ? '…' : 'Clear discount'}
+                </BtnPrimary>
+              </ActionRow>
+              <ActionRow
+                icon={Skull}
+                label="Clear today's kill locks"
+                description="Deletes today's successful Hitman events on this target (same hirer can kill again today)"
+              >
+                <BtnPrimary onClick={() => handleHitmanResetCooldown('day_locks')} disabled={hitmanResetLoading || !(formData.targetUsername || '').trim()}>
+                  {hitmanResetLoading ? '…' : 'Clear day locks'}
+                </BtnPrimary>
+              </ActionRow>
+              <ActionRow
+                icon={Trash2}
+                label="Clear all Hitman locks"
+                description="Victim CD + protection + discount + today's kill locks"
+                color="text-red-400"
+              >
+                <BtnDanger onClick={() => handleHitmanResetCooldown('all')} disabled={hitmanResetLoading || !(formData.targetUsername || '').trim()}>
+                  {hitmanResetLoading ? '…' : 'Clear all'}
+                </BtnDanger>
               </ActionRow>
             </div>
           )}

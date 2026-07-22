@@ -8,6 +8,7 @@ import api, {
   invalidateApiCache,
   apiRequestWith429Retry,
   apiGetWithResumeRetries,
+  shouldSuppressResumeNetworkToast,
   STAFF_ADMIN_API_FORBIDDEN_EVENT,
 } from '../utils/api';
 import { clearStaffPortalSession, isStaffPortalTokenValid } from '../utils/staffPortalSession';
@@ -453,8 +454,6 @@ export default function Layout({ children }) {
   const [worldCupEnabled, setWorldCupEnabled] = useState(false);
   const [hitmanForHireLive, setHitmanForHireLive] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
-  /** Remount `{children}` after the tab was backgrounded long enough (mobile browsers often freeze or drop XHR; UI stays blank until refresh). */
-  const [contentResumeKey, setContentResumeKey] = useState(0);
   const userSearchRef = useRef(null);
   const userSearchInputRef = useRef(null);
   const userSearchDebounceRef = useRef(null);
@@ -839,10 +838,16 @@ export default function Layout({ children }) {
 
   const refreshUserDebounceRef = useRef(null);
   useEffect(() => {
-    const runRefresh = async () => {
+    const runRefresh = async ({ light = false } = {}) => {
       invalidateApiCache();
-      fetchData(); fetchUnreadCount(); fetchHelpDeskOpenCount(); fetchWarStatus(); fetchRankingCounts();
-      api.get('/oc/status').then((r) => setOcStatus(r.data)).catch(() => setOcStatus(null));
+      fetchData();
+      fetchUnreadCount();
+      if (!light) {
+        fetchHelpDeskOpenCount();
+        fetchWarStatus();
+        fetchRankingCounts();
+        api.get('/oc/status').then((r) => setOcStatus(r.data)).catch(() => setOcStatus(null));
+      }
       if (notificationPanelOpenRef.current) {
         try {
           const response = await apiGetWithResumeRetries('/notifications');
@@ -883,27 +888,35 @@ export default function Layout({ children }) {
         }
       }
       if (refreshUserDebounceRef.current) clearTimeout(refreshUserDebounceRef.current);
-      refreshUserDebounceRef.current = setTimeout(() => runRefresh(), 500);
+      // AFK wake: lighter refresh + longer debounce so Safari networking can come up.
+      const resume = !!detail.resume;
+      refreshUserDebounceRef.current = setTimeout(
+        () => runRefresh({ light: resume }),
+        resume ? 900 : 500,
+      );
     };
     window.addEventListener('app:refresh-user', handler);
     return () => { window.removeEventListener('app:refresh-user', handler); if (refreshUserDebounceRef.current) clearTimeout(refreshUserDebounceRef.current); };
   }, []); // eslint-disable-line
 
-  // Only after a longer hidden stint: remount the current page so its data effects run again (fixes blank/stuck content without a manual refresh). Quick app switches stay under this threshold so scroll/state is preserved.
+  // Soft resume after AFK: invalidate cache + refresh user/page data WITHOUT remounting.
+  // Remounting wiped the UI (white/blank) while Safari's radio was still waking and caused
+  // "Connection problem" storms that forced players to refresh many times.
   const contentResumeTimerRef = useRef(null);
   const tabHiddenAtRef = useRef(null);
   useEffect(() => {
     const MIN_HIDDEN_MS = 60_000;
     const scheduleResume = () => {
       if (contentResumeTimerRef.current) clearTimeout(contentResumeTimerRef.current);
+      // Delay slightly so iOS networking can wake before the first requests fire.
       contentResumeTimerRef.current = setTimeout(() => {
         contentResumeTimerRef.current = null;
         try {
           invalidateApiCache();
         } catch (_) { /* ignore */ }
-        setContentResumeKey((k) => k + 1);
-        window.dispatchEvent(new CustomEvent('app:refresh-user', { detail: {} }));
-      }, 350);
+        window.dispatchEvent(new CustomEvent('app:refresh-user', { detail: { resume: true } }));
+        window.dispatchEvent(new CustomEvent('app:page-resume', { detail: {} }));
+      }, 700);
     };
 
     const onVisibility = () => {
@@ -918,6 +931,7 @@ export default function Layout({ children }) {
     };
 
     const onPageShow = (e) => {
+      // bfcache restore or long idle: soft resume only (keep current UI mounted).
       if (e.persisted) scheduleResume();
     };
 
@@ -1216,7 +1230,9 @@ export default function Layout({ children }) {
         clearStaffPortalSession();
         navigate('/');
       } else {
-        console.error('Failed to fetch user (non-auth):', error);
+        if (!shouldSuppressResumeNetworkToast(error)) {
+          console.error('Failed to fetch user (non-auth):', error);
+        }
       }
     }
   };
@@ -1227,6 +1243,7 @@ export default function Layout({ children }) {
     const onVisibility = () => {
       if (document.visibilityState !== 'visible') return;
       if (debounceTimer) clearTimeout(debounceTimer);
+      // Give Safari/iOS a moment after wake before hitting the API.
       debounceTimer = setTimeout(() => {
         debounceTimer = null;
         (async () => {
@@ -1241,7 +1258,7 @@ export default function Layout({ children }) {
             await fetchDataRef.current?.();
           } catch (_) { /* fetchData handles auth */ }
         })();
-      }, 450);
+      }, 800);
     };
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
@@ -2647,7 +2664,7 @@ export default function Layout({ children }) {
           return (
             <ErrorBoundary>
               <div ref={mainContentRef} className="relative">
-                <Fragment key={contentResumeKey}>{children}</Fragment>
+                {children}
                 {user ? <FindWordHuntLayer /> : null}
               </div>
             </ErrorBoundary>
