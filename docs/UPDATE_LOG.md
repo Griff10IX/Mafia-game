@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-22 16:00 UTC[/color][/b] — [b]Mute page toast pop-ups[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] On [b]Edit Profile[/b] → [b]Page toast alerts[/b], turn off pop-up toasts on busy pages (Hitlist, Attack, Crimes, GTA, Jail, Store, and more). Inbox notification prefs are unchanged. Session/login alerts still always show.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-22 14:40 UTC[/color][/b] — [b]Safari / AFK resume fix[/b][/size]
 [quote]
 [list]

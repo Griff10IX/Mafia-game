@@ -2,8 +2,8 @@
 from datetime import datetime, timezone, timedelta
 import uuid
 import time
-from typing import Optional
-from pydantic import BaseModel
+from typing import List, Optional
+from pydantic import BaseModel, Field
 
 from fastapi import Depends, HTTPException
 
@@ -38,6 +38,40 @@ DEFAULT_NOTIFICATION_PREFS = {
     "designer_comp": True,
 }
 
+# Pages players can mute in-app (Sonner) toasts for. Keep in sync with src/utils/toastPageMutes.js
+TOAST_MUTEABLE_PAGE_IDS = frozenset({
+    "hitlist",
+    "attack",
+    "witness_statements",
+    "attempts",
+    "hitman",
+    "bodyguards",
+    "armoury",
+    "crimes",
+    "gta",
+    "jail",
+    "organised_crime",
+    "booze_run",
+    "store",
+    "properties",
+    "quick_trade",
+})
+
+
+def normalize_toast_muted_pages(raw) -> list:
+    """Return de-duped allowlisted page ids from a user document field."""
+    if not isinstance(raw, list):
+        return []
+    out = []
+    seen = set()
+    for x in raw:
+        k = str(x or "").strip().lower()
+        if k in TOAST_MUTEABLE_PAGE_IDS and k not in seen:
+            seen.add(k)
+            out.append(k)
+    return out
+
+
 # ----- Models -----
 class NotificationPreferencesRequest(BaseModel):
     """Optional; only include keys you want to update. True = receive, False = mute."""
@@ -51,6 +85,11 @@ class NotificationPreferencesRequest(BaseModel):
     forum_comment_reply: Optional[bool] = None
     forum_mention: Optional[bool] = None
     designer_comp: Optional[bool] = None
+
+
+class ToastPagePrefsRequest(BaseModel):
+    """Replace the muted toast page list. Empty = toasts enabled on all pages."""
+    muted_pages: List[str] = Field(default_factory=list)
 
 
 class SendMessageRequest(BaseModel):
@@ -102,6 +141,36 @@ def register(router):
             {"$set": {"notification_preferences": new_prefs}}
         )
         return {"message": "Preferences updated", "notification_preferences": new_prefs}
+
+    @router.get("/profile/toast-page-prefs")
+    async def get_toast_page_prefs(current_user: dict = Depends(get_current_user)):
+        """Pages where in-app toast popups are muted (Sonner). Inbox prefs are separate."""
+        muted = normalize_toast_muted_pages(current_user.get("toast_muted_pages"))
+        return {
+            "muted_pages": muted,
+            "available_pages": sorted(TOAST_MUTEABLE_PAGE_IDS),
+        }
+
+    @router.patch("/profile/toast-page-prefs")
+    async def update_toast_page_prefs(request: ToastPagePrefsRequest, current_user: dict = Depends(get_current_user)):
+        """Replace muted toast pages. Unknown ids are dropped."""
+        raw = request.muted_pages if isinstance(request.muted_pages, list) else []
+        unknown = []
+        for x in raw:
+            k = str(x or "").strip().lower()
+            if k and k not in TOAST_MUTEABLE_PAGE_IDS:
+                unknown.append(k)
+        if unknown:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown page id(s): {', '.join(sorted(set(unknown)))}",
+            )
+        muted = normalize_toast_muted_pages(raw)
+        await db.users.update_one(
+            {"id": current_user.get("id") or ""},
+            {"$set": {"toast_muted_pages": muted}},
+        )
+        return {"message": "Toast page preferences updated", "muted_pages": muted}
 
     @router.get("/notifications", dependencies=_notifications_rl_u)
     async def get_notifications(current_user: dict = Depends(get_current_user)):

@@ -1,6 +1,7 @@
 import { useTheme } from "next-themes"
 import { Toaster as Sonner, toast } from "sonner"
 import { sendToastEvent } from "../../utils/api";
+import { isCurrentPageToastMuted } from "../../utils/toastPageMutes";
 
 const DEFAULT_TOAST_OPTIONS = {
   style: { color: 'var(--noir-toast-foreground, var(--noir-foreground, #f5f5f5))' },
@@ -118,6 +119,11 @@ export function initToastObservability() {
     const original = typeof toast[method] === "function" ? toast[method].bind(toast) : null;
     if (!original) return;
     toast[method] = (...args) => {
+      const options = args[1] && typeof args[1] === "object" ? args[1] : {};
+      const unsuppressible = !!(options.unsuppressible || options.forceShow);
+      if (!unsuppressible && isCurrentPageToastMuted()) {
+        return undefined;
+      }
       try {
         captureToast(kind, args[0], args[1]);
       } catch (_) {}

@@ -11,6 +11,7 @@ import api, {
   shouldSuppressResumeNetworkToast,
   STAFF_ADMIN_API_FORBIDDEN_EVENT,
 } from '../utils/api';
+import { setToastMutedPages } from '../utils/toastPageMutes';
 import { clearStaffPortalSession, isStaffPortalTokenValid } from '../utils/staffPortalSession';
 import { getThemeUiPlatform } from '../utils/themePlatform';
 import { readDashboardSessionCache } from '../utils/dashboardSessionCache';
@@ -817,7 +818,7 @@ export default function Layout({ children }) {
         if (userSearchQueryRef.current === q) {
           setUserSearchResults([]);
           const msg = getApiErrorMessage(err);
-          if (err?.response?.status === 401 || err?.response?.status === 403) toast.error(msg || 'Please log in again.');
+          if (err?.response?.status === 401 || err?.response?.status === 403) toast.error(msg || 'Please log in again.', { unsuppressible: true });
           else toast.error(msg || 'Search failed.');
         }
       } finally {
@@ -1219,11 +1220,14 @@ export default function Layout({ children }) {
       }));
       if (userRes.data?.username) setProfileSessionLastMeUsername(userRes.data.username);
       setRankProgress(progressRes.data);
+      try {
+        setToastMutedPages(userRes.data?.toast_muted_pages);
+      } catch (_) { /* ignore */ }
     } catch (error) {
       const status = error?.response?.status;
       if (status === 401 || (status === 403 && error.config?.url?.includes('/auth/me'))) {
         const msg = getApiErrorMessage(error);
-        toast.error(msg || 'Session expired. Please log in again.');
+        toast.error(msg || 'Session expired. Please log in again.', { unsuppressible: true });
         console.error('Auth failure, logging out:', error);
         localStorage.removeItem('token');
         clearProfileSessionLastMeUsername();

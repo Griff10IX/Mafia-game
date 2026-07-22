@@ -25,10 +25,21 @@ import {
   setProfileSessionLastMeUsername,
 } from '../../utils/prefetchCache';
 import { getProfileEditWarm } from '../../utils/profilePageWarm';
+import { TOAST_MUTEABLE_PAGES, setToastMutedPages, normalizeToastMutedPages, getToastMutedPages } from '../../utils/toastPageMutes';
 import { fileToAvatarDataUrl, fileToCustomBadgeDataUrl, validateSafeImageFile, AVATAR_RAW_UPLOAD_MAX_BYTES } from '../../utils/fileToCompressedDataUrl';
 import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
 import { PROFILE_GLOW_BORDER_CSS, customGlowBorderStyle, PROFILE_GLOW_PRESETS } from '../../constants/profileGlowPresets';
 import GlowPresetPicker from '../../components/GlowPresetPicker';
+
+const PROFILE_EDIT_TAB_IDS = new Set(['look', 'text', 'alerts', 'privacy', 'account', 'staff']);
+const PROFILE_EDIT_TAB_KEY = 'profile_edit_tab';
+const readStoredProfileEditTab = () => {
+  try {
+    const t = sessionStorage.getItem(PROFILE_EDIT_TAB_KEY);
+    if (t && PROFILE_EDIT_TAB_IDS.has(t)) return t;
+  } catch (_) {}
+  return 'look';
+};
 
 const PROFILE_STYLES = `
   @keyframes prof-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -1422,6 +1433,12 @@ export default function Profile() {
   const [searchParams] = useSearchParams();
   const viewPublic = searchParams.get('view') === 'public';
   const [me, setMe] = useState(null);
+  const [editTab, setEditTab] = useState(readStoredProfileEditTab);
+  const switchEditTab = (id) => {
+    if (!PROFILE_EDIT_TAB_IDS.has(id)) return;
+    setEditTab(id);
+    try { sessionStorage.setItem(PROFILE_EDIT_TAB_KEY, id); } catch (_) {}
+  };
   /** After first /auth/me attempt (success or fail) — avoids flashing visitor dossier for own account while me is still null but prefetch filled profile. */
   const [authMeReady, setAuthMeReady] = useState(false);
   const [profile, setProfile] = useState(null);
@@ -1436,6 +1453,8 @@ export default function Profile() {
   const [staffPortalSessionMin, setStaffPortalSessionMin] = useState(30);
   const [prefs, setPrefs] = useState({ ent_games: true, oc_invites: true, attacks: true, system: true, quicktrade: true, messages: true, forum_topic_reply: true, forum_comment_reply: true, forum_mention: true, designer_comp: true });
   const [savingPrefs, setSavingPrefs] = useState(false);
+  const [toastMutedPages, setToastMutedPagesState] = useState(() => getToastMutedPages());
+  const [savingToastMutes, setSavingToastMutes] = useState(false);
   const [passwordForm, setPasswordForm] = useState({ current: '', new: '', confirm: '' });
   const [changingPassword, setChangingPassword] = useState(false);
   const [telegramChatId, setTelegramChatId] = useState('');
@@ -1700,6 +1719,11 @@ export default function Profile() {
         if (cancelled) return;
         setMe(meRes.data);
         if (meRes.data?.username) setProfileSessionLastMeUsername(meRes.data.username);
+        try {
+          const muted = normalizeToastMutedPages(meRes.data?.toast_muted_pages);
+          setToastMutedPagesState(muted);
+          setToastMutedPages(muted);
+        } catch (_) { /* ignore */ }
         setIsAdmin(!!adminRes.data?.is_admin);
         setIsModerator(!!adminRes.data?.is_moderator);
         setHasAdminEmail(!!adminRes.data?.has_admin_email);
@@ -1812,6 +1836,16 @@ export default function Profile() {
       setPrefs({ ent_games: true, oc_invites: true, attacks: true, system: true, quicktrade: true, messages: true, forum_topic_reply: true, forum_comment_reply: true, forum_mention: true, designer_comp: true });
     }
   };
+  const fetchToastPagePrefs = async () => {
+    try {
+      const res = await api.get('/profile/toast-page-prefs');
+      const muted = normalizeToastMutedPages(res.data?.muted_pages);
+      setToastMutedPagesState(muted);
+      setToastMutedPages(muted);
+    } catch (_) {
+      /* keep current */
+    }
+  };
   const fetchTelegram = async () => {
     try {
       const res = await api.get('/profile/telegram');
@@ -1854,6 +1888,7 @@ export default function Profile() {
         setShowCountryFlagOnProfile(profile?.show_country_flag_on_profile === true);
       }
       fetchPrefs();
+      fetchToastPagePrefs();
       const tTelegram = setTimeout(fetchTelegram, 400);
       const tSpotify = setTimeout(fetchSpotifyStatus, 800);
       const tCensor = setTimeout(() => {
@@ -1959,6 +1994,24 @@ export default function Profile() {
     }).catch((e) => {
       toast.error(e.response?.data?.detail || 'Failed to save preferences');
     }).finally(() => setSavingPrefs(false));
+  };
+
+  const updateToastPageMute = (pageId, showToasts) => {
+    const id = String(pageId || '').trim().toLowerCase();
+    if (!id) return;
+    const mutedSet = new Set(toastMutedPages);
+    if (showToasts) mutedSet.delete(id);
+    else mutedSet.add(id);
+    const next = normalizeToastMutedPages(Array.from(mutedSet));
+    setToastMutedPagesState(next);
+    setToastMutedPages(next);
+    setSavingToastMutes(true);
+    api.patch('/profile/toast-page-prefs', { muted_pages: next }).then(() => {
+      toast.success('Page toast preferences saved', { unsuppressible: true });
+    }).catch((e) => {
+      toast.error(e.response?.data?.detail || 'Failed to save toast preferences', { unsuppressible: true });
+      fetchToastPagePrefs();
+    }).finally(() => setSavingToastMutes(false));
   };
 
   const saveTelegram = async () => {
@@ -2382,6 +2435,16 @@ export default function Profile() {
   const isRobotBodyguard = Boolean(profile.is_npc && profile.is_bodyguard);
   const honours = profile.honours || [];
   const ownedCasinos = profile.owned_casinos || [];
+  const showStaffEditTab = !!(hasAdminEmail || isModerator || me?.is_help_desk_operator);
+  const editPageTabs = [
+    { id: 'look', label: 'Look', icon: UserIcon },
+    { id: 'text', label: 'Text', icon: FileText },
+    { id: 'alerts', label: 'Alerts', icon: Mail },
+    { id: 'privacy', label: 'Privacy', icon: Lock },
+    { id: 'account', label: 'Account', icon: Settings },
+    ...(showStaffEditTab ? [{ id: 'staff', label: 'Staff', icon: Shield }] : []),
+  ];
+  const currentEditTab = editPageTabs.some((t) => t.id === editTab) ? editTab : 'look';
 
   return (
     <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="profile-page">
@@ -2415,8 +2478,30 @@ export default function Profile() {
 
       <div className="max-w-3xl mx-auto space-y-3 md:space-y-4">
         {isMe && !isPublicView ? (
-          /* ─── Edit Profile: notepad + profile settings only ─── */
+          /* ─── Edit Profile: tabbed settings ─── */
           <>
+            <div className="sticky top-0 z-20 -mx-1 sm:mx-0 px-0 py-1.5 border-b border-zinc-700/40 bg-zinc-950/95 backdrop-blur-md">
+              <div className="flex gap-1 overflow-x-auto pb-0.5 scrollbar-hide">
+                {editPageTabs.map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => switchEditTab(id)}
+                    className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-heading font-bold uppercase tracking-wider touch-manipulation transition-colors ${
+                      currentEditTab === id
+                        ? 'bg-primary/20 border-primary/50 text-primary'
+                        : 'bg-zinc-800/40 border-zinc-700/40 text-zinc-400 hover:text-foreground hover:border-zinc-600'
+                    }`}
+                  >
+                    <Icon size={12} className="shrink-0" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {currentEditTab === 'look' && (
+            <div className="space-y-3 md:space-y-4 prof-fade-in">
             <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
@@ -2557,7 +2642,11 @@ export default function Profile() {
                 <div className="prof-art-line text-zinc-600 mx-3" />
               </div>
             ) : null}
+            </div>
+            )}
 
+            {currentEditTab === 'text' && (
+            <div className="space-y-3 md:space-y-4 prof-fade-in">
             <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
@@ -2642,7 +2731,11 @@ export default function Profile() {
               </div>
               <div className="prof-art-line text-primary mx-3" />
             </div>
+            </div>
+            )}
 
+            {currentEditTab === 'account' && (
+            <div className="space-y-3 md:space-y-4 prof-fade-in">
             {/* Referral */}
             <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -2721,7 +2814,11 @@ export default function Profile() {
               </div>
               <div className="prof-art-line text-primary mx-3" />
             </div>
+            </div>
+            )}
 
+            {currentEditTab === 'alerts' && (
+            <div className="space-y-3 md:space-y-4 prof-fade-in">
             {/* Notifications */}
             <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -2758,6 +2855,42 @@ export default function Profile() {
               <div className="prof-art-line text-primary mx-3" />
             </div>
 
+            {/* Page toast alerts */}
+            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`}>
+              <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+                <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Page toast alerts</h2>
+              </div>
+              <div className="p-3 space-y-2">
+                <p className="text-xs text-mutedForeground mb-2">
+                  Turn off pop-up toasts on busy pages. Inbox notifications above are separate and unchanged.
+                </p>
+                {TOAST_MUTEABLE_PAGES.map(({ id, label }) => {
+                  const showToasts = !toastMutedPages.includes(id);
+                  return (
+                    <div key={id} className="flex items-center justify-between gap-3 py-1">
+                      <span className="text-sm text-foreground">{label}</span>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={showToasts}
+                        disabled={savingToastMutes}
+                        onClick={() => updateToastPageMute(id, !showToasts)}
+                        className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${showToasts ? 'bg-primary border-primary/50' : 'bg-secondary border-zinc-600'} ${savingToastMutes ? 'opacity-60' : ''}`}
+                      >
+                        <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${showToasts ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="prof-art-line text-primary mx-3" />
+            </div>
+            </div>
+            )}
+
+            {currentEditTab === 'privacy' && (
+            <div className="space-y-3 md:space-y-4 prof-fade-in">
             {/* Profile: cars, video, autoplay */}
             <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -2825,8 +2958,12 @@ export default function Profile() {
               </div>
               <div className="prof-art-line text-primary mx-3" />
             </div>
+            </div>
+            )}
 
-            {/* Account: Telegram, password */}
+            {currentEditTab === 'account' && (
+            <div className="space-y-3 md:space-y-4 prof-fade-in">
+            {/* Account: Telegram, password — referral panel is above when this tab is active */}
             <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
@@ -2912,9 +3049,11 @@ export default function Profile() {
               </div>
               <div className="prof-art-line text-primary mx-3" />
             </div>
+            </div>
+            )}
 
-            {isMe && (hasAdminEmail || isModerator || me?.is_help_desk_operator) && (
-          <>
+            {currentEditTab === 'staff' && showStaffEditTab && (
+            <div className="space-y-3 md:space-y-4 prof-fade-in">
             {(isAdmin || isModerator) && (
               <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-fade-in`}>
                 <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -3082,7 +3221,7 @@ export default function Profile() {
             </div>
             </>
             ) : null}
-            </>
+            </div>
             )}
           </>
         ) : (

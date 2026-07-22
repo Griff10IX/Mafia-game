@@ -963,6 +963,7 @@ class UserResponse(BaseModel):
     slow_bodyguard_hire_inflation_until: Optional[str] = None
     slow_bodyguard_hire_inflation_active: bool = False
     censor_profanity: bool = False  # when true, chat/forum show swear words as ***
+    toast_muted_pages: List[str] = Field(default_factory=list)  # page ids with Sonner toasts muted
     referred_by: Optional[str] = None  # first referrer id (legacy); see referred_by_ids for full list
     referred_by_username: Optional[str] = None  # comma-separated referrer usernames for display
     referred_by_ids: List[str] = Field(default_factory=list)  # all referrer user ids

@@ -1963,6 +1963,7 @@ def register(router):
     )
     async def get_me(request: Request, current_user: dict = Depends(get_current_user)):
         from utils.profile_cosmetics import profile_cosmetic_active
+        from routers.game.notifications import normalize_toast_muted_pages
 
         user_id = current_user.get("id") or "unknown"
         username = current_user.get("username") or user_id
@@ -2366,6 +2367,7 @@ def register(router):
                 slow_bodyguard_hire_inflation_until=u.get("slow_bodyguard_hire_inflation_until"),
                 slow_bodyguard_hire_inflation_active=_timed_perk_active(u.get("slow_bodyguard_hire_inflation_until")),
                 censor_profanity=bool(u.get("censor_profanity", False)),
+                toast_muted_pages=normalize_toast_muted_pages(u.get("toast_muted_pages")),
                 referred_by=referred_by_legacy,
                 referred_by_username=referred_by_username,
                 referred_by_ids=list(ref_ids),
