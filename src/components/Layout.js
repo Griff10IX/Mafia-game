@@ -56,7 +56,7 @@ function buildModStaffNavItems() {
   });
 }
 
-function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEntertainer, isHelpDeskOperator, staffToolsNavVisible, worldCupEnabled) {
+function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEntertainer, isHelpDeskOperator, staffToolsNavVisible, worldCupEnabled, hitmanForHireVisible) {
   const goItems = [
     { path: '/game/travel', label: 'Travel' },
     { path: '/game/states', label: 'States' },
@@ -85,6 +85,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
         { path: '/kill/attempts', label: 'Attempts' },
         { path: '/kill/combat-timeline', label: 'Combat timeline' },
         { path: '/kill/hitlist', label: 'Hitlist' },
+        ...(hitmanForHireVisible ? [{ path: '/kill/hitman', label: 'Hitman for Hire' }] : []),
         { path: '/kill/bodyguards', label: 'Bodyguards' },
         { path: '/kill/armour-weapons', label: 'Armoury' },
       ],
@@ -450,6 +451,7 @@ export default function Layout({ children }) {
   const [userSearchLoading, setUserSearchLoading] = useState(false);
   const [pageLocks, setPageLocks] = useState({});
   const [worldCupEnabled, setWorldCupEnabled] = useState(false);
+  const [hitmanForHireLive, setHitmanForHireLive] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   /** Remount `{children}` after the tab was backgrounded long enough (mobile browsers often freeze or drop XHR; UI stays blank until refresh). */
   const [contentResumeKey, setContentResumeKey] = useState(0);
@@ -609,8 +611,9 @@ export default function Layout({ children }) {
     if (!staffPortalEnabled) return true;
     return isStaffPortalTokenValid();
   }, [isAdmin, isModerator, staffLoginSession, staffPortalEnabled, portalNavTick]);
+  const hitmanForHireVisible = !!hitmanForHireLive || isAdmin || isModerator || hasAdminEmail;
   const mobileBottomNavItems = useMemo(() => {
-    let items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, !!user?.is_entertainer, !!user?.is_help_desk_operator, staffToolsNavVisible, !!worldCupEnabled);
+    let items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, !!user?.is_entertainer, !!user?.is_help_desk_operator, staffToolsNavVisible, !!worldCupEnabled, hitmanForHireVisible);
     if (hasAdminEmail && !isAdmin && !adminPreviewAsMod) {
       items = items.map((i) =>
         i.type === 'group' && i.id === 'you'
@@ -676,7 +679,7 @@ export default function Layout({ children }) {
       }
       return i;
     });
-  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, updateLogUnread, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, storePointsEventActive, worldCupEnabled, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
+  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, updateLogUnread, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, storePointsEventActive, worldCupEnabled, hitmanForHireVisible, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
 
   useEffect(() => onCooldownChange(setCooldownSeconds), []);
 
@@ -1329,9 +1332,15 @@ export default function Layout({ children }) {
         setWorldCupEnabled(!!r.data?.enabled);
       }).catch(() => setWorldCupEnabled(false));
     }, 5000);
+    const tHitman = setTimeout(() => {
+      api.get('/store/item-flags').then((r) => {
+        setHitmanForHireLive(!!r.data?.flags?.hitman_for_hire);
+      }).catch(() => setHitmanForHireLive(false));
+    }, 1600);
     return () => {
       clearTimeout(t);
       clearTimeout(tWc);
+      clearTimeout(tHitman);
     };
   }, []);
 
@@ -1464,7 +1473,7 @@ export default function Layout({ children }) {
         '/account/profile': 'information', '/account/referral': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information',
         '/game/users-online': 'information', '/money/property': 'information', '/game/help-desk': 'information', '/game/help-desk-hub': 'information', '/game/leaderboard': 'information',
         '/game/ranking': 'ranking', '/account/prestige': 'ranking',
-        '__combat__': 'combat', '/kill/attack': 'combat', '/kill/witness-statements': 'combat', '/kill/attempts': 'combat', '/kill/combat-timeline': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
+        '__combat__': 'combat', '/kill/attack': 'combat', '/kill/witness-statements': 'combat', '/kill/attempts': 'combat', '/kill/combat-timeline': 'combat', '/kill/hitlist': 'combat', '/kill/hitman': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
         '__messaging__': 'messaging',
         '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/game/entertainer': 'casino', '/money/distillery': 'money',
@@ -1478,7 +1487,7 @@ export default function Layout({ children }) {
         '/account/inventory': 'information', '/account/profile': 'information', '/account/referral': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information',
         '/game/users-online': 'information', '/money/property': 'information', '/game/help-desk': 'information', '/game/help-desk-hub': 'information',
         '/game/ranking': 'ranking', '/account/prestige': 'ranking',
-        '__combat__': 'combat', '/kill/attack': 'combat', '/kill/witness-statements': 'combat', '/kill/attempts': 'combat', '/kill/combat-timeline': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
+        '__combat__': 'combat', '/kill/attack': 'combat', '/kill/witness-statements': 'combat', '/kill/attempts': 'combat', '/kill/combat-timeline': 'combat', '/kill/hitlist': 'combat', '/kill/hitman': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
         '__messaging__': 'messaging',
         '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/game/entertainer': 'casino', '/casino/mini-games/flappy': 'money', '/money/distillery': 'money',
@@ -1645,7 +1654,7 @@ export default function Layout({ children }) {
     </div>
   );
 
-  const isCombatPath = (p) => ['/kill/attack', '/kill/attempts', '/kill/hitlist', '/kill/bodyguards', '/kill/armour-weapons'].includes(p) || p?.startsWith('/kill/');
+  const isCombatPath = (p) => ['/kill/attack', '/kill/attempts', '/kill/hitlist', '/kill/hitman', '/kill/bodyguards', '/kill/armour-weapons'].includes(p) || p?.startsWith('/kill/');
   const combatNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-combat-group" onClick={() => setCombatOpen((v) => { const next = !v; setNavSectionOpen('combat', next); return next; })}
@@ -1664,6 +1673,9 @@ export default function Layout({ children }) {
             { to: '/kill/attempts', label: 'Attempts', testId: 'nav-attempts', Icon: Crosshair },
             { to: '/kill/combat-timeline', label: 'Combat timeline', testId: 'nav-combat-timeline', Icon: Crosshair },
             { to: '/kill/hitlist', label: 'Hitlist', testId: 'nav-hitlist', Icon: ScrollText },
+            ...(hitmanForHireVisible
+              ? [{ to: '/kill/hitman', label: 'Hitman for Hire', testId: 'nav-hitman', Icon: Crosshair, staffPreview: !hitmanForHireLive }]
+              : []),
             { to: '/kill/bodyguards', label: 'Bodyguards', testId: 'nav-bodyguards', Icon: Shield },
             { to: '/kill/armour-weapons', label: 'Armoury', testId: 'nav-armoury', Icon: Sword },
           ].map((item, idx) => {
@@ -1685,6 +1697,9 @@ export default function Layout({ children }) {
                 <SameRouteAwareLink to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
                   <Icon size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
                   <span className="uppercase tracking-widest font-heading flex-1">{item.label}</span>
+                  {item.staffPreview && (
+                    <span className="shrink-0 text-[7px] font-heading font-bold uppercase tracking-wider text-amber-400/90 border border-amber-500/40 rounded px-1 py-0.5">Staff</span>
+                  )}
                   {wsBadge > 0 && (
                     wsEmerald ? (
                       <span className="shrink-0 min-w-[16px] h-[16px] rounded-full border border-emerald-500/40 bg-emerald-600/30 text-[9px] font-bold text-emerald-200 flex items-center justify-center px-0.5 tabular-nums font-heading">

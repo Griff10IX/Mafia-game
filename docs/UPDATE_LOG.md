@@ -6,6 +6,24 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-22 14:00 UTC[/color][/b] — [b]Anti-hitman protection[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] On [b]Hitman for Hire[/b], buy [b]Anti-hitman protection[/b] for [b]3,000 points[/b] or [b]5,000 respect[/b] — blocks all Hitman contracts on you for [b]5 days[/b]. Cannot stack or refresh while active. After it expires there is a [b]2h[/b] cooldown before you can buy protection again.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-22 13:45 UTC[/color][/b] — [b]Hitman for Hire (staff preview)[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]Hitman for Hire[/b] (Combat) — spend 1k / 2.5k / 5k points for a chance to kill a rival's [b]visible robot bodyguard[/b] (highest slot; needs 2+ guards). No witnesses; owner gets an anonymous strike notice. Fail: 10% free re-roll, then 25% off counter-offer for the target. Success: 25% free token, victim 24h Hitman cooldown. Starts [b]Staff preview[/b] only (Admin → Store item rollout → Hitman for Hire).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-22 02:30 UTC[/color][/b] — [b]Auto Rank page tabs[/b][/size]
 [quote]
 [list]

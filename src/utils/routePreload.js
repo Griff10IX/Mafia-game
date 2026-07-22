@@ -20,6 +20,7 @@ const ROUTE_PRELOADERS = {
   '/kill/attack': () => import('../pages/Kill/Attack'),
   '/kill/combat-timeline': () => import('../pages/Kill/CombatTimeline'),
   '/kill/hitlist': () => import('../pages/Kill/HitlistPage'),
+  '/kill/hitman': () => import('../pages/Kill/HitmanForHire'),
   '/organised-crime': () => import('../pages/Crime/OrganisedCrime'),
   '/crime/crimes': () => import('../pages/Crime/Crimes'),
   '/crime/gta': () => import('../pages/Crime/GTA'),

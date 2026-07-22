@@ -85,6 +85,7 @@ const CombatTimeline = lazy(() => import("./pages/Kill/CombatTimeline"));
 const WitnessStatements = lazy(() => import("./pages/Kill/WitnessStatements"));
 const Bodyguards = lazy(() => import("./pages/Kill/Bodyguards"));
 const HitlistPage = lazy(() => import("./pages/Kill/HitlistPage"));
+const HitmanForHire = lazy(() => import("./pages/Kill/HitmanForHire"));
 
 // MiniGames pages
 const Battleships = lazy(() => import("./pages/MiniGames/Battleships"));
@@ -652,6 +653,20 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <HitlistPage />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/kill/hitman"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <ErrorBoundary>
+                    <HitmanForHire />
+                  </ErrorBoundary>
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

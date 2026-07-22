@@ -3505,6 +3505,8 @@ stock_market.register(api_router)
 notifications.register(api_router)
 game_chat.register(api_router)
 hitlist.register(api_router)
+from routers.kill import hitman as hitman_router
+hitman_router.register(api_router)
 properties.register(api_router)
 illegal_business.register(api_router)
 store.register(api_router)
