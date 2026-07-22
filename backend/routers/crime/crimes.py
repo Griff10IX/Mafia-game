@@ -594,26 +594,76 @@ async def commit_crime(crime_id: str, current_user: dict = Depends(get_current_u
 
 
 async def commit_all_crimes(current_user: dict = Depends(get_current_user_verified)):
-    """Commit every currently-available non-prestige crime in one request."""
+    """Commit every available non-prestige crime. On-cooldown crimes burn one Crime Skip each (−50% cash)."""
+    from utils.cooldown_skip import (
+        has_skip_credit,
+        can_activate_cooldown_skip_token,
+        activation_inc_fields,
+    )
+
     if current_user.get("in_jail"):
         raise HTTPException(status_code=400, detail="You can't commit crimes while in jail.")
     crimes = await get_crimes(current_user)
-    available_ids: list[str] = []
+    ready_ids: list[str] = []
+    cooldown_ids: list[str] = []
     for c in crimes:
         crime_id = c.get("id") if isinstance(c, dict) else getattr(c, "id", None)
         can_commit = c.get("can_commit") if isinstance(c, dict) else getattr(c, "can_commit", False)
+        unlocked = c.get("unlocked") if isinstance(c, dict) else getattr(c, "unlocked", False)
         crime_type = c.get("crime_type") if isinstance(c, dict) else getattr(c, "crime_type", "")
-        if crime_id and can_commit and crime_type != "prestige":
-            available_ids.append(str(crime_id))
+        if not crime_id or crime_type == "prestige" or not unlocked:
+            continue
+        cid = str(crime_id)
+        if can_commit:
+            ready_ids.append(cid)
+        else:
+            cooldown_ids.append(cid)
+
+    async def _ensure_crime_skip_credit(user: dict) -> tuple[bool, dict]:
+        uid = user.get("id") or ""
+        if has_skip_credit(user, "crime"):
+            return True, user
+        tokens = int(user.get("cooldown_skip_crime_tokens") or 0)
+        if tokens < 1 or not can_activate_cooldown_skip_token(user, "crime"):
+            return False, user
+        inc, set_doc = activation_inc_fields("crime", user)
+        inc["cooldown_skip_crime_tokens"] = -1
+        r = await db.users.update_one(
+            {"id": uid, "cooldown_skip_crime_tokens": {"$gte": 1}},
+            {"$inc": inc, "$set": set_doc},
+        )
+        if r.modified_count != 1:
+            return False, user
+        refreshed = await db.users.find_one({"id": uid}, {"_id": 0}) or user
+        return has_skip_credit(refreshed, "crime"), refreshed
 
     committed = 0
     failed = 0
+    skips_used = 0
     total_cash = 0
     total_respect = 0
     errors: list[str] = []
-    for crime_id in available_ids:
+
+    # Ready first (no tokens), then on-cooldown with one skip each.
+    queue: list[tuple[str, bool]] = [(cid, False) for cid in ready_ids] + [(cid, True) for cid in cooldown_ids]
+
+    for crime_id, needs_skip in queue:
+        user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0})
+        if not user:
+            break
+        if user.get("in_jail"):
+            errors.append(f"{crime_id}: In jail")
+            break
+        current_user = user
+        if needs_skip:
+            ok, current_user = await _ensure_crime_skip_credit(current_user)
+            if not ok:
+                # Out of skip tokens / daily cap — stop cooldown portion (ready already done).
+                break
         try:
             res = await commit_crime_locked(crime_id, current_user)
+            if needs_skip:
+                skips_used += 1
             if bool(getattr(res, "success", False)):
                 committed += 1
                 total_cash += int(getattr(res, "reward", 0) or 0)
@@ -625,7 +675,6 @@ async def commit_all_crimes(current_user: dict = Depends(get_current_user_verifi
                 failed += 1
                 msg = getattr(res, "message", "Failed") or "Failed"
                 errors.append(f"{crime_id}: {msg}")
-                # Casino heist fail jails the player; further commits in this batch would 400.
                 if "jail" in str(msg).lower():
                     break
         except HTTPException as e:
@@ -647,6 +696,7 @@ async def commit_all_crimes(current_user: dict = Depends(get_current_user_verifi
     return {
         "committed": committed,
         "failed": failed,
+        "skips_used": int(skips_used),
         "total_cash": int(total_cash),
         "total_respect": int(total_respect),
         "errors": errors[:25],

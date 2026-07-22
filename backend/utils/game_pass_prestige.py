@@ -27,6 +27,8 @@ GAME_PASS_PRESTIGE_BONUS_RATE = 0.15
 GAME_PASS_PRESTIGE_PRICE_GBP = 10.00
 # Flat bonus on top of the 15% season VIP totals.
 GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES = 500
+# Max queued prestiges (buy early while climbing VIP; auto-apply at tier 100).
+GAME_PASS_PRESTIGE_PENDING_CAP = 1
 
 
 def season_vip_reward_totals(season_id: Optional[str] = None) -> Dict[str, int]:
@@ -61,7 +63,23 @@ def prestige_bonus_rewards(season_id: Optional[str] = None) -> Dict[str, int]:
     return out
 
 
-def prestige_eligibility_error(user: Optional[dict]) -> Optional[str]:
+def _token_unactivated_valid(user: dict, now: Optional[datetime] = None) -> bool:
+    if int(user.get("rank_xp_pass_tokens") or 0) < 1:
+        return False
+    exp = user.get("rank_xp_pass_token_expires_at")
+    if not exp:
+        return True
+    try:
+        until = datetime.fromisoformat(str(exp).replace("Z", "+00:00"))
+        if until.tzinfo is None:
+            until = until.replace(tzinfo=timezone.utc)
+        return until > (now or datetime.now(timezone.utc))
+    except Exception:
+        return True
+
+
+def prestige_apply_eligibility_error(user: Optional[dict]) -> Optional[str]:
+    """Error if prestige cannot be applied right now (VIP track not finished)."""
     if not user:
         return "Not logged in"
     if user.get("rank_xp_pass_rewards_granted") is not True:
@@ -71,23 +89,144 @@ def prestige_eligibility_error(user: Optional[dict]) -> Optional[str]:
     return None
 
 
+def prestige_eligibility_error(user: Optional[dict]) -> Optional[str]:
+    """Backward-compatible name: apply eligibility (immediate prestige)."""
+    return prestige_apply_eligibility_error(user)
+
+
+def prestige_purchase_eligibility_error(user: Optional[dict]) -> Optional[str]:
+    """
+    Error if prestige cannot be bought / queued.
+    Allowed with active VIP or a held Game Pass token — can buy early so it
+    auto-applies when VIP tiers 1–100 finish.
+    """
+    if not user:
+        return "Not logged in"
+    vip = user.get("rank_xp_pass_rewards_granted") is True
+    if not vip and not _token_unactivated_valid(user):
+        return "Buy Game Pass first — then you can buy Prestige (£10) early so it auto-applies when you finish VIP tiers 1–100."
+    pending = int(user.get("game_pass_prestige_pending") or 0)
+    if pending >= GAME_PASS_PRESTIGE_PENDING_CAP:
+        return "You already have a Game Pass Prestige queued — it will apply automatically when you finish VIP tiers 1–100."
+    # Already at 100 with no pending: purchase applies immediately (handled at fulfill).
+    return None
+
+
 def prestige_status_payload(user: Optional[dict], season_id: Optional[str] = None) -> Dict[str, Any]:
     sid = season_id
     if user and not sid:
         sid = str(user.get("game_pass_season_id") or "").strip() or None
     bonus = prestige_bonus_rewards(sid)
-    err = prestige_eligibility_error(user)
+    apply_err = prestige_apply_eligibility_error(user)
+    purchase_err = prestige_purchase_eligibility_error(user)
+    pending = int((user or {}).get("game_pass_prestige_pending") or 0)
+    can_apply_now = apply_err is None
+    can_purchase = purchase_err is None
     return {
         "package_id": GAME_PASS_PRESTIGE_PACKAGE_ID,
         "price_gbp": GAME_PASS_PRESTIGE_PRICE_GBP,
         "bonus_rate": GAME_PASS_PRESTIGE_BONUS_RATE,
         "bonus_percent": int(round(GAME_PASS_PRESTIGE_BONUS_RATE * 100)),
-        "available": err is None,
-        "unavailable_reason": err,
+        # available = can buy (queue or apply). ready_to_apply = track complete.
+        "available": can_purchase,
+        "unavailable_reason": purchase_err,
+        "ready_to_apply": can_apply_now,
+        "apply_unavailable_reason": apply_err,
+        "prestige_pending": pending,
+        "prestige_pending_cap": GAME_PASS_PRESTIGE_PENDING_CAP,
         "prestige_count": int((user or {}).get("game_pass_prestige_count") or 0),
         "bonus_rewards": bonus,
         "bonus_summary": format_rewards_summary(bonus) if bonus else "",
     }
+
+
+async def queue_game_pass_prestige(db, user_id: str) -> Dict[str, Any]:
+    """Increment pending prestige queue (buy early). Cap enforced atomically."""
+    from fastapi import HTTPException
+
+    result = await db.users.update_one(
+        {
+            "id": user_id,
+            "$or": [
+                {"game_pass_prestige_pending": {"$lt": GAME_PASS_PRESTIGE_PENDING_CAP}},
+                {"game_pass_prestige_pending": {"$exists": False}},
+            ],
+        },
+        {"$inc": {"game_pass_prestige_pending": 1}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="You already have a Game Pass Prestige queued — it will apply automatically when you finish VIP tiers 1–100.",
+        )
+    user = await db.users.find_one({"id": user_id}, {"_id": 0, "game_pass_prestige_pending": 1})
+    pending = int((user or {}).get("game_pass_prestige_pending") or 0)
+    try:
+        import server as srv
+
+        await srv.send_notification(
+            user_id,
+            "Game Pass Prestige queued",
+            (
+                "Your £10 Prestige is ready. When you finish VIP Game Pass tiers 1–100, "
+                "it will apply automatically (+15% season VIP rewards + loot pieces, then reset the track)."
+            ),
+            "reward",
+        )
+    except Exception:
+        pass
+    return {"ok": True, "queued": True, "prestige_pending": pending}
+
+
+async def try_consume_pending_game_pass_prestige(
+    db,
+    user_id: str,
+    *,
+    season_end_at: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    If a prestige is queued and VIP track is complete, consume one pending and apply.
+    Safe to call often; returns None when nothing applied.
+    """
+    user = await db.users.find_one(
+        {"id": user_id},
+        {
+            "_id": 0,
+            "rank_xp_pass_rewards_granted": 1,
+            "rank_xp_pass_last_granted_micro_tier": 1,
+            "game_pass_prestige_pending": 1,
+        },
+    )
+    if not user or int(user.get("game_pass_prestige_pending") or 0) < 1:
+        return None
+    if prestige_apply_eligibility_error(user):
+        return None
+
+    claimed = await db.users.update_one(
+        {
+            "id": user_id,
+            "game_pass_prestige_pending": {"$gte": 1},
+            "rank_xp_pass_rewards_granted": True,
+            "rank_xp_pass_last_granted_micro_tier": {"$gte": MAX_MICRO_TIER},
+        },
+        {"$inc": {"game_pass_prestige_pending": -1}},
+    )
+    if claimed.modified_count == 0:
+        return None
+
+    import server as srv
+
+    try:
+        return await execute_game_pass_prestige(
+            db,
+            user_id=user_id,
+            send_notification=srv.send_notification,
+            season_end_at=season_end_at,
+        )
+    except Exception:
+        # Restore the pending slot if apply failed after consume.
+        await db.users.update_one({"id": user_id}, {"$inc": {"game_pass_prestige_pending": 1}})
+        raise
 
 
 async def execute_game_pass_prestige(
@@ -116,7 +255,7 @@ async def execute_game_pass_prestige(
             "points": 1,
         },
     )
-    err = prestige_eligibility_error(user)
+    err = prestige_apply_eligibility_error(user)
     if err:
         raise HTTPException(status_code=400, detail=err)
 
@@ -203,4 +342,5 @@ async def execute_game_pass_prestige(
         "prestige_count": new_count,
         "token_expires_at": entitlement_until.isoformat(),
         "season_id": season_id,
+        "queued": False,
     }

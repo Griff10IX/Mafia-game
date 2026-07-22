@@ -720,7 +720,7 @@ POINT_PACKAGES = {
     "elite": {"points": 150000, "price_gbp": 274.99},
     "legend": {"points": 200000, "price_gbp": 349.99},
     # Rank-XP pass entitlement (no points credited; token is activated in Armoury).
-    "rank_xp_pass_499": {"points": 0, "price_gbp": 9.99},
+    "rank_xp_pass_499": {"points": 0, "price_gbp": 15.00},
     # Permanent Auto Rank (email-tied entitlement; no points credited).
     "auto_rank_permanent_2000": {"points": 0, "price_gbp": 15.00},
     # Dead > Alive revive (no points credited; fulfills revive swap after payment).
@@ -948,6 +948,8 @@ class UserResponse(BaseModel):
     rank_xp_pass_rewards_granted: bool = False
     # Times this account paid for Game Pass prestige (£10 reset + 15% bonus).
     game_pass_prestige_count: int = 0
+    # Queued £10 prestiges (bought early; auto-apply when VIP tiers 1–100 finish).
+    game_pass_prestige_pending: int = 0
     shooting_range_bonus_plays: int = 0  # store upgrade: added to base 10 plays/hour in shooting range
     hitlist_npc_bonus_slots: int = 0  # store upgrade: +1 NPC slot per 3h window (max +3)
     robot_bg_auto_search_until: Optional[str] = None

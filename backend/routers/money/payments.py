@@ -907,9 +907,14 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
             "revived_username": revive_out.get("revived_username"),
         }
 
-    # Game Pass prestige (£10): +15% VIP season totals, reset track, keep VIP claimed.
+    # Game Pass prestige (£10): apply now if VIP 1–100 done, else queue for auto-apply at tier 100.
     if is_game_pass_prestige:
-        from utils.game_pass_prestige import execute_game_pass_prestige
+        from utils.game_pass_prestige import (
+            execute_game_pass_prestige,
+            prestige_apply_eligibility_error,
+            prestige_purchase_eligibility_error,
+            queue_game_pass_prestige,
+        )
         import server as srv
 
         claim = await db.payment_transactions.update_one(
@@ -927,14 +932,50 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
                 return {"credited": True, "preorder": False, "game_pass_prestiged": True}
             return {"credited": False, "preorder": False}
 
-        season = await get_game_pass_season_public(db)
-        try:
-            prestige_out = await execute_game_pass_prestige(
-                db,
-                user_id=user_id,
-                send_notification=srv.send_notification,
-                season_end_at=season.get("game_pass_season_end_at"),
+        user = await db.users.find_one(
+            {"id": user_id},
+            {
+                "_id": 0,
+                "rank_xp_pass_rewards_granted": 1,
+                "rank_xp_pass_last_granted_micro_tier": 1,
+                "rank_xp_pass_tokens": 1,
+                "rank_xp_pass_token_expires_at": 1,
+                "game_pass_prestige_pending": 1,
+            },
+        )
+        purchase_err = prestige_purchase_eligibility_error(user)
+        if purchase_err and prestige_apply_eligibility_error(user):
+            # Neither queue nor apply possible
+            await db.payment_transactions.update_one(
+                {"session_id": session_id},
+                {
+                    "$set": {
+                        "payment_status": "fulfillment_blocked",
+                        "fulfillment_blocked_at": now.isoformat(),
+                        "fulfillment_blocked_detail": str(purchase_err)[:1000],
+                    }
+                },
             )
+            logger.error(
+                "Game Pass prestige fulfillment blocked: session_id=%s user_id=%s detail=%s",
+                session_id,
+                user_id,
+                purchase_err,
+            )
+            return {"credited": False, "preorder": False, "fulfillment_blocked": True, "detail": purchase_err}
+
+        season = await get_game_pass_season_public(db)
+        apply_now = prestige_apply_eligibility_error(user) is None
+        try:
+            if apply_now:
+                prestige_out = await execute_game_pass_prestige(
+                    db,
+                    user_id=user_id,
+                    send_notification=srv.send_notification,
+                    season_end_at=season.get("game_pass_season_end_at"),
+                )
+            else:
+                prestige_out = await queue_game_pass_prestige(db, user_id)
         except HTTPException as he:
             await db.payment_transactions.update_one(
                 {"session_id": session_id},
@@ -971,6 +1012,7 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
             )
             return {"credited": False, "preorder": False, "fulfillment_blocked": True, "detail": str(e)}
 
+        queued = bool(prestige_out.get("queued"))
         await db.payment_transactions.update_one(
             {"session_id": session_id},
             {
@@ -979,22 +1021,27 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
                     "points_credited_at": now_iso,
                     "points_before": 0,
                     "points_after": 0,
-                    "game_pass_prestiged_at": now_iso,
+                    "game_pass_prestiged_at": now_iso if not queued else None,
+                    "game_pass_prestige_queued": queued,
+                    "game_pass_prestige_pending": prestige_out.get("prestige_pending"),
                     "game_pass_prestige_count": prestige_out.get("prestige_count"),
                     "game_pass_prestige_bonus_summary": (prestige_out.get("bonus_summary") or "")[:500],
                 }
             },
         )
         logger.info(
-            "Game Pass prestige fulfilled: session_id=%s user_id=%s count=%s",
+            "Game Pass prestige fulfilled: session_id=%s user_id=%s queued=%s count=%s",
             session_id,
             user_id,
+            queued,
             prestige_out.get("prestige_count"),
         )
         return {
             "credited": True,
             "preorder": False,
-            "game_pass_prestiged": True,
+            "game_pass_prestiged": not queued,
+            "game_pass_prestige_queued": queued,
+            "prestige_pending": prestige_out.get("prestige_pending"),
             "prestige_count": prestige_out.get("prestige_count"),
             "bonus_summary": prestige_out.get("bonus_summary"),
         }
@@ -1561,11 +1608,15 @@ def register(router):
             revive_intent_id = intent["id"]
 
         if package_id == GAME_PASS_PRESTIGE_PACKAGE_ID:
-            from utils.game_pass_prestige import prestige_eligibility_error
+            from utils.game_pass_prestige import (
+                prestige_apply_eligibility_error,
+                prestige_purchase_eligibility_error,
+            )
 
-            err = prestige_eligibility_error(current_user)
-            if err:
-                raise HTTPException(status_code=400, detail=err)
+            purchase_err = prestige_purchase_eligibility_error(current_user)
+            apply_err = prestige_apply_eligibility_error(current_user)
+            if purchase_err and apply_err:
+                raise HTTPException(status_code=400, detail=purchase_err)
 
         # success_url: frontend sends origin_url like http://localhost:3000/store
         origin = (request.origin_url or "").rstrip("/")
@@ -1800,7 +1851,10 @@ def register(router):
                 out["dead_alive_revived"] = True
                 out["revived_username"] = transaction.get("revived_username")
             if pkg == GAME_PASS_PRESTIGE_PACKAGE_ID:
-                out["game_pass_prestiged"] = True
+                queued = bool(transaction.get("game_pass_prestige_queued"))
+                out["game_pass_prestiged"] = not queued
+                out["game_pass_prestige_queued"] = queued
+                out["prestige_pending"] = transaction.get("game_pass_prestige_pending")
                 out["game_pass_prestige_count"] = transaction.get("game_pass_prestige_count")
                 out["bonus_summary"] = transaction.get("game_pass_prestige_bonus_summary")
             return out
@@ -1975,6 +2029,10 @@ def register(router):
                         out["game_pass_prestiged"] = True
                         out["game_pass_prestige_count"] = credit_result.get("prestige_count")
                         out["bonus_summary"] = credit_result.get("bonus_summary")
+                    if credit_result.get("game_pass_prestige_queued"):
+                        out["game_pass_prestige_queued"] = True
+                        out["prestige_pending"] = credit_result.get("prestige_pending")
+                        out["game_pass_prestiged"] = False
                     return out
                     return {
                         "status": "fulfillment_blocked",

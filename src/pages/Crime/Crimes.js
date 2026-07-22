@@ -690,20 +690,27 @@ export default function Crimes() {
   }, [crimes, tick, authUser?.in_jail]);
 
   const commitAll = async () => {
-    const available = crimeRows.filter((c) => c.can_commit);
-    if (available.length === 0 || commitAllLoading || authUser?.in_jail) return;
+    const ready = crimeRows.filter((c) => c.crime_type !== 'prestige' && c.can_commit);
+    const onCooldown = crimeRows.filter(
+      (c) => c.crime_type !== 'prestige' && c.unlocked !== false && !c.can_commit && c.next_available,
+    );
+    const skipBudget = skipTokens + skipCredits;
+    const willSkip = canSkipCooldown ? Math.min(onCooldown.length, Math.max(0, skipBudget)) : 0;
+    if ((ready.length === 0 && willSkip === 0) || commitAllLoading || authUser?.in_jail) return;
     setCommitAllLoading(true);
 
     try {
       const res = await api.post('/crimes/commit-all');
       const committed = Number(res.data?.committed || 0);
       const failed = Number(res.data?.failed || 0);
+      const skipsUsed = Number(res.data?.skips_used || 0);
       const totalCash = Number(res.data?.total_cash || 0);
       const totalRespect = Number(res.data?.total_respect || 0);
       const errors = Array.isArray(res.data?.errors) ? res.data.errors : [];
       if (committed > 0 || failed > 0) {
         refreshUser();
         const parts = [`Committed ${committed} crime${committed !== 1 ? 's' : ''}`];
+        if (skipsUsed > 0) parts.push(`${skipsUsed} skip${skipsUsed !== 1 ? 's' : ''} (−50% cash)`);
         if (failed > 0) parts.push(`${failed} failed`);
         if (totalCash > 0 || totalRespect > 0) {
           const rewards = [];
@@ -711,7 +718,7 @@ export default function Crimes() {
           if (totalRespect > 0) rewards.push(`${totalRespect.toLocaleString()} respect`);
           parts.push(`earned ${rewards.join(' + ')}`);
         }
-        toast.success(parts.join(' and '));
+        toast.success(parts.join(' · '));
       }
       errors.slice(0, 3).forEach((msg) => toast.error(String(msg)));
     } catch (e) {
@@ -726,7 +733,13 @@ export default function Crimes() {
 
   const regularCrimeRows = crimeRows.filter((c) => c.crime_type !== 'prestige');
   const prestigeCrimeRows = crimeRows.filter((c) => c.crime_type === 'prestige' && c.unlocked);
-  const commitAllCount = regularCrimeRows.filter((c) => c.can_commit).length;
+  const commitAllReady = regularCrimeRows.filter((c) => c.can_commit).length;
+  const commitAllOnCooldown = regularCrimeRows.filter(
+    (c) => c.unlocked !== false && !c.can_commit && c.next_available,
+  ).length;
+  const commitAllSkipBudget = skipTokens + skipCredits;
+  const commitAllSkippable = canSkipCooldown ? Math.min(commitAllOnCooldown, Math.max(0, commitAllSkipBudget)) : 0;
+  const commitAllCount = commitAllReady + commitAllSkippable;
 
   return (
     <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="crimes-page">
@@ -775,9 +788,18 @@ export default function Crimes() {
               type="button"
               onClick={commitAll}
               disabled={commitAllLoading}
+              title={
+                commitAllSkippable > 0
+                  ? `Commit ready crimes, then burn up to ${commitAllSkippable} Crime Skip(s) for on-cooldown crimes (−50% cash each)`
+                  : 'Commit all ready crimes'
+              }
               className="text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/40 hover:bg-primary/10 rounded px-1.5 py-0.5 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
             >
-              {commitAllLoading ? '...' : `Commit All (${commitAllCount})`}
+              {commitAllLoading
+                ? '...'
+                : commitAllSkippable > 0
+                  ? `Commit All (${commitAllCount} · ${commitAllSkippable} skips)`
+                  : `Commit All (${commitAllCount})`}
             </button>
           )}
         </div>

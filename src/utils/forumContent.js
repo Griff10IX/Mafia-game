@@ -488,6 +488,7 @@ const SMILEYS = [
   [':paperclip:',   '📎'],
   [':scissors:',    '✂️'],
   [':pencil:',      '✏️'],
+  [':memo:',        '📝'],
   [':pen:',         '🖊️'],
   [':book:',        '📖'],
   [':books:',       '📚'],

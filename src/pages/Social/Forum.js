@@ -22,6 +22,13 @@ function forumTopicTitleForDisplay(topic) {
   return base;
 }
 
+/** Unread count for Update Log topic (0 if not applicable). */
+function forumUpdateLogUnreadCount(topic) {
+  const n = Number(topic?.update_log_unread) || 0;
+  if (n > 0 && /^update\s*log$/i.test(String(topic?.title || '').trim())) return n;
+  return 0;
+}
+
 const FORUM_STYLES = `
   @keyframes f-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .f-fade-in { animation: f-fade-in 0.4s ease-out both; }
@@ -808,7 +815,11 @@ const TopicRowDesktop = ({ topic, canStickyImportant, onUpdate, updating, design
   const showDesignerSubmit = designerCompId && isMyTopic;
   const alreadySubmitted = showDesignerSubmit && (myEntryTopicIds || []).includes(topic.id);
   const isSubmitting = submittingTopicId === topic.id;
-  const titleHtml = parseForumContent(forumTopicTitleForDisplay(topic), { censorProfanity });
+  const updateLogUnread = forumUpdateLogUnreadCount(topic);
+  const titleHtml = parseForumContent(
+    updateLogUnread > 0 ? 'Update Log' : forumTopicTitleForDisplay(topic),
+    { censorProfanity },
+  );
 
   return (
     <div 
@@ -831,10 +842,23 @@ const TopicRowDesktop = ({ topic, canStickyImportant, onUpdate, updating, design
             {topic.is_important && <span className="text-amber-400 font-heading shrink-0">IMPORTANT:&nbsp;</span>}
             {topic.is_sticky && !topic.is_important && <span className="text-amber-400 font-heading shrink-0">STICKY:&nbsp;</span>}
             <span
-              className="truncate font-heading"
-              style={topic.title_color ? { color: topic.title_color } : {}}
-              dangerouslySetInnerHTML={{ __html: titleHtml }}
-            />
+              className="truncate font-heading inline-flex items-baseline gap-1 min-w-0"
+              style={topic.title_color ? { color: topic.title_color } : undefined}
+            >
+              <span className="truncate" dangerouslySetInnerHTML={{ __html: titleHtml }} />
+              {updateLogUnread > 0 && (
+                <span
+                  className="shrink-0 font-heading font-bold tabular-nums text-primary"
+                  style={{
+                    color: topic.title_color || 'var(--noir-primary)',
+                    textShadow: `0 0 8px ${topic.title_color || 'var(--noir-primary)'}88`,
+                  }}
+                  title={`${updateLogUnread} unread update${updateLogUnread === 1 ? '' : 's'}`}
+                >
+                  {updateLogUnread}
+                </span>
+              )}
+            </span>
             {topic?.designer_auction && (
               <span className="inline-flex items-center gap-1 shrink-0">
                 <span className={`text-[9px] px-1 py-0.5 rounded border ${getAuctionStatusChip(topic.designer_auction.status).className}`}>
@@ -920,7 +944,11 @@ const TopicRowMobile = ({ topic, canStickyImportant, onUpdate, updating, designe
   const showDesignerSubmit = designerCompId && isMyTopic;
   const alreadySubmitted = showDesignerSubmit && (myEntryTopicIds || []).includes(topic.id);
   const isSubmitting = submittingTopicId === topic.id;
-  const titleHtml = parseForumContent(forumTopicTitleForDisplay(topic), { censorProfanity });
+  const updateLogUnread = forumUpdateLogUnreadCount(topic);
+  const titleHtml = parseForumContent(
+    updateLogUnread > 0 ? 'Update Log' : forumTopicTitleForDisplay(topic),
+    { censorProfanity },
+  );
 
   return (
   <Link to={`/forum/topic/${topic.id}`} className="sm:hidden block px-3 py-2 f-row transition-colors active:bg-zinc-800/50">
@@ -937,10 +965,23 @@ const TopicRowMobile = ({ topic, canStickyImportant, onUpdate, updating, designe
           {topic.is_important && <AlertCircle size={12} className="text-amber-400 shrink-0" />}
           {topic.is_sticky && !topic.is_important && <Pin size={12} className="text-amber-400 shrink-0" />}
           <span
-            className={`text-xs font-heading truncate ${topic.is_important || topic.is_sticky ? 'text-amber-400 font-bold' : ''}`}
-            style={topic.title_color && !topic.is_important && !topic.is_sticky ? { color: topic.title_color } : {}}
-            dangerouslySetInnerHTML={{ __html: titleHtml }}
-          />
+            className={`text-xs font-heading truncate inline-flex items-baseline gap-1 min-w-0 ${topic.is_important || topic.is_sticky ? 'text-amber-400 font-bold' : ''}`}
+            style={topic.title_color && !topic.is_important && !topic.is_sticky ? { color: topic.title_color } : undefined}
+          >
+            <span className="truncate" dangerouslySetInnerHTML={{ __html: titleHtml }} />
+            {updateLogUnread > 0 && (
+              <span
+                className="shrink-0 font-heading font-bold tabular-nums text-primary"
+                style={{
+                  color: topic.title_color || 'var(--noir-primary)',
+                  textShadow: `0 0 8px ${topic.title_color || 'var(--noir-primary)'}88`,
+                }}
+                title={`${updateLogUnread} unread update${updateLogUnread === 1 ? '' : 's'}`}
+              >
+                {updateLogUnread}
+              </span>
+            )}
+          </span>
           {topic?.designer_auction && (
             <span className="inline-flex items-center gap-1 shrink-0">
               <span className={`text-[9px] px-1 py-0.5 rounded border ${getAuctionStatusChip(topic.designer_auction.status).className}`}>

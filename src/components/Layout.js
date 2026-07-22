@@ -624,7 +624,7 @@ export default function Layout({ children }) {
           if (sub.path === '/game/help-desk') return { ...sub, badge: helpDeskOpenCount };
           if (sub.path === '/social/inbox') return { ...sub, badge: unreadCount };
           if (sub.path === '/social/forum' && !sub.search && updateLogUnread > 0) {
-            return { ...sub, badge: updateLogUnread };
+            return { ...sub, badge: updateLogUnread, badgeTone: 'primary' };
           }
           if (sub.path === '/game/users-online') return { ...sub, onlineCountBadge: usersOnlineCount };
           return sub;
@@ -1741,7 +1741,14 @@ export default function Layout({ children }) {
             Forum & inbox
           </span>
           {!messagingMenuOpen && (unreadCount > 0 || updateLogUnread > 0) && (
-            <span className="shrink-0 rounded border border-red-500/30 bg-red-600/20 px-1.5 py-0.5 font-heading text-[10px] font-bold text-red-400">
+            <span
+              className={
+                unreadCount > 0
+                  ? 'shrink-0 rounded border border-red-500/30 bg-red-600/20 px-1.5 py-0.5 font-heading text-[10px] font-bold text-red-400'
+                  : 'shrink-0 rounded border border-primary/40 bg-primary/15 px-1.5 py-0.5 font-heading text-[10px] font-bold text-primary tabular-nums'
+              }
+              style={unreadCount > 0 ? undefined : { textShadow: '0 0 6px rgba(var(--noir-primary-rgb), 0.55)' }}
+            >
               {(unreadCount + updateLogUnread) > 9 ? '9+' : (unreadCount + updateLogUnread)}
             </span>
           )}
@@ -1777,7 +1784,13 @@ export default function Layout({ children }) {
                     <IconComp size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
                     <span className="uppercase tracking-widest font-heading flex-1">{row.label}</span>
                     {row.key === 'forum-general' && updateLogUnread > 0 && (
-                      <span className="shrink-0 rounded border border-red-500/30 bg-red-600/20 px-1.5 py-0.5 font-heading text-[10px] font-bold text-red-400" title="Unread Update Log entries">{updateLogUnread > 9 ? '9+' : updateLogUnread}</span>
+                      <span
+                        className="shrink-0 rounded border border-primary/40 bg-primary/15 px-1.5 py-0.5 font-heading text-[10px] font-bold text-primary tabular-nums"
+                        style={{ textShadow: '0 0 8px rgba(var(--noir-primary-rgb), 0.55)' }}
+                        title="Unread Update Log entries"
+                      >
+                        {updateLogUnread > 9 ? '9+' : updateLogUnread}
+                      </span>
                     )}
                     {row.kind === 'inbox' && unreadCount > 0 && (
                       <span className="shrink-0 rounded border border-red-500/30 bg-red-600/20 px-1.5 py-0.5 font-heading text-[10px] font-bold text-red-400">{unreadCount > 9 ? '9+' : unreadCount}</span>
@@ -1957,7 +1970,18 @@ export default function Layout({ children }) {
               <Sparkles size={8} /> Sale
             </span>
           )}
-          {item.badge > 0 && <span className="bg-red-600/20 text-red-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-red-500/30">{item.badge > 9 ? '9+' : item.badge}</span>}
+          {item.badge > 0 && (
+            item.badgeTone === 'primary' ? (
+              <span
+                className="bg-primary/15 text-primary text-[10px] px-1.5 py-0.5 rounded font-bold border border-primary/40 tabular-nums"
+                style={{ textShadow: '0 0 6px rgba(var(--noir-primary-rgb), 0.55)' }}
+              >
+                {item.badge > 9 ? '9+' : item.badge}
+              </span>
+            ) : (
+              <span className="bg-red-600/20 text-red-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-red-500/30">{item.badge > 9 ? '9+' : item.badge}</span>
+            )
+          )}
         </SameRouteAwareLink>
       </Fragment>
     );
@@ -2941,6 +2965,13 @@ export default function Layout({ children }) {
                         {sub.badge > 0 && (
                           sub.badgeTone === 'emerald' ? (
                             <span className="shrink-0 min-w-[16px] h-[16px] rounded-full border border-emerald-500/40 bg-emerald-600/30 text-[9px] font-bold text-emerald-200 flex items-center justify-center px-0.5 tabular-nums">
+                              {sub.badge > 99 ? '99+' : sub.badge}
+                            </span>
+                          ) : sub.badgeTone === 'primary' ? (
+                            <span
+                              className="shrink-0 min-w-[16px] h-[16px] rounded-full border border-primary/50 bg-primary/20 text-[9px] font-bold text-primary flex items-center justify-center px-0.5 tabular-nums"
+                              style={{ textShadow: '0 0 6px rgba(var(--noir-primary-rgb), 0.65)' }}
+                            >
                               {sub.badge > 99 ? '99+' : sub.badge}
                             </span>
                           ) : (

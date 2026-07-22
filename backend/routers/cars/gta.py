@@ -629,10 +629,24 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
             )
             cd_until = _parse_iso_datetime((existing or {}).get("cooldown_until"))
             if cd_until and cd_until > now:
-                secs = int((cd_until - now).total_seconds())
-                raise HTTPException(
-                    status_code=400, detail=f"GTA cooldown: try again in {secs}s"
+                from utils.cooldown_skip import has_skip_credit, consume_skip_credit
+
+                # Fresh credits — Auto Rank may have just activated a held token.
+                fresh = await db.users.find_one(
+                    {"id": uid},
+                    {"_id": 0, "cooldown_skip_gta_credits": 1},
                 )
+                credit_user = {**(current_user or {}), **(fresh or {})}
+                if has_skip_credit(credit_user, "gta") and await consume_skip_credit(db, uid, "gta"):
+                    await db.gta_cooldowns.update_one(
+                        {"user_id": uid},
+                        {"$set": {"cooldown_until": cooldown_iso}},
+                    )
+                else:
+                    secs = int((cd_until - now).total_seconds())
+                    raise HTTPException(
+                        status_code=400, detail=f"GTA cooldown: try again in {secs}s"
+                    )
     
     # PROGRESS BAR: 10-92%. Success +3-5%. Fail -1-3%; once hit 92%, floor 77%
     user_gta = await db.user_gta.find_one(

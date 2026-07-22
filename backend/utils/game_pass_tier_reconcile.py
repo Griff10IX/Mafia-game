@@ -68,6 +68,19 @@ async def grant_missing_vip_micro_tier_rewards(
         last_granted = 0
 
     if current_micro <= last_granted:
+        if last_granted >= MAX_MICRO_TIER:
+            try:
+                from utils.game_pass_prestige import try_consume_pending_game_pass_prestige
+                from utils.game_pass_season import get_game_pass_season_public
+
+                season = await get_game_pass_season_public(db)
+                await try_consume_pending_game_pass_prestige(
+                    db,
+                    user_id,
+                    season_end_at=(season or {}).get("game_pass_season_end_at"),
+                )
+            except Exception:
+                pass
         return {
             "ok": True,
             "reason": "already_caught_up",

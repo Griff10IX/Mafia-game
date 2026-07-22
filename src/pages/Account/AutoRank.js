@@ -459,9 +459,34 @@ const SetupCard = ({
 /* ═══════════════════════════════════════════════════════
    Settings Card
    ═══════════════════════════════════════════════════════ */
-const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
+const kindHasUsableSkip = (s) => {
+  if (!s) return false;
+  const credits = Number(s.credits || 0);
+  if (credits > 0) return true;
+  const held = Number(s.tokens || 0);
+  if (held < 1) return false;
+  const leftToday = Math.max(0, Number(s.daily_cap || 0) - Number(s.uses_today || 0));
+  return leftToday > 0;
+};
+
+const hasAnyUsableArSkip = (skipTokens, statsFlag) => {
+  if (typeof statsFlag === 'boolean') return statsFlag;
+  const skip = skipTokens || {};
+  return (
+    kindHasUsableSkip(skip.crime)
+    || kindHasUsableSkip(skip.gta)
+    || kindHasUsableSkip(skip.booze)
+  );
+};
+
+const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref, skipTokens, hasUsableArSkips }) => {
   const p = prefs || {};
   const masterDisabled = savingPrefs || (!p.auto_rank_enabled && !canEnable);
+  const inventoryKnown = typeof hasUsableArSkips === 'boolean' || skipTokens != null;
+  const canUseSkips = inventoryKnown
+    ? hasAnyUsableArSkip(skipTokens, hasUsableArSkips)
+    : true;
+  const skipToggleDisabled = savingPrefs || (!p.auto_rank_use_skip_tokens && !canUseSkips);
   return (
   <div className={`relative rounded-lg overflow-hidden ar-fade-in ${styles.panel} mobile-panel`} style={{ animationDelay: '0.1s' }}>
     <div className={`px-2.5 sm:px-3 py-2 ${styles.panelHeader}`}>
@@ -507,10 +532,17 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
       <ToggleRow
         icon={Zap}
         label="Use cooldown skip tokens"
-        description="When on, Auto Rank burns up to 5 Crime / GTA / Booze Travel Skip tokens per cycle (daily caps still apply), uses jail bailout tokens if you get locked up, and skipped crimes pay −50% cash. Turn off to only act when cooldowns are naturally ready."
-        checked={!!p.auto_rank_use_skip_tokens}
-        disabled={savingPrefs}
-        onToggle={() => onUpdatePref('auto_rank_use_skip_tokens', !p.auto_rank_use_skip_tokens)}
+        description={
+          !canUseSkips
+            ? 'No usable Crime / GTA / Booze skip tokens (all must be empty). Buy some in the Points Store to enable this.'
+            : 'When on, Auto Rank burns up to 5 Crime / GTA / Booze Travel Skip tokens per cycle (daily caps still apply), uses jail bailout tokens if you get locked up, and skipped crimes pay −50% cash. Turn off to only act when cooldowns are naturally ready.'
+        }
+        checked={!!p.auto_rank_use_skip_tokens && canUseSkips}
+        disabled={skipToggleDisabled}
+        onToggle={() => {
+          if (!p.auto_rank_use_skip_tokens && !canUseSkips) return;
+          onUpdatePref('auto_rank_use_skip_tokens', !p.auto_rank_use_skip_tokens);
+        }}
       />
       
       <div className="py-1.5 px-0">
@@ -1010,8 +1042,9 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
                     ].map(({ key, label, life, cash }) => {
                       const s = skip[key] || {};
                       const held = s.tokens ?? 0;
+                      const credits = s.credits ?? 0;
                       const leftToday = Math.max(0, (s.daily_cap ?? 0) - (s.uses_today ?? 0));
-                      const canBurn = held > 0 && leftToday > 0;
+                      const canBurn = credits > 0 || (held > 0 && leftToday > 0);
                       return (
                         <div key={key} className="text-zinc-300">
                           <span className="text-zinc-500">{label}:</span>{' '}
@@ -1640,6 +1673,9 @@ export default function AutoRank() {
           gta_skips_ready: !!d.gta_skips_ready,
           booze_skips_ready: !!d.booze_skips_ready,
           auto_rank_use_skip_tokens: !!d.auto_rank_use_skip_tokens,
+          has_usable_ar_skips: typeof d.has_usable_ar_skips === 'boolean'
+            ? d.has_usable_ar_skips
+            : hasAnyUsableArSkip(d.skip_tokens ?? prev.skip_tokens),
           skip_tokens: d.skip_tokens ?? prev.skip_tokens ?? null,
           activity_detail: d.activity_detail ?? null,
           last_activity: d.last_activity ?? null,
@@ -1662,6 +1698,9 @@ export default function AutoRank() {
           total_booze_runs: d.total_booze_runs ?? prev.total_booze_runs,
           total_booze_profit: d.total_booze_profit ?? prev.total_booze_profit,
         }));
+        if (d.auto_rank_use_skip_tokens === false) {
+          setPrefs((p) => (p.auto_rank_use_skip_tokens ? { ...p, auto_rank_use_skip_tokens: false } : p));
+        }
         setLastStatsAt(Date.now());
       }).catch(() => {});
     };
@@ -1783,6 +1822,9 @@ export default function AutoRank() {
             gta_skips_ready: !!statsRes.data.gta_skips_ready,
             booze_skips_ready: !!statsRes.data.booze_skips_ready,
             auto_rank_use_skip_tokens: !!statsRes.data.auto_rank_use_skip_tokens,
+            has_usable_ar_skips: typeof statsRes.data.has_usable_ar_skips === 'boolean'
+              ? statsRes.data.has_usable_ar_skips
+              : hasAnyUsableArSkip(statsRes.data.skip_tokens),
             skip_tokens: statsRes.data.skip_tokens ?? null,
             activity_detail: statsRes.data.activity_detail ?? null,
             last_activity: statsRes.data.last_activity ?? null,
@@ -1805,6 +1847,9 @@ export default function AutoRank() {
             attempted_busts_today: statsRes.data.attempted_busts_today ?? 0,
           });
           setLastStatsAt(Date.now());
+          if (statsRes.data.auto_rank_use_skip_tokens === false) {
+            setPrefs((p) => (p.auto_rank_use_skip_tokens ? { ...p, auto_rank_use_skip_tokens: false } : p));
+          }
         }
         if (checkRes.data?.is_admin) {
           if (intervalRes?.data) {
@@ -2266,6 +2311,8 @@ export default function AutoRank() {
         canEnable={canEnable}
         savingPrefs={savingPrefs}
         onUpdatePref={updatePref}
+        skipTokens={stats?.skip_tokens}
+        hasUsableArSkips={stats?.has_usable_ar_skips}
       />
       
       {canEnable && (prefs?.auto_rank_crimes || prefs?.auto_rank_gta || prefs?.auto_rank_melt || prefs?.auto_rank_scrap) && (

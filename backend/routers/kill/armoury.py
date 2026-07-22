@@ -194,7 +194,7 @@ TOKEN_TYPES = (
     "cooldown_skip_gta",
     "cooldown_skip_booze",
     "cooldown_skip_properties",
-    # Rank-XP (£9.99) pass token: 24h window granted only when activated via Armoury/My Inventory.
+    # Rank-XP (£15) pass token: 24h window granted only when activated via Armoury/My Inventory.
     "rank_xp_pass",
 )
 # Store-only count tokens (not activated in Armoury)
@@ -330,6 +330,21 @@ async def _try_grant_rank_xp_pass_micro_tier(
         except Exception:
             import logging
             logging.getLogger(__name__).exception("game_pass_vip_car grant failed user_id=%s", user_id)
+        try:
+            from utils.game_pass_prestige import try_consume_pending_game_pass_prestige
+            from utils.game_pass_season import get_game_pass_season_public
+
+            season = await get_game_pass_season_public(db)
+            await try_consume_pending_game_pass_prestige(
+                db,
+                user_id,
+                season_end_at=(season or {}).get("game_pass_season_end_at"),
+            )
+        except Exception:
+            import logging
+            logging.getLogger(__name__).exception(
+                "pending game_pass prestige auto-apply failed user_id=%s", user_id
+            )
     return rewards
 
 

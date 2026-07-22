@@ -781,7 +781,7 @@ def register(router):
                 "tutorial_rewards_granted": False,
                 "tutorial_ineligible_reason": None,
                 "loot_box_free_rare_opens": 0,
-                # Rank-XP pass (£9.99): entitlement is unactivated until used in Armoury.
+                # Rank-XP pass (£15): entitlement is unactivated until used in Armoury.
                 "rank_xp_pass_tokens": 0,
                 "rank_xp_pass_bonus_until": None,
                 "rank_xp_pass_token_expires_at": None,

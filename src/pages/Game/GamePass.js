@@ -637,6 +637,8 @@ export default function GamePass() {
         if (res.data.game_pass_prestiged) {
           const summary = res.data.bonus_summary ? ` (${res.data.bonus_summary})` : '';
           toast.success(`Game Pass prestiged — +${GAME_PASS_PRESTIGE_BONUS_PERCENT}% VIP rewards credited${summary}. Track reset to tier 1.`);
+        } else if (res.data.game_pass_prestige_queued) {
+          toast.success('Prestige queued — it will apply automatically when you finish VIP tiers 1–100.');
         } else {
           const pts = Number(res.data.points_added || 0);
           if (pts === 0) toast.success('Game Pass purchased — token delivered. Activate in My Inventory.');
@@ -917,40 +919,61 @@ export default function GamePass() {
                   </p>
                 </>
               )}
-              {vipRewardTrackComplete && (
-                <div className="space-y-2">
-                  <p className="text-[9px] text-emerald-400/95 font-heading leading-relaxed">
-                    VIP Game Pass tier rewards are complete — all payouts through tier {MAX_MICRO_TIER} have been credited.
-                  </p>
-                  <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2.5 py-2.5 space-y-2">
-                    <div className="text-[10px] font-heading font-bold text-amber-300/95 uppercase tracking-wider">
-                      Prestige Game Pass — £{GAME_PASS_PRESTIGE_PRICE_GBP}
-                    </div>
-                    <p className="text-[9px] text-zinc-400 font-heading leading-relaxed">
-                      Get +{GAME_PASS_PRESTIGE_BONUS_PERCENT}% of this season&apos;s VIP rewards
-                      {prestigeStatus?.bonus_summary ? (
-                        <>
-                          {' '}
-                          (<span className="text-zinc-300">{prestigeStatus.bonus_summary}</span>)
-                        </>
-                      ) : null}
-                      , plus {GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES.toLocaleString()} extra loot pieces, then start the track again from tier 1 (VIP stays active).
-                    </p>
-                    {(Number(user?.game_pass_prestige_count) > 0 || Number(prestigeStatus?.prestige_count) > 0) && (
-                      <p className="text-[8px] text-zinc-500 font-heading">
-                        Prestiged {Number(user?.game_pass_prestige_count ?? prestigeStatus?.prestige_count ?? 0)} time
-                        {Number(user?.game_pass_prestige_count ?? prestigeStatus?.prestige_count ?? 0) === 1 ? '' : 's'} this account.
-                      </p>
-                    )}
-                    <button
-                      type="button"
-                      onClick={handlePrestigePurchase}
-                      disabled={!user || prestigeLoading || loading}
-                      className="w-full min-h-[40px] py-2 text-[10px] font-heading font-bold uppercase rounded bg-amber-500/20 text-amber-200 border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-50 touch-manipulation"
-                    >
-                      {prestigeLoading ? '...' : `Prestige for £${GAME_PASS_PRESTIGE_PRICE_GBP}`}
-                    </button>
+              {(vipClaimed || passIsUnactivatedValid || Number(prestigeStatus?.prestige_pending || 0) > 0) && (
+                <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2.5 py-2.5 space-y-2">
+                  <div className="text-[10px] font-heading font-bold text-amber-300/95 uppercase tracking-wider">
+                    Prestige Game Pass — £{GAME_PASS_PRESTIGE_PRICE_GBP}
                   </div>
+                  <p className="text-[9px] text-zinc-400 font-heading leading-relaxed">
+                    {vipRewardTrackComplete
+                      ? <>Get +{GAME_PASS_PRESTIGE_BONUS_PERCENT}% of this season&apos;s VIP rewards</>
+                      : <>Buy now while you climb — when you finish VIP tiers 1–{MAX_MICRO_TIER}, Prestige auto-applies (+{GAME_PASS_PRESTIGE_BONUS_PERCENT}% season VIP rewards</>}
+                    {prestigeStatus?.bonus_summary ? (
+                      <>
+                        {' '}
+                        (<span className="text-zinc-300">{prestigeStatus.bonus_summary}</span>)
+                      </>
+                    ) : null}
+                    {vipRewardTrackComplete
+                      ? <>, plus {GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES.toLocaleString()} extra loot pieces, then start the track again from tier 1 (VIP stays active).</>
+                      : <>, plus {GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES.toLocaleString()} loot pieces, then reset the track). You can buy Game Pass (£{GAME_PASS_PRICE_GBP}) and Prestige (£{GAME_PASS_PRESTIGE_PRICE_GBP}) together.</>}
+                  </p>
+                  {Number(prestigeStatus?.prestige_pending || user?.game_pass_prestige_pending || 0) > 0 && (
+                    <p className="text-[9px] text-amber-200/95 font-heading">
+                      Prestige queued — applies automatically when you finish VIP tier {MAX_MICRO_TIER}.
+                    </p>
+                  )}
+                  {(Number(user?.game_pass_prestige_count) > 0 || Number(prestigeStatus?.prestige_count) > 0) && (
+                    <p className="text-[8px] text-zinc-500 font-heading">
+                      Prestiged {Number(user?.game_pass_prestige_count ?? prestigeStatus?.prestige_count ?? 0)} time
+                      {Number(user?.game_pass_prestige_count ?? prestigeStatus?.prestige_count ?? 0) === 1 ? '' : 's'} this account.
+                    </p>
+                  )}
+                  {vipRewardTrackComplete && (
+                    <p className="text-[9px] text-emerald-400/95 font-heading leading-relaxed">
+                      VIP Game Pass tier rewards are complete — all payouts through tier {MAX_MICRO_TIER} have been credited.
+                    </p>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handlePrestigePurchase}
+                    disabled={
+                      !user
+                      || prestigeLoading
+                      || loading
+                      || prestigeStatus?.available === false
+                    }
+                    className="w-full min-h-[40px] py-2 text-[10px] font-heading font-bold uppercase rounded bg-amber-500/20 text-amber-200 border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-50 touch-manipulation"
+                  >
+                    {prestigeLoading
+                      ? '...'
+                      : vipRewardTrackComplete
+                        ? `Prestige for £${GAME_PASS_PRESTIGE_PRICE_GBP}`
+                        : `Queue Prestige for £${GAME_PASS_PRESTIGE_PRICE_GBP}`}
+                  </button>
+                  {prestigeStatus?.available === false && prestigeStatus?.unavailable_reason && (
+                    <p className="text-[8px] text-zinc-500 font-heading">{prestigeStatus.unavailable_reason}</p>
+                  )}
                 </div>
               )}
             </div>
