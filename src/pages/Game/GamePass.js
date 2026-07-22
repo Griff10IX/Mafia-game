@@ -495,6 +495,22 @@ export default function GamePass() {
         if (Number.isFinite(n) && n > 0) setSeasonCloseWindowDays(Math.floor(n));
       }
       setPrestigeStatus(prestigeRes?.data || null);
+      const topup = prestigeRes?.data?.rate_topup;
+      if (topup?.ok && topup?.bonus_summary) {
+        toast.success(`Prestige topped up to +50%: ${topup.bonus_summary}`, { duration: 12000 });
+        try {
+          await refreshUser();
+        } catch {
+          /* ignore */
+        }
+      } else if (topup?.ok) {
+        toast.success('Your Game Pass Prestige was topped up from +15% to +50%.', { duration: 10000 });
+        try {
+          await refreshUser();
+        } catch {
+          /* ignore */
+        }
+      }
     } catch {
       toast.error('Failed to load data');
     } finally {

@@ -3382,6 +3382,90 @@ def register(router):
             return {"message": f"Granted and auto-activated Game Pass for {un}. VIP rewards applied."}
         return {"message": f"Granted Game Pass to {un} (activation pending — user should open Armoury)."}
 
+    @router.post("/admin/game-pass/prestige-rate-topup")
+    async def admin_game_pass_prestige_rate_topup(
+        target_username: Optional[str] = Query(
+            None,
+            description="If set, top up one user; otherwise scan all users with prestige_count >= 1",
+        ),
+        limit: int = Query(500, ge=1, le=5000),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Make-good: credit the +15% → +50% Prestige difference for users who already prestiged at 15%.
+        Idempotent. Normally auto-runs when a player opens Game Pass; this is for bulk/staff.
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        from utils.game_pass_prestige import ensure_game_pass_prestige_rate_topup
+        from utils.game_pass_season import get_game_pass_season_public
+
+        season = await get_game_pass_season_public(db)
+        season_id = season.get("game_pass_season_id")
+
+        results = []
+        if (target_username or "").strip():
+            username_pattern = _username_pattern(target_username.strip())
+            target = await db.users.find_one(
+                {"username": username_pattern},
+                {"_id": 0, "id": 1, "username": 1},
+            )
+            if not target:
+                raise HTTPException(status_code=404, detail="User not found")
+            out = await ensure_game_pass_prestige_rate_topup(
+                db, target["id"], season_id=season_id
+            )
+            results.append(
+                {
+                    "username": target.get("username"),
+                    "user_id": target["id"],
+                    "topup": out,
+                }
+            )
+        else:
+            cursor = db.users.find(
+                {"game_pass_prestige_count": {"$gte": 1}},
+                {"_id": 0, "id": 1, "username": 1},
+            ).limit(limit)
+            async for u in cursor:
+                uid = u.get("id")
+                if not uid:
+                    continue
+                out = await ensure_game_pass_prestige_rate_topup(db, uid, season_id=season_id)
+                if out:
+                    results.append(
+                        {
+                            "username": u.get("username"),
+                            "user_id": uid,
+                            "topup": out,
+                        }
+                    )
+
+        try:
+            await srv.log_activity(
+                current_user["id"],
+                current_user.get("username") or "?",
+                "admin_game_pass_prestige_rate_topup",
+                {
+                    "target": (target_username or "").strip() or "all",
+                    "topped_up": len(results),
+                },
+            )
+        except Exception:
+            pass
+
+        return {
+            "ok": True,
+            "topped_up_users": len(results),
+            "results": results,
+            "message": (
+                f"Topped up {len(results)} user(s) from +15% to +50% Prestige."
+                if results
+                else "No users needed a Prestige rate top-up."
+            ),
+        }
+
     @router.post("/admin/remove-game-pass")
     async def admin_remove_game_pass(
         target_username: str,

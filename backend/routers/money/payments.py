@@ -1450,13 +1450,26 @@ def register(router):
     @router.get("/payments/game-pass-prestige")
     async def get_game_pass_prestige_status(current_user: dict = Depends(get_current_user)):
         """Prestige availability, £10 package id, and +50% bonus preview for the Game Pass UI."""
-        from utils.game_pass_prestige import prestige_status_payload
+        from utils.game_pass_prestige import (
+            ensure_game_pass_prestige_rate_topup,
+            prestige_status_payload,
+        )
 
         season = await get_game_pass_season_public(db)
-        return prestige_status_payload(
-            current_user,
-            season_id=season.get("game_pass_season_id"),
-        )
+        season_id = season.get("game_pass_season_id")
+        topup = None
+        try:
+            topup = await ensure_game_pass_prestige_rate_topup(
+                db,
+                current_user.get("id") or "",
+                season_id=season_id,
+            )
+        except Exception:
+            logger.exception("game pass prestige rate top-up")
+        payload = prestige_status_payload(current_user, season_id=season_id)
+        if topup:
+            payload["rate_topup"] = topup
+        return payload
 
     @router.post("/payments/buy-game-pass-with-points")
     async def buy_game_pass_with_points(_request: BuyGamePassWithPointsRequest, current_user: dict = Depends(get_current_user)):

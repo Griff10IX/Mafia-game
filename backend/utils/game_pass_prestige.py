@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import math
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
@@ -24,11 +25,16 @@ from utils.game_pass_micro_rewards import (
 
 GAME_PASS_PRESTIGE_PACKAGE_ID = "game_pass_prestige_10"
 GAME_PASS_PRESTIGE_BONUS_RATE = 0.50
+# Prestige used to grant +15%; anyone who already applied at that rate gets a one-time top-up to 50%.
+GAME_PASS_PRESTIGE_LEGACY_BONUS_RATE = 0.15
 GAME_PASS_PRESTIGE_PRICE_GBP = 10.00
 # Flat bonus on top of the 50% season VIP totals.
 GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES = 500
 # Max queued prestiges (buy early while climbing VIP; auto-apply at tier 100).
 GAME_PASS_PRESTIGE_PENDING_CAP = 1
+
+PRESTIGE_RATE_TOPUP_EVENT = "game_pass_prestige_rate_topup"
+PRESTIGE_GRANT_EVENT = "game_pass_prestige"
 
 
 def season_vip_reward_totals(season_id: Optional[str] = None) -> Dict[str, int]:
@@ -61,6 +67,205 @@ def prestige_bonus_rewards(season_id: Optional[str] = None) -> Dict[str, int]:
             out[k] = amt
     out["loot_box_pieces"] = int(out.get("loot_box_pieces") or 0) + GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES
     return out
+
+
+def prestige_bonus_rewards_at_rate(rate: float, season_id: Optional[str] = None, *, include_extra_loot: bool = True) -> Dict[str, int]:
+    """Season VIP totals × rate (ceil per key). Extra loot only for full prestige apply, not rate top-ups."""
+    totals = season_vip_reward_totals(season_id)
+    out: Dict[str, int] = {}
+    for k, v in totals.items():
+        amt = int(math.ceil(float(v) * float(rate)))
+        if amt > 0:
+            out[k] = amt
+    if include_extra_loot:
+        out["loot_box_pieces"] = int(out.get("loot_box_pieces") or 0) + GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES
+    return out
+
+
+def prestige_rate_topup_rewards(season_id: Optional[str] = None) -> Dict[str, int]:
+    """Difference between current 50% and legacy 15% season VIP totals (no second +500 loot)."""
+    at_new = prestige_bonus_rewards_at_rate(
+        GAME_PASS_PRESTIGE_BONUS_RATE, season_id, include_extra_loot=False
+    )
+    at_old = prestige_bonus_rewards_at_rate(
+        GAME_PASS_PRESTIGE_LEGACY_BONUS_RATE, season_id, include_extra_loot=False
+    )
+    out: Dict[str, int] = {}
+    keys = set(at_new) | set(at_old)
+    for k in keys:
+        diff = int(at_new.get(k) or 0) - int(at_old.get(k) or 0)
+        if diff > 0:
+            out[k] = diff
+    return out
+
+
+def _bonus_rate_is_legacy(rate: Any) -> bool:
+    """True if a stored prestige grant was below the current 50% rate."""
+    if rate is None:
+        return True
+    try:
+        return float(rate) + 1e-9 < float(GAME_PASS_PRESTIGE_BONUS_RATE)
+    except (TypeError, ValueError):
+        return True
+
+
+async def _count_legacy_prestige_grants(db, user_id: str) -> int:
+    """How many prestige applies for this user were credited at the old (sub-50%) rate."""
+    if not user_id:
+        return 0
+    n = 0
+    saw_any = False
+    async for ev in db.point_ledger_events.find(
+        {"user_id": user_id, "event_type": PRESTIGE_GRANT_EVENT},
+        {"_id": 0, "meta": 1},
+    ):
+        saw_any = True
+        rate = (ev.get("meta") or {}).get("bonus_rate")
+        if _bonus_rate_is_legacy(rate):
+            n += 1
+    if saw_any:
+        return n
+    # Ledger missing (rare): treat each prestige_count as a legacy grant needing top-up.
+    user = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "game_pass_prestige_count": 1},
+    )
+    return max(0, int((user or {}).get("game_pass_prestige_count") or 0))
+
+
+async def _count_prestige_rate_topups(db, user_id: str) -> int:
+    if not user_id:
+        return 0
+    from_events = await db.point_ledger_events.count_documents(
+        {"user_id": user_id, "event_type": PRESTIGE_RATE_TOPUP_EVENT}
+    )
+    user = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "game_pass_prestige_rate_topup_count": 1},
+    )
+    from_user = int((user or {}).get("game_pass_prestige_rate_topup_count") or 0)
+    return max(int(from_events or 0), from_user)
+
+
+async def ensure_game_pass_prestige_rate_topup(
+    db,
+    user_id: str,
+    *,
+    send_notification=None,
+    season_id: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """
+    One-time make-good: users who prestiged at +15% get the difference to +50%.
+    Idempotent — safe to call on Game Pass page load.
+    """
+    if not user_id:
+        return None
+
+    legacy_n = await _count_legacy_prestige_grants(db, user_id)
+    if legacy_n < 1:
+        return None
+    already = await _count_prestige_rate_topups(db, user_id)
+    needed = legacy_n - already
+    if needed < 1:
+        return None
+
+    user = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "id": 1, "username": 1, "game_pass_season_id": 1, "points": 1},
+    )
+    if not user:
+        return None
+
+    sid = season_id or str(user.get("game_pass_season_id") or "").strip() or None
+    topup = prestige_rate_topup_rewards(sid)
+    if not topup:
+        return None
+
+    total_granted: Dict[str, int] = {}
+    applied = 0
+    for _ in range(needed):
+        # Claim one top-up slot atomically so parallel page loads cannot double-pay.
+        claim = await db.users.update_one(
+            {
+                "id": user_id,
+                "$expr": {
+                    "$lt": [
+                        {"$ifNull": ["$game_pass_prestige_rate_topup_count", 0]},
+                        legacy_n,
+                    ]
+                },
+            },
+            {"$inc": {"game_pass_prestige_rate_topup_count": 1}},
+        )
+        if claim.modified_count == 0:
+            break
+
+        inc = {k: int(v) for k, v in topup.items() if int(v or 0) > 0}
+        if inc:
+            await db.users.update_one({"id": user_id}, {"$inc": inc})
+            for k, v in inc.items():
+                total_granted[k] = int(total_granted.get(k) or 0) + int(v)
+
+        points_bonus = int(topup.get("points") or 0)
+        try:
+            await db.point_ledger_events.insert_one(
+                {
+                    "id": str(uuid.uuid4()),
+                    "event_type": PRESTIGE_RATE_TOPUP_EVENT,
+                    "user_id": user_id,
+                    "points": points_bonus,
+                    "lot_id": None,
+                    "origin_ref": GAME_PASS_PRESTIGE_PACKAGE_ID,
+                    "root_purchase_ref": None,
+                    "meta": {
+                        "from_rate": GAME_PASS_PRESTIGE_LEGACY_BONUS_RATE,
+                        "to_rate": GAME_PASS_PRESTIGE_BONUS_RATE,
+                        "season_id": sid,
+                        "bonus_rewards": dict(topup),
+                    },
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+            )
+        except Exception:
+            pass
+
+        applied += 1
+
+    if applied < 1:
+        return None
+
+    summary = format_rewards_summary(total_granted) if total_granted else ""
+    notify = send_notification
+    if notify is None:
+        try:
+            import server as srv
+
+            notify = srv.send_notification
+        except Exception:
+            notify = None
+    if notify:
+        try:
+            await notify(
+                user_id,
+                "Game Pass Prestige topped up",
+                (
+                    f"Prestige was raised from +{int(round(GAME_PASS_PRESTIGE_LEGACY_BONUS_RATE * 100))}% "
+                    f"to +{int(round(GAME_PASS_PRESTIGE_BONUS_RATE * 100))}%. "
+                    f"You received the difference ({summary or 'season VIP reward top-up'})."
+                ),
+                "reward",
+            )
+        except Exception:
+            pass
+
+    return {
+        "ok": True,
+        "topups_applied": applied,
+        "bonus_rewards": total_granted,
+        "bonus_summary": summary,
+        "from_rate": GAME_PASS_PRESTIGE_LEGACY_BONUS_RATE,
+        "to_rate": GAME_PASS_PRESTIGE_BONUS_RATE,
+    }
 
 
 def _token_unactivated_valid(user: dict, now: Optional[datetime] = None) -> bool:
