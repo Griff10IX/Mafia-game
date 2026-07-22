@@ -325,6 +325,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Minigame Payouts', categoryId: 'admin-logs', collapseKey: 'minigamePayouts', keywords: ['minigame', 'payout', 'reward', 'cash', 'mini', 'game'] },
   { label: 'Weekly Leaderboard Payouts', categoryId: 'admin-logs', collapseKey: 'weeklyLeaderboardPayouts', keywords: ['leaderboard', 'weekly', 'payout', 'respect', 'points', 'top 10', 'fix', 'deduction', 'negative points'] },
   { label: 'Attack Logs', categoryId: 'admin-logs', collapseKey: 'attackLogs', keywords: ['attack', 'log', 'kill'] },
+  { label: 'Hitman hire log', categoryId: 'admin-testing', collapseKey: 'hitman', keywords: ['hitman', 'hire', 'contract', 'log', 'bodyguard killed', 'who hired'] },
   { label: 'Bodyguard audit', categoryId: 'admin-logs', collapseKey: 'bodyguardAudit', keywords: ['bodyguard', 'guard', 'hire', 'drop', 'inflation', 'robot hire history', 'last 100 robot', 'searching time', 'find time', 'overpay', 'stale inflation'] },
   { label: 'Mod Action Logs', categoryId: 'admin-logs', collapseKey: 'modLogs', keywords: ['mod', 'action', 'log'] },
   { label: 'Crime logs', categoryId: 'admin-logs', collapseKey: 'crimeLogs', keywords: ['crime', 'log', 'heist'] },
@@ -352,7 +353,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Reset OC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'timer'] },
   { label: 'Reset Daily Rewards Timer', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['daily', 'rewards', 'timer', 'rps'] },
   { label: 'Bodyguard Tools', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'robot', 'generate', 'sync', 'location', 'hacked', 'replace', 'hire inflation', 'clear inflation'] },
-  { label: 'Hitman Tools', categoryId: 'admin-testing', collapseKey: 'hitman', keywords: ['hitman', 'cooldown', 'protection', 'victim', 'reset', 'for hire'] },
+  { label: 'Hitman Tools', categoryId: 'admin-testing', collapseKey: 'hitman', keywords: ['hitman', 'cooldown', 'protection', 'victim', 'reset', 'for hire', 'hire log', 'contracts', 'staff hire'] },
   { label: 'Generate Bodyguards', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'generate', 'robot'] },
   { label: 'Test Bodyguard Payout', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'payout', 'test'] },
   { label: 'GTA exclusive pool & dealer', categoryId: 'admin-world-systems', collapseKey: 'gtaPool', keywords: ['gta', 'exclusive', 'loot exclusive', 'car intel', 'timeline', 'war lock', 'marketplace', 'pool', 'dealer', 'cars', 'values'], adminOnly: true },
@@ -5324,6 +5325,14 @@ export default function Admin() {
   };
 
   const [hitmanResetLoading, setHitmanResetLoading] = useState(false);
+  const [hitmanLogLoading, setHitmanLogLoading] = useState(false);
+  const [hitmanLogData, setHitmanLogData] = useState(null);
+  const [hitmanLogUsername, setHitmanLogUsername] = useState('');
+  const [hitmanLogRole, setHitmanLogRole] = useState('any');
+  const [hitmanLogOutcome, setHitmanLogOutcome] = useState('all');
+  const [hitmanLogIncludeStaff, setHitmanLogIncludeStaff] = useState(true);
+  const [hitmanLogLimit, setHitmanLogLimit] = useState(100);
+
   const handleHitmanResetCooldown = async (scope = 'victim') => {
     const username = (formData.targetUsername || '').trim();
     if (!username) {
@@ -5348,6 +5357,30 @@ export default function Admin() {
       toast.error(error.response?.data?.detail || 'Failed', { duration: 8000 });
     } finally {
       setHitmanResetLoading(false);
+    }
+  };
+
+  const handleLoadHitmanLogs = async () => {
+    setHitmanLogLoading(true);
+    try {
+      const params = {
+        limit: hitmanLogLimit,
+        outcome: hitmanLogOutcome,
+        include_staff: hitmanLogIncludeStaff,
+      };
+      const un = (hitmanLogUsername || formData.targetUsername || '').trim();
+      if (un) {
+        params.username = un;
+        params.role = hitmanLogRole;
+      }
+      const res = await api.get('/admin/hitman/logs', { params });
+      setHitmanLogData(res.data || null);
+      toast.success(`Loaded ${res.data?.count ?? 0} Hitman contract(s)`);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to load Hitman log');
+      setHitmanLogData(null);
+    } finally {
+      setHitmanLogLoading(false);
     }
   };
 
@@ -25000,6 +25033,139 @@ export default function Admin() {
                   {hitmanResetLoading ? '…' : 'Clear all'}
                 </BtnDanger>
               </ActionRow>
+
+              <div className="mt-2 rounded border border-zinc-700/50 bg-zinc-950/40 p-2 space-y-2">
+                <div className="flex items-center gap-1.5 text-[10px] font-heading font-bold uppercase tracking-wider text-primary">
+                  <ScrollText size={12} />
+                  Hire log
+                  {hitmanLogData?.count != null && (
+                    <span className="text-mutedForeground font-normal normal-case tracking-normal">
+                      · {hitmanLogData.count} shown
+                    </span>
+                  )}
+                </div>
+                <p className="text-[9px] text-mutedForeground font-heading leading-snug">
+                  Who hired, who was marked, whether the visible robot died, tier, cost, free token / retry, staff test flag.
+                  Leave username blank for recent global contracts.
+                </p>
+                <div className="flex flex-wrap gap-1.5 items-center">
+                  <input
+                    type="text"
+                    value={hitmanLogUsername}
+                    onChange={(e) => setHitmanLogUsername(e.target.value)}
+                    placeholder={formData.targetUsername || 'Username (optional)'}
+                    className="min-w-[8rem] flex-1 px-2 py-1.5 rounded border border-zinc-700/50 bg-zinc-900 text-[10px] font-heading text-foreground"
+                  />
+                  <select
+                    value={hitmanLogRole}
+                    onChange={(e) => setHitmanLogRole(e.target.value)}
+                    className="px-2 py-1.5 rounded border border-zinc-700/50 bg-zinc-900 text-[10px] font-heading text-foreground"
+                    title="Role when username set"
+                  >
+                    <option value="any">Hirer or target</option>
+                    <option value="hirer">As hirer</option>
+                    <option value="target">As target</option>
+                  </select>
+                  <select
+                    value={hitmanLogOutcome}
+                    onChange={(e) => setHitmanLogOutcome(e.target.value)}
+                    className="px-2 py-1.5 rounded border border-zinc-700/50 bg-zinc-900 text-[10px] font-heading text-foreground"
+                  >
+                    <option value="all">All outcomes</option>
+                    <option value="success">Kills only</option>
+                    <option value="fail">Misses only</option>
+                  </select>
+                  <select
+                    value={hitmanLogLimit}
+                    onChange={(e) => setHitmanLogLimit(Number(e.target.value) || 100)}
+                    className="px-2 py-1.5 rounded border border-zinc-700/50 bg-zinc-900 text-[10px] font-heading text-foreground"
+                  >
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                    <option value={250}>250</option>
+                    <option value={500}>500</option>
+                  </select>
+                  <label className="inline-flex items-center gap-1 text-[9px] font-heading text-zinc-400">
+                    <input
+                      type="checkbox"
+                      checked={hitmanLogIncludeStaff}
+                      onChange={(e) => setHitmanLogIncludeStaff(e.target.checked)}
+                      className="rounded border-zinc-600"
+                    />
+                    Staff hires
+                  </label>
+                  <BtnPrimary onClick={handleLoadHitmanLogs} disabled={hitmanLogLoading}>
+                    {hitmanLogLoading ? 'Loading…' : 'Load log'}
+                  </BtnPrimary>
+                </div>
+                {hitmanLogData && (
+                  <div className="max-h-[28rem] overflow-auto rounded border border-zinc-800/80">
+                    {(hitmanLogData.events || []).length === 0 ? (
+                      <p className="p-2 text-[10px] text-mutedForeground font-heading">No contracts matched.</p>
+                    ) : (
+                      <table className="w-full text-left text-[9px] font-heading">
+                        <thead className="sticky top-0 bg-zinc-950 text-zinc-500 uppercase tracking-wider">
+                          <tr>
+                            <th className="px-1.5 py-1 whitespace-nowrap">When</th>
+                            <th className="px-1.5 py-1">Hirer</th>
+                            <th className="px-1.5 py-1">Target</th>
+                            <th className="px-1.5 py-1">Tier</th>
+                            <th className="px-1.5 py-1">Result</th>
+                            <th className="px-1.5 py-1">Robot</th>
+                            <th className="px-1.5 py-1">Cost</th>
+                            <th className="px-1.5 py-1">Flags</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(hitmanLogData.events || []).map((ev, idx) => {
+                            const flags = [];
+                            if (ev.staff_hire) flags.push('staff');
+                            if (ev.free_token_spent) flags.push('used free token');
+                            if (ev.free_retry_used) flags.push('free retry');
+                            if (ev.free_token_earned) flags.push('earned token');
+                            return (
+                              <tr
+                                key={ev.id || `${ev.at}-${idx}`}
+                                className="border-t border-zinc-800/60 hover:bg-zinc-900/50"
+                              >
+                                <td className="px-1.5 py-1 whitespace-nowrap text-zinc-400 tabular-nums">
+                                  {ev.at ? formatAdminDateTime(ev.at) : '—'}
+                                </td>
+                                <td className="px-1.5 py-1 text-foreground font-bold">
+                                  {ev.hirer_username || '—'}
+                                </td>
+                                <td className="px-1.5 py-1 text-foreground">
+                                  {ev.target_username || '—'}
+                                </td>
+                                <td className="px-1.5 py-1 text-zinc-300">
+                                  {ev.tier_label || ev.tier || '—'}
+                                </td>
+                                <td
+                                  className={`px-1.5 py-1 font-bold ${
+                                    ev.bodyguard_killed ? 'text-red-400' : 'text-zinc-400'
+                                  }`}
+                                >
+                                  {ev.bodyguard_killed ? 'BG killed' : 'Miss'}
+                                </td>
+                                <td className="px-1.5 py-1 text-zinc-400">
+                                  {ev.robot_name || (ev.guard_user_id ? '(id only)' : '—')}
+                                  {ev.slot_number != null ? ` · slot ${ev.slot_number}` : ''}
+                                </td>
+                                <td className="px-1.5 py-1 tabular-nums text-amber-300/90">
+                                  {Number(ev.cost || 0).toLocaleString()}
+                                </td>
+                                <td className="px-1.5 py-1 text-zinc-500">
+                                  {flags.length ? flags.join(' · ') : '—'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

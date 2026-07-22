@@ -706,6 +706,8 @@ async def _hitman_hire_impl(body: HireBody, current_user: dict):
         "free_token_spent": free_token_spent,
         "free_token_earned": free_token_earned,
         "guard_user_id": visible.get("bodyguard_user_id"),
+        "robot_name": (visible.get("robot_name") or "").strip() or None,
+        "slot_number": visible.get("slot_number"),
         "staff_hire": bool(staff_hire),
     }
     try:

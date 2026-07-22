@@ -6780,6 +6780,132 @@ def register(router):
             },
         }
 
+    @router.get("/admin/hitman/logs")
+    async def admin_hitman_logs(
+        username: Optional[str] = Query(
+            None,
+            description="Filter by hirer and/or target username (omit for recent global log)",
+        ),
+        role: Optional[str] = Query(
+            None,
+            description="When username set: hirer | target | any (default any)",
+        ),
+        outcome: Optional[str] = Query(
+            None,
+            description="success | fail | all (default all)",
+        ),
+        include_staff: bool = Query(
+            True,
+            description="Include staff_hire test contracts (default true for staff tools)",
+        ),
+        limit: int = Query(100, ge=1, le=500),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Staff: Hitman for Hire contract log — who hired, target, kill/miss, cost, tokens, staff flag."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+
+        rl = (role or "any").strip().lower()
+        if rl not in ("hirer", "target", "any"):
+            raise HTTPException(status_code=400, detail="role must be hirer, target, or any")
+        oc = (outcome or "all").strip().lower()
+        if oc not in ("success", "fail", "all", "kill", "miss"):
+            raise HTTPException(status_code=400, detail="outcome must be success, fail, or all")
+        if oc == "kill":
+            oc = "success"
+        if oc == "miss":
+            oc = "fail"
+
+        q: Dict[str, Any] = {}
+        resolved_username: Optional[str] = None
+        scope = "all"
+        key = (username or "").strip()
+        if key and key.lower() not in ("*", "all"):
+            user = await db.users.find_one(
+                {"username": _username_pattern(key)},
+                {"_id": 0, "id": 1, "username": 1},
+            )
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            uid = user["id"]
+            resolved_username = user.get("username") or key
+            scope = "user"
+            if rl == "hirer":
+                q["hirer_id"] = uid
+            elif rl == "target":
+                q["target_id"] = uid
+            else:
+                q["$or"] = [{"hirer_id": uid}, {"target_id": uid}]
+
+        if oc == "success":
+            q["success"] = True
+        elif oc == "fail":
+            q["success"] = False
+
+        if not include_staff:
+            q["staff_hire"] = {"$ne": True}
+
+        rows = await db.hitman_events.find(q, {"_id": 0}).sort("at", -1).to_list(limit)
+
+        guard_ids = [r.get("guard_user_id") for r in rows if r.get("guard_user_id")]
+        guard_names: Dict[str, str] = {}
+        if guard_ids:
+            async for gu in db.users.find(
+                {"id": {"$in": list(set(guard_ids))}},
+                {"_id": 0, "id": 1, "username": 1},
+            ):
+                if gu.get("id"):
+                    guard_names[str(gu["id"])] = (gu.get("username") or "").strip()
+
+        tier_labels = {
+            "low": "Street shooter",
+            "mid": "Made man",
+            "high": "Professional",
+        }
+        events = []
+        for r in rows:
+            gid = r.get("guard_user_id")
+            robot_name = (r.get("robot_name") or "").strip()
+            if not robot_name and gid:
+                robot_name = guard_names.get(str(gid), "") or ""
+            success = bool(r.get("success"))
+            tier_id = (r.get("tier") or "").strip().lower()
+            events.append(
+                {
+                    "id": r.get("id"),
+                    "at": r.get("at"),
+                    "day": r.get("day"),
+                    "hirer_id": r.get("hirer_id"),
+                    "hirer_username": r.get("hirer_username") or "",
+                    "target_id": r.get("target_id"),
+                    "target_username": r.get("target_username") or "",
+                    "tier": tier_id,
+                    "tier_label": tier_labels.get(tier_id) or (r.get("tier") or "?"),
+                    "cost": int(r.get("cost") or 0),
+                    "success": success,
+                    "bodyguard_killed": success,
+                    "free_retry_used": bool(r.get("free_retry_used")),
+                    "free_token_spent": bool(r.get("free_token_spent")),
+                    "free_token_earned": bool(r.get("free_token_earned")),
+                    "staff_hire": bool(r.get("staff_hire")),
+                    "guard_user_id": gid,
+                    "robot_name": robot_name or None,
+                    "slot_number": r.get("slot_number"),
+                }
+            )
+
+        return {
+            "ok": True,
+            "scope": scope,
+            "username": resolved_username,
+            "role": rl if scope == "user" else None,
+            "outcome": oc,
+            "include_staff": include_staff,
+            "limit": limit,
+            "count": len(events),
+            "events": events,
+        }
+
     @router.get("/admin/crimes/inspect/{target_username}")
     async def admin_crimes_inspect(
         target_username: str,
