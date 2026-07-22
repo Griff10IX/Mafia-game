@@ -10,6 +10,10 @@ CIVILIAN_PROTECTION_KILL_BLOCKED_DETAIL = (
     "That player still has new-account protection and can't be attacked in normal PvP yet."
 )
 
+CIVILIAN_PROTECTION_HITMAN_BLOCKED_DETAIL = (
+    "That player still has new-account protection and can't be targeted by Hitman yet."
+)
+
 RULES_BULLETS: List[str] = [
     "Take a casino from someone and reject their buyback, or ignore buyback until it expires.",
     "Run a search on another player or a bodyguard (searching only a hitlist NPC does not remove protection).",

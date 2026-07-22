@@ -16,6 +16,10 @@ from utils.store_item_flags import (
     _is_staff,
 )
 from utils.point_provenance import consume_points_fifo, log_points_event
+from utils.civilian_protection import (
+    CIVILIAN_PROTECTION_HITMAN_BLOCKED_DETAIL,
+    is_civilian_protected,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -165,8 +169,12 @@ async def _resolve_username(username: str) -> Optional[dict]:
             "_id": 0,
             "id": 1,
             "username": 1,
+            "email": 1,
             "is_dead": 1,
             "is_npc": 1,
+            "is_moderator": 1,
+            "created_at": 1,
+            "civilian_protection_revoked_at": 1,
             "hitman_victim_cooldown_until": 1,
             "hitman_protection_until": 1,
         },
@@ -430,6 +438,15 @@ async def _hitman_lookup_impl(username: str, current_user: dict):
     if target.get("is_npc"):
         return {"ok": False, "hireable": False, "reason": "Cannot target NPCs."}
 
+    if is_civilian_protected(target):
+        return {
+            "ok": True,
+            "hireable": False,
+            "civilian_protected": True,
+            "username": target.get("username"),
+            "reason": CIVILIAN_PROTECTION_HITMAN_BLOCKED_DETAIL,
+        }
+
     prot = _parse_iso(target.get("hitman_protection_until"))
     if prot and prot > _now():
         return {
@@ -493,6 +510,8 @@ async def _hitman_hire_impl(body: HireBody, current_user: dict):
         raise HTTPException(status_code=400, detail="That player is dead")
     if target.get("is_npc"):
         raise HTTPException(status_code=400, detail="Cannot target NPCs")
+    if is_civilian_protected(target):
+        raise HTTPException(status_code=403, detail=CIVILIAN_PROTECTION_HITMAN_BLOCKED_DETAIL)
 
     now = _now()
     prot = _parse_iso(target.get("hitman_protection_until"))

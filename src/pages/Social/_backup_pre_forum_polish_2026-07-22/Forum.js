@@ -499,30 +499,30 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general', ca
 
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/80 backdrop-blur-sm">
-      <div className={`${styles.panel} w-full sm:max-w-md max-h-[90dvh] sm:max-h-[85vh] flex flex-col rounded-t-lg sm:rounded-lg overflow-hidden border border-primary/20 shadow-2xl`}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent shrink-0" />
-        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 shrink-0">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+      <div className={`${styles.panel} w-full max-w-md rounded-lg overflow-hidden border border-primary/20 shadow-2xl`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
           <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
             {category === 'entertainer' ? '🎭 Entertainer: New Topic' : category === 'designer' ? '🎨 Designer Forum: New Topic' : category === 'game_ideas' ? '💡 Game Ideas: New Topic (admin)' : '📝 Create New Topic'}
           </h2>
         </div>
-        <form onSubmit={handleSubmit} className="p-3 space-y-3 overflow-y-auto overscroll-contain flex-1 min-h-0">
+        <form onSubmit={handleSubmit} className="p-3 space-y-3">
           <div className="space-y-2">
             <div className="flex gap-2">
               <input
                 type="text"
-                placeholder="Title…"
+                placeholder="Title..."
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 style={titleColor ? { color: titleColor } : {}}
-                className="flex-1 px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-zinc-600 placeholder:italic focus:border-primary/50 focus:outline-none"
+                className="flex-1 px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
               />
               {canUseColors && (
                 <button
                   type="button"
                   onClick={() => setShowTitleColors(!showTitleColors)}
-                  className="px-2 py-1.5 min-h-8 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 flex items-center gap-1 touch-manipulation"
+                  className="px-2 py-1 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 flex items-center gap-1"
                   title="Title Color (Staff Only)"
                 >
                   <Palette size={14} />
@@ -613,23 +613,20 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general', ca
           )}
           <textarea
             ref={contentTextareaRef}
-            placeholder="Write your post…"
+            placeholder="Content... Use [b]bold[/b], [i]italic[/i], [color=red]coloured[/color], [img]url[/img], [gif]url[/gif], or :) smileys"
             value={content}
             onChange={(e) => setContent(e.target.value)}
             rows={4}
-            className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-zinc-600 placeholder:italic focus:border-primary/50 focus:outline-none resize-y"
+            className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y"
           />
-          <p className="text-[9px] text-zinc-500 font-heading -mt-1">
-            Tips: [b]bold[/b] · [i]italic[/i] · [img]url[/img] · [gif]url[/gif] · :) smileys
-          </p>
           
           {/* Rich toolbar */}
           <div className="flex flex-wrap items-center gap-1">
-            <button type="button" onClick={() => insertTopicMarkup('[b]', '[/b]')} className="p-1.5 min-h-8 min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation" title="Bold"><Bold size={14} /></button>
-            <button type="button" onClick={() => insertTopicMarkup('[i]', '[/i]')} className="p-1.5 min-h-8 min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation" title="Italic"><Italic size={14} /></button>
-            <button type="button" onClick={() => insertTopicMarkup('[color=#eab308]', '[/color]')} className="p-1.5 min-h-8 min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation" title="Colour"><Palette size={14} /></button>
-            <button type="button" onClick={() => { const u = window.prompt('Image URL (http/https):'); if (u && u.trim()) insertTopicMarkup('[img]' + u.trim() + '[/img]'); }} className="p-1.5 min-h-8 min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation" title="Image"><Image size={14} /></button>
-            <button type="button" onClick={() => setShowGifPicker((v) => !v)} className="px-2.5 py-1.5 min-h-8 rounded border border-primary/30 text-primary text-[10px] font-heading hover:bg-primary/10 touch-manipulation">GIF</button>
+            <button type="button" onClick={() => insertTopicMarkup('[b]', '[/b]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Bold"><Bold size={14} /></button>
+            <button type="button" onClick={() => insertTopicMarkup('[i]', '[/i]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Italic"><Italic size={14} /></button>
+            <button type="button" onClick={() => insertTopicMarkup('[color=#eab308]', '[/color]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Colour"><Palette size={14} /></button>
+            <button type="button" onClick={() => { const u = window.prompt('Image URL (http/https):'); if (u && u.trim()) insertTopicMarkup('[img]' + u.trim() + '[/img]'); }} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Image"><Image size={14} /></button>
+            <button type="button" onClick={() => setShowGifPicker((v) => !v)} className="px-2 py-1 rounded border border-primary/30 text-primary text-[10px] font-heading hover:bg-primary/10">GIF</button>
             <button type="button" onClick={() => setShowEmojis(!showEmojis)} className="px-2 py-1 rounded border border-zinc-700/50 text-mutedForeground text-[10px] font-heading hover:text-foreground">{showEmojis ? 'Hide emoji' : '😀 Emoji'}</button>
           </div>
           {showEmojis && (
@@ -970,7 +967,7 @@ const TopicRowMobile = ({ topic, canStickyImportant, onUpdate, updating, designe
   );
 
   return (
-  <Link to={`/forum/topic/${topic.id}`} className="sm:hidden block px-3 py-2.5 f-row transition-colors active:bg-zinc-800/50">
+  <Link to={`/forum/topic/${topic.id}`} className="sm:hidden block px-3 py-2 f-row transition-colors active:bg-zinc-800/50">
     <div className="flex items-start justify-between gap-2">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
@@ -1923,7 +1920,7 @@ export default function Forum() {
             <button
               key={tab.id}
               onClick={() => { setActiveTab(tab.id); setForumPage(1); setSearchParams(tab.id === 'general' ? {} : { tab: tab.id }, { replace: true }); }}
-              className={`shrink-0 px-3 py-2 min-h-9 text-xs font-heading font-bold uppercase rounded transition-all touch-manipulation ${activeTab === tab.id ? 'bg-primary/30 text-primary border border-primary/50' : 'text-mutedForeground hover:text-foreground border border-transparent'}`}
+              className={`shrink-0 px-3 py-1.5 text-xs font-heading font-bold uppercase rounded transition-all ${activeTab === tab.id ? 'bg-primary/30 text-primary border border-primary/50' : 'text-mutedForeground hover:text-foreground border border-transparent'}`}
             >
               {tab.label}
             </button>
@@ -2658,26 +2655,11 @@ export default function Forum() {
         </div>
 
         {!hasLoaded && topics.length === 0 ? (
-          <div className="space-y-2 p-2 sm:p-3 f-fade-in">
-            {[0, 1, 2, 3, 4, 5].map((i) => (
-              <div
-                key={i}
-                className={`${styles.panel} rounded-md overflow-hidden border border-zinc-800/60 bg-zinc-900/50 p-3 space-y-2`}
-                style={{ animationDelay: `${i * 0.04}s` }}
-              >
-                <div className="h-3 w-3/4 max-w-[16rem] rounded bg-primary/15 animate-pulse" />
-                <div className="flex gap-3">
-                  <div className="h-2.5 w-20 rounded bg-zinc-800/70 animate-pulse" />
-                  <div className="h-2.5 w-12 rounded bg-zinc-800/50 animate-pulse" />
-                  <div className="h-2.5 w-14 rounded bg-zinc-800/40 animate-pulse" />
-                </div>
-              </div>
-            ))}
-          </div>
+          <div className="p-6" />
         ) : topics.length === 0 ? (
           <div className="p-6 text-center text-xs text-mutedForeground">No topics yet. Create one!</div>
         ) : (
-          <div className="space-y-2 px-1.5 sm:px-0 sm:space-y-1.5">
+          <div className="space-y-1.5 px-1 sm:px-0">
             {/* Pinned topics first */}
             {pinnedTopics.length > 0 && (
               <>

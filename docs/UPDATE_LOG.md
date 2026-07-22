@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-22 16:45 UTC[/color][/b] — [b]Forum polish[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Improved:[/b] Forum create-topic / comment boxes use short placeholders (tips sit underneath) so example BBCode no longer looks like typed text. Loading skeletons and fade-in on the topic list and topic page; larger tap targets and a scrollable create-topic sheet on mobile.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-22 16:30 UTC[/color][/b] — [b]Forum, profile & racket polish[/b][/size]
 [quote]
 [list]

@@ -126,8 +126,6 @@ const FORUM_FAQ_STYLES = `
   .forum-faq-content tr:nth-child(even) { background: var(--noir-surface); }
 `;
 const FORUM_CONTENT_STYLES = `
-  @keyframes f-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
-  .f-fade-in { animation: f-fade-in 0.35s ease-out both; }
   .forum-content-media { max-width: 100%; height: auto; border-radius: 8px; margin: 0.25em 0; display: block; }
   .forum-content-gif { max-height: 280px; object-fit: contain; }
   .forum-content strong { font-weight: 700; }
@@ -945,40 +943,7 @@ export default function ForumTopic() {
 
   if (!hasLoaded && !topic) {
     return (
-      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="forum-topic-page">
-        <style>{FORUM_CONTENT_STYLES}</style>
-        <div className="flex items-center gap-3 f-fade-in">
-          <div className="h-8 w-8 rounded-md bg-zinc-800/80 animate-pulse shrink-0" />
-          <div className="flex-1 space-y-2 min-w-0">
-            <div className="h-5 w-2/3 max-w-xs rounded bg-primary/15 animate-pulse" />
-            <div className="h-3 w-40 rounded bg-zinc-800/70 animate-pulse" />
-          </div>
-        </div>
-        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel f-fade-in`}>
-          <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-            <div className="h-3 w-28 rounded bg-primary/20 animate-pulse" />
-          </div>
-          <div className="p-3 space-y-2">
-            <div className="h-3 w-full rounded bg-zinc-800/60 animate-pulse" />
-            <div className="h-3 w-11/12 rounded bg-zinc-800/50 animate-pulse" />
-            <div className="h-3 w-4/5 rounded bg-zinc-800/40 animate-pulse" />
-            <div className="h-3 w-2/3 rounded bg-zinc-800/40 animate-pulse" />
-          </div>
-        </div>
-        <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel f-fade-in`} style={{ animationDelay: '0.05s' }}>
-          <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-            <div className="h-3 w-24 rounded bg-primary/20 animate-pulse" />
-          </div>
-          <div className="p-3 space-y-3">
-            {[0, 1].map((i) => (
-              <div key={i} className="rounded-md border border-zinc-800/60 bg-zinc-900/40 p-2.5 space-y-2">
-                <div className="h-3 w-32 rounded bg-zinc-800/70 animate-pulse" />
-                <div className="h-3 w-full rounded bg-zinc-800/50 animate-pulse" />
-                <div className="h-3 w-3/4 rounded bg-zinc-800/40 animate-pulse" />
-              </div>
-            ))}
-          </div>
-        </div>
+      <div className={`${styles.pageContent} flex items-center justify-center min-h-[40vh] mobile-page-root`}>
       </div>
     );
   }
@@ -1003,7 +968,7 @@ export default function ForumTopic() {
   const forumParseOpts = { censorProfanity: user?.censor_profanity };
 
   return (
-    <div className={`space-y-4 ${styles.pageContent} mobile-page-root f-fade-in`} data-testid="forum-topic-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="forum-topic-page">
       <style>{FORUM_CONTENT_STYLES}</style>
       <AutoRefreshNote seconds={60}>Topic and comments refresh every 60 seconds in the background.</AutoRefreshNote>
       {/* Header */}
@@ -1154,14 +1119,14 @@ export default function ForumTopic() {
 
       {/* Staff controls: Admin/Mod = sticky, important, lock; HDO = lock only; Admin/Mod/HDO = delete topic */}
       {(isAdmin || isModerator || isHdo) && (
-        <div className="flex flex-wrap items-center gap-2">
-          {(isAdmin || isModerator || isHdo) && <span className="text-[10px] text-amber-400 font-heading uppercase mr-0.5">Staff:</span>}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {(isAdmin || isModerator || isHdo) && <span className="text-[10px] text-amber-400 font-heading uppercase mr-1">Staff:</span>}
           {(isAdmin || isModerator) && (
             <>
               <button
                 onClick={() => updateTopicFlags({ is_sticky: !topic.is_sticky })}
                 disabled={adminBusy}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 min-h-8 rounded text-[10px] font-heading border transition-all touch-manipulation ${
+                className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading border transition-all ${
                   topic.is_sticky ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-zinc-800/50 border-zinc-700/50 text-mutedForeground hover:border-amber-500/50'
                 }`}
               >
@@ -1170,7 +1135,7 @@ export default function ForumTopic() {
               <button
                 onClick={() => updateTopicFlags({ is_important: !topic.is_important })}
                 disabled={adminBusy}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 min-h-8 rounded text-[10px] font-heading border transition-all touch-manipulation ${
+                className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading border transition-all ${
                   topic.is_important ? 'bg-amber-500/20 border-amber-500/50 text-amber-400' : 'bg-zinc-800/50 border-zinc-700/50 text-mutedForeground hover:border-amber-500/50'
                 }`}
               >
@@ -1180,7 +1145,7 @@ export default function ForumTopic() {
                 type="button"
                 onClick={() => setShowStaffTitleColors((v) => !v)}
                 disabled={adminBusy}
-                className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 min-h-8 rounded text-[10px] font-heading border transition-all touch-manipulation ${
+                className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading border transition-all ${
                   topic.title_color || showStaffTitleColors
                     ? 'bg-primary/20 border-primary/50 text-primary'
                     : 'bg-zinc-800/50 border-zinc-700/50 text-mutedForeground hover:border-primary/50'
@@ -1199,7 +1164,7 @@ export default function ForumTopic() {
             <button
               onClick={() => updateTopicFlags({ is_locked: !topic.is_locked })}
               disabled={adminBusy}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 min-h-8 rounded text-[10px] font-heading border transition-all touch-manipulation ${
+              className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading border transition-all ${
                 topic.is_locked ? 'bg-red-500/20 border-red-500/50 text-red-400' : 'bg-zinc-800/50 border-zinc-700/50 text-mutedForeground hover:border-red-500/50'
               }`}
             >
@@ -1210,7 +1175,7 @@ export default function ForumTopic() {
             <button
               onClick={deleteTopic}
               disabled={adminBusy}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 min-h-8 rounded text-[10px] font-heading border border-red-500/50 text-red-400 hover:bg-red-500/20 transition-all touch-manipulation"
+              className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading border border-red-500/50 text-red-400 hover:bg-red-500/20 transition-all"
             >
               <Trash2 size={10} /> Delete
             </button>
@@ -1248,7 +1213,7 @@ export default function ForumTopic() {
           <button
             type="button"
             onClick={openEditTopic}
-            className="flex items-center gap-1 px-2.5 py-1.5 min-h-8 rounded text-[10px] font-heading border border-primary/40 text-primary hover:bg-primary/10 transition-all touch-manipulation"
+            className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading border border-primary/40 text-primary hover:bg-primary/10 transition-all"
           >
             <Pencil size={10} /> Edit topic
           </button>
@@ -1267,11 +1232,11 @@ export default function ForumTopic() {
                 <div className="flex gap-2">
                   <input
                     type="text"
-                    placeholder="Title…"
+                    placeholder="Title..."
                     value={editTitle}
                     onChange={(e) => setEditTitle(e.target.value)}
                     style={editTitleColor ? { color: editTitleColor } : {}}
-                    className="flex-1 px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-zinc-600 placeholder:italic focus:border-primary/50 focus:outline-none"
+                    className="flex-1 px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none"
                   />
                   {(isAdmin || isModerator) && (
                     <button
@@ -1320,17 +1285,14 @@ export default function ForumTopic() {
                 </div>
               )}
               <textarea
-                placeholder="Write your post…"
+                placeholder="Content..."
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
                 rows={4}
-                className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-zinc-600 placeholder:italic focus:border-primary/50 focus:outline-none resize-y"
+                className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y"
               />
-              <p className="text-[9px] text-zinc-500 font-heading -mt-1">
-                Tips: [b]bold[/b] · [i]italic[/i] · [img]url[/img] · [gif]url[/gif]
-              </p>
               <div className="flex gap-2">
-                <button type="button" onClick={() => setEditShowGifPicker((v) => !v)} className="px-2.5 py-1.5 min-h-8 rounded border border-primary/30 text-primary text-[10px] font-heading hover:bg-primary/10 touch-manipulation">GIF</button>
+                <button type="button" onClick={() => setEditShowGifPicker((v) => !v)} className="px-2 py-1 rounded border border-primary/30 text-primary text-[10px] font-heading hover:bg-primary/10">GIF</button>
               </div>
               <div className="flex gap-2 pt-1">
                 <button type="button" onClick={() => setShowEditTopic(false)} className="flex-1 px-4 py-2 bg-zinc-700/50 text-foreground text-xs font-heading font-bold uppercase rounded border border-zinc-600/50 hover:bg-zinc-600/50">
@@ -1682,17 +1644,17 @@ export default function ForumTopic() {
                       title="Who liked this"
                       onClick={() => openReactionUsers(c.id, 'like')}
                       disabled={likingId === c.id || dislikingId === c.id}
-                      className={`px-2 py-1.5 min-h-8 shrink-0 transition-colors touch-manipulation ${
+                      className={`px-1.5 py-1 shrink-0 transition-colors ${
                         c.liked ? 'text-emerald-400 hover:bg-emerald-500/25' : 'text-mutedForeground hover:text-emerald-400 hover:bg-emerald-500/10'
                       } disabled:opacity-50`}
                     >
-                      <ThumbsUp size={11} />
+                      <ThumbsUp size={10} />
                     </button>
                     <button
                       type="button"
                       onClick={() => likeComment(c.id)}
                       disabled={likingId === c.id || dislikingId === c.id}
-                      className={`px-2.5 py-1.5 min-h-8 border-l border-zinc-700/50 transition-colors touch-manipulation ${
+                      className={`px-2 py-1 border-l border-zinc-700/50 transition-colors ${
                         c.liked ? 'text-emerald-400 hover:bg-emerald-500/25' : 'text-mutedForeground hover:text-emerald-400 hover:bg-emerald-500/10'
                       } disabled:opacity-50`}
                     >
@@ -1709,17 +1671,17 @@ export default function ForumTopic() {
                       title="Who disliked this"
                       onClick={() => openReactionUsers(c.id, 'dislike')}
                       disabled={likingId === c.id || dislikingId === c.id}
-                      className={`px-2 py-1.5 min-h-8 shrink-0 transition-colors touch-manipulation ${
+                      className={`px-1.5 py-1 shrink-0 transition-colors ${
                         c.disliked ? 'text-red-400 hover:bg-red-500/25' : 'text-mutedForeground hover:text-red-400 hover:bg-red-500/10'
                       } disabled:opacity-50`}
                     >
-                      <ThumbsDown size={11} />
+                      <ThumbsDown size={10} />
                     </button>
                     <button
                       type="button"
                       onClick={() => dislikeComment(c.id)}
                       disabled={likingId === c.id || dislikingId === c.id}
-                      className={`px-2.5 py-1.5 min-h-8 border-l border-zinc-700/50 transition-colors touch-manipulation ${
+                      className={`px-2 py-1 border-l border-zinc-700/50 transition-colors ${
                         c.disliked ? 'text-red-400 hover:bg-red-500/25' : 'text-mutedForeground hover:text-red-400 hover:bg-red-500/10'
                       } disabled:opacity-50`}
                     >
@@ -1732,9 +1694,9 @@ export default function ForumTopic() {
                       setReplyToComment({ id: c.id, author_username: c.author_username });
                       setTimeout(() => commentTextareaRef.current?.focus(), 100);
                     }}
-                    className="inline-flex items-center gap-1.5 text-[10px] font-heading px-2.5 py-1.5 min-h-8 rounded text-mutedForeground hover:text-primary hover:bg-primary/10 transition-all touch-manipulation"
+                    className="flex items-center gap-1 text-[10px] font-heading px-2 py-1 rounded text-mutedForeground hover:text-primary hover:bg-primary/10 transition-all"
                   >
-                    <MessageCircle size={11} /> Reply
+                    <MessageCircle size={10} /> Reply
                   </button>
                   </>
                   )}
@@ -1744,9 +1706,9 @@ export default function ForumTopic() {
                       type="button"
                       onClick={() => deleteComment(c.id)}
                       disabled={deletingCommentId === c.id}
-                      className="inline-flex items-center gap-1.5 text-[10px] font-heading px-2.5 py-1.5 min-h-8 rounded text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-50 touch-manipulation"
+                      className="flex items-center gap-1 text-[10px] font-heading px-2 py-1 rounded text-red-400/70 hover:text-red-400 hover:bg-red-500/10 transition-all disabled:opacity-50"
                     >
-                      <Trash2 size={11} /> {deletingCommentId === c.id ? '...' : 'Delete'}
+                      <Trash2 size={10} /> {deletingCommentId === c.id ? '...' : 'Delete'}
                     </button>
                   )}
                   {/* Designer competition: submit this post as my entry (only on competition topic, only my comments) */}
@@ -1814,28 +1776,25 @@ export default function ForumTopic() {
               <textarea
                 ref={commentTextareaRef}
                 id="forum-add-comment"
-                placeholder="Write a comment…"
+                placeholder="Write a comment... Use [b]bold[/b], [i]italic[/i], [color=red]coloured[/color], [img]url[/img], @Username to mention"
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
                 rows={3}
-                className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-zinc-600 placeholder:italic focus:border-primary/50 focus:outline-none resize-y"
+                className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y"
               />
-              <p className="text-[9px] text-zinc-500 font-heading -mt-1">
-                Tips: [b]bold[/b] · [i]italic[/i] · [img]url[/img] · @Username
-              </p>
               
               {/* Toolbar */}
               <div className="flex flex-wrap items-center gap-2">
-                <button type="button" onClick={() => insertCommentMarkup('[b]', '[/b]')} className="p-1.5 min-h-8 min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation" title="Bold"><Bold size={14} /></button>
-                <button type="button" onClick={() => insertCommentMarkup('[i]', '[/i]')} className="p-1.5 min-h-8 min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation" title="Italic"><Italic size={14} /></button>
-                <button type="button" onClick={() => insertCommentMarkup('[color=#eab308]', '[/color]')} className="p-1.5 min-h-8 min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation" title="Colour"><Palette size={14} /></button>
+                <button type="button" onClick={() => insertCommentMarkup('[b]', '[/b]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Bold"><Bold size={14} /></button>
+                <button type="button" onClick={() => insertCommentMarkup('[i]', '[/i]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Italic"><Italic size={14} /></button>
+                <button type="button" onClick={() => insertCommentMarkup('[color=#eab308]', '[/color]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Colour"><Palette size={14} /></button>
                 <button
                   type="button"
                   onClick={() => {
                     const url = window.prompt('Image URL (must start with http:// or https://):');
                     if (url && url.trim()) insertCommentMarkup('[img]' + url.trim() + '[/img]');
                   }}
-                  className="p-1.5 min-h-8 min-w-8 inline-flex items-center justify-center rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10 touch-manipulation"
+                  className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10"
                   title="Image"
                 >
                   <Image size={14} />
@@ -1843,7 +1802,7 @@ export default function ForumTopic() {
                 <button
                   type="button"
                   onClick={() => setShowGifPicker((v) => !v)}
-                  className="px-2.5 py-1.5 min-h-8 rounded border border-primary/30 text-primary text-[10px] font-heading hover:bg-primary/10 transition-all touch-manipulation"
+                  className="px-2 py-1 rounded border border-primary/30 text-primary text-[10px] font-heading hover:bg-primary/10 transition-all"
                 >
                   GIF
                 </button>
@@ -1851,7 +1810,7 @@ export default function ForumTopic() {
                   <button
                     type="button"
                     onClick={() => setShowEmojis(!showEmojis)}
-                    className="px-2.5 py-1.5 min-h-8 rounded border border-zinc-700/50 text-mutedForeground text-[10px] font-heading hover:text-foreground transition-all touch-manipulation"
+                    className="px-2 py-1 rounded border border-zinc-700/50 text-mutedForeground text-[10px] font-heading hover:text-foreground transition-all"
                   >
                     😀 Emoji
                   </button>
