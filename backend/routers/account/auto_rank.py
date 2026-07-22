@@ -2191,21 +2191,23 @@ async def _auto_rank_try_jail_bailout(db, user_id: str, user: dict, lines: list)
     uses_today = int(user.get("jail_bailout_uses_today") or 0)
     if user.get("jail_bailout_day") == today and uses_today >= JAIL_BAILOUT_DAILY_CAP:
         return False, user
-    set_doc = {"jail_bailout_day": today}
-    inc_uses = 1
+    # Path may appear in $set or $inc, never both (Mongo conflict on day rollover / first use).
+    set_doc = {
+        "in_jail": False,
+        "jail_until": None,
+        "snitch_attempted_this_term": False,
+        "jail_bailout_day": today,
+    }
+    inc_doc = {"jail_bailout_tokens": -1}
     if user.get("jail_bailout_day") != today:
         set_doc["jail_bailout_uses_today"] = 1
-        inc_uses = 1 - uses_today
+    else:
+        inc_doc["jail_bailout_uses_today"] = 1
     result = await db.users.update_one(
         {"id": user_id, "in_jail": True, "jail_bailout_tokens": {"$gte": 1}},
         {
-            "$set": {
-                "in_jail": False,
-                "jail_until": None,
-                "snitch_attempted_this_term": False,
-                **set_doc,
-            },
-            "$inc": {"jail_bailout_tokens": -1, "jail_bailout_uses_today": inc_uses},
+            "$set": set_doc,
+            "$inc": inc_doc,
             "$unset": {"auto_rank_next_run_at": ""},
         },
     )

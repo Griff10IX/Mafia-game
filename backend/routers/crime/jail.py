@@ -1144,11 +1144,18 @@ async def jail_bailout_token(current_user: dict = Depends(get_current_user_verif
     uses_today = int(current_user.get("jail_bailout_uses_today") or 0)
     if current_user.get("jail_bailout_day") == today and uses_today >= JAIL_BAILOUT_DAILY_CAP:
         raise HTTPException(status_code=400, detail=f"Jail bailout limit reached ({JAIL_BAILOUT_DAILY_CAP} per UTC day)")
-    inc_uses = 1
-    set_doc = {"jail_bailout_day": today}
+    # Path may appear in $set or $inc, never both (Mongo conflict on day rollover / first use).
+    set_doc: dict = {
+        "in_jail": False,
+        "jail_until": None,
+        "snitch_attempted_this_term": False,
+        "jail_bailout_day": today,
+    }
+    inc_doc: dict = {"jail_bailout_tokens": -1}
     if current_user.get("jail_bailout_day") != today:
         set_doc["jail_bailout_uses_today"] = 1
-        inc_uses = 1 - uses_today
+    else:
+        inc_doc["jail_bailout_uses_today"] = 1
     result = await db.users.update_one(
         {
             "id": current_user["id"],
@@ -1156,13 +1163,8 @@ async def jail_bailout_token(current_user: dict = Depends(get_current_user_verif
             "jail_bailout_tokens": {"$gte": 1},
         },
         {
-            "$set": {
-                "in_jail": False,
-                "jail_until": None,
-                "snitch_attempted_this_term": False,
-                **set_doc,
-            },
-            "$inc": {"jail_bailout_tokens": -1, "jail_bailout_uses_today": inc_uses},
+            "$set": set_doc,
+            "$inc": inc_doc,
             "$unset": {"auto_rank_next_run_at": ""},
         },
     )
