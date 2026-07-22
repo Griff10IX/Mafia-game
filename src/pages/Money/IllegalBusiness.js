@@ -404,6 +404,21 @@ export default function IllegalBusiness() {
   const authUser = useAuthUser();
   const [missionLogShowAll, setMissionLogShowAll] = useState(false);
   const [missionsFullLoaded, setMissionsFullLoaded] = useState(false);
+  const [muscleOpen, setMuscleOpen] = useState(() => {
+    try {
+      const v = sessionStorage.getItem('illegal_biz_muscle_open');
+      if (v === '1') return true;
+      if (v === '0') return false;
+    } catch (_) {}
+    return false;
+  });
+  const toggleMuscleOpen = () => {
+    setMuscleOpen((prev) => {
+      const next = !prev;
+      try { sessionStorage.setItem('illegal_biz_muscle_open', next ? '1' : '0'); } catch (_) {}
+      return next;
+    });
+  };
 
   const fetchData = useCallback(async (silent = false, opts = {}) => {
     const cacheKey = bizSessionKey(authUser?.id);
@@ -958,14 +973,25 @@ export default function IllegalBusiness() {
               ) : null}
             </div>
 
-            {/* Guards compact */}
+            {/* Guards compact — collapsed by default (huge on mobile when many hired) */}
             <div>
-              <div className="flex items-baseline justify-between mb-2">
+              <button
+                type="button"
+                onClick={toggleMuscleOpen}
+                className="w-full flex items-center justify-between gap-2 mb-2 text-left touch-manipulation"
+                aria-expanded={muscleOpen}
+              >
                 <span className="text-[10px] font-heading uppercase tracking-widest text-mutedForeground">Muscle</span>
-                <span className="font-heading font-bold text-primary text-sm">{guardsCount} / {guardSlots}</span>
-              </div>
+                <span className="flex items-center gap-2 shrink-0">
+                  <span className="font-heading font-bold text-primary text-sm">{guardsCount} / {guardSlots}</span>
+                  <span className="text-[9px] font-heading font-bold uppercase tracking-wider text-zinc-500">
+                    {muscleOpen ? 'Hide' : 'Show'}
+                  </span>
+                  <ChevronDown size={14} className={`text-primary/70 transition-transform ${muscleOpen ? 'rotate-180' : ''}`} />
+                </span>
+              </button>
 
-              {guards.length > 0 && (
+              {muscleOpen && guards.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {guards.map((g, i) => (
                     <div key={g.id} className="flex flex-wrap items-center gap-1 px-2 py-1 rounded bg-primary/5 border border-primary/12 max-w-full">
@@ -998,6 +1024,12 @@ export default function IllegalBusiness() {
                     </div>
                   ))}
                 </div>
+              )}
+
+              {!muscleOpen && guardsCount > 0 && (
+                <p className="text-[9px] text-zinc-500 font-heading mb-2">
+                  Guard list hidden — tap Muscle to upgrade armour / weapons.
+                </p>
               )}
 
               <div className="flex flex-wrap gap-2">

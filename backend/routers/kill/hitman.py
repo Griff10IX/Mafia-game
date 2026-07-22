@@ -243,6 +243,53 @@ async def _remove_robot_bodyguard_slot(owner_id: str, bg: dict, hirer_id: str) -
         logger.exception("hitman_kill audit event")
 
 
+async def _log_hitman_kill_attempt(
+    *,
+    hirer_id: str,
+    hirer_username: str,
+    owner_id: str,
+    owner_username: str,
+    bg: dict,
+) -> None:
+    """Write attack_attempts so Last 15 Kills shows the robot victim with Killer = Hitman."""
+    db = _db()
+    guard_uid = bg.get("bodyguard_user_id")
+    guard_name = (bg.get("robot_name") or "").strip()
+    if guard_uid and not guard_name:
+        try:
+            guard = await db.users.find_one({"id": guard_uid}, {"_id": 0, "username": 1})
+            if guard:
+                guard_name = (guard.get("username") or "").strip()
+        except Exception:
+            logger.exception("hitman: load robot for attempt log")
+    if not guard_name:
+        guard_name = "Robot bodyguard"
+    doc: Dict[str, Any] = {
+        "id": str(uuid.uuid4()),
+        "attacker_id": hirer_id,
+        "attacker_username": hirer_username or "?",
+        "target_id": guard_uid,
+        "target_username": guard_name,
+        "outcome": "killed",
+        "make_public": False,
+        "is_bodyguard_kill": True,
+        "is_hitman_kill": True,
+        "is_npc_kill": True,
+        "target_is_npc": True,
+        "bodyguard_owner_id": owner_id,
+        "bodyguard_owner_username": owner_username or "",
+        "player_message": "Hitman for Hire killed the visible robot bodyguard.",
+        "created_at": _now(),
+        "via": "hitman_for_hire",
+        "bullets_used": 0,
+        "molotovs_used": 0,
+    }
+    try:
+        await db.attack_attempts.insert_one(doc)
+    except Exception:
+        logger.exception("hitman attack_attempts insert")
+
+
 async def _charge_points(user_id: str, cost: int, *, event_type: str = "hitman_hire") -> None:
     if cost <= 0:
         return
@@ -522,6 +569,16 @@ async def _hitman_hire_impl(body: HireBody, current_user: dict):
 
     if success:
         await _remove_robot_bodyguard_slot(target["id"], visible, hirer_id)
+        try:
+            await _log_hitman_kill_attempt(
+                hirer_id=hirer_id,
+                hirer_username=hirer.get("username") or current_user.get("username") or "",
+                owner_id=target["id"],
+                owner_username=target.get("username") or "",
+                bg=visible,
+            )
+        except Exception:
+            logger.exception("hitman kill attempt log")
         victim_until = (now + HITMAN_VICTIM_COOLDOWN).isoformat()
         await db.users.update_one(
             {"id": target["id"]},

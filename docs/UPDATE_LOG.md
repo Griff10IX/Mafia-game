@@ -6,6 +6,27 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-22 16:30 UTC[/color][/b] — [b]Forum, profile & racket polish[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Improved:[/b] [b]Edit Profile[/b] is split into tabs ([b]Look[/b] / [b]Text[/b] / [b]Alerts[/b] / [b]Privacy[/b] / [b]Account[/b]; [b]Staff[/b] for staff) so the page is shorter.[/color]
+[*][color=#888888][b]Fixed:[/b] Forum links no longer break when a post contains [b]https://…[/b] (smiley [b]:/[/b] was eating the protocol). FAQs formatting guide examples show as readable code instead of broken links/images.[/color]
+[*][color=#888888][b]Improved:[/b] [b]Update Log[/b] topic title always uses your theme accent colour (same as the unread badge).[/color]
+[*][color=#888888][b]Improved:[/b] Illegal Business [b]Muscle[/b] guard list can be hidden/shown (starts collapsed) so it does not dominate the page on mobile.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-22 16:15 UTC[/color][/b] — [b]Hitman kills on Last 15[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] When a [b]Hitman for Hire[/b] contract kills a robot bodyguard, it now appears on [b]Stats → Last 15 Kills[/b]. Killer shows as [b]Hitman[/b] (hirer stays anonymous).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-22 16:00 UTC[/color][/b] — [b]Mute page toast pop-ups[/b][/size]
 [quote]
 [list]

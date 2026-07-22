@@ -128,9 +128,10 @@ async def ensure_update_log_forum_topic(db) -> None:
         }
         if (existing.get("content") or "") != body:
             payload["updated_at"] = now
+        # Title colour is theme primary on the client — drop any stored hex so it always matches.
         result = await db.forum_topics.update_one(
             {"_id": existing["_id"]},
-            {"$set": payload},
+            {"$set": payload, "$unset": {"title_color": ""}},
         )
         if result.modified_count:
             logger.info("ensure_update_log_forum_topic: updated '%s' from docs/UPDATE_LOG.md", UPDATE_LOG_TITLE)

@@ -29,6 +29,22 @@ function forumUpdateLogUnreadCount(topic) {
   return 0;
 }
 
+function isUpdateLogTopic(topic) {
+  return /^update\s*log$/i.test(String(topic?.title || '').trim());
+}
+
+/** Update Log always uses theme primary (matches unread badge); other topics use title_color. */
+function forumTopicTitleColorStyle(topic) {
+  if (isUpdateLogTopic(topic)) return { color: 'var(--noir-primary)' };
+  if (topic?.title_color) return { color: topic.title_color };
+  return undefined;
+}
+
+function forumTopicAccentColor(topic) {
+  if (isUpdateLogTopic(topic)) return 'var(--noir-primary)';
+  return topic?.title_color || 'var(--noir-primary)';
+}
+
 const FORUM_STYLES = `
   @keyframes f-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .f-fade-in { animation: f-fade-in 0.4s ease-out both; }
@@ -843,15 +859,15 @@ const TopicRowDesktop = ({ topic, canStickyImportant, onUpdate, updating, design
             {topic.is_sticky && !topic.is_important && <span className="text-amber-400 font-heading shrink-0">STICKY:&nbsp;</span>}
             <span
               className="truncate font-heading inline-flex items-baseline gap-1 min-w-0"
-              style={topic.title_color ? { color: topic.title_color } : undefined}
+              style={forumTopicTitleColorStyle(topic)}
             >
               <span className="truncate" dangerouslySetInnerHTML={{ __html: titleHtml }} />
               {updateLogUnread > 0 && (
                 <span
                   className="shrink-0 font-heading font-bold tabular-nums text-primary"
                   style={{
-                    color: topic.title_color || 'var(--noir-primary)',
-                    textShadow: `0 0 8px ${topic.title_color || 'var(--noir-primary)'}88`,
+                    color: forumTopicAccentColor(topic),
+                    textShadow: '0 0 8px rgba(var(--noir-primary-rgb), 0.53)',
                   }}
                   title={`${updateLogUnread} unread update${updateLogUnread === 1 ? '' : 's'}`}
                 >
@@ -964,17 +980,19 @@ const TopicRowMobile = ({ topic, canStickyImportant, onUpdate, updating, designe
           )}
           {topic.is_important && <AlertCircle size={12} className="text-amber-400 shrink-0" />}
           {topic.is_sticky && !topic.is_important && <Pin size={12} className="text-amber-400 shrink-0" />}
+          {topic.is_important && <span className="text-amber-400 font-heading shrink-0 text-xs">IMPORTANT:&nbsp;</span>}
+          {topic.is_sticky && !topic.is_important && <span className="text-amber-400 font-heading shrink-0 text-xs">STICKY:&nbsp;</span>}
           <span
-            className={`text-xs font-heading truncate inline-flex items-baseline gap-1 min-w-0 ${topic.is_important || topic.is_sticky ? 'text-amber-400 font-bold' : ''}`}
-            style={topic.title_color && !topic.is_important && !topic.is_sticky ? { color: topic.title_color } : undefined}
+            className="text-xs font-heading truncate inline-flex items-baseline gap-1 min-w-0"
+            style={forumTopicTitleColorStyle(topic)}
           >
             <span className="truncate" dangerouslySetInnerHTML={{ __html: titleHtml }} />
             {updateLogUnread > 0 && (
               <span
                 className="shrink-0 font-heading font-bold tabular-nums text-primary"
                 style={{
-                  color: topic.title_color || 'var(--noir-primary)',
-                  textShadow: `0 0 8px ${topic.title_color || 'var(--noir-primary)'}88`,
+                  color: forumTopicAccentColor(topic),
+                  textShadow: '0 0 8px rgba(var(--noir-primary-rgb), 0.53)',
                 }}
                 title={`${updateLogUnread} unread update${updateLogUnread === 1 ? '' : 's'}`}
               >

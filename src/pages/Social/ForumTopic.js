@@ -338,6 +338,7 @@ export default function ForumTopic() {
   const [editTitle, setEditTitle] = useState('');
   const [editTitleColor, setEditTitleColor] = useState('');
   const [showEditTitleColors, setShowEditTitleColors] = useState(false);
+  const [showStaffTitleColors, setShowStaffTitleColors] = useState(false);
   const [editContent, setEditContent] = useState('');
   const [editGifUrl, setEditGifUrl] = useState('');
   const [editShowGifPicker, setEditShowGifPicker] = useState(false);
@@ -490,6 +491,9 @@ export default function ForumTopic() {
   }, [topic?.game_idea_season_id, user]);
 
   const isAuthor = topic && user && topic.author_id === user.id && !topic.redeem_code;
+  const canEditTopic = Boolean(
+    topic && user && !topic.crew_oc_family_id && (isAuthor || isAdmin || isModerator)
+  );
 
   const updateTopicFlags = async (payload) => {
     setAdminBusy(true);
@@ -982,7 +986,13 @@ export default function ForumTopic() {
               {topic.is_sticky && !topic.is_important && <Pin size={14} className="text-amber-400" />}
               <h1
                 className="text-lg sm:text-xl font-heading font-bold prof-banner-content"
-                style={topic.title_color ? { color: topic.title_color } : { color: 'var(--noir-primary)' }}
+                style={
+                  /^update\s*log$/i.test(String(topic.title || '').trim())
+                    ? { color: 'var(--noir-primary)' }
+                    : topic.title_color
+                      ? { color: topic.title_color }
+                      : { color: 'var(--noir-primary)' }
+                }
                 dangerouslySetInnerHTML={{ __html: parseForumContent(topic.title || '', { censorProfanity: user?.censor_profanity }) }}
               />
               {topic.is_locked && <Lock size={14} className="text-red-400" />}
@@ -1131,6 +1141,23 @@ export default function ForumTopic() {
               >
                 <AlertCircle size={10} /> {topic.is_important ? 'Unmark' : 'Important'}
               </button>
+              <button
+                type="button"
+                onClick={() => setShowStaffTitleColors((v) => !v)}
+                disabled={adminBusy}
+                className={`flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading border transition-all ${
+                  topic.title_color || showStaffTitleColors
+                    ? 'bg-primary/20 border-primary/50 text-primary'
+                    : 'bg-zinc-800/50 border-zinc-700/50 text-mutedForeground hover:border-primary/50'
+                }`}
+                title="Title colour (list + topic header)"
+              >
+                <Palette size={10} />
+                Colour
+                {topic.title_color ? (
+                  <span className="w-2.5 h-2.5 rounded-full border border-white/20" style={{ backgroundColor: topic.title_color }} />
+                ) : null}
+              </button>
             </>
           )}
           {(isAdmin || isModerator || isHdo) && (
@@ -1156,8 +1183,32 @@ export default function ForumTopic() {
         </div>
       )}
 
-      {/* Author: Edit topic */}
-      {isAuthor && !topic.crew_oc_family_id && (
+      {(isAdmin || isModerator) && showStaffTitleColors && topic && (
+        <div className="flex flex-wrap gap-1 p-2 mt-1.5 bg-zinc-900/50 border border-zinc-700/50 rounded">
+          {TITLE_COLORS.map((c) => (
+            <button
+              key={c.value || 'default'}
+              type="button"
+              disabled={adminBusy}
+              onClick={() => {
+                updateTopicFlags({ title_color: c.value || '' });
+                setShowStaffTitleColors(false);
+              }}
+              className={`px-2 py-1 text-[10px] font-heading rounded border transition-all ${
+                (topic.title_color || '') === (c.value || '')
+                  ? 'border-primary bg-primary/20 text-primary'
+                  : 'border-zinc-700/50 hover:border-primary/50'
+              }`}
+              style={c.value ? { color: c.value } : {}}
+            >
+              {c.name}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Author or staff: Edit topic (staff can edit redeem-code / system topics) */}
+      {canEditTopic && (
         <div className="flex flex-wrap items-center gap-1.5 mt-1.5">
           <button
             type="button"

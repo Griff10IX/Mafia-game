@@ -1,6 +1,6 @@
 /**
  * Parse forum topic/comment content: [b], [i], [u], [s], [center], [color]/[colour],
- * [size], [spoiler], [quote], [url], [img], [gif], [ytube], [list], [*], [hr], and smileys.
+ * [size], [spoiler], [quote], [url], [img], [gif], [ytube], [list], [*], [hr], [code]/[noparse], and smileys.
  * Output is safe HTML (we only emit our own tags). URLs restricted to http/https.
  */
 
@@ -72,6 +72,16 @@ function getYoutubeVideoId(urlOrId) {
 
 function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Build replace regex for a smiley token.
+ * Short ":/" must not match inside URLs (`https://…`) or it eats the protocol.
+ */
+function smileyReplaceRegex(from) {
+  if (from === ':/') return /:\/(?!\/)/g;
+  if (from === ':-/') return /:-\/(?!\/)/g;
+  return new RegExp(escapeRegex(from), 'g');
 }
 
 /** Longest codes first so :poggers: wins over :p and :pizza: over :p (avoids partial matches leaking text/HTML). */
@@ -682,10 +692,20 @@ export function parseForumContent(content, options = {}) {
   // 1) Escape HTML so raw < > & are safe
   s = escapeHtml(s);
 
-  // 2) Extract media/embed tags into placeholders so their URLs survive escaping
+  // 2) Extract protected / media tags into placeholders (before other BBCode + smileys)
+  const codePlaceholders  = [];
   const gifPlaceholders   = [];
   const imgPlaceholders   = [];
   const ytubePlaceholders = [];
+
+  // [code] / [noparse] — show literal BBCode (used in FAQ formatting guide)
+  s = s.replace(/\[(?:code|noparse)\]([\s\S]*?)\[\/(?:code|noparse)\]/gi, (_, inner) => {
+    const idx = codePlaceholders.length;
+    codePlaceholders.push(
+      `<code class="forum-content-code" style="font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:0.92em;padding:0.05em 0.3em;border-radius:3px;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);white-space:pre-wrap;word-break:break-word;">${inner}</code>`
+    );
+    return `\u0001C${idx}\u0001`;
+  });
 
   // Note: use [\s\S]*? so URLs can span newlines (JS `.` does not match `\n`).
   s = s.replace(/\[gif\]([\s\S]*?)\[\/gif\]/gi, (_, url) => {
@@ -830,7 +850,7 @@ export function parseForumContent(content, options = {}) {
 
   // 6) Smileys - long emoji codes first, then image smileys, then text emojis
   for (const [from, emoji] of sortSmileyPairsLongestFirst(LONG_EMOJI_CODES)) {
-    s = s.replace(new RegExp(escapeRegex(from), 'g'), wrapForumUnicodeEmoji(emoji));
+    s = s.replace(smileyReplaceRegex(from), wrapForumUnicodeEmoji(emoji));
   }
   if (options.dmUnicodeSmileys) {
     const DM_WINK_UNICODE = [
@@ -839,20 +859,21 @@ export function parseForumContent(content, options = {}) {
       [';)', '😉'],
     ];
     for (const [from, ch] of sortSmileyPairsLongestFirst(DM_WINK_UNICODE)) {
-      s = s.replace(new RegExp(escapeRegex(from), 'g'), wrapForumUnicodeEmoji(ch));
+      s = s.replace(smileyReplaceRegex(from), wrapForumUnicodeEmoji(ch));
     }
   }
   for (const [from, imgPath] of sortSmileyPairsLongestFirst(IMAGE_SMILEYS)) {
     const src = escapeAttr(resolveSmileyImgSrc(imgPath));
     const px = FORUM_INLINE_SMILEY_PX;
     const imgTag = `<img src="${src}" alt="${inlineSmileyAltForAttr(from)}" class="inline-smiley" style="display:inline;vertical-align:middle;width:${px}px;height:${px}px;max-width:${px}px;max-height:${px}px;object-fit:contain;" />`;
-    s = s.replace(new RegExp(escapeRegex(from), 'g'), imgTag);
+    s = s.replace(smileyReplaceRegex(from), imgTag);
   }
   for (const [from, emoji] of sortSmileyPairsLongestFirst(SMILEYS)) {
-    s = s.replace(new RegExp(escapeRegex(from), 'g'), wrapForumUnicodeEmoji(emoji));
+    s = s.replace(smileyReplaceRegex(from), wrapForumUnicodeEmoji(emoji));
   }
 
-  // 7) Restore media placeholders
+  // 7) Restore placeholders
+  codePlaceholders.forEach((html, i)  => { s = s.split(`\u0001C${i}\u0001`).join(html); });
   gifPlaceholders.forEach((html, i)   => { s = s.split(`\u0001G${i}\u0001`).join(html); });
   imgPlaceholders.forEach((html, i)   => { s = s.split(`\u0001I${i}\u0001`).join(html); });
   ytubePlaceholders.forEach((html, i) => { s = s.split(`\u0001Y${i}\u0001`).join(html); });

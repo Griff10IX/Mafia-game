@@ -32,6 +32,11 @@ def attempt_make_public(attempt: dict) -> bool:
     return bool(v)
 
 
+def attempt_is_hitman_kill(attempt: dict) -> bool:
+    """Hitman for Hire robot bodyguard kill — Killer column shows Hitman, never the hirer."""
+    return bool(attempt.get("is_hitman_kill"))
+
+
 def stats_kill_shows_killer_username(
     attempt: dict,
     *,
