@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink, X, Crown, Star } from 'lucide-react';
-import api, { apiGetWithResumeRetries, getApiErrorMessage, isTransientResumeLoadError } from '../../utils/api';
+import api, { apiGetWithResumeRetries, getApiErrorMessage, isTransientResumeLoadError, shouldSuppressResumeNetworkToast } from '../../utils/api';
 import {
   getOrCreateStaffPortalDeviceId,
   isStaffPortalTokenValid,
@@ -1684,13 +1684,20 @@ export default function Profile() {
   }, [avatarLightbox]);
 
   useEffect(() => {
+    let cancelled = false;
+    // Never leave Safari users stuck on "Verifying session…" if /auth/me is slow after AFK.
+    const failSafe = setTimeout(() => {
+      if (!cancelled) setAuthMeReady(true);
+    }, 6000);
+
     const run = async () => {
       if (!usernameParam) setLoading(true);
       try {
         const [meRes, adminRes] = await Promise.all([
-          api.get('/auth/me'),
-          api.get('/auth/staff-flags').catch(() => ({ data: {} })),
+          apiGetWithResumeRetries('/auth/me'),
+          apiGetWithResumeRetries('/auth/staff-flags').catch(() => ({ data: {} })),
         ]);
+        if (cancelled) return;
         setMe(meRes.data);
         if (meRes.data?.username) setProfileSessionLastMeUsername(meRes.data.username);
         setIsAdmin(!!adminRes.data?.is_admin);
@@ -1700,13 +1707,41 @@ export default function Profile() {
         setStaffPortalEnabled(!!adminRes.data?.staff_portal_enabled);
         setStaffPortalSessionMin(Number(adminRes.data?.staff_portal_session_minutes) || 30);
       } catch (e) {
-        toast.error('Failed to load your account');
+        if (!cancelled && !shouldSuppressResumeNetworkToast(e)) {
+          toast.error(getApiErrorMessage(e) || 'Failed to load your account');
+        }
       } finally {
-        if (!usernameParam) setLoading(false);
-        setAuthMeReady(true);
+        if (!cancelled) {
+          if (!usernameParam) setLoading(false);
+          setAuthMeReady(true);
+        }
       }
     };
     run();
+
+    const onResume = () => {
+      // Soft re-check after AFK without remounting / blanking the dossier.
+      apiGetWithResumeRetries('/auth/me')
+        .then((meRes) => {
+          if (cancelled) return;
+          setMe(meRes.data);
+          if (meRes.data?.username) setProfileSessionLastMeUsername(meRes.data.username);
+          setAuthMeReady(true);
+        })
+        .catch(() => {});
+    };
+    const onRefreshUser = (e) => {
+      if (e?.detail?.resume) onResume();
+    };
+    window.addEventListener('app:page-resume', onResume);
+    window.addEventListener('app:refresh-user', onRefreshUser);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(failSafe);
+      window.removeEventListener('app:page-resume', onResume);
+      window.removeEventListener('app:refresh-user', onRefreshUser);
+    };
   }, [usernameParam]);
 
   useEffect(() => {
