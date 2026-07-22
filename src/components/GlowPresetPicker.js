@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, X } from 'lucide-react';
 import { PROFILE_GLOW_PRESETS, isCustomGlowValue } from '../constants/profileGlowPresets';
 import styles from '../styles/noir.module.css';
@@ -6,6 +7,7 @@ import styles from '../styles/noir.module.css';
 /**
  * Glow colour picker (presets + custom hex) — shared by Store purchase and Edit Profile.
  * `value` is a preset id (e.g. "crimson") or a custom "#rrggbb" hex.
+ * Modal is portaled to document.body so overflow/transform on profile cards cannot clip it.
  */
 export default function GlowPresetPicker({
   value,
@@ -28,35 +30,31 @@ export default function GlowPresetPicker({
     setOpen(false);
   };
 
-  return (
-    <div>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => {
-          if (isCustom && customHexValue) setCustomHex(customHexValue);
-          else if (current?.hex) setCustomHex(current.hex);
-          setOpen(true);
-        }}
-        className={buttonClassName}
-        style={{ color: current.hex }}
-      >
-        <span
-          className="inline-block w-3 h-3 rounded-full shrink-0"
-          style={{ backgroundColor: current.hex, boxShadow: `0 0 6px ${current.hex}` }}
-        />
-        {disabled ? savingLabel : `${idlePrefix} ${current.label}`}
-        <ChevronDown size={12} className="shrink-0" />
-      </button>
-      {open && (
+  useEffect(() => {
+    if (!open) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open]);
+
+  const modal = open
+    ? createPortal(
         <div
-          className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
           onClick={() => setOpen(false)}
           role="dialog"
           aria-modal="true"
+          aria-label="Glow colour"
         >
           <div
-            className={`${styles.panel} w-full max-w-md rounded-xl border border-primary/25 overflow-hidden max-h-[85vh] flex flex-col`}
+            className={`${styles.panel} w-full max-w-md rounded-xl border border-primary/25 overflow-hidden max-h-[85vh] flex flex-col shadow-2xl`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="px-3 py-2 border-b border-primary/15 bg-primary/5 flex items-center justify-between shrink-0">
@@ -118,8 +116,32 @@ export default function GlowPresetPicker({
               </div>
             </div>
           </div>
-        </div>
-      )}
+        </div>,
+        document.body,
+      )
+    : null;
+
+  return (
+    <div>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => {
+          if (isCustom && customHexValue) setCustomHex(customHexValue);
+          else if (current?.hex) setCustomHex(current.hex);
+          setOpen(true);
+        }}
+        className={buttonClassName}
+        style={{ color: current.hex }}
+      >
+        <span
+          className="inline-block w-3 h-3 rounded-full shrink-0"
+          style={{ backgroundColor: current.hex, boxShadow: `0 0 6px ${current.hex}` }}
+        />
+        {disabled ? savingLabel : `${idlePrefix} ${current.label}`}
+        <ChevronDown size={12} className="shrink-0" />
+      </button>
+      {modal}
     </div>
   );
 }
