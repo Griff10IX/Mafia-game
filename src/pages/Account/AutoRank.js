@@ -1003,34 +1003,36 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
                 <div className="rounded border border-sky-500/25 bg-sky-500/5 p-2 space-y-1.5 text-[10px] sm:text-xs font-heading">
                   <div className="text-[9px] font-bold text-sky-300/90 uppercase tracking-wider">Cooldown skips</div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
-                    <div className="text-zinc-300">
-                      <span className="text-zinc-500">Crime:</span>{' '}
-                      {skip.crime?.tokens ?? 0} held · {skip.crime?.credits ?? 0} ready
-                      <div className="text-zinc-500 text-[9px]">
-                        AR used today: {skip.crime?.auto_rank_used_today ?? 0}
-                        {(skip.crime?.auto_rank_cash_today ?? 0) > 0 && <> · {fmtMoney(skip.crime.auto_rank_cash_today)} from skips</>}
-                        {(skip.crime?.lifetime_cash ?? 0) > 0 && <> · life {fmtMoney(skip.crime.lifetime_cash)}</>}
-                      </div>
-                    </div>
-                    <div className="text-zinc-300">
-                      <span className="text-zinc-500">GTA:</span>{' '}
-                      {skip.gta?.tokens ?? 0} held · {skip.gta?.credits ?? 0} ready
-                      <div className="text-zinc-500 text-[9px]">
-                        AR used today: {skip.gta?.auto_rank_used_today ?? 0}
-                        {(skip.gta?.lifetime_uses ?? 0) > 0 && <> · life {skip.gta.lifetime_uses} uses</>}
-                      </div>
-                    </div>
-                    <div className="text-zinc-300">
-                      <span className="text-zinc-500">Booze:</span>{' '}
-                      {skip.booze?.tokens ?? 0} held · {skip.booze?.credits ?? 0} ready
-                      <div className="text-zinc-500 text-[9px]">
-                        AR used today: {skip.booze?.auto_rank_used_today ?? 0}
-                        {(skip.booze?.lifetime_profit ?? 0) > 0 && <> · life {fmtMoney(skip.booze.lifetime_profit)}</>}
-                      </div>
-                    </div>
+                    {[
+                      { key: 'crime', label: 'Crime', life: (s) => (s.lifetime_cash > 0 ? <> · life {fmtMoney(s.lifetime_cash)}</> : null), cash: true },
+                      { key: 'gta', label: 'GTA', life: (s) => (s.lifetime_uses > 0 ? <> · life {s.lifetime_uses} uses</> : null), cash: false },
+                      { key: 'booze', label: 'Booze', life: (s) => (s.lifetime_profit > 0 ? <> · life {fmtMoney(s.lifetime_profit)}</> : null), cash: true },
+                    ].map(({ key, label, life, cash }) => {
+                      const s = skip[key] || {};
+                      const held = s.tokens ?? 0;
+                      const leftToday = Math.max(0, (s.daily_cap ?? 0) - (s.uses_today ?? 0));
+                      const canBurn = held > 0 && leftToday > 0;
+                      return (
+                        <div key={key} className="text-zinc-300">
+                          <span className="text-zinc-500">{label}:</span>{' '}
+                          {held.toLocaleString()} held
+                          {canBurn ? (
+                            <span className="text-emerald-400/90"> · usable</span>
+                          ) : held > 0 ? (
+                            <span className="text-amber-300/90"> · daily cap</span>
+                          ) : null}
+                          <div className="text-zinc-500 text-[9px]">
+                            AR used today: {s.auto_rank_used_today ?? 0}
+                            {cash && (s.auto_rank_cash_today ?? 0) > 0 && <> · {fmtMoney(s.auto_rank_cash_today)} from skips</>}
+                            {' · '}{leftToday.toLocaleString()} left today
+                            {life(s)}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  {(skip.crime?.tokens ?? 0) + (skip.crime?.credits ?? 0) + (skip.gta?.tokens ?? 0) + (skip.gta?.credits ?? 0) + (skip.booze?.tokens ?? 0) + (skip.booze?.credits ?? 0) === 0 && (
-                    <div className="text-amber-300/90 text-[9px]">No skip tokens or credits held — buy Crime / GTA / Booze Travel Skip in the Store, or turn the toggle off.</div>
+                  {(skip.crime?.tokens ?? 0) + (skip.gta?.tokens ?? 0) + (skip.booze?.tokens ?? 0) === 0 && (
+                    <div className="text-amber-300/90 text-[9px]">No skip tokens held — buy Crime / GTA / Booze Travel Skip in the Store, or turn the toggle off.</div>
                   )}
                 </div>
               )}
