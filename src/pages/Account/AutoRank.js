@@ -507,7 +507,7 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
       <ToggleRow
         icon={Zap}
         label="Use cooldown skip tokens"
-        description="When on, Auto Rank burns held Crime / GTA / Booze Travel Skip tokens to bypass timers (respects each type's daily cap). Turn off to only act when cooldowns are naturally ready."
+        description="When on, Auto Rank burns up to 5 Crime / GTA / Booze Travel Skip tokens per cycle (daily caps still apply), uses jail bailout tokens if you get locked up, and skipped crimes pay −50% cash. Turn off to only act when cooldowns are naturally ready."
         checked={!!p.auto_rank_use_skip_tokens}
         disabled={savingPrefs}
         onToggle={() => onUpdatePref('auto_rank_use_skip_tokens', !p.auto_rank_use_skip_tokens)}
@@ -1085,8 +1085,8 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
               </div>
             </div>
             <p className="text-[9px] sm:text-[10px] text-zinc-500 font-heading leading-relaxed ">
-              <strong className="text-zinc-400">Cycle order:</strong> busts → crimes → GTA. <strong className="text-zinc-400">OC</strong> and <strong className="text-zinc-400">booze</strong> run on their own timers. Interval: {interval}s; in jail, cycles pause until you’re out.
-              {skipOn ? ' With skip tokens on, Auto Rank burns held Crime/GTA/Booze skips to bypass those timers.' : ''}
+              <strong className="text-zinc-400">Cycle order:</strong> busts → crimes → GTA. <strong className="text-zinc-400">OC</strong> and <strong className="text-zinc-400">booze</strong> run on their own timers. Interval: {interval}s; in jail, cycles pause until you’re out
+              {skipOn ? ' (or until a bailout token frees you). With skip tokens on, Auto Rank burns up to 5 Crime/GTA/Booze skips per cycle; skipped crimes pay −50% cash.' : '.'}
             </p>
           </>
         )}

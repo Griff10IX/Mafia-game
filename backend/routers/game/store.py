@@ -5,7 +5,7 @@ from typing import Optional
 import uuid
 
 logger = logging.getLogger(__name__)
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 from fastapi import Depends, HTTPException, Query, Request
 
@@ -338,12 +338,17 @@ class BuyStoreTokenBody(BaseModel):
     token_type: str
     amount: int = 1
 
-    @field_validator("amount")
-    @classmethod
-    def amount_ok(cls, v):
-        if v is None or v < 1 or v > 100:
-            raise ValueError("amount must be 1–100")
-        return v
+    @model_validator(mode="after")
+    def amount_ok(self):
+        from utils.cooldown_skip import TOKEN_TYPE_TO_SKIP_KIND, cooldown_skip_daily_cap
+
+        kind = TOKEN_TYPE_TO_SKIP_KIND.get(str(self.token_type or "").strip())
+        max_qty = int(cooldown_skip_daily_cap(kind)) if kind else 100
+        amt = int(self.amount or 0)
+        if amt < 1 or amt > max_qty:
+            raise ValueError(f"amount must be 1–{max_qty}")
+        self.amount = amt
+        return self
 
 
 class ProfileGlowPurchaseBody(BaseModel):

@@ -890,10 +890,11 @@ async def _booze_buy_and_travel(db, user, user_id: str, username: str, telegram_
 
 
 async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id: str, bot_token: Optional[str], now: datetime, lines: list) -> bool:
-    """Run one booze step: apply travel arrival, then sell if carrying else buy and start travel."""
+    """Run booze: arrive/skip travel, sell, buy+travel. With skip tokens on, up to AUTO_RANK_SKIP_BATCH travel skips."""
     from server import STATES
     from routers.money.booze_run import _booze_round_trip_cities, _booze_user_carrying_total
     from routers.admin.airport import _start_travel_impl
+    from utils.cooldown_skip import consume_skip_credit
 
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
@@ -907,31 +908,42 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
     if not user or user.get("in_jail"):
         logger.info("Auto rank booze %s: in jail or missing after travel apply", user_id)
         return False
+
+    booze_skips_used = 0
+    any_ok = False
+
+    async def _try_skip_mid_travel() -> bool:
+        """If mid-travel, burn a skip to land (when allowed). True = landed / not traveling."""
+        nonlocal user, booze_skips_used
+        if not user or not user.get("travel_arrives_at"):
+            return True
+        adt = _parse_iso(user["travel_arrives_at"])
+        wall = datetime.now(timezone.utc)
+        if adt and wall >= adt:
+            user = await _apply_overdue_travel(db, user_id, user, wall)
+            return bool(user) and not user.get("travel_arrives_at")
+        if user.get("auto_rank_use_skip_tokens") is not True:
+            return False
+        if booze_skips_used >= AUTO_RANK_SKIP_BATCH or not _can_use_skip(user, "booze"):
+            return False
+        dest = (user.get("traveling_to") or "").strip()
+        ok, user = await _ensure_skip_credit(db, user_id, user, "booze")
+        if not (ok and dest and await consume_skip_credit(db, user_id, "booze")):
+            return False
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {"current_state": dest}, "$unset": {"traveling_to": "", "travel_arrives_at": ""}},
+        )
+        user = await db.users.find_one({"id": user_id}, {"_id": 0}) or user
+        booze_skips_used += 1
+        lines.append(f"**Booze** — Skipped the drive to {dest}.")
+        return True
+
+    # Initial mid-travel: skip once or wait
     if user.get("travel_arrives_at"):
         adt = _parse_iso(user["travel_arrives_at"])
         if adt and now < adt:
-            # Optional: burn a Booze Travel Skip to finish the drive now (same as Skip Run).
-            if user.get("auto_rank_use_skip_tokens") is True and _can_use_skip(user, "booze"):
-                from utils.cooldown_skip import consume_skip_credit
-
-                dest = (user.get("traveling_to") or "").strip()
-                ok, user = await _ensure_skip_credit(db, user_id, user, "booze")
-                if ok and dest and await consume_skip_credit(db, user_id, "booze"):
-                    await db.users.update_one(
-                        {"id": user_id},
-                        {"$set": {"current_state": dest}, "$unset": {"traveling_to": "", "travel_arrives_at": ""}},
-                    )
-                    user = await db.users.find_one({"id": user_id}, {"_id": 0}) or user
-                    await _inc_auto_rank_skip_stats(db, user_id, now, kind="booze", used=1, cash=0)
-                    try:
-                        from utils.token_perk_stats import bump_token_perk_stats
-                        await bump_token_perk_stats(db, user_id, "cooldown_skip_booze", uses=1, via_auto_rank=1)
-                    except Exception:
-                        pass
-                    lines.append(f"**Booze** — Skipped the drive to {dest} (1 skip).")
-                else:
-                    return False
-            else:
+            if not await _try_skip_mid_travel():
                 return False
 
     round_trip = _booze_round_trip_cities()
@@ -939,10 +951,8 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
         logger.warning("Auto rank booze %s: no round trip cities available", user_id)
         return False
     city_a, city_b = round_trip[0], round_trip[1]
-    current = (user.get("current_state") or "").strip()
-    idx_a = STATES.index(city_a) if city_a in STATES else 0
-    idx_b = STATES.index(city_b) if city_b in STATES else 1
 
+    current = (user.get("current_state") or "").strip()
     if current not in (city_a, city_b):
         travel_method = await _get_travel_method(db, user_id)
         if travel_method:
@@ -950,56 +960,108 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
                 await _start_travel_impl(user, city_a, travel_method, airport_slot=None, booze_run=True)
                 await _set_last_activity(db, user_id, "booze_travel", now)
                 lines.append(f"**Booze** — Traveling to {city_a} to start run.")
-                return True
+                # If skips remain, land immediately and continue the sell/buy loop below
+                user = await db.users.find_one({"id": user_id}, {"_id": 0}) or user
+                if not await _try_skip_mid_travel():
+                    return True
+                any_ok = True
             except HTTPException as he:
                 logger.info("Auto rank booze %s: travel to %s failed: %s", user_id, city_a, he.detail)
+                return False
             except Exception as e:
                 logger.exception("Auto rank booze travel to buy city %s: %s", user_id, e)
+                return False
         else:
             logger.info("Auto rank booze %s: at %s (not in %s/%s), no working car to travel", user_id, current, city_a, city_b)
-        return False
+            return False
 
-    carrying_total = _booze_user_carrying_total(dict(user.get("booze_carrying") or {}))
-    other_city = city_b if current == city_a else city_a
-    other_idx = idx_b if current == city_a else idx_a
-    current_idx = idx_a if current == city_a else idx_b
-
-    if carrying_total > 0:
-        success, user = await _booze_sell_at_city(db, user, user_id, username, telegram_chat_id, bot_token, now, lines)
-        if success:
-            await _set_last_activity(db, user_id, "booze_sell", now)
-        if not success and user:
-            # At buy city with booze — can't sell here; travel to sell city so we can sell on arrival
-            travel_method = await _get_travel_method(db, user_id)
-            if travel_method:
-                try:
-                    await _start_travel_impl(user, other_city, travel_method, airport_slot=None, booze_run=True)
-                    await _set_last_activity(db, user_id, "booze_travel", now)
-                    lines.append(f"**Booze** — Traveling to {other_city} to sell.")
-                    return True
-                except HTTPException:
-                    pass
-                except Exception as e:
-                    logger.exception("Auto rank booze travel to sell city %s: %s", user_id, e)
-        if not success or not user:
-            return success
-        # Continue cycle: sell then immediately buy+travel (only delay = travel time)
+    # Sell / buy / skip-travel loop (up to batch travel skips)
+    while True:
         user = await db.users.find_one({"id": user_id}, {"_id": 0})
         if not user or user.get("in_jail"):
-            return success
-        carrying_after = _booze_user_carrying_total(dict(user.get("booze_carrying") or {}))
-        current_after = (user.get("current_state") or "").strip()
-        if carrying_after == 0 and current_after in (city_a, city_b):
-            did_buy = await _booze_buy_and_travel(db, user, user_id, username, telegram_chat_id, bot_token, now, lines, current_after, other_city, current_idx, other_idx)
+            break
+        if user.get("travel_arrives_at"):
+            if not await _try_skip_mid_travel():
+                break
+            user = await db.users.find_one({"id": user_id}, {"_id": 0}) or user
+
+        current = (user.get("current_state") or "").strip()
+        if current not in (city_a, city_b):
+            break
+        idx_a = STATES.index(city_a) if city_a in STATES else 0
+        idx_b = STATES.index(city_b) if city_b in STATES else 1
+        other_city = city_b if current == city_a else city_a
+        other_idx = idx_b if current == city_a else idx_a
+        current_idx = idx_a if current == city_a else idx_b
+        carrying_total = _booze_user_carrying_total(dict(user.get("booze_carrying") or {}))
+
+        if carrying_total > 0:
+            success, user = await _booze_sell_at_city(db, user, user_id, username, telegram_chat_id, bot_token, now, lines)
+            if success:
+                any_ok = True
+                await _set_last_activity(db, user_id, "booze_sell", now)
+            if not success and user:
+                travel_method = await _get_travel_method(db, user_id)
+                if travel_method:
+                    try:
+                        await _start_travel_impl(user, other_city, travel_method, airport_slot=None, booze_run=True)
+                        await _set_last_activity(db, user_id, "booze_travel", now)
+                        lines.append(f"**Booze** — Traveling to {other_city} to sell.")
+                        any_ok = True
+                        user = await db.users.find_one({"id": user_id}, {"_id": 0}) or user
+                        if await _try_skip_mid_travel():
+                            continue
+                        break
+                    except HTTPException:
+                        pass
+                    except Exception as e:
+                        logger.exception("Auto rank booze travel to sell city %s: %s", user_id, e)
+            if not success or not user:
+                break
+            user = await db.users.find_one({"id": user_id}, {"_id": 0})
+            if not user or user.get("in_jail"):
+                break
+            carrying_after = _booze_user_carrying_total(dict(user.get("booze_carrying") or {}))
+            current_after = (user.get("current_state") or "").strip()
+            if carrying_after == 0 and current_after in (city_a, city_b):
+                other_after = city_b if current_after == city_a else city_a
+                cur_idx = STATES.index(current_after) if current_after in STATES else 0
+                oth_idx = STATES.index(other_after) if other_after in STATES else 1
+                did_buy = await _booze_buy_and_travel(
+                    db, user, user_id, username, telegram_chat_id, bot_token, now, lines,
+                    current_after, other_after, cur_idx, oth_idx,
+                )
+                if did_buy:
+                    any_ok = True
+                    await _set_last_activity(db, user_id, "booze_travel", now)
+                    user = await db.users.find_one({"id": user_id}, {"_id": 0}) or user
+                    if await _try_skip_mid_travel():
+                        continue
+                break
+            break
+        else:
+            did_buy = await _booze_buy_and_travel(
+                db, user, user_id, username, telegram_chat_id, bot_token, now, lines,
+                current, other_city, current_idx, other_idx,
+            )
             if did_buy:
+                any_ok = True
                 await _set_last_activity(db, user_id, "booze_travel", now)
-            return did_buy
-        return success
-    else:
-        did_buy = await _booze_buy_and_travel(db, user, user_id, username, telegram_chat_id, bot_token, now, lines, current, other_city, current_idx, other_idx)
-        if did_buy:
-            await _set_last_activity(db, user_id, "booze_travel", now)
-        return did_buy
+                user = await db.users.find_one({"id": user_id}, {"_id": 0}) or user
+                if await _try_skip_mid_travel():
+                    continue
+            break
+
+    if booze_skips_used > 0:
+        await _inc_auto_rank_skip_stats(db, user_id, now, kind="booze", used=booze_skips_used, cash=0)
+        try:
+            from utils.token_perk_stats import bump_token_perk_stats
+            await bump_token_perk_stats(db, user_id, "cooldown_skip_booze", uses=booze_skips_used, via_auto_rank=booze_skips_used)
+        except Exception:
+            pass
+        if booze_skips_used > 1:
+            lines.append(f"**Booze** — Used {booze_skips_used} travel skips this cycle.")
+    return any_ok
 
 
 # ─── Bust-only (5-sec loop) ──────────────────────────────────────
@@ -1110,10 +1172,15 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         return
     chat_id = (telegram_chat_id or "").strip()
     token = (bot_token or "").strip() or (user.get("telegram_bot_token") or "").strip()
-    if user.get("in_jail"):
-        return
-
     lines = [f"**Auto Rank** — {username}", ""]
+    if user.get("in_jail"):
+        if user.get("auto_rank_use_skip_tokens") is True:
+            freed, user = await _auto_rank_try_jail_bailout(db, user_id, user, lines)
+            if not freed:
+                return
+        else:
+            return
+
     has_success = False
     respect_before = int(user.get("respect_points") or 0)
     use_skips = user.get("auto_rank_use_skip_tokens") is True
@@ -1191,7 +1258,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 if until is not None and until > now:
                     if (
                         not use_skips
-                        or skip_crime_used >= AUTO_RANK_CRIME_SKIP_CAP
+                        or skip_crime_used >= AUTO_RANK_SKIP_BATCH
                         or not _can_use_skip(user, "crime")
                     ):
                         continue
@@ -1224,7 +1291,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 until = cooldown_by_crime.get(chosen.get("id"))
                 used_skip_this = False
                 if until is not None and until > now:
-                    if skip_crime_used >= AUTO_RANK_CRIME_SKIP_CAP:
+                    if skip_crime_used >= AUTO_RANK_SKIP_BATCH:
                         break
                     ok, user = await _ensure_skip_credit(db, user_id, user, "crime")
                     if not ok:
@@ -1289,74 +1356,122 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     if not user:
         return
     if user.get("in_jail"):
-        return
+        if user.get("auto_rank_use_skip_tokens") is True:
+            freed, user = await _auto_rank_try_jail_bailout(db, user_id, user, lines)
+            if not freed:
+                return
+        else:
+            return
     use_skips = user.get("auto_rank_use_skip_tokens") is True
 
-    # --- GTA: only if global GTA cooldown has passed (or skip tokens enabled). Rotate through unlocked options. ---
+    # --- GTA: ready attempt, then up to AUTO_RANK_SKIP_BATCH skipped attempts when skips on. ---
     if _auto_rank_task_enabled(user, "auto_rank_gta"):
-        cooldown_doc = await db.gta_cooldowns.find_one({"user_id": user_id}, {"_id": 0, "cooldown_until": 1})
-        until = _parse_iso(cooldown_doc.get("cooldown_until")) if cooldown_doc else None
-        on_cooldown = bool(until and until > now)
-        gta_ready = not on_cooldown
-        if on_cooldown and use_skips and _can_use_skip(user, "gta"):
-            from utils.cooldown_skip import consume_skip_credit
+        from utils.cooldown_skip import consume_skip_credit
 
-            ok, user = await _ensure_skip_credit(db, user_id, user, "gta")
-            if ok and await consume_skip_credit(db, user_id, "gta"):
+        gta_success_count = 0
+        gta_fail_count = 0
+        gta_names: list[str] = []
+        skip_gta_used = 0
+        _first_gta_in_cycle = True
+        while True:
+            user = await db.users.find_one({"id": user_id}, {"_id": 0})
+            if not user or user.get("in_jail"):
+                break
+            use_skips = user.get("auto_rank_use_skip_tokens") is True
+            wall_now = datetime.now(timezone.utc)
+            cooldown_doc = await db.gta_cooldowns.find_one({"user_id": user_id}, {"_id": 0, "cooldown_until": 1})
+            until = _parse_iso(cooldown_doc.get("cooldown_until")) if cooldown_doc else None
+            on_cooldown = bool(until and until > wall_now)
+            used_skip_this = False
+            if on_cooldown:
+                if (
+                    not use_skips
+                    or skip_gta_used >= AUTO_RANK_SKIP_BATCH
+                    or not _can_use_skip(user, "gta")
+                ):
+                    break
+                ok, user = await _ensure_skip_credit(db, user_id, user, "gta")
+                if not ok or not await consume_skip_credit(db, user_id, "gta"):
+                    break
                 await db.gta_cooldowns.update_one(
                     {"user_id": user_id},
-                    {"$set": {"cooldown_until": now.isoformat()}},
+                    {"$set": {"cooldown_until": wall_now.isoformat()}},
+                    upsert=True,
                 )
                 skip_gta_used += 1
-                gta_ready = True
-        if gta_ready:
+                used_skip_this = True
+            elif not _first_gta_in_cycle and not use_skips:
+                break
             rank_id, _ = get_rank_info(int(user.get("rank_points") or 0), user_prestige_rank_mult(user))
             unlocked = [opt for opt in GTA_OPTIONS if rank_id >= opt["min_rank"]]
             allowed_gta_ids = user.get("auto_rank_gta_option_ids")
             if isinstance(allowed_gta_ids, list) and len(allowed_gta_ids) > 0:
                 allowed_set = set(allowed_gta_ids)
                 unlocked = [opt for opt in unlocked if opt.get("id") in allowed_set]
-            if unlocked:
+            if not unlocked:
+                break
+            try:
+                if not _first_gta_in_cycle:
+                    await asyncio.sleep(AUTO_RANK_CRIME_COMMIT_INTERVAL_SEC)
+                _first_gta_in_cycle = False
                 next_index = int(user.get("auto_rank_next_gta_option_index") or 0) % max(1, len(unlocked))
                 opt = unlocked[next_index]
-                try:
-                    out = await attempt_gta_locked(opt["id"], user, caller_updates_total_gta=True)
-                    # Advance to next unlocked option so we rotate through all GTAs as they unlock
-                    await db.users.update_one(
-                        {"id": user_id},
-                        {"$set": {"auto_rank_next_gta_option_index": (next_index + 1) % len(unlocked)}},
+                out = await attempt_gta_locked(opt["id"], user, caller_updates_total_gta=True)
+                await db.users.update_one(
+                    {"id": user_id},
+                    {"$set": {"auto_rank_next_gta_option_index": (next_index + 1) % len(unlocked)}},
+                )
+                if out.success:
+                    has_success = True
+                    gta_success_count += 1
+                    car_name = out.car.get("name", "Car") if out.car else "Car"
+                    gta_names.append(car_name)
+                    await _update_auto_rank_stats_gta(
+                        db, user_id, out.car or {}, wall_now, option_id=opt.get("id"), option_name=opt.get("name")
                     )
-                    if out.success:
-                        has_success = True
-                        car_name = out.car.get("name", "Car") if out.car else "Car"
-                        await _update_auto_rank_stats_gta(db, user_id, out.car or {}, now, option_id=opt.get("id"), option_name=opt.get("name"))
-                        if skip_gta_used:
-                            await _inc_auto_rank_skip_stats(db, user_id, now, kind="gta", used=skip_gta_used, cash=0)
-                            try:
-                                from utils.token_perk_stats import bump_token_perk_stats
-                                await bump_token_perk_stats(
-                                    db, user_id, "cooldown_skip_gta", uses=skip_gta_used, via_auto_rank=skip_gta_used
-                                )
-                            except Exception:
-                                pass
-                        await _set_last_activity(db, user_id, "gta", now)
-                        skip_note = " (1 skip)" if skip_gta_used else ""
-                        lines.append(f"**GTA** — Success: {car_name}! +{out.rank_points_earned} RP.{skip_note}")
-                    else:
-                        await _inc_failed_today(db, user_id, "auto_rank_failed_gtas_today", "auto_rank_failed_gtas_date", now)
-                except HTTPException:
-                    # Normal "can't do that" (e.g. in_jail, cooldown, rank) — skip GTA this run
+                    await _set_last_activity(db, user_id, "gta", wall_now)
+                else:
+                    gta_fail_count += 1
+                    await _inc_failed_today(db, user_id, "auto_rank_failed_gtas_today", "auto_rank_failed_gtas_date", wall_now)
+            except HTTPException:
+                break
+            except Exception as e:
+                logger.exception("Auto rank GTA for %s: %s", user_id, e)
+                gta_fail_count += 1
+                await _inc_failed_today(db, user_id, "auto_rank_failed_gtas_today", "auto_rank_failed_gtas_date", wall_now)
+                break
+            # Without skips: one attempt per cycle. With skips: loop until batch / tokens run out.
+            if not use_skips:
+                break
+        if gta_success_count > 0:
+            if skip_gta_used:
+                await _inc_auto_rank_skip_stats(db, user_id, now, kind="gta", used=skip_gta_used, cash=0)
+                try:
+                    from utils.token_perk_stats import bump_token_perk_stats
+                    await bump_token_perk_stats(
+                        db, user_id, "cooldown_skip_gta", uses=skip_gta_used, via_auto_rank=skip_gta_used
+                    )
+                except Exception:
                     pass
-                except Exception as e:
-                    logger.exception("Auto rank GTA for %s: %s", user_id, e)
-                    await _inc_failed_today(db, user_id, "auto_rank_failed_gtas_today", "auto_rank_failed_gtas_date", now)
+            names_part = ", ".join(gta_names[:6])
+            if len(gta_names) > 6:
+                names_part += f" (+{len(gta_names) - 6} more)"
+            skip_note = f" ({skip_gta_used} skip{'s' if skip_gta_used != 1 else ''})" if skip_gta_used else ""
+            lines.append(
+                f"**GTA** — Success ×{gta_success_count}: {names_part}.{skip_note}"
+            )
 
     # --- Melt ---
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         return
     if user.get("in_jail"):
-        return
+        if user.get("auto_rank_use_skip_tokens") is True:
+            freed, user = await _auto_rank_try_jail_bailout(db, user_id, user, lines)
+            if not freed:
+                return
+        else:
+            return
     total_batch_limit = effective_garage_batch_limit(user)
     used_in_melt = 0  # shared cap across melt + timed scrap
     if _auto_rank_task_enabled(user, "auto_rank_melt"):
@@ -1568,8 +1683,15 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     # --- Booze ---
     # Refetch user: scrap block uses minimal projection that omits auto_rank_booze
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
-    if not user or user.get("in_jail"):
+    if not user:
         return
+    if user.get("in_jail"):
+        if user.get("auto_rank_use_skip_tokens") is True:
+            freed, user = await _auto_rank_try_jail_bailout(db, user_id, user, lines)
+            if not freed:
+                return
+        else:
+            return
     if _auto_rank_task_enabled(user, "auto_rank_booze") and not user.get("passive_booze_paused"):
         try:
             if await _run_booze_for_user(db, user_id, username, chat_id, bot_token, now, lines):
@@ -1992,8 +2114,10 @@ _PREFERENCE_DEFAULTS = {
     "auto_rank_use_skip_tokens": False,
 }
 
-# Soft cap so one Auto Rank cycle can't burn unbounded crime skips.
-AUTO_RANK_CRIME_SKIP_CAP = 200
+# Max skips burned per type (crime / GTA / booze) in one Auto Rank user cycle.
+AUTO_RANK_SKIP_BATCH = 5
+# Back-compat alias for older references / tests.
+AUTO_RANK_CRIME_SKIP_CAP = AUTO_RANK_SKIP_BATCH
 
 _SKIP_TOKEN_COUNT_FIELDS = {
     "crime": "cooldown_skip_crime_tokens",
@@ -2001,6 +2125,57 @@ _SKIP_TOKEN_COUNT_FIELDS = {
     "booze": "cooldown_skip_booze_tokens",
     "properties": "cooldown_skip_properties_tokens",
 }
+
+
+async def _auto_rank_try_jail_bailout(db, user_id: str, user: dict, lines: list) -> Tuple[bool, dict]:
+    """Spend one jail bailout token if possible. Returns (freed, refreshed_user)."""
+    from routers.crime.jail import JAIL_BAILOUT_DAILY_CAP, _invalidate_all_jail_players_cache
+
+    if not user or not user.get("in_jail"):
+        return True, user or {}
+    if int(user.get("jail_bailout_tokens") or 0) < 1:
+        return False, user
+    unbreakable = user.get("unbreakable_until")
+    if unbreakable:
+        try:
+            ub = datetime.fromisoformat(str(unbreakable).replace("Z", "+00:00"))
+            if ub.tzinfo is None:
+                ub = ub.replace(tzinfo=timezone.utc)
+            if ub > datetime.now(timezone.utc):
+                return False, user
+        except Exception:
+            pass
+    today = datetime.now(timezone.utc).date().isoformat()
+    uses_today = int(user.get("jail_bailout_uses_today") or 0)
+    if user.get("jail_bailout_day") == today and uses_today >= JAIL_BAILOUT_DAILY_CAP:
+        return False, user
+    set_doc = {"jail_bailout_day": today}
+    inc_uses = 1
+    if user.get("jail_bailout_day") != today:
+        set_doc["jail_bailout_uses_today"] = 1
+        inc_uses = 1 - uses_today
+    result = await db.users.update_one(
+        {"id": user_id, "in_jail": True, "jail_bailout_tokens": {"$gte": 1}},
+        {
+            "$set": {
+                "in_jail": False,
+                "jail_until": None,
+                "snitch_attempted_this_term": False,
+                **set_doc,
+            },
+            "$inc": {"jail_bailout_tokens": -1, "jail_bailout_uses_today": inc_uses},
+            "$unset": {"auto_rank_next_run_at": ""},
+        },
+    )
+    if result.modified_count == 0:
+        return False, user
+    try:
+        _invalidate_all_jail_players_cache()
+    except Exception:
+        pass
+    refreshed = await db.users.find_one({"id": user_id}, {"_id": 0}) or user
+    lines.append("**Jail** — Used a bailout token to get out.")
+    return True, refreshed
 
 
 def _can_use_skip(user: Optional[dict], kind: str) -> bool:

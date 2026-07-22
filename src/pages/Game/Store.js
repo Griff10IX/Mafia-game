@@ -109,8 +109,18 @@ const WEAPON11_STORE_COST_POINTS = 1000;
 const AUTO_RANK_2H_TOKEN_STORE_PTS = Math.ceil(AUTO_RANK_COST_POINTS / 8);
 const CREW_OC_AUTO_3H_TOKEN_STORE_PTS = 48; // match backend jailbust_bonus / crew_oc_auto_3h store price
 
-/** Max qty per single consumable-token purchase (must match backend BuyStoreTokenBody). */
+/** Default max qty per consumable-token purchase (must match backend BuyStoreTokenBody). */
 const TOKEN_BUY_MAX_QTY = 100;
+/** Cooldown-skip buy caps = daily activation caps (backend utils/cooldown_skip.py). */
+const TOKEN_BUY_MAX_QTY_BY_TYPE = {
+  cooldown_skip_crime: 5000,
+  cooldown_skip_gta: 1000,
+  cooldown_skip_booze: 200,
+  cooldown_skip_properties: 3,
+};
+function tokenBuyMaxQty(tokenType) {
+  return TOKEN_BUY_MAX_QTY_BY_TYPE[tokenType] || TOKEN_BUY_MAX_QTY;
+}
 const TOKEN_STORE_ITEMS = [
   { tokenType: 'xp_crimes', title: 'Crimes XP Token', price: 42, userKey: 'xp_crimes_tokens', desc: `2× crime XP for 1h when activated (stack up to ${TOKEN_MAX_STACK_LABEL}).` },
   { tokenType: 'xp_gta', title: 'GTA XP Token', price: 42, userKey: 'xp_gta_tokens', desc: `2× GTA XP for 1h when activated (stack up to ${TOKEN_MAX_STACK_LABEL}).` },
@@ -138,7 +148,7 @@ const TOKEN_STORE_ITEMS = [
   { tokenType: 'auto_collect_12h', title: 'Auto-Collect (12h)', price: 85, userKey: 'auto_collect_12h_tokens', flagKey: 'auto_collect', desc: 'Auto-collect family rackets when cooldowns allow (properties have their own Auto Collect perk). Activate in My Inventory (12h, stacks to 168h).' },
   { tokenType: 'auto_collect_24h', title: 'Auto-Collect (24h)', price: 150, userKey: 'auto_collect_24h_tokens', flagKey: 'auto_collect', desc: 'Same as 12h pass but 24h per activation (stacks to 168h).' },
   { tokenType: 'jail_bailout', title: 'Jail Bailout Token', price: 25, userKey: 'jail_bailout_tokens', flagKey: 'jail_bailout', desc: 'Instant leave jail from the Jail page (500 uses/day UTC; does not bypass OC lockdown).' },
-  { tokenType: 'cooldown_skip_crime', title: 'Crime Cooldown Skip', price: 35, userKey: 'cooldown_skip_crime_tokens', flagKey: 'cooldown_skip_crime', desc: 'Activate in My Inventory or tap Skip on a crime row — skips one crime cooldown (max 5,000 activations/day).' },
+  { tokenType: 'cooldown_skip_crime', title: 'Crime Cooldown Skip', price: 35, userKey: 'cooldown_skip_crime_tokens', flagKey: 'cooldown_skip_crime', desc: 'Activate in My Inventory or tap Skip on a crime row — skips one crime cooldown (max 5,000 activations/day). Skipped crimes pay −50% cash.' },
   { tokenType: 'cooldown_skip_gta', title: 'GTA Cooldown Skip', price: 35, userKey: 'cooldown_skip_gta_tokens', flagKey: 'cooldown_skip_gta', desc: 'Skips one GTA cooldown when activated (1,000/day cap).' },
   { tokenType: 'cooldown_skip_booze', title: 'Booze Travel Skip', price: 35, userKey: 'cooldown_skip_booze_tokens', flagKey: 'cooldown_skip_booze', desc: 'Skips one booze-run travel wait when activated (200/day cap).' },
   { tokenType: 'cooldown_skip_properties', title: 'Properties Collect Skip', price: 35, userKey: 'cooldown_skip_properties_tokens', flagKey: 'cooldown_skip_properties', desc: 'Skips one property collect cooldown when activated — tap ⚡ Skip Collect on the Properties page (3/day cap).' },
@@ -431,7 +441,8 @@ export default function Store() {
   );
 
   const setTokenBuyQty = (tokenType, next) => {
-    const n = Math.max(1, Math.min(TOKEN_BUY_MAX_QTY, Math.floor(Number(next) || 1)));
+    const maxQty = tokenBuyMaxQty(tokenType);
+    const n = Math.max(1, Math.min(maxQty, Math.floor(Number(next) || 1)));
     setTokenBuyQtyByType((prev) => ({ ...prev, [tokenType]: n }));
   };
 
@@ -1732,7 +1743,9 @@ export default function Store() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
               {TOKEN_STORE_ITEMS.map((t) => {
                 const held = Number(user?.[t.userKey] ?? 0);
-                const qty = Math.max(1, Math.min(TOKEN_BUY_MAX_QTY, Number(tokenBuyQtyByType[t.tokenType] || 1)));
+                const maxQty = tokenBuyMaxQty(t.tokenType);
+                const bigStep = maxQty >= 1000 ? 100 : 10;
+                const qty = Math.max(1, Math.min(maxQty, Number(tokenBuyQtyByType[t.tokenType] || 1)));
                 const totalPts = t.price * qty;
                 const totalRespect = storeRespectForPoints(totalPts);
                 const tokenCashPrice = cashPriceAvailable ? Math.round(t.price * cashPricePerPoint) : 0;
@@ -1768,16 +1781,16 @@ export default function Store() {
                       }
                     }}
                   >
-                    <p className="text-[10px] text-mutedForeground mb-1.5">Held: {held.toLocaleString()} · {t.price} pts each</p>
+                    <p className="text-[10px] text-mutedForeground mb-1.5">Held: {held.toLocaleString()} · {t.price} pts each · buy up to {maxQty.toLocaleString()}</p>
                     <div className="flex items-center gap-1.5 mb-1.5">
                       <button
                         type="button"
-                        onClick={() => setTokenBuyQty(t.tokenType, qty - 10)}
+                        onClick={() => setTokenBuyQty(t.tokenType, qty - bigStep)}
                         disabled={qty <= 1}
                         className="min-h-[32px] min-w-[32px] rounded border border-primary/30 bg-primary/10 text-primary text-[9px] font-bold disabled:opacity-40"
-                        title="−10"
+                        title={`−${bigStep}`}
                       >
-                        −10
+                        −{bigStep}
                       </button>
                       <button
                         type="button"
@@ -1790,7 +1803,7 @@ export default function Store() {
                       <input
                         type="number"
                         min={1}
-                        max={TOKEN_BUY_MAX_QTY}
+                        max={maxQty}
                         value={qty}
                         onChange={(e) => setTokenBuyQty(t.tokenType, e.target.value)}
                         className="flex-1 min-w-0 h-8 rounded border border-primary/30 bg-background/80 px-2 text-center text-[11px] font-heading font-bold text-foreground tabular-nums"
@@ -1799,19 +1812,19 @@ export default function Store() {
                       <button
                         type="button"
                         onClick={() => setTokenBuyQty(t.tokenType, qty + 1)}
-                        disabled={qty >= TOKEN_BUY_MAX_QTY}
+                        disabled={qty >= maxQty}
                         className="min-h-[32px] min-w-[32px] rounded border border-primary/30 bg-primary/10 text-primary font-bold disabled:opacity-40"
                       >
                         +
                       </button>
                       <button
                         type="button"
-                        onClick={() => setTokenBuyQty(t.tokenType, qty + 10)}
-                        disabled={qty >= TOKEN_BUY_MAX_QTY}
+                        onClick={() => setTokenBuyQty(t.tokenType, qty + bigStep)}
+                        disabled={qty >= maxQty}
                         className="min-h-[32px] min-w-[32px] rounded border border-primary/30 bg-primary/10 text-primary text-[9px] font-bold disabled:opacity-40"
-                        title="+10"
+                        title={`+${bigStep}`}
                       >
-                        +10
+                        +{bigStep}
                       </button>
                     </div>
                     <p className="text-[9px] text-zinc-500 font-heading mb-0.5 tabular-nums">

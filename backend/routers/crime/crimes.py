@@ -904,6 +904,9 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         rank_points = int(rank_points * pass_mult)
         reward = int(reward * CRIME_CASH_PAYOUT_MULT)
         rank_points = max(1, int(rank_points * rank_multiplier_for_actor(current_user.get("current_state"), _climate)))
+        # Instant cooldown skip: −50% cash (rank points unchanged).
+        if used_crime_skip:
+            reward = reward // 2
         rank_points_earned_out = int(rank_points)
         rp_before = int(current_user.get("rank_points") or 0)
         # Racket / illegal-business missions: crimes in the business's state (doc.state set at start)
