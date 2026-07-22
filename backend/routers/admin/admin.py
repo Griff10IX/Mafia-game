@@ -3403,6 +3403,7 @@ def register(router):
 
         season = await get_game_pass_season_public(db)
         season_id = season.get("game_pass_season_id")
+        notify = srv.send_notification
 
         results = []
         if (target_username or "").strip():
@@ -3414,7 +3415,7 @@ def register(router):
             if not target:
                 raise HTTPException(status_code=404, detail="User not found")
             out = await ensure_game_pass_prestige_rate_topup(
-                db, target["id"], season_id=season_id
+                db, target["id"], send_notification=notify, season_id=season_id
             )
             results.append(
                 {
@@ -3432,7 +3433,9 @@ def register(router):
                 uid = u.get("id")
                 if not uid:
                     continue
-                out = await ensure_game_pass_prestige_rate_topup(db, uid, season_id=season_id)
+                out = await ensure_game_pass_prestige_rate_topup(
+                    db, uid, send_notification=notify, season_id=season_id
+                )
                 if out:
                     results.append(
                         {

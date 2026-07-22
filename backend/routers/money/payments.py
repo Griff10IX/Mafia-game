@@ -1459,9 +1459,12 @@ def register(router):
         season_id = season.get("game_pass_season_id")
         topup = None
         try:
+            import server as srv
+
             topup = await ensure_game_pass_prestige_rate_topup(
                 db,
                 current_user.get("id") or "",
+                send_notification=srv.send_notification,
                 season_id=season_id,
             )
         except Exception:

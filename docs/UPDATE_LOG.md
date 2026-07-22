@@ -9,7 +9,7 @@
 [size=1.5][b][color=#2ECC71]2026-07-22 18:55 UTC[/color][/b] — [b]Game Pass Prestige top-up (+15% → +50%)[/b][/size]
 [quote]
 [list]
-[*][color=#888888][b]Fixed:[/b] Players who already bought [b]Game Pass Prestige[/b] at [b]+15%[/b] now receive the difference to the live [b]+50%[/b] season VIP bonus (same rewards table, no second +500 loot). Open [b]Game → Game Pass[/b] to claim automatically; you also get an inbox notice.[/color]
+[*][color=#888888][b]Fixed:[/b] Players who already bought [b]Game Pass Prestige[/b] at [b]+15%[/b] now receive the difference to the live [b]+50%[/b] season VIP bonus (same rewards table, no second +500 loot). Open [b]Game → Game Pass[/b] to claim automatically; you get an [b]inbox message[/b] as well.[/color]
 [/list]
 [/quote]
 

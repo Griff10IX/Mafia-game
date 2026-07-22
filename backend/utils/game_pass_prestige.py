@@ -249,14 +249,25 @@ async def ensure_game_pass_prestige_rate_topup(
                 user_id,
                 "Game Pass Prestige topped up",
                 (
-                    f"Prestige was raised from +{int(round(GAME_PASS_PRESTIGE_LEGACY_BONUS_RATE * 100))}% "
-                    f"to +{int(round(GAME_PASS_PRESTIGE_BONUS_RATE * 100))}%. "
-                    f"You received the difference ({summary or 'season VIP reward top-up'})."
+                    f"Good news — Game Pass Prestige was raised from "
+                    f"+{int(round(GAME_PASS_PRESTIGE_LEGACY_BONUS_RATE * 100))}% to "
+                    f"+{int(round(GAME_PASS_PRESTIGE_BONUS_RATE * 100))}% of season VIP rewards.\n\n"
+                    f"Because you already prestiged at the old rate, we've credited you the difference"
+                    f"{f' ({summary})' if summary else ''}.\n\n"
+                    f"Check your cash, points, bullets, tokens, and loot pieces — nothing else to claim."
                 ),
                 "reward",
+                category="system",
+                always_deliver=True,
+                message_link_to="/game-pass",
+                message_link_label="Open Game Pass",
             )
         except Exception:
-            pass
+            import logging
+
+            logging.getLogger(__name__).exception(
+                "game pass prestige rate top-up inbox notify failed user=%s", user_id
+            )
 
     return {
         "ok": True,
