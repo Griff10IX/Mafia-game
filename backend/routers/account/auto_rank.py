@@ -1389,8 +1389,10 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         if user.get("auto_rank_use_skip_tokens") is True:
             freed, user = await _auto_rank_try_jail_bailout(db, user_id, user, lines)
             if not freed:
+                await _auto_disable_skip_tokens_if_empty(db, user_id, user)
                 return
         else:
+            await _auto_disable_skip_tokens_if_empty(db, user_id, user)
             return
     use_skips = user.get("auto_rank_use_skip_tokens") is True
 
@@ -1511,8 +1513,10 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         if user.get("auto_rank_use_skip_tokens") is True:
             freed, user = await _auto_rank_try_jail_bailout(db, user_id, user, lines)
             if not freed:
+                await _auto_disable_skip_tokens_if_empty(db, user_id, user)
                 return
         else:
+            await _auto_disable_skip_tokens_if_empty(db, user_id, user)
             return
     total_batch_limit = effective_garage_batch_limit(user)
     used_in_melt = 0  # shared cap across melt + timed scrap
@@ -1731,8 +1735,10 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         if user.get("auto_rank_use_skip_tokens") is True:
             freed, user = await _auto_rank_try_jail_bailout(db, user_id, user, lines)
             if not freed:
+                await _auto_disable_skip_tokens_if_empty(db, user_id, user)
                 return
         else:
+            await _auto_disable_skip_tokens_if_empty(db, user_id, user)
             return
     if _auto_rank_task_enabled(user, "auto_rank_booze") and not user.get("passive_booze_paused"):
         try:
@@ -1742,6 +1748,10 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             logger.info("Auto rank booze for %s: %s", user_id, he.detail)
         except Exception as e:
             logger.exception("Auto rank booze for %s: %s", user_id, e)
+
+    # After skips burned this cycle, auto-disable + inbox summary if inventory is empty.
+    user = await db.users.find_one({"id": user_id}, {"_id": 0}) or user
+    user = await _auto_disable_skip_tokens_if_empty(db, user_id, user)
 
     if has_success and chat_id and _auto_rank_telegram_notify(user):
         user_after = await db.users.find_one({"id": user_id}, {"_id": 0, "respect_points": 1})
@@ -1800,6 +1810,8 @@ async def run_booze_arrivals():
         lines = [f"**Auto Rank** — {u.get('username', '?')}", ""]
         try:
             has_success = await _run_booze_for_user(db, u["id"], u.get("username", "?"), chat_id, bot_token, now, lines)
+            refreshed = await db.users.find_one({"id": u["id"]}, {"_id": 0}) or u
+            await _auto_disable_skip_tokens_if_empty(db, u["id"], refreshed)
             if has_success and len(lines) > 2 and chat_id and _auto_rank_telegram_notify(u):
                 try:
                     await send_telegram_to_chat(chat_id, "\n".join(lines), bot_token, username=u.get("username", "?"))
@@ -2258,18 +2270,128 @@ def _has_any_usable_ar_skip(user: Optional[dict]) -> bool:
     )
 
 
+def _fmt_skip_inbox_money(n: int) -> str:
+    return f"${int(n):,}"
+
+
+def _build_skip_tokens_depleted_inbox_message(user: dict) -> str:
+    """Plain-text inbox summary matching Auto Rank Daily skips & bailouts cards."""
+    now = datetime.now(timezone.utc)
+    today = _today_utc(now)
+    from utils.cooldown_skip import cooldown_skip_uses_today, cooldown_skip_daily_cap
+    from routers.crime.jail import JAIL_BAILOUT_DAILY_CAP
+
+    def _ar_today(used_field: str, date_field: str, cash_field: Optional[str] = None) -> Tuple[int, int]:
+        used = int(user.get(used_field) or 0) if user.get(date_field) == today else 0
+        cash = int(user.get(cash_field) or 0) if cash_field and user.get(date_field) == today else 0
+        return used, cash
+
+    crime_used, crime_cash = _ar_today(
+        "auto_rank_skip_crime_used_today", "auto_rank_skip_crime_date", "auto_rank_skip_crime_cash_today"
+    )
+    gta_used, _ = _ar_today("auto_rank_skip_gta_used_today", "auto_rank_skip_gta_date")
+    booze_used, booze_cash = _ar_today(
+        "auto_rank_skip_booze_used_today", "auto_rank_skip_booze_date", "auto_rank_skip_booze_cash_today"
+    )
+    bailout_used = (
+        int(user.get("auto_rank_bailout_used_today") or 0) if user.get("auto_rank_bailout_date") == today else 0
+    )
+
+    perk = user.get("token_perk_stats") if isinstance(user.get("token_perk_stats"), dict) else {}
+    crime_perk = perk.get("cooldown_skip_crime") if isinstance(perk.get("cooldown_skip_crime"), dict) else {}
+    gta_perk = perk.get("cooldown_skip_gta") if isinstance(perk.get("cooldown_skip_gta"), dict) else {}
+    booze_perk = perk.get("cooldown_skip_booze") if isinstance(perk.get("cooldown_skip_booze"), dict) else {}
+    bailout_perk = perk.get("jail_bailout") if isinstance(perk.get("jail_bailout"), dict) else {}
+
+    crime_held = int(user.get("cooldown_skip_crime_tokens") or 0)
+    gta_held = int(user.get("cooldown_skip_gta_tokens") or 0)
+    booze_held = int(user.get("cooldown_skip_booze_tokens") or 0)
+    bailout_held = int(user.get("jail_bailout_tokens") or 0)
+    crime_left = max(0, cooldown_skip_daily_cap("crime") - cooldown_skip_uses_today(user, "crime"))
+    gta_left = max(0, cooldown_skip_daily_cap("gta") - cooldown_skip_uses_today(user, "gta"))
+    booze_left = max(0, cooldown_skip_daily_cap("booze") - cooldown_skip_uses_today(user, "booze"))
+    bailout_uses_today = (
+        int(user.get("jail_bailout_uses_today") or 0) if user.get("jail_bailout_day") == today else 0
+    )
+    bailout_left = max(0, JAIL_BAILOUT_DAILY_CAP - bailout_uses_today)
+
+    lines = [
+        "Crime, GTA, and Booze skips are all empty or at daily cap.",
+        "Use cooldown skip tokens has been turned off.",
+        "",
+        "── Crime skip ──",
+        f"Held: {crime_held:,}",
+        f"AR used today: {crime_used:,}",
+        f"Cash from skips: {_fmt_skip_inbox_money(crime_cash)}",
+        f"Left today: {crime_left:,}",
+        f"Lifetime cash: {_fmt_skip_inbox_money(int(crime_perk.get('cash_earned') or 0))}",
+        "",
+        "── GTA skip ──",
+        f"Held: {gta_held:,}",
+        f"AR used today: {gta_used:,}",
+        f"Left today: {gta_left:,}",
+        f"Lifetime uses: {int(gta_perk.get('uses') or 0):,}",
+        "",
+        "── Booze travel skip ──",
+        f"Held: {booze_held:,}",
+        f"AR used today: {booze_used:,}",
+        f"Profit from skips: {_fmt_skip_inbox_money(booze_cash)}",
+        f"Left today: {booze_left:,}",
+        f"Lifetime profit: {_fmt_skip_inbox_money(int(booze_perk.get('profit_cash') or 0))}",
+        "",
+        "── Jail bailout ──",
+        f"Held: {bailout_held:,}",
+        f"AR used today: {bailout_used:,}",
+        f"Left today: {bailout_left:,}",
+        f"Life (AR): {int(bailout_perk.get('via_auto_rank') or 0):,}",
+        f"Life (all): {int(bailout_perk.get('uses') or 0):,}",
+        "",
+        "Buy more Crime / GTA / Booze skip tokens in the Points Store to turn the toggle on again.",
+        "Open Auto Rank",
+    ]
+    return "\n".join(lines)
+
+
+async def _notify_skip_tokens_depleted(user_id: str, user: dict) -> None:
+    """Send one inbox summary when Auto Rank auto-disables skip tokens."""
+    try:
+        import server as srv
+
+        await srv.send_notification(
+            user_id,
+            "Auto Rank — skip tokens depleted",
+            _build_skip_tokens_depleted_inbox_message(user),
+            "system",
+            category="system",
+            always_deliver=True,
+            message_link_to="/account/autorank",
+            message_link_label="Open Auto Rank",
+        )
+    except Exception:
+        logger.exception("Auto Rank skip-depleted inbox notify failed for %s", user_id)
+
+
 async def _auto_disable_skip_tokens_if_empty(db, user_id: str, user: dict) -> dict:
-    """Turn off auto_rank_use_skip_tokens when Crime+GTA+Booze all have 0 usable skips."""
+    """Turn off auto_rank_use_skip_tokens when Crime+GTA+Booze all have 0 usable skips.
+
+    When the toggle actually flips off, send a one-shot inbox summary of skips used/gained.
+    """
     if not user or user.get("auto_rank_use_skip_tokens") is not True:
         return user or {}
     if _has_any_usable_ar_skip(user):
         return user
-    await db.users.update_one(
+    result = await db.users.update_one(
         {"id": user_id, "auto_rank_use_skip_tokens": True},
         {"$set": {"auto_rank_use_skip_tokens": False}},
     )
     user = dict(user)
     user["auto_rank_use_skip_tokens"] = False
+    if result.modified_count:
+        fresh = await db.users.find_one({"id": user_id}, {"_id": 0}) or user
+        fresh = dict(fresh)
+        fresh["auto_rank_use_skip_tokens"] = False
+        await _notify_skip_tokens_depleted(user_id, fresh)
+        return fresh
     return user
 
 
@@ -3114,13 +3236,8 @@ def register(router):
             else 0
         )
         if use_skip_tokens and not _has_any_usable_ar_skip(u or {}):
-            await db.users.update_one(
-                {"id": current_user["id"], "auto_rank_use_skip_tokens": True},
-                {"$set": {"auto_rank_use_skip_tokens": False}},
-            )
+            u = await _auto_disable_skip_tokens_if_empty(db, current_user["id"], u or {})
             use_skip_tokens = False
-            if isinstance(u, dict):
-                u["auto_rank_use_skip_tokens"] = False
         can_skip_crime = use_skip_tokens and _can_use_skip(u or {}, "crime")
         can_skip_gta = use_skip_tokens and _can_use_skip(u or {}, "gta")
         can_skip_booze = use_skip_tokens and _can_use_skip(u or {}, "booze")
