@@ -761,6 +761,7 @@ def register(router):
                 "casinos_seized": 1, "casinos_lost": 1, "properties_seized": 1, "properties_lost": 1,
                 "total_casino_payouts": 1, "biggest_casino_payout": 1,
                 "stats_gambling_reset_at": 1,
+                "token_perk_stats": 1,
             },
         )
         u = u or {}
@@ -959,6 +960,7 @@ def register(router):
             "prestige": {
                 "level": int(u.get("prestige_level") or 0),
             },
+            "token_perk_stats": u.get("token_perk_stats") if isinstance(u.get("token_perk_stats"), dict) else {},
         }
 
     @router.post("/stats/me/reset-gambling-display")

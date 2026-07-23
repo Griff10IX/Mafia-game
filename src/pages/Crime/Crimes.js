@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { HelpCircle, Clock, AlertCircle, Bot, Skull, Zap, Lock, Star } from 'lucide-react';
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { useAuthUser } from '../../context/AuthContext';
@@ -167,18 +168,16 @@ const StatusIcons = ({ inJail, autoRankActive }) => {
   );
 };
 
-const EventBanner = ({ event }) => {
-  if (!event?.name || (event.kill_cash === 1 && event.rank_points === 1)) {
-    return null;
-  }
-
+const GameEventsLink = ({ event, eventsEnabled }) => {
+  if (!eventsEnabled || !event?.name || event.id === 'none') return null;
+  if (event.kill_cash === 1 && event.rank_points === 1 && event.racket_payout === 1) return null;
   return (
-    <div className="px-2 py-1.5 bg-primary/8 border border-primary/20 rounded-md cr-fade-in">
-      <p className="text-[10px] font-heading">
-        <span className="text-primary font-bold">✨ {event.name}</span>
-        <span className="text-mutedForeground ml-1">{event.message}</span>
-      </p>
-    </div>
+    <Link
+      to="/account/game-events"
+      className="text-[10px] font-heading text-primary/80 hover:text-primary transition-colors cr-fade-in"
+    >
+      Active event: {event.name} — Game Events →
+    </Link>
   );
 };
 
@@ -751,7 +750,7 @@ export default function Crimes() {
         <StatusIcons inJail={!!authUser?.in_jail} autoRankActive={autoRankCrimesDisabled === true} />
       </div>
 
-      {eventsEnabled && <EventBanner event={event} />}
+      {eventsEnabled && <GameEventsLink event={event} eventsEnabled={eventsEnabled} />}
 
       {activeLootPerks.length > 0 && (
         <div className="flex flex-wrap gap-1.5 cr-fade-in">

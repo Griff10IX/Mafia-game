@@ -35,14 +35,41 @@ async def get_active_event(current_user: dict = Depends(get_current_user)):
     """Current game-wide event(s) when enabled; includes rotation info."""
     enabled = await get_events_enabled()
     if not enabled:
-        return {"event": None, "events_enabled": False, "active_event_ids": [], "active_event_names": [], "expires_at": None, "duration_hours": 0}
+        return {
+            "event": None,
+            "events_enabled": False,
+            "active_event_ids": [],
+            "active_event_names": [],
+            "active_events": [],
+            "expires_at": None,
+            "duration_hours": 0,
+        }
     full = await get_effective_event_full()
-    names = [GAME_EVENTS_BY_ID.get(eid, {}).get("name", eid) for eid in (full.get("event_ids") or [])]
+    event_ids = full.get("event_ids") or []
+    names = [GAME_EVENTS_BY_ID.get(eid, {}).get("name", eid) for eid in event_ids]
+    active_events = []
+    for eid in event_ids:
+        ev = GAME_EVENTS_BY_ID.get(eid)
+        if not ev:
+            continue
+        active_events.append({
+            "id": eid,
+            "name": ev.get("name") or eid,
+            "message": ev.get("message") or "",
+            "rank_points": float(ev.get("rank_points", 1.0)),
+            "kill_cash": float(ev.get("kill_cash", 1.0)),
+            "gta_success": float(ev.get("gta_success", 1.0)),
+            "bodyguard_cost": float(ev.get("bodyguard_cost", 1.0)),
+            "racket_cooldown": float(ev.get("racket_cooldown", 1.0)),
+            "racket_payout": float(ev.get("racket_payout", 1.0)),
+            "armour_weapon_cost": float(ev.get("armour_weapon_cost", 1.0)),
+        })
     return {
         "event": full["event"],
         "events_enabled": True,
-        "active_event_ids": full.get("event_ids") or [],
+        "active_event_ids": event_ids,
         "active_event_names": names,
+        "active_events": active_events,
         "expires_at": full.get("expires_at"),
         "duration_hours": full.get("duration_hours", 0),
     }

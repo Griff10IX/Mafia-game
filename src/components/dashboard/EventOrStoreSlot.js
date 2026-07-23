@@ -40,6 +40,6 @@ export default function EventOrStoreSlot({ user, userId }) {
   }, [userId]);
 
   const hasEvent = !loading && eventData?.events_enabled && eventData?.event && eventData?.event?.id !== 'none';
-  if (hasEvent) return <ActiveEventWidget />;
+  if (hasEvent) return <ActiveEventWidget eventData={eventData} />;
   return <StoreWidget user={user} storePointsEvent={storePointsEvent} />;
 }

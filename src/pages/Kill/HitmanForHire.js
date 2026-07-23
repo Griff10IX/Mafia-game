@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Crosshair, Coins, Skull, Ticket, Search, AlertTriangle, Shield, Target, Clock, Sparkles, Users, XCircle } from 'lucide-react';
+import { Crosshair, Coins, Skull, Ticket, Search, Shield, Target, Clock, Sparkles, Users, XCircle } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -118,7 +118,6 @@ export default function HitmanForHire() {
   }, []);
 
   const available = !!status?.available;
-  const staffPreview = !!status?.staff_preview;
   const freeTokens = status?.free_tokens ?? 0;
   const discount = status?.my_discount;
   const tiers = status?.tiers || [];
@@ -471,11 +470,6 @@ export default function HitmanForHire() {
         <p className="mt-1.5 text-[9px] sm:text-[10px] text-zinc-400 font-heading italic leading-relaxed">
           Quiet work. Pay a contractor to take out a rival&apos;s visible robot bodyguard — no witnesses, no names.
         </p>
-        {staffPreview && (
-          <div className="mt-2 inline-flex items-center gap-1.5 rounded border border-amber-500/45 bg-amber-500/10 px-2 py-1 text-[9px] font-heading font-bold uppercase tracking-wider text-amber-300">
-            <AlertTriangle size={11} /> Staff preview — not live for players
-          </div>
-        )}
       </div>
 
       {/* Stats */}

@@ -2296,6 +2296,18 @@ def mongodb_effective_kill_count_expr() -> dict:
     }
 
 
+def mongodb_lifetime_rank_points_expr() -> dict:
+    """Lifetime RP for leaderboard / honours: current rank_points + prestige carry, as long."""
+    return {
+        "$toLong": {
+            "$add": [
+                {"$ifNull": ["$rank_xp_pass_prestige_carry_rp", 0]},
+                {"$ifNull": ["$rank_points", 0]},
+            ]
+        }
+    }
+
+
 # Floor for owner-set max bet across casino routers (matches set-max-bet handlers).
 CASINO_MIN_OWNER_MAX_BET = 50_000
 

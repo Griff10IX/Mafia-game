@@ -394,11 +394,9 @@ async def _hitman_status_impl(current_user: dict):
     db = _db()
     flags = await get_store_item_flags(db)
     enabled = bool(flags.get(HITMAN_FLAG))
-    staff = _is_staff(current_user)
-    if not enabled and not staff:
+    if not enabled:
         return {
             "enabled": False,
-            "staff_preview": False,
             "available": False,
         }
     u = await db.users.find_one(
@@ -437,9 +435,8 @@ async def _hitman_status_impl(current_user: dict):
             rebuy_cooldown_until = cd_end
     game_stats = await _game_wide_stats()
     return {
-        "enabled": enabled,
-        "staff_preview": (not enabled) and staff,
-        "available": enabled or staff,
+        "enabled": True,
+        "available": True,
         "tiers": _tiers_payload(),
         "free_tokens": int(u.get("hitman_free_tokens") or 0),
         "points": int(u.get("points") or 0),

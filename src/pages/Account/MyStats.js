@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BarChart3, Target, Sword, Dice5, Trophy, DollarSign, TrendingUp, Wine, Bot, RotateCcw } from 'lucide-react';
+import { BarChart3, Target, Sword, Dice5, Trophy, DollarSign, TrendingUp, Wine, Bot, RotateCcw, Zap, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../utils/api';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
@@ -85,6 +85,7 @@ function writeMyStatsCache(data) {
 const EMPTY_MY_STATS = {
   combat: {},
   rank: {},
+  rank_period: {},
   bodyguards: {},
   casinos: {},
   gambling: {},
@@ -183,6 +184,24 @@ export default function MyStats() {
   const bank = stats.bank || {};
   const points = stats.points || {};
   const prestige = stats.prestige || {};
+  const rankPeriod = stats.rank_period || {};
+
+  const periodCrime = rankPeriod.crimes || {};
+  const periodGta = rankPeriod.gta || {};
+  const periodJail = rankPeriod.jail || {};
+  const recentActivityRows = [
+    { label: 'Crimes today', value: formatNumber(periodCrime.count_today) },
+    { label: 'Successful crimes today', value: formatNumber(periodCrime.success_today) },
+    { label: 'Crimes this week', value: formatNumber(periodCrime.count_week) },
+    { label: 'Crime profit today', value: formatMoney(periodCrime.profit_today), valueColor: 'text-emerald-400' },
+    { label: 'Crime profit (24h)', value: formatMoney(periodCrime.profit_24h), valueColor: 'text-emerald-400' },
+    { label: 'GTAs today', value: formatNumber(periodGta.count_today) },
+    { label: 'Successful GTAs today', value: formatNumber(periodGta.success_today) },
+    { label: 'GTAs this week', value: formatNumber(periodGta.count_week) },
+    { label: 'GTA profit today', value: formatMoney(periodGta.profit_today), valueColor: 'text-emerald-400' },
+    { label: 'Jailbusts today', value: formatNumber(periodJail.count_today) },
+    { label: 'Jailbusts this week', value: formatNumber(periodJail.count_week) },
+  ].filter((r) => r.value !== '—' && r.value !== '0' && r.value !== '$0');
 
   const kdRatio = combat.total_deaths > 0 ? (combat.total_kills / combat.total_deaths).toFixed(2) : combat.total_kills > 0 ? '∞' : '0.00';
   const combatRows = [
@@ -341,9 +360,29 @@ export default function MyStats() {
           </Link>
         </div>
         <p className="text-[10px] sm:text-xs text-mutedForeground font-heading">
-          Lifetime totals: bodyguards bought, casino profit/loss, booze, auto rank, stock market, bank interest, and more. Gambling and sports can be reset to a fresh window; all-time nets stay as "Lifetime".
+          Lifetime totals and recent crime/GTA/jail activity. World buffs and perk boost details live on Game Events. Gambling and sports can be reset to a fresh window; all-time nets stay as &quot;Lifetime&quot;.
         </p>
         <AutoRefreshNote seconds={30} />
+
+        <div className={`${styles.panel} rounded-md border border-primary/20 mobile-panel p-2.5 flex items-center gap-2 flex-wrap`}>
+          <Zap size={14} className="text-primary shrink-0" />
+          <div className="min-w-0 flex-1">
+            <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Game events &amp; perk boosts</div>
+            <p className="text-[9px] text-mutedForeground font-heading mt-0.5">
+              Live world buffs and lifetime perk stats (Crimes XP RP, OC savings, and more).
+            </p>
+          </div>
+          <Link
+            to="/account/game-events"
+            className="shrink-0 text-[10px] font-heading font-bold text-primary hover:underline"
+          >
+            Open Game Events →
+          </Link>
+        </div>
+
+        {recentActivityRows.length > 0 && (
+          <StatCard title="Recent activity" icon={Clock} rows={recentActivityRows} delay={0} />
+        )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <StatCard title="Combat & Bodyguards" icon={Sword} rows={combatRows} delay={0} />

@@ -83,21 +83,17 @@ function stripBodyguardSlotFromToastMessage(msg) {
   return msg.replace(/\s+in slot\s+\d+/gi, '').trim();
 }
 
-const EventBanner = ({ event }) => (
-  <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-fade-in mobile-panel`}>
-    <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
-      <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
-        🎯 Today's Event
-      </h2>
-    </div>
-    <div className="p-2">
-      <p className="text-[11px] font-heading font-bold text-primary mb-0.5">{event.name}</p>
-      <p className="text-[10px] text-mutedForeground font-heading">{event.message}</p>
-    </div>
-    <div className="atk-art-line text-primary mx-2" />
-  </div>
-);
+const GameEventsLink = ({ event }) => {
+  if (!event?.name || event.id === 'none') return null;
+  return (
+    <Link
+      to="/account/game-events"
+      className="text-[10px] font-heading text-primary/80 hover:text-primary transition-colors atk-fade-in"
+    >
+      Active event: {event.name} — Game Events →
+    </Link>
+  );
+};
 
 // Only run the F5-resend check once per document load so navigating away and back doesn't resend
 let attackResendCheckDoneThisLoad = false;
@@ -2321,7 +2317,7 @@ export default function Attack() {
       <p className="text-[9px] text-zinc-500 font-heading italic">Search, travel, and strike. No witnesses, no mercy.</p>
 
       {eventsEnabled && event && (event.kill_cash !== 1 || event.rank_points !== 1) && event.name && (
-        <EventBanner event={event} />
+        <GameEventsLink event={event} />
       )}
 
       {killBannerMessage && (

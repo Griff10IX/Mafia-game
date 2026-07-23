@@ -98,18 +98,16 @@ const useCooldownTicker = (options, onCooldownExpired) => {
 };
 
 // Subcomponents
-const EventBanner = ({ event, eventsEnabled }) => {
-  if (!eventsEnabled || !event?.name || (event.gta_success === 1 && event.rank_points === 1)) {
-    return null;
-  }
-
+const GameEventsLink = ({ event, eventsEnabled }) => {
+  if (!eventsEnabled || !event?.name || event.id === 'none') return null;
+  if (event.gta_success === 1 && event.rank_points === 1 && event.kill_cash === 1) return null;
   return (
-    <div className="px-2 py-1.5 bg-primary/8 border border-primary/20 rounded-md gta-fade-in">
-      <p className="text-[10px] font-heading">
-        <span className="text-primary font-bold">✨ {event.name}</span>
-        <span className="text-mutedForeground ml-1">{event.message}</span>
-      </p>
-    </div>
+    <Link
+      to="/account/game-events"
+      className="text-[10px] font-heading text-primary/80 hover:text-primary transition-colors gta-fade-in"
+    >
+      Active event: {event.name} — Game Events →
+    </Link>
   );
 };
 
@@ -762,7 +760,7 @@ export default function GTA() {
         <p className="text-[9px] text-zinc-500 font-heading italic">Steal cars. Unlock by rank. One attempt puts all on cooldown.</p>
         {autoRankGtaDisabled && <AutoRankIcon />}
       </div>
-      <EventBanner event={event} eventsEnabled={eventsEnabled} />
+      <GameEventsLink event={event} eventsEnabled={eventsEnabled} />
 
       {user?.xp_gta_until && (
         <div className="gta-fade-in">

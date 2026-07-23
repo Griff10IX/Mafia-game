@@ -30,7 +30,6 @@ import FirstTimeThemeModal from './FirstTimeThemeModal';
 import TutorialCoach, { markTutorialThemeDoneAndAdvance } from './TutorialCoach';
 import { getThemePreset } from '../constants/themes';
 import ErrorBoundary from './ErrorBoundary';
-import ActiveEventBanner from './ActiveEventBanner';
 import FindWordHuntLayer from './entertainer/FindWordHuntLayer';
 import { NotificationMessage } from './NotificationMessage';
 import FamilyCommandCenter from './FamilyCommandCenter';
@@ -165,6 +164,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
         { path: '/account/settings', label: 'IP & Devices' },
         { path: '/game/stats', label: 'Stats' },
         { path: '/account/stats', label: 'My Stats' },
+        { path: '/account/game-events', label: 'Game Events' },
         { path: '/game/dead-alive', label: 'Dead > Alive' },
         { action: 'theme', label: 'Theme' },
         { action: 'logout', label: 'Logout' },
@@ -612,7 +612,7 @@ export default function Layout({ children }) {
     if (!staffPortalEnabled) return true;
     return isStaffPortalTokenValid();
   }, [isAdmin, isModerator, staffLoginSession, staffPortalEnabled, portalNavTick]);
-  const hitmanForHireVisible = !!hitmanForHireLive || isAdmin || isModerator || hasAdminEmail;
+  const hitmanForHireVisible = !!hitmanForHireLive;
   const mobileBottomNavItems = useMemo(() => {
     let items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, !!user?.is_entertainer, !!user?.is_help_desk_operator, staffToolsNavVisible, !!worldCupEnabled, hitmanForHireVisible);
     if (hasAdminEmail && !isAdmin && !adminPreviewAsMod) {
@@ -1492,7 +1492,7 @@ export default function Layout({ children }) {
   const PATH_TO_CATEGORY = isCategorizedClassic
     ? {
         '/account/dashboard': 'information', '/verify-email': 'information', '/account/objectives': 'information', '/account/missions': 'information', '__tutorial__': 'information',
-        '/account/profile': 'information', '/account/referral': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information',
+        '/account/profile': 'information', '/account/referral': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information', '/account/game-events': 'information',
         '/game/users-online': 'information', '/money/property': 'information', '/game/help-desk': 'information', '/game/help-desk-hub': 'information', '/game/leaderboard': 'information',
         '/game/ranking': 'ranking', '/account/prestige': 'ranking',
         '__combat__': 'combat', '/kill/attack': 'combat', '/kill/witness-statements': 'combat', '/kill/attempts': 'combat', '/kill/combat-timeline': 'combat', '/kill/hitlist': 'combat', '/kill/hitman': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
@@ -1506,7 +1506,7 @@ export default function Layout({ children }) {
       }
     : {
         '/account/dashboard': 'information', '/verify-email': 'information', '/account/objectives': 'information', '/account/missions': 'information', '__tutorial__': 'information',
-        '/account/inventory': 'information', '/account/profile': 'information', '/account/referral': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information',
+        '/account/inventory': 'information', '/account/profile': 'information', '/account/referral': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information', '/account/game-events': 'information',
         '/game/users-online': 'information', '/money/property': 'information', '/game/help-desk': 'information', '/game/help-desk-hub': 'information',
         '/game/ranking': 'ranking', '/account/prestige': 'ranking',
         '__combat__': 'combat', '/kill/attack': 'combat', '/kill/witness-statements': 'combat', '/kill/attempts': 'combat', '/kill/combat-timeline': 'combat', '/kill/hitlist': 'combat', '/kill/hitman': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
@@ -1543,6 +1543,7 @@ export default function Layout({ children }) {
     { path: '__combat__', icon: Sword, label: 'Combat' },
     { path: '/game/stats', icon: TrendingUp, label: 'Stats' },
     { path: '/account/stats', icon: BarChart3, label: 'My Stats' },
+    { path: '/account/game-events', icon: Zap, label: 'Game Events' },
     { path: '/money/bank', icon: Landmark, label: 'Bank' },
     { path: '/money/lottery', icon: Ticket, label: 'Lottery' },
     { path: '/money/loot-box', icon: Gift, label: 'Loot Box' },
@@ -1696,7 +1697,7 @@ export default function Layout({ children }) {
             { to: '/kill/combat-timeline', label: 'Combat timeline', testId: 'nav-combat-timeline', Icon: Crosshair },
             { to: '/kill/hitlist', label: 'Hitlist', testId: 'nav-hitlist', Icon: ScrollText },
             ...(hitmanForHireVisible
-              ? [{ to: '/kill/hitman', label: 'Hitman for Hire', testId: 'nav-hitman', Icon: Crosshair, staffPreview: !hitmanForHireLive }]
+              ? [{ to: '/kill/hitman', label: 'Hitman for Hire', testId: 'nav-hitman', Icon: Crosshair }]
               : []),
             { to: '/kill/bodyguards', label: 'Bodyguards', testId: 'nav-bodyguards', Icon: Shield },
             { to: '/kill/armour-weapons', label: 'Armoury', testId: 'nav-armoury', Icon: Sword },
@@ -2630,7 +2631,6 @@ export default function Layout({ children }) {
 
       {/* ── MAIN CONTENT ─────────────────────────────────────────────────────── */}
       <main data-layout="main" className={`${!isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:ml-40' : 'md:ml-48') : ''} mt-main-below-topbar min-h-screen p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' ? 'pb-safe-bottom-nav md:pb-6' : ''} ${(isMobileViewport || isLandscapeCompactLayout) && mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)) && mobileNavStyle !== 'bottom' ? 'pb-16 md:pb-6' : ''} ${user && mobileStatsDisplay === 'right_sidebar' && !isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:mr-60' : 'md:mr-52') : ''}`}>
-        <ActiveEventBanner fetchEnabled={!!user} />
         {needsEmailVerification && (
           <div className="mb-3 px-3 py-2 rounded-sm flex items-center gap-2 flex-wrap" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.15)', border: '1px solid rgba(var(--noir-primary-rgb), 0.4)' }}>
             <Mail size={16} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />

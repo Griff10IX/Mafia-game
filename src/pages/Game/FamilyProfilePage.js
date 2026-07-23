@@ -971,42 +971,13 @@ export default function FamilyProfilePage() {
 
       {/* ══════════════════════════════════════════
           OPERATIONS (Rackets + Crew OC)
+          Mobile: Crew OC first so Apply isn’t buried under a long rackets list / bottom nav.
       ══════════════════════════════════════════ */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 
-        {/* Rackets */}
-        {rackets.length > 0 && (
-          <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/15 fp-in mobile-panel`} style={{ animationDelay: '0.25s' }}>
-            <div className="px-4 py-2.5 flex items-center gap-2 border-b border-primary/10">
-              <TrendingUp size={11} className="text-primary/60" />
-              <span className="text-[10px] font-heading font-bold text-primary/70 uppercase tracking-[0.2em]">Rackets</span>
-              <span className="text-[9px] text-zinc-700 font-heading ml-auto">{rackets.filter(r => r.level > 0).length} running</span>
-            </div>
-            <div className="p-3 space-y-1.5">
-              {rackets.map((r) => {
-                const isMax = r.level >= RACKET_MAX_LEVEL;
-                return (
-                  <div key={r.id} className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-zinc-800/25 border border-zinc-700/20"
-                    style={isMax ? { borderColor: 'rgba(var(--noir-primary-rgb),.2)' } : {}}>
-                    {isMax && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(90deg,transparent,rgba(var(--noir-primary-rgb),.3),transparent)' }} />}
-                    <p className="font-heading font-bold text-[10px] text-foreground/70 flex-1 truncate">{r.name}</p>
-                    <span className={`text-[9px] font-heading font-bold shrink-0 ${isMax ? 'text-primary' : 'text-primary/60'}`}>
-                      {isMax ? 'MAX' : `Lv ${r.level}`}
-                    </span>
-                    <div className="w-10 h-1 bg-zinc-800 rounded-full overflow-hidden shrink-0">
-                      <div className={`h-full rounded-full transition-all duration-500 ${isMax ? 'bg-gradient-to-r from-primary to-amber-400' : 'bg-primary/60'}`}
-                        style={{ width: `${(r.level / RACKET_MAX_LEVEL) * 100}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {/* Crew OC — only show to users not in this family when crew is not wiped */}
         {!isWiped && !isMyFamily && (
-        <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/15 fp-in mobile-panel`} style={{ animationDelay: '0.3s' }}>
+        <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/15 fp-in mobile-panel order-1 sm:order-2`} style={{ animationDelay: '0.3s' }}>
           <div className="px-4 py-2.5 flex items-center justify-between border-b border-primary/10">
             <div className="flex items-center gap-2">
               <Crosshair size={11} className="text-primary/60" />
@@ -1021,20 +992,7 @@ export default function FamilyProfilePage() {
             </span>
           </div>
           <div className="p-3 space-y-2.5">
-            {(family.crew_oc_crew?.length > 0) && (
-              <div className="flex flex-wrap gap-1">
-                {family.crew_oc_crew.map((c, i) => (
-                  <span key={`${c.username}-${i}`} className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-heading ${
-                    c.is_family_member
-                      ? 'bg-primary/10 text-primary border border-primary/20'
-                      : 'bg-zinc-800/60 text-zinc-500 border border-zinc-700/30'
-                  }`}>
-                    <Link to={`/profile/${encodeURIComponent(c.username)}`} className="hover:underline">{c.username}</Link>
-                    {!c.is_family_member && <span className="ml-1 opacity-50 text-[8px]">(ext)</span>}
-                  </span>
-                ))}
-              </div>
-            )}
+            {/* Apply first — CTA must be visible without scrolling past crew chips / rackets */}
             {crewOCApp ? (
               (() => {
                 const canReapply = ['kicked', 'rejected'].includes((crewOCApp.status || '').toLowerCase());
@@ -1046,7 +1004,7 @@ export default function FamilyProfilePage() {
                     </div>
                     {canReapply && (
                       <button type="button" onClick={handleApplyCrewOC} disabled={crewOCApplyLoading}
-                        className="w-full py-2 font-heading font-bold uppercase tracking-wider text-[11px] rounded-lg border border-primary/30 bg-primary/8 text-primary hover:bg-primary/15 disabled:opacity-50 transition-all">
+                        className="w-full min-h-[44px] py-2.5 font-heading font-bold uppercase tracking-wider text-[11px] rounded-lg border border-primary/30 bg-primary/8 text-primary hover:bg-primary/15 disabled:opacity-50 transition-all touch-manipulation">
                         {crewOCApplyLoading ? 'Applying...' : crewOCFee > 0 ? `Reapply — $${crewOCFee.toLocaleString()}` : 'Reapply (free)'}
                       </button>
                     )}
@@ -1055,9 +1013,23 @@ export default function FamilyProfilePage() {
               })()
             ) : (
               <button type="button" onClick={handleApplyCrewOC} disabled={crewOCApplyLoading}
-                className="w-full py-2 font-heading font-bold uppercase tracking-wider text-[11px] rounded-lg border border-primary/30 bg-primary/8 text-primary hover:bg-primary/15 disabled:opacity-50 transition-all">
+                className="w-full min-h-[44px] py-2.5 font-heading font-bold uppercase tracking-wider text-[11px] rounded-lg border border-primary/30 bg-primary/8 text-primary hover:bg-primary/15 disabled:opacity-50 transition-all touch-manipulation">
                 {crewOCApplyLoading ? 'Applying...' : crewOCFee > 0 ? `Apply — $${crewOCFee.toLocaleString()}` : 'Apply (free)'}
               </button>
+            )}
+            {(family.crew_oc_crew?.length > 0) && (
+              <div className="flex flex-wrap gap-1 min-w-0">
+                {family.crew_oc_crew.map((c, i) => (
+                  <span key={`${c.username}-${i}`} className={`inline-flex items-center max-w-full px-2 py-0.5 rounded text-[10px] font-heading ${
+                    c.is_family_member
+                      ? 'bg-primary/10 text-primary border border-primary/20'
+                      : 'bg-zinc-800/60 text-zinc-500 border border-zinc-700/30'
+                  }`}>
+                    <Link to={`/profile/${encodeURIComponent(c.username)}`} className="hover:underline truncate">{c.username}</Link>
+                    {!c.is_family_member && <span className="ml-1 opacity-50 text-[8px] shrink-0">(ext)</span>}
+                  </span>
+                ))}
+              </div>
             )}
             {family.crew_oc_forum_topic_id && (
               <Link to={`/forum/topic/${family.crew_oc_forum_topic_id}`}
@@ -1067,6 +1039,36 @@ export default function FamilyProfilePage() {
             )}
           </div>
         </div>
+        )}
+
+        {/* Rackets */}
+        {rackets.length > 0 && (
+          <div className={`${styles.panel} rounded-xl overflow-hidden border border-primary/15 fp-in mobile-panel order-2 sm:order-1`} style={{ animationDelay: '0.25s' }}>
+            <div className="px-4 py-2.5 flex items-center gap-2 border-b border-primary/10">
+              <TrendingUp size={11} className="text-primary/60" />
+              <span className="text-[10px] font-heading font-bold text-primary/70 uppercase tracking-[0.2em]">Rackets</span>
+              <span className="text-[9px] text-zinc-700 font-heading ml-auto">{rackets.filter(r => r.level > 0).length} running</span>
+            </div>
+            <div className="p-3 space-y-1.5">
+              {rackets.map((r) => {
+                const isMax = r.level >= RACKET_MAX_LEVEL;
+                return (
+                  <div key={r.id} className="relative flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg bg-zinc-800/25 border border-zinc-700/20"
+                    style={isMax ? { borderColor: 'rgba(var(--noir-primary-rgb),.2)' } : {}}>
+                    {isMax && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '1px', background: 'linear-gradient(90deg,transparent,rgba(var(--noir-primary-rgb),.3),transparent)' }} />}
+                    <p className="font-heading font-bold text-[10px] text-foreground/70 flex-1 truncate min-w-0">{r.name}</p>
+                    <span className={`text-[9px] font-heading font-bold shrink-0 ${isMax ? 'text-primary' : 'text-primary/60'}`}>
+                      {isMax ? 'MAX' : `Lv ${r.level}`}
+                    </span>
+                    <div className="w-10 h-1 bg-zinc-800 rounded-full overflow-hidden shrink-0">
+                      <div className={`h-full rounded-full transition-all duration-500 ${isMax ? 'bg-gradient-to-r from-primary to-amber-400' : 'bg-primary/60'}`}
+                        style={{ width: `${(r.level / RACKET_MAX_LEVEL) * 100}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
       </div>
     </div>

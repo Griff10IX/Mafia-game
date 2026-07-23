@@ -9,6 +9,7 @@ const ROUTE_PRELOADERS = {
   '/account/settings': () => import('../pages/Account/IPRules'),
   '/account/prestige': () => import('../pages/Account/Prestige'),
   '/account/stats': () => import('../pages/Account/MyStats'),
+  '/account/game-events': () => import('../pages/Account/GameEvents'),
   '/account/inventory': () => import('../pages/Account/MyInventory'),
   '/account/profile': () => import('../pages/Account/Profile'),
   '/account/objectives': () => import('../pages/Account/Objectives'),

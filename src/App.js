@@ -39,6 +39,7 @@ const IPRules = lazy(() => import("./pages/Account/IPRules"));
 const Missions = lazy(() => import("./pages/Account/Missions"));
 const MyInventory = lazy(() => import("./pages/Account/MyInventory"));
 const MyStats = lazy(() => import("./pages/Account/MyStats"));
+const GameEvents = lazy(() => import("./pages/Account/GameEvents"));
 const Objectives = lazy(() => import("./pages/Account/Objectives"));
 const Prestige = lazy(() => import("./pages/Account/Prestige"));
 const Profile = lazy(() => import("./pages/Account/Profile"));
@@ -1532,6 +1533,19 @@ function App() {
               )
             }
           />
+          <Route
+            path="/account/game-events"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <GameEvents />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route path="/game-events" element={<Navigate to="/account/game-events" replace />} />
           <Route
             path="/account/inventory"
             element={

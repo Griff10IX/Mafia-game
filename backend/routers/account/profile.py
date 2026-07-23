@@ -120,6 +120,8 @@ def register(router):
     db = srv.db
     effective_player_kill_count = srv.effective_player_kill_count
     mongodb_effective_kill_count_expr = srv.mongodb_effective_kill_count_expr
+    mongodb_lifetime_rank_points_expr = srv.mongodb_lifetime_rank_points_expr
+    expand_user_ids_for_mongo_nin = srv.expand_user_ids_for_mongo_nin
     get_current_user = srv.get_current_user
     get_current_user_verified = srv.get_current_user_verified
     _username_pattern = srv._username_pattern
@@ -490,17 +492,13 @@ def register(router):
             tv = int(total_value)
             pipeline = [
                 {"$match": q},
+                {"$addFields": {"_lb_total_rp": mongodb_lifetime_rank_points_expr()}},
                 {
-                    "$addFields": {
-                        "_lb_total_rp": {
-                            "$add": [
-                                {"$ifNull": ["$rank_xp_pass_prestige_carry_rp", 0]},
-                                {"$ifNull": ["$rank_points", 0]},
-                            ]
-                        }
+                    "$match": {
+                        "_lb_total_rp": {"$gt": tv},
+                        "id": {"$nin": expand_user_ids_for_mongo_nin([uid])},
                     }
                 },
-                {"$match": {"_lb_total_rp": {"$gt": tv}}},
                 {"$count": "n"},
             ]
             cur = await db.users.aggregate(pipeline).to_list(1)

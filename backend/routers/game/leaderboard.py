@@ -19,6 +19,7 @@ from server import (
     stat_leaderboard_users_match,
     effective_player_kill_count,
     mongodb_effective_kill_count_expr,
+    mongodb_lifetime_rank_points_expr,
 )
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_LEADERBOARD
 
@@ -169,16 +170,7 @@ async def _top_by_total_rank_points(current_user_id: str, limit: int, dead: bool
     query = await stat_leaderboard_users_match(dead=dead, database=db)
     pipeline = [
         {"$match": query},
-        {
-            "$addFields": {
-                "_lb_total_rp": {
-                    "$add": [
-                        {"$ifNull": ["$rank_xp_pass_prestige_carry_rp", 0]},
-                        {"$ifNull": ["$rank_points", 0]},
-                    ]
-                }
-            }
-        },
+        {"$addFields": {"_lb_total_rp": mongodb_lifetime_rank_points_expr()}},
         {"$sort": {"_lb_total_rp": -1}},
         {"$limit": limit},
         {"$project": {"_id": 0, "username": 1, "id": 1, "_lb_total_rp": 1}},
