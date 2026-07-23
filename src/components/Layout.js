@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation, useNavigationType } from 'react-router-dom';
 import { SAME_ROUTE_NAV_CLICK } from '../constants/navigationEvents';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Grid3x3, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Grid3x3, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb, Flame } from 'lucide-react';
 import api, {
   getApiErrorMessage,
   onCooldownChange,
@@ -1589,6 +1589,7 @@ export default function Layout({ children }) {
     { path: '/tjjeujr3wa/account-compare', icon: ArrowLeftRight, label: 'Account compare' },
     { path: '/tjjeujr3wa/exclusive-cars', icon: Car, label: 'Exclusive cars' },
     { path: '/tjjeujr3wa/vip-cars', icon: Car, label: 'VIP Pass cars' },
+    { path: '/tjjeujr3wa/molotovs', icon: Flame, label: 'Ammo' },
     { path: '/tjjeujr3wa/ent-games', icon: Dice5, label: 'E-Games audit' },
     { path: '/tjjeujr3wa/crew-recovery', icon: Building2, label: 'Crew recovery' },
     { path: '/tjjeujr3wa/property-transfer', icon: Landmark, label: 'Armoury / airport' },

@@ -11213,6 +11213,122 @@ def register(router):
 
         return await get_vip_pass_car_stats(db)
 
+    async def _user_ammo_field_overview(
+        *,
+        field: str,
+        status: str,
+        search: Optional[str],
+        offset: int,
+        limit: int,
+    ) -> dict:
+        """Totals + paginated holders for a scalar users.<field> balance (molotovs / bullets)."""
+        if field not in ("molotovs", "bullets"):
+            raise HTTPException(status_code=500, detail="Invalid ammo field")
+        player_match = {"is_npc": {"$ne": True}, "is_bodyguard": {"$ne": True}}
+        st = (status or "all").strip().lower()
+        if st == "alive":
+            player_match["is_dead"] = {"$ne": True}
+        elif st == "dead":
+            player_match["is_dead"] = True
+        elif st != "all":
+            raise HTTPException(status_code=400, detail="status must be all, alive, or dead")
+
+        holders_match = {**player_match, field: {"$gt": 0}}
+        q = (search or "").strip()
+        if q:
+            holders_match["username"] = {"$regex": re.escape(q), "$options": "i"}
+
+        field_expr = {"$ifNull": [f"${field}", 0]}
+        agg = await db.users.aggregate(
+            [
+                {"$match": player_match},
+                {
+                    "$group": {
+                        "_id": None,
+                        "circulating": {"$sum": field_expr},
+                        "alive_circulating": {
+                            "$sum": {
+                                "$cond": [
+                                    {"$ne": [{"$ifNull": ["$is_dead", False]}, True]},
+                                    field_expr,
+                                    0,
+                                ]
+                            }
+                        },
+                        "dead_circulating": {
+                            "$sum": {
+                                "$cond": [
+                                    {"$eq": [{"$ifNull": ["$is_dead", False]}, True]},
+                                    field_expr,
+                                    0,
+                                ]
+                            }
+                        },
+                    }
+                },
+            ]
+        ).to_list(1)
+        totals = agg[0] if agg else {}
+        holders_with_balance = await db.users.count_documents(holders_match)
+        rows_raw = await db.users.find(
+            holders_match,
+            {"_id": 0, "id": 1, "username": 1, field: 1, "is_dead": 1, "last_seen": 1},
+        ).sort([(field, -1), ("username", 1)]).skip(int(offset)).limit(int(limit)).to_list(int(limit))
+        rows = [
+            {
+                "user_id": r.get("id"),
+                "username": r.get("username") or "?",
+                "amount": int(r.get(field) or 0),
+                field: int(r.get(field) or 0),
+                "is_dead": bool(r.get("is_dead")),
+                "last_seen": r.get("last_seen"),
+            }
+            for r in rows_raw
+        ]
+        return {
+            "field": field,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "status": st,
+            "search": q or None,
+            "offset": int(offset),
+            "limit": int(limit),
+            "circulating_total": int(totals.get("circulating") or 0),
+            "alive_circulating": int(totals.get("alive_circulating") or 0),
+            "dead_circulating": int(totals.get("dead_circulating") or 0),
+            "holders_with_balance": holders_with_balance,
+            "rows": rows,
+        }
+
+    @router.get("/admin/molotovs-overview")
+    async def admin_molotovs_overview(
+        status: str = Query("all"),
+        search: Optional[str] = Query(None),
+        offset: int = Query(0, ge=0),
+        limit: int = Query(100, ge=1, le=500),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Molotov circulation: totals and per-player balances (users.molotovs)."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return await _user_ammo_field_overview(
+            field="molotovs", status=status, search=search, offset=offset, limit=limit
+        )
+
+    @router.get("/admin/bullets-overview")
+    async def admin_bullets_overview(
+        status: str = Query("all"),
+        search: Optional[str] = Query(None),
+        offset: int = Query(0, ge=0),
+        limit: int = Query(100, ge=1, le=500),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Bullet circulation: totals and per-player balances (users.bullets)."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return await _user_ammo_field_overview(
+            field="bullets", status=status, search=search, offset=offset, limit=limit
+        )
+
     @router.post("/admin/vip-pass-car-remove")
     async def admin_vip_pass_car_remove(
         body: AdminVipPassCarRemoveRequest,
