@@ -594,6 +594,15 @@ async def store_buy_bullets(
         except ValueError as e:
             logger.exception("store_buy_bullets validation error: %s", e)
             raise HTTPException(status_code=400, detail="Invalid bullet quantity.")
+    try:
+        from server import get_effective_event
+        ev = await get_effective_event()
+        aw_mult = float(ev.get("armour_weapon_cost", 1.0) or 1.0)
+    except Exception:
+        aw_mult = 1.0
+    full_cost = int(cost)
+    if aw_mult != 1.0 and aw_mult > 0:
+        cost = max(1, int(full_cost * aw_mult))
     cost_used, inc, gte_filter = _store_cost_inc(current_user, cost, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
@@ -604,6 +613,13 @@ async def store_buy_bullets(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    try:
+        from utils.world_event_stats import bump_world_event_discount
+        await bump_world_event_discount(
+            db, current_user["id"], base_cost=full_cost, paid_cost=cost_used, currency="points"
+        )
+    except Exception:
+        pass
     await _record_store_points_spend(current_user, inc, "buy-bullets", cost_used=cost_used, extra={"bullets": bullets})
     return {"message": f"Bought {bullets:,} bullets for {cost_used} points", "bullets": bullets, "cost": cost_used}
 

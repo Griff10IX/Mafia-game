@@ -678,7 +678,7 @@ Attack other families' rackets to steal income:
 [quote]
 [color=#E91E63][b]Solo Games[/b][/color]
 [list]
-[*][color=#888888][b]Dice[/b] - Choose nominal sides (payout multiplier); the roll uses extra faces (⌈sides×1.05⌉, capped at max). You may pick any number from [b]1[/b] up to that face count; win if the roll matches.[/color]
+[*][color=#888888][b]Dice[/b] - Choose sides (2–2500). Pick a number from [b]1[/b] to [b]sides[/b] (e.g. sides 150, pick 145). The die rolls [b]1..sides[/b]; win if the roll matches. Payout ≈ sides × stake.[/color]
 [*][color=#888888][b]Roulette[/b] - Standard casino roulette (red/black, numbers)[/color]
 [*][color=#888888][b]Blackjack[/b] - Classic 21, beat the dealer[/color]
 [*][color=#888888][b]Slots[/b] - Spin to win, jackpot available[/color]

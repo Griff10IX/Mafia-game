@@ -168,35 +168,65 @@ export default function GameEvents() {
   const combinedChips = multiplierChips(eventData?.event);
   const saleActive = storeSale && storeSale.active !== false && (storeSale.percent || storeSale.label);
   const myGains = eventData?.my_gains || {};
-  const gainsChips = [];
-  if (Number(myGains.bonus_rp) > 0) {
-    gainsChips.push({
+  const combinedEv = eventData?.event || {};
+  const n = (v) => Number(v || 0);
+  const mult = (key) => Number(combinedEv[key] ?? 1);
+  const formatCooldownSaved = (sec) => {
+    const s = Math.max(0, Math.floor(n(sec)));
+    if (s <= 0) return '0h';
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    if (h > 0 && m > 0) return `${h}h ${m}m`;
+    if (h > 0) return `${h}h`;
+    return `${m}m`;
+  };
+  // Show a chip for every trackable event benefit — always for core earn paths,
+  // and for discount / GTA / cooldown when that mult is live or you already have lifetime gains.
+  const gainsChips = [
+    {
       label: 'Extra RP from events',
-      value: `+${Number(myGains.bonus_rp).toLocaleString()} RP`,
+      value: `+${n(myGains.bonus_rp).toLocaleString()} RP`,
       cls: 'text-violet-300',
-    });
-  }
-  if (Number(myGains.bonus_cash) > 0) {
-    gainsChips.push({
+    },
+    {
       label: 'Extra cash from events',
-      value: `+$${Number(myGains.bonus_cash).toLocaleString()}`,
+      value: `+$${n(myGains.bonus_cash).toLocaleString()}`,
       cls: 'text-emerald-300',
-    });
-  }
-  if (Number(myGains.saved_cash) > 0) {
+    },
+  ];
+  if (n(myGains.saved_cash) > 0 || mult('armour_weapon_cost') < 1 || mult('bodyguard_cost') < 1) {
     gainsChips.push({
       label: 'Cash saved on discounts',
-      value: `$${Number(myGains.saved_cash).toLocaleString()}`,
+      value: `$${n(myGains.saved_cash).toLocaleString()}`,
       cls: 'text-sky-300',
     });
   }
-  if (Number(myGains.uses) > 0) {
+  if (n(myGains.saved_points) > 0 || mult('armour_weapon_cost') < 1 || mult('bodyguard_cost') < 1) {
     gainsChips.push({
-      label: 'Boosted actions',
-      value: Number(myGains.uses).toLocaleString(),
-      cls: 'text-foreground',
+      label: 'Points saved on discounts',
+      value: n(myGains.saved_points).toLocaleString(),
+      cls: 'text-sky-300',
     });
   }
+  if (n(myGains.gta_boosted) > 0 || mult('gta_success') > 1) {
+    gainsChips.push({
+      label: 'Boosted GTA successes',
+      value: n(myGains.gta_boosted).toLocaleString(),
+      cls: 'text-amber-300',
+    });
+  }
+  if (n(myGains.cooldown_seconds_saved) > 0 || (mult('racket_cooldown') > 0 && mult('racket_cooldown') < 1)) {
+    gainsChips.push({
+      label: 'Racket cooldown saved',
+      value: formatCooldownSaved(myGains.cooldown_seconds_saved),
+      cls: 'text-cyan-300',
+    });
+  }
+  gainsChips.push({
+    label: 'Boosted actions',
+    value: n(myGains.uses).toLocaleString(),
+    cls: 'text-foreground',
+  });
 
   return (
     <div className={`${styles.pageContent} p-3 sm:p-4 mobile-page-root`}>
@@ -307,16 +337,9 @@ export default function GameEvents() {
             <div className={`${styles.panel} rounded-md border border-violet-500/25 bg-violet-500/5 mobile-panel p-2.5 space-y-2`}>
               <div className="text-[10px] font-heading font-bold text-violet-300 uppercase tracking-wider">Your event gains</div>
               <p className="text-[9px] text-mutedForeground font-heading leading-relaxed">
-                Lifetime extras you&apos;ve earned from world event boosts (crimes, GTA, kills, OC, rackets).
+                Lifetime extras from world events: RP, cash, discount savings, boosted GTAs, and racket cooldown time. Chips for live event types stay visible at 0 until you use them.
               </p>
-              {gainsChips.length > 0 ? (
-                <StatChipGrid chips={gainsChips} />
-              ) : (
-                <div className="rounded-md border border-zinc-700/40 bg-zinc-950/40 px-2.5 py-2">
-                  <div className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground">Extra RP from events</div>
-                  <div className="text-[11px] font-heading font-bold text-violet-300">+0 RP</div>
-                </div>
-              )}
+              <StatChipGrid chips={gainsChips} />
             </div>
           )}
         </section>

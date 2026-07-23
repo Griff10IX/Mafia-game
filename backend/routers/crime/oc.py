@@ -596,7 +596,8 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
             pass
     ev = await get_effective_event()
     rank_mult = float(ev.get("rank_points", 1.0))
-    cash_mult = float(ev.get("kill_cash", 1.0))
+    # Kill-loot cash events and racket/OC payout events both boost OC cash (combined events multiply).
+    cash_mult = float(ev.get("kill_cash", 1.0) or 1.0) * float(ev.get("racket_payout", 1.0) or 1.0)
     success = _rng.random() < OC_SUCCESS_RATE
     if not success:
         goes_to_jail = _rng.random() < OC_JAIL_CHANCE_ON_FAIL

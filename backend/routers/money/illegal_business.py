@@ -2617,6 +2617,15 @@ async def _collect_illegal_business_impl(current_user: dict) -> dict:
             )
         except Exception:
             pass
+    try:
+        gev = float(ev_collect.get("racket_payout", 1.0) or 1.0)
+        if gev > 1.0 and income > 0:
+            we_bonus = max(0, int(float(income) - float(income) / gev))
+            if we_bonus:
+                from utils.world_event_stats import bump_world_event_stats
+                await bump_world_event_stats(db, current_user["id"], bonus_cash=we_bonus, uses=1)
+    except Exception:
+        pass
     if auto_sell_cash > 0:
         await _bump_distillery_token_bonus_stats(current_user, auto_sell_cash, now)
     msg = f"The till's been cleared. ${income:,.2f} added to vault."
@@ -3577,6 +3586,18 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
         prestige = get_prestige_bonus(current_user)
         loot_cash_credited = int(loot_cash * float(ev.get("racket_payout", 1.0)) * float(prestige.get("illegal_business_mult", 1.0)))
         loot_cash_credited = max(RAID_LOOT_CASH_MIN, min(RAID_LOOT_CASH_MAX, loot_cash_credited))
+        try:
+            gev = float(ev.get("racket_payout", 1.0) or 1.0)
+            if gev > 1.0 and loot_cash_credited > 0:
+                # Approximate event slice before prestige/cap (best-effort).
+                pre_ev = int(loot_cash * float(prestige.get("illegal_business_mult", 1.0)))
+                pre_ev = max(RAID_LOOT_CASH_MIN, min(RAID_LOOT_CASH_MAX, pre_ev))
+                we_bonus = max(0, loot_cash_credited - pre_ev)
+                if we_bonus:
+                    from utils.world_event_stats import bump_world_event_stats
+                    await bump_world_event_stats(db, current_user["id"], bonus_cash=we_bonus, uses=1)
+        except Exception:
+            pass
         # Drain uncollected till first, then the victim's vault for any shortfall.
         till_taken = min(int(available), loot_cash_credited)
         vault_taken = 0

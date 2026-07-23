@@ -857,12 +857,19 @@ async def _attempt_gta_impl(
                 await bump_token_perk_stats(db, current_user.get("id") or "", "xp_gta", bonus_rp=_xp_token_bonus, uses=1)
             except Exception:
                 pass
-        if _we_bonus_rp:
-            try:
-                from utils.world_event_stats import bump_world_event_stats
-                await bump_world_event_stats(db, current_user.get("id") or "", bonus_rp=_we_bonus_rp, uses=1)
-            except Exception:
-                pass
+        try:
+            from utils.world_event_stats import bump_world_event_stats
+            _we_fields: dict = {}
+            if _we_bonus_rp:
+                _we_fields["bonus_rp"] = _we_bonus_rp
+            _gta_succ_mult = float(ev.get("gta_success", 1.0) or 1.0)
+            if _gta_succ_mult > 1.0:
+                _we_fields["gta_boosted"] = 1
+            if _we_fields:
+                _we_fields["uses"] = 1
+                await bump_world_event_stats(db, current_user.get("id") or "", **_we_fields)
+        except Exception:
+            pass
         from server import rank_xp_pass_multiplier
         pass_mult = float(rank_xp_pass_multiplier(current_user))
         rank_points = int(rank_points * pass_mult)

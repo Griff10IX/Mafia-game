@@ -1452,7 +1452,13 @@ async def store_buy_bullets(bullets: int, current_user: dict = Depends(get_curre
     """Buy bullets from store: respect first at ceil(20.25 respect per point of price) via store._store_cost_inc, then points."""
     if bullets < 1 or bullets > CUSTOM_BULLETS_MAX:
         raise HTTPException(status_code=400, detail=f"Bullet amount must be between 1 and {CUSTOM_BULLETS_MAX:,}")
-    cost = _calculate_bullet_cost(bullets)
+    full_cost = _calculate_bullet_cost(bullets)
+    try:
+        ev = await get_effective_event()
+        aw_mult = float(ev.get("armour_weapon_cost", 1.0) or 1.0)
+    except Exception:
+        aw_mult = 1.0
+    cost = max(1, int(full_cost * aw_mult)) if aw_mult > 0 else full_cost
     cost_used, inc, gte = _store_cost_inc(current_user, cost)
     if cost_used is None:
         raise HTTPException(status_code=400, detail="Insufficient points")
@@ -1462,6 +1468,13 @@ async def store_buy_bullets(bullets: int, current_user: dict = Depends(get_curre
     result = await db.users.update_one(gte_filter, {"$inc": inc})
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    try:
+        from utils.world_event_stats import bump_world_event_discount
+        await bump_world_event_discount(
+            db, current_user["id"], base_cost=full_cost, paid_cost=cost_used, currency="points"
+        )
+    except Exception:
+        pass
     return {"message": f"Bought {bullets:,} bullets for {cost_used} points", "bullets": bullets, "cost": cost_used}
 
 
@@ -1609,13 +1622,30 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
             detail="Unclaimed armoury only sells basic armour (level 1). Claim an armoury for higher tiers.",
         )
     ev = await get_effective_event()
-    mult = ev.get("armour_weapon_cost", 1.0)
+    mult = float(ev.get("armour_weapon_cost", 1.0) or 1.0)
     if armour.get("cost_money") is not None:
         price = _effective_armour_money_sell(armour, factory, mult)
+        full_price = _effective_armour_money_sell(armour, factory, 1.0)
     else:
         price = _effective_armour_points_sell(armour, mult)
+        full_price = _effective_armour_points_sell(armour, 1.0)
     currency_field = "money" if armour.get("cost_money") is not None else "points"
     insufficient_msg = "Insufficient cash" if currency_field == "money" else "Insufficient points"
+
+    async def _record_armour_event_savings():
+        if mult >= 1.0:
+            return
+        try:
+            from utils.world_event_stats import bump_world_event_discount
+            await bump_world_event_discount(
+                db,
+                current_user["id"],
+                base_cost=full_price,
+                paid_cost=price,
+                currency="points" if currency_field == "points" else "cash",
+            )
+        except Exception:
+            pass
 
     # Armour purchases are armoury-stock-only: no direct fallback when stock is empty.
     state_key = factory.get("state") or _normalize_state(state) if factory else None
@@ -1641,6 +1671,7 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
                 {"id": current_user["id"]},
                 {"$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}},
             )
+            await _record_armour_event_savings()
             await log_activity(current_user["id"], current_user.get("username", "?"), "armoury_buy_armour", {"item": armour["name"], "level": level, "cost": price, "source": "armoury"})
             return {"message": f"Purchased {armour['name']} (Armour Lv.{level}) from armoury", "new_level": level}
         await db.users.update_one(
@@ -1922,7 +1953,7 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
             detail="Unclaimed armoury only sells Brass Knuckles. Claim an armoury for better weapons.",
         )
     ev = await get_effective_event()
-    mult = ev.get("armour_weapon_cost", 1.0)
+    mult = float(ev.get("armour_weapon_cost", 1.0) or 1.0)
     currency = (request.currency or "").strip().lower()
     if currency not in ("money", "points"):
         raise HTTPException(status_code=400, detail="Invalid currency")
@@ -1930,6 +1961,7 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
         if weapon.get("price_money") is None:
             raise HTTPException(status_code=400, detail="This weapon can only be bought with points")
         pm = _effective_weapon_money_sell(weapon, factory, mult)
+        full_price = _effective_weapon_money_sell(weapon, factory, 1.0)
         if pm is None:
             raise HTTPException(status_code=400, detail="Invalid weapon price")
         price = pm
@@ -1938,6 +1970,7 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
         if weapon.get("price_points") is None:
             raise HTTPException(status_code=400, detail="This weapon can only be bought with money")
         price = int(weapon["price_points"] * ARMOUR_WEAPON_MARGIN * mult)
+        full_price = int(weapon["price_points"] * ARMOUR_WEAPON_MARGIN)
         insufficient_msg = "Insufficient points"
 
     # Weapon purchases are armoury-stock-only: no direct fallback when stock is empty.
@@ -1964,6 +1997,17 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
                 await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit": price}})
             else:
                 await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit_points": price}})
+            try:
+                from utils.world_event_stats import bump_world_event_discount
+                await bump_world_event_discount(
+                    db,
+                    current_user["id"],
+                    base_cost=full_price,
+                    paid_cost=price,
+                    currency="points" if currency == "points" else "cash",
+                )
+            except Exception:
+                pass
         await db.user_weapons.update_one(
             {"user_id": current_user["id"], "weapon_id": weapon_id},
             {"$inc": {"quantity": 1}, "$set": {"acquired_at": datetime.now(timezone.utc).isoformat()}},

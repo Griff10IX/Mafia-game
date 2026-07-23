@@ -632,7 +632,9 @@ async def upgrade_bodyguard_armour(slot: int, current_user: dict = Depends(get_c
     if cur_level >= 5:
         raise HTTPException(status_code=400, detail="Bodyguard armour is already maxed")
     ev = await get_effective_event()
-    cost = int(BODYGUARD_ARMOUR_UPGRADE_COSTS.get(cur_level, 0) * ev.get("bodyguard_cost", 1.0))
+    base_cost = int(BODYGUARD_ARMOUR_UPGRADE_COSTS.get(cur_level, 0) or 0)
+    bg_mult = float(ev.get("bodyguard_cost", 1.0) or 1.0)
+    cost = int(base_cost * bg_mult)
     if cost <= 0:
         raise HTTPException(status_code=400, detail="Invalid armour upgrade cost")
     new_level = cur_level + 1
@@ -642,6 +644,11 @@ async def upgrade_bodyguard_armour(slot: int, current_user: dict = Depends(get_c
     )
     if upgrade_result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    try:
+        from utils.world_event_stats import bump_world_event_discount
+        await bump_world_event_discount(db, current_user["id"], base_cost=base_cost, paid_cost=cost, currency="points")
+    except Exception:
+        pass
     await log_points_event(db, user_id=current_user["id"], points=-cost, event_type="bodyguard_armour_upgrade",
                            event_ref=f"slot:{slot}", meta={"slot": slot, "new_level": new_level})
     await db.bodyguards.update_one(
@@ -672,13 +679,20 @@ async def buy_bodyguard_slot(current_user: dict = Depends(get_current_user)):
     if slots >= 4:
         raise HTTPException(status_code=400, detail="All bodyguard slots already purchased")
     ev = await get_effective_event()
-    cost = int(BODYGUARD_SLOT_COSTS[slots] * ev.get("bodyguard_cost", 1.0))
+    base_cost = int(BODYGUARD_SLOT_COSTS[slots] or 0)
+    bg_mult = float(ev.get("bodyguard_cost", 1.0) or 1.0)
+    cost = int(base_cost * bg_mult)
     slot_result = await db.users.update_one(
         {"id": current_user["id"], "points": {"$gte": cost}},
         {"$inc": {"points": -cost, "bodyguard_slots": 1, "lifetime_points_spent": cost}},
     )
     if slot_result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    try:
+        from utils.world_event_stats import bump_world_event_discount
+        await bump_world_event_discount(db, current_user["id"], base_cost=base_cost, paid_cost=cost, currency="points")
+    except Exception:
+        pass
     await log_points_event(db, user_id=current_user["id"], points=-cost, event_type="bodyguard_slot_buy", meta={"cost": cost})
     await db.hitlist_bodyguard_events.insert_one({
         "at": datetime.now(timezone.utc),
@@ -839,6 +853,14 @@ async def _do_hire_bodyguard_reserved(
     )
     if hire_result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    try:
+        from utils.world_event_stats import bump_world_event_discount
+        no_event_cost = int(base_cost * inflation_mult)
+        await bump_world_event_discount(
+            db, current_user["id"], base_cost=no_event_cost, paid_cost=total_cost, currency="points"
+        )
+    except Exception:
+        pass
     hire_meta = {
         "slot": slot,
         "is_robot": is_robot,
@@ -1121,6 +1143,15 @@ async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
             status_code=400,
             detail=f"Inviter does not have enough points for the hire cost ({human_hire_cost} pts, 25% off robot price)",
         )
+    try:
+        from utils.world_event_stats import bump_world_event_discount
+        no_event_robot = int(base_cost * inflation_mult)
+        no_event_human = max(1, int(no_event_robot * BODYGUARD_HUMAN_HIRE_DISCOUNT))
+        await bump_world_event_discount(
+            db, inviter["id"], base_cost=no_event_human, paid_cost=human_hire_cost, currency="points"
+        )
+    except Exception:
+        pass
     human_hire_meta = {
         "guard_username": current_user.get("username"),
         "is_robot": False,

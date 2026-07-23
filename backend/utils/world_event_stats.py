@@ -10,6 +10,17 @@ from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
 
+# Fields exposed to /events/active → my_gains (and Game Events UI).
+STATS_FIELDS = (
+    "bonus_rp",
+    "bonus_cash",
+    "saved_cash",
+    "saved_points",
+    "gta_boosted",
+    "cooldown_seconds_saved",
+    "uses",
+)
+
 
 async def bump_world_event_stats(db, user_id: str, **fields) -> None:
     """$inc numeric benefit fields from active world events, e.g.
@@ -31,6 +42,27 @@ async def bump_world_event_stats(db, user_id: str, **fields) -> None:
         await db.users.update_one({"id": uid}, {"$inc": inc})
     except Exception as e:
         logger.debug("world event stats %s: %s", uid, e)
+
+
+async def bump_world_event_discount(
+    db,
+    user_id: str,
+    *,
+    base_cost: Any,
+    paid_cost: Any,
+    currency: str = "cash",
+) -> None:
+    """Record savings when a cost multiplier < 1 reduced what the player paid."""
+    try:
+        base = int(base_cost or 0)
+        paid = int(paid_cost or 0)
+    except (TypeError, ValueError):
+        return
+    saved = max(0, base - paid)
+    if not saved:
+        return
+    field = "saved_points" if currency in ("points", "pts", "point") else "saved_cash"
+    await bump_world_event_stats(db, user_id, **{field: saved, "uses": 1})
 
 
 def world_event_bonus_delta(base: Any, mult: Any) -> int:
@@ -60,9 +92,4 @@ def world_event_saved_delta(base: Any, mult: Any) -> int:
 def serialize_world_event_stats(raw: Optional[dict]) -> Dict[str, int]:
     """Shape returned to the Game Events UI."""
     s = raw if isinstance(raw, dict) else {}
-    return {
-        "bonus_rp": int(s.get("bonus_rp") or 0),
-        "bonus_cash": int(s.get("bonus_cash") or 0),
-        "saved_cash": int(s.get("saved_cash") or 0),
-        "uses": int(s.get("uses") or 0),
-    }
+    return {k: int(s.get(k) or 0) for k in STATS_FIELDS}

@@ -15,9 +15,7 @@ const CG_STYLES = `
 
 const DICE_HOUSE_EDGE = 0.0005;
 const ROLL_DURATION_MS = 2500;
-const DICE_SIDES_BONUS_MULT_FALLBACK = 1.05;
-/** ⌈2500×1.05⌉ — must match backend DICE_ROLL_FACES_CAP when sides_max is 2500 */
-const DICE_ROLL_FACES_MAX_FALLBACK = Math.ceil(2500 * DICE_SIDES_BONUS_MULT_FALLBACK);
+const DICE_SIDES_MAX_FALLBACK = 2500;
 
 function formatMoney(n) {
   const num = Number(n ?? 0);
@@ -186,16 +184,15 @@ const QUICK_BETS = [
 export default function Dice() {
   const [diceConfig, setDiceConfig] = useState({
     sides_min: 2,
-    sides_max: 2500,
-    roll_faces_max: DICE_ROLL_FACES_MAX_FALLBACK,
+    sides_max: DICE_SIDES_MAX_FALLBACK,
     max_bet: 5_000_000,
-    sides_bonus_mult: DICE_SIDES_BONUS_MULT_FALLBACK,
+    house_edge: DICE_HOUSE_EDGE,
   });
   const [ownership, setOwnership] = useState({ current_city: null, owner: null });
 
   const [stake, setStake] = useState('');
-  const [sides, setSides] = useState('100');
-  const [chosenNumber, setChosenNumber] = useState('101');
+  const [sides, setSides] = useState('150');
+  const [chosenNumber, setChosenNumber] = useState('145');
   const [skipAnimation, setSkipAnimation] = useState(false);
 
   const [playing, setPlaying] = useState(false);
@@ -224,20 +221,18 @@ export default function Dice() {
         setDiceConfig(
           r.data ?? {
             sides_min: 2,
-            sides_max: 2500,
-            roll_faces_max: DICE_ROLL_FACES_MAX_FALLBACK,
+            sides_max: DICE_SIDES_MAX_FALLBACK,
             max_bet: 5_000_000,
-            sides_bonus_mult: DICE_SIDES_BONUS_MULT_FALLBACK,
+            house_edge: DICE_HOUSE_EDGE,
           }
         )
       )
       .catch(() =>
         setDiceConfig({
           sides_min: 2,
-          sides_max: 2500,
-          roll_faces_max: DICE_ROLL_FACES_MAX_FALLBACK,
+          sides_max: DICE_SIDES_MAX_FALLBACK,
           max_bet: 5_000_000,
-          sides_bonus_mult: DICE_SIDES_BONUS_MULT_FALLBACK,
+          house_edge: DICE_HOUSE_EDGE,
         })
       );
 
@@ -270,28 +265,27 @@ export default function Dice() {
       ? diceConfig
       : {
           sides_min: 2,
-          sides_max: 2500,
-          roll_faces_max: DICE_ROLL_FACES_MAX_FALLBACK,
+          sides_max: DICE_SIDES_MAX_FALLBACK,
           max_bet: 5_000_000,
-          sides_bonus_mult: DICE_SIDES_BONUS_MULT_FALLBACK,
+          house_edge: DICE_HOUSE_EDGE,
         };
   const stakeNum = parseInt(String(stake || '').replace(/[^\d]/g, ''), 10) || 0;
-  const sidesMax = config.sides_max ?? 2500;
-  const rollFacesMax = config.roll_faces_max ?? DICE_ROLL_FACES_MAX_FALLBACK;
-  const sidesNum = Math.max(config.sides_min || 2, Math.min(sidesMax, parseInt(String(sides || ''), 10) || 100));
-  const bonusMult = typeof config.sides_bonus_mult === 'number' && config.sides_bonus_mult > 1 ? config.sides_bonus_mult : DICE_SIDES_BONUS_MULT_FALLBACK;
-  const actualSidesNum = Math.min(rollFacesMax, Math.ceil(sidesNum * bonusMult));
-  const chosenNum = Math.max(1, Math.min(actualSidesNum, parseInt(String(chosenNumber || ''), 10) || 1));
-  const returnsAmount = stakeNum > 0 && sidesNum >= 2 ? Math.floor(stakeNum * sidesNum * (1 - DICE_HOUSE_EDGE)) : 0;
+  const sidesMax = config.sides_max ?? DICE_SIDES_MAX_FALLBACK;
+  const sidesNum = Math.max(config.sides_min || 2, Math.min(sidesMax, parseInt(String(sides || ''), 10) || 150));
+  const houseEdge = typeof config.house_edge === 'number' ? config.house_edge : DICE_HOUSE_EDGE;
+  const chosenNum = Math.max(1, Math.min(sidesNum, parseInt(String(chosenNumber || ''), 10) || 1));
+  const returnsAmount = stakeNum > 0 && sidesNum >= 2
+    ? Math.floor(stakeNum * sidesNum * (1 - houseEdge))
+    : 0;
   const effectiveMaxBet = ownership?.max_bet ?? config.max_bet ?? 5_000_000;
-  const canBet = stakeNum > 0 && stakeNum <= effectiveMaxBet && sidesNum >= 2 && chosenNum >= 1 && chosenNum <= actualSidesNum;
+  const canBet = stakeNum > 0 && stakeNum <= effectiveMaxBet && sidesNum >= 2 && chosenNum >= 1 && chosenNum <= sidesNum;
 
   useEffect(() => {
     const n = parseInt(String(chosenNumber || ''), 10);
     if (chosenNumber === '' || Number.isNaN(n)) return;
     if (n < 1) setChosenNumber('1');
-    else if (n > actualSidesNum) setChosenNumber(String(actualSidesNum));
-  }, [sides, sidesNum, actualSidesNum, chosenNumber]);
+    else if (n > sidesNum) setChosenNumber(String(sidesNum));
+  }, [sides, sidesNum, chosenNumber]);
 
   useEffect(() => {
     if (!buyBackOffer?.expires_at) { setBuyBackSecondsLeft(null); return; }
@@ -310,30 +304,39 @@ export default function Dice() {
     if (!diceLoading || sidesNum < 2) return;
     setLastResult(null);
     rollIntervalRef.current = setInterval(() => {
-      setRollingNumber(Math.floor(Math.random() * actualSidesNum) + 1);
+      setRollingNumber(Math.floor(Math.random() * sidesNum) + 1);
     }, 60);
     return () => {
       if (rollIntervalRef.current) { clearInterval(rollIntervalRef.current); rollIntervalRef.current = null; }
     };
-  }, [diceLoading, sidesNum, actualSidesNum]);
+  }, [diceLoading, sidesNum]);
 
   const applyRollResult = (data) => {
     if (rollIntervalRef.current) { clearInterval(rollIntervalRef.current); rollIntervalRef.current = null; }
     setRollingNumber(null);
-    setLastResult({ roll: data.roll, win: data.win });
-    if (data.win) {
+    // Losses must never show the player's pick (would look like a suppressed win).
+    let displayRoll = data.roll;
+    const isWin = Boolean(data.win) && Number(data.roll) === chosenNum;
+    if (!isWin && Number(displayRoll) === chosenNum && sidesNum >= 2) {
+      displayRoll = chosenNum;
+      while (Number(displayRoll) === chosenNum) {
+        displayRoll = Math.floor(Math.random() * sidesNum) + 1;
+      }
+    }
+    setLastResult({ roll: displayRoll, win: isWin });
+    if (isWin) {
       if (data.shortfall > 0) {
         const received = data.actual_payout ?? data.owner_paid ?? 0;
-        toast.success(`Rolled ${data.roll}! House paid ${formatMoney(received)} (full win: ${formatMoney(data.payout)})`);
+        toast.success(`Rolled ${displayRoll}! House paid ${formatMoney(received)} (full win: ${formatMoney(data.payout)})`);
         if (data.ownership_transferred) toast.success('You won the casino! This table is now yours.');
         if (data.buy_back_offer) { setBuyBackOffer(data.buy_back_offer); buyBackFromGameRef.current = true; }
       } else {
-        toast.success(`Rolled ${data.roll}! You won ${formatMoney(data.payout)}!`);
+        toast.success(`Rolled ${displayRoll}! You won ${formatMoney(data.payout)}!`);
       }
       setShowWin(true);
       setTimeout(() => setShowWin(false), 3000);
     } else {
-      toast.error(`Rolled ${data.roll}. Lost ${formatMoney(stakeNum)}.`);
+      toast.error(`Rolled ${displayRoll}. Lost ${formatMoney(stakeNum)}.`);
     }
     setDiceLoading(false);
     setPlaying(false);
@@ -345,8 +348,8 @@ export default function Dice() {
     if (!canBet || playing) {
       if (stakeNum <= 0) toast.error('Enter a stake amount');
       else if (stakeNum > effectiveMaxBet) toast.error(`Max bet is ${formatMoney(effectiveMaxBet)}`);
-      else if (chosenNum < 1 || chosenNum > actualSidesNum)
-        toast.error(`Pick 1–${actualSidesNum} (⌈sides×${bonusMult}⌉ dice faces, max ${rollFacesMax})`);
+      else if (chosenNum < 1 || chosenNum > sidesNum)
+        toast.error(`Pick 1–${sidesNum} (must be within sides, max ${sidesMax})`);
       return;
     }
     setChosenNumber(String(chosenNum));
@@ -355,7 +358,7 @@ export default function Dice() {
     if (!skipAnimation) {
       setDiceLoading(true);
       setLastResult(null);
-      setRollingNumber(Math.floor(Math.random() * actualSidesNum) + 1);
+      setRollingNumber(Math.floor(Math.random() * sidesNum) + 1);
     }
     if (rollTimeoutRef.current) { clearTimeout(rollTimeoutRef.current); rollTimeoutRef.current = null; }
     try {
@@ -716,19 +719,18 @@ export default function Dice() {
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[10px] font-heading">
                   <span
                     className="text-emerald-200/50"
-                    title={`Pick any integer 1–${actualSidesNum} (roll is uniform on that many dice faces).`}
+                    title={`Pick any integer 1–${sidesNum}. Roll is uniform on 1..sides.`}
                   >
-                    Pick: <span className="text-white font-bold">1–{actualSidesNum}</span>
+                    Pick: <span className="text-white font-bold">1–{sidesNum}</span>
                   </span>
                   <span
                     className="text-emerald-200/50"
-                    title={`Nominal sides (max ${sidesMax.toLocaleString()}) sets payout; roll uses ⌈sides×${bonusMult}⌉ dice faces (max ${rollFacesMax.toLocaleString()}).`}
+                    title={`Sides (max ${sidesMax.toLocaleString()}) sets both the roll range and the payout multiplier.`}
                   >
-                    Sides / dice faces: <span className="text-white font-bold">{sidesNum}</span> /{' '}
-                    <span className="text-white font-bold">{actualSidesNum}</span>
+                    Sides: <span className="text-white font-bold">{sidesNum}</span>
                   </span>
                   <span className="text-emerald-200/50">
-                    True odds: <span className="text-primary font-bold">1 in {actualSidesNum}</span>
+                    True odds: <span className="text-primary font-bold">1 in {sidesNum}</span>
                   </span>
                   <span className="text-emerald-200/50">
                     Pays: <span className="text-emerald-300 font-bold">{formatMoney(returnsAmount)}</span>
@@ -779,13 +781,13 @@ export default function Dice() {
                 {/* Sides */}
                 <div>
                   <label className="block text-[10px] font-heading text-emerald-200/60 uppercase tracking-wider mb-1.5">
-                    Sides (nominal, max {sidesMax.toLocaleString()})
+                    Sides (2–{sidesMax.toLocaleString()})
                   </label>
                   <input
                     type="number"
                     min={config.sides_min ?? 2}
                     max={sidesMax}
-                    placeholder="100"
+                    placeholder="150"
                     value={sides}
                     onChange={(e) => setSides(e.target.value)}
                     className="w-full bg-black/30 border border-emerald-700/30 rounded-lg h-10 px-3 text-white text-sm font-heading font-bold focus:border-primary/60 focus:outline-none"
@@ -798,14 +800,14 @@ export default function Dice() {
                   <input
                     type="number"
                     min={1}
-                    max={actualSidesNum}
-                    placeholder={`1-${actualSidesNum}`}
+                    max={sidesNum}
+                    placeholder={`1-${sidesNum}`}
                     value={chosenNumber === '' ? '' : String(chosenNum)}
                     onChange={(e) => {
                       const v = e.target.value;
                       if (v === '') { setChosenNumber(''); return; }
                       const n = parseInt(v, 10);
-                      if (!Number.isNaN(n)) setChosenNumber(String(Math.max(1, Math.min(actualSidesNum, n))));
+                      if (!Number.isNaN(n)) setChosenNumber(String(Math.max(1, Math.min(sidesNum, n))));
                     }}
                     onBlur={() => { if (chosenNumber === '') setChosenNumber('1'); }}
                     className="w-full bg-black/30 border border-emerald-700/30 rounded-lg h-10 px-3 text-white text-sm font-heading font-bold focus:border-primary/60 focus:outline-none"
@@ -855,12 +857,14 @@ export default function Dice() {
         <div className="p-3">
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>
-              Pick 1–{actualSidesNum}; win if the roll matches. Largest number you can ever bet on is {rollFacesMax.toLocaleString()} (nominal sides {sidesMax.toLocaleString()} → ⌈sides×1.05⌉ = {rollFacesMax.toLocaleString()}).
+              Choose sides (2–{sidesMax.toLocaleString()}) and pick a number from 1 to sides — e.g. sides 150, pick 145. Win if the roll matches.
             </li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>
-              Nominal sides (payout multiplier) max {sidesMax.toLocaleString()}. Roll range is ⌈{bonusMult === 1.05 ? 'sides×1.05' : `${bonusMult}× sides`}⌉ dice faces (capped at {rollFacesMax.toLocaleString()}) — e.g. 2→3, 1000→1050, {sidesMax.toLocaleString()}→{rollFacesMax.toLocaleString()}
+              The die rolls exactly 1..sides (true die). Odds are 1 in {sidesNum} for your current sides setting.
             </li>
-            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Payout ≈ sides × stake (minus 0.05% house edge)</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>
+              Win payout ≈ sides × stake (minus 0.05% house edge).
+            </li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Max bet: {formatMoney(maxBet)}</li>
           </ul>
         </div>

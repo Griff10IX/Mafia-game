@@ -5102,12 +5102,21 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
     if collect_result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Racket on cooldown. Another collection likely just happened.")
     try:
+        from utils.world_event_stats import bump_world_event_stats
+        we_fields: dict = {}
         gev = float(payout_breakdown.get("global_event_multiplier") or 1.0)
         if gev > 1.0 and income_final > 0:
             we_bonus = max(0, int(income_final - income_final / gev))
             if we_bonus:
-                from utils.world_event_stats import bump_world_event_stats
-                await bump_world_event_stats(db, current_user["id"], bonus_cash=we_bonus, uses=1)
+                we_fields["bonus_cash"] = we_bonus
+        cd_mult = float(ev.get("racket_cooldown", 1.0) or 1.0)
+        if 0 < cd_mult < 1.0 and cooldown_h > 0:
+            saved_sec = int(cooldown_h * (1.0 / cd_mult - 1.0) * 3600)
+            if saved_sec > 0:
+                we_fields["cooldown_seconds_saved"] = saved_sec
+        if we_fields:
+            we_fields["uses"] = 1
+            await bump_world_event_stats(db, current_user["id"], **we_fields)
     except Exception:
         pass
     await log_family_vault_tx(
