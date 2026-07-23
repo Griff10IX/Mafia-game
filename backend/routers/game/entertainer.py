@@ -321,7 +321,7 @@ FIND_WORD_WORDS = [
 
 DEFAULT_REWARD_TYPE_WEIGHTS = {
     "cash": 36,
-    "bullets": 30,
+    "bullets": 15,
     "cash_bullets": 17,
     "car_cash": 0,  # cars disabled — cash-only fallback if rolled via legacy config
     "car": 0,
@@ -335,12 +335,12 @@ DEFAULT_REWARD_TYPE_WEIGHTS = {
 
 # Gbox secondary rolls (no cash — cash comes from one shared pot split in _run_gbox_payout)
 GBOX_SECONDARY_WEIGHTS = {
-    "bullets": 35,
+    "bullets": 18,
     "token": 12,
     "all_tokens": 2,
     "car": 0,
     "two_cars": 0,
-    "bullets_token": 20,
+    "bullets_token": 12,
 }
 
 # New garage cars only from GTA / dealer / marketplace / store VIP-custom / admin.
@@ -388,7 +388,7 @@ async def _get_rewards_config() -> dict:
             "cash_min": int(doc.get("cash_min") or 100),
             "cash_max": int(doc.get("cash_max") or 2000),
             "bullets_min": int(doc.get("bullets_min") or 1),
-            "bullets_max": int(doc.get("bullets_max") or 25),
+            "bullets_max": min(10, max(1, int(doc.get("bullets_max") or 10))),
             "reward_type_weights": merged_w,
         }
     else:
@@ -396,7 +396,7 @@ async def _get_rewards_config() -> dict:
             "cash_min": 100,
             "cash_max": 2000,
             "bullets_min": 1,
-            "bullets_max": 25,
+            "bullets_max": 10,
             "reward_type_weights": dict(DEFAULT_REWARD_TYPE_WEIGHTS),
         }
     _cached_rewards_config = cfg

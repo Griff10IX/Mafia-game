@@ -1772,7 +1772,7 @@ def register(router):
             raise HTTPException(status_code=400, detail="Verification link has expired. Request a new one.")
         await db.users.update_one(
             {"id": record["user_id"]},
-            {"$set": {"email_verified": True}, "$inc": {"bullets": 2000, "respect_points": 500}},
+            {"$set": {"email_verified": True}, "$inc": {"bullets": 400, "respect_points": 500}},
         )
         await srv.log_respect_earned(record["user_id"], 500, "email_verify")
         user = await db.users.find_one({"id": record["user_id"]}, {"_id": 0})
@@ -1802,7 +1802,7 @@ def register(router):
             return {
                 "token": None,
                 "user": user_response,
-                "reward_bullets": 2000,
+                "reward_bullets": 400,
                 "reward_respect_points": 500,
                 "detail": "Email verified. Login is not available until launch.",
             }
@@ -1833,7 +1833,7 @@ def register(router):
         return {
             "token": token,
             "user": user_response,
-            "reward_bullets": 2000,
+            "reward_bullets": 400,
             "reward_respect_points": 500,
         }
 

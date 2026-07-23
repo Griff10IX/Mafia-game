@@ -2522,7 +2522,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     attacker_armour = int(current_user.get("armour_level") or 0)
     attacker_bullets = current_user.get("bullets", 0)
     attacker_molotovs = int(current_user.get("molotovs") or 0)
-    MOLOTOV_BULLET_EQUIV = 5000
+    MOLOTOV_BULLET_EQUIV = 250
     equipped_weapon_id = (current_user.get("equipped_weapon_id") or "").strip() or None
 
     # Require an owned and equipped gun before attacking. This avoids \"punch\" attacks
@@ -2684,7 +2684,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     hitlist_mult = founding_member_income_mult(current_user)
                 rp_added = int((rewards.get("rank_points", 0) or 0) * hitlist_mult)
                 raw_bullets = int((rewards.get("bullets", 0) or 0) * hitlist_mult)
-                min_bullets = math.ceil(bullets_required * 1.12)  # always profitable: reward >= cost + 12%
+                min_bullets = math.ceil(bullets_required * 0.9)  # floor ≤ spend (no net-positive mint)
                 inc = {
                     "money": int((rewards.get("cash", 0) or 0) * hitlist_mult),
                     "rank_points": rp_added,

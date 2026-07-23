@@ -1202,12 +1202,6 @@ const RacketsTab = ({
         onBuyOffence={onBuyOffence}
       />
       <div className="flex flex-wrap items-center justify-between gap-2">
-        {eventsEnabled && event && (event.racket_payout !== 1 || event.racket_cooldown !== 1) && event.name && (
-          <div className="flex items-center gap-2 px-3 py-2 rounded-lg text-[10px] border border-primary/30 bg-primary/5">
-            <span className="text-primary font-heading font-bold">✨ {event.name}</span>
-            <span className="text-zinc-400">{event.message}</span>
-          </div>
-        )}
         {readyCount > 0 && effectiveCanCollect && (
           <button
             type="button"

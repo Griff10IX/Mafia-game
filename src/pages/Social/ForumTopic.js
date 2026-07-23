@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link, useSearchParams, useLocation } from 'react-router-dom';
 import { Lock, ThumbsUp, ThumbsDown, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package, UserPlus, Bold, Italic, Image, Palette, Pencil, X, Plus, Mic2 } from 'lucide-react';
 import api from '../../utils/api';
 import { confirmEntertainerGameCreatorDeduction, ENTERTAINER_GBOX_MAX_POINTS } from '../../utils/entertainerGameCreateConfirm';
-import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import { writeSessionJson } from '../../utils/sessionPageCache';
+import { forumTopicCacheKey, readForumTopicCache } from '../../utils/forumTopicWarm';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
 import GifPicker from '../../components/GifPicker';
 import { toast } from 'sonner';
@@ -313,9 +314,9 @@ export default function ForumTopic() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
-  const [topic, setTopic] = useState(null);
-  const [comments, setComments] = useState([]);
-  const [hasLoaded, setHasLoaded] = useState(false);
+  const [topic, setTopic] = useState(() => readForumTopicCache(topicId)?.topic ?? null);
+  const [comments, setComments] = useState(() => readForumTopicCache(topicId)?.comments ?? []);
+  const [hasLoaded, setHasLoaded] = useState(() => !!readForumTopicCache(topicId)?.topic);
   const [commentText, setCommentText] = useState('');
   const [posting, setPosting] = useState(false);
   const [likingId, setLikingId] = useState(null);
@@ -378,7 +379,7 @@ export default function ForumTopic() {
       const cm = res.data?.comments ?? [];
       setTopic(t);
       setComments(cm);
-      if (t) writeSessionJson(`mafia_forum_topic_${topicId}`, { topic: t, comments: cm });
+      if (t) writeSessionJson(forumTopicCacheKey(topicId), { topic: t, comments: cm });
     } catch (e) {
       if (!silent) {
         setTopic(null);
@@ -395,10 +396,9 @@ export default function ForumTopic() {
     }
   }, [topicId, navigate]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!topicId) return;
-    const k = `mafia_forum_topic_${topicId}`;
-    const c = readSessionJson(k);
+    const c = readForumTopicCache(topicId);
     if (c?.topic) {
       setTopic(c.topic);
       setComments(c.comments ?? []);
@@ -407,6 +407,7 @@ export default function ForumTopic() {
     } else {
       setTopic(null);
       setComments([]);
+      setHasLoaded(false);
       fetchTopic(false);
     }
   }, [topicId, fetchTopic]);
@@ -950,31 +951,32 @@ export default function ForumTopic() {
         <div className="flex items-center gap-3 f-fade-in">
           <div className="h-8 w-8 rounded-md bg-zinc-800/80 animate-pulse shrink-0" />
           <div className="flex-1 space-y-2 min-w-0">
-            <div className="h-5 w-2/3 max-w-xs rounded bg-primary/15 animate-pulse" />
-            <div className="h-3 w-40 rounded bg-zinc-800/70 animate-pulse" />
+            <div className="h-5 w-48 max-w-[70%] rounded bg-primary/20 animate-pulse" />
+            <div className="h-3 w-36 rounded bg-zinc-700/60 animate-pulse" />
           </div>
         </div>
         <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel f-fade-in`}>
           <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-            <div className="h-3 w-28 rounded bg-primary/20 animate-pulse" />
+            <span className="text-xs font-heading font-bold text-primary/70 uppercase tracking-widest">📝 Original Post</span>
           </div>
-          <div className="p-3 space-y-2">
-            <div className="h-3 w-full rounded bg-zinc-800/60 animate-pulse" />
-            <div className="h-3 w-11/12 rounded bg-zinc-800/50 animate-pulse" />
-            <div className="h-3 w-4/5 rounded bg-zinc-800/40 animate-pulse" />
-            <div className="h-3 w-2/3 rounded bg-zinc-800/40 animate-pulse" />
+          <div className="p-3 space-y-2.5">
+            <div className="h-3.5 w-full rounded bg-zinc-700/50 animate-pulse" />
+            <div className="h-3.5 w-[92%] rounded bg-zinc-700/40 animate-pulse" />
+            <div className="h-3.5 w-[78%] rounded bg-zinc-700/35 animate-pulse" />
+            <div className="h-3.5 w-[55%] rounded bg-zinc-700/30 animate-pulse" />
           </div>
         </div>
         <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel f-fade-in`} style={{ animationDelay: '0.05s' }}>
-          <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
-            <div className="h-3 w-24 rounded bg-primary/20 animate-pulse" />
+          <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex items-center justify-between">
+            <span className="text-xs font-heading font-bold text-primary/70 uppercase tracking-widest">💬 Comments</span>
+            <span className="text-[10px] text-mutedForeground/60">Loading…</span>
           </div>
           <div className="p-3 space-y-3">
             {[0, 1].map((i) => (
-              <div key={i} className="rounded-md border border-zinc-800/60 bg-zinc-900/40 p-2.5 space-y-2">
-                <div className="h-3 w-32 rounded bg-zinc-800/70 animate-pulse" />
-                <div className="h-3 w-full rounded bg-zinc-800/50 animate-pulse" />
-                <div className="h-3 w-3/4 rounded bg-zinc-800/40 animate-pulse" />
+              <div key={i} className="rounded-md border border-zinc-700/40 bg-zinc-900/50 p-2.5 space-y-2">
+                <div className="h-3 w-28 rounded bg-zinc-700/55 animate-pulse" />
+                <div className="h-3 w-full rounded bg-zinc-700/40 animate-pulse" />
+                <div className="h-3 w-2/3 rounded bg-zinc-700/30 animate-pulse" />
               </div>
             ))}
           </div>

@@ -28,9 +28,9 @@ GR_FAMILY_RETALIATION_CHANCE = 0.005  # 0.5% per dig (very rare)
 GR_TOKEN_TYPES = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
 
 GR_REWARD_WEIGHTS = (
-    ("nothing", 0.26),
-    ("cash", 0.40),
-    ("bullets", 0.17),
+    ("nothing", 0.30),
+    ("cash", 0.43),
+    ("bullets", 0.10),
     ("points", 0.02),  # hardest reward to hit
     ("tokens", 0.15),
 )
@@ -86,8 +86,8 @@ def _reward_ranges_for_cost(attempt_cost: int) -> dict:
     c = max(1, int(attempt_cost or GR_BASE_ATTEMPT_COST))
     cash_min = max(250_000, int(c * 0.55))
     cash_max = max(cash_min, int(c * 1.50))
-    bullets_min = max(75, int(c / 7000))
-    bullets_max = max(bullets_min + 25, int(c / 2500))
+    bullets_min = max(40, int(c / 14000))
+    bullets_max = max(bullets_min + 15, int(c / 5000))
     points_min = max(5, int(c / 250_000))
     points_max = max(points_min + 5, int(c / 90_000))
     points_max = min(100, points_max)
@@ -116,8 +116,8 @@ def _roll_reward(attempt_cost: int) -> dict:
         reward["money"] = _rng.randint(lo, hi)
         return reward
     if kind == "bullets":
-        lo = max(75, int(attempt_cost / 7000))
-        hi = max(lo + 25, int(attempt_cost / 2500))
+        lo = max(40, int(attempt_cost / 14000))
+        hi = max(lo + 15, int(attempt_cost / 5000))
         reward["bullets"] = _rng.randint(lo, hi)
         return reward
     if kind == "points":

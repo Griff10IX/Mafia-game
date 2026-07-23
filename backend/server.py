@@ -2413,8 +2413,8 @@ def get_wealth_rank_range(money: int | float) -> str:
             return f"${min_m:,}+"
     return "$0"
 
-# Bullet reward per rank up (flat 5000 bullets each time you rank up)
-RANK_UP_BULLET_REWARD = 5000
+# Bullet reward per rank up (flat; free progression mint — kept modest vs melt/store)
+RANK_UP_BULLET_REWARD = 1500
 # Respect when you *reach* each rank id (2 = first promotion from Rat). Scales up so high ranks feel meaningful.
 # If you skip multiple ranks in one update, you get the sum for each tier crossed.
 RANK_UP_RESPECT_BY_REACHED_RANK = {

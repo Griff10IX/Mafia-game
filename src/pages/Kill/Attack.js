@@ -67,7 +67,7 @@ function formatInflationResetReady(availableAtIso) {
 
 // Shown in toast when caught during booze run (prohibition bust)
 const BOOZE_CAUGHT_IMAGE = 'https://historicipswich.net/wp-content/uploads/2021/12/0a79f-boston-rum-prohibition1.jpg';
-const MOLOTOV_BULLET_EQUIV = 5000;
+const MOLOTOV_BULLET_EQUIV = 250;
 const MAX_BULLETS_REQUIRED = 150000;
 const MOBILE_SEARCH_RENDER_STEP = 40;
 
@@ -82,18 +82,6 @@ function stripBodyguardSlotFromToastMessage(msg) {
   if (typeof msg !== 'string') return msg;
   return msg.replace(/\s+in slot\s+\d+/gi, '').trim();
 }
-
-const GameEventsLink = ({ event }) => {
-  if (!event?.name || event.id === 'none') return null;
-  return (
-    <Link
-      to="/account/game-events"
-      className="text-[10px] font-heading text-primary/80 hover:text-primary transition-colors atk-fade-in"
-    >
-      Active event: {event.name} — Game Events →
-    </Link>
-  );
-};
 
 // Only run the F5-resend check once per document load so navigating away and back doesn't resend
 let attackResendCheckDoneThisLoad = false;
@@ -301,7 +289,18 @@ const KillUserCard = ({
   onOpenCalc,
   bulletsNeededForKill,
   bulletsNeededLoading,
-}) => (
+}) => {
+  const molotovsToUse = (() => {
+    if (!useMolotovs) return null;
+    const needed = Number(bulletsNeededForKill?.bullets || 0);
+    const requested = parseInt(String(bulletsToUse || '').replace(/,/g, ''), 10) || 0;
+    if (needed < 1 || requested < 1) return null;
+    const bulletsUsed = Math.min(requested, Number(userBullets || 0));
+    const shortfall = Math.max(0, needed - bulletsUsed);
+    return Math.min(Number(userMolotovs || 0), Math.ceil(shortfall / MOLOTOV_BULLET_EQUIV));
+  })();
+
+  return (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-card atk-fade-in mobile-panel`}>
     <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none atk-glow" />
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -421,8 +420,13 @@ const KillUserCard = ({
           <div className="text-[10px] text-mutedForeground font-heading">
             Molotovs:{' '}
             <span className="text-foreground font-bold">
-              {Number(userMolotovs || 0).toLocaleString()} <span className="text-xs text-mutedForeground">(5,000 bullets each)</span>
+              {Number(userMolotovs || 0).toLocaleString()} <span className="text-xs text-mutedForeground">(250 bullets each)</span>
             </span>
+            {molotovsToUse != null ? (
+              <span className={molotovsToUse > 0 ? 'text-primary ml-1' : 'text-mutedForeground/80 ml-1'}>
+                · using {molotovsToUse.toLocaleString()}
+              </span>
+            ) : null}
           </div>
           <label className="inline-flex items-center gap-1.5 text-[10px] text-foreground font-heading cursor-pointer">
             <input
@@ -448,7 +452,8 @@ const KillUserCard = ({
     </div>
     <div className="atk-art-line text-primary mx-2" />
   </div>
-);
+  );
+};
 
 const FindUserCard = ({
   targetUsername,
@@ -1363,8 +1368,6 @@ export default function Attack() {
   const [showCalcModal, setShowCalcModal] = useState(false);
   const [killBulletsResult, setKillBulletsResult] = useState(null);
   const [killBulletsLoading, setKillBulletsLoading] = useState(false);
-  const [event, setEvent] = useState(null);
-  const [eventsEnabled, setEventsEnabled] = useState(false);
   const [userBullets, setUserBullets] = useState(0);
   const [userMolotovs, setUserMolotovs] = useState(0);
   const [travelModalDestination, setTravelModalDestination] = useState(null);
@@ -1730,11 +1733,9 @@ export default function Attack() {
         // /attack/list now returns inflation_pct inline so we drop the dedicated /attack/inflation page-load call.
         const all = await Promise.all([
           api.get('/auth/me').catch(() => ({ data: {} })),
-          apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: {} })),
           refreshAttacks(),
         ]);
         const meRes = all[0];
-        const eventsRes = all[1];
         setUserBullets(meRes.data?.bullets ?? 0);
         setUserMolotovs(meRes.data?.molotovs ?? 0);
         setBodyguardFindTimeActive(
@@ -1743,15 +1744,11 @@ export default function Attack() {
         setSlowKillInflationActive(
           bodyguardFindTimePerkActive(meRes.data?.slow_kill_inflation_until, meRes.data?.slow_kill_inflation_active),
         );
-        setEvent(eventsRes.data?.event ?? null);
-        setEventsEnabled(!!eventsRes.data?.events_enabled);
       } catch (_) {
         setInflationPct(0);
         setInflationReset(null);
         setUserBullets(0);
         setUserMolotovs(0);
-        setEvent(null);
-        setEventsEnabled(false);
         await refreshAttacks();
       }
     };
@@ -2315,10 +2312,6 @@ export default function Attack() {
       {captchaModal}
 
       <p className="text-[9px] text-zinc-500 font-heading italic">Search, travel, and strike. No witnesses, no mercy.</p>
-
-      {eventsEnabled && event && (event.kill_cash !== 1 || event.rank_points !== 1) && event.name && (
-        <GameEventsLink event={event} />
-      )}
 
       {killBannerMessage && (
         <KillNotificationBanner

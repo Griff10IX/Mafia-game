@@ -991,17 +991,6 @@ export default function Store() {
         )}
       </div>
 
-      {eventsEnabled && event?.name && (
-        <div className="relative rounded-lg border border-primary/20 overflow-hidden">
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="px-4 py-3 bg-primary/8 border-b border-primary/20">
-            <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{event.name}</p>
-            <p className="text-[10px] text-zinc-500 font-heading italic mt-0.5">{event.message}</p>
-          </div>
-          <div className="store-art-line text-primary mx-3" />
-        </div>
-      )}
-
       {!storePointsAutoCredit && (
         <div className="relative rounded-lg border border-sky-500/30 overflow-hidden bg-sky-500/5">
           <div className="h-0.5 bg-gradient-to-r from-transparent via-sky-500/50 to-transparent" />

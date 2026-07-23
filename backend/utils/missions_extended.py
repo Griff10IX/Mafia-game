@@ -31,7 +31,8 @@ TOTAL_CASH_IMMEDIATE = 500_000_000
 _OLD_MISSION_CASH_DAILY_SUM = 120_125_000
 TOTAL_RESPECT_DAILY = 1000
 # Kept near prior ~14.5k/day (was 69_575 * TOTAL_TRIBUTE_DAILY_CASH / _OLD_...) before cash target rose to 75M.
-TOTAL_BULLETS_DAILY = 14_500
+# Nerf: free daily tribute bullets tightened (~7k/day when ladder complete).
+TOTAL_BULLETS_DAILY = 7_000
 # Total random-armoury-token credits per day (tribute_tokens pool); split across token-eligible missions.
 TOTAL_TRIBUTE_TOKEN_CREDITS_DAILY = 20
 # Auto-rank 2h tokens credited daily to balance (not tribute bank); split only across missions that used to grant this bonus.
@@ -355,7 +356,7 @@ def build_missions() -> List[Dict[str, Any]]:
             "reward_respect": 3,
             "reward_respect_daily": resp_d[o],
             "reward_tribute": 2_000,
-            "reward_bullets": 2_500,
+            "reward_bullets": 1_250,
             "reward_tribute_bullets_daily": bull_d[o],
             "reward_tribute_loot_box_pieces_daily": loot_d[o],
             "reward_auto_rank_2h": 1,
@@ -698,7 +699,7 @@ def build_missions() -> List[Dict[str, Any]]:
             row["reward_tribute_auto_rank_2h_daily"] = ard
         # Bullet lump milestones (subset)
         if diff in (5, 8, 10, 12, 14, 16, 18, 20, 22, 24, 25):
-            row["reward_bullets"] = min(5000 + (diff - 5) * 4500, 100_000)
+            row["reward_bullets"] = min(2500 + (diff - 5) * 2250, 50_000)
         missions.append(row)
 
     # --- m_26 .. m_100
@@ -738,7 +739,7 @@ def build_missions() -> List[Dict[str, Any]]:
         if ard:
             row["reward_tribute_auto_rank_2h_daily"] = ard
         if diff % 4 == 0:
-            row["reward_bullets"] = min(30_000 + (diff - 26) * 1200, 250_000)
+            row["reward_bullets"] = min(15_000 + (diff - 26) * 600, 125_000)
         missions.append(row)
 
     # Sanity checks (plan)

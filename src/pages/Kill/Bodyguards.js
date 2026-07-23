@@ -858,16 +858,6 @@ export default function Bodyguards() {
         </div>
       </div>
 
-      {/* Event Banner */}
-      {eventsEnabled && event?.name && event?.bodyguard_cost !== 1 && (
-        <div className="px-3 py-2 bg-primary/8 border border-primary/20 rounded-lg bg-fade-in">
-          <p className="text-xs font-heading">
-            <span className="text-primary font-bold">✨ {event.name}</span>
-            <span className="text-mutedForeground ml-2">{event.message}</span>
-          </p>
-        </div>
-      )}
-
       {/* Hire banner */}
       {hireBanner && (
         <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-heading animate-in fade-in slide-in-from-top-1 duration-200 ${

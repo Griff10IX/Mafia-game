@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Zap, Clock, Package } from 'lucide-react';
+import { Zap, Clock, Package, Gift } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../utils/api';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
@@ -40,6 +40,23 @@ function formatMult(v) {
   return `×${n}`;
 }
 
+function formatPerkRemaining(ar) {
+  if (ar?.attempts_remaining != null) {
+    return `${ar.attempts_remaining} attempts left`;
+  }
+  if (!ar?.expires_at) return '';
+  try {
+    const until = new Date(String(ar.expires_at).replace('Z', 'Z'));
+    const ms = until - new Date();
+    if (ms <= 0) return 'Expired';
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    return `${h}h ${m}m left`;
+  } catch {
+    return '';
+  }
+}
+
 function multiplierChips(ev) {
   if (!ev) return [];
   const chips = [];
@@ -76,6 +93,7 @@ const REFRESH_MS = 60_000;
 export default function GameEvents() {
   const [eventData, setEventData] = useState(null);
   const [storeSale, setStoreSale] = useState(null);
+  const [myPerks, setMyPerks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [countdown, setCountdown] = useState('');
 
@@ -103,7 +121,16 @@ export default function GameEvents() {
         if (!silent) setStoreSale(null);
       });
 
-    return Promise.all([eventsReq, saleReq]);
+    const perksReq = api.get('/loot-box/status')
+      .then((lootRes) => {
+        const rewards = Array.isArray(lootRes?.data?.active_rewards) ? lootRes.data.active_rewards : [];
+        setMyPerks(rewards);
+      })
+      .catch(() => {
+        if (!silent) setMyPerks([]);
+      });
+
+    return Promise.all([eventsReq, saleReq, perksReq]);
   }, []);
 
   useEffect(() => {
@@ -152,11 +179,41 @@ export default function GameEvents() {
           </h1>
         </div>
         <p className="text-[10px] sm:text-xs text-mutedForeground font-heading">
-          Live world buffs that rotate for everyone. Token perk boosts live on Inventory.
+          Live world buffs for everyone, plus your active loot perks. Activate armoury tokens from Inventory.
         </p>
         <AutoRefreshNote seconds={60} />
 
         <section className="space-y-2 ge-fade-in">
+          <div className="flex items-center gap-2 px-0.5">
+            <Gift size={12} className="text-amber-400" />
+            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">My game events perks</h2>
+          </div>
+          {myPerks.length === 0 ? (
+            <div className={`${styles.panel} rounded-md border border-primary/20 p-3 text-[10px] text-mutedForeground font-heading mobile-panel`}>
+              No personal loot perks active. Open a loot box or check{' '}
+              <Link to="/account/inventory" className="text-primary hover:underline">Inventory → In use</Link>
+              {' '}for armoury tokens.
+            </div>
+          ) : (
+            <ul className={`${styles.panel} rounded-md border border-amber-500/25 bg-amber-500/5 mobile-panel p-2 list-none m-0 space-y-1.5`}>
+              {myPerks.map((ar, i) => {
+                const left = formatPerkRemaining(ar);
+                return (
+                  <li
+                    key={`${ar.type || ar.name || 'perk'}-${i}`}
+                    className="flex items-center gap-2 text-[10px] font-heading text-foreground rounded border border-amber-500/20 bg-zinc-950/40 px-2.5 py-2"
+                  >
+                    <Zap size={12} className="text-amber-400 shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">{ar.name || ar.type || 'Perk'}</span>
+                    {left ? <span className="text-[9px] text-mutedForeground shrink-0">{left}</span> : null}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </section>
+
+        <section className="space-y-2 ge-fade-in" style={{ animationDelay: '0.04s' }}>
           <div className="flex items-center gap-2 px-0.5">
             <Zap size={12} className="text-primary" />
             <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Active world events</h2>

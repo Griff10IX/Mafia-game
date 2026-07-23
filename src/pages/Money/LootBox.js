@@ -1259,38 +1259,6 @@ export default function LootBox() {
               </div>
             )}
 
-            {/* Active rewards */}
-            {(status?.active_rewards?.length > 0) && (
-              <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in mobile-panel`} style={{ animationDelay: '0.07s' }}>
-                <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-                <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
-                  <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Active rewards</span>
-                </div>
-                <ul className="p-1.5 list-none m-0 flex flex-col gap-0.5">
-                  {status.active_rewards.map((ar, i) => (
-                    <li key={i} className="flex items-center gap-1.5 text-[9px] font-heading text-foreground bg-primary/5 border border-primary/15 rounded px-1.5 py-1">
-                      <Zap size={12} className="text-primary shrink-0" />
-                      <span>
-                        {ar.name}
-                        {ar.expires_at && (() => {
-                          try {
-                            const until = new Date(ar.expires_at.replace('Z', 'Z'));
-                            const ms = until - new Date();
-                            if (ms <= 0) return null;
-                            const h = Math.floor(ms / 3600000);
-                            const m = Math.floor((ms % 3600000) / 60000);
-                            return <span className="text-mutedForeground italic ml-1">({h}h {m}m left)</span>;
-                          } catch { return null; }
-                        })()}
-                        {ar.attempts_remaining != null && <span className="text-mutedForeground italic ml-1">({ar.attempts_remaining} attempts left)</span>}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-                <div className="lb-art-line text-primary mx-2.5" />
-              </div>
-            )}
-
             {/* ── Last 10 wins (below, centered) ── */}
             <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />

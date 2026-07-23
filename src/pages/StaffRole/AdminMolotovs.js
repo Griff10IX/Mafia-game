@@ -25,7 +25,7 @@ const TABS = [
     endpoint: '/admin/molotovs-overview',
     Icon: Flame,
     empty: 'No molotov holders match.',
-    blurb: 'Crime / Game Pass drops; spent on Attack (each molotov ≈ 5,000 bullets).',
+    blurb: 'Crime / Game Pass drops; spent on Attack (each molotov ≈ 250 bullets).',
   },
   {
     id: 'bullets',

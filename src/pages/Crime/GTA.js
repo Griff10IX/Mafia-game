@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { Car, Lock, ChevronDown, ChevronRight, Bot, Zap, HelpCircle } from 'lucide-react';
+import { Car, Lock, ChevronDown, ChevronRight, Bot, HelpCircle } from 'lucide-react';
 const RARITY_COLORS = {
   common: 'text-gray-400',
   uncommon: 'text-green-400',
@@ -93,20 +93,6 @@ const useCooldownTicker = (options, onCooldownExpired) => {
   }, [options, onCooldownExpired]);
 
   return tick;
-};
-
-// Subcomponents
-const GameEventsLink = ({ event, eventsEnabled }) => {
-  if (!eventsEnabled || !event?.name || event.id === 'none') return null;
-  if (event.gta_success === 1 && event.rank_points === 1 && event.kill_cash === 1) return null;
-  return (
-    <Link
-      to="/account/game-events"
-      className="text-[10px] font-heading text-primary/80 hover:text-primary transition-colors gta-fade-in"
-    >
-      Active event: {event.name} — Game Events →
-    </Link>
-  );
 };
 
 // Compact status icon: Auto Rank active
@@ -560,7 +546,6 @@ export default function GTA() {
   };
 
   const [autoRankGtaDisabled, setAutoRankGtaDisabled] = useState(() => !!gtaBoot?.autoRankGtaDisabled);
-  const [activeLootPerks, setActiveLootPerks] = useState(() => gtaBoot?.activeLootPerks ?? []);
   const [user, setUser] = useState(() => gtaBoot?.user ?? null);
 
   const optionsRef = useRef(options);
@@ -572,7 +557,6 @@ export default function GTA() {
     let nextEvent = null;
     let nextEventsEnabled = false;
     let nextAutoRankGtaDisabled = false;
-    let nextActiveLootPerks = [];
     let nextUser = null;
     let nextGtaStats = { ...DEFAULT_GTA_STATS };
     try {
@@ -582,10 +566,9 @@ export default function GTA() {
         apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: { event: null, events_enabled: false } })),
         silent ? Promise.resolve({ data: null }) : api.get('/gta/stats').catch(() => ({ data: {} })),
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
-        api.get('/loot-box/status').catch(() => ({ data: {} })),
         api.get('/auth/me').catch(() => ({ data: null })),
       ]);
-      const [optionsRes, recentStolenRes, eventsRes, statsRes, autoRankRes, lootStatusRes, meRes] = settled;
+      const [optionsRes, recentStolenRes, eventsRes, statsRes, autoRankRes, meRes] = settled;
       
       if (optionsRes.status === 'fulfilled' && Array.isArray(optionsRes.value?.data)) {
         nextOptions = optionsRes.value.data;
@@ -616,13 +599,6 @@ export default function GTA() {
         nextAutoRankGtaDisabled = !!(ar.auto_rank_enabled && ar.auto_rank_gta);
         setAutoRankGtaDisabled(nextAutoRankGtaDisabled);
       }
-      if (lootStatusRes.status === 'fulfilled' && Array.isArray(lootStatusRes.value?.data?.active_rewards)) {
-        nextActiveLootPerks = lootStatusRes.value.data.active_rewards.filter((r) => r.type === 'rp_10' || r.type === 'gta_rare_100');
-        setActiveLootPerks(nextActiveLootPerks);
-      } else {
-        nextActiveLootPerks = [];
-        setActiveLootPerks(nextActiveLootPerks);
-      }
       if (meRes.status === 'fulfilled' && meRes.value?.data) {
         nextUser = meRes.value.data;
         setUser(nextUser);
@@ -634,7 +610,6 @@ export default function GTA() {
         eventsEnabled: nextEventsEnabled,
         gtaStats: silent ? (readSessionJson(GTA_SESSION_CACHE_KEY)?.gtaStats ?? nextGtaStats) : nextGtaStats,
         autoRankGtaDisabled: nextAutoRankGtaDisabled,
-        activeLootPerks: nextActiveLootPerks,
         user: nextUser,
       });
     } catch (error) {
@@ -758,31 +733,6 @@ export default function GTA() {
         <p className="text-[9px] text-zinc-500 font-heading italic">Steal cars. Unlock by rank. One attempt puts all on cooldown.</p>
         {autoRankGtaDisabled && <AutoRankIcon />}
       </div>
-      <GameEventsLink event={event} eventsEnabled={eventsEnabled} />
-
-      {activeLootPerks.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 gta-fade-in">
-          {activeLootPerks.map((ar, i) => (
-            <div key={i} className="flex items-center gap-1.5 text-[10px] font-heading text-amber-400/90 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1">
-              <Zap size={10} className="shrink-0" />
-              <span>
-                {ar.name}
-                {ar.expires_at && (() => {
-                  try {
-                    const until = new Date(ar.expires_at.replace('Z', 'Z'));
-                    const ms = until - new Date();
-                    if (ms <= 0) return null;
-                    const h = Math.floor(ms / 3600000);
-                    const m = Math.floor((ms % 3600000) / 60000);
-                    return ` (${h}h ${m}m left)`;
-                  } catch { return null; }
-                })()}
-                {ar.attempts_remaining != null && ` (${ar.attempts_remaining} attempts left)`}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* GTA options list */}
       <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 gta-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>

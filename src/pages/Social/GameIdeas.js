@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, Lightbulb } from 'lucide-react';
 import api from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import { prefetchForumTopic } from '../../utils/forumTopicWarm';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -117,7 +118,9 @@ export default function GameIdeas() {
             </div>
             {hubId && (
               <Link
-                to={`/forum/topic/${hubId}`}
+                to={`/social/forum/${hubId}`}
+                onMouseEnter={() => prefetchForumTopic(hubId)}
+                onPointerDown={() => prefetchForumTopic(hubId)}
                 className="inline-block text-primary font-heading font-bold hover:underline"
               >
                 Open hub topic (post & register your idea) →

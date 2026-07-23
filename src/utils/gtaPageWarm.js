@@ -27,7 +27,6 @@ function buildGtaCacheFromSettled(
   eventsRes,
   statsRes,
   autoRankRes,
-  lootStatusRes,
   meRes,
 ) {
   let nextOptions = [];
@@ -60,13 +59,6 @@ function buildGtaCacheFromSettled(
     nextAutoRankGtaDisabled = !!(ar.auto_rank_enabled && ar.auto_rank_gta);
   }
 
-  let nextActiveLootPerks = [];
-  if (lootStatusRes.status === 'fulfilled' && Array.isArray(lootStatusRes.value?.data?.active_rewards)) {
-    nextActiveLootPerks = lootStatusRes.value.data.active_rewards.filter(
-      (r) => r.type === 'rp_10' || r.type === 'gta_rare_100',
-    );
-  }
-
   let nextUser = null;
   if (meRes.status === 'fulfilled' && meRes.value?.data) {
     nextUser = meRes.value.data;
@@ -79,7 +71,6 @@ function buildGtaCacheFromSettled(
     eventsEnabled: nextEventsEnabled,
     gtaStats: nextGtaStats,
     autoRankGtaDisabled: nextAutoRankGtaDisabled,
-    activeLootPerks: nextActiveLootPerks,
     user: nextUser,
   };
 }
@@ -102,7 +93,6 @@ export async function prefetchGtaPageData(options = {}) {
       apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: { event: null, events_enabled: false } })),
       api.get('/gta/stats').catch(() => ({ data: {} })),
       api.get('/auto-rank/me').catch(() => ({ data: {} })),
-      api.get('/loot-box/status').catch(() => ({ data: {} })),
       Promise.resolve(meRes),
     ]);
 
@@ -115,7 +105,6 @@ export async function prefetchGtaPageData(options = {}) {
       settled[3],
       settled[4],
       settled[5],
-      settled[6],
     );
 
     writeSessionJson(GTA_SESSION_CACHE_KEY, payload);

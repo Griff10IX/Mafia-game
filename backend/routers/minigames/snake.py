@@ -45,7 +45,7 @@ def _rewards_from_score(score: int) -> dict[str, int]:
         "money": min(25_000, s * 5),
         "respect_points": min(500, s // 20),
         "rank_points": min(200, s // 50),
-        "bullets": min(50, s // 100),
+        "bullets": min(20, s // 100),
     }
 
 

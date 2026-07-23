@@ -163,7 +163,7 @@ Open [b]Kill → Hitman for Hire[/b] (when the feature is live). Pay points to h
 High-damage throwable weapons for devastating attacks.
 
 [list]
-[*][color=#FF6B6B]Each molotov deals 5,000 bullets worth of damage[/color]
+[*][color=#FF6B6B]Each molotov deals 250 bullets worth of damage[/color]
 [*][color=#888888]Can be used alongside regular bullet attacks[/color]
 [*][color=#888888]Obtained from loot boxes or special events[/color]
 [*][color=#888888]Great for taking down heavily armoured targets[/color]

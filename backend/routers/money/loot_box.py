@@ -548,7 +548,7 @@ def _loot_tier_profile(box_quality: str) -> Dict[str, Any]:
         "common": {
             "cash": (25_000, 5_000_000),
             "rank_points": (20, 800),
-            "bullets": (100, 8_000),
+            "bullets": (50, 3_000),
             "loot_pieces": (2, 30),
             "car_rarities": ("common",),
             "car_count": (1, 2),
@@ -560,7 +560,7 @@ def _loot_tier_profile(box_quality: str) -> Dict[str, Any]:
         "uncommon": {
             "cash": (250_000, 40_000_000),
             "rank_points": (200, 2_500),
-            "bullets": (2_000, 40_000),
+            "bullets": (1_000, 20_000),
             "loot_pieces": (8, 55),
             "car_rarities": ("common", "uncommon"),
             "car_count": (1, 3),
@@ -572,7 +572,7 @@ def _loot_tier_profile(box_quality: str) -> Dict[str, Any]:
         "rare": {
             "cash": (10_000_000, LOOT_MAX_CASH),
             "rank_points": (800, 5_000),
-            "bullets": (15_000, 100_000),
+            "bullets": (7_500, 50_000),
             "loot_pieces": (20, 95),
             "car_rarities": ("uncommon", "rare", "ultra_rare"),
             "car_count": (1, 1),
@@ -584,7 +584,7 @@ def _loot_tier_profile(box_quality: str) -> Dict[str, Any]:
         "ultra_rare": {
             "cash": (50_000_000, LOOT_MAX_CASH),
             "rank_points": (2_000, 8_000),
-            "bullets": (40_000, 150_000),
+            "bullets": (15_000, 60_000),
             "loot_pieces": (40, 120),
             "car_rarities": ("ultra_rare",),
             "car_count": (1, 1),

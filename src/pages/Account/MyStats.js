@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BarChart3, Target, Sword, Dice5, Trophy, DollarSign, TrendingUp, Wine, Bot, RotateCcw, Zap, Clock } from 'lucide-react';
+import { BarChart3, Target, Sword, Dice5, Trophy, DollarSign, TrendingUp, Wine, Bot, RotateCcw, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../utils/api';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
@@ -360,25 +360,9 @@ export default function MyStats() {
           </Link>
         </div>
         <p className="text-[10px] sm:text-xs text-mutedForeground font-heading">
-          Lifetime totals and recent crime/GTA/jail activity. World buffs are on Game Events; token perk boosts are on Inventory. Gambling and sports can be reset to a fresh window; all-time nets stay as &quot;Lifetime&quot;.
+          Lifetime totals and recent crime/GTA/jail activity. World buffs and loot perks are on Game Events. Gambling and sports can be reset to a fresh window; all-time nets stay as &quot;Lifetime&quot;.
         </p>
         <AutoRefreshNote seconds={30} />
-
-        <div className={`${styles.panel} rounded-md border border-primary/20 mobile-panel p-2.5 flex items-center gap-2 flex-wrap`}>
-          <Zap size={14} className="text-primary shrink-0" />
-          <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Game events</div>
-            <p className="text-[9px] text-mutedForeground font-heading mt-0.5">
-              Live world buffs (rank points, racket payouts, and more).
-            </p>
-          </div>
-          <Link
-            to="/account/game-events"
-            className="shrink-0 text-[10px] font-heading font-bold text-primary hover:underline"
-          >
-            Open Game Events →
-          </Link>
-        </div>
 
         {recentActivityRows.length > 0 && (
           <StatCard title="Recent activity" icon={Clock} rows={recentActivityRows} delay={0} />

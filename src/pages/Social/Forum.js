@@ -4,6 +4,7 @@ import { MessageSquare, Lock, Pin, AlertCircle, Plus, ChevronRight, Eye, Message
 import api from '../../utils/api';
 import { confirmEntertainerGameCreatorDeduction, ENTERTAINER_GBOX_MAX_POINTS } from '../../utils/entertainerGameCreateConfirm';
 import { readForumSpecialTabsWarm } from '../../utils/forumSpecialTabsWarm';
+import { prefetchForumTopic } from '../../utils/forumTopicWarm';
 import { toast } from 'sonner';
 import GifPicker from '../../components/GifPicker';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -848,7 +849,13 @@ const TopicRowDesktop = ({ topic, canStickyImportant, onUpdate, updating, design
     >
       <div className="grid grid-cols-12 gap-2 px-3 py-2 f-row transition-colors items-center text-xs">
         <div className={`flex items-center gap-1.5 min-w-0 ${showFlagControls ? 'col-span-6' : 'col-span-7'}`}>
-          <Link to={`/forum/topic/${topic.id}`} className="flex items-center gap-1.5 min-w-0 flex-1 truncate">
+          <Link
+            to={`/social/forum/${topic.id}`}
+            className="flex items-center gap-1.5 min-w-0 flex-1 truncate"
+            onMouseEnter={() => prefetchForumTopic(topic.id)}
+            onFocus={() => prefetchForumTopic(topic.id)}
+            onPointerDown={() => prefetchForumTopic(topic.id)}
+          >
             {topic.category === 'crew_oc' && (
               <FamilyEmblem
                 emblemPresetId={topic.crew_oc_family_emblem_preset_id}
@@ -970,7 +977,13 @@ const TopicRowMobile = ({ topic, canStickyImportant, onUpdate, updating, designe
   );
 
   return (
-  <Link to={`/forum/topic/${topic.id}`} className="sm:hidden block px-3 py-2.5 f-row transition-colors active:bg-zinc-800/50">
+  <Link
+    to={`/social/forum/${topic.id}`}
+    className="sm:hidden block px-3 py-2.5 f-row transition-colors active:bg-zinc-800/50"
+    onMouseEnter={() => prefetchForumTopic(topic.id)}
+    onFocus={() => prefetchForumTopic(topic.id)}
+    onPointerDown={() => prefetchForumTopic(topic.id)}
+  >
     <div className="flex items-start justify-between gap-2">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
@@ -2072,7 +2085,7 @@ export default function Forum() {
                 <p className="text-[10px] text-mutedForeground">
                   Post your picture in the pinned competition topic below (add a reply with your image), then open that topic and click &quot;Submit as my entry&quot; on your post.
                   {activeDesignerComp.competition_topic_id && (
-                    <> <Link to={`/forum/topic/${activeDesignerComp.competition_topic_id}`} className="text-primary font-heading font-bold underline">Open competition topic →</Link></>
+                    <> <Link to={`/social/forum/${activeDesignerComp.competition_topic_id}`} onMouseEnter={() => prefetchForumTopic(activeDesignerComp.competition_topic_id)} onPointerDown={() => prefetchForumTopic(activeDesignerComp.competition_topic_id)} className="text-primary font-heading font-bold underline">Open competition topic →</Link></>
                   )}
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
@@ -2117,7 +2130,7 @@ export default function Forum() {
                           <p className="text-[10px] text-mutedForeground">by <Link to={`/profile/${encodeURIComponent(entry.author_username)}`} className="text-primary hover:underline">{entry.author_username}</Link></p>
                           <p className="text-[10px] text-mutedForeground">{entry.vote_count} vote(s)</p>
                           <div className="flex gap-1 mt-1.5">
-                            <Link to={`/forum/topic/${entry.topic_id || activeDesignerComp?.competition_topic_id || ''}`} className="text-[10px] text-primary hover:underline">View topic</Link>
+                            <Link to={`/social/forum/${entry.topic_id || activeDesignerComp?.competition_topic_id || ''}`} onMouseEnter={() => prefetchForumTopic(entry.topic_id || activeDesignerComp?.competition_topic_id)} onPointerDown={() => prefetchForumTopic(entry.topic_id || activeDesignerComp?.competition_topic_id)} className="text-[10px] text-primary hover:underline">View topic</Link>
                             {activeDesignerComp && (
                               myVoteEntryId === entry.id ? (
                                 <span className="text-[10px] text-emerald-400 font-heading font-bold">Voted</span>
@@ -2778,7 +2791,10 @@ export default function Forum() {
         onCreated={(info) => {
           fetchTopics();
           const tid = info?.topicId;
-          if (tid) navigate(`/forum/topic/${tid}#forum-topic-${tid}`);
+          if (tid) {
+            prefetchForumTopic(tid);
+            navigate(`/social/forum/${tid}#forum-topic-${tid}`);
+          }
         }}
         category={currentCategory}
         canUseColors={isAdmin || isModerator}

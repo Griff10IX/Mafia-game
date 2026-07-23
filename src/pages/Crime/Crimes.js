@@ -1,7 +1,6 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
-import { HelpCircle, Clock, AlertCircle, Bot, Skull, Zap, Lock, Star } from 'lucide-react';
-import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
+import { HelpCircle, Clock, AlertCircle, Bot, Skull, Lock, Star } from 'lucide-react';
+import api, { refreshUser } from '../../utils/api';
 import { useAuthUser } from '../../context/AuthContext';
 import { SAME_ROUTE_NAV_CLICK } from '../../constants/navigationEvents';
 import { getCrimesPrefetch, clearCrimesPrefetch } from '../../utils/prefetchCache';
@@ -163,19 +162,6 @@ const StatusIcons = ({ inJail, autoRankActive }) => {
         </span>
       )}
     </div>
-  );
-};
-
-const GameEventsLink = ({ event, eventsEnabled }) => {
-  if (!eventsEnabled || !event?.name || event.id === 'none') return null;
-  if (event.kill_cash === 1 && event.rank_points === 1 && event.racket_payout === 1) return null;
-  return (
-    <Link
-      to="/account/game-events"
-      className="text-[10px] font-heading text-primary/80 hover:text-primary transition-colors cr-fade-in"
-    >
-      Active event: {event.name} — Game Events →
-    </Link>
   );
 };
 
@@ -468,15 +454,12 @@ export default function Crimes() {
   const authUser = useAuthUser();
   const [bootPrefetchedCrimes] = useState(() => getCrimesPrefetch());
   const [crimes, setCrimes] = useState(() => bootPrefetchedCrimes || []);
-  const [event, setEvent] = useState(null);
-  const [eventsEnabled, setEventsEnabled] = useState(false);
   const [crimeStats, setCrimeStats] = useState({
     count_today: 0, count_week: 0, success_today: 0, success_week: 0,
     profit_today: 0, profit_24h: 0, profit_week: 0,
   });
 
   const [autoRankCrimesDisabled, setAutoRankCrimesDisabled] = useState(null); // null = unknown/loading, true = disabled, false = enabled
-  const [activeLootPerks, setActiveLootPerks] = useState([]);
 
   // silent=true (cooldown sync / focus): skip /crimes/stats — that aggregate scans 7d of crime_events.
   // includeStats overrides: needed when silently refreshing after prefetch still wants the footer numbers.
@@ -493,30 +476,11 @@ export default function Crimes() {
       const ar = autoRankRes.data || {};
       setAutoRankCrimesDisabled(!!(ar.auto_rank_enabled && ar.auto_rank_crimes));
 
-      const extras = [
-        apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: { event: null, events_enabled: false } })),
-        api.get('/loot-box/status').catch(() => ({ data: {} })),
-      ];
       if (wantStats) {
-        extras.splice(1, 0, api.get('/crimes/stats').catch(() => ({ data: {} })));
+        api.get('/crimes/stats').catch(() => ({ data: {} })).then((statsRes) => {
+          setCrimeStats(statsRes.data || {});
+        }).catch(() => {});
       }
-
-      Promise.all(extras)
-        .then((results) => {
-          const eventsRes = results[0];
-          const statsRes = wantStats ? results[1] : null;
-          const lootStatusRes = wantStats ? results[2] : results[1];
-          setEvent(eventsRes.data?.event ?? null);
-          setEventsEnabled(!!eventsRes.data?.events_enabled);
-          if (statsRes) setCrimeStats(statsRes.data || {});
-          if (Array.isArray(lootStatusRes?.data?.active_rewards)) {
-            const rewards = lootStatusRes.data.active_rewards.filter((r) => r.type === 'rp_10');
-            setActiveLootPerks(rewards);
-          } else {
-            setActiveLootPerks([]);
-          }
-        })
-        .catch(() => {});
     } catch (error) {
       if (!silent) {
         toast.error('Failed to load crimes');
@@ -616,7 +580,7 @@ export default function Crimes() {
             parts.push(`${bonus.booze.amount}× ${boozeName}`);
           }
           if (bonus.bullets) parts.push(`${bonus.bullets} bullets`);
-          if (bonus.molotovs) parts.push(`${bonus.molotovs} molotov${bonus.molotovs === 1 ? '' : 's'} (each counts as 5,000 bullets)`);
+          if (bonus.molotovs) parts.push(`${bonus.molotovs} molotov${bonus.molotovs === 1 ? '' : 's'} (each counts as 250 bullets)`);
           if (bonus.loot_box_pieces) {
             parts.push(`${bonus.loot_box_pieces} loot piece${bonus.loot_box_pieces === 1 ? '' : 's'}`);
           }
@@ -746,31 +710,6 @@ export default function Crimes() {
         <p className="text-[9px] text-zinc-500 font-heading italic">Commit crimes for cash and rank. Fail and you risk jail.</p>
         <StatusIcons inJail={!!authUser?.in_jail} autoRankActive={autoRankCrimesDisabled === true} />
       </div>
-
-      {eventsEnabled && <GameEventsLink event={event} eventsEnabled={eventsEnabled} />}
-
-      {activeLootPerks.length > 0 && (
-        <div className="flex flex-wrap gap-1.5 cr-fade-in">
-          {activeLootPerks.map((ar, i) => (
-            <div key={i} className="flex items-center gap-1.5 text-[10px] font-heading text-amber-400/90 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-1">
-              <Zap size={10} className="shrink-0" />
-              <span>
-                {ar.name}
-                {ar.expires_at && (() => {
-                  try {
-                    const until = new Date(ar.expires_at.replace('Z', 'Z'));
-                    const ms = until - new Date();
-                    if (ms <= 0) return null;
-                    const h = Math.floor(ms / 3600000);
-                    const m = Math.floor((ms % 3600000) / 60000);
-                    return ` (${h}h ${m}m left)`;
-                  } catch { return null; }
-                })()}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Crimes list */}
       <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 cr-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>

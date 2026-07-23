@@ -6,6 +6,25 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-23 20:45 UTC[/color][/b] — [b]Molotovs: 250 bullets each[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] On Attack, each molotov now counts as [b]250 bullets[/b] (was 5,000). Existing molotov stock is unchanged — only combat value changed.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-23 20:35 UTC[/color][/b] — [b]Bullets: free grants tightened[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Free / RNG bullet grants are lower across Loot Boxes, Hitlist NPCs (no more net-positive ammo from practice kills), mission tribute & lumps, Entertainer, Grave Robber, Package Run, rank-ups, and email verify.[/color]
+[*][color=#888888][b]Unchanged:[/b] [b]Garage melt[/b] stays the main bullet grind; [b]Store[/b] and [b]Armoury[/b] cash factory stay the paid top-ups. Game Pass / Speakeasy not touched this pass.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-23 20:25 UTC[/color][/b] — [b]Loot Box: full Store token pool[/b][/size]
 [quote]
 [list]
