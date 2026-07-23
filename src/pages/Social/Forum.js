@@ -1686,7 +1686,8 @@ export default function Forum() {
   const isUserInParticipantList = (parts) =>
     !!uidStr && (parts || []).some((p) => String(p.user_id || '') === uidStr);
   const handleJoinGame = async (gameId) => {
-    if (!gameId || joiningInFlightRef.current.has(gameId)) return;
+    // Serialize all joins (not just same gameId) so the next join always uses a fresh token.
+    if (!gameId || joiningInFlightRef.current.size > 0) return;
     joiningInFlightRef.current.add(gameId);
     setJoiningId(gameId);
     try {
@@ -1696,10 +1697,11 @@ export default function Forum() {
       } catch {
         return; // captcha cancelled/failed — user can tap Join again
       }
-      await api.post(`/forum/entertainer/games/${gameId}/join`, {
+      const res = await api.post(`/forum/entertainer/games/${gameId}/join`, {
         join_token: entJoinTokenRef.current,
         captcha_token: captchaToken,
       });
+      if (res.data?.join_token) entJoinTokenRef.current = res.data.join_token;
       toast.success('Joined');
       fetchEntertainerGames();
       fetchEntertainerHistory();
@@ -1711,6 +1713,8 @@ export default function Forum() {
         skipEntertainerGamesLoadSpinnerRef.current = true;
         fetchEntertainerGames();
         toast.warning(detail.includes('Too fast') ? 'Too fast — tap Join again.' : 'Session refreshed — tap Join again.');
+      } else if (err.response?.status === 429) {
+        toast.warning(typeof detail === 'string' && detail ? detail : 'Please wait a moment before joining again.');
       } else {
         toast.error(detail || 'Failed to join');
       }

@@ -35,6 +35,11 @@ async def _entertainer_sustained_rl_verified(current_user: dict = Depends(get_cu
     await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_ENTERTAINER)
 
 
+# Min gap between join attempts (same user). Keep short so players can join several open
+# games back-to-back; frontend also serializes joins. True bot spam still hits sustained RL.
+ENT_JOIN_SPAM_GAP_SECONDS = 0.45
+
+
 async def _entertainer_join_spam_guard(current_user: dict = Depends(get_current_user_verified)):
     """Small always-on per-user guard for rapid repeat join attempts."""
     uid = str((current_user or {}).get("id") or "").strip()
@@ -47,7 +52,7 @@ async def _entertainer_join_spam_guard(current_user: dict = Depends(get_current_
         {"_id": 0, "last_at": 1},
     )
     last_at = _parse_iso((row or {}).get("last_at"))
-    if last_at and (now - last_at).total_seconds() < 2.0:
+    if last_at and (now - last_at).total_seconds() < ENT_JOIN_SPAM_GAP_SECONDS:
         raise HTTPException(
             status_code=429,
             detail="Please wait a moment before trying to join again.",
@@ -61,8 +66,51 @@ async def _entertainer_join_spam_guard(current_user: dict = Depends(get_current_
 # --- Anti-bot join tokens (layer 1, always on) ---
 # Issued per-user with the games list; joins must echo the token back. A minimum age check
 # means a script that fetches the list and joins in the same instant fails; single-use per join.
+# After a successful join we re-issue a token that is immediately usable so multi-joins work.
 ENT_JOIN_TOKEN_TTL_SECONDS = 600
 ENT_JOIN_TOKEN_MIN_AGE_SECONDS = 1.5
+
+
+async def _issue_ent_join_token(uid: str, *, ready_immediately: bool = False) -> Optional[str]:
+    """Store a new join token for uid. If ready_immediately, backdate issued_at past min-age."""
+    uid = str(uid or "").strip()
+    if not uid:
+        return None
+    token = secrets.token_urlsafe(24)
+    now = datetime.now(timezone.utc)
+    if ready_immediately:
+        issued_at = (now - timedelta(seconds=ENT_JOIN_TOKEN_MIN_AGE_SECONDS + 0.05)).isoformat()
+    else:
+        issued_at = now.isoformat()
+    await db.ent_join_tokens.update_one(
+        {"user_id": uid},
+        {"$set": {"token": token, "issued_at": issued_at}},
+        upsert=True,
+    )
+    return token
+
+
+async def _get_or_issue_ent_join_token(uid: str) -> Optional[str]:
+    """Return existing unexpired join token, or issue a new one.
+
+    Reusing avoids poll/post-join list refreshes resetting min-age (which blocked
+    joining a second game quickly and caused false 'Too fast' after polls).
+    """
+    uid = str(uid or "").strip()
+    if not uid:
+        return None
+    row = await db.ent_join_tokens.find_one(
+        {"user_id": uid},
+        {"_id": 0, "token": 1, "issued_at": 1},
+    )
+    stored = str((row or {}).get("token") or "").strip()
+    if stored:
+        issued_at = _parse_iso((row or {}).get("issued_at"))
+        if issued_at is not None:
+            age = (datetime.now(timezone.utc) - issued_at).total_seconds()
+            if 0 <= age <= ENT_JOIN_TOKEN_TTL_SECONDS:
+                return stored
+    return await _issue_ent_join_token(uid)
 
 # E-Games prizes: Rank-XP Pass is shop-only (not listed in "what you can win" and never rolled here).
 ENTERTAINER_TOKEN_TYPES = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
@@ -1103,17 +1151,11 @@ async def list_games(
     if status and status in ("open", "full", "completed"):
         query["status"] = status
     games = await db.entertainer_games.find(query, {"_id": 0}).sort("created_at", -1).to_list(50)
-    # Anti-bot: hand out a fresh single-use join token with the list (consumed by the next join).
+    # Anti-bot: hand out a join token with the list (consumed by the next join).
+    # Reuse a still-valid token so polls / refreshes do not reset the min-age clock.
     join_token = None
     try:
-        uid = str(current_user.get("id") or "")
-        if uid:
-            join_token = secrets.token_urlsafe(24)
-            await db.ent_join_tokens.update_one(
-                {"user_id": uid},
-                {"$set": {"token": join_token, "issued_at": datetime.now(timezone.utc).isoformat()}},
-                upsert=True,
-            )
+        join_token = await _get_or_issue_ent_join_token(str(current_user.get("id") or ""))
     except Exception:
         logger.exception("ent join token issue failed")
         join_token = None
@@ -1534,7 +1576,17 @@ async def join_game(
         game = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
         await _settle_game(game)
     updated = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
-    return {"message": "Joined game" + (" — rewards rolled!" if is_full else ""), "game": _with_public_hangman(updated, current_user.get("id"))}
+    # Re-issue a ready token so the player can join another open game without waiting for list refetch / min-age.
+    next_join_token = None
+    try:
+        next_join_token = await _issue_ent_join_token(uid, ready_immediately=True)
+    except Exception:
+        logger.exception("ent join token reissue after join failed")
+    return {
+        "message": "Joined game" + (" — rewards rolled!" if is_full else ""),
+        "game": _with_public_hangman(updated, current_user.get("id")),
+        "join_token": next_join_token,
+    }
 
 
 async def guess_hangman(

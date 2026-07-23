@@ -587,25 +587,52 @@ export default function Jail() {
     setLoading(true);
     try {
       const response = await api.post('/jail/bust', { target_username: username });
+      const data = response.data || {};
       if (response.status === 200) {
         startBustCooldown(JAIL_BUST_MIN_INTERVAL_SEC);
       }
-      if (response.data.success) {
-        let msg = response.data.message;
-        if (response.data.cash_reward > 0) {
-          msg += ` +$${Number(response.data.cash_reward).toLocaleString()}`;
+      if (data.success) {
+        let msg = data.message;
+        if (data.cash_reward > 0) {
+          msg += ` +$${Number(data.cash_reward).toLocaleString()}`;
         }
-        if (response.data.respect_points > 0) {
-          msg += ` +${response.data.respect_points} respect`;
+        if (data.respect_points > 0) {
+          msg += ` +${data.respect_points} respect`;
         }
         toast.success(msg);
+        const cash = Number(data.cash_reward) || 0;
+        setJailedPlayers((prev) =>
+          (Array.isArray(prev) ? prev : []).filter(
+            (p) => String(p?.username || '').toLowerCase() !== String(username || '').toLowerCase(),
+          ),
+        );
+        setJailStats((prev) => ({
+          ...prev,
+          count_today: (prev.count_today || 0) + 1,
+          count_week: (prev.count_week || 0) + 1,
+          success_today: (prev.success_today || 0) + 1,
+          success_week: (prev.success_week || 0) + 1,
+          profit_today: (prev.profit_today || 0) + cash,
+          profit_24h: (prev.profit_24h || 0) + cash,
+          profit_week: (prev.profit_week || 0) + cash,
+        }));
         refreshUser();
       } else {
-        const jailTime = response.data.jail_time ?? 30;
-        toast.error(response.data.message + (jailTime ? ` You're in jail for ${jailTime}s.` : ''));
+        const jailTime = data.jail_time ?? 30;
+        toast.error(data.message + (jailTime ? ` You're in jail for ${jailTime}s.` : ''));
+        setJailStats((prev) => ({
+          ...prev,
+          count_today: (prev.count_today || 0) + 1,
+          count_week: (prev.count_week || 0) + 1,
+        }));
+        if (jailTime > 0) {
+          const until = new Date(Date.now() + jailTime * 1000).toISOString();
+          setJailStatus((s) => ({ ...s, in_jail: true, jail_until: until }));
+        }
         refreshUser();
+        // List may still be fine; light poll only (not full bootstrap).
+        fetchJailPlayers().catch(() => {});
       }
-      await fetchJailData();
     } catch (error) {
       const detail = error.response?.data?.detail;
       const waitSec = parseBustWaitSecondsFromDetail(detail);

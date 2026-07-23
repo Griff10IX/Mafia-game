@@ -49,7 +49,9 @@ from server import (
     STATES,
 )
 from routers.account.objectives import update_objectives_progress
+from routers.game.achievements import badge_bonuses_from_user
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
+from utils.location_climate import get_location_climate, jail_bust_rate_after_climate, rank_multiplier_for_actor
 from utils.point_provenance import log_points_event
 from utils.rolling_event_stats import (
     fetch_rolling_event_stats,
@@ -59,6 +61,26 @@ from utils.sustained_page_ratelimit import check_jail_sustained_page_rl
 from utils.entertainer_service import ENTERTAINER_ONLINE_COLOR_DEFAULT
 
 logger = logging.getLogger(__name__)
+
+# Post-bust bookkeeping (events, objectives, milestones) runs after the HTTP response.
+_jail_bookkeeping_locks: dict = {}
+_jail_bookkeeping_tasks: set = set()
+
+
+def _spawn_jail_bookkeeping(user_id: str, coro_factory) -> None:
+    """Run coro_factory() in the background, serialized per user."""
+    lock = _jail_bookkeeping_locks.setdefault(user_id or "", asyncio.Lock())
+
+    async def _runner():
+        async with lock:
+            try:
+                await coro_factory()
+            except Exception:
+                logger.exception("jail post-bust bookkeeping failed user_id=%s", user_id)
+
+    task = asyncio.create_task(_runner())
+    _jail_bookkeeping_tasks.add(task)
+    task.add_done_callback(_jail_bookkeeping_tasks.discard)
 
 
 async def _jail_sustained_rl_user(current_user: dict = Depends(get_current_user)):
@@ -677,8 +699,6 @@ async def _award_bust_milestones(user_id: str, new_total_busts: int, claimed: li
 
 async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
     """Attempt to bust target (NPC or player) out of jail. Returns dict with success, message, optional rank_points_earned, cash_reward, jail_time. On validation failure returns {success: False, error: str, error_code: int}."""
-    from utils.location_climate import get_location_climate, jail_bust_rate_after_climate, rank_multiplier_for_actor
-
     target_name = (target_username or "").strip()
     username_ci = re.compile("^" + re.escape(target_name) + "$", re.IGNORECASE) if target_name else None
     if not username_ci:
@@ -727,11 +747,13 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
     total_attempts = _safe_int(current_user.get("jail_bust_attempts"), 0)
     total_successes = _safe_int(current_user.get("jail_busts"), 0)
     player_success_rate = _player_bust_success_rate(total_attempts, total_successes)
-    # Badge bonus: 0.1% per jail busts badge; prestige: 0.5% boost per level
+    # Badge bonus from in-memory user (no extra DB read).
     try:
-        from routers.game.achievements import get_badge_bonuses
-        bb = await get_badge_bonuses(current_user.get("id") or "")
-        player_success_rate = min(0.95, player_success_rate + bb.get("jail_busts", 0) * 0.001 * bb.get("prestige_badge_mult", 1))
+        bb = badge_bonuses_from_user(current_user)
+        player_success_rate = min(
+            0.95,
+            player_success_rate + bb.get("jail_busts", 0) * 0.001 * bb.get("prestige_badge_mult", 1),
+        )
     except Exception:
         pass
     if _jailbust_bonus_active(current_user):
@@ -739,6 +761,17 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
 
     _climate = get_location_climate()
     _state = current_user.get("current_state")
+    deferred_ops: list = []
+
+    def _spawn_and_return(result: dict) -> dict:
+        if deferred_ops:
+
+            async def _run():
+                for op in deferred_ops:
+                    await op()
+
+            _spawn_jail_bookkeeping(uid, _run)
+        return result
 
     npc = await db.jail_npcs.find_one(
         {"$and": [{"username": username_ci}, _npc_visible_to_user_filter(current_user["id"])]},
@@ -778,34 +811,50 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                 updates["$inc"]["money"] = bust_reward_cash
             jail_npc_update = apply_season_rp_mirror_to_update(updates, user=current_user)
             await db.users.update_one({"id": current_user["id"]}, jail_npc_update)
-            try:
-                await maybe_process_rank_up(
-                    current_user["id"],
-                    rp_before,
-                    rank_points_in_update(jail_npc_update),
-                    current_user.get("username", ""),
-                    user_prestige_rank_mult(current_user),
-                )
-            except Exception as e:
-                logger.exception("Rank-up notification (jail NPC bust): %s", e)
-            try:
-                await update_objectives_progress(current_user["id"], "busts", 1)
-            except Exception:
-                pass
-            await _record_bust_event(current_user["id"], True, bust_reward_cash, target_username=target_username, is_npc=True)
-            if _jailbust_bonus_active(current_user):
-                try:
-                    from utils.token_perk_stats import bump_token_perk_stats
-                    await bump_token_perk_stats(db, current_user["id"], "jailbust_bonus", busts_won=1)
-                except Exception:
-                    pass
             new_total = total_successes + 1
             claimed = current_user.get("respect_points_bust_milestones_claimed") or []
             new_claimed = [m for m in BUST_MILESTONES if m <= new_total and m not in claimed]
             respect_earned = sum(BUST_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
-            await _award_bust_milestones(current_user["id"], new_total, claimed)
+            jailbust_active = _jailbust_bonus_active(current_user)
+
+            async def _post_npc_success():
+                try:
+                    await maybe_process_rank_up(
+                        current_user["id"],
+                        rp_before,
+                        rank_points_in_update(jail_npc_update),
+                        current_user.get("username", ""),
+                        user_prestige_rank_mult(current_user),
+                    )
+                except Exception as e:
+                    logger.exception("Rank-up notification (jail NPC bust): %s", e)
+                try:
+                    await update_objectives_progress(current_user["id"], "busts", 1)
+                except Exception:
+                    pass
+                await _record_bust_event(
+                    current_user["id"], True, bust_reward_cash, target_username=target_username, is_npc=True
+                )
+                if jailbust_active:
+                    try:
+                        from utils.token_perk_stats import bump_token_perk_stats
+
+                        await bump_token_perk_stats(db, current_user["id"], "jailbust_bonus", busts_won=1)
+                    except Exception:
+                        pass
+                await _award_bust_milestones(current_user["id"], new_total, claimed)
+
+            deferred_ops.append(_post_npc_success)
             msg = _rng.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=target_username)
-            return {"success": True, "message": msg, "rank_points_earned": rank_points, "cash_reward": bust_reward_cash, "respect_points": respect_earned}
+            return _spawn_and_return(
+                {
+                    "success": True,
+                    "message": msg,
+                    "rank_points_earned": rank_points,
+                    "cash_reward": bust_reward_cash,
+                    "respect_points": respect_earned,
+                }
+            )
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
         next_attempts = total_attempts + 1
         go_to_jail = True
@@ -829,14 +878,27 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                 {"id": current_user["id"]},
                 {"$set": {"jail_bust_attempts": next_attempts, "current_consecutive_busts": 0}},
             )
-            try:
-                from utils.token_perk_stats import bump_token_perk_stats
-                await bump_token_perk_stats(db, current_user["id"], "jailbust_bonus", jail_avoided=1)
-            except Exception:
-                pass
-        await _record_bust_event(current_user["id"], False, 0, target_username=target_username, is_npc=True)
+
+            async def _post_npc_avoid():
+                try:
+                    from utils.token_perk_stats import bump_token_perk_stats
+
+                    await bump_token_perk_stats(db, current_user["id"], "jailbust_bonus", jail_avoided=1)
+                except Exception:
+                    pass
+
+            deferred_ops.append(_post_npc_avoid)
+
+        async def _post_npc_fail_event():
+            await _record_bust_event(
+                current_user["id"], False, 0, target_username=target_username, is_npc=True
+            )
+
+        deferred_ops.append(_post_npc_fail_event)
         msg = _rng.choice(JAIL_BUST_FAIL_MESSAGES if go_to_jail else JAIL_BUST_FAIL_AVOID_JAIL_MESSAGES)
-        return {"success": False, "message": msg, "jail_time": 30 if go_to_jail else 0}
+        return _spawn_and_return(
+            {"success": False, "message": msg, "jail_time": 30 if go_to_jail else 0}
+        )
 
     target = await db.users.find_one({"username": username_ci}, {"_id": 0})
     if not target:
@@ -911,48 +973,76 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             if pay_result.modified_count == 0:
                 base_pay = 0
                 cash_to_pay = 0
-            else:
-                await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": cash_to_pay}})
         new_consec = _safe_int(current_user.get("current_consecutive_busts"), 0) + 1
         record = max(_safe_int(current_user.get("consecutive_busts_record"), 0), new_consec)
         rp_before = _rank_points_before_bust(current_user)
+        buster_inc = {
+            "rank_points": rank_points,
+            "jail_busts": 1,
+            "jail_bust_attempts": 1,
+        }
+        if cash_to_pay > 0:
+            buster_inc["money"] = cash_to_pay
         jail_player_update = apply_season_rp_mirror_to_update(
-            {"$inc": {"rank_points": rank_points, "jail_busts": 1, "jail_bust_attempts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}},
+            {
+                "$inc": buster_inc,
+                "$set": {
+                    "current_consecutive_busts": new_consec,
+                    "consecutive_busts_record": record,
+                },
+            },
             user=current_user,
         )
         await db.users.update_one(
             {"id": current_user["id"]},
             jail_player_update,
         )
-        try:
-            await maybe_process_rank_up(
-                current_user["id"],
-                rp_before,
-                rank_points_in_update(jail_player_update),
-                current_user.get("username", ""),
-                user_prestige_rank_mult(current_user),
-            )
-        except Exception as e:
-            logger.exception("Rank-up notification (jail player bust): %s", e)
-        try:
-            await update_objectives_progress(current_user["id"], "busts", 1)
-        except Exception:
-            pass
-        await _record_bust_event(current_user["id"], True, cash_to_pay, target_username=target.get("username") or "", is_npc=False)
-        if _jailbust_bonus_active(current_user):
-            try:
-                from utils.token_perk_stats import bump_token_perk_stats
-                await bump_token_perk_stats(db, current_user["id"], "jailbust_bonus", busts_won=1)
-            except Exception:
-                pass
         new_total = total_successes + 1
         claimed = current_user.get("respect_points_bust_milestones_claimed") or []
         new_claimed = [m for m in BUST_MILESTONES if m <= new_total and m not in claimed]
         respect_earned = sum(BUST_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
-        await _award_bust_milestones(current_user["id"], new_total, claimed)
+        target_display = target.get("username") or ""
+        jailbust_active = _jailbust_bonus_active(current_user)
+
+        async def _post_player_success():
+            try:
+                await maybe_process_rank_up(
+                    current_user["id"],
+                    rp_before,
+                    rank_points_in_update(jail_player_update),
+                    current_user.get("username", ""),
+                    user_prestige_rank_mult(current_user),
+                )
+            except Exception as e:
+                logger.exception("Rank-up notification (jail player bust): %s", e)
+            try:
+                await update_objectives_progress(current_user["id"], "busts", 1)
+            except Exception:
+                pass
+            await _record_bust_event(
+                current_user["id"], True, cash_to_pay, target_username=target_display, is_npc=False
+            )
+            if jailbust_active:
+                try:
+                    from utils.token_perk_stats import bump_token_perk_stats
+
+                    await bump_token_perk_stats(db, current_user["id"], "jailbust_bonus", busts_won=1)
+                except Exception:
+                    pass
+            await _award_bust_milestones(current_user["id"], new_total, claimed)
+
+        deferred_ops.append(_post_player_success)
         display_name = target.get("username") or target_username or "Unknown"
         msg = _rng.choice(JAIL_BUST_SUCCESS_MESSAGES).format(target_username=display_name)
-        return {"success": True, "message": msg, "rank_points_earned": rank_points, "cash_reward": cash_to_pay, "respect_points": respect_earned}
+        return _spawn_and_return(
+            {
+                "success": True,
+                "message": msg,
+                "rank_points_earned": rank_points,
+                "cash_reward": cash_to_pay,
+                "respect_points": respect_earned,
+            }
+        )
     jail_until = datetime.now(timezone.utc) + timedelta(seconds=30)
     next_attempts = total_attempts + 1
     go_to_jail = not _jailbust_failed_bust_avoids_jail(current_user)
@@ -966,14 +1056,29 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             {"id": current_user["id"]},
             {"$set": {"jail_bust_attempts": next_attempts, "current_consecutive_busts": 0}},
         )
-        try:
-            from utils.token_perk_stats import bump_token_perk_stats
-            await bump_token_perk_stats(db, current_user["id"], "jailbust_bonus", jail_avoided=1)
-        except Exception:
-            pass
-    await _record_bust_event(current_user["id"], False, 0, target_username=target.get("username") or "", is_npc=False)
+
+        async def _post_player_avoid():
+            try:
+                from utils.token_perk_stats import bump_token_perk_stats
+
+                await bump_token_perk_stats(db, current_user["id"], "jailbust_bonus", jail_avoided=1)
+            except Exception:
+                pass
+
+        deferred_ops.append(_post_player_avoid)
+
+    fail_target_name = target.get("username") or ""
+
+    async def _post_player_fail_event():
+        await _record_bust_event(
+            current_user["id"], False, 0, target_username=fail_target_name, is_npc=False
+        )
+
+    deferred_ops.append(_post_player_fail_event)
     msg = _rng.choice(JAIL_BUST_FAIL_MESSAGES if go_to_jail else JAIL_BUST_FAIL_AVOID_JAIL_MESSAGES)
-    return {"success": False, "message": msg, "jail_time": 30 if go_to_jail else 0}
+    return _spawn_and_return(
+        {"success": False, "message": msg, "jail_time": 30 if go_to_jail else 0}
+    )
 
 
 async def bust_out_of_jail(
@@ -989,10 +1094,23 @@ async def bust_out_of_jail(
     if result.get("error"):
         raise HTTPException(status_code=result.get("error_code", 400), detail=result["error"])
     _invalidate_all_jail_players_cache()
-    await log_activity(current_user["id"], current_user.get("username", "?"), "jail_bust", {
-        "target": request.target_username, "success": result.get("success", False),
-        "cash_reward": result.get("cash_reward", 0), "rp": result.get("rank_points_earned", 0),
-    })
+    uid = current_user.get("id") or ""
+    activity_details = {
+        "target": request.target_username,
+        "success": result.get("success", False),
+        "cash_reward": result.get("cash_reward", 0),
+        "rp": result.get("rank_points_earned", 0),
+    }
+
+    async def _post_route_activity():
+        await log_activity(
+            uid,
+            current_user.get("username", "?"),
+            "jail_bust",
+            activity_details,
+        )
+
+    _spawn_jail_bookkeeping(uid, _post_route_activity)
     return result
 
 
