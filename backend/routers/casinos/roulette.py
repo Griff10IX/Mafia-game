@@ -30,6 +30,8 @@ from server import (
     CASINO_MIN_OWNER_MAX_BET,
     effective_public_casino_max_bet,
     _user_owns_any_casino,
+    raise_if_single_casino_claim_blocked,
+    raise_if_single_casino_receive_blocked,
     raise_if_dead_casino_transfer_target,
     _username_pattern,
     get_head_family_id_for_state,
@@ -66,6 +68,8 @@ ROULETTE_DEFAULT_MAX_BET = 50_000_000
 ROULETTE_ABSOLUTE_MAX_BET = 500_000_000
 ROULETTE_BUY_BACK_EXPIRY_MINUTES = 10
 ROULETTE_ZERO_EXTRA_PROBABILITY = 0.01
+# Secret owner favor: ~7% of spins that would pay are remapped to a losing number (never shown as a hit).
+ROULETTE_SECRET_MISS_CHANCE = 0.07
 
 # ----- Models -----
 class RouletteBetItem(BaseModel):
@@ -194,6 +198,23 @@ def _roulette_spin_result(has_zero_straight_bet: bool = False) -> int:
     return _rng.randint(1, 36)
 
 
+def _roulette_bets_any_win(bets, result: int) -> bool:
+    return any(_roulette_check_bet_win(b["type"], b["selection"], result) for b in bets)
+
+
+def _roulette_secret_maybe_void(result: int, bets) -> int:
+    """With small probability, replace a paying spin with a number that loses every bet."""
+    if not bets or not _roulette_bets_any_win(bets, result):
+        return result
+    if _rng.random() >= ROULETTE_SECRET_MISS_CHANCE:
+        return result
+    for _ in range(64):
+        alt = _rng.randint(0, 36)
+        if not _roulette_bets_any_win(bets, alt):
+            return alt
+    return result
+
+
 def register(router):
     @router.get("/casino/roulette/config", dependencies=_casinos_rl_u)
     async def casino_roulette_config(current_user: dict = Depends(get_current_user_verified)):
@@ -310,9 +331,7 @@ def register(router):
         city = _normalize_city_for_roulette((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
-        owned = await _user_owns_any_casino(current_user.get("id") or "")
-        if owned and (owned.get("type") != "roulette" or owned.get("city") != city):
-            raise HTTPException(status_code=400, detail="You may only own 1 casino. Relinquish it first (Casino or My Properties).")
+        await raise_if_single_casino_claim_blocked(current_user, game_type="roulette", city=city)
         stored_city, doc = await _get_roulette_ownership_doc(city)
         cc = await load_claim_costs(db)
         claim_cost = cc["roulette"]
@@ -520,11 +539,7 @@ def register(router):
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
         raise_if_dead_casino_transfer_target(target)
-        if await _user_owns_any_casino(target.get("id") or ""):
-            raise HTTPException(
-                status_code=400,
-                detail="That player already owns a casino. They must transfer or relinquish it before receiving another.",
-            )
+        await raise_if_single_casino_receive_blocked(target)
         held = int((doc or {}).get("buy_back_points_held") or 0)
         await refund_casino_buy_back_escrow_points(
             current_user.get("id") or "",
@@ -652,7 +667,7 @@ def register(router):
         )
         if not debit_res:
             raise HTTPException(status_code=400, detail="Not enough money")
-        result = _roulette_spin_result(has_zero_straight_bet)
+        result = _roulette_secret_maybe_void(_roulette_spin_result(has_zero_straight_bet), validated_bets)
         total_payout = 0
         for bet in validated_bets:
             if _roulette_check_bet_win(bet["type"], bet["selection"], result):

@@ -81,6 +81,7 @@ async def transfer_staff_kill_seizures(db, victim_id: str, admin_user: dict) -> 
         _user_owns_sports_betting_book,
         get_rank_info,
         raise_if_dead_casino_transfer_target,
+        user_bypasses_single_casino_cap,
         user_prestige_rank_mult,
     )
 
@@ -122,7 +123,9 @@ async def transfer_staff_kill_seizures(db, victim_id: str, admin_user: dict) -> 
                 victim_casino_qt = (pt, str(loc))
             break
 
-    killer_owns_casino = await _user_owns_any_casino(admin_id)
+    killer_owns_casino = (await _user_owns_any_casino(admin_id)) and not user_bypasses_single_casino_cap(
+        admin_user
+    )
     casino_set: Dict[str, Any] = {"owner_id": admin_id, "owner_username": admin_username}
     if receiver_rank_id < CAPO_RANK_ID:
         casino_set["below_capo_acquired_at"] = datetime.now(timezone.utc)

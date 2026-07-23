@@ -18413,8 +18413,14 @@ def register(router):
                     status_code=400,
                     detail="Casino has active buy-back — clear in-game or use dossier takeover after clearing",
                 )
+            from server import user_bypasses_single_casino_cap
+
             owned_other = await _user_owns_any_casino(to_uid)
-            if owned_other and not body.allow_recipient_already_owns:
+            if (
+                owned_other
+                and not body.allow_recipient_already_owns
+                and not user_bypasses_single_casino_cap(to_user)
+            ):
                 conflict = f"Recipient already owns {owned_other.get('type')} · {owned_other.get('city') or owned_other.get('state')}"
         else:
             owned_prop = await _user_owns_any_property(to_uid)
@@ -18604,8 +18610,10 @@ def register(router):
                 detail="This casino has an active buy-back (reward or held points). Clear buy-back in-game before takeover.",
             )
 
+        from server import user_bypasses_single_casino_cap
+
         owned_other = await _user_owns_any_casino(to_uid)
-        if owned_other:
+        if owned_other and not user_bypasses_single_casino_cap(to_user):
             otype = owned_other.get("type")
             ocity = owned_other.get("city")
             if otype != game_type or str(ocity or "") != str(location):

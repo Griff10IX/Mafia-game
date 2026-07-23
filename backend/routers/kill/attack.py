@@ -138,6 +138,7 @@ from server import (
     _family_war_start,
     _family_war_check_wipe_and_award,
     _user_owns_any_casino,
+    user_bypasses_single_casino_cap,
     _user_owns_any_property,
     _user_owns_garage_dealership,
     _user_owns_sports_betting_book,
@@ -3236,8 +3237,11 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     )
         except Exception as e:
             logging.exception("Racing team transfer on kill: %s", e)
-        # Transfer victim's casino ownership to killer (or release if killer already has one)
-        killer_owns_casino = await _user_owns_any_casino(killer_id)
+        # Transfer victim's casino ownership to killer (or release if killer already has one).
+        # Admins/mods may hold multiple casinos, so they still receive on kill.
+        killer_owns_casino = (await _user_owns_any_casino(killer_id)) and not user_bypasses_single_casino_cap(
+            current_user
+        )
         casino_colls = [
             ("dice", db.dice_ownership),
             ("roulette", db.roulette_ownership),

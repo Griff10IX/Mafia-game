@@ -28,6 +28,8 @@ from server import (
     CASINO_MIN_OWNER_MAX_BET,
     effective_public_casino_max_bet,
     _user_owns_any_casino,
+    raise_if_single_casino_claim_blocked,
+    raise_if_single_casino_receive_blocked,
     raise_if_dead_casino_transfer_target,
     _username_pattern,
     log_gambling,
@@ -552,9 +554,7 @@ def register(router):
         city = _normalize_city_for_blackjack((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
-        owned = await _user_owns_any_casino(current_user.get("id") or "")
-        if owned and (owned.get("type") != "blackjack" or owned.get("city") != city):
-            raise HTTPException(status_code=400, detail="You may only own 1 casino. Relinquish it first (Casino or My Properties).")
+        await raise_if_single_casino_claim_blocked(current_user, game_type="blackjack", city=city)
         stored_city, doc = await _get_blackjack_ownership_doc(city)
         cc = await load_claim_costs(db)
         claim_cost = cc["blackjack"]
@@ -744,11 +744,7 @@ def register(router):
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
         raise_if_dead_casino_transfer_target(target)
-        if await _user_owns_any_casino(target.get("id") or ""):
-            raise HTTPException(
-                status_code=400,
-                detail="That player already owns a casino. They must transfer or relinquish it before receiving another.",
-            )
+        await raise_if_single_casino_receive_blocked(target)
         held = int((doc or {}).get("buy_back_points_held") or 0)
         await refund_casino_buy_back_escrow_points(
             current_user.get("id") or "",

@@ -32,6 +32,8 @@ from server import (
     CASINO_MIN_OWNER_MAX_BET,
     effective_public_casino_max_bet,
     _user_owns_any_casino,
+    raise_if_single_casino_claim_blocked,
+    raise_if_single_casino_receive_blocked,
     raise_if_dead_casino_transfer_target,
     _username_pattern,
     get_head_family_id_for_state,
@@ -62,8 +64,8 @@ DICE_SIDES_MIN = 2
 DICE_SIDES_MAX = 2500
 # Tiny skim off wins/losses for state-head treasury when a head family exists.
 DICE_HOUSE_EDGE = 0.0005  # 0.05%
-# Secret owner favor: advertised odds stay 1/sides; ~7% of would-be hits are silently turned into misses.
-DICE_SECRET_MISS_CHANCE = 0.07
+# Secret owner favor: advertised odds stay 1/sides; ~3% of would-be hits are silently turned into misses.
+DICE_SECRET_MISS_CHANCE = 0.03
 DICE_MAX_BET = 5_000_000          # default max bet for new tables
 DICE_ABSOLUTE_MAX_BET = 500_000_000  # hard ceiling owners can set up to
 DICE_BUY_BACK_EXPIRY_MINUTES = 10
@@ -466,9 +468,7 @@ def register(router):
         city = _normalize_city_for_dice((request.city or "").strip())
         if not city or city not in STATES:
             raise HTTPException(status_code=400, detail="Invalid city")
-        owned = await _user_owns_any_casino(current_user.get("id") or "")
-        if owned and (owned.get("type") != "dice" or owned.get("city") != city):
-            raise HTTPException(status_code=400, detail="You may only own 1 casino. Relinquish it first (Casino or My Properties).")
+        await raise_if_single_casino_claim_blocked(current_user, game_type="dice", city=city)
         user_city = _normalize_city_for_dice((current_user.get("current_state") or "").strip())
         if user_city != city:
             raise HTTPException(status_code=400, detail="You must be in this city to claim the dice table")
@@ -728,11 +728,7 @@ def register(router):
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
         raise_if_dead_casino_transfer_target(target)
-        if await _user_owns_any_casino(target.get("id") or ""):
-            raise HTTPException(
-                status_code=400,
-                detail="That player already owns a casino. They must transfer or relinquish it before receiving another.",
-            )
+        await raise_if_single_casino_receive_blocked(target)
         held = int((doc or {}).get("buy_back_points_held") or 0)
         await refund_casino_buy_back_escrow_points(
             current_user.get("id") or "",

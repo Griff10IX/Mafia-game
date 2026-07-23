@@ -3411,10 +3411,40 @@ async def _user_owns_all_casinos(user_id: str) -> List[Dict[str, Any]]:
 
 
 async def _user_owns_any_casino(user_id: str):
-    """Return first casino owned by user: {type, city, max_bet, buy_back_reward?, profit?} or None. Rule: 1 casino only. profit is $ (total_earnings or profit field)."""
+    """Return first casino owned by user: {type, city, max_bet, buy_back_reward?, profit?} or None. Rule: 1 casino only (staff exempt). profit is $ (total_earnings or profit field)."""
     async for out in _iter_user_casino_summaries(user_id):
         return out
     return None
+
+
+def user_bypasses_single_casino_cap(user: Optional[dict]) -> bool:
+    """Admins and moderators may own any number of casinos."""
+    if not user:
+        return False
+    return _admin_or_mod(user)
+
+
+async def raise_if_single_casino_claim_blocked(user: dict, *, game_type: str, city: str) -> None:
+    """Block claiming a second casino unless staff (admin/mod)."""
+    if user_bypasses_single_casino_cap(user):
+        return
+    owned = await _user_owns_any_casino(user.get("id") or "")
+    if owned and (owned.get("type") != game_type or owned.get("city") != city):
+        raise HTTPException(
+            status_code=400,
+            detail="You may only own 1 casino. Relinquish it first (Casino or My Properties).",
+        )
+
+
+async def raise_if_single_casino_receive_blocked(target: dict) -> None:
+    """Block receiving a casino when the target already owns one, unless staff."""
+    if user_bypasses_single_casino_cap(target):
+        return
+    if await _user_owns_any_casino(target.get("id") or ""):
+        raise HTTPException(
+            status_code=400,
+            detail="That player already owns a casino. They must transfer or relinquish it before receiving another.",
+        )
 
 
 def raise_if_dead_casino_transfer_target(target: Optional[dict]) -> None:
