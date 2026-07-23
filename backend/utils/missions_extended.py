@@ -273,7 +273,9 @@ def build_missions() -> List[Dict[str, Any]]:
     w = _weights_100()
     pts = _allocate_exact_int(TOTAL_REWARD_POINTS, w)
     trib = _allocate_exact_int(TOTAL_TRIBUTE_DAILY_CASH, w)
-    cash = _allocate_exact_int(TOTAL_CASH_IMMEDIATE, w)
+    # m_second gets a fixed +$1M cash (car-replacement bonus); rest of pool allocates to TOTAL.
+    M_SECOND_CASH_BONUS = 1_000_000
+    cash = _allocate_exact_int(TOTAL_CASH_IMMEDIATE - M_SECOND_CASH_BONUS, w)
     resp_d = _allocate_exact_int(TOTAL_RESPECT_DAILY, w)
     bull_d = _allocate_exact_int(TOTAL_BULLETS_DAILY, w)
     loot_d = _allocate_loot_pieces_daily(TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY, w)
@@ -348,7 +350,7 @@ def build_missions() -> List[Dict[str, Any]]:
             "requirements": m2_req,
             "title": "New York Run",
             "description": _format_requirements_description(m2_req),
-            "reward_cash_immediate": (cash[o] or 0) + 1_000_000,
+            "reward_cash_immediate": (cash[o] or 0) + M_SECOND_CASH_BONUS,
             "reward_tribute_daily": trib[o],
             "reward_respect": 3,
             "reward_respect_daily": resp_d[o],
