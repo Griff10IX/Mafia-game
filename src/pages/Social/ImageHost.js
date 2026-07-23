@@ -24,8 +24,9 @@ const MAX_EDGE_OPTIONS = [
 // Use a more conservative client target to ensure the multipart body fits.
 const CLIENT_MAX_UPLOAD_BYTES = 2.5 * 1024 * 1024; // ~2.5MB
 
-// Backend gallery resize max edge is 640px; we mirror it for safe uploads.
-const SERVER_MAX_EDGE = 640;
+// When "Original size" is chosen but the file is too large for upload, downscale
+// to this max edge (not the old hard-coded 640 which crushed banners).
+const OVERSIZE_FALLBACK_MAX_EDGE = 1920;
 
 export default function ImageHost() {
   const fileRef = useRef(null);
@@ -93,23 +94,28 @@ export default function ImageHost() {
       const originalFile = f;
       let uploadFile = originalFile;
 
-      const chosenMaxEdge = maxEdge ? Number(maxEdge) : SERVER_MAX_EDGE;
+      const userPickedMaxEdge = maxEdge ? Number(maxEdge) : null;
+      const hasUserMaxEdge = Number.isFinite(userPickedMaxEdge) && userPickedMaxEdge > 0;
+      const tooLargeForUpload = originalFile.size > CLIENT_MAX_UPLOAD_BYTES;
+      const isRaster = ['image/jpeg', 'image/png', 'image/webp'].includes(originalFile.type);
 
-      // If user selected a max edge (e.g. 400px), we always resize/compress so the payload
-      // fits the actual upload limit. This avoids "resize didn't trigger, still 413" issues.
-      const shouldClientResize =
-        ['image/jpeg', 'image/png', 'image/webp'].includes(originalFile.type) &&
-        (originalFile.size > CLIENT_MAX_UPLOAD_BYTES || (chosenMaxEdge && Number.isFinite(chosenMaxEdge)));
+      // Only client-resize when the user picked a max size, OR the file is too big to upload.
+      // Bug fix: "Original size" used to fall back to 640px and always recompress — that
+      // crushed quality and made wide banners look tiny.
+      const shouldClientResize = isRaster && (hasUserMaxEdge || tooLargeForUpload);
 
       if (shouldClientResize) {
-        // Only raster images can be resized safely in-browser.
-        const isSupportedMime = ['image/jpeg', 'image/png', 'image/webp'].includes(originalFile.type);
-        if (!isSupportedMime) {
+        if (!isRaster) {
           toast.error('Image is too large to upload. Use JPEG/PNG/WebP (GIF resize is not handled client-side).');
           return;
         }
 
-        toast.info('Large image detected — resizing before upload…');
+        const targetMaxEdge = hasUserMaxEdge ? userPickedMaxEdge : OVERSIZE_FALLBACK_MAX_EDGE;
+        toast.info(
+          hasUserMaxEdge
+            ? `Resizing to max ${targetMaxEdge}px before upload…`
+            : 'File is large — compressing to fit upload limits (keeping high quality)…',
+        );
 
         const imgUrl = URL.createObjectURL(originalFile);
         const img = new Image();
@@ -127,14 +133,21 @@ export default function ImageHost() {
 
         const width = img.width || 1;
         const height = img.height || 1;
-        const baseScale = Math.min(1, chosenMaxEdge / Math.max(width, height));
+        const baseScale = Math.min(1, targetMaxEdge / Math.max(width, height));
 
-        // Try a couple of downscale steps + JPEG quality reductions until it fits.
-        const qualitySteps = [0.85, 0.7, 0.55, 0.4, 0.3, 0.2];
-        const scaleSteps = [1, 0.85, 0.7, 0.55];
+        // Prefer high quality first; only drop quality / scale if still over the size cap.
+        const qualitySteps = hasUserMaxEdge
+          ? [0.92, 0.85, 0.75, 0.65, 0.55]
+          : [0.95, 0.9, 0.85, 0.75, 0.65];
+        const scaleSteps = hasUserMaxEdge ? [1, 0.9, 0.8, 0.7] : [1, 0.92, 0.85, 0.75];
 
         let finalBlob = null;
+        let usedMime = 'image/jpeg';
         try {
+          // Prefer keeping PNG when the source was PNG and we only need a light downscale
+          // under the size cap — avoids JPEG banding on logos/banners.
+          const preferPng = originalFile.type === 'image/png';
+
           // eslint-disable-next-line no-restricted-syntax
           for (const scaleStep of scaleSteps) {
             if (finalBlob) break;
@@ -149,9 +162,27 @@ export default function ImageHost() {
             if (!ctx) throw new Error('Canvas not available');
             ctx.drawImage(img, 0, 0, nextW, nextH);
 
+            if (preferPng) {
+              // eslint-disable-next-line no-await-in-loop
+              const pngBlob = await new Promise((resolve, reject) => {
+                canvas.toBlob(
+                  (b) => {
+                    if (!b) reject(new Error('Failed to encode resized image'));
+                    else resolve(b);
+                  },
+                  'image/png',
+                );
+              });
+              if (pngBlob.size <= CLIENT_MAX_UPLOAD_BYTES) {
+                finalBlob = pngBlob;
+                usedMime = 'image/png';
+                break;
+              }
+            }
+
             // eslint-disable-next-line no-restricted-syntax
             for (const q of qualitySteps) {
-              // eslint-disable-next-line no-loop-func
+              // eslint-disable-next-line no-await-in-loop, no-loop-func
               const blob = await new Promise((resolve, reject) => {
                 canvas.toBlob(
                   (b) => {
@@ -164,6 +195,7 @@ export default function ImageHost() {
               });
               if (blob.size <= CLIENT_MAX_UPLOAD_BYTES) {
                 finalBlob = blob;
+                usedMime = 'image/jpeg';
                 break;
               }
             }
@@ -177,7 +209,11 @@ export default function ImageHost() {
           return;
         }
 
-        uploadFile = new File([finalBlob], originalFile.name, { type: 'image/jpeg' });
+        const outName =
+          usedMime === 'image/png'
+            ? originalFile.name.replace(/\.(jpe?g|webp)$/i, '.png') || 'image.png'
+            : originalFile.name.replace(/\.(png|webp)$/i, '.jpg') || 'image.jpg';
+        uploadFile = new File([finalBlob], outName, { type: usedMime });
       }
 
       const fd = new FormData();
@@ -293,7 +329,7 @@ export default function ImageHost() {
               Image host
             </h1>
             <p className="text-[10px] font-heading text-mutedForeground mt-0.5">
-              Host up to {max} pictures (JPEG, PNG, GIF, WebP). Copy direct links for forums, custom cars, etc. Optional resize limits the longest side; animated GIFs keep the original file if you pick a size.
+              Host up to {max} pictures (JPEG, PNG, GIF, WebP). Copy direct links for forums, custom cars, etc. Leave Save size on <span className="text-foreground">Original size</span> to keep full quality; optional max side only shrinks if you pick it. Animated GIFs keep the original file if you pick a size.
             </p>
           </div>
         </div>
@@ -379,7 +415,7 @@ export default function ImageHost() {
       ) : images.length === 0 ? (
         <p className="text-center text-mutedForeground font-heading text-sm py-8">No images yet. Upload or import one above.</p>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4">
           {images.map((img) => {
             const src = imageHostPublicUrl(img.public_id);
             return (
@@ -387,17 +423,20 @@ export default function ImageHost() {
                 key={img.public_id}
                 className={`${styles.panel} rounded-md border border-primary/20 overflow-hidden mobile-panel`}
               >
-                <div className="bg-zinc-950/90 flex items-center justify-center p-2 min-h-[120px] max-h-[min(42vh,360px)]">
+                <div className="bg-zinc-950/90 flex justify-center p-2">
                   <img
                     src={src}
                     alt=""
-                    className="max-w-full max-h-[min(42vh,360px)] w-auto h-auto object-contain"
+                    className="block max-w-full h-auto w-auto"
+                    style={{ maxHeight: 'min(70vh, 720px)' }}
                     loading="lazy"
                   />
                 </div>
                 <div className="p-3 space-y-2 border-t border-primary/10">
-                  {img.resize_max_edge != null && (
+                  {img.resize_max_edge != null ? (
                     <p className="text-[9px] font-heading text-primary/90">Saved max side {img.resize_max_edge}px</p>
+                  ) : (
+                    <p className="text-[9px] font-heading text-zinc-500">Original size (no max-side resize)</p>
                   )}
                   <label className="inline-flex items-center gap-2 text-[10px] font-heading text-mutedForeground">
                     <input

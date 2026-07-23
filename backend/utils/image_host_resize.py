@@ -79,13 +79,13 @@ def apply_max_edge_resize(data: bytes, mime: str, max_edge: int) -> Tuple[bytes,
     buf = BytesIO()
     out_mime = mime
     if mime == "image/jpeg":
-        work.convert("RGB").save(buf, format="JPEG", quality=88, optimize=True)
+        work.convert("RGB").save(buf, format="JPEG", quality=92, optimize=True)
         out_mime = "image/jpeg"
     elif mime == "image/png":
         work.save(buf, format="PNG", optimize=True)
         out_mime = "image/png"
     elif mime == "image/webp":
-        work.save(buf, format="WEBP", quality=85, method=4)
+        work.save(buf, format="WEBP", quality=90, method=4)
         out_mime = "image/webp"
     elif mime == "image/gif":
         p = work.convert("RGBA").convert("P", palette=Image.ADAPTIVE, colors=256)
