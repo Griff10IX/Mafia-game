@@ -2,8 +2,6 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import { Car, Lock, ChevronDown, ChevronRight, Bot, Zap, HelpCircle } from 'lucide-react';
-import ActiveTokenBadge from '../../components/ActiveTokenBadge';
-
 const RARITY_COLORS = {
   common: 'text-gray-400',
   uncommon: 'text-green-400',
@@ -761,12 +759,6 @@ export default function GTA() {
         {autoRankGtaDisabled && <AutoRankIcon />}
       </div>
       <GameEventsLink event={event} eventsEnabled={eventsEnabled} />
-
-      {user?.xp_gta_until && (
-        <div className="gta-fade-in">
-          <ActiveTokenBadge tokenType="xp_gta" untilIso={user.xp_gta_until} />
-        </div>
-      )}
 
       {activeLootPerks.length > 0 && (
         <div className="flex flex-wrap gap-1.5 gta-fade-in">

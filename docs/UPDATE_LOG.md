@@ -6,6 +6,23 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-23 18:40 UTC[/color][/b] — [b]Game Events page, Honours RP, Tutorial & more[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]Account → Game Events[/b] — live world buffs in one place (multipliers, countdown, combined effect when two are active, plus an active Store points sale when one is running). Dashboard Active Event card, Crimes / GTA / Attack event links, sidebar, and mobile [b]You[/b] all open this page.[/color]
+[*][color=#888888][b]Changed:[/b] The global top [b]Active Event[/b] banner is gone — check [b]Game Events[/b] instead. Token perk boost totals stay on [b]My Inventory → In use[/b] (not duplicated on Game Events).[/color]
+[*][color=#888888][b]Improved:[/b] [b]My Stats[/b] has a Game Events teaser and a [b]Recent activity[/b] card (crime / GTA / jail windows).[/color]
+[*][color=#888888][b]Fixed:[/b] Profile [b]Honours → Most Rank Points Earned[/b] now matches the leaderboard (same lifetime RP total), so #1 on the board is #1 on your profile.[/color]
+[*][color=#888888][b]Changed:[/b] [b]Hitman for Hire[/b] no longer uses a staff-preview badge/path — when Admin turns the Hitman store flag on, everyone sees it; when off, the page stays hidden for all.[/color]
+[*][color=#888888][b]Improved:[/b] Tutorial crime step: any attempt (success or fail) unlocks Next. GTA step is ack-only at Hustler (“Got it” — no steal required). Mobile [b]You → Tutorial[/b] to replay anytime.[/color]
+[*][color=#888888][b]Improved:[/b] Family profile on mobile: [b]Crew OC[/b] sits above Rackets, and [b]Apply / Reapply[/b] sits above crew name chips so it is not buried under the bottom nav.[/color]
+[*][color=#888888][b]Fixed:[/b] GTA / garage car images refresh correctly after cache issues (image URLs bumped to [b]?v=3[/b]).[/color]
+[*][color=#888888][b]Fixed:[/b] Image Host [b]Original size[/b] is no longer crushed to 640px — oversized uploads fall back to a larger max edge instead.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-22 18:55 UTC[/color][/b] — [b]Game Pass Prestige top-up (+15% → +50%)[/b][/size]
 [quote]
 [list]

@@ -5,7 +5,6 @@ import { toast } from 'sonner';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import { BOOZE_RUN_MOUNT_CACHE_KEY } from '../../utils/sessionStaleCache';
 import styles from '../../styles/noir.module.css';
-import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 import { useGameActionsTurnstile } from '../../hooks/useGameActionsTurnstile';
 
 function formatMoney(n) {
@@ -995,12 +994,6 @@ export default function BoozeRun() {
       </div>
 
       {autoRankBoozeDisabled && <AutoRankBoozeBanner />}
-
-      {user?.booze_until && (
-        <div className="bz-fade-in">
-          <ActiveTokenBadge tokenType="booze" untilIso={user.booze_until} />
-        </div>
-      )}
 
       {canSkipRun && !autoRankBoozeDisabled && (
         <div className="bz-fade-in rounded-md border border-primary/30 bg-primary/5 px-2.5 py-2 flex items-center justify-between gap-2 flex-wrap">

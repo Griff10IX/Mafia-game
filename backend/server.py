@@ -607,12 +607,24 @@ async def force_rotate_random_events() -> dict:
         }},
         upsert=True,
     )
-    return {
+    full = {
         "event": _build_combined_event(event_ids),
         "event_ids": event_ids,
         "expires_at": expires_at.isoformat(),
         "duration_hours": duration_hours,
     }
+    try:
+        _effective_event_full_cache["value"] = {
+            "event": dict(full["event"]),
+            "event_ids": list(event_ids),
+            "expires_at": full["expires_at"],
+            "duration_hours": duration_hours,
+        }
+        _effective_event_full_cache["at"] = time.monotonic()
+        _cache_effective_event_from_full(_effective_event_full_cache["value"])
+    except Exception:
+        pass
+    return full
 
 
 async def get_events_enabled() -> bool:
@@ -626,7 +638,17 @@ async def get_events_enabled() -> bool:
 # Short TTL cache: get_effective_event is on the hot path of every crime/GTA commit,
 # and each uncached call costs two game_config round-trips.
 _effective_event_cache = {"at": 0.0, "value": None}
+_effective_event_full_cache = {"at": 0.0, "value": None}
 _EFFECTIVE_EVENT_TTL_SECONDS = 5.0
+
+
+def _cache_effective_event_from_full(full: dict) -> dict:
+    """Keep multiplier-only cache in sync with full rotation cache."""
+    value = dict((full or {}).get("event") or NO_EVENT)
+    nowm = time.monotonic()
+    _effective_event_cache["value"] = dict(value)
+    _effective_event_cache["at"] = nowm
+    return value
 
 
 async def get_effective_event():
@@ -635,14 +657,8 @@ async def get_effective_event():
         nowm = time.monotonic()
         if _effective_event_cache["value"] is not None and nowm - _effective_event_cache["at"] < _EFFECTIVE_EVENT_TTL_SECONDS:
             return dict(_effective_event_cache["value"])
-        if not await get_events_enabled():
-            value = NO_EVENT.copy()
-        else:
-            result = await get_or_rotate_random_events()
-            value = dict(result["event"])
-        _effective_event_cache["value"] = dict(value)
-        _effective_event_cache["at"] = nowm
-        return value
+        full = await get_effective_event_full()
+        return _cache_effective_event_from_full(full)
     except Exception:
         return NO_EVENT.copy()
 
@@ -650,9 +666,22 @@ async def get_effective_event():
 async def get_effective_event_full():
     """Like get_effective_event but returns the full rotation info (event_ids, expires_at, duration_hours)."""
     try:
+        nowm = time.monotonic()
+        if _effective_event_full_cache["value"] is not None and nowm - _effective_event_full_cache["at"] < _EFFECTIVE_EVENT_TTL_SECONDS:
+            return dict(_effective_event_full_cache["value"])
         if not await get_events_enabled():
-            return {"event": NO_EVENT.copy(), "event_ids": [], "expires_at": None, "duration_hours": 0}
-        return await get_or_rotate_random_events()
+            full = {"event": NO_EVENT.copy(), "event_ids": [], "expires_at": None, "duration_hours": 0}
+        else:
+            full = await get_or_rotate_random_events()
+        _effective_event_full_cache["value"] = {
+            "event": dict(full.get("event") or NO_EVENT),
+            "event_ids": list(full.get("event_ids") or []),
+            "expires_at": full.get("expires_at"),
+            "duration_hours": full.get("duration_hours", 0),
+        }
+        _effective_event_full_cache["at"] = nowm
+        _cache_effective_event_from_full(_effective_event_full_cache["value"])
+        return dict(_effective_event_full_cache["value"])
     except Exception:
         return {"event": NO_EVENT.copy(), "event_ids": [], "expires_at": None, "duration_hours": 0}
 

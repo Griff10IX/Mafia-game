@@ -1,16 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Zap, Clock, BarChart3, Package } from 'lucide-react';
+import { Zap, Clock, Package } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../utils/api';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
 import styles from '../../styles/noir.module.css';
-import {
-  PERK_STAT_DISPLAY_NAMES,
-  PERK_STAT_DISPLAY_ORDER,
-  buildPerkStatChipsForType,
-  tokenPerkStatsHasAny,
-} from '../../utils/perkStatChips';
 
 const PAGE_STYLES = `
   @keyframes ge-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -81,27 +75,35 @@ const REFRESH_MS = 60_000;
 
 export default function GameEvents() {
   const [eventData, setEventData] = useState(null);
-  const [perkStats, setPerkStats] = useState({});
   const [storeSale, setStoreSale] = useState(null);
   const [loading, setLoading] = useState(true);
   const [countdown, setCountdown] = useState('');
 
   const load = useCallback((silent = false) => {
     if (!silent) setLoading(true);
-    return Promise.all([
-      api.get('/events/active').catch(() => ({ data: null })),
-      api.get('/stats/me').catch(() => ({ data: null })),
-      api.get('/payments/store-points-event').catch(() => ({ data: null })),
-    ])
-      .then(([evRes, statsRes, saleRes]) => {
+    const eventsReq = api.get('/events/active')
+      .then((evRes) => {
         setEventData(evRes?.data || null);
-        setPerkStats(statsRes?.data?.token_perk_stats || {});
+      })
+      .catch(() => {
+        if (!silent) {
+          setEventData(null);
+          toast.error('Failed to load game events');
+        }
+      })
+      .finally(() => {
+        if (!silent) setLoading(false);
+      });
+
+    const saleReq = api.get('/payments/store-points-event')
+      .then((saleRes) => {
         setStoreSale(saleRes?.data?.event ?? null);
       })
       .catch(() => {
-        if (!silent) toast.error('Failed to load game events');
-      })
-      .finally(() => setLoading(false));
+        if (!silent) setStoreSale(null);
+      });
+
+    return Promise.all([eventsReq, saleReq]);
   }, []);
 
   useEffect(() => {
@@ -137,17 +139,6 @@ export default function GameEvents() {
     && activeEvents.length > 0;
 
   const combinedChips = multiplierChips(eventData?.event);
-  const hasPerkEvents = tokenPerkStatsHasAny(perkStats);
-  const perkCards = useMemo(
-    () =>
-      PERK_STAT_DISPLAY_ORDER.map((key) => {
-        const chips = buildPerkStatChipsForType(key, perkStats[key]);
-        if (!chips.length) return null;
-        return { key, name: PERK_STAT_DISPLAY_NAMES[key] || key, chips };
-      }).filter(Boolean),
-    [perkStats],
-  );
-
   const saleActive = storeSale && storeSale.active !== false && (storeSale.percent || storeSale.label);
 
   return (
@@ -159,21 +150,12 @@ export default function GameEvents() {
             <Zap size={22} />
             Game Events
           </h1>
-          <div className="flex items-center gap-3">
-            <Link to="/account/stats" className="text-[10px] font-heading text-mutedForeground hover:text-primary transition-colors inline-flex items-center gap-1">
-              <BarChart3 size={11} /> My Stats
-            </Link>
-            <Link to="/account/inventory" className="text-[10px] font-heading text-mutedForeground hover:text-primary transition-colors inline-flex items-center gap-1">
-              <Package size={11} /> Inventory
-            </Link>
-          </div>
         </div>
         <p className="text-[10px] sm:text-xs text-mutedForeground font-heading">
-          Live world buffs and your lifetime perk boost results (same tracking as Inventory → Perks in use).
+          Live world buffs that rotate for everyone. Token perk boosts live on Inventory.
         </p>
         <AutoRefreshNote seconds={60} />
 
-        {/* Active world events */}
         <section className="space-y-2 ge-fade-in">
           <div className="flex items-center gap-2 px-0.5">
             <Zap size={12} className="text-primary" />
@@ -235,7 +217,6 @@ export default function GameEvents() {
           )}
         </section>
 
-        {/* Store sale (optional) */}
         {saleActive && (
           <section className="space-y-2 ge-fade-in" style={{ animationDelay: '0.08s' }}>
             <div className="flex items-center gap-2 px-0.5">
@@ -253,40 +234,6 @@ export default function GameEvents() {
             </Link>
           </section>
         )}
-
-        {/* Perk boosts */}
-        <section className="space-y-2 ge-fade-in" style={{ animationDelay: '0.1s' }}>
-          <div className="flex items-center gap-2 px-0.5">
-            <Zap size={12} className="text-primary" />
-            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Your perk boosts</h2>
-            <Link to="/account/inventory" className="ml-auto text-[9px] font-heading text-mutedForeground hover:text-primary transition-colors">
-              Manage tokens →
-            </Link>
-          </div>
-          {!hasPerkEvents ? (
-            <div className={`${styles.panel} rounded-md border border-primary/20 p-3 text-[10px] text-mutedForeground font-heading mobile-panel`}>
-              Use token perks (Crimes XP, OC Reduced, Booze, …) to build lifetime boost stats here.
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-              {perkCards.map(({ key, name, chips }, idx) => (
-                <div
-                  key={key}
-                  className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel p-2.5 space-y-2 ge-fade-in`}
-                  style={{ animationDelay: `${0.05 + idx * 0.03}s` }}
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/25 flex items-center justify-center shrink-0">
-                      <Zap size={14} className="text-primary" />
-                    </div>
-                    <span className="text-[11px] font-heading font-bold text-foreground truncate">{name}</span>
-                  </div>
-                  <StatChipGrid chips={chips} />
-                </div>
-              ))}
-            </div>
-          )}
-        </section>
       </div>
     </div>
   );

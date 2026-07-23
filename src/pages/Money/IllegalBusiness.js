@@ -7,8 +7,6 @@ import { useAuthUser } from '../../context/AuthContext';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
-import ActiveTokenBadge from '../../components/ActiveTokenBadge';
-
 const BIZ_CACHE_PREFIX = 'mafia_illegal_biz_v1:';
 const BIZ_REFRESH = 30_000;
 
@@ -726,10 +724,6 @@ export default function IllegalBusiness() {
             )}
           </div>
         </div>
-
-        {authUser?.racket_until && (
-          <ActiveTokenBadge tokenType="racket" untilIso={authUser.racket_until} />
-        )}
 
         <KillRewardsBlock pendingRewards={pendingRewards} saving={saving} onClaim={handleClaimKillReward} />
 

@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 
 from fastapi import Depends
 
-from server import db, get_current_user, get_effective_event, get_effective_event_full, get_events_enabled, GAME_EVENTS_BY_ID
+from server import db, get_current_user, get_effective_event_full, GAME_EVENTS_BY_ID
 from routers.money.booze_run import get_booze_rotation_interval_seconds, get_booze_rotation_index
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_EVENTS
 
@@ -33,8 +33,11 @@ FLASH_NEWS_TIPS = [
 
 async def get_active_event(current_user: dict = Depends(get_current_user)):
     """Current game-wide event(s) when enabled; includes rotation info."""
-    enabled = await get_events_enabled()
-    if not enabled:
+    _ = current_user
+    full = await get_effective_event_full()
+    event_ids = full.get("event_ids") or []
+    if not event_ids:
+        # get_effective_event_full returns empty ids when events are disabled
         return {
             "event": None,
             "events_enabled": False,
@@ -44,8 +47,6 @@ async def get_active_event(current_user: dict = Depends(get_current_user)):
             "expires_at": None,
             "duration_hours": 0,
         }
-    full = await get_effective_event_full()
-    event_ids = full.get("event_ids") or []
     names = [GAME_EVENTS_BY_ID.get(eid, {}).get("name", eid) for eid in event_ids]
     active_events = []
     for eid in event_ids:

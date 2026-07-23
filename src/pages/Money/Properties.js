@@ -4,7 +4,6 @@ import { Building, TrendingUp, DollarSign, Lock, Zap, Martini, Factory, Crown, A
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
-import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 import { getPropertiesPrefetch, setPropertiesPrefetch } from '../../utils/prefetchCache';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import { useAuthUser } from '../../context/AuthContext';
@@ -627,9 +626,6 @@ export default function Properties() {
           <p className="text-[9px] text-primary/50 font-heading uppercase tracking-[0.25em]">Investments</p>
           <p className="text-[10px] text-zinc-500 font-heading italic">Passive income from businesses.</p>
         </div>
-        {authUser?.properties_until && (
-          <ActiveTokenBadge tokenType="properties" untilIso={authUser.properties_until} compact />
-        )}
         {propertyIncomePerkUntil && (() => {
           try {
             const until = new Date(propertyIncomePerkUntil.replace('Z', 'Z'));

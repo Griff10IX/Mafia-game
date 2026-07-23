@@ -3,8 +3,6 @@ import { Users, Banknote, Star, Clock, AlertCircle, XCircle, UserCheck, ChevronD
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
-import ActiveTokenBadge from '../../components/ActiveTokenBadge';
-
 const OC_STYLES = `
   @keyframes oc-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .oc-fade-in { animation: oc-fade-in 0.4s ease-out both; }
@@ -745,12 +743,6 @@ export default function OrganisedCrime() {
         <p className="text-[9px] text-zinc-500 font-heading italic">Pick a job, fill your crew, set cuts. Run the heist.</p>
         {autoRankOcDisabled && <AutoRankIcon />}
       </div>
-
-      {user?.oc_reduced_until && (
-        <div className="oc-fade-in">
-          <ActiveTokenBadge tokenType="oc_reduced" untilIso={user.oc_reduced_until} />
-        </div>
-      )}
 
       {/* Pending Heist */}
       <PendingHeistSection

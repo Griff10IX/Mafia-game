@@ -4,7 +4,6 @@ import { Plane, Car, Clock, MapPin, Zap, ShoppingCart, Bot, Spade } from 'lucide
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
-import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 import { RARITY_GLOW_HEX, rarityRowStyle } from '../../constants/carRarityGlows';
 import { getTravelPrefetch, clearTravelPrefetch } from '../../utils/prefetchCache';
 import {
@@ -714,12 +713,6 @@ export default function Travel() {
       </div>
 
       {autoRankBoozeOn && <AutoRankTravelBanner />}
-
-      {user?.travel_until && (
-        <div className="trv-fade-in">
-          <ActiveTokenBadge tokenType="travel" untilIso={user.travel_until} />
-        </div>
-      )}
 
       <CurrentLocationCard
         location={travelInfo?.current_location}

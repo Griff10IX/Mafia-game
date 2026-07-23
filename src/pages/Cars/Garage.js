@@ -9,7 +9,6 @@ import { toast } from 'sonner';
 const GARAGE_CACHE_KEY = 'mafia_garage_v1';
 import { filterProfanity } from '../../utils/profanityFilter';
 import styles from '../../styles/noir.module.css';
-import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 import CustomCarImageModal from '../../components/CustomCarImageModal';
 import { useGameActionsTurnstile } from '../../hooks/useGameActionsTurnstile';
 
@@ -992,12 +991,6 @@ export default function Garage() {
         </p>
         <AutoRefreshNote seconds={60} />
       </div>
-
-      {user?.melt_until && (
-        <div className="gar-fade-in">
-          <ActiveTokenBadge tokenType="melt" untilIso={user.melt_until} />
-        </div>
-      )}
 
       {cars.length === 0 ? (
         <EmptyGarageCard />

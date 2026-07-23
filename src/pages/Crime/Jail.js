@@ -5,8 +5,6 @@ import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
-import ActiveTokenBadge from '../../components/ActiveTokenBadge';
-
 const DEFAULT_MOD_COLOR = '#1e3a5f';
 
 const JAIL_STYLES = `
@@ -713,12 +711,6 @@ export default function Jail() {
   return (
     <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="jail-page">
       <style>{JAIL_STYLES + (animateIn ? JAIL_FADE_STYLES : '')}</style>
-
-      {user?.jailbust_bonus_until && (
-        <div className="j-fade-in">
-          <ActiveTokenBadge tokenType="jailbust_bonus" untilIso={user.jailbust_bonus_until} />
-        </div>
-      )}
 
       <div className="relative j-fade-in flex items-center gap-2 flex-wrap">
         <p className="text-[9px] text-zinc-500 font-heading italic">Bust out jailed players for RP. Set a reward if you get locked up.</p>

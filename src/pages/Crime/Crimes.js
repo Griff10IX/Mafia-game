@@ -7,8 +7,6 @@ import { SAME_ROUTE_NAV_CLICK } from '../../constants/navigationEvents';
 import { getCrimesPrefetch, clearCrimesPrefetch } from '../../utils/prefetchCache';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
-import ActiveTokenBadge from '../../components/ActiveTokenBadge';
-
 const CRIMES_STYLES = `
   @keyframes cr-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .cr-fade-in { animation: cr-fade-in 0.4s ease-out both; }
@@ -746,7 +744,6 @@ export default function Crimes() {
 
       <div className="relative cr-fade-in flex items-center gap-2 flex-wrap">
         <p className="text-[9px] text-zinc-500 font-heading italic">Commit crimes for cash and rank. Fail and you risk jail.</p>
-        {authUser?.xp_crimes_until && <ActiveTokenBadge tokenType="xp_crimes" untilIso={authUser.xp_crimes_until} symbol />}
         <StatusIcons inJail={!!authUser?.in_jail} autoRankActive={autoRankCrimesDisabled === true} />
       </div>
 
