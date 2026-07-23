@@ -377,10 +377,9 @@ export default function TutorialCoach({
       return Boolean(status?.tutorial_theme_done) || themeSessionDoneRef.current;
     }
     if (step.gate === 'crime') return Boolean(status?.tutorial_crime_done);
-    if (step.gate === 'gta') return Boolean(status?.tutorial_gta_done);
     return true;
   })();
-  const isActionGate = step.gate === 'crime' || step.gate === 'gta' || step.gate === 'theme';
+  const isActionGate = step.gate === 'crime' || step.gate === 'theme';
   const stepIndex = Math.max(0, TUTORIAL_STEPS.findIndex((s) => s.id === step.id));
   const stepCount = TUTORIAL_STEPS.length;
 
@@ -700,19 +699,15 @@ export default function TutorialCoach({
 
   const gateHint = !gateOk
     ? (step.gate === 'crime'
-      ? 'Commit a crime to unlock Next.'
-      : step.gate === 'gta'
-        ? 'Attempt a GTA to unlock Next.'
-        : step.gate === 'theme'
-          ? 'Pick Default or Modern to unlock Next.'
-          : null)
+      ? 'Attempt a crime to unlock Next.'
+      : step.gate === 'theme'
+        ? 'Pick Default or Modern to unlock Next.'
+        : null)
     : null;
   const gateDoneLine = gateOk && isActionGate
     ? (step.gate === 'crime'
-      ? 'Crime committed — Next unlocked.'
-      : step.gate === 'gta'
-        ? 'GTA attempted — Next unlocked.'
-        : 'Theme chosen — Next unlocked.')
+      ? 'Crime attempted — Next unlocked.'
+      : 'Theme chosen — Next unlocked.')
     : null;
 
   return (

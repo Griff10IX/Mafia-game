@@ -44,8 +44,7 @@ def _gate_ok(step: str, user: dict) -> bool:
         return bool(user.get("tutorial_theme_done"))
     if step == "crimes":
         return bool(user.get("tutorial_crime_done"))
-    if step == "gta":
-        return bool(user.get("tutorial_gta_done"))
+    # GTA unlocks at Hustler — tutorial only shows the page; no attempt required.
     # Informational steps: advance is always allowed
     return True
 
@@ -65,11 +64,10 @@ async def tutorial_status(
             info.get("eligible")
             and info.get("tutorial_status") == TUTORIAL_STATUS_IN_PROGRESS
             and step
-            and _gate_ok(step, current_user if step not in ("theme", "crimes", "gta") else {
+            and _gate_ok(step, current_user if step not in ("theme", "crimes") else {
                 **current_user,
                 "tutorial_theme_done": info.get("tutorial_theme_done"),
                 "tutorial_crime_done": info.get("tutorial_crime_done"),
-                "tutorial_gta_done": info.get("tutorial_gta_done"),
             })
         ),
         "loot_box_free_rare_opens": int(current_user.get("loot_box_free_rare_opens") or 0),
@@ -211,9 +209,7 @@ async def tutorial_advance(
 
     if not _gate_ok(step, fresh):
         if step == "crimes":
-            raise HTTPException(status_code=400, detail="Commit a crime to continue")
-        if step == "gta":
-            raise HTTPException(status_code=400, detail="Attempt a GTA to continue")
+            raise HTTPException(status_code=400, detail="Attempt a crime to continue")
         if step == "theme":
             raise HTTPException(status_code=400, detail="Pick a theme to continue")
         raise HTTPException(status_code=400, detail="Step requirements not met")

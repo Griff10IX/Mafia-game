@@ -1225,13 +1225,13 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
             "crime",
             crime_details,
         )
-        if success:
-            try:
-                from utils.tutorial import mark_tutorial_crime_done
+        # Any attempt counts for the tutorial (same as GTA) — new players often fail first tries.
+        try:
+            from utils.tutorial import mark_tutorial_crime_done
 
-                await mark_tutorial_crime_done(db, current_user["id"])
-            except Exception:
-                logging.exception("tutorial crime mark failed user_id=%s", current_user.get("id"))
+            await mark_tutorial_crime_done(db, current_user["id"])
+        except Exception:
+            logging.exception("tutorial crime mark failed user_id=%s", current_user.get("id"))
 
     deferred_ops.append(_post_commit_common)
 
