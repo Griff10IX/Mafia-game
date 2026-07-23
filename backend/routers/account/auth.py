@@ -956,20 +956,9 @@ def register(router):
                 except Exception:
                     pass
 
-            # Beta signup: grant Al Capone car (car20), loot-exclusive car (car21), and loot-exclusive weapon (weapon_loot)
+            # Beta signup: grant loot-exclusive weapon only (cars no longer granted on signup)
             if beta_signup_gifts:
                 now_iso = datetime.now(timezone.utc).isoformat()
-                for car_id in ("car20", "car21"):
-                    car_info = next((c for c in CARS if c.get("id") == car_id), None)
-                    if car_info:
-                        await db.user_cars.insert_one({
-                            "id": str(uuid.uuid4()),
-                            "user_id": user_id,
-                            "car_id": car_id,
-                            "car_name": car_info.get("name", car_id),
-                            "acquired_at": now_iso,
-                            "damage_percent": 0,
-                        })
                 await db.user_weapons.update_one(
                     {"user_id": user_id, "weapon_id": "weapon_loot"},
                     {"$inc": {"quantity": 1}, "$set": {"acquired_at": now_iso}},
@@ -2594,7 +2583,8 @@ def register(router):
         inc["redeem_stats_total_respect_points"] = int(rewards.get("respect_points") or 0)
         inc["redeem_stats_total_loot_box_pieces"] = int(rewards.get("loot_box_pieces") or 0)
         inc["redeem_stats_total_bullets"] = int(rewards.get("bullets") or 0)
-        inc["redeem_stats_total_cars"] = len(rewards.get("cars") or [])
+        # Cars no longer granted via redeem codes (GTA / dealer / store / admin only)
+        inc["redeem_stats_total_cars"] = 0
         inc["redeem_stats_total_tokens"] = sum(
             int(a)
             for tt, a in (rewards.get("tokens") or {}).items()
@@ -2609,16 +2599,7 @@ def register(router):
             await db.users.update_one({"id": user_id}, {"$addToSet": {"redeemed_codes": code_normalized}})
         if inc.get("points", 0) > 0:
             await log_points_event(db, user_id=user_id, points=inc["points"], event_type="redeem_code", event_ref=code_normalized, meta={"code": code_normalized})
-        for car_id in (rewards.get("cars") or []):
-            car_info = next((c for c in CARS if c.get("id") == car_id), None)
-            if car_info:
-                await db.user_cars.insert_one({
-                    "id": str(uuid.uuid4()),
-                    "user_id": user_id,
-                    "car_id": car_id,
-                    "car_name": car_info.get("name", car_id),
-                    "acquired_at": datetime.now(timezone.utc).isoformat(),
-                })
+        # Skip rewards.cars[] inserts — new garage cars only from GTA / dealer / marketplace / store / admin
         max_uses_val = doc.get("max_uses")
         topic_id = doc.get("forum_topic_id")
         if topic_id and max_uses_val is not None and new_used >= int(max_uses_val):
@@ -2642,10 +2623,8 @@ def register(router):
                 continue
             if amount:
                 granted.append(f"{amount} {token_type.replace('_', ' ')} token(s)")
-        for car_id in (rewards.get("cars") or []):
-            car_info = next((c for c in CARS if c.get("id") == car_id), None)
-            if car_info:
-                granted.append(car_info.get("name", car_id))
+        if rewards.get("cars"):
+            granted.append("(car rewards skipped — cars only from GTA / dealer / store)")
         return {"message": "Code redeemed successfully", "granted": granted}
 
     @router.get("/user/casino-property", dependencies=_casino_property_rl_u)

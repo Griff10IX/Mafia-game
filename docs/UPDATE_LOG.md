@@ -6,6 +6,25 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-23 20:25 UTC[/color][/b] — [b]Loot Box: full Store token pool[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Loot Box token prizes now roll from the full [b]Store → Tokens[/b] catalog (crime/GTA/booze/properties skips, jail bailout, auto-collect, auto-rank, Crew OC auto, and the usual XP/melt/OC/booze/racket/travel/properties/jailbust tokens). [b]Game Pass / VIP pass[/b] tokens stay store-only.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-23 19:20 UTC[/color][/b] — [b]Cars: GTA / dealer / marketplace only[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] New garage cars now only come from [b]GTA[/b], the [b]dealer[/b], [b]marketplace[/b] transfers, [b]Store[/b] custom / VIP Pass cars, and admin tools. Free/random car drops are removed from Daily Rewards, Entertainer games, Loot Boxes (including exclusive car), Grave Robber, Missions, Hitlist NPCs, redeem codes, and beta signup.[/color]
+[*][color=#888888][b]Changed:[/b] Where a car was the prize, you get [b]cash[/b] (or other existing rewards) instead. Cars you already own are unchanged.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-23 18:40 UTC[/color][/b] — [b]Game Events page, Honours RP, Tutorial & more[/b][/size]
 [quote]
 [list]

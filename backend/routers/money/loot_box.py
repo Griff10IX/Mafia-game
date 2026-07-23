@@ -25,7 +25,8 @@ from server import (
     ARMOUR_BASE_BULLETS,
     LOOT_EXCLUSIVE_ARMOUR_LEVEL,
 )
-from routers.kill.armoury import _invalidate_weapons_cache, TOKEN_CONFIG, TOKEN_TYPES
+from routers.kill.armoury import _invalidate_weapons_cache, TOKEN_CONFIG, TOKEN_TYPES, STORE_COUNT_ONLY_TOKENS
+from routers.game.store import STORE_COUNT_ONLY_TOKEN_FIELDS, TOKEN_STORE_UNIT_PRICE_POINTS
 from utils.point_provenance import log_points_event
 from utils.civilian_protection import maybe_revoke_civilian_protection
 from utils.speakeasy_rewards import (
@@ -36,7 +37,6 @@ from utils.speakeasy_rewards import (
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.loot_perk_stack import stacked_perk_until as _stacked_perk_until, GTA_RARE_DROP_PERK_ATTEMPTS
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_LOOT_BOX
-
 logger = logging.getLogger(__name__)
 
 LOOT_BOX_PIECES_PER_OPEN = 100  # legacy default; opens use LOOT_BOX_OPEN_COST_BY_TIER
@@ -49,7 +49,13 @@ LOOT_BOX_OPEN_COST_BY_TIER: Dict[str, int] = {
 LOOT_MAX_POINTS = 10_000
 LOOT_MAX_CASH = 250_000_000
 # Secret jackpot on points prizes — do not expose chance in public reward info / UI.
-LOOT_POINTS_HIGH_ROLL_CHANCE = 0.15
+# Chance is by effective reward tier (not paid box tier).
+LOOT_POINTS_HIGH_ROLL_CHANCE_BY_TIER: Dict[str, float] = {
+    "common": 0.05,
+    "uncommon": 0.10,
+    "rare": 0.15,
+    "ultra_rare": 0.20,
+}
 LOOT_POINTS_HIGH_FLOOR = 3_000
 PAID_LOOT_TIERS = ("common", "uncommon", "rare", "ultra_rare")
 REWARD_TIER_RANK = {"common": 0, "uncommon": 1, "rare": 2, "ultra_rare": 3}
@@ -95,7 +101,6 @@ STANDARD_REWARD_WEIGHTS = [
     ("points", 1),
     ("rank_points", 1),
     ("cash", 1),
-    ("cars", 1),
     ("bullets", 1),
     ("loot_pieces", 1),
     ("perk", 1),
@@ -105,7 +110,6 @@ STANDARD_PRIZE_LABELS = {
     "points": "Points",
     "rank_points": "Rank points",
     "cash": "Cash",
-    "cars": "Cars",
     "bullets": "Bullets",
     "loot_pieces": "Loot box pieces",
     "perk": "Time-limited perk",
@@ -122,8 +126,30 @@ BOX_TIER_PRIZE_COUNTS: Dict[str, Tuple[int, int]] = {
 GUARANTEED_STANDARD_TYPES_BY_TIER: Dict[str, Tuple[str, ...]] = {
     "ultra_rare": ("cash", "points"),
 }
-# Pass tokens are purchasable/entitled only; do not allow them as random loot box prizes.
-LOOT_BOX_TOKEN_TYPES = [t for t in TOKEN_TYPES if t != "rank_xp_pass"]
+# Store → Tokens catalog (points buyable), excluding Game Pass / VIP pass tokens.
+_LOOT_BOX_TOKEN_EXCLUDE = frozenset({"rank_xp_pass"})
+
+
+def _loot_box_token_count_field(token_type: str) -> Optional[str]:
+    tt = (token_type or "").strip()
+    if not tt or tt in _LOOT_BOX_TOKEN_EXCLUDE:
+        return None
+    if tt in STORE_COUNT_ONLY_TOKEN_FIELDS:
+        return STORE_COUNT_ONLY_TOKEN_FIELDS[tt]
+    cfg = TOKEN_CONFIG.get(tt)
+    if cfg and cfg.get("count_field"):
+        return str(cfg["count_field"])
+    return None
+
+
+# Prefer store price list so new store tokens appear in loot automatically; fall back to TOKEN_TYPES + jail_bailout.
+_LOOT_BOX_TOKEN_CANDIDATES = list(TOKEN_STORE_UNIT_PRICE_POINTS.keys()) or (
+    list(TOKEN_TYPES) + list(STORE_COUNT_ONLY_TOKENS)
+)
+LOOT_BOX_TOKEN_TYPES = [
+    t for t in _LOOT_BOX_TOKEN_CANDIDATES
+    if t not in _LOOT_BOX_TOKEN_EXCLUDE and _loot_box_token_count_field(t)
+]
 PERK_TYPES = [
     "property_income_10",
     "rp_10",
@@ -458,7 +484,6 @@ def _loot_public_reward_info() -> Dict[str, Any]:
         token_types.append({"id": tt, "label": str(tt).replace("_", " ")})
     exclusives = [
         {"id": "weapon", "label": "Exclusive weapon", "cap_global": _exclusive_cap("weapon")},
-        {"id": "car", "label": "Exclusive vehicle", "cap_global": _exclusive_cap("car")},
         {"id": "armour", "label": f"Exclusive armour ({ARMOUR_LEVEL_7_NAME})", "cap_global": _exclusive_cap("armour")},
         {"id": "property", "label": "Speakeasy (exclusive property)", "cap_global": _exclusive_cap("property")},
     ]
@@ -473,7 +498,6 @@ def _loot_public_reward_info() -> Dict[str, Any]:
         r0, r1 = t["rank_points"]
         b0, b1 = t["bullets"]
         l0, l1 = t["loot_pieces"]
-        cc_lo, cc_hi = t["car_count"]
         t_lo, t_hi = _loot_token_amount_range(q)
         excl = t.get("perk_exclude") or frozenset()
         perk_labels = [PERK_LABELS[p] for p in PERK_TYPES if p not in excl]
@@ -487,7 +511,6 @@ def _loot_public_reward_info() -> Dict[str, Any]:
             "bullets": [int(b0), int(b1)],
             "loot_pieces": [int(l0), int(l1)],
             "tokens": {"amount": [t_lo, t_hi], "types": token_types},
-            "cars": {"count": [1, 1], "rarities": [str(x).replace("_", " ") for x in t["car_rarities"]]},
             "perks": perk_labels,
         }
     jackpot_tiers: Dict[str, Any] = {}
@@ -506,11 +529,12 @@ def _loot_public_reward_info() -> Dict[str, Any]:
         "rare_plus_minimum": 2,
         "jackpot_tier_weights_pct": jackpot_tiers,
         "standard_prize_types": standard_prizes,
-        "standard_note": "Each prize is one random type (no duplicate type in one open). At most one car per open.",
+        "standard_note": "Each prize is one random type (no duplicate type in one open). Cars are not awarded from loot boxes.",
         "exclusives": exclusives,
         "exclusive_note": (
-            f"Global caps (all players): weapon {_exclusive_cap('weapon')}, car {_exclusive_cap('car')}, "
+            f"Global caps (all players): weapon {_exclusive_cap('weapon')}, "
             f"armour {_exclusive_cap('armour')}, Speakeasy {_exclusive_cap('property')}. "
+            "Cars are not awarded from loot boxes. "
             "If a type is full or you already own that exclusive, the roll tries another exclusive or becomes a standard prize."
         ),
         "tiers": tiers,
@@ -610,15 +634,20 @@ def _loot_pick_car(
     return _rng.choice(filtered)
 
 
-def _loot_roll_points(tier: Dict[str, Any]) -> int:
-    """Standard band stays under LOOT_POINTS_HIGH_FLOOR; secret high-roll chance for 3000+."""
+def _loot_points_high_roll_chance(reward_tier: str) -> float:
+    q = _normalize_reward_tier(reward_tier)
+    return float(LOOT_POINTS_HIGH_ROLL_CHANCE_BY_TIER.get(q, 0.05))
+
+
+def _loot_roll_points(tier: Dict[str, Any], reward_tier: str) -> int:
+    """Standard band stays under LOOT_POINTS_HIGH_FLOOR; tiered secret high-roll for 3000+."""
     mix = list(tier["points_mix"])
     lo = int(tier.get("points_min") or min(mix))
     standard_hi = min(int(tier["points_max"]), LOOT_POINTS_HIGH_FLOOR - 1)
     if standard_hi < lo:
         standard_hi = lo
 
-    if _rng.random() < LOOT_POINTS_HIGH_ROLL_CHANCE:
+    if _rng.random() < _loot_points_high_roll_chance(reward_tier):
         amount = int(_rng.randint(LOOT_POINTS_HIGH_FLOOR, LOOT_MAX_POINTS))
     elif _rng.random() < 0.62:
         amount = min(int(_rng.choice(mix)), standard_hi)
@@ -752,15 +781,14 @@ async def open_loot_box(
                     available = []
                     if claimed["weapon"] < _exclusive_cap("weapon") and not await _user_has_loot_exclusive_weapon(user_id):
                         available.append("weapon")
-                    if claimed["car"] < _exclusive_cap("car") and not await _user_has_loot_exclusive_car(user_id):
-                        available.append("car")
+                    # Exclusive cars no longer granted from loot boxes
                     if claimed["armour"] < _exclusive_cap("armour") and not await _user_has_armour_6(user_id):
                         available.append("armour")
                     if claimed["property"] < _exclusive_cap("property") and not await _user_has_exclusive_property(user_id):
                         available.append("property")
                     # Admin at 100% exclusive: if nothing available (cap or already have), still grant an exclusive for testing (skip property if user already has one to avoid duplicate key)
                     if is_admin_test and exclusive_chance >= 1.0 and not available:
-                        available = ["weapon", "car", "armour"]
+                        available = ["weapon", "armour"]
                         if not await _user_has_exclusive_property(user_id):
                             available.append("property")
                     if available:
@@ -787,48 +815,7 @@ async def open_loot_box(
                             })
                             continue
                         if typ == "car":
-                            car_info = next((c for c in CARS if c.get("id") == LOOT_EXCLUSIVE_CAR_ID), None)
-                            car_name = (car_info.get("name") if car_info else None) or "1930 Cadillac Series 452 V-16 Armored Sedan"
-                            loot_car_uc_id = str(uuid.uuid4())
-                            await db.user_cars.insert_one({
-                                "id": loot_car_uc_id,
-                                "user_id": user_id,
-                                "car_id": LOOT_EXCLUSIVE_CAR_ID,
-                                "car_name": car_name,
-                                "acquired_at": now.isoformat(),
-                                "damage_percent": 0,
-                                "rarity": "loot_exclusive",
-                                "value": int((car_info or {}).get("value") or 0),
-                                "min_rank": int((car_info or {}).get("min_rank") or 1),
-                                "min_difficulty": int((car_info or {}).get("min_difficulty") or 1),
-                                "travel_bonus": int((car_info or {}).get("travel_bonus") or 0),
-                                "image": str((car_info or {}).get("image") or ""),
-                            })
-                            from utils.exclusive_car_events import log_exclusive_car_event
-
-                            await log_exclusive_car_event(
-                                db,
-                                event_type="loot_box",
-                                car_id=LOOT_EXCLUSIVE_CAR_ID,
-                                user_car_id=loot_car_uc_id,
-                                to_user_id=user_id,
-                                to_username=current_user.get("username") if current_user else "",
-                                car_name=car_name,
-                            )
-                            await _increment_claimed_count("car")
-                            new_claimed = await _get_claimed_counts()
-                            if new_claimed["car"] >= _exclusive_cap("car"):
-                                await send_notification(user_id, "Loot box", f"The last exclusive car ({car_name}) has been claimed!", "system")
-                            cars_given_ids.add(LOOT_EXCLUSIVE_CAR_ID)
-                            cars_prize_granted = True
-                            rewards.append({
-                                "type": "car",
-                                "name": car_name,
-                                "id": LOOT_EXCLUSIVE_CAR_ID,
-                                "rarity": "loot_exclusive",
-                                "reward_tier": "loot_exclusive",
-                            })
-                            await maybe_revoke_civilian_protection(db, user_id, "exclusive_car")
+                            # Exclusive cars no longer granted from loot boxes — skip to another exclusive if possible
                             continue
                         if typ == "armour":
                             await db.users.update_one(
@@ -905,7 +892,7 @@ async def open_loot_box(
                 rewards.append(payload)
 
             if chosen == "points":
-                amount = _loot_roll_points(tier)
+                amount = _loot_roll_points(tier, reward_tier)
                 merged_inc["points"] = merged_inc.get("points", 0) + amount
                 _append_standard({"type": "points", "amount": amount})
             elif chosen == "rank_points":
@@ -918,33 +905,6 @@ async def open_loot_box(
                 amount = _clamp_loot_cash(_rng.randint(int(c_lo), int(c_hi)))
                 merged_inc["money"] = merged_inc.get("money", 0) + amount
                 _append_standard({"type": "cash", "amount": amount})
-            elif chosen == "cars":
-                pool = _loot_car_pool(tuple(tier["car_rarities"]))
-                car = _loot_pick_car(pool, reward_tier, cars_given_ids) if pool else None
-                if not car:
-                    c_lo, c_hi = tier["cash"]
-                    amount = _clamp_loot_cash(_rng.randint(int(c_lo), int(c_hi)))
-                    merged_inc["money"] = merged_inc.get("money", 0) + amount
-                    _append_standard({"type": "cash", "amount": amount})
-                else:
-                    cars_given_ids.add(car["id"])
-                    cars_prize_granted = True
-                    await db.user_cars.insert_one({
-                        "id": str(uuid.uuid4()),
-                        "user_id": user_id,
-                        "car_id": car["id"],
-                        "car_name": car.get("name", car["id"]),
-                        "acquired_at": now.isoformat(),
-                        "damage_percent": _rng.randint(0, 30),
-                        "rarity": car.get("rarity") or "common",
-                        "value": int(car.get("value") or 0),
-                        "min_rank": int(car.get("min_rank") or 1),
-                        "min_difficulty": int(car.get("min_difficulty") or 1),
-                        "travel_bonus": int(car.get("travel_bonus") or 0),
-                        "image": str(car.get("image") or ""),
-                    })
-                    items = [{"name": car.get("name", car["id"]), "rarity": car.get("rarity", "common"), "car_id": car["id"]}]
-                    _append_standard({"type": "cars", "count": 1, "items": items})
             elif chosen == "bullets":
                 b_lo, b_hi = tier["bullets"]
                 amount = _rng.randint(int(b_lo), int(b_hi))
@@ -957,10 +917,17 @@ async def open_loot_box(
                 _append_standard({"type": "loot_pieces", "amount": amount})
             elif chosen == "tokens":
                 amt = _loot_token_amount(reward_tier)
-                token_type = _rng.choice(LOOT_BOX_TOKEN_TYPES)
-                field = TOKEN_CONFIG[token_type]["count_field"]
-                merged_inc[field] = merged_inc.get(field, 0) + amt
-                _append_standard({"type": "token", "token_type": token_type, "amount": amt})
+                pool = [t for t in LOOT_BOX_TOKEN_TYPES if _loot_box_token_count_field(t)]
+                if not pool:
+                    c_lo, c_hi = tier["cash"]
+                    amount = _clamp_loot_cash(_rng.randint(int(c_lo), int(c_hi)))
+                    merged_inc["money"] = merged_inc.get("money", 0) + amount
+                    _append_standard({"type": "cash", "amount": amount})
+                else:
+                    token_type = _rng.choice(pool)
+                    field = _loot_box_token_count_field(token_type)
+                    merged_inc[field] = merged_inc.get(field, 0) + amt
+                    _append_standard({"type": "token", "token_type": token_type, "amount": amt})
             else:
                 excl = tier.get("perk_exclude") or frozenset()
                 perk_pool = [p for p in PERK_TYPES if p not in excl]

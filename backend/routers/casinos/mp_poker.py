@@ -636,27 +636,8 @@ def register(router):
 
         given_car = None
         if car_id:
-            import server as srv
-            car_id_clean = str(car_id).strip()
-            car_info = next((c for c in (srv.CARS or []) if c.get("id") == car_id_clean), None)
-            if not car_info:
-                raise HTTPException(status_code=404, detail="Car not found")
-            now_iso = datetime.now(timezone.utc).isoformat()
-            await db.user_cars.insert_one(
-                {
-                    "id": str(uuid.uuid4()),
-                    "user_id": target_user_id,
-                    "car_id": car_id_clean,
-                    "car_name": car_info.get("name", car_id_clean),
-                    "value": int(car_info.get("value") or 0),
-                    "condition": 100,
-                    "created_at": now_iso,
-                    "acquired_at": now_iso,
-                    "listed_for_sale": False,
-                    "listed_at": None,
-                }
-            )
-            given_car = car_id_clean
+            # Tournament car bonuses disabled — new cars only from GTA / dealer / marketplace / store / admin
+            car_id = None
 
         return {
             "money": money,

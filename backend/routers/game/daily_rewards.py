@@ -1,12 +1,11 @@
-# Daily Rewards: Rock Paper Scissors and Noughts & Crosses vs computer. 3 plays per 6 hours (shared). Win = cash + maybe cars + maybe loot pieces.
+# Daily Rewards: Rock Paper Scissors and Noughts & Crosses vs computer. 3 plays per 6 hours (shared). Win = cash + maybe loot pieces (no new cars).
 from datetime import datetime, timezone, timedelta
 import secrets
-import uuid
 
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from server import db, get_current_user, log_activity, CARS
+from server import db, get_current_user, log_activity
 
 _rng = secrets.SystemRandom()
 
@@ -14,11 +13,6 @@ RPS_PLAYS_PER_WINDOW = 3
 RPS_WINDOW_HOURS = 6
 RPS_CHOICES = ["rock", "paper", "scissors"]
 RPS_WIN_MONEY = 10_000_000
-# Cars up to rare only (common, uncommon, rare)
-DAILY_REWARDS_CAR_IDS = [c["id"] for c in CARS if c.get("id") not in ("car_custom", "car20", "car21", "car22") and c.get("rarity") in ("common", "uncommon", "rare")]
-# On win: 25% chance 1 car, 8% chance 2 cars (so sometimes just cash, sometimes cash + 1 or 2 cars)
-DAILY_REWARDS_CAR_1_CHANCE = 0.25
-DAILY_REWARDS_CAR_2_CHANCE = 0.08
 # On win: 25% chance for 10 or 15 loot box pieces
 DAILY_REWARDS_LOOT_CHANCE = 0.25
 DAILY_REWARDS_LOOT_PIECES_OPTIONS = (10, 15)
@@ -154,36 +148,15 @@ async def _get_play_window(uid: str) -> tuple[int, str | None]:
 
 
 async def _grant_daily_win_rewards(user_id: str) -> tuple[int, list, int]:
-    """Grant cash + optional cars (max rare) + optional loot pieces. Returns (money_won, car names, loot pieces)."""
+    """Grant cash + optional loot pieces. Returns (money_won, car names [always empty], loot pieces)."""
     inc: dict = {"money": RPS_WIN_MONEY}
     loot_box_pieces = 0
     if _rng.random() < DAILY_REWARDS_LOOT_CHANCE:
         loot_box_pieces = _rng.choice(DAILY_REWARDS_LOOT_PIECES_OPTIONS)
         inc["loot_box_pieces"] = loot_box_pieces
 
-    cars_won = []
-    car_ids = DAILY_REWARDS_CAR_IDS if isinstance(DAILY_REWARDS_CAR_IDS, list) else []
-    if car_ids:
-        r = _rng.random()
-        num_cars = 2 if r < DAILY_REWARDS_CAR_2_CHANCE else (1 if r < DAILY_REWARDS_CAR_1_CHANCE else 0)
-        chosen = _rng.sample(car_ids, min(num_cars, len(car_ids))) if num_cars else []
-        now_iso = datetime.now(timezone.utc).isoformat()
-        cars_list = CARS if isinstance(CARS, list) else []
-        for car_id in chosen:
-            car = next((c for c in cars_list if c.get("id") == car_id), None)
-            if car:
-                await db.user_cars.insert_one({
-                    "id": str(uuid.uuid4()),
-                    "user_id": user_id,
-                    "car_id": car_id,
-                    "car_name": car.get("name", car_id),
-                    "acquired_at": now_iso,
-                    "damage_percent": 0,
-                })
-                cars_won.append(car.get("name", car_id))
-
     await db.users.update_one({"id": user_id}, {"$inc": inc})
-    return RPS_WIN_MONEY, cars_won, loot_box_pieces
+    return RPS_WIN_MONEY, [], loot_box_pieces
 
 
 class RPSPlayRequest(BaseModel):
@@ -221,7 +194,7 @@ def register(router):
 
     @router.post("/daily-rewards/play")
     async def daily_rewards_play(req: RPSPlayRequest, current_user: dict = Depends(get_current_user)):
-        """Play rock/paper/scissors. Uses one of your 3 plays per 6h. Win = money + optional cars."""
+        """Play rock/paper/scissors. Uses one of your 3 plays per 6h. Win = money + optional loot pieces."""
         choice = (req.choice or "").strip().lower()
         if choice not in RPS_CHOICES:
             raise HTTPException(status_code=400, detail="Choice must be rock, paper, or scissors")

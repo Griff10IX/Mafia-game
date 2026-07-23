@@ -21,7 +21,6 @@ FIRST_MISSION_ID = "m_first"
 SECOND_MISSION_ID = "m_second"
 THIRD_MISSION_ID = "m_third"
 FOURTH_MISSION_ID = "m_fourth"
-COMMON_CAR_REWARD_ID = "car1"
 
 # Economy targets (plan)
 TOTAL_REWARD_POINTS = 10_000
@@ -311,7 +310,7 @@ def build_missions() -> List[Dict[str, Any]]:
             "requirements": m1_req,
             "title": "Prove Yourself",
             "description": f"{_format_requirements_description(m1_req)} The outfit wants to see what you're made of.",
-            "reward_money": 50_000,
+            "reward_money": 300_000,
             "reward_cash_immediate": cash[o],
             "reward_points": pts[o],
             "reward_respect": 2,
@@ -320,7 +319,6 @@ def build_missions() -> List[Dict[str, Any]]:
             "reward_respect_daily": resp_d[o],
             "reward_tribute_bullets_daily": bull_d[o],
             "reward_tribute_loot_box_pieces_daily": loot_d[o],
-            "reward_car_id": COMMON_CAR_REWARD_ID,
             "reward_token": "random",
             "reward_auto_rank_2h": 1,
             "difficulty": 1,
@@ -350,12 +348,11 @@ def build_missions() -> List[Dict[str, Any]]:
             "requirements": m2_req,
             "title": "New York Run",
             "description": _format_requirements_description(m2_req),
-            "reward_cash_immediate": cash[o],
+            "reward_cash_immediate": (cash[o] or 0) + 1_000_000,
             "reward_tribute_daily": trib[o],
             "reward_respect": 3,
             "reward_respect_daily": resp_d[o],
             "reward_tribute": 2_000,
-            "reward_car_ids": ["car7", "car2"],
             "reward_bullets": 2_500,
             "reward_tribute_bullets_daily": bull_d[o],
             "reward_tribute_loot_box_pieces_daily": loot_d[o],

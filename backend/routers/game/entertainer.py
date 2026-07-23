@@ -323,9 +323,9 @@ DEFAULT_REWARD_TYPE_WEIGHTS = {
     "cash": 36,
     "bullets": 30,
     "cash_bullets": 17,
-    "car_cash": 7,
-    "car": 5,
-    "two_cars": 2,
+    "car_cash": 0,  # cars disabled — cash-only fallback if rolled via legacy config
+    "car": 0,
+    "two_cars": 0,
     "token": 1,
     "cash_token": 1,
     "bullets_token": 1,
@@ -338,10 +338,16 @@ GBOX_SECONDARY_WEIGHTS = {
     "bullets": 35,
     "token": 12,
     "all_tokens": 2,
-    "car": 8,
-    "two_cars": 3,
+    "car": 0,
+    "two_cars": 0,
     "bullets_token": 20,
 }
+
+# New garage cars only from GTA / dealer / marketplace / store VIP-custom / admin.
+_DISABLED_CAR_REWARD_TYPES = frozenset(("car", "two_cars", "car_cash"))
+# Cash fallback when a disabled car type somehow rolls (legacy admin weights).
+ENTERTAINER_CAR_CASH_FALLBACK = 50_000
+ENTERTAINER_TWO_CARS_CASH_FALLBACK = 100_000
 
 ENTERTAINER_REWARDS_CONFIG_KEY = "entertainer_rewards_config"
 
@@ -376,6 +382,8 @@ async def _get_rewards_config() -> dict:
                     merged_w[k] = max(0, int(float(v)))
                 except (TypeError, ValueError):
                     pass
+        for k in _DISABLED_CAR_REWARD_TYPES:
+            merged_w[k] = 0
         cfg = {
             "cash_min": int(doc.get("cash_min") or 100),
             "cash_max": int(doc.get("cash_max") or 2000),
@@ -424,17 +432,21 @@ def _token_label(token_type: str) -> str:
 
 async def _give_random_reward(user_id: str, *, exclude_cash: bool = False) -> dict:
     """Apply a random reward to user. Returns description for result.
-    If exclude_cash=True (Gbox secondary), only bullets/tokens/cars — no independent cash roll."""
+    If exclude_cash=True (Gbox secondary), only bullets/tokens — no independent cash roll.
+    Car reward types are disabled (cash fallback only)."""
     rcfg = await _get_rewards_config()
     if exclude_cash:
-        weights = GBOX_SECONDARY_WEIGHTS
+        weights = dict(GBOX_SECONDARY_WEIGHTS)
     else:
-        weights = rcfg["reward_type_weights"]
-    reward_type = _rng.choices(
-        population=list(weights.keys()),
-        weights=list(weights.values()),
-        k=1,
-    )[0]
+        weights = dict(rcfg["reward_type_weights"])
+    for k in _DISABLED_CAR_REWARD_TYPES:
+        weights[k] = 0
+    # Drop zero-weight keys so choices stays valid
+    pop = [k for k, w in weights.items() if w > 0]
+    wts = [weights[k] for k in pop]
+    if not pop:
+        pop, wts = ["bullets"], [1]
+    reward_type = _rng.choices(population=pop, weights=wts, k=1)[0]
     desc = {"reward_type": reward_type, "money": 0, "bullets": 0, "cars": [], "tokens": {}}
     updates = {}
     token_updates = {}
@@ -485,48 +497,21 @@ async def _give_random_reward(user_id: str, *, exclude_cash: bool = False) -> di
         desc["money"], desc["bullets"] = c, b
         _add_token(_rng.choice(list(ENTERTAINER_TOKEN_TYPES)), 1)
     elif reward_type == "car":
-        if E_GAME_CAR_IDS:
-            car_id = _rng.choice(E_GAME_CAR_IDS)
-            car = next((c for c in CARS if c.get("id") == car_id), None)
-            if car:
-                await db.user_cars.insert_one({
-                    "id": str(uuid.uuid4()),
-                    "user_id": user_id,
-                    "car_id": car_id,
-                    "car_name": car.get("name", car_id),
-                    "acquired_at": datetime.now(timezone.utc).isoformat(),
-                })
-                desc["cars"] = [car.get("name", car_id)]
+        # Cars no longer granted — cash fallback
+        amt = ENTERTAINER_CAR_CASH_FALLBACK
+        updates["money"] = amt
+        desc["money"] = amt
+        desc["reward_type"] = "cash"
     elif reward_type == "two_cars":
-        if E_GAME_CAR_IDS:
-            chosen = _rng.sample(E_GAME_CAR_IDS, min(2, len(E_GAME_CAR_IDS)))
-            for car_id in chosen:
-                car = next((c for c in CARS if c.get("id") == car_id), None)
-                if car:
-                    await db.user_cars.insert_one({
-                        "id": str(uuid.uuid4()),
-                        "user_id": user_id,
-                        "car_id": car_id,
-                        "car_name": car.get("name", car_id),
-                        "acquired_at": datetime.now(timezone.utc).isoformat(),
-                    })
-                    desc["cars"].append(car.get("name", car_id))
+        amt = ENTERTAINER_TWO_CARS_CASH_FALLBACK
+        updates["money"] = amt
+        desc["money"] = amt
+        desc["reward_type"] = "cash"
     elif reward_type == "car_cash":
-        c = _random_cash_range(rcfg)
+        c = _random_cash_range(rcfg) + ENTERTAINER_CAR_CASH_FALLBACK
         updates["money"] = c
         desc["money"] = c
-        if E_GAME_CAR_IDS:
-            car_id = _rng.choice(E_GAME_CAR_IDS)
-            car = next((c for c in CARS if c.get("id") == car_id), None)
-            if car:
-                await db.user_cars.insert_one({
-                    "id": str(uuid.uuid4()),
-                    "user_id": user_id,
-                    "car_id": car_id,
-                    "car_name": car.get("name", car_id),
-                    "acquired_at": datetime.now(timezone.utc).isoformat(),
-                })
-                desc["cars"] = [car.get("name", car_id)]
+        desc["reward_type"] = "cash"
     if updates:
         inc = {k: v for k, v in updates.items() if v}
         if inc:

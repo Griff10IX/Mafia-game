@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import Depends, HTTPException
 
-from server import CARS, db, get_current_user_verified, log_activity, send_notification
+from server import db, get_current_user_verified, log_activity, send_notification
 from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES
 from utils.point_provenance import log_points_event
 
@@ -27,19 +27,12 @@ GR_FAMILY_RETALIATION_CHANCE = 0.005  # 0.5% per dig (very rare)
 # Rank-XP pass token is store-only, excluded from this reward pool.
 GR_TOKEN_TYPES = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
 
-# Exclude exclusive and loot-exclusive, plus custom car.
-GR_CAR_POOL = [
-    c for c in CARS
-    if c.get("id") != "car_custom" and c.get("rarity") not in ("exclusive", "loot_exclusive", "vip_exclusive")
-]
-
 GR_REWARD_WEIGHTS = (
-    ("nothing", 0.24),
-    ("cash", 0.38),
-    ("bullets", 0.16),
+    ("nothing", 0.26),
+    ("cash", 0.40),
+    ("bullets", 0.17),
     ("points", 0.02),  # hardest reward to hit
-    ("tokens", 0.14),
-    ("car", 0.06),
+    ("tokens", 0.15),
 )
 
 
@@ -114,7 +107,6 @@ def _roll_reward(attempt_cost: int) -> dict:
         "bullets": 0,
         "points": 0,
         "tokens": [],
-        "car": None,
     }
     if kind == "nothing":
         return reward
@@ -141,13 +133,7 @@ def _roll_reward(attempt_cost: int) -> dict:
         for t in chosen:
             reward["tokens"].append({"token_type": t, "amount": _rng.randint(1, 2)})
         return reward
-    if kind == "car" and GR_CAR_POOL:
-        car = _rng.choice(GR_CAR_POOL)
-        reward["car"] = {
-            "car_id": car.get("id"),
-            "name": car.get("name", car.get("id")),
-            "rarity": car.get("rarity", "common"),
-        }
+    # Cars no longer granted from Grave Robber — treat as nothing
     return reward
 
 
@@ -251,12 +237,6 @@ def register(router):
                     "label": "Tokens",
                     "chance_pct": round(weights.get("tokens", 0) * 100, 2),
                     "details": "1 token type (65%) or 2 types (35%); each type gives 1-2 tokens. No game pass token.",
-                },
-                {
-                    "kind": "car",
-                    "label": "Car",
-                    "chance_pct": round(weights.get("car", 0) * 100, 2),
-                    "details": "Random non-exclusive car only.",
                 },
             ],
             "recent_attempts": recent,
@@ -401,19 +381,6 @@ def register(router):
                 event_type="grave_robber_reward",
                 event_ref=f"grave_robber:{uuid.uuid4().hex}",
             )
-
-        if reward.get("car"):
-            car_id = reward["car"].get("car_id")
-            if car_id:
-                await db.user_cars.insert_one(
-                    {
-                        "id": uuid.uuid4().hex,
-                        "user_id": uid,
-                        "car_id": car_id,
-                        "acquired_at": now,
-                        "source": "grave_robber",
-                    }
-                )
 
         is_last_attempt = next_attempts_used >= attempts_total
         cooldown_until_iso = None

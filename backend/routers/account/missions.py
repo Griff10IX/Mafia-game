@@ -784,24 +784,6 @@ async def _run_mission_completion_side_effects(
     if reward_respect:
         await log_respect_earned(user_id, reward_respect, "missions")
 
-    reward_car_id = meta.get("reward_car_id")
-    reward_car_ids = meta.get("reward_car_ids") or []
-    if reward_car_id and next((c for c in CARS if c.get("id") == reward_car_id), None):
-        await db.user_cars.insert_one({
-            "id": str(uuid.uuid4()),
-            "user_id": user_id,
-            "car_id": reward_car_id,
-            "acquired_at": datetime.now(timezone.utc).isoformat(),
-        })
-    for cid in reward_car_ids:
-        if isinstance(cid, str) and next((c for c in CARS if c.get("id") == cid), None):
-            await db.user_cars.insert_one({
-                "id": str(uuid.uuid4()),
-                "user_id": user_id,
-                "car_id": cid,
-                "acquired_at": datetime.now(timezone.utc).isoformat(),
-            })
-
     reward_points = int(rp_awarded if rp_awarded is not None else meta.get("reward_points") or 0)
     try:
         if reward_points:

@@ -473,14 +473,13 @@ function LootRewardGuide({ rewardInfo, odds }) {
             const [pLo, pHi] = t.prize_count || [1, 1];
             const tok = t.tokens || {};
             const [taLo, taHi] = tok.amount || [1, 1];
-            const cars = t.cars || {};
             const jackpots = jackpot_tier_weights_pct?.[key];
             return (
               <div key={key} className={`rounded border px-1.5 py-1.5 ${color}`}>
                 <div className={`text-[9px] font-heading font-bold uppercase tracking-wider mb-0.5 ${LOOT_TIER_THEME[key]?.accent}`}>
                   {title} · {fmtInt(cost)} pcs
                 </div>
-                <div className="text-[7px] opacity-90 mb-1">{fmtInt(pLo)}–{fmtInt(pHi)} prizes · 1 car max/box</div>
+                <div className="text-[7px] opacity-90 mb-1">{fmtInt(pLo)}–{fmtInt(pHi)} prizes</div>
                 {(key === 'rare' || key === 'ultra_rare') && rare_plus_minimum && (
                   <p className="text-[7px] text-amber-200/85 mb-1">≥{rare_plus_minimum} prizes from Rare / Ultra tables</p>
                 )}
@@ -499,7 +498,6 @@ function LootRewardGuide({ rewardInfo, odds }) {
                   <li>Bullets {formatNumRange(t.bullets[0], t.bullets[1])}</li>
                   <li>Pieces {formatNumRange(t.loot_pieces[0], t.loot_pieces[1])}</li>
                   <li>Tokens {formatNumRange(taLo, taHi)}</li>
-                  <li>Car · {(cars.rarities || []).join(', ')}</li>
                 </ul>
                 {jackpots && Object.keys(jackpots).length > 0 && (
                   <p className="text-[7px] font-heading mt-1 pt-1 border-t border-white/10 text-amber-200/80">

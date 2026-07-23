@@ -382,7 +382,7 @@ export default function GraveRobber() {
               <li>Run = 50 digs. Start at {formatMoney(status?.base_attempt_cost || 1_000_000)} per dig.</li>
               <li>Cost rises by +{Math.round((Number(status?.tier_multiplier || 1.15) - 1) * 100)}% every {status?.tier_step_percent || 5}% progress.</li>
               <li>After dig #50, cooldown is {status?.cooldown_hours || 24}h before a new run.</li>
-              <li>Possible outcomes: nothing, cash, bullets, points, tokens, or a non-exclusive car.</li>
+              <li>Possible outcomes: nothing, cash, bullets, points, or tokens.</li>
               <li>
                 Heat: about {Math.round(Number(status?.jail_chance_per_dig ?? 0.04) * 100)}% chance per dig of
                 {' '}{Number(status?.jail_seconds_on_caught ?? 60)}s jail (unbreakable for that term).

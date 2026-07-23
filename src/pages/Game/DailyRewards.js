@@ -367,7 +367,7 @@ export default function DailyRewards() {
           <div className="flex items-center gap-2 pt-2 border-t border-zinc-700/40">
             <DollarSign size={13} className="text-emerald-400" />
             <span className="text-[11px] text-zinc-500 font-heading">
-              Win = <span className="text-emerald-400">{formatMoney(info?.win_money ?? 10000000)}</span> cash, maybe a car or two (max rare), or {Math.round((info?.loot_pieces_chance ?? 0.25) * 100)}% chance for {info?.loot_pieces_options?.join('/') ?? '10/15'} loot pieces
+              Win = <span className="text-emerald-400">{formatMoney(info?.win_money ?? 10000000)}</span> cash, or {Math.round((info?.loot_pieces_chance ?? 0.25) * 100)}% chance for {info?.loot_pieces_options?.join('/') ?? '10/15'} loot pieces
             </span>
           </div>
         </div>
