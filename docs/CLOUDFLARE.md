@@ -7,6 +7,7 @@ Use this when `mafiawars.co.uk` is **orange-cloud proxied** through Cloudflare t
 - **503 Service Unavailable** (sometimes **“from prefetch cache”** in Chrome) on routes like `/account/dashboard` or `/game/help-desk`
 - **Stale** or **broken** pages after deploy
 - **Rocket Loader** or minify breaking scripts (stack traces mention `rocket-loader.min.js`)
+- **GTA / garage car pictures blank** (placeholder car icon) while names/values still show — Cloudflare often cached **SPA `index.html`** (`content-type: text/html`) for `/images/gta/...` URLs
 
 ## 1. DNS
 
@@ -47,6 +48,16 @@ Default should **not** be “cache the whole site as static.”
 **After deploy**
 
 - **Caching → Purge Cache → Purge Everything** (or purge by prefix) once nginx/build are updated.
+
+**If car / static images show as blank icons**
+
+1. Confirm origin is fine (on the droplet):  
+   `curl -sI --resolve mafiawars.co.uk:443:127.0.0.1 https://mafiawars.co.uk/images/gta/car10.jpg`  
+   Expect **`content-type: image/jpeg`** (not `text/html`).
+2. Through Cloudflare, if `content-type` is **`text/html`** and **`CF-Cache-Status: HIT`**, the edge cached the SPA shell for that image URL.  
+   **Caching → Purge Cache** for `https://mafiawars.co.uk/images/gta*` (and `www`), or Purge Everything.
+3. Ensure nginx has a dedicated `location /images/` with `try_files $uri =404;` (see `scripts/nginx-mafia-https.conf.example`) so missing assets never become `index.html`.
+4. App catalog uses a `?v=` cache-bust on GTA image paths (`GTA_IMAGE_CACHE_BUST` in `backend/server.py`); bump that version after a bad HTML cache if a purge alone is not enough.
 
 ## 4. Speed / optimization
 

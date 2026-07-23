@@ -43,6 +43,15 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
+    # Static assets under /images/: never fall through to index.html. If a file is missing,
+    # return 404 instead of SPA HTML — otherwise Cloudflare can cache text/html for an image
+    # URL and GTA/garage thumbnails stay blank until the cache is purged or ?v= is bumped.
+    location /images/ {
+        try_files $uri =404;
+        expires 7d;
+        add_header Cache-Control "public" always;
+    }
+
     # Required for SPA: /travel/, /account/dashboard, etc. must serve index.html so React Router
     # can run. Without try_files, deep links often 404/403. If you still see 503, the origin was
     # down, nginx misconfigured, or Cloudflare could not reach origin (orange-cloud proxy still

@@ -748,39 +748,47 @@ MELT_VALUE_PER_BULLET = 385
 MELT_BULLETS_VALUE_MULT_NUM = 165  # ~35% above prior 122 (122 × 1.35 ≈ 165)
 MELT_BULLETS_VALUE_MULT_DEN = 100
 
+# Bump when Cloudflare caches SPA HTML/404 for /images/gta/* (browsers then hide imgs via onError).
+GTA_IMAGE_CACHE_BUST = "3"
+
+
+def gta_car_image(filename: str) -> str:
+    """Public path for a GTA car asset under public/images/gta/."""
+    return f"/images/gta/{filename}?v={GTA_IMAGE_CACHE_BUST}"
+
+
 # Base car cash values (GTA sell, scrap, melt, dealer, etc.). Non-exclusive tiers + custom: ×1.25 on prior table (rounded). exclusive + loot_exclusive: unchanged.
 CARS = [
     # Common (difficulty 1) - 6 cars
-    {"id": "car1", "name": "Model T Ford", "rarity": "common", "min_difficulty": 1, "value": 225, "travel_bonus": 0, "image": "/images/gta/car1.jpg"},
-    {"id": "car5", "name": "Essex Coach", "rarity": "common", "min_difficulty": 1, "value": 249, "travel_bonus": 0, "image": "/images/gta/car5.jpg"},
-    # ?v=2 busts CDN/browser caches that stored a bad response for these two files.
-    {"id": "car2", "name": "Chevrolet Series AB", "rarity": "common", "min_difficulty": 1, "value": 269, "travel_bonus": 5, "image": "/images/gta/car2.jpg?v=2"},
-    {"id": "car6", "name": "Durant Star", "rarity": "common", "min_difficulty": 1, "value": 292, "travel_bonus": 5, "image": "/images/gta/car6.jpg?v=2"},
-    {"id": "car4", "name": "Ford Model A", "rarity": "common", "min_difficulty": 1, "value": 314, "travel_bonus": 5, "image": "/images/gta/car4.jpg?v=2"},
-    {"id": "car3", "name": "Dodge Brothers", "rarity": "common", "min_difficulty": 1, "value": 338, "travel_bonus": 5, "image": "/images/gta/car3.jpg"},
+    {"id": "car1", "name": "Model T Ford", "rarity": "common", "min_difficulty": 1, "value": 225, "travel_bonus": 0, "image": gta_car_image("car1.jpg")},
+    {"id": "car5", "name": "Essex Coach", "rarity": "common", "min_difficulty": 1, "value": 249, "travel_bonus": 0, "image": gta_car_image("car5.jpg")},
+    {"id": "car2", "name": "Chevrolet Series AB", "rarity": "common", "min_difficulty": 1, "value": 269, "travel_bonus": 5, "image": gta_car_image("car2.jpg")},
+    {"id": "car6", "name": "Durant Star", "rarity": "common", "min_difficulty": 1, "value": 292, "travel_bonus": 5, "image": gta_car_image("car6.jpg")},
+    {"id": "car4", "name": "Ford Model A", "rarity": "common", "min_difficulty": 1, "value": 314, "travel_bonus": 5, "image": gta_car_image("car4.jpg")},
+    {"id": "car3", "name": "Dodge Brothers", "rarity": "common", "min_difficulty": 1, "value": 338, "travel_bonus": 5, "image": gta_car_image("car3.jpg")},
     # Uncommon (difficulty 2) - 4 cars; melt scales with MELT_VALUE_PER_BULLET
-    {"id": "car7", "name": "Oakland", "rarity": "uncommon", "min_difficulty": 2, "value": 2695, "travel_bonus": 10, "image": "/images/gta/car7.jpg?v=2"},
-    {"id": "car8", "name": "Willys-Knight", "rarity": "uncommon", "min_difficulty": 2, "value": 4044, "travel_bonus": 10, "image": "/images/gta/car8.jpg"},
-    {"id": "car10", "name": "Buick Master Six", "rarity": "uncommon", "min_difficulty": 2, "value": 5390, "travel_bonus": 12, "image": "/images/gta/car10.jpg?v=2"},
-    {"id": "car9", "name": "Cadillac V-8", "rarity": "uncommon", "min_difficulty": 2, "value": 6919, "travel_bonus": 15, "image": "/images/gta/car9.jpg?v=2"},
+    {"id": "car7", "name": "Oakland", "rarity": "uncommon", "min_difficulty": 2, "value": 2695, "travel_bonus": 10, "image": gta_car_image("car7.jpg")},
+    {"id": "car8", "name": "Willys-Knight", "rarity": "uncommon", "min_difficulty": 2, "value": 4044, "travel_bonus": 10, "image": gta_car_image("car8.jpg")},
+    {"id": "car10", "name": "Buick Master Six", "rarity": "uncommon", "min_difficulty": 2, "value": 5390, "travel_bonus": 12, "image": gta_car_image("car10.jpg")},
+    {"id": "car9", "name": "Cadillac V-8", "rarity": "uncommon", "min_difficulty": 2, "value": 6919, "travel_bonus": 15, "image": gta_car_image("car9.jpg")},
     # Rare (difficulty 3) - 4 cars
-    {"id": "car11", "name": "Packard Eight", "rarity": "rare", "min_difficulty": 3, "value": 7188, "travel_bonus": 20, "image": "/images/gta/car11.jpg?v=2"},
-    {"id": "car12", "name": "Lincoln Model L", "rarity": "rare", "min_difficulty": 3, "value": 9882, "travel_bonus": 20, "image": "/images/gta/car12.jpg"},
-    {"id": "car13", "name": "Pierce-Arrow", "rarity": "rare", "min_difficulty": 3, "value": 12578, "travel_bonus": 25, "image": "/images/gta/car13.jpg"},
-    {"id": "car14", "name": "Stutz Bearcat", "rarity": "rare", "min_difficulty": 3, "value": 15274, "travel_bonus": 25, "image": "/images/gta/car14.jpg?v=2"},
+    {"id": "car11", "name": "Packard Eight", "rarity": "rare", "min_difficulty": 3, "value": 7188, "travel_bonus": 20, "image": gta_car_image("car11.jpg")},
+    {"id": "car12", "name": "Lincoln Model L", "rarity": "rare", "min_difficulty": 3, "value": 9882, "travel_bonus": 20, "image": gta_car_image("car12.jpg")},
+    {"id": "car13", "name": "Pierce-Arrow", "rarity": "rare", "min_difficulty": 3, "value": 12578, "travel_bonus": 25, "image": gta_car_image("car13.jpg")},
+    {"id": "car14", "name": "Stutz Bearcat", "rarity": "rare", "min_difficulty": 3, "value": 15274, "travel_bonus": 25, "image": gta_car_image("car14.jpg")},
     # Ultra Rare (difficulty 4) - 3 cars
-    {"id": "car15", "name": "Duesenberg Model J", "rarity": "ultra_rare", "min_difficulty": 4, "value": 17070, "travel_bonus": 35, "image": "/images/gta/car15.jpeg"},
-    {"id": "car16", "name": "Cord L-29", "rarity": "ultra_rare", "min_difficulty": 4, "value": 22461, "travel_bonus": 35, "image": "/images/gta/car16.jpg"},
-    {"id": "car17", "name": "Auburn Speedster", "rarity": "ultra_rare", "min_difficulty": 4, "value": 31445, "travel_bonus": 40, "image": "/images/gta/car17.jpg"},
+    {"id": "car15", "name": "Duesenberg Model J", "rarity": "ultra_rare", "min_difficulty": 4, "value": 17070, "travel_bonus": 35, "image": gta_car_image("car15.jpeg")},
+    {"id": "car16", "name": "Cord L-29", "rarity": "ultra_rare", "min_difficulty": 4, "value": 22461, "travel_bonus": 35, "image": gta_car_image("car16.jpg")},
+    {"id": "car17", "name": "Auburn Speedster", "rarity": "ultra_rare", "min_difficulty": 4, "value": 31445, "travel_bonus": 40, "image": gta_car_image("car17.jpg")},
     # Legendary (difficulty 5) - 2 cars
-    {"id": "car18", "name": "Bugatti Type 41 Royale", "rarity": "legendary", "min_difficulty": 5, "value": 35938, "travel_bonus": 50, "image": "/images/gta/car18.jpg"},
-    {"id": "car19", "name": "Rolls-Royce Phantom II", "rarity": "legendary", "min_difficulty": 5, "value": 42226, "travel_bonus": 55, "image": "/images/gta/car19.jpg"},
+    {"id": "car18", "name": "Bugatti Type 41 Royale", "rarity": "legendary", "min_difficulty": 5, "value": 35938, "travel_bonus": 50, "image": gta_car_image("car18.jpg")},
+    {"id": "car19", "name": "Rolls-Royce Phantom II", "rarity": "legendary", "min_difficulty": 5, "value": 42226, "travel_bonus": 55, "image": gta_car_image("car19.jpg")},
     # Custom (store only, 500 pts)
     {"id": "car_custom", "name": "Custom Car", "rarity": "custom", "min_difficulty": 5, "value": 71875, "travel_bonus": 55, "image": None},
     # Exclusive (admin only)
-    {"id": "car20", "name": "Al Capone's Armored Cadillac", "rarity": "exclusive", "min_difficulty": 5, "value": 71875000, "travel_bonus": 60, "image": "/images/gta/car20.png"},
+    {"id": "car20", "name": "Al Capone's Armored Cadillac", "rarity": "exclusive", "min_difficulty": 5, "value": 71875000, "travel_bonus": 60, "image": gta_car_image("car20.png")},
     # Loot-exclusive (loot box only; global caps per type in loot_box.py)
-    {"id": "car21", "name": "1930 Cadillac Series 452 V-16 Armored Sedan", "rarity": "loot_exclusive", "min_difficulty": 5, "value": 143750000, "travel_bonus": 68, "image": "/images/gta/car21.png"},
+    {"id": "car21", "name": "1930 Cadillac Series 452 V-16 Armored Sedan", "rarity": "loot_exclusive", "min_difficulty": 5, "value": 143750000, "travel_bonus": 68, "image": gta_car_image("car21.png")},
     # VIP Game Pass tier 100 (once per account; custom image; survives death)
     {"id": "car22", "name": "VIP Pass Car", "rarity": "vip_exclusive", "min_difficulty": 5, "value": 71875, "travel_bonus": 55, "image": None},
 ]

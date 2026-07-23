@@ -25,7 +25,7 @@ from .racing_lap_engine import (
 from pydantic import BaseModel
 from pymongo import UpdateOne
 
-from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, user_prestige_rank_mult, send_notification, log_gambling, _is_admin, _get_staff_user_ids, log_respect_delta, require_admin_verified
+from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, user_prestige_rank_mult, send_notification, log_gambling, _is_admin, _get_staff_user_ids, log_respect_delta, require_admin_verified, gta_car_image
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
 from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 import pathlib as _pathlib
@@ -51,11 +51,11 @@ def _now_iso() -> str:
 
 # Racing cars: 4–5 historically accurate (1920s–30s). Choose one, no purchase. id, name, base_speed, base_grip, image
 RACING_CARS: List[dict] = [
-    {"id": "ford_model_t_racer", "name": "Ford Model T Racer", "base_speed": 10, "base_grip": 0.92, "image": "/images/gta/car1.jpg"},
-    {"id": "packard_734", "name": "Packard 734", "base_speed": 14, "base_grip": 0.88, "image": "/images/gta/car11.jpg"},
-    {"id": "stutz_bearcat", "name": "Stutz Bearcat", "base_speed": 18, "base_grip": 0.85, "image": "/images/gta/car14.jpg"},
-    {"id": "miller_91", "name": "Miller 91", "base_speed": 22, "base_grip": 0.78, "image": "/images/gta/car15.jpeg"},
-    {"id": "duesenberg_model_j", "name": "Duesenberg Model J", "base_speed": 26, "base_grip": 0.82, "image": "/images/gta/car18.jpg"},
+    {"id": "ford_model_t_racer", "name": "Ford Model T Racer", "base_speed": 10, "base_grip": 0.92, "image": gta_car_image("car1.jpg")},
+    {"id": "packard_734", "name": "Packard 734", "base_speed": 14, "base_grip": 0.88, "image": gta_car_image("car11.jpg")},
+    {"id": "stutz_bearcat", "name": "Stutz Bearcat", "base_speed": 18, "base_grip": 0.85, "image": gta_car_image("car14.jpg")},
+    {"id": "miller_91", "name": "Miller 91", "base_speed": 22, "base_grip": 0.78, "image": gta_car_image("car15.jpeg")},
+    {"id": "duesenberg_model_j", "name": "Duesenberg Model J", "base_speed": 26, "base_grip": 0.82, "image": gta_car_image("car18.jpg")},
 ]
 
 TRACKS: List[dict] = [
