@@ -158,6 +158,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
         { path: '/account/dashboard', label: 'Dashboard' },
         { path: '/account/objectives', label: 'Objectives' },
         { path: '/account/missions', label: 'Missions' },
+        { action: 'tutorial', label: 'Tutorial' },
         { path: '/account/inventory', label: 'My Inventory' },
         { path: '/account/profile', label: 'Edit Profile' },
         { path: '/account/referral', label: 'Referral & Redeem' },
@@ -2937,6 +2938,15 @@ export default function Layout({ children }) {
                     if (sub.action === 'theme') {
                       return (
                         <button key="theme" type="button" onClick={() => { setThemePickerOpen(true); setMobileBottomMenuOpen(null); }} role="menuitem"
+                          className="flex items-center justify-center px-2 py-3 rounded-md border font-heading text-[10px] uppercase tracking-wider transition-colors"
+                          style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.2)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.06)', color: 'var(--noir-primary)' }}>
+                          {sub.label}
+                        </button>
+                      );
+                    }
+                    if (sub.action === 'tutorial') {
+                      return (
+                        <button key="tutorial" type="button" data-testid="mobile-nav-tutorial" onClick={() => { setMobileBottomMenuOpen(null); replayTutorial(); }} role="menuitem"
                           className="flex items-center justify-center px-2 py-3 rounded-md border font-heading text-[10px] uppercase tracking-wider transition-colors"
                           style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.2)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.06)', color: 'var(--noir-primary)' }}>
                           {sub.label}
