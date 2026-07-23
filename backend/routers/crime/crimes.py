@@ -465,6 +465,9 @@ from server import (
     get_rank_info,
     user_prestige_rank_mult,
     get_effective_event,
+    get_prestige_bonus,
+    founding_member_income_mult,
+    rank_xp_pass_multiplier,
     log_activity,
     log_respect_earned,
     maybe_process_rank_up,
@@ -475,6 +478,7 @@ from server import (
 )
 from utils.location_climate import get_location_climate, rank_multiplier_for_actor, success_multiplier_for_actor
 from routers.account.objectives import update_objectives_progress
+from routers.game.achievements import badge_bonuses_from_user
 from routers.kill.armoury import (
     TOKEN_CONFIG,
     TOKEN_TYPES_GLOBAL_RANDOM_DROP,
@@ -929,40 +933,19 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
                     rank_points = rank_points * 2
             except Exception:
                 pass
-        # Prestige bonus: boost crime cash payout
-        from server import get_prestige_bonus
+        # Prestige / badge / pass multipliers — all from in-memory user (no extra DB reads).
         reward = int(reward * get_prestige_bonus(current_user)["crime_mult"])
-        # Badge bonus (0.1% per crimes badge; prestige 0.5%/level) and the racket in-state
-        # lookup are independent reads — run them concurrently to save a round-trip.
-        from routers.game.achievements import get_badge_bonuses
-
-        async def _biz_state_row():
-            return await db.illegal_businesses.find_one(
-                {"user_id": current_user["id"]},
-                {"_id": 0, "state": 1},
-            )
-
-        bb = {}
-        biz = None
         try:
-            bb, biz = await asyncio.gather(
-                get_badge_bonuses(current_user.get("id") or ""),
-                _biz_state_row(),
-            )
-        except Exception:
-            pass
-        try:
+            bb = badge_bonuses_from_user(current_user)
             reward = int(reward * (1 + (bb or {}).get("crimes", 0) * 0.001) * (bb or {}).get("prestige_badge_mult", 1))
         except Exception:
             pass
-        from server import founding_member_income_mult
         _fm_cr = founding_member_income_mult(current_user)
         reward = int(reward * _fm_cr)
         rank_points = int(rank_points * _fm_cr)
         # Referred user: 10% higher crime cash payouts
         if user_has_referrers(current_user.get("referred_by")):
             reward = int(reward * 1.10)
-        from server import rank_xp_pass_multiplier
         pass_mult = float(rank_xp_pass_multiplier(current_user))
         reward = int(reward * pass_mult)
         rank_points = int(rank_points * pass_mult)
@@ -973,29 +956,17 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
             reward = reward // 2
         rank_points_earned_out = int(rank_points)
         rp_before = int(current_user.get("rank_points") or 0)
-        # Racket / illegal-business missions: crimes in the business's state (doc.state set at start)
-        ib_crimes_in_state_inc = 0
-        try:
-            if biz:
-                bstate = (biz.get("state") or "").strip()
-                here = (current_user.get("current_state") or "").strip()
-                if bstate and bstate not in (STATES or []):
-                    bstate = here
-                if bstate and here and bstate == here:
-                    ib_crimes_in_state_inc = 1
-        except Exception:
-            pass
         inc = {
             "money": reward,
             "rank_points": rank_points,
             "total_crimes": 1,
             "crime_profit": reward,
         }
-        if ib_crimes_in_state_inc:
-            inc["illegal_business_crimes_in_state"] = ib_crimes_in_state_inc
         respect_drop = maybe_respect_points_drop()
+        respect_from_drop = 0
         if respect_drop:
-            inc["respect_points"] = max(0, int(respect_drop * RESPECT_FROM_CRIMES_MULT * _fm_cr * pass_mult))
+            respect_from_drop = max(0, int(respect_drop * RESPECT_FROM_CRIMES_MULT * _fm_cr * pass_mult))
+            inc["respect_points"] = respect_from_drop
         # Global ultra-rare molotov drop from any successful crime
         prestige_bonus_earned: Optional[dict] = None
         if _rng.random() < MOLOTOV_GLOBAL_DROP_CHANCE:
@@ -1020,13 +991,55 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
             else:
                 prestige_bonus_earned["token"] = token_type
                 prestige_bonus_earned["token_amount"] = token_amt
+
+        # Prestige crime extras — merge into the same $inc (one users.update_one).
+        prestige_bonus_respect = 0
+        prestige_bonus_points = 0
+        if crime.get("prestige_bonus"):
+            prestige_bonus_from_prestige = _apply_prestige_bonus(crime, current_user)
+            if prestige_bonus_from_prestige:
+                if "cash" in prestige_bonus_from_prestige:
+                    cash_bonus = int(prestige_bonus_from_prestige["cash"] * CRIME_CASH_PAYOUT_MULT)
+                    inc["money"] = int(inc.get("money", 0) or 0) + cash_bonus
+                if "respect_points" in prestige_bonus_from_prestige:
+                    prestige_bonus_respect = int(prestige_bonus_from_prestige["respect_points"] or 0)
+                    if prestige_bonus_respect:
+                        inc["respect_points"] = int(inc.get("respect_points", 0) or 0) + prestige_bonus_respect
+                if "bullets" in prestige_bonus_from_prestige:
+                    inc["bullets"] = int(inc.get("bullets", 0) or 0) + int(prestige_bonus_from_prestige["bullets"])
+                if "molotovs" in prestige_bonus_from_prestige:
+                    inc["molotovs"] = int(inc.get("molotovs", 0) or 0) + int(prestige_bonus_from_prestige["molotovs"])
+                if "loot_box_pieces" in prestige_bonus_from_prestige:
+                    inc["loot_box_pieces"] = int(inc.get("loot_box_pieces", 0) or 0) + int(
+                        prestige_bonus_from_prestige["loot_box_pieces"]
+                    )
+                if "points" in prestige_bonus_from_prestige:
+                    prestige_bonus_points = int(prestige_bonus_from_prestige["points"] or 0)
+                    if prestige_bonus_points:
+                        inc["points"] = int(inc.get("points", 0) or 0) + prestige_bonus_points
+                if "booze" in prestige_bonus_from_prestige and not booze_intake_blocked(current_user):
+                    b = prestige_bonus_from_prestige["booze"]
+                    key = f"booze_carrying.{b['id']}"
+                    inc[key] = int(inc.get(key, 0) or 0) + int(b["amount"])
+                if prestige_bonus_earned is None:
+                    prestige_bonus_earned = {
+                        k: v for k, v in prestige_bonus_from_prestige.items()
+                        if k != "booze" or not booze_intake_blocked(current_user)
+                    }
+                else:
+                    for k, v in prestige_bonus_from_prestige.items():
+                        if k in {"cash", "respect_points", "bullets", "points", "molotovs", "loot_box_pieces"}:
+                            prestige_bonus_earned[k] = prestige_bonus_earned.get(k, 0) + v
+                        elif k == "booze" and not booze_intake_blocked(current_user):
+                            prestige_bonus_earned["booze"] = v
+
         crime_update = apply_season_rp_mirror_to_update({"$inc": inc}, user=current_user)
         await db.users.update_one(
             {"id": current_user["id"]},
             crime_update,
         )
-        # Exploit check, referral split, respect log and economy event are bookkeeping —
-        # they don't affect the response, so they run in the deferred background batch.
+        # Exploit check, referral split, respect log, illegal-business counter, prestige logs —
+        # bookkeeping that does not affect the response.
         async def _post_success_bookkeeping():
             try:
                 import middleware.security as sec
@@ -1034,7 +1047,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
                     prev = int(current_user.get("money") or 0)
                     await sec.check_impossible_wealth_gain(
                         db, current_user["id"], current_user.get("username", "?"),
-                        prev, prev + reward, "crime"
+                        prev, prev + int(inc.get("money") or reward or 0), "crime"
                     )
             except Exception:
                 pass
@@ -1069,6 +1082,24 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
                     )
                 except Exception:
                     pass
+            # Illegal-business mission: crimes committed in the business's state.
+            try:
+                biz = await db.illegal_businesses.find_one(
+                    {"user_id": current_user["id"]},
+                    {"_id": 0, "state": 1},
+                )
+                if biz:
+                    bstate = (biz.get("state") or "").strip()
+                    here = (current_user.get("current_state") or "").strip()
+                    if bstate and bstate not in (STATES or []):
+                        bstate = here
+                    if bstate and here and bstate == here:
+                        await db.users.update_one(
+                            {"id": current_user["id"]},
+                            {"$inc": {"illegal_business_crimes_in_state": 1}},
+                        )
+            except Exception:
+                pass
             # Referral: referrers split 10% of crime profit evenly (game-paid)
             _rb = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "referred_by": 1})
             ref_ids = normalize_referred_by_ids((_rb or current_user).get("referred_by"))
@@ -1079,8 +1110,19 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
                         await apply_referrer_referral_increment(
                             db, rid, {"money": amt, "referral_earnings_crime": amt}, context="crime"
                         )
-            if inc.get("respect_points"):
-                await log_respect_earned(current_user["id"], inc["respect_points"], "crimes")
+            if respect_from_drop:
+                await log_respect_earned(current_user["id"], respect_from_drop, "crimes")
+            if prestige_bonus_respect:
+                await log_respect_earned(current_user["id"], prestige_bonus_respect, "crimes_prestige")
+            if prestige_bonus_points > 0:
+                await log_points_event(
+                    db,
+                    user_id=current_user["id"],
+                    points=prestige_bonus_points,
+                    event_type="prestige_crime_bonus",
+                    event_ref=crime.get("id"),
+                    meta={"crime_name": crime.get("name")},
+                )
             if inc.get("loot_box_pieces"):
                 try:
                     await db.economy_events.insert_one({
@@ -1096,45 +1138,6 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
                     logger.warning("economy_events loot_piece_drop insert: %s", e)
 
         deferred_ops.append(_post_success_bookkeeping)
-
-        # Prestige bonus rewards (separate update so they're always applied cleanly)
-        if crime.get("prestige_bonus"):
-            prestige_bonus_from_prestige = _apply_prestige_bonus(crime, current_user)
-            if prestige_bonus_from_prestige:
-                bonus_inc = {}
-                if "cash" in prestige_bonus_from_prestige:
-                    bonus_inc["money"] = int(prestige_bonus_from_prestige["cash"] * CRIME_CASH_PAYOUT_MULT)
-                if "respect_points" in prestige_bonus_from_prestige:
-                    bonus_inc["respect_points"] = prestige_bonus_from_prestige["respect_points"]
-                if "bullets" in prestige_bonus_from_prestige:
-                    bonus_inc["bullets"] = prestige_bonus_from_prestige["bullets"]
-                if "molotovs" in prestige_bonus_from_prestige:
-                    bonus_inc["molotovs"] = bonus_inc.get("molotovs", 0) + prestige_bonus_from_prestige["molotovs"]
-                if "loot_box_pieces" in prestige_bonus_from_prestige:
-                    bonus_inc["loot_box_pieces"] = bonus_inc.get("loot_box_pieces", 0) + prestige_bonus_from_prestige["loot_box_pieces"]
-                if "points" in prestige_bonus_from_prestige:
-                    bonus_inc["points"] = prestige_bonus_from_prestige["points"]
-                if "booze" in prestige_bonus_from_prestige and not booze_intake_blocked(current_user):
-                    b = prestige_bonus_from_prestige["booze"]
-                    bonus_inc[f"booze_carrying.{b['id']}"] = b["amount"]
-                if bonus_inc:
-                    await db.users.update_one({"id": current_user["id"]}, {"$inc": bonus_inc})
-                    if bonus_inc.get("respect_points"):
-                        await log_respect_earned(current_user["id"], bonus_inc["respect_points"], "crimes_prestige")
-                    if bonus_inc.get("points", 0) > 0:
-                        await log_points_event(db, user_id=current_user["id"], points=bonus_inc["points"], event_type="prestige_crime_bonus", event_ref=crime.get("id"), meta={"crime_name": crime.get("name")})
-                # Merge prestige bonuses into the response dict (preserving any global molotov drop)
-                if prestige_bonus_earned is None:
-                    prestige_bonus_earned = {
-                        k: v for k, v in prestige_bonus_from_prestige.items()
-                        if k != "booze" or not booze_intake_blocked(current_user)
-                    }
-                else:
-                    for k, v in prestige_bonus_from_prestige.items():
-                        if k in {"cash", "respect_points", "bullets", "points", "molotovs", "loot_box_pieces"}:
-                            prestige_bonus_earned[k] = prestige_bonus_earned.get(k, 0) + v
-                        elif k == "booze" and not booze_intake_blocked(current_user):
-                            prestige_bonus_earned["booze"] = v
 
         new_total_crimes = (current_user.get("total_crimes") or 0) + 1
         claimed = current_user.get("respect_points_crime_milestones_claimed") or []

@@ -550,10 +550,11 @@ export default function Crimes() {
         await api.post('/inventory/tokens/use', { token_type: 'cooldown_skip_crime' });
       }
       await commitCrime(crimeId);
-      refreshUser();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to use cooldown skip token');
       refreshUser();
+      clearCrimesPrefetch();
+      await fetchCrimes(true);
     } finally {
       setSkipBusyId(null);
     }
@@ -562,13 +563,15 @@ export default function Crimes() {
   const commitCrime = async (crimeId) => {
     try {
       const response = await api.post(`/crimes/${crimeId}/commit`);
-      const progressAfter = response.data?.progress_after;
+      const data = response.data || {};
+      const progressAfter = data.progress_after;
+      const nextAvailable = data.next_available;
 
-      if (response.data.success) {
-        const bonus = response.data.prestige_bonus_earned;
-        let msg = response.data.message;
-        if (response.data.respect_points) {
-          msg += `${msg.trim().endsWith('.') ? '' : '.'} +${response.data.respect_points} respect`;
+      if (data.success) {
+        const bonus = data.prestige_bonus_earned;
+        let msg = data.message;
+        if (data.respect_points) {
+          msg += `${msg.trim().endsWith('.') ? '' : '.'} +${data.respect_points} respect`;
         }
         if (bonus && Object.keys(bonus).length > 0) {
           const parts = [];
@@ -593,26 +596,44 @@ export default function Crimes() {
           if (parts.length > 0) msg += ` ★ Bonus: ${parts.join(', ')}`;
         }
         toast.success(msg);
-        refreshUser();
+        const profit = Number(data.reward) || 0;
+        setCrimeStats((prev) => ({
+          ...prev,
+          count_today: (prev.count_today || 0) + 1,
+          count_week: (prev.count_week || 0) + 1,
+          success_today: (prev.success_today || 0) + 1,
+          success_week: (prev.success_week || 0) + 1,
+          profit_today: (prev.profit_today || 0) + profit,
+          profit_24h: (prev.profit_24h || 0) + profit,
+          profit_week: (prev.profit_week || 0) + profit,
+        }));
       } else {
-        toast.error(response.data.message);
+        toast.error(data.message);
+        setCrimeStats((prev) => ({
+          ...prev,
+          count_today: (prev.count_today || 0) + 1,
+          count_week: (prev.count_week || 0) + 1,
+        }));
       }
 
-      if (progressAfter != null) {
-        setCrimes((prev) =>
-          prev.map((c) =>
-            c.id === crimeId ? { ...c, progress: progressAfter } : c
-          )
-        );
-      }
+      // Patch cooldown / progress from the commit response — avoid a full /crimes refetch per tap.
       clearCrimesPrefetch();
-      await fetchCrimes();
+      setCrimes((prev) =>
+        prev.map((c) => {
+          if (c.id !== crimeId) return c;
+          const patched = { ...c, can_commit: false };
+          if (progressAfter != null) patched.progress = progressAfter;
+          if (nextAvailable) patched.next_available = nextAvailable;
+          return patched;
+        })
+      );
+      refreshUser();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to commit crime');
       console.error('Error committing crime:', error);
       // Keep cooldown UI authoritative on server state (important on mobile taps/races).
       clearCrimesPrefetch();
-      await fetchCrimes();
+      await fetchCrimes(true);
     }
   };
 

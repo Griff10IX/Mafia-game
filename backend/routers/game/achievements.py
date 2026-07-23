@@ -101,6 +101,18 @@ def compute_profile_badges(user: dict) -> list:
     return result
 
 
+def badge_bonuses_from_user(user: Optional[dict]) -> dict:
+    """Unlocked tier counts from an in-memory user doc (no DB). Same keys as get_badge_bonuses."""
+    user = user or {}
+    out = {}
+    for cat in BADGE_CATEGORIES:
+        computed = _compute_category(cat, user)
+        out[cat["id"]] = computed["unlocked_count"]
+    prestige_level = int(user.get("prestige_level") or 0)
+    out["prestige_badge_mult"] = 1 + prestige_level * 0.005
+    return out
+
+
 async def get_badge_bonuses(user_id: str) -> dict:
     """Return unlocked tier count per bonus category (excludes rank). Keys: crimes, gta, jail_busts, kills, oc_heists, bullets_melted, booze_runs, hitlist_npc. Also includes prestige_badge_mult (1 + 0.5% per prestige level) to scale badge effects."""
     from server import db
@@ -114,14 +126,7 @@ async def get_badge_bonuses(user_id: str) -> dict:
             "rank_points": 1, "prestige_level": 1,
         },
     )
-    user = u or {}
-    out = {}
-    for cat in BADGE_CATEGORIES:
-        computed = _compute_category(cat, user)
-        out[cat["id"]] = computed["unlocked_count"]
-    prestige_level = int(user.get("prestige_level") or 0)
-    out["prestige_badge_mult"] = 1 + prestige_level * 0.005
-    return out
+    return badge_bonuses_from_user(u)
 
 
 def _fmt(target: int, key: str = "") -> str:

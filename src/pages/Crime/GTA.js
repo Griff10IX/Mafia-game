@@ -635,14 +635,17 @@ export default function GTA() {
     
     try {
       const response = await api.post('/gta/attempt', { option_id: optionId });
+      const data = response.data || {};
+      const car = data.car;
+      const progressAfter = data.progress_after;
+      const cooldownUntil = data.cooldown_until;
       
-      if (response.data.success) {
-        const car = response.data.car;
+      if (data.success) {
         const img = car?.image;
         const rarityKey = String(car?.rarity || 'common').toLowerCase();
         const glowHex = RARITY_GLOW_HEX[rarityKey] || RARITY_GLOW_HEX.common;
         const rarityLabel = rarityKey.replace(/_/g, ' ');
-        toast.success(response.data.message, {
+        toast.success(data.message, {
           description: car ? (
             <div className="flex items-center gap-3">
               {img ? (
@@ -661,29 +664,63 @@ export default function GTA() {
                 <div className={`mt-0.5 text-[10px] font-bold uppercase tracking-wider ${getRarityColor(rarityKey)}`}>
                   {rarityLabel}
                 </div>
-                {typeof response.data.respect_points === 'number' && response.data.respect_points > 0 ? (
-                  <div className="mt-0.5">Respect: +{response.data.respect_points}</div>
+                {typeof data.respect_points === 'number' && data.respect_points > 0 ? (
+                  <div className="mt-0.5">Respect: +{data.respect_points}</div>
                 ) : null}
               </div>
             </div>
           ) : undefined,
         });
-        refreshUser();
-      } else if (response.data.jailed) {
-        toast.error(response.data.message);
-        refreshUser();
-      } else if (response.data.success === false && response.data.message) {
-        toast.error(response.data.message);
+        const profit = Number(car?.value) || 0;
+        setGtaStats((prev) => ({
+          ...prev,
+          count_today: (prev.count_today || 0) + 1,
+          count_week: (prev.count_week || 0) + 1,
+          success_today: (prev.success_today || 0) + 1,
+          success_week: (prev.success_week || 0) + 1,
+          profit_today: (prev.profit_today || 0) + profit,
+          profit_24h: (prev.profit_24h || 0) + profit,
+          profit_week: (prev.profit_week || 0) + profit,
+        }));
+        if (car) {
+          setRecentStolen((prev) => {
+            const entry = {
+              id: car.id,
+              car_id: car.id,
+              name: car.name,
+              rarity: car.rarity,
+              image: car.image,
+              value: car.value,
+            };
+            return [entry, ...(Array.isArray(prev) ? prev : [])].slice(0, 10);
+          });
+        }
+      } else if (data.jailed) {
+        toast.error(data.message);
+        setGtaStats((prev) => ({
+          ...prev,
+          count_today: (prev.count_today || 0) + 1,
+          count_week: (prev.count_week || 0) + 1,
+        }));
+      } else if (data.success === false && data.message) {
+        toast.error(data.message);
+        setGtaStats((prev) => ({
+          ...prev,
+          count_today: (prev.count_today || 0) + 1,
+          count_week: (prev.count_week || 0) + 1,
+        }));
       }
 
-      if (response.data?.progress_after != null) {
-        setOptions((prev) =>
-          prev.map((o) =>
-            o.id === optionId ? { ...o, progress: response.data.progress_after } : o
-          )
-        );
-      }
-      fetchData({ silent: true });
+      // One attempt cools all options — patch from response instead of refetching /gta/options.
+      setOptions((prev) =>
+        prev.map((o) => {
+          const patched = { ...o };
+          if (cooldownUntil) patched.cooldown_until = cooldownUntil;
+          if (o.id === optionId && progressAfter != null) patched.progress = progressAfter;
+          return patched;
+        })
+      );
+      refreshUser();
     } catch (error) {
       const status = error.response?.status;
       const d = error.response?.data?.detail;
@@ -698,6 +735,7 @@ export default function GTA() {
         attemptGTA(optionId, true);
         return;
       }
+      fetchData({ silent: true });
     } finally {
       if (!willRetry) setAttemptingOptionId(null);
     }
@@ -716,10 +754,10 @@ export default function GTA() {
         await api.post('/inventory/tokens/use', { token_type: 'cooldown_skip_gta' });
       }
       await attemptGTA(optionId);
-      refreshUser();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to use cooldown skip token');
       refreshUser();
+      fetchData({ silent: true });
     } finally {
       setSkipBusyId(null);
     }

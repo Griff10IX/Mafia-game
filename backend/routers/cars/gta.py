@@ -48,6 +48,10 @@ logger = logging.getLogger(__name__)
 _gta_garage_locks: Dict[str, asyncio.Lock] = {}
 _gta_garage_locks_guard = asyncio.Lock()
 
+# Post-attempt bookkeeping (events, logs, objectives, milestones) runs after the HTTP response.
+_gta_bookkeeping_locks: Dict[str, asyncio.Lock] = {}
+_gta_bookkeeping_tasks: set = set()
+
 
 async def _get_gta_garage_lock(user_id: str) -> asyncio.Lock:
     uid = user_id or ""
@@ -55,6 +59,22 @@ async def _get_gta_garage_lock(user_id: str) -> asyncio.Lock:
         if uid not in _gta_garage_locks:
             _gta_garage_locks[uid] = asyncio.Lock()
         return _gta_garage_locks[uid]
+
+
+def _spawn_gta_bookkeeping(user_id: str, coro_factory) -> None:
+    """Run coro_factory() in the background, serialized per user."""
+    lock = _gta_bookkeeping_locks.setdefault(user_id or "", asyncio.Lock())
+
+    async def _runner():
+        async with lock:
+            try:
+                await coro_factory()
+            except Exception:
+                logger.exception("gta post-attempt bookkeeping failed user_id=%s", user_id)
+
+    task = asyncio.create_task(_runner())
+    _gta_bookkeeping_tasks.add(task)
+    task.add_done_callback(_gta_bookkeeping_tasks.discard)
 
 
 # ---------------------------------------------------------------------------
@@ -146,6 +166,7 @@ class GTAAttemptResponse(BaseModel):
     rank_points_earned: int
     progress_after: Optional[int] = None
     respect_points: int = 0
+    cooldown_until: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
@@ -160,6 +181,9 @@ from server import (
     get_rank_info,
     user_prestige_rank_mult,
     get_effective_event,
+    get_prestige_bonus,
+    founding_member_income_mult,
+    rank_xp_pass_multiplier,
     maybe_process_rank_up,
     maybe_respect_points_drop,
     log_activity,
@@ -183,6 +207,7 @@ from server import (
 )
 from routers.account.objectives import update_objectives_progress
 from routers.admin.airport import _invalidate_travel_info_cache
+from routers.game.achievements import badge_bonuses_from_user
 from routers.game.families import resolve_family_id
 from utils.family_vault_log import log_family_vault_tx
 from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
@@ -725,12 +750,27 @@ async def _attempt_gta_impl(
         {"$set": set_fields, "$inc": {"attempts": 1, "successes": 1 if success else 0}},
         upsert=True,
     )
-    try:
-        from utils.tutorial import mark_tutorial_gta_done
+    deferred_ops: list = []
 
-        await mark_tutorial_gta_done(db, current_user.get("id") or "")
-    except Exception:
-        logging.exception("tutorial gta mark failed user_id=%s", current_user.get("id"))
+    async def _post_attempt_common():
+        try:
+            from utils.tutorial import mark_tutorial_gta_done
+
+            await mark_tutorial_gta_done(db, current_user.get("id") or "")
+        except Exception:
+            logging.exception("tutorial gta mark failed user_id=%s", current_user.get("id"))
+
+    deferred_ops.append(_post_attempt_common)
+
+    def _spawn_and_return(resp: GTAAttemptResponse) -> GTAAttemptResponse:
+        resp.cooldown_until = cooldown_iso
+
+        async def _run():
+            for op in deferred_ops:
+                await op()
+
+        _spawn_gta_bookkeeping(uid, _run)
+        return resp
 
     if success:
         # Store-bought custom car template — not a GTA steal reward (would look like random garage dupes).
@@ -780,15 +820,11 @@ async def _attempt_gta_impl(
                 active_for_exclusive = True
             if not active_for_exclusive:
                 exclusive_in_roll = False
-        # Prestige bonus and loot-box GTA rare perk: weight rarer cars more heavily
-        from server import get_prestige_bonus, founding_member_income_mult
+        # Prestige / badge rare boost from in-memory user (no extra DB reads).
         _fm_gta = founding_member_income_mult(current_user)
-        _gta_prestige_user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "prestige_level": 1})
-        _rare_boost = get_prestige_bonus(_gta_prestige_user or {})["gta_rare_boost"]
-        # Badge bonus: 0.1% per GTA badge; prestige: 0.5% boost per level
+        _rare_boost = get_prestige_bonus(current_user)["gta_rare_boost"]
         try:
-            from routers.game.achievements import get_badge_bonuses
-            bb = await get_badge_bonuses(current_user.get("id") or "")
+            bb = badge_bonuses_from_user(current_user)
             _rare_boost += bb.get("gta", 0) * 0.001 * bb.get("prestige_badge_mult", 1)
         except Exception:
             pass
@@ -848,47 +884,28 @@ async def _attempt_gta_impl(
         rp_perk_until = _parse_iso_datetime(current_user.get("rp_perk_until"))
         if rp_perk_until and now_utc < rp_perk_until:
             rank_points = int(rank_points * 1.1)
+        _xp_token_bonus = 0
         xp_gta_until = _parse_iso_datetime(current_user.get("xp_gta_until"))
         if xp_gta_until and now_utc < xp_gta_until:
             _xp_token_bonus = int(rank_points)  # the doubled slice equals the pre-double RP
             rank_points = rank_points * 2
-            try:
-                from utils.token_perk_stats import bump_token_perk_stats
-                await bump_token_perk_stats(db, current_user.get("id") or "", "xp_gta", bonus_rp=_xp_token_bonus, uses=1)
-            except Exception:
-                pass
-        try:
-            from utils.world_event_stats import bump_world_event_stats
-            _we_fields: dict = {}
-            if _we_bonus_rp:
-                _we_fields["bonus_rp"] = _we_bonus_rp
-            _gta_succ_mult = float(ev.get("gta_success", 1.0) or 1.0)
-            if _gta_succ_mult > 1.0:
-                _we_fields["gta_boosted"] = 1
-            if _we_fields:
-                _we_fields["uses"] = 1
-                await bump_world_event_stats(db, current_user.get("id") or "", **_we_fields)
-        except Exception:
-            pass
-        from server import rank_xp_pass_multiplier
+        _gta_succ_mult = float(ev.get("gta_success", 1.0) or 1.0)
         pass_mult = float(rank_xp_pass_multiplier(current_user))
         rank_points = int(rank_points * pass_mult)
         rank_points = max(1, int(rank_points * rank_multiplier_for_actor(current_user.get("current_state"), _climate)))
-        gta_rare_perk = int(current_user.get("gta_rare_drop_perk_attempts_remaining") or 0)
-        if gta_rare_perk > 0:
-            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"gta_rare_drop_perk_attempts_remaining": -1}})
         new_gta_uc_id = str(uuid.uuid4())
+        car_acquired_at = datetime.now(timezone.utc).isoformat()
         await db.user_cars.insert_one(
             {
                 "id": new_gta_uc_id,
                 "user_id": current_user.get("id") or "",
                 "car_id": car["id"],
                 "car_name": car["name"],
-                "acquired_at": datetime.now(timezone.utc).isoformat(),
+                "acquired_at": car_acquired_at,
                 "damage_percent": damage_percent,
             }
         )
-        # If the Al Capone exclusive was just won, auto-disable pool release.
+        # If the Al Capone exclusive was just won, auto-disable pool release (must stay sync).
         if (car.get("id") or "") == GTA_EXCLUSIVE_CAR_ID:
             invalidate_car20_owned_count_cache()
             _car20_owned_count_cache["n"] = 1
@@ -900,17 +917,6 @@ async def _attempt_gta_impl(
             )
         if (car.get("rarity") or "") in _MARKET_EXCLUSIVE_RARITIES:
             await maybe_revoke_civilian_protection(db, current_user.get("id") or "", "exclusive_car")
-            from utils.exclusive_car_events import log_exclusive_car_event
-
-            await log_exclusive_car_event(
-                db,
-                event_type="gta_won",
-                car_id=car.get("id"),
-                user_car_id=new_gta_uc_id,
-                to_user_id=current_user.get("id"),
-                to_username=current_user.get("username"),
-                car_name=car.get("name"),
-            )
         _invalidate_travel_info_cache(current_user.get("id") or "")
         rp_before = int(current_user.get("rank_points") or 0)
         rp_granted = int(rank_points * _fm_gta)
@@ -919,59 +925,110 @@ async def _attempt_gta_impl(
             gta_inc["total_gta"] = 1
         if (car.get("rarity") or "").strip().lower() == "uncommon":
             gta_inc["uncommon_cars_stolen"] = 1
+        if gta_rare_perk > 0:
+            gta_inc["gta_rare_drop_perk_attempts_remaining"] = -1
         respect_drop = maybe_respect_points_drop()
+        respect_from_drop = 0
         if respect_drop:
-            gta_inc["respect_points"] = max(0, int(respect_drop * RESPECT_FROM_GTA_MULT * _fm_gta * pass_mult))
+            respect_from_drop = max(0, int(respect_drop * RESPECT_FROM_GTA_MULT * _fm_gta * pass_mult))
+            gta_inc["respect_points"] = respect_from_drop
         gta_update = apply_season_rp_mirror_to_update({"$inc": gta_inc}, user=current_user)
         await db.users.update_one(
             {"id": current_user.get("id") or ""},
             gta_update,
         )
-        if gta_inc.get("respect_points"):
-            await log_respect_earned(current_user.get("id") or "", gta_inc["respect_points"], "gta")
         new_total_gta = (current_user.get("total_gta") or 0) + 1
         claimed = current_user.get("respect_points_gta_milestones_claimed") or []
         new_claimed = [m for m in GTA_MILESTONES if m <= new_total_gta and m not in claimed]
         milestone_respect = sum(GTA_MILESTONE_REWARDS.get(m, 0) for m in new_claimed)
-        await _award_gta_milestones(current_user.get("id") or "", new_total_gta, claimed, bonus_mult=_fm_gta)
-        respect_earned = max(0, int((respect_drop or 0) * RESPECT_FROM_GTA_MULT * _fm_gta)) + max(0, int(milestone_respect * RESPECT_FROM_GTA_MULT * _fm_gta))
-        try:
-            await maybe_process_rank_up(
-                current_user.get("id") or "",
-                rp_before,
-                rank_points_in_update(gta_update),
-                current_user.get("username", ""),
-                user_prestige_rank_mult(current_user),
-            )
-        except Exception as e:
-            logger.exception("Rank-up notification (GTA): %s", e)
-        try:
-            await update_objectives_progress(current_user.get("id") or "", "gta", 1)
-        except Exception:
-            pass
-        if used_gta_skip:
-            try:
-                from utils.token_perk_stats import bump_token_perk_stats
+        respect_earned = max(0, int((respect_drop or 0) * RESPECT_FROM_GTA_MULT * _fm_gta)) + max(
+            0, int(milestone_respect * RESPECT_FROM_GTA_MULT * _fm_gta)
+        )
+        car_rarity = (car.get("rarity") or "common").strip().lower()
+        car_is_market_exclusive = car_rarity in _MARKET_EXCLUSIVE_RARITIES
 
-                rarity_field = _GTA_SKIP_STOLEN_RARITY_FIELDS.get(
-                    (car.get("rarity") or "common").strip().lower()
-                )
-                if rarity_field:
+        async def _post_success_bookkeeping():
+            if _xp_token_bonus:
+                try:
+                    from utils.token_perk_stats import bump_token_perk_stats
+
                     await bump_token_perk_stats(
-                        db, current_user.get("id") or "", "cooldown_skip_gta", **{rarity_field: 1}
+                        db, current_user.get("id") or "", "xp_gta", bonus_rp=_xp_token_bonus, uses=1
                     )
+                except Exception:
+                    pass
+            try:
+                from utils.world_event_stats import bump_world_event_stats
+
+                _we_fields: dict = {}
+                if _we_bonus_rp:
+                    _we_fields["bonus_rp"] = _we_bonus_rp
+                if _gta_succ_mult > 1.0:
+                    _we_fields["gta_boosted"] = 1
+                if _we_fields:
+                    _we_fields["uses"] = 1
+                    await bump_world_event_stats(db, current_user.get("id") or "", **_we_fields)
             except Exception:
                 pass
+            if respect_from_drop:
+                await log_respect_earned(current_user.get("id") or "", respect_from_drop, "gta")
+            await _award_gta_milestones(
+                current_user.get("id") or "", new_total_gta, claimed, bonus_mult=_fm_gta
+            )
+            try:
+                await maybe_process_rank_up(
+                    current_user.get("id") or "",
+                    rp_before,
+                    rank_points_in_update(gta_update),
+                    current_user.get("username", ""),
+                    user_prestige_rank_mult(current_user),
+                )
+            except Exception as e:
+                logger.exception("Rank-up notification (GTA): %s", e)
+            try:
+                await update_objectives_progress(current_user.get("id") or "", "gta", 1)
+            except Exception:
+                pass
+            if used_gta_skip:
+                try:
+                    from utils.token_perk_stats import bump_token_perk_stats
+
+                    rarity_field = _GTA_SKIP_STOLEN_RARITY_FIELDS.get(car_rarity)
+                    if rarity_field:
+                        await bump_token_perk_stats(
+                            db, current_user.get("id") or "", "cooldown_skip_gta", **{rarity_field: 1}
+                        )
+                except Exception:
+                    pass
+            if car_is_market_exclusive:
+                try:
+                    from utils.exclusive_car_events import log_exclusive_car_event
+
+                    await log_exclusive_car_event(
+                        db,
+                        event_type="gta_won",
+                        car_id=car.get("id"),
+                        user_car_id=new_gta_uc_id,
+                        to_user_id=current_user.get("id"),
+                        to_username=current_user.get("username"),
+                        car_name=car.get("name"),
+                    )
+                except Exception:
+                    logger.exception("exclusive car event log failed user_id=%s", current_user.get("id"))
+
+        deferred_ops.append(_post_success_bookkeeping)
         msg = _rng.choice(GTA_SUCCESS_MESSAGES).format(car_name=car["name"])
-        return GTAAttemptResponse(
-            success=True,
-            message=msg,
-            car=car,
-            jailed=False,
-            jail_until=None,
-            rank_points_earned=rp_granted,
-            progress_after=progress_after,
-            respect_points=respect_earned,
+        return _spawn_and_return(
+            GTAAttemptResponse(
+                success=True,
+                message=msg,
+                car=car,
+                jailed=False,
+                jail_until=None,
+                rank_points_earned=rp_granted,
+                progress_after=progress_after,
+                respect_points=respect_earned,
+            )
         )
     # Failure: sometimes caught (jail), sometimes get away (no car, no jail)
     caught = _rng.random() < GTA_CAUGHT_CHANCE
@@ -982,26 +1039,30 @@ async def _attempt_gta_impl(
             {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "snitch_attempted_this_term": False}},
         )
         fail_msg = _rng.choice(GTA_FAIL_CAUGHT_MESSAGES).format(seconds=option["jail_time"])
-        return GTAAttemptResponse(
+        return _spawn_and_return(
+            GTAAttemptResponse(
+                success=False,
+                message=fail_msg,
+                car=None,
+                jailed=True,
+                jail_until=jail_until.isoformat(),
+                rank_points_earned=0,
+                progress_after=progress_after,
+                respect_points=0,
+            )
+        )
+    fail_msg = _rng.choice(GTA_FAIL_ESCAPED_MESSAGES)
+    return _spawn_and_return(
+        GTAAttemptResponse(
             success=False,
             message=fail_msg,
             car=None,
-            jailed=True,
-            jail_until=jail_until.isoformat(),
+            jailed=False,
+            jail_until=None,
             rank_points_earned=0,
             progress_after=progress_after,
             respect_points=0,
         )
-    fail_msg = _rng.choice(GTA_FAIL_ESCAPED_MESSAGES)
-    return GTAAttemptResponse(
-        success=False,
-        message=fail_msg,
-        car=None,
-        jailed=False,
-        jail_until=None,
-        rank_points_earned=0,
-        progress_after=progress_after,
-        respect_points=0,
     )
 
 
@@ -1095,8 +1156,9 @@ async def attempt_gta(
         car = getattr(result, "car", None)
         jailed = getattr(result, "jailed", False)
         jail_seconds = int(option["jail_time"]) if (option and jailed) else None
+        uid = current_user.get("id") or ""
         event_doc = {
-            "user_id": current_user.get("id") or "",
+            "user_id": uid,
             "username": current_user.get("username") or "",
             "at": now,
             "success": success,
@@ -1109,25 +1171,37 @@ async def attempt_gta(
             "jailed": jailed,
             "jail_seconds": jail_seconds,
         }
-        gta_event_result = await db.gta_events.insert_one(event_doc)
-        invalidate_rolling_event_stats_cache("gta_events", current_user.get("id") or "")
-        if success:
-            try:
-                from utils.family_daily_tasks import record_family_daily_activity
+        activity_details = {
+            "option": (option or {}).get("name", request.option_id),
+            "success": success,
+            "car": car.get("name") if car else None,
+            "jailed": jailed,
+        }
 
-                await record_family_daily_activity(
-                    db,
-                    current_user.get("id") or "",
-                    "gta",
-                    source_id=f"gta:{gta_event_result.inserted_id}",
-                    now=now,
-                )
-            except Exception:
-                logging.exception("Family daily GTA progress failed user_id=%s", current_user.get("id"))
-        await log_activity(current_user.get("id", ""), current_user.get("username", "?"), "gta_attempt", {
-            "option": (option or {}).get("name", request.option_id), "success": success,
-            "car": car.get("name") if car else None, "jailed": jailed,
-        })
+        async def _post_route_bookkeeping():
+            gta_event_result = await db.gta_events.insert_one(event_doc)
+            invalidate_rolling_event_stats_cache("gta_events", uid)
+            if success:
+                try:
+                    from utils.family_daily_tasks import record_family_daily_activity
+
+                    await record_family_daily_activity(
+                        db,
+                        uid,
+                        "gta",
+                        source_id=f"gta:{gta_event_result.inserted_id}",
+                        now=now,
+                    )
+                except Exception:
+                    logging.exception("Family daily GTA progress failed user_id=%s", uid)
+            await log_activity(
+                uid,
+                current_user.get("username", "?"),
+                "gta_attempt",
+                activity_details,
+            )
+
+        _spawn_gta_bookkeeping(uid, _post_route_bookkeeping)
         return result
 
 
