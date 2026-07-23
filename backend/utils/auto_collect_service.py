@@ -14,13 +14,20 @@ AUTO_COLLECT_TICKER_SECONDS = 300
 
 
 async def try_auto_collect_property(db, user_id: str, property_id: str) -> Optional[dict]:
-    from routers.money.properties import collect_property_income
+    from routers.money.properties import (
+        PROPERTY_AUTO_COLLECT_INCOME_FRACTION,
+        collect_property_income_impl,
+    )
 
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
         return None
     try:
-        return await collect_property_income(property_id, user)
+        return await collect_property_income_impl(
+            property_id,
+            user,
+            income_fraction=PROPERTY_AUTO_COLLECT_INCOME_FRACTION,
+        )
     except HTTPException:
         return None
     except Exception as e:

@@ -133,6 +133,51 @@ const CashStack = ({ className = "" }) => (
   </svg>
 );
 
+const NPC_REWARD_LABELS = {
+  cash: (v) => `$${Number(v).toLocaleString()}`,
+  rank_points: (v) => `${Number(v).toLocaleString()} XP`,
+  respect_points: (v) => `${Number(v).toLocaleString()} Respect`,
+  points: (v) => `${Number(v).toLocaleString()}p`,
+};
+
+function formatNpcRewardText(npcRewards) {
+  const rewards = npcRewards && typeof npcRewards === 'object' ? npcRewards : {};
+  const parts = [];
+  for (const [k, v] of Object.entries(rewards)) {
+    if (!v || k === 'booze' || k === 'bullets' || k === 'car_id') continue;
+    const fmt = NPC_REWARD_LABELS[k];
+    parts.push(fmt ? fmt(v) : `${Number(v).toLocaleString()} ${k.replace(/_/g, ' ')}`);
+  }
+  if (rewards.booze && typeof rewards.booze === 'object' && Object.keys(rewards.booze).length > 0) {
+    parts.push('Booze');
+  }
+  return parts.length ? parts.join(' · ') : 'Practice rewards';
+}
+
+function HitlistRewardCell({ item }) {
+  if (item?.target_type === 'npc') {
+    return (
+      <span className="text-primary font-bold text-xs leading-snug">
+        {formatNpcRewardText(item.npc_rewards)}
+      </span>
+    );
+  }
+  if (item?.reward_type === 'cash') {
+    return (
+      <>
+        <CashStack className="w-4 h-3" />
+        ${Number(item.reward_amount ?? 0).toLocaleString()}
+      </>
+    );
+  }
+  return (
+    <>
+      <CoinIcon className="w-3.5 h-3.5" />
+      {Number(item.reward_amount ?? 0).toLocaleString()}
+    </>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════
    Your Status Card (Combined)
    ═══════════════════════════════════════════════════════ */
@@ -233,14 +278,14 @@ const YourStatusCard = ({ me, user, revealed, who, submitting, onBuyOff, onRevea
                   type="button"
                   onClick={onAddNpc}
                   disabled={addingNpc}
-                  title={`Practice targets: max ${npcMaxBoard} on The Board at once. Kill one from Attack to free a slot.`}
+                  title={`Practice targets: max ${npcMaxBoard} on The Board at once. Kill one or wait 48h for expiry to free a slot.`}
                   className="w-full bg-primary/20 text-primary rounded px-2.5 sm:px-3 py-1.5 sm:py-2 font-heading font-bold uppercase tracking-wide text-[9px] sm:text-[10px] border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center justify-center gap-1 touch-manipulation"
                 >
                   <UserPlus size={10} className="sm:w-3 sm:h-3" />
                   {addingNpc ? 'Adding...' : 'Add NPC'}
                 </button>
                 <p className="text-[8px] text-zinc-500 font-heading text-center leading-tight px-0.5">
-                  Max {npcMaxBoard} on The Board — kill one to free a slot
+                  Max {npcMaxBoard} on The Board — kill or 48h expiry frees a slot
                 </p>
               </div>
             ) : (
@@ -252,7 +297,7 @@ const YourStatusCard = ({ me, user, revealed, who, submitting, onBuyOff, onRevea
                   </span>
                 </div>
                 <span className="text-[8px] text-amber-200/80 font-heading text-center leading-tight">
-                  Board full — kill a practice NPC to add another
+                  Board full — kill one or wait 48h for expiry
                 </span>
               </div>
             )
@@ -270,13 +315,13 @@ const YourStatusCard = ({ me, user, revealed, who, submitting, onBuyOff, onRevea
                   You have <span className="text-foreground font-bold tabular-nums">{npcOnBoard}</span> of{' '}
                   <span className="text-foreground font-bold tabular-nums">{npcMaxBoard}</span> on The Board. You can add{' '}
                   <span className="text-foreground font-bold tabular-nums">{npcMaxBoard - npcOnBoard}</span> more
-                  {npcOnBoard > 0 ? ' until you reach the cap' : ''}.
+                  {npcOnBoard > 0 ? ' until you reach the cap' : ''}. Practice NPCs expire after 48 hours.
                 </>
               ) : (
                 <>
                   You have <span className="text-foreground font-bold tabular-nums">{npcOnBoard}</span> of{' '}
                   <span className="text-foreground font-bold tabular-nums">{npcMaxBoard}</span> on The Board (max). Finish one
-                  from the Attack page, then add another.
+                  from Attack, or wait for a 48-hour expiry, then add another.
                 </>
               )}
             </p>
@@ -287,7 +332,7 @@ const YourStatusCard = ({ me, user, revealed, who, submitting, onBuyOff, onRevea
         {npcStatus && !onHitlist && (
           <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading">
             Add practice targets · Max {npcStatus.max_on_board ?? npcStatus.max_per_window ?? 3} on The Board at once
-            (kill one to free a slot)
+            (kill one or wait 48h to free a slot)
           </p>
         )}
         
@@ -551,17 +596,7 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                       </td>
                       <td className="py-2 px-3">
                         <div className="flex items-center gap-1 text-primary font-bold text-xs">
-                          {item.reward_type === 'cash' ? (
-                            <>
-                              <CashStack className="w-4 h-3" />
-                              ${Number(item.reward_amount ?? 0).toLocaleString()}
-                            </>
-                          ) : (
-                            <>
-                              <CoinIcon className="w-3.5 h-3.5" />
-                              {Number(item.reward_amount ?? 0).toLocaleString()}
-                            </>
-                          )}
+                          <HitlistRewardCell item={item} />
                         </div>
                       </td>
                       <td className="py-2 px-3 text-zinc-400 text-[10px]">
@@ -635,18 +670,8 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                     </div>
                     
                     <div className="text-right">
-                      <div className="flex items-center gap-1 text-primary font-heading font-bold text-xs mb-0.5">
-                        {item.reward_type === 'cash' ? (
-                          <>
-                            <CashStack className="w-4 h-3" />
-                            ${Number(item.reward_amount ?? 0).toLocaleString()}
-                          </>
-                        ) : (
-                          <>
-                            <CoinIcon className="w-3.5 h-3.5" />
-                            {Number(item.reward_amount ?? 0).toLocaleString()}
-                          </>
-                        )}
+                      <div className="flex items-center justify-end gap-1 text-primary font-heading font-bold text-xs mb-0.5">
+                        <HitlistRewardCell item={item} />
                       </div>
                       <div className="text-[8px] text-zinc-500 font-heading">
                         by {item.placer_username ?? 'Hidden'}
@@ -869,7 +894,7 @@ export default function HitlistPage() {
     if (npcStatus?.can_add === false) {
       const maxB = npcStatus.max_on_board ?? npcStatus.max_per_window ?? 3;
       toast.error(
-        `You already have ${npcStatus.active_on_board ?? npcStatus.adds_used_in_window ?? maxB} practice NPC(s) on the board (max ${maxB}). Kill one from Attack first.`,
+        `You already have ${npcStatus.active_on_board ?? npcStatus.adds_used_in_window ?? maxB} practice NPC(s) on the board (max ${maxB}). Kill one from Attack, or wait 48 hours for expiry.`,
       );
       return;
     }

@@ -858,6 +858,8 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
     success = _rng.random() < min(1.0, success_rate)
     rank_points_earned_out = 0
     xp_crimes_bonus_rp = 0
+    _we_bonus_rp = 0
+    _we_bonus_cash = 0
     # Non-response-affecting DB work queued here runs in a background task after we respond.
     deferred_ops: list = []
 
@@ -891,8 +893,20 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
             else 5
         )
         ev = await get_effective_event()
-        reward = int(reward * ev.get("kill_cash", 1.0))
-        rank_points = int(rank_points * ev.get("rank_points", 1.0))
+        _ev_cash_mult = float(ev.get("kill_cash", 1.0) or 1.0)
+        _ev_rp_mult = float(ev.get("rank_points", 1.0) or 1.0)
+        if _ev_cash_mult > 1.0:
+            _pre = reward
+            reward = int(reward * _ev_cash_mult)
+            _we_bonus_cash = reward - _pre
+        else:
+            reward = int(reward * _ev_cash_mult)
+        if _ev_rp_mult > 1.0:
+            _pre = rank_points
+            rank_points = int(rank_points * _ev_rp_mult)
+            _we_bonus_rp = rank_points - _pre
+        else:
+            rank_points = int(rank_points * _ev_rp_mult)
         now_utc = datetime.now(timezone.utc)
         rp_perk_until = current_user.get("rp_perk_until")
         if rp_perk_until:
@@ -1028,6 +1042,18 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
                 try:
                     from utils.token_perk_stats import bump_token_perk_stats
                     await bump_token_perk_stats(db, current_user["id"], "xp_crimes", bonus_rp=xp_crimes_bonus_rp, uses=1)
+                except Exception:
+                    pass
+            if _we_bonus_rp or _we_bonus_cash:
+                try:
+                    from utils.world_event_stats import bump_world_event_stats
+                    await bump_world_event_stats(
+                        db,
+                        current_user["id"],
+                        bonus_rp=_we_bonus_rp,
+                        bonus_cash=_we_bonus_cash,
+                        uses=1,
+                    )
                 except Exception:
                     pass
             if used_crime_skip:

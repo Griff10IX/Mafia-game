@@ -624,8 +624,12 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     num_humans = len(user_ids)
     num_npcs = 4 - num_humans
     total_shares = num_humans * 1.0 + num_npcs * NPC_PAYOUT_MULTIPLIER
-    cash_pool = int(job["cash"] * (total_shares / 4.0) * cash_mult)
-    rp_pool = int(job["rp"] * (total_shares / 4.0) * rank_mult)
+    cash_pool_base = int(job["cash"] * (total_shares / 4.0))
+    rp_pool_base = int(job["rp"] * (total_shares / 4.0))
+    cash_pool = int(cash_pool_base * cash_mult)
+    rp_pool = int(rp_pool_base * rank_mult)
+    _we_pool_cash = max(0, cash_pool - cash_pool_base) if cash_mult > 1.0 else 0
+    _we_pool_rp = max(0, rp_pool - rp_pool_base) if rank_mult > 1.0 else 0
     if oc_reduced:
         _pre_cash, _pre_rp = cash_pool, rp_pool
         cash_pool = int(cash_pool * 1.1)
@@ -682,6 +686,20 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
             {"id": user_id},
             oc_user_update,
         )
+        _we_cash_share = int(_we_pool_cash * pct / 100) if _we_pool_cash else 0
+        _we_rp_share = int(_we_pool_rp * pct / 100) if _we_pool_rp else 0
+        if _we_cash_share or _we_rp_share:
+            try:
+                from utils.world_event_stats import bump_world_event_stats
+                await bump_world_event_stats(
+                    db,
+                    user_id,
+                    bonus_cash=_we_cash_share,
+                    bonus_rp=_we_rp_share,
+                    uses=1,
+                )
+            except Exception:
+                pass
         try:
             from routers.game.achievements import maybe_log_oc_heist_badge_tiers
             await maybe_log_oc_heist_badge_tiers(

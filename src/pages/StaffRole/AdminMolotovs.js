@@ -25,7 +25,7 @@ const TABS = [
     endpoint: '/admin/molotovs-overview',
     Icon: Flame,
     empty: 'No molotov holders match.',
-    blurb: 'Crime / Game Pass drops; spent on Attack (each molotov ≈ 250 bullets).',
+    blurb: 'Crime / Game Pass drops; spent on Attack (each molotov ≈ 250 bullets). Admin/mod accounts excluded.',
   },
   {
     id: 'bullets',
@@ -33,7 +33,7 @@ const TABS = [
     endpoint: '/admin/bullets-overview',
     Icon: Crosshair,
     empty: 'No bullet holders match.',
-    blurb: 'Player bullet balances (armoury, melts, rewards, combat spend).',
+    blurb: 'Player bullet balances (armoury, melts, rewards, combat spend). Admin/mod accounts excluded.',
   },
 ];
 

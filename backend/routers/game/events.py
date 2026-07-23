@@ -32,10 +32,19 @@ FLASH_NEWS_TIPS = [
 
 
 async def get_active_event(current_user: dict = Depends(get_current_user)):
-    """Current game-wide event(s) when enabled; includes rotation info."""
-    _ = current_user
+    """Current game-wide event(s) when enabled; includes rotation info and this user's lifetime event gains."""
+    from utils.world_event_stats import serialize_world_event_stats
+
     full = await get_effective_event_full()
     event_ids = full.get("event_ids") or []
+    my_stats = serialize_world_event_stats(None)
+    try:
+        uid = (current_user or {}).get("id")
+        if uid:
+            row = await db.users.find_one({"id": uid}, {"_id": 0, "world_event_stats": 1})
+            my_stats = serialize_world_event_stats((row or {}).get("world_event_stats"))
+    except Exception:
+        pass
     if not event_ids:
         # get_effective_event_full returns empty ids when events are disabled
         return {
@@ -46,6 +55,7 @@ async def get_active_event(current_user: dict = Depends(get_current_user)):
             "active_events": [],
             "expires_at": None,
             "duration_hours": 0,
+            "my_gains": my_stats,
         }
     names = [GAME_EVENTS_BY_ID.get(eid, {}).get("name", eid) for eid in event_ids]
     active_events = []
@@ -73,6 +83,7 @@ async def get_active_event(current_user: dict = Depends(get_current_user)):
         "active_events": active_events,
         "expires_at": full.get("expires_at"),
         "duration_hours": full.get("duration_hours", 0),
+        "my_gains": my_stats,
     }
 
 

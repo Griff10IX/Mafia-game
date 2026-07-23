@@ -258,6 +258,8 @@ PROPERTY_AUTO_COLLECT_DURATION_DAYS = 7
 PROPERTY_AUTO_COLLECT_UNLOCK_MISSIONS = 15
 # Auto-bribe kicks in once heat reaches this level (clears to 0, charging only what's needed).
 PROPERTY_AUTO_COLLECT_HEAT_TRIGGER = 5.0
+# Each auto-collect tick takes this share of accrued income (rest stays for later / manual collect).
+PROPERTY_AUTO_COLLECT_INCOME_FRACTION = 0.5
 
 
 def property_auto_collect_active(user: dict) -> bool:
@@ -666,7 +668,7 @@ async def auto_clear_properties_heat(user: dict) -> Optional[dict]:
 
 async def buy_property_auto_collect(current_user: dict = Depends(get_current_user)):
     """Buy the Property Auto Collect perk: 2,500 points for 7 days (repurchase extends from current expiry).
-    Requires 15 completed Business progress missions. Auto-collects property income, pays upkeep, clears heat."""
+    Requires 15 completed Business progress missions. Auto-collects 50% of accrued property income per tick, pays upkeep, clears heat."""
     uid = current_user["id"]
     fresh = await db.users.find_one(
         {"id": uid},
@@ -716,7 +718,7 @@ async def buy_property_auto_collect(current_user: dict = Depends(get_current_use
     return {
         "message": (
             f"Auto Collect active until {_format_utc_datetime_friendly(new_until_dt)}. "
-            "It collects your property income into your racket vault, pays weekly upkeep, and clears heat automatically."
+            "Each check banks 50% of accrued property income into your racket vault, pays weekly upkeep, and clears heat automatically."
         ),
         "property_auto_collect_until": new_until,
         "enabled": True,
@@ -968,6 +970,7 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
         "upkeep_paid_total": int(ac_stats.get("upkeep_paid") or 0),
         "heat_bribes_total": int(ac_stats.get("heat_bribes_paid") or 0),
         "last_collected_at": ac_stats.get("last_collected_at"),
+        "income_fraction": float(PROPERTY_AUTO_COLLECT_INCOME_FRACTION),
     }
     return PropertiesListResponse(
         properties=result,
@@ -1061,6 +1064,11 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
 
 
 async def collect_property_income(property_id: str, current_user: dict = Depends(get_current_user)):
+    """Manual collect endpoint — always takes 100% of accrued income."""
+    return await collect_property_income_impl(property_id, current_user, income_fraction=1.0)
+
+
+async def collect_property_income_impl(property_id: str, current_user: dict, *, income_fraction: float = 1.0):
     prop = await db.properties.find_one(
         {
             "id": property_id,
@@ -1231,6 +1239,17 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
     if kill_pct > 0:
         income *= 1.0 + kill_pct / 100.0
     income *= founding_member_income_mult(current_user)
+    fraction = _clamp_float(income_fraction, 0.01, 1.0)
+    if fraction < 1.0:
+        income = income * fraction
+        # Leave the uncollected share accrued: rewind last_collected by the remaining hours.
+        rem_h = max(0.0, float(max_hours_passed) * (1.0 - fraction))
+        rem_h = min(rem_h, 24.0)
+        partial_iso = (now_utc - timedelta(hours=rem_h)).isoformat()
+        await db.user_properties.update_many(
+            {"user_id": current_user["id"], "property_id": property_id},
+            {"$set": {"last_collected": partial_iso}},
+        )
     await db.users.update_one(
         {"id": current_user["id"]},
         {"$inc": {"money": income}}

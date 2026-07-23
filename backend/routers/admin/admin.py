@@ -11221,10 +11221,16 @@ def register(router):
         offset: int,
         limit: int,
     ) -> dict:
-        """Totals + paginated holders for a scalar users.<field> balance (molotovs / bullets)."""
+        """Totals + paginated holders for a scalar users.<field> balance (molotovs / bullets).
+        Excludes NPCs, bodyguards, and staff (admins + mods) — same segment as game stats / cash holders.
+        """
         if field not in ("molotovs", "bullets"):
             raise HTTPException(status_code=500, detail="Invalid ammo field")
-        player_match = {"is_npc": {"$ne": True}, "is_bodyguard": {"$ne": True}}
+        player_match = {
+            "is_npc": {"$ne": True},
+            "is_bodyguard": {"$ne": True},
+            **_staff_exclude_user_filter(),
+        }
         st = (status or "all").strip().lower()
         if st == "alive":
             player_match["is_dead"] = {"$ne": True}
@@ -11296,6 +11302,7 @@ def register(router):
             "alive_circulating": int(totals.get("alive_circulating") or 0),
             "dead_circulating": int(totals.get("dead_circulating") or 0),
             "holders_with_balance": holders_with_balance,
+            "staff_excluded": True,
             "rows": rows,
         }
 
@@ -11307,7 +11314,7 @@ def register(router):
         limit: int = Query(100, ge=1, le=500),
         current_user: dict = Depends(get_current_user),
     ):
-        """Molotov circulation: totals and per-player balances (users.molotovs)."""
+        """Molotov circulation: totals and per-player balances (users.molotovs). Excludes admin/mod accounts."""
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         return await _user_ammo_field_overview(
@@ -11322,7 +11329,7 @@ def register(router):
         limit: int = Query(100, ge=1, le=500),
         current_user: dict = Depends(get_current_user),
     ):
-        """Bullet circulation: totals and per-player balances (users.bullets)."""
+        """Bullet circulation: totals and per-player balances (users.bullets). Excludes admin/mod accounts."""
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         return await _user_ammo_field_overview(

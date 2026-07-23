@@ -2683,12 +2683,10 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 except Exception:
                     hitlist_mult = founding_member_income_mult(current_user)
                 rp_added = int((rewards.get("rank_points", 0) or 0) * hitlist_mult)
-                raw_bullets = int((rewards.get("bullets", 0) or 0) * hitlist_mult)
-                min_bullets = math.ceil(bullets_required * 0.9)  # floor ≤ spend (no net-positive mint)
+                # Hitlist practice NPCs never grant bullets (no template reward, no spend refund).
                 inc = {
                     "money": int((rewards.get("cash", 0) or 0) * hitlist_mult),
                     "rank_points": rp_added,
-                    "bullets": max(raw_bullets, min_bullets),
                     "hitlist_npc_kills": 1,
                 }
                 if target.get("is_bodyguard"):
@@ -2959,8 +2957,29 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         base_cash_loot = int(victim_money * KILL_CASH_PERCENT)
         rank_points = 25
         ev = await get_effective_event()
-        cash_loot = min(victim_money, int(base_cash_loot * float(ev.get("kill_cash", 1.0) or 1.0)))
-        rank_points = int(rank_points * ev.get("rank_points", 1.0))
+        _ev_cash_mult = float(ev.get("kill_cash", 1.0) or 1.0)
+        _ev_rp_mult = float(ev.get("rank_points", 1.0) or 1.0)
+        cash_loot = min(victim_money, int(base_cash_loot * _ev_cash_mult))
+        _we_bonus_cash = max(0, cash_loot - min(victim_money, base_cash_loot)) if _ev_cash_mult > 1.0 else 0
+        _we_bonus_rp = 0
+        if _ev_rp_mult > 1.0:
+            _pre_rp = rank_points
+            rank_points = int(rank_points * _ev_rp_mult)
+            _we_bonus_rp = rank_points - _pre_rp
+        else:
+            rank_points = int(rank_points * _ev_rp_mult)
+        if _we_bonus_rp or _we_bonus_cash:
+            try:
+                from utils.world_event_stats import bump_world_event_stats
+                await bump_world_event_stats(
+                    db,
+                    killer_id,
+                    bonus_rp=_we_bonus_rp,
+                    bonus_cash=_we_bonus_cash,
+                    uses=1,
+                )
+            except Exception:
+                pass
         victim_cars = await db.user_cars.find({"user_id": victim_id}).to_list(500)
         victim_prop_rows = await db.user_properties.find({"user_id": victim_id}).to_list(100)
         try:

@@ -836,7 +836,14 @@ async def _attempt_gta_impl(
         rank_points = int(
             rank_points * GTA_DIFFICULTY_RANK_POINTS_MULT.get(int(option["difficulty"]), 1.0)
         )
-        rank_points = int(rank_points * ev.get("rank_points", 1.0))
+        _ev_rp_mult = float(ev.get("rank_points", 1.0) or 1.0)
+        _we_bonus_rp = 0
+        if _ev_rp_mult > 1.0:
+            _pre_rp = rank_points
+            rank_points = int(rank_points * _ev_rp_mult)
+            _we_bonus_rp = rank_points - _pre_rp
+        else:
+            rank_points = int(rank_points * _ev_rp_mult)
         now_utc = datetime.now(timezone.utc)
         rp_perk_until = _parse_iso_datetime(current_user.get("rp_perk_until"))
         if rp_perk_until and now_utc < rp_perk_until:
@@ -848,6 +855,12 @@ async def _attempt_gta_impl(
             try:
                 from utils.token_perk_stats import bump_token_perk_stats
                 await bump_token_perk_stats(db, current_user.get("id") or "", "xp_gta", bonus_rp=_xp_token_bonus, uses=1)
+            except Exception:
+                pass
+        if _we_bonus_rp:
+            try:
+                from utils.world_event_stats import bump_world_event_stats
+                await bump_world_event_stats(db, current_user.get("id") or "", bonus_rp=_we_bonus_rp, uses=1)
             except Exception:
                 pass
         from server import rank_xp_pass_multiplier

@@ -72,6 +72,7 @@ HITLIST_REVEAL_COST_POINTS = 5000
 # Max practice NPCs **on the board at once** per placer (same numbers as former "per 3h window" + store bonus).
 HITLIST_NPC_MAX_PER_WINDOW = 3
 HITLIST_NPC_STORE_BONUS_SLOTS_MAX = 3  # base 3 + max 3 from store = 6
+HITLIST_NPC_MAX_AGE = timedelta(hours=48)  # stale practice NPCs drop off so slots free up
 
 HITLIST_NPC_NAMES = [
     "Tony the Rat", "Vinny the Snake", "Lucky Lou", "Mad Dog Mike",
@@ -83,12 +84,12 @@ HITLIST_NPC_NAMES = [
 HITLIST_NPC_TEMPLATES = [
     {"id": "npc_1", "rank": 2, "rewards": {"cash": 100_000, "booze": {"bathtub_gin": 15}, "respect_points": 25}},
     {"id": "npc_2", "rank": 4, "rewards": {"cash": 200_000, "respect_points": 50}},
-    {"id": "npc_3", "rank": 5, "rewards": {"rank_points": 40, "bullets": 250, "respect_points": 30}},
+    {"id": "npc_3", "rank": 5, "rewards": {"rank_points": 40, "respect_points": 30}},
     {"id": "npc_4", "rank": 3, "rewards": {"cash": 150_000, "booze": {"moonshine": 25}, "respect_points": 20}},
     {"id": "npc_5", "rank": 6, "rewards": {"respect_points": 75, "rank_points": 30}},
-    {"id": "npc_6", "rank": 6, "rewards": {"cash": 250_000, "bullets": 180, "booze": {"rum_runners": 20}, "respect_points": 40}},
+    {"id": "npc_6", "rank": 6, "rewards": {"cash": 250_000, "booze": {"rum_runners": 20}, "respect_points": 40}},
     {"id": "npc_7", "rank": 5, "rewards": {"cash": 500_000, "respect_points": 60}},
-    {"id": "npc_8", "rank": 8, "rewards": {"rank_points": 75, "bullets": 375, "respect_points": 100}},
+    {"id": "npc_8", "rank": 8, "rewards": {"rank_points": 75, "respect_points": 100}},
     {"id": "npc_9", "rank": 3, "rewards": {"cash": 400_000, "booze": {"speakeasy_whiskey": 10, "needle_beer": 10}, "respect_points": 15}},
     {"id": "npc_10", "rank": 7, "rewards": {"cash": 500_000, "booze": {"jamaica_ginger": 30}, "respect_points": 50}},
 ]
@@ -107,6 +108,46 @@ async def _hitlist_npc_max_per_window_for_user(user: dict) -> int:
 
 async def _hitlist_npc_active_on_board_count(placer_id: str) -> int:
     return await db.hitlist.count_documents({"placer_id": placer_id, "target_type": "npc"})
+
+
+async def _expire_stale_hitlist_npcs(*, placer_id: Optional[str] = None) -> int:
+    """Remove practice NPCs older than 48h (hitlist row + attack searches; mark NPC user dead). Returns count removed."""
+    query: dict = {"target_type": "npc"}
+    if placer_id:
+        query["placer_id"] = placer_id
+    cutoff = datetime.now(timezone.utc) - HITLIST_NPC_MAX_AGE
+    expired = []
+    async for doc in db.hitlist.find(query, {"_id": 0, "id": 1, "target_id": 1, "created_at": 1}):
+        created = _parse_iso_datetime(doc.get("created_at"))
+        if created is None or created <= cutoff:
+            expired.append(doc)
+    if not expired:
+        return 0
+    now_iso = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    removed = 0
+    for doc in expired:
+        hitlist_id = (doc.get("id") or "").strip()
+        target_id = (doc.get("target_id") or "").strip()
+        if hitlist_id:
+            res = await db.hitlist.delete_one({"id": hitlist_id, "target_type": "npc"})
+            if res.deleted_count:
+                removed += 1
+        elif target_id:
+            res = await db.hitlist.delete_many({"target_id": target_id, "target_type": "npc"})
+            removed += int(res.deleted_count or 0)
+        if target_id:
+            try:
+                await db.attacks.delete_many({"target_id": target_id})
+            except Exception:
+                logger.exception("expire hitlist npc: attacks delete failed target_id=%s", target_id)
+            try:
+                await db.users.update_one(
+                    {"id": target_id, "is_npc": True},
+                    {"$set": {"is_dead": True, "dead_at": now_iso, "health": 0}},
+                )
+            except Exception:
+                logger.exception("expire hitlist npc: mark dead failed target_id=%s", target_id)
+    return removed
 
 
 async def hitlist_add(request: HitlistAddRequest, current_user: dict = Depends(get_current_user)):
@@ -267,8 +308,9 @@ async def hitlist_add(request: HitlistAddRequest, current_user: dict = Depends(g
 
 
 async def hitlist_npc_status(current_user: dict = Depends(get_current_user)):
-    """Practice NPCs: cap = how many of your NPC rows are still on the hitlist; kill one to free a slot (no rolling timer)."""
+    """Practice NPCs: cap = how many of your NPC rows are still on the hitlist; kill one or wait 48h expiry to free a slot."""
     uid = current_user["id"]
+    await _expire_stale_hitlist_npcs(placer_id=uid)
     max_on_board = await _hitlist_npc_max_per_window_for_user(current_user)
     active = await _hitlist_npc_active_on_board_count(uid)
     can_add = active < max_on_board
@@ -278,6 +320,7 @@ async def hitlist_npc_status(current_user: dict = Depends(get_current_user)):
         "max_on_board": max_on_board,
         "adds_used_in_window": active,
         "max_per_window": max_on_board,
+        "npc_max_age_hours": int(HITLIST_NPC_MAX_AGE.total_seconds() // 3600),
         "next_add_at": None,
         "seconds_until_next_slot": None,
         "window_next_frees_at": None,
@@ -286,24 +329,25 @@ async def hitlist_npc_status(current_user: dict = Depends(get_current_user)):
 
 
 async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
-    """Add a random NPC to the hitlist. At most N practice NPCs on the board at once (N=3 base, up to 6 with store)."""
+    """Add a random NPC to the hitlist. At most N practice NPCs on the board at once (N=3 base, up to 6 with store). Expires after 48h."""
     now = datetime.now(timezone.utc)
     now_iso = now.replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    max_on_board = await _hitlist_npc_max_per_window_for_user(current_user)
     uid = current_user["id"]
+    await _expire_stale_hitlist_npcs(placer_id=uid)
+    max_on_board = await _hitlist_npc_max_per_window_for_user(current_user)
     active = await _hitlist_npc_active_on_board_count(uid)
     if active >= max_on_board:
         raise HTTPException(
             status_code=400,
             detail=(
                 f"You already have {active} practice NPC(s) on the board (max {max_on_board}). "
-                "Kill one from Attack or clear the board before adding another."
+                "Kill one from Attack, or wait for one to expire after 48 hours."
             ),
         )
     template = random.choice(HITLIST_NPC_TEMPLATES)
     hitlist_id = str(uuid.uuid4())
     npc_user_id = str(uuid.uuid4())
-    rewards = template.get("rewards") or {}
+    rewards = {k: v for k, v in (template.get("rewards") or {}).items() if k != "bullets"}
     rank_id = max(1, min(template.get("rank", 1), len(RANKS)))
     rank_points = RANKS[rank_id - 1]["required_points"]
     rank_name = RANKS[rank_id - 1]["name"]
@@ -394,6 +438,7 @@ async def hitlist_list(current_user: dict = Depends(get_current_user)):
     """List public hitlist entries (user bounties) + only this user's NPC entries. NPCs are personal per placer.
     Never expose placer_id or target_id in response (privacy: prevent correlating placers with other data)."""
     user_id = current_user["id"]
+    await _expire_stale_hitlist_npcs(placer_id=user_id)
     active_user_entries = await db.hitlist.find(
         {"target_type": {"$in": ["user", "bodyguards"]}},
         {"_id": 0, "target_id": 1},
@@ -438,7 +483,13 @@ async def hitlist_list(current_user: dict = Depends(get_current_user)):
         }
         if doc.get("target_type") == "npc":
             item["npc_rank"] = doc.get("npc_rank", 1)
-            item["npc_rewards"] = doc.get("npc_rewards") or {}
+            raw_rewards = doc.get("npc_rewards") or {}
+            # Bullets are no longer granted for practice NPCs — hide from UI even on older rows.
+            item["npc_rewards"] = {k: v for k, v in raw_rewards.items() if k != "bullets"}
+            created = _parse_iso_datetime(doc.get("created_at"))
+            if created is not None:
+                item["expires_at"] = (created + HITLIST_NPC_MAX_AGE).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+            item["npc_max_age_hours"] = int(HITLIST_NPC_MAX_AGE.total_seconds() // 3600)
         items.append(item)
     return {"items": items}
 

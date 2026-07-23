@@ -167,6 +167,36 @@ export default function GameEvents() {
 
   const combinedChips = multiplierChips(eventData?.event);
   const saleActive = storeSale && storeSale.active !== false && (storeSale.percent || storeSale.label);
+  const myGains = eventData?.my_gains || {};
+  const gainsChips = [];
+  if (Number(myGains.bonus_rp) > 0) {
+    gainsChips.push({
+      label: 'Extra RP from events',
+      value: `+${Number(myGains.bonus_rp).toLocaleString()} RP`,
+      cls: 'text-violet-300',
+    });
+  }
+  if (Number(myGains.bonus_cash) > 0) {
+    gainsChips.push({
+      label: 'Extra cash from events',
+      value: `+$${Number(myGains.bonus_cash).toLocaleString()}`,
+      cls: 'text-emerald-300',
+    });
+  }
+  if (Number(myGains.saved_cash) > 0) {
+    gainsChips.push({
+      label: 'Cash saved on discounts',
+      value: `$${Number(myGains.saved_cash).toLocaleString()}`,
+      cls: 'text-sky-300',
+    });
+  }
+  if (Number(myGains.uses) > 0) {
+    gainsChips.push({
+      label: 'Boosted actions',
+      value: Number(myGains.uses).toLocaleString(),
+      cls: 'text-foreground',
+    });
+  }
 
   return (
     <div className={`${styles.pageContent} p-3 sm:p-4 mobile-page-root`}>
@@ -269,6 +299,23 @@ export default function GameEvents() {
                 <p className="text-[9px] text-mutedForeground font-heading px-0.5">
                   Rotates at {new Date(eventData.expires_at).toLocaleString(undefined, { timeZone: 'UTC' })} UTC
                 </p>
+              )}
+            </div>
+          )}
+
+          {!loading && (
+            <div className={`${styles.panel} rounded-md border border-violet-500/25 bg-violet-500/5 mobile-panel p-2.5 space-y-2`}>
+              <div className="text-[10px] font-heading font-bold text-violet-300 uppercase tracking-wider">Your event gains</div>
+              <p className="text-[9px] text-mutedForeground font-heading leading-relaxed">
+                Lifetime extras you&apos;ve earned from world event boosts (crimes, GTA, kills, OC, rackets).
+              </p>
+              {gainsChips.length > 0 ? (
+                <StatChipGrid chips={gainsChips} />
+              ) : (
+                <div className="rounded-md border border-zinc-700/40 bg-zinc-950/40 px-2.5 py-2">
+                  <div className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground">Extra RP from events</div>
+                  <div className="text-[11px] font-heading font-bold text-violet-300">+0 RP</div>
+                </div>
               )}
             </div>
           )}

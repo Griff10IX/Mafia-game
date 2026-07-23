@@ -9,6 +9,8 @@ from typing import Any, Dict, List, Optional, Tuple
 _STATS_OVERVIEW_CACHE: Dict[str, Tuple[Dict[str, Any], float]] = {}
 _STATS_KILL_FEED_CACHE: Dict[str, Tuple[Dict[str, Any], float]] = {}
 _STATS_OVERVIEW_TTL_SEC = 55.0
+# Bump when overview aggregation match rules change so stale cache cannot keep inflated totals.
+_STATS_OVERVIEW_CACHE_VER = "v2-alive-bullets-staff"
 _STATS_RECENT_KILLS_SCAN_LIMIT = 800
 
 from fastapi import Depends, HTTPException
@@ -328,7 +330,7 @@ def register(router):
         users_only_kills: bool = False,
         current_user: dict = Depends(get_current_user),
     ):
-        cache_key = "true" if users_only_kills else "false"
+        cache_key = f"{_STATS_OVERVIEW_CACHE_VER}:{'true' if users_only_kills else 'false'}"
         now_mono = time.monotonic()
         staff_can_see = current_user and (_is_admin(current_user) or _is_moderator(current_user))
         cached = _STATS_OVERVIEW_CACHE.get(cache_key)
@@ -355,20 +357,32 @@ def register(router):
 
         now = datetime.now(timezone.utc)
         staff_filter = _staff_exclude_user_filter()
-        staff_ids = await _get_staff_user_ids()
-        # Real users only: exclude NPCs and staff (admins + mods)
+        staff_ids = srv.expand_user_ids_for_mongo_nin(await _get_staff_user_ids())
+        # Real users only: exclude NPCs and staff (admins + mods). Also $nin staff ids
+        # so email-list misses cannot inflate circulating totals (same as public leaderboards).
         real_user_match = {"is_npc": {"$ne": True}, **staff_filter}
+        if staff_ids:
+            real_user_match["id"] = {"$nin": staff_ids}
         alive_real_match = srv.alive_real_player_wallet_match()
-        dead_user_match = {
-            **real_user_match,
-            "is_dead": True,
-            "$nor": [{"death_by_staff": True}],
-            "$or": [
-                {"killed_by_user_id": {"$exists": True, "$nin": [None, ""]}},
-                {"killed_by_username": {"$exists": True, "$nin": [None, ""]}},
-                {"death_by_staff": False},
-            ],
+        if staff_ids:
+            alive_real_match = {**alive_real_match, "id": {"$nin": staff_ids}}
+        dead_user_match: dict = {
+            "$and": [
+                {"is_npc": {"$ne": True}},
+                {"is_dead": True},
+                staff_filter,
+                {"$nor": [{"death_by_staff": True}]},
+                {
+                    "$or": [
+                        {"killed_by_user_id": {"$exists": True, "$nin": [None, ""]}},
+                        {"killed_by_username": {"$exists": True, "$nin": [None, ""]}},
+                        {"death_by_staff": False},
+                    ]
+                },
+            ]
         }
+        if staff_ids:
+            dead_user_match["$and"].append({"id": {"$nin": staff_ids}})
         bank_match = {"claimed_at": None}
         if staff_ids:
             bank_match["user_id"] = {"$nin": staff_ids}
@@ -418,7 +432,16 @@ def register(router):
                     "$group": {
                         "_id": None,
                         "swiss_total": {"$sum": {"$ifNull": ["$swiss_balance", 0]}},
-                        "bullets_total": {"$sum": {"$ifNull": ["$bullets", 0]}},
+                        # Circulating ammo: alive players only (dead/admin/mod already out of match for staff).
+                        "bullets_total": {
+                            "$sum": {
+                                "$cond": [
+                                    {"$ne": [{"$ifNull": ["$is_dead", False]}, True]},
+                                    {"$ifNull": ["$bullets", 0]},
+                                    0,
+                                ]
+                            }
+                        },
                         "total_crimes": {"$sum": {"$ifNull": ["$total_crimes", 0]}},
                         "total_gta": {"$sum": {"$ifNull": ["$total_gta", 0]}},
                         "total_jail_busts": {"$sum": {"$ifNull": ["$jail_busts", 0]}},

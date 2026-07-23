@@ -148,7 +148,7 @@ export default function Properties() {
   const buyAutoCollect = async () => {
     if (autoCollectBusy) return;
     const cost = Number(autoCollect?.cost_points ?? 2500);
-    if (!window.confirm(`Buy Auto Collect for ${cost.toLocaleString()} points? It runs for ${Number(autoCollect?.duration_days ?? 7)} days and auto-collects income, pays upkeep, and clears heat from your cash.`)) return;
+    if (!window.confirm(`Buy Auto Collect for ${cost.toLocaleString()} points? It runs for ${Number(autoCollect?.duration_days ?? 7)} days and auto-collects half of accrued income each check, pays upkeep, and clears heat from your cash.`)) return;
     setAutoCollectBusy(true);
     try {
       const res = await api.post('/properties/auto-collect/buy');
@@ -382,244 +382,6 @@ export default function Properties() {
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="properties-page">
       <style>{PROP_STYLES}</style>
-
-      {propertyUpkeep && propertyUpkeep.weekly_amount > 0 && (
-        <div
-          className={`relative ${styles.panel} rounded-lg overflow-hidden border prop-fade-in mobile-panel ${
-            propertyUpkeep.overdue ? 'border-amber-500/50 bg-amber-500/5' : 'border-primary/20'
-          }`}
-        >
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div className="flex items-start gap-2 min-w-0">
-              {propertyUpkeep.overdue ? (
-                <AlertTriangle className="text-amber-400 shrink-0 mt-0.5" size={16} />
-              ) : (
-                <Wallet className="text-primary/80 shrink-0 mt-0.5" size={16} />
-              )}
-              <div className="min-w-0 space-y-0.5">
-                <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Weekly property upkeep</p>
-                <p className="text-[10px] text-mutedForeground font-heading">
-                  {propertyUpkeep.overdue ? (
-                    <span className="text-amber-400/95">
-                      Overdue — you cannot collect from any business until you pay this bill. Pay now to unlock collections again and extend coverage for
-                      another week.
-                    </span>
-                  ) : (
-                    <span>
-                      Pay before the date below to extend coverage for another week and keep collecting from your businesses. If that time passes without
-                      paying, all business income collection is blocked until you pay. Your bill is based on weekly baseline income and total portfolio
-                      value.
-                    </span>
-                  )}
-                </p>
-                <p className="text-[9px] text-zinc-500 font-heading tabular-nums">
-                  Bill {formatMoney(propertyUpkeep.weekly_amount)} · baseline /wk {formatMoney(propertyUpkeep.weekly_baseline_gross)} · portfolio{' '}
-                  {formatMoney(propertyUpkeep.portfolio_value)}
-                  {propertyUpkeep.paid_until && (
-                    <span className="block sm:inline sm:ml-1 mt-0.5 sm:mt-0">
-                      · Paid through{' '}
-                      {(() => {
-                        try {
-                          return new Date(propertyUpkeep.paid_until).toLocaleString();
-                        } catch {
-                          return propertyUpkeep.paid_until;
-                        }
-                      })()}
-                    </span>
-                  )}
-                </p>
-                {propertyUpkeep.can_pay === false && propertyUpkeep.pay_eligible_at && (
-                  <p className="text-[9px] text-zinc-500 font-heading mt-0.5">
-                    Next payment unlocks{' '}
-                    {(() => {
-                      try {
-                        return new Date(propertyUpkeep.pay_eligible_at).toLocaleString();
-                      } catch {
-                        return propertyUpkeep.pay_eligible_at;
-                      }
-                    })()}
-                    {propertyUpkeep.pay_window_hours != null ? (
-                      <span className="text-zinc-600"> ({propertyUpkeep.pay_window_hours}h before coverage ends)</span>
-                    ) : null}
-                  </p>
-                )}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={payPropertyUpkeep}
-              disabled={upkeepPayLoading || propertyUpkeep.can_pay === false}
-              title={
-                propertyUpkeep.can_pay === false
-                  ? 'Pay is only available when overdue or within the window before coverage ends'
-                  : undefined
-              }
-              className="shrink-0 text-[10px] font-heading font-bold uppercase tracking-wider rounded px-3 py-1.5 border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50"
-            >
-              {upkeepPayLoading ? 'Paying…' : propertyUpkeep.can_pay === false ? 'Not due yet' : `Pay ${formatMoney(propertyUpkeep.weekly_amount)}`}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {autoCollect && (
-        <div
-          className={`relative ${styles.panel} rounded-lg overflow-hidden border prop-fade-in mobile-panel ${
-            autoCollect.active ? 'border-emerald-500/40' : 'border-primary/20'
-          }`}
-        >
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div className="flex items-start gap-2 min-w-0">
-              <Bot className={`shrink-0 mt-0.5 ${autoCollect.active ? 'text-emerald-400' : 'text-primary/80'}`} size={16} />
-              <div className="min-w-0 space-y-0.5">
-                <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">
-                  Auto Collect
-                  {autoCollect.active && (
-                    <span className={`ml-2 normal-case tracking-normal font-bold ${autoCollect.enabled ? 'text-emerald-400' : 'text-amber-400'}`}>
-                      {autoCollect.enabled ? 'Active' : 'Paused'}
-                    </span>
-                  )}
-                </p>
-                {!autoCollect.unlocked ? (
-                  <>
-                    <p className="text-[10px] text-mutedForeground font-heading">
-                      Unlocks at <Link to="/money/racket" className="text-primary hover:underline">Business progress {autoCollect.unlock_missions}</Link>
-                      {' '}— you&apos;re at {Number(autoCollect.missions_completed ?? 0)}/{autoCollect.unlock_missions}.
-                    </p>
-                    <p className="text-[9px] text-zinc-500 font-heading">
-                      Auto-collects your business income into your racket vault, pays weekly upkeep, and clears heat from your cash — checked every few minutes.
-                    </p>
-                  </>
-                ) : autoCollect.active ? (
-                  <>
-                    <p className="text-[10px] text-mutedForeground font-heading">
-                      {autoCollect.enabled
-                        ? 'Collecting your business income into your racket vault, paying weekly upkeep, and clearing heat from your cash automatically.'
-                        : 'Paused — nothing is collected or paid while disabled. The timer keeps running.'}
-                    </p>
-                    {autoCollect.until && (
-                      <p className="text-[9px] text-zinc-500 font-heading tabular-nums">
-                        Active until{' '}
-                        {(() => {
-                          try {
-                            return new Date(autoCollect.until).toLocaleString();
-                          } catch {
-                            return autoCollect.until;
-                          }
-                        })()}
-                      </p>
-                    )}
-                    {(Number(autoCollect.vault_cash_total || 0) > 0 || Number(autoCollect.upkeep_paid_total || 0) > 0 || Number(autoCollect.heat_bribes_total || 0) > 0) && (
-                      <p className="text-[9px] font-heading tabular-nums">
-                        <span className="text-emerald-400 font-bold">${Number(autoCollect.vault_cash_total || 0).toLocaleString()}</span>
-                        <span className="text-zinc-500"> sent to racket vault so far</span>
-                        {Number(autoCollect.upkeep_paid_total || 0) > 0 && (
-                          <span className="text-zinc-500"> · ${Number(autoCollect.upkeep_paid_total).toLocaleString()} upkeep paid</span>
-                        )}
-                        {Number(autoCollect.heat_bribes_total || 0) > 0 && (
-                          <span className="text-zinc-500"> · ${Number(autoCollect.heat_bribes_total).toLocaleString()} heat bribes</span>
-                        )}
-                        {autoCollect.last_collected_at && (
-                          <span className="text-zinc-600">
-                            {' '}· last collect{' '}
-                            {(() => {
-                              try {
-                                return new Date(autoCollect.last_collected_at).toLocaleString();
-                              } catch {
-                                return autoCollect.last_collected_at;
-                              }
-                            })()}
-                          </span>
-                        )}
-                      </p>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <p className="text-[10px] text-mutedForeground font-heading">
-                      Auto-collects your business income into your racket vault, pays the weekly upkeep bill, and bribes heat back to 0 from your cash — checked every few minutes.
-                    </p>
-                    <p className="text-[9px] text-zinc-500 font-heading">
-                      {Number(autoCollect.cost_points ?? 2500).toLocaleString()} points · lasts {Number(autoCollect.duration_days ?? 7)} days · buy again to extend.
-                    </p>
-                  </>
-                )}
-              </div>
-            </div>
-            <div className="shrink-0 flex items-center gap-2">
-              {autoCollect.unlocked && !autoCollect.active && (
-                <button
-                  type="button"
-                  onClick={buyAutoCollect}
-                  disabled={autoCollectBusy}
-                  className="text-[10px] font-heading font-bold uppercase tracking-wider rounded px-3 py-1.5 border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50"
-                >
-                  {autoCollectBusy ? '…' : `Buy — ${Number(autoCollect.cost_points ?? 2500).toLocaleString()} pts`}
-                </button>
-              )}
-              {autoCollect.active && (
-                <>
-                  <button
-                    type="button"
-                    onClick={toggleAutoCollect}
-                    disabled={autoCollectBusy}
-                    className={`text-[10px] font-heading font-bold uppercase tracking-wider rounded px-3 py-1.5 border disabled:opacity-50 ${
-                      autoCollect.enabled
-                        ? 'border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
-                        : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
-                    }`}
-                  >
-                    {autoCollectBusy ? '…' : autoCollect.enabled ? 'Disable' : 'Enable'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={buyAutoCollect}
-                    disabled={autoCollectBusy}
-                    title="Extend by another 7 days"
-                    className="text-[10px] font-heading font-bold uppercase tracking-wider rounded px-3 py-1.5 border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50"
-                  >
-                    Extend
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div
-        className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prop-fade-in mobile-panel`}
-      >
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-3 py-2 flex items-start gap-2">
-          <Skull className="text-primary/80 shrink-0 mt-0.5" size={16} />
-          <div className="min-w-0 space-y-0.5">
-            <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Portfolio kill bonus</p>
-            {portfolioKillBoostPercent > 0 ? (
-              <>
-                <p className="text-[11px] font-heading text-foreground">
-                  <span className="text-emerald-400/95 font-bold">+{portfolioKillBoostPercent}%</span> business income when you collect (max 20%).
-                </p>
-                <p className="text-[9px] text-mutedForeground font-heading">
-                  Earned from kills on players who owned upgraded businesses. Applies when you collect from any business.
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-[10px] text-mutedForeground font-heading">
-                  None yet — you can earn up to <span className="text-foreground/90">+20%</span> extra business income when you collect.
-                </p>
-                <p className="text-[9px] text-zinc-500 font-heading">
-                  Kill players who own businesses more than half upgraded (or maxed) to gain bonus percent; at the cap you receive cash from further qualifying
-                  deeds instead.
-                </p>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
 
       <div className="relative prop-fade-in flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -1019,6 +781,244 @@ export default function Properties() {
           )}
         </div>
       )}
+
+      {propertyUpkeep && propertyUpkeep.weekly_amount > 0 && (
+        <div
+          className={`relative ${styles.panel} rounded-lg overflow-hidden border prop-fade-in mobile-panel ${
+            propertyUpkeep.overdue ? 'border-amber-500/50 bg-amber-500/5' : 'border-primary/20'
+          }`}
+        >
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="flex items-start gap-2 min-w-0">
+              {propertyUpkeep.overdue ? (
+                <AlertTriangle className="text-amber-400 shrink-0 mt-0.5" size={16} />
+              ) : (
+                <Wallet className="text-primary/80 shrink-0 mt-0.5" size={16} />
+              )}
+              <div className="min-w-0 space-y-0.5">
+                <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Weekly property upkeep</p>
+                <p className="text-[10px] text-mutedForeground font-heading">
+                  {propertyUpkeep.overdue ? (
+                    <span className="text-amber-400/95">
+                      Overdue — you cannot collect from any business until you pay this bill. Pay now to unlock collections again and extend coverage for
+                      another week.
+                    </span>
+                  ) : (
+                    <span>
+                      Pay before the date below to extend coverage for another week and keep collecting from your businesses. If that time passes without
+                      paying, all business income collection is blocked until you pay. Your bill is based on weekly baseline income and total portfolio
+                      value.
+                    </span>
+                  )}
+                </p>
+                <p className="text-[9px] text-zinc-500 font-heading tabular-nums">
+                  Bill {formatMoney(propertyUpkeep.weekly_amount)} · baseline /wk {formatMoney(propertyUpkeep.weekly_baseline_gross)} · portfolio{' '}
+                  {formatMoney(propertyUpkeep.portfolio_value)}
+                  {propertyUpkeep.paid_until && (
+                    <span className="block sm:inline sm:ml-1 mt-0.5 sm:mt-0">
+                      · Paid through{' '}
+                      {(() => {
+                        try {
+                          return new Date(propertyUpkeep.paid_until).toLocaleString();
+                        } catch {
+                          return propertyUpkeep.paid_until;
+                        }
+                      })()}
+                    </span>
+                  )}
+                </p>
+                {propertyUpkeep.can_pay === false && propertyUpkeep.pay_eligible_at && (
+                  <p className="text-[9px] text-zinc-500 font-heading mt-0.5">
+                    Next payment unlocks{' '}
+                    {(() => {
+                      try {
+                        return new Date(propertyUpkeep.pay_eligible_at).toLocaleString();
+                      } catch {
+                        return propertyUpkeep.pay_eligible_at;
+                      }
+                    })()}
+                    {propertyUpkeep.pay_window_hours != null ? (
+                      <span className="text-zinc-600"> ({propertyUpkeep.pay_window_hours}h before coverage ends)</span>
+                    ) : null}
+                  </p>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={payPropertyUpkeep}
+              disabled={upkeepPayLoading || propertyUpkeep.can_pay === false}
+              title={
+                propertyUpkeep.can_pay === false
+                  ? 'Pay is only available when overdue or within the window before coverage ends'
+                  : undefined
+              }
+              className="shrink-0 text-[10px] font-heading font-bold uppercase tracking-wider rounded px-3 py-1.5 border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50"
+            >
+              {upkeepPayLoading ? 'Paying…' : propertyUpkeep.can_pay === false ? 'Not due yet' : `Pay ${formatMoney(propertyUpkeep.weekly_amount)}`}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {autoCollect && (
+        <div
+          className={`relative ${styles.panel} rounded-lg overflow-hidden border prop-fade-in mobile-panel ${
+            autoCollect.active ? 'border-emerald-500/40' : 'border-primary/20'
+          }`}
+        >
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="flex items-start gap-2 min-w-0">
+              <Bot className={`shrink-0 mt-0.5 ${autoCollect.active ? 'text-emerald-400' : 'text-primary/80'}`} size={16} />
+              <div className="min-w-0 space-y-0.5">
+                <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">
+                  Auto Collect
+                  {autoCollect.active && (
+                    <span className={`ml-2 normal-case tracking-normal font-bold ${autoCollect.enabled ? 'text-emerald-400' : 'text-amber-400'}`}>
+                      {autoCollect.enabled ? 'Active' : 'Paused'}
+                    </span>
+                  )}
+                </p>
+                {!autoCollect.unlocked ? (
+                  <>
+                    <p className="text-[10px] text-mutedForeground font-heading">
+                      Unlocks at <Link to="/money/racket" className="text-primary hover:underline">Business progress {autoCollect.unlock_missions}</Link>
+                      {' '}— you&apos;re at {Number(autoCollect.missions_completed ?? 0)}/{autoCollect.unlock_missions}.
+                    </p>
+                    <p className="text-[9px] text-zinc-500 font-heading">
+                      Auto-collects half of your accrued business income into your racket vault each check, pays weekly upkeep, and clears heat from your cash.
+                    </p>
+                  </>
+                ) : autoCollect.active ? (
+                  <>
+                    <p className="text-[10px] text-mutedForeground font-heading">
+                      {autoCollect.enabled
+                        ? `Collecting ${Math.round(Number(autoCollect.income_fraction ?? 0.5) * 100)}% of accrued business income into your racket vault each check, paying weekly upkeep, and clearing heat from your cash automatically.`
+                        : 'Paused — nothing is collected or paid while disabled. The timer keeps running.'}
+                    </p>
+                    {autoCollect.until && (
+                      <p className="text-[9px] text-zinc-500 font-heading tabular-nums">
+                        Active until{' '}
+                        {(() => {
+                          try {
+                            return new Date(autoCollect.until).toLocaleString();
+                          } catch {
+                            return autoCollect.until;
+                          }
+                        })()}
+                      </p>
+                    )}
+                    {(Number(autoCollect.vault_cash_total || 0) > 0 || Number(autoCollect.upkeep_paid_total || 0) > 0 || Number(autoCollect.heat_bribes_total || 0) > 0) && (
+                      <p className="text-[9px] font-heading tabular-nums">
+                        <span className="text-emerald-400 font-bold">${Number(autoCollect.vault_cash_total || 0).toLocaleString()}</span>
+                        <span className="text-zinc-500"> sent to racket vault so far</span>
+                        {Number(autoCollect.upkeep_paid_total || 0) > 0 && (
+                          <span className="text-zinc-500"> · ${Number(autoCollect.upkeep_paid_total).toLocaleString()} upkeep paid</span>
+                        )}
+                        {Number(autoCollect.heat_bribes_total || 0) > 0 && (
+                          <span className="text-zinc-500"> · ${Number(autoCollect.heat_bribes_total).toLocaleString()} heat bribes</span>
+                        )}
+                        {autoCollect.last_collected_at && (
+                          <span className="text-zinc-600">
+                            {' '}· last collect{' '}
+                            {(() => {
+                              try {
+                                return new Date(autoCollect.last_collected_at).toLocaleString();
+                              } catch {
+                                return autoCollect.last_collected_at;
+                              }
+                            })()}
+                          </span>
+                        )}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-[10px] text-mutedForeground font-heading">
+                      Auto-collects your business income into your racket vault, pays the weekly upkeep bill, and bribes heat back to 0 from your cash — checked every few minutes.
+                    </p>
+                    <p className="text-[9px] text-zinc-500 font-heading">
+                      {Number(autoCollect.cost_points ?? 2500).toLocaleString()} points · lasts {Number(autoCollect.duration_days ?? 7)} days · buy again to extend.
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="shrink-0 flex items-center gap-2">
+              {autoCollect.unlocked && !autoCollect.active && (
+                <button
+                  type="button"
+                  onClick={buyAutoCollect}
+                  disabled={autoCollectBusy}
+                  className="text-[10px] font-heading font-bold uppercase tracking-wider rounded px-3 py-1.5 border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50"
+                >
+                  {autoCollectBusy ? '…' : `Buy — ${Number(autoCollect.cost_points ?? 2500).toLocaleString()} pts`}
+                </button>
+              )}
+              {autoCollect.active && (
+                <>
+                  <button
+                    type="button"
+                    onClick={toggleAutoCollect}
+                    disabled={autoCollectBusy}
+                    className={`text-[10px] font-heading font-bold uppercase tracking-wider rounded px-3 py-1.5 border disabled:opacity-50 ${
+                      autoCollect.enabled
+                        ? 'border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20'
+                        : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20'
+                    }`}
+                  >
+                    {autoCollectBusy ? '…' : autoCollect.enabled ? 'Disable' : 'Enable'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={buyAutoCollect}
+                    disabled={autoCollectBusy}
+                    title="Extend by another 7 days"
+                    className="text-[10px] font-heading font-bold uppercase tracking-wider rounded px-3 py-1.5 border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50"
+                  >
+                    Extend
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div
+        className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prop-fade-in mobile-panel`}
+      >
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2 flex items-start gap-2">
+          <Skull className="text-primary/80 shrink-0 mt-0.5" size={16} />
+          <div className="min-w-0 space-y-0.5">
+            <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Portfolio kill bonus</p>
+            {portfolioKillBoostPercent > 0 ? (
+              <>
+                <p className="text-[11px] font-heading text-foreground">
+                  <span className="text-emerald-400/95 font-bold">+{portfolioKillBoostPercent}%</span> business income when you collect (max 20%).
+                </p>
+                <p className="text-[9px] text-mutedForeground font-heading">
+                  Earned from kills on players who owned upgraded businesses. Applies when you collect from any business.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-[10px] text-mutedForeground font-heading">
+                  None yet — you can earn up to <span className="text-foreground/90">+20%</span> extra business income when you collect.
+                </p>
+                <p className="text-[9px] text-zinc-500 font-heading">
+                  Kill players who own businesses more than half upgraded (or maxed) to gain bonus percent; at the cap you receive cash from further qualifying
+                  deeds instead.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
 
       <details className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prop-fade-in mobile-panel`} style={{ animationDelay: `${0.02 + properties.length * 0.04}s` }}>
         <summary className="list-none cursor-pointer">
