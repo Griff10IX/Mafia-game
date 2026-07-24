@@ -49,6 +49,7 @@ FEED_INTERVAL_HOURS = 2.5
 AUTO_WATER_IRRIGATION_LEVEL = 5
 AUTO_FEED_IRRIGATION_LEVEL = 8
 MAX_HEAT = 100.0
+MIN_RAID_TARGET_GROWER_LEVEL = 2
 CLEANLINESS_SAFE_PCT = 30.0
 CLEANLINESS_BASE_DECAY_PER_HOUR = 0.25
 CLEANLINESS_ACTIVE_PLOT_DECAY_PER_HOUR = 0.45
@@ -1194,7 +1195,22 @@ async def weed_raid_targets(current_user: dict = Depends(_gate)):
     today = _utc_date_str()
     my_farm = await _get_or_create_farm(me)
     already = dict(my_farm.get("raid_last_by_target") or {})
-    cursor = db.weed_farms.find({"user_id": {"$ne": me}}, {"_id": 0, "user_id": 1, "house_tier": 1, "heat": 1, "business_cash": 1, "equipment": 1, "stash": 1})
+    cursor = db.weed_farms.find(
+        {
+            "user_id": {"$ne": me},
+            "grower_level": {"$gte": MIN_RAID_TARGET_GROWER_LEVEL},
+        },
+        {
+            "_id": 0,
+            "user_id": 1,
+            "house_tier": 1,
+            "grower_level": 1,
+            "heat": 1,
+            "business_cash": 1,
+            "equipment": 1,
+            "stash": 1,
+        },
+    )
     targets = []
     async for f in cursor:
         uid = f.get("user_id")
@@ -1211,6 +1227,7 @@ async def weed_raid_targets(current_user: dict = Depends(_gate)):
                 "user_id": uid,
                 "username": u.get("username") or "Unknown",
                 "house_tier": int(f.get("house_tier") or 0),
+                "grower_level": int(f.get("grower_level") or 1),
                 "heat": float(f.get("heat") or 0),
                 "stash_grams": round(stash_g, 1),
                 "equip_count": len(f.get("equipment") or {}),
@@ -1237,6 +1254,8 @@ async def weed_raid(body: RaidBody, current_user: dict = Depends(_gate)):
     dfn = await db.weed_farms.find_one({"user_id": defender_id}, {"_id": 0})
     if not dfn:
         raise HTTPException(status_code=404, detail="Target has no weed business")
+    if int(dfn.get("grower_level") or 1) < MIN_RAID_TARGET_GROWER_LEVEL:
+        raise HTTPException(status_code=400, detail="Growers below level 2 are protected from raids")
 
     atk_stats = _stats(atk)
     dfn_stats = _stats(dfn)

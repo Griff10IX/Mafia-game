@@ -888,7 +888,8 @@ export default function WeedEmpire() {
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground flex items-start gap-2">
             <Shield className="w-4 h-4 shrink-0 mt-0.5" />
-            Steal stash, business cash, and equipment (victims must re-buy gear). Same grower only once per day.
+            Steal stash, business cash, and equipment (victims must re-buy gear). Grower Lv 1 farms are protected;
+            the same eligible grower can only be raided once per day.
             {farm.sabotage_unlocked ? " Sabotage heat spike unlocked." : " Harvest 10 plants to unlock sabotage."}
           </p>
           <button type="button" disabled={busy} onClick={loadTargets} className="text-xs px-2 py-1 border rounded">
@@ -906,7 +907,8 @@ export default function WeedEmpire() {
                   <div className="text-sm">
                     <div className="font-heading">{t.username}</div>
                     <div className="text-[10px] text-muted-foreground">
-                      Tier {t.house_tier} · stash {t.stash_grams}g · {t.equip_count} gear lines
+                      Grower Lv {t.grower_level} · Tier {t.house_tier} · stash {t.stash_grams}g · {t.equip_count} gear
+                      lines
                     </div>
                   </div>
                   <div className="flex gap-2">
