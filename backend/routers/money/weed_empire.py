@@ -28,6 +28,7 @@ from utils.weed_empire_catalog import (
     aggregate_stats,
     apply_grower_xp,
     assert_can_upgrade_equipment,
+    curing_minutes,
     equipment_level_cost,
     equipment_shop_entries,
     grams_to_oz,
@@ -47,7 +48,6 @@ FEED_INTERVAL_HOURS = 2.5
 # Irrigation equipment unlocks automation (hand → drip → auto).
 AUTO_WATER_IRRIGATION_LEVEL = 5
 AUTO_FEED_IRRIGATION_LEVEL = 8
-CURE_HOURS = 0.75
 MAX_HEAT = 100.0
 CLEANLINESS_SAFE_PCT = 30.0
 CLEANLINESS_BASE_DECAY_PER_HOUR = 0.25
@@ -465,8 +465,17 @@ def _tick_curing(farm: dict, now: datetime) -> dict:
     curing = list(farm.get("curing") or [])
     stash = dict(farm.get("stash") or {})
     still = []
-    for batch in curing:
+    cure_level = int(_equip_levels(farm).get("curing") or 0)
+    for raw_batch in curing:
+        batch = dict(raw_batch)
         ready_at = _parse_iso(batch.get("ready_at"))
+        started_at = _parse_iso(batch.get("started_at"))
+        minutes = curing_minutes(float(batch.get("grams") or 0), cure_level)
+        expected_ready_at = started_at + timedelta(minutes=minutes) if started_at else None
+        if expected_ready_at and (not ready_at or ready_at > expected_ready_at):
+            ready_at = expected_ready_at
+            batch["ready_at"] = _iso(expected_ready_at)
+        batch["curing_minutes"] = round(minutes, 2)
         if ready_at and now >= ready_at:
             sid = str(batch.get("strain_id") or "")
             grams = float(batch.get("grams") or 0)
@@ -507,6 +516,19 @@ def _public_farm(farm: dict, *, username: str = "") -> Dict[str, Any]:
     light = active_light_class(_equip_levels(farm))
     house = _house(farm)
     sold = int(farm.get("daily_sold_usd") or 0)
+    street_prices = {
+        strain["id"]: round(
+            market_price_per_oz(
+                strain,
+                house_tier=int(farm.get("house_tier") or 0),
+                dealers_level=int(farm.get("dealers_level") or 0),
+                sold_today_usd=sold,
+                heat=float(farm.get("heat") or 0),
+            ),
+            2,
+        )
+        for strain in STRAINS
+    }
     auto_water, auto_feed = _auto_flags(farm)
     irrig_lvl = int(_equip_levels(farm).get("irrigation") or 0)
     gp = grower_progress(farm)
@@ -533,6 +555,7 @@ def _public_farm(farm: dict, *, username: str = "") -> Dict[str, Any]:
         "lifetime_sold_usd": int(farm.get("lifetime_sold_usd") or 0),
         "stash": farm.get("stash") or {},
         "curing": farm.get("curing") or [],
+        "street_price_per_oz": street_prices,
         "heat": round(float(farm.get("heat") or 0), 1),
         "cleanliness_pct": round(float(farm.get("cleanliness_pct", 100.0)), 2),
         "last_cleanliness_tick_at": farm.get("last_cleanliness_tick_at"),
@@ -818,14 +841,15 @@ async def weed_harvest(body: PlotActionBody, current_user: dict = Depends(_gate)
         grams = round(max(1.0, grams), 2)
         trim_lvl = int(_equip_levels(farm).get("trimmers") or 0)
         cure_lvl = int(_equip_levels(farm).get("curing") or 0)
-        cure_h = max(0.25, CURE_HOURS * (1.0 - 0.03 * cure_lvl))
+        cure_minutes = curing_minutes(grams, cure_lvl)
         batch = {
             "id": str(uuid.uuid4()),
             "strain_id": strain["id"],
             "grams": grams,
             "quality": float(p.get("quality") or 50),
             "started_at": _iso(now),
-            "ready_at": _iso(now + timedelta(hours=cure_h)),
+            "ready_at": _iso(now + timedelta(minutes=cure_minutes)),
+            "curing_minutes": round(cure_minutes, 2),
         }
         curing = list(farm.get("curing") or [])
         curing.append(batch)

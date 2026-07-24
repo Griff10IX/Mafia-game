@@ -11,6 +11,9 @@ GRAMS_PER_KG = 1000
 START_BUSINESS_CASH = 100_000
 DAILY_SELL_CAP_USD = 100_000_000
 BASE_STREET_PRICE_PER_OZ = 22_500
+MIN_CURE_MINUTES = 5.0
+MAX_CURE_MINUTES = 20.0
+MAX_CURE_BATCH_GRAMS = 300.0
 
 # Soil charge consumed per plant
 SOIL_CHARGE_PER_PLANT = 1
@@ -214,6 +217,14 @@ def unit_to_grams(amount: float, unit: str) -> float:
 
 def grams_to_oz(grams: float) -> float:
     return float(grams) / GRAMS_PER_OZ
+
+
+def curing_minutes(grams: float, curing_level: int = 0) -> float:
+    """Scale curing from 5–20 minutes by batch weight, then apply equipment."""
+    weight = min(1.0, max(0.0, float(grams)) / MAX_CURE_BATCH_GRAMS)
+    amount_minutes = MIN_CURE_MINUTES + (MAX_CURE_MINUTES - MIN_CURE_MINUTES) * weight
+    reduction = min(0.45, max(0, int(curing_level)) * 0.03)
+    return max(MIN_CURE_MINUTES, MIN_CURE_MINUTES + (amount_minutes - MIN_CURE_MINUTES) * (1.0 - reduction))
 
 
 def market_price_per_oz(

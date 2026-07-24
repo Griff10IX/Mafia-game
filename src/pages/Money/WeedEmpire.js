@@ -27,6 +27,9 @@ const TABS = [
   { id: "raid", label: "Raid", Icon: Swords },
 ];
 
+const SELL_UNIT_GRAMS = { g: 1, oz: 28, lb: 448, kg: 1000 };
+const SELL_BULK_MULT = { g: 1, oz: 1, lb: 1.03, kg: 1.05 };
+
 function money(n) {
   return `$${Number(n || 0).toLocaleString()}`;
 }
@@ -86,7 +89,7 @@ export default function WeedEmpire() {
   const [selectedPlotId, setSelectedPlotId] = useState(null);
   const [strainId, setStrainId] = useState("northern_lights");
   const [soilType, setSoilType] = useState("soil_conventional");
-  const [sellUnit, setSellUnit] = useState("oz");
+  const [sellUnit, setSellUnit] = useState("g");
   const [sellAmount, setSellAmount] = useState(1);
   const [sellStrain, setSellStrain] = useState("");
   const [shopGroup, setShopGroup] = useState("lighting");
@@ -169,6 +172,22 @@ export default function WeedEmpire() {
       (s) => unlocks.has(s.id) || (s.unlock_house_tier || 0) <= (farm?.house_tier || 0)
     );
   }, [catalog, farm]);
+
+  const sellPreview = useMemo(() => {
+    const amount = Number(sellAmount);
+    const grams = amount * (SELL_UNIT_GRAMS[sellUnit] || 1);
+    const available = Number(farm?.stash?.[sellStrain] || 0);
+    const pricePerOz = Number(farm?.street_price_per_oz?.[sellStrain] || 0);
+    const gross = Math.floor((grams / 28) * pricePerOz * (SELL_BULK_MULT[sellUnit] || 1));
+    const remainingCap = Number(farm?.daily_sold_remaining || 0);
+    return {
+      grams,
+      available,
+      payout: Math.min(gross, remainingCap),
+      valid: amount > 0 && grams <= available + 1e-6 && pricePerOz > 0 && remainingCap > 0,
+      capped: gross > remainingCap,
+    };
+  }, [farm, sellAmount, sellStrain, sellUnit]);
 
   const run = async (fn) => {
     if (busy) return;
@@ -773,25 +792,47 @@ export default function WeedEmpire() {
                 onChange={(e) => setSellAmount(e.target.value)}
                 className="w-24 bg-background border border-border rounded px-2 py-1.5 text-sm"
               />
+              <button
+                type="button"
+                disabled={!sellStrain}
+                onClick={() =>
+                  setSellAmount(
+                    (
+                      Number(farm.stash?.[sellStrain] || 0) /
+                      (SELL_UNIT_GRAMS[sellUnit] || 1)
+                    ).toFixed(sellUnit === "g" ? 1 : 3)
+                  )
+                }
+                className="px-2 py-1.5 rounded border border-border text-xs text-muted-foreground"
+              >
+                Max
+              </button>
               <select
                 className="bg-background border border-border rounded px-2 py-1.5 text-sm"
                 value={sellUnit}
                 onChange={(e) => setSellUnit(e.target.value)}
               >
                 <option value="g">grams</option>
-                <option value="oz">oz (~$100 mid)</option>
+                <option value="oz">oz</option>
                 <option value="lb">lb</option>
                 <option value="kg">kg</option>
               </select>
               <button
                 type="button"
-                disabled={busy || !sellStrain}
+                disabled={busy || !sellStrain || !sellPreview.valid}
                 onClick={sell}
                 className="px-3 py-1.5 rounded bg-emerald-700/80 text-sm font-heading"
               >
                 Sell to street
               </button>
             </div>
+            {sellStrain && (
+              <p className={`text-xs ${sellPreview.valid ? "text-emerald-400" : "text-amber-400"}`}>
+                {sellPreview.grams > sellPreview.available + 1e-6
+                  ? `Not enough stash — need ${sellPreview.grams.toFixed(1)}g, have ${sellPreview.available.toFixed(1)}g`
+                  : `You receive about ${money(sellPreview.payout)}${sellPreview.capped ? " (daily cap)" : ""}`}
+              </p>
+            )}
             {(farm.dealers_level || 0) >= 1 ? (
               <button type="button" disabled={busy} onClick={dealerSell} className="text-xs underline text-muted-foreground">
                 Run dealers (Lv {farm.dealers_level})

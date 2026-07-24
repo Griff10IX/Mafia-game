@@ -2,6 +2,7 @@ from utils.weed_empire_catalog import (
     BASE_STREET_PRICE_PER_OZ,
     STRAINS,
     STRAIN_BY_ID,
+    curing_minutes,
     grams_to_oz,
     market_price_per_oz,
 )
@@ -63,3 +64,10 @@ def test_dealer_cut_is_applied_after_network_progression():
     )
 
     assert dealer_price == direct_price * 0.9
+
+
+def test_curing_scales_from_five_to_twenty_minutes_by_weight():
+    assert curing_minutes(0, 0) == 5
+    assert curing_minutes(300, 0) == 20
+    assert 5 < curing_minutes(33.17, 0) < 7
+    assert 5 <= curing_minutes(300, 14) < 20
