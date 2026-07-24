@@ -75,6 +75,7 @@ export default function WeedEmpire() {
   const [sellStrain, setSellStrain] = useState("");
   const [shopGroup, setShopGroup] = useState("lighting");
   const [fx, setFx] = useState(null);
+  const [fxNonce, setFxNonce] = useState(0);
   const [targets, setTargets] = useState([]);
   const [busy, setBusy] = useState(false);
 
@@ -163,14 +164,20 @@ export default function WeedEmpire() {
       applyFarm(data.farm);
       toast.success("Planted");
       setFx("plant");
+      setFxNonce((n) => n + 1);
       setTimeout(() => setFx(null), 400);
     });
+
+  const triggerFx = (kind) => {
+    setFx(kind);
+    setFxNonce((n) => n + 1);
+  };
 
   const water = () =>
     run(async () => {
       const { data } = await api.post("/weed-empire/water", { plot_id: selectedPlotId });
       applyFarm(data.farm);
-      setFx("water");
+      triggerFx("water");
       toast.success("Watered");
     });
 
@@ -178,7 +185,7 @@ export default function WeedEmpire() {
     run(async () => {
       const { data } = await api.post("/weed-empire/feed", { plot_id: selectedPlotId });
       applyFarm(data.farm);
-      setFx("feed");
+      triggerFx("feed");
       toast.success("Fed");
     });
 
@@ -186,7 +193,7 @@ export default function WeedEmpire() {
     run(async () => {
       const { data } = await api.post("/weed-empire/harvest", { plot_id: selectedPlotId });
       applyFarm(data.farm);
-      setFx("harvest_trim");
+      triggerFx("harvest_trim");
       toast.success(`Harvested ${data.grams}g — curing`);
       if (data.leveled_up) toast.success(`Grower level up! Lv ${data.grower_level}`);
     });
@@ -373,12 +380,16 @@ export default function WeedEmpire() {
               stage={selectedPlot?.stage || selectedPlot?.state || "empty"}
               progress={selectedPlot?.progress || 0}
               budMeshKey={selStrain.bud_mesh_key || "dense"}
+              strainType={selStrain.type || "hybrid"}
               quality={selectedPlot?.quality || 50}
               equipment={farm.equipment || {}}
               houseTier={farm.house_tier || 0}
+              houseId={farm.house?.id || "closet"}
               autoWater={!!farm.auto_water}
+              autoFeed={!!farm.auto_feed}
               curingCount={(farm.curing || []).length}
               fx={fx === "plant" ? null : fx}
+              fxNonce={fxNonce}
               onFxDone={() => setFx(null)}
             />
             <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground">
