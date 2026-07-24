@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import api from "../../utils/api";
 import WeedEmpire3D from "../../components/weed/WeedEmpire3D";
+import WeedShop from "../../components/weed/WeedShop";
 import styles from "../../styles/noir.module.css";
 
 const TABS = [
@@ -26,6 +27,26 @@ const TABS = [
 
 function money(n) {
   return `$${Number(n || 0).toLocaleString()}`;
+}
+
+function CareMeter({ label, pct, hoursLeft, colorClass, warn }) {
+  const v = Math.max(0, Math.min(100, Number(pct) || 0));
+  const bar =
+    v > 50 ? colorClass : v > 25 ? "bg-amber-500" : "bg-red-500";
+  return (
+    <div className="space-y-0.5">
+      <div className="flex justify-between gap-2 text-[10px]">
+        <span className={warn ? "text-amber-300" : "text-muted-foreground"}>{label}</span>
+        <span className="text-muted-foreground tabular-nums">
+          {v.toFixed(0)}%
+          {hoursLeft != null ? ` · ${Number(hoursLeft).toFixed(1)}h` : ""}
+        </span>
+      </div>
+      <div className="h-1.5 rounded bg-zinc-800 overflow-hidden">
+        <div className={`h-full transition-all ${bar}`} style={{ width: `${v}%` }} />
+      </div>
+    </div>
+  );
 }
 
 export default function WeedEmpire() {
@@ -108,16 +129,6 @@ export default function WeedEmpire() {
     );
   }, [catalog, farm]);
 
-  const shopRows = useMemo(() => {
-    const equip = farm?.equipment || {};
-    return (catalog?.equipment_shop || [])
-      .filter((r) => r.group === shopGroup)
-      .filter((r) => {
-        const cur = equip[r.category_id] || 0;
-        return r.level === cur + 1 || (cur === 0 && r.level === 1);
-      });
-  }, [catalog, farm, shopGroup]);
-
   const run = async (fn) => {
     if (busy) return;
     setBusy(true);
@@ -166,6 +177,7 @@ export default function WeedEmpire() {
       applyFarm(data.farm);
       setFx("harvest_trim");
       toast.success(`Harvested ${data.grams}g — curing`);
+      if (data.leveled_up) toast.success(`Grower level up! Lv ${data.grower_level}`);
     });
 
   const upgradeEquip = (categoryId) =>
@@ -196,6 +208,7 @@ export default function WeedEmpire() {
       });
       applyFarm(data.farm);
       toast.success(`Sold for ${money(data.payout)} @ ${money(data.effective_price_per_oz)}/oz`);
+      if (data.leveled_up) toast.success(`Grower level up! Lv ${data.grower_level}`);
     });
 
   const upgradeHouse = (tier) =>
@@ -272,7 +285,22 @@ export default function WeedEmpire() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs">
+        <div className="rounded border border-border/50 bg-card/40 p-2">
+          <div className="text-muted-foreground flex justify-between">
+            <span>Grower Lv {farm.grower_level || 1}</span>
+            <span>
+              {farm.grower_xp || 0}/{farm.grower_xp_to_next || 100} XP
+            </span>
+          </div>
+          <div className="h-1.5 mt-1 rounded bg-zinc-800 overflow-hidden">
+            <div
+              className="h-full bg-amber-500/80"
+              style={{ width: `${Math.min(100, farm.grower_xp_pct || 0)}%` }}
+            />
+          </div>
+          <div className="text-[10px] mt-1 text-muted-foreground">Harvest &amp; sell to level up</div>
+        </div>
         <div className="rounded border border-border/50 bg-card/40 p-2">
           <div className="text-muted-foreground">House</div>
           <div className="font-heading">{farm.house?.name}</div>
@@ -331,10 +359,14 @@ export default function WeedEmpire() {
           <div className="space-y-3">
             <WeedEmpire3D
               lightClass={farm.active_light_class || "cfl"}
-              stage={selectedPlot?.stage || "empty"}
+              stage={selectedPlot?.stage || selectedPlot?.state || "empty"}
               progress={selectedPlot?.progress || 0}
               budMeshKey={selStrain.bud_mesh_key || "dense"}
               quality={selectedPlot?.quality || 50}
+              equipment={farm.equipment || {}}
+              houseTier={farm.house_tier || 0}
+              autoWater={!!farm.auto_water}
+              curingCount={(farm.curing || []).length}
               fx={fx === "plant" ? null : fx}
               onFxDone={() => setFx(null)}
             />
@@ -347,6 +379,18 @@ export default function WeedEmpire() {
                 Yield mult ×{(farm.stats?.yield_mult || 1).toFixed(2)} · Quality ceiling{" "}
                 {(farm.stats?.quality_ceiling || 0).toFixed(0)}
               </span>
+              {farm.auto_water || farm.auto_feed ? (
+                <span className="text-emerald-400/90">
+                  Auto{farm.auto_water ? " water" : ""}
+                  {farm.auto_water && farm.auto_feed ? " +" : ""}
+                  {farm.auto_feed ? " feeders" : ""} on (Irrigation Lv {farm.irrigation_level})
+                </span>
+              ) : (
+                <span>
+                  Auto-water at Irrigation Lv {farm.auto_water_at_irrigation || 5}; auto-feeders at Lv{" "}
+                  {farm.auto_feed_at_irrigation || 8}
+                </span>
+              )}
             </div>
           </div>
 
@@ -355,6 +399,7 @@ export default function WeedEmpire() {
               {(farm.plots || []).map((p, idx) => {
                 const st = p.stage || p.state || "empty";
                 const active = p.id === selectedPlotId;
+                const growing = p.strain_id && st !== "empty" && st !== "dead";
                 return (
                   <button
                     key={p.id}
@@ -365,13 +410,26 @@ export default function WeedEmpire() {
                     }`}
                   >
                     <div className="font-heading">Plot {idx + 1}</div>
-                    <div className="text-muted-foreground capitalize">{st.replace("_", " ")}</div>
+                    <div className="text-muted-foreground capitalize">{String(st).replace("_", " ")}</div>
                     {p.strain_id ? (
                       <div className="truncate text-[10px] mt-0.5">{strainMap[p.strain_id]?.name || p.strain_id}</div>
                     ) : null}
-                    {p.needs_water ? (
-                      <div className="text-sky-400 text-[10px] mt-1 flex items-center gap-1">
-                        <Droplets className="w-3 h-3" /> needs water
+                    {growing ? (
+                      <div className="mt-1.5 space-y-1">
+                        <CareMeter
+                          label="Water"
+                          pct={p.water_pct}
+                          hoursLeft={p.water_hours_left}
+                          colorClass="bg-sky-500"
+                          warn={p.needs_water}
+                        />
+                        <CareMeter
+                          label="Feed"
+                          pct={p.feed_pct}
+                          hoursLeft={p.feed_hours_left}
+                          colorClass="bg-lime-500"
+                          warn={p.needs_feed}
+                        />
                       </div>
                     ) : null}
                   </button>
@@ -418,22 +476,50 @@ export default function WeedEmpire() {
             )}
 
             {selectedPlot?.strain_id && selectedPlot?.state !== "empty" && (
-              <div className="flex flex-wrap gap-2">
+              <div className="space-y-2">
+                <div className="rounded border border-border/40 bg-card/30 p-3 space-y-2">
+                  <CareMeter
+                    label="Water meter"
+                    pct={selectedPlot.water_pct}
+                    hoursLeft={selectedPlot.water_hours_left}
+                    colorClass="bg-sky-500"
+                    warn={selectedPlot.needs_water}
+                  />
+                  <CareMeter
+                    label="Feed meter"
+                    pct={selectedPlot.feed_pct}
+                    hoursLeft={selectedPlot.feed_hours_left}
+                    colorClass="bg-lime-500"
+                    warn={selectedPlot.needs_feed}
+                  />
+                  {farm.auto_water || farm.auto_feed ? (
+                    <p className="text-[10px] text-emerald-400/90">
+                      {farm.auto_water ? "Auto-water active. " : ""}
+                      {farm.auto_feed ? "Auto-feeders active." : ""}
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-muted-foreground">
+                      Upgrade Irrigation to Lv {farm.auto_water_at_irrigation || 5} for auto-water, Lv{" "}
+                      {farm.auto_feed_at_irrigation || 8} for auto-feeders.
+                    </p>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || farm.auto_water}
                   onClick={water}
-                  className="inline-flex items-center gap-1 px-3 py-2 rounded border border-sky-500/40 text-sky-300 text-xs"
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded border border-sky-500/40 text-sky-300 text-xs disabled:opacity-40"
                 >
-                  <Droplets className="w-3.5 h-3.5" /> Water
+                  <Droplets className="w-3.5 h-3.5" /> {farm.auto_water ? "Auto watering" : "Water"}
                 </button>
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || farm.auto_feed}
                   onClick={feed}
-                  className="inline-flex items-center gap-1 px-3 py-2 rounded border border-lime-500/40 text-lime-300 text-xs"
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded border border-lime-500/40 text-lime-300 text-xs disabled:opacity-40"
                 >
-                  <Leaf className="w-3.5 h-3.5" /> Feed
+                  <Leaf className="w-3.5 h-3.5" /> {farm.auto_feed ? "Auto feeding" : "Feed"}
                 </button>
                 {(selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready") && (
                   <button
@@ -445,6 +531,7 @@ export default function WeedEmpire() {
                     <Scissors className="w-3.5 h-3.5" /> Harvest / Trim
                   </button>
                 )}
+                </div>
               </div>
             )}
           </div>
@@ -452,71 +539,14 @@ export default function WeedEmpire() {
       )}
 
       {tab === "shop" && (
-        <div className="space-y-3">
-          <p className="text-xs text-muted-foreground">
-            All gear buys/upgrades debit <strong>business cash</strong> only. Better soil &amp; equipment = more
-            yield = more profit. Shop has {catalog?.equipment_shop?.length || 0} upgrade steps.
-          </p>
-          <div className="flex flex-wrap gap-1">
-            {["lighting", "medium", "structure", "containers", "water", "nutrients", "climate", "monitoring", "plantwork", "harvest", "power", "security"].map(
-              (g) => (
-                <button
-                  key={g}
-                  type="button"
-                  onClick={() => setShopGroup(g)}
-                  className={`px-2 py-1 rounded text-[10px] uppercase border ${
-                    shopGroup === g ? "border-emerald-500/50 text-emerald-300" : "border-border/40 text-muted-foreground"
-                  }`}
-                >
-                  {g}
-                </button>
-              )
-            )}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button type="button" disabled={busy} onClick={() => buySoil("soil_conventional")} className="text-xs px-2 py-1 border rounded">
-              Restock conventional soil
-            </button>
-            <button type="button" disabled={busy} onClick={() => buySoil("soil_organic")} className="text-xs px-2 py-1 border rounded">
-              Restock organic soil
-            </button>
-            <button type="button" disabled={busy} onClick={() => buySoil("coco")} className="text-xs px-2 py-1 border rounded">
-              Restock coco
-            </button>
-          </div>
-          <div className="space-y-2">
-            {shopRows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No upgrades available in this group (maxed or house-gated).</p>
-            ) : (
-              shopRows.map((row) => (
-                <div
-                  key={`${row.category_id}-${row.level}`}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded border border-border/40 bg-card/30 px-3 py-2"
-                >
-                  <div>
-                    <div className="text-sm font-heading">
-                      {row.name} → Lv {row.level}
-                    </div>
-                    <div className="text-[10px] text-muted-foreground">{row.description}</div>
-                    {row.stats_per_level?.yield_mult ? (
-                      <div className="text-[10px] text-emerald-400/90">
-                        +{Math.round(row.stats_per_level.yield_mult * 100)}% yield / level
-                      </div>
-                    ) : null}
-                  </div>
-                  <button
-                    type="button"
-                    disabled={busy || (farm.house_tier || 0) < (row.min_house_tier || 0)}
-                    onClick={() => upgradeEquip(row.category_id)}
-                    className="text-xs px-3 py-1.5 rounded bg-emerald-700/70 hover:bg-emerald-600"
-                  >
-                    {money(row.cost)}
-                  </button>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
+        <WeedShop
+          farm={farm}
+          shopGroup={shopGroup}
+          setShopGroup={setShopGroup}
+          busy={busy}
+          onUpgrade={upgradeEquip}
+          onBuySoil={buySoil}
+        />
       )}
 
       {tab === "stash" && (

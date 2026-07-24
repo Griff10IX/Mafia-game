@@ -25,9 +25,14 @@ from utils.weed_empire_catalog import (
     STRAINS,
     active_light_class,
     aggregate_stats,
+    apply_grower_xp,
+    assert_can_upgrade_equipment,
     equipment_level_cost,
     equipment_shop_entries,
     grams_to_oz,
+    grower_progress,
+    rarity_xp_mult,
+    shop_status_for_farm,
     unit_to_grams,
 )
 
@@ -37,6 +42,9 @@ _rng = secrets.SystemRandom()
 FEATURE_ID = "weed_empire"
 WATER_INTERVAL_HOURS = 1.5
 FEED_INTERVAL_HOURS = 2.5
+# Irrigation equipment unlocks automation (hand → drip → auto).
+AUTO_WATER_IRRIGATION_LEVEL = 5
+AUTO_FEED_IRRIGATION_LEVEL = 8
 CURE_HOURS = 0.75
 MAX_HEAT = 100.0
 CITY_DEMAND_BASE = 1.0
@@ -90,12 +98,14 @@ def _default_farm(user_id: str) -> Dict[str, Any]:
         "user_id": user_id,
         "house_tier": 0,
         "plots": plots,
-        "equipment": {"lights_cfl": 1, "pots": 1, "soil_conventional": 1},
+        "equipment": {"lights_cfl": 1, "pots": 1, "soil_conventional": 1, "tents": 1, "irrigation": 1, "nutes_base": 1},
         "soil_stock": {"soil_conventional": 4},
         "business_cash": START_BUSINESS_CASH,
         "daily_sold_usd": 0,
         "daily_sold_utc_date": _utc_date_str(),
         "lifetime_sold_usd": 0,
+        "grower_level": 1,
+        "grower_xp": 0,
         "stash": {},  # strain_id -> grams cured
         "curing": [],  # {id, strain_id, grams, quality, started_at, ready_at}
         "heat": 5.0,
@@ -117,6 +127,14 @@ async def _require_access(user: dict) -> None:
 async def _get_or_create_farm(user_id: str) -> Dict[str, Any]:
     farm = await db.weed_farms.find_one({"user_id": user_id}, {"_id": 0})
     if farm:
+        # Migrate missing grower fields
+        if farm.get("grower_level") is None:
+            farm["grower_level"] = 1
+            farm["grower_xp"] = int(farm.get("grower_xp") or 0)
+            await db.weed_farms.update_one(
+                {"user_id": user_id},
+                {"$set": {"grower_level": 1, "grower_xp": farm["grower_xp"]}},
+            )
         return farm
     doc = _default_farm(user_id)
     await db.weed_farms.insert_one(dict(doc))
@@ -165,10 +183,34 @@ def _plot_stage(planted_at: datetime, hours_needed: float, now: datetime) -> Tup
     return "seedling", progress
 
 
+def _care_intervals(stats: dict) -> Tuple[float, float]:
+    water_need = WATER_INTERVAL_HOURS / max(0.5, float(stats.get("water_interval_mult") or 1.0))
+    feed_need = FEED_INTERVAL_HOURS / max(0.5, float(stats.get("feed_efficiency") or 1.0))
+    return water_need, feed_need
+
+
+def _auto_flags(farm: dict) -> Tuple[bool, bool]:
+    irrig = int(_equip_levels(farm).get("irrigation") or 0)
+    return irrig >= AUTO_WATER_IRRIGATION_LEVEL, irrig >= AUTO_FEED_IRRIGATION_LEVEL
+
+
+def _meter_pct(hours_since: float, interval: float) -> float:
+    """100 = just tended; 0 = fully due."""
+    if interval <= 0:
+        return 0.0
+    return max(0.0, min(100.0, (1.0 - hours_since / interval) * 100.0))
+
+
 def _tick_plot(plot: dict, farm: dict, stats: dict, now: datetime) -> dict:
     if plot.get("state") in (None, "empty", "dead"):
         plot["stage"] = plot.get("state") or "empty"
         plot["progress"] = 0.0
+        plot["water_pct"] = 0
+        plot["feed_pct"] = 0
+        plot["water_hours_left"] = 0
+        plot["feed_hours_left"] = 0
+        plot["needs_water"] = False
+        plot["needs_feed"] = False
         return plot
     strain = STRAIN_BY_ID.get(plot.get("strain_id") or "")
     if not strain:
@@ -186,21 +228,41 @@ def _tick_plot(plot: dict, farm: dict, stats: dict, now: datetime) -> dict:
         pref == "led" and light in ("led", "quantum")
     )
 
-    # Neglect penalties
-    quality = float(plot.get("quality") or 50.0)
+    auto_water, auto_feed = _auto_flags(farm)
+    water_need, feed_need = _care_intervals(stats)
+
+    # Auto systems top up before neglect checks (when interval is nearly due).
     last_w = _parse_iso(plot.get("last_watered_at")) or planted
     last_f = _parse_iso(plot.get("last_fed_at")) or planted
-    water_need = WATER_INTERVAL_HOURS / max(0.5, float(stats.get("water_interval_mult") or 1.0))
-    feed_need = FEED_INTERVAL_HOURS / max(0.5, float(stats.get("feed_efficiency") or 1.0))
-    water_overdue = (now - last_w).total_seconds() / 3600.0 > water_need * 1.35
-    feed_overdue = (now - last_f).total_seconds() / 3600.0 > feed_need * 1.5
+    hours_since_w = (now - last_w).total_seconds() / 3600.0
+    hours_since_f = (now - last_f).total_seconds() / 3600.0
+    if auto_water and hours_since_w >= water_need * 0.85:
+        plot["last_watered_at"] = _iso(now)
+        last_w = now
+        hours_since_w = 0.0
+        plot["quality"] = min(100.0, float(plot.get("quality") or 50) + 0.5)
+        plot["auto_watered"] = True
+    if auto_feed and hours_since_f >= feed_need * 0.85:
+        plot["last_fed_at"] = _iso(now)
+        last_f = now
+        hours_since_f = 0.0
+        plot["quality"] = min(100.0, float(plot.get("quality") or 50) + 0.5)
+        plot["auto_fed"] = True
+
+    quality = float(plot.get("quality") or 50.0)
+    water_overdue = hours_since_w > water_need * 1.35
+    feed_overdue = hours_since_f > feed_need * 1.5
     neglect = (1 if water_overdue else 0) + (1 if feed_overdue else 0)
     if neglect:
         quality -= 4.0 * neglect
-    if water_overdue and (now - last_w).total_seconds() / 3600.0 > water_need * 3.0:
+    if water_overdue and hours_since_w > water_need * 3.0:
         plot["state"] = "dead"
         plot["stage"] = "dead"
         plot["quality"] = max(0.0, quality)
+        plot["water_pct"] = 0
+        plot["feed_pct"] = _meter_pct(hours_since_f, feed_need)
+        plot["needs_water"] = True
+        plot["needs_feed"] = feed_overdue
         return plot
 
     hours_needed = _grow_hours_needed(strain, stats, preferred_ok)
@@ -216,8 +278,14 @@ def _tick_plot(plot: dict, farm: dict, stats: dict, now: datetime) -> dict:
     plot["state"] = "harvest_ready" if stage == "harvest_ready" else "growing"
     plot["hours_needed"] = round(hours_needed, 2)
     plot["hours_elapsed"] = round((now - planted).total_seconds() / 3600.0, 2)
-    plot["needs_water"] = water_overdue
-    plot["needs_feed"] = feed_overdue
+    plot["water_pct"] = round(_meter_pct(hours_since_w, water_need), 1)
+    plot["feed_pct"] = round(_meter_pct(hours_since_f, feed_need), 1)
+    plot["water_hours_left"] = round(max(0.0, water_need - hours_since_w), 2)
+    plot["feed_hours_left"] = round(max(0.0, feed_need - hours_since_f), 2)
+    plot["water_interval_hours"] = round(water_need, 2)
+    plot["feed_interval_hours"] = round(feed_need, 2)
+    plot["needs_water"] = water_overdue or plot["water_pct"] <= 25
+    plot["needs_feed"] = feed_overdue or plot["feed_pct"] <= 25
     return plot
 
 
@@ -260,11 +328,21 @@ def _public_farm(farm: dict, *, username: str = "") -> Dict[str, Any]:
     farm = _sync_plot_count(farm)
     stats = _stats(farm)
     plots = [_tick_plot(dict(p), farm, stats, now) for p in (farm.get("plots") or [])]
+    # Persist auto-tend timestamps back onto farm plots
     farm["plots"] = plots
     farm = _tick_curing(farm, now)
     light = active_light_class(_equip_levels(farm))
     house = _house(farm)
     sold = int(farm.get("daily_sold_usd") or 0)
+    auto_water, auto_feed = _auto_flags(farm)
+    irrig_lvl = int(_equip_levels(farm).get("irrigation") or 0)
+    gp = grower_progress(farm)
+    shop = shop_status_for_farm(
+        farm,
+        house_tier=int(farm.get("house_tier") or 0),
+        house_max_equip_tier=int(house.get("max_equip_tier") or 20),
+        equipment_levels=_equip_levels(farm),
+    )
     return {
         "id": farm.get("id"),
         "user_id": farm.get("user_id"),
@@ -273,6 +351,7 @@ def _public_farm(farm: dict, *, username: str = "") -> Dict[str, Any]:
         "house_tier": int(farm.get("house_tier") or 0),
         "plots": plots,
         "equipment": _equip_levels(farm),
+        "equipment_shop_status": shop,
         "soil_stock": farm.get("soil_stock") or {},
         "business_cash": int(farm.get("business_cash") or 0),
         "daily_sold_usd": sold,
@@ -289,6 +368,12 @@ def _public_farm(farm: dict, *, username: str = "") -> Dict[str, Any]:
         "dealers_level": int(farm.get("dealers_level") or 0),
         "missions": farm.get("missions") or {},
         "sabotage_unlocked": bool(farm.get("sabotage_unlocked")),
+        "auto_water": auto_water,
+        "auto_feed": auto_feed,
+        "irrigation_level": irrig_lvl,
+        "auto_water_at_irrigation": AUTO_WATER_IRRIGATION_LEVEL,
+        "auto_feed_at_irrigation": AUTO_FEED_IRRIGATION_LEVEL,
+        **gp,
         "staff_preview": True,
     }
 
@@ -553,6 +638,9 @@ async def weed_harvest(body: PlotActionBody, current_user: dict = Depends(_gate)
         farm["curing"] = curing
         farm["missions"] = missions
         _add_heat(farm, 2.0)
+        xp_amt = int(25 * rarity_xp_mult(str(strain.get("rarity") or "common")))
+        xp_fields, leveled, new_lvl = apply_grower_xp(farm, xp_amt)
+        farm.update(xp_fields)
         await _save_farm(
             farm,
             {
@@ -561,6 +649,7 @@ async def weed_harvest(body: PlotActionBody, current_user: dict = Depends(_gate)
                 "missions": missions,
                 "heat": farm["heat"],
                 "sabotage_unlocked": farm.get("sabotage_unlocked"),
+                **xp_fields,
             },
         )
         return {
@@ -568,6 +657,9 @@ async def weed_harvest(body: PlotActionBody, current_user: dict = Depends(_gate)
             "grams": grams,
             "trim_level": trim_lvl,
             "fx": "harvest_trim",
+            "xp_gained": xp_amt,
+            "leveled_up": leveled,
+            "grower_level": new_lvl,
             "farm": _public_farm(farm, username=current_user.get("username") or ""),
         }
     raise HTTPException(status_code=404, detail="Plot not found")
@@ -632,6 +724,10 @@ async def weed_sell(body: SellBody, current_user: dict = Depends(_gate)):
     if missions["sell_count"] >= 5 and int(farm.get("dealers_level") or 0) == 0:
         farm["dealers_level"] = 1
 
+    xp_amt = max(5, int(8 * oz * rarity_xp_mult(str(strain.get("rarity") or "common"))))
+    xp_fields, leveled, new_lvl = apply_grower_xp(farm, xp_amt)
+    farm.update(xp_fields)
+
     await _save_farm(
         farm,
         {
@@ -643,6 +739,7 @@ async def weed_sell(body: SellBody, current_user: dict = Depends(_gate)):
             "heat": farm["heat"],
             "missions": missions,
             "dealers_level": farm.get("dealers_level"),
+            **xp_fields,
         },
     )
     return {
@@ -650,6 +747,9 @@ async def weed_sell(body: SellBody, current_user: dict = Depends(_gate)):
         "payout": payout,
         "effective_price_per_oz": round(price_per_oz, 2),
         "grams_sold": round(grams, 2),
+        "xp_gained": xp_amt,
+        "leveled_up": leveled,
+        "grower_level": new_lvl,
         "farm": _public_farm(farm, username=current_user.get("username") or ""),
     }
 
@@ -688,22 +788,27 @@ async def weed_upgrade_equip(body: UpgradeEquipBody, current_user: dict = Depend
     cat = EQUIPMENT_BY_ID.get(body.category_id)
     if not cat:
         raise HTTPException(status_code=404, detail="Unknown equipment")
+    house = _house(farm)
     house_tier = int(farm.get("house_tier") or 0)
-    if house_tier < int(cat.get("min_house_tier") or 0):
-        raise HTTPException(status_code=400, detail="House tier too low for this gear")
-    max_tier = int(_house(farm).get("max_equip_tier") or 20)
-    cur = int(_equip_levels(farm).get(body.category_id) or 0)
-    nxt = cur + 1
-    if nxt > int(cat["max_level"]):
-        raise HTTPException(status_code=400, detail="Already max level")
-    if nxt > max_tier:
-        raise HTTPException(status_code=400, detail="Upgrade your house for higher gear levels")
+    grower_level = max(1, int(farm.get("grower_level") or 1))
+    equip_levels = _equip_levels(farm)
+    cur = int(equip_levels.get(body.category_id) or 0)
+    try:
+        nxt = assert_can_upgrade_equipment(
+            cat,
+            owned_level=cur,
+            house_tier=house_tier,
+            grower_level=grower_level,
+            equipment_levels=equip_levels,
+            house_max_equip_tier=int(house.get("max_equip_tier") or 20),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     cost = equipment_level_cost(cat, nxt)
     _spend(farm, cost)
     equip = dict(farm.get("equipment") or {})
     equip[body.category_id] = nxt
     farm["equipment"] = equip
-    # Buying soil line level 1 grants starter bags
     stock = dict(farm.get("soil_stock") or {})
     stock_key = cat.get("consumable_stock_key")
     if stock_key and nxt == 1:
