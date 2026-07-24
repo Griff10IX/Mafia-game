@@ -335,10 +335,11 @@ def _user_hidden_from_mod(user_ref: Optional[Dict[str, Any]], users_by_id: Dict[
 
 
 def _sanitize_lineage_for_actor(payload: Dict[str, Any], actor: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    from utils.staff_mod_protection import actor_has_full_admin_powers, account_hidden_from_mod_investigation_links
-
-    if actor_has_full_admin_powers(actor):
-        return payload
+    from utils.staff_mod_protection import (
+        actor_has_full_admin_powers,
+        account_hidden_from_mod_investigation_links,
+        user_is_top_secret_clean_account,
+    )
 
     users_by_id: Dict[str, Dict[str, Any]] = {}
     for side in ("a", "b"):
@@ -348,12 +349,24 @@ def _sanitize_lineage_for_actor(payload: Dict[str, Any], actor: Optional[Dict[st
             if uid:
                 users_by_id[uid] = acc
 
+    def hide_row(user_ref: Optional[Dict[str, Any]]) -> bool:
+        if not user_ref:
+            return False
+        uid = user_ref.get("id")
+        full = users_by_id.get(uid) if uid else None
+        target = full or user_ref
+        if user_is_top_secret_clean_account(target):
+            return True
+        if actor_has_full_admin_powers(actor):
+            return False
+        return account_hidden_from_mod_investigation_links(target)
+
     def filter_match_rows(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         kept: List[Dict[str, Any]] = []
         for row in rows or []:
-            if _user_hidden_from_mod(row.get("account_a"), users_by_id):
+            if hide_row(row.get("account_a")):
                 continue
-            if _user_hidden_from_mod(row.get("account_b"), users_by_id):
+            if hide_row(row.get("account_b")):
                 continue
             kept.append(row)
         return kept
@@ -362,10 +375,7 @@ def _sanitize_lineage_for_actor(payload: Dict[str, Any], actor: Optional[Dict[st
     lineage = dict(out.get("lineage") or {})
     for side in ("a", "b"):
         cluster = dict(lineage.get(side) or {})
-        related = [
-            r for r in (cluster.get("related_accounts") or [])
-            if not account_hidden_from_mod_investigation_links(r)
-        ]
+        related = [r for r in (cluster.get("related_accounts") or []) if not hide_row(r)]
         cluster["related_accounts"] = related
         cluster["prior_account_count"] = sum(1 for r in related if not r.get("is_primary"))
         lineage[side] = cluster

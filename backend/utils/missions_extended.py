@@ -22,8 +22,16 @@ SECOND_MISSION_ID = "m_second"
 THIRD_MISSION_ID = "m_third"
 FOURTH_MISSION_ID = "m_fourth"
 
-# Economy targets (plan)
-TOTAL_REWARD_POINTS = 10_000
+# Economy targets (plan). RP is fixed per band (see reward_points_for_order); sum = 330_000.
+TOTAL_REWARD_POINTS = 330_000
+# Snapshot of the prior weighted 10k RP curve (order 0..99) for one-time completion top-ups.
+PREVIOUS_REWARD_POINTS_BY_ORDER: List[int] = [
+    2, 2, 3, 3, 4, 5, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 17, 18, 20, 21, 23, 24, 26, 28, 29,
+    31, 33, 35, 37, 39, 41, 43, 45, 47, 49, 51, 53, 55, 58, 60, 62, 65, 67, 70, 72, 75, 77, 80,
+    82, 85, 88, 90, 93, 96, 99, 101, 104, 107, 110, 113, 116, 119, 122, 125, 128, 131, 134,
+    138, 141, 144, 147, 151, 154, 157, 161, 164, 168, 171, 175, 178, 182, 185, 189, 192, 196,
+    200, 203, 207, 211, 215, 218, 222, 226, 230, 234, 238, 242, 246, 250, 254,
+]
 # Sum of per-mission reward_tribute_daily when ladder complete (~$75M/day).
 TOTAL_TRIBUTE_DAILY_CASH = 75_000_000
 TOTAL_CASH_IMMEDIATE = 500_000_000
@@ -45,8 +53,9 @@ TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY = 200
 WEIGHT_P = 1.6
 WEIGHT_BASE = 12.0
 
-# 25% easier: all numeric mission targets are 75% of prior values (min 1).
-MISSION_REQUIREMENT_MULT = 0.75
+# 15% easier than the prior 0.75 ease pass (overall ≈ 36.25% below raw targets; min 1).
+# Changing this scales every mission target live — including each player's current mission.
+MISSION_REQUIREMENT_MULT = 0.6375
 
 
 def _ease_amount(v: int) -> int:
@@ -161,6 +170,22 @@ def legacy_loot_pieces_daily_by_order() -> List[int]:
     return _allocate_exact_int(PREVIOUS_TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY, _weights_100())
 
 
+def reward_points_for_order(order: int) -> int:
+    """Fixed RP by 1-based mission number (order + 1)."""
+    n = int(order) + 1
+    if n <= 10:
+        return 250
+    if n <= 15:
+        return 500
+    if n <= 25:
+        return 2500
+    if n <= 50:
+        return 3000
+    if n <= 75:
+        return 4000
+    return 5000
+
+
 def _mission_has_random_token(order: int) -> bool:
     if order in (0, 2):
         return True
@@ -272,7 +297,6 @@ def _title_extended(difficulty: int) -> Tuple[str, str]:
 
 def build_missions() -> List[Dict[str, Any]]:
     w = _weights_100()
-    pts = _allocate_exact_int(TOTAL_REWARD_POINTS, w)
     trib = _allocate_exact_int(TOTAL_TRIBUTE_DAILY_CASH, w)
     # m_second gets a fixed +$1M cash (car-replacement bonus); rest of pool allocates to TOTAL.
     M_SECOND_CASH_BONUS = 1_000_000
@@ -315,7 +339,7 @@ def build_missions() -> List[Dict[str, Any]]:
             "description": f"{_format_requirements_description(m1_req)} The outfit wants to see what you're made of.",
             "reward_money": 300_000,
             "reward_cash_immediate": cash[o],
-            "reward_points": pts[o],
+            "reward_points": reward_points_for_order(o),
             "reward_respect": 2,
             "reward_tribute": 1_000,
             "reward_tribute_daily": trib[o],
@@ -360,7 +384,7 @@ def build_missions() -> List[Dict[str, Any]]:
             "reward_tribute_bullets_daily": bull_d[o],
             "reward_tribute_loot_box_pieces_daily": loot_d[o],
             "reward_auto_rank_2h": 1,
-            "reward_points": pts[o],
+            "reward_points": reward_points_for_order(o),
             "difficulty": 2,
             "unlocks_city": None,
             "character_id": None,
@@ -393,7 +417,7 @@ def build_missions() -> List[Dict[str, Any]]:
             "description": _format_requirements_description(m3_req),
             "reward_money": 0,
             "reward_cash_immediate": cash[o],
-            "reward_points": pts[o],
+            "reward_points": reward_points_for_order(o),
             "reward_respect": 5,
             "reward_tribute": 3_000,
             "reward_tribute_daily": trib[o],
@@ -433,7 +457,7 @@ def build_missions() -> List[Dict[str, Any]]:
             "description": _format_requirements_description(m4_req),
             "reward_money": 1_000_000,
             "reward_cash_immediate": cash[o],
-            "reward_points": pts[o],
+            "reward_points": reward_points_for_order(o),
             "reward_respect": 10,
             "reward_tribute": 5_000,
             "reward_tribute_daily": trib[o],
@@ -676,7 +700,7 @@ def build_missions() -> List[Dict[str, Any]]:
             "title": ttl,
             "description": _format_requirements_description(req),
             "reward_cash_immediate": cash[o],
-            "reward_points": pts[o],
+            "reward_points": reward_points_for_order(o),
             "reward_respect": min(8 + i * 5, 130),
             "reward_tribute": min(10_000 + i * 85_000, 2_000_000),
             "reward_tribute_daily": trib[o],
@@ -717,7 +741,7 @@ def build_missions() -> List[Dict[str, Any]]:
             "title": ttl,
             "description": desc,
             "reward_cash_immediate": cash[o],
-            "reward_points": pts[o],
+            "reward_points": reward_points_for_order(o),
             "reward_respect": min(20 + diff, 400),
             "reward_tribute": min(50_000 + diff * 25_000, 5_000_000),
             "reward_tribute_daily": trib[o],

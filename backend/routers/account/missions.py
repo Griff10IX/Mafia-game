@@ -31,6 +31,10 @@ from utils.missions_extended import (
     TOTAL_TRIBUTE_LOOT_BOX_PIECES_DAILY,
 )
 from utils.mission_loot_daily import daily_loot_for_completed_ids, ensure_mission_loot_daily_backfill
+from utils.mission_rp_backfill import (
+    MISSION_RP_BACKFILL_FLAG,
+    compute_mission_rp_backfill_credit,
+)
 from pymongo.errors import DuplicateKeyError
 import random
 
@@ -424,6 +428,7 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
         current_user.update(m3_set)
     await _ensure_extended_mission_baselines(current_user)
     current_user = await _maybe_mission_loot_backfill(current_user)
+    current_user = await _maybe_mission_rp_backfill(current_user)
     missions_out = []
     for m in MISSIONS:
         if m["city"] not in unlocked:
@@ -472,10 +477,17 @@ async def get_missions(current_user: dict = Depends(get_current_user), city: Opt
     # Send inbox notification once: "Prove yourself" mission offer (if not yet completed and not yet sent)
     completed_ids = _user_completed_mission_ids(current_user)
     if FIRST_MISSION_ID not in completed_ids and not current_user.get("first_mission_notification_sent"):
+        m_first = MISSION_BY_ID.get(FIRST_MISSION_ID) or {}
+        first_money = int(m_first.get("reward_money") or 0)
+        first_rp = int(m_first.get("reward_points") or 0)
         await send_notification(
             current_user["id"],
             "Prove Yourself",
-            "The outfit wants to see what you're made of. Commit 15 crimes and bust 1 NPC from jail. Reward: $50,000, 1 common car, and 50 rank points. Check Missions to track progress and claim your reward.",
+            (
+                "The outfit wants to see what you're made of. Commit 15 crimes and bust 1 NPC from jail. "
+                f"Reward: ${first_money:,}, 1 common car, and {first_rp:,} rank points. "
+                "Check Missions to track progress and claim your reward."
+            ),
             "system",
             category="missions",
         )
@@ -525,6 +537,7 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         current_user.update(m3_set)
     await _ensure_extended_mission_baselines(current_user)
     current_user = await _maybe_mission_loot_backfill(current_user)
+    current_user = await _maybe_mission_rp_backfill(current_user)
     by_city = {}
     for m in MISSIONS:
         if m["city"] not in unlocked:
@@ -1145,6 +1158,58 @@ async def _maybe_mission_loot_backfill(current_user: dict) -> dict:
     if not credited:
         return current_user
     fresh = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
+    return fresh or current_user
+
+
+async def _maybe_mission_rp_backfill(current_user: dict) -> dict:
+    """One-time remaining RP for missions completed under the old weighted table."""
+    if current_user.get(MISSION_RP_BACKFILL_FLAG):
+        return current_user
+    uid = current_user.get("id")
+    if not uid:
+        return current_user
+    completed_ids = _user_completed_mission_ids(current_user)
+    mult = _mission_completion_reward_mult(current_user)
+    credit = compute_mission_rp_backfill_credit(
+        current_user,
+        mission_by_id=MISSION_BY_ID,
+        mult=mult,
+        completed_ids=completed_ids,
+    )
+    update: Dict[str, Any] = {"$set": {MISSION_RP_BACKFILL_FLAG: True}}
+    if credit > 0:
+        update["$inc"] = {"rank_points": credit}
+        update = apply_season_rp_mirror_to_update(update, user=current_user)
+        credit = rank_points_in_update(update)
+    res = await db.users.update_one(
+        {"id": uid, MISSION_RP_BACKFILL_FLAG: {"$ne": True}},
+        update,
+    )
+    if res.matched_count == 0:
+        return current_user
+    if credit > 0:
+        await send_notification(
+            uid,
+            "Mission RP adjustment",
+            (
+                f"Mission rank point rewards were increased. You've been credited {credit:,} rank points "
+                "for missions you already completed under the old rewards. This adjustment is one-time."
+            ),
+            "system",
+            category="missions",
+        )
+        try:
+            rp_before = int(current_user.get("rank_points") or 0)
+            await maybe_process_rank_up(
+                uid,
+                rp_before,
+                credit,
+                current_user.get("username", ""),
+                user_prestige_rank_mult(current_user),
+            )
+        except Exception:
+            pass
+    fresh = await db.users.find_one({"id": uid}, {"_id": 0})
     return fresh or current_user
 
 

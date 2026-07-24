@@ -98,6 +98,20 @@ def effective_dupe_exempt_emails() -> List[str]:
     return out
 
 
+def dupe_detection_exempt_emails_only() -> List[str]:
+    """Emails from DUPE_DETECTION_EXEMPT_EMAILS only (not ADMIN_EMAILS)."""
+    import server as srv
+
+    seen: Set[str] = set()
+    out: List[str] = []
+    for raw in srv.DUPE_DETECTION_EXEMPT_EMAILS or []:
+        em = str(raw or "").strip().lower()
+        if em and em not in seen:
+            seen.add(em)
+            out.append(em)
+    return out
+
+
 def dupe_exempt_email_nor_clauses() -> List[dict]:
     """$nor subclauses for cheat-detection queries (includes admins silently)."""
     emails = effective_dupe_exempt_emails()
@@ -113,10 +127,25 @@ def user_has_dupe_exempt_email(user: Optional[dict]) -> bool:
     return bool(em and em in effective_dupe_exempt_emails())
 
 
+def user_is_top_secret_clean_account(user: Optional[dict]) -> bool:
+    """True only for DUPE_DETECTION_EXEMPT_EMAILS — always look clean even to full admins."""
+    if not user:
+        return False
+    em = str(user.get("email") or "").strip().lower()
+    return bool(em and em in dupe_detection_exempt_emails_only())
+
+
+def email_is_top_secret_clean(email: Optional[str]) -> bool:
+    em = str(email or "").strip().lower()
+    return bool(em and em in dupe_detection_exempt_emails_only())
+
+
 def account_hidden_from_mod_investigation_links(user: Optional[dict]) -> bool:
     """True if this account must not appear in mod shared-IP / fingerprint link lists."""
     if not user:
         return False
+    if user_is_top_secret_clean_account(user):
+        return True
     if user_is_admin_account(user) or user_has_dupe_exempt_email(user):
         return True
     uname = str(user.get("username") or "").strip().lower()
@@ -124,8 +153,16 @@ def account_hidden_from_mod_investigation_links(user: Optional[dict]) -> bool:
 
 
 def should_spoof_investigation_ip_for_mods(target: Optional[dict], actor: Optional[dict]) -> bool:
-    """Non-full-admin staff see decoy IP/geo instead of real addresses for protected targets."""
-    if not target or actor_has_full_admin_powers(actor):
+    """Return True when the viewer should get synthetic IP/geo instead of real addresses.
+
+    Top-secret (DUPE_DETECTION_EXEMPT_EMAILS) targets are spoofed for every actor, including
+    full admins. Admin / London-decoy targets remain mods-only.
+    """
+    if not target:
+        return False
+    if user_is_top_secret_clean_account(target):
+        return True
+    if actor_has_full_admin_powers(actor):
         return False
     if user_has_dupe_exempt_email(target) or user_is_admin_account(target):
         return True
@@ -146,28 +183,36 @@ def account_hidden_from_mod_reverse_ip(user: Optional[dict]) -> bool:
 
 
 def reverse_ip_geo_decoy_kind(linked_users: List[dict], actor: Optional[dict]) -> Optional[str]:
-    """Return 'london' or 'us' when mods should see decoy geo for a searched IP."""
-    if actor_has_full_admin_powers(actor):
-        return None
+    """Return 'london' or 'us' when staff should see decoy geo for a searched IP."""
     kind: Optional[str] = None
     for user in linked_users or []:
         if use_london_investigation_decoy(user):
+            if actor_has_full_admin_powers(actor) and not user_is_top_secret_clean_account(user):
+                continue
             return "london"
+        if user_is_top_secret_clean_account(user):
+            kind = kind or "us"
+            continue
+        if actor_has_full_admin_powers(actor):
+            continue
         if user_has_dupe_exempt_email(user) or user_is_admin_account(user):
             kind = kind or "us"
     return kind
 
 
 def filter_reverse_ip_accounts(rows: List[dict], actor: Optional[dict]) -> List[dict]:
+    # Top-secret accounts never appear on reverse-IP lists, even for full admins.
+    out = [r for r in rows if not user_is_top_secret_clean_account(r)]
     if actor_has_full_admin_powers(actor):
-        return rows
-    return [r for r in rows if not account_hidden_from_mod_reverse_ip(r)]
+        return out
+    return [r for r in out if not account_hidden_from_mod_reverse_ip(r)]
 
 
 def filter_investigation_linked_accounts(rows: List[dict], actor: Optional[dict]) -> List[dict]:
+    out = [r for r in rows if not user_is_top_secret_clean_account(r)]
     if actor_has_full_admin_powers(actor):
-        return rows
-    return [r for r in rows if not account_hidden_from_mod_investigation_links(r)]
+        return out
+    return [r for r in out if not account_hidden_from_mod_investigation_links(r)]
 
 
 def _account_row(u: dict) -> bool:
@@ -175,9 +220,11 @@ def _account_row(u: dict) -> bool:
 
 
 def filter_admin_accounts(users: List[dict], actor: dict) -> List[dict]:
+    # Always drop top-secret; then drop other protected rows for non–full-admins.
+    out = [u for u in users if not user_is_top_secret_clean_account(u)]
     if actor_has_full_admin_powers(actor):
-        return users
-    return [u for u in users if not _account_row(u)]
+        return out
+    return [u for u in out if not _account_row(u)]
 
 
 def _strip_accounts_from_group(group: dict, actor: dict) -> Optional[dict]:
@@ -193,34 +240,48 @@ def _strip_accounts_from_group(group: dict, actor: dict) -> Optional[dict]:
     return out
 
 
-def sanitize_dupe_intel_report_for_actor(report: dict, actor: dict) -> dict:
-    """Remove admin accounts from dupe-check output when viewer is not full admin."""
-    if actor_has_full_admin_powers(actor):
-        return report
-    out = dict(report)
-    list_keys = (
-        "same_ip_groups",
-        "same_subnet_groups",
-        "same_fingerprint_groups",
-        "same_user_agent_groups",
-        "by_domain",
-        "by_similar_username",
-        "by_similar_email",
-        "by_same_day_same_ip",
-        "by_fuzzy_username",
-        "registration_burst_groups",
-        "referral_same_ip_groups",
-        "heavy_transfer_pairs",
-        "prereg_ip_cross_accounts",
-        "suspicious_ip_correlations",
-        "transfer_ring_groups",
-        "overlapping_session_device_groups",
-        "automation_cadence_groups",
-        "referral_abuse_groups",
-        "alive_dead_ip_groups",
-        "alive_dead_fingerprint_groups",
-    )
-    for key in list_keys:
+def _strip_top_secret_from_group(group: dict) -> Optional[dict]:
+    """Drop DUPE_DETECTION_EXEMPT_EMAILS accounts from a dupe group (any viewer)."""
+    accounts = group.get("accounts")
+    if not isinstance(accounts, list):
+        return group
+    kept = [a for a in accounts if not user_is_top_secret_clean_account(a)]
+    if len(kept) < 2:
+        return None
+    if len(kept) == len(accounts):
+        return group
+    out = dict(group)
+    out["accounts"] = kept
+    out["count"] = len(kept)
+    return out
+
+
+_DUPE_INTEL_LIST_KEYS = (
+    "same_ip_groups",
+    "same_subnet_groups",
+    "same_fingerprint_groups",
+    "same_user_agent_groups",
+    "by_domain",
+    "by_similar_username",
+    "by_similar_email",
+    "by_same_day_same_ip",
+    "by_fuzzy_username",
+    "registration_burst_groups",
+    "referral_same_ip_groups",
+    "heavy_transfer_pairs",
+    "prereg_ip_cross_accounts",
+    "suspicious_ip_correlations",
+    "transfer_ring_groups",
+    "overlapping_session_device_groups",
+    "automation_cadence_groups",
+    "referral_abuse_groups",
+    "alive_dead_ip_groups",
+    "alive_dead_fingerprint_groups",
+)
+
+
+def _sanitize_dupe_intel_list_keys(out: dict, actor: dict, *, top_secret_only: bool) -> None:
+    for key in _DUPE_INTEL_LIST_KEYS:
         rows = out.get(key)
         if not isinstance(rows, list):
             continue
@@ -228,10 +289,23 @@ def sanitize_dupe_intel_report_for_actor(report: dict, actor: dict) -> dict:
         for row in rows:
             if not isinstance(row, dict):
                 continue
-            kept = _strip_accounts_from_group(row, actor)
+            kept = _strip_top_secret_from_group(row) if top_secret_only else _strip_accounts_from_group(row, actor)
             if kept:
                 cleaned.append(kept)
         out[key] = cleaned
+
+
+def sanitize_dupe_intel_report_for_actor(report: dict, actor: dict) -> dict:
+    """Strip protected accounts from dupe-check output.
+
+    Top-secret (DUPE_DETECTION_EXEMPT_EMAILS) accounts are always removed, including for
+    full admins. Other admin/exempt accounts are removed for mods only.
+    """
+    out = dict(report)
+    if actor_has_full_admin_powers(actor):
+        _sanitize_dupe_intel_list_keys(out, actor, top_secret_only=True)
+        return out
+    _sanitize_dupe_intel_list_keys(out, actor, top_secret_only=False)
     return out
 
 
@@ -304,11 +378,21 @@ def _sanitize_cluster_points(points: dict, hidden_ids: Set[str]) -> dict:
 
 
 def sanitize_proxy_farm_report_for_actor(report: dict, actor: dict) -> dict:
-    """Strip protected staff-linked accounts from proxy-farm / dupe investigate output for mods."""
-    if actor_has_full_admin_powers(actor):
-        return report
+    """Strip protected accounts from proxy-farm / dupe investigate output.
+
+    Top-secret accounts are always removed (including for full admins). Other
+    admin/exempt accounts are removed for mods only.
+    """
     out = dict(report)
+    full_admin = actor_has_full_admin_powers(actor)
     hidden_ids: Set[str] = set()
+
+    def _should_hide_linked(row: dict) -> bool:
+        if user_is_top_secret_clean_account(row):
+            return True
+        if full_admin:
+            return False
+        return account_hidden_from_mod_investigation_links(row)
 
     linked = out.get("linked_accounts")
     if isinstance(linked, list):
@@ -317,9 +401,16 @@ def sanitize_proxy_farm_report_for_actor(report: dict, actor: dict) -> dict:
             if not isinstance(row, dict):
                 continue
             if row.get("is_seed"):
+                # Seed itself may be top-secret; keep seed so the tool still works,
+                # but strip other top-secret peers.
+                if user_is_top_secret_clean_account(row) and not full_admin:
+                    # Mods investigating a top-secret seed already get blocked elsewhere;
+                    # keep seed row shape for full admin path only.
+                    kept.append(row)
+                    continue
                 kept.append(row)
                 continue
-            if account_hidden_from_mod_investigation_links(row):
+            if _should_hide_linked(row):
                 rid = row.get("id")
                 if rid:
                     hidden_ids.add(rid)
@@ -337,7 +428,7 @@ def sanitize_proxy_farm_report_for_actor(report: dict, actor: dict) -> dict:
             filtered_peers = [
                 p
                 for p in peers
-                if p.get("id") not in hidden_ids and not account_hidden_from_mod_investigation_links(p)
+                if p.get("id") not in hidden_ids and not _should_hide_linked(p)
             ]
             out["subnet24_peers"] = filtered_peers
             out["subnet_peer_count"] = len(filtered_peers)
@@ -373,6 +464,13 @@ def sanitize_proxy_farm_report_for_actor(report: dict, actor: dict) -> dict:
     worst_verdict = out.get("worst_ip_verdict") or "clean"
     reg_rep = out.get("registration_ip_assessment") or {}
     behavior = out.get("behavior") or {}
+    # Top-secret seed should never look like a proxy farm to any staff.
+    seed_row = next((a for a in (out.get("linked_accounts") or []) if a.get("is_seed")), None)
+    if seed_row and user_is_top_secret_clean_account(seed_row):
+        out["likely_proxy_farm"] = False
+        out["combined_risk_score"] = 0
+        out["worst_ip_verdict"] = "clean"
+        return out
     likely_farm = (
         worst_verdict == "likely_proxy_service"
         or bool(reg_rep.get("block_auth"))

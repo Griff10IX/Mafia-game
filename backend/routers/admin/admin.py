@@ -7361,15 +7361,22 @@ def register(router):
                 "forced_online": is_forced_online,
                 "last_seen_recent": last_seen_recent,
             })
-        # Same-IP badge: dupe-exempt accounts are not counted (includes admins silently).
+        # Same-IP badge: top-secret + dupe-exempt accounts are not counted as peers.
+        from utils.staff_mod_protection import user_is_top_secret_clean_account
+
         ip_counts = {}
         for u in users:
-            if user_has_dupe_exempt_email(u):
+            raw_u = raw_by_id.get(u.get("id") or "") or u
+            if user_is_top_secret_clean_account(raw_u) or user_has_dupe_exempt_email(raw_u):
                 continue
             ip = u.get("ip")
             if ip:
                 ip_counts[ip] = ip_counts.get(ip, 0) + 1
         for u in users:
+            raw_u = raw_by_id.get(u.get("id") or "") or u
+            if user_is_top_secret_clean_account(raw_u):
+                u["same_ip_online_count"] = 0
+                continue
             ip = u.get("ip")
             same = (ip_counts.get(ip, 0) - 1) if ip else 0
             u["same_ip_online_count"] = max(0, same)

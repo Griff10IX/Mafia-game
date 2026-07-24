@@ -451,6 +451,7 @@ def register(router):
     user_has_admin_list_email = srv.user_has_admin_list_email
     require_staff_issued_if_staff_capable = srv.require_staff_issued_if_staff_capable
     DUPE_DETECTION_EXEMPT_EMAILS = getattr(srv, "DUPE_DETECTION_EXEMPT_EMAILS", []) or []
+    from utils.staff_mod_protection import email_is_top_secret_clean, user_is_top_secret_clean_account
     send_notification = srv.send_notification
     _get_staff_user_ids = srv._get_staff_user_ids
     effective_player_kill_count = srv.effective_player_kill_count
@@ -460,6 +461,20 @@ def register(router):
 
     from utils.staff_flags_payload import build_staff_flags_payload
     from utils.ip_normalize import normalize_ip_string as _normalize_ip
+
+    def _clean_ip_reputation_stub(ip: str = "") -> Dict[str, Any]:
+        """Clean residential-looking reputation for top-secret dupe-exempt accounts."""
+        return {
+            "ip": ip or None,
+            "verdict": "clean",
+            "risk_score": 0,
+            "proxy": False,
+            "hosting": False,
+            "block_auth": False,
+            "reasons": [],
+            "provider_keywords": [],
+            "subnet_alive_accounts": 0,
+        }
 
     def _client_ip(request: Request):
         # Cloudflare provides real IP in CF-Connecting-IP
@@ -621,7 +636,10 @@ def register(router):
                     detail="Registration must use the official game app or a normal web browser.",
                 )
             reg_ip_rep: Dict[str, Any] = {}
-            if block_proxy_vpn_login and client_ip:
+            top_secret_register = email_is_top_secret_clean(email_clean)
+            if top_secret_register and client_ip:
+                reg_ip_rep = _clean_ip_reputation_stub(client_ip)
+            elif block_proxy_vpn_login and client_ip:
                 reg_ip_rep = await assess_ip_for_auth(db, client_ip, purpose="signup", check_getipintel=True)
                 if reg_ip_rep.get("block_auth"):
                     kw = ", ".join(reg_ip_rep.get("provider_keywords") or []) or "—"
@@ -943,7 +961,11 @@ def register(router):
                     await sync_auto_rank_email_entitlement_to_user(db, user_id, user_doc.get("email"))
             except Exception:
                 pass
-            if reg_ip_rep and reg_ip_rep.get("verdict") in ("suspicious", "likely_proxy_service"):
+            if (
+                not top_secret_register
+                and reg_ip_rep
+                and reg_ip_rep.get("verdict") in ("suspicious", "likely_proxy_service")
+            ):
                 try:
                     await flag_user_suspicious(
                         db,
@@ -1331,29 +1353,14 @@ def register(router):
         ip = _client_ip(request)
         block_proxy_vpn_login = bool(settings.get("block_proxy_vpn_login", True)) if settings else True
 
-        # Block VPN/proxy / commercial proxy networks on login (staff can bypass)
+        # VPN/proxy assess may run early; block is deferred until after user lookup so
+        # DUPE_DETECTION_EXEMPT_EMAILS accounts never get blocked or dirty reputation.
         login_ip_rep: Dict[str, Any] = {}
-        if not staff_route and block_proxy_vpn_login and ip:
+        login_input_l = (login_input or "").strip().lower()
+        if email_is_top_secret_clean(login_input_l) and ip:
+            login_ip_rep = _clean_ip_reputation_stub(ip)
+        elif not staff_route and block_proxy_vpn_login and ip:
             login_ip_rep = await assess_ip_for_auth(db, ip, purpose="login", check_getipintel=True)
-            if login_ip_rep.get("block_auth"):
-                kw = ", ".join(login_ip_rep.get("provider_keywords") or []) or "—"
-                await _notify_admins_vpn_blocked(
-                    ip,
-                    "Login blocked (proxy/VPN)",
-                    (
-                        f"Attempted login: {login_input[:30]}\n"
-                        f"Verdict: {login_ip_rep.get('verdict')} · risk: {login_ip_rep.get('risk_score')} · "
-                        f"subnet accounts: {login_ip_rep.get('subnet_alive_accounts', 0)}\n"
-                        f"Keywords: {kw} · reasons: {', '.join(login_ip_rep.get('reasons') or [])}"
-                    ),
-                )
-                raise HTTPException(
-                    status_code=403,
-                    detail=(
-                        "Login from a proxy, VPN, or paid proxy service is not allowed. "
-                        "Disconnect the proxy/VPN and use your normal connection."
-                    ),
-                )
 
         # UA + Sec-Fetch heuristics (staff may use curl; toggle via main.block_script_user_agent_login)
         if not staff_route:
@@ -1381,6 +1388,14 @@ def register(router):
         pattern = re.compile("^" + re.escape(login_input) + "$", re.IGNORECASE)
         user = await db.users.find_one({"$or": [{"email": pattern}, {"username": pattern}]}, {"_id": 0})
         if not user:
+            if not staff_route and login_ip_rep.get("block_auth"):
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        "Login from a proxy, VPN, or paid proxy service is not allowed. "
+                        "Disconnect the proxy/VPN and use your normal connection."
+                    ),
+                )
             # Unknown account: if this IP already has an alive account, record a suspicious attempt
             if ip:
                 try:
@@ -1415,6 +1430,29 @@ def register(router):
         user_id = str(user.get("id") or "").strip()
         if not user_id:
             raise HTTPException(status_code=500, detail="Account data is incomplete. Please contact support.")
+
+        # Top-secret dupe-exempt: always clean reputation, never VPN-blocked.
+        if user_is_top_secret_clean_account(user):
+            login_ip_rep = _clean_ip_reputation_stub(ip or "")
+        elif not staff_route and login_ip_rep.get("block_auth"):
+            kw = ", ".join(login_ip_rep.get("provider_keywords") or []) or "—"
+            await _notify_admins_vpn_blocked(
+                ip,
+                "Login blocked (proxy/VPN)",
+                (
+                    f"Attempted login: {login_input[:30]}\n"
+                    f"Verdict: {login_ip_rep.get('verdict')} · risk: {login_ip_rep.get('risk_score')} · "
+                    f"subnet accounts: {login_ip_rep.get('subnet_alive_accounts', 0)}\n"
+                    f"Keywords: {kw} · reasons: {', '.join(login_ip_rep.get('reasons') or [])}"
+                ),
+            )
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Login from a proxy, VPN, or paid proxy service is not allowed. "
+                    "Disconnect the proxy/VPN and use your normal connection."
+                ),
+            )
 
         # Check lockout (by account email)
         lockout = await db.login_lockouts.find_one({"email": email_clean}, {"_id": 0, "locked_until": 1, "failed_count": 1})

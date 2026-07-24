@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional, Set
 
 from utils.ip_enrichment import get_or_fetch_ip_geodata, network_label, normalize_ip
 from utils.proxy_detection import classify_ip_reputation
-from utils.staff_mod_protection import filter_investigation_linked_accounts
+from utils.staff_mod_protection import filter_investigation_linked_accounts, user_is_top_secret_clean_account
 
 
 def _parse_created_at(raw: Any) -> Optional[datetime]:
@@ -367,6 +367,21 @@ async def attach_online_screening(
         raw = raw_by_id.get(uid) or {}
         ipn = normalize_ip(row.get("ip") or "")
         flags: List[str] = []
+
+        # Top-secret dupe-exempt accounts always look clean on the online screen.
+        if user_is_top_secret_clean_account(raw):
+            row["same_ip_online_count"] = 0
+            row["screen"] = {
+                "band": "clean",
+                "flags": [],
+                "linked_alive_count": 0,
+                "linked_total_count": 0,
+                "fp_match_count": 0,
+                "why": [],
+                "real_account_candidates": [],
+            }
+            summary["clean"] += 1
+            continue
 
         if int(row.get("same_ip_online_count") or 0) > 0:
             flags.append("same_ip_online")

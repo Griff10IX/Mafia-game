@@ -1474,6 +1474,7 @@ def register(router):
             reverse_ip_geo_decoy_kind,
             user_has_dupe_exempt_email,
             user_is_admin_account,
+            user_is_top_secret_clean_account,
         )
         from utils.synthetic_user_ip_check import build_london_reverse_ip_geo, build_us_reverse_ip_geo
 
@@ -1482,6 +1483,9 @@ def register(router):
             geo_payload = build_london_reverse_ip_geo(ipn)
         elif geo_decoy == "us":
             decoy_user = next(
+                (u for u in users_raw if user_is_top_secret_clean_account(u)),
+                None,
+            ) or next(
                 (u for u in users_raw if user_is_admin_account(u) or user_has_dupe_exempt_email(u)),
                 users_raw[0] if users_raw else {},
             )
@@ -1504,20 +1508,22 @@ def register(router):
                 "geo_error": g.get("error"),
             }
 
-        if not actor_has_full_admin_powers(current_user):
-            accounts = filter_reverse_ip_accounts(accounts, current_user)
-            hidden_atk_ids: set = set()
-            atk_ids = [aa.get("attacker_id") for aa in attack_attackers if aa.get("attacker_id")]
-            if atk_ids:
-                async for u in db.users.find(
-                    {"id": {"$in": atk_ids}},
-                    {"_id": 0, "id": 1, "email": 1, "username": 1},
+        # Always strip top-secret; mods also lose other protected staff accounts.
+        accounts = filter_reverse_ip_accounts(accounts, current_user)
+        hidden_atk_ids: set = set()
+        atk_ids = [aa.get("attacker_id") for aa in attack_attackers if aa.get("attacker_id")]
+        if atk_ids:
+            async for u in db.users.find(
+                {"id": {"$in": atk_ids}},
+                {"_id": 0, "id": 1, "email": 1, "username": 1},
+            ):
+                if user_is_top_secret_clean_account(u) or (
+                    not actor_has_full_admin_powers(current_user) and account_hidden_from_mod_reverse_ip(u)
                 ):
-                    if account_hidden_from_mod_reverse_ip(u):
-                        hidden_atk_ids.add(u["id"])
-            if hidden_atk_ids:
-                attack_attackers = [aa for aa in attack_attackers if aa.get("attacker_id") not in hidden_atk_ids]
-                accounts = [a for a in accounts if a.get("id") not in hidden_atk_ids]
+                    hidden_atk_ids.add(u["id"])
+        if hidden_atk_ids:
+            attack_attackers = [aa for aa in attack_attackers if aa.get("attacker_id") not in hidden_atk_ids]
+            accounts = [a for a in accounts if a.get("id") not in hidden_atk_ids]
         return {
             "ip": ipn,
             "account_count": len(accounts),
