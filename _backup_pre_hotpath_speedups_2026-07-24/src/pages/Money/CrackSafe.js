@@ -532,44 +532,19 @@ export default function CrackSafe() {
       if (res.data.cracked) {
         const hasBonus = (res.data.bonus_tokens?.length > 0) || Number(res.data.bonus_loot_pieces) > 0;
         toast.success(hasBonus ? '🔓 SAFE CRACKED! Check your balance and rewards!' : '🔓 SAFE CRACKED! Check your balance!');
-        setInfo((prev) => (prev ? {
-          ...prev,
-          jackpot: res.data.jackpot ?? prev.jackpot,
-          total_attempts: res.data.total_attempts ?? 0,
-          last_winner_username: res.data.last_winner_username ?? prev.last_winner_username,
-          last_won_at: res.data.last_won_at ?? prev.last_won_at,
-          win_locked: res.data.win_locked ?? prev.win_locked,
-          win_lock_until: res.data.win_lock_until ?? prev.win_lock_until,
-          next_guess_at: res.data.next_guess_at ?? null,
-          can_guess: res.data.can_guess ?? false,
-          clues: res.data.clues ?? prev.clues,
-        } : prev));
         await refreshUser();
-        await fetchInfo();
-      } else if (res.data.refetch) {
-        toast.error(res.data.message);
-        await fetchInfo();
       } else {
         setShaking(true);
         setTimeout(() => setShaking(false), 650);
         toast.error(res.data.message);
-        setInfo((prev) => (prev ? {
-          ...prev,
-          jackpot: res.data.jackpot ?? prev.jackpot,
-          total_attempts: res.data.total_attempts ?? prev.total_attempts,
-          clues: res.data.clues ?? prev.clues,
-          next_guess_at: res.data.next_guess_at ?? prev.next_guess_at,
-          can_guess: res.data.can_guess ?? prev.can_guess,
-        } : prev));
-        if (res.data.new_balance != null) refreshUser(res.data.new_balance);
-        else refreshUser();
       }
+
+      await fetchInfo();
     } catch (e) {
       clearInterval(spinRef.current);
       spinRef.current = null;
       const detail = e.response?.data?.detail || 'Failed to submit guess';
       toast.error(detail);
-      await fetchInfo();
     } finally {
       setGuessing(false);
     }

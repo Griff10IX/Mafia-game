@@ -2,8 +2,6 @@
 # SAFE_REPLAY_COST (max SAFE_REPLAY_MAX_PER_DAY per UK calendar day). Admins unlimited / no win lock.
 # Reward pool: cash jackpot (always) + 25% chance for 1 bonus token + 25% chance for 10–15 loot box pieces
 from datetime import datetime, timedelta, timezone
-import asyncio
-import logging
 import secrets
 _rng = secrets.SystemRandom()
 from typing import List, Optional
@@ -13,27 +11,6 @@ from fastapi import Depends, HTTPException
 
 from server import db, get_current_user, get_current_user_verified, _is_admin, log_activity
 from utils.game_timezone import game_today_date_str
-
-logger = logging.getLogger(__name__)
-
-_crack_safe_bookkeeping_locks: dict = {}
-_crack_safe_bookkeeping_tasks: set = set()
-
-
-def _spawn_crack_safe_bookkeeping(user_id: str, coro_factory) -> None:
-    """Run coro_factory() in the background, serialized per user."""
-    lock = _crack_safe_bookkeeping_locks.setdefault(user_id or "", asyncio.Lock())
-
-    async def _runner():
-        async with lock:
-            try:
-                await coro_factory()
-            except Exception:
-                logger.exception("crack safe post-guess bookkeeping failed user_id=%s", user_id)
-
-    task = asyncio.create_task(_runner())
-    _crack_safe_bookkeeping_tasks.add(task)
-    task.add_done_callback(_crack_safe_bookkeeping_tasks.discard)
 
 # Token types that can drop as bonus reward (matches armoury TOKEN_TYPES)
 SAFE_TOKEN_REWARD_TYPES = (
@@ -347,26 +324,23 @@ def register(router):
 
         cracked = req.numbers == combo
         correct_positions = sum(1 for a, b in zip(req.numbers, combo) if a == b)
-        uname = user.get("username") or "?"
 
-        async def _post_guess_log():
-            await db.safe_guesses.insert_one({
-                "user_id": uid,
-                "username": uname,
-                "guess": req.numbers,
-                "guessed_at": now,
-                "correct": cracked,
-            })
-            await log_activity(
-                uid,
-                uname,
-                "crack_safe_guess",
-                {"cracked": cracked, "correct_positions": correct_positions, "is_admin": is_admin},
-            )
-
-        _spawn_crack_safe_bookkeeping(uid, _post_guess_log)
+        await db.safe_guesses.insert_one({
+            "user_id": user.get("id") or "",
+            "username": user.get("username", "?"),
+            "guess": req.numbers,
+            "guessed_at": now,
+            "correct": cracked,
+        })
+        await log_activity(
+            user.get("id") or "",
+            user.get("username") or "?",
+            "crack_safe_guess",
+            {"cracked": cracked, "correct_positions": sum(1 for a, b in zip(req.numbers, combo) if a == b), "is_admin": is_admin},
+        )
 
         if cracked:
+            uid = user.get("id") or ""
             new_combo = [_rng.randint(SAFE_MIN, SAFE_MAX) for _ in range(SAFE_DIGITS)]
             won_safe = await db.safe_game.find_one_and_update(
                 {"combination": combo},
@@ -374,7 +348,7 @@ def register(router):
                     "combination": new_combo,
                     "jackpot": SAFE_JACKPOT_SEED,
                     "total_attempts": 0,
-                    "last_winner_username": uname,
+                    "last_winner_username": user.get("username", "?"),
                     "last_won_at": now,
                 }},
             )
@@ -383,10 +357,8 @@ def register(router):
                     "cracked": False,
                     "correct_positions": SAFE_DIGITS,
                     "message": "Safe was cracked by someone else just before you!",
-                    "refetch": True,
                 }
             jackpot_amount = won_safe.get("jackpot", SAFE_JACKPOT_SEED)
-            win_lock_until = now + timedelta(hours=SAFE_WIN_LOCK_HOURS)
             win_inc: dict = {"money": jackpot_amount}
             bonus_loot_pieces = 0
             if _rng.random() < SAFE_LOOT_REWARD_CHANCE:
@@ -399,7 +371,7 @@ def register(router):
                     {"id": uid},
                     {
                         "$inc": win_inc,
-                        "$set": {"crack_safe_win_lock_until": win_lock_until},
+                        "$set": {"crack_safe_win_lock_until": now + timedelta(hours=SAFE_WIN_LOCK_HOURS)},
                     },
                 )
 
@@ -422,24 +394,20 @@ def register(router):
                         await db.users.update_one({"id": uid}, {"$inc": incs})
                 except Exception:
                     pass
-
-            async def _post_win_bookkeeping():
-                await db.safe_winners.insert_one({
-                    "username": uname,
-                    "user_id": uid,
-                    "won_at": now,
-                    "amount_won": jackpot_amount,
-                    "bonus_tokens": bonus_tokens,
-                    "bonus_loot_pieces": bonus_loot_pieces,
-                })
-                await log_activity(
-                    uid,
-                    uname,
-                    "crack_safe_jackpot",
-                    {"jackpot_won": jackpot_amount, "bonus_tokens": bonus_tokens, "bonus_loot_pieces": bonus_loot_pieces},
-                )
-
-            _spawn_crack_safe_bookkeeping(uid, _post_win_bookkeeping)
+            await db.safe_winners.insert_one({
+                "username": user.get("username", "?"),
+                "user_id": uid,
+                "won_at": now,
+                "amount_won": jackpot_amount,
+                "bonus_tokens": bonus_tokens,
+                "bonus_loot_pieces": bonus_loot_pieces,
+            })
+            await log_activity(
+                uid,
+                user.get("username") or "?",
+                "crack_safe_jackpot",
+                {"jackpot_won": jackpot_amount, "bonus_tokens": bonus_tokens, "bonus_loot_pieces": bonus_loot_pieces},
+            )
             msg = f"YOU CRACKED THE SAFE! ${jackpot_amount:,} is yours!"
             if bonus_loot_pieces:
                 msg += f" Plus {bonus_loot_pieces:,} loot box pieces!"
@@ -453,20 +421,10 @@ def register(router):
                 "bonus_tokens": bonus_tokens,
                 "bonus_loot_pieces": bonus_loot_pieces,
                 "message": msg,
-                "jackpot": SAFE_JACKPOT_SEED,
-                "total_attempts": 0,
-                "last_winner_username": uname,
-                "last_won_at": now.isoformat(),
-                "win_locked": not is_admin,
-                "win_lock_until": None if is_admin else win_lock_until.isoformat(),
-                "next_guess_at": None if is_admin else cooldown_until.isoformat(),
-                "can_guess": bool(is_admin),
             }
 
-        fresh_safe = await db.safe_game.find_one({})
-        jackpot_now = int((fresh_safe or {}).get("jackpot") or SAFE_JACKPOT_SEED)
-        attempts_now = int((fresh_safe or {}).get("total_attempts") or 0)
-        clues = _generate_clues((fresh_safe or {}).get("combination") or [], attempts_now)
+        fresh = await db.safe_game.find_one({})
+        clues = _generate_clues(fresh.get("combination") or [], fresh.get("total_attempts", 0))
 
         # Only sometimes reveal how many digits were in the correct position (randomly, not every attempt)
         show_position_hint = _rng.random() < 0.5
@@ -475,15 +433,9 @@ def register(router):
             if show_position_hint
             else "Wrong combination."
         )
-        money_after = int(fresh.get("money") or 0) - SAFE_ENTRY_COST
         return {
             "cracked": False,
             "correct_positions": correct_positions if show_position_hint else None,
             "clues": clues,
             "message": message,
-            "jackpot": jackpot_now,
-            "total_attempts": attempts_now,
-            "next_guess_at": None if is_admin else cooldown_until.isoformat(),
-            "can_guess": bool(is_admin or money_after >= SAFE_ENTRY_COST),
-            "new_balance": money_after,
         }

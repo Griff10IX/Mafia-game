@@ -1,6 +1,4 @@
 from datetime import datetime, timedelta, timezone
-import asyncio
-import logging
 import math
 import secrets
 import uuid
@@ -12,27 +10,7 @@ from server import db, get_current_user_verified, log_activity, send_notificatio
 from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES
 from utils.point_provenance import log_points_event
 
-logger = logging.getLogger(__name__)
 _rng = secrets.SystemRandom()
-
-_gr_bookkeeping_locks: dict = {}
-_gr_bookkeeping_tasks: set = set()
-
-
-def _spawn_grave_robber_bookkeeping(user_id: str, coro_factory) -> None:
-    """Run coro_factory() in the background, serialized per user."""
-    lock = _gr_bookkeeping_locks.setdefault(user_id or "", asyncio.Lock())
-
-    async def _runner():
-        async with lock:
-            try:
-                await coro_factory()
-            except Exception:
-                logger.exception("grave robber post-attempt bookkeeping failed user_id=%s", user_id)
-
-    task = asyncio.create_task(_runner())
-    _gr_bookkeeping_tasks.add(task)
-    task.add_done_callback(_gr_bookkeeping_tasks.discard)
 
 GR_ATTEMPTS_TOTAL = 50
 GR_BASE_ATTEMPT_COST = 1_000_000
@@ -395,10 +373,17 @@ def register(router):
 
         if inc:
             await db.users.update_one({"id": uid}, {"$inc": inc})
+        if int(reward.get("points") or 0) > 0:
+            await log_points_event(
+                db,
+                user_id=uid,
+                points=int(reward["points"]),
+                event_type="grave_robber_reward",
+                event_ref=f"grave_robber:{uuid.uuid4().hex}",
+            )
 
         is_last_attempt = next_attempts_used >= attempts_total
         cooldown_until_iso = None
-        cool_until = None
         if is_last_attempt:
             cool_until = now + timedelta(hours=GR_COOLDOWN_HOURS)
             await db.users.update_one(
@@ -425,19 +410,26 @@ def register(router):
             "attempt_cost": expected_cost,
             "reward": reward,
         }
-        points_reward = int(reward.get("points") or 0)
-        reward_cash = int(reward.get("money") or 0)
-        reward_bullets = int(reward.get("bullets") or 0)
+        await db.grave_robber_attempts.insert_one(attempt_row)
+        await log_activity(
+            uid,
+            uname,
+            "grave_robber_attempt",
+            {
+                "attempt_number": next_attempts_used,
+                "attempt_cost": expected_cost,
+                "reward_kind": reward.get("kind"),
+                "is_last_attempt": is_last_attempt,
+            },
+        )
 
         hitlist_event = None
-        bounty_cash = 0
         if _rng.random() < GR_FAMILY_RETALIATION_CHANCE:
             bounty_cash = int(round(expected_cost * 1.10))
             hitlist_event = {
                 "bounty_cash": bounty_cash,
                 "reason": "A fallen gangster's family spotted you at the graveyard.",
             }
-            # Hitlist + notify stay sync so the player is immediately on the list.
             await db.hitlist.insert_one(
                 {
                     "id": uuid.uuid4().hex,
@@ -452,6 +444,20 @@ def register(router):
                     "created_at": now.isoformat(),
                 }
             )
+            await db.hitlist_bodyguard_events.insert_one(
+                {
+                    "at": now.isoformat(),
+                    "type": "grave_robber_retaliation_hitlist",
+                    "placer_id": "system",
+                    "placer_username": "Fallen Family",
+                    "target_id": uid,
+                    "target_username": uname,
+                    "target_type": "user",
+                    "reward_type": "cash",
+                    "reward_amount": bounty_cash,
+                    "hidden": False,
+                }
+            )
             await send_notification(
                 uid,
                 "⚠️ Graveyard retaliation",
@@ -459,74 +465,12 @@ def register(router):
                 "system",
                 category="hitlist",
             )
-
-        async def _post_attempt_bookkeeping():
-            await db.grave_robber_attempts.insert_one(attempt_row)
             await log_activity(
                 uid,
                 uname,
-                "grave_robber_attempt",
-                {
-                    "attempt_number": next_attempts_used,
-                    "attempt_cost": expected_cost,
-                    "reward_kind": reward.get("kind"),
-                    "is_last_attempt": is_last_attempt,
-                },
+                "grave_robber_retaliation_hitlist",
+                {"bounty_cash": bounty_cash, "attempt_number": next_attempts_used},
             )
-            if points_reward > 0:
-                await log_points_event(
-                    db,
-                    user_id=uid,
-                    points=points_reward,
-                    event_type="grave_robber_reward",
-                    event_ref=f"grave_robber:{uuid.uuid4().hex}",
-                )
-            if hitlist_event:
-                await db.hitlist_bodyguard_events.insert_one(
-                    {
-                        "at": now.isoformat(),
-                        "type": "grave_robber_retaliation_hitlist",
-                        "placer_id": "system",
-                        "placer_username": "Fallen Family",
-                        "target_id": uid,
-                        "target_username": uname,
-                        "target_type": "user",
-                        "reward_type": "cash",
-                        "reward_amount": bounty_cash,
-                        "hidden": False,
-                    }
-                )
-                await log_activity(
-                    uid,
-                    uname,
-                    "grave_robber_retaliation_hitlist",
-                    {"bounty_cash": bounty_cash, "attempt_number": next_attempts_used},
-                )
-
-        _spawn_grave_robber_bookkeeping(uid, _post_attempt_bookkeeping)
-
-        display_cost = GR_BASE_ATTEMPT_COST if is_last_attempt else next_cost
-        next_attempt_cost = (
-            GR_BASE_ATTEMPT_COST
-            if is_last_attempt
-            else _cost_for_attempts_used(min(attempts_total - 1, next_attempts_used + 1))
-        )
-        tier_for_ui = _tier_for_attempts_used(
-            next_attempts_used if next_attempts_used < attempts_total else attempts_total - 1
-        )
-        total_spent = int(fresh.get("grave_robber_total_spent") or 0) + expected_cost
-        total_rewards_cash = int(fresh.get("grave_robber_total_rewards_cash") or 0) + reward_cash
-        total_rewards_bullets = int(fresh.get("grave_robber_total_rewards_bullets") or 0) + reward_bullets
-        total_rewards_points = int(fresh.get("grave_robber_total_rewards_points") or 0) + points_reward
-        recent_entry = {
-            "id": attempt_row["id"],
-            "user_id": uid,
-            "username": uname,
-            "attempted_at": now.isoformat(),
-            "attempt_number": next_attempts_used,
-            "attempt_cost": expected_cost,
-            "reward": reward,
-        }
 
         return {
             "message": "Grave disturbed.",
@@ -535,7 +479,6 @@ def register(router):
                 "attempt_cost": expected_cost,
                 "reward": reward,
             },
-            "recent_attempt": recent_entry,
             "hitlist_event": hitlist_event,
             "jailed": go_to_jail,
             "jail_seconds": GR_JAIL_SECONDS if go_to_jail else 0,
@@ -543,20 +486,9 @@ def register(router):
             "attempts_total": attempts_total,
             "attempts_used": next_attempts_used,
             "attempts_remaining": max(0, attempts_total - next_attempts_used),
-            "run_started": not is_last_attempt,
-            "current_attempt_cost": display_cost if not is_last_attempt else GR_BASE_ATTEMPT_COST,
-            "next_attempt_cost": next_attempt_cost,
-            "tier_index": tier_for_ui,
-            "tier_count": GR_TIERS_TOTAL,
-            "cooldown_active": bool(is_last_attempt),
+            "current_attempt_cost": next_cost if not is_last_attempt else None,
             "cooldown_until": cooldown_until_iso,
-            "cooldown_remaining_seconds": _remaining_seconds(cool_until, now) if cool_until else 0,
             "cooldown_hours": GR_COOLDOWN_HOURS if is_last_attempt else 0,
-            "total_spent": total_spent,
-            "total_rewards_cash": total_rewards_cash,
-            "total_rewards_bullets": total_rewards_bullets,
-            "total_rewards_points": total_rewards_points,
-            "total_net_cash": total_rewards_cash - total_spent,
             "tier_step_percent": GR_TIER_STEP_PCT,
             "tier_multiplier": GR_TIER_MULTIPLIER,
         }

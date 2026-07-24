@@ -916,33 +916,11 @@ export default function BoozeRun() {
       refreshUser();
       setTradeAmounts((prev) => ({ ...prev, [boozeId]: '' }));
       if (response.data.caught) {
-        setConfig((prev) => {
-          if (!prev) return prev;
-          const prices = (prev.prices_at_location || []).map((row) => ({ ...row, carrying: 0 }));
-          return { ...prev, prices_at_location: prices, carrying_total: 0 };
-        });
         window.setTimeout(() => {
           window.location.replace('/crime/jail');
         }, BOOZE_CAUGHT_JAIL_REDIRECT_MS);
       } else {
-        const newCarrying = response.data.new_carrying;
-        const carryingTotal = response.data.carrying_total;
-        setConfig((prev) => {
-          if (!prev) return prev;
-          const prices = (prev.prices_at_location || []).map((row) => (
-            row.booze_id === boozeId && newCarrying != null
-              ? { ...row, carrying: Number(newCarrying) }
-              : row
-          ));
-          return {
-            ...prev,
-            prices_at_location: prices,
-            carrying_total: carryingTotal != null
-              ? Number(carryingTotal)
-              : prices.reduce((sum, row) => sum + Number(row.carrying || 0), 0),
-          };
-        });
-        fetchConfig({ silent: true });
+        fetchConfig();
       }
     } catch (e) {
       toast.error(apiErrorDetail(e, 'Sell failed'));

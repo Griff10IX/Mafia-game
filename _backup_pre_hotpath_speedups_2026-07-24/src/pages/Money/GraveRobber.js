@@ -285,47 +285,14 @@ export default function GraveRobber() {
     setDigging(true);
     try {
       const res = await api.post('/grave-robber/attempt');
-      const data = res.data || {};
-      setLatest(data.attempt || null);
-      if (data.hitlist_event?.bounty_cash) {
-        toast.warning(`You were spotted and added to the hitlist for ${formatMoney(data.hitlist_event.bounty_cash)}.`);
+      setLatest(res.data?.attempt || null);
+      if (res.data?.hitlist_event?.bounty_cash) {
+        toast.warning(`You were spotted and added to the hitlist for ${formatMoney(res.data.hitlist_event.bounty_cash)}.`);
       }
-      setStatus((prev) => {
-        if (!prev) return prev;
-        const recent = Array.isArray(prev.recent_attempts) ? prev.recent_attempts : [];
-        const entry = data.recent_attempt || (data.attempt
-          ? {
-              attempt_number: data.attempt.attempt_number,
-              attempt_cost: data.attempt.attempt_cost,
-              reward: data.attempt.reward,
-              attempted_at: new Date().toISOString(),
-            }
-          : null);
-        return {
-          ...prev,
-          attempts_total: data.attempts_total ?? prev.attempts_total,
-          attempts_used: data.attempts_used ?? prev.attempts_used,
-          attempts_remaining: data.attempts_remaining ?? prev.attempts_remaining,
-          run_started: data.run_started ?? prev.run_started,
-          current_attempt_cost: data.current_attempt_cost ?? prev.current_attempt_cost,
-          next_attempt_cost: data.next_attempt_cost ?? prev.next_attempt_cost,
-          tier_index: data.tier_index ?? prev.tier_index,
-          tier_count: data.tier_count ?? prev.tier_count,
-          cooldown_active: !!data.cooldown_active,
-          cooldown_until: data.cooldown_until || null,
-          cooldown_remaining_seconds: Number(data.cooldown_remaining_seconds || 0),
-          total_spent: data.total_spent ?? prev.total_spent,
-          total_rewards_cash: data.total_rewards_cash ?? prev.total_rewards_cash,
-          total_rewards_bullets: data.total_rewards_bullets ?? prev.total_rewards_bullets,
-          total_rewards_points: data.total_rewards_points ?? prev.total_rewards_points,
-          total_net_cash: data.total_net_cash ?? prev.total_net_cash,
-          recent_attempts: entry ? [entry, ...recent].slice(0, 20) : recent,
-        };
-      });
       refreshUser();
+      await fetchStatus(true);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Dig failed');
-      await fetchStatus(true);
     } finally {
       setDigging(false);
     }

@@ -1,7 +1,6 @@
 # Booze Run: config, buy, sell, capacity upgrade; rotation helpers for flash news
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Optional
-import asyncio
 import logging
 import time
 import secrets
@@ -42,25 +41,6 @@ async def _booze_sustained_rl_user(current_user: dict = Depends(get_current_user
 
 
 _booze_rl_u = [Depends(_booze_sustained_rl_user)]
-
-_booze_bookkeeping_locks: Dict[str, asyncio.Lock] = {}
-_booze_bookkeeping_tasks: set = set()
-
-
-def _spawn_booze_bookkeeping(user_id: str, coro_factory) -> None:
-    """Run coro_factory() in the background, serialized per user."""
-    lock = _booze_bookkeeping_locks.setdefault(user_id or "", asyncio.Lock())
-
-    async def _runner():
-        async with lock:
-            try:
-                await coro_factory()
-            except Exception:
-                logger.exception("booze post-sell bookkeeping failed user_id=%s", user_id)
-
-    task = asyncio.create_task(_runner())
-    _booze_bookkeeping_tasks.add(task)
-    task.add_done_callback(_booze_bookkeeping_tasks.discard)
 
 
 def _parse_iso_datetime(s):
@@ -443,17 +423,6 @@ async def _booze_reload_user_trade_state(user: dict) -> dict:
             "booze_capacity_bonus": 1,
             "rank_points": 1,
             "prestige_level": 1,
-            "referred_by": 1,
-            # Badge tiers for sell-path badge_bonuses_from_user (no extra DB round-trip).
-            "total_crimes": 1,
-            "total_gta": 1,
-            "jail_busts": 1,
-            "total_kills": 1,
-            "total_oc_heists": 1,
-            "bullets_melted": 1,
-            "hitlist_npc_kills": 1,
-            "robot_bodyguard_kills": 1,
-            "total_kills_excludes_npc_v1": 1,
         },
     )
     if not fresh:
@@ -784,36 +753,31 @@ async def _booze_sell_impl(
             _bj["via_auto_rank"] = True
         if via_distillery_collect:
             _bj["via_distillery_collect"] = True
+        await log_activity(
+            user.get("id", ""),
+            user.get("username", ""),
+            "booze_jail",
+            _bj,
+        )
         jail_at = datetime.now(timezone.utc)
-        uid_jail = user.get("id", "")
-        uname_jail = user.get("username", "")
-        loss_basis_i = int(loss_basis or 0)
-
-        async def _post_jail_bookkeeping():
-            await log_activity(uid_jail, uname_jail, "booze_jail", _bj)
-            try:
-                await db.economy_events.insert_one(
-                    {
-                        "at": jail_at,
-                        "type": "booze_run_jail",
-                        "user_id": uid_jail,
-                        "username": uname_jail or "",
-                        "phase": "sell",
-                        "inventory_loss_basis": loss_basis_i,
-                    }
-                )
-            except Exception:
-                pass
-
-        _spawn_booze_bookkeeping(uid_jail, _post_jail_bookkeeping)
+        try:
+            await db.economy_events.insert_one(
+                {
+                    "at": jail_at,
+                    "type": "booze_run_jail",
+                    "user_id": user["id"],
+                    "username": user.get("username") or "",
+                    "phase": "sell",
+                    "inventory_loss_basis": int(loss_basis or 0),
+                }
+            )
+        except Exception:
+            pass
         out = {
             "message": "Busted! Prohibition agents got you. You're going to jail.",
             "caught": True,
             "jail_until": jail_until.isoformat(),
             "jail_seconds": BOOZE_RUN_JAIL_SECONDS,
-            "booze_id": booze_id,
-            "new_carrying": 0,
-            "carrying_cleared": True,
         }
         if loss_basis > 0:
             out["inventory_loss_basis"] = loss_basis
@@ -827,8 +791,8 @@ async def _booze_sell_impl(
     is_run = buy_location is not None and buy_location != current_state
     if is_run:
         try:
-            from routers.game.achievements import badge_bonuses_from_user
-            bb = badge_bonuses_from_user(user)
+            from routers.game.achievements import get_badge_bonuses
+            bb = await get_badge_bonuses(user.get("id") or "")
             profit = int(profit * (1 + bb.get("booze_runs", 0) * 0.001) * bb.get("prestige_badge_mult", 1))
         except Exception:
             pass
@@ -909,28 +873,13 @@ async def _booze_sell_impl(
                 user.get("id"),
             )
             await db.users.update_one({"id": user["id"]}, {"$inc": {"money": int(revenue)}})
-    _invalidate_config_cache(user["id"])
-    _bs = {"booze": booze_name, "amount": amount, "revenue": revenue, "profit": profit}
-    if via_auto_rank:
-        _bs["via_auto_rank"] = True
-    if via_distillery_collect:
-        _bs["via_distillery_collect"] = True
-    if ib_vault_id:
-        _bs["illegal_business_id"] = ib_vault_id
-    uid_sell = user.get("id", "")
-    uname_sell = user.get("username", "")
-    ref_ids = normalize_referred_by_ids(user.get("referred_by"))
-    booze_event_at = datetime.now(timezone.utc)
-
-    async def _post_sell_bookkeeping():
-        await log_activity(uid_sell, uname_sell, "booze_sell", _bs)
-        if not is_run:
-            return
+    if is_run:
+        booze_event_at = datetime.now(timezone.utc)
         booze_event_result = await db.economy_events.insert_one({
             "at": booze_event_at,
             "type": "booze_run_sell",
-            "user_id": uid_sell,
-            "username": uname_sell or "",
+            "user_id": user["id"],
+            "username": user.get("username") or "",
             "booze_id": booze_id,
             "booze_name": booze_name,
             "amount": amount,
@@ -942,37 +891,39 @@ async def _booze_sell_impl(
 
             await record_family_daily_activity(
                 db,
-                uid_sell,
+                user["id"],
                 "booze_run",
                 source_id=f"booze-run:{booze_event_result.inserted_id}",
                 now=booze_event_at,
             )
         except Exception:
-            logger.exception("Family daily booze progress failed user_id=%s", uid_sell)
+            logger.exception("Family daily booze progress failed user_id=%s", user.get("id"))
+    if is_run:
         try:
             from routers.account.objectives import update_objectives_progress
-            await update_objectives_progress(uid_sell, "booze_runs", 1)
+            await update_objectives_progress(user["id"], "booze_runs", 1)
         except Exception:
             pass
+        # Referral: referrers split 10% of booze profit (game-paid)
+        _rb = await db.users.find_one({"id": user["id"]}, {"_id": 0, "referred_by": 1})
+        ref_ids = normalize_referred_by_ids((_rb or user).get("referred_by"))
         if ref_ids and profit > 0:
             pool = referral_pool_int(profit, 0.10)
-            for rid, amt in split_referral_pool(pool, ref_ids, self_id=uid_sell):
+            for rid, amt in split_referral_pool(pool, ref_ids, self_id=user["id"]):
                 if amt > 0:
                     await apply_referrer_referral_increment(
                         db, rid, {"money": amt, "referral_earnings_booze": amt}, context="booze_run"
                     )
-
-    _spawn_booze_bookkeeping(uid_sell, _post_sell_bookkeeping)
-    carrying_total = _booze_user_carrying_total(carrying) - amount
-    return {
-        "message": f"Sold {amount} {booze_name}",
-        "revenue": revenue,
-        "profit": profit,
-        "new_carrying": new_val,
-        "booze_id": booze_id,
-        "carrying_total": max(0, int(carrying_total)),
-        "is_run": is_run,
-    }
+    _invalidate_config_cache(user["id"])
+    _bs = {"booze": booze_name, "amount": amount, "revenue": revenue, "profit": profit}
+    if via_auto_rank:
+        _bs["via_auto_rank"] = True
+    if via_distillery_collect:
+        _bs["via_distillery_collect"] = True
+    if ib_vault_id:
+        _bs["illegal_business_id"] = ib_vault_id
+    await log_activity(user.get("id", ""), user.get("username", ""), "booze_sell", _bs)
+    return {"message": f"Sold {amount} {booze_name}", "revenue": revenue, "profit": profit, "new_carrying": new_val, "is_run": is_run}
 
 
 # ----- Routes -----

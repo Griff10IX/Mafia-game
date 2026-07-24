@@ -1,14 +1,12 @@
 # Properties endpoints: list, buy, collect income
 # Progression: buy in order; first property pays least, last pays most. Must max previous to unlock next.
 from datetime import datetime, timezone, timedelta
-from typing import List, Optional, Dict
+from typing import List, Optional
 import asyncio
-import logging
 import math
 from pydantic import BaseModel
 import secrets
 _rng = secrets.SystemRandom()
-logger = logging.getLogger(__name__)
 
 from fastapi import Depends, HTTPException
 
@@ -22,25 +20,6 @@ async def _properties_sustained_rl_user(current_user: dict = Depends(get_current
 
 
 _properties_rl_u = [Depends(_properties_sustained_rl_user)]
-
-_properties_bookkeeping_locks: Dict[str, asyncio.Lock] = {}
-_properties_bookkeeping_tasks: set = set()
-
-
-def _spawn_properties_bookkeeping(user_id: str, coro_factory) -> None:
-    """Run coro_factory() in the background, serialized per user."""
-    lock = _properties_bookkeeping_locks.setdefault(user_id or "", asyncio.Lock())
-
-    async def _runner():
-        async with lock:
-            try:
-                await coro_factory()
-            except Exception:
-                logger.exception("properties post-collect bookkeeping failed user_id=%s", user_id)
-
-    task = asyncio.create_task(_runner())
-    _properties_bookkeeping_tasks.add(task)
-    task.add_done_callback(_properties_bookkeeping_tasks.discard)
 
 
 def _parse_iso_datetime(s):
@@ -1261,21 +1240,29 @@ async def collect_property_income_impl(property_id: str, current_user: dict, *, 
         income *= 1.0 + kill_pct / 100.0
     income *= founding_member_income_mult(current_user)
     fraction = _clamp_float(income_fraction, 0.01, 1.0)
-    last_collected_iso = now_iso
     if fraction < 1.0:
         income = income * fraction
         # Leave the uncollected share accrued: rewind last_collected by the remaining hours.
         rem_h = max(0.0, float(max_hours_passed) * (1.0 - fraction))
         rem_h = min(rem_h, 24.0)
-        last_collected_iso = (now_utc - timedelta(hours=rem_h)).isoformat()
+        partial_iso = (now_utc - timedelta(hours=rem_h)).isoformat()
         await db.user_properties.update_many(
             {"user_id": current_user["id"], "property_id": property_id},
-            {"$set": {"last_collected": last_collected_iso}},
+            {"$set": {"last_collected": partial_iso}},
         )
     await db.users.update_one(
         {"id": current_user["id"]},
         {"$inc": {"money": income}}
     )
+    if properties_until and now_utc < properties_until:
+        # All later multipliers are linear, so the token's slice of the final amount is 2/3.
+        try:
+            from utils.token_perk_stats import bump_token_perk_stats
+            await bump_token_perk_stats(
+                db, current_user["id"], "properties", bonus_cash=int(income - income / 3.0), uses=1
+            )
+        except Exception:
+            pass
     await db.user_properties.update_many(
         {"user_id": current_user["id"], "property_id": property_id},
         {"$set": {"collection_streak_days": streak_days}}
@@ -1289,88 +1276,55 @@ async def collect_property_income_impl(property_id: str, current_user: dict, *, 
         message += " with reinvest bonus."
     if risk_event and risk_event.get("message"):
         message += f" {risk_event['message']}"
-    income_rounded = round(income, 2)
-    prop_name = prop.get("name", property_id)
-    uname = current_user.get("username", "")
-    token_perk_active = bool(properties_until and now_utc < properties_until)
-    perk_bonus_cash = int(income - income / 3.0) if token_perk_active else 0
-
-    async def _post_collect_bookkeeping():
-        await log_activity(
-            user_id,
-            uname,
-            "property_collect",
-            {"property": prop_name, "income": income_rounded, "owned_count": owned_count},
+    await log_activity(current_user.get("id", ""), current_user.get("username", ""), "property_collect", {"property": prop.get("name", property_id), "income": round(income, 2), "owned_count": owned_count})
+    # ---- Permanent property upgrade progression tracking ----
+    try:
+        # Fetch current counters from DB (avoid stale current_user)
+        uprog = await db.users.find_one(
+            {"id": user_id},
+            {
+                "_id": 0,
+                "property_portfolio_upgrade_progress": 1,
+                "property_portfolio_upgrade_unlocked_tier": 1,
+            },
         )
-        if token_perk_active:
-            try:
-                from utils.token_perk_stats import bump_token_perk_stats
-                await bump_token_perk_stats(
-                    db, user_id, "properties", bonus_cash=perk_bonus_cash, uses=1
-                )
-            except Exception:
-                pass
-        # Permanent property upgrade progression (meta — same class as crime milestones).
-        try:
-            uprog = await db.users.find_one(
-                {"id": user_id},
-                {
-                    "_id": 0,
-                    "property_portfolio_upgrade_progress": 1,
-                    "property_portfolio_upgrade_unlocked_tier": 1,
-                },
-            )
-            progress = dict((uprog or {}).get("property_portfolio_upgrade_progress") or {})
-            collect_actions = _portfolio_progress_get(progress, "collect_actions") + 1
-            collect_total_cash = _portfolio_progress_get(progress, "collect_total_cash") + int(income or 0)
-            collect_all_sets = _portfolio_progress_get(progress, "collect_all_sets")
-            seen = set(progress.get("collect_all_seen_property_ids") or [])
-            seen.add(property_id)
-            owned_rows = await db.user_properties.find(
-                {"user_id": user_id},
-                {"_id": 0, "property_id": 1, "level": 1},
-            ).to_list(200)
-            owned_ids = {
-                r.get("property_id")
-                for r in owned_rows
-                if r.get("property_id") and int(r.get("level") or 0) > 0
-            }
-            if owned_ids and owned_ids.issubset(seen):
-                collect_all_sets += 1
-                seen = set()
-            progress["collect_actions"] = int(collect_actions)
-            progress["collect_total_cash"] = int(collect_total_cash)
-            progress["collect_all_sets"] = int(collect_all_sets)
-            progress["collect_all_seen_property_ids"] = sorted(list(seen))
-            derived_unlocked = _portfolio_unlocked_tier_from_progress(progress)
-            existing_unlocked = int((uprog or {}).get("property_portfolio_upgrade_unlocked_tier") or 0)
-            new_unlocked = max(existing_unlocked, derived_unlocked)
-            await db.users.update_one(
-                {"id": user_id},
-                {
-                    "$set": {
-                        "property_portfolio_upgrade_progress": progress,
-                        "property_portfolio_upgrade_unlocked_tier": new_unlocked,
-                    }
-                },
-            )
-        except Exception:
-            pass
-
-    _spawn_properties_bookkeeping(user_id, _post_collect_bookkeeping)
-    hours_since_after = 0.0
-    if fraction < 1.0:
-        hours_since_after = max(
-            0.0,
-            (now_utc - (_parse_iso_datetime(last_collected_iso) or now_utc)).total_seconds() / 3600,
+        progress = dict((uprog or {}).get("property_portfolio_upgrade_progress") or {})
+        collect_actions = _portfolio_progress_get(progress, "collect_actions") + 1
+        collect_total_cash = _portfolio_progress_get(progress, "collect_total_cash") + int(income or 0)
+        collect_all_sets = _portfolio_progress_get(progress, "collect_all_sets")
+        seen = set(progress.get("collect_all_seen_property_ids") or [])
+        seen.add(property_id)
+        # Owned property ids (distinct) for this user
+        owned_rows = await db.user_properties.find(
+            {"user_id": user_id},
+            {"_id": 0, "property_id": 1, "level": 1},
+        ).to_list(200)
+        owned_ids = {r.get("property_id") for r in owned_rows if r.get("property_id") and int(r.get("level") or 0) > 0}
+        if owned_ids and owned_ids.issubset(seen):
+            collect_all_sets += 1
+            seen = set()
+        progress["collect_actions"] = int(collect_actions)
+        progress["collect_total_cash"] = int(collect_total_cash)
+        progress["collect_all_sets"] = int(collect_all_sets)
+        progress["collect_all_seen_property_ids"] = sorted(list(seen))
+        derived_unlocked = _portfolio_unlocked_tier_from_progress(progress)
+        existing_unlocked = int((uprog or {}).get("property_portfolio_upgrade_unlocked_tier") or 0)
+        new_unlocked = max(existing_unlocked, derived_unlocked)
+        await db.users.update_one(
+            {"id": user_id},
+            {
+                "$set": {
+                    "property_portfolio_upgrade_progress": progress,
+                    "property_portfolio_upgrade_unlocked_tier": new_unlocked,
+                }
+            },
         )
+    except Exception:
+        # Never break collections because objective tracking failed.
+        pass
     return {
         "message": message,
-        "amount": income_rounded,
-        "property_id": property_id,
-        "last_collected": last_collected_iso,
-        "available_income": 0.0 if fraction >= 1.0 else None,
-        "hours_since_collect": hours_since_after,
+        "amount": round(income, 2),
         "streak_days": streak_days,
         "risk_event": risk_event,
         "buff_active": buff_active,

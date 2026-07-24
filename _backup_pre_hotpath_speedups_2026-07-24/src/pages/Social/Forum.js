@@ -1731,27 +1731,9 @@ export default function Forum() {
     setGuessingLetter(letter);
     try {
       const res = await api.post(`/forum/entertainer/games/${gameId}/guess`, { letter });
-      const settled = !!(res.data?.word_solved || res.data?.game_over);
-      if (res.data?.game) {
-        setEntertainerGames((prev) => {
-          const nextGame = res.data.game;
-          const idx = (prev || []).findIndex((g) => g.id === gameId);
-          if (idx < 0) {
-            return settled ? prev : [...(prev || []), nextGame];
-          }
-          if (settled && nextGame.status && nextGame.status !== 'open') {
-            return prev.filter((g) => g.id !== gameId);
-          }
-          const copy = prev.slice();
-          copy[idx] = nextGame;
-          return copy;
-        });
-      }
-      if (settled) {
-        fetchEntertainerGames();
-        fetchEntertainerHistory();
-        window.dispatchEvent(new CustomEvent('app:refresh-user'));
-      }
+      fetchEntertainerGames();
+      fetchEntertainerHistory();
+      window.dispatchEvent(new CustomEvent('app:refresh-user'));
       if (res.data?.word_solved) {
         toast.success(`'${letter}' — word solved! Game settled.`);
         setExpandedHangmanId(null);
@@ -1765,7 +1747,6 @@ export default function Forum() {
       }
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to submit guess');
-      fetchEntertainerGames();
     } finally {
       setGuessingLetter(null);
     }

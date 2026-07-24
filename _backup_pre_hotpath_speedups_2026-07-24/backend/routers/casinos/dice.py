@@ -1,4 +1,4 @@
-# Casino Dice: config, play, claim, relinquish, set-max-bet, set-buy-back, reset-profit, sell-on-trade, buy-back, send-to-user
+﻿# Casino Dice: config, play, claim, relinquish, set-max-bet, set-buy-back, reset-profit, sell-on-trade, buy-back, send-to-user
 from datetime import datetime, timezone, timedelta
 import re
 import secrets
@@ -82,7 +82,7 @@ def _dice_secret_roll(sides: int, chosen: int):
         return roll, False, sides
     if _rng.random() >= DICE_SECRET_MISS_CHANCE:
         return chosen, True, sides
-    # Secret void — never show the chosen number (that would reveal it was nearly a win).
+    # Secret void ÔÇö never show the chosen number (that would reveal it was nearly a win).
     display = chosen
     while display == chosen:
         display = _rng.randint(1, sides)
@@ -303,7 +303,7 @@ def register(router):
         if max_bet <= 0 and stake > 0:
             raise HTTPException(
                 status_code=400,
-                detail="This table is not accepting bets yet — the owner must set a max bet above $0.",
+                detail="This table is not accepting bets yet ÔÇö the owner must set a max bet above $0.",
             )
         if stake > max_bet:
             raise HTTPException(status_code=400, detail=f"Stake exceeds max bet ({max_bet})")
@@ -336,36 +336,11 @@ def register(router):
                 )
                 _invalidate_ownership_cache(owner_id)
             await log_gambling(current_user.get("id") or "", current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": sides, "actual_sides": roll_faces, "chosen": chosen, "roll": roll, "win": False, "payout": 0})
-            # debit_result is pre-update; balance after stake debit is player_money - stake.
-            return {
-                "roll": roll,
-                "win": False,
-                "payout": 0,
-                "actual_payout": 0,
-                "owner_paid": 0,
-                "shortfall": 0,
-                "ownership_transferred": False,
-                "buy_back_offer": None,
-                "nominal_sides": sides,
-                "actual_sides": sides,
-                "new_balance": player_money - stake,
-            }
+            return {"roll": roll, "win": False, "payout": 0, "actual_payout": 0, "owner_paid": 0, "shortfall": 0, "ownership_transferred": False, "buy_back_offer": None, "nominal_sides": sides, "actual_sides": sides}
         if not owner_id:
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout_full}})
             await log_gambling(current_user.get("id") or "", current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": sides, "actual_sides": roll_faces, "chosen": chosen, "roll": roll, "win": True, "payout": payout_full})
-            return {
-                "roll": roll,
-                "win": True,
-                "payout": payout_full,
-                "actual_payout": payout_full,
-                "owner_paid": 0,
-                "shortfall": 0,
-                "ownership_transferred": False,
-                "buy_back_offer": None,
-                "nominal_sides": sides,
-                "actual_sides": sides,
-                "new_balance": player_money - stake + payout_full,
-            }
+            return {"roll": roll, "win": True, "payout": payout_full, "actual_payout": payout_full, "owner_paid": 0, "shortfall": 0, "ownership_transferred": False, "buy_back_offer": None, "nominal_sides": sides, "actual_sides": sides}
         owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
         owner_money = int(((owner or {}).get("money") or 0) or 0)
         owner_username = (owner or {}).get("username")
@@ -480,19 +455,7 @@ def register(router):
                 dice_details["buy_back_points_offered"] = 0
                 dice_details["buy_back_outcome"] = "not_offered"
         await log_gambling(current_user.get("id") or "", current_user.get("username") or "?", "dice", dice_details)
-        return {
-            "roll": roll,
-            "win": True,
-            "payout": payout_full,
-            "actual_payout": actual_payout,
-            "owner_paid": actual_payout,
-            "shortfall": shortfall,
-            "ownership_transferred": ownership_transferred,
-            "buy_back_offer": buy_back_offer,
-            "nominal_sides": sides,
-            "actual_sides": sides,
-            "new_balance": player_money - stake + actual_payout,
-        }
+        return {"roll": roll, "win": True, "payout": payout_full, "actual_payout": actual_payout, "owner_paid": actual_payout, "shortfall": shortfall, "ownership_transferred": ownership_transferred, "buy_back_offer": buy_back_offer, "nominal_sides": sides, "actual_sides": sides}
 
     @router.post("/casino/dice/claim")
     async def casino_dice_claim(request: DiceClaimRequest, current_user: dict = Depends(get_current_user_verified)):

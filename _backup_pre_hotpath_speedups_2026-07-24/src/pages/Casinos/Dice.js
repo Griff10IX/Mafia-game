@@ -340,12 +340,8 @@ export default function Dice() {
     }
     setDiceLoading(false);
     setPlaying(false);
-    if (data.new_balance != null) refreshUser(data.new_balance);
-    else refreshUser();
-    // Ownership/config only changes on seizure or buy-back — not every roll.
-    if (data.ownership_transferred || data.buy_back_offer) {
-      fetchConfigAndOwnership();
-    }
+    refreshUser();
+    fetchConfigAndOwnership();
   };
 
   const placeDiceBet = async () => {

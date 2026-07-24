@@ -225,43 +225,20 @@ export default function Properties() {
     }
   };
 
-  const patchPropertyAfterCollect = (propertyId, data) => {
-    if (!propertyId || !data) return;
-    setProperties((prev) => prev.map((p) => {
-      if (p.id !== propertyId) return p;
-      const next = {
-        ...p,
-        hours_since_collect: data.hours_since_collect != null
-          ? Number(data.hours_since_collect)
-          : 0,
-        collection_streak_days: data.streak_days ?? p.collection_streak_days,
-      };
-      if (data.available_income != null) next.available_income = Number(data.available_income);
-      else if (data.hours_since_collect == null || Number(data.hours_since_collect) === 0) {
-        next.available_income = 0;
-      }
-      if (data.last_collected) next.last_collected = data.last_collected;
-      return next;
-    }));
-  };
-
   const collectIncome = async (propertyId) => {
     try {
       const response = await api.post(`/properties/${propertyId}/collect`);
       toast.success(response.data.message);
-      patchPropertyAfterCollect(propertyId, response.data);
       refreshUser();
+      fetchProperties();
     } catch (error) {
       const detail = formatApiDetail(error.response?.data?.detail);
       if (isCollectCooldownOrWaitMessage(detail) || isNoIncomeCollectMessage(detail)) {
         toast.warning(detail || 'Not ready to collect yet');
-        fetchProperties({ silent: true });
       } else if (detail) {
         toast.error(detail);
-        fetchProperties({ silent: true });
       } else {
         toast.error('Failed to collect income');
-        fetchProperties({ silent: true });
       }
     }
   };
@@ -342,14 +319,9 @@ export default function Properties() {
       try {
         const res = await api.post(`/properties/${prop.id}/collect`);
         collected++;
-        patchPropertyAfterCollect(prop.id, res.data);
-        const amt = Number(res.data?.amount);
-        if (Number.isFinite(amt)) total += amt;
-        else {
-          const msg = res.data?.message || '';
-          const match = msg.match(/\$([\d,]+(?:\.\d+)?)/);
-          if (match) total += parseFloat(match[1].replace(/,/g, '')) || 0;
-        }
+        const msg = res.data?.message || '';
+        const match = msg.match(/\$([\d,]+(?:\.\d+)?)/);
+        if (match) total += parseFloat(match[1].replace(/,/g, '')) || 0;
       } catch (e) {
         const detail = formatApiDetail(e.response?.data?.detail);
         // Mid-loop: if this one needs a skip and we still hold tokens, activate and retry once.
@@ -359,14 +331,9 @@ export default function Properties() {
             tokensLeft -= 1;
             const retry = await api.post(`/properties/${prop.id}/collect`);
             collected++;
-            patchPropertyAfterCollect(prop.id, retry.data);
-            const amt = Number(retry.data?.amount);
-            if (Number.isFinite(amt)) total += amt;
-            else {
-              const msg = retry.data?.message || '';
-              const match = msg.match(/\$([\d,]+(?:\.\d+)?)/);
-              if (match) total += parseFloat(match[1].replace(/,/g, '')) || 0;
-            }
+            const msg = retry.data?.message || '';
+            const match = msg.match(/\$([\d,]+(?:\.\d+)?)/);
+            if (match) total += parseFloat(match[1].replace(/,/g, '')) || 0;
             continue;
           } catch (e2) {
             const d2 = formatApiDetail(e2.response?.data?.detail);
@@ -399,8 +366,7 @@ export default function Properties() {
       );
     }
     hardFailures.forEach((line) => toast.error(line));
-    // Only full-refetch on hard failures (authoritative heat/upkeep/etc). Soft waits already patched or unchanged.
-    if (hardFailures.length > 0) fetchProperties({ silent: true });
+    if (collected > 0 || softFailures.length || hardFailures.length) fetchProperties();
     setCollectAllLoading(false);
     setSkipAllBusy(false);
   };
