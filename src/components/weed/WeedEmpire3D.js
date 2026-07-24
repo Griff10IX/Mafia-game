@@ -104,13 +104,13 @@ function makeFanLeaf(mat, fingers = 5, size = 1, strainType = "hybrid") {
   petiole.position.y = 0.055 * size;
   leaf.add(petiole);
 
-  // Smooth teardrop blade (no serration — game-readable like ref)
+  // Smooth teardrop blade (compact — pot-relative scale)
   const bladeShape = new THREE.Shape();
   bladeShape.moveTo(0, 0);
-  bladeShape.quadraticCurveTo(0.09, 0.12, 0.07, 0.35);
-  bladeShape.quadraticCurveTo(0.04, 0.55, 0, 0.72);
-  bladeShape.quadraticCurveTo(-0.04, 0.55, -0.07, 0.35);
-  bladeShape.quadraticCurveTo(-0.09, 0.12, 0, 0);
+  bladeShape.quadraticCurveTo(0.055, 0.08, 0.045, 0.22);
+  bladeShape.quadraticCurveTo(0.025, 0.36, 0, 0.48);
+  bladeShape.quadraticCurveTo(-0.025, 0.36, -0.045, 0.22);
+  bladeShape.quadraticCurveTo(-0.055, 0.08, 0, 0);
   const bladeGeom = new THREE.ShapeGeometry(bladeShape);
 
   const count = Math.max(3, Math.min(7, fingers | 0));
@@ -124,8 +124,8 @@ function makeFanLeaf(mat, fingers = 5, size = 1, strainType = "hybrid") {
   for (let i = 0; i < count; i++) {
     const ang = angles[i];
     const centerBoost = 1 - Math.abs(ang) * 0.2;
-    const sx = 0.55 * size * widthBias * (0.75 + centerBoost * 0.25);
-    const sy = 0.85 * size * lenBias * centerBoost;
+    const sx = 0.42 * size * widthBias * (0.75 + centerBoost * 0.25);
+    const sy = 0.55 * size * lenBias * centerBoost;
     const finger = new THREE.Mesh(bladeGeom.clone(), leafMat.clone());
     finger.scale.set(sx, sy, 1);
     // Fan in Z; slight pitch so face reads toward camera when leaf group is oriented
@@ -685,28 +685,28 @@ export default function WeedEmpire3D({
     cotR.position.set(0.045, 0.12, 0.04);
     cotR.rotation.z = -0.35;
     seedlingGroup.add(cotR);
-    // Opposite pair of readable 5-finger fans facing camera
-    const firstTrueL = makeFanLeaf(seedlingLeafMat, 5, 0.95, "hybrid");
-    firstTrueL.position.set(-0.06, 0.2, 0.06);
-    firstTrueL.rotation.set(-0.35, 0.55, -0.15);
+    // Small true leaves — seedling should fit in the pot canopy, not fill the tent
+    const firstTrueL = makeFanLeaf(seedlingLeafMat, 3, 0.38, "hybrid");
+    firstTrueL.position.set(-0.04, 0.18, 0.05);
+    firstTrueL.rotation.set(-0.4, 0.5, -0.1);
     seedlingGroup.add(firstTrueL);
-    const firstTrueR = makeFanLeaf(seedlingLeafMat, 5, 0.95, "hybrid");
-    firstTrueR.position.set(0.06, 0.24, 0.04);
-    firstTrueR.rotation.set(-0.3, -0.55, 0.15);
+    const firstTrueR = makeFanLeaf(seedlingLeafMat, 3, 0.38, "hybrid");
+    firstTrueR.position.set(0.04, 0.2, 0.03);
+    firstTrueR.rotation.set(-0.35, -0.5, 0.1);
     seedlingGroup.add(firstTrueR);
     plant.add(seedlingGroup);
 
     const fanLeaves = [];
-    // Layered whorls up the stem (img-4 style canopy)
+    // Layered whorls — sizes relative to pot (~0.5 wide), grow denser with progress
     const leafNodes = [
-      { y: 0.28, fingers: 5, size: 0.8, minP: 0.05 },
-      { y: 0.4, fingers: 5, size: 0.95, minP: 0.18 },
-      { y: 0.52, fingers: 7, size: 1.05, minP: 0.3 },
-      { y: 0.64, fingers: 7, size: 1.15, minP: 0.4 },
-      { y: 0.74, fingers: 7, size: 1.2, minP: 0.5 },
-      { y: 0.84, fingers: 7, size: 1.1, minP: 0.58 },
-      { y: 0.5, fingers: 5, size: 0.9, minP: 0.34, branch: true },
-      { y: 0.68, fingers: 5, size: 0.95, minP: 0.46, branch: true },
+      { y: 0.28, fingers: 5, size: 0.42, minP: 0.08 },
+      { y: 0.38, fingers: 5, size: 0.48, minP: 0.2 },
+      { y: 0.48, fingers: 7, size: 0.55, minP: 0.32 },
+      { y: 0.58, fingers: 7, size: 0.58, minP: 0.42 },
+      { y: 0.68, fingers: 7, size: 0.6, minP: 0.52 },
+      { y: 0.76, fingers: 7, size: 0.55, minP: 0.6 },
+      { y: 0.46, fingers: 5, size: 0.48, minP: 0.36, branch: true },
+      { y: 0.62, fingers: 5, size: 0.5, minP: 0.48, branch: true },
     ];
     leafNodes.forEach((node, idx) => {
       const mat = node.fingers >= 7 ? darkLeafMat : vegLeafMat;
@@ -1381,17 +1381,17 @@ export default function WeedEmpire3D({
       lightClass === "quantum" || lightClass === "led" ? 1.08 : lightClass === "hps" ? 1.05 : 1;
     const base =
       stage === "seedling"
-        ? 1.05 + p * 0.55
+        ? 0.55 + p * 0.25
         : stage === "veg"
-          ? 1.2 + p * 0.5
+          ? 0.75 + p * 0.3
           : stage === "flower"
-            ? 1.35 + p * 0.35
-            : 1.65;
+            ? 0.95 + p * 0.25
+            : 1.15;
     st.plant.scale.setScalar(base * lightBoost);
 
     if (st.seedlingGroup) {
       st.seedlingGroup.visible = stage === "seedling" || (stage === "veg" && p < 0.45);
-      st.seedlingGroup.scale.setScalar(stage === "seedling" ? 1.55 : 0.95);
+      st.seedlingGroup.scale.setScalar(stage === "seedling" ? 0.85 : 0.65);
     }
 
     (st.leafPairs || []).forEach((pair) => {
