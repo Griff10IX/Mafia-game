@@ -278,6 +278,7 @@ def _tick_plot(plot: dict, farm: dict, stats: dict, now: datetime) -> dict:
     plot["state"] = "harvest_ready" if stage == "harvest_ready" else "growing"
     plot["hours_needed"] = round(hours_needed, 2)
     plot["hours_elapsed"] = round((now - planted).total_seconds() / 3600.0, 2)
+    plot["hours_to_harvest"] = round(max(0.0, hours_needed - plot["hours_elapsed"]), 2)
     plot["water_pct"] = round(_meter_pct(hours_since_w, water_need), 1)
     plot["feed_pct"] = round(_meter_pct(hours_since_f, feed_need), 1)
     plot["water_hours_left"] = round(max(0.0, water_need - hours_since_w), 2)

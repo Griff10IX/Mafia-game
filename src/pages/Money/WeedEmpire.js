@@ -29,17 +29,28 @@ function money(n) {
   return `$${Number(n || 0).toLocaleString()}`;
 }
 
-function CareMeter({ label, pct, hoursLeft, colorClass, warn }) {
+function CareMeter({ label, pct, hoursLeft, colorClass, warn, fillUp = false }) {
   const v = Math.max(0, Math.min(100, Number(pct) || 0));
-  const bar =
-    v > 50 ? colorClass : v > 25 ? "bg-amber-500" : "bg-red-500";
+  const ready = fillUp && (warn || v >= 99.5);
+  const bar = fillUp
+    ? colorClass
+    : v > 50
+      ? colorClass
+      : v > 25
+        ? "bg-amber-500"
+        : "bg-red-500";
+  const hoursLabel =
+    hoursLeft == null
+      ? ""
+      : ready || (fillUp && Number(hoursLeft) <= 0)
+        ? " · ready"
+        : ` · ${Number(hoursLeft).toFixed(1)}h`;
   return (
     <div className="space-y-0.5">
       <div className="flex justify-between gap-2 text-[10px]">
-        <span className={warn ? "text-amber-300" : "text-muted-foreground"}>{label}</span>
+        <span className={warn || ready ? "text-amber-300" : "text-muted-foreground"}>{label}</span>
         <span className="text-muted-foreground tabular-nums">
-          {v.toFixed(0)}%
-          {hoursLeft != null ? ` · ${Number(hoursLeft).toFixed(1)}h` : ""}
+          {v.toFixed(0)}%{hoursLabel}
         </span>
       </div>
       <div className="h-1.5 rounded bg-zinc-800 overflow-hidden">
@@ -417,6 +428,14 @@ export default function WeedEmpire() {
                     {growing ? (
                       <div className="mt-1.5 space-y-1">
                         <CareMeter
+                          label={st === "harvest_ready" ? "Harvest" : "Grow"}
+                          pct={(p.progress || 0) * 100}
+                          hoursLeft={st === "harvest_ready" ? 0 : p.hours_to_harvest}
+                          colorClass={st === "harvest_ready" ? "bg-amber-500" : "bg-emerald-500"}
+                          warn={st === "harvest_ready"}
+                          fillUp
+                        />
+                        <CareMeter
                           label="Water"
                           pct={p.water_pct}
                           hoursLeft={p.water_hours_left}
@@ -478,6 +497,28 @@ export default function WeedEmpire() {
             {selectedPlot?.strain_id && selectedPlot?.state !== "empty" && (
               <div className="space-y-2">
                 <div className="rounded border border-border/40 bg-card/30 p-3 space-y-2">
+                  <CareMeter
+                    label={
+                      selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready"
+                        ? "Ready to harvest"
+                        : "Grow / harvest"
+                    }
+                    pct={(selectedPlot.progress || 0) * 100}
+                    hoursLeft={
+                      selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready"
+                        ? 0
+                        : selectedPlot.hours_to_harvest
+                    }
+                    colorClass={
+                      selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready"
+                        ? "bg-amber-500"
+                        : "bg-emerald-500"
+                    }
+                    warn={
+                      selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready"
+                    }
+                    fillUp
+                  />
                   <CareMeter
                     label="Water meter"
                     pct={selectedPlot.water_pct}

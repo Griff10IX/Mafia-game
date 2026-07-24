@@ -29,6 +29,75 @@ function disposeObject(obj) {
   });
 }
 
+/** Single serrated cannabis leaflet (flat Shape). */
+function makeLeafletGeom() {
+  const shape = new THREE.Shape();
+  shape.moveTo(0, 0);
+  shape.lineTo(0.045, 0.06);
+  shape.lineTo(0.028, 0.1);
+  shape.lineTo(0.055, 0.16);
+  shape.lineTo(0.03, 0.2);
+  shape.lineTo(0.048, 0.28);
+  shape.lineTo(0.02, 0.34);
+  shape.lineTo(0.03, 0.42);
+  shape.lineTo(0, 0.55); // tip
+  shape.lineTo(-0.03, 0.42);
+  shape.lineTo(-0.02, 0.34);
+  shape.lineTo(-0.048, 0.28);
+  shape.lineTo(-0.03, 0.2);
+  shape.lineTo(-0.055, 0.16);
+  shape.lineTo(-0.028, 0.1);
+  shape.lineTo(-0.045, 0.06);
+  shape.lineTo(0, 0);
+  const geom = new THREE.ShapeGeometry(shape);
+  geom.translate(0, 0, 0);
+  return geom;
+}
+
+let _leafletGeom = null;
+function leafletGeom() {
+  if (!_leafletGeom) _leafletGeom = makeLeafletGeom();
+  return _leafletGeom;
+}
+
+/** Classic cannabis fan leaf (3–7 fingers). */
+function makeFanLeaf(mat, fingers = 5, size = 1) {
+  const leaf = new THREE.Group();
+  leaf.userData.kind = "fan";
+  const stemMat = mat.clone();
+  stemMat.color = mat.color.clone().multiplyScalar(0.85);
+  const petiole = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.006 * size, 0.009 * size, 0.1 * size, 5),
+    stemMat
+  );
+  petiole.position.y = 0.05 * size;
+  leaf.add(petiole);
+
+  const count = Math.max(3, Math.min(7, fingers));
+  const spread = 0.95 + (count - 3) * 0.08;
+  for (let i = 0; i < count; i++) {
+    const t = count === 1 ? 0 : i / (count - 1) - 0.5;
+    const ang = t * spread;
+    const lenScale = (1 - Math.abs(t) * 0.28) * size;
+    const finger = new THREE.Mesh(leafletGeom().clone(), mat.clone());
+    finger.scale.set(0.85 * lenScale, lenScale, 1);
+    finger.rotation.z = ang;
+    finger.position.set(Math.sin(ang) * 0.04 * size, 0.1 * size, 0.002 * i);
+    leaf.add(finger);
+  }
+  return leaf;
+}
+
+/** Cotyledon (round seedling leaf). */
+function makeCotyledon(mat, size = 1) {
+  const m = new THREE.Mesh(
+    new THREE.CircleGeometry(0.06 * size, 10),
+    mat.clone()
+  );
+  m.rotation.x = -0.35;
+  return m;
+}
+
 /**
  * Gear-driven grow room: tent shell, canopy SpotLights, props from owned equipment.
  */
@@ -113,26 +182,23 @@ export default function WeedEmpire3D({
     const ty = 1.08;
     const thick = 0.04;
 
-    const addPanel = (w, h, d, x, y, z, mat) => {
-      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+    const addPanel = (pw, ph, pd, x, y, z, mat) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(pw, ph, pd), mat);
       m.position.set(x, y, z);
       tent.add(m);
       return m;
     };
-    // Floor / ceiling / back / left / right — no front wall
     addPanel(TW, thick, TD, 0, ty - TH / 2, 0, tentOuterMat);
     addPanel(TW, thick, TD, 0, ty + TH / 2, 0, tentOuterMat);
     addPanel(TW, TH, thick, 0, ty, -TD / 2, tentOuterMat);
     addPanel(thick, TH, TD, -TW / 2, ty, 0, tentOuterMat);
     addPanel(thick, TH, TD, TW / 2, ty, 0, tentOuterMat);
-    // Mylar lining on interior faces (slightly inset)
     addPanel(TW - 0.08, thick * 0.5, TD - 0.08, 0, ty - TH / 2 + 0.03, 0, tentMylarMat);
     addPanel(TW - 0.08, thick * 0.5, TD - 0.08, 0, ty + TH / 2 - 0.03, 0, tentMylarMat);
     addPanel(TW - 0.1, TH - 0.1, thick * 0.5, 0, ty, -TD / 2 + 0.03, tentMylarMat);
     addPanel(thick * 0.5, TH - 0.1, TD - 0.1, -TW / 2 + 0.03, ty, 0, tentMylarMat);
     addPanel(thick * 0.5, TH - 0.1, TD - 0.1, TW / 2 - 0.03, ty, 0, tentMylarMat);
 
-    // Rolled-open door flaps on front edges
     const flapMat = new THREE.MeshStandardMaterial({
       color: 0x222226,
       roughness: 0.7,
@@ -146,7 +212,6 @@ export default function WeedEmpire3D({
     rightFlap.position.set(TW / 2 - 0.12, ty, TD / 2 - 0.02);
     rightFlap.rotation.y = -0.35;
     tent.add(rightFlap);
-    // Zipper pulls on rolled flaps
     const zipMat = new THREE.MeshStandardMaterial({ color: 0x888890, metalness: 0.6, roughness: 0.4 });
     for (const sx of [-1, 1]) {
       const zip = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.9, 0.02), zipMat);
@@ -154,7 +219,6 @@ export default function WeedEmpire3D({
       tent.add(zip);
     }
 
-    // Frame poles
     const poleMat = new THREE.MeshStandardMaterial({ color: 0x555560, metalness: 0.7, roughness: 0.35 });
     for (const [x, z] of [
       [-TW / 2 + 0.08, -TD / 2 + 0.08],
@@ -166,7 +230,6 @@ export default function WeedEmpire3D({
       pole.position.set(x, ty, z);
       tent.add(pole);
     }
-    // Keep refs for scale / mylar tint updates
     const tentBox = tent;
 
     // Fixture hang + grow lights
@@ -196,7 +259,6 @@ export default function WeedEmpire3D({
     emitter.position.y = -0.05;
     fixture.add(emitter);
 
-    // LED diode dots (hidden for CFL)
     const diodes = new THREE.Group();
     diodes.visible = false;
     for (let i = 0; i < 18; i++) {
@@ -209,7 +271,6 @@ export default function WeedEmpire3D({
     }
     fixture.add(diodes);
 
-    // CFL bulbs
     const cflGroup = new THREE.Group();
     for (const ox of [-0.14, 0.14]) {
       const bulb = new THREE.Mesh(
@@ -226,7 +287,6 @@ export default function WeedEmpire3D({
     }
     fixture.add(cflGroup);
 
-    // HPS hood
     const hpsHood = new THREE.Mesh(
       new THREE.ConeGeometry(0.28, 0.22, 12, 1, true),
       new THREE.MeshStandardMaterial({ color: 0x3a3a40, metalness: 0.5, roughness: 0.4, side: THREE.DoubleSide })
@@ -269,7 +329,6 @@ export default function WeedEmpire3D({
     glowSphere.position.copy(fixture.position);
     scene.add(glowSphere);
 
-    // Pot (swappable look via materials)
     const potGroup = new THREE.Group();
     scene.add(potGroup);
     const potMat = new THREE.MeshStandardMaterial({ color: 0x6a4830, roughness: 0.7, metalness: 0.05 });
@@ -283,29 +342,37 @@ export default function WeedEmpire3D({
     soil.position.y = 0.36;
     potGroup.add(soil);
 
-    // Plant
+    // ——— Cannabis plant (stage-aware silhouette) ———
     const plant = new THREE.Group();
-    plant.position.set(0, 0.4, 0);
+    plant.position.set(0, 0.38, 0);
     scene.add(plant);
 
-    const stem = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.02, 0.03, 0.5, 8),
-      new THREE.MeshStandardMaterial({
-        color: 0x3d7a38,
-        roughness: 0.65,
-        emissive: 0x142814,
-        emissiveIntensity: 0.25,
-      })
-    );
-    stem.position.y = 0.25;
-    plant.add(stem);
-
-    const leafMat = new THREE.MeshStandardMaterial({
-      color: 0x3d8f3d,
+    const stemMat = new THREE.MeshStandardMaterial({
+      color: 0x4a7a3a,
+      roughness: 0.7,
+      emissive: 0x142814,
+      emissiveIntensity: 0.2,
+    });
+    const seedlingLeafMat = new THREE.MeshStandardMaterial({
+      color: 0x8fd46a,
       roughness: 0.55,
-      metalness: 0.02,
+      side: THREE.DoubleSide,
+      emissive: 0x2a4a1a,
+      emissiveIntensity: 0.25,
+    });
+    const vegLeafMat = new THREE.MeshStandardMaterial({
+      color: 0x3d9a3d,
+      roughness: 0.5,
+      side: THREE.DoubleSide,
       emissive: 0x1a3a1a,
-      emissiveIntensity: 0.35,
+      emissiveIntensity: 0.3,
+    });
+    const darkLeafMat = new THREE.MeshStandardMaterial({
+      color: 0x2d7a32,
+      roughness: 0.48,
+      side: THREE.DoubleSide,
+      emissive: 0x143014,
+      emissiveIntensity: 0.28,
     });
     const budMat = new THREE.MeshStandardMaterial({
       color: MESH_TINT[budMeshKey] || MESH_TINT.dense,
@@ -321,45 +388,120 @@ export default function WeedEmpire3D({
       emissiveIntensity: 0.35,
     });
 
-    const leaves = [];
-    for (let i = 0; i < 6; i++) {
-      const leaf = new THREE.Mesh(new THREE.SphereGeometry(0.12, 10, 10), leafMat.clone());
-      leaf.scale.set(1.6, 0.35, 0.8);
-      const a = (i / 6) * Math.PI * 2;
-      leaf.position.set(Math.cos(a) * 0.18, 0.35 + (i % 3) * 0.08, Math.sin(a) * 0.18);
-      plant.add(leaf);
-      leaves.push(leaf);
-    }
+    // Main stalk (height scales with stage via group scale + stretch)
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.022, 0.85, 8), stemMat);
+    stem.position.y = 0.42;
+    plant.add(stem);
 
+    // Seedling: cotyledons + first true leaves
+    const seedlingGroup = new THREE.Group();
+    seedlingGroup.name = "seedling";
+    const cotL = makeCotyledon(seedlingLeafMat, 1.1);
+    cotL.position.set(-0.07, 0.18, 0.02);
+    cotL.rotation.z = 0.5;
+    seedlingGroup.add(cotL);
+    const cotR = makeCotyledon(seedlingLeafMat, 1.1);
+    cotR.position.set(0.07, 0.18, 0.02);
+    cotR.rotation.z = -0.5;
+    seedlingGroup.add(cotR);
+    const firstTrue = makeFanLeaf(seedlingLeafMat, 3, 0.55);
+    firstTrue.position.set(0, 0.28, 0.02);
+    firstTrue.rotation.x = -0.4;
+    seedlingGroup.add(firstTrue);
+    plant.add(seedlingGroup);
+
+    // Fan leaves along the stalk (veg → flower canopy)
+    const fanLeaves = [];
+    const leafNodes = [
+      { y: 0.32, fingers: 3, size: 0.55, minP: 0.08, stage: "seedling" },
+      { y: 0.42, fingers: 5, size: 0.7, minP: 0.2, stage: "veg" },
+      { y: 0.52, fingers: 5, size: 0.85, minP: 0.28, stage: "veg" },
+      { y: 0.62, fingers: 7, size: 0.95, minP: 0.38, stage: "veg" },
+      { y: 0.7, fingers: 7, size: 1.05, minP: 0.48, stage: "veg" },
+      { y: 0.78, fingers: 7, size: 1.0, minP: 0.55, stage: "flower" },
+      { y: 0.55, fingers: 5, size: 0.75, minP: 0.35, stage: "veg", branch: true },
+      { y: 0.65, fingers: 5, size: 0.8, minP: 0.45, stage: "veg", branch: true },
+    ];
+
+    leafNodes.forEach((node, idx) => {
+      const mat = node.fingers >= 7 ? darkLeafMat : vegLeafMat;
+      const pair = new THREE.Group();
+      pair.userData.minP = node.minP;
+      pair.userData.stage = node.stage;
+
+      if (node.branch) {
+        const br = new THREE.Mesh(
+          new THREE.CylinderGeometry(0.008, 0.012, 0.22, 5),
+          stemMat.clone()
+        );
+        br.rotation.z = idx % 2 === 0 ? 0.9 : -0.9;
+        br.position.set(idx % 2 === 0 ? 0.08 : -0.08, node.y - 0.05, 0);
+        pair.add(br);
+      }
+
+      const sides = node.branch ? 1 : 2;
+      for (let s = 0; s < sides; s++) {
+        const leaf = makeFanLeaf(mat, node.fingers, node.size);
+        const ang = node.branch
+          ? idx % 2 === 0
+            ? 0.85
+            : -0.85
+          : s === 0
+            ? Math.PI * 0.15 + idx * 0.4
+            : Math.PI * 0.15 + idx * 0.4 + Math.PI;
+        const reach = node.branch ? 0.22 : 0.14;
+        leaf.position.set(Math.sin(ang) * reach, node.y, Math.cos(ang) * reach * 0.6);
+        leaf.rotation.y = ang;
+        leaf.rotation.x = -0.55 - (idx % 3) * 0.08;
+        leaf.rotation.z = (s === 0 ? -0.15 : 0.15) + (idx % 2) * 0.1;
+        pair.add(leaf);
+        fanLeaves.push(leaf);
+      }
+      pair.visible = false;
+      plant.add(pair);
+      fanLeaves.push(pair);
+    });
+
+    // Store leaf pairs separately for visibility
+    const leafPairs = plant.children.filter((c) => c.userData && c.userData.minP != null);
+
+    // Cola buds — stacked calyx look
     const buds = new THREE.Group();
     buds.visible = false;
     plant.add(buds);
     const budMeshes = [];
     const budSpecs = [
-      { y: 0.72, x: 0, z: 0, s: 1.15 },
-      { y: 0.58, x: 0.14, z: 0.08, s: 0.72 },
-      { y: 0.56, x: -0.12, z: 0.1, s: 0.68 },
-      { y: 0.52, x: 0.06, z: -0.14, s: 0.62 },
-      { y: 0.5, x: -0.1, z: -0.1, s: 0.58 },
-      { y: 0.44, x: 0.16, z: -0.02, s: 0.5 },
-      { y: 0.42, x: -0.15, z: 0.04, s: 0.48 },
+      { y: 0.88, x: 0, z: 0, s: 1.2 },
+      { y: 0.78, x: 0.16, z: 0.06, s: 0.75 },
+      { y: 0.76, x: -0.14, z: 0.08, s: 0.7 },
+      { y: 0.72, x: 0.08, z: -0.14, s: 0.65 },
+      { y: 0.7, x: -0.1, z: -0.1, s: 0.6 },
+      { y: 0.64, x: 0.18, z: -0.02, s: 0.52 },
+      { y: 0.62, x: -0.16, z: 0.04, s: 0.5 },
     ];
     for (const spec of budSpecs) {
       const cola = new THREE.Group();
       cola.position.set(spec.x, spec.y, spec.z);
-      const body = new THREE.Mesh(new THREE.SphereGeometry(0.11, 12, 12), budMat.clone());
-      body.scale.set(0.85 * spec.s, 1.35 * spec.s, 0.85 * spec.s);
-      cola.add(body);
-      for (let k = 0; k < 3; k++) {
-        const bump = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 8), budMat.clone());
-        bump.position.set((k - 1) * 0.04, 0.02 + k * 0.05, (k % 2) * 0.03);
-        bump.scale.setScalar(0.7 * spec.s);
-        cola.add(bump);
+      // stacked spheres = calyx clusters
+      for (let k = 0; k < 5; k++) {
+        const calyx = new THREE.Mesh(new THREE.SphereGeometry(0.055, 10, 10), budMat.clone());
+        calyx.scale.set(0.9 * spec.s, 0.7 * spec.s, 0.9 * spec.s);
+        calyx.position.y = k * 0.045 * spec.s;
+        cola.add(calyx);
       }
-      for (let k = 0; k < 4; k++) {
-        const tip = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 6), pistilMat.clone());
-        const a = (k / 4) * Math.PI * 2;
-        tip.position.set(Math.cos(a) * 0.06 * spec.s, 0.1 * spec.s, Math.sin(a) * 0.06 * spec.s);
+      // sugar leaves
+      for (let k = 0; k < 3; k++) {
+        const sugar = makeFanLeaf(darkLeafMat, 3, 0.22 * spec.s);
+        sugar.position.set((k - 1) * 0.05, 0.08 * spec.s, 0.04);
+        sugar.rotation.z = (k - 1) * 0.5;
+        sugar.rotation.x = -0.8;
+        cola.add(sugar);
+      }
+      // orange pistils
+      for (let k = 0; k < 8; k++) {
+        const tip = new THREE.Mesh(new THREE.SphereGeometry(0.01, 5, 5), pistilMat.clone());
+        const a = (k / 8) * Math.PI * 2;
+        tip.position.set(Math.cos(a) * 0.055 * spec.s, 0.12 + (k % 3) * 0.03, Math.sin(a) * 0.055 * spec.s);
         cola.add(tip);
       }
       cola.userData.baseScale = spec.s;
@@ -372,9 +514,9 @@ export default function WeedEmpire3D({
     const sparkCount = mobileLod ? 28 : 55;
     const positions = new Float32Array(sparkCount * 3);
     for (let i = 0; i < sparkCount; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 0.4;
-      positions[i * 3 + 1] = 0.45 + Math.random() * 0.4;
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 0.4;
+      positions[i * 3] = (Math.random() - 0.5) * 0.45;
+      positions[i * 3 + 1] = 0.55 + Math.random() * 0.45;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 0.45;
     }
     sparkGeom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
     const sparks = new THREE.Points(
@@ -384,16 +526,25 @@ export default function WeedEmpire3D({
     sparks.visible = false;
     plant.add(sparks);
 
+    const leaves = fanLeaves;
+
     // Props group
     const props = new THREE.Group();
     scene.add(props);
 
-    // Fan (clip style)
+    // Fan — clip to inside right wall
     const fan = new THREE.Group();
-    fan.position.set(0.85, 1.15, 0.55);
+    fan.position.set(0.88, 1.05, -0.15);
+    fan.rotation.y = -Math.PI / 2;
     fan.visible = false;
+    const fanMount = new THREE.Mesh(
+      new THREE.BoxGeometry(0.06, 0.08, 0.04),
+      new THREE.MeshStandardMaterial({ color: 0x2a2a2e, metalness: 0.4, roughness: 0.5 })
+    );
+    fanMount.position.x = -0.06;
+    fan.add(fanMount);
     const fanHub = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.04, 0.04, 0.06, 10),
+      new THREE.CylinderGeometry(0.035, 0.035, 0.05, 10),
       new THREE.MeshStandardMaterial({ color: 0x333338, metalness: 0.5, roughness: 0.4 })
     );
     fanHub.rotation.z = Math.PI / 2;
@@ -401,8 +552,8 @@ export default function WeedEmpire3D({
     const blades = new THREE.Group();
     for (let i = 0; i < 3; i++) {
       const blade = new THREE.Mesh(
-        new THREE.BoxGeometry(0.28, 0.04, 0.01),
-        new THREE.MeshStandardMaterial({ color: 0x888890, roughness: 0.5 })
+        new THREE.BoxGeometry(0.22, 0.035, 0.01),
+        new THREE.MeshStandardMaterial({ color: 0x9a9aa2, roughness: 0.5 })
       );
       blade.rotation.z = (i / 3) * Math.PI * 2;
       blades.add(blade);
@@ -410,73 +561,96 @@ export default function WeedEmpire3D({
     fan.add(blades);
     props.add(fan);
 
-    // Carbon filter + duct on tent roof
+    // Carbon filter — ceiling rear-left, duct into back wall
     const filterGroup = new THREE.Group();
-    filterGroup.position.set(-0.55, 2.15, -0.2);
+    filterGroup.position.set(-0.65, 1.95, -0.55);
     filterGroup.visible = false;
     const filterCyl = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.12, 0.12, 0.45, 12),
+      new THREE.CylinderGeometry(0.1, 0.1, 0.4, 12),
       new THREE.MeshStandardMaterial({ color: 0x2a2a2e, roughness: 0.7 })
     );
     filterCyl.rotation.z = Math.PI / 2;
     filterGroup.add(filterCyl);
     const duct = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.06, 0.06, 0.5, 10),
+      new THREE.CylinderGeometry(0.05, 0.05, 0.35, 10),
       new THREE.MeshStandardMaterial({ color: 0x6a5a40, roughness: 0.65 })
     );
-    duct.position.set(0.35, 0.05, 0);
-    duct.rotation.z = Math.PI / 3;
+    duct.position.set(0.28, 0.02, -0.12);
+    duct.rotation.x = Math.PI / 5;
+    duct.rotation.z = Math.PI / 8;
     filterGroup.add(duct);
     props.add(filterGroup);
 
-    // Climate box (AC / dehum)
+    // Climate box — floor, left rear corner
     const climateBox = new THREE.Mesh(
-      new THREE.BoxGeometry(0.35, 0.45, 0.28),
+      new THREE.BoxGeometry(0.32, 0.4, 0.26),
       new THREE.MeshStandardMaterial({ color: 0xd8d8dc, roughness: 0.45, metalness: 0.25 })
     );
-    climateBox.position.set(-1.15, 0.25, 0.7);
+    climateBox.position.set(-0.78, 0.22, -0.55);
     climateBox.visible = false;
     props.add(climateBox);
 
-    // CO2 tank
+    // CO2 tank — floor, right rear corner
     const co2Group = new THREE.Group();
-    co2Group.position.set(1.15, 0.35, -0.55);
+    co2Group.position.set(0.82, 0.3, -0.55);
     co2Group.visible = false;
     const tank = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.1, 0.1, 0.55, 12),
+      new THREE.CylinderGeometry(0.09, 0.09, 0.5, 12),
       new THREE.MeshStandardMaterial({ color: 0x3a6aaa, metalness: 0.55, roughness: 0.35 })
     );
     co2Group.add(tank);
     const valve = new THREE.Mesh(
-      new THREE.BoxGeometry(0.08, 0.06, 0.08),
+      new THREE.BoxGeometry(0.07, 0.05, 0.07),
       new THREE.MeshStandardMaterial({ color: 0x888890, metalness: 0.7 })
     );
-    valve.position.y = 0.32;
+    valve.position.y = 0.28;
     co2Group.add(valve);
     props.add(co2Group);
 
-    // Irrigation drip lines
+    // Irrigation — watering can on floor (low lvl) OR drip stake into soil (higher)
     const irrig = new THREE.Group();
     irrig.visible = false;
-    const can = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.06, 0.08, 0.14, 10),
+    const wateringCan = new THREE.Group();
+    wateringCan.name = "wateringCan";
+    const canBody = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.07, 0.09, 0.16, 10),
       new THREE.MeshStandardMaterial({ color: 0x3a7aaa, roughness: 0.5 })
     );
-    can.position.set(-0.45, 0.55, 0.35);
-    irrig.add(can);
-    const dripLine = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.008, 0.008, 0.5, 6),
-      new THREE.MeshStandardMaterial({ color: 0x222228 })
+    canBody.position.y = 0.08;
+    wateringCan.add(canBody);
+    const spout = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.015, 0.02, 0.14, 6),
+      new THREE.MeshStandardMaterial({ color: 0x2a5a7a, roughness: 0.45 })
     );
-    dripLine.position.set(0.1, 0.95, 0.15);
-    dripLine.rotation.z = Math.PI / 2.5;
-    irrig.add(dripLine);
-    const nozzle = new THREE.Mesh(
-      new THREE.SphereGeometry(0.025, 8, 8),
-      new THREE.MeshStandardMaterial({ color: 0x444450, metalness: 0.4 })
+    spout.position.set(0.1, 0.12, 0);
+    spout.rotation.z = -Math.PI / 3;
+    wateringCan.add(spout);
+    wateringCan.position.set(-0.42, 0, 0.28);
+    irrig.add(wateringCan);
+
+    const dripKit = new THREE.Group();
+    dripKit.name = "dripKit";
+    dripKit.visible = false;
+    const dripTube = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.01, 0.01, 0.55, 6),
+      new THREE.MeshStandardMaterial({ color: 0x1a1a22 })
     );
-    nozzle.position.set(0, 0.72, 0.05);
-    irrig.add(nozzle);
+    dripTube.position.set(0.18, 0.95, 0);
+    dripKit.add(dripTube);
+    const emitterRing = new THREE.Mesh(
+      new THREE.TorusGeometry(0.06, 0.012, 6, 12),
+      new THREE.MeshStandardMaterial({ color: 0x333340, metalness: 0.3, roughness: 0.5 })
+    );
+    emitterRing.rotation.x = Math.PI / 2;
+    emitterRing.position.set(0, 0.42, 0);
+    dripKit.add(emitterRing);
+    const stake = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.012, 0.01, 0.28, 6),
+      new THREE.MeshStandardMaterial({ color: 0x444450 })
+    );
+    stake.position.set(0.12, 0.28, 0.1);
+    dripKit.add(stake);
+    irrig.add(dripKit);
     props.add(irrig);
 
     // Idle drip particles for auto-water
@@ -492,12 +666,12 @@ export default function WeedEmpire3D({
     idleDrips.visible = false;
     scene.add(idleDrips);
 
-    // Security cam
+    // Security cam — front-right ceiling corner
     const cam = new THREE.Mesh(
-      new THREE.SphereGeometry(0.05, 10, 10),
+      new THREE.SphereGeometry(0.045, 10, 10),
       new THREE.MeshStandardMaterial({ color: 0x1a1a1e, metalness: 0.6, roughness: 0.35 })
     );
-    cam.position.set(0.9, 1.85, 0.7);
+    cam.position.set(0.85, 1.85, 0.55);
     cam.visible = false;
     props.add(cam);
 
@@ -510,23 +684,23 @@ export default function WeedEmpire3D({
     meter.visible = false;
     props.add(meter);
 
-    // Curing racks background
+    // Curing racks — outside tent, left wall background
     const curingRack = new THREE.Group();
-    curingRack.position.set(-1.6, 0.9, -0.9);
+    curingRack.position.set(-1.55, 0.55, -0.7);
     curingRack.visible = false;
     for (let s = 0; s < 3; s++) {
       const shelf = new THREE.Mesh(
-        new THREE.BoxGeometry(0.7, 0.03, 0.35),
+        new THREE.BoxGeometry(0.55, 0.03, 0.28),
         new THREE.MeshStandardMaterial({ color: 0x4a3828, roughness: 0.8 })
       );
       shelf.position.y = s * 0.28;
       curingRack.add(shelf);
       for (let j = 0; j < 2; j++) {
         const jar = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.05, 0.05, 0.1, 8),
+          new THREE.CylinderGeometry(0.045, 0.045, 0.09, 8),
           new THREE.MeshStandardMaterial({ color: 0x88aa66, transparent: true, opacity: 0.55 })
         );
-        jar.position.set(-0.15 + j * 0.25, s * 0.28 + 0.08, 0);
+        jar.position.set(-0.12 + j * 0.22, s * 0.28 + 0.07, 0);
         curingRack.add(jar);
       }
     }
@@ -570,6 +744,8 @@ export default function WeedEmpire3D({
       plant,
       stem,
       leaves,
+      leafPairs,
+      seedlingGroup,
       bud,
       buds,
       budMeshes,
@@ -599,6 +775,8 @@ export default function WeedEmpire3D({
       climateBox,
       co2Group,
       irrig,
+      wateringCan,
+      dripKit,
       idleDrips,
       idlePos,
       idleDripGeom,
@@ -801,6 +979,8 @@ export default function WeedEmpire3D({
     st.climateBox.visible = climate >= 1 && showDetail;
     st.co2Group.visible = co2 >= 1;
     st.irrig.visible = irrigLvl >= 1;
+    if (st.wateringCan) st.wateringCan.visible = irrigLvl >= 1 && irrigLvl < 4;
+    if (st.dripKit) st.dripKit.visible = irrigLvl >= 4;
     st.cam.visible = security >= 2;
     st.meter.visible = meters >= 1;
     st.curingRack.visible = curingCount > 0 && showDetail;
@@ -808,13 +988,13 @@ export default function WeedEmpire3D({
 
     // Hang fixture from tent ceiling when tent present
     if (st.fixture) {
-      st.fixture.position.y = tents >= 1 ? 1.95 : 2.15;
+      st.fixture.position.set(0, tents >= 1 ? 1.88 : 2.05, 0);
       st.glowSphere.position.copy(st.fixture.position);
       st.canopySpot.position.set(0, st.fixture.position.y - 0.05, 0.05);
     }
   }, [equipment, houseTier, autoWater, curingCount]);
 
-  // Plant stage
+  // Plant stage — cannabis silhouette + continuous growth
   useEffect(() => {
     const st = stateRef.current;
     if (!st?.plant) return;
@@ -824,15 +1004,47 @@ export default function WeedEmpire3D({
     if (empty) {
       if (st.buds) st.buds.visible = false;
       if (st.sparks) st.sparks.visible = false;
+      if (st.seedlingGroup) st.seedlingGroup.visible = false;
       return;
     }
 
     const lightBoost =
       lightClass === "quantum" || lightClass === "led" ? 1.08 : lightClass === "hps" ? 1.05 : 1;
-    const scale =
-      (stage === "seedling" ? 0.4 + p * 0.25 : stage === "veg" ? 0.65 + p * 0.3 : 1.0 + p * 0.2) *
-      lightBoost;
-    st.plant.scale.setScalar(scale);
+    const t = Math.pow(p, 0.7);
+    // Seedling stays compact; veg/flower stretch taller in the tent
+    const base =
+      stage === "seedling"
+        ? 0.55 + p * 0.5
+        : stage === "veg"
+          ? 0.85 + p * 0.55
+          : stage === "flower"
+            ? 1.15 + p * 0.35
+            : 1.45;
+    st.plant.scale.setScalar(base * lightBoost);
+
+    // Seedling look early; fade once veg canopy fills in
+    if (st.seedlingGroup) {
+      st.seedlingGroup.visible = stage === "seedling" || (stage === "veg" && p < 0.45);
+      st.seedlingGroup.scale.setScalar(stage === "seedling" ? 1.15 : 0.85);
+    }
+
+    // Fan-leaf nodes unlock with progress
+    (st.leafPairs || []).forEach((pair) => {
+      const minP = pair.userData?.minP ?? 0;
+      const show = p >= minP && (stage !== "seedling" || minP <= 0.15);
+      pair.visible = show;
+      if (show) {
+        const growIn = Math.min(1, (p - minP) / 0.12 + 0.35);
+        pair.scale.setScalar(Math.max(0.4, growIn));
+      }
+    });
+
+    // Stem thickens slightly with age
+    if (st.stem) {
+      const thick = stage === "seedling" ? 0.7 : stage === "veg" ? 1 : 1.15;
+      st.stem.scale.set(thick, stage === "seedling" ? 0.55 : 1, thick);
+      st.stem.position.y = stage === "seedling" ? 0.28 : 0.42;
+    }
 
     const showBuds = stage === "flower" || stage === "harvest_ready";
     if (st.buds) {
@@ -843,15 +1055,15 @@ export default function WeedEmpire3D({
           cola.visible = true;
           cola.scale.setScalar(1);
         } else {
-          const unlock = i === 0 ? 0 : 0.15 + i * 0.1;
+          const unlock = i === 0 ? 0.65 : 0.7 + i * 0.04;
           cola.visible = p >= unlock;
-          cola.scale.setScalar(0.55 + p * 0.45);
+          cola.scale.setScalar(0.5 + (p - 0.65) * 1.2);
         }
       });
     }
     if (st.sparks) {
       st.sparks.visible = showBuds && (stage === "harvest_ready" || quality >= 55);
-      st.sparks.material.opacity = stage === "harvest_ready" ? 0.95 : 0.7;
+      st.sparks.material.opacity = stage === "harvest_ready" ? 0.95 : 0.65;
     }
 
     const tint = MESH_TINT[budMeshKey] || MESH_TINT.dense;
@@ -860,19 +1072,16 @@ export default function WeedEmpire3D({
         if (obj.isMesh && obj.material && obj.material.emissive && obj.material.color) {
           const c = obj.material.color.getHex();
           if (c === 0xe8a040) return;
+          // skip sugar leaf greens
+          if (obj.parent?.userData?.kind === "fan") return;
           obj.material.color.setHex(tint);
           obj.material.emissiveIntensity =
-            stage === "harvest_ready" ? 0.75 : 0.45 + (quality / 100) * 0.3;
+            stage === "harvest_ready" ? 0.75 : 0.4 + (quality / 100) * 0.3;
         }
       });
     });
-    (st.leaves || []).forEach((leaf) => {
-      if (leaf?.material) {
-        leaf.material.emissiveIntensity = 0.3 + (lightClass === "led" || lightClass === "quantum" ? 0.2 : 0);
-      }
-    });
 
-    st.budBaseScale = stage === "harvest_ready" ? 1.35 : stage === "flower" ? 0.9 + p * 0.25 : 0.7;
+    st.budBaseScale = stage === "harvest_ready" ? 1.25 : stage === "flower" ? 0.85 + p * 0.3 : 0.7;
     if (st.buds && st.fxKind !== "harvest_trim") {
       st.buds.scale.setScalar(st.budBaseScale);
     }
