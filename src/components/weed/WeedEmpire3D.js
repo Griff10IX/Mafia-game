@@ -230,6 +230,7 @@ export default function WeedEmpire3D({
       fanModels: [],
       fanLevel: level(equipment, "osc_fans"),
       leafNodes: [],
+      colaNodes: [],
       transitions: [],
       irrigationLevel: level(equipment, "irrigation"),
       fxDoneNonce: null,
@@ -320,15 +321,32 @@ export default function WeedEmpire3D({
         const heavyFlower = state.plant.userData.stage === "flower" || state.plant.userData.stage === "harvest_ready";
         const stageDamping = state.plant.userData.stage === "seedling" ? 0.55 : heavyFlower ? 0.72 : 1;
         const airflow = fanRunning ? Math.min(1, 0.34 + state.fanLevel * 0.1) : 0.12;
-        state.plant.rotation.y = Math.sin(elapsed * 0.35) * 0.035 * stageDamping;
-        state.plant.rotation.z = Math.sin(elapsed * 0.78) * 0.012 * airflow * stageDamping;
+        const gust = fanRunning ? 0.76 + Math.sin(elapsed * (0.62 + state.fanLevel * 0.025)) * 0.24 : 0.35;
+        state.plant.rotation.y = Math.sin(elapsed * 0.42) * 0.042 * airflow * stageDamping;
+        state.plant.rotation.z =
+          (Math.sin(elapsed * 0.86) + Math.sin(elapsed * 2.15) * 0.22) *
+          0.026 *
+          airflow *
+          gust *
+          stageDamping;
         if (!state.mobileLod || Math.floor(now / 32) % 2 === 0) {
           state.leafNodes.forEach((leaf, index) => {
-            const baseZ = leaf.userData.airflowBaseZ || 0;
-            const baseX = leaf.userData.airflowBaseX || 0;
-            const phase = leaf.userData.airflowPhase || index * 0.47;
-            leaf.rotation.z = baseZ + Math.sin(elapsed * (2.1 + airflow) + phase) * 0.018 * airflow * stageDamping;
-            leaf.rotation.x = baseX + Math.cos(elapsed * 1.6 + phase) * 0.009 * airflow * stageDamping;
+            const baseZ = leaf.userData.airflowBaseZ ?? 0;
+            const baseX = leaf.userData.airflowBaseX ?? 0;
+            const phase = leaf.userData.airflowPhase ?? index * 0.47;
+            leaf.rotation.z =
+              baseZ + Math.sin(elapsed * (2.15 + airflow) + phase) * 0.032 * airflow * gust * stageDamping;
+            leaf.rotation.x =
+              baseX + Math.cos(elapsed * 1.72 + phase) * 0.014 * airflow * gust * stageDamping;
+          });
+          state.colaNodes.forEach((cola, index) => {
+            const phase = cola.userData.airflowPhase ?? index * 0.61;
+            cola.rotation.z =
+              (cola.userData.airflowBaseZ ?? 0) +
+              Math.sin(elapsed * 1.35 + phase) * 0.009 * airflow * gust * stageDamping;
+            cola.rotation.x =
+              (cola.userData.airflowBaseX ?? 0) +
+              Math.cos(elapsed * 1.1 + phase) * 0.005 * airflow * gust * stageDamping;
           });
         }
       }
@@ -447,12 +465,19 @@ export default function WeedEmpire3D({
         model.scale.set(...strainScale(strainType, growth));
         model.userData.stage = normalizedStage;
         const leafNodes = [];
+        const colaNodes = [];
         model.traverse((object) => {
-          if (object.name !== "FanLeaf") return;
-          object.userData.airflowBaseZ = object.rotation.z;
-          object.userData.airflowBaseX = object.rotation.x;
-          object.userData.airflowPhase = leafNodes.length * 0.73 + Math.random() * 0.25;
-          leafNodes.push(object);
+          if (object.name === "FanLeaf" || object.name === "SugarLeaf") {
+            object.userData.airflowBaseZ = object.rotation.z;
+            object.userData.airflowBaseX = object.rotation.x;
+            object.userData.airflowPhase = leafNodes.length * 0.73 + Math.random() * 0.25;
+            leafNodes.push(object);
+          } else if (object.name === "BudCluster") {
+            object.userData.airflowBaseZ = object.rotation.z;
+            object.userData.airflowBaseX = object.rotation.x;
+            object.userData.airflowPhase = colaNodes.length * 0.61 + Math.random() * 0.18;
+            colaNodes.push(object);
+          }
         });
         setOpacity(model, 0);
         state.plantRig.add(model);
@@ -462,6 +487,7 @@ export default function WeedEmpire3D({
         }
         state.plant = model;
         state.leafNodes = leafNodes;
+        state.colaNodes = colaNodes;
         state.transitions.push({ object: model, from: 0, to: 1, start: performance.now(), duration: 360 });
         const phenotype = getBudPhenotype(budMeshKey);
         state.sparkles.material.color.setHex(phenotype.sparkle);
@@ -482,6 +508,7 @@ export default function WeedEmpire3D({
         }
         state.plant = placeholder;
         state.leafNodes = [];
+        state.colaNodes = [];
         setLoadWarning(`Plant model failed to load: ${url}. Showing fallback.`);
       })
       .finally(() => {

@@ -69,7 +69,7 @@ function branch(parent, from, to, radius = 0.012) {
   parent.add(mesh);
 }
 
-function addWhorl(root, y, radius, leafSize, count, phase, flowering) {
+function addWhorl(root, y, radius, leafSize, count, phase, budScaleFactor = 0) {
   for (let i = 0; i < count; i++) {
     const a = phase + (i / count) * Math.PI * 2;
     const end = new THREE.Vector3(Math.cos(a) * radius, y + radius * 0.28, Math.sin(a) * radius);
@@ -79,7 +79,9 @@ function addWhorl(root, y, radius, leafSize, count, phase, flowering) {
     leaf.rotation.y = -a + Math.PI;
     leaf.rotation.z = -0.08;
     root.add(leaf);
-    if (flowering) addCola(root, end.clone().add(new THREE.Vector3(0, 0.04, 0)), leafSize * 0.42);
+    if (budScaleFactor > 0) {
+      addCola(root, end.clone().add(new THREE.Vector3(0, 0.035, 0)), leafSize * budScaleFactor);
+    }
   }
 }
 
@@ -87,31 +89,53 @@ function addCola(root, position, scale) {
   const cola = new THREE.Group();
   cola.name = "BudCluster";
   cola.position.copy(position);
-  for (let i = 0; i < 7; i++) {
-    const a = i * 2.4;
-    const budKey = `${scale.toFixed(4)}:${i % 3}`;
-    if (!budGeometryCache.has(budKey)) {
-      budGeometryCache.set(budKey, new THREE.IcosahedronGeometry(scale * (0.34 + (i % 3) * 0.035), 1));
-    }
-    const calyx = new THREE.Mesh(budGeometryCache.get(budKey), bud);
-    calyx.scale.set(0.82, 1.25, 0.82);
-    calyx.position.set(Math.cos(a) * scale * 0.16, i * scale * 0.21, Math.sin(a) * scale * 0.16);
-    calyx.name = "Bud";
-    cola.add(calyx);
-    if (i % 2 === 0) {
-      const pistilKey = scale.toFixed(4);
-      if (!pistilGeometryCache.has(pistilKey)) {
-        pistilGeometryCache.set(
-          pistilKey,
-          new THREE.CylinderGeometry(scale * 0.018, scale * 0.01, scale * 0.28, 5)
-        );
+  const layers = 5;
+  for (let layer = 0; layer < layers; layer++) {
+    const taper = 0.56 + Math.sin(((layer + 0.5) / layers) * Math.PI) * 0.44;
+    const units = layer === layers - 1 ? 2 : 3;
+    for (let unit = 0; unit < units; unit++) {
+      const a = (unit / units) * Math.PI * 2 + layer * 0.82;
+      const budKey = `${scale.toFixed(4)}:${layer}:${unit === 0 ? 0 : 1}`;
+      if (!budGeometryCache.has(budKey)) {
+        budGeometryCache.set(budKey, new THREE.DodecahedronGeometry(scale * 0.14 * taper, 0));
       }
-      const hair = new THREE.Mesh(pistilGeometryCache.get(pistilKey), pistil);
-      hair.position.set(Math.cos(a) * scale * 0.3, i * scale * 0.2, Math.sin(a) * scale * 0.3);
-      hair.rotation.z = Math.PI / 3;
-      hair.name = "Pistil";
-      cola.add(hair);
+      const calyx = new THREE.Mesh(budGeometryCache.get(budKey), bud);
+      calyx.scale.set(0.78, 1.32, 0.78);
+      calyx.position.set(
+        Math.cos(a) * scale * 0.1 * taper,
+        layer * scale * 0.16,
+        Math.sin(a) * scale * 0.1 * taper
+      );
+      calyx.rotation.set((unit - 1) * 0.12, -a, Math.cos(a) * 0.18);
+      calyx.name = "BudCalyx";
+      cola.add(calyx);
+
+      if ((layer + unit) % 3 === 0) {
+        const pistilKey = scale.toFixed(4);
+        if (!pistilGeometryCache.has(pistilKey)) {
+          pistilGeometryCache.set(
+            pistilKey,
+            new THREE.CylinderGeometry(scale * 0.009, scale * 0.003, scale * 0.17, 5)
+          );
+        }
+        const hair = new THREE.Mesh(pistilGeometryCache.get(pistilKey), pistil);
+        hair.position.set(
+          Math.cos(a) * scale * 0.18,
+          layer * scale * 0.16 + scale * 0.025,
+          Math.sin(a) * scale * 0.18
+        );
+        hair.rotation.set(Math.sin(a) * 0.9, a, Math.cos(a) * 0.9);
+        hair.name = "Pistil";
+        cola.add(hair);
+      }
     }
+  }
+  for (let i = 0; i < 3; i++) {
+    const sugarLeaf = fanLeaf(scale * 0.52, green, 3);
+    sugarLeaf.name = "SugarLeaf";
+    sugarLeaf.position.set(0, scale * (0.2 + i * 0.12), 0);
+    sugarLeaf.rotation.set(-0.25, (i / 3) * Math.PI * 2, i % 2 ? 0.55 : -0.55);
+    cola.add(sugarLeaf);
   }
   root.add(cola);
 }
@@ -142,12 +166,26 @@ function buildStage(stage) {
     for (let i = 0; i < cfg.whorls; i++) {
       const f = i / Math.max(1, cfg.whorls - 1);
       const taper = 0.72 + Math.sin(f * Math.PI) * 0.32;
-      addWhorl(root, 0.18 + f * cfg.height * 0.67, cfg.radius * taper, cfg.size * taper, cfg.count, i * 0.55, stage !== "veg");
+      const budScaleFactor =
+        stage === "veg" || f < 0.28
+          ? 0
+          : (stage === "harvest" ? 0.24 : 0.17) * (0.72 + f * 0.28);
+      addWhorl(
+        root,
+        0.18 + f * cfg.height * 0.67,
+        cfg.radius * taper,
+        cfg.size * taper,
+        cfg.count,
+        i * 0.55,
+        budScaleFactor
+      );
     }
     const top = fanLeaf(cfg.size * 0.76, green, 7);
     top.position.y = cfg.height;
     root.add(top);
-    if (stage !== "veg") addCola(root, new THREE.Vector3(0, cfg.height * 0.92, 0), stage === "harvest" ? 0.16 : 0.12);
+    if (stage !== "veg") {
+      addCola(root, new THREE.Vector3(0, cfg.height * 0.92, 0), stage === "harvest" ? 0.115 : 0.078);
+    }
   }
 
   root.traverse((object) => {
