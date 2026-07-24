@@ -32,6 +32,7 @@ from utils.weed_empire_catalog import (
     equipment_shop_entries,
     grams_to_oz,
     grower_progress,
+    market_price_per_oz,
     rarity_xp_mult,
     shop_status_for_farm,
     unit_to_grams,
@@ -48,7 +49,6 @@ AUTO_WATER_IRRIGATION_LEVEL = 5
 AUTO_FEED_IRRIGATION_LEVEL = 8
 CURE_HOURS = 0.75
 MAX_HEAT = 100.0
-CITY_DEMAND_BASE = 1.0
 CLEANLINESS_SAFE_PCT = 30.0
 CLEANLINESS_BASE_DECAY_PER_HOUR = 0.25
 CLEANLINESS_ACTIVE_PLOT_DECAY_PER_HOUR = 0.45
@@ -963,14 +963,13 @@ async def weed_sell(body: SellBody, current_user: dict = Depends(_gate)):
         raise HTTPException(status_code=400, detail="Not enough stash")
 
     oz = grams_to_oz(grams)
-    # Demand soft dial from today's volume
-    sold_today = float(farm.get("daily_sold_usd") or 0)
-    demand = CITY_DEMAND_BASE * max(0.55, 1.0 - (sold_today / DAILY_SELL_CAP_USD) * 0.35)
-    heat = float(farm.get("heat") or 0)
-    heat_pen = min(0.45, heat / 200.0)
-    # Average quality assumption from curing batches — use 70 baseline
-    quality_mult = 0.85 + 0.3 * 0.7
-    price_per_oz = float(strain.get("base_price_per_oz") or 100) * demand * quality_mult * (1.0 - heat_pen)
+    price_per_oz = market_price_per_oz(
+        strain,
+        house_tier=int(farm.get("house_tier") or 0),
+        dealers_level=int(farm.get("dealers_level") or 0),
+        sold_today_usd=float(farm.get("daily_sold_usd") or 0),
+        heat=float(farm.get("heat") or 0),
+    )
     # Bulk sweetener for lb/kg
     u = body.unit.lower()
     if u in ("lb", "lbs", "pound", "pounds"):
@@ -983,10 +982,11 @@ async def weed_sell(body: SellBody, current_user: dict = Depends(_gate)):
 
     remaining = DAILY_SELL_CAP_USD - int(farm.get("daily_sold_usd") or 0)
     if payout > remaining:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Daily cap $100M reached (remaining ${remaining:,})",
-        )
+        if remaining <= 0:
+            raise HTTPException(status_code=400, detail="Daily cap $100M reached")
+        grams *= remaining / payout
+        oz = grams_to_oz(grams)
+        payout = remaining
 
     stash[body.strain_id] = round(have - grams, 4)
     if stash[body.strain_id] <= 0:
@@ -1393,11 +1393,21 @@ async def weed_dealer_sell(current_user: dict = Depends(_gate)):
         if not strain:
             continue
         oz = grams_to_oz(take)
-        price = float(strain.get("base_price_per_oz") or 100) * 0.9  # dealer cut
+        price = market_price_per_oz(
+            strain,
+            house_tier=int(farm.get("house_tier") or 0),
+            dealers_level=lvl,
+            sold_today_usd=float(farm.get("daily_sold_usd") or 0) + total_payout,
+            heat=float(farm.get("heat") or 0),
+            dealer_cut=0.9,
+        )
         pay = int(math.floor(price * oz))
         remaining = DAILY_SELL_CAP_USD - int(farm.get("daily_sold_usd") or 0) - total_payout
+        if remaining <= 0:
+            break
         if pay > remaining:
-            continue
+            take *= remaining / pay
+            pay = remaining
         stash[sid] = round(float(grams) - take, 4)
         if stash[sid] <= 0:
             stash.pop(sid, None)

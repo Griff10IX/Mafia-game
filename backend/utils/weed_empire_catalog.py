@@ -10,7 +10,7 @@ GRAMS_PER_KG = 1000
 
 START_BUSINESS_CASH = 100_000
 DAILY_SELL_CAP_USD = 100_000_000
-BASE_STREET_PRICE_PER_OZ = 100  # mid starter anchor
+BASE_STREET_PRICE_PER_OZ = 22_500
 
 # Soil charge consumed per plant
 SOIL_CHARGE_PER_PLANT = 1
@@ -24,6 +24,7 @@ HOUSES: List[Dict[str, Any]] = [
         "cost": 0,
         "max_equip_tier": 3,
         "grow_speed_mult": 1.0,
+        "market_mult": 1.0,
         "heat_decay": 0.5,
         "raid_defence": 0,
         "description": "A crap closet with a towel under the door.",
@@ -36,6 +37,7 @@ HOUSES: List[Dict[str, Any]] = [
         "cost": 75_000,
         "max_equip_tier": 8,
         "grow_speed_mult": 1.05,
+        "market_mult": 1.35,
         "heat_decay": 0.8,
         "raid_defence": 5,
         "description": "Damp basement with room for a real tent.",
@@ -48,6 +50,7 @@ HOUSES: List[Dict[str, Any]] = [
         "cost": 400_000,
         "max_equip_tier": 12,
         "grow_speed_mult": 1.12,
+        "market_mult": 2.0,
         "heat_decay": 1.2,
         "raid_defence": 15,
         "description": "Whole spare rooms for multi-tent grows.",
@@ -60,6 +63,7 @@ HOUSES: List[Dict[str, Any]] = [
         "cost": 2_500_000,
         "max_equip_tier": 16,
         "grow_speed_mult": 1.2,
+        "market_mult": 3.0,
         "heat_decay": 1.6,
         "raid_defence": 30,
         "description": "Industrial racks and serious power.",
@@ -72,6 +76,7 @@ HOUSES: List[Dict[str, Any]] = [
         "cost": 15_000_000,
         "max_equip_tier": 20,
         "grow_speed_mult": 1.3,
+        "market_mult": 4.65,
         "heat_decay": 2.0,
         "raid_defence": 50,
         "description": "Fortified empire grounds.",
@@ -209,6 +214,33 @@ def unit_to_grams(amount: float, unit: str) -> float:
 
 def grams_to_oz(grams: float) -> float:
     return float(grams) / GRAMS_PER_OZ
+
+
+def market_price_per_oz(
+    strain: Dict[str, Any],
+    *,
+    house_tier: int,
+    dealers_level: int,
+    sold_today_usd: float,
+    heat: float,
+    dealer_cut: float = 1.0,
+) -> float:
+    """Return the progression-scaled sale value for one ounce."""
+    house = HOUSE_BY_TIER.get(max(0, int(house_tier)), HOUSE_BY_TIER[0])
+    house_mult = float(house.get("market_mult") or 1.0)
+    network_mult = 1.0 + min(5, max(0, int(dealers_level))) * 0.2
+    demand = max(0.55, 1.0 - (max(0.0, float(sold_today_usd)) / DAILY_SELL_CAP_USD) * 0.35)
+    heat_penalty = min(0.45, max(0.0, float(heat)) / 200.0)
+    quality_mult = 0.85 + 0.3 * 0.7
+    return (
+        float(strain.get("base_price_per_oz") or BASE_STREET_PRICE_PER_OZ)
+        * demand
+        * quality_mult
+        * (1.0 - heat_penalty)
+        * house_mult
+        * network_mult
+        * max(0.0, float(dealer_cut))
+    )
 
 
 def active_light_class(equipment_levels: Dict[str, int]) -> str:
