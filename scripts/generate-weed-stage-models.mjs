@@ -97,14 +97,14 @@ function addCola(root, position, scale) {
       const a = (unit / units) * Math.PI * 2 + layer * 0.82;
       const budKey = `${scale.toFixed(4)}:${layer}:${unit === 0 ? 0 : 1}`;
       if (!budGeometryCache.has(budKey)) {
-        budGeometryCache.set(budKey, new THREE.DodecahedronGeometry(scale * 0.14 * taper, 0));
+        budGeometryCache.set(budKey, new THREE.DodecahedronGeometry(scale * 0.19 * taper, 0));
       }
       const calyx = new THREE.Mesh(budGeometryCache.get(budKey), bud);
       calyx.scale.set(0.78, 1.32, 0.78);
       calyx.position.set(
-        Math.cos(a) * scale * 0.1 * taper,
-        layer * scale * 0.16,
-        Math.sin(a) * scale * 0.1 * taper
+        Math.cos(a) * scale * 0.13 * taper,
+        layer * scale * 0.19,
+        Math.sin(a) * scale * 0.13 * taper
       );
       calyx.rotation.set((unit - 1) * 0.12, -a, Math.cos(a) * 0.18);
       calyx.name = "BudCalyx";
@@ -121,7 +121,7 @@ function addCola(root, position, scale) {
         const hair = new THREE.Mesh(pistilGeometryCache.get(pistilKey), pistil);
         hair.position.set(
           Math.cos(a) * scale * 0.18,
-          layer * scale * 0.16 + scale * 0.025,
+          layer * scale * 0.19 + scale * 0.025,
           Math.sin(a) * scale * 0.18
         );
         hair.rotation.set(Math.sin(a) * 0.9, a, Math.cos(a) * 0.9);
@@ -169,7 +169,7 @@ function buildStage(stage) {
       const budScaleFactor =
         stage === "veg" || f < 0.28
           ? 0
-          : (stage === "harvest" ? 0.24 : 0.17) * (0.72 + f * 0.28);
+          : (stage === "harvest" ? 0.34 : 0.25) * (0.72 + f * 0.28);
       addWhorl(
         root,
         0.18 + f * cfg.height * 0.67,
@@ -184,7 +184,7 @@ function buildStage(stage) {
     top.position.y = cfg.height;
     root.add(top);
     if (stage !== "veg") {
-      addCola(root, new THREE.Vector3(0, cfg.height * 0.92, 0), stage === "harvest" ? 0.115 : 0.078);
+      addCola(root, new THREE.Vector3(0, cfg.height * 0.92, 0), stage === "harvest" ? 0.16 : 0.11);
     }
   }
 

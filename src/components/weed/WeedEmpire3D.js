@@ -207,6 +207,7 @@ export default function WeedEmpire3D({
     renderer.toneMappingExposure = 1.08;
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.domElement.style.touchAction = "none";
     mount.appendChild(renderer.domElement);
 
     const room = buildGrowRoom(scene, houseTier, mobileLod);
@@ -239,6 +240,7 @@ export default function WeedEmpire3D({
       animationFrame: 0,
       startedAt: performance.now(),
       lastFrameAt: performance.now(),
+      cameraTargetZ: 3.25,
     };
     stateRef.current = state;
 
@@ -319,13 +321,13 @@ export default function WeedEmpire3D({
 
       if (state.plant && !careActive) {
         const heavyFlower = state.plant.userData.stage === "flower" || state.plant.userData.stage === "harvest_ready";
-        const stageDamping = state.plant.userData.stage === "seedling" ? 0.55 : heavyFlower ? 0.72 : 1;
+        const stageDamping = state.plant.userData.stage === "seedling" ? 0.65 : heavyFlower ? 0.85 : 1;
         const airflow = fanRunning ? Math.min(1, 0.34 + state.fanLevel * 0.1) : 0.12;
         const gust = fanRunning ? 0.76 + Math.sin(elapsed * (0.62 + state.fanLevel * 0.025)) * 0.24 : 0.35;
         state.plant.rotation.y = Math.sin(elapsed * 0.42) * 0.042 * airflow * stageDamping;
         state.plant.rotation.z =
           (Math.sin(elapsed * 0.86) + Math.sin(elapsed * 2.15) * 0.22) *
-          0.026 *
+          0.075 *
           airflow *
           gust *
           stageDamping;
@@ -335,18 +337,18 @@ export default function WeedEmpire3D({
             const baseX = leaf.userData.airflowBaseX ?? 0;
             const phase = leaf.userData.airflowPhase ?? index * 0.47;
             leaf.rotation.z =
-              baseZ + Math.sin(elapsed * (2.15 + airflow) + phase) * 0.032 * airflow * gust * stageDamping;
+              baseZ + Math.sin(elapsed * (2.15 + airflow) + phase) * 0.07 * airflow * gust * stageDamping;
             leaf.rotation.x =
-              baseX + Math.cos(elapsed * 1.72 + phase) * 0.014 * airflow * gust * stageDamping;
+              baseX + Math.cos(elapsed * 1.72 + phase) * 0.03 * airflow * gust * stageDamping;
           });
           state.colaNodes.forEach((cola, index) => {
             const phase = cola.userData.airflowPhase ?? index * 0.61;
             cola.rotation.z =
               (cola.userData.airflowBaseZ ?? 0) +
-              Math.sin(elapsed * 1.35 + phase) * 0.009 * airflow * gust * stageDamping;
+              Math.sin(elapsed * 1.35 + phase) * 0.018 * airflow * gust * stageDamping;
             cola.rotation.x =
               (cola.userData.airflowBaseX ?? 0) +
-              Math.cos(elapsed * 1.1 + phase) * 0.005 * airflow * gust * stageDamping;
+              Math.cos(elapsed * 1.1 + phase) * 0.01 * airflow * gust * stageDamping;
           });
         }
       }
@@ -381,6 +383,8 @@ export default function WeedEmpire3D({
           propsRef.current.onFxDone?.();
         }
       }
+      camera.position.z = THREE.MathUtils.lerp(camera.position.z, state.cameraTargetZ, 0.1);
+      camera.lookAt(0, 0.78, 0);
       renderer.render(scene, camera);
       state.animationFrame = requestAnimationFrame(animate);
     };
@@ -395,12 +399,23 @@ export default function WeedEmpire3D({
       renderer.setSize(nextWidth, nextHeight);
     };
     window.addEventListener("resize", resize);
+    const zoom = (event) => {
+      event.preventDefault();
+      state.cameraTargetZ = THREE.MathUtils.clamp(state.cameraTargetZ + event.deltaY * 0.0022, 1.65, 3.5);
+    };
+    const toggleZoom = () => {
+      state.cameraTargetZ = state.cameraTargetZ > 2.4 ? 1.72 : 3.25;
+    };
+    renderer.domElement.addEventListener("wheel", zoom, { passive: false });
+    renderer.domElement.addEventListener("dblclick", toggleZoom);
 
     return () => {
       cancelled = true;
       state.disposed = true;
       cancelAnimationFrame(state.animationFrame);
       window.removeEventListener("resize", resize);
+      renderer.domElement.removeEventListener("wheel", zoom);
+      renderer.domElement.removeEventListener("dblclick", toggleZoom);
       if (state.careRig) disposeCareRig(state.careRig);
       if (state.hygieneRig) disposeHygieneRig(state.hygieneRig);
       state.models.forEach(disposeModelClone);
