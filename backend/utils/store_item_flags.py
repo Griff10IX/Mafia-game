@@ -19,6 +19,7 @@ STORE_ITEM_FLAG_DEFAULTS: Dict[str, bool] = {
     "raid_capacity": False,
     "raid_reset": False,
     "hitman_for_hire": False,
+    "weed_empire": False,
 }
 
 PHASE1_STORE_ITEM_FLAGS = (

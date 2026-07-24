@@ -117,6 +117,7 @@ const QuickTrade = lazy(() => import("./pages/Money/QuickTrade"));
 const Lottery = lazy(() => import("./pages/Money/Lottery"));
 const StockMarket = lazy(() => import("./pages/Money/StockMarket"));
 const GraveRobber = lazy(() => import("./pages/Money/GraveRobber"));
+const WeedEmpire = lazy(() => import("./pages/Money/WeedEmpire"));
 
 // Social pages
 const Forum = lazy(() => import("./pages/Social/Forum"));
@@ -1376,8 +1377,21 @@ function App() {
               )
             }
           />
+          <Route
+            path="/money/weed-empire"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <WeedEmpire />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
           <Route path="/racket" element={<Navigate to="/money/racket" replace />} />
           <Route path="/distillery" element={<Navigate to="/money/distillery" replace />} />
+          <Route path="/weed-empire" element={<Navigate to="/money/weed-empire" replace />} />
           <Route
             path="/money/lottery"
             element={

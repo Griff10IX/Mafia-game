@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation, useNavigationType } from 'react-router-dom';
 import { SAME_ROUTE_NAV_CLICK } from '../constants/navigationEvents';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Grid3x3, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb, Flame } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Grid3x3, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb, Flame, Leaf } from 'lucide-react';
 import api, {
   getApiErrorMessage,
   onCooldownChange,
@@ -57,7 +57,7 @@ function buildModStaffNavItems() {
   });
 }
 
-function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEntertainer, isHelpDeskOperator, staffToolsNavVisible, worldCupEnabled, hitmanForHireVisible) {
+function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEntertainer, isHelpDeskOperator, staffToolsNavVisible, worldCupEnabled, hitmanForHireVisible, weedEmpireNavVisible) {
   const goItems = [
     { path: '/game/travel', label: 'Travel' },
     { path: '/game/states', label: 'States' },
@@ -65,6 +65,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
     { path: '/money/property', label: 'Properties' },
     { path: '/money/booze-run', label: 'Booze Run' },
     { path: '/money/distillery', label: 'Distillery' },
+    ...(weedEmpireNavVisible ? [{ path: '/money/weed-empire', label: 'Weed Empire' }] : []),
     { path: '/cars/garage', label: 'Garage' },
   ];
   return [
@@ -102,6 +103,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
         { path: '/money/quick-trade', label: 'Quick Trade' },
         { path: '/money/stocks', label: 'Stock Market' },
         { path: '/money/racket', label: 'Racket' },
+        ...(weedEmpireNavVisible ? [{ path: '/money/weed-empire', label: 'Weed Empire' }] : []),
         { path: '/cars/buy', label: 'Buy Cars' },
         { path: '/cars/sell', label: 'Sell Cars' },
         { path: '/money/lottery', label: 'Lottery' },
@@ -455,6 +457,7 @@ export default function Layout({ children }) {
   const [pageLocks, setPageLocks] = useState({});
   const [worldCupEnabled, setWorldCupEnabled] = useState(false);
   const [hitmanForHireLive, setHitmanForHireLive] = useState(false);
+  const [weedEmpireVisible, setWeedEmpireVisible] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
   const userSearchRef = useRef(null);
   const userSearchInputRef = useRef(null);
@@ -613,8 +616,9 @@ export default function Layout({ children }) {
     return isStaffPortalTokenValid();
   }, [isAdmin, isModerator, staffLoginSession, staffPortalEnabled, portalNavTick]);
   const hitmanForHireVisible = !!hitmanForHireLive;
+  const weedEmpireNavVisible = !!weedEmpireVisible || !!(isAdmin || isModerator || hasAdminEmail);
   const mobileBottomNavItems = useMemo(() => {
-    let items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, !!user?.is_entertainer, !!user?.is_help_desk_operator, staffToolsNavVisible, !!worldCupEnabled, hitmanForHireVisible);
+    let items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, !!user?.is_entertainer, !!user?.is_help_desk_operator, staffToolsNavVisible, !!worldCupEnabled, hitmanForHireVisible, weedEmpireNavVisible);
     if (hasAdminEmail && !isAdmin && !adminPreviewAsMod) {
       items = items.map((i) =>
         i.type === 'group' && i.id === 'you'
@@ -680,7 +684,7 @@ export default function Layout({ children }) {
       }
       return i;
     });
-  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, updateLogUnread, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, storePointsEventActive, worldCupEnabled, hitmanForHireVisible, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
+  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, updateLogUnread, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, storePointsEventActive, worldCupEnabled, hitmanForHireVisible, weedEmpireNavVisible, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
 
   useEffect(() => onCooldownChange(setCooldownSeconds), []);
 
@@ -1357,7 +1361,13 @@ export default function Layout({ children }) {
     const tHitman = setTimeout(() => {
       api.get('/store/item-flags').then((r) => {
         setHitmanForHireLive(!!r.data?.flags?.hitman_for_hire);
-      }).catch(() => setHitmanForHireLive(false));
+        const weedLive = !!r.data?.flags?.weed_empire;
+        // Staff can always see Weed Empire while flag is off (preview).
+        setWeedEmpireVisible(weedLive);
+      }).catch(() => {
+        setHitmanForHireLive(false);
+        setWeedEmpireVisible(false);
+      });
     }, 1600);
     return () => {
       clearTimeout(t);
@@ -1498,7 +1508,7 @@ export default function Layout({ children }) {
         '__combat__': 'combat', '/kill/attack': 'combat', '/kill/witness-statements': 'combat', '/kill/attempts': 'combat', '/kill/combat-timeline': 'combat', '/kill/hitlist': 'combat', '/kill/hitman': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
         '__messaging__': 'messaging',
-        '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/game/entertainer': 'casino', '/money/distillery': 'money',
+        '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/game/entertainer': 'casino', '/money/distillery': 'money', '/money/weed-empire': 'money',
         '/cars/garage': 'money', '/cars/buy': 'money', '/cars/sell': 'money', '/money/crack-safe': 'money', '/money/grave-robber': 'money', '/money/lottery': 'money', '/money/loot-box': 'money',
         '/casino': 'casino', '/game/world-cup': 'casino',
         '/game/family/list': 'other', '/game/dead-alive': 'other', '/account/autorank': 'other',
@@ -1512,7 +1522,7 @@ export default function Layout({ children }) {
         '__combat__': 'combat', '/kill/attack': 'combat', '/kill/witness-statements': 'combat', '/kill/attempts': 'combat', '/kill/combat-timeline': 'combat', '/kill/hitlist': 'combat', '/kill/hitman': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
         '__messaging__': 'messaging',
-        '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/game/entertainer': 'casino', '/casino/mini-games/flappy': 'money', '/money/distillery': 'money',
+        '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/game/entertainer': 'casino', '/casino/mini-games/flappy': 'money', '/money/distillery': 'money', '/money/weed-empire': 'money',
         '/cars/garage': 'money', '/cars/buy': 'money', '/cars/sell': 'money', '/money/crack-safe': 'money', '/money/grave-robber': 'money', '/money/lottery': 'money', '/money/loot-box': 'money', '/game/leaderboard': 'money',
         '/casino': 'casino', '/game/world-cup': 'casino',
         '/game/family/list': 'other', '/game/dead-alive': 'other', '/account/autorank': 'other',
@@ -1554,6 +1564,9 @@ export default function Layout({ children }) {
     { path: '/money/booze-run', icon: Wine, label: 'Booze Run' },
     { path: '/money/distillery', icon: Wine, label: 'Distillery' },
     { path: '/money/racket', icon: Building2, label: 'Racket' },
+    ...((weedEmpireVisible || isAdmin || isModerator || hasAdminEmail)
+      ? [{ path: '/money/weed-empire', icon: Leaf, label: weedEmpireVisible ? 'Weed Empire' : 'Weed Empire (Staff)' }]
+      : []),
     { path: '/game/users-online', icon: Users, label: 'Users Online', countBadge: usersOnlineCount },
     { path: '__messaging__', icon: MessageSquare, label: 'Forum & inbox' },
     { path: '/game/help-desk', icon: HelpCircle, label: 'Help Desk', badge: helpDeskOpenCount },
