@@ -732,6 +732,22 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
                     await apply_referrer_referral_increment(
                         db, rid, {"money": amt, "referral_earnings_oc": amt}, context="oc"
                     )
+    # Family daily "Organised crime participation" — count each human on a successful crew OC
+    # (solo Organised Crime heists already record via organised_crime.py).
+    try:
+        from utils.family_daily_tasks import record_family_daily_activity
+
+        job_id = str(job.get("id") or "")
+        for participant_id in user_ids:
+            await record_family_daily_activity(
+                db,
+                participant_id,
+                "oc",
+                source_id=f"crew-oc:{uid}:{now.isoformat()}:{job_id}:{participant_id}",
+                now=now,
+            )
+    except Exception:
+        logger.exception("Family daily crew OC progress failed runner_id=%s", uid)
     msg = _rng.choice(OC_TEAM_HEIST_SUCCESS_MESSAGES).format(job_name=job["name"])
     return {
         "success": True,

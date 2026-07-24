@@ -65,7 +65,7 @@ DICE_SIDES_MAX = 2500
 # Tiny skim off wins/losses for state-head treasury when a head family exists.
 DICE_HOUSE_EDGE = 0.0005  # 0.05%
 # Secret owner favor: advertised odds stay 1/sides; ~3% of would-be hits are silently turned into misses.
-DICE_SECRET_MISS_CHANCE = 0.03
+DICE_SECRET_MISS_CHANCE = 0.15
 DICE_MAX_BET = 5_000_000          # default max bet for new tables
 DICE_ABSOLUTE_MAX_BET = 500_000_000  # hard ceiling owners can set up to
 DICE_BUY_BACK_EXPIRY_MINUTES = 10
