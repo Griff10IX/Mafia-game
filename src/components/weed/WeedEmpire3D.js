@@ -124,8 +124,8 @@ function makeFanLeaf(mat, fingers = 5, size = 1, strainType = "hybrid") {
   for (let i = 0; i < count; i++) {
     const ang = angles[i];
     const centerBoost = 1 - Math.abs(ang) * 0.2;
-    const sx = 0.42 * size * widthBias * (0.75 + centerBoost * 0.25);
-    const sy = 0.55 * size * lenBias * centerBoost;
+    const sx = 0.5 * size * widthBias * (0.75 + centerBoost * 0.25);
+    const sy = 0.65 * size * lenBias * centerBoost;
     const finger = new THREE.Mesh(bladeGeom.clone(), leafMat.clone());
     finger.scale.set(sx, sy, 1);
     // Fan in Z; slight pitch so face reads toward camera when leaf group is oriented
@@ -182,29 +182,28 @@ function makeWateringCan() {
   can.add(handle);
 
   const spout = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.032, 0.26, 10), dark);
-  spout.position.set(0.18, 0.15, 0);
-  spout.rotation.z = -Math.PI / 2.5;
+  spout.position.set(0.18, 0.16, 0);
+  spout.rotation.z = -0.7;
   spout.name = "spout";
   can.add(spout);
 
   const rose = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.04, 0.035, 12), plastic);
-  rose.position.set(0.3, 0.22, 0);
-  rose.rotation.z = -Math.PI / 2.5;
+  rose.position.set(0.3, 0.24, 0);
+  rose.rotation.z = -0.7;
   rose.name = "rose";
   can.add(rose);
-  // Marker at rose tip for pour aim
   const tip = new THREE.Object3D();
   tip.name = "pourTip";
-  tip.position.set(0.34, 0.25, 0);
+  tip.position.set(0.34, 0.28, 0);
   can.add(tip);
 
   can.scale.setScalar(1.35);
-  // Idle: left of pot, spout aimed vaguely at pot
-  can.userData.idlePos = new THREE.Vector3(-0.55, 0, 0.28);
-  can.userData.idleRotZ = 0.2;
-  // Pour: further left so it doesn't clip plant; higher; mild tip so spout over soil
-  can.userData.pourPos = new THREE.Vector3(-0.4, 0.58, 0.18);
-  can.userData.pourRotZ = -0.55;
+  // Idle: left of pot, spout aimed at pot rim (not floor)
+  can.userData.idlePos = new THREE.Vector3(-0.5, 0, 0.22);
+  can.userData.idleRotZ = 0.45;
+  // Pour: lift + tip spout into soil
+  can.userData.pourPos = new THREE.Vector3(-0.38, 0.55, 0.12);
+  can.userData.pourRotZ = -0.4;
   can.position.copy(can.userData.idlePos);
   can.rotation.z = can.userData.idleRotZ;
   return can;
@@ -672,41 +671,45 @@ export default function WeedEmpire3D({
       emissiveIntensity: 0.28,
     });
 
-    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.022, 0.85, 8), stemMat);
-    stem.position.y = 0.42;
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.022, 0.7, 8), stemMat);
+    stem.position.y = 0.35;
     plant.add(stem);
 
     const seedlingGroup = new THREE.Group();
-    const cotL = makeCotyledon(seedlingLeafMat, 0.55);
-    cotL.position.set(-0.045, 0.12, 0.04);
+    const cotL = makeCotyledon(seedlingLeafMat, 0.5);
+    cotL.position.set(-0.04, 0.1, 0.04);
     cotL.rotation.z = 0.35;
     seedlingGroup.add(cotL);
-    const cotR = makeCotyledon(seedlingLeafMat, 0.55);
-    cotR.position.set(0.045, 0.12, 0.04);
+    const cotR = makeCotyledon(seedlingLeafMat, 0.5);
+    cotR.position.set(0.04, 0.1, 0.04);
     cotR.rotation.z = -0.35;
     seedlingGroup.add(cotR);
-    // Small true leaves — seedling should fit in the pot canopy, not fill the tent
-    const firstTrueL = makeFanLeaf(seedlingLeafMat, 3, 0.38, "hybrid");
-    firstTrueL.position.set(-0.04, 0.18, 0.05);
-    firstTrueL.rotation.set(-0.4, 0.5, -0.1);
+    // Clear small cannabis fans (readable, pot-sized)
+    const firstTrueL = makeFanLeaf(seedlingLeafMat, 5, 0.55, "hybrid");
+    firstTrueL.position.set(-0.05, 0.16, 0.06);
+    firstTrueL.rotation.set(-0.45, 0.6, 0);
     seedlingGroup.add(firstTrueL);
-    const firstTrueR = makeFanLeaf(seedlingLeafMat, 3, 0.38, "hybrid");
-    firstTrueR.position.set(0.04, 0.2, 0.03);
-    firstTrueR.rotation.set(-0.35, -0.5, 0.1);
+    const firstTrueR = makeFanLeaf(seedlingLeafMat, 5, 0.55, "hybrid");
+    firstTrueR.position.set(0.05, 0.18, 0.04);
+    firstTrueR.rotation.set(-0.4, -0.6, 0);
     seedlingGroup.add(firstTrueR);
+    const firstTrueTop = makeFanLeaf(seedlingLeafMat, 5, 0.48, "hybrid");
+    firstTrueTop.position.set(0, 0.26, 0.05);
+    firstTrueTop.rotation.set(-0.5, 0.15, 0);
+    seedlingGroup.add(firstTrueTop);
     plant.add(seedlingGroup);
 
     const fanLeaves = [];
-    // Layered whorls — sizes relative to pot (~0.5 wide), grow denser with progress
+    // Whorls unlock early so mid-grow isn't a bare stick
     const leafNodes = [
-      { y: 0.28, fingers: 5, size: 0.42, minP: 0.08 },
-      { y: 0.38, fingers: 5, size: 0.48, minP: 0.2 },
-      { y: 0.48, fingers: 7, size: 0.55, minP: 0.32 },
-      { y: 0.58, fingers: 7, size: 0.58, minP: 0.42 },
-      { y: 0.68, fingers: 7, size: 0.6, minP: 0.52 },
-      { y: 0.76, fingers: 7, size: 0.55, minP: 0.6 },
-      { y: 0.46, fingers: 5, size: 0.48, minP: 0.36, branch: true },
-      { y: 0.62, fingers: 5, size: 0.5, minP: 0.48, branch: true },
+      { y: 0.22, fingers: 5, size: 0.5, minP: 0.05 },
+      { y: 0.32, fingers: 5, size: 0.58, minP: 0.12 },
+      { y: 0.42, fingers: 7, size: 0.62, minP: 0.22 },
+      { y: 0.52, fingers: 7, size: 0.66, minP: 0.32 },
+      { y: 0.62, fingers: 7, size: 0.68, minP: 0.42 },
+      { y: 0.7, fingers: 7, size: 0.64, minP: 0.52 },
+      { y: 0.4, fingers: 5, size: 0.55, minP: 0.28, branch: true },
+      { y: 0.56, fingers: 5, size: 0.58, minP: 0.4, branch: true },
     ];
     leafNodes.forEach((node, idx) => {
       const mat = node.fingers >= 7 ? darkLeafMat : vegLeafMat;
@@ -1381,30 +1384,33 @@ export default function WeedEmpire3D({
       lightClass === "quantum" || lightClass === "led" ? 1.08 : lightClass === "hps" ? 1.05 : 1;
     const base =
       stage === "seedling"
-        ? 0.55 + p * 0.25
+        ? 0.72 + p * 0.2
         : stage === "veg"
-          ? 0.75 + p * 0.3
+          ? 0.88 + p * 0.22
           : stage === "flower"
-            ? 0.95 + p * 0.25
-            : 1.15;
+            ? 1.05 + p * 0.2
+            : 1.2;
     st.plant.scale.setScalar(base * lightBoost);
 
     if (st.seedlingGroup) {
-      st.seedlingGroup.visible = stage === "seedling" || (stage === "veg" && p < 0.45);
-      st.seedlingGroup.scale.setScalar(stage === "seedling" ? 0.85 : 0.65);
+      st.seedlingGroup.visible = stage === "seedling" || (stage === "veg" && p < 0.4);
+      st.seedlingGroup.scale.setScalar(stage === "seedling" ? 1.05 : 0.75);
     }
 
     (st.leafPairs || []).forEach((pair) => {
       const minP = pair.userData?.minP ?? 0;
-      const show = p >= minP && (stage !== "seedling" || minP <= 0.15);
+      const show = p >= minP && (stage !== "seedling" || minP <= 0.12);
       pair.visible = show;
-      if (show) pair.scale.setScalar(Math.max(0.4, Math.min(1, (p - minP) / 0.12 + 0.35)));
+      if (show) pair.scale.setScalar(Math.max(0.55, Math.min(1, (p - minP) / 0.1 + 0.5)));
     });
 
     if (st.stem) {
-      const thick = stage === "seedling" ? 0.7 : stage === "veg" ? 1 : 1.15;
-      st.stem.scale.set(thick, stage === "seedling" ? 0.55 : 1, thick);
-      st.stem.position.y = stage === "seedling" ? 0.28 : 0.42;
+      // Stem height tracks grow progress — no tall bare stick
+      const stemH =
+        stage === "seedling" ? 0.4 + p * 0.25 : stage === "veg" ? 0.55 + p * 0.4 : 0.95;
+      const thick = stage === "seedling" ? 0.75 : stage === "veg" ? 1 : 1.12;
+      st.stem.scale.set(thick, stemH, thick);
+      st.stem.position.y = 0.18 + stemH * 0.35;
     }
 
     // Leaf emissive under grow light
