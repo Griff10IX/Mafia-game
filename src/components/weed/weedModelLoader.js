@@ -13,6 +13,9 @@ export const WEED_MODELS = {
   wateringCan: "/models/weed/watering-can.glb",
   nutrientBottle: "/models/weed/nutrient-bottle.glb",
   pot: "/models/weed/pot.glb",
+  potFabric: "/models/weed/pot-fabric-grow-bag.glb",
+  potAir: "/models/weed/pot-air-perforated.glb",
+  potHydro: "/models/weed/pot-hydro-autopot.glb",
   fan: "/models/weed/clip-fan.glb",
   filter: "/models/weed/carbon-filter.glb",
   climate: "/models/weed/dehumidifier.glb",
@@ -44,7 +47,7 @@ function cloneMaterials(root) {
   });
 }
 
-export async function loadWeedModel(url, { height = 1, ground = true } = {}) {
+export async function loadWeedModel(url, { height = 1, ground = true, preserveOrigin = false } = {}) {
   const gltf = await fetchModel(url);
   const model = cloneSkeleton(gltf.scene);
   cloneMaterials(model);
@@ -54,11 +57,18 @@ export async function loadWeedModel(url, { height = 1, ground = true } = {}) {
   const center = bounds.getCenter(new THREE.Vector3());
   const scale = height / Math.max(size.y, 0.001);
   model.scale.setScalar(scale);
-  model.position.set(-center.x * scale, ground ? -bounds.min.y * scale : -center.y * scale, -center.z * scale);
+  if (preserveOrigin) model.position.set(0, 0, 0);
+  else model.position.set(-center.x * scale, ground ? -bounds.min.y * scale : -center.y * scale, -center.z * scale);
 
   const wrapper = new THREE.Group();
   wrapper.name = `model:${url}`;
   wrapper.userData.modelUrl = url;
+  wrapper.userData.normalizedBounds = {
+    min: bounds.min.clone().multiplyScalar(scale),
+    max: bounds.max.clone().multiplyScalar(scale),
+    size: size.clone().multiplyScalar(scale),
+  };
+  wrapper.userData.originGroundOffset = -bounds.min.y * scale;
   wrapper.add(model);
   return wrapper;
 }

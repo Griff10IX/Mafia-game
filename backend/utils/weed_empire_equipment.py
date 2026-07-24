@@ -316,8 +316,14 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
         "pest_ipm", "Pest Control / IPM", "plantwork",
         max_level=12, base_cost=1_100, cost_growth=1.27,
         min_grower_level=3, tier="mid", icon="pest", room_visual="pest",
-        stats_per_level={"quality_ceiling": 1.5, "yield_mult": 0.01},
-        description="Reduce pest quality fails.",
+        stats_per_level={
+            "quality_ceiling": 1.5,
+            "yield_mult": 0.01,
+            "cleanliness_decay_mult": -0.04,
+            "mite_resistance": 0.06,
+            "mite_treatment_bonus": 3.0,
+        },
+        description="Slows room decay, resists spider mites, and improves treatment.",
     ),
     _cat(
         "trimmers", "Trimmers", "harvest",

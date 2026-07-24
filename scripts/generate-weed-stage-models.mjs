@@ -23,14 +23,20 @@ const young = new THREE.MeshStandardMaterial({ name: "YoungLeaves", color: 0x62a
 const stem = new THREE.MeshStandardMaterial({ name: "Stem", color: 0x47733a, roughness: 0.72 });
 const bud = new THREE.MeshStandardMaterial({ name: "Buds", color: 0x4b843d, roughness: 0.36 });
 const pistil = new THREE.MeshStandardMaterial({ name: "Pistils", color: 0xd9832f, roughness: 0.55 });
+const bladeCache = new Map();
+const budGeometryCache = new Map();
+const pistilGeometryCache = new Map();
 
 function bladeGeometry(length = 0.28, width = 0.065) {
+  const key = `${length.toFixed(4)}:${width.toFixed(4)}`;
+  if (bladeCache.has(key)) return bladeCache.get(key);
   const shape = new THREE.Shape();
   shape.moveTo(0, 0);
   shape.bezierCurveTo(width * 0.72, length * 0.18, width, length * 0.47, 0, length);
   shape.bezierCurveTo(-width, length * 0.47, -width * 0.72, length * 0.18, 0, 0);
   const geometry = new THREE.ShapeGeometry(shape, 6);
   geometry.rotateX(-Math.PI / 2);
+  bladeCache.set(key, geometry);
   return geometry;
 }
 
@@ -83,13 +89,24 @@ function addCola(root, position, scale) {
   cola.position.copy(position);
   for (let i = 0; i < 7; i++) {
     const a = i * 2.4;
-    const calyx = new THREE.Mesh(new THREE.IcosahedronGeometry(scale * (0.34 + (i % 3) * 0.035), 1), bud);
+    const budKey = `${scale.toFixed(4)}:${i % 3}`;
+    if (!budGeometryCache.has(budKey)) {
+      budGeometryCache.set(budKey, new THREE.IcosahedronGeometry(scale * (0.34 + (i % 3) * 0.035), 1));
+    }
+    const calyx = new THREE.Mesh(budGeometryCache.get(budKey), bud);
     calyx.scale.set(0.82, 1.25, 0.82);
     calyx.position.set(Math.cos(a) * scale * 0.16, i * scale * 0.21, Math.sin(a) * scale * 0.16);
     calyx.name = "Bud";
     cola.add(calyx);
     if (i % 2 === 0) {
-      const hair = new THREE.Mesh(new THREE.CylinderGeometry(scale * 0.018, scale * 0.01, scale * 0.28, 5), pistil);
+      const pistilKey = scale.toFixed(4);
+      if (!pistilGeometryCache.has(pistilKey)) {
+        pistilGeometryCache.set(
+          pistilKey,
+          new THREE.CylinderGeometry(scale * 0.018, scale * 0.01, scale * 0.28, 5)
+        );
+      }
+      const hair = new THREE.Mesh(pistilGeometryCache.get(pistilKey), pistil);
       hair.position.set(Math.cos(a) * scale * 0.3, i * scale * 0.2, Math.sin(a) * scale * 0.3);
       hair.rotation.z = Math.PI / 3;
       hair.name = "Pistil";

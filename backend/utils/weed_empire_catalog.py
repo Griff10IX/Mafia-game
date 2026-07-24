@@ -244,6 +244,9 @@ def aggregate_stats(equipment_levels: Dict[str, int], house: Dict[str, Any]) -> 
         "power_capacity": 200.0,
         "raid_defence": float(house.get("raid_defence") or 0),
         "stash_security": 0.0,
+        "cleanliness_decay_mult": 1.0,
+        "mite_resistance": 0.0,
+        "mite_treatment_bonus": 0.0,
     }
     for cat_id, lvl in (equipment_levels or {}).items():
         cat = EQUIPMENT_BY_ID.get(cat_id)

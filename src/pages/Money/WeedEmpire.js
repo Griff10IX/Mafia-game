@@ -3,12 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Droplets,
+  Bug,
   Leaf,
   Lightbulb,
   Package,
   Scissors,
   Shield,
   ShoppingCart,
+  Sparkles,
   Swords,
   Warehouse,
 } from "lucide-react";
@@ -121,6 +123,19 @@ export default function WeedEmpire() {
     load();
   }, [load]);
 
+  useEffect(() => {
+    if (tab !== "grow") return undefined;
+    const refresh = window.setInterval(async () => {
+      try {
+        const { data } = await api.get("/weed-empire/status");
+        applyFarm(data?.farm);
+      } catch {
+        // Keep the current view if a background refresh briefly fails.
+      }
+    }, 60000);
+    return () => window.clearInterval(refresh);
+  }, [tab, applyFarm]);
+
   const selectedPlot = useMemo(
     () => (farm?.plots || []).find((p) => p.id === selectedPlotId) || farm?.plots?.[0],
     [farm, selectedPlotId]
@@ -187,6 +202,24 @@ export default function WeedEmpire() {
       applyFarm(data.farm);
       triggerFx("feed");
       toast.success("Fed");
+    });
+
+  const cleanRoom = () =>
+    run(async () => {
+      const { data } = await api.post("/weed-empire/clean-room");
+      applyFarm(data.farm);
+      triggerFx("clean");
+      toast.success(`Grow room cleaned for ${money(data.cost)}`);
+    });
+
+  const treatMites = () =>
+    run(async () => {
+      const { data } = await api.post("/weed-empire/treat-mites", { plot_id: selectedPlotId });
+      applyFarm(data.farm);
+      triggerFx("ipm");
+      toast.success(
+        `Spider mites treated (${Number(data.treatment_effect_pct || 0).toFixed(0)}% effective) for ${money(data.cost)}`
+      );
     });
 
   const harvest = () =>
@@ -281,6 +314,10 @@ export default function WeedEmpire() {
 
   const capPct = Math.min(100, ((farm.daily_sold_usd || 0) / (farm.daily_sold_cap || 1)) * 100);
   const selStrain = strainMap[selectedPlot?.strain_id] || {};
+  const cleanlinessPct = Math.max(0, Math.min(100, Number(farm.cleanliness_pct ?? farm.cleanliness ?? 100)));
+  const cleanlinessRisk = cleanlinessPct < 30;
+  const mitePct = Math.max(0, Math.min(100, Number(selectedPlot?.mite_infestation_pct || 0)));
+  const miteInfested = !!selectedPlot?.mite_infested || mitePct > 0;
 
   return (
     <div className={`${styles.page} max-w-6xl mx-auto px-3 py-4 space-y-4`}>
@@ -303,7 +340,7 @@ export default function WeedEmpire() {
         </div>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 text-xs">
         <div className="rounded border border-border/50 bg-card/40 p-2">
           <div className="text-muted-foreground flex justify-between">
             <span>Grower Lv {farm.grower_level || 1}</span>
@@ -349,6 +386,35 @@ export default function WeedEmpire() {
             Cool off
           </button>
         </div>
+        <div
+          className={`rounded border p-2 ${
+            cleanlinessRisk ? "border-red-500/50 bg-red-950/20" : "border-emerald-500/30 bg-card/40"
+          }`}
+        >
+          <CareMeter
+            label={cleanlinessRisk ? "Cleanliness · mite risk" : "Cleanliness · safe"}
+            pct={cleanlinessPct}
+            colorClass={cleanlinessRisk ? "bg-red-500" : "bg-emerald-500"}
+            warn={cleanlinessRisk}
+            fillUp
+          />
+          <div className="mt-1 text-[9px] text-muted-foreground">
+            −{Number(farm.cleanliness?.decay_per_hour || 0).toFixed(2)}%/h · IPM{" "}
+            {Number(farm.cleanliness?.mite_resistance_pct || 0).toFixed(0)}% resistance
+          </div>
+          <button
+            type="button"
+            disabled={
+              busy ||
+              cleanlinessPct >= 99.5 ||
+              Number(farm.business_cash || 0) < Number(farm.cleanliness?.clean_room_cost || 0)
+            }
+            onClick={cleanRoom}
+            className="mt-1.5 inline-flex items-center gap-1 text-[10px] uppercase text-emerald-300 disabled:opacity-40"
+          >
+            <Sparkles className="h-3 w-3" /> Clean room · {money(farm.cleanliness?.clean_room_cost || 0)}
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-1">
@@ -388,6 +454,9 @@ export default function WeedEmpire() {
               autoWater={!!farm.auto_water}
               autoFeed={!!farm.auto_feed}
               curingCount={(farm.curing || []).length}
+              cleanlinessPct={cleanlinessPct}
+              miteInfestationPct={mitePct}
+              miteInfested={miteInfested}
               fx={fx === "plant" ? null : fx}
               fxNonce={fxNonce}
               onFxDone={() => setFx(null)}
@@ -460,6 +529,15 @@ export default function WeedEmpire() {
                           colorClass="bg-lime-500"
                           warn={p.needs_feed}
                         />
+                        {(p.mite_infested || Number(p.mite_infestation_pct) > 0) && (
+                          <CareMeter
+                            label="Spider mites"
+                            pct={p.mite_infestation_pct}
+                            colorClass="bg-red-500"
+                            warn
+                            fillUp
+                          />
+                        )}
                       </div>
                     ) : null}
                   </button>
@@ -544,6 +622,21 @@ export default function WeedEmpire() {
                     colorClass="bg-lime-500"
                     warn={selectedPlot.needs_feed}
                   />
+                  {miteInfested && (
+                    <>
+                      <CareMeter
+                        label="Spider-mite infestation"
+                        pct={mitePct}
+                        colorClass="bg-red-500"
+                        warn
+                        fillUp
+                      />
+                      <p className="text-[10px] text-red-300">
+                        Webbing and feeding damage reduce quality and harvest by{" "}
+                        {Math.round(Number(selectedPlot.mite_yield_penalty_pct || 0))}%.
+                      </p>
+                    </>
+                  )}
                   {farm.auto_water || farm.auto_feed ? (
                     <p className="text-[10px] text-emerald-400/90">
                       {farm.auto_water ? "Auto-water active. " : ""}
@@ -573,6 +666,19 @@ export default function WeedEmpire() {
                 >
                   <Leaf className="w-3.5 h-3.5" /> {farm.auto_feed ? "Auto feeding" : "Feed"}
                 </button>
+                {miteInfested && (
+                  <button
+                    type="button"
+                    disabled={
+                      busy ||
+                      Number(farm.business_cash || 0) < Number(selectedPlot.mite_treatment_cost || 0)
+                    }
+                    onClick={treatMites}
+                    className="inline-flex items-center gap-1 px-3 py-2 rounded border border-red-500/50 text-red-300 text-xs disabled:opacity-40"
+                  >
+                    <Bug className="w-3.5 h-3.5" /> Treat mites · {money(selectedPlot.mite_treatment_cost || 0)}
+                  </button>
+                )}
                 {(selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready") && (
                   <button
                     type="button"

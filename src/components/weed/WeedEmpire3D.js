@@ -7,6 +7,7 @@ import {
   preloadWeedModels,
 } from "./weedModelLoader";
 import {
+  applyEquipmentVisualLevels,
   applyHousePreset,
   applyLightPreset,
   buildGrowRoom,
@@ -19,10 +20,18 @@ import {
   updateCareFx,
 } from "./weedFx";
 import {
+  applyInfestationStress,
   applyPlantPhenotype,
   getBudPhenotype,
   strainScale,
 } from "./weedPhenotypes";
+import {
+  createHygieneRig,
+  disposeHygieneRig,
+  setHygieneState,
+  startHygieneFx,
+  updateHygieneFx,
+} from "./weedHygieneFx";
 
 function level(equipment, id) {
   return Math.max(0, Number(equipment?.[id]) || 0);
@@ -38,6 +47,25 @@ function stageHeight(stage) {
   if (stage === "veg") return 0.72;
   if (stage === "flower") return 0.92;
   return 1.02;
+}
+
+function potVisual(levelValue) {
+  const potLevel = Math.max(0, Number(levelValue) || 0);
+  if (potLevel >= 8) return { url: WEED_MODELS.potHydro, height: 0.43, soilScale: 1.08, tier: "hydro" };
+  if (potLevel >= 5) return { url: WEED_MODELS.potAir, height: 0.4, soilScale: 1.04, tier: "air" };
+  if (potLevel >= 3) return { url: WEED_MODELS.potFabric, height: 0.42, soilScale: 1.02, tier: "fabric" };
+  return { url: WEED_MODELS.pot, height: 0.36, soilScale: 0.98, tier: "starter" };
+}
+
+function preparePotModel(model, visual) {
+  const soilY = Number(model.userData.originGroundOffset) || 0.365;
+  model.position.y = soilY;
+  model.userData.potTier = visual.tier;
+  model.userData.potUrl = visual.url;
+  model.traverse((object) => {
+    if (object.name?.toLowerCase() === "soil") object.visible = false;
+  });
+  return soilY;
 }
 
 function setOpacity(root, opacity) {
@@ -111,7 +139,7 @@ function disposeSceneObject(root) {
 }
 
 const EQUIPMENT_CONFIG = {
-  fan: { equipment: "osc_fans", url: WEED_MODELS.fan, height: 0.38, position: [0.82, 0.86, -0.45], rotation: [0, -1.2, 0] },
+  fan: { equipment: "osc_fans", url: WEED_MODELS.fan, height: 0.78, position: [0.72, 0, -0.5], rotation: [0, -1.15, 0] },
   filter: { equipment: "carbon_filter", url: WEED_MODELS.filter, height: 0.28, position: [-0.73, 1.62, -0.58], rotation: [0, 0, Math.PI / 2] },
   climate: { equipment: "climate_control", alternate: "dehumidifier", url: WEED_MODELS.climate, height: 0.42, position: [-0.8, 0.03, -0.52], rotation: [0, 0.35, 0] },
   co2: { equipment: "co2", url: WEED_MODELS.co2, height: 0.56, position: [0.84, 0.02, -0.55], rotation: [0, -0.3, 0] },
@@ -130,6 +158,9 @@ export default function WeedEmpire3D({
   autoWater = false,
   autoFeed = false,
   curingCount = 0,
+  cleanlinessPct = 100,
+  miteInfestationPct = 0,
+  miteInfested = false,
   fx = null,
   fxNonce = 0,
   onFxDone,
@@ -150,6 +181,8 @@ export default function WeedEmpire3D({
     equipment,
     houseTier,
     lightClass,
+    miteInfested,
+    miteInfestationPct,
     onFxDone,
   };
 
@@ -162,7 +195,7 @@ export default function WeedEmpire3D({
     const mobileLod = width < 480;
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x161310);
-    scene.fog = new THREE.FogExp2(0x19140f, 0.018);
+    scene.fog = new THREE.FogExp2(0x272019, 0.011);
     const camera = new THREE.PerspectiveCamera(40, width / height, 0.08, 40);
     camera.position.set(0.12, 1.35, 3.25);
     camera.lookAt(0, 0.78, 0);
@@ -179,6 +212,8 @@ export default function WeedEmpire3D({
     const room = buildGrowRoom(scene, houseTier, mobileLod);
     const sparkles = makeSparkles(mobileLod);
     room.plantRig.add(sparkles);
+    const hygieneRig = createHygieneRig(room.plantRig, room.roomRoot, room.growZone, mobileLod);
+    setHygieneState(hygieneRig, cleanlinessPct, miteInfested ? miteInfestationPct : 0, stage);
     const state = {
       ...room,
       scene,
@@ -186,21 +221,29 @@ export default function WeedEmpire3D({
       renderer,
       mobileLod,
       sparkles,
+      hygieneRig,
       plant: null,
+      potModel: null,
       careRig: null,
       models: new Set(),
       equipmentModels: {},
+      fanModels: [],
+      fanLevel: level(equipment, "osc_fans"),
+      leafNodes: [],
       transitions: [],
       irrigationLevel: level(equipment, "irrigation"),
       fxDoneNonce: null,
+      hygieneFxDoneNonce: null,
       disposed: false,
       animationFrame: 0,
       startedAt: performance.now(),
+      lastFrameAt: performance.now(),
     };
     stateRef.current = state;
 
+    const initialPot = potVisual(level(equipment, "pots"));
     const required = [
-      WEED_MODELS.pot,
+      initialPot.url,
       WEED_MODELS.wateringCan,
       WEED_MODELS.nutrientBottle,
       stageUrl(stage),
@@ -214,7 +257,7 @@ export default function WeedEmpire3D({
       if (cancelled || state.disposed) return;
       try {
         const [potModel, canModel, bottleModel] = await Promise.all([
-          loadWeedModel(WEED_MODELS.pot, { height: 0.34 }),
+          loadWeedModel(initialPot.url, { height: initialPot.height, preserveOrigin: true }),
           loadWeedModel(WEED_MODELS.wateringCan, { height: 0.34 }),
           loadWeedModel(WEED_MODELS.nutrientBottle, { height: 0.28 }),
         ]);
@@ -225,9 +268,15 @@ export default function WeedEmpire3D({
         state.models.add(potModel);
         state.models.add(canModel);
         state.models.add(bottleModel);
+        const initialSoilY = preparePotModel(potModel, initialPot);
         state.potRig.add(potModel);
+        state.potModel = potModel;
+        state.soil.position.y = initialSoilY;
+        state.plantRig.position.y = initialSoilY;
+        state.soil.scale.set(initialPot.soilScale, 1, initialPot.soilScale);
         state.fallbackPot.visible = false;
         state.careRig = createCareRig(state.growZone, canModel, bottleModel, state.soil, mobileLod);
+        state.careRig.splash.position.y = initialSoilY + 0.033;
         setIrrigationVisibility(state.careRig, state.irrigationLevel);
       } catch (error) {
         setLoadWarning("Some grow-room models could not load. Using clean fallback props.");
@@ -243,7 +292,46 @@ export default function WeedEmpire3D({
     const animate = (now) => {
       if (state.disposed) return;
       const elapsed = (now - state.startedAt) / 1000;
-      if (state.plant && !state.careRig?.kind) state.plant.rotation.y = Math.sin(elapsed * 0.35) * 0.045;
+      const frameDelta = Math.min(0.05, Math.max(0, (now - state.lastFrameAt) / 1000));
+      state.lastFrameAt = now;
+      const careActive = !!state.careRig?.kind;
+      const fanModel = state.equipmentModels.fan;
+      const fanRunning = !!fanModel?.visible && state.fanLevel > 0;
+      const fanSpeed = fanRunning ? 7 + Math.min(8, state.fanLevel * 0.85) : 0;
+      state.fanModels.forEach((activeFan, index) => {
+        if (!activeFan.visible || !fanRunning) return;
+        const bladeRotor = activeFan.userData.bladeRotor;
+        const fanHead = activeFan.userData.fanHead;
+        if (bladeRotor) bladeRotor.rotation.z -= fanSpeed * frameDelta * (index % 2 ? 0.94 : 1);
+        if (fanHead) {
+          fanHead.rotation.y =
+            Math.sin(elapsed * (0.62 + state.fanLevel * 0.025) + index * Math.PI) * 0.42;
+        }
+      });
+      if (state.dustMotes) {
+        state.dustMotes.rotation.y = elapsed * 0.028;
+        state.dustMotes.position.y = Math.sin(elapsed * 0.34) * 0.018;
+      }
+      state.fixture?.userData?.chains?.forEach((chain, index) => {
+        chain.rotation.z = Math.sin(elapsed * 0.55 + index * Math.PI) * 0.008;
+      });
+
+      if (state.plant && !careActive) {
+        const heavyFlower = state.plant.userData.stage === "flower" || state.plant.userData.stage === "harvest_ready";
+        const stageDamping = state.plant.userData.stage === "seedling" ? 0.55 : heavyFlower ? 0.72 : 1;
+        const airflow = fanRunning ? Math.min(1, 0.34 + state.fanLevel * 0.1) : 0.12;
+        state.plant.rotation.y = Math.sin(elapsed * 0.35) * 0.035 * stageDamping;
+        state.plant.rotation.z = Math.sin(elapsed * 0.78) * 0.012 * airflow * stageDamping;
+        if (!state.mobileLod || Math.floor(now / 32) % 2 === 0) {
+          state.leafNodes.forEach((leaf, index) => {
+            const baseZ = leaf.userData.airflowBaseZ || 0;
+            const baseX = leaf.userData.airflowBaseX || 0;
+            const phase = leaf.userData.airflowPhase || index * 0.47;
+            leaf.rotation.z = baseZ + Math.sin(elapsed * (2.1 + airflow) + phase) * 0.018 * airflow * stageDamping;
+            leaf.rotation.x = baseX + Math.cos(elapsed * 1.6 + phase) * 0.009 * airflow * stageDamping;
+          });
+        }
+      }
       state.sparkles.rotation.y = elapsed * 0.08;
       state.sparkles.material.opacity = 0.68 + Math.sin(elapsed * 2.2) * 0.14;
 
@@ -254,7 +342,7 @@ export default function WeedEmpire3D({
         if (amount >= 1) {
           state.transitions.splice(i, 1);
           if (transition.remove) {
-            state.plantRig.remove(transition.object);
+            (transition.parent || state.plantRig).remove(transition.object);
             state.models.delete(transition.object);
             disposeModelClone(transition.object);
           }
@@ -265,6 +353,13 @@ export default function WeedEmpire3D({
         const finished = updateCareFx(state.careRig, now, state.irrigationLevel);
         if (finished && state.fxDoneNonce !== null) {
           state.fxDoneNonce = null;
+          propsRef.current.onFxDone?.();
+        }
+      }
+      if (state.hygieneRig) {
+        const hygieneFinished = updateHygieneFx(state.hygieneRig, now);
+        if (hygieneFinished && state.hygieneFxDoneNonce !== null) {
+          state.hygieneFxDoneNonce = null;
           propsRef.current.onFxDone?.();
         }
       }
@@ -289,6 +384,7 @@ export default function WeedEmpire3D({
       cancelAnimationFrame(state.animationFrame);
       window.removeEventListener("resize", resize);
       if (state.careRig) disposeCareRig(state.careRig);
+      if (state.hygieneRig) disposeHygieneRig(state.hygieneRig);
       state.models.forEach(disposeModelClone);
       disposeSceneObject(scene);
       renderer.dispose();
@@ -341,11 +437,23 @@ export default function WeedEmpire3D({
           disposeModelClone(model);
           return;
         }
-        applyPlantPhenotype(model, budMeshKey, normalizedStage, quality);
+        applyPlantPhenotype(model, budMeshKey, normalizedStage, quality, lightClass);
+        applyInfestationStress(
+          model,
+          propsRef.current.miteInfested ? propsRef.current.miteInfestationPct : 0
+        );
         const p = Math.max(0, Math.min(1, Number(progress) || 0));
         const growth = 0.88 + p * 0.12;
         model.scale.set(...strainScale(strainType, growth));
         model.userData.stage = normalizedStage;
+        const leafNodes = [];
+        model.traverse((object) => {
+          if (object.name !== "FanLeaf") return;
+          object.userData.airflowBaseZ = object.rotation.z;
+          object.userData.airflowBaseX = object.rotation.x;
+          object.userData.airflowPhase = leafNodes.length * 0.73 + Math.random() * 0.25;
+          leafNodes.push(object);
+        });
         setOpacity(model, 0);
         state.plantRig.add(model);
         state.models.add(model);
@@ -353,6 +461,7 @@ export default function WeedEmpire3D({
           state.transitions.push({ object: state.plant, from: 1, to: 0, start: performance.now(), duration: 320, remove: true });
         }
         state.plant = model;
+        state.leafNodes = leafNodes;
         state.transitions.push({ object: model, from: 0, to: 1, start: performance.now(), duration: 360 });
         const phenotype = getBudPhenotype(budMeshKey);
         state.sparkles.material.color.setHex(phenotype.sparkle);
@@ -372,6 +481,7 @@ export default function WeedEmpire3D({
           disposeModelClone(state.plant);
         }
         state.plant = placeholder;
+        state.leafNodes = [];
         setLoadWarning(`Plant model failed to load: ${url}. Showing fallback.`);
       })
       .finally(() => {
@@ -380,7 +490,7 @@ export default function WeedEmpire3D({
     return () => {
       stale = true;
     };
-  }, [sceneReady, stage, progress, strainType, budMeshKey, quality]);
+  }, [sceneReady, stage, progress, strainType, budMeshKey, quality, lightClass]);
 
   useEffect(() => {
     const state = stateRef.current;
@@ -390,16 +500,68 @@ export default function WeedEmpire3D({
     const mylar = level(equipment, "mylar");
     const pots = level(equipment, "pots");
     const irrigationLevel = level(equipment, "irrigation");
+    state.fanLevel = level(equipment, "osc_fans");
     state.irrigationLevel = irrigationLevel;
+    if (state.careRig) {
+      state.careRig.autoWater = !!autoWater;
+      state.careRig.autoFeed = !!autoFeed;
+    }
     state.tent.visible = tents >= 1;
     state.tent.scale.setScalar(tents >= 8 || houseTier >= 2 ? 1.14 : tents >= 4 ? 1.07 : 1);
     if (state.tent.userData.mylar) {
       state.tent.userData.mylar.metalness = 0.5 + Math.min(0.3, mylar * 0.04);
       state.tent.userData.mylar.color.setHex(mylar >= 3 ? 0xe4e4df : 0xc9c8c1);
     }
-    const potScale = pots >= 8 ? 1.12 : pots >= 4 ? 1.07 : 1;
-    state.potRig.scale.setScalar(potScale);
+    state.potRig.scale.setScalar(1);
     if (state.careRig) setIrrigationVisibility(state.careRig, irrigationLevel);
+    applyEquipmentVisualLevels(state, equipment);
+
+    const syncPot = async () => {
+      const visual = potVisual(pots);
+      if (state.potModel?.userData?.potUrl === visual.url) {
+        state.soil.scale.set(visual.soilScale, 1, visual.soilScale);
+        return;
+      }
+      try {
+        const nextPot = await loadWeedModel(visual.url, {
+          height: visual.height,
+          preserveOrigin: true,
+        });
+        if (stale || state.disposed) {
+          disposeModelClone(nextPot);
+          return;
+        }
+        const nextSoilY = preparePotModel(nextPot, visual);
+        setOpacity(nextPot, 0);
+        state.potRig.add(nextPot);
+        state.models.add(nextPot);
+        if (state.potModel) {
+          state.transitions.push({
+            object: state.potModel,
+            parent: state.potRig,
+            from: 1,
+            to: 0,
+            start: performance.now(),
+            duration: 280,
+            remove: true,
+          });
+        }
+        state.potModel = nextPot;
+        state.soil.position.y = nextSoilY;
+        state.plantRig.position.y = nextSoilY;
+        if (state.careRig) state.careRig.splash.position.y = nextSoilY + 0.033;
+        state.soil.scale.set(visual.soilScale, 1, visual.soilScale);
+        state.transitions.push({
+          object: nextPot,
+          from: 0,
+          to: 1,
+          start: performance.now(),
+          duration: 320,
+        });
+      } catch {
+        setLoadWarning(`Pot upgrade model failed to load: ${visual.url}`);
+      }
+    };
 
     const syncEquipment = async () => {
       for (const [key, config] of Object.entries(EQUIPMENT_CONFIG)) {
@@ -418,6 +580,14 @@ export default function WeedEmpire3D({
             state.props.add(model);
             state.models.add(model);
             state.equipmentModels[key] = model;
+            if (key === "fan") {
+              model.userData.bladeRotor = model.getObjectByName("bladeRotor");
+              model.userData.fanHead =
+                model.getObjectByName("fanHead") ||
+                model.getObjectByName("oscillationHead") ||
+                model.getObjectByName("head");
+              state.fanModels.push(model);
+            }
           } catch (error) {
             setLoadWarning(`Equipment model failed to load: ${config.url}`);
           }
@@ -427,11 +597,33 @@ export default function WeedEmpire3D({
           const detailScale = 1 + Math.min(0.16, Math.max(0, ownedLevel - 1) * 0.025);
           model.scale.setScalar(detailScale);
         }
+        if (state.equipmentSupports?.[key]) state.equipmentSupports[key].visible = visible;
+        if (key === "fan" && visible && ownedLevel >= 8 && !state.equipmentModels.fanSecondary) {
+          try {
+            const secondary = await loadWeedModel(config.url, { height: 0.68 });
+            if (stale || state.disposed) {
+              disposeModelClone(secondary);
+              return;
+            }
+            secondary.position.set(-0.72, 0, -0.5);
+            secondary.rotation.set(0, 1.15, 0);
+            secondary.userData.bladeRotor = secondary.getObjectByName("bladeRotor");
+            secondary.userData.fanHead = secondary.getObjectByName("head");
+            state.props.add(secondary);
+            state.models.add(secondary);
+            state.equipmentModels.fanSecondary = secondary;
+            state.fanModels.push(secondary);
+          } catch {
+            setLoadWarning(`Second fan model failed to load: ${config.url}`);
+          }
+        }
+        if (key === "fan" && state.equipmentModels.fanSecondary) {
+          state.equipmentModels.fanSecondary.visible = visible && ownedLevel >= 8;
+        }
       }
     };
+    syncPot();
     syncEquipment();
-    void autoWater;
-    void autoFeed;
     void curingCount;
     return () => {
       stale = true;
@@ -440,10 +632,30 @@ export default function WeedEmpire3D({
 
   useEffect(() => {
     const state = stateRef.current;
+    if (!sceneReady || !state?.hygieneRig) return;
+    setHygieneState(
+      state.hygieneRig,
+      cleanlinessPct,
+      miteInfested ? miteInfestationPct : 0,
+      stage
+    );
+    applyInfestationStress(state.plant, miteInfested ? miteInfestationPct : 0);
+  }, [sceneReady, cleanlinessPct, miteInfestationPct, miteInfested, stage]);
+
+  useEffect(() => {
+    const state = stateRef.current;
     if (!sceneReady || !state || !fx) return;
     if (fx === "water" || fx === "feed") {
       if (state.careRig && startCareFx(state.careRig, fx, state.irrigationLevel)) {
         state.fxDoneNonce = fxNonce;
+      } else {
+        onFxDone?.();
+      }
+      return;
+    }
+    if (fx === "clean" || fx === "ipm") {
+      if (state.hygieneRig && startHygieneFx(state.hygieneRig, fx)) {
+        state.hygieneFxDoneNonce = fxNonce;
       } else {
         onFxDone?.();
       }

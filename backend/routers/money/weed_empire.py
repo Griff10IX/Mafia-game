@@ -5,6 +5,7 @@ import logging
 import math
 import secrets
 import uuid
+import hashlib
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -48,6 +49,23 @@ AUTO_FEED_IRRIGATION_LEVEL = 8
 CURE_HOURS = 0.75
 MAX_HEAT = 100.0
 CITY_DEMAND_BASE = 1.0
+CLEANLINESS_SAFE_PCT = 30.0
+CLEANLINESS_BASE_DECAY_PER_HOUR = 0.25
+CLEANLINESS_ACTIVE_PLOT_DECAY_PER_HOUR = 0.45
+CLEAN_ROOM_BASE_COST = 4_000
+CLEAN_ROOM_HOUSE_TIER_COST = 2_500
+CLEAN_ROOM_ACTIVE_PLOT_COST = 750
+MITE_RISK_INTERVAL_HOURS = 1.0
+MITE_BASE_RISK_CHANCE = 0.08
+MITE_MAX_DIRT_RISK_CHANCE = 0.22
+MITE_ACTIVE_PLOT_RISK_CHANCE = 0.01
+MITE_NEW_INFESTATION_PCT = 12.0
+MITE_EXISTING_GROWTH_PCT = 2.0
+MITE_QUALITY_DRAIN_PER_HOUR = 0.6
+MITE_MAX_HARVEST_YIELD_PENALTY_PCT = 35.0
+MITE_TREATMENT_BASE_COST = 2_500
+MITE_TREATMENT_COST_PER_PCT = 50
+MITE_TREATMENT_BASE_EFFECT_PCT = 55.0
 
 router = APIRouter(prefix="/weed-empire", tags=["weed-empire"])
 
@@ -87,6 +105,11 @@ def _empty_plot() -> Dict[str, Any]:
         "yield_g": 0.0,
         "stage": "empty",
         "progress": 0.0,
+        "mite_infestation_pct": 0.0,
+        "mite_infested": False,
+        "last_mite_treated_at": None,
+        "last_mite_risk_at": None,
+        "last_mite_damage_at": None,
     }
 
 
@@ -109,6 +132,8 @@ def _default_farm(user_id: str) -> Dict[str, Any]:
         "stash": {},  # strain_id -> grams cured
         "curing": [],  # {id, strain_id, grams, quality, started_at, ready_at}
         "heat": 5.0,
+        "cleanliness_pct": 100.0,
+        "last_cleanliness_tick_at": _iso(),
         "unlocks": ["ditch_weed", "schwag", "northern_lights", "white_widow"],
         "raid_last_by_target": {},  # defender_id -> utc date
         "raid_stats": {"raids_won": 0, "raids_lost": 0, "times_raided": 0},
@@ -127,14 +152,32 @@ async def _require_access(user: dict) -> None:
 async def _get_or_create_farm(user_id: str) -> Dict[str, Any]:
     farm = await db.weed_farms.find_one({"user_id": user_id}, {"_id": 0})
     if farm:
-        # Migrate missing grower fields
+        migration: Dict[str, Any] = {}
+        # Migrate missing grower and cleanliness fields without retroactive decay.
         if farm.get("grower_level") is None:
             farm["grower_level"] = 1
             farm["grower_xp"] = int(farm.get("grower_xp") or 0)
-            await db.weed_farms.update_one(
-                {"user_id": user_id},
-                {"$set": {"grower_level": 1, "grower_xp": farm["grower_xp"]}},
-            )
+            migration.update({"grower_level": 1, "grower_xp": farm["grower_xp"]})
+        if farm.get("cleanliness_pct") is None:
+            farm["cleanliness_pct"] = 100.0
+            migration["cleanliness_pct"] = 100.0
+        if not farm.get("last_cleanliness_tick_at"):
+            farm["last_cleanliness_tick_at"] = _iso()
+            migration["last_cleanliness_tick_at"] = farm["last_cleanliness_tick_at"]
+        if migration:
+            await db.weed_farms.update_one({"user_id": user_id}, {"$set": migration})
+        now = _utcnow()
+        farm = _tick_environment(farm, _stats(farm), now)
+        await db.weed_farms.update_one(
+            {"user_id": user_id},
+            {
+                "$set": {
+                    "plots": farm.get("plots") or [],
+                    "cleanliness_pct": farm["cleanliness_pct"],
+                    "last_cleanliness_tick_at": farm["last_cleanliness_tick_at"],
+                }
+            },
+        )
         return farm
     doc = _default_farm(user_id)
     await db.weed_farms.insert_one(dict(doc))
@@ -194,6 +237,124 @@ def _auto_flags(farm: dict) -> Tuple[bool, bool]:
     return irrig >= AUTO_WATER_IRRIGATION_LEVEL, irrig >= AUTO_FEED_IRRIGATION_LEVEL
 
 
+def _active_plot_count(farm: dict) -> int:
+    return sum(1 for p in (farm.get("plots") or []) if p.get("state") in ("growing", "harvest_ready"))
+
+
+def _cleanliness_decay_per_hour(farm: dict, stats: dict) -> float:
+    active = _active_plot_count(farm)
+    reduction = min(0.48, max(0.0, 1.0 - float(stats.get("cleanliness_decay_mult") or 1.0)))
+    raw = CLEANLINESS_BASE_DECAY_PER_HOUR + CLEANLINESS_ACTIVE_PLOT_DECAY_PER_HOUR * active
+    return raw * (1.0 - reduction)
+
+
+def _mite_resistance(stats: dict) -> float:
+    return min(0.72, max(0.0, float(stats.get("mite_resistance") or 0.0)))
+
+
+def _mite_treatment_effect_pct(stats: dict) -> float:
+    bonus = max(0.0, float(stats.get("mite_treatment_bonus") or 0.0))
+    return min(95.0, MITE_TREATMENT_BASE_EFFECT_PCT + bonus)
+
+
+def _mite_yield_penalty_pct(plot: dict) -> float:
+    infestation = min(100.0, max(0.0, float(plot.get("mite_infestation_pct") or 0.0)))
+    return MITE_MAX_HARVEST_YIELD_PENALTY_PCT * infestation / 100.0
+
+
+def _mite_treatment_cost(plot: dict) -> int:
+    infestation = min(100.0, max(0.0, float(plot.get("mite_infestation_pct") or 0.0)))
+    return MITE_TREATMENT_BASE_COST + int(math.ceil(infestation * MITE_TREATMENT_COST_PER_PCT))
+
+
+def _clean_room_cost(farm: dict) -> int:
+    return (
+        CLEAN_ROOM_BASE_COST
+        + int(farm.get("house_tier") or 0) * CLEAN_ROOM_HOUSE_TIER_COST
+        + _active_plot_count(farm) * CLEAN_ROOM_ACTIVE_PLOT_COST
+    )
+
+
+def _deterministic_mite_roll(farm: dict, plot: dict, interval_at: datetime) -> float:
+    key = f"{farm.get('id')}:{plot.get('id')}:{interval_at.isoformat()}".encode("utf-8")
+    digest = hashlib.sha256(key).digest()
+    return int.from_bytes(digest[:8], "big") / float(2**64)
+
+
+def _clear_plot_mites(plot: dict) -> None:
+    plot["mite_infestation_pct"] = 0.0
+    plot["mite_infested"] = False
+    plot.setdefault("last_mite_treated_at", None)
+    plot["last_mite_risk_at"] = None
+    plot["last_mite_damage_at"] = None
+
+
+def _tick_environment(farm: dict, stats: dict, now: datetime) -> dict:
+    last_clean = _parse_iso(farm.get("last_cleanliness_tick_at")) or now
+    elapsed_hours = max(0.0, (now - last_clean).total_seconds() / 3600.0)
+    decay_rate = _cleanliness_decay_per_hour(farm, stats)
+    cleanliness_before = min(100.0, max(0.0, float(farm.get("cleanliness_pct", 100.0))))
+    cleanliness = max(0.0, cleanliness_before - elapsed_hours * decay_rate)
+    farm["cleanliness_pct"] = round(cleanliness, 2)
+    farm["last_cleanliness_tick_at"] = _iso(now)
+
+    active_count = _active_plot_count(farm)
+    resistance = _mite_resistance(stats)
+    dirty_severity = max(0.0, (CLEANLINESS_SAFE_PCT - cleanliness) / CLEANLINESS_SAFE_PCT)
+    risk_chance = min(
+        0.65,
+        (
+            MITE_BASE_RISK_CHANCE
+            + dirty_severity * MITE_MAX_DIRT_RISK_CHANCE
+            + max(0, active_count - 1) * MITE_ACTIVE_PLOT_RISK_CHANCE
+        )
+        * (1.0 - resistance),
+    )
+
+    plots = []
+    for source in (farm.get("plots") or []):
+        plot = dict(source)
+        plot.setdefault("last_mite_treated_at", None)
+        if plot.get("state") not in ("growing", "harvest_ready"):
+            _clear_plot_mites(plot)
+            plots.append(plot)
+            continue
+
+        infestation = min(100.0, max(0.0, float(plot.get("mite_infestation_pct") or 0.0)))
+        last_risk = _parse_iso(plot.get("last_mite_risk_at")) or now
+        if cleanliness >= CLEANLINESS_SAFE_PCT:
+            last_risk = now
+        else:
+            dirty_started_at = last_clean
+            if cleanliness_before >= CLEANLINESS_SAFE_PCT and decay_rate > 0:
+                hours_until_dirty = (cleanliness_before - CLEANLINESS_SAFE_PCT) / decay_rate
+                dirty_started_at = min(now, last_clean + timedelta(hours=hours_until_dirty))
+            last_risk = max(last_risk, dirty_started_at)
+            interval_seconds = MITE_RISK_INTERVAL_HOURS * 3600.0
+            intervals = min(168, int(max(0.0, (now - last_risk).total_seconds()) // interval_seconds))
+            for step in range(1, intervals + 1):
+                interval_at = last_risk + timedelta(hours=step * MITE_RISK_INTERVAL_HOURS)
+                if _deterministic_mite_roll(farm, plot, interval_at) < risk_chance:
+                    increase = MITE_NEW_INFESTATION_PCT if infestation <= 0 else MITE_EXISTING_GROWTH_PCT
+                    infestation = min(100.0, infestation + increase * (1.0 - resistance))
+            if intervals:
+                last_risk = now if intervals >= 168 else last_risk + timedelta(hours=intervals)
+
+        last_damage = _parse_iso(plot.get("last_mite_damage_at")) or now
+        damage_hours = max(0.0, (now - last_damage).total_seconds() / 3600.0)
+        quality_drain = damage_hours * MITE_QUALITY_DRAIN_PER_HOUR * (infestation / 100.0)
+        if quality_drain > 0:
+            plot["quality"] = max(0.0, float(plot.get("quality") or 50.0) - quality_drain)
+        plot["mite_infestation_pct"] = round(infestation, 2)
+        plot["mite_infested"] = infestation > 0
+        plot["last_mite_risk_at"] = _iso(last_risk)
+        plot["last_mite_damage_at"] = _iso(now)
+        plot["mite_quality_drain_applied"] = round(quality_drain, 3)
+        plots.append(plot)
+    farm["plots"] = plots
+    return farm
+
+
 def _meter_pct(hours_since: float, interval: float) -> float:
     """100 = just tended; 0 = fully due."""
     if interval <= 0:
@@ -203,6 +364,7 @@ def _meter_pct(hours_since: float, interval: float) -> float:
 
 def _tick_plot(plot: dict, farm: dict, stats: dict, now: datetime) -> dict:
     if plot.get("state") in (None, "empty", "dead"):
+        _clear_plot_mites(plot)
         plot["stage"] = plot.get("state") or "empty"
         plot["progress"] = 0.0
         plot["water_pct"] = 0
@@ -216,6 +378,7 @@ def _tick_plot(plot: dict, farm: dict, stats: dict, now: datetime) -> dict:
     if not strain:
         plot["state"] = "dead"
         plot["stage"] = "dead"
+        _clear_plot_mites(plot)
         return plot
 
     planted = _parse_iso(plot.get("planted_at"))
@@ -263,6 +426,7 @@ def _tick_plot(plot: dict, farm: dict, stats: dict, now: datetime) -> dict:
         plot["feed_pct"] = _meter_pct(hours_since_f, feed_need)
         plot["needs_water"] = True
         plot["needs_feed"] = feed_overdue
+        _clear_plot_mites(plot)
         return plot
 
     hours_needed = _grow_hours_needed(strain, stats, preferred_ok)
@@ -287,6 +451,13 @@ def _tick_plot(plot: dict, farm: dict, stats: dict, now: datetime) -> dict:
     plot["feed_interval_hours"] = round(feed_need, 2)
     plot["needs_water"] = water_overdue or plot["water_pct"] <= 25
     plot["needs_feed"] = feed_overdue or plot["feed_pct"] <= 25
+    yield_penalty = _mite_yield_penalty_pct(plot)
+    plot["mite_quality_drain_per_hour"] = round(
+        MITE_QUALITY_DRAIN_PER_HOUR * float(plot.get("mite_infestation_pct") or 0.0) / 100.0, 4
+    )
+    plot["mite_yield_penalty_pct"] = round(yield_penalty, 2)
+    plot["mite_yield_mult"] = round(1.0 - yield_penalty / 100.0, 4)
+    plot["mite_treatment_cost"] = _mite_treatment_cost(plot) if plot.get("mite_infested") else 0
     return plot
 
 
@@ -328,6 +499,7 @@ def _public_farm(farm: dict, *, username: str = "") -> Dict[str, Any]:
     farm = _ensure_daily_cap(dict(farm))
     farm = _sync_plot_count(farm)
     stats = _stats(farm)
+    farm = _tick_environment(farm, stats, now)
     plots = [_tick_plot(dict(p), farm, stats, now) for p in (farm.get("plots") or [])]
     # Persist auto-tend timestamps back onto farm plots
     farm["plots"] = plots
@@ -362,6 +534,22 @@ def _public_farm(farm: dict, *, username: str = "") -> Dict[str, Any]:
         "stash": farm.get("stash") or {},
         "curing": farm.get("curing") or [],
         "heat": round(float(farm.get("heat") or 0), 1),
+        "cleanliness_pct": round(float(farm.get("cleanliness_pct", 100.0)), 2),
+        "last_cleanliness_tick_at": farm.get("last_cleanliness_tick_at"),
+        "cleanliness": {
+            "pct": round(float(farm.get("cleanliness_pct", 100.0)), 2),
+            "safe_at_or_above_pct": CLEANLINESS_SAFE_PCT,
+            "is_safe": float(farm.get("cleanliness_pct", 100.0)) >= CLEANLINESS_SAFE_PCT,
+            "decay_per_hour": round(_cleanliness_decay_per_hour(farm, stats), 4),
+            "clean_room_cost": _clean_room_cost(farm),
+            "active_plots": _active_plot_count(farm),
+            "pest_ipm_level": int(_equip_levels(farm).get("pest_ipm") or 0),
+            "mite_resistance_pct": round(_mite_resistance(stats) * 100.0, 2),
+            "mite_risk_interval_hours": MITE_RISK_INTERVAL_HOURS,
+            "mite_quality_drain_max_per_hour": MITE_QUALITY_DRAIN_PER_HOUR,
+            "mite_harvest_yield_penalty_cap_pct": MITE_MAX_HARVEST_YIELD_PENALTY_PCT,
+            "mite_treatment_effect_pct": round(_mite_treatment_effect_pct(stats), 2),
+        },
         "unlocks": list(farm.get("unlocks") or []),
         "stats": {k: round(float(v), 4) if isinstance(v, float) else v for k, v in stats.items()},
         "active_light_class": light,
@@ -461,6 +649,8 @@ async def weed_status(current_user: dict = Depends(_gate)):
             "daily_sold_usd": pub["daily_sold_usd"],
             "daily_sold_utc_date": farm.get("daily_sold_utc_date") or _utc_date_str(),
             "heat": pub["heat"],
+            "cleanliness_pct": pub["cleanliness_pct"],
+            "last_cleanliness_tick_at": pub["last_cleanliness_tick_at"],
         },
     )
     return {
@@ -473,6 +663,8 @@ async def weed_status(current_user: dict = Depends(_gate)):
             "start_business_cash": START_BUSINESS_CASH,
             "daily_sell_cap": DAILY_SELL_CAP_USD,
             "units": {"g": 1, "oz": 28, "lb": 448, "kg": 1000},
+            "cleanliness_safe_pct": CLEANLINESS_SAFE_PCT,
+            "mite_harvest_yield_penalty_cap_pct": MITE_MAX_HARVEST_YIELD_PENALTY_PCT,
         },
     }
 
@@ -541,6 +733,11 @@ async def weed_plant(body: PlantBody, current_user: dict = Depends(_gate)):
                 "medium": soil_type,
                 "stage": "seedling",
                 "progress": 0.0,
+                "mite_infestation_pct": 0.0,
+                "mite_infested": False,
+                "last_mite_treated_at": None,
+                "last_mite_risk_at": _iso(now),
+                "last_mite_damage_at": _iso(now),
             }
             found = True
             break
@@ -598,6 +795,7 @@ async def weed_harvest(body: PlotActionBody, current_user: dict = Depends(_gate)
     farm = await _get_or_create_farm(current_user["id"])
     stats = _stats(farm)
     now = _utcnow()
+    farm = _tick_environment(farm, stats, now)
     plots = [_tick_plot(dict(p), farm, stats, now) for p in (farm.get("plots") or [])]
 
     for i, p in enumerate(plots):
@@ -615,6 +813,8 @@ async def weed_harvest(body: PlotActionBody, current_user: dict = Depends(_gate)
         grams = base * float(stats.get("yield_mult") or 1.0)
         if p.get("soil_type") == "soil_organic":
             grams *= 1.05
+        mite_yield_penalty_pct = _mite_yield_penalty_pct(p)
+        grams *= 1.0 - mite_yield_penalty_pct / 100.0
         grams = round(max(1.0, grams), 2)
         trim_lvl = int(_equip_levels(farm).get("trimmers") or 0)
         cure_lvl = int(_equip_levels(farm).get("curing") or 0)
@@ -650,6 +850,8 @@ async def weed_harvest(body: PlotActionBody, current_user: dict = Depends(_gate)
                 "missions": missions,
                 "heat": farm["heat"],
                 "sabotage_unlocked": farm.get("sabotage_unlocked"),
+                "cleanliness_pct": farm["cleanliness_pct"],
+                "last_cleanliness_tick_at": farm["last_cleanliness_tick_at"],
                 **xp_fields,
             },
         )
@@ -657,11 +859,88 @@ async def weed_harvest(body: PlotActionBody, current_user: dict = Depends(_gate)
             "ok": True,
             "grams": grams,
             "trim_level": trim_lvl,
+            "mite_yield_penalty_pct": round(mite_yield_penalty_pct, 2),
             "fx": "harvest_trim",
             "xp_gained": xp_amt,
             "leveled_up": leveled,
             "grower_level": new_lvl,
             "farm": _public_farm(farm, username=current_user.get("username") or ""),
+        }
+    raise HTTPException(status_code=404, detail="Plot not found")
+
+
+@router.post("/clean-room")
+async def weed_clean_room(current_user: dict = Depends(_gate)):
+    farm = await _get_or_create_farm(current_user["id"])
+    now = _utcnow()
+    stats = _stats(farm)
+    farm = _tick_environment(farm, stats, now)
+    cost = _clean_room_cost(farm)
+    _spend(farm, cost)
+    farm["cleanliness_pct"] = 100.0
+    farm["last_cleanliness_tick_at"] = _iso(now)
+    await _save_farm(
+        farm,
+        {
+            "business_cash": farm["business_cash"],
+            "cleanliness_pct": farm["cleanliness_pct"],
+            "last_cleanliness_tick_at": farm["last_cleanliness_tick_at"],
+            "plots": farm["plots"],
+        },
+    )
+    return {
+        "ok": True,
+        "cost": cost,
+        "farm": _public_farm(farm, username=current_user.get("username") or ""),
+        "fx": "clean_room",
+    }
+
+
+@router.post("/treat-mites")
+async def weed_treat_mites(body: PlotActionBody, current_user: dict = Depends(_gate)):
+    farm = await _get_or_create_farm(current_user["id"])
+    now = _utcnow()
+    stats = _stats(farm)
+    farm = _tick_environment(farm, stats, now)
+    plots = list(farm.get("plots") or [])
+    for i, plot in enumerate(plots):
+        if plot.get("id") != body.plot_id:
+            continue
+        if plot.get("state") not in ("growing", "harvest_ready"):
+            raise HTTPException(status_code=400, detail="No living plant to treat")
+        infestation = float(plot.get("mite_infestation_pct") or 0.0)
+        if infestation <= 0:
+            raise HTTPException(status_code=400, detail="This plant has no spider mites")
+        cost = _mite_treatment_cost(plot)
+        _spend(farm, cost)
+        effect_pct = _mite_treatment_effect_pct(stats)
+        remaining = max(0.0, infestation * (1.0 - effect_pct / 100.0))
+        if remaining < 1.0:
+            remaining = 0.0
+        plots[i] = {
+            **plot,
+            "mite_infestation_pct": round(remaining, 2),
+            "mite_infested": remaining > 0,
+            "last_mite_treated_at": _iso(now),
+            "last_mite_damage_at": _iso(now),
+        }
+        farm["plots"] = plots
+        await _save_farm(
+            farm,
+            {
+                "business_cash": farm["business_cash"],
+                "plots": plots,
+                "cleanliness_pct": farm["cleanliness_pct"],
+                "last_cleanliness_tick_at": farm["last_cleanliness_tick_at"],
+            },
+        )
+        return {
+            "ok": True,
+            "cost": cost,
+            "treatment_effect_pct": round(effect_pct, 2),
+            "remaining_infestation_pct": round(remaining, 2),
+            "farm": _public_farm(farm, username=current_user.get("username") or ""),
+            "fx": "treat_mites",
         }
     raise HTTPException(status_code=404, detail="Plot not found")
 
