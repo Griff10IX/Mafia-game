@@ -91,7 +91,7 @@ export default function WeedEmpire3D({
     leftWall.rotation.y = Math.PI / 2;
     scene.add(leftWall);
 
-    // Tent group (fabric walls + poles + mylar inner)
+    // Tent — open front so plant / lights stay visible (cutaway grow tent)
     const tent = new THREE.Group();
     tent.visible = false;
     scene.add(tent);
@@ -105,33 +105,69 @@ export default function WeedEmpire3D({
       color: 0xc8c4b8,
       roughness: 0.35,
       metalness: 0.55,
-      side: THREE.BackSide,
+      side: THREE.DoubleSide,
     });
-    const tentBox = new THREE.Mesh(new THREE.BoxGeometry(2.1, 2.15, 1.7), tentOuterMat);
-    tentBox.position.y = 1.08;
-    tent.add(tentBox);
-    const tentInner = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.05, 1.6), tentMylarMat);
-    tentInner.position.y = 1.08;
-    tent.add(tentInner);
-    // zipper strip
-    const zip = new THREE.Mesh(
-      new THREE.BoxGeometry(0.04, 1.6, 0.02),
-      new THREE.MeshStandardMaterial({ color: 0x888890, metalness: 0.6, roughness: 0.4 })
-    );
-    zip.position.set(0, 1.0, 0.86);
-    tent.add(zip);
-    // poles
+    const TW = 2.1;
+    const TH = 2.15;
+    const TD = 1.7;
+    const ty = 1.08;
+    const thick = 0.04;
+
+    const addPanel = (w, h, d, x, y, z, mat) => {
+      const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+      m.position.set(x, y, z);
+      tent.add(m);
+      return m;
+    };
+    // Floor / ceiling / back / left / right — no front wall
+    addPanel(TW, thick, TD, 0, ty - TH / 2, 0, tentOuterMat);
+    addPanel(TW, thick, TD, 0, ty + TH / 2, 0, tentOuterMat);
+    addPanel(TW, TH, thick, 0, ty, -TD / 2, tentOuterMat);
+    addPanel(thick, TH, TD, -TW / 2, ty, 0, tentOuterMat);
+    addPanel(thick, TH, TD, TW / 2, ty, 0, tentOuterMat);
+    // Mylar lining on interior faces (slightly inset)
+    addPanel(TW - 0.08, thick * 0.5, TD - 0.08, 0, ty - TH / 2 + 0.03, 0, tentMylarMat);
+    addPanel(TW - 0.08, thick * 0.5, TD - 0.08, 0, ty + TH / 2 - 0.03, 0, tentMylarMat);
+    addPanel(TW - 0.1, TH - 0.1, thick * 0.5, 0, ty, -TD / 2 + 0.03, tentMylarMat);
+    addPanel(thick * 0.5, TH - 0.1, TD - 0.1, -TW / 2 + 0.03, ty, 0, tentMylarMat);
+    addPanel(thick * 0.5, TH - 0.1, TD - 0.1, TW / 2 - 0.03, ty, 0, tentMylarMat);
+
+    // Rolled-open door flaps on front edges
+    const flapMat = new THREE.MeshStandardMaterial({
+      color: 0x222226,
+      roughness: 0.7,
+      side: THREE.DoubleSide,
+    });
+    const leftFlap = new THREE.Mesh(new THREE.BoxGeometry(0.18, TH - 0.15, 0.05), flapMat);
+    leftFlap.position.set(-TW / 2 + 0.12, ty, TD / 2 - 0.02);
+    leftFlap.rotation.y = 0.35;
+    tent.add(leftFlap);
+    const rightFlap = new THREE.Mesh(new THREE.BoxGeometry(0.18, TH - 0.15, 0.05), flapMat);
+    rightFlap.position.set(TW / 2 - 0.12, ty, TD / 2 - 0.02);
+    rightFlap.rotation.y = -0.35;
+    tent.add(rightFlap);
+    // Zipper pulls on rolled flaps
+    const zipMat = new THREE.MeshStandardMaterial({ color: 0x888890, metalness: 0.6, roughness: 0.4 });
+    for (const sx of [-1, 1]) {
+      const zip = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.9, 0.02), zipMat);
+      zip.position.set(sx * (TW / 2 - 0.2), ty - 0.15, TD / 2 + 0.02);
+      tent.add(zip);
+    }
+
+    // Frame poles
     const poleMat = new THREE.MeshStandardMaterial({ color: 0x555560, metalness: 0.7, roughness: 0.35 });
     for (const [x, z] of [
-      [-0.95, -0.75],
-      [0.95, -0.75],
-      [-0.95, 0.75],
-      [0.95, 0.75],
+      [-TW / 2 + 0.08, -TD / 2 + 0.08],
+      [TW / 2 - 0.08, -TD / 2 + 0.08],
+      [-TW / 2 + 0.08, TD / 2 - 0.08],
+      [TW / 2 - 0.08, TD / 2 - 0.08],
     ]) {
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 2.15, 8), poleMat);
-      pole.position.set(x, 1.08, z);
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, TH, 8), poleMat);
+      pole.position.set(x, ty, z);
       tent.add(pole);
     }
+    // Keep refs for scale / mylar tint updates
+    const tentBox = tent;
 
     // Fixture hang + grow lights
     const fixture = new THREE.Group();
