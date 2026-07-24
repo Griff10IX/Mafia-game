@@ -32,6 +32,12 @@ import {
   startHygieneFx,
   updateHygieneFx,
 } from "./weedHygieneFx";
+import {
+  createHarvestRig,
+  disposeHarvestRig,
+  startHarvestFx,
+  updateHarvestFx,
+} from "./weedHarvestFx";
 
 function level(equipment, id) {
   return Math.max(0, Number(equipment?.[id]) || 0);
@@ -214,6 +220,7 @@ export default function WeedEmpire3D({
     const sparkles = makeSparkles(mobileLod);
     room.plantRig.add(sparkles);
     const hygieneRig = createHygieneRig(room.plantRig, room.roomRoot, room.growZone, mobileLod);
+    const harvestRig = createHarvestRig(room.growZone, mobileLod);
     setHygieneState(hygieneRig, cleanlinessPct, miteInfested ? miteInfestationPct : 0, stage);
     const state = {
       ...room,
@@ -223,6 +230,7 @@ export default function WeedEmpire3D({
       mobileLod,
       sparkles,
       hygieneRig,
+      harvestRig,
       plant: null,
       potModel: null,
       careRig: null,
@@ -236,6 +244,7 @@ export default function WeedEmpire3D({
       irrigationLevel: level(equipment, "irrigation"),
       fxDoneNonce: null,
       hygieneFxDoneNonce: null,
+      harvestFxDoneNonce: null,
       disposed: false,
       animationFrame: 0,
       startedAt: performance.now(),
@@ -297,7 +306,7 @@ export default function WeedEmpire3D({
       const elapsed = (now - state.startedAt) / 1000;
       const frameDelta = Math.min(0.05, Math.max(0, (now - state.lastFrameAt) / 1000));
       state.lastFrameAt = now;
-      const careActive = !!state.careRig?.kind;
+      const careActive = !!state.careRig?.kind || !!state.harvestRig?.active;
       const fanModel = state.equipmentModels.fan;
       const fanRunning = !!fanModel?.visible && state.fanLevel > 0;
       const fanSpeed = fanRunning ? 7 + Math.min(8, state.fanLevel * 0.85) : 0;
@@ -383,6 +392,13 @@ export default function WeedEmpire3D({
           propsRef.current.onFxDone?.();
         }
       }
+      if (state.harvestRig) {
+        const harvestFinished = updateHarvestFx(state.harvestRig, now);
+        if (harvestFinished && state.harvestFxDoneNonce !== null) {
+          state.harvestFxDoneNonce = null;
+          propsRef.current.onFxDone?.();
+        }
+      }
       camera.position.z = THREE.MathUtils.lerp(camera.position.z, state.cameraTargetZ, 0.1);
       camera.lookAt(0, 0.78, 0);
       renderer.render(scene, camera);
@@ -418,6 +434,7 @@ export default function WeedEmpire3D({
       renderer.domElement.removeEventListener("dblclick", toggleZoom);
       if (state.careRig) disposeCareRig(state.careRig);
       if (state.hygieneRig) disposeHygieneRig(state.hygieneRig);
+      if (state.harvestRig) disposeHarvestRig(state.harvestRig);
       state.models.forEach(disposeModelClone);
       disposeSceneObject(scene);
       renderer.dispose();
@@ -691,7 +708,7 @@ export default function WeedEmpire3D({
       if (state.careRig && startCareFx(state.careRig, fx, state.irrigationLevel)) {
         state.fxDoneNonce = fxNonce;
       } else {
-        onFxDone?.();
+        propsRef.current.onFxDone?.();
       }
       return;
     }
@@ -699,25 +716,18 @@ export default function WeedEmpire3D({
       if (state.hygieneRig && startHygieneFx(state.hygieneRig, fx)) {
         state.hygieneFxDoneNonce = fxNonce;
       } else {
-        onFxDone?.();
+        propsRef.current.onFxDone?.();
       }
       return;
     }
     if (fx === "harvest_trim" && state.plant) {
-      const currentScale = state.plant.scale.clone();
-      state.transitions.push({
-        object: state.plant,
-        from: 1,
-        to: 0.25,
-        start: performance.now(),
-        duration: 1300,
-      });
-      window.setTimeout(() => {
-        if (!state.disposed && state.plant) state.plant.scale.copy(currentScale);
-        onFxDone?.();
-      }, 1350);
+      if (state.harvestRig && startHarvestFx(state.harvestRig, state.plant)) {
+        state.harvestFxDoneNonce = fxNonce;
+      } else {
+        propsRef.current.onFxDone?.();
+      }
     }
-  }, [sceneReady, fx, fxNonce, onFxDone]);
+  }, [sceneReady, fx, fxNonce]);
 
   return (
     <div

@@ -31,6 +31,20 @@ function money(n) {
   return `$${Number(n || 0).toLocaleString()}`;
 }
 
+function shortReadyDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "soon";
+  const now = new Date();
+  const sameDay =
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate();
+  const time = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return sameDay
+    ? `today at ${time}`
+    : date.toLocaleString([], { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" });
+}
+
 function CareMeter({ label, pct, hoursLeft, colorClass, warn, fillUp = false }) {
   const v = Math.max(0, Math.min(100, Number(pct) || 0));
   const ready = fillUp && (warn || v >= 99.5);
@@ -717,7 +731,7 @@ export default function WeedEmpire() {
               <ul className="text-sm space-y-1">
                 {farm.curing.map((b) => (
                   <li key={b.id}>
-                    {strainMap[b.strain_id]?.name || b.strain_id}: {b.grams}g (ready {b.ready_at})
+                    {strainMap[b.strain_id]?.name || b.strain_id}: {b.grams}g (ready {shortReadyDate(b.ready_at)})
                   </li>
                 ))}
               </ul>
