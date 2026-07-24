@@ -84,57 +84,69 @@ function disposeObject(obj) {
 }
 
 /**
- * Smooth palmate cannabis fan — separate flattened-cone fingers (img-4 readable).
- * No jagged ExtrudeGeometry.
+ * Smooth palmate cannabis fan — separate teardrop blades (readable from camera).
  */
 function makeFanLeaf(mat, fingers = 5, size = 1, strainType = "hybrid") {
   const leaf = new THREE.Group();
   leaf.userData.kind = "fan";
-  const widthBias = strainType === "indica" ? 1.25 : strainType === "sativa" ? 0.75 : 1;
-  const lenBias = strainType === "sativa" ? 1.3 : strainType === "indica" ? 0.85 : 1;
+  const widthBias = strainType === "indica" ? 1.3 : strainType === "sativa" ? 0.72 : 1;
+  const lenBias = strainType === "sativa" ? 1.28 : strainType === "indica" ? 0.88 : 1;
   const leafMat = mat.clone();
   leafMat.side = THREE.DoubleSide;
-  leafMat.roughness = 0.55;
+  leafMat.roughness = 0.52;
   const stemMat = mat.clone();
-  stemMat.color = mat.color.clone().multiplyScalar(0.7);
+  stemMat.color = mat.color.clone().multiplyScalar(0.72);
 
   const petiole = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.01 * size, 0.014 * size, 0.12 * size, 6),
+    new THREE.CylinderGeometry(0.01 * size, 0.013 * size, 0.11 * size, 6),
     stemMat
   );
-  petiole.position.y = 0.06 * size;
+  petiole.position.y = 0.055 * size;
   leaf.add(petiole);
+
+  // Smooth teardrop blade (no serration — game-readable like ref)
+  const bladeShape = new THREE.Shape();
+  bladeShape.moveTo(0, 0);
+  bladeShape.quadraticCurveTo(0.09, 0.12, 0.07, 0.35);
+  bladeShape.quadraticCurveTo(0.04, 0.55, 0, 0.72);
+  bladeShape.quadraticCurveTo(-0.04, 0.55, -0.07, 0.35);
+  bladeShape.quadraticCurveTo(-0.09, 0.12, 0, 0);
+  const bladeGeom = new THREE.ShapeGeometry(bladeShape);
 
   const count = Math.max(3, Math.min(7, fingers | 0));
   const angleSets = {
-    3: [-0.65, 0, 0.65],
-    5: [-1.15, -0.58, 0, 0.58, 1.15],
-    7: [-1.35, -0.9, -0.45, 0, 0.45, 0.9, 1.35],
+    3: [-0.55, 0, 0.55],
+    5: [-1.05, -0.52, 0, 0.52, 1.05],
+    7: [-1.25, -0.85, -0.42, 0, 0.42, 0.85, 1.25],
   };
   const angles = angleSets[count] || angleSets[5];
 
   for (let i = 0; i < count; i++) {
     const ang = angles[i];
-    const centerBoost = 1 - Math.abs(ang) * 0.18;
-    const len = 0.34 * size * lenBias * centerBoost;
-    const wid = 0.075 * size * widthBias * (0.85 + centerBoost * 0.15);
-    const finger = new THREE.Mesh(new THREE.ConeGeometry(wid, len, 8), leafMat.clone());
-    finger.scale.set(1, 1, 0.14);
+    const centerBoost = 1 - Math.abs(ang) * 0.2;
+    const sx = 0.55 * size * widthBias * (0.75 + centerBoost * 0.25);
+    const sy = 0.85 * size * lenBias * centerBoost;
+    const finger = new THREE.Mesh(bladeGeom.clone(), leafMat.clone());
+    finger.scale.set(sx, sy, 1);
+    // Fan in Z; slight pitch so face reads toward camera when leaf group is oriented
     finger.rotation.z = ang;
-    const reach = 0.05 * size;
-    finger.position.set(Math.sin(ang) * reach, 0.1 * size + len * 0.35, 0);
+    finger.rotation.x = -0.08;
+    const reach = 0.04 * size;
+    finger.position.set(Math.sin(ang) * reach, 0.1 * size, Math.cos(ang) * 0.005);
     leaf.add(finger);
   }
   return leaf;
 }
 
 function makeCotyledon(mat, size = 1) {
-  const m = new THREE.Mesh(new THREE.SphereGeometry(0.04 * size, 10, 8), mat.clone());
-  m.scale.set(1.5, 0.32, 1.1);
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.038 * size, 10, 8), mat.clone());
+  m.scale.set(1.55, 0.3, 1.15);
   return m;
 }
 
-/** Chunky game watering can — body, handle, spout, rose. */
+/**
+ * Watering can — spout along +X. Pour pose lifts left of pot and tips spout into soil.
+ */
 function makeWateringCan() {
   const can = new THREE.Group();
   can.name = "wateringCan";
@@ -180,19 +192,19 @@ function makeWateringCan() {
   rose.rotation.z = -Math.PI / 2.5;
   rose.name = "rose";
   can.add(rose);
-  const roseFace = new THREE.Mesh(
-    new THREE.CircleGeometry(0.042, 12),
-    new THREE.MeshStandardMaterial({ color: 0x154060, roughness: 0.55, side: THREE.DoubleSide })
-  );
-  roseFace.position.set(0.32, 0.235, 0);
-  roseFace.rotation.y = Math.PI / 2;
-  can.add(roseFace);
+  // Marker at rose tip for pour aim
+  const tip = new THREE.Object3D();
+  tip.name = "pourTip";
+  tip.position.set(0.34, 0.25, 0);
+  can.add(tip);
 
-  can.scale.setScalar(1.45);
-  can.userData.idlePos = new THREE.Vector3(-0.52, 0, 0.34);
-  can.userData.pourPos = new THREE.Vector3(-0.2, 0.5, 0.1);
-  can.userData.idleRotZ = 0.12;
-  can.userData.pourRotZ = -1.05;
+  can.scale.setScalar(1.35);
+  // Idle: left of pot, spout aimed vaguely at pot
+  can.userData.idlePos = new THREE.Vector3(-0.55, 0, 0.28);
+  can.userData.idleRotZ = 0.2;
+  // Pour: further left so it doesn't clip plant; higher; mild tip so spout over soil
+  can.userData.pourPos = new THREE.Vector3(-0.4, 0.58, 0.18);
+  can.userData.pourRotZ = -0.55;
   can.position.copy(can.userData.idlePos);
   can.rotation.z = can.userData.idleRotZ;
   return can;
@@ -1104,7 +1116,7 @@ export default function WeedEmpire3D({
     const tick = (now) => {
       if (st.disposed) return;
       const elapsed = (now - st.t0) / 1000;
-      plant.rotation.y = Math.sin(elapsed * 0.25) * 0.08;
+      plant.rotation.y = st.fxKind === "water" || st.fxKind === "feed" ? 0 : Math.sin(elapsed * 0.25) * 0.08;
       if (st.blades && st.fan?.visible) st.blades.rotation.z = elapsed * 6;
 
       // Can / bottle: lift+tilt ease (pour into soil, not floor)
@@ -1500,53 +1512,66 @@ export default function WeedEmpire3D({
       let sz;
 
       if (isWater && useCan) {
-        // Lift can above pot rim, tip spout at soil — never pour from floor
+        // Lift left of pot (no clip), mild tip so spout aims into soil
         if (st.irrig) st.irrig.visible = true;
         st.wateringCan.visible = true;
-        st.canTargetPos = st.wateringCan.userData.pourPos.clone();
-        st.canTilt = st.wateringCan.userData.pourRotZ;
-        // Spout tip approx when lifted+tipped toward soil
-        sx = -0.02;
-        sy = 0.68;
-        sz = 0.08;
+        const pourPos = st.wateringCan.userData.pourPos;
+        const pourRot = st.wateringCan.userData.pourRotZ;
+        st.canTargetPos = pourPos.clone();
+        st.canTilt = pourRot;
+        // Snap immediately so stream matches pose (don't wait for lerp)
+        st.wateringCan.position.copy(pourPos);
+        st.wateringCan.rotation.z = pourRot;
+        st.wateringCan.updateMatrixWorld(true);
+        const tip = st.wateringCan.getObjectByName("pourTip");
+        const tipWorld = new THREE.Vector3();
+        if (tip) tip.getWorldPosition(tipWorld);
+        else tipWorld.set(-0.12, 0.62, 0.12);
+        sx = tipWorld.x;
+        sy = tipWorld.y;
+        sz = tipWorld.z;
       } else if (isWater && useDrip) {
         sx = 0.04;
         sy = 0.62;
         sz = 0.04;
       } else if (!isWater) {
         st.nuteBottle.visible = true;
-        st.bottleTargetPos = new THREE.Vector3(0.22, 0.55, 0.18);
-        st.nuteBottle.position.set(0.4, 0.2, 0.35);
-        st.bottleTilt = 1.05;
-        sx = 0.08;
-        sy = 0.7;
-        sz = 0.1;
+        st.bottleTargetPos = new THREE.Vector3(0.28, 0.58, 0.2);
+        st.nuteBottle.position.copy(st.bottleTargetPos);
+        st.bottleTilt = 0.85;
+        sx = 0.12;
+        sy = 0.68;
+        sz = 0.12;
       } else {
-        sx = -0.08;
-        sy = 0.72;
-        sz = 0.1;
+        sx = -0.1;
+        sy = 0.7;
+        sz = 0.12;
       }
 
-      // Stream column from spout tip down onto soil center
-      const midX = (sx + soilX) / 2;
-      const midY = (sy + soilY) / 2;
-      const midZ = (sz + soilZ) / 2;
-      const len = Math.max(0.2, Math.hypot(sx - soilX, sy - soilY, sz - soilZ));
+      // Vertical-ish stream from tip down into soil center
+      const midX = (sx + soilX) * 0.5;
+      const midY = (sy + soilY) * 0.5;
+      const midZ = (sz + soilZ) * 0.5;
+      const dx = soilX - sx;
+      const dy = soilY - sy;
+      const dz = soilZ - sz;
+      const len = Math.max(0.22, Math.hypot(dx, dy, dz));
       st.stream.position.set(midX, midY, midZ);
-      st.stream.scale.set(1.1, len / 0.55, 1.1);
-      st.stream.lookAt(soilX, soilY, soilZ);
-      st.stream.rotateX(Math.PI / 2);
+      st.stream.scale.set(0.9, len / 0.55, 0.9);
+      st.stream.rotation.set(0, 0, 0);
+      // Aim cylinder along tip→soil
+      const dir = new THREE.Vector3(dx, dy, dz).normalize();
+      st.stream.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir);
 
       for (let i = 0; i < st.dripVel.length; i++) {
-        const t = Math.random();
-        st.dripPos[i * 3] = sx + (soilX - sx) * t * 0.15 + (Math.random() - 0.5) * 0.06;
-        st.dripPos[i * 3 + 1] = sy - Math.random() * 0.05;
-        st.dripPos[i * 3 + 2] = sz + (soilZ - sz) * t * 0.15 + (Math.random() - 0.5) * 0.06;
+        st.dripPos[i * 3] = sx + (Math.random() - 0.5) * 0.04;
+        st.dripPos[i * 3 + 1] = sy + (Math.random() - 0.5) * 0.03;
+        st.dripPos[i * 3 + 2] = sz + (Math.random() - 0.5) * 0.04;
         st.dripVel[i] = {
-          vx: (soilX - sx) * 0.035 + (Math.random() - 0.5) * 0.008,
-          vy: -0.045 - Math.random() * 0.03,
-          vz: (soilZ - sz) * 0.035 + (Math.random() - 0.5) * 0.008,
-          life: 0.85 + Math.random() * 0.55,
+          vx: dx * 0.04 + (Math.random() - 0.5) * 0.006,
+          vy: dy * 0.04 - 0.01,
+          vz: dz * 0.04 + (Math.random() - 0.5) * 0.006,
+          life: 0.9 + Math.random() * 0.5,
         };
       }
       st.dripGeom.attributes.position.needsUpdate = true;
