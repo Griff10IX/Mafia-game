@@ -616,7 +616,7 @@ def _loot_public_reward_info() -> Dict[str, Any]:
         {"id": "property", "label": "Speakeasy (exclusive property)", "cap_global": _exclusive_cap("property")},
         {
             "id": "weed_strain",
-            "label": "Exclusive Weed Empire strains (Acapulco Gold, Super Silver Haze, Critical Mass, LA Confidential, Godfather OG)",
+            "label": "Exclusive Weed Empire strains (1 per player from loot; more via kill)",
             "cap_global": _exclusive_cap("weed_strain"),
         },
         {
@@ -673,10 +673,11 @@ def _loot_public_reward_info() -> Dict[str, Any]:
         "exclusive_note": (
             f"Global caps (all players): weapon {_exclusive_cap('weapon')}, "
             f"armour {_exclusive_cap('armour')}, Speakeasy {_exclusive_cap('property')}, "
-            f"Weed Empire special strains {_exclusive_cap('weed_strain')} (1 of each), "
+            f"Weed Empire special strains {_exclusive_cap('weed_strain')} (1 of each; "
+            "loot can grant you at most one — more only by killing holders), "
             "Duesenberg Model SJ 1 (Rare boxes 5% / Ultra Rare 10% only; 2s travel). "
             "If a type is full or you already own that exclusive, the roll tries another exclusive or becomes a standard prize. "
-            "Weed exclusives transfer only on PvP kill once claimed. Model SJ ownership also transfers on kill."
+            "Weed exclusives and Model SJ transfer on PvP kill once claimed."
         ),
         "tiers": tiers,
     }
@@ -934,6 +935,7 @@ async def open_loot_box(
                 if roll < exclusive_chance:
                     from utils.weed_empire_exclusive_strains import (
                         exclusive_strain_display_name,
+                        get_owned_exclusive_strain_ids,
                         grant_exclusive_weed_strain,
                         list_unowned_exclusive_strain_ids,
                     )
@@ -946,15 +948,21 @@ async def open_loot_box(
                         available.append("armour")
                     if claimed["property"] < _exclusive_cap("property") and not await _user_has_exclusive_property(user_id):
                         available.append("property")
+                    # One weed special per player from loot — more only via PvP kill (anti-hoard).
                     unowned_weed = await list_unowned_exclusive_strain_ids(db)
-                    if unowned_weed and claimed.get("weed_strain", 0) < _exclusive_cap("weed_strain"):
+                    user_owns_weed = bool(await get_owned_exclusive_strain_ids(db, user_id))
+                    if (
+                        unowned_weed
+                        and not user_owns_weed
+                        and claimed.get("weed_strain", 0) < _exclusive_cap("weed_strain")
+                    ):
                         available.append("weed_strain")
                     # Admin at 100% exclusive: if nothing available (cap or already have), still grant an exclusive for testing (skip property if user already has one to avoid duplicate key)
                     if is_admin_test and exclusive_chance >= 1.0 and not available:
                         available = ["weapon", "armour"]
                         if not await _user_has_exclusive_property(user_id):
                             available.append("property")
-                        if unowned_weed:
+                        if unowned_weed and not user_owns_weed:
                             available.append("weed_strain")
                     if available:
                         typ = _rng.choice(available)
@@ -1019,6 +1027,8 @@ async def open_loot_box(
                             await maybe_revoke_civilian_protection(db, user_id, "received_property_transfer")
                             continue
                         if typ == "weed_strain":
+                            if await get_owned_exclusive_strain_ids(db, user_id):
+                                continue
                             pool = unowned_weed or await list_unowned_exclusive_strain_ids(db)
                             if not pool:
                                 continue

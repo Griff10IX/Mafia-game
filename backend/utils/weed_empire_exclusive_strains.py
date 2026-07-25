@@ -189,6 +189,10 @@ async def grant_exclusive_weed_strain(
     """Atomically grant one exclusive strain. Returns False if already claimed or invalid."""
     if not user_id or not is_exclusive_strain_id(strain_id):
         return False
+    # Loot boxes: at most one special per player (more only via PvP kill transfer).
+    if (source or "loot_box") == "loot_box":
+        if await get_owned_exclusive_strain_ids(db, user_id):
+            return False
     now_iso = _utcnow().isoformat()
     doc = {
         "id": str(uuid.uuid4()),
@@ -218,7 +222,8 @@ async def grant_exclusive_weed_strain(
                 (
                     f"You claimed the exclusive strain {name} (1 of 1 in the game). "
                     f"Buff: {buff}. Plant it from Weed Empire at Grower Level "
-                    f"{EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL}+. Ownership transfers only if someone kills you."
+                    f"{EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL}+. Loot will not grant you another special — "
+                    f"get more only by killing holders. Ownership transfers if someone kills you."
                 ),
                 "reward",
             )

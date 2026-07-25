@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-25 20:15 UTC[/color][/b] — [b]Loot: one Weed special per player[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Loot Box[/b] can grant you at most [b]one[/b] Weed Empire special strain. Extra specials only come from [b]killing[/b] a holder (stash/curing of that strain still transfers). Stops loot farming from collecting all five.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-25 19:40 UTC[/color][/b] — [b]Loot: Duesenberg Model SJ[/b][/size]
 [quote]
 [list]
@@ -28,7 +37,7 @@
 [size=1.5][b][color=#2ECC71]2026-07-25 18:55 UTC[/color][/b] — [b]Loot: Weed Empire special strains[/b][/size]
 [quote]
 [list]
-[*][color=#888888][b]New:[/b] [b]Money → Loot Box[/b] can roll [b]5 game-wide special Weed Empire strains[/b] (1 of each): [b]Acapulco Gold[/b], [b]Super Silver Haze[/b], [b]Critical Mass[/b], [b]LA Confidential[/b], and [b]Godfather OG[/b]. Once claimed they never return to the loot pool.[/color]
+[*][color=#888888][b]New:[/b] [b]Money → Loot Box[/b] can roll [b]5 game-wide special Weed Empire strains[/b] (1 of each): [b]Acapulco Gold[/b], [b]Super Silver Haze[/b], [b]Critical Mass[/b], [b]LA Confidential[/b], and [b]Godfather OG[/b]. Once claimed they never return to the loot pool. Each player can receive at most [b]one[/b] from loot — more only by kill.[/color]
 [*][color=#888888][b]Changed:[/b] Own a special at [b]Grower Level 2+[/b] to plant it and activate its farm-wide buff (daily cash, faster harvest, more yield, slower heat, or higher sell price). Kill the holder to take ownership — growing plots of that strain are cleared, and their stash / curing of that special moves to the killer.[/color]
 [/list]
 [/quote]
