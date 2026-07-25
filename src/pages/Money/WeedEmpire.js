@@ -211,16 +211,16 @@ export default function WeedEmpire() {
     }
   };
 
-  const plant = ({ freeRestart = false } = {}) =>
+  const plant = ({ scavengedSeed = false } = {}) =>
     run(async () => {
       const { data } = await api.post("/weed-empire/plant", {
         plot_id: selectedPlotId,
-        strain_id: freeRestart ? "ditch_weed" : strainId,
-        soil_type: freeRestart ? "soil_conventional" : soilType,
-        ...(freeRestart ? actionCodeRef.current : {}),
+        strain_id: scavengedSeed ? "ditch_weed" : strainId,
+        soil_type: scavengedSeed ? "soil_conventional" : soilType,
+        ...(scavengedSeed ? actionCodeRef.current : {}),
       });
       applyFarm(data.farm);
-      toast.success(data.free_restart ? "Free restart planted — Ditch Weed" : "Planted");
+      toast.success(data.scavenged_seed ? "Found some rough seeds — Ditch Weed planted" : "Planted");
       setFx("plant");
       setFxNonce((n) => n + 1);
       setTimeout(() => setFx(null), 400);
@@ -610,18 +610,18 @@ export default function WeedEmpire() {
                     This crop is lost. Replanting uses a fresh seed and soil charge and restarts at seedling.
                   </p>
                 )}
-                {farm.free_restart_available && (
+                {farm.scavenged_seed_available && (
                   <div className="rounded border border-amber-500/40 bg-amber-500/10 p-2 space-y-1.5">
                     <p className="text-xs text-amber-200">
-                      Farm broke? Restart free with Ditch Weed and conventional soil.
+                      Search the old bags for rough Ditch Weed seeds and scrape together basic soil. Costs $0.
                     </p>
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => plant({ freeRestart: true })}
+                      onClick={() => plant({ scavengedSeed: true })}
                       className="w-full py-2 rounded bg-amber-700/80 hover:bg-amber-700 text-sm font-heading"
                     >
-                      Free restart — Ditch Weed
+                      Scavenge seeds and plant — $0
                     </button>
                   </div>
                 )}

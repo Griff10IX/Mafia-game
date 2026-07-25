@@ -246,15 +246,15 @@ def _active_plot_count(farm: dict) -> int:
     return sum(1 for p in (farm.get("plots") or []) if p.get("state") in ("growing", "harvest_ready"))
 
 
-def _free_restart_available(farm: dict) -> bool:
+def _scavenged_seed_available(farm: dict) -> bool:
     starter = STRAIN_BY_ID.get("ditch_weed") or {}
     seed_cost = int(starter.get("seed_cost") or 0)
-    has_stash = any(float(grams or 0) > 0 for grams in (farm.get("stash") or {}).values())
     return (
-        int(farm.get("business_cash") or 0) < seed_cost
-        and _active_plot_count(farm) == 0
-        and not has_stash
-        and not (farm.get("curing") or [])
+        _active_plot_count(farm) == 0
+        and (
+            int(farm.get("business_cash") or 0) < seed_cost
+            or int((farm.get("soil_stock") or {}).get("soil_conventional") or 0) < SOIL_CHARGE_PER_PLANT
+        )
     )
 
 
@@ -602,9 +602,9 @@ def _public_farm(farm: dict, *, username: str = "") -> Dict[str, Any]:
         "irrigation_level": irrig_lvl,
         "auto_water_at_irrigation": AUTO_WATER_IRRIGATION_LEVEL,
         "auto_feed_at_irrigation": AUTO_FEED_IRRIGATION_LEVEL,
-        "free_restart_available": _free_restart_available(farm),
-        "free_restart_strain_id": "ditch_weed",
-        "free_restart_soil_type": "soil_conventional",
+        "scavenged_seed_available": _scavenged_seed_available(farm),
+        "scavenged_strain_id": "ditch_weed",
+        "scavenged_soil_type": "soil_conventional",
         **gp,
         "staff_preview": True,
     }
@@ -809,14 +809,14 @@ async def weed_plant(body: PlantBody, http_request: Request, current_user: dict 
     if soil_type not in ("soil_conventional", "soil_organic", "coco"):
         raise HTTPException(status_code=400, detail="Invalid soil/medium")
     stock = dict(farm.get("soil_stock") or {})
-    free_restart = (
-        _free_restart_available(farm)
+    scavenged_seed = (
+        _scavenged_seed_available(farm)
         and body.strain_id == "ditch_weed"
         and soil_type == "soil_conventional"
     )
-    if free_restart:
+    if scavenged_seed:
         await _require_weed_action_code(http_request, current_user)
-    if int(stock.get(soil_type) or 0) < SOIL_CHARGE_PER_PLANT and not free_restart:
+    if int(stock.get(soil_type) or 0) < SOIL_CHARGE_PER_PLANT and not scavenged_seed:
         raise HTTPException(status_code=400, detail="Buy soil/medium first")
     if not _equip_levels(farm).get("pots") and not _equip_levels(farm).get("hydro_system"):
         raise HTTPException(status_code=400, detail="Need pots or a hydro system")
@@ -824,9 +824,9 @@ async def weed_plant(body: PlantBody, http_request: Request, current_user: dict 
         raise HTTPException(status_code=400, detail="Need lights installed")
 
     seed_cost = int(strain.get("seed_cost") or 0)
-    if not free_restart:
+    if not scavenged_seed:
         _spend(farm, seed_cost)
-    if int(stock.get(soil_type) or 0) >= SOIL_CHARGE_PER_PLANT:
+    if not scavenged_seed and int(stock.get(soil_type) or 0) >= SOIL_CHARGE_PER_PLANT:
         stock[soil_type] = int(stock.get(soil_type) or 0) - SOIL_CHARGE_PER_PLANT
     farm["soil_stock"] = stock
 
@@ -877,7 +877,7 @@ async def weed_plant(body: PlantBody, http_request: Request, current_user: dict 
         "ok": True,
         "farm": _public_farm(farm, username=current_user.get("username") or ""),
         "fx": "plant",
-        "free_restart": free_restart,
+        "scavenged_seed": scavenged_seed,
     }
 
 
