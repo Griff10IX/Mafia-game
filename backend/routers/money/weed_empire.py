@@ -51,6 +51,7 @@ FEED_INTERVAL_HOURS = 2.5
 AUTO_WATER_IRRIGATION_LEVEL = 5
 AUTO_FEED_IRRIGATION_LEVEL = 8
 MAX_HEAT = 100.0
+MIN_RAID_GROWER_LEVEL = 2
 MIN_RAID_TARGET_GROWER_LEVEL = 2
 WEED_ACTION_CODE_PREFIX = "we_"
 WEED_ACTION_CODE_BUCKET_SECONDS = 7200
@@ -1294,6 +1295,13 @@ async def weed_raid_targets(current_user: dict = Depends(_gate)):
     me = current_user["id"]
     today = _utc_date_str()
     my_farm = await _get_or_create_farm(me)
+    if int(my_farm.get("grower_level") or 1) < MIN_RAID_GROWER_LEVEL:
+        return {
+            "targets": [],
+            "sabotage_unlocked": bool(my_farm.get("sabotage_unlocked")),
+            "raid_unlocked": False,
+            "required_grower_level": MIN_RAID_GROWER_LEVEL,
+        }
     already = dict(my_farm.get("raid_last_by_target") or {})
     cursor = db.weed_farms.find(
         {
@@ -1335,7 +1343,12 @@ async def weed_raid_targets(current_user: dict = Depends(_gate)):
         )
         if len(targets) >= 40:
             break
-    return {"targets": targets, "sabotage_unlocked": bool(my_farm.get("sabotage_unlocked"))}
+    return {
+        "targets": targets,
+        "sabotage_unlocked": bool(my_farm.get("sabotage_unlocked")),
+        "raid_unlocked": True,
+        "required_grower_level": MIN_RAID_GROWER_LEVEL,
+    }
 
 
 @router.post("/raid")
@@ -1348,6 +1361,8 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
 
     today = _utc_date_str()
     atk = await _get_or_create_farm(attacker_id)
+    if int(atk.get("grower_level") or 1) < MIN_RAID_GROWER_LEVEL:
+        raise HTTPException(status_code=400, detail="Reach Grower Level 2 before raiding other growers")
     already = dict(atk.get("raid_last_by_target") or {})
     if already.get(defender_id) == today:
         raise HTTPException(status_code=400, detail="Already raided this grower today")

@@ -369,6 +369,7 @@ export default function WeedEmpire() {
   const plantSeedCost = Number(plantStrain.seed_cost || 0);
   const selectedSoilStock = Number(farm.soil_stock?.[soilType] || 0);
   const canAffordPlant = Number(farm.business_cash || 0) >= plantSeedCost && selectedSoilStock >= 1;
+  const raidUnlocked = Number(farm.grower_level || 1) >= 2;
   const cleanlinessPct = Math.max(0, Math.min(100, Number(farm.cleanliness_pct ?? farm.cleanliness ?? 100)));
   const cleanlinessRisk = cleanlinessPct < 30;
   const mitePct = Math.max(0, Math.min(100, Number(selectedPlot?.mite_infestation_pct || 0)));
@@ -479,7 +480,7 @@ export default function WeedEmpire() {
             type="button"
             onClick={() => {
               setTab(id);
-              if (id === "raid") loadTargets();
+              if (id === "raid" && raidUnlocked) loadTargets();
             }}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-heading uppercase tracking-wide border ${
               tab === id
@@ -945,15 +946,22 @@ export default function WeedEmpire() {
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground flex items-start gap-2">
             <Shield className="w-4 h-4 shrink-0 mt-0.5" />
-            Steal stash, business cash, and equipment (victims must re-buy gear). Grower Lv 1 farms are protected;
-            the same eligible grower can only be raided once per day.
+            Reach Grower Lv 2 to raid. Steal stash, business cash, and equipment (victims must re-buy gear). Grower Lv 1
+            farms are protected; the same eligible grower can only be raided once per day.
             {farm.sabotage_unlocked ? " Sabotage heat spike unlocked." : " Harvest 10 plants to unlock sabotage."}
           </p>
-          <button type="button" disabled={busy} onClick={loadTargets} className="text-xs px-2 py-1 border rounded">
+          <button
+            type="button"
+            disabled={busy || !raidUnlocked}
+            onClick={loadTargets}
+            className="text-xs px-2 py-1 border rounded disabled:opacity-40"
+          >
             Refresh targets
           </button>
           <div className="space-y-2">
-            {targets.length === 0 ? (
+            {!raidUnlocked ? (
+              <p className="text-sm text-amber-300">Reach Grower Level 2 to unlock raids.</p>
+            ) : targets.length === 0 ? (
               <p className="text-sm text-muted-foreground">No raidable growers right now.</p>
             ) : (
               targets.map((t) => (
