@@ -454,8 +454,6 @@ async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
             "common_box_pct": int(rarity.get("common_pct") or 0),
             "uncommon_box_pct": int(rarity.get("uncommon_pct") or 0),
             "rare_box_pct": int(rarity.get("rare_pct") or 0),
-            "model_sj_rare_pct": 2,
-            "model_sj_ultra_rare_pct": 5,
         },
     }
 
@@ -621,9 +619,8 @@ def _loot_public_reward_info() -> Dict[str, Any]:
         },
         {
             "id": "car_sj",
-            "label": "Duesenberg Model SJ (Rare 2% / Ultra Rare 5%, 2s travel)",
+            "label": "Duesenberg Model SJ (Rare / Ultra Rare only, 2s travel)",
             "cap_global": 1,
-            "drop_rates_pct": {"rare": 2, "ultra_rare": 5},
         },
     ]
     tiers: Dict[str, Any] = {}
@@ -674,7 +671,7 @@ def _loot_public_reward_info() -> Dict[str, Any]:
             f"Global caps (all players): weapon {_exclusive_cap('weapon')}, "
             f"armour {_exclusive_cap('armour')}, Speakeasy {_exclusive_cap('property')}, "
             f"Weed Empire special strains {_exclusive_cap('weed_strain')} (1 of each), "
-            "Duesenberg Model SJ 1 (Rare boxes 2% / Ultra Rare 5% only; 2s travel). "
+            "Duesenberg Model SJ 1 (Rare / Ultra Rare boxes only; 2s travel). "
             "If a type is full or you already own that exclusive, the roll tries another exclusive or becomes a standard prize. "
             "Weed exclusives transfer only on PvP kill once claimed. Model SJ ownership also transfers on kill."
         ),
