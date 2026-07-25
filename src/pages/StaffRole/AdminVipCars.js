@@ -33,6 +33,8 @@ export default function AdminVipCars() {
   const [clearGrant, setClearGrant] = useState(false);
   const [removeCounts, setRemoveCounts] = useState({});
   const [expandedUser, setExpandedUser] = useState(null);
+  const [backfillBusy, setBackfillBusy] = useState(false);
+  const [backfillResult, setBackfillResult] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -90,6 +92,28 @@ export default function AdminVipCars() {
     list.sort((a, b) => b.cars.length - a.cars.length || String(a.username).localeCompare(String(b.username)));
     return list;
   }, [stats]);
+
+  const runDeadAliveBackfill = async (dryRun) => {
+    if (!dryRun) {
+      const ok = window.confirm(
+        'Transfer VIP Pass Cars still on dead accounts to their Dead → Alive recipients and send inbox notifications?'
+      );
+      if (!ok) return;
+    }
+    setBackfillBusy(true);
+    try {
+      const res = await api.post('/admin/vip-pass-car-dead-alive-backfill', null, {
+        params: { dry_run: dryRun },
+      });
+      setBackfillResult(res.data || null);
+      toast.success(res.data?.message || (dryRun ? 'Dry run done' : 'Backfill done'));
+      if (!dryRun) await loadStats();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Backfill failed');
+    } finally {
+      setBackfillBusy(false);
+    }
+  };
 
   const removeByCarId = async (owner, car) => {
     const msg = clearGrant
@@ -198,6 +222,49 @@ export default function AdminVipCars() {
             />
             Also clear the Game Pass free-grant flag on removal (lets them earn the tier-100 car again)
           </label>
+
+          <div className="border-t border-zinc-700/50 pt-3 space-y-2">
+            <div className="text-[10px] font-heading font-bold uppercase tracking-wider text-emerald-300">
+              Dead → Alive VIP car backfill
+            </div>
+            <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+              Moves VIP Pass Cars still on dead accounts to the alive recipient of Claim Inheritance, and sends them an inbox message. Safe to re-run.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Btn
+                onClick={() => runDeadAliveBackfill(true)}
+                disabled={backfillBusy || !!actionKey}
+                className="border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+              >
+                {backfillBusy ? '…' : 'Dry run'}
+              </Btn>
+              <Btn
+                onClick={() => runDeadAliveBackfill(false)}
+                disabled={backfillBusy || !!actionKey}
+                className="border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
+              >
+                {backfillBusy ? '…' : 'Apply transfer + notify'}
+              </Btn>
+            </div>
+            {backfillResult && (
+              <div className="rounded border border-zinc-700/50 bg-zinc-900/50 p-2 space-y-1 text-[9px] font-heading text-mutedForeground">
+                <div className="text-foreground">
+                  {backfillResult.dry_run ? 'Dry run' : 'Applied'}:{' '}
+                  {Number(backfillResult.transferred_cars || 0)} car(s) →{' '}
+                  {Number(backfillResult.transferred_users || 0)} player(s)
+                  {Number(backfillResult.skipped || 0) > 0
+                    ? ` · skipped ${backfillResult.skipped}`
+                    : ''}
+                </div>
+                {(backfillResult.transfers || []).slice(0, 40).map((t) => (
+                  <div key={`${t.dead_username}-${t.recipient_username}`}>
+                    {t.dead_username} → {t.recipient_username}: {t.cars} car
+                    {t.cars === 1 ? '' : 's'}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

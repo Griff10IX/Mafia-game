@@ -11355,6 +11355,25 @@ def register(router):
             field="bullets", status=status, search=search, offset=offset, limit=limit
         )
 
+    @router.post("/admin/vip-pass-car-dead-alive-backfill")
+    async def admin_vip_pass_car_dead_alive_backfill(
+        dry_run: bool = Query(True, description="If true, preview only — no transfers or inbox messages"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Move VIP Pass Cars still on dead accounts to their Dead → Alive retrieve recipients."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.game_pass_vip_car import backfill_vip_pass_cars_dead_alive
+
+        result = await backfill_vip_pass_cars_dead_alive(db, dry_run=bool(dry_run))
+        users = int(result.get("transferred_users") or 0)
+        cars = int(result.get("transferred_cars") or 0)
+        if dry_run:
+            msg = f"Dry run: would transfer {cars} VIP Pass Car(s) to {users} player(s)"
+        else:
+            msg = f"Transferred {cars} VIP Pass Car(s) to {users} player(s) (inbox notified)"
+        return {"message": msg, **result}
+
     @router.post("/admin/vip-pass-car-remove")
     async def admin_vip_pass_car_remove(
         body: AdminVipPassCarRemoveRequest,

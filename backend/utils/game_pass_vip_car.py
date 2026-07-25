@@ -512,6 +512,99 @@ async def transfer_vip_pass_cars_dead_alive(
     return result
 
 
+async def backfill_vip_pass_cars_dead_alive(db, *, dry_run: bool = False) -> dict:
+    """
+    Find dead accounts still holding VIP Pass Cars that already completed a Dead → Alive
+    retrieve, move cars to the alive recipient, and inbox-notify them.
+    Idempotent — safe to re-run.
+    """
+    owner_ids = await db.user_cars.distinct("user_id", {"car_id": GAME_PASS_VIP_CAR_ID})
+    out = {
+        "dry_run": bool(dry_run),
+        "dead_with_cars": 0,
+        "transferred_users": 0,
+        "transferred_cars": 0,
+        "skipped": 0,
+        "transfers": [],
+        "skips": [],
+    }
+    if not owner_ids:
+        return out
+
+    dead_users = await db.users.find(
+        {"id": {"$in": list(owner_ids)}, "is_dead": True},
+        {"_id": 0, "id": 1, "username": 1, "game_pass_vip_car_granted": 1},
+    ).to_list(len(owner_ids) + 1)
+    out["dead_with_cars"] = len(dead_users)
+
+    for dead in dead_users:
+        dead_id = dead.get("id")
+        if not dead_id:
+            continue
+        xfer = await db.dead_alive_transfers.find_one(
+            {"event_type": "retrieve", "dead_id": dead_id},
+            {"_id": 0, "recipient_id": 1, "recipient_username": 1, "created_at": 1},
+            sort=[("created_at", -1)],
+        )
+        dead_name = dead.get("username") or dead_id
+        if not xfer or not xfer.get("recipient_id"):
+            out["skipped"] += 1
+            out["skips"].append({"dead_username": dead_name, "reason": "no_retrieve_log"})
+            continue
+        recip_id = xfer["recipient_id"]
+        recip = await db.users.find_one(
+            {"id": recip_id, "is_dead": {"$ne": True}},
+            {"_id": 0, "id": 1, "username": 1},
+        )
+        if not recip:
+            out["skipped"] += 1
+            out["skips"].append({
+                "dead_username": dead_name,
+                "reason": "recipient_missing_or_dead",
+                "recipient_id": recip_id,
+            })
+            continue
+
+        car_count = int(
+            await db.user_cars.count_documents({"user_id": dead_id, "car_id": GAME_PASS_VIP_CAR_ID})
+        )
+        entry = {
+            "dead_username": dead_name,
+            "recipient_username": recip.get("username"),
+            "cars": car_count,
+            "grant_flag": bool(dead.get("game_pass_vip_car_granted")),
+        }
+        if dry_run:
+            out["transferred_users"] += 1
+            out["transferred_cars"] += car_count
+            out["transfers"].append({**entry, "applied": False})
+            continue
+
+        result = await transfer_vip_pass_cars_dead_alive(
+            db,
+            dead_user_id=dead_id,
+            recipient_user_id=recip_id,
+            dead_username=dead.get("username"),
+            recipient_username=recip.get("username"),
+            notify=True,
+        )
+        n = int((result or {}).get("transferred_count") or 0)
+        if n > 0:
+            out["transferred_users"] += 1
+            out["transferred_cars"] += n
+            out["transfers"].append({
+                **entry,
+                "cars": n,
+                "applied": True,
+                "grant_flag_carried": bool((result or {}).get("grant_flag_carried")),
+            })
+        else:
+            out["skipped"] += 1
+            out["skips"].append({"dead_username": dead_name, "reason": "no_cars_moved"})
+
+    return out
+
+
 async def grant_game_pass_vip_car_if_eligible(db, *, user_id: str) -> bool:
     """
     Grant one VIP Pass car the first time VIP reaches tier 100 (once per account).
