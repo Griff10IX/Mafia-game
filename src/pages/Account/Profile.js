@@ -1471,6 +1471,7 @@ export default function Profile() {
   const [profileAutoplayVideo, setProfileAutoplayVideo] = useState(true);
   const [hideKillsOnProfile, setHideKillsOnProfile] = useState(false);
   const [hideJailbustsOnProfile, setHideJailbustsOnProfile] = useState(false);
+  const [hideLeaderboardUsername, setHideLeaderboardUsername] = useState(false);
   const [showCountryFlagOnProfile, setShowCountryFlagOnProfile] = useState(false);
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [savingAutoplay, setSavingAutoplay] = useState(false);
@@ -1880,11 +1881,13 @@ export default function Profile() {
         setProfileAutoplayVideo(warm.profile_autoplay_video !== false);
         setHideKillsOnProfile(warm.hide_kills_on_profile === true);
         setHideJailbustsOnProfile(warm.hide_jailbusts_on_profile === true);
+        setHideLeaderboardUsername(warm.hide_leaderboard_username === true);
         setShowCountryFlagOnProfile(warm.show_country_flag_on_profile === true);
       } else {
         setProfileAutoplayVideo(me?.profile_autoplay_video !== false);
         setHideKillsOnProfile(profile?.hide_kills_on_profile === true);
         setHideJailbustsOnProfile(profile?.hide_jailbusts_on_profile === true);
+        setHideLeaderboardUsername(profile?.hide_leaderboard_username === true);
         setShowCountryFlagOnProfile(profile?.show_country_flag_on_profile === true);
       }
       fetchPrefs();
@@ -1902,7 +1905,7 @@ export default function Profile() {
         clearTimeout(tCensor);
       };
     }
-  }, [isMe, viewPublic, profile, profile?.hide_kills_on_profile, profile?.hide_jailbusts_on_profile, profile?.show_country_flag_on_profile, me?.profile_autoplay_video, me?.id]);
+  }, [isMe, viewPublic, profile, profile?.hide_kills_on_profile, profile?.hide_jailbusts_on_profile, profile?.hide_leaderboard_username, profile?.show_country_flag_on_profile, me?.profile_autoplay_video, me?.id]);
 
   useEffect(() => {
     if (!isMe || viewPublic || !spotifyStatus?.spotify_connected || !spotifyStatus?.feature_enabled) {
@@ -2106,6 +2109,7 @@ export default function Profile() {
         hide_kills_on_profile: hideKillsOnProfile,
         hide_jailbusts_on_profile: hideJailbustsOnProfile,
         show_country_flag_on_profile: showCountryFlagOnProfile,
+        hide_leaderboard_username: hideLeaderboardUsername,
       });
       toast.success('Profile visibility saved');
       await refetchProfile({ silent: true, usernameOverride: me?.username });
@@ -2930,6 +2934,15 @@ export default function Profile() {
                     <span className="text-sm text-foreground">Hide jailbusts</span>
                     <button type="button" role="switch" aria-checked={hideJailbustsOnProfile} disabled={savingVisibility} onClick={() => setHideJailbustsOnProfile((v) => !v)} className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${hideJailbustsOnProfile ? 'bg-primary border-primary/50' : 'bg-secondary border-zinc-600'} ${savingVisibility ? 'opacity-60' : ''}`}>
                       <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${hideJailbustsOnProfile ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 py-1">
+                    <div className="min-w-0 pr-2">
+                      <span className="text-sm text-foreground block">Hide username on leaderboards</span>
+                      <span className="text-[10px] text-mutedForeground">Shows as &quot;Hidden&quot; on leaderboards; Honours on your profile are hidden while this is on.</span>
+                    </div>
+                    <button type="button" role="switch" aria-checked={hideLeaderboardUsername} disabled={savingVisibility} onClick={() => setHideLeaderboardUsername((v) => !v)} className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${hideLeaderboardUsername ? 'bg-primary border-primary/50' : 'bg-secondary border-zinc-600'} ${savingVisibility ? 'opacity-60' : ''}`}>
+                      <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${hideLeaderboardUsername ? 'translate-x-5' : 'translate-x-0.5'}`} />
                     </button>
                   </div>
                   <div className="flex items-center justify-between gap-3 py-1">

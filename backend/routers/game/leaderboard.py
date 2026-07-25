@@ -24,16 +24,17 @@ from server import (
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_LEADERBOARD
 
 _lb_cache: dict = {}
+_last_reward_winners_cache: dict = {}
 _LB_CACHE_TTL = 90
+_LAST_WINNERS_CACHE_TTL = 300
 # Weekly boards fire many heavy aggregates; cap parallel scans to reduce CPU spikes / pool contention.
 _LEADERBOARD_WEEKLY_DB_CONCURRENCY = 4
 
 
 def invalidate_leaderboard_cache():
-    """Clear in-memory /leaderboards/top cache (e.g. after admin respect correction)."""
+    """Clear in-memory /leaderboards/top + last-winners cache (e.g. privacy toggle, payout)."""
     _lb_cache.clear()
-_last_reward_winners_cache: dict = {}
-_LAST_WINNERS_CACHE_TTL = 300
+    _last_reward_winners_cache.clear()
 
 _leaderboard_user_filter = _staff_exclude_user_filter
 
@@ -134,6 +135,7 @@ class LeaderboardEntry(BaseModel):
     gta: int
     jail_busts: int
     is_current_user: bool = False
+    username_hidden: bool = False
 
 
 class StatLeaderboardEntry(BaseModel):
@@ -141,6 +143,7 @@ class StatLeaderboardEntry(BaseModel):
     username: str
     value: int
     is_current_user: bool = False
+    hide_leaderboard_username: bool = False
 
 
 async def _top_by_field(field: str, current_user_id: str, limit: int, dead: bool = False) -> List[StatLeaderboardEntry]:
@@ -148,7 +151,7 @@ async def _top_by_field(field: str, current_user_id: str, limit: int, dead: bool
     query = await stat_leaderboard_users_match(dead=dead, database=db)
     users = await db.users.find(
         query,
-        {"_id": 0, "username": 1, "id": 1, field: 1}
+        {"_id": 0, "username": 1, "id": 1, "hide_leaderboard_username": 1, field: 1}
     ).sort(field, -1).limit(limit).to_list(limit)
     out: List[StatLeaderboardEntry] = []
     for i, user in enumerate(users):
@@ -156,7 +159,8 @@ async def _top_by_field(field: str, current_user_id: str, limit: int, dead: bool
             rank=i + 1,
             username=user["username"],
             value=int(user.get(field, 0) or 0),
-            is_current_user=user["id"] == current_user_id
+            is_current_user=user["id"] == current_user_id,
+            hide_leaderboard_username=bool(user.get("hide_leaderboard_username")),
         ))
     return out
 
@@ -173,7 +177,7 @@ async def _top_by_total_rank_points(current_user_id: str, limit: int, dead: bool
         {"$addFields": {"_lb_total_rp": mongodb_lifetime_rank_points_expr()}},
         {"$sort": {"_lb_total_rp": -1}},
         {"$limit": limit},
-        {"$project": {"_id": 0, "username": 1, "id": 1, "_lb_total_rp": 1}},
+        {"$project": {"_id": 0, "username": 1, "id": 1, "hide_leaderboard_username": 1, "_lb_total_rp": 1}},
     ]
     cursor = db.users.aggregate(pipeline)
     docs = await cursor.to_list(limit)
@@ -185,6 +189,7 @@ async def _top_by_total_rank_points(current_user_id: str, limit: int, dead: bool
                 username=user["username"],
                 value=int(user.get("_lb_total_rp") or 0),
                 is_current_user=user["id"] == current_user_id,
+                hide_leaderboard_username=bool(user.get("hide_leaderboard_username")),
             )
         )
     return out
@@ -199,7 +204,7 @@ async def _top_by_effective_kills(current_user_id: str, limit: int, dead: bool =
         {"$addFields": {"_lb_eff_kills": mongodb_effective_kill_count_expr()}},
         {"$sort": {"_lb_eff_kills": -1}},
         {"$limit": limit},
-        {"$project": {"_id": 0, "username": 1, "id": 1, "_lb_eff_kills": 1}},
+        {"$project": {"_id": 0, "username": 1, "id": 1, "hide_leaderboard_username": 1, "_lb_eff_kills": 1}},
     ]
     cursor = db.users.aggregate(pipeline)
     docs = await cursor.to_list(limit)
@@ -211,6 +216,7 @@ async def _top_by_effective_kills(current_user_id: str, limit: int, dead: bool =
                 username=user["username"],
                 value=int(user.get("_lb_eff_kills") or 0),
                 is_current_user=user["id"] == current_user_id,
+                hide_leaderboard_username=bool(user.get("hide_leaderboard_username")),
             )
         )
     return out
@@ -264,7 +270,7 @@ async def _top_by_field_weekly(
     q = await _users_query_id_in_with_staff_filters(db, id_list)
     users_map = await db.users.find(
         q,
-        {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1}
+        {"_id": 0, "id": 1, "username": 1, "hide_leaderboard_username": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1}
     ).to_list(len(id_list) + 1)
     users_by_id = {u["id"]: u for u in users_map}
     filtered = []
@@ -279,7 +285,12 @@ async def _top_by_field_weekly(
             continue
         if u.get("is_bodyguard") or u.get("is_npc"):
             continue
-        filtered.append({"user_id": uid, "value": int(d.get("value") or 0), "username": u["username"]})
+        filtered.append({
+            "user_id": uid,
+            "value": int(d.get("value") or 0),
+            "username": u["username"],
+            "hide_leaderboard_username": bool(u.get("hide_leaderboard_username")),
+        })
     filtered = filtered[:limit]
     return [
         StatLeaderboardEntry(
@@ -287,6 +298,7 @@ async def _top_by_field_weekly(
             username=e["username"],
             value=e["value"],
             is_current_user=e["user_id"] == current_user_id,
+            hide_leaderboard_username=e["hide_leaderboard_username"],
         )
         for i, e in enumerate(filtered)
     ]
@@ -341,7 +353,7 @@ async def _top_by_field_weekly_sum(
     q = await _users_query_id_in_with_staff_filters(db, id_list)
     users_map = await db.users.find(
         q,
-        {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1}
+        {"_id": 0, "id": 1, "username": 1, "hide_leaderboard_username": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1}
     ).to_list(len(id_list) + 1)
     users_by_id = {u["id"]: u for u in users_map}
     filtered = []
@@ -356,7 +368,12 @@ async def _top_by_field_weekly_sum(
             continue
         if u.get("is_bodyguard") or u.get("is_npc"):
             continue
-        filtered.append({"user_id": uid, "value": int(d.get("value") or 0), "username": u["username"]})
+        filtered.append({
+            "user_id": uid,
+            "value": int(d.get("value") or 0),
+            "username": u["username"],
+            "hide_leaderboard_username": bool(u.get("hide_leaderboard_username")),
+        })
     filtered = filtered[:limit]
     return [
         StatLeaderboardEntry(
@@ -364,6 +381,7 @@ async def _top_by_field_weekly_sum(
             username=e["username"],
             value=e["value"],
             is_current_user=e["user_id"] == current_user_id,
+            hide_leaderboard_username=e["hide_leaderboard_username"],
         )
         for i, e in enumerate(filtered)
     ]
@@ -390,7 +408,7 @@ async def _top_by_lifetime_respect_earned_alltime(
     q = await _users_query_id_in_with_staff_filters(db, id_list)
     users_map = await db.users.find(
         q,
-        {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1},
+        {"_id": 0, "id": 1, "username": 1, "hide_leaderboard_username": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1},
     ).to_list(len(id_list) + 1)
     users_by_id = {u["id"]: u for u in users_map}
     filtered = []
@@ -405,7 +423,12 @@ async def _top_by_lifetime_respect_earned_alltime(
             continue
         if u.get("is_bodyguard") or u.get("is_npc"):
             continue
-        filtered.append({"user_id": uid, "value": int(d.get("value") or 0), "username": u["username"]})
+        filtered.append({
+            "user_id": uid,
+            "value": int(d.get("value") or 0),
+            "username": u["username"],
+            "hide_leaderboard_username": bool(u.get("hide_leaderboard_username")),
+        })
     filtered = filtered[:limit]
     return [
         StatLeaderboardEntry(
@@ -413,6 +436,7 @@ async def _top_by_lifetime_respect_earned_alltime(
             username=e["username"],
             value=e["value"],
             is_current_user=e["user_id"] == current_user_id,
+            hide_leaderboard_username=e["hide_leaderboard_username"],
         )
         for i, e in enumerate(filtered)
     ]
@@ -518,11 +542,28 @@ async def _get_last_reward_winners(database) -> dict:
     if all_ids:
         users = await database.users.find(
             {"id": {"$in": list(all_ids)}},
-            {"_id": 0, "id": 1, "username": 1},
+            {"_id": 0, "id": 1, "username": 1, "hide_leaderboard_username": 1},
         ).to_list(len(all_ids) + 1)
-        users_map = {u["id"]: u.get("username") or "" for u in users}
+        users_map = {
+            u["id"]: {
+                "username": u.get("username") or "",
+                "hide": bool(u.get("hide_leaderboard_username")),
+            }
+            for u in users
+        }
+
     def with_username(lst):
-        return [{"rank": e["rank"], "username": users_map.get(e["user_id"], "")} for e in lst]
+        out = []
+        for e in lst:
+            info = users_map.get(e["user_id"]) or {}
+            hide = bool(info.get("hide"))
+            out.append({
+                "rank": e["rank"],
+                "username": "Hidden" if hide else (info.get("username") or ""),
+                "username_hidden": hide,
+            })
+        return out
+
     return {
         "kills": with_username(kills),
         "crimes": with_username(crimes),
@@ -740,6 +781,7 @@ async def get_leaderboard(current_user: dict = Depends(get_current_user)):
         {
             "_id": 0,
             "username": 1,
+            "hide_leaderboard_username": 1,
             "money": 1,
             "total_kills": 1,
             "total_crimes": 1,
@@ -753,31 +795,39 @@ async def get_leaderboard(current_user: dict = Depends(get_current_user)):
     ).sort("money", -1).limit(10).to_list(10)
     result = []
     for i, user in enumerate(users):
+        hide = bool(user.get("hide_leaderboard_username"))
         result.append(LeaderboardEntry(
             rank=i + 1,
-            username=user["username"],
+            username="Hidden" if hide else user["username"],
             money=user["money"],
             kills=effective_player_kill_count(user),
             crimes=user.get("total_crimes", 0),
             gta=user.get("total_gta", 0),
             jail_busts=user.get("jail_busts", 0),
-            is_current_user=user["id"] == current_user["id"]
+            is_current_user=user["id"] == current_user["id"],
+            username_hidden=hide,
         ))
     return result
 
 
 def _stamp_current_user(boards_raw: dict, username: str) -> dict:
-    """Re-stamp is_current_user on cached board dicts for the requesting user."""
+    """Re-stamp is_current_user; redact Hidden usernames while keeping _uid for You-stamp."""
     out = {}
     for key, entries in boards_raw.items():
         if not entries:
             out[key] = entries
             continue
-        out[key] = [
-            {"rank": e["rank"], "username": e["username"], "value": e["value"],
-             "is_current_user": e.get("_uid") == username}
-            for e in entries
-        ]
+        stamped = []
+        for e in entries:
+            hide = bool(e.get("_hide"))
+            stamped.append({
+                "rank": e["rank"],
+                "username": "Hidden" if hide else e["username"],
+                "value": e["value"],
+                "is_current_user": e.get("_uid") == username,
+                "username_hidden": hide,
+            })
+        out[key] = stamped
     return out
 
 
@@ -839,7 +889,16 @@ async def _fetch_top_boards_raw(limit: int, dead: bool, period: str) -> dict:
         )
 
     def _to_raw(entries):
-        return [{"rank": e.rank, "username": e.username, "value": e.value, "_uid": e.username} for e in entries]
+        return [
+            {
+                "rank": e.rank,
+                "username": e.username,
+                "value": e.value,
+                "_uid": e.username,
+                "_hide": bool(e.hide_leaderboard_username),
+            }
+            for e in entries
+        ]
 
     result = {
         "kills": _to_raw(kills),

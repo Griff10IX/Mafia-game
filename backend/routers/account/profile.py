@@ -458,6 +458,8 @@ def register(router):
         uid = user.get("id")
         fresh = await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0}) if uid else None
         u = {**user, **(fresh or {})}
+        if bool(u.get("hide_leaderboard_username")):
+            return []
 
         base_q = await stat_leaderboard_users_match(dead=is_dead, database=db)
 
@@ -990,6 +992,7 @@ def register(router):
             "profile_country_code": _profile_cc if _show_country_flag and _profile_cc else None,
             "hide_kills_on_profile": bool(user.get("hide_kills_on_profile", False)),
             "hide_jailbusts_on_profile": bool(user.get("hide_jailbusts_on_profile", False)),
+            "hide_leaderboard_username": bool(user.get("hide_leaderboard_username", False)),
             "kills": None if user.get("hide_kills_on_profile") else effective_player_kill_count(user),
             "jail_busts": None if user.get("hide_jailbusts_on_profile") else user.get("jail_busts", 0),
             "created_at": created_at,
@@ -1044,6 +1047,7 @@ def register(router):
                 "youtube_url",
                 "hide_kills_on_profile",
                 "hide_jailbusts_on_profile",
+                "hide_leaderboard_username",
             ):
                 if key in ("top_cars",):
                     out[key] = []
@@ -1051,7 +1055,11 @@ def register(router):
                     out[key] = 0
                 elif key == "prestige_name":
                     out[key] = ""
-                elif key in ("hide_kills_on_profile", "hide_jailbusts_on_profile"):
+                elif key in (
+                    "hide_kills_on_profile",
+                    "hide_jailbusts_on_profile",
+                    "hide_leaderboard_username",
+                ):
                     out[key] = False  # don't expose other users' hide prefs
                 else:
                     out[key] = None
@@ -2034,8 +2042,9 @@ def register(router):
         hide_kills_on_profile: Optional[bool] = Body(None, embed=True),
         hide_jailbusts_on_profile: Optional[bool] = Body(None, embed=True),
         show_country_flag_on_profile: Optional[bool] = Body(None, embed=True),
+        hide_leaderboard_username: Optional[bool] = Body(None, embed=True),
     ):
-        """Hide kills and/or jailbusts from your profile (for everyone including yourself)."""
+        """Hide kills/jailbusts on profile; optionally hide username on leaderboards (and profile honours)."""
         updates = {}
         if hide_kills_on_profile is not None:
             updates["hide_kills_on_profile"] = hide_kills_on_profile
@@ -2043,23 +2052,40 @@ def register(router):
             updates["hide_jailbusts_on_profile"] = hide_jailbusts_on_profile
         if show_country_flag_on_profile is not None:
             updates["show_country_flag_on_profile"] = show_country_flag_on_profile
+        if hide_leaderboard_username is not None:
+            updates["hide_leaderboard_username"] = bool(hide_leaderboard_username)
         if not updates:
             return {
                 "message": "No visibility changes",
                 "hide_kills_on_profile": bool(current_user.get("hide_kills_on_profile", False)),
                 "hide_jailbusts_on_profile": bool(current_user.get("hide_jailbusts_on_profile", False)),
                 "show_country_flag_on_profile": bool(current_user.get("show_country_flag_on_profile", False)),
+                "hide_leaderboard_username": bool(current_user.get("hide_leaderboard_username", False)),
             }
         await db.users.update_one({"id": current_user["id"]}, {"$set": updates})
+        if "hide_leaderboard_username" in updates:
+            try:
+                from routers.game.leaderboard import invalidate_leaderboard_cache
+
+                invalidate_leaderboard_cache()
+            except Exception:
+                pass
         doc = await db.users.find_one(
             {"id": current_user["id"]},
-            {"_id": 0, "hide_kills_on_profile": 1, "hide_jailbusts_on_profile": 1, "show_country_flag_on_profile": 1},
+            {
+                "_id": 0,
+                "hide_kills_on_profile": 1,
+                "hide_jailbusts_on_profile": 1,
+                "show_country_flag_on_profile": 1,
+                "hide_leaderboard_username": 1,
+            },
         )
         return {
             "message": "Profile visibility updated",
             "hide_kills_on_profile": bool(doc.get("hide_kills_on_profile", False)),
             "hide_jailbusts_on_profile": bool(doc.get("hide_jailbusts_on_profile", False)),
             "show_country_flag_on_profile": bool(doc.get("show_country_flag_on_profile", False)),
+            "hide_leaderboard_username": bool(doc.get("hide_leaderboard_username", False)),
         }
 
     @router.get("/profile/censor-profanity")

@@ -6,6 +6,24 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-25 18:05 UTC[/color][/b] — [b]Privacy: hide username on leaderboards[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]Account → Edit Profile → Privacy[/b] — [b]Hide username on leaderboards[/b]. When on, your name shows as [b]Hidden[/b] on the main leaderboards (no profile link), and [b]Honours[/b] on your profile stay empty. Rank and scores are unchanged. Off by default.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-25 18:00 UTC[/color][/b] — [b]Weed Business Empire[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]Money → Weed Empire[/b] — grow strains, water/feed, keep the room clean, treat mites, upgrade gear and houses, sell product, and raid other growers once unlocked. Staff can turn the feature on/off for the live game.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-23 20:45 UTC[/color][/b] — [b]Molotovs: 250 bullets each[/b][/size]
 [quote]
 [list]

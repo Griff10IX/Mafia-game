@@ -76,13 +76,17 @@ function StatBoard({ title, boardKey, icon: Icon, entries, valueLabel, topLabel,
               </div>
               <div className="flex-1 min-w-0">
                 <div className="font-heading font-medium text-foreground truncate text-xs">
-                  <Link
-                    to={`/profile/${encodeURIComponent(entry.username)}`}
-                    className="hover:text-primary"
-                    data-testid={`leaderboard-profile-link-${title}-${entry.username}`}
-                  >
-                    {entry.username}
-                  </Link>
+                  {entry.username_hidden || entry.username === 'Hidden' ? (
+                    <span data-testid={`leaderboard-hidden-${title}`}>Hidden</span>
+                  ) : (
+                    <Link
+                      to={`/profile/${encodeURIComponent(entry.username)}`}
+                      className="hover:text-primary"
+                      data-testid={`leaderboard-profile-link-${title}-${entry.username}`}
+                    >
+                      {entry.username}
+                    </Link>
+                  )}
                   {entry.is_current_user && (
                     <span className="ml-1 text-[10px] text-primary font-normal">(You)</span>
                   )}
