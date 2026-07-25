@@ -289,6 +289,12 @@ async def ensure_all_indexes(db):
         await db.airport_ownership.create_index([("state", 1), ("slot", 1)], unique=True)
         await db.exclusive_properties.create_index("owner_id")
         await db.exclusive_properties.create_index("id", unique=True)
+        try:
+            from utils.weed_empire_exclusive_strains import ensure_exclusive_weed_strain_indexes
+
+            await ensure_exclusive_weed_strain_indexes(db)
+        except Exception as e:
+            logger.warning("exclusive_weed_strains indexes: %s", e)
         await db.bullet_factory.create_index("owner_id")
         await db.bullet_factory.create_index("state")
         await db.garage_dealership.create_index("owner_id", unique=True, sparse=True)

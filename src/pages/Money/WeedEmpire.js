@@ -135,6 +135,10 @@ export default function WeedEmpire() {
       applyFarm(statusRes.data?.farm);
       setCatalog(statusRes.data?.catalog);
       actionCodeRef.current = weedActionCodePayload(statusRes.data);
+      const dailyCash = statusRes.data?.exclusive_daily_cash;
+      if (dailyCash?.cash) {
+        toast.success(`Acapulco Gold: $${Number(dailyCash.cash).toLocaleString()} cash credited`);
+      }
     } catch (e) {
       const detail = e?.response?.data?.detail || e?.message || "Failed to load";
       toast.error(typeof detail === "string" ? detail : "Not available yet");
@@ -177,10 +181,20 @@ export default function WeedEmpire() {
 
   const unlockedStrains = useMemo(() => {
     const unlocks = new Set(farm?.unlocks || []);
-    return (catalog?.strains || []).filter(
-      (s) => unlocks.has(s.id) || (s.unlock_house_tier || 0) <= (farm?.house_tier || 0)
+    const exclusiveOwned = new Set(farm?.exclusive_strain_ids || []);
+    const growerLv = Number(farm?.grower_level || 1);
+    const minExclusiveLv = Number(
+      farm?.exclusive_min_grower_level || catalog?.exclusive_min_grower_level || 2
     );
+    return (catalog?.strains || []).filter((s) => {
+      if (s.loot_exclusive) {
+        return exclusiveOwned.has(s.id) && growerLv >= minExclusiveLv;
+      }
+      return unlocks.has(s.id) || (s.unlock_house_tier || 0) <= (farm?.house_tier || 0);
+    });
   }, [catalog, farm]);
+
+  const ownedExclusiveStrains = useMemo(() => farm?.exclusive_strains || [], [farm]);
 
   const sellPreview = useMemo(() => {
     const amount = Number(sellAmount);
@@ -395,6 +409,32 @@ export default function WeedEmpire() {
           <div className="text-[10px] text-muted-foreground uppercase">Business cash</div>
         </div>
       </header>
+
+      {ownedExclusiveStrains.length > 0 && (
+        <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3 space-y-1.5">
+          <div className="text-[10px] uppercase tracking-wider font-heading text-amber-300">
+            Loot exclusive strains
+          </div>
+          <ul className="space-y-1 text-xs">
+            {ownedExclusiveStrains.map((ex) => (
+              <li key={ex.strain_id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <span className="font-heading text-foreground">{ex.name}</span>
+                <span className="text-muted-foreground">{ex.buff_label}</span>
+                {!ex.active ? (
+                  <span className="text-amber-300/90 text-[10px]">
+                    Needs Grower Lv {ex.requires_grower_level || 2}+ to plant / activate
+                  </span>
+                ) : (
+                  <span className="text-emerald-400/90 text-[10px]">Active</span>
+                )}
+              </li>
+            ))}
+          </ul>
+          <p className="text-[10px] text-muted-foreground">
+            1 of each in the whole game. Ownership moves only if someone kills you.
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 text-xs">
         <div className="rounded border border-border/50 bg-card/40 p-2">
@@ -633,10 +673,19 @@ export default function WeedEmpire() {
                 >
                   {unlockedStrains.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.name} (seed {money(s.seed_cost)} · ~{s.base_grow_hours}h · {money(s.base_price_per_oz)}/oz)
+                      {s.loot_exclusive ? "★ " : ""}
+                      {s.name}
+                      {s.loot_exclusive ? " (exclusive)" : ""} (seed {money(s.seed_cost)} · ~{s.base_grow_hours}h ·{" "}
+                      {money(s.base_price_per_oz)}/oz)
                     </option>
                   ))}
                 </select>
+                {plantStrain?.loot_exclusive && (
+                  <p className="text-[10px] text-amber-200/90">
+                    Exclusive: {plantStrain.exclusive_buff_label || "global farm buff while owned"}. Buffs apply at Grower
+                    Lv {farm.exclusive_min_grower_level || 2}+.
+                  </p>
+                )}
                 <select
                   className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm"
                   value={soilType}

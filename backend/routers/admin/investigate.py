@@ -1540,7 +1540,7 @@ def register(router):
         current_user: dict = Depends(require_admin_or_mod),
     ):
         """
-        Summarize execute_token integrity failures plus client signal / IP / user correlation.
+        Summarize execute_token / search_code integrity failures plus client signal / IP / user correlation.
         Optional: counts rows in attack_client_audit (search starts) in the same window.
         Admin or moderator.
         """
@@ -1551,10 +1551,16 @@ def register(router):
 
         token_q: Dict[str, Any] = {
             "outcome": "error",
-            "integrity_violation": "execute_token",
+            "integrity_violation": {"$in": ["execute_token", "search_code"]},
             **time_or,
         }
         token_fail_count = await db.attack_attempts.count_documents(token_q)
+        execute_token_fail_count = await db.attack_attempts.count_documents(
+            {**token_q, "integrity_violation": "execute_token"}
+        )
+        search_code_fail_count = await db.attack_attempts.count_documents(
+            {**token_q, "integrity_violation": "search_code"}
+        )
 
         top_ips = await db.attack_attempts.aggregate(
             [
@@ -1663,6 +1669,8 @@ def register(router):
             "window_hours": hours,
             "since": since_iso,
             "execute_token_failures": token_fail_count,
+            "execute_token_only_failures": execute_token_fail_count,
+            "search_code_failures": search_code_fail_count,
             "top_ips": [{"client_ip": (x.get("_id") or "—"), "count": x.get("count", 0)} for x in top_ips],
             "top_attackers": [
                 {"attacker_id": x.get("_id"), "username": x.get("username"), "count": x.get("count", 0)}
@@ -1679,6 +1687,7 @@ def register(router):
             "recent_attack_turnstile_failure_samples": attack_turnstile_failure_samples,
             "note": "Strict header checks are opt-in via ATTACK_STRICT_* env vars in attack router. "
             "attack_client_audit logs each successful /attack/search with client_header_snapshot. "
+            "execute_token_failures includes integrity_violation execute_token + search_code. "
             "Attack Turnstile failures are also included when the attack gate is enabled.",
         }
 

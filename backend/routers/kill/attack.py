@@ -913,11 +913,18 @@ async def _log_attack_error(
     *,
     extra: Optional[Dict[str, Any]] = None,
 ):
-    """Log a failed execute attempt (validation/perm error) so admin sees every click."""
+    """Log a failed execute/search attempt (validation/perm error) so admin sees every click."""
     try:
         meta = _request_meta(req)
-        if extra and extra.get("integrity_violation") == "execute_token":
-            _mark_execute_token_integrity_meta(meta, str(extra.get("token_failure_reason") or "execute_token_invalid"))
+        viol = (extra or {}).get("integrity_violation")
+        if viol in ("execute_token", "search_code"):
+            default_reason = (
+                "search_code_invalid" if viol == "search_code" else "execute_token_invalid"
+            )
+            _mark_execute_token_integrity_meta(
+                meta,
+                str((extra or {}).get("token_failure_reason") or default_reason),
+            )
         doc: Dict[str, Any] = {
             "id": str(uuid.uuid4()),
             "attacker_id": attacker_id,
@@ -1886,6 +1893,22 @@ async def search_target(payload: AttackSearchRequest, req: Request, current_user
     meta = _request_meta(req)
     submitted_code = await _submitted_search_code(payload, req)
     if not _valid_search_code(current_user.get("id") or "", submitted_code):
+        target_uname = (payload.target_username or "").strip()
+        token_failure_reason = "search_code_mismatch" if (submitted_code or "").strip() else "search_code_missing"
+        _fire_and_forget(
+            _log_attack_error(
+                current_user["id"],
+                current_user.get("username"),
+                "Search rejected: invalid or missing hidden search code (anti-bot / scripted client).",
+                req,
+                extra={
+                    "integrity_violation": "search_code",
+                    "token_failure_reason": token_failure_reason,
+                    "target_username": target_uname or "?",
+                },
+            ),
+            label="log_search_code_invalid",
+        )
         try:
             from utils.staff_bot_client_alert import maybe_notify_staff_attack_search_code_fail
 
@@ -1894,7 +1917,7 @@ async def search_target(payload: AttackSearchRequest, req: Request, current_user
                 request=req,
                 user_id=current_user.get("id") or "",
                 username=current_user.get("username") or "",
-                target_username=(payload.target_username or "").strip(),
+                target_username=target_uname,
             )
         except Exception:
             pass
@@ -3539,6 +3562,23 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     {"owner_id": victim_id},
                     {"$set": {"owner_id": killer_id}},
                 )
+        # Transfer loot-exclusive Weed Empire special strains (1 of each game-wide)
+        try:
+            from utils.weed_empire_exclusive_strains import transfer_exclusive_weed_strains_on_kill
+
+            await transfer_exclusive_weed_strains_on_kill(
+                db,
+                victim_id=victim_id,
+                killer_id=killer_id,
+                victim_username=target_name,
+                killer_username=current_user.get("username"),
+            )
+        except Exception:
+            logger.exception(
+                "exclusive weed strain kill transfer failed victim=%s killer=%s",
+                victim_id,
+                killer_id,
+            )
         # Illegal business: victim loses it; killer gets pending reward (takeover vs liquidate via claim endpoint)
         try:
             victim_biz = await db.illegal_businesses.find_one({"user_id": victim_id}, {"_id": 0})

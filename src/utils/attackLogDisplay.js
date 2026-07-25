@@ -41,8 +41,11 @@ export function formatAttackLogBotRationale(row) {
   const parts = [];
   const sig = row.attacker_client_signal;
   if (sig) parts.push(`Client signal: ${sig}`);
-  if (row.integrity_violation === 'execute_token') {
-    const reason = String(row.token_failure_reason || 'execute_token_invalid').replace(/_/g, ' ');
+  if (row.integrity_violation === 'execute_token' || row.integrity_violation === 'search_code') {
+    const reason = String(
+      row.token_failure_reason
+        || (row.integrity_violation === 'search_code' ? 'search_code_invalid' : 'execute_token_invalid')
+    ).replace(/_/g, ' ');
     parts.push(`Integrity signal: ${reason}`);
   }
   const det = String(row.attacker_client_signal_detail || '').replace(/_/g, ' ').trim();
@@ -90,6 +93,13 @@ export function formatAttackLogBotCell(row) {
       title: pickTitle('Attack execute failed the server-issued session token check'),
     };
   }
+  if (row.integrity_violation === 'search_code') {
+    return {
+      text: 'Suspicious',
+      className: 'text-amber-500 font-medium',
+      title: pickTitle('Attack search failed the server-issued hidden search code check'),
+    };
+  }
   if (sig === 'browser') {
     return { text: 'No', className: 'text-mutedForeground', title: pickTitle('Classified as normal browser request') };
   }
@@ -121,6 +131,16 @@ export function formatAttackLogIntegrityCell(row) {
       title: reason
         ? `POST /attack/execute failed session token check: ${reason}. Staff were notified (throttled).`
         : 'POST /attack/execute without valid session token (anti-bot). Staff were notified (throttled).',
+    };
+  }
+  if (v === 'search_code') {
+    const reason = String(row.token_failure_reason || '').replace(/_/g, ' ');
+    return {
+      text: 'Search code fail',
+      className: 'text-red-400 font-bold',
+      title: reason
+        ? `POST /attack/search failed hidden search code check: ${reason}. Staff were notified (throttled).`
+        : 'POST /attack/search without valid hidden search code (anti-bot). Staff were notified (throttled).',
     };
   }
   if (v) {

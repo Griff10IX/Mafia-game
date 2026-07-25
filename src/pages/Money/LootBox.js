@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Gift, X, Package, Swords, Car, Shield, Building2, Coins, Zap, Save, Puzzle } from 'lucide-react';
+import { Gift, X, Package, Swords, Car, Shield, Building2, Coins, Zap, Save, Puzzle, Leaf } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
@@ -132,7 +132,7 @@ function getRewardAnimLevel(reward, paidTier) {
   if (!reward) return 0;
   let level = 0;
   const rt = reward.reward_tier || reward.rarity;
-  if (rt === 'loot_exclusive' || rt === 'exclusive' || ['weapon', 'car', 'armour', 'property'].includes(reward.type)) {
+  if (rt === 'loot_exclusive' || rt === 'exclusive' || ['weapon', 'car', 'armour', 'property', 'weed_strain'].includes(reward.type)) {
     if (reward.type && ['weapon', 'car', 'armour', 'property'].includes(reward.type)) return 4;
     if (rt === 'loot_exclusive') return 4;
   }
@@ -382,6 +382,7 @@ function rewardLabel(reward) {
     case 'car':       return reward.name || 'Exclusive car';
     case 'armour':    return reward.name || 'Exclusive armour';
     case 'property':  return reward.name || 'Speakeasy';
+    case 'weed_strain': return reward.name || 'Exclusive weed strain';
     case 'points': {
       const amt = reward.amount ?? reward.points ?? reward.value;
       return `${fmtInt(amt)} points`;
@@ -1022,8 +1023,8 @@ export default function LootBox() {
   const freeRareOpens = Number(status?.loot_box_free_rare_opens || 0);
   const tierCost = resolveOpenCost(status, selectedTier);
   const tierTheme = LOOT_TIER_THEME[selectedTier] || LOOT_TIER_THEME.common;
-  const claimed = status?.claimed_counts ?? { weapon: 0, car: 0, armour: 0, property: 0 };
-  const exclusiveCaps = status?.exclusive_caps ?? { weapon: 1, car: 1, armour: 1, property: 1 };
+  const claimed = status?.claimed_counts ?? { weapon: 0, car: 0, armour: 0, property: 0, weed_strain: 0 };
+  const exclusiveCaps = status?.exclusive_caps ?? { weapon: 1, car: 1, armour: 1, property: 1, weed_strain: 5 };
   const canUseFreeRare = selectedTier === 'rare' && freeRareOpens > 0;
   const canOpen = (pieces >= tierCost || canUseFreeRare) && phase === 'idle';
 
@@ -1174,6 +1175,7 @@ export default function LootBox() {
                   <ScarcityRow icon={Car} label="Exclusive Vehicle" claimed={claimed.car} cap={exclusiveCaps.car} />
                   <ScarcityRow icon={Shield} label="Exclusive Armour" claimed={claimed.armour} cap={exclusiveCaps.armour} />
                   <ScarcityRow icon={Building2} label="Speakeasy" claimed={claimed.property} cap={exclusiveCaps.property} />
+                  <ScarcityRow icon={Leaf} label="Weed Empire specials" claimed={claimed.weed_strain} cap={exclusiveCaps.weed_strain} />
                 </ul>
               </div>
               <div className="lb-art-line text-primary mx-2.5" />

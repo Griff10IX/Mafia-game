@@ -71,6 +71,7 @@ EXCLUSIVE_CAP_BY_TYPE: Dict[str, int] = {
     "car": 1,
     "armour": 2,
     "property": 2,
+    "weed_strain": 5,  # 5 unique loot-exclusive Weed Empire strains (1 of each)
 }
 LOOT_EXCLUSIVE_WEAPON_ID = "weapon_loot"
 LOOT_EXCLUSIVE_CAR_ID = "car21"
@@ -170,14 +171,27 @@ def _exclusive_cap(typ: str) -> int:
     return int(EXCLUSIVE_CAP_BY_TYPE.get(str(typ), 1))
 
 
+async def _weed_strain_claimed_live() -> int:
+    """Prefer live exclusive_weed_strains count (source of truth) over counter."""
+    try:
+        n = int(await db.exclusive_weed_strains.count_documents({}))
+        return min(_exclusive_cap("weed_strain"), max(0, n))
+    except Exception:
+        return 0
+
+
 async def _get_claimed_counts():
     doc = await db.game_settings.find_one({"key": GAME_SETTINGS_LOOT_COUNTS_KEY}, {"_id": 0, "value": 1})
     raw = (doc or {}).get("value") or {}
+    weed_claimed = await _weed_strain_claimed_live()
+    if weed_claimed <= 0:
+        weed_claimed = min(_exclusive_cap("weed_strain"), int(raw.get("weed_strain") or 0))
     return {
         "weapon": min(_exclusive_cap("weapon"), int(raw.get("weapon") or 0)),
         "car": min(_exclusive_cap("car"), int(raw.get("car") or 0)),
         "armour": min(_exclusive_cap("armour"), int(raw.get("armour") or 0)),
         "property": min(_exclusive_cap("property"), int(raw.get("property") or 0)),
+        "weed_strain": weed_claimed,
     }
 
 
@@ -319,6 +333,7 @@ async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
             "car": _exclusive_cap("car"),
             "armour": _exclusive_cap("armour"),
             "property": _exclusive_cap("property"),
+            "weed_strain": _exclusive_cap("weed_strain"),
         },
         "active_rewards": active_rewards,
         "last_10_wins": last_10_wins,
@@ -486,6 +501,11 @@ def _loot_public_reward_info() -> Dict[str, Any]:
         {"id": "weapon", "label": "Exclusive weapon", "cap_global": _exclusive_cap("weapon")},
         {"id": "armour", "label": f"Exclusive armour ({ARMOUR_LEVEL_7_NAME})", "cap_global": _exclusive_cap("armour")},
         {"id": "property", "label": "Speakeasy (exclusive property)", "cap_global": _exclusive_cap("property")},
+        {
+            "id": "weed_strain",
+            "label": "Exclusive Weed Empire strains (Acapulco Gold, Super Silver Haze, Critical Mass, LA Confidential, Godfather OG)",
+            "cap_global": _exclusive_cap("weed_strain"),
+        },
     ]
     tiers: Dict[str, Any] = {}
     for q in PAID_LOOT_TIERS:
@@ -533,9 +553,11 @@ def _loot_public_reward_info() -> Dict[str, Any]:
         "exclusives": exclusives,
         "exclusive_note": (
             f"Global caps (all players): weapon {_exclusive_cap('weapon')}, "
-            f"armour {_exclusive_cap('armour')}, Speakeasy {_exclusive_cap('property')}. "
+            f"armour {_exclusive_cap('armour')}, Speakeasy {_exclusive_cap('property')}, "
+            f"Weed Empire special strains {_exclusive_cap('weed_strain')} (1 of each). "
             "Cars are not awarded from loot boxes. "
-            "If a type is full or you already own that exclusive, the roll tries another exclusive or becomes a standard prize."
+            "If a type is full or you already own that exclusive, the roll tries another exclusive or becomes a standard prize. "
+            "Weed exclusives transfer only on PvP kill once claimed."
         ),
         "tiers": tiers,
     }
@@ -778,6 +800,12 @@ async def open_loot_box(
             if forced_standard is None:
                 roll = _rng.random()
                 if roll < exclusive_chance:
+                    from utils.weed_empire_exclusive_strains import (
+                        exclusive_strain_display_name,
+                        grant_exclusive_weed_strain,
+                        list_unowned_exclusive_strain_ids,
+                    )
+
                     available = []
                     if claimed["weapon"] < _exclusive_cap("weapon") and not await _user_has_loot_exclusive_weapon(user_id):
                         available.append("weapon")
@@ -786,11 +814,16 @@ async def open_loot_box(
                         available.append("armour")
                     if claimed["property"] < _exclusive_cap("property") and not await _user_has_exclusive_property(user_id):
                         available.append("property")
+                    unowned_weed = await list_unowned_exclusive_strain_ids(db)
+                    if unowned_weed and claimed.get("weed_strain", 0) < _exclusive_cap("weed_strain"):
+                        available.append("weed_strain")
                     # Admin at 100% exclusive: if nothing available (cap or already have), still grant an exclusive for testing (skip property if user already has one to avoid duplicate key)
                     if is_admin_test and exclusive_chance >= 1.0 and not available:
                         available = ["weapon", "armour"]
                         if not await _user_has_exclusive_property(user_id):
                             available.append("property")
+                        if unowned_weed:
+                            available.append("weed_strain")
                     if available:
                         typ = _rng.choice(available)
                         if typ == "weapon":
@@ -852,6 +885,39 @@ async def open_loot_box(
                                 "reward_tier": "loot_exclusive",
                             })
                             await maybe_revoke_civilian_protection(db, user_id, "received_property_transfer")
+                            continue
+                        if typ == "weed_strain":
+                            pool = unowned_weed or await list_unowned_exclusive_strain_ids(db)
+                            if not pool:
+                                continue
+                            sid = _rng.choice(pool)
+                            ok = await grant_exclusive_weed_strain(
+                                db,
+                                user_id=user_id,
+                                strain_id=sid,
+                                source="loot_box",
+                                username=current_user.get("username"),
+                                notify=True,
+                            )
+                            if not ok:
+                                continue
+                            await _increment_claimed_count("weed_strain")
+                            name = exclusive_strain_display_name(sid)
+                            new_claimed = await _get_claimed_counts()
+                            if new_claimed.get("weed_strain", 0) >= _exclusive_cap("weed_strain"):
+                                await send_notification(
+                                    user_id,
+                                    "Loot box",
+                                    f"The last exclusive Weed Empire strain ({name}) has been claimed!",
+                                    "system",
+                                )
+                            rewards.append({
+                                "type": "weed_strain",
+                                "name": name,
+                                "id": sid,
+                                "rarity": "loot_exclusive",
+                                "reward_tier": "loot_exclusive",
+                            })
                             continue
 
             force_rare_plus = prize_idx in rare_plus_slots

@@ -176,6 +176,33 @@ def _build_strains() -> List[Dict[str, Any]]:
                 "preferred_light": "either" if typ == "hybrid" else ("hps" if typ == "indica" else "led"),
                 "bud_mesh_key": mesh,
                 "thc_band": f"{16 + tier * 2}-{20 + tier * 3}%",
+                "loot_exclusive": False,
+            }
+        )
+    # Game-wide loot exclusives (1 of each) — not house-unlockable.
+    from utils.weed_empire_exclusive_strains import EXCLUSIVE_STRAIN_BUFFS, EXCLUSIVE_STRAIN_SEED
+
+    for sid, name, typ, hours, yld, price_mult, mesh in EXCLUSIVE_STRAIN_SEED:
+        buff = EXCLUSIVE_STRAIN_BUFFS.get(sid) or {}
+        out.append(
+            {
+                "id": sid,
+                "name": name,
+                "type": typ,
+                "base_grow_hours": hours,
+                "yield_g_min": yld[0],
+                "yield_g_max": yld[1],
+                "base_price_per_oz": round(BASE_STREET_PRICE_PER_OZ * price_mult, 2),
+                "unlock_house_tier": 99,
+                "seed_cost": int(25_000 + price_mult * 8_000),
+                "rarity": "loot_exclusive",
+                "preferred_light": "either" if typ == "hybrid" else ("hps" if typ == "indica" else "led"),
+                "bud_mesh_key": mesh,
+                "thc_band": "28-34%",
+                "loot_exclusive": True,
+                "exclusive_buff_label": buff.get("label") or "",
+                "exclusive_buff_kind": buff.get("kind") or "",
+                "min_grower_level": 2,
             }
         )
     return out

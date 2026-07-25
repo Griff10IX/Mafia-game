@@ -40,6 +40,14 @@ from utils.weed_empire_catalog import (
     shop_status_for_farm,
     unit_to_grams,
 )
+from utils.weed_empire_exclusive_strains import (
+    EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL,
+    apply_exclusive_stat_bonuses,
+    exclusive_buffs_public,
+    get_owned_exclusive_strain_ids,
+    is_exclusive_strain_id,
+    maybe_claim_acapulco_gold_daily,
+)
 
 logger = logging.getLogger(__name__)
 _rng = secrets.SystemRandom()
@@ -155,6 +163,16 @@ async def _require_access(user: dict) -> None:
     await require_store_item_allowed(db, FEATURE_ID, user)
 
 
+async def _attach_exclusive_owned(farm: dict) -> dict:
+    """Load exclusive strain ownership onto farm for sync helpers (_stats / heat / market)."""
+    uid = farm.get("user_id") or ""
+    try:
+        farm["_exclusive_owned_ids"] = await get_owned_exclusive_strain_ids(db, uid)
+    except Exception:
+        farm["_exclusive_owned_ids"] = set()
+    return farm
+
+
 async def _get_or_create_farm(user_id: str) -> Dict[str, Any]:
     farm = await db.weed_farms.find_one({"user_id": user_id}, {"_id": 0})
     if farm:
@@ -172,6 +190,7 @@ async def _get_or_create_farm(user_id: str) -> Dict[str, Any]:
             migration["last_cleanliness_tick_at"] = farm["last_cleanliness_tick_at"]
         if migration:
             await db.weed_farms.update_one({"user_id": user_id}, {"$set": migration})
+        await _attach_exclusive_owned(farm)
         now = _utcnow()
         farm = _tick_environment(farm, _stats(farm), now)
         await db.weed_farms.update_one(
@@ -187,6 +206,7 @@ async def _get_or_create_farm(user_id: str) -> Dict[str, Any]:
         return farm
     doc = _default_farm(user_id)
     await db.weed_farms.insert_one(dict(doc))
+    await _attach_exclusive_owned(doc)
     return doc
 
 
@@ -200,7 +220,16 @@ def _equip_levels(farm: dict) -> Dict[str, int]:
 
 
 def _stats(farm: dict) -> Dict[str, float]:
-    return aggregate_stats(_equip_levels(farm), _house(farm))
+    stats = aggregate_stats(_equip_levels(farm), _house(farm))
+    return apply_exclusive_stat_bonuses(
+        stats,
+        owned_ids=set(farm.get("_exclusive_owned_ids") or []),
+        grower_level=int(farm.get("grower_level") or 1),
+    )
+
+
+def _market_price_bonus(farm: dict) -> float:
+    return float(_stats(farm).get("market_mult_bonus") or 1.0)
 
 
 def _ensure_daily_cap(farm: dict) -> dict:
@@ -534,6 +563,7 @@ def _public_farm(farm: dict, *, username: str = "") -> Dict[str, Any]:
     light = active_light_class(_equip_levels(farm))
     house = _house(farm)
     sold = int(farm.get("daily_sold_usd") or 0)
+    market_bonus = float(stats.get("market_mult_bonus") or 1.0)
     street_prices = {
         strain["id"]: round(
             market_price_per_oz(
@@ -542,11 +572,17 @@ def _public_farm(farm: dict, *, username: str = "") -> Dict[str, Any]:
                 dealers_level=int(farm.get("dealers_level") or 0),
                 sold_today_usd=sold,
                 heat=float(farm.get("heat") or 0),
-            ),
+            )
+            * market_bonus,
             2,
         )
         for strain in STRAINS
     }
+    owned_exclusive = set(farm.get("_exclusive_owned_ids") or [])
+    exclusive_owned = exclusive_buffs_public(
+        owned_exclusive,
+        grower_level=int(farm.get("grower_level") or 1),
+    )
     auto_water, auto_feed = _auto_flags(farm)
     irrig_lvl = int(_equip_levels(farm).get("irrigation") or 0)
     gp = grower_progress(farm)
@@ -592,6 +628,9 @@ def _public_farm(farm: dict, *, username: str = "") -> Dict[str, Any]:
             "mite_treatment_effect_pct": round(_mite_treatment_effect_pct(stats), 2),
         },
         "unlocks": list(farm.get("unlocks") or []),
+        "exclusive_strains": exclusive_owned,
+        "exclusive_strain_ids": sorted(owned_exclusive),
+        "exclusive_min_grower_level": EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL,
         "stats": {k: round(float(v), 4) if isinstance(v, float) else v for k, v in stats.items()},
         "active_light_class": light,
         "raid_stats": farm.get("raid_stats") or {},
@@ -627,7 +666,8 @@ def _spend(farm: dict, cost: int) -> None:
 
 
 def _add_heat(farm: dict, amount: float) -> None:
-    farm["heat"] = min(MAX_HEAT, max(0.0, float(farm.get("heat") or 0) + amount))
+    mult = float(_stats(farm).get("heat_gain_mult") or 1.0)
+    farm["heat"] = min(MAX_HEAT, max(0.0, float(farm.get("heat") or 0) + amount * max(0.05, mult)))
 
 
 def _weed_action_code_bucket(now: Optional[float] = None) -> int:
@@ -746,6 +786,13 @@ async def _gate(user: dict = Depends(get_current_user)):
 @router.get("/status")
 async def weed_status(current_user: dict = Depends(_gate)):
     farm = await _get_or_create_farm(current_user["id"])
+    daily_exclusive = await maybe_claim_acapulco_gold_daily(
+        db,
+        user_id=current_user["id"],
+        farm=farm,
+        grower_level=int(farm.get("grower_level") or 1),
+        owned_ids=set(farm.get("_exclusive_owned_ids") or []),
+    )
     # Persist lazy ticks
     pub = _public_farm(farm, username=current_user.get("username") or "")
     await _save_farm(
@@ -759,9 +806,10 @@ async def weed_status(current_user: dict = Depends(_gate)):
             "heat": pub["heat"],
             "cleanliness_pct": pub["cleanliness_pct"],
             "last_cleanliness_tick_at": pub["last_cleanliness_tick_at"],
+            "exclusive_acapulco_gold_claimed_utc": farm.get("exclusive_acapulco_gold_claimed_utc"),
         },
     )
-    return {
+    out = {
         "farm": pub,
         "catalog": {
             "houses": HOUSES,
@@ -773,9 +821,13 @@ async def weed_status(current_user: dict = Depends(_gate)):
             "units": {"g": 1, "oz": 28, "lb": 448, "kg": 1000},
             "cleanliness_safe_pct": CLEANLINESS_SAFE_PCT,
             "mite_harvest_yield_penalty_cap_pct": MITE_MAX_HARVEST_YIELD_PENALTY_PCT,
+            "exclusive_min_grower_level": EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL,
         },
         **_weed_action_code_payload(current_user["id"]),
     }
+    if daily_exclusive:
+        out["exclusive_daily_cash"] = daily_exclusive
+    return out
 
 
 @router.get("/catalog")
@@ -800,11 +852,21 @@ async def weed_plant(body: PlantBody, http_request: Request, current_user: dict 
     if not strain:
         raise HTTPException(status_code=404, detail="Unknown strain")
     unlocks = set(farm.get("unlocks") or [])
-    if body.strain_id not in unlocks and int(strain.get("unlock_house_tier") or 0) > int(farm.get("house_tier") or 0):
-        raise HTTPException(status_code=400, detail="Strain not unlocked")
-    if body.strain_id not in unlocks and int(strain.get("unlock_house_tier") or 0) <= int(farm.get("house_tier") or 0):
-        unlocks.add(body.strain_id)
-        farm["unlocks"] = list(unlocks)
+    if is_exclusive_strain_id(body.strain_id) or strain.get("loot_exclusive"):
+        owned = set(farm.get("_exclusive_owned_ids") or [])
+        if body.strain_id not in owned:
+            raise HTTPException(status_code=400, detail="You do not own this exclusive loot strain")
+        if int(farm.get("grower_level") or 1) < EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Grower Level {EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL}+ required to plant exclusive strains",
+            )
+    else:
+        if body.strain_id not in unlocks and int(strain.get("unlock_house_tier") or 0) > int(farm.get("house_tier") or 0):
+            raise HTTPException(status_code=400, detail="Strain not unlocked")
+        if body.strain_id not in unlocks and int(strain.get("unlock_house_tier") or 0) <= int(farm.get("house_tier") or 0):
+            unlocks.add(body.strain_id)
+            farm["unlocks"] = list(unlocks)
 
     soil_type = (body.soil_type or "soil_conventional").strip()
     if soil_type not in ("soil_conventional", "soil_organic", "coco"):
@@ -1095,7 +1157,7 @@ async def weed_sell(body: SellBody, http_request: Request, current_user: dict = 
         dealers_level=int(farm.get("dealers_level") or 0),
         sold_today_usd=float(farm.get("daily_sold_usd") or 0),
         heat=float(farm.get("heat") or 0),
-    )
+    ) * _market_price_bonus(farm)
     # Bulk sweetener for lb/kg
     u = body.unit.lower()
     if u in ("lb", "lbs", "pound", "pounds"):
@@ -1248,9 +1310,11 @@ async def weed_upgrade_house(body: UpgradeHouseBody, current_user: dict = Depend
     _spend(farm, cost)
     farm["house_tier"] = target
     farm = _sync_plot_count(farm)
-    # Auto-unlock strains for new tier
+    # Auto-unlock strains for new tier (never loot exclusives)
     unlocks = set(farm.get("unlocks") or [])
     for s in STRAINS:
+        if s.get("loot_exclusive"):
+            continue
         if int(s.get("unlock_house_tier") or 0) <= target:
             unlocks.add(s["id"])
     farm["unlocks"] = list(unlocks)
@@ -1267,6 +1331,8 @@ async def weed_unlock_strain(body: UnlockStrainBody, current_user: dict = Depend
     strain = STRAIN_BY_ID.get(body.strain_id)
     if not strain:
         raise HTTPException(status_code=404, detail="Unknown strain")
+    if strain.get("loot_exclusive") or is_exclusive_strain_id(body.strain_id):
+        raise HTTPException(status_code=400, detail="Exclusive strains come from loot boxes (or PvP kill), not the shop")
     if int(strain.get("unlock_house_tier") or 0) > int(farm.get("house_tier") or 0):
         raise HTTPException(status_code=400, detail="House tier too low")
     unlocks = set(farm.get("unlocks") or [])
@@ -1564,7 +1630,7 @@ async def weed_dealer_sell(
             sold_today_usd=float(farm.get("daily_sold_usd") or 0) + total_payout,
             heat=float(farm.get("heat") or 0),
             dealer_cut=0.9,
-        )
+        ) * _market_price_bonus(farm)
         pay = int(math.floor(price * oz))
         remaining = DAILY_SELL_CAP_USD - int(farm.get("daily_sold_usd") or 0) - total_payout
         if remaining <= 0:

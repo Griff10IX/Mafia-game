@@ -1,0 +1,423 @@
+"""Loot-exclusive Weed Empire special strains (1 of each game-wide; PvP kill transfer)."""
+from __future__ import annotations
+
+import logging
+import uuid
+from datetime import datetime, timezone
+from typing import Any, Dict, List, Optional, Set
+
+logger = logging.getLogger(__name__)
+
+EXCLUSIVE_WEED_STRAINS_COLLECTION = "exclusive_weed_strains"
+
+EXCLUSIVE_ACAPULCO_GOLD = "exclusive_acapulco_gold"
+EXCLUSIVE_SUPER_SILVER_HAZE = "exclusive_super_silver_haze"
+EXCLUSIVE_CRITICAL_MASS = "exclusive_critical_mass"
+EXCLUSIVE_LA_CONFIDENTIAL = "exclusive_la_confidential"
+EXCLUSIVE_GODFATHER_OG = "exclusive_godfather_og"
+
+EXCLUSIVE_STRAIN_IDS: tuple = (
+    EXCLUSIVE_ACAPULCO_GOLD,
+    EXCLUSIVE_SUPER_SILVER_HAZE,
+    EXCLUSIVE_CRITICAL_MASS,
+    EXCLUSIVE_LA_CONFIDENTIAL,
+    EXCLUSIVE_GODFATHER_OG,
+)
+
+EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL = 2
+ACAPULCO_GOLD_DAILY_CASH = 25_000_000
+
+EXCLUSIVE_STRAIN_BUFFS: Dict[str, Dict[str, Any]] = {
+    EXCLUSIVE_ACAPULCO_GOLD: {
+        "label": "+$25,000,000 cash / day",
+        "kind": "daily_cash",
+        "amount": ACAPULCO_GOLD_DAILY_CASH,
+    },
+    EXCLUSIVE_SUPER_SILVER_HAZE: {
+        "label": "50% faster harvest (all crops)",
+        "kind": "grow_speed",
+        "mult": 1.5,
+    },
+    EXCLUSIVE_CRITICAL_MASS: {
+        "label": "+50% harvest yield (all crops)",
+        "kind": "yield",
+        "mult": 1.5,
+    },
+    EXCLUSIVE_LA_CONFIDENTIAL: {
+        "label": "Heat rises 50% slower",
+        "kind": "heat",
+        "mult": 0.5,
+    },
+    EXCLUSIVE_GODFATHER_OG: {
+        "label": "+50% sell price (all sales)",
+        "kind": "market",
+        "mult": 1.5,
+    },
+}
+
+# Catalog seed rows: id, name, type, hours, yield, price_mult, bud_mesh, buff_key
+EXCLUSIVE_STRAIN_SEED: List[tuple] = [
+    (EXCLUSIVE_ACAPULCO_GOLD, "Acapulco Gold", "sativa", 5.5, (20, 32), 2.4, "frosty"),
+    (EXCLUSIVE_SUPER_SILVER_HAZE, "Super Silver Haze", "sativa", 5.0, (18, 28), 2.2, "airy"),
+    (EXCLUSIVE_CRITICAL_MASS, "Critical Mass", "indica", 4.5, (28, 42), 2.1, "dense"),
+    (EXCLUSIVE_LA_CONFIDENTIAL, "LA Confidential", "indica", 4.0, (18, 28), 2.15, "dense"),
+    (EXCLUSIVE_GODFATHER_OG, "Godfather OG", "indica", 5.5, (20, 32), 2.5, "frosty"),
+]
+
+
+def is_exclusive_strain_id(strain_id: Optional[str]) -> bool:
+    return bool(strain_id) and str(strain_id) in EXCLUSIVE_STRAIN_IDS
+
+
+def exclusive_strain_display_name(strain_id: str) -> str:
+    for sid, name, *_rest in EXCLUSIVE_STRAIN_SEED:
+        if sid == strain_id:
+            return name
+    return strain_id.replace("exclusive_", "").replace("_", " ").title()
+
+
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _utc_date_str(dt: Optional[datetime] = None) -> str:
+    d = dt or _utcnow()
+    return d.astimezone(timezone.utc).date().isoformat()
+
+
+async def ensure_exclusive_weed_strain_indexes(db) -> None:
+    try:
+        await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].create_index("strain_id", unique=True)
+        await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].create_index("owner_id")
+    except Exception:
+        logger.exception("ensure exclusive_weed_strains indexes failed")
+
+
+async def get_owned_exclusive_strain_ids(db, user_id: str) -> Set[str]:
+    if not user_id:
+        return set()
+    rows = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].find(
+        {"owner_id": user_id},
+        {"_id": 0, "strain_id": 1},
+    ).to_list(20)
+    return {str(r["strain_id"]) for r in (rows or []) if r.get("strain_id")}
+
+
+async def list_owned_exclusive_strains(db, user_id: str) -> List[Dict[str, Any]]:
+    if not user_id:
+        return []
+    rows = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].find(
+        {"owner_id": user_id},
+        {"_id": 0, "strain_id": 1, "acquired_at": 1, "source": 1},
+    ).to_list(20)
+    out = []
+    for r in rows or []:
+        sid = r.get("strain_id")
+        if not sid:
+            continue
+        buff = EXCLUSIVE_STRAIN_BUFFS.get(sid) or {}
+        out.append(
+            {
+                "strain_id": sid,
+                "name": exclusive_strain_display_name(sid),
+                "buff_label": buff.get("label") or "",
+                "buff_kind": buff.get("kind") or "",
+                "acquired_at": r.get("acquired_at"),
+                "source": r.get("source"),
+            }
+        )
+    out.sort(key=lambda x: (x.get("name") or "").lower())
+    return out
+
+
+async def list_unowned_exclusive_strain_ids(db) -> List[str]:
+    owned = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].distinct("strain_id")
+    owned_set = {str(x) for x in (owned or []) if x}
+    return [sid for sid in EXCLUSIVE_STRAIN_IDS if sid not in owned_set]
+
+
+async def exclusive_strain_ownership_summary(db) -> Dict[str, Any]:
+    rows = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].find(
+        {},
+        {"_id": 0, "strain_id": 1, "owner_id": 1, "acquired_at": 1, "source": 1},
+    ).to_list(20)
+    by_id = {str(r.get("strain_id")): r for r in (rows or []) if r.get("strain_id")}
+    owner_ids = sorted({str(r.get("owner_id")) for r in by_id.values() if r.get("owner_id")})
+    users = {}
+    if owner_ids:
+        docs = await db.users.find(
+            {"id": {"$in": owner_ids}},
+            {"_id": 0, "id": 1, "username": 1},
+        ).to_list(len(owner_ids) + 1)
+        users = {str(u["id"]): (u.get("username") or "?") for u in (docs or []) if u.get("id")}
+    strains = []
+    claimed = 0
+    for sid in EXCLUSIVE_STRAIN_IDS:
+        row = by_id.get(sid)
+        oid = (row or {}).get("owner_id")
+        if oid:
+            claimed += 1
+        strains.append(
+            {
+                "strain_id": sid,
+                "name": exclusive_strain_display_name(sid),
+                "buff_label": (EXCLUSIVE_STRAIN_BUFFS.get(sid) or {}).get("label") or "",
+                "owned": bool(oid),
+                "owner_id": oid,
+                "owner_username": users.get(str(oid)) if oid else None,
+                "acquired_at": (row or {}).get("acquired_at"),
+                "source": (row or {}).get("source"),
+            }
+        )
+    return {
+        "claimed": claimed,
+        "cap": len(EXCLUSIVE_STRAIN_IDS),
+        "remaining": max(0, len(EXCLUSIVE_STRAIN_IDS) - claimed),
+        "strains": strains,
+    }
+
+
+async def grant_exclusive_weed_strain(
+    db,
+    *,
+    user_id: str,
+    strain_id: str,
+    source: str = "loot_box",
+    username: Optional[str] = None,
+    notify: bool = True,
+) -> bool:
+    """Atomically grant one exclusive strain. Returns False if already claimed or invalid."""
+    if not user_id or not is_exclusive_strain_id(strain_id):
+        return False
+    now_iso = _utcnow().isoformat()
+    doc = {
+        "id": str(uuid.uuid4()),
+        "strain_id": strain_id,
+        "owner_id": user_id,
+        "acquired_at": now_iso,
+        "source": source or "loot_box",
+    }
+    try:
+        await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].insert_one(doc)
+    except Exception as e:
+        # Duplicate key → already claimed
+        if "duplicate" in str(e).lower() or getattr(e, "code", None) == 11000:
+            return False
+        logger.exception("grant_exclusive_weed_strain insert failed strain=%s user=%s", strain_id, user_id)
+        return False
+
+    if notify:
+        try:
+            from server import send_notification
+
+            name = exclusive_strain_display_name(strain_id)
+            buff = (EXCLUSIVE_STRAIN_BUFFS.get(strain_id) or {}).get("label") or ""
+            await send_notification(
+                user_id,
+                "Loot exclusive strain",
+                (
+                    f"You claimed the exclusive strain {name} (1 of 1 in the game). "
+                    f"Buff: {buff}. Plant it from Weed Empire at Grower Level "
+                    f"{EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL}+. Ownership transfers only if someone kills you."
+                ),
+                "reward",
+            )
+        except Exception:
+            logger.exception("exclusive weed strain notify failed user=%s", user_id)
+    return True
+
+
+async def transfer_exclusive_weed_strains_on_kill(
+    db,
+    *,
+    victim_id: str,
+    killer_id: str,
+    victim_username: Optional[str] = None,
+    killer_username: Optional[str] = None,
+) -> List[str]:
+    """
+    Reassign victim's exclusive strains to killer. Clears victim growing plots of those strains.
+    Returns list of transferred strain_ids.
+    """
+    if not victim_id or not killer_id or victim_id == killer_id:
+        return []
+    rows = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].find(
+        {"owner_id": victim_id},
+        {"_id": 0, "strain_id": 1},
+    ).to_list(20)
+    transferred: List[str] = []
+    for row in rows or []:
+        sid = row.get("strain_id")
+        if not sid:
+            continue
+        res = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].update_one(
+            {"strain_id": sid, "owner_id": victim_id},
+            {
+                "$set": {
+                    "owner_id": killer_id,
+                    "transferred_at": _utcnow().isoformat(),
+                    "transfer_source": "pvp_kill",
+                }
+            },
+        )
+        if int(res.modified_count or 0) <= 0:
+            continue
+        transferred.append(str(sid))
+
+    if not transferred:
+        return []
+
+    # Clear victim plots growing those exclusive strains (stash stays).
+    try:
+        farm = await db.weed_farms.find_one({"user_id": victim_id}, {"_id": 0, "plots": 1})
+        if farm and farm.get("plots"):
+            transferred_set = set(transferred)
+            plots = []
+            changed = False
+            for p in farm.get("plots") or []:
+                if p.get("strain_id") in transferred_set and p.get("state") in ("growing", "harvest_ready"):
+                    plots.append(
+                        {
+                            "id": p.get("id"),
+                            "state": "empty",
+                            "strain_id": None,
+                            "planted_at": None,
+                            "last_watered_at": None,
+                            "last_fed_at": None,
+                            "quality": 0,
+                            "soil_type": None,
+                            "medium": None,
+                            "stage": None,
+                            "progress": 0,
+                            "mite_infestation_pct": 0.0,
+                            "mite_infested": False,
+                        }
+                    )
+                    changed = True
+                else:
+                    plots.append(p)
+            if changed:
+                await db.weed_farms.update_one({"user_id": victim_id}, {"$set": {"plots": plots}})
+    except Exception:
+        logger.exception("clear exclusive strain plots on kill failed victim=%s", victim_id)
+
+    try:
+        from server import send_notification
+
+        for sid in transferred:
+            name = exclusive_strain_display_name(sid)
+            buff = (EXCLUSIVE_STRAIN_BUFFS.get(sid) or {}).get("label") or ""
+            try:
+                await send_notification(
+                    killer_id,
+                    "Exclusive strain taken",
+                    f"You took {name} from {victim_username or 'your victim'}. Buff: {buff}.",
+                    "reward",
+                )
+            except Exception:
+                pass
+            try:
+                await send_notification(
+                    victim_id,
+                    "Exclusive strain lost",
+                    f"You lost {name} to {killer_username or 'your killer'}.",
+                    "attack",
+                    category="attacks",
+                )
+            except Exception:
+                pass
+    except Exception:
+        logger.exception("exclusive weed strain kill notify failed")
+
+    return transferred
+
+
+def apply_exclusive_stat_bonuses(
+    stats: Dict[str, float],
+    *,
+    owned_ids: Set[str],
+    grower_level: int,
+) -> Dict[str, float]:
+    """Mutate/return stats with exclusive global buffs when grower is high enough."""
+    out = dict(stats or {})
+    if int(grower_level or 0) < EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL:
+        return out
+    owned = owned_ids or set()
+    if EXCLUSIVE_SUPER_SILVER_HAZE in owned:
+        out["grow_speed_mult"] = float(out.get("grow_speed_mult") or 1.0) * 1.5
+    if EXCLUSIVE_CRITICAL_MASS in owned:
+        out["yield_mult"] = float(out.get("yield_mult") or 1.0) * 1.5
+    if EXCLUSIVE_LA_CONFIDENTIAL in owned:
+        out["heat_gain_mult"] = float(out.get("heat_gain_mult") or 1.0) * 0.5
+    if EXCLUSIVE_GODFATHER_OG in owned:
+        out["market_mult_bonus"] = float(out.get("market_mult_bonus") or 1.0) * 1.5
+    return out
+
+
+def exclusive_buffs_public(
+    owned_ids: Set[str],
+    *,
+    grower_level: int,
+) -> List[Dict[str, Any]]:
+    active = int(grower_level or 0) >= EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL
+    out = []
+    for sid in EXCLUSIVE_STRAIN_IDS:
+        if sid not in (owned_ids or set()):
+            continue
+        buff = EXCLUSIVE_STRAIN_BUFFS.get(sid) or {}
+        out.append(
+            {
+                "strain_id": sid,
+                "name": exclusive_strain_display_name(sid),
+                "buff_label": buff.get("label") or "",
+                "buff_kind": buff.get("kind") or "",
+                "active": active,
+                "requires_grower_level": EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL,
+            }
+        )
+    return out
+
+
+async def maybe_claim_acapulco_gold_daily(
+    db,
+    *,
+    user_id: str,
+    farm: dict,
+    grower_level: int,
+    owned_ids: Set[str],
+) -> Optional[Dict[str, Any]]:
+    """Credit $25m once per UTC day if Acapulco Gold is owned and grower Lv >= 3."""
+    if EXCLUSIVE_ACAPULCO_GOLD not in (owned_ids or set()):
+        return None
+    if int(grower_level or 0) < EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL:
+        return None
+    today = _utc_date_str()
+    if farm.get("exclusive_acapulco_gold_claimed_utc") == today:
+        return None
+    try:
+        from server import send_notification
+
+        res = await db.users.update_one(
+            {"id": user_id},
+            {"$inc": {"money": ACAPULCO_GOLD_DAILY_CASH}},
+        )
+        if int(res.modified_count or 0) <= 0 and int(res.matched_count or 0) <= 0:
+            return None
+        await db.weed_farms.update_one(
+            {"user_id": user_id},
+            {"$set": {"exclusive_acapulco_gold_claimed_utc": today}},
+        )
+        farm["exclusive_acapulco_gold_claimed_utc"] = today
+        try:
+            await send_notification(
+                user_id,
+                "Acapulco Gold",
+                f"Exclusive strain payout: ${ACAPULCO_GOLD_DAILY_CASH:,} cash credited to your wallet.",
+                "reward",
+            )
+        except Exception:
+            pass
+        return {"strain_id": EXCLUSIVE_ACAPULCO_GOLD, "cash": ACAPULCO_GOLD_DAILY_CASH, "utc_date": today}
+    except Exception:
+        logger.exception("acapulco gold daily claim failed user=%s", user_id)
+        return None
