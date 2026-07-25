@@ -3295,7 +3295,11 @@ async def hire_illegal_business_guard(req: HireGuardRequest, current_user: dict 
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient vault funds")
     await db.illegal_business_guards.insert_one(guard_doc)
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"illegal_business_guards_hired": 1}})
+    # Hire fills a slot — counts for both "guards hired" and "guard slots bought" missions.
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$inc": {"illegal_business_guards_hired": 1, "illegal_business_guard_slots_bought": 1}},
+    )
     return {"message": "Another pair of hands on the door.", "guard_id": guard_id}
 
 

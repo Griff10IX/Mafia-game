@@ -565,7 +565,7 @@ export default function IllegalBusiness() {
   });
   const handleBuyGuardSlot = withSave(async () => {
     await api.post('/illegal-business/guards/buy-slot');
-    toast.success('Another slot on the door.');
+    toast.success('Guard slot bought — capacity +1.');
     fetchData();
   });
   const handleGuardGearUpgrade = withSave(async (guardId, { armour, weapon }) => {
@@ -1033,10 +1033,10 @@ export default function IllegalBusiness() {
                     <UserPlus size={9} /> Hire Guard — {formatMoney(guardHireCost)}
                   </button>
                 )}
-                {guardsCount >= guardSlots && nextGuardSlotCostCash != null && (
+                {nextGuardSlotCostCash != null && (
                   <button onClick={handleBuyGuardSlot} disabled={saving}
                     className="flex items-center gap-1 text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/30 px-2.5 py-1.5 rounded hover:bg-primary/10 disabled:opacity-40 transition-all">
-                    <UserPlus size={9} /> Add Slot — {formatMoney(nextGuardSlotCostCash)}
+                    <UserPlus size={9} /> Buy Guard Slot — {formatMoney(nextGuardSlotCostCash)}
                   </button>
                 )}
               </div>
