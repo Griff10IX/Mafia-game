@@ -508,11 +508,53 @@ def _tick_plot(plot: dict, farm: dict, stats: dict, now: datetime) -> dict:
     return plot
 
 
+def _merge_curing_batches(curing: list, cure_level: int = 0) -> list:
+    """One curing row per strain_id — combine grams (weighted quality), keep earliest start / latest ready."""
+    by_strain: Dict[str, dict] = {}
+    order: List[str] = []
+    for raw in curing or []:
+        sid = str((raw or {}).get("strain_id") or "")
+        grams = float((raw or {}).get("grams") or 0)
+        if not sid or grams <= 0:
+            continue
+        if sid not in by_strain:
+            by_strain[sid] = dict(raw)
+            by_strain[sid]["grams"] = round(grams, 2)
+            order.append(sid)
+            continue
+        dest = by_strain[sid]
+        old_g = float(dest.get("grams") or 0)
+        new_g = old_g + grams
+        old_q = float(dest.get("quality") or 50)
+        add_q = float((raw or {}).get("quality") or 50)
+        dest["quality"] = round((old_q * old_g + add_q * grams) / new_g, 1) if new_g > 0 else old_q
+        dest["grams"] = round(new_g, 2)
+        a = _parse_iso(dest.get("started_at"))
+        b = _parse_iso((raw or {}).get("started_at"))
+        if a and b and b < a:
+            dest["started_at"] = (raw or {}).get("started_at")
+        elif not a and b:
+            dest["started_at"] = (raw or {}).get("started_at")
+        ra = _parse_iso(dest.get("ready_at"))
+        rb = _parse_iso((raw or {}).get("ready_at"))
+        if ra and rb and rb > ra:
+            dest["ready_at"] = (raw or {}).get("ready_at")
+        elif not ra and rb:
+            dest["ready_at"] = (raw or {}).get("ready_at")
+    out = []
+    for sid in order:
+        batch = by_strain[sid]
+        mins = curing_minutes(float(batch.get("grams") or 0), cure_level)
+        batch["curing_minutes"] = round(mins, 2)
+        out.append(batch)
+    return out
+
+
 def _tick_curing(farm: dict, now: datetime) -> dict:
-    curing = list(farm.get("curing") or [])
+    cure_level = int(_equip_levels(farm).get("curing") or 0)
+    curing = _merge_curing_batches(list(farm.get("curing") or []), cure_level)
     stash = dict(farm.get("stash") or {})
     still = []
-    cure_level = int(_equip_levels(farm).get("curing") or 0)
     for raw_batch in curing:
         batch = dict(raw_batch)
         ready_at = _parse_iso(batch.get("ready_at"))
@@ -1016,6 +1058,7 @@ async def weed_harvest(body: PlotActionBody, http_request: Request, current_user
         }
         curing = list(farm.get("curing") or [])
         curing.append(batch)
+        curing = _merge_curing_batches(curing, cure_lvl)
         plots[i] = _empty_plot()
         plots[i]["id"] = p["id"]
         missions = dict(farm.get("missions") or {})
