@@ -391,6 +391,127 @@ async def grant_vip_pass_car_to_user(
     return True
 
 
+async def transfer_vip_pass_cars_dead_alive(
+    db,
+    *,
+    dead_user_id: str,
+    recipient_user_id: str,
+    dead_username: Optional[str] = None,
+    recipient_username: Optional[str] = None,
+    notify: bool = True,
+) -> dict:
+    """
+    Move all VIP Pass Cars (car22) from a dead account to the alive recipient on Dead → Alive retrieve.
+    Also carries `game_pass_vip_car_granted` so the free tier-100 grant stays one-time.
+    Idempotent: no-op if the dead garage has no car22 rows left.
+    """
+    result = {
+        "transferred_count": 0,
+        "user_car_ids": [],
+        "grant_flag_carried": False,
+    }
+    if not dead_user_id or not recipient_user_id or dead_user_id == recipient_user_id:
+        return result
+
+    dead_proj = await db.users.find_one(
+        {"id": dead_user_id},
+        {"_id": 0, "username": 1, "game_pass_vip_car_granted": 1},
+    )
+    if not dead_username:
+        dead_username = (dead_proj or {}).get("username")
+    if not recipient_username:
+        recip = await db.users.find_one({"id": recipient_user_id}, {"_id": 0, "username": 1})
+        recipient_username = (recip or {}).get("username")
+
+    cars = await db.user_cars.find(
+        {"user_id": dead_user_id, "car_id": GAME_PASS_VIP_CAR_ID},
+        {"_id": 0, "id": 1, "car_name": 1, "vip_pass_grant_source": 1},
+    ).to_list(50)
+
+    transferred_ids: list = []
+    for row in cars or []:
+        ucid = row.get("id")
+        if not ucid:
+            continue
+        upd = await db.user_cars.update_one(
+            {"id": ucid, "user_id": dead_user_id, "car_id": GAME_PASS_VIP_CAR_ID},
+            {
+                "$set": {"user_id": recipient_user_id},
+                "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""},
+            },
+        )
+        if int(upd.modified_count or 0) <= 0:
+            continue
+        transferred_ids.append(ucid)
+        try:
+            from utils.exclusive_car_events import log_exclusive_car_event
+
+            await log_exclusive_car_event(
+                db,
+                event_type="dead_alive_transfer",
+                car_id=GAME_PASS_VIP_CAR_ID,
+                user_car_id=ucid,
+                from_user_id=dead_user_id,
+                from_username=dead_username,
+                to_user_id=recipient_user_id,
+                to_username=recipient_username,
+                car_name=row.get("car_name") or "VIP Pass Car",
+                extra={"source": "dead_alive_retrieve"},
+            )
+        except Exception:
+            logger.exception(
+                "dead_alive vip car event log failed user_car_id=%s dead=%s recip=%s",
+                ucid,
+                dead_user_id,
+                recipient_user_id,
+            )
+
+    grant_on_dead = bool((dead_proj or {}).get("game_pass_vip_car_granted"))
+    if grant_on_dead:
+        await db.users.update_one(
+            {"id": recipient_user_id},
+            {"$set": {"game_pass_vip_car_granted": True}},
+        )
+        await db.users.update_one(
+            {"id": dead_user_id},
+            {"$unset": {"game_pass_vip_car_granted": ""}},
+        )
+        result["grant_flag_carried"] = True
+
+    result["transferred_count"] = len(transferred_ids)
+    result["user_car_ids"] = transferred_ids
+
+    if notify and transferred_ids:
+        try:
+            from server import send_notification
+
+            dead_label = (dead_username or "your dead account").strip() or "your dead account"
+            n = len(transferred_ids)
+            if n == 1:
+                body = (
+                    f"Your VIP Pass Car was moved from your dead account ({dead_label}) to this life. "
+                    "Check Garage — custom image, 9s travel, and +50% booze cargo still apply while you own it."
+                )
+            else:
+                body = (
+                    f"{n} VIP Pass Cars were moved from your dead account ({dead_label}) to this life. "
+                    "Check Garage."
+                )
+            await send_notification(
+                recipient_user_id,
+                "VIP Pass Car transferred",
+                body,
+                "reward",
+            )
+        except Exception:
+            logger.exception(
+                "dead_alive vip car notification failed recipient=%s",
+                recipient_user_id,
+            )
+
+    return result
+
+
 async def grant_game_pass_vip_car_if_eligible(db, *, user_id: str) -> bool:
     """
     Grant one VIP Pass car the first time VIP reaches tier 100 (once per account).

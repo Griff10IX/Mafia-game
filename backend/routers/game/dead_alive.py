@@ -480,6 +480,7 @@ def register(router):
         supplemental_swiss_only = False
         supplemental_rank_pass_only = False
         supplemental_points_only = False
+        supplemental_vip_only = False
         supplemental_points_amount = 0
         now = datetime.now(timezone.utc)
         pass_bonus_until_dt = _parse_iso_utc(dead_user.get("rank_xp_pass_bonus_until"))
@@ -492,14 +493,30 @@ def register(router):
 
         pending_swiss = swiss_at_death if not swiss_retrieval_used else 0
         pending_rank_pass = has_dead_rank_xp_carry and (not rank_pass_carry_used or missing_game_pass_current_xp)
+        from utils.game_pass_vip_car import count_user_vip_pass_cars
+
+        pending_vip_cars = int(await count_user_vip_pass_cars(db, dead_user["id"]) or 0) > 0
 
         if already_retrieved:
             supplemental_points_amount = dead_live_points
-            if pending_swiss <= 0 and supplemental_points_amount <= 0 and not pending_rank_pass:
+            if (
+                pending_swiss <= 0
+                and supplemental_points_amount <= 0
+                and not pending_rank_pass
+                and not pending_vip_cars
+            ):
                 raise HTTPException(status_code=400, detail="That dead account has already been used for a transfer.")
             supplemental_swiss_only = pending_swiss > 0 and supplemental_points_amount <= 0 and not pending_rank_pass
             supplemental_rank_pass_only = pending_rank_pass and pending_swiss <= 0 and supplemental_points_amount <= 0
             supplemental_points_only = supplemental_points_amount > 0 and pending_swiss <= 0 and not pending_rank_pass
+            supplemental_vip_only = (
+                pending_vip_cars
+                and pending_swiss <= 0
+                and supplemental_points_amount <= 0
+                and not pending_rank_pass
+            )
+        else:
+            supplemental_vip_only = False
         tokens_at_death_raw = dead_user.get("tokens_at_death") or {}
         token_inc, tokens_restored = _compute_token_restore_for_dead_alive(tokens_at_death_raw, pass_token_expires_dt, now)
 
@@ -512,10 +529,10 @@ def register(router):
             has_estate = dead_live_points > 0 or money_at_death > 0 or add_swiss > 0
         has_rank_xp_merge = pending_rank_pass and not supplemental_swiss_only and not supplemental_points_only
         has_token_restore = (not already_retrieved) and bool(token_inc)
-        if not has_estate and not has_token_restore and not has_rank_xp_merge:
+        if not has_estate and not has_token_restore and not has_rank_xp_merge and not pending_vip_cars:
             raise HTTPException(
                 status_code=400,
-                detail="That account had no points, cash, Swiss cash, restorable tokens, or Game Pass state to transfer.",
+                detail="That account had no points, cash, Swiss cash, restorable tokens, Game Pass state, or VIP Pass Car to transfer.",
             )
 
         claim_projection = {"_id": 0, "points": 1, "swiss_balance": 1}
@@ -542,7 +559,11 @@ def register(router):
                 claim_filter["points"] = {"$gt": 0}
             if pending_rank_pass and not rank_pass_carry_used:
                 claim_filter["rank_xp_pass_dead_alive_carry_used"] = {"$ne": True}
-            if pending_rank_pass and rank_pass_carry_used and supplemental_points_amount <= 0 and pending_swiss <= 0:
+            if (
+                supplemental_vip_only
+                or (pending_rank_pass and rank_pass_carry_used and supplemental_points_amount <= 0 and pending_swiss <= 0)
+            ):
+                # No estate claim to mutate — just load dead row (VIP cars / GP XP catch-up transfer below).
                 claim = await db.users.find_one(
                     {"id": dead_user["id"], "is_dead": True, "account_locked": {"$ne": True}, "retrieval_used": True},
                     claim_projection,
@@ -631,6 +652,27 @@ def register(router):
                 wallet_points_after=0,
             )
 
+        # VIP Pass Cars survive death on the dead garage — move them to the new life.
+        vip_cars_transferred = 0
+        try:
+            from utils.game_pass_vip_car import transfer_vip_pass_cars_dead_alive
+
+            vip_xfer = await transfer_vip_pass_cars_dead_alive(
+                db,
+                dead_user_id=dead_user["id"],
+                recipient_user_id=current_user["id"],
+                dead_username=dead_user.get("username"),
+                recipient_username=current_user.get("username"),
+                notify=True,
+            )
+            vip_cars_transferred = int((vip_xfer or {}).get("transferred_count") or 0)
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "dead_alive VIP car transfer failed dead=%s recip=%s",
+                dead_user.get("id"),
+                current_user.get("id"),
+            )
+
         try:
             await log_dead_alive_transfer(
                 db,
@@ -651,6 +693,7 @@ def register(router):
                     "tax_points": tax_points,
                     "tokens_restored": tokens_restored if has_token_restore else {},
                     "game_pass_merged": has_rank_xp_merge,
+                    "vip_pass_cars_transferred": vip_cars_transferred,
                     "dead_state": dead_state,
                     "head_family_id": head_family_id,
                 },
@@ -724,6 +767,12 @@ def register(router):
             parts.append(f"50% tokens restored: {', '.join(token_parts)}")
         if has_rank_xp_merge:
             parts.append("Game Pass progression transferred")
+        if vip_cars_transferred > 0:
+            parts.append(
+                "1 VIP Pass Car transferred"
+                if vip_cars_transferred == 1
+                else f"{vip_cars_transferred} VIP Pass Cars transferred"
+            )
         if parts:
             msg += ", ".join(parts)
         else:
@@ -735,6 +784,7 @@ def register(router):
             "money_transferred": add_money,
             "swiss_transferred": add_swiss,
             "tokens_restored": tokens_restored,
+            "vip_pass_cars_transferred": vip_cars_transferred,
         }
 
     @router.get("/dead-alive/revive-eligibility")

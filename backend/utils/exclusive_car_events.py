@@ -23,6 +23,7 @@ EVENT_LABELS = {
     "admin_grant": "Admin grant",
     "store_purchase": "Store purchase",
     "game_pass_tier_100": "Game Pass tier 100 reward",
+    "dead_alive_transfer": "Dead → Alive transfer",
     "admin_transfer": "Admin transfer",
     "scraped": "Scrapped",
     "melted": "Melted",
