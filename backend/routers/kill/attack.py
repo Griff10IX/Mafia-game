@@ -32,11 +32,19 @@ _attack_micro_cooldown_lock = asyncio.Lock()
 ACCOUNT_LOCKED_ATTACK_BLOCK_DETAIL = "Error, this account has been locked for investigation."
 MAX_ACTIVE_ATTACK_SEARCHES_PER_PLAYER = 250
 _EXECUTE_CODE_PREFIX = "kc_"
+_SEARCH_CODE_PREFIX = "sc_"
 
 
 def _execute_code_bucket_seconds() -> int:
     try:
         return max(900, int(os.getenv("KILL_EXECUTE_CODE_BUCKET_SECONDS", "7200") or "7200"))
+    except Exception:
+        return 7200
+
+
+def _search_code_bucket_seconds() -> int:
+    try:
+        return max(900, int(os.getenv("KILL_SEARCH_CODE_BUCKET_SECONDS", "7200") or "7200"))
     except Exception:
         return 7200
 
@@ -265,6 +273,76 @@ def _execute_code_payload(token: str) -> Dict[str, Any]:
         "execute_code_bucket": _execute_code_bucket(),
         name: token,
     }
+
+
+def _search_code_bucket(now: Optional[float] = None) -> int:
+    return int((time.time() if now is None else now) // _search_code_bucket_seconds())
+
+
+def _search_code_field_name(bucket: Optional[int] = None) -> str:
+    b = _search_code_bucket() if bucket is None else int(bucket)
+    secret = str(SECRET_KEY or "kill-search-code").encode("utf-8", "ignore")
+    digest = hmac.new(secret, f"kill-search-field:{b}".encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{_SEARCH_CODE_PREFIX}{digest[:16]}"
+
+
+def _accepted_search_code_field_names() -> Set[str]:
+    b = _search_code_bucket()
+    return {_search_code_field_name(b), _search_code_field_name(b - 1)}
+
+
+def _search_code_value(user_id: str, bucket: Optional[int] = None) -> str:
+    b = _search_code_bucket() if bucket is None else int(bucket)
+    secret = str(SECRET_KEY or "kill-search-code").encode("utf-8", "ignore")
+    digest = hmac.new(secret, f"kill-search-value:{user_id}:{b}".encode("utf-8"), hashlib.sha256).hexdigest()
+    return digest[:48]
+
+
+def _search_code_payload(user_id: str) -> Dict[str, Any]:
+    name = _search_code_field_name()
+    return {
+        "search_code_name": name,
+        "search_code_bucket": _search_code_bucket(),
+        name: _search_code_value(user_id),
+    }
+
+
+def _valid_search_code(user_id: str, submitted: Optional[str]) -> bool:
+    s = (submitted or "").strip()
+    if len(s) < 16:
+        return False
+    b = _search_code_bucket()
+    for candidate in (_search_code_value(user_id, b), _search_code_value(user_id, b - 1)):
+        if hmac.compare_digest(candidate, s):
+            return True
+    return False
+
+
+async def _submitted_search_code(payload: "AttackSearchRequest", req: Request) -> Optional[str]:
+    body: Dict[str, Any] = {}
+    try:
+        raw = await req.json()
+        if isinstance(raw, dict):
+            body = raw
+    except Exception:
+        body = {}
+    extras = getattr(payload, "__pydantic_extra__", None) or {}
+    if isinstance(extras, dict):
+        for k, v in extras.items():
+            if k not in body:
+                body[k] = v
+    names = _accepted_search_code_field_names()
+    hinted = body.get("search_code_name")
+    if isinstance(hinted, str) and hinted in names:
+        val = body.get(hinted)
+        if isinstance(val, str) and len(val.strip()) >= 16:
+            return val.strip()
+    for name in names:
+        val = body.get(name)
+        if isinstance(val, str) and len(val.strip()) >= 16:
+            return val.strip()
+    legacy = (getattr(payload, "search_code", None) or "").strip()
+    return legacy if len(legacy) >= 16 else None
 
 
 async def _submitted_execute_token(request: "AttackExecuteRequest", req: Request) -> Optional[str]:
@@ -1018,10 +1096,14 @@ async def _record_vendetta_bg_kill(
 # ---------------------------------------------------------------------------
 
 class AttackSearchRequest(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     target_username: str
     note: Optional[str] = None
     captcha_token: Optional[str] = None
     captcha_nonce: Optional[str] = None
+    # Issued on GET /attack/list (rotating hidden field); required on POST /attack/search.
+    search_code: Optional[str] = None
 
 class AttackSearchResponse(BaseModel):
     attack_id: str
@@ -1802,6 +1884,27 @@ async def insert_attack_search_row(
 
 async def search_target(payload: AttackSearchRequest, req: Request, current_user: dict = Depends(get_current_user_verified)):
     meta = _request_meta(req)
+    submitted_code = await _submitted_search_code(payload, req)
+    if not _valid_search_code(current_user.get("id") or "", submitted_code):
+        try:
+            from utils.staff_bot_client_alert import maybe_notify_staff_attack_search_code_fail
+
+            await maybe_notify_staff_attack_search_code_fail(
+                db=db,
+                request=req,
+                user_id=current_user.get("id") or "",
+                username=current_user.get("username") or "",
+                target_username=(payload.target_username or "").strip(),
+            )
+        except Exception:
+            pass
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "attack_search_code_invalid",
+                "detail": "Search refreshed. Open Kill / My Searches and try Start Search again.",
+            },
+        )
     await require_attack_turnstile(
         db,
         request=req,
@@ -1979,6 +2082,7 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
     ac_state = (current_user.get("current_state") or "")
 
     robot_auto_active = robot_bg_auto_search_running(current_user)
+    search_code = _search_code_payload(attacker_id)
     cached = _attack_list_cache_get(attacker_id, ac_state)
     if cached is not None:
         payload = await _kill_inflation_payload(attacker_id, current_user)
@@ -1986,6 +2090,7 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
             "attacks": cached,
             "robot_bg_auto_search_active": robot_auto_active,
             **payload,
+            **search_code,
         }
     # Run list build and inflation calc concurrently to drop one round-trip from page load.
     items, payload = await asyncio.gather(
@@ -1997,6 +2102,7 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
         "attacks": items,
         "robot_bg_auto_search_active": robot_auto_active,
         **payload,
+        **search_code,
     }
 
 async def delete_attacks(request: AttackDeleteRequest, current_user: dict = Depends(get_current_user_verified)):

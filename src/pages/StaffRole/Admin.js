@@ -10659,6 +10659,28 @@ export default function Admin() {
                     <div className="text-foreground font-bold">{(pointsSourcesReport.points_transfers_received?.total_points ?? 0).toLocaleString()}</div>
                   </div>
                 </div>
+                <div>
+                  <div className="text-[9px] font-bold text-primary mb-0.5">Received breakdown</div>
+                  {(pointsSourcesReport.lines || []).length === 0 ? (
+                    <p className="text-[9px] text-mutedForeground italic">No logged inflows for this account.</p>
+                  ) : (
+                    <ul className="max-h-48 overflow-y-auto space-y-0.5 border border-zinc-700/30 rounded p-1.5 bg-zinc-900/40">
+                      {(pointsSourcesReport.lines || []).map((line, i) => (
+                        <li key={`recv-${i}`} className="text-[9px] text-emerald-200/90 leading-snug">
+                          {line}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {pointsSourcesReport.received_totals?.all != null && (
+                    <div className="text-[9px] text-mutedForeground mt-1">
+                      Logged received total: {(pointsSourcesReport.received_totals.all ?? 0).toLocaleString()} pts
+                      {' · '}features {(pointsSourcesReport.received_totals.features ?? 0).toLocaleString()}
+                      {' · '}users {(pointsSourcesReport.received_totals.users ?? 0).toLocaleString()}
+                      {' · '}purchases {(pointsSourcesReport.received_totals.purchases ?? 0).toLocaleString()}
+                    </div>
+                  )}
+                </div>
                 {pointsSourcesReport.balance_matches_lots === false && (
                   <div className="text-amber-400 text-[9px]">
                     Lots total does not match balance (expected when legacy seed has not run or data is mid-migration).

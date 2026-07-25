@@ -47,6 +47,7 @@ from utils.point_provenance import (
     consume_points_fifo,
     log_points_event,
 )
+from utils.point_sources_breakdown import build_received_breakdown
 from utils.claim_costs import (
     CLAIM_COSTS_SETTINGS_KEY,
     invalidate_claim_costs_cache,
@@ -1740,6 +1741,7 @@ def register(router):
 
         lot_sum = sum(int(r.get("remaining") or 0) for r in lots_rows)
         balance = int(u.get("points") or 0)
+        received = await build_received_breakdown(db, user_id, for_player=False)
 
         return {
             "user": {
@@ -1752,6 +1754,9 @@ def register(router):
                 "redeem_codes_points_total": int(u.get("redeem_stats_total_points") or 0),
                 "stock_market_profit_total_points": int(u.get("stock_market_profit_total") or 0),
             },
+            "received_breakdown": received.get("received_breakdown") or [],
+            "lines": received.get("lines") or [],
+            "received_totals": received.get("totals") or {},
             "lots_remaining_by_origin": [
                 {
                     "origin_type": r.get("_id"),
@@ -1795,6 +1800,7 @@ def register(router):
                 "This report is for store currency (users.points). Rank progression uses rank_points separately.",
                 "Current balance is represented as FIFO lots; legacy or untracked grants (e.g. some in-game rewards, admin add-points) may be bucketed as legacy_seed.",
                 "Ledger rows aggregate point_ledger_events; not every feature writes to this log.",
+                "Received breakdown lists feature credits, player transfers, and completed store purchases (Readable lines).",
             ],
         }
 

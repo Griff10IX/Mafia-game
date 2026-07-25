@@ -2201,11 +2201,30 @@ export default function Profile() {
   const addToAttackSearches = async () => {
     if (!profile?.username) return;
     try {
-      const res = await api.post('/attack/search', { target_username: profile.username, note: 'profile' });
+      const listRes = await api.get('/attack/list');
+      const codeName = String(listRes.data?.search_code_name || '').trim();
+      const searchCode = (
+        codeName
+        && typeof listRes.data?.[codeName] === 'string'
+        && listRes.data[codeName].trim().length >= 16
+      )
+        ? { search_code_name: codeName, [codeName]: listRes.data[codeName].trim() }
+        : {};
+      const res = await api.post('/attack/search', {
+        target_username: profile.username,
+        note: 'profile',
+        ...searchCode,
+      });
       toast.success(res.data?.message || `Searching for ${profile.username}...`);
       navigate('/attack');
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to start search');
+      const detail = e.response?.data?.detail;
+      const msg = typeof detail === 'string'
+        ? detail
+        : (detail && typeof detail === 'object' && detail.detail)
+          ? detail.detail
+          : 'Failed to start search';
+      toast.error(msg);
     }
   };
 

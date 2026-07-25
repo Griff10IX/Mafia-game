@@ -400,6 +400,8 @@ export default function Store() {
     }
   }, [tabFromUrl]);
   const [pointsTransfers, setPointsTransfers] = useState([]);
+  const [pointsBreakdown, setPointsBreakdown] = useState(null);
+  const [pointsBreakdownLoading, setPointsBreakdownLoading] = useState(false);
   const [adminTransfers, setAdminTransfers] = useState([]);
   const [adminTransfersOpen, setAdminTransfersOpen] = useState(false);
   const [sendToUsername, setSendToUsername] = useState('');
@@ -694,6 +696,18 @@ export default function Store() {
     }
   }, []);
 
+  const fetchPointsBreakdown = useCallback(async () => {
+    setPointsBreakdownLoading(true);
+    try {
+      const res = await api.get('/store/points-breakdown');
+      setPointsBreakdown(res.data || null);
+    } catch {
+      setPointsBreakdown(null);
+    } finally {
+      setPointsBreakdownLoading(false);
+    }
+  }, []);
+
   const fetchAdminTransfers = useCallback(async () => {
     try {
       const res = await api.get('/store/points-transfers/admin', { params: { limit: 500 } });
@@ -741,8 +755,11 @@ export default function Store() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (activeTab === 'sendpts') fetchPointsTransfers();
-  }, [activeTab, fetchPointsTransfers]);
+    if (activeTab === 'sendpts') {
+      fetchPointsTransfers();
+      fetchPointsBreakdown();
+    }
+  }, [activeTab, fetchPointsTransfers, fetchPointsBreakdown]);
 
   const checkPaymentStatus = async (sessionId, attempt = 0) => {
     if (attempt >= 5) {
@@ -1375,6 +1392,7 @@ export default function Store() {
                     refreshUser();
                     fetchData();
                     fetchPointsTransfers();
+                    fetchPointsBreakdown();
                   } catch (e) {
                     toast.error(e.response?.data?.detail || 'Failed to send');
                   } finally {
@@ -1386,6 +1404,37 @@ export default function Store() {
               >
                 {loading ? '...' : 'Send'}
               </button>
+            </div>
+            <div className="store-art-line text-primary mx-3" />
+          </div>
+
+          <div className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden mobile-panel`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
+              <Package size={14} className="text-primary shrink-0" />
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Points received breakdown</span>
+            </div>
+            <div className="p-3">
+              {pointsBreakdownLoading && !pointsBreakdown ? (
+                <p className="text-[10px] text-zinc-500 font-heading italic">Loading…</p>
+              ) : !(pointsBreakdown?.lines || []).length ? (
+                <p className="text-[10px] text-zinc-500 font-heading italic">No logged points received yet.</p>
+              ) : (
+                <>
+                  <ul className="space-y-1 max-h-64 overflow-y-auto">
+                    {(pointsBreakdown.lines || []).map((line, i) => (
+                      <li key={`pts-recv-${i}`} className="text-[11px] sm:text-[10px] font-heading text-emerald-200/90 leading-snug">
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                  {pointsBreakdown.totals?.all != null && (
+                    <p className="text-[9px] text-zinc-500 font-heading mt-2">
+                      Logged total received: {(pointsBreakdown.totals.all ?? 0).toLocaleString()} pts
+                    </p>
+                  )}
+                </>
+              )}
             </div>
             <div className="store-art-line text-primary mx-3" />
           </div>

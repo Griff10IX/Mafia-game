@@ -201,6 +201,57 @@ function getTravelCodePayload(travelInfo) {
   return {};
 }
 
+function getSearchCodePayload(searchCodeInfo) {
+  const codeName = String(searchCodeInfo?.search_code_name || '').trim();
+  if (
+    codeName
+    && Object.prototype.hasOwnProperty.call(searchCodeInfo || {}, codeName)
+    && typeof searchCodeInfo[codeName] === 'string'
+    && searchCodeInfo[codeName].trim().length >= 16
+  ) {
+    return {
+      search_code_name: codeName,
+      [codeName]: searchCodeInfo[codeName].trim(),
+    };
+  }
+  return {};
+}
+
+function isAttackSearchCodeError(error) {
+  const detail = error?.response?.data?.detail;
+  const msg = typeof detail === 'string'
+    ? detail
+    : (detail && typeof detail === 'object' && typeof detail.detail === 'string')
+      ? detail.detail
+      : '';
+  const lower = msg.toLowerCase();
+  return (
+    error?.response?.status === 400
+    && (
+      detail?.code === 'attack_search_code_invalid'
+      || lower.includes('search refreshed')
+      || lower.includes('start search again')
+    )
+  );
+}
+
+function extractSearchCodeInfo(data) {
+  if (!data || typeof data !== 'object') return null;
+  const codeName = String(data.search_code_name || '').trim();
+  if (
+    codeName
+    && typeof data[codeName] === 'string'
+    && data[codeName].trim().length >= 16
+  ) {
+    return {
+      search_code_name: codeName,
+      search_code_bucket: data.search_code_bucket,
+      [codeName]: data[codeName].trim(),
+    };
+  }
+  return null;
+}
+
 function isAttackExecuteCodeError(error) {
   const detail = error?.response?.data?.detail;
   const msg = typeof detail === 'string'
@@ -1383,6 +1434,8 @@ export default function Attack() {
   const attackListAbortRef = useRef(null);
   /** Last good /attack/list result. Used so a transient refresh failure does not look like "no target". */
   const attacksRef = useRef(attacks);
+  /** Rotating hidden search code from GET /attack/list (anti-bot for Start Search). */
+  const searchCodeRef = useRef(null);
   /** Abort in-flight kill-form bullet calc while typing. */
   const killCalcAbortRef = useRef(null);
 
@@ -1462,6 +1515,8 @@ export default function Attack() {
       setAttacks(list);
       attacksRef.current = list;
       writeCachedAttacks(list);
+      const nextSearchCode = extractSearchCodeInfo(response.data);
+      if (nextSearchCode) searchCodeRef.current = nextSearchCode;
       // Inflation comes inline now (Tier 3 plan item: drop the dedicated /attack/inflation page-load call).
       if (response.data && typeof response.data.inflation_pct === 'number') {
         applyInflationPayload(response.data);
@@ -1597,6 +1652,15 @@ export default function Attack() {
     return captcha ? { ...body, ...captcha } : body;
   }, [getAttackCaptcha]);
 
+  const withSearchCode = useCallback(async (body) => {
+    let codePayload = getSearchCodePayload(searchCodeRef.current);
+    if (!Object.keys(codePayload).length) {
+      await refreshAttacks();
+      codePayload = getSearchCodePayload(searchCodeRef.current);
+    }
+    return { ...body, ...codePayload };
+  }, [refreshAttacks]);
+
   const postAttackExecute = useCallback((body) => (
     apiRequestWith429Retry(() => api.post('/attack/execute', body, { timeout: 20000 }))
   ), []);
@@ -1631,12 +1695,19 @@ export default function Attack() {
             setSearchLoading(true);
             try {
               const note = bg.target_username ? `Bodyguard for: ${bg.target_username}` : '';
-              const searchBody = await withAttackCaptcha('search', { target_username: bg.search_username, note });
+              const searchBody = await withSearchCode(
+                await withAttackCaptcha('search', { target_username: bg.search_username, note }),
+              );
               const res = await api.post('/attack/search', searchBody);
               toast.success(res.data?.message || 'Search started', { duration: 10000 });
               await refreshAttacks();
             } catch (err) {
-              toast.error(err.response?.data?.detail || 'Failed to search', { duration: 10000 });
+              if (isAttackSearchCodeError(err)) {
+                await refreshAttacks();
+                toast.error('Search code refreshed. Tap Search again.', { duration: 10000 });
+              } else {
+                toast.error(getApiErrorMessage(err) || 'Failed to search', { duration: 10000 });
+              }
             } finally {
               setSearchLoading(false);
             }
@@ -1644,7 +1715,7 @@ export default function Attack() {
         }
       : undefined;
     showKillResult(message, 'warning', action ? { action } : {});
-  }, [refreshAttacks, withAttackCaptcha]);
+  }, [refreshAttacks, withAttackCaptcha, withSearchCode]);
 
   // Hitlist board crosshair → /attack?target=… — prefill kill form and start a search (same as Find User submit)
   useEffect(() => {
@@ -1677,7 +1748,9 @@ export default function Attack() {
             JSON.stringify({ type: 'search', target_username: trimmed, note: noteFromBoard }),
           );
         } catch (_) {}
-        const searchBody = await withAttackCaptcha('search', { target_username: trimmed, note: noteFromBoard });
+        const searchBody = await withSearchCode(
+          await withAttackCaptcha('search', { target_username: trimmed, note: noteFromBoard }),
+        );
         const response = await api.post('/attack/search', searchBody, { signal: ac.signal });
         if (cancelled) return;
         stripBoardQuery();
@@ -1688,7 +1761,12 @@ export default function Attack() {
       } catch (error) {
         if (cancelled || error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError') return;
         stripBoardQuery();
-        toast.error(getApiErrorMessage(error) || 'Failed to search target');
+        if (isAttackSearchCodeError(error)) {
+          window.dispatchEvent(new CustomEvent('app:refresh-attacks'));
+          toast.error('Search code refreshed. Try Start Search again.');
+        } else {
+          toast.error(getApiErrorMessage(error) || 'Failed to search target');
+        }
       } finally {
         if (!cancelled) setSearchLoading(false);
       }
@@ -1698,7 +1776,7 @@ export default function Attack() {
       cancelled = true;
       ac.abort();
     };
-  }, [searchParams, setSearchParams, withAttackCaptcha]);
+  }, [searchParams, setSearchParams, withAttackCaptcha, withSearchCode]);
 
   // Clear stored submit when leaving the page so "Kill → go to Crimes → back to Kill" never auto-sends. F5 on Attack page still resends (reload doesn't run this cleanup).
   useEffect(() => {
@@ -1860,15 +1938,22 @@ export default function Attack() {
       if (payload.type === 'search') {
         setSearchLoading(true);
         try {
-          const searchBody = await withAttackCaptcha('search', {
-            target_username: payload.target_username || '',
-            note: payload.note || '',
-          });
+          const searchBody = await withSearchCode(
+            await withAttackCaptcha('search', {
+              target_username: payload.target_username || '',
+              note: payload.note || '',
+            }),
+          );
           const response = await api.post('/attack/search', searchBody);
           toast.success(response.data?.message || 'Search started');
           await refreshAttacks();
         } catch (error) {
-          toast.error(error.response?.data?.detail || 'Failed to search target');
+          if (isAttackSearchCodeError(error)) {
+            await refreshAttacks();
+            toast.error('Search code refreshed. Try Start Search again.');
+          } else {
+            toast.error(getApiErrorMessage(error) || 'Failed to search target');
+          }
         } finally {
           setSearchLoading(false);
         }
@@ -1923,7 +2008,7 @@ export default function Attack() {
       }
     };
     run();
-  }, [pendingResend, withAttackCaptcha, showBodyguardBlockResult]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [pendingResend, withAttackCaptcha, withSearchCode, showBodyguardBlockResult]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleSelected = (attackId) => {
     setSelectedAttackIds((prev) => (
@@ -1966,14 +2051,21 @@ export default function Attack() {
       try {
         sessionStorage.setItem('attack-last-submit', JSON.stringify({ type: 'search', target_username: target, note: noteVal }));
       } catch (_) {}
-      const searchBody = await withAttackCaptcha('search', { target_username: target, note: noteVal });
+      const searchBody = await withSearchCode(
+        await withAttackCaptcha('search', { target_username: target, note: noteVal }),
+      );
       const response = await api.post('/attack/search', searchBody);
       toast.success(response.data.message);
       setTargetUsername('');
       setNote('');
       await refreshAttacks();
     } catch (error) {
-      toast.error(getApiErrorMessage(error) || 'Failed to search target');
+      if (isAttackSearchCodeError(error)) {
+        await refreshAttacks();
+        toast.error('Search code refreshed. Click Start Search again.');
+      } else {
+        toast.error(getApiErrorMessage(error) || 'Failed to search target');
+      }
     } finally {
       setSearchLoading(false);
     }
