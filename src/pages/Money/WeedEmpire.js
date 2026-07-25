@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -29,6 +29,12 @@ const TABS = [
 
 const SELL_UNIT_GRAMS = { g: 1, oz: 28, lb: 448, kg: 1000 };
 const SELL_BULK_MULT = { g: 1, oz: 1, lb: 1.03, kg: 1.05 };
+
+function weedActionCodePayload(data) {
+  const name = String(data?.action_code_name || "");
+  const token = name && typeof data?.[name] === "string" ? data[name] : "";
+  return name && token ? { action_code_name: name, [name]: token } : {};
+}
 
 function money(n) {
   return `$${Number(n || 0).toLocaleString()}`;
@@ -81,6 +87,7 @@ function CareMeter({ label, pct, hoursLeft, colorClass, warn, fillUp = false }) 
 
 export default function WeedEmpire() {
   const navigate = useNavigate();
+  const actionCodeRef = useRef({});
   const [loading, setLoading] = useState(true);
   const [staffPreview, setStaffPreview] = useState(false);
   const [farm, setFarm] = useState(null);
@@ -127,6 +134,7 @@ export default function WeedEmpire() {
       setStaffPreview(!live && isStaff);
       applyFarm(statusRes.data?.farm);
       setCatalog(statusRes.data?.catalog);
+      actionCodeRef.current = weedActionCodePayload(statusRes.data);
     } catch (e) {
       const detail = e?.response?.data?.detail || e?.message || "Failed to load";
       toast.error(typeof detail === "string" ? detail : "Not available yet");
@@ -146,6 +154,7 @@ export default function WeedEmpire() {
       try {
         const { data } = await api.get("/weed-empire/status");
         applyFarm(data?.farm);
+        actionCodeRef.current = weedActionCodePayload(data);
       } catch {
         // Keep the current view if a background refresh briefly fails.
       }
@@ -257,7 +266,10 @@ export default function WeedEmpire() {
 
   const harvest = () =>
     run(async () => {
-      const { data } = await api.post("/weed-empire/harvest", { plot_id: selectedPlotId });
+      const { data } = await api.post("/weed-empire/harvest", {
+        plot_id: selectedPlotId,
+        ...actionCodeRef.current,
+      });
       applyFarm(data.farm);
       triggerFx("harvest_trim");
       toast.success(`Harvested ${data.grams}g — curing`);
@@ -289,6 +301,7 @@ export default function WeedEmpire() {
         strain_id: sellStrain,
         amount: Number(sellAmount),
         unit: sellUnit,
+        ...actionCodeRef.current,
       });
       applyFarm(data.farm);
       toast.success(`Sold for ${money(data.payout)} @ ${money(data.effective_price_per_oz)}/oz`);
@@ -310,7 +323,11 @@ export default function WeedEmpire() {
 
   const raid = (targetUserId, sabotage = false) =>
     run(async () => {
-      const { data } = await api.post("/weed-empire/raid", { target_user_id: targetUserId, sabotage });
+      const { data } = await api.post("/weed-empire/raid", {
+        target_user_id: targetUserId,
+        sabotage,
+        ...actionCodeRef.current,
+      });
       applyFarm(data.farm);
       if (data.success) {
         const eq = data.stolen?.equipment?.name;
@@ -332,7 +349,7 @@ export default function WeedEmpire() {
 
   const dealerSell = () =>
     run(async () => {
-      const { data } = await api.post("/weed-empire/dealers/sell");
+      const { data } = await api.post("/weed-empire/dealers/sell", actionCodeRef.current);
       applyFarm(data.farm);
       toast.success(`Dealers moved product for ${money(data.payout)}`);
     });
@@ -578,9 +595,16 @@ export default function WeedEmpire() {
               })}
             </div>
 
-            {(selectedPlot?.state === "empty" || !selectedPlot?.strain_id) && (
+            {(selectedPlot?.state === "empty" || selectedPlot?.state === "dead" || !selectedPlot?.strain_id) && (
               <div className="rounded border border-border/50 p-3 space-y-2 bg-card/30">
-                <div className="text-xs font-heading uppercase text-muted-foreground">Plant</div>
+                <div className="text-xs font-heading uppercase text-muted-foreground">
+                  {selectedPlot?.state === "dead" ? "Plant died — start again" : "Plant"}
+                </div>
+                {selectedPlot?.state === "dead" && (
+                  <p className="text-xs text-red-300/80">
+                    This crop is lost. Replanting uses a fresh seed and soil charge and restarts at seedling.
+                  </p>
+                )}
                 <select
                   className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm"
                   value={strainId}
@@ -616,7 +640,9 @@ export default function WeedEmpire() {
               </div>
             )}
 
-            {selectedPlot?.strain_id && selectedPlot?.state !== "empty" && (
+            {selectedPlot?.strain_id &&
+              selectedPlot?.state !== "empty" &&
+              selectedPlot?.state !== "dead" && (
               <div className="space-y-2">
                 <div className="rounded border border-border/40 bg-card/30 p-3 space-y-2">
                   <CareMeter

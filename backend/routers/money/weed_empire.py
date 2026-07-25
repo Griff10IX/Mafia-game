@@ -6,13 +6,15 @@ import math
 import secrets
 import uuid
 import hashlib
+import hmac
+import time
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from server import db, get_current_user, send_notification
+from server import SECRET_KEY, db, get_current_user, send_notification
 from utils.store_item_flags import require_store_item_allowed
 from utils.weed_empire_catalog import (
     DAILY_SELL_CAP_USD,
@@ -50,6 +52,8 @@ AUTO_WATER_IRRIGATION_LEVEL = 5
 AUTO_FEED_IRRIGATION_LEVEL = 8
 MAX_HEAT = 100.0
 MIN_RAID_TARGET_GROWER_LEVEL = 2
+WEED_ACTION_CODE_PREFIX = "we_"
+WEED_ACTION_CODE_BUCKET_SECONDS = 7200
 CLEANLINESS_SAFE_PCT = 30.0
 CLEANLINESS_BASE_DECAY_PER_HOUR = 0.25
 CLEANLINESS_ACTIVE_PLOT_DECAY_PER_HOUR = 0.45
@@ -610,6 +614,70 @@ def _add_heat(farm: dict, amount: float) -> None:
     farm["heat"] = min(MAX_HEAT, max(0.0, float(farm.get("heat") or 0) + amount))
 
 
+def _weed_action_code_bucket(now: Optional[float] = None) -> int:
+    return int((time.time() if now is None else now) // WEED_ACTION_CODE_BUCKET_SECONDS)
+
+
+def _weed_action_code_field_name(bucket: int) -> str:
+    secret = str(SECRET_KEY or "weed-action-code").encode("utf-8", "ignore")
+    digest = hmac.new(secret, f"weed-action-field:{bucket}".encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{WEED_ACTION_CODE_PREFIX}{digest[:16]}"
+
+
+def _weed_action_code_token(user_id: str, bucket: int) -> str:
+    secret = str(SECRET_KEY or "weed-action-code").encode("utf-8", "ignore")
+    return hmac.new(
+        secret,
+        f"weed-action-token:{user_id}:{bucket}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()
+
+
+def _weed_action_code_payload(user_id: str) -> Dict[str, Any]:
+    bucket = _weed_action_code_bucket()
+    name = _weed_action_code_field_name(bucket)
+    return {
+        "action_code_name": name,
+        "action_code_bucket": bucket,
+        name: _weed_action_code_token(str(user_id or ""), bucket),
+    }
+
+
+async def _require_weed_action_code(request: Request, current_user: dict) -> None:
+    try:
+        raw = await request.json()
+        body = raw if isinstance(raw, dict) else {}
+    except Exception:
+        body = {}
+    current_bucket = _weed_action_code_bucket()
+    accepted = {
+        _weed_action_code_field_name(current_bucket): current_bucket,
+        _weed_action_code_field_name(current_bucket - 1): current_bucket - 1,
+    }
+    hinted = body.get("action_code_name")
+    submitted = body.get(hinted) if isinstance(hinted, str) and hinted in accepted else None
+    bucket = accepted.get(hinted) if isinstance(hinted, str) else None
+    if not isinstance(submitted, str):
+        for name, candidate_bucket in accepted.items():
+            value = body.get(name)
+            if isinstance(value, str):
+                submitted = value
+                bucket = candidate_bucket
+                break
+    expected = _weed_action_code_token(str(current_user.get("id") or ""), int(bucket or current_bucket))
+    if isinstance(submitted, str) and secrets.compare_digest(submitted.strip(), expected):
+        return
+    logger.warning(
+        "Weed action rejected: missing/invalid hidden code user=%s path=%s",
+        current_user.get("id"),
+        request.url.path,
+    )
+    raise HTTPException(
+        status_code=400,
+        detail="Security code expired or missing. Refresh Weed Empire and try again. Do not use bots or automated tools.",
+    )
+
+
 # ---- Requests ----
 class PlantBody(BaseModel):
     plot_id: str
@@ -690,6 +758,7 @@ async def weed_status(current_user: dict = Depends(_gate)):
             "cleanliness_safe_pct": CLEANLINESS_SAFE_PCT,
             "mite_harvest_yield_penalty_cap_pct": MITE_MAX_HARVEST_YIELD_PENALTY_PCT,
         },
+        **_weed_action_code_payload(current_user["id"]),
     }
 
 
@@ -741,7 +810,7 @@ async def weed_plant(body: PlantBody, current_user: dict = Depends(_gate)):
     found = False
     for i, p in enumerate(plots):
         if p.get("id") == body.plot_id:
-            if p.get("state") not in ("empty", None):
+            if p.get("state") not in ("empty", "dead", None):
                 raise HTTPException(status_code=400, detail="Plot is not empty")
             base_q = 48.0 + (8.0 if soil_type == "soil_organic" else 0.0)
             plots[i] = {
@@ -815,7 +884,8 @@ async def weed_feed(body: PlotActionBody, current_user: dict = Depends(_gate)):
 
 
 @router.post("/harvest")
-async def weed_harvest(body: PlotActionBody, current_user: dict = Depends(_gate)):
+async def weed_harvest(body: PlotActionBody, http_request: Request, current_user: dict = Depends(_gate)):
+    await _require_weed_action_code(http_request, current_user)
     farm = await _get_or_create_farm(current_user["id"])
     stats = _stats(farm)
     now = _utcnow()
@@ -971,7 +1041,8 @@ async def weed_treat_mites(body: PlotActionBody, current_user: dict = Depends(_g
 
 
 @router.post("/sell")
-async def weed_sell(body: SellBody, current_user: dict = Depends(_gate)):
+async def weed_sell(body: SellBody, http_request: Request, current_user: dict = Depends(_gate)):
+    await _require_weed_action_code(http_request, current_user)
     farm = await _get_or_create_farm(current_user["id"])
     farm = _ensure_daily_cap(farm)
     farm = _tick_curing(farm, _utcnow())
@@ -1239,7 +1310,8 @@ async def weed_raid_targets(current_user: dict = Depends(_gate)):
 
 
 @router.post("/raid")
-async def weed_raid(body: RaidBody, current_user: dict = Depends(_gate)):
+async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = Depends(_gate)):
+    await _require_weed_action_code(http_request, current_user)
     attacker_id = current_user["id"]
     defender_id = (body.target_user_id or "").strip()
     if not defender_id or defender_id == attacker_id:
@@ -1416,8 +1488,13 @@ async def weed_raid(body: RaidBody, current_user: dict = Depends(_gate)):
 
 
 @router.post("/dealers/sell")
-async def weed_dealer_sell(current_user: dict = Depends(_gate)):
+async def weed_dealer_sell(
+    http_request: Request,
+    body: Optional[DealerSellBody] = None,
+    current_user: dict = Depends(_gate),
+):
     """Passive drip sell via dealers (counts toward daily cap)."""
+    await _require_weed_action_code(http_request, current_user)
     farm = await _get_or_create_farm(current_user["id"])
     lvl = int(farm.get("dealers_level") or 0)
     if lvl < 1:
