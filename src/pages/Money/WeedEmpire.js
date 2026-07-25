@@ -211,15 +211,16 @@ export default function WeedEmpire() {
     }
   };
 
-  const plant = () =>
+  const plant = ({ freeRestart = false } = {}) =>
     run(async () => {
       const { data } = await api.post("/weed-empire/plant", {
         plot_id: selectedPlotId,
-        strain_id: strainId,
-        soil_type: soilType,
+        strain_id: freeRestart ? "ditch_weed" : strainId,
+        soil_type: freeRestart ? "soil_conventional" : soilType,
+        ...(freeRestart ? actionCodeRef.current : {}),
       });
       applyFarm(data.farm);
-      toast.success("Planted");
+      toast.success(data.free_restart ? "Free restart planted — Ditch Weed" : "Planted");
       setFx("plant");
       setFxNonce((n) => n + 1);
       setTimeout(() => setFx(null), 400);
@@ -364,6 +365,10 @@ export default function WeedEmpire() {
 
   const capPct = Math.min(100, ((farm.daily_sold_usd || 0) / (farm.daily_sold_cap || 1)) * 100);
   const selStrain = strainMap[selectedPlot?.strain_id] || {};
+  const plantStrain = strainMap[strainId] || {};
+  const plantSeedCost = Number(plantStrain.seed_cost || 0);
+  const selectedSoilStock = Number(farm.soil_stock?.[soilType] || 0);
+  const canAffordPlant = Number(farm.business_cash || 0) >= plantSeedCost && selectedSoilStock >= 1;
   const cleanlinessPct = Math.max(0, Math.min(100, Number(farm.cleanliness_pct ?? farm.cleanliness ?? 100)));
   const cleanlinessRisk = cleanlinessPct < 30;
   const mitePct = Math.max(0, Math.min(100, Number(selectedPlot?.mite_infestation_pct || 0)));
@@ -605,6 +610,21 @@ export default function WeedEmpire() {
                     This crop is lost. Replanting uses a fresh seed and soil charge and restarts at seedling.
                   </p>
                 )}
+                {farm.free_restart_available && (
+                  <div className="rounded border border-amber-500/40 bg-amber-500/10 p-2 space-y-1.5">
+                    <p className="text-xs text-amber-200">
+                      Farm broke? Restart free with Ditch Weed and conventional soil.
+                    </p>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => plant({ freeRestart: true })}
+                      className="w-full py-2 rounded bg-amber-700/80 hover:bg-amber-700 text-sm font-heading"
+                    >
+                      Free restart — Ditch Weed
+                    </button>
+                  </div>
+                )}
                 <select
                   className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm"
                   value={strainId}
@@ -612,7 +632,7 @@ export default function WeedEmpire() {
                 >
                   {unlockedStrains.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.name} (~{s.base_grow_hours}h · {money(s.base_price_per_oz)}/oz)
+                      {s.name} (seed {money(s.seed_cost)} · ~{s.base_grow_hours}h · {money(s.base_price_per_oz)}/oz)
                     </option>
                   ))}
                 </select>
@@ -629,13 +649,24 @@ export default function WeedEmpire() {
                   </option>
                   <option value="coco">Coco (stock {farm.soil_stock?.coco || 0})</option>
                 </select>
+                <div className="rounded border border-border/40 bg-black/20 px-2 py-1.5 text-xs text-muted-foreground">
+                  Planting cost: <span className="text-foreground">{money(plantSeedCost)}</span> seed +{" "}
+                  <span className="text-foreground">1 {soilType.replace(/_/g, " ")} charge</span>
+                  {!canAffordPlant && (
+                    <span className="block mt-1 text-amber-300">
+                      {Number(farm.business_cash || 0) < plantSeedCost
+                        ? `Need ${money(plantSeedCost - Number(farm.business_cash || 0))} more business cash.`
+                        : `No ${soilType.replace(/_/g, " ")} charges left.`}
+                    </span>
+                  )}
+                </div>
                 <button
                   type="button"
-                  disabled={busy}
+                  disabled={busy || !canAffordPlant}
                   onClick={plant}
                   className="w-full py-2 rounded bg-emerald-600/80 hover:bg-emerald-600 text-sm font-heading"
                 >
-                  Plant (uses soil + seed cost)
+                  Plant — {money(plantSeedCost)} + 1 soil charge
                 </button>
               </div>
             )}
