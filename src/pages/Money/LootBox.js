@@ -853,7 +853,22 @@ export default function LootBox() {
   const [rarityConfig, setRarityConfig] = useState(null);
   const [rarityForm, setRarityForm] = useState({ exclusive_chance_pct: 10, common_pct: 55, uncommon_pct: 32, rare_pct: 13 });
   const [raritySaving, setRaritySaving] = useState(false);
+  const [sjGuarantee, setSjGuarantee] = useState(null);
+  const [sjGuaranteeUser, setSjGuaranteeUser] = useState('');
+  const [sjGuaranteeBusy, setSjGuaranteeBusy] = useState(false);
   const tutorialLoot = searchParams.get('tutorial') === '1';
+
+  const loadSjGuarantee = async () => {
+    try {
+      const res = await api.get('/loot-box/admin/sj-guarantee');
+      setSjGuarantee(res.data || null);
+      if (res.data?.guarantee?.username) {
+        setSjGuaranteeUser(res.data.guarantee.username);
+      }
+    } catch {
+      setSjGuarantee(null);
+    }
+  };
 
   useEffect(() => {
     const t = (searchParams.get('tier') || '').trim().toLowerCase();
@@ -902,6 +917,17 @@ export default function LootBox() {
               ...box,
             });
           }
+          try {
+            const gRes = await api.get('/loot-box/admin/sj-guarantee');
+            if (!cancelled) {
+              setSjGuarantee(gRes.data || null);
+              if (gRes.data?.guarantee?.username) {
+                setSjGuaranteeUser(gRes.data.guarantee.username);
+              }
+            }
+          } catch {
+            /* ignore */
+          }
         }
       } catch {
         if (!cancelled) setIsAdmin(false);
@@ -909,6 +935,41 @@ export default function LootBox() {
     })();
     return () => { cancelled = true; };
   }, []);
+
+  const saveSjGuarantee = async () => {
+    const un = (sjGuaranteeUser || '').trim();
+    if (!un) {
+      toast.error('Enter a username');
+      return;
+    }
+    setSjGuaranteeBusy(true);
+    try {
+      const res = await api.post('/loot-box/admin/sj-guarantee', { username: un });
+      setSjGuarantee({
+        guarantee: res.data?.guarantee || null,
+        sj_claimed: !!res.data?.sj_claimed,
+      });
+      toast.success(res.data?.message || 'Set');
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to set');
+    } finally {
+      setSjGuaranteeBusy(false);
+    }
+  };
+
+  const clearSjGuarantee = async () => {
+    setSjGuaranteeBusy(true);
+    try {
+      await api.delete('/loot-box/admin/sj-guarantee');
+      setSjGuarantee({ guarantee: null, sj_claimed: sjGuarantee?.sj_claimed });
+      setSjGuaranteeUser('');
+      toast.success('Cleared');
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || 'Failed to clear');
+    } finally {
+      setSjGuaranteeBusy(false);
+    }
+  };
 
   const saveRarity = async () => {
     setRaritySaving(true);
@@ -1256,6 +1317,59 @@ export default function LootBox() {
                     <Save size={12} />
                     {raritySaving ? 'Saving…' : 'Save rarity'}
                   </button>
+                  <div className="pt-1.5 mt-1.5 border-t border-primary/20 space-y-1">
+                    <div className="flex items-center justify-between gap-1">
+                      <span className="text-[8px] font-heading font-bold text-amber-200/90 uppercase tracking-wider">
+                        Secret — next UR → SJ
+                      </span>
+                      <button
+                        type="button"
+                        onClick={loadSjGuarantee}
+                        disabled={sjGuaranteeBusy}
+                        className="text-[8px] text-mutedForeground underline disabled:opacity-50"
+                      >
+                        refresh
+                      </button>
+                    </div>
+                    <p className="text-[7px] text-mutedForeground leading-tight">
+                      Username gets Model SJ on their next Ultra Rare open (if still unclaimed). Cleared after grant. Not shown to players.
+                    </p>
+                    {sjGuarantee?.sj_claimed ? (
+                      <p className="text-[8px] text-amber-300">SJ already claimed — guarantee inactive.</p>
+                    ) : sjGuarantee?.guarantee?.username ? (
+                      <p className="text-[8px] text-emerald-400/90">
+                        Armed: <span className="font-bold">{sjGuarantee.guarantee.username}</span>
+                        {sjGuarantee.guarantee.set_by ? ` (by ${sjGuarantee.guarantee.set_by})` : ''}
+                      </p>
+                    ) : (
+                      <p className="text-[8px] text-mutedForeground">No guarantee set.</p>
+                    )}
+                    <div className="flex flex-wrap gap-1 items-center">
+                      <input
+                        type="text"
+                        value={sjGuaranteeUser}
+                        onChange={(e) => setSjGuaranteeUser(e.target.value)}
+                        placeholder="Username"
+                        className="flex-1 min-w-[100px] px-1.5 py-0.5 rounded border border-amber-500/30 bg-background text-foreground text-[10px] font-heading"
+                      />
+                      <button
+                        type="button"
+                        onClick={saveSjGuarantee}
+                        disabled={sjGuaranteeBusy || !!sjGuarantee?.sj_claimed}
+                        className="px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/10 text-amber-200 text-[8px] font-heading uppercase disabled:opacity-50"
+                      >
+                        Arm
+                      </button>
+                      <button
+                        type="button"
+                        onClick={clearSjGuarantee}
+                        disabled={sjGuaranteeBusy || !sjGuarantee?.guarantee}
+                        className="px-1.5 py-0.5 rounded border border-zinc-500/40 text-mutedForeground text-[8px] font-heading uppercase disabled:opacity-50"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 <div className="lb-art-line text-primary mx-2.5" />
               </div>

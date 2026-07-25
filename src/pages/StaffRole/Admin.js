@@ -1058,6 +1058,9 @@ export default function Admin() {
   const [takeoverCasinoAssignUsername, setTakeoverCasinoAssignUsername] = useState('');
   const [exclusiveLootOwners, setExclusiveLootOwners] = useState(null);
   const [exclusiveLootLoading, setExclusiveLootLoading] = useState(false);
+  const [sjUrGuarantee, setSjUrGuarantee] = useState(null);
+  const [sjUrGuaranteeUser, setSjUrGuaranteeUser] = useState('');
+  const [sjUrGuaranteeLoading, setSjUrGuaranteeLoading] = useState(false);
 
   // Security state
   const [securitySummary, setSecuritySummary] = useState(null);
@@ -4900,6 +4903,65 @@ export default function Admin() {
       setExclusiveLootOwners(null);
     } finally {
       setExclusiveLootLoading(false);
+    }
+  };
+
+  const handleLoadSjUrGuarantee = async () => {
+    setSjUrGuaranteeLoading(true);
+    try {
+      const res = await api.get('/loot-box/admin/sj-guarantee');
+      setSjUrGuarantee(res.data || null);
+      if (res.data?.guarantee?.username) {
+        setSjUrGuaranteeUser(res.data.guarantee.username);
+      }
+      toast.success(
+        res.data?.guarantee?.username
+          ? `Armed: ${res.data.guarantee.username}`
+          : res.data?.sj_claimed
+            ? 'SJ already claimed'
+            : 'No UR SJ guarantee set'
+      );
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load');
+      setSjUrGuarantee(null);
+    } finally {
+      setSjUrGuaranteeLoading(false);
+    }
+  };
+
+  const handleArmSjUrGuarantee = async () => {
+    const un = (sjUrGuaranteeUser || formData.targetUsername || '').trim();
+    if (!un) {
+      toast.error('Enter username (field below or target username)');
+      return;
+    }
+    setSjUrGuaranteeLoading(true);
+    try {
+      const res = await api.post('/loot-box/admin/sj-guarantee', { username: un });
+      setSjUrGuarantee({
+        guarantee: res.data?.guarantee || null,
+        sj_claimed: !!res.data?.sj_claimed,
+      });
+      if (res.data?.guarantee?.username) setSjUrGuaranteeUser(res.data.guarantee.username);
+      toast.success(res.data?.message || 'Armed');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to arm');
+    } finally {
+      setSjUrGuaranteeLoading(false);
+    }
+  };
+
+  const handleClearSjUrGuarantee = async () => {
+    setSjUrGuaranteeLoading(true);
+    try {
+      await api.delete('/loot-box/admin/sj-guarantee');
+      setSjUrGuarantee({ guarantee: null, sj_claimed: sjUrGuarantee?.sj_claimed });
+      setSjUrGuaranteeUser('');
+      toast.success('UR SJ guarantee cleared');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to clear');
+    } finally {
+      setSjUrGuaranteeLoading(false);
     }
   };
 
@@ -10441,6 +10503,40 @@ export default function Admin() {
                 Open tool
               </Link>
             </ActionRow>
+            <ActionRow
+              icon={Car}
+              label="Secret — next UR → Model SJ"
+              description="Arm a username: their next Ultra Rare loot open gets Model SJ if still unclaimed. Cleared after grant. Not shown to players."
+            >
+              <BtnSecondary type="button" onClick={handleLoadSjUrGuarantee} disabled={sjUrGuaranteeLoading}>
+                {sjUrGuaranteeLoading ? '…' : 'Status'}
+              </BtnSecondary>
+              <BtnPrimary type="button" onClick={handleArmSjUrGuarantee} disabled={sjUrGuaranteeLoading || !!sjUrGuarantee?.sj_claimed}>
+                Arm
+              </BtnPrimary>
+              <BtnDanger type="button" onClick={handleClearSjUrGuarantee} disabled={sjUrGuaranteeLoading || !sjUrGuarantee?.guarantee}>
+                Clear
+              </BtnDanger>
+            </ActionRow>
+            <div className="pl-6 flex flex-wrap items-center gap-2 -mt-0.5 mb-1">
+              <input
+                type="text"
+                value={sjUrGuaranteeUser}
+                onChange={(e) => setSjUrGuaranteeUser(e.target.value)}
+                placeholder={formData.targetUsername ? `Username (or use target: ${formData.targetUsername})` : 'Username'}
+                className="flex-1 min-w-[140px] max-w-xs px-2 py-1 rounded border border-amber-500/30 bg-transparent text-[10px] font-heading"
+              />
+              {sjUrGuarantee?.sj_claimed ? (
+                <span className="text-[9px] text-amber-300 font-heading">SJ already claimed</span>
+              ) : sjUrGuarantee?.guarantee?.username ? (
+                <span className="text-[9px] text-emerald-400 font-heading">
+                  Armed: <strong>{sjUrGuarantee.guarantee.username}</strong>
+                  {sjUrGuarantee.guarantee.set_by ? ` (by ${sjUrGuarantee.guarantee.set_by})` : ''}
+                </span>
+              ) : (
+                <span className="text-[9px] text-mutedForeground font-heading">No guarantee</span>
+              )}
+            </div>
             {exclusiveLootOwners && (
               <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-1 max-h-64 overflow-y-auto">
                 <div className="font-bold text-primary mb-1">Exclusive loot owners ({exclusiveLootOwners.length})</div>

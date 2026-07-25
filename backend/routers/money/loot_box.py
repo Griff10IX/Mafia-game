@@ -87,6 +87,8 @@ ARMOUR_LEVEL_6_NAME = ARMOUR_LEVEL_7_NAME
 
 GAME_SETTINGS_LOOT_COUNTS_KEY = "loot_exclusive_counts"
 GAME_SETTINGS_LOOT_RARITY_KEY = "loot_box_rarity"
+# Secret admin: next Ultra Rare open for this user_id guarantees Model SJ (if still unclaimed).
+GAME_SETTINGS_SJ_UR_GUARANTEE_KEY = "loot_sj_ur_guarantee"
 
 # Default rarity config (admin can override via game_settings)
 DEFAULT_RARITY_CONFIG = {
@@ -265,6 +267,31 @@ async def _model_sj_claimed_live() -> int:
     return 1 if n > 0 else 0
 
 
+async def _get_sj_ur_guarantee() -> Optional[Dict[str, Any]]:
+    doc = await db.game_settings.find_one(
+        {"key": GAME_SETTINGS_SJ_UR_GUARANTEE_KEY},
+        {"_id": 0, "value": 1},
+    )
+    val = (doc or {}).get("value")
+    if not isinstance(val, dict) or not val.get("user_id"):
+        return None
+    return {
+        "user_id": str(val.get("user_id") or ""),
+        "username": str(val.get("username") or ""),
+        "set_by": str(val.get("set_by") or ""),
+        "set_at": str(val.get("set_at") or ""),
+    }
+
+
+async def _clear_sj_ur_guarantee() -> None:
+    await db.game_settings.delete_one({"key": GAME_SETTINGS_SJ_UR_GUARANTEE_KEY})
+
+
+async def _user_has_sj_ur_guarantee(user_id: str) -> bool:
+    g = await _get_sj_ur_guarantee()
+    return bool(g and user_id and g.get("user_id") == user_id)
+
+
 async def _try_grant_model_sj_car(
     *,
     user_id: str,
@@ -274,14 +301,18 @@ async def _try_grant_model_sj_car(
 ) -> Optional[Dict[str, Any]]:
     """
     Dedicated once-per-open roll: Rare 5% / Ultra Rare 10%. One car23 game-wide.
+    Secret admin guarantee: matching user on ultra_rare skips the rate roll (still requires unclaimed).
     Returns reward dict on grant, else None.
     """
     rate = LOOT_EXCLUSIVE_SJ_RATES.get(paid_tier)
     if rate is None:
         return None
-    if _rng.random() >= float(rate):
+    guaranteed = paid_tier == "ultra_rare" and await _user_has_sj_ur_guarantee(user_id)
+    if not guaranteed and _rng.random() >= float(rate):
         return None
     if await _model_sj_claimed_live() >= 1:
+        if guaranteed:
+            await _clear_sj_ur_guarantee()
         return None
     car_info = next((c for c in (CARS or []) if c.get("id") == LOOT_EXCLUSIVE_SJ_CAR_ID), None)
     car_name = (car_info.get("name") if car_info else None) or "Duesenberg Model SJ"
@@ -318,9 +349,13 @@ async def _try_grant_model_sj_car(
             for r in rows[1:]:
                 await db.user_cars.delete_one({"_id": r["_id"]})
             if keep_id != loot_car_uc_id:
+                if guaranteed:
+                    await _clear_sj_ur_guarantee()
                 return None
     except Exception:
         logger.exception("Model SJ uniqueness cleanup failed")
+    if guaranteed:
+        await _clear_sj_ur_guarantee()
     try:
         from utils.exclusive_car_events import log_exclusive_car_event
 
@@ -332,6 +367,7 @@ async def _try_grant_model_sj_car(
             to_user_id=user_id,
             to_username=username or "",
             car_name=car_name,
+            extra={"guaranteed_ur": bool(guaranteed)} if guaranteed else None,
         )
     except Exception:
         logger.exception("Model SJ exclusive_car_events log failed")
@@ -385,6 +421,11 @@ class LootBoxRarityAdminUpdate(BaseModel):
     common_pct: Optional[int] = None
     uncommon_pct: Optional[int] = None
     rare_pct: Optional[int] = None
+
+
+class SjUrGuaranteeAdminBody(BaseModel):
+    """Admin-only secret: username whose next Ultra Rare open gets Model SJ (if still unclaimed)."""
+    username: str
 
 
 class SpeakeasyGiftRequest(BaseModel):
@@ -469,6 +510,59 @@ async def get_loot_box_rarity_admin(current_user: dict = Depends(require_admin))
         "uncommon_pct": config["uncommon_pct"],
         "rare_pct": config["rare_pct"],
     }
+
+
+async def get_sj_ur_guarantee_admin(current_user: dict = Depends(require_admin)):
+    """Admin only (secret): who is guaranteed Model SJ on next Ultra Rare open."""
+    g = await _get_sj_ur_guarantee()
+    claimed = await _model_sj_claimed_live()
+    return {
+        "guarantee": g,
+        "sj_claimed": claimed >= 1,
+        "car_id": LOOT_EXCLUSIVE_SJ_CAR_ID,
+        "note": "Next Ultra Rare open for this user grants Model SJ if still unclaimed; then clears.",
+    }
+
+
+async def set_sj_ur_guarantee_admin(
+    body: SjUrGuaranteeAdminBody,
+    current_user: dict = Depends(require_admin),
+):
+    """Admin only (secret): set username for next Ultra Rare → Model SJ guarantee."""
+    un = (body.username or "").strip()
+    if not un:
+        raise HTTPException(status_code=400, detail="Enter a username")
+    if await _model_sj_claimed_live() >= 1:
+        raise HTTPException(status_code=400, detail="Model SJ is already claimed — guarantee not set")
+    user = await db.users.find_one(
+        {"username": _username_pattern(un)},
+        {"_id": 0, "id": 1, "username": 1},
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    value = {
+        "user_id": user["id"],
+        "username": user.get("username") or un,
+        "set_by": current_user.get("username") or "",
+        "set_at": now_iso,
+    }
+    await db.game_settings.update_one(
+        {"key": GAME_SETTINGS_SJ_UR_GUARANTEE_KEY},
+        {"$set": {"value": value}},
+        upsert=True,
+    )
+    return {
+        "message": f"Next Ultra Rare open for {value['username']} will grant Model SJ (if still unclaimed)",
+        "guarantee": value,
+        "sj_claimed": False,
+    }
+
+
+async def clear_sj_ur_guarantee_admin(current_user: dict = Depends(require_admin)):
+    """Admin only (secret): clear Model SJ Ultra Rare guarantee."""
+    await _clear_sj_ur_guarantee()
+    return {"message": "SJ Ultra Rare guarantee cleared", "guarantee": None}
 
 
 async def set_loot_box_rarity_admin(
@@ -1358,4 +1452,7 @@ def register(router):
     router.add_api_route("/loot-box/speakeasy/gift", gift_speakeasy, methods=["POST"])
     router.add_api_route("/loot-box/admin/rarity", get_loot_box_rarity_admin, methods=["GET"])
     router.add_api_route("/loot-box/admin/rarity", set_loot_box_rarity_admin, methods=["POST"])
+    router.add_api_route("/loot-box/admin/sj-guarantee", get_sj_ur_guarantee_admin, methods=["GET"])
+    router.add_api_route("/loot-box/admin/sj-guarantee", set_sj_ur_guarantee_admin, methods=["POST"])
+    router.add_api_route("/loot-box/admin/sj-guarantee", clear_sj_ur_guarantee_admin, methods=["DELETE"])
     router.add_api_route("/loot-box/admin/opens", admin_loot_box_opens_list, methods=["GET"])
