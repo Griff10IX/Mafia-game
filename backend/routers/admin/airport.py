@@ -21,6 +21,7 @@ from server import (
     STATES,
     CARS,
     TRAVEL_TIMES,
+    travel_seconds_for_car,
     SECRET_KEY,
     get_rank_info,
     user_prestige_rank_mult,
@@ -368,7 +369,7 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
     for uc in user_cars:
         car_info = next((c for c in CARS if c["id"] == uc["car_id"]), None)
         if car_info:
-            base_time = TRAVEL_TIMES.get(car_info["rarity"], 45)
+            base_time = travel_seconds_for_car(car_info.get("id"), car_info.get("rarity"), 45)
             travel_time = _effective_car_travel_seconds(base_time, current_user, now_utc, fam_time_red)
             user_car_id = uc.get("id") or str(uc["_id"])
             name = car_info["name"]
@@ -679,7 +680,7 @@ async def _start_travel_impl(
             raise HTTPException(status_code=400, detail="That car is too damaged to travel. Repair or scrap it in the garage.")
         car_info = next((c for c in CARS if c["id"] == user_car["car_id"]), None)
         if car_info:
-            travel_time = TRAVEL_TIMES.get(car_info["rarity"], 45)
+            travel_time = travel_seconds_for_car(car_info.get("id"), car_info.get("rarity"), 45)
             method_name = car_info["name"]
             if car_info.get("id") == "car22" or car_info.get("rarity") == "vip_exclusive":
                 method_name = (user_car.get("custom_name") or "").strip() or method_name

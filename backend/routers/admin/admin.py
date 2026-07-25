@@ -4243,16 +4243,16 @@ def register(router):
         car = next((c for c in CARS if c["id"] == car_id), None)
         if not car:
             raise HTTPException(status_code=404, detail="Car not found")
-        if car_id == LOOT_EXCLUSIVE_CAR_ID:
+        if car_id in LOOT_EXCLUSIVE_CAR_IDS or (car and car.get("rarity") == "loot_exclusive"):
             other = await db.user_cars.find_one(
-                {"car_id": LOOT_EXCLUSIVE_CAR_ID, "user_id": {"$ne": target["id"]}},
+                {"car_id": car_id, "user_id": {"$ne": target["id"]}},
                 {"_id": 0, "user_id": 1},
             )
             if other:
                 ou = await db.users.find_one({"id": other["user_id"]}, {"_id": 0, "username": 1})
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Loot-exclusive car is already owned by {(ou or {}).get('username') or other.get('user_id')}",
+                    detail=f"{car.get('name') or 'Loot-exclusive car'} is already owned by {(ou or {}).get('username') or other.get('user_id')}",
                 )
         if car_id == GTA_EXCLUSIVE_CAR_ID:
             other = await db.user_cars.find_one(
@@ -4374,6 +4374,8 @@ def register(router):
     GTA_EXCLUSIVE_POOL_CONFIG_ID = "gta_exclusive"
     GTA_EXCLUSIVE_CAR_ID = "car20"
     LOOT_EXCLUSIVE_CAR_ID = "car21"
+    LOOT_EXCLUSIVE_SJ_CAR_ID = "car23"
+    LOOT_EXCLUSIVE_CAR_IDS = ("car21", "car23")
     GAME_SETTINGS_LOOT_COUNTS_KEY = "loot_exclusive_counts"
     GTA_EXCLUSIVE_DROP_WEIGHT_DEFAULT = 0.000006
     GTA_EXCLUSIVE_DROP_WEIGHT_MIN = 0.0000001

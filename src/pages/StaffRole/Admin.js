@@ -10430,10 +10430,10 @@ export default function Admin() {
         />
         {!collapsed.player && (
           <div className="p-2 space-y-1">
-            <ActionRow icon={Gift} label="Who has exclusive loot" description="Cars (car20/car21), Colt Monitor, Steel Vest 1922, Speakeasy">
+            <ActionRow icon={Gift} label="Who has exclusive loot" description="Cars (car20/car21/car23), Colt Monitor, Steel Vest 1922, Speakeasy">
               <BtnPrimary onClick={handleFetchExclusiveLoot} disabled={exclusiveLootLoading}>{exclusiveLootLoading ? '...' : 'View'}</BtnPrimary>
             </ActionRow>
-            <ActionRow icon={Car} label="Exclusive car manager" description="Remove, transfer, or grant car20 / car21 (dedicated page)">
+            <ActionRow icon={Car} label="Exclusive car manager" description="Remove, transfer, or grant car20 / car21 / car23 (dedicated page)">
               <Link
                 to="/tjjeujr3wa/exclusive-cars"
                 className="inline-block bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 font-heading touch-manipulation"
@@ -16801,7 +16801,8 @@ export default function Admin() {
                   >
                     <option value="all">All exclusive types</option>
                     <option value="car20">car20 (Al Capone)</option>
-                    <option value="car21">car21 (loot exclusive)</option>
+                    <option value="car21">car21 (Cadillac V-16 loot exclusive)</option>
+                    <option value="car23">car23 (Model SJ loot exclusive)</option>
                   </select>
                   <input
                     type="text"

@@ -1023,8 +1023,8 @@ export default function LootBox() {
   const freeRareOpens = Number(status?.loot_box_free_rare_opens || 0);
   const tierCost = resolveOpenCost(status, selectedTier);
   const tierTheme = LOOT_TIER_THEME[selectedTier] || LOOT_TIER_THEME.common;
-  const claimed = status?.claimed_counts ?? { weapon: 0, car: 0, armour: 0, property: 0, weed_strain: 0 };
-  const exclusiveCaps = status?.exclusive_caps ?? { weapon: 1, car: 1, armour: 1, property: 1, weed_strain: 5 };
+  const claimed = status?.claimed_counts ?? { weapon: 0, car: 0, car_sj: 0, armour: 0, property: 0, weed_strain: 0 };
+  const exclusiveCaps = status?.exclusive_caps ?? { weapon: 1, car: 1, car_sj: 1, armour: 1, property: 1, weed_strain: 5 };
   const canUseFreeRare = selectedTier === 'rare' && freeRareOpens > 0;
   const canOpen = (pieces >= tierCost || canUseFreeRare) && phase === 'idle';
 
@@ -1172,7 +1172,7 @@ export default function LootBox() {
                 </p>
                 <ul className="list-none p-0 m-0 flex flex-col gap-0.5">
                   <ScarcityRow icon={Swords} label="Exclusive Weapon" claimed={claimed.weapon} cap={exclusiveCaps.weapon} />
-                  <ScarcityRow icon={Car} label="Exclusive Vehicle" claimed={claimed.car} cap={exclusiveCaps.car} />
+                  <ScarcityRow icon={Car} label="Model SJ (Rare 2% / UR 5%)" claimed={claimed.car_sj} cap={exclusiveCaps.car_sj ?? 1} />
                   <ScarcityRow icon={Shield} label="Exclusive Armour" claimed={claimed.armour} cap={exclusiveCaps.armour} />
                   <ScarcityRow icon={Building2} label="Speakeasy" claimed={claimed.property} cap={exclusiveCaps.property} />
                   <ScarcityRow icon={Leaf} label="Weed Empire specials" claimed={claimed.weed_strain} cap={exclusiveCaps.weed_strain} />

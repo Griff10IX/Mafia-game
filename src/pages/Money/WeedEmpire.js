@@ -200,15 +200,24 @@ export default function WeedEmpire() {
     const amount = Number(sellAmount);
     const grams = amount * (SELL_UNIT_GRAMS[sellUnit] || 1);
     const available = Number(farm?.stash?.[sellStrain] || 0);
+    // Allow 1-decimal UI rounding (e.g. 0.099g shown/typed as 0.1g) — backend clamps to stash.
+    const enough =
+      Number.isFinite(grams) &&
+      (grams <= available + 1e-6 || (grams <= available + 0.05 && Math.round(grams * 10) === Math.round(available * 10)));
+    const sellGrams = enough && grams > available ? available : grams;
     const pricePerOz = Number(farm?.street_price_per_oz?.[sellStrain] || 0);
-    const gross = Math.floor((grams / 28) * pricePerOz * (SELL_BULK_MULT[sellUnit] || 1));
+    const gross = Math.floor((sellGrams / 28) * pricePerOz * (SELL_BULK_MULT[sellUnit] || 1));
     const remainingCap = Number(farm?.daily_sold_remaining || 0);
+    // Dust amounts can floor to $0 — still allow clearing full stash for $1 (matches backend).
+    const clearingDust = enough && available > 0 && sellGrams >= available - 1e-6 && gross <= 0;
+    const payout = Math.min(clearingDust ? 1 : gross, remainingCap);
     return {
-      grams,
+      grams: sellGrams,
+      requestedGrams: grams,
       available,
-      payout: Math.min(gross, remainingCap),
-      valid: amount > 0 && grams <= available + 1e-6 && pricePerOz > 0 && remainingCap > 0,
-      capped: gross > remainingCap,
+      payout,
+      valid: amount > 0 && enough && pricePerOz > 0 && remainingCap > 0 && payout > 0,
+      capped: !clearingDust && gross > remainingCap,
     };
   }, [farm, sellAmount, sellStrain, sellUnit]);
 
@@ -873,7 +882,8 @@ export default function WeedEmpire() {
                   <div key={sid} className="flex justify-between gap-2">
                     <span>{strainMap[sid]?.name || sid}</span>
                     <span>
-                      {Number(g).toFixed(1)}g ({(Number(g) / 28).toFixed(2)} oz)
+                      {Number(g) < 1 ? Number(g).toFixed(2) : Number(g).toFixed(1)}g (
+                      {(Number(g) / 28).toFixed(2)} oz)
                     </span>
                   </div>
                 ))
@@ -893,7 +903,7 @@ export default function WeedEmpire() {
               </select>
               <input
                 type="number"
-                min={0.1}
+                min={0.01}
                 step={0.1}
                 value={sellAmount}
                 onChange={(e) => setSellAmount(e.target.value)}
@@ -902,14 +912,19 @@ export default function WeedEmpire() {
               <button
                 type="button"
                 disabled={!sellStrain}
-                onClick={() =>
-                  setSellAmount(
-                    (
-                      Number(farm.stash?.[sellStrain] || 0) /
-                      (SELL_UNIT_GRAMS[sellUnit] || 1)
-                    ).toFixed(sellUnit === "g" ? 1 : 3)
-                  )
-                }
+                onClick={() => {
+                  const avail = Number(farm.stash?.[sellStrain] || 0);
+                  const unitMult = SELL_UNIT_GRAMS[sellUnit] || 1;
+                  const maxInUnit = avail / unitMult;
+                  if (sellUnit === "g") {
+                    // Floor to 0.1g so Max never rounds above stash (toFixed rounds up).
+                    const floored = Math.floor(maxInUnit * 10 + 1e-9) / 10;
+                    setSellAmount(floored > 0 ? floored.toFixed(1) : String(maxInUnit));
+                  } else {
+                    const floored = Math.floor(maxInUnit * 1000 + 1e-9) / 1000;
+                    setSellAmount(floored > 0 ? floored.toFixed(3) : String(maxInUnit));
+                  }
+                }}
                 className="px-2 py-1.5 rounded border border-border text-xs text-muted-foreground"
               >
                 Max
@@ -935,9 +950,13 @@ export default function WeedEmpire() {
             </div>
             {sellStrain && (
               <p className={`text-xs ${sellPreview.valid ? "text-emerald-400" : "text-amber-400"}`}>
-                {sellPreview.grams > sellPreview.available + 1e-6
-                  ? `Not enough stash — need ${sellPreview.grams.toFixed(1)}g, have ${sellPreview.available.toFixed(1)}g`
-                  : `You receive about ${money(sellPreview.payout)}${sellPreview.capped ? " (daily cap)" : ""}`}
+                {sellPreview.requestedGrams > sellPreview.available + 0.05
+                  ? `Not enough stash — need ${sellPreview.requestedGrams.toFixed(2)}g, have ${sellPreview.available.toFixed(2)}g`
+                  : sellPreview.valid
+                    ? `You receive about ${money(sellPreview.payout)}${sellPreview.capped ? " (daily cap)" : ""}`
+                    : sellPreview.available > 0 && sellPreview.requestedGrams > 0
+                      ? "Sale too small for street price — try a bit more, or use Max"
+                      : `Not enough stash — need ${sellPreview.requestedGrams.toFixed(2)}g, have ${sellPreview.available.toFixed(2)}g`}
               </p>
             )}
             {(farm.dealers_level || 0) >= 1 ? (

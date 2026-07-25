@@ -3186,27 +3186,46 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             and killer_fid_for_war != victim_fid_for_war
             and await _get_active_war_between(killer_fid_for_war, victim_fid_for_war)
         )
-        # Transfer cars to killer; exclusive + loot-exclusive get a new id so old view-car links are dead
-        killer_has_loot_car = await db.user_cars.count_documents({"user_id": killer_id, "car_id": "car21"})
+        # Transfer cars to killer; exclusive + loot-exclusive get a new id so old view-car links are dead.
+        # Loot-exclusive uniqueness is per catalog car_id (car21 Cadillac, car23 Model SJ, etc.).
         car_transfer_ops: List[Any] = []
         exclusive_transfer_logs: List[dict] = []
         car_transfer_outcomes: List[dict] = []
         victim_name = target.get("username") or target_name
         killer_name = current_user.get("username") or "?"
+        killer_loot_ids: Set[str] = set()
+        try:
+            async for row in db.user_cars.find(
+                {"user_id": killer_id},
+                {"_id": 0, "car_id": 1},
+            ):
+                cid = row.get("car_id")
+                if not cid:
+                    continue
+                ci = next((c for c in CARS if c.get("id") == cid), None)
+                if ci and ci.get("rarity") == "loot_exclusive":
+                    killer_loot_ids.add(str(cid))
+        except Exception:
+            killer_loot_ids = set()
         for uc in victim_cars:
             car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
             if uc.get("car_id") == "car22" or (car_info and car_info.get("rarity") == "vip_exclusive"):
                 continue
             is_loot_exclusive = car_info and car_info.get("rarity") == "loot_exclusive"
             if is_loot_exclusive:
-                if killer_has_loot_car >= 1 and not war_kill:
+                loot_cid = str(uc.get("car_id") or "")
+                killer_has_this = loot_cid in killer_loot_ids
+                if killer_has_this and not war_kill:
                     car_transfer_ops.append(DeleteOne({"_id": uc["_id"]}))
                     exclusive_transfer_logs.append(
                         {"car_id": uc.get("car_id"), "car_name": car_info.get("name"), "destroyed": True, "previous_user_car_id": uc.get("id")}
                     )
                 else:
-                    if killer_has_loot_car >= 1 and war_kill:
-                        killer_loot_row = await db.user_cars.find_one({"user_id": killer_id, "car_id": "car21"}, {"_id": 1})
+                    if killer_has_this and war_kill:
+                        killer_loot_row = await db.user_cars.find_one(
+                            {"user_id": killer_id, "car_id": loot_cid},
+                            {"_id": 1},
+                        )
                         if killer_loot_row:
                             car_transfer_ops.append(DeleteOne({"_id": killer_loot_row["_id"]}))
                     new_id = str(uuid.uuid4())
@@ -3225,10 +3244,11 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                             "car_name": car_info.get("name"),
                             "user_car_id": new_id,
                             "previous_user_car_id": uc.get("id"),
-                            "war_kill_replaced_duplicate": war_kill and killer_has_loot_car >= 1,
+                            "war_kill_replaced_duplicate": war_kill and killer_has_this,
                         }
                     )
-                    killer_has_loot_car = 1
+                    if loot_cid:
+                        killer_loot_ids.add(loot_cid)
                 continue
             is_exclusive = car_info and car_info.get("rarity") == "exclusive"
             if is_exclusive:

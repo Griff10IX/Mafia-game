@@ -527,7 +527,7 @@ def _tick_curing(farm: dict, now: datetime) -> dict:
             sid = str(batch.get("strain_id") or "")
             grams = float(batch.get("grams") or 0)
             if sid and grams > 0:
-                stash[sid] = float(stash.get(sid) or 0) + grams
+                stash[sid] = round(float(stash.get(sid) or 0) + grams, 2)
         else:
             still.append(batch)
     farm["curing"] = still
@@ -1147,8 +1147,12 @@ async def weed_sell(body: SellBody, http_request: Request, current_user: dict = 
         raise HTTPException(status_code=400, detail=str(e))
     stash = dict(farm.get("stash") or {})
     have = float(stash.get(body.strain_id) or 0)
+    # UI shows/steps 0.1g — clamp when request rounds slightly above true stash.
     if grams > have + 1e-6:
-        raise HTTPException(status_code=400, detail="Not enough stash")
+        if grams <= round(have, 1) + 1e-9 and grams <= have + 0.05:
+            grams = have
+        else:
+            raise HTTPException(status_code=400, detail="Not enough stash")
 
     oz = grams_to_oz(grams)
     price_per_oz = market_price_per_oz(
@@ -1166,7 +1170,13 @@ async def weed_sell(body: SellBody, http_request: Request, current_user: dict = 
         price_per_oz *= 1.05
     payout = int(math.floor(price_per_oz * oz))
     if payout <= 0:
-        raise HTTPException(status_code=400, detail="Sale too small")
+        # Tiny dust sales still clear stash for at least $1 if anything is sold.
+        if have > 0 and grams >= have - 1e-6:
+            payout = 1
+            grams = have
+            oz = grams_to_oz(grams)
+        else:
+            raise HTTPException(status_code=400, detail="Sale too small")
 
     remaining = DAILY_SELL_CAP_USD - int(farm.get("daily_sold_usd") or 0)
     if payout > remaining:
@@ -1177,7 +1187,7 @@ async def weed_sell(body: SellBody, http_request: Request, current_user: dict = 
         payout = remaining
 
     stash[body.strain_id] = round(have - grams, 4)
-    if stash[body.strain_id] <= 0:
+    if stash[body.strain_id] < 0.01:
         stash.pop(body.strain_id, None)
     farm["stash"] = stash
     farm["business_cash"] = int(farm.get("business_cash") or 0) + payout

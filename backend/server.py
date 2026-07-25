@@ -772,13 +772,26 @@ TRAVEL_TIMES = {
     "airport": 0   # Airport (instant); set > 0 for timed flights (family -1s perk applies to this value)
 }
 
+# Per-car travel seconds override (beats TRAVEL_TIMES[rarity]). Model SJ loot exclusive = 2s.
+TRAVEL_TIME_OVERRIDES = {
+    "car23": 2,
+}
+
+
+def travel_seconds_for_car(car_id: Optional[str], rarity: Optional[str], default: int = 45) -> int:
+    """Resolve travel seconds: per-car override, else rarity TRAVEL_TIMES."""
+    cid = (car_id or "").strip()
+    if cid and cid in TRAVEL_TIME_OVERRIDES:
+        return int(TRAVEL_TIME_OVERRIDES[cid])
+    return int(TRAVEL_TIMES.get(rarity or "common", default))
+
 # Melt-for-bullets: catalog value × (100 − damage)% (damage-immune cars unchanged); melt_value = that × NUM // DEN; bullets = melt_value // MELT_VALUE_PER_BULLET — see gta._melt_cars_impl
 MELT_VALUE_PER_BULLET = 385
 MELT_BULLETS_VALUE_MULT_NUM = 165  # ~35% above prior 122 (122 × 1.35 ≈ 165)
 MELT_BULLETS_VALUE_MULT_DEN = 100
 
 # Bump when Cloudflare caches SPA HTML/404 for /images/gta/* (browsers then hide imgs via onError).
-GTA_IMAGE_CACHE_BUST = "3"
+GTA_IMAGE_CACHE_BUST = "4"
 
 
 def gta_car_image(filename: str) -> str:
@@ -820,6 +833,8 @@ CARS = [
     {"id": "car21", "name": "1930 Cadillac Series 452 V-16 Armored Sedan", "rarity": "loot_exclusive", "min_difficulty": 5, "value": 143750000, "travel_bonus": 68, "image": gta_car_image("car21.png")},
     # VIP Game Pass tier 100 (once per account; custom image; survives death)
     {"id": "car22", "name": "VIP Pass Car", "rarity": "vip_exclusive", "min_difficulty": 5, "value": 71875, "travel_bonus": 55, "image": None},
+    # Loot-exclusive: Rare 2% / Ultra Rare 5% loot boxes only; 1 game-wide; 2s travel
+    {"id": "car23", "name": "Duesenberg Model SJ", "rarity": "loot_exclusive", "min_difficulty": 5, "value": 143750000, "travel_bonus": 75, "image": gta_car_image("car23.png"), "travel_seconds": 2},
 ]
 
 # Models (UserRegister, UserLogin, PasswordResetRequest, PasswordResetConfirm moved to routers/auth.py)
@@ -2044,7 +2059,11 @@ async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_
         if rarity not in ("exclusive", "loot_exclusive") or not winner_boss_id:
             continue
         if rarity == "loot_exclusive":
-            existing = await db.user_cars.find_one({"user_id": winner_boss_id, "car_id": "car21"}, {"_id": 1})
+            # One of each loot-exclusive catalog id (car21, car23, …)
+            existing = await db.user_cars.find_one(
+                {"user_id": winner_boss_id, "car_id": uc.get("car_id")},
+                {"_id": 1},
+            )
             if existing and existing.get("_id") != uc.get("_id"):
                 await db.user_cars.delete_one({"_id": existing["_id"]})
         new_id = str(uuid.uuid4())

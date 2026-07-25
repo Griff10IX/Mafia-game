@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-25 19:40 UTC[/color][/b] — [b]Loot: Duesenberg Model SJ[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]Money → Loot Box[/b] — one game-wide [b]Duesenberg Model SJ[/b] (loot exclusive). [b]2%[/b] chance from [b]Rare[/b] boxes, [b]5%[/b] from [b]Ultra Rare[/b] only. Once claimed it never returns to the pool.[/color]
+[*][color=#888888][b]Changed:[/b] Model SJ travels in [b]2 seconds[/b] (fastest car). Damage-immune like other exclusives; ownership transfers on kill. Used by Travel / Auto Rank / Booze.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-25 19:10 UTC[/color][/b] — [b]Weed Empire specials: kill takes stash[/b][/size]
 [quote]
 [list]

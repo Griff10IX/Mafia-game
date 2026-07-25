@@ -193,6 +193,7 @@ from server import (
     RANKS,
     CARS,
     TRAVEL_TIMES,
+    travel_seconds_for_car,
     MELT_VALUE_PER_BULLET,
     MELT_BULLETS_VALUE_MULT_NUM,
     MELT_BULLETS_VALUE_MULT_DEN,
@@ -2985,7 +2986,7 @@ async def get_car(car_id: str, current_user: dict = Depends(get_current_user)):
     if car.get("id") == "car_custom":
         out["travel_time"] = TRAVEL_TIMES.get("custom", 12)
     else:
-        out["travel_time"] = TRAVEL_TIMES.get(rarity, 45)
+        out["travel_time"] = travel_seconds_for_car(car.get("id"), rarity, 45)
     return out
 
 
@@ -3060,7 +3061,11 @@ async def get_view_car(
     owner_id = user_car.get("user_id")
     car_id = user_car.get("car_id")
     rarity = car_info.get("rarity") or "common"
-    travel_time = TRAVEL_TIMES.get("custom", 12) if car_id == "car_custom" else TRAVEL_TIMES.get(rarity, 45)
+    travel_time = (
+        TRAVEL_TIMES.get("custom", 12)
+        if car_id == "car_custom"
+        else travel_seconds_for_car(car_id, rarity, 45)
+    )
     damage_percent = 0 if _is_damage_immune_car(car_id, rarity) else min(100, max(0, float(user_car.get("damage_percent", 0))))
     name = user_car.get("custom_name") or user_car.get("car_name") or car_info.get("name")
     image = car_info.get("image")

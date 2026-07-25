@@ -285,6 +285,7 @@ async def _booze_garage_travel_leg_seconds(db, user_id: str) -> tuple[Optional[s
 
     CARS = getattr(srv, "CARS", None) or []
     TRAVEL_TIMES = getattr(srv, "TRAVEL_TIMES", None) or {}
+    travel_seconds_for_car = getattr(srv, "travel_seconds_for_car", None)
     default_leg = int(TRAVEL_TIMES.get("common", 45))
     user_id = (user_id or "").strip()
     if not user_id:
@@ -315,7 +316,10 @@ async def _booze_garage_travel_leg_seconds(db, user_id: str) -> tuple[Optional[s
         else:
             car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
             rarity = (car_info or {}).get("rarity", "common")
-            travel_time = int(TRAVEL_TIMES.get(rarity, 45) if car_info else 45)
+            if callable(travel_seconds_for_car):
+                travel_time = int(travel_seconds_for_car(uc.get("car_id"), rarity, 45) if car_info else 45)
+            else:
+                travel_time = int(TRAVEL_TIMES.get(rarity, 45) if car_info else 45)
             method = uc.get("id") or str(uc.get("_id", ""))
             if not method:
                 continue

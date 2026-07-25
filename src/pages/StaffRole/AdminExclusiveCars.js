@@ -8,7 +8,8 @@ import styles from '../../styles/noir.module.css';
 
 const EXCLUSIVE_OPTIONS = [
   { id: 'car20', label: 'car20 — Al Capone (GTA exclusive)' },
-  { id: 'car21', label: 'car21 — Loot box exclusive' },
+  { id: 'car21', label: 'car21 — Cadillac V-16 (legacy loot exclusive)' },
+  { id: 'car23', label: 'car23 — Duesenberg Model SJ (loot exclusive, 2s)' },
 ];
 
 function Btn({ children, className = '', ...props }) {
@@ -200,8 +201,8 @@ export default function AdminExclusiveCars() {
             </h1>
           </div>
           <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-            Remove or transfer Al Capone (car20) and loot-box exclusive (car21). Granting updates global caps and the
-            GTA pool automatically. For full timelines use{' '}
+            Remove or transfer Al Capone (car20), Cadillac V-16 (car21), and Model SJ (car23). Granting updates global
+            caps and the GTA pool automatically. For full timelines use{' '}
             <Link to="/tjjeujr3wa/overview#gtaPool" className="text-primary hover:underline">
               Admin → GTA exclusive pool
             </Link>
@@ -361,7 +362,8 @@ export default function AdminExclusiveCars() {
               </Btn>
             </div>
             <p className="text-[9px] text-mutedForeground font-heading">
-              Only one car20 and one car21 can exist game-wide. Grant fails if another player already holds that car.
+              Only one of each exclusive id (car20 / car21 / car23) can exist game-wide. Grant fails if another player
+              already holds that car.
             </p>
           </div>
 
