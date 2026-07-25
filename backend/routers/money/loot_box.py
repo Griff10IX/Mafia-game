@@ -77,8 +77,8 @@ LOOT_EXCLUSIVE_WEAPON_ID = "weapon_loot"
 LOOT_EXCLUSIVE_CAR_ID = "car21"  # legacy Cadillac — no longer droppable from loot boxes
 LOOT_EXCLUSIVE_SJ_CAR_ID = "car23"  # Duesenberg Model SJ — Rare/Ultra Rare only
 LOOT_EXCLUSIVE_SJ_RATES: Dict[str, float] = {
-    "rare": 0.02,
-    "ultra_rare": 0.05,
+    "rare": 0.05,
+    "ultra_rare": 0.10,
 }
 LOOT_EXCLUSIVE_ARMOUR_LEVEL = 7
 ARMOUR_LEVEL_7_NAME = "Steel Plate Bulletproof Vest (1922)"
@@ -273,7 +273,7 @@ async def _try_grant_model_sj_car(
     username: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """
-    Dedicated once-per-open roll: Rare 2% / Ultra Rare 5%. One car23 game-wide.
+    Dedicated once-per-open roll: Rare 5% / Ultra Rare 10%. One car23 game-wide.
     Returns reward dict on grant, else None.
     """
     rate = LOOT_EXCLUSIVE_SJ_RATES.get(paid_tier)
@@ -454,6 +454,8 @@ async def get_loot_box_status(current_user: dict = Depends(get_current_user)):
             "common_box_pct": int(rarity.get("common_pct") or 0),
             "uncommon_box_pct": int(rarity.get("uncommon_pct") or 0),
             "rare_box_pct": int(rarity.get("rare_pct") or 0),
+            "model_sj_rare_pct": 5,
+            "model_sj_ultra_rare_pct": 10,
         },
     }
 
@@ -619,8 +621,9 @@ def _loot_public_reward_info() -> Dict[str, Any]:
         },
         {
             "id": "car_sj",
-            "label": "Duesenberg Model SJ (Rare / Ultra Rare only, 2s travel)",
+            "label": "Duesenberg Model SJ (Rare 5% / Ultra Rare 10%, 2s travel)",
             "cap_global": 1,
+            "drop_rates_pct": {"rare": 5, "ultra_rare": 10},
         },
     ]
     tiers: Dict[str, Any] = {}
@@ -671,7 +674,7 @@ def _loot_public_reward_info() -> Dict[str, Any]:
             f"Global caps (all players): weapon {_exclusive_cap('weapon')}, "
             f"armour {_exclusive_cap('armour')}, Speakeasy {_exclusive_cap('property')}, "
             f"Weed Empire special strains {_exclusive_cap('weed_strain')} (1 of each), "
-            "Duesenberg Model SJ 1 (Rare / Ultra Rare boxes only; 2s travel). "
+            "Duesenberg Model SJ 1 (Rare boxes 5% / Ultra Rare 10% only; 2s travel). "
             "If a type is full or you already own that exclusive, the roll tries another exclusive or becomes a standard prize. "
             "Weed exclusives transfer only on PvP kill once claimed. Model SJ ownership also transfers on kill."
         ),
@@ -911,7 +914,7 @@ async def open_loot_box(
         exclusive_chance = min(1.0, max(0.0, exclusive_chance))
         chosen_standard_types: set = set()
 
-        # Dedicated Model SJ roll (Rare 2% / Ultra Rare 5%) — once per open, not shared exclusive pool.
+        # Dedicated Model SJ roll (Rare 5% / Ultra Rare 10%) — once per open, not shared exclusive pool.
         sj_reward = await _try_grant_model_sj_car(
             user_id=user_id,
             paid_tier=paid_tier,

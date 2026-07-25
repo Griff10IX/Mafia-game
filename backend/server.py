@@ -833,7 +833,7 @@ CARS = [
     {"id": "car21", "name": "1930 Cadillac Series 452 V-16 Armored Sedan", "rarity": "loot_exclusive", "min_difficulty": 5, "value": 143750000, "travel_bonus": 68, "image": gta_car_image("car21.png")},
     # VIP Game Pass tier 100 (once per account; custom image; survives death)
     {"id": "car22", "name": "VIP Pass Car", "rarity": "vip_exclusive", "min_difficulty": 5, "value": 71875, "travel_bonus": 55, "image": None},
-    # Loot-exclusive: Rare 2% / Ultra Rare 5% loot boxes only; 1 game-wide; 2s travel
+    # Loot-exclusive: Rare 5% / Ultra Rare 10% loot boxes only; 1 game-wide; 2s travel
     {"id": "car23", "name": "Duesenberg Model SJ", "rarity": "loot_exclusive", "min_difficulty": 5, "value": 143750000, "travel_bonus": 75, "image": gta_car_image("car23.png"), "travel_seconds": 2},
 ]
 
