@@ -10659,27 +10659,89 @@ export default function Admin() {
                     <div className="text-foreground font-bold">{(pointsSourcesReport.points_transfers_received?.total_points ?? 0).toLocaleString()}</div>
                   </div>
                 </div>
-                <div>
-                  <div className="text-[9px] font-bold text-primary mb-0.5">Received breakdown</div>
-                  {(pointsSourcesReport.lines || []).length === 0 ? (
-                    <p className="text-[9px] text-mutedForeground italic">No logged inflows for this account.</p>
-                  ) : (
-                    <ul className="max-h-48 overflow-y-auto space-y-0.5 border border-zinc-700/30 rounded p-1.5 bg-zinc-900/40">
-                      {(pointsSourcesReport.lines || []).map((line, i) => (
-                        <li key={`recv-${i}`} className="text-[9px] text-emerald-200/90 leading-snug">
-                          {line}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {pointsSourcesReport.received_totals?.all != null && (
-                    <div className="text-[9px] text-mutedForeground mt-1">
-                      Logged received total: {(pointsSourcesReport.received_totals.all ?? 0).toLocaleString()} pts
-                      {' · '}features {(pointsSourcesReport.received_totals.features ?? 0).toLocaleString()}
-                      {' · '}users {(pointsSourcesReport.received_totals.users ?? 0).toLocaleString()}
-                      {' · '}purchases {(pointsSourcesReport.received_totals.purchases ?? 0).toLocaleString()}
+                <div className="space-y-2">
+                  <div>
+                    <div className="text-[9px] font-bold text-primary mb-0.5">Received totals (by source)</div>
+                    {(pointsSourcesReport.lines || []).length === 0 ? (
+                      <p className="text-[9px] text-mutedForeground italic">No logged inflows for this account.</p>
+                    ) : (
+                      <ul className="max-h-36 overflow-y-auto space-y-0.5 border border-zinc-700/30 rounded p-1.5 bg-zinc-900/40">
+                        {(pointsSourcesReport.lines || []).map((line, i) => (
+                          <li key={`recv-${i}`} className="text-[9px] text-emerald-200/90 leading-snug">
+                            {line}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {pointsSourcesReport.received_totals?.all != null && (
+                      <div className="text-[9px] text-mutedForeground mt-1">
+                        Logged received total: {(pointsSourcesReport.received_totals.all ?? 0).toLocaleString()} pts
+                        {' · '}features {(pointsSourcesReport.received_totals.features ?? 0).toLocaleString()}
+                        {' · '}users {(pointsSourcesReport.received_totals.users ?? 0).toLocaleString()}
+                        {' · '}purchases {(pointsSourcesReport.received_totals.purchases ?? 0).toLocaleString()}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-[9px] font-bold text-amber-200/90 mb-0.5">Sent totals (by source)</div>
+                    {(pointsSourcesReport.sent_lines || []).length === 0 ? (
+                      <p className="text-[9px] text-mutedForeground italic">No logged outflows for this account.</p>
+                    ) : (
+                      <ul className="max-h-36 overflow-y-auto space-y-0.5 border border-zinc-700/30 rounded p-1.5 bg-zinc-900/40">
+                        {(pointsSourcesReport.sent_lines || []).map((line, i) => (
+                          <li key={`sent-${i}`} className="text-[9px] text-amber-200/85 leading-snug">
+                            {line}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {pointsSourcesReport.sent_totals?.all != null && (
+                      <div className="text-[9px] text-mutedForeground mt-1">
+                        Logged sent total: {(pointsSourcesReport.sent_totals.all ?? 0).toLocaleString()} pts
+                        {' · '}features {(pointsSourcesReport.sent_totals.features ?? 0).toLocaleString()}
+                        {' · '}users {(pointsSourcesReport.sent_totals.users ?? 0).toLocaleString()}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-[9px] font-bold text-primary mb-0.5">
+                      Each received (MDG lobby / before→after when logged)
                     </div>
-                  )}
+                    {(pointsSourcesReport.received_transactions || []).length === 0 ? (
+                      <p className="text-[9px] text-mutedForeground italic">No per-event received rows.</p>
+                    ) : (
+                      <ul className="max-h-56 overflow-y-auto space-y-0.5 border border-emerald-800/30 rounded p-1.5 bg-zinc-900/40">
+                        {(pointsSourcesReport.received_transactions || []).map((tx, i) => (
+                          <li key={tx.id || `recv-tx-${i}`} className="text-[9px] text-emerald-100/90 leading-snug border-b border-zinc-800/60 pb-0.5 last:border-0">
+                            <span className="text-zinc-500">{tx.created_at ? String(tx.created_at).slice(0, 19).replace('T', ' ') : '—'}</span>
+                            {' · '}
+                            {tx.line || `${tx.detail || tx.label} (${(tx.points || 0).toLocaleString()} pts)`}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-[9px] font-bold text-amber-200/90 mb-0.5">
+                      Each sent out (MDG lobby / before→after when logged)
+                    </div>
+                    {(pointsSourcesReport.sent_transactions || []).length === 0 ? (
+                      <p className="text-[9px] text-mutedForeground italic">No per-event sent rows.</p>
+                    ) : (
+                      <ul className="max-h-56 overflow-y-auto space-y-0.5 border border-amber-800/30 rounded p-1.5 bg-zinc-900/40">
+                        {(pointsSourcesReport.sent_transactions || []).map((tx, i) => (
+                          <li key={tx.id || `sent-tx-${i}`} className="text-[9px] text-amber-100/90 leading-snug border-b border-zinc-800/60 pb-0.5 last:border-0">
+                            <span className="text-zinc-500">{tx.created_at ? String(tx.created_at).slice(0, 19).replace('T', ' ') : '—'}</span>
+                            {' · '}
+                            {tx.line || `${tx.detail || tx.label} (${(tx.points || 0).toLocaleString()} pts)`}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <p className="text-[8px] text-mutedForeground mt-1">
+                      Before→after only appears on events logged after wallet snapshot fields were added. Older MDG rows still show lobby / opponents when the game record exists.
+                    </p>
+                  </div>
                 </div>
                 {pointsSourcesReport.balance_matches_lots === false && (
                   <div className="text-amber-400 text-[9px]">

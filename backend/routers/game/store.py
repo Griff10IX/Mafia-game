@@ -1618,14 +1618,20 @@ async def get_my_points_transfers(current_user: dict = Depends(get_current_user)
 
 
 async def get_my_points_breakdown(current_user: dict = Depends(get_current_user)):
-    """Self-only readable breakdown of store points received (features, players, purchases)."""
+    """Self-only readable breakdown of store points received/sent (aggregates + per-tx detail)."""
     uid = current_user["id"]
-    received = await build_received_breakdown(db, uid, for_player=True)
+    received = await build_received_breakdown(db, uid, for_player=True, include_transactions=True, tx_limit=100)
     return {
         "balance": int(current_user.get("points") or 0),
         "received_breakdown": received.get("received_breakdown") or [],
         "lines": received.get("lines") or [],
         "totals": received.get("totals") or {},
+        "sent_breakdown": received.get("sent_breakdown") or [],
+        "sent_lines": received.get("sent_lines") or [],
+        "sent_totals": received.get("sent_totals") or {},
+        "received_transactions": received.get("received_transactions") or [],
+        "sent_transactions": received.get("sent_transactions") or [],
+        "tx_limit": received.get("tx_limit"),
     }
 
 

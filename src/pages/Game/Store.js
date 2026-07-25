@@ -1412,27 +1412,80 @@ export default function Store() {
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
               <Package size={14} className="text-primary shrink-0" />
-              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Points received breakdown</span>
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Points received / sent breakdown</span>
             </div>
-            <div className="p-3">
+            <div className="p-3 space-y-3">
               {pointsBreakdownLoading && !pointsBreakdown ? (
                 <p className="text-[10px] text-zinc-500 font-heading italic">Loading…</p>
-              ) : !(pointsBreakdown?.lines || []).length ? (
-                <p className="text-[10px] text-zinc-500 font-heading italic">No logged points received yet.</p>
               ) : (
                 <>
-                  <ul className="space-y-1 max-h-64 overflow-y-auto">
-                    {(pointsBreakdown.lines || []).map((line, i) => (
-                      <li key={`pts-recv-${i}`} className="text-[11px] sm:text-[10px] font-heading text-emerald-200/90 leading-snug">
-                        {line}
-                      </li>
-                    ))}
-                  </ul>
-                  {pointsBreakdown.totals?.all != null && (
-                    <p className="text-[9px] text-zinc-500 font-heading mt-2">
-                      Logged total received: {(pointsBreakdown.totals.all ?? 0).toLocaleString()} pts
-                    </p>
-                  )}
+                  <div>
+                    <p className="text-[9px] font-heading font-bold text-emerald-300/90 uppercase tracking-wider mb-1">Received totals</p>
+                    {!(pointsBreakdown?.lines || []).length ? (
+                      <p className="text-[10px] text-zinc-500 font-heading italic">No logged points received yet.</p>
+                    ) : (
+                      <ul className="space-y-1 max-h-40 overflow-y-auto">
+                        {(pointsBreakdown.lines || []).map((line, i) => (
+                          <li key={`pts-recv-${i}`} className="text-[11px] sm:text-[10px] font-heading text-emerald-200/90 leading-snug">
+                            {line}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {pointsBreakdown?.totals?.all != null && (
+                      <p className="text-[9px] text-zinc-500 font-heading mt-1.5">
+                        Logged total received: {(pointsBreakdown.totals.all ?? 0).toLocaleString()} pts
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-heading font-bold text-amber-300/90 uppercase tracking-wider mb-1">Sent totals</p>
+                    {!(pointsBreakdown?.sent_lines || []).length ? (
+                      <p className="text-[10px] text-zinc-500 font-heading italic">No logged points sent yet.</p>
+                    ) : (
+                      <ul className="space-y-1 max-h-40 overflow-y-auto">
+                        {(pointsBreakdown.sent_lines || []).map((line, i) => (
+                          <li key={`pts-sent-${i}`} className="text-[11px] sm:text-[10px] font-heading text-amber-200/85 leading-snug">
+                            {line}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    {pointsBreakdown?.sent_totals?.all != null && (
+                      <p className="text-[9px] text-zinc-500 font-heading mt-1.5">
+                        Logged total sent: {(pointsBreakdown.sent_totals.all ?? 0).toLocaleString()} pts
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-heading font-bold text-emerald-300/90 uppercase tracking-wider mb-1">Each received</p>
+                    <p className="text-[9px] text-zinc-500 font-heading mb-1">MDG shows host / opponents; balance before→after when available.</p>
+                    {!(pointsBreakdown?.received_transactions || []).length ? (
+                      <p className="text-[10px] text-zinc-500 font-heading italic">No per-event received rows.</p>
+                    ) : (
+                      <ul className="space-y-1.5 max-h-56 overflow-y-auto">
+                        {(pointsBreakdown.received_transactions || []).map((tx, i) => (
+                          <li key={tx.id || `recv-tx-${i}`} className="text-[11px] sm:text-[10px] font-heading text-emerald-100/90 leading-snug">
+                            {tx.line}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[9px] font-heading font-bold text-amber-300/90 uppercase tracking-wider mb-1">Each sent out</p>
+                    {!(pointsBreakdown?.sent_transactions || []).length ? (
+                      <p className="text-[10px] text-zinc-500 font-heading italic">No per-event sent rows.</p>
+                    ) : (
+                      <ul className="space-y-1.5 max-h-56 overflow-y-auto">
+                        {(pointsBreakdown.sent_transactions || []).map((tx, i) => (
+                          <li key={tx.id || `sent-tx-${i}`} className="text-[11px] sm:text-[10px] font-heading text-amber-100/90 leading-snug">
+                            {tx.line}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </>
               )}
             </div>

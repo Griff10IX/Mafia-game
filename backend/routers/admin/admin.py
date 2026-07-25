@@ -1741,7 +1741,7 @@ def register(router):
 
         lot_sum = sum(int(r.get("remaining") or 0) for r in lots_rows)
         balance = int(u.get("points") or 0)
-        received = await build_received_breakdown(db, user_id, for_player=False)
+        received = await build_received_breakdown(db, user_id, for_player=False, include_transactions=True, tx_limit=200)
 
         return {
             "user": {
@@ -1757,6 +1757,12 @@ def register(router):
             "received_breakdown": received.get("received_breakdown") or [],
             "lines": received.get("lines") or [],
             "received_totals": received.get("totals") or {},
+            "sent_breakdown": received.get("sent_breakdown") or [],
+            "sent_lines": received.get("sent_lines") or [],
+            "sent_totals": received.get("sent_totals") or {},
+            "received_transactions": received.get("received_transactions") or [],
+            "sent_transactions": received.get("sent_transactions") or [],
+            "tx_limit": received.get("tx_limit"),
             "lots_remaining_by_origin": [
                 {
                     "origin_type": r.get("_id"),
