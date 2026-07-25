@@ -431,7 +431,7 @@ export default function WeedEmpire() {
             ))}
           </ul>
           <p className="text-[10px] text-muted-foreground">
-            1 of each in the whole game. Ownership moves only if someone kills you.
+            1 of each in the whole game. Ownership and that strain's stash move if someone kills you.
           </p>
         </div>
       )}

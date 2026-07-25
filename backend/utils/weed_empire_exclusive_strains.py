@@ -236,7 +236,8 @@ async def transfer_exclusive_weed_strains_on_kill(
     killer_username: Optional[str] = None,
 ) -> List[str]:
     """
-    Reassign victim's exclusive strains to killer. Clears victim growing plots of those strains.
+    Reassign victim's exclusive strains to killer.
+    Clears victim growing plots of those strains and moves their exclusive stash/curing to the killer.
     Returns list of transferred strain_ids.
     """
     if not victim_id or not killer_id or victim_id == killer_id:
@@ -267,39 +268,105 @@ async def transfer_exclusive_weed_strains_on_kill(
     if not transferred:
         return []
 
-    # Clear victim plots growing those exclusive strains (stash stays).
+    stolen_stash_grams: Dict[str, float] = {}
+    # Clear victim plots + move exclusive stash/curing to killer.
     try:
-        farm = await db.weed_farms.find_one({"user_id": victim_id}, {"_id": 0, "plots": 1})
-        if farm and farm.get("plots"):
-            transferred_set = set(transferred)
-            plots = []
-            changed = False
-            for p in farm.get("plots") or []:
-                if p.get("strain_id") in transferred_set and p.get("state") in ("growing", "harvest_ready"):
-                    plots.append(
-                        {
-                            "id": p.get("id"),
-                            "state": "empty",
-                            "strain_id": None,
-                            "planted_at": None,
-                            "last_watered_at": None,
-                            "last_fed_at": None,
-                            "quality": 0,
-                            "soil_type": None,
-                            "medium": None,
-                            "stage": None,
-                            "progress": 0,
-                            "mite_infestation_pct": 0.0,
-                            "mite_infested": False,
-                        }
-                    )
-                    changed = True
-                else:
-                    plots.append(p)
-            if changed:
-                await db.weed_farms.update_one({"user_id": victim_id}, {"$set": {"plots": plots}})
+        transferred_set = set(transferred)
+        victim_farm = await db.weed_farms.find_one(
+            {"user_id": victim_id},
+            {"_id": 0, "plots": 1, "stash": 1, "curing": 1},
+        )
+        victim_set: Dict[str, Any] = {}
+        if victim_farm:
+            if victim_farm.get("plots"):
+                plots = []
+                plots_changed = False
+                for p in victim_farm.get("plots") or []:
+                    if p.get("strain_id") in transferred_set and p.get("state") in ("growing", "harvest_ready"):
+                        plots.append(
+                            {
+                                "id": p.get("id"),
+                                "state": "empty",
+                                "strain_id": None,
+                                "planted_at": None,
+                                "last_watered_at": None,
+                                "last_fed_at": None,
+                                "quality": 0,
+                                "soil_type": None,
+                                "medium": None,
+                                "stage": None,
+                                "progress": 0,
+                                "mite_infestation_pct": 0.0,
+                                "mite_infested": False,
+                            }
+                        )
+                        plots_changed = True
+                    else:
+                        plots.append(p)
+                if plots_changed:
+                    victim_set["plots"] = plots
+
+            victim_stash = dict(victim_farm.get("stash") or {})
+            moved_stash: Dict[str, float] = {}
+            for sid in transferred:
+                grams = float(victim_stash.get(sid) or 0)
+                if grams > 0:
+                    moved_stash[sid] = round(grams, 4)
+                    stolen_stash_grams[sid] = moved_stash[sid]
+                    victim_stash.pop(sid, None)
+            if moved_stash:
+                victim_set["stash"] = victim_stash
+
+            victim_curing = list(victim_farm.get("curing") or [])
+            moved_curing = [b for b in victim_curing if (b or {}).get("strain_id") in transferred_set]
+            if moved_curing:
+                victim_set["curing"] = [
+                    b for b in victim_curing if (b or {}).get("strain_id") not in transferred_set
+                ]
+                for b in moved_curing:
+                    sid = str((b or {}).get("strain_id") or "")
+                    grams = float((b or {}).get("grams") or 0)
+                    if sid and grams > 0:
+                        stolen_stash_grams[sid] = round(
+                            float(stolen_stash_grams.get(sid) or 0) + grams, 4
+                        )
+
+            if victim_set:
+                await db.weed_farms.update_one({"user_id": victim_id}, {"$set": victim_set})
+
+            if moved_stash or moved_curing:
+                killer_farm = await db.weed_farms.find_one(
+                    {"user_id": killer_id},
+                    {"_id": 0, "stash": 1, "curing": 1},
+                )
+                if killer_farm is None:
+                    # Killer may not have opened Weed Empire yet — ensure a farm exists for stash.
+                    from routers.money.weed_empire import _get_or_create_farm
+
+                    await _get_or_create_farm(killer_id)
+                    killer_farm = await db.weed_farms.find_one(
+                        {"user_id": killer_id},
+                        {"_id": 0, "stash": 1, "curing": 1},
+                    ) or {"stash": {}, "curing": []}
+
+                killer_set: Dict[str, Any] = {}
+                if moved_stash:
+                    killer_stash = dict((killer_farm or {}).get("stash") or {})
+                    for sid, grams in moved_stash.items():
+                        killer_stash[sid] = round(float(killer_stash.get(sid) or 0) + grams, 4)
+                    killer_set["stash"] = killer_stash
+                if moved_curing:
+                    killer_curing = list((killer_farm or {}).get("curing") or [])
+                    killer_curing.extend(moved_curing)
+                    killer_set["curing"] = killer_curing
+                if killer_set:
+                    await db.weed_farms.update_one({"user_id": killer_id}, {"$set": killer_set})
     except Exception:
-        logger.exception("clear exclusive strain plots on kill failed victim=%s", victim_id)
+        logger.exception(
+            "exclusive strain farm loot on kill failed victim=%s killer=%s",
+            victim_id,
+            killer_id,
+        )
 
     try:
         from server import send_notification
@@ -307,11 +374,13 @@ async def transfer_exclusive_weed_strains_on_kill(
         for sid in transferred:
             name = exclusive_strain_display_name(sid)
             buff = (EXCLUSIVE_STRAIN_BUFFS.get(sid) or {}).get("label") or ""
+            grams = float(stolen_stash_grams.get(sid) or 0)
+            grams_bit = f" Took {grams:g}g stash." if grams > 0 else ""
             try:
                 await send_notification(
                     killer_id,
                     "Exclusive strain taken",
-                    f"You took {name} from {victim_username or 'your victim'}. Buff: {buff}.",
+                    f"You took {name} from {victim_username or 'your victim'}. Buff: {buff}.{grams_bit}",
                     "reward",
                 )
             except Exception:
@@ -320,7 +389,10 @@ async def transfer_exclusive_weed_strains_on_kill(
                 await send_notification(
                     victim_id,
                     "Exclusive strain lost",
-                    f"You lost {name} to {killer_username or 'your killer'}.",
+                    (
+                        f"You lost {name} to {killer_username or 'your killer'}."
+                        + (f" They took your {grams:g}g stash." if grams > 0 else "")
+                    ),
                     "attack",
                     category="attacks",
                 )
