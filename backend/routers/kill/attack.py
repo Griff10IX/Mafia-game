@@ -78,11 +78,12 @@ def _fire_and_forget(coro, *, label: str = "kill_bg") -> None:
 # also invalidate explicitly so a user clicking Search sees the new row immediately.
 _ATTACK_LIST_CACHE_TTL_SEC = 1.0
 _ATTACK_LIST_CACHE_MAX = 5000
-_attack_list_cache: Dict[Tuple[str, str], Tuple[float, List[dict]]] = {}
+# Key: (attacker_id, ac_state, find_clock_active) — perk must not share a stripped/full payload.
+_attack_list_cache: Dict[Tuple[str, str, bool], Tuple[float, List[dict]]] = {}
 
 
-def _attack_list_cache_get(attacker_id: str, ac_state: str) -> Optional[List[dict]]:
-    cached = _attack_list_cache.get((attacker_id, ac_state))
+def _attack_list_cache_get(attacker_id: str, ac_state: str, find_clock_active: bool) -> Optional[List[dict]]:
+    cached = _attack_list_cache.get((attacker_id, ac_state, bool(find_clock_active)))
     if not cached:
         return None
     if cached[0] <= time.monotonic():
@@ -90,9 +91,14 @@ def _attack_list_cache_get(attacker_id: str, ac_state: str) -> Optional[List[dic
     return cached[1]
 
 
-def _attack_list_cache_set(attacker_id: str, ac_state: str, items: List[dict]) -> None:
+def _attack_list_cache_set(
+    attacker_id: str, ac_state: str, items: List[dict], find_clock_active: bool
+) -> None:
     now = time.monotonic()
-    _attack_list_cache[(attacker_id, ac_state)] = (now + _ATTACK_LIST_CACHE_TTL_SEC, items)
+    _attack_list_cache[(attacker_id, ac_state, bool(find_clock_active))] = (
+        now + _ATTACK_LIST_CACHE_TTL_SEC,
+        items,
+    )
     if len(_attack_list_cache) > _ATTACK_LIST_CACHE_MAX:
         for k, (exp, _items) in list(_attack_list_cache.items())[:512]:
             if exp < now:
@@ -102,6 +108,22 @@ def _attack_list_cache_set(attacker_id: str, ac_state: str, items: List[dict]) -
 def _attack_list_cache_invalidate(attacker_id: str) -> None:
     for k in [k for k in _attack_list_cache if k[0] == attacker_id]:
         _attack_list_cache.pop(k, None)
+
+
+def _attacker_has_find_clock(user_doc: Optional[dict]) -> bool:
+    """True while Bodyguard Find Clock store perk is active (exact find time may be shown)."""
+    if not user_doc:
+        return False
+    until_raw = user_doc.get("bodyguard_find_time_until")
+    if not until_raw:
+        return False
+    try:
+        until_dt = datetime.fromisoformat(str(until_raw).replace("Z", "+00:00"))
+        if until_dt.tzinfo is None:
+            until_dt = until_dt.replace(tzinfo=timezone.utc)
+        return until_dt > datetime.now(timezone.utc)
+    except Exception:
+        return False
 
 _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend not in sys.path:
@@ -1116,7 +1138,8 @@ class AttackSearchResponse(BaseModel):
     attack_id: str
     status: str
     message: str
-    estimated_completion: str
+    # Exact find ISO only when Bodyguard Find Clock perk is active; otherwise omitted/null.
+    estimated_completion: Optional[str] = None
 
 class AttackStatusResponse(BaseModel):
     model_config = ConfigDict(extra="allow")
@@ -1397,10 +1420,20 @@ async def _guard_username_map(guard_ids: List[str]) -> Dict[str, dict]:
     return guard_users
 
 
-async def _build_active_attacks_list(attacker_id: str, attacker_current_state: str) -> List[dict]:
+async def _build_active_attacks_list(
+    attacker_id: str,
+    attacker_current_state: str,
+    *,
+    find_clock_active: bool = False,
+) -> List[dict]:
     """
     Load active searches/found attacks for attacker; apply same expiry, promotions, and cleanup as GET /attack/list.
     Mutates DB (deletes expired, bulk_write status). Returns client item list.
+
+    Intel rules (Network-safe):
+    - Exact `found_at` only when find_clock_active and status is searching.
+    - Never include `first_bodyguard` / `bodyguard_count` (reveal only on execute BG-block).
+    - While searching, BG target flags/owner only for the attacker's own robot BG.
     """
     now = datetime.now(timezone.utc)
     cutoff = now - timedelta(hours=24)
@@ -1412,25 +1445,10 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
         return []
 
     target_ids = list({a["target_id"] for a in attacks if a.get("target_id")})
-    users_map, bgs_by_owner = await asyncio.gather(
-        _users_map_for_targets(target_ids),
-        _bgs_by_owner_for_targets(target_ids),
-    )
+    users_map = await _users_map_for_targets(target_ids)
 
     bg_target_ids = [tid for tid in target_ids if (users_map.get(tid) or {}).get("is_bodyguard")]
-    guard_ids = list(
-        {
-            b["bodyguard_user_id"]
-            for rows in bgs_by_owner.values()
-            for b in rows
-            if b.get("bodyguard_user_id")
-        }
-    )
-    # Independent: guard usernames vs bodyguard hire rows for NPC guards
-    (still_bg_tids, bg_owner_by_guard_uid), guard_users = await asyncio.gather(
-        _resolve_still_bg_and_owners(bg_target_ids),
-        _guard_username_map(guard_ids),
-    )
+    still_bg_tids, bg_owner_by_guard_uid = await _resolve_still_bg_and_owners(bg_target_ids)
 
     delete_ids: List[str] = []
     bulk_ops: List[UpdateOne] = []
@@ -1532,22 +1550,38 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
             "note": attack.get("note"),
             "location_state": attack.get("location_state") if attack["status"] == "found" else None,
             "search_started": attack.get("search_started"),
-            "found_at": attack.get("found_at"),
             "expires_at": attack.get("expires_at"),
             "can_travel": can_travel,
             "can_attack": can_attack,
             "message": msg,
             "target_is_npc": bool((tu_row or {}).get("is_npc")) if tid else False,
-            "target_is_robot_bodyguard": bool(tu_row and tu_row.get("is_npc") and tu_row.get("is_bodyguard")),
-            "target_is_bodyguard": bool(tu_row and tu_row.get("is_bodyguard")),
         }
+        # Exact find time is a paid perk — never leak via Network without it.
+        if find_clock_active and attack["status"] == "searching" and attack.get("found_at"):
+            item["found_at"] = attack.get("found_at")
+
+        is_mine_bg = False
+        owner_username = None
         if tid:
             tu_bg = users_map.get(tid)
             if tu_bg and tu_bg.get("is_bodyguard"):
                 own = bg_owner_by_guard_uid.get(str(tid))
                 if own and own.get("owner_id"):
-                    item["bodyguard_owner_username"] = own.get("owner_username") or "?"
-                    item["bodyguard_is_mine"] = own["owner_id"] == str(attacker_id)
+                    is_mine_bg = own["owner_id"] == str(attacker_id)
+                    owner_username = own.get("owner_username") or "?"
+
+        # While searching: only reveal BG meta for the attacker's own robot BG.
+        # When found: target-is-BG flags OK (you searched that username); never preview first BG / count.
+        reveal_bg_meta = attack["status"] == "found" or is_mine_bg
+        if reveal_bg_meta:
+            item["target_is_robot_bodyguard"] = bool(
+                tu_row and tu_row.get("is_npc") and tu_row.get("is_bodyguard")
+            )
+            item["target_is_bodyguard"] = bool(tu_row and tu_row.get("is_bodyguard"))
+            if owner_username is not None:
+                item["bodyguard_owner_username"] = owner_username
+                item["bodyguard_is_mine"] = is_mine_bg
+
         # Mint execute token only when the attacker can actually strike (same location). Reuse token on row; batch mint.
         if attack["status"] == "found" and can_attack:
             existing_tok = attack.get("execute_token")
@@ -1559,24 +1593,6 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
                 item.update(_execute_code_payload(existing_tok))
             else:
                 token_deferred.append((len(items), attack["id"]))
-        if attack["status"] == "found" and tid:
-            target_bgs = bgs_by_owner.get(tid) or []
-            if target_bgs:
-                first_bg = max(target_bgs, key=lambda b: b.get("slot_number", 0))
-                search_username = None
-                display_name = first_bg.get("robot_name") or "bodyguard"
-                if first_bg.get("bodyguard_user_id"):
-                    bg_user = guard_users.get(first_bg["bodyguard_user_id"])
-                    if bg_user:
-                        search_username = bg_user.get("username")
-                        if not first_bg.get("robot_name"):
-                            display_name = search_username
-                item["first_bodyguard"] = _first_bodyguard_client_payload(
-                    display_name=display_name,
-                    search_username=search_username,
-                    target_username=attack.get("target_username") or "?",
-                )
-                item["bodyguard_count"] = len(target_bgs)
         items.append(item)
 
     if token_deferred:
@@ -2004,7 +2020,7 @@ async def search_target(payload: AttackSearchRequest, req: Request, current_user
         attack_id=attack_id,
         status="searching",
         message=f"Searching for {payload.target_username}...",
-        estimated_completion=found_at_iso,
+        estimated_completion=found_at_iso if _attacker_has_find_clock(current_user) else None,
     )
 
 async def get_attack_status(
@@ -2103,10 +2119,11 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
     await maybe_sync_robot_bg_searches_for_owner(db, current_user)
     attacker_id = current_user["id"]
     ac_state = (current_user.get("current_state") or "")
+    find_clock_active = _attacker_has_find_clock(current_user)
 
     robot_auto_active = robot_bg_auto_search_running(current_user)
     search_code = _search_code_payload(attacker_id)
-    cached = _attack_list_cache_get(attacker_id, ac_state)
+    cached = _attack_list_cache_get(attacker_id, ac_state, find_clock_active)
     if cached is not None:
         payload = await _kill_inflation_payload(attacker_id, current_user)
         return {
@@ -2117,10 +2134,10 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
         }
     # Run list build and inflation calc concurrently to drop one round-trip from page load.
     items, payload = await asyncio.gather(
-        _build_active_attacks_list(attacker_id, ac_state),
+        _build_active_attacks_list(attacker_id, ac_state, find_clock_active=find_clock_active),
         _kill_inflation_payload(attacker_id, current_user),
     )
-    _attack_list_cache_set(attacker_id, ac_state, items)
+    _attack_list_cache_set(attacker_id, ac_state, items, find_clock_active)
     return {
         "attacks": items,
         "robot_bg_auto_search_active": robot_auto_active,
@@ -4086,9 +4103,16 @@ async def get_attack_timeline(
     uid = timeline_user["id"]
     can_view_debug_payload = viewer_is_staff
     can_view_incoming_timeline = can_view_debug_payload
-    attacker_row = await db.users.find_one({"id": uid}, {"_id": 0, "current_state": 1})
+    attacker_row = await db.users.find_one(
+        {"id": uid},
+        {"_id": 0, "current_state": 1, "bodyguard_find_time_until": 1},
+    )
     ac_state = (attacker_row or {}).get("current_state") or current_user.get("current_state") or ""
-    active_items = await _build_active_attacks_list(uid, ac_state)
+    # Timeline subject’s perk (staff viewing another user uses that user’s clock entitlement).
+    find_clock_active = _attacker_has_find_clock(attacker_row or timeline_user)
+    active_items = await _build_active_attacks_list(
+        uid, ac_state, find_clock_active=find_clock_active
+    )
 
     attempts_query = (
         {"$or": [{"attacker_id": uid}, {"target_id": uid}]}
@@ -4137,7 +4161,8 @@ async def get_attack_timeline(
 
     for it in active_items[:TIMELINE_ACTIVE_ATTACK_CAP]:
         et = "active_found" if it.get("status") == "found" else "active_search"
-        ts = it.get("search_started") or it.get("found_at")
+        # Never use future found_at as occurred_at (that leaked exact find time).
+        ts = it.get("search_started")
         events.append(
             {
                 "id": f"active-{it.get('attack_id')}",

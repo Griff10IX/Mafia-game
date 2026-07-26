@@ -1613,7 +1613,8 @@ export default function Attack() {
 
   const searchCompleteTimeoutRef = useRef(null);
 
-  // Refetch list exactly when the soonest "searching" attack is due to complete, so the UI shows "found" at the set time (e.g. 1 min on the dot)
+  // With Find Clock perk: refetch exactly when soonest searching row's found_at fires.
+  // Without perk, found_at is omitted server-side — fall back to normal ATTACK_LIST_POLL_MS only.
   useEffect(() => {
     if (searchCompleteTimeoutRef.current) {
       clearTimeout(searchCompleteTimeoutRef.current);
@@ -2240,14 +2241,8 @@ export default function Attack() {
         use_molotovs: useMolotovs,
         ...(getAttackExecuteCodePayload(best) || {}),
       };
-      if (best.first_bodyguard) {
-        const bg = best.first_bodyguard;
-        const protectedName = bg.target_username || best.target_username || username;
-        const fallbackMessage = bg.search_username
-          ? `${protectedName} has a bodyguard called ${bg.display_name || bg.search_username}. You need to kill them first.`
-          : `${protectedName} has a bodyguard. You need to kill them first.`;
-        showBodyguardBlockResult({ message: fallbackMessage, first_bodyguard: bg }, fallbackMessage);
-      }
+      // Do not preview first_bodyguard from /attack/list — that leaked BG names in Network
+      // without spending bullets. Reveal only from POST /attack/execute bodyguard-block.
       try {
         sessionStorage.setItem('attack-last-submit', JSON.stringify({
           type: 'kill',
