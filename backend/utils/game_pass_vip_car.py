@@ -2,9 +2,10 @@
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Optional, Tuple
 
 from server import CARS
 
@@ -19,6 +20,16 @@ VIP_PASS_GRANT_SOURCE_REVIVE_HEAL = "revive_estate_heal"
 VIP_PASS_CAR_PURCHASE_LIMIT_DEFAULT = 5
 VIP_PASS_CAR_PURCHASE_LIMIT_MIN = 1
 VIP_PASS_CAR_PURCHASE_LIMIT_MAX = 50
+
+# Avoid scanning all car22 rows on every /me / Store poll.
+_STORE_STOCK_CACHE_TTL_SEC = 45.0
+_store_stock_cache: Optional[Tuple[int, float]] = None  # (count, expires_at_monotonic)
+
+
+def invalidate_vip_pass_store_stock_cache() -> None:
+    """Clear cached store-limited VIP Pass Car count (call after grant/remove/transfer/limit change)."""
+    global _store_stock_cache
+    _store_stock_cache = None
 
 
 def _vip_car_catalog() -> Optional[dict]:
@@ -47,6 +58,7 @@ async def set_vip_pass_car_purchase_limit(db, limit: int) -> int:
         {"$set": {"vip_pass_car_purchase_limit": n}},
         upsert=True,
     )
+    invalidate_vip_pass_store_stock_cache()
     return n
 
 
@@ -75,19 +87,30 @@ def _vip_pass_car_is_game_pass_origin(row: dict, gp_event_ids: set) -> bool:
     return bool(ucid and str(ucid) in gp_event_ids)
 
 
-async def count_store_limited_vip_pass_cars(db) -> int:
+async def count_store_limited_vip_pass_cars(db, *, bypass_cache: bool = False) -> int:
     """
     Cars that consume the game-wide store stock limit.
     Game Pass free grants are excluded.
+    Cached briefly for Store UI; pass bypass_cache=True for buy/grant sold-out checks.
     """
+    global _store_stock_cache
+    now = time.monotonic()
+    if not bypass_cache and _store_stock_cache is not None:
+        cached_count, expires_at = _store_stock_cache
+        if now < expires_at:
+            return int(cached_count)
+
     rows = await db.user_cars.find(
         {"car_id": GAME_PASS_VIP_CAR_ID},
         {"_id": 0, "id": 1, "vip_pass_grant_source": 1},
     ).to_list(500)
     if not rows:
-        return 0
-    gp_ids = await _vip_pass_car_ids_from_game_pass_events(db)
-    return sum(1 for r in rows if not _vip_pass_car_is_game_pass_origin(r, gp_ids))
+        count = 0
+    else:
+        gp_ids = await _vip_pass_car_ids_from_game_pass_events(db)
+        count = sum(1 for r in rows if not _vip_pass_car_is_game_pass_origin(r, gp_ids))
+    _store_stock_cache = (count, now + _STORE_STOCK_CACHE_TTL_SEC)
+    return count
 
 
 async def get_vip_pass_car_stats(db) -> dict:
@@ -260,11 +283,14 @@ async def admin_remove_vip_pass_cars(
             {"$unset": {"game_pass_vip_car_granted": ""}},
         )
 
+    if removed:
+        invalidate_vip_pass_store_stock_cache()
+
     return {
         "removed_count": len(removed),
         "removed": removed,
         "cars_in_game": await count_global_vip_pass_cars(db),
-        "store_limited_in_game": await count_store_limited_vip_pass_cars(db),
+        "store_limited_in_game": await count_store_limited_vip_pass_cars(db, bypass_cache=True),
         "cleared_game_pass_grant": bool(clear_game_pass_grant and affected_user_ids),
     }
 
@@ -313,6 +339,8 @@ async def _insert_vip_pass_car(
     except Exception:
         logger.exception("game_pass_vip_car insert failed user_id=%s", user_id)
         return False
+
+    invalidate_vip_pass_store_stock_cache()
 
     try:
         from utils.exclusive_car_events import log_exclusive_car_event
@@ -367,7 +395,7 @@ async def grant_vip_pass_car_to_user(
     )
     if counts_toward_limit:
         limit = await get_vip_pass_car_purchase_limit(db)
-        if await count_store_limited_vip_pass_cars(db) >= limit:
+        if await count_store_limited_vip_pass_cars(db, bypass_cache=True) >= limit:
             return False
     ok = await _insert_vip_pass_car(
         db,
@@ -381,7 +409,7 @@ async def grant_vip_pass_car_to_user(
     # Soft race guard for store stock only.
     if counts_toward_limit:
         limit = await get_vip_pass_car_purchase_limit(db)
-        if await count_store_limited_vip_pass_cars(db) > limit:
+        if await count_store_limited_vip_pass_cars(db, bypass_cache=True) > limit:
             try:
                 newest = await db.user_cars.find_one(
                     {"user_id": user_id, "car_id": GAME_PASS_VIP_CAR_ID},
@@ -390,6 +418,7 @@ async def grant_vip_pass_car_to_user(
                 )
                 if newest and newest.get("id"):
                     await db.user_cars.delete_one({"id": newest["id"], "user_id": user_id})
+                    invalidate_vip_pass_store_stock_cache()
             except Exception:
                 logger.exception("game_pass_vip_car over-limit rollback failed user_id=%s", user_id)
             return False

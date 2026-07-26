@@ -25,7 +25,8 @@ from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_LEA
 
 _lb_cache: dict = {}
 _last_reward_winners_cache: dict = {}
-_LB_CACHE_TTL = 90
+_lb_inflight: dict = {}  # cache_key -> asyncio.Future (singleflight rebuild)
+_LB_CACHE_TTL = 180
 _LAST_WINNERS_CACHE_TTL = 300
 # Weekly boards fire many heavy aggregates; cap parallel scans to reduce CPU spikes / pool contention.
 _LEADERBOARD_WEEKLY_DB_CONCURRENCY = 4
@@ -35,6 +36,7 @@ def invalidate_leaderboard_cache():
     """Clear in-memory /leaderboards/top + last-winners cache (e.g. privacy toggle, payout)."""
     _lb_cache.clear()
     _last_reward_winners_cache.clear()
+    _lb_inflight.clear()
 
 _leaderboard_user_filter = _staff_exclude_user_filter
 
@@ -945,8 +947,27 @@ async def get_top_leaderboards(
     if cached and (now - cached["ts"]) < _LB_CACHE_TTL:
         return _add_last_winners(_stamp_current_user(cached["data"], username))
 
-    boards_raw = await _fetch_top_boards_raw(limit, dead, period)
-    _lb_cache[cache_key] = {"ts": now, "data": boards_raw}
+    # Singleflight: concurrent cold hits share one rebuild (avoids N× weekly agg stampedes).
+    # No await between get/set — safe on the asyncio event loop.
+    fut = _lb_inflight.get(cache_key)
+    if fut is None:
+        fut = asyncio.get_running_loop().create_future()
+        _lb_inflight[cache_key] = fut
+        try:
+            boards_raw = await _fetch_top_boards_raw(limit, dead, period)
+            _lb_cache[cache_key] = {"ts": time.monotonic(), "data": boards_raw}
+            if not fut.done():
+                fut.set_result(boards_raw)
+        except Exception as e:
+            if not fut.done():
+                fut.set_exception(e)
+            raise
+        finally:
+            if _lb_inflight.get(cache_key) is fut:
+                _lb_inflight.pop(cache_key, None)
+    else:
+        boards_raw = await fut
+
     out = _stamp_current_user(boards_raw, username)
     lrw = _last_reward_winners_cache.get("data")
     if lrw is None or (now - _last_reward_winners_cache.get("ts", 0)) >= _LAST_WINNERS_CACHE_TTL:

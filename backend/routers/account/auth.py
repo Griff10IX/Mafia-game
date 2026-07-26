@@ -2127,16 +2127,16 @@ def register(router):
                 return ("weapon10" in ids, "weapon11" in ids)
 
             async def _vip_pass_car_info():
+                # Global store stock is NOT scanned here (slow car22 find). Store UI loads it via
+                # GET /store/vip-pass-car-stock. /me only needs per-user ownership + purchase limit.
                 from utils.game_pass_vip_car import (
-                    count_store_limited_vip_pass_cars,
                     count_user_vip_pass_cars,
                     get_vip_pass_car_purchase_limit,
                 )
 
                 count = await count_user_vip_pass_cars(db, u["id"])
-                in_game = await count_store_limited_vip_pass_cars(db)
                 limit = await get_vip_pass_car_purchase_limit(db)
-                return count, in_game, limit
+                return count, 0, limit
 
             admin_color_doc, weapon_doc, fam, bodyguard_count, witness_nav_green_n, gp_season_pub, premium_weapon_flags, vip_pass_car_info = await asyncio.gather(
                 db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1}),

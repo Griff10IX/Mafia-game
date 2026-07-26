@@ -1416,6 +1416,24 @@ async def buy_custom_car(
     return {"message": f"Custom car '{request.car_name}' purchased for {cost_used} points"}
 
 
+async def get_vip_pass_car_stock(current_user: dict = Depends(get_current_user)):
+    """Store-limited VIP Pass Car stock (cached). Prefer this over /me for garage-wide counts."""
+    from utils.game_pass_vip_car import (
+        count_store_limited_vip_pass_cars,
+        count_user_vip_pass_cars,
+        get_vip_pass_car_purchase_limit,
+    )
+
+    limit = await get_vip_pass_car_purchase_limit(db)
+    in_game = await count_store_limited_vip_pass_cars(db)
+    owned = await count_user_vip_pass_cars(db, current_user.get("id") or "")
+    return {
+        "vip_pass_car_in_game": int(in_game),
+        "vip_pass_car_purchase_limit": int(limit),
+        "vip_pass_car_count": int(owned),
+    }
+
+
 async def buy_vip_pass_car(
     pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
@@ -1429,7 +1447,7 @@ async def buy_vip_pass_car(
     )
 
     limit = await get_vip_pass_car_purchase_limit(db)
-    in_game = await count_store_limited_vip_pass_cars(db)
+    in_game = await count_store_limited_vip_pass_cars(db, bypass_cache=True)
     if in_game >= limit:
         raise HTTPException(
             status_code=400,
@@ -1457,7 +1475,7 @@ async def buy_vip_pass_car(
         if inc.get("lifetime_respect_points_spent"):
             refund["lifetime_respect_points_spent"] = -int(inc["lifetime_respect_points_spent"])
         await db.users.update_one({"id": current_user["id"]}, {"$inc": refund})
-        in_game_now = await count_store_limited_vip_pass_cars(db)
+        in_game_now = await count_store_limited_vip_pass_cars(db, bypass_cache=True)
         raise HTTPException(
             status_code=400,
             detail=f"VIP Pass Car store stock sold out ({in_game_now}/{limit})",
@@ -1471,7 +1489,7 @@ async def buy_vip_pass_car(
         {"item": "vip_pass_car", "cost": cost_used},
     )
     owned_after = await count_user_vip_pass_cars(db, current_user["id"])
-    in_game_after = await count_store_limited_vip_pass_cars(db)
+    in_game_after = await count_store_limited_vip_pass_cars(db, bypass_cache=True)
     return {
         "message": f"VIP Pass Car purchased! (store stock {in_game_after}/{limit}) 9s travel, +50% booze cargo while owned, custom image from Garage.",
         "cost": cost_used,
@@ -2572,6 +2590,7 @@ def register(router):
     router.add_api_route("/store/buy-bullets", store_buy_bullets, methods=["POST"])
     router.add_api_route("/store/buy-health", buy_health, methods=["POST"])
     router.add_api_route("/store/buy-custom-car", buy_custom_car, methods=["POST"])
+    router.add_api_route("/store/vip-pass-car-stock", get_vip_pass_car_stock, methods=["GET"])
     router.add_api_route("/store/buy-vip-pass-car", buy_vip_pass_car, methods=["POST"])
     router.add_api_route("/store/buy-token", buy_store_token, methods=["POST"])
     router.add_api_route("/store/buy-token-bundle", buy_store_token_bundle, methods=["POST"])

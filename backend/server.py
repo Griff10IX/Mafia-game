@@ -866,7 +866,7 @@ class UserResponse(BaseModel):
     owns_weapon11: bool = False
     owns_vip_pass_car: bool = False
     vip_pass_car_count: int = 0
-    vip_pass_car_in_game: int = 0  # store-limited stock currently in garages (excludes Game Pass free)
+    vip_pass_car_in_game: int = 0  # legacy on /me (always 0); Store uses GET /store/vip-pass-car-stock
     vip_pass_car_purchase_limit: int = 5  # max store copies across whole player base
     current_state: str
     total_kills: int
