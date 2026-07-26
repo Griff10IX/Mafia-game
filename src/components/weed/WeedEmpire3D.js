@@ -147,9 +147,35 @@ function disposeSceneObject(root) {
 const EQUIPMENT_CONFIG = {
   fan: { equipment: "osc_fans", url: WEED_MODELS.fan, height: 0.78, position: [0.72, 0, -0.5], rotation: [0, -1.15, 0] },
   filter: { equipment: "carbon_filter", url: WEED_MODELS.filter, height: 0.28, position: [-0.73, 1.62, -0.58], rotation: [0, 0, Math.PI / 2] },
-  climate: { equipment: "climate_control", alternate: "dehumidifier", url: WEED_MODELS.climate, height: 0.42, position: [-0.8, 0.03, -0.52], rotation: [0, 0.35, 0] },
+  // Back-left — keep clear of the second osc fan (front-left).
+  climate: { equipment: "climate_control", alternate: "dehumidifier", url: WEED_MODELS.climate, height: 0.42, position: [-0.95, 0.03, -0.62], rotation: [0, 0.55, 0] },
   co2: { equipment: "co2", url: WEED_MODELS.co2, height: 0.56, position: [0.84, 0.02, -0.55], rotation: [0, -0.3, 0] },
 };
+
+/** Quaternius AC sign texture reads as angry LED eyes — replace with a calm status LCD. */
+function softenClimateDisplay(model) {
+  model?.traverse((object) => {
+    if (!object.isMesh || !object.material) return;
+    const materials = Array.isArray(object.material) ? object.material : [object.material];
+    materials.forEach((material) => {
+      if (!material) return;
+      const name = `${material.name || ""}`.toLowerCase();
+      if (!name.includes("texture_signs") && !name.includes("sign")) return;
+      if (material.map) material.map = null;
+      if (material.emissiveMap) material.emissiveMap = null;
+      if (material.color) material.color.setHex(0x16352f);
+      if (material.emissive) {
+        material.emissive.setHex(0x3ecf9a);
+        material.emissiveIntensity = 0.28;
+      }
+      material.roughness = 0.32;
+      material.metalness = 0.08;
+      material.transparent = false;
+      material.opacity = 1;
+      material.needsUpdate = true;
+    });
+  });
+}
 
 export default function WeedEmpire3D({
   lightClass = "cfl",
@@ -636,6 +662,7 @@ export default function WeedEmpire3D({
             }
             model.position.set(...config.position);
             model.rotation.set(...config.rotation);
+            if (key === "climate") softenClimateDisplay(model);
             state.props.add(model);
             state.models.add(model);
             state.equipmentModels[key] = model;
@@ -655,8 +682,13 @@ export default function WeedEmpire3D({
           model.visible = visible;
           const detailScale = 1 + Math.min(0.16, Math.max(0, ownedLevel - 1) * 0.025);
           model.scale.setScalar(detailScale);
+          if (key === "climate") {
+            model.position.set(...config.position);
+            softenClimateDisplay(model);
+          }
         }
         if (state.equipmentSupports?.[key]) state.equipmentSupports[key].visible = visible;
+        // Second fan: front-left — clear of climate unit (back-left).
         if (key === "fan" && visible && ownedLevel >= 8 && !state.equipmentModels.fanSecondary) {
           try {
             const secondary = await loadWeedModel(config.url, { height: 0.68 });
@@ -664,8 +696,8 @@ export default function WeedEmpire3D({
               disposeModelClone(secondary);
               return;
             }
-            secondary.position.set(-0.72, 0, -0.5);
-            secondary.rotation.set(0, 1.15, 0);
+            secondary.position.set(-0.95, 0, 0.28);
+            secondary.rotation.set(0, 0.85, 0);
             secondary.userData.bladeRotor = secondary.getObjectByName("bladeRotor");
             secondary.userData.fanHead = secondary.getObjectByName("head");
             state.props.add(secondary);
@@ -677,7 +709,10 @@ export default function WeedEmpire3D({
           }
         }
         if (key === "fan" && state.equipmentModels.fanSecondary) {
-          state.equipmentModels.fanSecondary.visible = visible && ownedLevel >= 8;
+          const secondary = state.equipmentModels.fanSecondary;
+          secondary.visible = visible && ownedLevel >= 8;
+          secondary.position.set(-0.95, 0, 0.28);
+          secondary.rotation.set(0, 0.85, 0);
         }
       }
     };
@@ -721,7 +756,10 @@ export default function WeedEmpire3D({
       return;
     }
     if (fx === "harvest_trim" && state.plant) {
-      if (state.harvestRig && startHarvestFx(state.harvestRig, state.plant)) {
+      if (
+        state.harvestRig &&
+        startHarvestFx(state.harvestRig, state.plant, 4200, propsRef.current.budMeshKey || "dense")
+      ) {
         state.harvestFxDoneNonce = fxNonce;
       } else {
         propsRef.current.onFxDone?.();

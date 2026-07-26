@@ -11581,6 +11581,71 @@ def register(router):
             )
         return {"message": msg, **result}
 
+    @router.post("/admin/force-restore-illegal-business-from-archive")
+    async def admin_force_restore_illegal_business_from_archive(
+        username: str = Query(..., min_length=1, max_length=64, description="Player to overwrite"),
+        archive_username: Optional[str] = Query(
+            None,
+            description="Whose death archive to use (default: same as username). e.g. Chaos for Piece",
+        ),
+        dry_run: bool = Query(True, description="If true, preview only — no DB writes"),
+        vault_policy: str = Query(
+            "max",
+            description="Vault cash: max (keep larger), archive, or current",
+        ),
+        restore_ibm_missions: bool = Query(
+            True,
+            description="Also restore illegal_business_mission_completions from archive",
+        ),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Force overwrite Speakeasy / illegal business + guards (+ IBM missions) from a death archive.
+        Use when a Level-1 shell already exists so normal revive/heal skipped restore.
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        policy = (vault_policy or "max").strip().lower()
+        if policy not in ("max", "archive", "current"):
+            raise HTTPException(
+                status_code=400,
+                detail="vault_policy must be max, archive, or current",
+            )
+        from utils.dead_alive_estate_heal import force_restore_illegal_business_from_archive
+
+        result = await force_restore_illegal_business_from_archive(
+            db,
+            username=username.strip(),
+            archive_username=(archive_username or "").strip() or None,
+            dry_run=bool(dry_run),
+            vault_policy=policy,
+            restore_ibm_missions=bool(restore_ibm_missions),
+        )
+        if not result.get("ok"):
+            raise HTTPException(
+                status_code=404,
+                detail=result.get("error") or "Force restore failed",
+            )
+        before = result.get("before") or {}
+        after = result.get("after") or {}
+        if dry_run:
+            msg = (
+                f"Dry run: would {result.get('mode')} {result.get('username')} Speakeasy "
+                f"Lv{before.get('level', 0)}→{after.get('level', 0)}, "
+                f"sec {before.get('security_level', 0)}→{after.get('security_level', 0)}, "
+                f"guards {before.get('guards', 0)}→{after.get('guards', 0)}, "
+                f"dist {before.get('distillery_steps', 0)}→{after.get('distillery_steps', 0)} "
+                f"(archive {result.get('archive_username')})"
+            )
+        else:
+            msg = (
+                f"Restored {result.get('username')} Speakeasy from "
+                f"{result.get('archive_username')} archive: "
+                f"Lv{after.get('level', 0)}, sec {after.get('security_level', 0)}, "
+                f"{after.get('guards', 0)} guards, dist {after.get('distillery_steps', 0)} steps"
+            )
+        return {"message": msg, **result}
+
     @router.post("/admin/vip-pass-car-remove")
     async def admin_vip_pass_car_remove(
         body: AdminVipPassCarRemoveRequest,

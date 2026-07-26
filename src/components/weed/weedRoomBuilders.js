@@ -235,9 +235,9 @@ function buildEquipmentSupports(mobileLod) {
 
   const climate = new THREE.Group();
   climate.name = "climateFloorMount";
-  box(climate, [0.42, 0.035, 0.34], [-0.8, 0.02, -0.52], rubber, "climatePad");
+  box(climate, [0.42, 0.035, 0.34], [-0.95, 0.02, -0.62], rubber, "climatePad");
   const climateShadow = contactCard(0.3, 0.23, 0.2);
-  climateShadow.position.set(-0.8, 0.006, -0.52);
+  climateShadow.position.set(-0.95, 0.006, -0.62);
   climate.add(climateShadow);
   climate.visible = false;
   supports.climate = climate;
@@ -352,16 +352,16 @@ function buildUpgradeDetails(mobileLod) {
   climateDrain.name = "climateDrain";
   const drain = new THREE.Mesh(new THREE.TorusGeometry(0.16, 0.012, 7, 24, Math.PI * 1.45), dark);
   drain.rotation.x = Math.PI / 2;
-  drain.position.set(-0.68, 0.06, -0.35);
+  drain.position.set(-0.82, 0.06, -0.42);
   climateDrain.add(drain);
   climateDrain.visible = false;
   details.climateDrain = climateDrain;
 
   const secondFanPad = new THREE.Group();
   secondFanPad.name = "secondFanFloorMount";
-  box(secondFanPad, [0.32, 0.025, 0.28], [-0.72, 0.015, -0.5], dark, "secondFanPad");
+  box(secondFanPad, [0.32, 0.025, 0.28], [-0.95, 0.015, 0.28], dark, "secondFanPad");
   const secondFanShadow = contactCard(0.25, 0.21, 0.2);
-  secondFanShadow.position.set(-0.72, 0.006, -0.5);
+  secondFanShadow.position.set(-0.95, 0.006, 0.28);
   secondFanPad.add(secondFanShadow);
   secondFanPad.visible = false;
   details.secondFanPad = secondFanPad;

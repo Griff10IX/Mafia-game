@@ -43,6 +43,10 @@ export default function AdminVipCars() {
   const [pairReviver, setPairReviver] = useState('FFS');
   const [pairBusy, setPairBusy] = useState(false);
   const [pairResult, setPairResult] = useState(null);
+  const [forceBizTarget, setForceBizTarget] = useState('Piece');
+  const [forceBizArchive, setForceBizArchive] = useState('Chaos');
+  const [forceBizBusy, setForceBizBusy] = useState(false);
+  const [forceBizResult, setForceBizResult] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -176,6 +180,40 @@ export default function AdminVipCars() {
       toast.error(e.response?.data?.detail || 'Pair heal failed');
     } finally {
       setPairBusy(false);
+    }
+  };
+
+  const runForceBizRestore = async (dryRun) => {
+    const target = String(forceBizTarget || '').trim();
+    const archiveSrc = String(forceBizArchive || '').trim();
+    if (!target) {
+      toast.error('Enter target username');
+      return;
+    }
+    if (!dryRun) {
+      const ok = window.confirm(
+        `Overwrite ${target}'s Speakeasy / illegal business from ${archiveSrc || target}'s death archive? ` +
+          'Guards + distillery + IBM missions restore; vault keeps the larger of live vs archive.'
+      );
+      if (!ok) return;
+    }
+    setForceBizBusy(true);
+    try {
+      const res = await api.post('/admin/force-restore-illegal-business-from-archive', null, {
+        params: {
+          username: target,
+          ...(archiveSrc ? { archive_username: archiveSrc } : {}),
+          dry_run: dryRun,
+          vault_policy: 'max',
+          restore_ibm_missions: true,
+        },
+      });
+      setForceBizResult(res.data || null);
+      toast.success(res.data?.message || (dryRun ? 'Dry run done' : 'Speakeasy restored'));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Force Speakeasy restore failed');
+    } finally {
+      setForceBizBusy(false);
     }
   };
 
@@ -470,6 +508,84 @@ export default function AdminVipCars() {
                       ) : null}
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+
+            <div className="border-t border-zinc-700/40 pt-3 space-y-2">
+              <div className="text-[10px] font-heading font-bold uppercase tracking-wider text-sky-300">
+                Force restore Speakeasy from archive
+              </div>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                Overwrites a wiped Level‑1 Speakeasy / distillery / guards from a death archive (normal heal skips
+                when any biz row already exists). Defaults: restore{' '}
+                <span className="text-foreground">Piece</span> from{' '}
+                <span className="text-foreground">Chaos</span>&apos;s archive. Vault keeps the larger of live vs
+                archive. Dry run first.
+              </p>
+              <div className="flex flex-wrap gap-2 items-end">
+                <label className="text-[9px] font-heading text-mutedForeground">
+                  Target (overwrite)
+                  <input
+                    value={forceBizTarget}
+                    onChange={(e) => setForceBizTarget(e.target.value)}
+                    className="mt-0.5 block w-36 rounded border border-zinc-600 bg-zinc-900 px-2 py-1 text-[11px] text-foreground"
+                  />
+                </label>
+                <label className="text-[9px] font-heading text-mutedForeground">
+                  Archive source
+                  <input
+                    value={forceBizArchive}
+                    onChange={(e) => setForceBizArchive(e.target.value)}
+                    className="mt-0.5 block w-36 rounded border border-zinc-600 bg-zinc-900 px-2 py-1 text-[11px] text-foreground"
+                    placeholder="Chaos"
+                  />
+                </label>
+                <Btn
+                  onClick={() => runForceBizRestore(true)}
+                  disabled={forceBizBusy || pairBusy || estateHealBusy || !!actionKey}
+                  className="border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                >
+                  {forceBizBusy ? '…' : 'Dry run Speakeasy'}
+                </Btn>
+                <Btn
+                  onClick={() => runForceBizRestore(false)}
+                  disabled={forceBizBusy || pairBusy || estateHealBusy || !!actionKey}
+                  className="border-sky-500/40 bg-sky-500/10 text-sky-200 hover:bg-sky-500/20"
+                >
+                  {forceBizBusy ? '…' : 'Apply Speakeasy restore'}
+                </Btn>
+              </div>
+              {forceBizResult && (
+                <div className="rounded border border-zinc-700/50 bg-zinc-900/50 p-2 space-y-1 text-[9px] font-heading text-mutedForeground">
+                  <div className="text-foreground">
+                    {forceBizResult.dry_run ? 'Dry run' : 'Applied'}: {forceBizResult.mode}{' '}
+                    {forceBizResult.username} ← archive {forceBizResult.archive_username}
+                    {forceBizResult.archive_captured_at
+                      ? ` (${forceBizResult.archive_captured_at})`
+                      : ''}
+                  </div>
+                  <div>
+                    before: Lv{forceBizResult.before?.level ?? 0}, sec{' '}
+                    {forceBizResult.before?.security_level ?? 0}, guards{' '}
+                    {forceBizResult.before?.guards ?? 0}, dist{' '}
+                    {forceBizResult.before?.distillery_steps ?? 0}, vault $
+                    {Number(forceBizResult.before?.vault || 0).toLocaleString()}
+                  </div>
+                  <div>
+                    after: Lv{forceBizResult.after?.level ?? 0}, sec{' '}
+                    {forceBizResult.after?.security_level ?? 0}, guards{' '}
+                    {forceBizResult.after?.guards ?? 0}, dist{' '}
+                    {forceBizResult.after?.distillery_steps ?? 0}, vault $
+                    {Number(forceBizResult.after?.vault || 0).toLocaleString()}
+                  </div>
+                  <div>
+                    IBM missions: {forceBizResult.ibm_missions_current ?? 0} →{' '}
+                    {forceBizResult.ibm_missions_archive ?? 0}
+                    {forceBizResult.vault_policy
+                      ? ` · vault policy ${forceBizResult.vault_policy}`
+                      : ''}
+                  </div>
                 </div>
               )}
             </div>

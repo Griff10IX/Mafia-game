@@ -1,7 +1,8 @@
 import * as THREE from "three";
+import { getBudPhenotype } from "./weedPhenotypes";
 
-const GREEN = 0x3f7938;
-const BUD_GREEN = 0x739a68;
+const FALLBACK_GREEN = 0x3f7938;
+const FALLBACK_BUD = 0x739a68;
 const STEEL = 0xb8bec4;
 const HANDLE = 0x243029;
 const TRAY = 0x242728;
@@ -102,6 +103,40 @@ function localPosition(root, object, fallback) {
   return root.worldToLocal(position);
 }
 
+function trayPileTarget(index, count, { bud = false } = {}) {
+  // Tray sits at local (0.55, 0.075, 0.34); pile into a visible mound on the bed.
+  const cx = 0.55;
+  const cz = 0.34;
+  const angle = (index / Math.max(1, count)) * Math.PI * 2 + (bud ? 0.35 : 0.1);
+  const ring = Math.floor(index / 5);
+  const radius = (bud ? 0.05 : 0.07) + ring * (bud ? 0.045 : 0.05) + (index % 3) * 0.012;
+  const stack = Math.floor(index / 3);
+  const y = 0.11 + stack * (bud ? 0.028 : 0.016) + (index % 2) * 0.008;
+  return new THREE.Vector3(
+    cx + Math.cos(angle) * radius * (bud ? 0.85 : 1.05),
+    y,
+    cz + Math.sin(angle) * radius * 0.72
+  );
+}
+
+function applyHarvestPhenotype(rig, phenotypeKey) {
+  const preset = getBudPhenotype(phenotypeKey);
+  rig.phenotypeKey = phenotypeKey || "dense";
+  if (rig.buds?.material?.color) {
+    rig.buds.material.color.setHex(preset.bud ?? FALLBACK_BUD);
+    if (rig.buds.material.emissive) {
+      rig.buds.material.emissive.setHex(preset.emissive ?? 0x000000);
+      rig.buds.material.emissiveIntensity = phenotypeKey === "purple" || phenotypeKey === "frosty" ? 0.12 : 0.04;
+    }
+    rig.buds.material.roughness = phenotypeKey === "frosty" ? 0.28 : 0.34;
+    rig.buds.material.needsUpdate = true;
+  }
+  if (rig.trimmings?.material?.color) {
+    rig.trimmings.material.color.setHex(preset.leaf ?? FALLBACK_GREEN);
+    rig.trimmings.material.needsUpdate = true;
+  }
+}
+
 function populateDrops(rig, plant) {
   plant.updateMatrixWorld(true);
   rig.root.updateMatrixWorld(true);
@@ -119,14 +154,14 @@ function populateDrops(rig, plant) {
   const fallback = new THREE.Vector3(0, 0.85, 0);
   rig.budDrops = Array.from({ length: rig.budCount }, (_, index) => ({
     source: localPosition(rig.root, buds[index % Math.max(1, buds.length)], fallback),
-    target: new THREE.Vector3(0.38 + (index % 4) * 0.1, 0.13 + (index % 2) * 0.018, 0.25 + (index % 3) * 0.08),
-    delay: 0.16 + index * 0.045,
+    target: trayPileTarget(index, rig.budCount, { bud: true }),
+    delay: 0.12 + index * 0.038,
     spin: 1.8 + index * 0.37,
   }));
   rig.trimDrops = Array.from({ length: rig.trimCount }, (_, index) => ({
     source: localPosition(rig.root, leaves[index % Math.max(1, leaves.length)], fallback),
-    target: new THREE.Vector3(0.32 + (index % 6) * 0.085, 0.12, 0.2 + (index % 4) * 0.075),
-    delay: 0.12 + index * 0.026,
+    target: trayPileTarget(index, rig.trimCount, { bud: false }),
+    delay: 0.08 + index * 0.022,
     spin: 2.4 + index * 0.51,
   }));
 }
@@ -140,18 +175,23 @@ export function createHarvestRig(growZone, mobileLod) {
   const tray = makeTray();
   root.add(shears, tray);
 
-  const budCount = mobileLod ? 7 : 12;
-  const trimCount = mobileLod ? 12 : 22;
+  const budCount = mobileLod ? 10 : 16;
+  const trimCount = mobileLod ? 14 : 24;
   const buds = makeDrops(
     budCount,
-    new THREE.DodecahedronGeometry(0.035, 0),
-    new THREE.MeshStandardMaterial({ color: BUD_GREEN, roughness: 0.34 }),
+    new THREE.DodecahedronGeometry(0.042, 0),
+    new THREE.MeshStandardMaterial({
+      color: FALLBACK_BUD,
+      roughness: 0.34,
+      emissive: 0x000000,
+      emissiveIntensity: 0.04,
+    }),
     "harvestBudDrops"
   );
   const trimmings = makeDrops(
     trimCount,
     new THREE.TetrahedronGeometry(0.026, 0),
-    new THREE.MeshStandardMaterial({ color: GREEN, roughness: 0.52, side: THREE.DoubleSide }),
+    new THREE.MeshStandardMaterial({ color: FALLBACK_GREEN, roughness: 0.52, side: THREE.DoubleSide }),
     "harvestLeafTrimmings"
   );
   root.add(buds, trimmings);
@@ -170,13 +210,14 @@ export function createHarvestRig(growZone, mobileLod) {
     trimDrops: [],
     cutNodes: [],
     plant: null,
+    phenotypeKey: "dense",
     active: false,
     startedAt: 0,
-    duration: 3400,
+    duration: 4200,
   };
 }
 
-export function startHarvestFx(rig, plant, duration = 3400) {
+export function startHarvestFx(rig, plant, duration = 4200, phenotypeKey = "dense") {
   if (!rig || !plant || rig.active) return false;
   rig.active = true;
   rig.startedAt = performance.now();
@@ -184,8 +225,12 @@ export function startHarvestFx(rig, plant, duration = 3400) {
   rig.plant = plant;
   rig.root.visible = true;
   rig.shears.visible = true;
+  rig.tray.visible = true;
+  rig.buds.visible = true;
+  rig.trimmings.visible = true;
   rig.shears.position.set(1.15, 1.25, 0.28);
   plant.visible = true;
+  applyHarvestPhenotype(rig, phenotypeKey);
   populateDrops(rig, plant);
   resetInstances(rig.buds, rig.budCount);
   resetInstances(rig.trimmings, rig.trimCount);
@@ -204,16 +249,21 @@ function updateDrops(meshObject, drops, phase, scale) {
   const rotation = new THREE.Euler();
   const size = new THREE.Vector3();
   drops.forEach((drop, index) => {
-    const amount = THREE.MathUtils.clamp((phase - drop.delay) / 0.28, 0, 1);
-    if (amount <= 0) {
+    const travel = THREE.MathUtils.clamp((phase - drop.delay) / 0.24, 0, 1);
+    const ease = travel * travel * (3 - 2 * travel);
+    if (travel <= 0) {
       size.setScalar(0);
       position.copy(drop.source);
+      quaternion.identity();
     } else {
-      position.lerpVectors(drop.source, drop.target, amount);
-      position.y += Math.sin(amount * Math.PI) * 0.14;
-      rotation.set(amount * drop.spin, amount * drop.spin * 0.7, amount * drop.spin * 0.45);
+      position.lerpVectors(drop.source, drop.target, ease);
+      // Arc only while in flight; settle flat on the tray pile.
+      position.y += Math.sin(ease * Math.PI) * 0.16 * (1 - ease);
+      rotation.set(ease * drop.spin, ease * drop.spin * 0.7, ease * drop.spin * 0.45);
       quaternion.setFromEuler(rotation);
-      size.setScalar(scale * (0.72 + Math.sin(Math.min(1, amount) * Math.PI) * 0.28));
+      // Grow to full size and stay — visible mound build-up.
+      const landScale = scale * (0.55 + 0.55 * ease);
+      size.setScalar(landScale);
     }
     matrix.compose(position, quaternion, size);
     meshObject.setMatrixAt(index, matrix);
@@ -224,7 +274,7 @@ function updateDrops(meshObject, drops, phase, scale) {
 export function updateHarvestFx(rig, now) {
   if (!rig?.active) return false;
   const phase = THREE.MathUtils.clamp((now - rig.startedAt) / rig.duration, 0, 1);
-  const cutCenters = [0.18, 0.37, 0.56];
+  const cutCenters = [0.14, 0.3, 0.46];
   let nearestCut = 0;
   let nearestDistance = Infinity;
   cutCenters.forEach((center, index) => {
@@ -239,25 +289,26 @@ export function updateHarvestFx(rig, now) {
     new THREE.Vector3(0.36, 0.96, 0.1),
     new THREE.Vector3(0.3, 0.7, 0.08),
   ];
-  const approach = smoothstep(0.01, 0.12, phase);
-  const retreat = smoothstep(0.64, 0.76, phase);
+  const approach = smoothstep(0.01, 0.1, phase);
+  const retreat = smoothstep(0.58, 0.7, phase);
   const target = cutTargets[nearestCut];
   rig.shears.position.lerpVectors(new THREE.Vector3(1.15, 1.25, 0.28), target, approach * (1 - retreat));
   rig.shears.position.x += Math.sin(phase * Math.PI * 16) * 0.018 * (1 - retreat);
   const snip = Math.max(0, Math.sin(((phase - cutCenters[nearestCut]) / 0.1 + 0.5) * Math.PI));
   rig.shears.userData.upperBlade.rotation.z = 0.28 * (1 - snip);
   rig.shears.userData.lowerBlade.rotation.z = -0.28 * (1 - snip);
+  rig.shears.visible = phase < 0.78;
 
-  const cutProgress = smoothstep(0.12, 0.64, phase);
+  const cutProgress = smoothstep(0.1, 0.55, phase);
   const hiddenCount = Math.floor(rig.cutNodes.length * cutProgress);
   rig.cutNodes.forEach((node, index) => {
     node.visible = index >= hiddenCount && node.userData.harvestWasVisible !== false;
   });
-  updateDrops(rig.buds, rig.budDrops, phase, 0.8);
-  updateDrops(rig.trimmings, rig.trimDrops, phase, 0.72);
+  updateDrops(rig.buds, rig.budDrops, phase, 1.05);
+  updateDrops(rig.trimmings, rig.trimDrops, phase, 0.85);
 
   if (rig.plant) {
-    const finish = smoothstep(0.66, 0.9, phase);
+    const finish = smoothstep(0.58, 0.82, phase);
     rig.plant.rotation.z = finish * -0.34;
     rig.plant.position.y = finish * -0.2;
     rig.plant.traverse((object) => {
@@ -269,8 +320,10 @@ export function updateHarvestFx(rig, now) {
         material.depthWrite = finish < 0.55;
       });
     });
+    if (finish >= 0.98) rig.plant.visible = false;
   }
 
+  // Hold the piled tray in frame after the plant is gone.
   if (phase >= 1) {
     if (rig.plant) rig.plant.visible = false;
     rig.root.visible = false;

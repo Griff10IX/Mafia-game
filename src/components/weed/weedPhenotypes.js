@@ -11,7 +11,7 @@ export const BUD_PHENOTYPES = {
   dense: { bud: 0x347940, leaf: 0x246a31, pistil: 0xe99135, emissive: 0x0b2512, sparkle: 0xe8ffe4 },
   airy: { bud: 0x6fa64a, leaf: 0x4f9638, pistil: 0xeea047, emissive: 0x203816, sparkle: 0xf4ffe8 },
   frosty: { bud: 0x82ad88, leaf: 0x5f8d62, pistil: 0xf4b55f, emissive: 0x304b34, sparkle: 0xffffff },
-  purple: { bud: 0x653c72, leaf: 0x3f4058, pistil: 0xf08b2e, emissive: 0x2a1533, sparkle: 0xead8ff },
+  purple: { bud: 0x7a3d8e, leaf: 0x4a3f62, pistil: 0xf08b2e, emissive: 0x3a1848, sparkle: 0xf0dcff },
 };
 
 export function getBudPhenotype(key) {

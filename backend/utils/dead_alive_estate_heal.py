@@ -650,11 +650,6 @@ async def heal_pair_kill_revive(
     )
     from utils.game_pass_vip_car import ensure_vip_pass_car_on_revive, count_user_vip_pass_cars
 
-    def _uname_re(name: str):
-        import re
-
-        return re.compile("^" + re.escape((name or "").strip()) + "$", re.IGNORECASE)
-
     killer = await db.users.find_one(
         {"username": _uname_re(killer_username)},
         {"_id": 0, "id": 1, "username": 1, "is_dead": 1},
@@ -994,6 +989,239 @@ async def heal_pair_kill_revive(
             out["actions"].append({"kind": "vip_pass_car_regrant", "applied": bool(ok)})
 
     out["action_count"] = len(out["actions"])
+    return out
+
+
+def _uname_re(name: str):
+    import re
+
+    return re.compile("^" + re.escape((name or "").strip()) + "$", re.IGNORECASE)
+
+
+def _distillery_steps(biz: Optional[dict]) -> int:
+    dist = (biz or {}).get("distillery") or {}
+    equipment = dist.get("equipment") or {}
+    specials = dist.get("special_upgrades") or {}
+    eq = sum(int(equipment.get(k) or 0) for k in equipment) if isinstance(equipment, dict) else 0
+    sp = sum(1 for v in (specials.values() if isinstance(specials, dict) else []) if v)
+    return int(eq + sp)
+
+
+def _biz_progress_summary(biz: Optional[dict], *, guards: int = 0) -> Dict[str, Any]:
+    if not biz:
+        return {
+            "present": False,
+            "type": None,
+            "name": None,
+            "level": 0,
+            "security_level": 0,
+            "vault": 0,
+            "income_per_hour": 0,
+            "guards": 0,
+            "distillery_steps": 0,
+        }
+    sec = len(biz.get("security_upgrades") or []) or int(biz.get("security_level") or 0)
+    return {
+        "present": True,
+        "type": biz.get("type") or biz.get("business_type"),
+        "name": biz.get("name"),
+        "level": int(biz.get("level") or 1),
+        "security_level": int(sec),
+        "vault": int(biz.get("vault") or 0),
+        "income_per_hour": int(biz.get("income_per_hour") or 0),
+        "guards": int(guards),
+        "distillery_steps": _distillery_steps(biz),
+    }
+
+
+def _resolve_vault(current_vault: int, archive_vault: int, vault_policy: str) -> int:
+    policy = (vault_policy or "max").strip().lower()
+    if policy == "archive":
+        return int(archive_vault)
+    if policy == "current":
+        return int(current_vault)
+    # default max — never wipe a larger live vault on restore
+    return max(int(current_vault), int(archive_vault))
+
+
+async def force_restore_illegal_business_from_archive(
+    db,
+    *,
+    username: str,
+    archive_username: Optional[str] = None,
+    dry_run: bool = True,
+    vault_policy: str = "max",
+    restore_ibm_missions: bool = True,
+) -> dict:
+    """
+    Overwrite a player's illegal business (Speakeasy/distillery/guards) from a death archive.
+
+    Use when a wiped Level-1 shell already exists so normal revive/heal skips restore.
+    For kill→revive (e.g. Piece ← Chaos archive): set username=Piece, archive_username=Chaos.
+    """
+    target_name = (username or "").strip()
+    archive_name = (archive_username or username or "").strip()
+    if not target_name:
+        return {"ok": False, "error": "username required"}
+
+    target = await db.users.find_one(
+        {"username": _uname_re(target_name)},
+        {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "is_dead": 1,
+            "illegal_business_mission_completions": 1,
+            "illegal_business_mission_baselines": 1,
+        },
+    )
+    if not target:
+        return {"ok": False, "error": f"User not found: {target_name}"}
+
+    archive_user = target
+    if archive_name.lower() != target_name.lower():
+        archive_user = await db.users.find_one(
+            {"username": _uname_re(archive_name)},
+            {"_id": 0, "id": 1, "username": 1, "death_revive_snapshot_archive": 1},
+        )
+        if not archive_user:
+            return {"ok": False, "error": f"Archive user not found: {archive_name}"}
+    else:
+        archive_user = await db.users.find_one(
+            {"id": target["id"]},
+            {"_id": 0, "id": 1, "username": 1, "death_revive_snapshot_archive": 1},
+        )
+
+    snap = _latest_archive_snap(archive_user or {})
+    if not snap:
+        return {
+            "ok": False,
+            "error": f"No death_revive_snapshot_archive on {archive_user.get('username') or archive_name}",
+        }
+
+    snap_biz = snap.get("illegal_business")
+    if not snap_biz:
+        return {
+            "ok": False,
+            "error": (
+                f"Archive for {archive_user.get('username') or archive_name} "
+                "has no illegal_business snapshot"
+            ),
+            "archive_captured_at": snap.get("captured_at") or snap.get("archived_at"),
+        }
+
+    snap_guards = list(snap.get("illegal_business_guards") or [])
+    target_id = target["id"]
+    current = await db.illegal_businesses.find_one({"user_id": target_id}, {"_id": 0})
+    current_guards = []
+    if current and current.get("id"):
+        current_guards = await db.illegal_business_guards.find(
+            {"business_id": current["id"]}, {"_id": 0}
+        ).to_list(2000)
+
+    current_vault = int((current or {}).get("vault") or 0)
+    archive_vault = int(snap_biz.get("vault") or 0)
+    resolved_vault = _resolve_vault(current_vault, archive_vault, vault_policy)
+
+    ibm_snap = snap.get("user_ibm_fields") or {}
+    ibm_missions = list(ibm_snap.get("illegal_business_mission_completions") or [])
+    current_missions = list(target.get("illegal_business_mission_completions") or [])
+
+    before = _biz_progress_summary(current, guards=len(current_guards))
+    after = _biz_progress_summary(snap_biz, guards=len(snap_guards))
+    after["vault"] = resolved_vault
+
+    out: Dict[str, Any] = {
+        "ok": True,
+        "dry_run": bool(dry_run),
+        "username": target.get("username"),
+        "user_id": target_id,
+        "archive_username": archive_user.get("username"),
+        "archive_user_id": archive_user.get("id"),
+        "archive_captured_at": snap.get("captured_at") or snap.get("archived_at"),
+        "vault_policy": (vault_policy or "max").strip().lower(),
+        "vault_current": current_vault,
+        "vault_archive": archive_vault,
+        "vault_resolved": resolved_vault,
+        "restore_ibm_missions": bool(restore_ibm_missions),
+        "ibm_missions_current": len(current_missions),
+        "ibm_missions_archive": len(ibm_missions),
+        "before": before,
+        "after": after,
+        "mode": "overwrite" if current else "insert",
+        "applied": False,
+    }
+
+    if dry_run:
+        out["would_apply"] = True
+        return out
+
+    biz_doc = deepcopy(snap_biz)
+    biz_doc.pop("_id", None)
+    biz_doc.pop("seized_from_user_id", None)
+    biz_doc["user_id"] = target_id
+    biz_doc["vault"] = resolved_vault
+
+    if current and current.get("id"):
+        biz_id = current["id"]
+        biz_doc["id"] = biz_id
+        # Keep row identity; replace payload.
+        await db.illegal_businesses.replace_one(
+            {"user_id": target_id, "id": biz_id},
+            biz_doc,
+            upsert=True,
+        )
+        await db.illegal_business_guards.delete_many({"business_id": biz_id})
+    else:
+        biz_id = str(uuid.uuid4())
+        biz_doc["id"] = biz_id
+        await db.illegal_businesses.insert_one(biz_doc)
+
+    for g in snap_guards:
+        gd = dict(g)
+        gd.pop("_id", None)
+        gd["id"] = str(uuid.uuid4())
+        gd["business_id"] = biz_id
+        await db.illegal_business_guards.insert_one(gd)
+
+    if restore_ibm_missions and ibm_snap:
+        set_doc = {k: v for k, v in ibm_snap.items() if k in (
+            "illegal_business_mission_completions",
+            "illegal_business_mission_baselines",
+        )}
+        if set_doc:
+            await db.users.update_one({"id": target_id}, {"$set": set_doc})
+            out["ibm_fields_restored"] = True
+
+    # Keep last few backups for undo / audit
+    backup = {
+        "at": _utc_now_iso(),
+        "archive_username": archive_user.get("username"),
+        "archive_captured_at": snap.get("captured_at") or snap.get("archived_at"),
+        "biz": current,
+        "guards": current_guards,
+        "ibm_missions_count": len(current_missions),
+    }
+    try:
+        await db.users.update_one(
+            {"id": target_id},
+            {
+                "$push": {
+                    "illegal_business_force_restore_backups": {
+                        "$each": [backup],
+                        "$slice": -5,
+                    }
+                }
+            },
+        )
+    except Exception:
+        logger.exception(
+            "force_restore biz backup push failed user=%s", target_id
+        )
+
+    out["applied"] = True
+    out["business_id"] = biz_id
+    out["guards_restored"] = len(snap_guards)
     return out
 
 
