@@ -11383,7 +11383,8 @@ def register(router):
     ):
         """
         Heal gaps after past Dead → Alive revives: missing illegal business (both keep),
-        exclusive weed specials clawback, VIP Pass Car inheritance/re-grant.
+        killer portfolio/biz stolen by old revive clawback, exclusive weed clawback,
+        VIP inheritance / £10 sacrifice transfer / re-grant.
         """
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
@@ -11393,18 +11394,51 @@ def register(router):
         totals = result.get("totals") or {}
         if dry_run:
             msg = (
-                f"Dry run: would heal {totals.get('biz_healed', 0)} biz, "
-                f"{totals.get('weed_healed', 0)} weed, "
-                f"{totals.get('vip_regrant_healed', 0)} VIP re-grant, "
-                f"{totals.get('vip_inheritance_cars', 0)} VIP inheritance car(s)"
+                f"Dry run: victim biz {totals.get('biz_healed', 0)}, "
+                f"killer biz {totals.get('killer_biz_healed', 0)}, "
+                f"killer portfolio {totals.get('killer_portfolio_healed', 0)}, "
+                f"weed {totals.get('weed_healed', 0)}, "
+                f"VIP re-grant {totals.get('vip_regrant_healed', 0)}, "
+                f"VIP inheritance {totals.get('vip_inheritance_cars', 0)}, "
+                f"VIP sacrifice {totals.get('vip_sacrifice_cars', 0)}"
             )
         else:
             msg = (
-                f"Healed {totals.get('biz_healed', 0)} biz, "
-                f"{totals.get('weed_healed', 0)} weed, "
-                f"{totals.get('vip_regrant_healed', 0)} VIP re-grant, "
-                f"{totals.get('vip_inheritance_cars', 0)} VIP inheritance car(s)"
+                f"Healed: victim biz {totals.get('biz_healed', 0)}, "
+                f"killer biz {totals.get('killer_biz_healed', 0)}, "
+                f"killer portfolio {totals.get('killer_portfolio_healed', 0)}, "
+                f"weed {totals.get('weed_healed', 0)}, "
+                f"VIP re-grant {totals.get('vip_regrant_healed', 0)}, "
+                f"VIP inheritance {totals.get('vip_inheritance_cars', 0)}, "
+                f"VIP sacrifice {totals.get('vip_sacrifice_cars', 0)}"
             )
+        return {"message": msg, **result}
+
+    @router.post("/admin/dead-alive-estate-heal-pair")
+    async def admin_dead_alive_estate_heal_pair(
+        killer_username: str = Query(..., min_length=1, max_length=64),
+        victim_username: str = Query(..., min_length=1, max_length=64),
+        dry_run: bool = Query(True, description="If true, preview only — no DB writes"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Targeted heal for one kill→revive pair (e.g. Piece killed Chaos, Chaos £10 revived)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.dead_alive_estate_heal import heal_pair_kill_revive
+
+        result = await heal_pair_kill_revive(
+            db,
+            killer_username=killer_username.strip(),
+            victim_username=victim_username.strip(),
+            dry_run=bool(dry_run),
+        )
+        if not result.get("ok"):
+            raise HTTPException(status_code=404, detail=result.get("error") or "Heal pair failed")
+        n = int(result.get("action_count") or 0)
+        if dry_run:
+            msg = f"Dry run: {n} action(s) for {result.get('killer')} → {result.get('victim')}"
+        else:
+            msg = f"Applied {n} action(s) for {result.get('killer')} / {result.get('victim')}"
         return {"message": msg, **result}
 
     @router.post("/admin/vip-pass-car-remove")

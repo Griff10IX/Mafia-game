@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-26 16:35 UTC[/color][/b] — [b]Dead → Alive: killer keeps portfolio + VIP from £10 alt[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] £10 revive no longer steals the killer’s [b]property portfolio[/b] (matching deed types). Killer and revived victim both keep deeds; distillery/illegal business both keep.[/color]
+[*][color=#888888][b]Changed:[/b] Paying £10 on a new alt to revive now moves that alt’s [b]VIP Pass Car[/b] onto the revived character (same idea as Claim Inheritance).[/color]
+[*][color=#888888][b]Changed:[/b] [b]£10 revive[/b] returns [b]Weed Empire specials[/b] taken on the kill.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-26 15:35 UTC[/color][/b] — [b]Dead → Alive: estate restore fixes[/b][/size]
 [quote]
 [list]

@@ -38,6 +38,10 @@ export default function AdminVipCars() {
   const [backfillResult, setBackfillResult] = useState(null);
   const [estateHealBusy, setEstateHealBusy] = useState(false);
   const [estateHealResult, setEstateHealResult] = useState(null);
+  const [pairKiller, setPairKiller] = useState('Piece');
+  const [pairVictim, setPairVictim] = useState('Chaos');
+  const [pairBusy, setPairBusy] = useState(false);
+  const [pairResult, setPairResult] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -121,7 +125,7 @@ export default function AdminVipCars() {
   const runEstateHeal = async (dryRun) => {
     if (!dryRun) {
       const ok = window.confirm(
-        'Heal Dead → Alive estate gaps: restore missing illegal businesses (both keep), claw back exclusive weed specials, VIP inheritance transfer + missing VIP car re-grants?'
+        'Heal Dead → Alive estate gaps: victim + killer biz/portfolio, weed clawback, VIP inheritance / £10 sacrifice transfer / re-grants?'
       );
       if (!ok) return;
     }
@@ -137,6 +141,38 @@ export default function AdminVipCars() {
       toast.error(e.response?.data?.detail || 'Estate heal failed');
     } finally {
       setEstateHealBusy(false);
+    }
+  };
+
+  const runPairHeal = async (dryRun) => {
+    const killer = String(pairKiller || '').trim();
+    const victim = String(pairVictim || '').trim();
+    if (!killer || !victim) {
+      toast.error('Enter killer and victim usernames');
+      return;
+    }
+    if (!dryRun) {
+      const ok = window.confirm(
+        `Fix kill→revive pair: restore ${killer}'s properties/distillery (both keep), return exclusive weed to ${victim}, move VIP from £10 sacrifice alt → ${victim}?`
+      );
+      if (!ok) return;
+    }
+    setPairBusy(true);
+    try {
+      const res = await api.post('/admin/dead-alive-estate-heal-pair', null, {
+        params: {
+          killer_username: killer,
+          victim_username: victim,
+          dry_run: dryRun,
+        },
+      });
+      setPairResult(res.data || null);
+      toast.success(res.data?.message || (dryRun ? 'Dry run done' : 'Pair heal done'));
+      if (!dryRun) await loadStats();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Pair heal failed');
+    } finally {
+      setPairBusy(false);
     }
   };
 
@@ -296,19 +332,20 @@ export default function AdminVipCars() {
               Dead → Alive estate heal
             </div>
             <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-              Fixes already-broken accounts after past revives: missing illegal business (killer keeps theirs; victim gets a restored copy), exclusive weed special clawback, VIP inheritance transfer, and VIP car re-grant when the grant flag is set but garage has zero car22. Prefer dry run first.
+              Global pass: restore killer portfolios/distilleries wiped by old revive clawback, victim biz + weed,
+              VIP from inheritance and £10 sacrifice alts, VIP re-grant. Prefer dry run first.
             </p>
             <div className="flex flex-wrap gap-2">
               <Btn
                 onClick={() => runEstateHeal(true)}
-                disabled={estateHealBusy || backfillBusy || !!actionKey}
+                disabled={estateHealBusy || pairBusy || backfillBusy || !!actionKey}
                 className="border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
               >
                 {estateHealBusy ? '…' : 'Dry run'}
               </Btn>
               <Btn
                 onClick={() => runEstateHeal(false)}
-                disabled={estateHealBusy || backfillBusy || !!actionKey}
+                disabled={estateHealBusy || pairBusy || backfillBusy || !!actionKey}
                 className="border-amber-500/40 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20"
               >
                 {estateHealBusy ? '…' : 'Apply estate heal'}
@@ -317,15 +354,23 @@ export default function AdminVipCars() {
             {estateHealResult && (
               <div className="rounded border border-zinc-700/50 bg-zinc-900/50 p-2 space-y-1 text-[9px] font-heading text-mutedForeground">
                 <div className="text-foreground">
-                  {estateHealResult.dry_run ? 'Dry run' : 'Applied'}: biz{' '}
+                  {estateHealResult.dry_run ? 'Dry run' : 'Applied'}: killer portfolio{' '}
+                  {Number(estateHealResult.totals?.killer_portfolio_healed || 0)}, killer biz{' '}
+                  {Number(estateHealResult.totals?.killer_biz_healed || 0)}, victim biz{' '}
                   {Number(estateHealResult.totals?.biz_healed || 0)}, weed{' '}
-                  {Number(estateHealResult.totals?.weed_healed || 0)}, VIP re-grant{' '}
-                  {Number(estateHealResult.totals?.vip_regrant_healed || 0)}, VIP inheritance cars{' '}
-                  {Number(estateHealResult.totals?.vip_inheritance_cars || 0)}
+                  {Number(estateHealResult.totals?.weed_healed || 0)}, VIP sacrifice{' '}
+                  {Number(estateHealResult.totals?.vip_sacrifice_cars || 0)}, VIP inheritance{' '}
+                  {Number(estateHealResult.totals?.vip_inheritance_cars || 0)}, VIP re-grant{' '}
+                  {Number(estateHealResult.totals?.vip_regrant_healed || 0)}
                 </div>
-                {(estateHealResult.illegal_business?.actions || []).slice(0, 20).map((a) => (
-                  <div key={`biz-${a.victim_id}-${a.kind}`}>
-                    biz · {a.username || a.victim_id}: {a.kind}
+                {(estateHealResult.killer_portfolio?.actions || []).slice(0, 20).map((a) => (
+                  <div key={`kp-${a.killer_id}-${a.victim_id}`}>
+                    portfolio · {a.killer_username} ← {a.victim_username}: {a.property_count} deed(s)
+                  </div>
+                ))}
+                {(estateHealResult.killer_illegal_business?.actions || []).slice(0, 20).map((a) => (
+                  <div key={`kb-${a.victim_id || a.killer_id}-${a.kind}`}>
+                    killer biz · {a.killer_username || a.username}: {a.kind}
                   </div>
                 ))}
                 {(estateHealResult.exclusive_weed?.actions || []).slice(0, 20).map((a) => (
@@ -333,13 +378,73 @@ export default function AdminVipCars() {
                     weed · {a.username || a.victim_id}: {(a.strain_ids || []).join(', ')}
                   </div>
                 ))}
-                {(estateHealResult.vip_pass_car?.regrant_actions || []).slice(0, 20).map((a) => (
-                  <div key={`vip-${a.user_id}`}>
-                    vip · {a.username || a.user_id}: re-grant
+                {(estateHealResult.vip_pass_car?.sacrifice_backfill?.actions || []).slice(0, 20).map((a) => (
+                  <div key={`vipsac-${a.dead_username}-${a.recipient_username}`}>
+                    vip sacrifice · {a.dead_username} → {a.recipient_username}: {a.cars}
                   </div>
                 ))}
               </div>
             )}
+
+            <div className="border-t border-zinc-700/40 pt-3 space-y-2">
+              <div className="text-[10px] font-heading font-bold uppercase tracking-wider text-rose-300">
+                Fix one kill → revive pair
+              </div>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                Example: killer <span className="text-foreground">Piece</span>, victim{' '}
+                <span className="text-foreground">Chaos</span> — gives Piece properties/distillery back (Chaos keeps),
+                returns weed specials to Chaos, moves VIP from the £10 sacrifice alt onto Chaos.
+              </p>
+              <div className="flex flex-wrap gap-2 items-end">
+                <label className="text-[9px] font-heading text-mutedForeground">
+                  Killer
+                  <input
+                    value={pairKiller}
+                    onChange={(e) => setPairKiller(e.target.value)}
+                    className="mt-0.5 block w-36 rounded border border-zinc-600 bg-zinc-900 px-2 py-1 text-[11px] text-foreground"
+                  />
+                </label>
+                <label className="text-[9px] font-heading text-mutedForeground">
+                  Victim (revived)
+                  <input
+                    value={pairVictim}
+                    onChange={(e) => setPairVictim(e.target.value)}
+                    className="mt-0.5 block w-36 rounded border border-zinc-600 bg-zinc-900 px-2 py-1 text-[11px] text-foreground"
+                  />
+                </label>
+                <Btn
+                  onClick={() => runPairHeal(true)}
+                  disabled={pairBusy || estateHealBusy || !!actionKey}
+                  className="border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+                >
+                  {pairBusy ? '…' : 'Dry run pair'}
+                </Btn>
+                <Btn
+                  onClick={() => runPairHeal(false)}
+                  disabled={pairBusy || estateHealBusy || !!actionKey}
+                  className="border-rose-500/40 bg-rose-500/10 text-rose-200 hover:bg-rose-500/20"
+                >
+                  {pairBusy ? '…' : 'Apply pair fix'}
+                </Btn>
+              </div>
+              {pairResult && (
+                <div className="rounded border border-zinc-700/50 bg-zinc-900/50 p-2 space-y-1 text-[9px] font-heading text-mutedForeground">
+                  <div className="text-foreground">
+                    {pairResult.dry_run ? 'Dry run' : 'Applied'}: {pairResult.killer} / {pairResult.victim} —{' '}
+                    {Number(pairResult.action_count || 0)} action(s)
+                  </div>
+                  {(pairResult.actions || []).map((a, i) => (
+                    <div key={`pair-${i}-${a.kind}`}>
+                      {a.kind}
+                      {a.property_count != null ? ` · ${a.property_count} props` : ''}
+                      {a.strain_ids ? ` · ${(a.strain_ids || []).join(', ')}` : ''}
+                      {a.cars != null ? ` · ${a.cars} VIP` : ''}
+                      {a.dead_username ? ` · from ${a.dead_username}` : ''}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>

@@ -226,12 +226,16 @@ async def _restore_user_ibm_fields(db, victim_id: str, snap: dict, summary: dict
 async def _restore_properties(
     db, victim_id: str, killer_id: Optional[str], snap: dict, summary: dict
 ) -> None:
+    """
+    Restore victim portfolio from snapshot only.
+    Never move rows off the killer — kill clears the victim's deeds for a boost %;
+    taking matching property_ids from the killer stole their own portfolio.
+    """
     rows = snap.get("user_properties") or []
     if not rows:
         return
     restored = 0
     skipped = 0
-    seizer_id = killer_id
     for row in rows:
         pid = row.get("property_id")
         if not pid:
@@ -240,21 +244,14 @@ async def _restore_properties(
         if existing:
             skipped += 1
             continue
-        moved = False
-        if seizer_id:
-            seizer_row = await db.user_properties.find_one(
-                {"user_id": seizer_id, "property_id": pid}, {"_id": 1}
-            )
-            if seizer_row:
-                await db.user_properties.update_one({"_id": seizer_row["_id"]}, {"$set": {"user_id": victim_id}})
-                restored += 1
-                moved = True
-        if not moved:
-            doc = dict(row)
-            doc.pop("_id", None)
-            doc["user_id"] = victim_id
-            await db.user_properties.insert_one(doc)
-            restored += 1
+        doc = dict(row)
+        doc.pop("_id", None)
+        doc["user_id"] = victim_id
+        # Fresh row id so we never collide with killer's deed of the same property_id.
+        if doc.get("id"):
+            doc["id"] = str(uuid.uuid4())
+        await db.user_properties.insert_one(doc)
+        restored += 1
     summary["properties_restored"] = restored
     summary["properties_skipped"] = skipped
 

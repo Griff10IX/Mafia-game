@@ -188,7 +188,7 @@ async def heal_exclusive_weed_gaps(db, *, dry_run: bool = True) -> dict:
         if r.get("owner_id"):
             killer_for[victim_id] = str(r["owner_id"])
 
-    # Archive fallback: alive user empty exclusives but archive lists strains
+    # Archive fallback: alive victim missing exclusives — use snap list, or pvp_kill rows on killer
     archive_users = await db.users.find(
         {
             "is_dead": {"$ne": True},
@@ -201,18 +201,33 @@ async def heal_exclusive_weed_gaps(db, *, dry_run: bool = True) -> dict:
         if not vid:
             continue
         snap = _latest_archive_snap(u)
-        strains = list((snap or {}).get("exclusive_weed_strains") or [])
-        if not strains:
+        if not snap:
             continue
         owned = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].count_documents({"owner_id": vid})
         if owned > 0:
+            continue
+        strains = list(snap.get("exclusive_weed_strains") or [])
+        killer_id = str(snap.get("killer_id") or "")
+        if not strains and killer_id:
+            held = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].find(
+                {
+                    "owner_id": killer_id,
+                    "$or": [
+                        {"previous_owner_id": vid},
+                        {"transfer_source": "pvp_kill"},
+                    ],
+                },
+                {"_id": 0, "strain_id": 1},
+            ).to_list(20)
+            strains = [str(r["strain_id"]) for r in (held or []) if r.get("strain_id")]
+        if not strains:
             continue
         by_victim.setdefault(vid, [])
         for sid in strains:
             if sid not in by_victim[vid]:
                 by_victim[vid].append(sid)
-        if (snap or {}).get("killer_id"):
-            killer_for[vid] = str(snap["killer_id"])
+        if killer_id:
+            killer_for[vid] = killer_id
 
     for victim_id, strain_ids in by_victim.items():
         out["checked"] += 1
@@ -269,10 +284,233 @@ async def heal_exclusive_weed_gaps(db, *, dry_run: bool = True) -> dict:
     return out
 
 
+async def heal_killer_portfolio_after_revive_clawback(db, *, dry_run: bool = True) -> dict:
+    """
+    Old revive stole matching property_ids from the killer onto the victim.
+    For each archive with killer_id: clone victim's current deeds the killer is missing
+    (for property_ids listed in the snapshot) back onto the killer.
+    """
+    out: Dict[str, Any] = {"checked": 0, "healed": 0, "actions": []}
+    archive_users = await db.users.find(
+        {
+            "is_dead": {"$ne": True},
+            "death_revive_snapshot_archive": {"$exists": True, "$ne": []},
+        },
+        {"_id": 0, "id": 1, "username": 1, "death_revive_snapshot_archive": 1},
+    ).to_list(2000)
+
+    for victim in archive_users:
+        snap = _latest_archive_snap(victim)
+        if not snap:
+            continue
+        killer_id = snap.get("killer_id")
+        prop_rows = list(snap.get("user_properties") or [])
+        if not killer_id or not prop_rows:
+            continue
+        out["checked"] += 1
+        killer = await db.users.find_one(
+            {"id": killer_id},
+            {"_id": 0, "id": 1, "username": 1, "is_dead": 1},
+        )
+        if not killer or killer.get("is_dead"):
+            continue
+
+        pids = [str(r.get("property_id")) for r in prop_rows if r.get("property_id")]
+        if not pids:
+            continue
+        missing: List[dict] = []
+        for pid in pids:
+            has = await db.user_properties.find_one(
+                {"user_id": killer_id, "property_id": pid}, {"_id": 1}
+            )
+            if has:
+                continue
+            victim_row = await db.user_properties.find_one(
+                {"user_id": victim["id"], "property_id": pid},
+                {"_id": 0},
+            )
+            if victim_row:
+                missing.append(victim_row)
+        if not missing:
+            continue
+
+        action = {
+            "kind": "killer_portfolio_restore",
+            "killer_id": killer_id,
+            "killer_username": killer.get("username"),
+            "victim_id": victim.get("id"),
+            "victim_username": victim.get("username"),
+            "property_count": len(missing),
+            "property_ids": [m.get("property_id") for m in missing],
+        }
+        if dry_run:
+            action["would_apply"] = True
+            out["actions"].append(action)
+            out["healed"] += 1
+            continue
+        for row in missing:
+            doc = deepcopy(row)
+            doc.pop("_id", None)
+            doc["user_id"] = killer_id
+            doc["id"] = str(uuid.uuid4())
+            await db.user_properties.insert_one(doc)
+        action["applied"] = True
+        out["actions"].append(action)
+        out["healed"] += 1
+        try:
+            from server import send_notification
+
+            await send_notification(
+                killer_id,
+                "Property portfolio restored",
+                (
+                    f"Your property deeds taken when {victim.get('username') or 'a player'} "
+                    f"revived have been copied back to you. They keep theirs too."
+                ),
+                "reward",
+            )
+        except Exception:
+            pass
+
+    return out
+
+
+async def heal_killer_biz_after_revive_revert(db, *, dry_run: bool = True) -> dict:
+    """
+    Old revive deleted the killer's seized illegal business. If victim is alive with a biz
+    and archive killer has none, clone victim's biz to the killer (both keep).
+    """
+    out: Dict[str, Any] = {"checked": 0, "healed": 0, "actions": []}
+    archive_users = await db.users.find(
+        {
+            "is_dead": {"$ne": True},
+            "death_revive_snapshot_archive": {"$exists": True, "$ne": []},
+        },
+        {"_id": 0, "id": 1, "username": 1, "death_revive_snapshot_archive": 1},
+    ).to_list(2000)
+
+    for victim in archive_users:
+        snap = _latest_archive_snap(victim)
+        if not snap or not snap.get("illegal_business") or not snap.get("killer_id"):
+            continue
+        killer_id = str(snap["killer_id"])
+        out["checked"] += 1
+        killer_biz = await db.illegal_businesses.find_one({"user_id": killer_id}, {"_id": 0, "id": 1})
+        if killer_biz:
+            continue
+        victim_biz = await db.illegal_businesses.find_one({"user_id": victim["id"]}, {"_id": 0})
+        if not victim_biz:
+            # Fall back to archive snap biz
+            victim_biz = snap.get("illegal_business")
+            guards = list(snap.get("illegal_business_guards") or [])
+        else:
+            guards = None
+        if not victim_biz:
+            continue
+        killer = await db.users.find_one(
+            {"id": killer_id}, {"_id": 0, "username": 1, "is_dead": 1}
+        )
+        if not killer or killer.get("is_dead"):
+            continue
+        action = await _clone_biz_to_victim(
+            db,
+            victim_id=killer_id,
+            source_biz=victim_biz,
+            guards=guards,
+            dry_run=dry_run,
+        )
+        action["kind"] = "killer_biz_restore"
+        action["killer_username"] = killer.get("username")
+        action["victim_username"] = victim.get("username")
+        action["username"] = killer.get("username")
+        out["actions"].append(action)
+        out["healed"] += 1
+        if not dry_run and action.get("applied"):
+            try:
+                from server import send_notification
+
+                await send_notification(
+                    killer_id,
+                    "Illegal business restored",
+                    (
+                        f"Your seized business removed when {victim.get('username') or 'a player'} "
+                        f"revived has been restored. They keep theirs too."
+                    ),
+                    "reward",
+                )
+            except Exception:
+                pass
+
+    return out
+
+
+async def heal_vip_from_revive_sacrifice(db, *, dry_run: bool = True) -> dict:
+    """Move VIP cars stuck on £10 revive sacrifice alts onto the revived recipient."""
+    from utils.game_pass_vip_car import (
+        GAME_PASS_VIP_CAR_ID,
+        transfer_vip_pass_cars_dead_alive,
+    )
+
+    out: Dict[str, Any] = {"checked": 0, "healed": 0, "actions": [], "transferred_cars": 0}
+    sacrificers = await db.users.find(
+        {
+            "is_dead": True,
+            "revive_sacrifice_for_user_id": {"$exists": True, "$nin": [None, ""]},
+        },
+        {"_id": 0, "id": 1, "username": 1, "revive_sacrifice_for_user_id": 1},
+    ).to_list(2000)
+
+    for sac in sacrificers:
+        out["checked"] += 1
+        recipient_id = str(sac.get("revive_sacrifice_for_user_id") or "")
+        if not recipient_id:
+            continue
+        n = await db.user_cars.count_documents(
+            {"user_id": sac["id"], "car_id": GAME_PASS_VIP_CAR_ID}
+        )
+        if n <= 0:
+            continue
+        recip = await db.users.find_one(
+            {"id": recipient_id}, {"_id": 0, "username": 1, "is_dead": 1}
+        )
+        if not recip or recip.get("is_dead"):
+            continue
+        action = {
+            "kind": "vip_from_revive_sacrifice",
+            "dead_username": sac.get("username"),
+            "recipient_username": recip.get("username"),
+            "cars": int(n),
+        }
+        if dry_run:
+            action["would_apply"] = True
+            out["actions"].append(action)
+            out["healed"] += 1
+            out["transferred_cars"] += int(n)
+            continue
+        result = await transfer_vip_pass_cars_dead_alive(
+            db,
+            dead_user_id=sac["id"],
+            recipient_user_id=recipient_id,
+            dead_username=sac.get("username"),
+            recipient_username=recip.get("username"),
+            notify=True,
+        )
+        moved = int((result or {}).get("transferred_count") or 0)
+        action["applied"] = moved > 0
+        action["cars"] = moved
+        out["actions"].append(action)
+        if moved:
+            out["healed"] += 1
+            out["transferred_cars"] += moved
+
+    return out
+
+
 async def heal_vip_pass_car_gaps(db, *, dry_run: bool = True) -> dict:
     """
     1) Inheritance stuck cars: existing dead→alive VIP backfill
-    2) Alive users with game_pass_vip_car_granted (or prior VIP events) and 0 car22 → re-grant
+    2) £10 revive sacrifice alts → revived recipient
+    3) Alive users with game_pass_vip_car_granted (or prior VIP events) and 0 car22 → re-grant
     """
     from utils.game_pass_vip_car import (
         backfill_vip_pass_cars_dead_alive,
@@ -282,12 +520,14 @@ async def heal_vip_pass_car_gaps(db, *, dry_run: bool = True) -> dict:
 
     out: Dict[str, Any] = {
         "inheritance_backfill": {},
+        "sacrifice_backfill": {},
         "regrant_checked": 0,
         "regrant_healed": 0,
         "regrant_actions": [],
     }
 
     out["inheritance_backfill"] = await backfill_vip_pass_cars_dead_alive(db, dry_run=dry_run)
+    out["sacrifice_backfill"] = await heal_vip_from_revive_sacrifice(db, dry_run=dry_run)
 
     candidates = await db.users.find(
         {
@@ -324,10 +564,210 @@ async def heal_vip_pass_car_gaps(db, *, dry_run: bool = True) -> dict:
     return out
 
 
+async def heal_pair_kill_revive(
+    db,
+    *,
+    killer_username: str,
+    victim_username: str,
+    dry_run: bool = True,
+    claw_killer_weed_to_victim: bool = True,
+) -> dict:
+    """
+    Targeted fix for one kill→revive case (e.g. Piece / Chaos):
+    - Clone victim properties killer is missing → killer
+    - Clone victim illegal biz → killer if killer has none
+    - Claw exclusive weed from killer → victim
+    - Move VIP from revive-sacrifice alts for victim; ensure VIP on victim
+    """
+    from utils.weed_empire_exclusive_strains import (
+        EXCLUSIVE_WEED_STRAINS_COLLECTION,
+        restore_exclusive_weed_strains_on_revive,
+    )
+    from utils.game_pass_vip_car import ensure_vip_pass_car_on_revive, count_user_vip_pass_cars
+
+    def _uname_re(name: str):
+        import re
+
+        return re.compile("^" + re.escape((name or "").strip()) + "$", re.IGNORECASE)
+
+    killer = await db.users.find_one(
+        {"username": _uname_re(killer_username)},
+        {"_id": 0, "id": 1, "username": 1, "is_dead": 1},
+    )
+    victim = await db.users.find_one(
+        {"username": _uname_re(victim_username)},
+        {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "is_dead": 1,
+            "death_revive_snapshot_archive": 1,
+            "game_pass_vip_car_granted": 1,
+        },
+    )
+    if not killer:
+        return {"ok": False, "error": f"Killer not found: {killer_username}"}
+    if not victim:
+        return {"ok": False, "error": f"Victim not found: {victim_username}"}
+
+    out: Dict[str, Any] = {
+        "ok": True,
+        "dry_run": bool(dry_run),
+        "killer": killer.get("username"),
+        "victim": victim.get("username"),
+        "actions": [],
+    }
+    killer_id = killer["id"]
+    victim_id = victim["id"]
+
+    # Properties: clone victim → killer for missing property_ids
+    victim_props = await db.user_properties.find({"user_id": victim_id}, {"_id": 0}).to_list(200)
+    cloned_props = 0
+    for row in victim_props or []:
+        pid = row.get("property_id")
+        if not pid:
+            continue
+        has = await db.user_properties.find_one(
+            {"user_id": killer_id, "property_id": pid}, {"_id": 1}
+        )
+        if has:
+            continue
+        if dry_run:
+            cloned_props += 1
+            continue
+        doc = deepcopy(row)
+        doc.pop("_id", None)
+        doc["user_id"] = killer_id
+        doc["id"] = str(uuid.uuid4())
+        await db.user_properties.insert_one(doc)
+        cloned_props += 1
+    if cloned_props:
+        out["actions"].append(
+            {
+                "kind": "killer_portfolio_restore",
+                "property_count": cloned_props,
+                "would_apply": dry_run,
+                "applied": not dry_run,
+            }
+        )
+
+    # Illegal biz: both keep
+    killer_biz = await db.illegal_businesses.find_one({"user_id": killer_id}, {"_id": 0, "id": 1})
+    victim_biz = await db.illegal_businesses.find_one({"user_id": victim_id}, {"_id": 0})
+    if not killer_biz and victim_biz:
+        action = await _clone_biz_to_victim(
+            db, victim_id=killer_id, source_biz=victim_biz, dry_run=dry_run
+        )
+        action["kind"] = "killer_biz_restore"
+        out["actions"].append(action)
+
+    # Weed: claw from killer → victim
+    if claw_killer_weed_to_victim:
+        snap = _latest_archive_snap(victim) or {}
+        strain_ids = list(snap.get("exclusive_weed_strains") or [])
+        if not strain_ids:
+            held = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].find(
+                {
+                    "owner_id": killer_id,
+                    "$or": [
+                        {"previous_owner_id": victim_id},
+                        {"transfer_source": "pvp_kill"},
+                    ],
+                },
+                {"_id": 0, "strain_id": 1},
+            ).to_list(20)
+            strain_ids = [str(r["strain_id"]) for r in (held or []) if r.get("strain_id")]
+        if strain_ids:
+            if dry_run:
+                out["actions"].append(
+                    {
+                        "kind": "exclusive_weed_clawback",
+                        "strain_ids": strain_ids,
+                        "would_apply": True,
+                    }
+                )
+            else:
+                restored = await restore_exclusive_weed_strains_on_revive(
+                    db,
+                    victim_id=victim_id,
+                    killer_id=killer_id,
+                    strain_ids=strain_ids,
+                    exclusive_stash=snap.get("exclusive_weed_stash") or {},
+                    notify=True,
+                )
+                out["actions"].append(
+                    {
+                        "kind": "exclusive_weed_clawback",
+                        "strain_ids": strain_ids,
+                        "restored": restored,
+                        "applied": bool(restored),
+                    }
+                )
+
+    # VIP from sacrifice alts for this victim + ensure on victim
+    from utils.game_pass_vip_car import GAME_PASS_VIP_CAR_ID, transfer_vip_pass_cars_dead_alive
+
+    sacrificers = await db.users.find(
+        {"is_dead": True, "revive_sacrifice_for_user_id": victim_id},
+        {"_id": 0, "id": 1, "username": 1},
+    ).to_list(50)
+    for srow in sacrificers:
+        n = await db.user_cars.count_documents(
+            {"user_id": srow["id"], "car_id": GAME_PASS_VIP_CAR_ID}
+        )
+        if n <= 0:
+            continue
+        if dry_run:
+            out["actions"].append(
+                {
+                    "kind": "vip_from_revive_sacrifice",
+                    "dead_username": srow.get("username"),
+                    "cars": n,
+                    "would_apply": True,
+                }
+            )
+        else:
+            xfer = await transfer_vip_pass_cars_dead_alive(
+                db,
+                dead_user_id=srow["id"],
+                recipient_user_id=victim_id,
+                dead_username=srow.get("username"),
+                recipient_username=victim.get("username"),
+                notify=True,
+            )
+            out["actions"].append(
+                {
+                    "kind": "vip_from_revive_sacrifice",
+                    "dead_username": srow.get("username"),
+                    "cars": int((xfer or {}).get("transferred_count") or 0),
+                    "applied": True,
+                }
+            )
+
+    vip_count = await count_user_vip_pass_cars(db, victim_id)
+    if vip_count <= 0 and (
+        victim.get("game_pass_vip_car_granted")
+        or sacrificers
+        or await db.exclusive_car_events.find_one(
+            {"car_id": GAME_PASS_VIP_CAR_ID, "to_user_id": victim_id}, {"_id": 1}
+        )
+    ):
+        if dry_run:
+            out["actions"].append({"kind": "vip_pass_car_regrant", "would_apply": True})
+        else:
+            ok = await ensure_vip_pass_car_on_revive(db, user_id=victim_id)
+            out["actions"].append({"kind": "vip_pass_car_regrant", "applied": bool(ok)})
+
+    out["action_count"] = len(out["actions"])
+    return out
+
+
 async def run_dead_alive_estate_heal(db, *, dry_run: bool = True) -> dict:
-    """Full estate heal pass (biz + weed + VIP)."""
+    """Full estate heal pass (biz + weed + VIP + killer portfolio/biz)."""
     started = _utc_now_iso()
     biz = await heal_illegal_business_gaps(db, dry_run=dry_run)
+    killer_biz = await heal_killer_biz_after_revive_revert(db, dry_run=dry_run)
+    killer_props = await heal_killer_portfolio_after_revive_clawback(db, dry_run=dry_run)
     weed = await heal_exclusive_weed_gaps(db, dry_run=dry_run)
     vip = await heal_vip_pass_car_gaps(db, dry_run=dry_run)
     return {
@@ -335,14 +775,21 @@ async def run_dead_alive_estate_heal(db, *, dry_run: bool = True) -> dict:
         "started_at": started,
         "finished_at": _utc_now_iso(),
         "illegal_business": biz,
+        "killer_illegal_business": killer_biz,
+        "killer_portfolio": killer_props,
         "exclusive_weed": weed,
         "vip_pass_car": vip,
         "totals": {
             "biz_healed": int(biz.get("healed") or 0),
+            "killer_biz_healed": int(killer_biz.get("healed") or 0),
+            "killer_portfolio_healed": int(killer_props.get("healed") or 0),
             "weed_healed": int(weed.get("healed") or 0),
             "vip_regrant_healed": int(vip.get("regrant_healed") or 0),
             "vip_inheritance_cars": int(
                 (vip.get("inheritance_backfill") or {}).get("transferred_cars") or 0
+            ),
+            "vip_sacrifice_cars": int(
+                (vip.get("sacrifice_backfill") or {}).get("transferred_cars") or 0
             ),
         },
     }

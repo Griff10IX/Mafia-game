@@ -253,6 +253,27 @@ async def execute_paid_revive(
         except Exception:
             logging.getLogger(__name__).exception("death_revive_snapshot restore revived=%s", dead_user.get("id"))
 
+        # Move VIP Pass Cars from the sacrificing alt onto the revived character (same as Claim Inheritance).
+        try:
+            from utils.game_pass_vip_car import transfer_vip_pass_cars_dead_alive
+
+            vip_xfer = await transfer_vip_pass_cars_dead_alive(
+                db,
+                dead_user_id=reviver["id"],
+                recipient_user_id=dead_user["id"],
+                dead_username=reviver.get("username"),
+                recipient_username=dead_user.get("username"),
+                notify=True,
+            )
+            if restore_summary is not None and int((vip_xfer or {}).get("transferred_count") or 0) > 0:
+                restore_summary["vip_pass_cars_from_reviver"] = int(vip_xfer["transferred_count"])
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "vip transfer reviver→revived reviver=%s revived=%s",
+                reviver.get("id"),
+                dead_user.get("id"),
+            )
+
         await db.users.update_one(
             {"id": reviver["id"]},
             {
