@@ -812,15 +812,18 @@ export default function GTA() {
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] gta-panel-header">GTA stats</span>
         </div>
-        <div className="p-2 text-[10px] font-heading text-foreground gta-stats-text">
-          GTAs today: {(gtaStats.count_today ?? 0).toLocaleString()}
-          <span className="text-emerald-400">
-            {' '}successful today {(gtaStats.success_today ?? 0).toLocaleString()}
-          </span>
-          {' '}past week {(gtaStats.count_week ?? 0).toLocaleString()}{' '}
-          <span className="text-emerald-400">
-            ({(gtaStats.success_week ?? 0).toLocaleString()} successful)
-          </span>
+        <div className="p-2 text-[10px] font-heading text-mutedForeground gta-stats-text space-y-1">
+          <div>
+            GTAs today:{' '}
+            <span className="text-primary font-bold tabular-nums">{(gtaStats.count_today ?? 0).toLocaleString()}</span>
+            {' '}· Successful today{' '}
+            <span className="text-emerald-400 font-bold tabular-nums">{(gtaStats.success_today ?? 0).toLocaleString()}</span>
+            {' '}· Past week{' '}
+            <span className="text-primary font-bold tabular-nums">{(gtaStats.count_week ?? 0).toLocaleString()}</span>
+            {' '}(
+            <span className="text-emerald-400 font-bold tabular-nums">{(gtaStats.success_week ?? 0).toLocaleString()} successful</span>
+            )
+          </div>
         </div>
         <div className="gta-art-line text-primary mx-2.5" />
       </div>

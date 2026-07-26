@@ -927,18 +927,26 @@ export default function Jail() {
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Bust stats</span>
         </div>
-        <div className="p-2 text-[10px] font-heading text-foreground">
-          Attempted busts today: {jailStats.count_today ?? 0}  streak {jailStatus.current_consecutive_busts ?? 0}{' '}
-          <span className="text-emerald-400">
-            total successful busts {jailStatus.jail_busts ?? 0}
-          </span>
-          <div className="mt-1 text-mutedForeground text-[9px]">
-            Record {jailStatus.consecutive_busts_record ?? 0}  ·  Past week {jailStats.count_week ?? 0} busts,{' '}
-            <span className="text-emerald-400">{jailStats.success_week ?? 0} successful</span>
-            {' '}·  Profit today{' '}
-            <span className="text-emerald-400">${(jailStats.profit_today ?? 0).toLocaleString()}</span>
-            {' '}·  Past week{' '}
-            <span className="text-emerald-400">${(jailStats.profit_week ?? 0).toLocaleString()}</span>
+        <div className="p-2 text-[10px] font-heading text-mutedForeground space-y-1">
+          <div>
+            Attempted busts today:{' '}
+            <span className="text-primary font-bold tabular-nums">{(jailStats.count_today ?? 0).toLocaleString()}</span>
+            {' '}· Streak{' '}
+            <span className="text-amber-300 font-bold tabular-nums">{(jailStatus.current_consecutive_busts ?? 0).toLocaleString()}</span>
+            {' '}· Total successful{' '}
+            <span className="text-emerald-400 font-bold tabular-nums">{(jailStatus.jail_busts ?? 0).toLocaleString()}</span>
+          </div>
+          <div className="text-[9px]">
+            Record{' '}
+            <span className="text-amber-300 font-bold tabular-nums">{(jailStatus.consecutive_busts_record ?? 0).toLocaleString()}</span>
+            {' '}· Past week{' '}
+            <span className="text-primary font-bold tabular-nums">{(jailStats.count_week ?? 0).toLocaleString()}</span>
+            {' '}busts,{' '}
+            <span className="text-emerald-400 font-bold tabular-nums">{(jailStats.success_week ?? 0).toLocaleString()} successful</span>
+            {' '}· Profit today{' '}
+            <span className="text-emerald-400 font-bold tabular-nums">${(jailStats.profit_today ?? 0).toLocaleString()}</span>
+            {' '}· Past week{' '}
+            <span className="text-emerald-400 font-bold tabular-nums">${(jailStats.profit_week ?? 0).toLocaleString()}</span>
           </div>
         </div>
         <div className="j-art-line text-primary mx-2.5" />

@@ -810,22 +810,25 @@ export default function Crimes() {
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Crime stats</span>
         </div>
-        <div className="p-2 text-[10px] font-heading text-foreground">
-          Crimes today: {(crimeStats.count_today ?? 0).toLocaleString()}
-          <span className="text-emerald-400">
-            {' '}successful today {(crimeStats.success_today ?? 0).toLocaleString()}
-          </span>
-          {' '}past week {(crimeStats.count_week ?? 0).toLocaleString()}{' '}
-          <span className="text-emerald-400">
-            ({(crimeStats.success_week ?? 0).toLocaleString()} successful)
-          </span>
-          <div className="mt-1 text-mutedForeground text-[9px]">
+        <div className="p-2 text-[10px] font-heading text-mutedForeground space-y-1">
+          <div>
+            Crimes today:{' '}
+            <span className="text-primary font-bold tabular-nums">{(crimeStats.count_today ?? 0).toLocaleString()}</span>
+            {' '}· Successful today{' '}
+            <span className="text-emerald-400 font-bold tabular-nums">{(crimeStats.success_today ?? 0).toLocaleString()}</span>
+            {' '}· Past week{' '}
+            <span className="text-primary font-bold tabular-nums">{(crimeStats.count_week ?? 0).toLocaleString()}</span>
+            {' '}(
+            <span className="text-emerald-400 font-bold tabular-nums">{(crimeStats.success_week ?? 0).toLocaleString()} successful</span>
+            )
+          </div>
+          <div className="text-[9px]">
             Profit today{' '}
-            <span className="text-emerald-400">${(crimeStats.profit_today ?? 0).toLocaleString()}</span>
-            {' '}·  Past 24h{' '}
-            <span className="text-emerald-400">${(crimeStats.profit_24h ?? 0).toLocaleString()}</span>
-            {' '}·  Past week{' '}
-            <span className="text-emerald-400">${(crimeStats.profit_week ?? 0).toLocaleString()}</span>
+            <span className="text-emerald-400 font-bold tabular-nums">${(crimeStats.profit_today ?? 0).toLocaleString()}</span>
+            {' '}· Past 24h{' '}
+            <span className="text-emerald-400 font-bold tabular-nums">${(crimeStats.profit_24h ?? 0).toLocaleString()}</span>
+            {' '}· Past week{' '}
+            <span className="text-emerald-400 font-bold tabular-nums">${(crimeStats.profit_week ?? 0).toLocaleString()}</span>
           </div>
         </div>
         <div className="cr-art-line text-primary mx-2.5" />

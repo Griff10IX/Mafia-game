@@ -855,9 +855,11 @@ export default function OrganisedCrime() {
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">OC stats</span>
         </div>
-        <div className="p-2 text-[10px] font-heading text-foreground">
+        <div className="p-2 text-[10px] font-heading text-mutedForeground">
           Total successful heists:{' '}
-          <span className="text-emerald-400">{status?.total_oc_heists ?? 0}</span>
+          <span className="text-emerald-400 font-bold tabular-nums">
+            {(status?.total_oc_heists ?? 0).toLocaleString()}
+          </span>
         </div>
         <div className="oc-art-line text-primary mx-2.5" />
       </div>
