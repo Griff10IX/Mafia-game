@@ -14,6 +14,7 @@ GAME_PASS_VIP_CAR_ID = "car22"
 VIP_EXCLUSIVE_RARITY = "vip_exclusive"
 VIP_PASS_GRANT_SOURCE_GAME_PASS = "game_pass_tier_100"
 VIP_PASS_GRANT_SOURCE_STORE = "store_purchase"
+VIP_PASS_GRANT_SOURCE_REVIVE_HEAL = "revive_estate_heal"
 # Max store / paid VIP Pass Cars game-wide. Game Pass free grants do NOT consume this stock.
 VIP_PASS_CAR_PURCHASE_LIMIT_DEFAULT = 5
 VIP_PASS_CAR_PURCHASE_LIMIT_MIN = 1
@@ -64,8 +65,9 @@ async def _vip_pass_car_ids_from_game_pass_events(db) -> set:
 
 
 def _vip_pass_car_is_game_pass_origin(row: dict, gp_event_ids: set) -> bool:
+    """True when the car should NOT consume store stock (Game Pass / revive heal)."""
     src = str(row.get("vip_pass_grant_source") or "").strip()
-    if src == VIP_PASS_GRANT_SOURCE_GAME_PASS:
+    if src in (VIP_PASS_GRANT_SOURCE_GAME_PASS, VIP_PASS_GRANT_SOURCE_REVIVE_HEAL):
         return True
     if src == VIP_PASS_GRANT_SOURCE_STORE:
         return False
@@ -359,7 +361,10 @@ async def grant_vip_pass_car_to_user(
     """
     if not user_id:
         return False
-    counts_toward_limit = event_type != VIP_PASS_GRANT_SOURCE_GAME_PASS
+    counts_toward_limit = event_type not in (
+        VIP_PASS_GRANT_SOURCE_GAME_PASS,
+        VIP_PASS_GRANT_SOURCE_REVIVE_HEAL,
+    )
     if counts_toward_limit:
         limit = await get_vip_pass_car_purchase_limit(db)
         if await count_store_limited_vip_pass_cars(db) >= limit:
@@ -603,6 +608,49 @@ async def backfill_vip_pass_cars_dead_alive(db, *, dry_run: bool = False) -> dic
             out["skips"].append({"dead_username": dead_name, "reason": "no_cars_moved"})
 
     return out
+
+
+async def ensure_vip_pass_car_on_revive(db, *, user_id: str) -> bool:
+    """
+    After £10 revive: if the account is expected to own a VIP Pass Car but has zero car22
+    rows, re-grant one (does not consume store stock).
+    """
+    if not user_id:
+        return False
+    if await count_user_vip_pass_cars(db, user_id) > 0:
+        return False
+
+    user = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "username": 1, "game_pass_vip_car_granted": 1},
+    )
+    if not user:
+        return False
+
+    expected = bool(user.get("game_pass_vip_car_granted"))
+    if not expected:
+        try:
+            prior = await db.exclusive_car_events.find_one(
+                {
+                    "car_id": GAME_PASS_VIP_CAR_ID,
+                    "$or": [{"to_user_id": user_id}, {"from_user_id": user_id}],
+                },
+                {"_id": 1},
+            )
+            expected = bool(prior)
+        except Exception:
+            logger.exception("ensure_vip_pass_car_on_revive event probe failed user_id=%s", user_id)
+            expected = False
+    if not expected:
+        return False
+
+    return await grant_vip_pass_car_to_user(
+        db,
+        user_id=user_id,
+        username=user.get("username"),
+        event_type=VIP_PASS_GRANT_SOURCE_REVIVE_HEAL,
+        notify=True,
+    )
 
 
 async def grant_game_pass_vip_car_if_eligible(db, *, user_id: str) -> bool:

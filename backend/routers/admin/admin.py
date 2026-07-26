@@ -11376,6 +11376,37 @@ def register(router):
             msg = f"Transferred {cars} VIP Pass Car(s) to {users} player(s) (inbox notified)"
         return {"message": msg, **result}
 
+    @router.post("/admin/dead-alive-estate-heal")
+    async def admin_dead_alive_estate_heal(
+        dry_run: bool = Query(True, description="If true, preview only — no DB writes"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Heal gaps after past Dead → Alive revives: missing illegal business (both keep),
+        exclusive weed specials clawback, VIP Pass Car inheritance/re-grant.
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.dead_alive_estate_heal import run_dead_alive_estate_heal
+
+        result = await run_dead_alive_estate_heal(db, dry_run=bool(dry_run))
+        totals = result.get("totals") or {}
+        if dry_run:
+            msg = (
+                f"Dry run: would heal {totals.get('biz_healed', 0)} biz, "
+                f"{totals.get('weed_healed', 0)} weed, "
+                f"{totals.get('vip_regrant_healed', 0)} VIP re-grant, "
+                f"{totals.get('vip_inheritance_cars', 0)} VIP inheritance car(s)"
+            )
+        else:
+            msg = (
+                f"Healed {totals.get('biz_healed', 0)} biz, "
+                f"{totals.get('weed_healed', 0)} weed, "
+                f"{totals.get('vip_regrant_healed', 0)} VIP re-grant, "
+                f"{totals.get('vip_inheritance_cars', 0)} VIP inheritance car(s)"
+            )
+        return {"message": msg, **result}
+
     @router.post("/admin/vip-pass-car-remove")
     async def admin_vip_pass_car_remove(
         body: AdminVipPassCarRemoveRequest,

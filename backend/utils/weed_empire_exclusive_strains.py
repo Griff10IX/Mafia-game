@@ -261,6 +261,7 @@ async def transfer_exclusive_weed_strains_on_kill(
             {
                 "$set": {
                     "owner_id": killer_id,
+                    "previous_owner_id": victim_id,
                     "transferred_at": _utcnow().isoformat(),
                     "transfer_source": "pvp_kill",
                 }
@@ -407,6 +408,152 @@ async def transfer_exclusive_weed_strains_on_kill(
         logger.exception("exclusive weed strain kill notify failed")
 
     return transferred
+
+
+async def restore_exclusive_weed_strains_on_revive(
+    db,
+    *,
+    victim_id: str,
+    killer_id: Optional[str] = None,
+    strain_ids: Optional[List[str]] = None,
+    exclusive_stash: Optional[Dict[str, float]] = None,
+    notify: bool = True,
+) -> List[str]:
+    """
+    Claw exclusive weed strains (and optional exclusive stash grams) back to a revived victim.
+    Prefer snapshotted strain_ids; fall back to rows with previous_owner_id == victim.
+    """
+    if not victim_id:
+        return []
+    restored: List[str] = []
+    ids: List[str] = []
+    if strain_ids:
+        ids = [str(s) for s in strain_ids if s and is_exclusive_strain_id(str(s))]
+    else:
+        rows = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].find(
+            {"previous_owner_id": victim_id},
+            {"_id": 0, "strain_id": 1, "owner_id": 1},
+        ).to_list(20)
+        ids = [str(r["strain_id"]) for r in (rows or []) if r.get("strain_id")]
+
+    for sid in ids:
+        q: Dict[str, Any] = {"strain_id": sid}
+        # Prefer clawing from killer if known; else whoever holds it (not already victim).
+        if killer_id:
+            q["owner_id"] = killer_id
+        else:
+            q["owner_id"] = {"$ne": victim_id}
+        res = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].update_one(
+            q,
+            {
+                "$set": {
+                    "owner_id": victim_id,
+                    "transferred_at": _utcnow().isoformat(),
+                    "transfer_source": "revive_estate_restore",
+                },
+                "$unset": {"previous_owner_id": ""},
+            },
+        )
+        if int(res.modified_count or 0) > 0:
+            restored.append(sid)
+            continue
+        # Fallback: previous_owner_id match even if killer_id filter missed
+        res2 = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].update_one(
+            {"strain_id": sid, "previous_owner_id": victim_id, "owner_id": {"$ne": victim_id}},
+            {
+                "$set": {
+                    "owner_id": victim_id,
+                    "transferred_at": _utcnow().isoformat(),
+                    "transfer_source": "revive_estate_restore",
+                },
+                "$unset": {"previous_owner_id": ""},
+            },
+        )
+        if int(res2.modified_count or 0) > 0:
+            restored.append(sid)
+
+    # Move exclusive stash grams from killer farm back to victim (from snapshot amounts if provided).
+    stash_map = {str(k): float(v or 0) for k, v in (exclusive_stash or {}).items() if float(v or 0) > 0}
+    if not stash_map and restored and killer_id:
+        # Take whatever exclusive grams killer still holds for restored strains.
+        try:
+            kf = await db.weed_farms.find_one({"user_id": killer_id}, {"_id": 0, "stash": 1})
+            for sid in restored:
+                g = float((kf or {}).get("stash", {}).get(sid) or 0)
+                if g > 0:
+                    stash_map[sid] = g
+        except Exception:
+            logger.exception("exclusive weed stash probe on revive failed killer=%s", killer_id)
+
+    if stash_map and killer_id and killer_id != victim_id:
+        try:
+            killer_farm = await db.weed_farms.find_one(
+                {"user_id": killer_id}, {"_id": 0, "stash": 1, "curing": 1}
+            )
+            victim_farm = await db.weed_farms.find_one(
+                {"user_id": victim_id}, {"_id": 0, "stash": 1, "curing": 1}
+            )
+            if victim_farm is None:
+                from routers.money.weed_empire import _get_or_create_farm
+
+                await _get_or_create_farm(victim_id)
+                victim_farm = await db.weed_farms.find_one(
+                    {"user_id": victim_id}, {"_id": 0, "stash": 1, "curing": 1}
+                ) or {"stash": {}, "curing": []}
+
+            if killer_farm is not None:
+                k_stash = dict((killer_farm or {}).get("stash") or {})
+                v_stash = dict((victim_farm or {}).get("stash") or {})
+                moved_any = False
+                for sid, want in stash_map.items():
+                    have = float(k_stash.get(sid) or 0)
+                    take = min(have, float(want or 0)) if have > 0 else 0.0
+                    if take <= 0:
+                        continue
+                    k_stash[sid] = round(have - take, 4)
+                    if k_stash[sid] <= 0:
+                        k_stash.pop(sid, None)
+                    v_stash[sid] = round(float(v_stash.get(sid) or 0) + take, 4)
+                    moved_any = True
+                k_curing = list((killer_farm or {}).get("curing") or [])
+                restored_set = set(restored) | set(stash_map.keys())
+                move_c = [b for b in k_curing if (b or {}).get("strain_id") in restored_set]
+                keep_c = [b for b in k_curing if (b or {}).get("strain_id") not in restored_set]
+                if moved_any or move_c:
+                    v_curing = list((victim_farm or {}).get("curing") or [])
+                    if move_c:
+                        v_curing.extend(move_c)
+                    await db.weed_farms.update_one(
+                        {"user_id": killer_id},
+                        {"$set": {"stash": k_stash, "curing": keep_c}},
+                    )
+                    await db.weed_farms.update_one(
+                        {"user_id": victim_id},
+                        {"$set": {"stash": v_stash, "curing": v_curing}},
+                    )
+        except Exception:
+            logger.exception(
+                "exclusive weed stash restore on revive failed victim=%s killer=%s",
+                victim_id,
+                killer_id,
+            )
+
+    if notify and restored:
+        try:
+            from server import send_notification
+
+            for sid in restored:
+                name = exclusive_strain_display_name(sid)
+                await send_notification(
+                    victim_id,
+                    "Exclusive strain restored",
+                    f"{name} was returned with your Dead → Alive revive.",
+                    "reward",
+                )
+        except Exception:
+            logger.exception("exclusive weed revive notify failed victim=%s", victim_id)
+
+    return restored
 
 
 def apply_exclusive_stat_bonuses(

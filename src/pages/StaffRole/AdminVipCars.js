@@ -21,6 +21,7 @@ function Btn({ children, className = '', ...props }) {
 function sourceLabel(src) {
   if (src === 'game_pass_tier_100') return 'Game Pass';
   if (src === 'store_purchase') return 'Store';
+  if (src === 'revive_estate_heal') return 'Revive heal';
   return src || '?';
 }
 
@@ -35,6 +36,8 @@ export default function AdminVipCars() {
   const [expandedUser, setExpandedUser] = useState(null);
   const [backfillBusy, setBackfillBusy] = useState(false);
   const [backfillResult, setBackfillResult] = useState(null);
+  const [estateHealBusy, setEstateHealBusy] = useState(false);
+  const [estateHealResult, setEstateHealResult] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +115,28 @@ export default function AdminVipCars() {
       toast.error(e.response?.data?.detail || 'Backfill failed');
     } finally {
       setBackfillBusy(false);
+    }
+  };
+
+  const runEstateHeal = async (dryRun) => {
+    if (!dryRun) {
+      const ok = window.confirm(
+        'Heal Dead → Alive estate gaps: restore missing illegal businesses (both keep), claw back exclusive weed specials, VIP inheritance transfer + missing VIP car re-grants?'
+      );
+      if (!ok) return;
+    }
+    setEstateHealBusy(true);
+    try {
+      const res = await api.post('/admin/dead-alive-estate-heal', null, {
+        params: { dry_run: dryRun },
+      });
+      setEstateHealResult(res.data || null);
+      toast.success(res.data?.message || (dryRun ? 'Dry run done' : 'Estate heal done'));
+      if (!dryRun) await loadStats();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Estate heal failed');
+    } finally {
+      setEstateHealBusy(false);
     }
   };
 
@@ -233,14 +258,14 @@ export default function AdminVipCars() {
             <div className="flex flex-wrap gap-2">
               <Btn
                 onClick={() => runDeadAliveBackfill(true)}
-                disabled={backfillBusy || !!actionKey}
+                disabled={backfillBusy || estateHealBusy || !!actionKey}
                 className="border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
               >
                 {backfillBusy ? '…' : 'Dry run'}
               </Btn>
               <Btn
                 onClick={() => runDeadAliveBackfill(false)}
-                disabled={backfillBusy || !!actionKey}
+                disabled={backfillBusy || estateHealBusy || !!actionKey}
                 className="border-emerald-500/40 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
               >
                 {backfillBusy ? '…' : 'Apply transfer + notify'}
@@ -260,6 +285,57 @@ export default function AdminVipCars() {
                   <div key={`${t.dead_username}-${t.recipient_username}`}>
                     {t.dead_username} → {t.recipient_username}: {t.cars} car
                     {t.cars === 1 ? '' : 's'}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="border-t border-zinc-700/50 pt-3 space-y-2">
+            <div className="text-[10px] font-heading font-bold uppercase tracking-wider text-amber-200">
+              Dead → Alive estate heal
+            </div>
+            <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+              Fixes already-broken accounts after past revives: missing illegal business (killer keeps theirs; victim gets a restored copy), exclusive weed special clawback, VIP inheritance transfer, and VIP car re-grant when the grant flag is set but garage has zero car22. Prefer dry run first.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Btn
+                onClick={() => runEstateHeal(true)}
+                disabled={estateHealBusy || backfillBusy || !!actionKey}
+                className="border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
+              >
+                {estateHealBusy ? '…' : 'Dry run'}
+              </Btn>
+              <Btn
+                onClick={() => runEstateHeal(false)}
+                disabled={estateHealBusy || backfillBusy || !!actionKey}
+                className="border-amber-500/40 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20"
+              >
+                {estateHealBusy ? '…' : 'Apply estate heal'}
+              </Btn>
+            </div>
+            {estateHealResult && (
+              <div className="rounded border border-zinc-700/50 bg-zinc-900/50 p-2 space-y-1 text-[9px] font-heading text-mutedForeground">
+                <div className="text-foreground">
+                  {estateHealResult.dry_run ? 'Dry run' : 'Applied'}: biz{' '}
+                  {Number(estateHealResult.totals?.biz_healed || 0)}, weed{' '}
+                  {Number(estateHealResult.totals?.weed_healed || 0)}, VIP re-grant{' '}
+                  {Number(estateHealResult.totals?.vip_regrant_healed || 0)}, VIP inheritance cars{' '}
+                  {Number(estateHealResult.totals?.vip_inheritance_cars || 0)}
+                </div>
+                {(estateHealResult.illegal_business?.actions || []).slice(0, 20).map((a) => (
+                  <div key={`biz-${a.victim_id}-${a.kind}`}>
+                    biz · {a.username || a.victim_id}: {a.kind}
+                  </div>
+                ))}
+                {(estateHealResult.exclusive_weed?.actions || []).slice(0, 20).map((a) => (
+                  <div key={`weed-${a.victim_id}`}>
+                    weed · {a.username || a.victim_id}: {(a.strain_ids || []).join(', ')}
+                  </div>
+                ))}
+                {(estateHealResult.vip_pass_car?.regrant_actions || []).slice(0, 20).map((a) => (
+                  <div key={`vip-${a.user_id}`}>
+                    vip · {a.username || a.user_id}: re-grant
                   </div>
                 ))}
               </div>

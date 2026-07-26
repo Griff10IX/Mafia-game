@@ -109,6 +109,43 @@ async def capture_death_revive_snapshot(
 
     victim_ep = await db.exclusive_properties.find_one({"owner_id": victim_id}, {"_id": 0})
 
+    exclusive_weed_strains: List[str] = []
+    exclusive_weed_stash: Dict[str, float] = {}
+    exclusive_weed_curing: List[dict] = []
+    try:
+        from utils.weed_empire_exclusive_strains import (
+            EXCLUSIVE_WEED_STRAINS_COLLECTION,
+            is_exclusive_strain_id,
+        )
+
+        excl_rows = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].find(
+            {"owner_id": victim_id},
+            {"_id": 0, "strain_id": 1},
+        ).to_list(20)
+        exclusive_weed_strains = [
+            str(r["strain_id"])
+            for r in (excl_rows or [])
+            if r.get("strain_id") and is_exclusive_strain_id(str(r["strain_id"]))
+        ]
+        if exclusive_weed_strains:
+            farm = await db.weed_farms.find_one(
+                {"user_id": victim_id},
+                {"_id": 0, "stash": 1, "curing": 1},
+            )
+            stash = (farm or {}).get("stash") or {}
+            for sid in exclusive_weed_strains:
+                grams = float(stash.get(sid) or 0)
+                if grams > 0:
+                    exclusive_weed_stash[sid] = round(grams, 4)
+            sid_set = set(exclusive_weed_strains)
+            for batch in (farm or {}).get("curing") or []:
+                if (batch or {}).get("strain_id") in sid_set:
+                    cleaned = _strip_mongo_id(batch) if isinstance(batch, dict) else None
+                    if cleaned:
+                        exclusive_weed_curing.append(cleaned)
+    except Exception:
+        logger.exception("death_revive_snapshot exclusive weed capture failed victim=%s", victim_id)
+
     snapshot: Dict[str, Any] = {
         "victim_id": victim_id,
         "victim_username": victim_username or "",
@@ -120,6 +157,9 @@ async def capture_death_revive_snapshot(
         "illegal_business": _strip_mongo_id(victim_biz),
         "illegal_business_guards": _strip_mongo_ids(guards_snapshot),
         "exclusive_property": _strip_mongo_id(victim_ep),
+        "exclusive_weed_strains": exclusive_weed_strains,
+        "exclusive_weed_stash": exclusive_weed_stash,
+        "exclusive_weed_curing": exclusive_weed_curing,
         "user_ibm_fields": _extract_ibm_user_fields(victim_user),
         "mission_completions": deepcopy(victim_user.get("mission_completions")),
         "car_transfer_outcomes": [],
@@ -146,6 +186,11 @@ def _format_restore_summary(summary: dict) -> str:
     cars = int(summary.get("cars_restored") or 0)
     if cars:
         parts.append(f"{cars} car{'s' if cars != 1 else ''}")
+    weed_n = int(summary.get("exclusive_weed_restored") or 0)
+    if weed_n:
+        parts.append(f"{weed_n} weed special{'s' if weed_n != 1 else ''}")
+    if summary.get("vip_pass_car_regranted"):
+        parts.append("VIP Pass Car")
     if summary.get("exclusive_property_restored"):
         parts.append("Speakeasy")
     skipped = []
@@ -232,17 +277,8 @@ async def _clawback_pending_biz_reward(db, victim_id: str, killer_id: Optional[s
 async def _revert_killer_biz_takeover_if_needed(
     db, victim_id: str, killer_id: Optional[str], snap: dict, summary: dict
 ) -> None:
-    if not killer_id or not snap.get("illegal_business"):
-        return
-    seized = await db.illegal_businesses.find_one(
-        {"user_id": killer_id, "seized_from_user_id": victim_id}, {"_id": 0, "id": 1}
-    )
-    if not seized:
-        return
-    biz_id = seized["id"]
-    await db.illegal_business_guards.delete_many({"business_id": biz_id})
-    await db.illegal_businesses.delete_one({"id": biz_id})
-    summary["killer_biz_takeover_reverted"] = True
+    """No-op: killer keeps seized/absorb business; victim restores a separate copy from snapshot."""
+    summary["killer_biz_takeover_kept"] = True
 
 
 async def _restore_illegal_business(db, victim_id: str, snap: dict, summary: dict) -> None:
@@ -255,7 +291,19 @@ async def _restore_illegal_business(db, victim_id: str, snap: dict, summary: dic
         return
     biz_doc = dict(biz)
     biz_doc.pop("_id", None)
-    biz_id = biz_doc.get("id") or str(uuid.uuid4())
+    old_biz_id = biz_doc.get("id")
+    need_new_ids = False
+    if old_biz_id:
+        held = await db.illegal_businesses.find_one({"id": old_biz_id}, {"_id": 0, "user_id": 1})
+        if held and held.get("user_id") != victim_id:
+            need_new_ids = True
+        elif held and held.get("user_id") == victim_id:
+            summary["illegal_business_skipped"] = True
+            return
+    else:
+        need_new_ids = True
+
+    biz_id = str(uuid.uuid4()) if need_new_ids else old_biz_id
     biz_doc["id"] = biz_id
     biz_doc["user_id"] = victim_id
     biz_doc.pop("seized_from_user_id", None)
@@ -263,10 +311,47 @@ async def _restore_illegal_business(db, victim_id: str, snap: dict, summary: dic
     for g in snap.get("illegal_business_guards") or []:
         gd = dict(g)
         gd.pop("_id", None)
-        gd["id"] = gd.get("id") or str(uuid.uuid4())
+        gd["id"] = str(uuid.uuid4()) if need_new_ids else (gd.get("id") or str(uuid.uuid4()))
         gd["business_id"] = biz_id
         await db.illegal_business_guards.insert_one(gd)
     summary["illegal_business_restored"] = True
+    if need_new_ids:
+        summary["illegal_business_new_id"] = True
+
+
+async def _restore_exclusive_weed(db, victim_id: str, killer_id: Optional[str], snap: dict, summary: dict) -> None:
+    strain_ids = list(snap.get("exclusive_weed_strains") or [])
+    stash = snap.get("exclusive_weed_stash") or {}
+    if not strain_ids and not stash:
+        return
+    try:
+        from utils.weed_empire_exclusive_strains import restore_exclusive_weed_strains_on_revive
+
+        restored = await restore_exclusive_weed_strains_on_revive(
+            db,
+            victim_id=victim_id,
+            killer_id=killer_id,
+            strain_ids=strain_ids or None,
+            exclusive_stash=stash if isinstance(stash, dict) else None,
+            notify=True,
+        )
+        summary["exclusive_weed_restored"] = len(restored)
+        summary["exclusive_weed_strain_ids"] = restored
+    except Exception:
+        logger.exception("death_revive exclusive weed restore failed victim=%s", victim_id)
+        summary["exclusive_weed_error"] = True
+
+
+async def _ensure_vip_pass_car_on_revive(db, victim_id: str, summary: dict) -> None:
+    """If revived user was VIP-car eligible/granted but has zero car22, re-grant one."""
+    try:
+        from utils.game_pass_vip_car import ensure_vip_pass_car_on_revive
+
+        granted = await ensure_vip_pass_car_on_revive(db, user_id=victim_id)
+        if granted:
+            summary["vip_pass_car_regranted"] = True
+    except Exception:
+        logger.exception("death_revive VIP car ensure failed victim=%s", victim_id)
 
 
 async def _restore_exclusive_property(
@@ -392,7 +477,8 @@ async def _clawback_cars_from_killer(
 async def restore_death_revive_snapshot(db, *, victim_id: str) -> dict:
     """
     One-time restore from users.death_revive_snapshot. Does not roll back revive on partial failure.
-    Clears snapshot after attempt.
+    Archives snapshot, then clears the live field after the restore attempt.
+    Killer keeps any seized illegal business; victim gets a restored copy (new ids if needed).
     """
     user = await db.users.find_one({"id": victim_id}, {"_id": 0, "death_revive_snapshot": 1, "username": 1})
     snap = (user or {}).get("death_revive_snapshot")
@@ -402,18 +488,42 @@ async def restore_death_revive_snapshot(db, *, victim_id: str) -> dict:
     killer_id = snap.get("killer_id")
     summary: Dict[str, Any] = {"restored": True, "victim_id": victim_id}
 
+    # Archive before mutating so auto-heal / admin can recover if restore fails mid-way.
+    archive_entry = deepcopy(snap) if isinstance(snap, dict) else {"raw": snap}
+    archive_entry["archived_at"] = _utc_now_iso()
+    archive_entry["archive_reason"] = "revive_restore"
+    try:
+        await db.users.update_one(
+            {"id": victim_id},
+            {
+                "$push": {
+                    "death_revive_snapshot_archive": {
+                        "$each": [archive_entry],
+                        "$slice": -10,
+                    }
+                }
+            },
+        )
+        summary["snapshot_archived"] = True
+    except Exception:
+        logger.exception("death_revive_snapshot archive failed victim=%s", victim_id)
+
     try:
         await _clawback_pending_biz_reward(db, victim_id, killer_id, summary)
+        # Killer keeps takeover/absorb; do not delete their seized biz.
         await _revert_killer_biz_takeover_if_needed(db, victim_id, killer_id, snap, summary)
         await _restore_illegal_business(db, victim_id, snap, summary)
         await _restore_properties(db, victim_id, killer_id, snap, summary)
         await _restore_exclusive_property(db, victim_id, killer_id, snap, summary)
         await _clawback_cars_from_killer(db, victim_id, killer_id, snap, summary)
+        await _restore_exclusive_weed(db, victim_id, killer_id, snap, summary)
         await _restore_user_ibm_fields(db, victim_id, snap, summary)
+        await _ensure_vip_pass_car_on_revive(db, victim_id, summary)
     except Exception:
         logger.exception("death_revive_snapshot restore failed victim=%s", victim_id)
         summary["error"] = True
 
     summary["summary_text"] = _format_restore_summary(summary)
+    # Only clear live snapshot after the attempt; archive is retained for heal.
     await db.users.update_one({"id": victim_id}, {"$unset": {"death_revive_snapshot": ""}})
     return summary

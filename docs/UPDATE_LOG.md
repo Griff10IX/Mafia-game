@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-26 15:35 UTC[/color][/b] — [b]Dead → Alive: estate restore fixes[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]£10 revive[/b] now returns your [b]Weed Empire special strains[/b] (and their exclusive stash/curing) that were taken on the kill.[/color]
+[*][color=#888888][b]Changed:[/b] After a kill takeover, the [b]killer keeps[/b] the illegal business they seized, and the [b]revived victim gets theirs back[/b] too (both keep a business).[/color]
+[*][color=#888888][b]Changed:[/b] [b]VIP Pass Car[/b] is re-checked on revive if it should be yours but is missing; [b]Claim Inheritance[/b] still moves VIP cars from the dead account to the alive recipient.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-25 21:40 UTC[/color][/b] — [b]Store: more loot pieces on GBP buys[/b][/size]
 [quote]
 [list]
