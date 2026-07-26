@@ -1132,7 +1132,7 @@ export default function Store() {
                     <>
                       Enter whole points from 1,000–1,000,000, or a GBP budget — the server prices along the standard store curve (Stripe checkout).
                       {' '}
-                      <span className="text-violet-400/90">GBP card checkouts earn ~5,000 loot box pieces per £100 charged</span> (50 per whole £1; credited when your points are).
+                      <span className="text-violet-400/90">GBP card checkouts earn ~9,000 loot box pieces per £120 charged</span> (75 per whole £1; credited when your points are).
                     </>
                   )
                   : (

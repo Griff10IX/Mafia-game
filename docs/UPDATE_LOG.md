@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-25 21:40 UTC[/color][/b] — [b]Store: more loot pieces on GBP buys[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Game → Store → Points[/b] (GBP card checkouts) now grant [b]75 loot box pieces per whole £1[/b] charged (was 50). About [b]9,000[/b] pieces on a [b]£120[/b] purchase.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-25 20:15 UTC[/color][/b] — [b]Loot: one Weed special per player[/b][/size]
 [quote]
 [list]
