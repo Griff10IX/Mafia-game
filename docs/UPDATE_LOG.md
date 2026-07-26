@@ -10,7 +10,7 @@
 [quote]
 [list]
 [*][color=#888888][b]Fixed:[/b] £10 revive no longer steals the killer’s [b]property portfolio[/b] (matching deed types). Killer and revived victim both keep deeds; distillery/illegal business both keep.[/color]
-[*][color=#888888][b]Changed:[/b] Paying £10 on a new alt to revive now moves that alt’s [b]VIP Pass Car[/b] onto the revived character (same idea as Claim Inheritance).[/color]
+[*][color=#888888][b]Changed:[/b] Paying £10 on a new alt to revive now moves that alt’s [b]VIP Pass Car[/b] and [b]Weed Empire special strains[/b] onto the revived character.[/color]
 [*][color=#888888][b]Changed:[/b] [b]£10 revive[/b] returns [b]Weed Empire specials[/b] taken on the kill.[/color]
 [/list]
 [/quote]

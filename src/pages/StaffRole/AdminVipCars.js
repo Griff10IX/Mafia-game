@@ -40,6 +40,7 @@ export default function AdminVipCars() {
   const [estateHealResult, setEstateHealResult] = useState(null);
   const [pairKiller, setPairKiller] = useState('Piece');
   const [pairVictim, setPairVictim] = useState('Chaos');
+  const [pairReviver, setPairReviver] = useState('FFS');
   const [pairBusy, setPairBusy] = useState(false);
   const [pairResult, setPairResult] = useState(null);
 
@@ -147,13 +148,14 @@ export default function AdminVipCars() {
   const runPairHeal = async (dryRun) => {
     const killer = String(pairKiller || '').trim();
     const victim = String(pairVictim || '').trim();
+    const reviver = String(pairReviver || '').trim();
     if (!killer || !victim) {
       toast.error('Enter killer and victim usernames');
       return;
     }
     if (!dryRun) {
       const ok = window.confirm(
-        `Fix kill→revive pair: restore ${killer}'s properties/distillery (both keep), return exclusive weed to ${victim}, move VIP from £10 sacrifice alt → ${victim}?`
+        `Fix kill→revive: restore ${killer}'s properties/distillery (both keep), move exclusive weed + VIP from £10 alt ${reviver || '(tagged sacrifice)'} → ${victim}?`
       );
       if (!ok) return;
     }
@@ -163,6 +165,7 @@ export default function AdminVipCars() {
         params: {
           killer_username: killer,
           victim_username: victim,
+          ...(reviver ? { reviver_username: reviver } : {}),
           dry_run: dryRun,
         },
       });
@@ -391,9 +394,9 @@ export default function AdminVipCars() {
                 Fix one kill → revive pair
               </div>
               <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                Example: killer <span className="text-foreground">Piece</span>, victim{' '}
-                <span className="text-foreground">Chaos</span> — gives Piece properties/distillery back (Chaos keeps),
-                returns weed specials to Chaos, moves VIP from the £10 sacrifice alt onto Chaos.
+                Example: killer <span className="text-foreground">Piece</span>, £10 alt{' '}
+                <span className="text-foreground">FFS</span>, victim <span className="text-foreground">Chaos</span> —
+                Piece gets properties/distillery back; weed + VIP move from FFS → Chaos.
               </p>
               <div className="flex flex-wrap gap-2 items-end">
                 <label className="text-[9px] font-heading text-mutedForeground">
@@ -402,6 +405,15 @@ export default function AdminVipCars() {
                     value={pairKiller}
                     onChange={(e) => setPairKiller(e.target.value)}
                     className="mt-0.5 block w-36 rounded border border-zinc-600 bg-zinc-900 px-2 py-1 text-[11px] text-foreground"
+                  />
+                </label>
+                <label className="text-[9px] font-heading text-mutedForeground">
+                  £10 reviver alt
+                  <input
+                    value={pairReviver}
+                    onChange={(e) => setPairReviver(e.target.value)}
+                    className="mt-0.5 block w-36 rounded border border-zinc-600 bg-zinc-900 px-2 py-1 text-[11px] text-foreground"
+                    placeholder="FFS"
                   />
                 </label>
                 <label className="text-[9px] font-heading text-mutedForeground">
@@ -437,11 +449,27 @@ export default function AdminVipCars() {
                     <div key={`pair-${i}-${a.kind}`}>
                       {a.kind}
                       {a.property_count != null ? ` · ${a.property_count} props` : ''}
-                      {a.strain_ids ? ` · ${(a.strain_ids || []).join(', ')}` : ''}
+                      {a.strain_ids?.length ? ` · weed: ${(a.strain_ids || []).join(', ')}` : ''}
+                      {a.restored?.length ? ` · restored: ${a.restored.join(', ')}` : ''}
+                      {a.skipped_reason ? ` · ${a.skipped_reason}` : ''}
                       {a.cars != null ? ` · ${a.cars} VIP` : ''}
                       {a.dead_username ? ` · from ${a.dead_username}` : ''}
                     </div>
                   ))}
+                  {pairResult.exclusive_weed_ownership && (
+                    <div className="pt-1 border-t border-zinc-700/40 space-y-0.5">
+                      <div className="text-foreground">Exclusive weed ownership (live)</div>
+                      {Object.entries(pairResult.exclusive_weed_ownership).map(([sid, info]) => (
+                        <div key={sid}>
+                          {info?.name || sid}: {info?.owner_username || info?.owner_id || '—'}
+                          {info?.transfer_source ? ` (${info.transfer_source})` : ''}
+                        </div>
+                      ))}
+                      {Object.keys(pairResult.exclusive_weed_ownership).length === 0 ? (
+                        <div>No exclusive_weed_strains rows in DB</div>
+                      ) : null}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

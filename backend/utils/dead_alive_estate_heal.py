@@ -444,6 +444,69 @@ async def heal_killer_biz_after_revive_revert(db, *, dry_run: bool = True) -> di
     return out
 
 
+async def heal_weed_from_revive_sacrifice(db, *, dry_run: bool = True) -> dict:
+    """Move exclusive weed strains stuck on £10 revive sacrifice alts onto the revived recipient."""
+    from utils.weed_empire_exclusive_strains import (
+        EXCLUSIVE_WEED_STRAINS_COLLECTION,
+        transfer_exclusive_weed_strains_between_users,
+    )
+
+    out: Dict[str, Any] = {"checked": 0, "healed": 0, "actions": [], "transferred_strains": 0}
+    sacrificers = await db.users.find(
+        {
+            "revive_sacrifice_for_user_id": {"$exists": True, "$nin": [None, ""]},
+        },
+        {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "revive_sacrifice_for_user_id": 1},
+    ).to_list(2000)
+
+    for sac in sacrificers:
+        out["checked"] += 1
+        recipient_id = str(sac.get("revive_sacrifice_for_user_id") or "")
+        if not recipient_id:
+            continue
+        held = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].find(
+            {"owner_id": sac["id"]},
+            {"_id": 0, "strain_id": 1},
+        ).to_list(20)
+        if not held:
+            continue
+        recip = await db.users.find_one(
+            {"id": recipient_id}, {"_id": 0, "username": 1, "is_dead": 1}
+        )
+        if not recip or recip.get("is_dead"):
+            continue
+        strain_ids = [str(r["strain_id"]) for r in held if r.get("strain_id")]
+        action = {
+            "kind": "weed_from_revive_sacrifice",
+            "dead_username": sac.get("username"),
+            "recipient_username": recip.get("username"),
+            "strain_ids": strain_ids,
+        }
+        if dry_run:
+            action["would_apply"] = True
+            out["actions"].append(action)
+            out["healed"] += 1
+            out["transferred_strains"] += len(strain_ids)
+            continue
+        moved = await transfer_exclusive_weed_strains_between_users(
+            db,
+            from_user_id=sac["id"],
+            to_user_id=recipient_id,
+            from_username=sac.get("username"),
+            to_username=recip.get("username"),
+            notify=True,
+            transfer_source="revive_sacrifice_heal",
+        )
+        action["restored"] = moved
+        action["applied"] = bool(moved)
+        out["actions"].append(action)
+        if moved:
+            out["healed"] += 1
+            out["transferred_strains"] += len(moved)
+
+    return out
+
+
 async def heal_vip_from_revive_sacrifice(db, *, dry_run: bool = True) -> dict:
     """Move VIP cars stuck on £10 revive sacrifice alts onto the revived recipient."""
     from utils.game_pass_vip_car import (
@@ -571,17 +634,19 @@ async def heal_pair_kill_revive(
     victim_username: str,
     dry_run: bool = True,
     claw_killer_weed_to_victim: bool = True,
+    reviver_username: Optional[str] = None,
 ) -> dict:
     """
-    Targeted fix for one kill→revive case (e.g. Piece / Chaos):
+    Targeted fix for one kill→revive case (e.g. Piece / Chaos, reviver FFS):
     - Clone victim properties killer is missing → killer
     - Clone victim illegal biz → killer if killer has none
     - Claw exclusive weed from killer → victim
-    - Move VIP from revive-sacrifice alts for victim; ensure VIP on victim
+    - Move exclusive weed + VIP from £10 sacrifice alt (reviver) → victim
     """
     from utils.weed_empire_exclusive_strains import (
         EXCLUSIVE_WEED_STRAINS_COLLECTION,
         restore_exclusive_weed_strains_on_revive,
+        transfer_exclusive_weed_strains_between_users,
     )
     from utils.game_pass_vip_car import ensure_vip_pass_car_on_revive, count_user_vip_pass_cars
 
@@ -619,6 +684,27 @@ async def heal_pair_kill_revive(
     }
     killer_id = killer["id"]
     victim_id = victim["id"]
+
+    # Resolve £10 sacrifice reviver (explicit username and/or revive_sacrifice_for_user_id)
+    reviver_ids: List[str] = []
+    if reviver_username and str(reviver_username).strip():
+        rev = await db.users.find_one(
+            {"username": _uname_re(str(reviver_username).strip())},
+            {"_id": 0, "id": 1, "username": 1},
+        )
+        if not rev:
+            return {"ok": False, "error": f"Reviver not found: {reviver_username}"}
+        reviver_ids.append(rev["id"])
+        out["reviver"] = rev.get("username")
+    sac_rows = await db.users.find(
+        {"revive_sacrifice_for_user_id": victim_id},
+        {"_id": 0, "id": 1, "username": 1},
+    ).to_list(50)
+    for srow in sac_rows or []:
+        if srow.get("id") and srow["id"] not in reviver_ids:
+            reviver_ids.append(srow["id"])
+            if not out.get("reviver"):
+                out["reviver"] = srow.get("username")
 
     # Properties: clone victim → killer for missing property_ids
     victim_props = await db.user_properties.find({"user_id": victim_id}, {"_id": 0}).to_list(200)
@@ -661,48 +747,197 @@ async def heal_pair_kill_revive(
         action["kind"] = "killer_biz_restore"
         out["actions"].append(action)
 
-    # Weed: claw from killer → victim
+    # Weed: claw exclusive strain(s) back to victim (aggressive discovery)
     if claw_killer_weed_to_victim:
+        from utils.weed_empire_exclusive_strains import (
+            EXCLUSIVE_STRAIN_IDS,
+            exclusive_strain_display_name,
+            is_exclusive_strain_id,
+        )
+
         snap = _latest_archive_snap(victim) or {}
-        strain_ids = list(snap.get("exclusive_weed_strains") or [])
-        if not strain_ids:
+        strain_ids: List[str] = []
+        discovery: List[str] = []
+
+        for sid in list(snap.get("exclusive_weed_strains") or []):
+            if is_exclusive_strain_id(str(sid)) and str(sid) not in strain_ids:
+                strain_ids.append(str(sid))
+                discovery.append("archive")
+
+        # Any row still tagged as taken from this victim
+        prev_rows = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].find(
+            {"previous_owner_id": victim_id},
+            {"_id": 0, "strain_id": 1, "owner_id": 1},
+        ).to_list(20)
+        for r in prev_rows or []:
+            sid = str(r.get("strain_id") or "")
+            if sid and sid not in strain_ids:
+                strain_ids.append(sid)
+                discovery.append("previous_owner_id")
+
+        # Exclusives on killer and on £10 sacrifice reviver(s)
+        for source_id, label in [(killer_id, "killer_owned")] + [
+            (rid, "reviver_owned") for rid in reviver_ids
+        ]:
             held = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].find(
-                {
-                    "owner_id": killer_id,
-                    "$or": [
-                        {"previous_owner_id": victim_id},
-                        {"transfer_source": "pvp_kill"},
-                    ],
-                },
+                {"owner_id": source_id},
                 {"_id": 0, "strain_id": 1},
             ).to_list(20)
-            strain_ids = [str(r["strain_id"]) for r in (held or []) if r.get("strain_id")]
+            for r in held or []:
+                sid = str(r.get("strain_id") or "")
+                if not sid or sid in strain_ids:
+                    continue
+                strain_ids.append(sid)
+                discovery.append(label)
+
+        # Inbox: "Exclusive strain lost" / "You lost {Name} to ..."
+        if not strain_ids:
+            try:
+                notes = await db.notifications.find(
+                    {
+                        "user_id": victim_id,
+                        "title": {"$in": ["Exclusive strain lost", "Exclusive strain taken"]},
+                    },
+                    {"_id": 0, "message": 1, "title": 1},
+                ).sort("created_at", -1).to_list(20)
+                name_to_id = {
+                    exclusive_strain_display_name(sid).lower(): sid for sid in EXCLUSIVE_STRAIN_IDS
+                }
+                for n in notes or []:
+                    msg = str(n.get("message") or "")
+                    for name_l, sid in name_to_id.items():
+                        if name_l in msg.lower() and sid not in strain_ids:
+                            strain_ids.append(sid)
+                            discovery.append("notification")
+            except Exception:
+                logger.exception("pair heal weed notification scan failed victim=%s", victim_id)
+
+        # Ownership snapshot for admin UI
+        all_rows = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].find(
+            {},
+            {"_id": 0, "strain_id": 1, "owner_id": 1, "previous_owner_id": 1, "transfer_source": 1},
+        ).to_list(20)
+        owner_map = {}
+        for r in all_rows or []:
+            oid = r.get("owner_id")
+            uname = None
+            if oid:
+                u = await db.users.find_one({"id": oid}, {"_id": 0, "username": 1})
+                uname = (u or {}).get("username")
+            owner_map[str(r.get("strain_id"))] = {
+                "owner_id": oid,
+                "owner_username": uname,
+                "previous_owner_id": r.get("previous_owner_id"),
+                "transfer_source": r.get("transfer_source"),
+                "name": exclusive_strain_display_name(str(r.get("strain_id") or "")),
+            }
+        out["exclusive_weed_ownership"] = owner_map
+
+        victim_owned = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].count_documents(
+            {"owner_id": victim_id}
+        )
         if strain_ids:
             if dry_run:
                 out["actions"].append(
                     {
                         "kind": "exclusive_weed_clawback",
                         "strain_ids": strain_ids,
+                        "discovery": discovery,
                         "would_apply": True,
+                        "current_owners": {
+                            sid: owner_map.get(sid) for sid in strain_ids
+                        },
                     }
                 )
             else:
-                restored = await restore_exclusive_weed_strains_on_revive(
-                    db,
-                    victim_id=victim_id,
-                    killer_id=killer_id,
-                    strain_ids=strain_ids,
-                    exclusive_stash=snap.get("exclusive_weed_stash") or {},
-                    notify=True,
-                )
+                restored_all: List[str] = []
+                # Prefer moving from reviver alts first (FFS → Chaos), then killer clawback
+                for rid in reviver_ids:
+                    moved = await transfer_exclusive_weed_strains_between_users(
+                        db,
+                        from_user_id=rid,
+                        to_user_id=victim_id,
+                        notify=True,
+                        transfer_source="revive_sacrifice_heal",
+                    )
+                    restored_all.extend(moved or [])
+                still = [s for s in strain_ids if s not in restored_all]
+                if still:
+                    moved2 = await restore_exclusive_weed_strains_on_revive(
+                        db,
+                        victim_id=victim_id,
+                        killer_id=killer_id,
+                        strain_ids=still,
+                        exclusive_stash=snap.get("exclusive_weed_stash") or {},
+                        notify=True,
+                    )
+                    restored_all.extend(moved2 or [])
+                # Unique preserve order
+                seen = set()
+                restored = []
+                for s in restored_all:
+                    if s not in seen:
+                        seen.add(s)
+                        restored.append(s)
                 out["actions"].append(
                     {
                         "kind": "exclusive_weed_clawback",
                         "strain_ids": strain_ids,
+                        "discovery": discovery,
                         "restored": restored,
                         "applied": bool(restored),
                     }
                 )
+        elif victim_owned <= 0:
+            out["actions"].append(
+                {
+                    "kind": "exclusive_weed_clawback",
+                    "strain_ids": [],
+                    "skipped_reason": (
+                        "No exclusive strain found on killer/reviver, in archive, previous_owner_id, "
+                        "or victim loss notifications. Check exclusive_weed_ownership in response."
+                    ),
+                    "would_apply": False,
+                }
+            )
+
+        # Explicit reviver→victim weed even if discovery missed strain_ids (FFS still holding)
+        for rid in reviver_ids:
+            held_n = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].count_documents({"owner_id": rid})
+            if held_n <= 0:
+                continue
+            if dry_run:
+                # Already covered if discovery found them; otherwise add action
+                if not any(a.get("kind") == "exclusive_weed_clawback" and a.get("strain_ids") for a in out["actions"]):
+                    rows = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].find(
+                        {"owner_id": rid}, {"_id": 0, "strain_id": 1}
+                    ).to_list(20)
+                    out["actions"].append(
+                        {
+                            "kind": "weed_from_revive_sacrifice",
+                            "strain_ids": [str(r["strain_id"]) for r in rows if r.get("strain_id")],
+                            "would_apply": True,
+                        }
+                    )
+            elif not any(
+                a.get("kind") == "exclusive_weed_clawback" and a.get("applied") for a in out["actions"]
+            ):
+                moved = await transfer_exclusive_weed_strains_between_users(
+                    db,
+                    from_user_id=rid,
+                    to_user_id=victim_id,
+                    notify=True,
+                    transfer_source="revive_sacrifice_heal",
+                )
+                if moved:
+                    out["actions"].append(
+                        {
+                            "kind": "weed_from_revive_sacrifice",
+                            "strain_ids": moved,
+                            "restored": moved,
+                            "applied": True,
+                        }
+                    )
 
     # VIP from sacrifice alts for this victim + ensure on victim
     from utils.game_pass_vip_car import GAME_PASS_VIP_CAR_ID, transfer_vip_pass_cars_dead_alive
@@ -769,6 +1004,7 @@ async def run_dead_alive_estate_heal(db, *, dry_run: bool = True) -> dict:
     killer_biz = await heal_killer_biz_after_revive_revert(db, dry_run=dry_run)
     killer_props = await heal_killer_portfolio_after_revive_clawback(db, dry_run=dry_run)
     weed = await heal_exclusive_weed_gaps(db, dry_run=dry_run)
+    weed_sac = await heal_weed_from_revive_sacrifice(db, dry_run=dry_run)
     vip = await heal_vip_pass_car_gaps(db, dry_run=dry_run)
     return {
         "dry_run": bool(dry_run),
@@ -778,12 +1014,15 @@ async def run_dead_alive_estate_heal(db, *, dry_run: bool = True) -> dict:
         "killer_illegal_business": killer_biz,
         "killer_portfolio": killer_props,
         "exclusive_weed": weed,
+        "weed_from_sacrifice": weed_sac,
         "vip_pass_car": vip,
         "totals": {
             "biz_healed": int(biz.get("healed") or 0),
             "killer_biz_healed": int(killer_biz.get("healed") or 0),
             "killer_portfolio_healed": int(killer_props.get("healed") or 0),
             "weed_healed": int(weed.get("healed") or 0),
+            "weed_sacrifice_healed": int(weed_sac.get("healed") or 0),
+            "weed_sacrifice_strains": int(weed_sac.get("transferred_strains") or 0),
             "vip_regrant_healed": int(vip.get("regrant_healed") or 0),
             "vip_inheritance_cars": int(
                 (vip.get("inheritance_backfill") or {}).get("transferred_cars") or 0

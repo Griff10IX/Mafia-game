@@ -253,7 +253,7 @@ async def execute_paid_revive(
         except Exception:
             logging.getLogger(__name__).exception("death_revive_snapshot restore revived=%s", dead_user.get("id"))
 
-        # Move VIP Pass Cars from the sacrificing alt onto the revived character (same as Claim Inheritance).
+        # Move VIP Pass Cars + exclusive weed from the sacrificing alt onto the revived character.
         try:
             from utils.game_pass_vip_car import transfer_vip_pass_cars_dead_alive
 
@@ -270,6 +270,29 @@ async def execute_paid_revive(
         except Exception:
             logging.getLogger(__name__).exception(
                 "vip transfer reviver→revived reviver=%s revived=%s",
+                reviver.get("id"),
+                dead_user.get("id"),
+            )
+        try:
+            from utils.weed_empire_exclusive_strains import (
+                transfer_exclusive_weed_strains_between_users,
+            )
+
+            weed_xfer = await transfer_exclusive_weed_strains_between_users(
+                db,
+                from_user_id=reviver["id"],
+                to_user_id=dead_user["id"],
+                from_username=reviver.get("username"),
+                to_username=dead_user.get("username"),
+                notify=True,
+                transfer_source="revive_sacrifice_transfer",
+            )
+            if restore_summary is not None and weed_xfer:
+                restore_summary["exclusive_weed_from_reviver"] = list(weed_xfer)
+                restore_summary["exclusive_weed_restored"] = len(weed_xfer)
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "exclusive weed transfer reviver→revived reviver=%s revived=%s",
                 reviver.get("id"),
                 dead_user.get("id"),
             )

@@ -11418,10 +11418,14 @@ def register(router):
     async def admin_dead_alive_estate_heal_pair(
         killer_username: str = Query(..., min_length=1, max_length=64),
         victim_username: str = Query(..., min_length=1, max_length=64),
+        reviver_username: Optional[str] = Query(
+            None,
+            description="£10 sacrifice alt that still holds VIP/weed (e.g. FFS)",
+        ),
         dry_run: bool = Query(True, description="If true, preview only — no DB writes"),
         current_user: dict = Depends(get_current_user),
     ):
-        """Targeted heal for one kill→revive pair (e.g. Piece killed Chaos, Chaos £10 revived)."""
+        """Targeted heal for one kill→revive pair (e.g. Piece killed Chaos; FFS paid £10)."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         from utils.dead_alive_estate_heal import heal_pair_kill_revive
@@ -11430,15 +11434,23 @@ def register(router):
             db,
             killer_username=killer_username.strip(),
             victim_username=victim_username.strip(),
+            reviver_username=(reviver_username or "").strip() or None,
             dry_run=bool(dry_run),
         )
         if not result.get("ok"):
             raise HTTPException(status_code=404, detail=result.get("error") or "Heal pair failed")
         n = int(result.get("action_count") or 0)
+        rev = result.get("reviver") or reviver_username or "?"
         if dry_run:
-            msg = f"Dry run: {n} action(s) for {result.get('killer')} → {result.get('victim')}"
+            msg = (
+                f"Dry run: {n} action(s) for killer {result.get('killer')} / "
+                f"reviver {rev} → {result.get('victim')}"
+            )
         else:
-            msg = f"Applied {n} action(s) for {result.get('killer')} / {result.get('victim')}"
+            msg = (
+                f"Applied {n} action(s) for killer {result.get('killer')} / "
+                f"reviver {rev} → {result.get('victim')}"
+            )
         return {"message": msg, **result}
 
     @router.post("/admin/vip-pass-car-remove")

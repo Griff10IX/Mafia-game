@@ -410,6 +410,78 @@ async def transfer_exclusive_weed_strains_on_kill(
     return transferred
 
 
+async def transfer_exclusive_weed_strains_between_users(
+    db,
+    *,
+    from_user_id: str,
+    to_user_id: str,
+    from_username: Optional[str] = None,
+    to_username: Optional[str] = None,
+    notify: bool = True,
+    transfer_source: str = "revive_sacrifice_transfer",
+) -> List[str]:
+    """
+    Move all exclusive weed strains (and exclusive stash/curing) from one account to another.
+    Used when a £10 revive sacrifice alt should hand exclusives to the revived character.
+    """
+    if not from_user_id or not to_user_id or from_user_id == to_user_id:
+        return []
+    rows = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].find(
+        {"owner_id": from_user_id},
+        {"_id": 0, "strain_id": 1},
+    ).to_list(20)
+    strain_ids = [str(r["strain_id"]) for r in (rows or []) if r.get("strain_id")]
+    if not strain_ids:
+        return []
+    restored = await restore_exclusive_weed_strains_on_revive(
+        db,
+        victim_id=to_user_id,
+        killer_id=from_user_id,
+        strain_ids=strain_ids,
+        exclusive_stash=None,  # pull whatever exclusive grams the from-user still holds
+        notify=False,
+    )
+    # Tag transfer source for admin/heal visibility
+    if restored:
+        try:
+            await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].update_many(
+                {"strain_id": {"$in": restored}, "owner_id": to_user_id},
+                {
+                    "$set": {
+                        "transfer_source": transfer_source,
+                        "previous_owner_id": from_user_id,
+                    }
+                },
+            )
+        except Exception:
+            logger.exception(
+                "exclusive weed sacrifice transfer tag failed from=%s to=%s",
+                from_user_id,
+                to_user_id,
+            )
+    if notify and restored:
+        try:
+            from server import send_notification
+
+            names = ", ".join(exclusive_strain_display_name(s) for s in restored)
+            await send_notification(
+                to_user_id,
+                "Exclusive strain transferred",
+                (
+                    f"{names} moved from {from_username or 'your revive alt'} "
+                    f"onto {to_username or 'this account'} with the £10 revive."
+                ),
+                "reward",
+            )
+        except Exception:
+            logger.exception(
+                "exclusive weed sacrifice notify failed from=%s to=%s",
+                from_user_id,
+                to_user_id,
+            )
+    return restored
+
+
 async def restore_exclusive_weed_strains_on_revive(
     db,
     *,
@@ -422,6 +494,7 @@ async def restore_exclusive_weed_strains_on_revive(
     """
     Claw exclusive weed strains (and optional exclusive stash grams) back to a revived victim.
     Prefer snapshotted strain_ids; fall back to rows with previous_owner_id == victim.
+    Always reassigns from whoever currently holds the strain (not only the killer).
     """
     if not victim_id:
         return []
@@ -437,39 +510,50 @@ async def restore_exclusive_weed_strains_on_revive(
         ids = [str(r["strain_id"]) for r in (rows or []) if r.get("strain_id")]
 
     for sid in ids:
-        q: Dict[str, Any] = {"strain_id": sid}
-        # Prefer clawing from killer if known; else whoever holds it (not already victim).
-        if killer_id:
-            q["owner_id"] = killer_id
-        else:
-            q["owner_id"] = {"$ne": victim_id}
-        res = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].update_one(
-            q,
-            {
-                "$set": {
-                    "owner_id": victim_id,
-                    "transferred_at": _utcnow().isoformat(),
-                    "transfer_source": "revive_estate_restore",
-                },
-                "$unset": {"previous_owner_id": ""},
-            },
+        # Already on victim — count as restored for stash logic / reporting.
+        already = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].find_one(
+            {"strain_id": sid, "owner_id": victim_id},
+            {"_id": 1},
         )
-        if int(res.modified_count or 0) > 0:
+        if already:
             restored.append(sid)
             continue
-        # Fallback: previous_owner_id match even if killer_id filter missed
-        res2 = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].update_one(
-            {"strain_id": sid, "previous_owner_id": victim_id, "owner_id": {"$ne": victim_id}},
-            {
-                "$set": {
-                    "owner_id": victim_id,
-                    "transferred_at": _utcnow().isoformat(),
-                    "transfer_source": "revive_estate_restore",
-                },
-                "$unset": {"previous_owner_id": ""},
+
+        update_doc = {
+            "$set": {
+                "owner_id": victim_id,
+                "transferred_at": _utcnow().isoformat(),
+                "transfer_source": "revive_estate_restore",
             },
-        )
-        if int(res2.modified_count or 0) > 0:
+            "$unset": {"previous_owner_id": ""},
+        }
+
+        # 1) Prefer claw from killer when known
+        matched = False
+        if killer_id:
+            res = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].update_one(
+                {"strain_id": sid, "owner_id": killer_id},
+                update_doc,
+            )
+            matched = int(res.modified_count or 0) > 0
+
+        # 2) previous_owner_id match (any current holder)
+        if not matched:
+            res2 = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].update_one(
+                {"strain_id": sid, "previous_owner_id": victim_id, "owner_id": {"$ne": victim_id}},
+                update_doc,
+            )
+            matched = int(res2.modified_count or 0) > 0
+
+        # 3) Force from whoever holds it (heal / revive when metadata is missing)
+        if not matched:
+            res3 = await db[EXCLUSIVE_WEED_STRAINS_COLLECTION].update_one(
+                {"strain_id": sid, "owner_id": {"$ne": victim_id}},
+                update_doc,
+            )
+            matched = int(res3.modified_count or 0) > 0
+
+        if matched:
             restored.append(sid)
 
     # Move exclusive stash grams from killer farm back to victim (from snapshot amounts if provided).
