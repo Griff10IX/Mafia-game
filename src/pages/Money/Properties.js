@@ -445,7 +445,7 @@ export default function Properties() {
               type="button"
               onClick={() => collectAll()}
               disabled={collectAllLoading || skipAllBusy}
-              className="text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/40 hover:bg-primary/10 rounded px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation flex items-center gap-1.5"
+              className="tap-feedback min-h-[44px] text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/40 hover:bg-primary/10 active:scale-[0.97] rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation flex items-center gap-1.5"
             >
               <DollarSign size={12} />
               {collectAllLoading ? '...' : `Collect all (${collectibleProperties.length})`}
@@ -456,7 +456,7 @@ export default function Properties() {
                 onClick={() => collectAll({ useSkip: true })}
                 disabled={collectAllLoading || skipAllBusy}
                 title="Use Properties Collect Skip tokens to collect businesses still on the 10m timer (3 activations/day)"
-                className="text-[9px] font-heading font-bold uppercase tracking-wider text-amber-300 border border-amber-500/45 bg-amber-500/10 hover:bg-amber-500/20 rounded px-2 py-1 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation flex items-center gap-1.5"
+                className="tap-feedback min-h-[44px] text-[9px] font-heading font-bold uppercase tracking-wider text-amber-300 border border-amber-500/45 bg-amber-500/10 hover:bg-amber-500/20 active:scale-[0.97] rounded px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation flex items-center gap-1.5"
               >
                 <Zap size={12} />
                 {skipAllBusy ? '...' : `⚡ Skip Collect (${onCooldownCollectible.length})`}
@@ -559,7 +559,7 @@ export default function Properties() {
                         data-testid={`skip-collect-${property.id}`}
                         disabled={skipBusyId === property.id || skipAllBusy}
                         title="Use a Properties Collect Skip token to collect now (max 3/day)"
-                        className="w-full bg-amber-500/15 text-amber-300 rounded font-heading font-bold uppercase tracking-wider py-1.5 text-[10px] border border-amber-500/45 hover:bg-amber-500/25 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="tap-feedback w-full min-h-[44px] bg-amber-500/15 text-amber-300 rounded font-heading font-bold uppercase tracking-wider py-2 text-[10px] border border-amber-500/45 hover:bg-amber-500/25 active:scale-[0.97] transition-all touch-manipulation flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <Zap size={12} />
                         {skipBusyId === property.id ? '...' : '⚡ Skip Collect'}
@@ -569,7 +569,7 @@ export default function Properties() {
                         onClick={() => collectIncome(property.id)}
                         data-testid={`collect-income-${property.id}`}
                         disabled={property.income_collection_blocked || heatBlocksPropertyCollect}
-                        className="w-full bg-primary/20 text-primary rounded font-heading font-bold uppercase tracking-wider py-1.5 text-[10px] border border-primary/40 hover:bg-primary/30 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                        className="tap-feedback w-full min-h-[44px] bg-primary/20 text-primary rounded font-heading font-bold uppercase tracking-wider py-2 text-[10px] border border-primary/40 hover:bg-primary/30 active:scale-[0.97] transition-all touch-manipulation flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                       >
                         <DollarSign size={12} />{' '}
                         {property.income_collection_blocked
@@ -583,7 +583,7 @@ export default function Properties() {
                       <button
                         onClick={() => buyProperty(property.id)}
                         data-testid={`upgrade-property-${property.id}`}
-                        className={`w-full ${styles.surface} border border-primary/30 text-primary rounded font-heading font-bold uppercase tracking-wider py-1.5 text-[10px] hover:bg-primary/10 transition-all flex items-center justify-center gap-1.5`}
+                        className={`tap-feedback w-full min-h-[44px] ${styles.surface} border border-primary/30 text-primary rounded font-heading font-bold uppercase tracking-wider py-2 text-[10px] hover:bg-primary/10 active:scale-[0.97] transition-all touch-manipulation flex items-center justify-center gap-1.5`}
                       >
                         <TrendingUp size={11} /> Upgrade ${(property.next_upgrade_cost ?? (property.price ?? 0) * ((property.level ?? 0) + 1)).toLocaleString()}
                       </button>
@@ -603,10 +603,10 @@ export default function Properties() {
                     onClick={() => !property.locked && buyProperty(property.id)}
                     data-testid={`buy-property-${property.id}`}
                     disabled={property.locked}
-                    className={`w-full rounded font-heading font-bold uppercase tracking-wider py-1.5 text-[10px] border transition-all flex items-center justify-center gap-1.5 ${
+                    className={`tap-feedback w-full min-h-[44px] rounded font-heading font-bold uppercase tracking-wider py-2 text-[10px] border transition-all touch-manipulation flex items-center justify-center gap-1.5 ${
                       property.locked
                         ? 'bg-zinc-800/50 text-zinc-500 border-zinc-600/50 cursor-not-allowed opacity-70'
-                        : 'bg-primary/20 text-primary border-primary/40 hover:bg-primary/30'
+                        : 'bg-primary/20 text-primary border-primary/40 hover:bg-primary/30 active:scale-[0.97]'
                     }`}
                   >
                     {property.locked ? <><Lock size={11} /> Locked</> : 'Buy Property'}
@@ -773,7 +773,7 @@ export default function Properties() {
                   type="button"
                   onClick={buyPortfolioUpgrade}
                   disabled={buyUpgradeLoading || (portfolioUpgrades.unlocked_tier ?? 0) < (portfolioUpgrades.next_tier ?? 0)}
-                  className="shrink-0 text-[10px] font-heading font-bold uppercase tracking-wider rounded px-3 py-1.5 border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50"
+                  className="tap-feedback shrink-0 min-h-[44px] text-[10px] font-heading font-bold uppercase tracking-wider rounded px-3 py-2 border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 active:scale-[0.97] touch-manipulation disabled:opacity-50"
                   title={(portfolioUpgrades.unlocked_tier ?? 0) < (portfolioUpgrades.next_tier ?? 0) ? 'Complete the unlock objectives first' : undefined}
                 >
                   {buyUpgradeLoading ? 'Buying…' : `Buy ${formatMoney(portfolioUpgrades.next_cost_cash ?? 0)}`}

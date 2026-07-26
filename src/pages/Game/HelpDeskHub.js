@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import api from '../../utils/api';
 import { getApiErrorMessage } from '../../utils/api';
 import { Headphones, RefreshCw, HelpCircle } from 'lucide-react';
+import styles from '../../styles/noir.module.css';
 
 const DEFAULT_HDO_COLOR = '#166534';
 
@@ -107,7 +108,7 @@ export default function HelpDeskHub() {
   );
 
   return (
-    <div className="max-w-3xl mx-auto p-4 space-y-6">
+    <div className={`max-w-3xl mx-auto p-4 space-y-6 ${styles.pageContent} mobile-page-root`}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <Headphones className="text-primary" size={22} />
@@ -117,13 +118,13 @@ export default function HelpDeskHub() {
           <button
             type="button"
             onClick={() => load()}
-            className="inline-flex items-center gap-1 px-2 py-1 text-[10px] font-heading uppercase border border-primary/40 rounded text-primary hover:bg-primary/10"
+            className="tap-feedback inline-flex items-center gap-1 min-h-10 px-3 py-2 text-[10px] font-heading uppercase border border-primary/40 rounded text-primary hover:bg-primary/10 active:scale-[0.97] touch-manipulation"
           >
             <RefreshCw size={12} /> Refresh
           </button>
           <Link
             to="/game/help-desk"
-            className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-heading font-bold uppercase rounded bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30"
+            className="tap-feedback inline-flex items-center gap-1 min-h-10 px-3 py-2 text-xs font-heading font-bold uppercase rounded bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30 active:scale-[0.97] touch-manipulation"
           >
             <HelpCircle size={14} /> Open Help Desk
           </Link>

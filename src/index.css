@@ -411,7 +411,38 @@ a.from-primary {
 }
 
 .transition-smooth {
-  transition: all 0.3s ease;
+  transition: color 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+}
+
+/* Mobile tap feel — reduce grey flash / 300ms delay; shared press feedback */
+button,
+a,
+[role="button"],
+[role="menuitem"],
+input[type="submit"],
+input[type="button"],
+.tap-feedback,
+.tap-target {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.tap-feedback {
+  transition: transform 0.12s ease, opacity 0.12s ease, background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.tap-feedback:active {
+  transform: scale(0.97);
+}
+
+.tap-target {
+  min-height: 44px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tap-feedback:active {
+    transform: none;
+  }
 }
 
 /* Mobile bottom nav: extra padding so content isn't hidden behind fixed nav + safe area */

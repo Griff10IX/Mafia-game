@@ -414,9 +414,9 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
       {/* Dark overlay */}
       <div className="absolute inset-0 bg-black/65 pointer-events-none" aria-hidden />
 
-      <div className="relative min-h-screen flex items-start md:items-center justify-center px-4 py-6 md:py-10">
-        <div className="w-full max-w-md mx-auto flex flex-col gap-2">
-          <div id="landing-auth-card" className="w-full max-w-md mx-auto flex flex-col gap-2">
+      <div className="relative min-h-screen flex items-start md:items-center justify-center px-3 sm:px-4 py-4 sm:py-6 md:py-10 safe-area-pt safe-area-pb">
+        <div className="w-full max-w-md mx-auto flex flex-col gap-2 mobile-page-root">
+          <div id="landing-auth-card" className="w-full max-w-md mx-auto flex flex-col gap-3 sm:gap-2">
           {/* ── HERO HEADER ─────────────────────────────────────── */}
           {/*   Gold radial glow + vertical shaft lines, no image   */}
           <div

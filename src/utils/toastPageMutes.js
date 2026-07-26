@@ -51,6 +51,25 @@ export const TOAST_MUTEABLE_PAGES = [
     label: 'Quick Trade',
     match: (p) => p === '/money/quick-trade' || p.startsWith('/money/quick-trade/'),
   },
+  {
+    id: 'loot_box',
+    label: 'Loot Box',
+    match: (p) => p === '/money/loot-box' || p.startsWith('/money/loot-box/'),
+  },
+  {
+    id: 'weed_empire',
+    label: 'Weed Empire',
+    match: (p) => p === '/money/weed-empire' || p.startsWith('/money/weed-empire/'),
+  },
+  {
+    id: 'distillery',
+    label: 'Distillery',
+    match: (p) =>
+      p === '/money/distillery' ||
+      p.startsWith('/money/distillery/') ||
+      p === '/money/racket' ||
+      p.startsWith('/money/racket/'),
+  },
 ];
 
 const ALLOWED_IDS = new Set(TOAST_MUTEABLE_PAGES.map((p) => p.id));

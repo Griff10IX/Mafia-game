@@ -1,5 +1,5 @@
 import { useState, useEffect, Suspense, lazy } from "react";
-import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useParams, useLocation } from "react-router-dom";
 
 /** Legacy `/store?...` links keep query string when redirecting to `/game/store`. */
 function RedirectStoreToGameStore() {
@@ -165,6 +165,18 @@ const PageLoader = () => (
   </div>
 );
 
+
+function AuthenticatedShell() {
+  return (
+    <Layout>
+      <Suspense fallback={<PageLoader />}>
+        <Outlet />
+      </Suspense>
+    </Layout>
+  );
+}
+
+
 // Redirect helpers for parameterized routes
 function ProfileRedirect() {
   const { username } = useParams();
@@ -259,7 +271,6 @@ function App() {
         <ThemeProvider>
         <DashboardPrefetchGate isAuthenticated={isAuthenticated} />
         <RouteChunkPreloadGate />
-        <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route
             path="/"
@@ -326,7 +337,9 @@ function App() {
             path="/locked"
             element={
               isAuthenticated ? (
-                <LockedPage />
+                <Suspense fallback={<PageLoader />}>
+                  <LockedPage />
+                </Suspense>
               ) : (
                 <Navigate to="/" replace />
               )
@@ -336,258 +349,51 @@ function App() {
             path="/account/rules-acceptance"
             element={
               isAuthenticated ? (
-                <RulesAccept />
+                <Suspense fallback={<PageLoader />}>
+                  <RulesAccept />
+                </Suspense>
               ) : (
                 <Navigate to="/" replace />
               )
             }
           />
-          <Route
-            path="/account/dashboard"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Dashboard />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
           <Route path="/dashboard" element={<Navigate to="/account/dashboard" replace />} />
-          <Route
-            path="/game/users-online"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <UsersOnline />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
           <Route path="/users-online" element={<Navigate to="/game/users-online" replace />} />
           {/* ═══ MONEY GROUP ═══ */}
-          <Route
-            path="/money/bank"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Bank />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/money/stocks"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <StockMarket />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
+
           {/* Money redirects */}
           <Route path="/bank" element={<Navigate to="/money/bank" replace />} />
           <Route path="/stock-market" element={<Navigate to="/money/stocks" replace />} />
-          <Route
-            path="/game/stats"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Stats />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
           <Route path="/stats" element={<Navigate to="/game/stats" replace />} />
-          <Route
-            path="/organised-crime"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <OrganisedCrime />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
           <Route path="/oc" element={<Navigate to="/organised-crime" replace />} />
-          <Route
-            path="/account/objectives"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Objectives />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
           <Route path="/objectives" element={<Navigate to="/account/objectives" replace />} />
-          <Route
-            path="/account/missions"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Missions />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
           <Route path="/missions" element={<Navigate to="/account/missions" replace />} />
-          <Route
-            path="/money/loot-box"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <LootBox />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
           <Route path="/loot-box" element={<RedirectLootBoxToMoney />} />
-          <Route
-            path="/game/ranking"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Ranking />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
           <Route path="/ranking" element={<Navigate to="/game/ranking" replace />} />
-          <Route
-            path="/game/ranking/badges"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <RankingBadges />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
           {/* ═══ CRIME GROUP ═══ */}
-          <Route
-            path="/crime/crimes"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Crimes />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/crime/jail"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Jail />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/crime/gta"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <GTA />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
+
+
           {/* Crime redirects */}
           <Route path="/crimes" element={<Navigate to="/crime/crimes" replace />} />
           <Route path="/jail" element={<Navigate to="/crime/jail" replace />} />
           <Route path="/gta" element={<Navigate to="/crime/gta" replace />} />
           {/* ═══ CARS GROUP ═══ */}
-          <Route
-            path="/cars/garage"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Garage />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/cars/buy"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <BuyCars />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/cars/sell"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <SellCars />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/cars/view"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <ViewCar />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/cars/profile/:carId"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <CarProfile />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
+
+
+
+
           {/* Cars redirects */}
           <Route path="/garage" element={<Navigate to="/cars/garage" replace />} />
           <Route path="/buy-cars" element={<Navigate to="/cars/buy" replace />} />
@@ -595,134 +401,18 @@ function App() {
           <Route path="/view-car" element={<ViewCarRedirect />} />
           <Route path="/gta/car/:carId" element={<CarProfileRedirect />} />
           {/* ═══ STAFF ROLE GROUP ═══ */}
-          <Route
-            path="/tjjeujr3wa/:section?"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <AdminShell />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/account/autorank"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <ErrorBoundary>
-                    <AutoRank />
-                  </ErrorBoundary>
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
+
           <Route path="/auto-rank" element={<Navigate to="/account/autorank" replace />} />
           {/* ═══ KILL GROUP ═══ */}
-          <Route
-            path="/kill/attack"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <ErrorBoundary>
-                    <Attack />
-                  </ErrorBoundary>
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/kill/bodyguards"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Bodyguards />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/kill/hitlist"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <HitlistPage />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/kill/hitman"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <ErrorBoundary>
-                    <HitmanForHire />
-                  </ErrorBoundary>
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/kill/attempts"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Attemps />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/kill/combat-timeline"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <CombatTimeline />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/kill/witness-statements"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <WitnessStatements />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/kill/armour-weapons"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <ArmourWeapons />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
+
+
+
+
+
+
+
           {/* Kill redirects */}
           <Route path="/attack" element={<AttackShortcutRedirect />} />
           <Route path="/bodyguards" element={<Navigate to="/kill/bodyguards" replace />} />
@@ -734,507 +424,54 @@ function App() {
           <Route path="/weapons" element={<Navigate to="/kill/armour-weapons" replace />} />
           <Route path="/armour" element={<Navigate to="/kill/armour-weapons" replace />} />
           {/* ═══ FAMILY GROUP ═══ */}
-          <Route
-            path="/game/family/list"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <FamilyPage />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/game/family/:familyId"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <FamilyProfilePage />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
+
           {/* Family redirects */}
           <Route path="/families" element={<Navigate to="/game/family/list" replace />} />
           <Route path="/families/:familyId" element={<FamilyRedirect />} />
-          <Route
-            path="/money/property"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Properties />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
           <Route path="/properties" element={<Navigate to="/money/property" replace />} />
           <Route path="/property" element={<Navigate to="/money/property" replace />} />
-          <Route
-            path="/casino"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Casino />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/sports-betting"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <SportsBetting />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/dice"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <ErrorBoundary>
-                    <Dice />
-                  </ErrorBoundary>
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/rlt"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Rlt />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/blackjack"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Blackjack />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/horseracing"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <ErrorBoundary>
-                    <HorseRacing />
-                  </ErrorBoundary>
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/slots"
-            element={
-              SLOTS_FEATURE_ENABLED ? (
-                isAuthenticated ? (
-                  <Layout>
-                    <Slots />
-                  </Layout>
-                ) : (
-                  <Navigate to="/" replace />
-                )
-              ) : (
-                <Navigate to="/casino" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/keno"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <ErrorBoundary>
-                    <Keno />
-                  </ErrorBoundary>
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/coin-flip"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <ErrorBoundary>
-                    <CoinFlip />
-                  </ErrorBoundary>
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/videopoker"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <VideoPoker />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/mdg"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <MDG />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/mp-blackjack"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <MPBlackjack />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/mp-blackjack/game/:gameId"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <MPBlackjackGame />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/mp-poker"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <MPPoker />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/mp-poker/game/:gameId"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <MPPokerGame />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/money/crack-safe"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <CrackSafe />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
           <Route path="/crack-safe" element={<Navigate to="/money/crack-safe" replace />} />
-          <Route
-            path="/money/grave-robber"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <GraveRobber />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
           <Route path="/grave-robber" element={<Navigate to="/money/grave-robber" replace />} />
-          <Route
-            path="/game/daily-rewards"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <DailyRewards />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
           <Route path="/daily-rewards" element={<Navigate to="/game/daily-rewards" replace />} />
-          <Route
-            path="/game/entertainer"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <EntertainerHub />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/game/help-desk-hub"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <HelpDeskHub />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/game/world-cup/staff"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <WorldCupStaff />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/game/world-cup"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <WorldCup />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
+
+
+
           {/* ═══ GAMES GROUP ═══ */}
-          <Route
-            path="/casino/mini-games/snake"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Snake />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/mini-games/battleships"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Battleships />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/mini-games/the-getaway"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <TheGetaway />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/mini-games/family-run"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <FamilyRun />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/mini-games/whack-a-copper"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <WhackACopper />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/mini-games/famiglia"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Famiglia />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/mini-games/minesweeper"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Minesweeper />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/mini-games/flappy"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Gauntlet />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/mini-games/shooting-range"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <ShootingRange />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/mini-games/shooting-range/play/:weaponId?"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <ShootingRange3D />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/mini-games/8-ball-pool"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <EightBallPool />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/mini-games/leaderboard"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <MiniGamesLeaderboard />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/mini-games/boxing"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Boxing />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/mini-games/boxing/:matchId"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Boxing />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/casino/mini-games/racing"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Racing />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
           {/* Games redirects */}
           <Route path="/snake" element={<Navigate to="/casino/mini-games/snake" replace />} />
           <Route path="/battleships" element={<Navigate to="/casino/mini-games/battleships" replace />} />
@@ -1251,363 +488,55 @@ function App() {
           <Route path="/boxing/arena/:matchId" element={<BoxingArenaRedirect />} />
           <Route path="/racing" element={<Navigate to="/casino/mini-games/racing" replace />} />
           <Route path="/8-ball-pool" element={<Navigate to="/casino/mini-games/8-ball-pool" replace />} />
-          <Route
-            path="/game/leaderboard"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Leaderboard />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
           <Route path="/leaderboard" element={<Navigate to="/game/leaderboard" replace />} />
-          <Route
-            path="/game/store"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Store />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/game-pass"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <GamePass />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
+
           <Route path="/store" element={<RedirectStoreToGameStore />} />
-          <Route
-            path="/money/quick-trade"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <QuickTrade />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
           <Route path="/quick-trade" element={<Navigate to="/money/quick-trade" replace />} />
-          <Route
-            path="/game/travel"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Travel />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
           <Route path="/travel" element={<Navigate to="/game/travel" replace />} />
-          <Route
-            path="/game/states"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <States />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
           <Route path="/states" element={<Navigate to="/game/states" replace />} />
-          <Route
-            path="/my-properties"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <MyProperties />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/money/booze-run"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <BoozeRun />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
+
           <Route path="/booze-run" element={<Navigate to="/money/booze-run" replace />} />
-          <Route
-            path="/money/racket"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <IllegalBusiness />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/money/distillery"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Distillery />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/money/weed-empire"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <WeedEmpire />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
+
+
           <Route path="/racket" element={<Navigate to="/money/racket" replace />} />
           <Route path="/distillery" element={<Navigate to="/money/distillery" replace />} />
           <Route path="/weed-empire" element={<Navigate to="/money/weed-empire" replace />} />
-          <Route
-            path="/money/lottery"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Lottery />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
           <Route path="/lottery" element={<Navigate to="/money/lottery" replace />} />
           {/* ═══ SOCIAL GROUP ═══ */}
-          <Route
-            path="/social/inbox"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Inbox />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/social/chat/:userId"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <InboxChat />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/social/forum"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Forum />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/social/forum/:topicId"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <ForumTopic />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/social/image-host"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <ImageHost />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/game/help-desk"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <HelpDesk />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
+
+
+
+
+
           <Route path="/help-desk" element={<Navigate to="/game/help-desk" replace />} />
           {/* Social redirects */}
           <Route path="/inbox" element={<Navigate to="/social/inbox" replace />} />
           <Route path="/inbox/chat/:userId" element={<InboxChatRedirect />} />
           <Route path="/forum" element={<Navigate to="/social/forum" replace />} />
           <Route path="/forum/topic/:topicId" element={<ForumTopicRedirect />} />
-          <Route
-            path="/game/game-ideas"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <GameIdeas />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
           <Route path="/game-ideas" element={<Navigate to="/game/game-ideas" replace />} />
-          <Route
-            path="/game/dead-alive"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <DeadAlive />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
           <Route path="/dead-alive" element={<Navigate to="/game/dead-alive" replace />} />
           {/* ═══ ACCOUNT GROUP ═══ */}
-          <Route
-            path="/account/profile"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Profile />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/account/profile/:username"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Profile />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/account/stats"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <MyStats />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/account/game-events"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <GameEvents />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
+
+
+
           <Route path="/game-events" element={<Navigate to="/account/game-events" replace />} />
-          <Route
-            path="/account/inventory"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <MyInventory />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/account/prestige"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Prestige />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/account/settings"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <IPRules />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/account/referral"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <Referral />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+
+
+
+
           {/* Account redirects */}
           <Route path="/profile" element={<ProfileRedirect />} />
           <Route path="/profile/:username" element={<ProfileRedirect />} />
@@ -1615,8 +544,613 @@ function App() {
           <Route path="/inventory" element={<Navigate to="/account/inventory" replace />} />
           <Route path="/prestige" element={<Navigate to="/account/prestige" replace />} />
           <Route path="/ip-rules" element={<Navigate to="/account/settings" replace />} />
+                  <Route
+            element={
+              isAuthenticated ? (
+                <AuthenticatedShell />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          >
+            <Route
+              path="/account/dashboard"
+              element={
+              <Dashboard />
+              }
+            />
+            <Route
+              path="/game/users-online"
+              element={
+              <UsersOnline />
+              }
+            />
+            <Route
+              path="/money/bank"
+              element={
+              <Bank />
+              }
+            />
+            <Route
+              path="/money/stocks"
+              element={
+              <StockMarket />
+              }
+            />
+            <Route
+              path="/game/stats"
+              element={
+              <Stats />
+              }
+            />
+            <Route
+              path="/organised-crime"
+              element={
+              <OrganisedCrime />
+              }
+            />
+            <Route
+              path="/account/objectives"
+              element={
+              <Objectives />
+              }
+            />
+            <Route
+              path="/account/missions"
+              element={
+              <Missions />
+              }
+            />
+            <Route
+              path="/money/loot-box"
+              element={
+              <LootBox />
+              }
+            />
+            <Route
+              path="/game/ranking"
+              element={
+              <Ranking />
+              }
+            />
+            <Route
+              path="/game/ranking/badges"
+              element={
+              <RankingBadges />
+              }
+            />
+            <Route
+              path="/crime/crimes"
+              element={
+              <Crimes />
+              }
+            />
+            <Route
+              path="/crime/jail"
+              element={
+              <Jail />
+              }
+            />
+            <Route
+              path="/crime/gta"
+              element={
+              <GTA />
+              }
+            />
+            <Route
+              path="/cars/garage"
+              element={
+              <Garage />
+              }
+            />
+            <Route
+              path="/cars/buy"
+              element={
+              <BuyCars />
+              }
+            />
+            <Route
+              path="/cars/sell"
+              element={
+              <SellCars />
+              }
+            />
+            <Route
+              path="/cars/view"
+              element={
+              <ViewCar />
+              }
+            />
+            <Route
+              path="/cars/profile/:carId"
+              element={
+              <CarProfile />
+              }
+            />
+            <Route
+              path="/tjjeujr3wa/:section?"
+              element={
+              <AdminShell />
+              }
+            />
+            <Route
+              path="/account/autorank"
+              element={
+              <ErrorBoundary>
+                <AutoRank />
+              </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/kill/attack"
+              element={
+              <ErrorBoundary>
+                <Attack />
+              </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/kill/bodyguards"
+              element={
+              <Bodyguards />
+              }
+            />
+            <Route
+              path="/kill/hitlist"
+              element={
+              <HitlistPage />
+              }
+            />
+            <Route
+              path="/kill/hitman"
+              element={
+              <ErrorBoundary>
+                <HitmanForHire />
+              </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/kill/attempts"
+              element={
+              <Attemps />
+              }
+            />
+            <Route
+              path="/kill/combat-timeline"
+              element={
+              <CombatTimeline />
+              }
+            />
+            <Route
+              path="/kill/witness-statements"
+              element={
+              <WitnessStatements />
+              }
+            />
+            <Route
+              path="/kill/armour-weapons"
+              element={
+              <ArmourWeapons />
+              }
+            />
+            <Route
+              path="/game/family/list"
+              element={
+              <FamilyPage />
+              }
+            />
+            <Route
+              path="/game/family/:familyId"
+              element={
+              <FamilyProfilePage />
+              }
+            />
+            <Route
+              path="/money/property"
+              element={
+              <Properties />
+              }
+            />
+            <Route
+              path="/casino"
+              element={
+              <Casino />
+              }
+            />
+            <Route
+              path="/sports-betting"
+              element={
+              <SportsBetting />
+              }
+            />
+            <Route
+              path="/casino/dice"
+              element={
+              <ErrorBoundary>
+                <Dice />
+              </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/casino/rlt"
+              element={
+              <Rlt />
+              }
+            />
+            <Route
+              path="/casino/blackjack"
+              element={
+              <Blackjack />
+              }
+            />
+            <Route
+              path="/casino/horseracing"
+              element={
+              <ErrorBoundary>
+                <HorseRacing />
+              </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/casino/keno"
+              element={
+              <ErrorBoundary>
+                <Keno />
+              </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/casino/coin-flip"
+              element={
+              <ErrorBoundary>
+                <CoinFlip />
+              </ErrorBoundary>
+              }
+            />
+            <Route
+              path="/casino/videopoker"
+              element={
+              <VideoPoker />
+              }
+            />
+            <Route
+              path="/casino/mdg"
+              element={
+              <MDG />
+              }
+            />
+            <Route
+              path="/casino/mp-blackjack"
+              element={
+              <MPBlackjack />
+              }
+            />
+            <Route
+              path="/casino/mp-blackjack/game/:gameId"
+              element={
+              <MPBlackjackGame />
+              }
+            />
+            <Route
+              path="/casino/mp-poker"
+              element={
+              <MPPoker />
+              }
+            />
+            <Route
+              path="/casino/mp-poker/game/:gameId"
+              element={
+              <MPPokerGame />
+              }
+            />
+            <Route
+              path="/money/crack-safe"
+              element={
+              <CrackSafe />
+              }
+            />
+            <Route
+              path="/money/grave-robber"
+              element={
+              <GraveRobber />
+              }
+            />
+            <Route
+              path="/game/daily-rewards"
+              element={
+              <DailyRewards />
+              }
+            />
+            <Route
+              path="/game/entertainer"
+              element={
+              <EntertainerHub />
+              }
+            />
+            <Route
+              path="/game/help-desk-hub"
+              element={
+              <HelpDeskHub />
+              }
+            />
+            <Route
+              path="/game/world-cup/staff"
+              element={
+              <WorldCupStaff />
+              }
+            />
+            <Route
+              path="/game/world-cup"
+              element={
+              <WorldCup />
+              }
+            />
+            <Route
+              path="/casino/mini-games/snake"
+              element={
+              <Snake />
+              }
+            />
+            <Route
+              path="/casino/mini-games/battleships"
+              element={
+              <Battleships />
+              }
+            />
+            <Route
+              path="/casino/mini-games/the-getaway"
+              element={
+              <TheGetaway />
+              }
+            />
+            <Route
+              path="/casino/mini-games/family-run"
+              element={
+              <FamilyRun />
+              }
+            />
+            <Route
+              path="/casino/mini-games/whack-a-copper"
+              element={
+              <WhackACopper />
+              }
+            />
+            <Route
+              path="/casino/mini-games/famiglia"
+              element={
+              <Famiglia />
+              }
+            />
+            <Route
+              path="/casino/mini-games/minesweeper"
+              element={
+              <Minesweeper />
+              }
+            />
+            <Route
+              path="/casino/mini-games/flappy"
+              element={
+              <Gauntlet />
+              }
+            />
+            <Route
+              path="/casino/mini-games/shooting-range"
+              element={
+              <ShootingRange />
+              }
+            />
+            <Route
+              path="/casino/mini-games/shooting-range/play/:weaponId?"
+              element={
+              <ShootingRange3D />
+              }
+            />
+            <Route
+              path="/casino/mini-games/8-ball-pool"
+              element={
+              <EightBallPool />
+              }
+            />
+            <Route
+              path="/casino/mini-games/leaderboard"
+              element={
+              <MiniGamesLeaderboard />
+              }
+            />
+            <Route
+              path="/casino/mini-games/boxing"
+              element={
+              <Boxing />
+              }
+            />
+            <Route
+              path="/casino/mini-games/boxing/:matchId"
+              element={
+              <Boxing />
+              }
+            />
+            <Route
+              path="/casino/mini-games/racing"
+              element={
+              <Racing />
+              }
+            />
+            <Route
+              path="/game/leaderboard"
+              element={
+              <Leaderboard />
+              }
+            />
+            <Route
+              path="/game/store"
+              element={
+              <Store />
+              }
+            />
+            <Route
+              path="/game-pass"
+              element={
+              <GamePass />
+              }
+            />
+            <Route
+              path="/money/quick-trade"
+              element={
+              <QuickTrade />
+              }
+            />
+            <Route
+              path="/game/travel"
+              element={
+              <Travel />
+              }
+            />
+            <Route
+              path="/game/states"
+              element={
+              <States />
+              }
+            />
+            <Route
+              path="/my-properties"
+              element={
+              <MyProperties />
+              }
+            />
+            <Route
+              path="/money/booze-run"
+              element={
+              <BoozeRun />
+              }
+            />
+            <Route
+              path="/money/racket"
+              element={
+              <IllegalBusiness />
+              }
+            />
+            <Route
+              path="/money/distillery"
+              element={
+              <Distillery />
+              }
+            />
+            <Route
+              path="/money/weed-empire"
+              element={
+              <WeedEmpire />
+              }
+            />
+            <Route
+              path="/money/lottery"
+              element={
+              <Lottery />
+              }
+            />
+            <Route
+              path="/social/inbox"
+              element={
+              <Inbox />
+              }
+            />
+            <Route
+              path="/social/chat/:userId"
+              element={
+              <InboxChat />
+              }
+            />
+            <Route
+              path="/social/forum"
+              element={
+              <Forum />
+              }
+            />
+            <Route
+              path="/social/forum/:topicId"
+              element={
+              <ForumTopic />
+              }
+            />
+            <Route
+              path="/social/image-host"
+              element={
+              <ImageHost />
+              }
+            />
+            <Route
+              path="/game/help-desk"
+              element={
+              <HelpDesk />
+              }
+            />
+            <Route
+              path="/game/game-ideas"
+              element={
+              <GameIdeas />
+              }
+            />
+            <Route
+              path="/game/dead-alive"
+              element={
+              <DeadAlive />
+              }
+            />
+            <Route
+              path="/account/profile"
+              element={
+              <Profile />
+              }
+            />
+            <Route
+              path="/account/profile/:username"
+              element={
+              <Profile />
+              }
+            />
+            <Route
+              path="/account/stats"
+              element={
+              <MyStats />
+              }
+            />
+            <Route
+              path="/account/game-events"
+              element={
+              <GameEvents />
+              }
+            />
+            <Route
+              path="/account/inventory"
+              element={
+              <MyInventory />
+              }
+            />
+            <Route
+              path="/account/prestige"
+              element={
+              <Prestige />
+              }
+            />
+            <Route
+              path="/account/settings"
+              element={
+              <IPRules />
+              }
+            />
+            <Route
+              path="/account/referral"
+              element={
+              <Referral />
+              }
+            />
+            <Route
+              path="/casino/slots"
+              element={
+                SLOTS_FEATURE_ENABLED ? <Slots /> : <Navigate to="/casino" replace />
+              }
+            />
+          </Route>
         </Routes>
-        </Suspense>
         </ThemeProvider>
       </BrowserRouter>
       <ThemedToaster />

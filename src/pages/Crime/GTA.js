@@ -329,7 +329,7 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
             type="button"
             onClick={() => onAttempt(option.id)}
             disabled={attemptingOptionId !== null}
-            className="bg-primary/20 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation disabled:opacity-60 font-heading"
+            className="tap-feedback bg-primary/20 text-primary rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 active:scale-[0.97] transition-all touch-manipulation disabled:opacity-60 font-heading"
             data-testid={`attempt-gta-${option.id}`}
           >
             {attemptingOptionId === option.id ? '...' : '🚗 Steal'}
@@ -340,7 +340,7 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
             disabled={skipBusy || attemptingOptionId !== null}
             onClick={() => onSkip(option.id)}
             title="Use a GTA cooldown skip token to attempt now (max 1,000 GTA skips/day)"
-            className="bg-amber-500/15 text-amber-300 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide border border-amber-500/45 hover:bg-amber-500/25 transition-all touch-manipulation font-heading disabled:opacity-50"
+            className="tap-feedback bg-amber-500/15 text-amber-300 rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-amber-500/45 hover:bg-amber-500/25 active:scale-[0.97] transition-all touch-manipulation font-heading disabled:opacity-50"
             data-testid={`skip-gta-${option.id}`}
           >
             {skipBusy ? '...' : '⚡ Skip'}

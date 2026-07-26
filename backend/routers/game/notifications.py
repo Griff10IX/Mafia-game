@@ -55,6 +55,9 @@ TOAST_MUTEABLE_PAGE_IDS = frozenset({
     "store",
     "properties",
     "quick_trade",
+    "loot_box",
+    "weed_empire",
+    "distillery",
 })
 
 

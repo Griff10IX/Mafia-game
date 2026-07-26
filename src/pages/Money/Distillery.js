@@ -194,8 +194,8 @@ function GoldBtn({ children, onClick, disabled, small }) {
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center justify-center rounded border border-primary/40 bg-primary/20 font-heading font-bold uppercase text-primary transition-all hover:bg-primary/30 disabled:cursor-not-allowed disabled:opacity-40 ${
-        small ? 'px-2.5 py-1.5 text-[8px] tracking-wider' : 'px-4 py-2 text-[10px] tracking-wider'
+      className={`tap-feedback inline-flex items-center justify-center rounded border border-primary/40 bg-primary/20 font-heading font-bold uppercase text-primary transition-all hover:bg-primary/30 active:scale-[0.97] touch-manipulation disabled:cursor-not-allowed disabled:opacity-40 ${
+        small ? 'min-h-9 px-2.5 py-1.5 text-[8px] tracking-wider' : 'min-h-[44px] px-4 py-2 text-[10px] tracking-wider'
       }`}
     >
       {children}
@@ -209,8 +209,8 @@ function GhostBtn({ children, onClick, disabled, small }) {
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center justify-center rounded border border-primary/30 bg-primary/10 font-heading font-bold uppercase text-primary transition-all hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40 ${
-        small ? 'px-2 py-1 text-[8px] tracking-wider' : 'px-3 py-2 text-[10px] tracking-wider'
+      className={`tap-feedback inline-flex items-center justify-center rounded border border-primary/30 bg-primary/10 font-heading font-bold uppercase text-primary transition-all hover:bg-primary/20 active:scale-[0.97] touch-manipulation disabled:cursor-not-allowed disabled:opacity-40 ${
+        small ? 'min-h-9 px-2 py-1 text-[8px] tracking-wider' : 'min-h-[44px] px-3 py-2 text-[10px] tracking-wider'
       }`}
     >
       {children}
@@ -649,10 +649,12 @@ export default function Distillery() {
         /* Equipment */
         .dist-equip-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
         @media (max-width: 500px) { .dist-equip-grid { grid-template-columns: 1fr 1fr; } }
-        .dist-equip-card { background: var(--bg); padding: 12px; cursor: pointer; transition: border-color 0.2s, background 0.2s; position: relative; overflow: hidden; }
+        .dist-equip-card { background: var(--bg); padding: 12px; min-height: 44px; cursor: pointer; transition: border-color 0.2s, background 0.2s, transform 0.12s; position: relative; overflow: hidden; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
         .dist-equip-card::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, rgba(var(--noir-primary-rgb), 0.45), transparent); opacity: 0; transition: opacity 0.2s; }
         .dist-equip-card:hover:not(:disabled)::after { opacity: 1; }
+        .dist-equip-card:active:not(:disabled) { transform: scale(0.97); }
         .dist-equip-card:disabled { opacity: 0.5; cursor: not-allowed; }
+        .dist-root { padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px)); }
         .dist-equip-icon { font-size: 18px; margin-bottom: 6px; }
         .dist-equip-name { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 8px; }
         .dist-equip-desc { font-size: 8px; color: var(--cyan, #67e8f9); margin-bottom: 4px; letter-spacing: 0.3px; }

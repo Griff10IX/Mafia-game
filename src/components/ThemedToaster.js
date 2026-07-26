@@ -132,10 +132,53 @@ export function ThemedToaster() {
     };
   }, [dragging, dragStart]);
 
+  const [mobileBottomNav, setMobileBottomNav] = useState(() => {
+    try {
+      return localStorage.getItem('app_theme_mobile_nav') !== 'sidebar';
+    } catch (_) {
+      return true;
+    }
+  });
+  const [isNarrowViewport, setIsNarrowViewport] = useState(() =>
+    typeof window !== 'undefined' ? window.matchMedia('(max-width: 767px)').matches : false
+  );
+
+  useEffect(() => {
+    const onPrefs = () => {
+      try {
+        setMobileBottomNav(localStorage.getItem('app_theme_mobile_nav') !== 'sidebar');
+      } catch (_) {}
+    };
+    window.addEventListener('toast-prefs-changed', onPrefs);
+    window.addEventListener('storage', onPrefs);
+    return () => {
+      window.removeEventListener('toast-prefs-changed', onPrefs);
+      window.removeEventListener('storage', onPrefs);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+    const mq = window.matchMedia('(max-width: 767px)');
+    const onChange = () => setIsNarrowViewport(mq.matches);
+    onChange();
+    mq.addEventListener?.('change', onChange);
+    return () => mq.removeEventListener?.('change', onChange);
+  }, []);
+
   const isBanner = toastStyle === 'banner';
   const isCustom = !isBanner && toastPosition === 'custom';
   const position = isBanner ? 'top-center' : (isCustom ? 'bottom-center' : toastPosition);
-  const offset = isCustom ? 0 : (position.startsWith('bottom') ? 'max(16px, env(safe-area-inset-bottom, 16px))' : 'max(16px, env(safe-area-inset-top, 16px))');
+  // Clear fixed bottom nav (~7rem) on mobile so toasts aren't hidden behind it.
+  const bottomClearance =
+    isNarrowViewport && mobileBottomNav && position.startsWith('bottom')
+      ? 'max(7.25rem, calc(7.25rem + env(safe-area-inset-bottom, 0px)))'
+      : 'max(16px, env(safe-area-inset-bottom, 16px))';
+  const offset = isCustom
+    ? 0
+    : (position.startsWith('bottom')
+      ? bottomClearance
+      : 'max(16px, env(safe-area-inset-top, 16px))');
 
   const toasterStyle = isCustom
     ? {

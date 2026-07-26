@@ -10,6 +10,7 @@ import {
   fundedGameHref,
 } from '../../utils/entertainerFundedGameDisplay';
 import { Gift, Megaphone, Mic2, RefreshCw, Trophy } from 'lucide-react';
+import styles from '../../styles/noir.module.css';
 
 const BROADCAST_TEMPLATE_DEFAULTS = {
   new_e_games: {
@@ -302,7 +303,7 @@ export default function EntertainerHub() {
   };
 
   return (
-    <div className="p-3 md:p-6 max-w-3xl mx-auto space-y-6">
+    <div className={`p-3 md:p-6 max-w-3xl mx-auto space-y-6 ${styles.pageContent} mobile-page-root`}>
       <div className="flex items-center gap-2 border-b border-primary/20 pb-3 flex-wrap">
         <Mic2 className="text-primary shrink-0" size={22} />
         <h1 className="text-lg md:text-xl font-heading font-bold text-primary tracking-wide uppercase">Entertainer Hub</h1>

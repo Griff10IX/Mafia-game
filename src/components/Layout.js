@@ -1181,10 +1181,10 @@ export default function Layout({ children }) {
       if (window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
       el.animate(
         [
-          { opacity: 0.3, transform: 'translateY(10px)' },
+          { opacity: 0.45, transform: 'translateY(6px)' },
           { opacity: 1, transform: 'none' },
         ],
-        { duration: 240, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
+        { duration: 160, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' },
       );
     } catch (_) { /* ignore */ }
   }, [location.pathname, navigationType]);
@@ -2994,7 +2994,7 @@ export default function Layout({ children }) {
                     if (sub.action === 'theme') {
                       return (
                         <button key="theme" type="button" onClick={() => { setThemePickerOpen(true); setMobileBottomMenuOpen(null); }} role="menuitem"
-                          className="flex items-center justify-center px-2 py-3 rounded-md border font-heading text-[10px] uppercase tracking-wider transition-colors"
+                          className="tap-feedback flex items-center justify-center px-2 py-3 min-h-[44px] rounded-md border font-heading text-[10px] uppercase tracking-wider transition-colors"
                           style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.2)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.06)', color: 'var(--noir-primary)' }}>
                           {sub.label}
                         </button>
@@ -3003,7 +3003,7 @@ export default function Layout({ children }) {
                     if (sub.action === 'tutorial') {
                       return (
                         <button key="tutorial" type="button" data-testid="mobile-nav-tutorial" onClick={() => { setMobileBottomMenuOpen(null); replayTutorial(); }} role="menuitem"
-                          className="flex items-center justify-center px-2 py-3 rounded-md border font-heading text-[10px] uppercase tracking-wider transition-colors"
+                          className="tap-feedback flex items-center justify-center px-2 py-3 min-h-[44px] rounded-md border font-heading text-[10px] uppercase tracking-wider transition-colors"
                           style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.2)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.06)', color: 'var(--noir-primary)' }}>
                           {sub.label}
                         </button>
@@ -3047,7 +3047,7 @@ export default function Layout({ children }) {
                         onClick={() => setMobileBottomMenuOpen(null)}
                         onMouseEnter={prefetchCrimes} onFocus={prefetchCrimes}
                         role="menuitem"
-                        className="flex items-center justify-center text-center px-1 py-3 rounded-md border font-heading text-[9px] uppercase tracking-wider transition-all gap-1 min-h-[44px] touch-manipulation"
+                        className="tap-feedback flex items-center justify-center text-center px-1 py-3 rounded-md border font-heading text-[9px] uppercase tracking-wider transition-all gap-1 min-h-[44px] touch-manipulation active:scale-[0.97]"
                         style={isActive
                           ? { borderColor: 'rgba(var(--noir-primary-rgb), 0.5)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.14)', color: 'var(--noir-primary)' }
                           : { borderColor: 'rgba(var(--noir-primary-rgb), 0.12)', backgroundColor: 'var(--noir-content)', color: 'var(--noir-foreground)' }}
@@ -3093,7 +3093,7 @@ export default function Layout({ children }) {
             aria-label="Mobile navigation">
             {mobileBottomNavItems.map((item, index) => {
               const Icon = item.icon;
-              const boxBase = 'flex flex-1 flex-col items-center justify-center gap-0 min-w-0 min-h-[44px] rounded border transition-all touch-manipulation';
+              const boxBase = 'tap-feedback flex flex-1 flex-col items-center justify-center gap-0 min-w-0 min-h-[44px] rounded border transition-all touch-manipulation active:scale-[0.97]';
               const boxInactive = { borderColor: 'var(--noir-border-mid)', backgroundColor: 'var(--noir-surface)', color: 'var(--noir-foreground)' };
               const boxActive = { borderColor: 'rgba(var(--noir-primary-rgb), 0.5)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.14)', color: 'var(--noir-primary)' };
               const bottomNavDividerStyle = { width: 1, minWidth: 1, alignSelf: 'stretch', borderLeft: sidebarDividerStyle === 'solid' ? '1px solid rgba(var(--noir-primary-rgb), 0.35)' : `1px ${sidebarDividerStyle} rgba(var(--noir-primary-rgb), 0.35)` };

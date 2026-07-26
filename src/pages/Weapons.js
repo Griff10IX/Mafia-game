@@ -98,12 +98,12 @@ export default function Weapons() {
 
   if (!hasLoaded) {
     return (
-      <div className="space-y-6" data-testid="weapons-page" />
+      <div className={`space-y-6 ${styles.pageContent} mobile-page-root`} data-testid="weapons-page" />
     );
   }
 
   return (
-    <div className="space-y-6" data-testid="weapons-page">
+    <div className={`space-y-6 ${styles.pageContent} mobile-page-root`} data-testid="weapons-page">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-xs uppercase tracking-[0.3em] text-mutedForeground">Weapons</div>

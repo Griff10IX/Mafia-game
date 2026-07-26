@@ -280,7 +280,7 @@ const CrimeRow = ({ crime, onCommit, manualPlayDisabled, canSkip, onSkip, skipBu
           <button
             type="button"
             onClick={() => onCommit(crime.id)}
-            className="bg-primary/20 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation font-heading"
+            className="tap-feedback bg-primary/20 text-primary rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 active:scale-[0.97] transition-all touch-manipulation font-heading"
             data-testid={`commit-crime-${crime.id}`}
           >
             💰 Commit
@@ -291,7 +291,7 @@ const CrimeRow = ({ crime, onCommit, manualPlayDisabled, canSkip, onSkip, skipBu
             disabled={skipBusy}
             onClick={() => onSkip(crime.id)}
             title="Use a cooldown skip token to commit now (−50% cash; max 5,000 crime skips/day)"
-            className="bg-amber-500/15 text-amber-300 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide border border-amber-500/45 hover:bg-amber-500/25 transition-all touch-manipulation font-heading disabled:opacity-50"
+            className="tap-feedback bg-amber-500/15 text-amber-300 rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-amber-500/45 hover:bg-amber-500/25 active:scale-[0.97] transition-all touch-manipulation font-heading disabled:opacity-50"
             data-testid={`skip-crime-${crime.id}`}
           >
             {skipBusy ? '...' : '⚡ Skip'}
@@ -402,7 +402,7 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled, canSkip, onSkip
             <button
               type="button"
               onClick={() => onCommit(crime.id)}
-              className="rounded px-2 py-0.5 text-[9px] font-heading font-bold uppercase tracking-wide border transition-all touch-manipulation"
+              className="tap-feedback rounded px-2.5 py-1.5 min-h-9 text-[9px] font-heading font-bold uppercase tracking-wide border transition-all touch-manipulation active:scale-[0.97]"
               style={{ color, borderColor: color + '60', background: color + '15' }}
             >
               ★ Commit
@@ -413,7 +413,7 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled, canSkip, onSkip
               disabled={skipBusy}
               onClick={() => onSkip(crime.id)}
               title="Use a cooldown skip token to commit now (−50% cash; max 5,000 crime skips/day)"
-              className="bg-amber-500/15 text-amber-300 rounded px-1.5 py-0.5 text-[9px] font-heading font-bold uppercase border border-amber-500/45 hover:bg-amber-500/25 transition-all touch-manipulation disabled:opacity-50"
+              className="tap-feedback bg-amber-500/15 text-amber-300 rounded px-2.5 py-1.5 min-h-9 text-[9px] font-heading font-bold uppercase border border-amber-500/45 hover:bg-amber-500/25 active:scale-[0.97] transition-all touch-manipulation disabled:opacity-50"
             >
               {skipBusy ? '...' : '⚡ Skip'}
             </button>
@@ -749,7 +749,7 @@ export default function Crimes() {
                   ? `Commit ready crimes, then burn up to ${commitAllSkippable} Crime Skip(s) for on-cooldown crimes (−50% cash each)`
                   : 'Commit all ready crimes'
               }
-              className="text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/40 hover:bg-primary/10 rounded px-1.5 py-0.5 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
+              className="tap-feedback min-h-9 text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/40 hover:bg-primary/10 active:scale-[0.97] rounded px-2.5 py-1.5 disabled:opacity-50 disabled:cursor-not-allowed touch-manipulation"
             >
               {commitAllLoading
                 ? '...'

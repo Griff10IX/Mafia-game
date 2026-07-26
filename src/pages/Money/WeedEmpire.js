@@ -405,7 +405,9 @@ export default function WeedEmpire() {
 
   if (loading) {
     return (
-      <div className={`${styles.page} p-6 text-sm text-muted-foreground`}>Loading weed empire…</div>
+      <div className={`${styles.pageContent} mobile-page-root p-6 text-sm text-muted-foreground`}>
+        Loading weed empire…
+      </div>
     );
   }
 
@@ -424,7 +426,7 @@ export default function WeedEmpire() {
   const miteInfested = !!selectedPlot?.mite_infested || mitePct > 0;
 
   return (
-    <div className={`${styles.page} max-w-6xl mx-auto px-3 py-4 space-y-4`}>
+    <div className={`${styles.pageContent} mobile-page-root max-w-6xl mx-auto px-3 py-4 space-y-4`}>
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-500/80 font-heading">Money</p>
@@ -512,7 +514,7 @@ export default function WeedEmpire() {
             type="button"
             disabled={busy}
             onClick={coolOff}
-            className="text-[10px] uppercase px-2 py-1 rounded border border-border hover:bg-muted/40"
+            className="text-[10px] uppercase px-2 py-1 rounded border border-border hover:bg-muted/40 tap-feedback touch-manipulation active:scale-[0.97] min-h-10"
           >
             Cool off
           </button>
@@ -749,7 +751,7 @@ export default function WeedEmpire() {
                   type="button"
                   disabled={busy || !canAffordPlant}
                   onClick={plant}
-                  className="w-full py-2 rounded bg-emerald-600/80 hover:bg-emerald-600 text-sm font-heading"
+                  className="w-full py-2 rounded bg-emerald-600/80 hover:bg-emerald-600 text-sm font-heading tap-feedback touch-manipulation active:scale-[0.97] min-h-10"
                 >
                   Plant — {money(plantSeedCost)} + 1 soil charge
                 </button>
@@ -829,7 +831,7 @@ export default function WeedEmpire() {
                   type="button"
                   disabled={busy || farm.auto_water}
                   onClick={water}
-                  className="inline-flex items-center gap-1 px-3 py-2 rounded border border-sky-500/40 text-sky-300 text-xs disabled:opacity-40"
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded border border-sky-500/40 text-sky-300 text-xs disabled:opacity-40 tap-feedback touch-manipulation active:scale-[0.97] min-h-10"
                 >
                   <Droplets className="w-3.5 h-3.5" /> {farm.auto_water ? "Auto watering" : "Water"}
                 </button>
@@ -837,7 +839,7 @@ export default function WeedEmpire() {
                   type="button"
                   disabled={busy || farm.auto_feed}
                   onClick={feed}
-                  className="inline-flex items-center gap-1 px-3 py-2 rounded border border-lime-500/40 text-lime-300 text-xs disabled:opacity-40"
+                  className="inline-flex items-center gap-1 px-3 py-2 rounded border border-lime-500/40 text-lime-300 text-xs disabled:opacity-40 tap-feedback touch-manipulation active:scale-[0.97] min-h-10"
                 >
                   <Leaf className="w-3.5 h-3.5" /> {farm.auto_feed ? "Auto feeding" : "Feed"}
                 </button>
@@ -849,7 +851,7 @@ export default function WeedEmpire() {
                       Number(farm.business_cash || 0) < Number(selectedPlot.mite_treatment_cost || 0)
                     }
                     onClick={treatMites}
-                    className="inline-flex items-center gap-1 px-3 py-2 rounded border border-red-500/50 text-red-300 text-xs disabled:opacity-40"
+                    className="inline-flex items-center gap-1 px-3 py-2 rounded border border-red-500/50 text-red-300 text-xs disabled:opacity-40 tap-feedback touch-manipulation active:scale-[0.97] min-h-10"
                   >
                     <Bug className="w-3.5 h-3.5" /> Treat mites · {money(selectedPlot.mite_treatment_cost || 0)}
                   </button>
@@ -859,7 +861,7 @@ export default function WeedEmpire() {
                     type="button"
                     disabled={busy}
                     onClick={harvest}
-                    className="inline-flex items-center gap-1 px-3 py-2 rounded bg-amber-600/80 text-xs font-heading"
+                    className="inline-flex items-center gap-1 px-3 py-2 rounded bg-amber-600/80 text-xs font-heading tap-feedback touch-manipulation active:scale-[0.97] min-h-10"
                   >
                     <Scissors className="w-3.5 h-3.5" /> Harvest / Trim
                   </button>
@@ -996,7 +998,7 @@ export default function WeedEmpire() {
                 type="button"
                 disabled={busy || !sellPreview.valid}
                 onClick={sell}
-                className="px-3 py-1.5 rounded bg-emerald-700/80 text-sm font-heading"
+                className="px-3 py-1.5 rounded bg-emerald-700/80 text-sm font-heading tap-feedback touch-manipulation active:scale-[0.97] min-h-10"
               >
                 Sell to street
               </button>
@@ -1007,7 +1009,7 @@ export default function WeedEmpire() {
               </p>
             )}
             {(farm.dealers_level || 0) >= 1 ? (
-              <button type="button" disabled={busy} onClick={dealerSell} className="text-xs underline text-muted-foreground">
+              <button type="button" disabled={busy} onClick={dealerSell} className="text-xs underline text-muted-foreground tap-feedback touch-manipulation active:scale-[0.97] min-h-10">
                 Run dealers (Lv {farm.dealers_level})
               </button>
             ) : (
@@ -1069,7 +1071,7 @@ export default function WeedEmpire() {
             type="button"
             disabled={busy || !raidUnlocked}
             onClick={loadTargets}
-            className="text-xs px-2 py-1 border rounded disabled:opacity-40"
+            className="text-xs px-2 py-1 border rounded disabled:opacity-40 tap-feedback touch-manipulation active:scale-[0.97] min-h-10"
           >
             Refresh targets
           </button>

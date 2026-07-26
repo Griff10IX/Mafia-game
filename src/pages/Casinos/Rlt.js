@@ -844,7 +844,7 @@ export default function Rlt() {
   };
 
   return (
-    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="roulette-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-0`} data-testid="roulette-page">
       <style>{CG_STYLES}</style>
       <style>{`
         @keyframes result-glow {

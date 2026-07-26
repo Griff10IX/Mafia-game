@@ -525,7 +525,7 @@ export default function Dice() {
   const maxBet = effectiveMaxBet;
 
   return (
-    <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="dice-page">
+    <div className={`space-y-4 ${styles.pageContent} mobile-page-root pb-[calc(8rem+env(safe-area-inset-bottom))] md:pb-0`} data-testid="dice-page">
       <style>{CG_STYLES}</style>
       <style>{`
         @keyframes dice-tumble {

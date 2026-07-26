@@ -883,6 +883,9 @@ export function ThemeProvider({ children }) {
     try {
       localStorage.setItem(STORAGE_KEY_MOBILE_NAV, v);
     } catch (_) {}
+    try {
+      window.dispatchEvent(new Event('toast-prefs-changed'));
+    } catch (_) {}
   }, []);
 
   const setThemeVariant = useCallback((variant) => {

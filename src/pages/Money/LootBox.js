@@ -763,7 +763,7 @@ function ResultModal({ result, onClose, openAnimLevel = 0 }) {
               {result.pieces_spent ? ` · ${fmtInt(result.pieces_spent)} pieces spent` : ''}
             </p>
           </div>
-          <button type="button" onClick={onClose} className="p-1.5 rounded border border-primary/20 bg-primary/5 text-mutedForeground hover:text-foreground transition-colors relative z-[1]">
+          <button type="button" onClick={onClose} className="p-1.5 rounded border border-primary/20 bg-primary/5 text-mutedForeground hover:text-foreground transition-colors relative z-[1] tap-feedback touch-manipulation active:scale-[0.97] min-h-10">
             <X size={16} />
           </button>
         </div>
@@ -1312,7 +1312,7 @@ export default function LootBox() {
                     type="button"
                     onClick={saveRarity}
                     disabled={raritySaving}
-                    className="w-full py-1 px-1.5 rounded border border-primary/40 bg-primary/15 text-primary font-heading text-[9px] uppercase tracking-wider flex items-center justify-center gap-1 hover:bg-primary/25 disabled:opacity-50"
+                    className="w-full py-1 px-1.5 rounded border border-primary/40 bg-primary/15 text-primary font-heading text-[9px] uppercase tracking-wider flex items-center justify-center gap-1 hover:bg-primary/25 disabled:opacity-50 tap-feedback touch-manipulation active:scale-[0.97] min-h-10"
                   >
                     <Save size={12} />
                     {raritySaving ? 'Saving…' : 'Save rarity'}
@@ -1326,7 +1326,7 @@ export default function LootBox() {
                         type="button"
                         onClick={loadSjGuarantee}
                         disabled={sjGuaranteeBusy}
-                        className="text-[8px] text-mutedForeground underline disabled:opacity-50"
+                        className="text-[8px] text-mutedForeground underline disabled:opacity-50 tap-feedback touch-manipulation active:scale-[0.97] min-h-10"
                       >
                         refresh
                       </button>
@@ -1356,7 +1356,7 @@ export default function LootBox() {
                         type="button"
                         onClick={saveSjGuarantee}
                         disabled={sjGuaranteeBusy || !!sjGuarantee?.sj_claimed}
-                        className="px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/10 text-amber-200 text-[8px] font-heading uppercase disabled:opacity-50"
+                        className="px-1.5 py-0.5 rounded border border-amber-500/40 bg-amber-500/10 text-amber-200 text-[8px] font-heading uppercase disabled:opacity-50 tap-feedback touch-manipulation active:scale-[0.97] min-h-10"
                       >
                         Arm
                       </button>
@@ -1364,7 +1364,7 @@ export default function LootBox() {
                         type="button"
                         onClick={clearSjGuarantee}
                         disabled={sjGuaranteeBusy || !sjGuarantee?.guarantee}
-                        className="px-1.5 py-0.5 rounded border border-zinc-500/40 text-mutedForeground text-[8px] font-heading uppercase disabled:opacity-50"
+                        className="px-1.5 py-0.5 rounded border border-zinc-500/40 text-mutedForeground text-[8px] font-heading uppercase disabled:opacity-50 tap-feedback touch-manipulation active:scale-[0.97] min-h-10"
                       >
                         Clear
                       </button>
