@@ -230,6 +230,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Log all users out', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['log all users', 'logout everyone', 'site wide', 'invalidate sessions', 'sessions', 'jwt', 'token'], adminOnly: true },
   { label: 'Add Bullets', categoryId: 'admin-players', collapseKey: 'bullets', keywords: ['bullets', 'ammo', 'add'] },
   { label: 'Give Car', categoryId: 'admin-players', collapseKey: 'cars', keywords: ['car', 'vehicle', 'give'] },
+  { label: 'Drop common/uncommon cars', categoryId: 'admin-players', collapseKey: 'cars', keywords: ['car', 'vehicle', 'drop', 'purge', 'common', 'uncommon', 'garage', 'dealership', 'stock'], adminOnly: true },
   { label: 'Ghost Mode', categoryId: 'admin-players', collapseKey: 'ghost', keywords: ['ghost', 'invisible', 'hide'] },
   { label: 'Lock Account', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['lock', 'ban', 'account'] },
   { label: 'Kill Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['kill', 'death', 'player'] },
@@ -4394,6 +4395,30 @@ export default function Admin() {
       const carName = response.data?.car_name || formData.carId || 'car';
       toast.success(`Removed ${removed.toLocaleString()} ${carName} from ${u}`);
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handlePurgeCommonUncommonCars = async (dryRun) => {
+    const confirmPhrase = 'DROP COMMON UNCOMMON';
+    if (!dryRun) {
+      const typed = window.prompt(
+        `Type ${confirmPhrase} to permanently delete ALL common and uncommon cars from every garage and dealership stock.\n\nRare+ / exclusive / custom / VIP are not touched.`,
+      );
+      if (typed !== confirmPhrase) {
+        if (typed != null) toast.error('Confirmation phrase did not match — cancelled');
+        return;
+      }
+      if (!window.confirm('Final confirm: purge common + uncommon cars game-wide?')) return;
+    }
+    try {
+      const response = await api.post('/admin/cars/purge-by-rarity', {
+        rarities: ['common', 'uncommon'],
+        confirm: confirmPhrase,
+        dry_run: !!dryRun,
+      });
+      toast.success(response.data?.message || (dryRun ? 'Dry run done' : 'Purged'));
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
   };
 
   const handleAddRandomCars = async (count = 1000) => {
@@ -11772,6 +11797,15 @@ export default function Admin() {
               <BtnSecondary onClick={() => handleAddRandomCars(1000)} title="Adds 1000 random cars to the target user's garage (bulk insert).">
                 +1000 random
               </BtnSecondary>
+            </ActionRow>
+
+            <ActionRow
+              icon={Trash2}
+              label="Drop common / uncommon cars"
+              description="Deletes every common and uncommon car from all garages and dealership stock (Vehicle Stats totals). Rare+ / exclusive / custom / VIP stay. Type DROP COMMON UNCOMMON to confirm."
+            >
+              <BtnSecondary onClick={() => handlePurgeCommonUncommonCars(true)}>Dry run</BtnSecondary>
+              <BtnDanger onClick={() => handlePurgeCommonUncommonCars(false)}>Drop from game</BtnDanger>
             </ActionRow>
 
             <ActionRow icon={Gift} label="Give Loot Box Pieces" description="Add pieces for Loot Box (100 = 1 open)">

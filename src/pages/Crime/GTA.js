@@ -231,9 +231,10 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
   const showSkip = Boolean(onCooldown && unlocked && canSkip && !manualPlayDisabled);
   const defaultCooldown = formatDefaultCooldown(option.cooldown ?? 0);
   const progress = Math.min(92, Math.max(10, Number(option.progress) ?? 10));
-  const successRateDisplay = eventsEnabled && event?.gta_success
-    ? Math.min(100, Math.round(progress * (event.gta_success ?? 1)))
-    : progress;
+  // Backend maps progress → steal % (max 55% base, 65% with events/climate). Prefer API value.
+  const successRateDisplay = Number.isFinite(Number(option.success_chance))
+    ? Math.min(65, Math.max(0, Math.round(Number(option.success_chance))))
+    : Math.min(55, Math.round(25 + ((progress - 25) / 67) * 30));
 
   const rankLocked = !unlocked && option.min_rank_name;
   return (
@@ -285,7 +286,7 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
       {/* Progress bar + % inline on mobile (matches Crimes layout) */}
       {unlocked && (
         <div className="flex items-center gap-1 shrink-0">
-          <GTAProgressBar progress={option.progress} />
+          <GTAProgressBar progress={option.progress} successChance={successRateDisplay} />
           <span className="text-[9px] text-primary font-heading w-6 sm:hidden">{successRateDisplay}%</span>
         </div>
       )}
@@ -447,14 +448,17 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
   );
 };
 
-// GTA progress bar: 10–92%, same as crimes (fail -2% or -3%; once at 92% floor 77%)
-const GTAProgressBar = ({ progress }) => {
+// GTA progress bar: skill meter 25–92% (maps to steal chance up to 55%/65%).
+const GTAProgressBar = ({ progress, successChance }) => {
   const pct = Math.min(92, Math.max(10, Number(progress) ?? 10));
   const barPct = ((pct - 10) / 82) * 100;
+  const chanceLabel = Number.isFinite(Number(successChance))
+    ? Math.round(Number(successChance))
+    : Math.min(55, Math.round(25 + ((pct - 25) / 67) * 30));
   return (
     <div
       className="flex items-center gap-1 shrink-0"
-      title={`Success rate: ${pct}%. Success +3–5%; fail -1–3%; once you've hit 92%, it never goes below 77%.`}
+      title={`Steal chance: ${chanceLabel}% (max 55% without boosts, 65% with events/climate). Progress +4–6% on success, −1–2% on fail; after peaking at 92% skill floor is 80%.`}
     >
       <div
         style={{

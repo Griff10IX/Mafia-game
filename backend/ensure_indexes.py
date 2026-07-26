@@ -262,6 +262,11 @@ async def ensure_all_indexes(db):
         await db.user_cars.create_index([("user_id", 1), ("acquired_at", -1)])
         await db.user_cars.create_index([("listed_for_sale", 1), ("listed_at", -1)])
         await db.user_cars.create_index("id", unique=True)
+        # Marketplace / view-car: filter by instance id (+ listed flag) without collection scan.
+        try:
+            await db.user_cars.create_index([("id", 1), ("listed_for_sale", 1)])
+        except Exception as e:
+            logger.warning("user_cars (id, listed_for_sale) index: %s", e)
         await db.user_cars.create_index([("user_id", 1), ("car_id", 1)])
         await db.user_cars.create_index("car_id")
         await db.exclusive_car_events.create_index([("at", -1)])
@@ -485,6 +490,16 @@ async def ensure_all_indexes(db):
         await db.user_weapons.create_index([("user_id", 1), ("quantity", 1)])
 
         # --- Auth / payments ---
+        # Hot paths: /me by id, forum/admin username lookups (exact $in). Avoid case-insensitive
+        # regex $or on username without this index — Atlas flags those as slow scans.
+        try:
+            await db.users.create_index("id", unique=True)
+        except Exception as e:
+            logger.warning("users.id unique index: %s", e)
+        try:
+            await db.users.create_index("username", unique=True)
+        except Exception as e:
+            logger.warning("users.username unique index: %s", e)
         await db.users.create_index("email")
         await db.password_resets.create_index("token", unique=True)
         await db.email_verifications.create_index("token", unique=True)

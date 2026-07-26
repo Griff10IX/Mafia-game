@@ -102,6 +102,56 @@ def _parse_iso_datetime(s):
         return None
 
 
+async def _resolve_usernames_to_ids(usernames) -> dict:
+    """
+    Map lowercased username -> user id for staff color resolve.
+    Prefer exact $in (uses users.username index); only regex-fallback for case mismatches.
+    """
+    unique = []
+    seen = set()
+    for raw in usernames or []:
+        u = (raw or "").strip()
+        if not u:
+            continue
+        key = u.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(u)
+    if not unique:
+        return {}
+
+    by_lower = {}
+    resolved = await db.users.find(
+        {"username": {"$in": unique}},
+        {"_id": 0, "id": 1, "username": 1},
+    ).to_list(len(unique) + 1)
+    for row in resolved or []:
+        uname = (row.get("username") or "").strip()
+        uid = row.get("id")
+        if uname and uid:
+            by_lower[uname.lower()] = uid
+
+    missing = [u for u in unique if u.lower() not in by_lower]
+    if missing:
+        # Rare path: stored casing differs from denormalized author_username.
+        or_clauses = [
+            {"username": re.compile("^" + re.escape(u) + "$", re.IGNORECASE)}
+            for u in missing
+        ]
+        more = await db.users.find(
+            {"$or": or_clauses},
+            {"_id": 0, "id": 1, "username": 1},
+        ).to_list(len(missing) + 1)
+        for row in more or []:
+            uname = (row.get("username") or "").strip()
+            uid = row.get("id")
+            if uname and uid:
+                by_lower[uname.lower()] = uid
+
+    return by_lower
+
+
 MOD_DEFAULT = "#1e3a5f"
 ADMIN_DEFAULT = "#a78bfa"
 
@@ -493,16 +543,13 @@ async def get_topics(
         if (t.get("author_username") or "").strip()
     ))
     if usernames_to_resolve:
-        or_clauses = [{"username": re.compile("^" + re.escape(u) + "$", re.IGNORECASE)} for u in usernames_to_resolve if u]
-        if or_clauses:
-            resolved = await db.users.find({"$or": or_clauses}, {"_id": 0, "id": 1, "username": 1}).to_list(100)
-            by_lower = {(u.get("username") or "").strip().lower(): u.get("id") for u in resolved if u.get("id")}
-            for uname in usernames_to_resolve:
-                key = (uname or "").strip().lower()
-                uid = by_lower.get(key)
-                if uid:
-                    username_to_id[key] = uid
-                    author_ids.append(uid)
+        by_lower = await _resolve_usernames_to_ids(usernames_to_resolve)
+        for uname in usernames_to_resolve:
+            key = (uname or "").strip().lower()
+            uid = by_lower.get(key)
+            if uid:
+                username_to_id[key] = uid
+                author_ids.append(uid)
     colors = await _get_author_display_colors(author_ids)
     topic_ids = [t["id"] for t in topics]
     count_by_topic = {}
@@ -654,12 +701,9 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
         if (c.get("author_username") or "").strip():
             usernames_to_resolve.append((c.get("author_username") or "").strip())
     username_to_id = {}
-    unique_names = [u for u in set(usernames_to_resolve) if u]
-    if unique_names:
-        or_clauses = [{"username": re.compile("^" + re.escape(u) + "$", re.IGNORECASE)} for u in unique_names]
-        resolved = await db.users.find({"$or": or_clauses}, {"_id": 0, "id": 1, "username": 1}).to_list(200)
-        by_lower = {(u.get("username") or "").strip().lower(): u.get("id") for u in resolved if u.get("id")}
-        for uname in unique_names:
+    if usernames_to_resolve:
+        by_lower = await _resolve_usernames_to_ids(usernames_to_resolve)
+        for uname in set(usernames_to_resolve):
             key = (uname or "").strip().lower()
             uid = by_lower.get(key)
             if uid:
@@ -989,28 +1033,23 @@ async def add_comment(
         notified_ids.add(reply_to_author_id)
     mention_names = list(dict.fromkeys(_extract_mention_usernames(content)))
     if mention_names:
-        m_or = [{"username": re.compile("^" + re.escape(u) + "$", re.IGNORECASE)} for u in mention_names if u]
-        if m_or:
-            mentioned_users = await db.users.find({"$or": m_or}, {"_id": 0, "id": 1, "username": 1}).to_list(50)
-            by_lower = {(u.get("username") or "").strip().lower(): u for u in mentioned_users if u.get("id")}
-            for username in mention_names:
-                key = (username or "").strip().lower()
-                mentioned = by_lower.get(key)
-                if mentioned:
-                    uid = mentioned.get("id")
-                    if uid and uid != current_user["id"] and uid not in notified_ids:
-                        await send_notification(
-                            uid,
-                            "Mentioned in forum",
-                            f'{author_username} mentioned you in "{topic_title}"',
-                            "forum_mention",
-                            category="forum_mention",
-                            topic_id=topic_id,
-                            topic_title=topic.get("title"),
-                            comment_id=comment_id,
-                            actor_username=author_username,
-                        )
-                        notified_ids.add(uid)
+        by_lower_ids = await _resolve_usernames_to_ids(mention_names)
+        for username in mention_names:
+            key = (username or "").strip().lower()
+            uid = by_lower_ids.get(key)
+            if uid and uid != current_user["id"] and uid not in notified_ids:
+                await send_notification(
+                    uid,
+                    "Mentioned in forum",
+                    f'{author_username} mentioned you in "{topic_title}"',
+                    "forum_mention",
+                    category="forum_mention",
+                    topic_id=topic_id,
+                    topic_title=topic.get("title"),
+                    comment_id=comment_id,
+                    actor_username=author_username,
+                )
+                notified_ids.add(uid)
 
     return {
         "id": comment_id,

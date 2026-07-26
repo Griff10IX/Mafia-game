@@ -81,7 +81,8 @@ def _spawn_gta_bookkeeping(user_id: str, coro_factory) -> None:
 # GTA options and request/response models
 # ---------------------------------------------------------------------------
 
-# Cooldowns in seconds. First GTA 60s, then scale up. Unlock by rank. (10% harder: success_rate * 0.9)
+# Cooldowns in seconds. First GTA 60s, then scale up. Unlock by rank.
+# Option success_rate is legacy; live steal chance uses progress → 55% / 65% caps.
 GTA_OPTIONS = [
     {"id": "easy", "name": "Street Parking", "success_rate": 0.81, "jail_time": 8, "difficulty": 1, "cooldown": 60, "min_rank": 3},
     {"id": "medium", "name": "Residential Area", "success_rate": 0.70, "jail_time": 15, "difficulty": 2, "cooldown": 90, "min_rank": 4},
@@ -249,6 +250,18 @@ def effective_garage_batch_limit(user: dict) -> int:
     if n <= 0:
         return DEFAULT_GARAGE_BATCH_LIMIT
     return min(n, GARAGE_BATCH_LIMIT_MAX)
+
+
+def _normalize_user_car_instance_id(raw) -> str:
+    """user_cars.id is a string UUID; never pass uuid.UUID (Atlas logs those as $uuid / misses string index)."""
+    if raw is None:
+        return ""
+    if isinstance(raw, uuid.UUID):
+        return str(raw)
+    s = str(raw).strip()
+    if len(s) >= 2 and s[0] == "{" and s[-1] == "}":
+        s = s[1:-1]
+    return s
 
 
 def _user_car_owner_clause(user_id) -> dict:
@@ -479,8 +492,36 @@ GTA_PROGRESS_MAX_DROP_FROM_PEAK = 12
 # On GTA failure, this chance you get caught (jail); otherwise you get away with no car
 GTA_CAUGHT_CHANCE = 0.4
 
-# 10% harder: success roll uses this multiplier (0.9 = 10% less success chance)
-GTA_DIFFICULTY_MULT = 0.9
+# Steal chance caps: progress bar maps up to NO_PERKS; events/climate can raise to WITH_PERKS.
+GTA_SUCCESS_CAP_NO_PERKS = 0.55
+GTA_SUCCESS_CAP_WITH_PERKS = 0.65
+# Legacy name kept for any imports; no longer applied as a post-progress multiplier.
+GTA_DIFFICULTY_MULT = 1.0
+
+
+def _gta_base_success_from_progress(progress: int) -> float:
+    """Map progress bar (MIN..MAX) to steal chance, peaking at 55% with no perk multipliers."""
+    p = max(GTA_PROGRESS_MIN, min(GTA_PROGRESS_MAX, int(progress)))
+    span = GTA_PROGRESS_MAX - GTA_PROGRESS_MIN
+    if span <= 0:
+        return float(GTA_SUCCESS_CAP_NO_PERKS)
+    t = (p - GTA_PROGRESS_MIN) / float(span)
+    low = GTA_PROGRESS_MIN / 100.0
+    high = float(GTA_SUCCESS_CAP_NO_PERKS)
+    return low + t * (high - low)
+
+
+def _gta_final_success_chance(
+    progress: int,
+    *,
+    event_mult: float = 1.0,
+    climate_mult: float = 1.0,
+) -> float:
+    """Effective steal probability: base from progress, then event/climate, hard-capped at 65%."""
+    base = _gta_base_success_from_progress(progress)
+    em = max(0.0, float(event_mult if event_mult is not None else 1.0))
+    cm = max(0.0, float(climate_mult if climate_mult is not None else 1.0))
+    return min(float(GTA_SUCCESS_CAP_WITH_PERKS), max(0.0, base * em * cm))
 
 GTA_SUCCESS_MESSAGES = [
     "Success! You stole a {car_name}!",
@@ -558,7 +599,7 @@ async def get_gta_options(current_user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     user_rank, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
     option_ids = [o["id"] for o in GTA_OPTIONS]
-    cooldown_doc, user_gta_list = await asyncio.gather(
+    cooldown_doc, user_gta_list, ev = await asyncio.gather(
         db.gta_cooldowns.find_one(
             {"user_id": current_user.get("id") or ""},
             {"_id": 0, "cooldown_until": 1},
@@ -567,7 +608,11 @@ async def get_gta_options(current_user: dict = Depends(get_current_user)):
             {"user_id": current_user.get("id") or "", "option_id": {"$in": option_ids}},
             {"_id": 0, "option_id": 1, "attempts": 1, "successes": 1, "progress": 1, "progress_max": 1},
         ).to_list(len(option_ids)),
+        get_effective_event(),
     )
+    _climate = get_location_climate()
+    climate_mult = success_multiplier_for_actor(current_user.get("current_state"), _climate)
+    event_mult = float((ev or {}).get("gta_success", 1.0) or 1.0)
     global_cooldown_until = None
     if cooldown_doc:
         until = _parse_iso_datetime(cooldown_doc.get("cooldown_until"))
@@ -585,7 +630,11 @@ async def get_gta_options(current_user: dict = Depends(get_current_user)):
             if stored is not None and GTA_PROGRESS_MIN <= int(stored) <= GTA_PROGRESS_MAX
             else _gta_progress_from_attempts(attempts)
         )
-        
+        base_chance = _gta_base_success_from_progress(progress)
+        final_chance = _gta_final_success_chance(
+            progress, event_mult=event_mult, climate_mult=climate_mult
+        )
+
         row = dict(opt)
         row["unlocked"] = user_rank >= opt["min_rank"]
         row["min_rank_name"] = next(
@@ -596,6 +645,8 @@ async def get_gta_options(current_user: dict = Depends(get_current_user)):
         row["attempts"] = attempts
         row["successes"] = successes
         row["progress"] = progress
+        row["success_chance"] = int(round(final_chance * 100))
+        row["success_chance_base"] = int(round(base_chance * 100))
         row["possible_cars"] = _gta_possible_cars_for_option(opt)
         result.append(row)
     return result
@@ -715,14 +766,12 @@ async def _attempt_gta_impl(
     
     ev = await get_effective_event()
     _climate = get_location_climate()
-    success_rate = progress / 100.0
-    gta_rate = (
-        success_rate
-        * ev.get("gta_success", 1.0)
-        * GTA_DIFFICULTY_MULT
-        * success_multiplier_for_actor(current_user.get("current_state"), _climate)
+    gta_rate = _gta_final_success_chance(
+        progress,
+        event_mult=float((ev or {}).get("gta_success", 1.0) or 1.0),
+        climate_mult=success_multiplier_for_actor(current_user.get("current_state"), _climate),
     )
-    success = _rng.random() < min(1.0, gta_rate)
+    success = _rng.random() < gta_rate
     
     if success:
         gain = _rng.randint(GTA_PROGRESS_GAIN_MIN, GTA_PROGRESS_GAIN_MAX)
@@ -2622,13 +2671,14 @@ async def list_car(
     """List one of your cars for sale on the marketplace (other players can buy for cash)."""
     if request.price <= 0:
         raise HTTPException(status_code=400, detail="Price must be positive")
+    list_uc_id = _normalize_user_car_instance_id(request.user_car_id)
     user_car = await db.user_cars.find_one(
-        {"user_id": current_user.get("id") or "", "id": request.user_car_id}
-    )
-    if not user_car:
+        {"user_id": current_user.get("id") or "", "id": list_uc_id}
+    ) if list_uc_id else None
+    if not user_car and list_uc_id:
         try:
             user_car = await db.user_cars.find_one(
-                {"user_id": current_user.get("id") or "", "_id": ObjectId(request.user_car_id)}
+                {"user_id": current_user.get("id") or "", "_id": ObjectId(list_uc_id)}
             )
         except Exception:
             user_car = None
@@ -2716,14 +2766,15 @@ async def buy_listed_car(
     """Buy a car listed by another player (pay cash to seller)."""
     buyer_id = current_user.get("id") or ""
     # Atomically claim the car before payment to prevent double-buy race condition
-    claim_filter = {"id": request.user_car_id, "listed_for_sale": True, "user_id": {"$ne": buyer_id}}
+    listed_car_id = _normalize_user_car_instance_id(request.user_car_id)
+    claim_filter = {"id": listed_car_id, "listed_for_sale": True, "user_id": {"$ne": buyer_id}}
     user_car = await db.user_cars.find_one_and_update(
         claim_filter,
         {"$set": {"listed_for_sale": False, "user_id": buyer_id}, "$unset": {"sale_price": "", "listed_at": ""}},
     )
     if not user_car:
         try:
-            claim_filter_oid = {"_id": ObjectId(request.user_car_id), "listed_for_sale": True, "user_id": {"$ne": buyer_id}}
+            claim_filter_oid = {"_id": ObjectId(listed_car_id), "listed_for_sale": True, "user_id": {"$ne": buyer_id}}
             user_car = await db.user_cars.find_one_and_update(
                 claim_filter_oid,
                 {"$set": {"listed_for_sale": False, "user_id": buyer_id}, "$unset": {"sale_price": "", "listed_at": ""}},
@@ -2732,10 +2783,10 @@ async def buy_listed_car(
             user_car = None
     if not user_car:
         # Distinguish self-buy from unavailable
-        maybe_car = await db.user_cars.find_one({"id": request.user_car_id, "listed_for_sale": True})
-        if not maybe_car:
+        maybe_car = await db.user_cars.find_one({"id": listed_car_id, "listed_for_sale": True}) if listed_car_id else None
+        if not maybe_car and listed_car_id:
             try:
-                maybe_car = await db.user_cars.find_one({"_id": ObjectId(request.user_car_id), "listed_for_sale": True})
+                maybe_car = await db.user_cars.find_one({"_id": ObjectId(listed_car_id), "listed_for_sale": True})
             except Exception:
                 pass
         if maybe_car and maybe_car.get("user_id") == buyer_id:
@@ -3047,10 +3098,11 @@ async def get_view_car(
     current_user: dict = Depends(get_current_user),
 ):
     """Return a specific car instance by its personal id (user_car_id). Own car: full details. Others: if listed for sale or shown on profile."""
-    user_car = await db.user_cars.find_one({"id": id})
-    if not user_car:
+    car_instance_id = _normalize_user_car_instance_id(id)
+    user_car = await db.user_cars.find_one({"id": car_instance_id}) if car_instance_id else None
+    if not user_car and car_instance_id:
         try:
-            user_car = await db.user_cars.find_one({"_id": ObjectId(id)})
+            user_car = await db.user_cars.find_one({"_id": ObjectId(car_instance_id)})
         except Exception:
             user_car = None
     if not user_car:

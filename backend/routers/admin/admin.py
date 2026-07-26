@@ -407,6 +407,14 @@ class GTAExclusivePoolRequest(BaseModel):
     drop_weight: Optional[float] = None
 
 
+class AdminPurgeCarsByRarityRequest(BaseModel):
+    """Delete all garage + dealership stock cars for allowed low rarities game-wide."""
+
+    rarities: List[str] = Field(default_factory=lambda: ["common", "uncommon"])
+    confirm: str = ""
+    dry_run: bool = False
+
+
 class EditCarValueRequest(BaseModel):
     car_id: str
     value: int
@@ -5828,6 +5836,94 @@ def register(router):
             status_code=410,
             detail="Bulk delete-all-cars has been removed from the admin API. Use per-user fixes or a controlled DB script if needed.",
         )
+
+    _PURGE_CARS_BY_RARITY_ALLOWED = frozenset({"common", "uncommon"})
+    _PURGE_CARS_BY_RARITY_CONFIRM = "DROP COMMON UNCOMMON"
+
+    @router.post("/admin/cars/purge-by-rarity")
+    async def admin_purge_cars_by_rarity(
+        body: AdminPurgeCarsByRarityRequest,
+        current_user: dict = Depends(require_admin),
+    ):
+        """
+        Delete every common/uncommon car from all garages (user_cars) and dealership stock.
+        Rare+ / exclusive / custom / VIP are never touched. Requires exact confirm phrase.
+        """
+        raw = body.rarities or ["common", "uncommon"]
+        rarities = sorted({str(r or "").strip().lower() for r in raw if str(r or "").strip()})
+        if not rarities:
+            raise HTTPException(status_code=400, detail="Select at least one rarity")
+        bad = [r for r in rarities if r not in _PURGE_CARS_BY_RARITY_ALLOWED]
+        if bad:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Only common and uncommon may be purged (got: {', '.join(bad)})",
+            )
+        if (body.confirm or "").strip() != _PURGE_CARS_BY_RARITY_CONFIRM:
+            raise HTTPException(
+                status_code=400,
+                detail=f'Confirmation must be exactly: {_PURGE_CARS_BY_RARITY_CONFIRM}',
+            )
+
+        car_ids = sorted(
+            {
+                str(c.get("id"))
+                for c in (CARS or [])
+                if c.get("id") and str(c.get("rarity") or "").strip().lower() in rarities
+            }
+        )
+        if not car_ids:
+            raise HTTPException(status_code=400, detail="No catalog cars match those rarities")
+
+        garage_match = {"car_id": {"$in": car_ids}}
+        dealer_match = {"car_id": {"$in": car_ids}}
+        garage_count = int(await db.user_cars.count_documents(garage_match))
+        dealer_count = int(await db.dealer_stock.count_documents(dealer_match))
+
+        if body.dry_run:
+            return {
+                "dry_run": True,
+                "rarities": rarities,
+                "car_ids": car_ids,
+                "user_cars_would_delete": garage_count,
+                "dealer_stock_would_delete": dealer_count,
+                "message": (
+                    f"Dry run: would delete {garage_count:,} garage car(s) and "
+                    f"{dealer_count:,} dealership stock row(s) for {', '.join(rarities)}."
+                ),
+            }
+
+        garage_res = await db.user_cars.delete_many(garage_match)
+        dealer_res = await db.dealer_stock.delete_many(dealer_match)
+        garage_deleted = int(garage_res.deleted_count or 0)
+        dealer_deleted = int(dealer_res.deleted_count or 0)
+
+        try:
+            await srv.log_activity(
+                current_user.get("id") or "",
+                current_user.get("username") or "?",
+                "admin_purge_cars_by_rarity",
+                {
+                    "rarities": rarities,
+                    "car_ids": car_ids,
+                    "user_cars_deleted": garage_deleted,
+                    "dealer_stock_deleted": dealer_deleted,
+                },
+            )
+        except Exception:
+            pass
+
+        return {
+            "dry_run": False,
+            "rarities": rarities,
+            "car_ids": car_ids,
+            "user_cars_deleted": garage_deleted,
+            "dealer_stock_deleted": dealer_deleted,
+            "message": (
+                f"Dropped {garage_deleted:,} garage car(s) and {dealer_deleted:,} dealership stock "
+                f"row(s) for {', '.join(rarities)}."
+            ),
+        }
 
     @router.get("/admin/security/summary")
     async def admin_security_summary(limit: int = 100, flag_type: str = None, current_user: dict = Depends(get_current_user)):
