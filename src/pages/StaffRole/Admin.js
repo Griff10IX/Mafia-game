@@ -221,6 +221,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Token Inspector', categoryId: 'admin-players', collapseKey: 'tokens', keywords: ['token', 'inspect', 'balance', 'boost', 'expiry', 'held', 'used', 'purchased', 'active'] },
   { label: 'Clear pool cue upgrades', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['pool', '8-ball', '8 ball', 'cue', 'upgrades', 'reset', 'minigame'] },
   { label: 'Reset kill inflation', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['kill', 'inflation', 'combat', 'attack', 'bullets', 'reset', 'zero', '0%'], adminOnly: true },
+  { label: 'Remove Bodyguard Find Clock', categoryId: 'admin-players', collapseKey: 'player', keywords: ['bodyguard', 'find', 'clock', 'find clock', 'perk', 'store', 'attack', 'search', 'remove'], adminOnly: true },
   { label: 'Auto Rank email entitlement', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['auto rank', 'email', 'entitlement', 'stripe', 'permanent', '20'], adminOnly: true },
   { label: 'New player tutorial', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-new-player-tutorial', keywords: ['tutorial', 'new player', 'onboarding', 'coach', 'reset tutorial', 'start tutorial'], adminOnly: true },
   { label: 'Founding Member', categoryId: 'admin-players', collapseKey: 'founding', keywords: ['founding', 'member', 'badge', 'founder'] },
@@ -4111,6 +4112,21 @@ export default function Admin() {
     try {
       const qs = new URLSearchParams({ target_username: formData.targetUsername.trim() });
       const response = await api.post(`/admin/remove-game-pass?${qs.toString()}`);
+      toast.success(response.data.message);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
+  const handleRemoveBodyguardFindClock = async () => {
+    const u = (formData.targetUsername || '').trim();
+    if (!u) {
+      toast.error('Enter target username');
+      return;
+    }
+    if (!window.confirm(`Remove Bodyguard Find Clock from ${u}? Attack searches will no longer show exact find times until they buy the perk again.`)) return;
+    try {
+      const response = await api.post(`/admin/remove-bodyguard-find-time?target_username=${encodeURIComponent(u)}`);
       toast.success(response.data.message);
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed');
@@ -10674,6 +10690,16 @@ export default function Admin() {
               <BtnSecondary onClick={() => handleHitmanResetCooldown('all')} disabled={hitmanResetLoading || !(formData.targetUsername || '').trim()}>
                 Clear all Hitman locks
               </BtnSecondary>
+            </ActionRow>
+
+            <ActionRow
+              icon={Clock}
+              label="Remove Bodyguard Find Clock"
+              description="Clears the store perk that reveals exact find times on Attack searches. Uses target username above."
+            >
+              <BtnDanger onClick={handleRemoveBodyguardFindClock} disabled={!(formData.targetUsername || '').trim()}>
+                Remove perk
+              </BtnDanger>
             </ActionRow>
             {inspectCrimesData && (
               <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-2 pl-6">

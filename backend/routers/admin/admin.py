@@ -3521,6 +3521,38 @@ def register(router):
             "message": f"Removed Game Pass state for {un}. They can purchase or receive a grant again anytime.",
         }
 
+    @router.post("/admin/remove-bodyguard-find-time")
+    async def admin_remove_bodyguard_find_time(
+        target_username: str = Query(..., min_length=1),
+        current_user: dict = Depends(require_admin),
+    ):
+        """Admin: clear Bodyguard Find Clock (store perk). User can buy it again afterward."""
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one(
+            {"username": username_pattern},
+            {"_id": 0, "id": 1, "username": 1, "bodyguard_find_time_until": 1},
+        )
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        un = (target.get("username") or target_username).strip()
+        had = bool(target.get("bodyguard_find_time_until"))
+        await db.users.update_one(
+            {"id": target["id"]},
+            {"$unset": {"bodyguard_find_time_until": ""}},
+        )
+        if had:
+            return {
+                "message": f"Removed Bodyguard Find Clock from {un}. They can buy it again in the Store.",
+                "removed": True,
+                "username": un,
+            }
+        return {
+            "message": f"{un} had no Bodyguard Find Clock active.",
+            "removed": False,
+            "username": un,
+        }
+
     @router.post("/admin/reconcile-game-pass-tiers")
     async def admin_reconcile_game_pass_tiers(
         target_username: str,
