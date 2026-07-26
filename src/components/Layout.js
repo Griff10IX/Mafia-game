@@ -426,6 +426,7 @@ export default function Layout({ children }) {
   const [portalNavTick, setPortalNavTick] = useState(0);
   const [rankingCounts, setRankingCounts] = useState({ crimes: 0, gta: 0, jail: 0 });
   const [sportsBettingEventCount, setSportsBettingEventCount] = useState(0);
+  const [weedEmpireReadyCount, setWeedEmpireReadyCount] = useState(0);
   const [storePointsEventActive, setStorePointsEventActive] = useState(false);
   const [gtaExclusiveInPool, setGtaExclusiveInPool] = useState(false);
   const [ocStatus, setOcStatus] = useState(null);
@@ -652,11 +653,16 @@ export default function Layout({ children }) {
       if (i.type === 'group' && i.id === 'money') {
         return {
           ...i,
-          items: i.items.map((sub) => (
-            sub.path === '/game/store'
-              ? { ...sub, saleBadge: storePointsEventActive }
-              : sub
-          )),
+          items: i.items.map((sub) => {
+            let next = sub;
+            if (sub.path === '/game/store') {
+              next = { ...next, saleBadge: storePointsEventActive };
+            }
+            if (sub.path === '/money/weed-empire' && weedEmpireReadyCount > 0) {
+              next = { ...next, badge: weedEmpireReadyCount, badgeTone: 'emerald' };
+            }
+            return next;
+          }),
         };
       }
       if (i.type === 'group' && i.id === 'casinos') {
@@ -684,7 +690,7 @@ export default function Layout({ children }) {
       }
       return i;
     });
-  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, updateLogUnread, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, storePointsEventActive, worldCupEnabled, hitmanForHireVisible, weedEmpireNavVisible, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
+  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, updateLogUnread, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, weedEmpireReadyCount, storePointsEventActive, worldCupEnabled, hitmanForHireVisible, weedEmpireNavVisible, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
 
   useEffect(() => onCooldownChange(setCooldownSeconds), []);
 
@@ -1448,6 +1454,28 @@ export default function Layout({ children }) {
     return () => clearInterval(id);
   }, [userId]);
 
+  useEffect(() => {
+    if (!userId || !weedEmpireNavVisible) {
+      setWeedEmpireReadyCount(0);
+      return undefined;
+    }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await api.get('/weed-empire/ready-count');
+        if (!cancelled) setWeedEmpireReadyCount(Math.max(0, Number(res.data?.ready_count) || 0));
+      } catch {
+        if (!cancelled) setWeedEmpireReadyCount(0);
+      }
+    };
+    load();
+    const id = setInterval(load, 60000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [userId, weedEmpireNavVisible, location.pathname]);
+
   const fetchTravelStatus = useCallback(async () => {
     try {
       const res = await apiRequestWith429Retry(() => api.get('/travel/status'));
@@ -1565,7 +1593,14 @@ export default function Layout({ children }) {
     { path: '/money/distillery', icon: Wine, label: 'Distillery' },
     { path: '/money/racket', icon: Building2, label: 'Racket' },
     ...((weedEmpireVisible || isAdmin || isModerator || hasAdminEmail)
-      ? [{ path: '/money/weed-empire', icon: Leaf, label: weedEmpireVisible ? 'Weed Empire' : 'Weed Empire (Staff)' }]
+      ? [{
+          path: '/money/weed-empire',
+          icon: Leaf,
+          label: weedEmpireVisible ? 'Weed Empire' : 'Weed Empire (Staff)',
+          ...(weedEmpireReadyCount > 0
+            ? { badge: weedEmpireReadyCount, badgeTone: 'emerald' }
+            : {}),
+        }]
       : []),
     { path: '/game/users-online', icon: Users, label: 'Users Online', countBadge: usersOnlineCount },
     { path: '__messaging__', icon: MessageSquare, label: 'Forum & inbox' },
@@ -2023,7 +2058,14 @@ export default function Layout({ children }) {
             </span>
           )}
           {item.badge > 0 && (
-            item.badgeTone === 'primary' ? (
+            item.badgeTone === 'emerald' ? (
+              <span
+                className="shrink-0 rounded border border-emerald-500/30 bg-emerald-600/20 px-1.5 py-0.5 font-heading text-[10px] font-bold tabular-nums text-emerald-400"
+                title="Plots ready to harvest"
+              >
+                {item.badge > 99 ? '99+' : item.badge}
+              </span>
+            ) : item.badgeTone === 'primary' ? (
               <span
                 className="bg-primary/15 text-primary text-[10px] px-1.5 py-0.5 rounded font-bold border border-primary/40 tabular-nums"
                 style={{ textShadow: '0 0 6px rgba(var(--noir-primary-rgb), 0.55)' }}

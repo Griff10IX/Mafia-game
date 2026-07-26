@@ -856,7 +856,8 @@ export default function OrganisedCrime() {
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">OC stats</span>
         </div>
         <div className="p-2 text-[10px] font-heading text-foreground">
-          Total successful heists: {status?.total_oc_heists ?? 0}
+          Total successful heists:{' '}
+          <span className="text-emerald-400">{status?.total_oc_heists ?? 0}</span>
         </div>
         <div className="oc-art-line text-primary mx-2.5" />
       </div>

@@ -825,6 +825,29 @@ async def _gate(user: dict = Depends(get_current_user)):
     return user
 
 
+@router.get("/ready-count")
+async def weed_ready_count(current_user: dict = Depends(_gate)):
+    """
+    Lightweight nav badge: how many plots are ready to harvest right now.
+    Does not create a farm or persist ticks (read-only estimate).
+    """
+    farm = await db.weed_farms.find_one({"user_id": current_user["id"]}, {"_id": 0})
+    if not farm:
+        return {"ready_count": 0}
+    await _attach_exclusive_owned(farm)
+    now = _utcnow()
+    farm = _tick_environment(farm, _stats(farm), now)
+    stats = _stats(farm)
+    ready = 0
+    for p in farm.get("plots") or []:
+        if (p or {}).get("state") not in ("growing", "harvest_ready"):
+            continue
+        ticked = _tick_plot(dict(p), farm, stats, now)
+        if ticked.get("state") == "harvest_ready" or ticked.get("stage") == "harvest_ready":
+            ready += 1
+    return {"ready_count": int(ready)}
+
+
 @router.get("/status")
 async def weed_status(current_user: dict = Depends(_gate)):
     farm = await _get_or_create_farm(current_user["id"])

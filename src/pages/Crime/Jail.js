@@ -928,9 +928,17 @@ export default function Jail() {
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Bust stats</span>
         </div>
         <div className="p-2 text-[10px] font-heading text-foreground">
-          Attempted busts today: {jailStats.count_today ?? 0}  streak {jailStatus.current_consecutive_busts ?? 0}  total successful busts {jailStatus.jail_busts ?? 0}
+          Attempted busts today: {jailStats.count_today ?? 0}  streak {jailStatus.current_consecutive_busts ?? 0}{' '}
+          <span className="text-emerald-400">
+            total successful busts {jailStatus.jail_busts ?? 0}
+          </span>
           <div className="mt-1 text-mutedForeground text-[9px]">
-            Record {jailStatus.consecutive_busts_record ?? 0}  ·  Past week {jailStats.count_week ?? 0} busts, {jailStats.success_week ?? 0} successful  ·  Profit today ${(jailStats.profit_today ?? 0).toLocaleString()}  ·  Past week ${(jailStats.profit_week ?? 0).toLocaleString()}
+            Record {jailStatus.consecutive_busts_record ?? 0}  ·  Past week {jailStats.count_week ?? 0} busts,{' '}
+            <span className="text-emerald-400">{jailStats.success_week ?? 0} successful</span>
+            {' '}·  Profit today{' '}
+            <span className="text-emerald-400">${(jailStats.profit_today ?? 0).toLocaleString()}</span>
+            {' '}·  Past week{' '}
+            <span className="text-emerald-400">${(jailStats.profit_week ?? 0).toLocaleString()}</span>
           </div>
         </div>
         <div className="j-art-line text-primary mx-2.5" />
