@@ -4,6 +4,8 @@ from __future__ import annotations
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
+from fastapi import HTTPException
+
 PROTECTION_HOURS = 14 * 24
 
 CIVILIAN_PROTECTION_KILL_BLOCKED_DETAIL = (
@@ -14,14 +16,38 @@ CIVILIAN_PROTECTION_HITMAN_BLOCKED_DETAIL = (
     "That player still has new-account protection and can't be targeted by Hitman yet."
 )
 
+CIVILIAN_PROTECTION_ASSET_TRANSFER_BLOCKED_DETAIL = (
+    "That player still has new-account protection and can't receive casinos, armoury, or airports yet."
+)
+
 RULES_BULLETS: List[str] = [
     "Take a casino from someone and reject their buyback, or ignore buyback until it expires.",
     "Run a search on another player or a bodyguard (searching only a hitlist NPC does not remove protection).",
     "Put a real player on the hitlist.",
     "Apply to a crew, join one, or start your own.",
     "Buy an exclusive car.",
-    "Claim a casino, or accept a casino or property someone sends to you.",
+    "Claim a casino.",
 ]
+
+_ASSET_RECIPIENT_PROJECTION = {
+    "_id": 0,
+    "id": 1,
+    "created_at": 1,
+    "civilian_protection_revoked_at": 1,
+    "is_npc": 1,
+    "email": 1,
+    "is_moderator": 1,
+}
+
+
+async def raise_if_civilian_protected_asset_recipient(db, user_id: Optional[str]) -> None:
+    """Block sending casinos / armoury / airport (and similar properties) to a protected account."""
+    uid = str(user_id or "").strip()
+    if not uid:
+        return
+    user = await db.users.find_one({"id": uid}, _ASSET_RECIPIENT_PROJECTION)
+    if is_civilian_protected(user):
+        raise HTTPException(status_code=400, detail=CIVILIAN_PROTECTION_ASSET_TRANSFER_BLOCKED_DETAIL)
 
 
 def _parse_user_dt(val: Any) -> Optional[datetime]:

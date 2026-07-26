@@ -13,7 +13,11 @@ from fastapi import Depends, HTTPException
 
 from utils.claim_costs import load_claim_costs
 from utils.point_provenance import log_points_event
-from utils.civilian_protection import cleanup_expired_buyback_offers_for_user, maybe_revoke_civilian_protection
+from utils.civilian_protection import (
+    cleanup_expired_buyback_offers_for_user,
+    maybe_revoke_civilian_protection,
+    raise_if_civilian_protected_asset_recipient,
+)
 
 from server import (
     db,
@@ -765,6 +769,7 @@ def register(router):
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
         raise_if_dead_casino_transfer_target(target)
+        await raise_if_civilian_protected_asset_recipient(db, target.get("id"))
         await raise_if_single_casino_receive_blocked(target)
         held = int((doc or {}).get("buy_back_points_held") or 0)
         await refund_casino_buy_back_escrow_points(

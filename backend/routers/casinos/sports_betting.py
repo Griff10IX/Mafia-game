@@ -46,7 +46,7 @@ from server import (
     _user_owns_any_property,
 )
 from routers.game.families import resolve_family_id
-from utils.civilian_protection import maybe_revoke_civilian_protection
+from utils.civilian_protection import maybe_revoke_civilian_protection, raise_if_civilian_protected_asset_recipient
 from utils.sports_betting_ownership import (
     SPORTS_BETTING_OWNERSHIP_ID,
     SPORTS_BETTING_CLAIM_COST_POINTS,
@@ -4394,6 +4394,7 @@ async def sports_betting_ownership_send_to_user(
         raise HTTPException(status_code=404, detail="User not found")
     if target["id"] == uid:
         raise HTTPException(status_code=400, detail="Cannot transfer to yourself")
+    await raise_if_civilian_protected_asset_recipient(db, target["id"])
     if await user_owns_sports_betting_book(db, target["id"]):
         raise HTTPException(status_code=400, detail="That user already owns the sports betting book")
     if await _user_owns_any_property(target["id"]):

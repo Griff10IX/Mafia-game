@@ -14,6 +14,7 @@ from bson.objectid import ObjectId
 
 from utils.claim_costs import load_claim_costs
 from utils.point_provenance import log_points_event
+from utils.civilian_protection import raise_if_civilian_protected_asset_recipient
 
 from server import (
     db,
@@ -913,6 +914,7 @@ async def airport_transfer(req: AirportTransferRequest, current_user: dict = Dep
         raise HTTPException(status_code=404, detail="User not found")
     if target["id"] == current_user["id"]:
         raise HTTPException(status_code=400, detail="Cannot transfer to yourself")
+    await raise_if_civilian_protected_asset_recipient(db, target["id"])
     if await _user_owns_airport(target["id"]):
         raise HTTPException(status_code=400, detail="That user already owns an airport")
     airport_set = {"owner_id": target["id"], "owner_username": target.get("username", target_username), "total_earnings": 0}

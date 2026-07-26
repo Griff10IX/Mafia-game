@@ -39,6 +39,7 @@ from server import (
     log_minigame_payout
 )
 from utils.point_provenance import log_points_event
+from utils.civilian_protection import raise_if_civilian_protected_asset_recipient
 from utils.speakeasy_rewards import (
     SPEAKEASY_DAILY_BULLETS,
     SPEAKEASY_DAILY_CASH,
@@ -1297,6 +1298,7 @@ async def bullet_factory_send_to_user(
         raise HTTPException(status_code=404, detail="User not found")
     if target["id"] == current_user["id"]:
         raise HTTPException(status_code=400, detail="Cannot transfer to yourself")
+    await raise_if_civilian_protected_asset_recipient(db, target["id"])
     if await _user_owns_bullet_factory(target["id"]):
         raise HTTPException(status_code=400, detail="That user already owns an armoury")
     transfer_set = {"owner_id": target["id"], "owner_username": target.get("username", target_username), "total_earnings": 0}

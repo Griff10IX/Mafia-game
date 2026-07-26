@@ -233,7 +233,7 @@ GARAGE_DEALERSHIP_TRANSFER_TARGET_CONFLICT_DETAIL = (
     "That player already owns an airport or armoury and cannot hold the car dealership."
 )
 from utils.minigame_captcha_gate import require_turnstile_for_game_action
-from utils.civilian_protection import maybe_revoke_civilian_protection
+from utils.civilian_protection import maybe_revoke_civilian_protection, raise_if_civilian_protected_asset_recipient
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_GTA
 
 
@@ -3430,6 +3430,7 @@ async def garage_dealership_send_to_user(
         raise HTTPException(status_code=404, detail="User not found")
     if target["id"] == uid:
         raise HTTPException(status_code=400, detail="Cannot transfer to yourself")
+    await raise_if_civilian_protected_asset_recipient(db, target["id"])
     if await user_owns_garage_dealership(db, target["id"]):
         raise HTTPException(status_code=400, detail="That user already owns the car dealership")
     if await _user_owns_any_property(target["id"]):
