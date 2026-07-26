@@ -211,7 +211,23 @@ export default function AdminVipCars() {
       setForceBizResult(res.data || null);
       toast.success(res.data?.message || (dryRun ? 'Dry run done' : 'Speakeasy restored'));
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Force Speakeasy restore failed');
+      const detail = e.response?.data?.detail;
+      const msg =
+        typeof detail === 'string'
+          ? detail
+          : detail?.message || 'Force Speakeasy restore failed';
+      if (detail && typeof detail === 'object') {
+        setForceBizResult({
+          ok: false,
+          dry_run: dryRun,
+          username: target,
+          archive_username: archiveSrc || target,
+          diagnostics: detail.diagnostics || {},
+          before: {},
+          after: {},
+        });
+      }
+      toast.error(msg);
     } finally {
       setForceBizBusy(false);
     }
@@ -517,11 +533,10 @@ export default function AdminVipCars() {
                 Force restore Speakeasy from archive
               </div>
               <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                Overwrites a wiped Level‑1 Speakeasy / distillery / guards from a death archive (normal heal skips
-                when any biz row already exists). Defaults: restore{' '}
-                <span className="text-foreground">Piece</span> from{' '}
-                <span className="text-foreground">Chaos</span>&apos;s archive. Vault keeps the larger of live vs
-                archive. Dry run first.
+                Overwrites a wiped Speakeasy / distillery / guards from a death snapshot. Tries archive source
+                first (archive + live snap), then the target, then any seized biz. If Chaos has no archive, clear
+                Archive source or set it to <span className="text-foreground">Piece</span>. Vault keeps the larger
+                of live vs archive. Dry run first.
               </p>
               <div className="flex flex-wrap gap-2 items-end">
                 <label className="text-[9px] font-heading text-mutedForeground">
@@ -560,7 +575,8 @@ export default function AdminVipCars() {
                 <div className="rounded border border-zinc-700/50 bg-zinc-900/50 p-2 space-y-1 text-[9px] font-heading text-mutedForeground">
                   <div className="text-foreground">
                     {forceBizResult.dry_run ? 'Dry run' : 'Applied'}: {forceBizResult.mode}{' '}
-                    {forceBizResult.username} ← archive {forceBizResult.archive_username}
+                    {forceBizResult.username} ← {forceBizResult.archive_source || 'archive'}{' '}
+                    {forceBizResult.archive_username}
                     {forceBizResult.archive_captured_at
                       ? ` (${forceBizResult.archive_captured_at})`
                       : ''}
@@ -586,6 +602,16 @@ export default function AdminVipCars() {
                       ? ` · vault policy ${forceBizResult.vault_policy}`
                       : ''}
                   </div>
+                  {(forceBizResult.diagnostics?.checked || []).length > 0 && (
+                    <div className="pt-1 border-t border-zinc-700/40 space-y-0.5">
+                      {(forceBizResult.diagnostics.checked || []).map((row) => (
+                        <div key={`diag-${row.username}`}>
+                          {row.username}: archive={row.archive_count ?? 0}, live_snap=
+                          {row.has_live_snapshot ? 'yes' : 'no'}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

@@ -1044,6 +1044,65 @@ def _resolve_vault(current_vault: int, archive_vault: int, vault_policy: str) ->
     return max(int(current_vault), int(archive_vault))
 
 
+async def _load_user_snap_sources(db, username: str) -> Optional[dict]:
+    """Load a user with live + archived death snapshots for Speakeasy restore discovery."""
+    return await db.users.find_one(
+        {"username": _uname_re(username)},
+        {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "death_revive_snapshot": 1,
+            "death_revive_snapshot_archive": 1,
+        },
+    )
+
+
+def _collect_biz_snap_sources(users: List[dict]) -> tuple:
+    """
+    Returns (checked_diag, usable_sources).
+    usable_sources ordered: each user's archive snap first, then live snap.
+    """
+    checked: List[Dict[str, Any]] = []
+    usable: List[Dict[str, Any]] = []
+    for user in users:
+        if not user or not user.get("id"):
+            continue
+        uname = user.get("username") or user["id"]
+        archive = user.get("death_revive_snapshot_archive") or []
+        checked.append(
+            {
+                "username": uname,
+                "user_id": user["id"],
+                "archive_count": len(archive) if isinstance(archive, list) else 0,
+                "has_live_snapshot": bool(user.get("death_revive_snapshot")),
+            }
+        )
+        snap = _latest_archive_snap(user)
+        if snap and snap.get("illegal_business"):
+            usable.append(
+                {
+                    "source": "death_revive_snapshot_archive",
+                    "username": uname,
+                    "user_id": user["id"],
+                    "snap": snap,
+                    "captured_at": snap.get("captured_at") or snap.get("archived_at"),
+                }
+            )
+        live = user.get("death_revive_snapshot")
+        if isinstance(live, dict) and live.get("illegal_business"):
+            usable.append(
+                {
+                    "source": "death_revive_snapshot",
+                    "username": uname,
+                    "user_id": user["id"],
+                    "snap": live,
+                    "captured_at": live.get("captured_at"),
+                }
+            )
+    return checked, usable
+
+
 async def force_restore_illegal_business_from_archive(
     db,
     *,
@@ -1054,13 +1113,15 @@ async def force_restore_illegal_business_from_archive(
     restore_ibm_missions: bool = True,
 ) -> dict:
     """
-    Overwrite a player's illegal business (Speakeasy/distillery/guards) from a death archive.
+    Overwrite a player's illegal business (Speakeasy/distillery/guards) from a death snapshot.
 
-    Use when a wiped Level-1 shell already exists so normal revive/heal skips restore.
-    For kill→revive (e.g. Piece ← Chaos archive): set username=Piece, archive_username=Chaos.
+    Discovery order:
+      1) archive_username archive / live snap (if set)
+      2) target username archive / live snap
+      3) seized biz tagged seized_from_user_id == archive or target
     """
     target_name = (username or "").strip()
-    archive_name = (archive_username or username or "").strip()
+    preferred_archive = (archive_username or "").strip()
     if not target_name:
         return {"ok": False, "error": "username required"}
 
@@ -1073,44 +1134,101 @@ async def force_restore_illegal_business_from_archive(
             "is_dead": 1,
             "illegal_business_mission_completions": 1,
             "illegal_business_mission_baselines": 1,
+            "death_revive_snapshot": 1,
+            "death_revive_snapshot_archive": 1,
         },
     )
     if not target:
         return {"ok": False, "error": f"User not found: {target_name}"}
 
-    archive_user = target
-    if archive_name.lower() != target_name.lower():
-        archive_user = await db.users.find_one(
-            {"username": _uname_re(archive_name)},
-            {"_id": 0, "id": 1, "username": 1, "death_revive_snapshot_archive": 1},
-        )
-        if not archive_user:
-            return {"ok": False, "error": f"Archive user not found: {archive_name}"}
-    else:
-        archive_user = await db.users.find_one(
-            {"id": target["id"]},
-            {"_id": 0, "id": 1, "username": 1, "death_revive_snapshot_archive": 1},
-        )
+    probe_users: List[dict] = [target]
+    if preferred_archive and preferred_archive.lower() != target_name.lower():
+        other = await _load_user_snap_sources(db, preferred_archive)
+        if not other:
+            return {"ok": False, "error": f"Archive user not found: {preferred_archive}"}
+        probe_users = [other, target]
 
-    snap = _latest_archive_snap(archive_user or {})
-    if not snap:
-        return {
-            "ok": False,
-            "error": f"No death_revive_snapshot_archive on {archive_user.get('username') or archive_name}",
-        }
+    checked, usable = _collect_biz_snap_sources(probe_users)
+    chosen = usable[0] if usable else None
 
-    snap_biz = snap.get("illegal_business")
+    snap: Optional[dict] = None
+    snap_biz: Optional[dict] = None
+    snap_guards: List[dict] = []
+    source_label = None
+    source_username = None
+    source_user_id = None
+    captured_at = None
+
+    if chosen:
+        snap = chosen["snap"]
+        snap_biz = snap.get("illegal_business")
+        snap_guards = list(snap.get("illegal_business_guards") or [])
+        source_label = chosen["source"]
+        source_username = chosen["username"]
+        source_user_id = chosen["user_id"]
+        captured_at = chosen.get("captured_at")
+
+    seized = None
     if not snap_biz:
+        for uid in [u["id"] for u in probe_users if u.get("id")]:
+            seized = await db.illegal_businesses.find_one(
+                {"seized_from_user_id": uid},
+                {"_id": 0},
+            )
+            if seized:
+                break
+        if seized:
+            snap_biz = seized
+            snap_guards = await db.illegal_business_guards.find(
+                {"business_id": seized.get("id")}, {"_id": 0}
+            ).to_list(2000)
+            source_label = "seized_illegal_business"
+            source_username = preferred_archive or target.get("username")
+            source_user_id = seized.get("user_id")
+            captured_at = None
+            snap = {"illegal_business": snap_biz, "illegal_business_guards": snap_guards}
+
+    diagnostics = {
+        "checked": checked,
+        "usable_sources": [
+            {
+                "source": c.get("source"),
+                "username": c.get("username"),
+                "captured_at": c.get("captured_at"),
+                "biz_level": int((c.get("snap") or {}).get("illegal_business", {}).get("level") or 0),
+                "biz_security": int(
+                    len((c.get("snap") or {}).get("illegal_business", {}).get("security_upgrades") or [])
+                    or (c.get("snap") or {}).get("illegal_business", {}).get("security_level")
+                    or 0
+                ),
+            }
+            for c in usable
+        ],
+        "seized_found": bool(seized),
+    }
+
+    if not snap_biz:
+        tried = preferred_archive or target_name
+        hint_parts = [
+            f"No Speakeasy snapshot found (tried {tried}"
+            + (f" then {target_name}" if preferred_archive else "")
+            + ")."
+        ]
+        for row in checked:
+            hint_parts.append(
+                f"{row.get('username')}: archive={row.get('archive_count') or 0}, "
+                f"live_snap={'yes' if row.get('has_live_snapshot') else 'no'}"
+            )
+        hint_parts.append(
+            "Chaos has no death archive from that kill — try Archive source blank/Piece, "
+            "or set Speakeasy progress manually from evidence."
+        )
         return {
             "ok": False,
-            "error": (
-                f"Archive for {archive_user.get('username') or archive_name} "
-                "has no illegal_business snapshot"
-            ),
-            "archive_captured_at": snap.get("captured_at") or snap.get("archived_at"),
+            "error": " | ".join(hint_parts),
+            "diagnostics": diagnostics,
         }
 
-    snap_guards = list(snap.get("illegal_business_guards") or [])
     target_id = target["id"]
     current = await db.illegal_businesses.find_one({"user_id": target_id}, {"_id": 0})
     current_guards = []
@@ -1123,7 +1241,7 @@ async def force_restore_illegal_business_from_archive(
     archive_vault = int(snap_biz.get("vault") or 0)
     resolved_vault = _resolve_vault(current_vault, archive_vault, vault_policy)
 
-    ibm_snap = snap.get("user_ibm_fields") or {}
+    ibm_snap = (snap or {}).get("user_ibm_fields") or {}
     ibm_missions = list(ibm_snap.get("illegal_business_mission_completions") or [])
     current_missions = list(target.get("illegal_business_mission_completions") or [])
 
@@ -1136,9 +1254,10 @@ async def force_restore_illegal_business_from_archive(
         "dry_run": bool(dry_run),
         "username": target.get("username"),
         "user_id": target_id,
-        "archive_username": archive_user.get("username"),
-        "archive_user_id": archive_user.get("id"),
-        "archive_captured_at": snap.get("captured_at") or snap.get("archived_at"),
+        "archive_username": source_username,
+        "archive_user_id": source_user_id,
+        "archive_source": source_label,
+        "archive_captured_at": captured_at,
         "vault_policy": (vault_policy or "max").strip().lower(),
         "vault_current": current_vault,
         "vault_archive": archive_vault,
@@ -1150,6 +1269,7 @@ async def force_restore_illegal_business_from_archive(
         "after": after,
         "mode": "overwrite" if current else "insert",
         "applied": False,
+        "diagnostics": diagnostics,
     }
 
     if dry_run:
@@ -1165,7 +1285,6 @@ async def force_restore_illegal_business_from_archive(
     if current and current.get("id"):
         biz_id = current["id"]
         biz_doc["id"] = biz_id
-        # Keep row identity; replace payload.
         await db.illegal_businesses.replace_one(
             {"user_id": target_id, "id": biz_id},
             biz_doc,
@@ -1193,11 +1312,11 @@ async def force_restore_illegal_business_from_archive(
             await db.users.update_one({"id": target_id}, {"$set": set_doc})
             out["ibm_fields_restored"] = True
 
-    # Keep last few backups for undo / audit
     backup = {
         "at": _utc_now_iso(),
-        "archive_username": archive_user.get("username"),
-        "archive_captured_at": snap.get("captured_at") or snap.get("archived_at"),
+        "archive_username": source_username,
+        "archive_source": source_label,
+        "archive_captured_at": captured_at,
         "biz": current,
         "guards": current_guards,
         "ibm_missions_count": len(current_missions),

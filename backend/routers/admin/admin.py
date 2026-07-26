@@ -11622,9 +11622,14 @@ def register(router):
             restore_ibm_missions=bool(restore_ibm_missions),
         )
         if not result.get("ok"):
+            # Include diagnostics so admin UI toast/body can show why (e.g. Chaos has no archive).
+            detail = result.get("error") or "Force restore failed"
             raise HTTPException(
                 status_code=404,
-                detail=result.get("error") or "Force restore failed",
+                detail={
+                    "message": detail,
+                    "diagnostics": result.get("diagnostics") or {},
+                },
             )
         before = result.get("before") or {}
         after = result.get("after") or {}
