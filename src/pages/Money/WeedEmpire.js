@@ -111,6 +111,8 @@ export default function WeedEmpire() {
     raid_cooldown_hours: 3,
     raid_cooldown_scope: "per_target",
     raid_unlocked: true,
+    required_grower_level: 5,
+    required_target_grower_level: 5,
   });
   const [raidFx, setRaidFx] = useState(null);
   const [bustModal, setBustModal] = useState(null);
@@ -531,6 +533,8 @@ export default function WeedEmpire() {
         raid_cooldown_hours: data.raid_cooldown_hours || 3,
         raid_cooldown_scope: data.raid_cooldown_scope || "per_target",
         raid_unlocked: data.raid_unlocked !== false,
+        required_grower_level: data.required_grower_level || 5,
+        required_target_grower_level: data.required_target_grower_level || 5,
       });
     });
 
@@ -663,7 +667,7 @@ export default function WeedEmpire() {
     (sum, p) => sum + Number(p.mite_treatment_cost || 0),
     0
   );
-  const raidUnlocked = Number(farm.grower_level || 1) >= 2;
+  const raidUnlocked = Number(farm.grower_level || 1) >= Number(raidMeta.required_grower_level || 5);
   const assistant = farm.assistant || {};
   const heatHigh = Number(farm.heat || 0) >= Number(farm.heat_bust_threshold || 95);
   const coolCost = Number(farm.cool_off_cost || 0);
@@ -1696,7 +1700,8 @@ export default function WeedEmpire() {
           ) : null}
           <p className="text-xs text-muted-foreground flex items-start gap-2">
             <Shield className="w-4 h-4 shrink-0 mt-0.5" />
-            Reach Grower Lv 2 to raid. Success steals the full stash, cash, and one gear line (they keep their upgrade
+            Reach Grower Lv {raidMeta.required_grower_level || 5} to raid or be raided. Success steals the full stash,
+            cash, and one gear line (they keep their upgrade
             level — rebuy in Equipment to restore it; you equip the stolen piece later if your house is too small).
             Cooldown is {raidMeta.raid_cooldown_hours || 3}h per target — you can still raid other growers. After a heat
             bust, growers are raid-protected for {farm.bust_raid_immune_hours || 6}h. Target security caps your odds —
@@ -1718,7 +1723,9 @@ export default function WeedEmpire() {
           </button>
           <div className="space-y-2">
             {!raidUnlocked ? (
-              <p className="text-sm text-amber-300">Reach Grower Level 2 to unlock raids.</p>
+              <p className="text-sm text-amber-300">
+                Reach Grower Level {raidMeta.required_grower_level || 5} to unlock raids.
+              </p>
             ) : targets.length === 0 ? (
               <p className="text-sm text-muted-foreground">No raidable growers right now.</p>
             ) : (

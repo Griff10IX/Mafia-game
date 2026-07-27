@@ -73,8 +73,8 @@ FEED_INTERVAL_HOURS = 2.5
 AUTO_WATER_IRRIGATION_LEVEL = 5
 AUTO_FEED_IRRIGATION_LEVEL = 8
 MAX_HEAT = 100.0
-MIN_RAID_GROWER_LEVEL = 2
-MIN_RAID_TARGET_GROWER_LEVEL = 2
+MIN_RAID_GROWER_LEVEL = 5  # cannot raid until Grower Lv 5
+MIN_RAID_TARGET_GROWER_LEVEL = 5  # cannot be raided until Grower Lv 5
 RAID_PER_TARGET_COOLDOWN_HOURS = 3
 RAID_GLOBAL_COOLDOWN_HOURS = RAID_PER_TARGET_COOLDOWN_HOURS  # legacy alias
 RAID_CASH_STEAL_CAP = 1_000_000
@@ -2852,6 +2852,7 @@ async def weed_raid_targets(current_user: dict = Depends(_gate)):
             "raid_cooldown_hours": RAID_PER_TARGET_COOLDOWN_HOURS,
             "raid_cooldown_scope": "per_target",
             "required_grower_level": MIN_RAID_GROWER_LEVEL,
+            "required_target_grower_level": MIN_RAID_TARGET_GROWER_LEVEL,
         }
     cursor = db.weed_farms.find(
         {
@@ -2925,6 +2926,7 @@ async def weed_raid_targets(current_user: dict = Depends(_gate)):
         "raid_cooldown_scope": "per_target",
         "bust_raid_immune_hours": BUST_RAID_IMMUNE_HOURS,
         "required_grower_level": MIN_RAID_GROWER_LEVEL,
+        "required_target_grower_level": MIN_RAID_TARGET_GROWER_LEVEL,
     }
 
 
@@ -2939,7 +2941,7 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
     now = _utcnow()
     atk = await _get_or_create_farm(attacker_id)
     if int(atk.get("grower_level") or 1) < MIN_RAID_GROWER_LEVEL:
-        raise HTTPException(status_code=400, detail="Reach Grower Level 2 before raiding other growers")
+        raise HTTPException(status_code=400, detail="Reach Grower Level 5 before raiding other growers")
     target_ready_at = _raid_available_at_for_target(atk, defender_id, now)
     if target_ready_at is not None:
         raise HTTPException(
@@ -2951,7 +2953,7 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
     if not dfn:
         raise HTTPException(status_code=404, detail="Target has no weed business")
     if int(dfn.get("grower_level") or 1) < MIN_RAID_TARGET_GROWER_LEVEL:
-        raise HTTPException(status_code=400, detail="Growers below level 2 are protected from raids")
+        raise HTTPException(status_code=400, detail="Growers below level 5 are protected from raids")
     immune_until = _defender_raid_immune_until(dfn, now)
     if immune_until is not None:
         raise HTTPException(
