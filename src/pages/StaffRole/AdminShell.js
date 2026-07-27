@@ -23,6 +23,7 @@ import AdminEntGames from './AdminEntGames';
 import AdminCrewRecovery from './AdminCrewRecovery';
 import AdminRacketProgress from './AdminRacketProgress';
 import AdminDistilleryProgress from './AdminDistilleryProgress';
+import AdminWeedSellAudit from './AdminWeedSellAudit';
 import AdminPropertyTransfer from './AdminPropertyTransfer';
 import AdminWitnessStatements from './AdminWitnessStatements';
 import AdminLocked from './AdminLocked';
@@ -53,6 +54,7 @@ const STANDALONE_ADMIN_SECTIONS = new Set([
   'crew-recovery',
   'racket-progress',
   'distillery-progress',
+  'weed-sell-audit',
   'property-transfer',
   'witness-statements',
   'locked',
@@ -1027,6 +1029,7 @@ export default function AdminShell() {
       {hubSection === 'crew-recovery' && <AdminCrewRecovery />}
       {hubSection === 'racket-progress' && <AdminRacketProgress />}
       {hubSection === 'distillery-progress' && <AdminDistilleryProgress />}
+      {hubSection === 'weed-sell-audit' && <AdminWeedSellAudit />}
       {hubSection === 'property-transfer' && <AdminPropertyTransfer />}
       {hubSection === 'witness-statements' && <AdminWitnessStatements />}
       {hubSection === 'locked' && <AdminLocked />}

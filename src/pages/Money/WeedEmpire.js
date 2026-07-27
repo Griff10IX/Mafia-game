@@ -104,9 +104,24 @@ export default function WeedEmpire() {
   const [fxNonce, setFxNonce] = useState(0);
   const [targets, setTargets] = useState([]);
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  const farmUpdatedAtRef = useRef("");
 
-  const applyFarm = useCallback((f) => {
-    setFarm(f);
+  const applyFarm = useCallback((f, { force = false } = {}) => {
+    if (!f) return;
+    const nextAt = String(f.updated_at || "");
+    const prevAt = farmUpdatedAtRef.current;
+    // Ignore stale /status polls that would restore stash after a sell.
+    // Always apply forced updates from sell / other mutations.
+    if (!force && prevAt && nextAt && nextAt < prevAt) {
+      return;
+    }
+    if (nextAt) farmUpdatedAtRef.current = nextAt;
+    setFarm({
+      ...f,
+      stash: { ...(f.stash || {}) },
+      curing: [...(f.curing || [])],
+    });
     if (f?.plots?.length) {
       setSelectedPlotId((prev) => {
         if (prev && f.plots.some((p) => p.id === prev)) return prev;
@@ -119,6 +134,21 @@ export default function WeedEmpire() {
       return stashKeys[0] || "";
     });
   }, []);
+
+  const run = async (fn) => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    try {
+      await fn();
+    } catch (e) {
+      const detail = e?.response?.data?.detail || e?.message || "Action failed";
+      toast.error(typeof detail === "string" ? detail : "Action failed");
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
+  };
 
   const load = useCallback(async () => {
     try {
@@ -236,19 +266,6 @@ export default function WeedEmpire() {
     };
   }, [farm, sellAmount, sellStrain, sellUnit]);
 
-  const run = async (fn) => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      await fn();
-    } catch (e) {
-      const detail = e?.response?.data?.detail || e?.message || "Action failed";
-      toast.error(typeof detail === "string" ? detail : "Action failed");
-    } finally {
-      setBusy(false);
-    }
-  };
-
   const plant = ({ scavengedSeed = false } = {}) =>
     run(async () => {
       const { data } = await api.post("/weed-empire/plant", {
@@ -257,7 +274,7 @@ export default function WeedEmpire() {
         soil_type: scavengedSeed ? "soil_conventional" : soilType,
         ...(scavengedSeed ? actionCodeRef.current : {}),
       });
-      applyFarm(data.farm);
+      applyFarm(data.farm, { force: true });
       toast.success(data.scavenged_seed ? "Found some rough seeds — Ditch Weed planted" : "Planted");
       setFx("plant");
       setFxNonce((n) => n + 1);
@@ -272,7 +289,7 @@ export default function WeedEmpire() {
   const water = () =>
     run(async () => {
       const { data } = await api.post("/weed-empire/water", { plot_id: selectedPlotId });
-      applyFarm(data.farm);
+      applyFarm(data.farm, { force: true });
       triggerFx("water");
       toast.success("Watered");
     });
@@ -280,7 +297,7 @@ export default function WeedEmpire() {
   const feed = () =>
     run(async () => {
       const { data } = await api.post("/weed-empire/feed", { plot_id: selectedPlotId });
-      applyFarm(data.farm);
+      applyFarm(data.farm, { force: true });
       triggerFx("feed");
       toast.success("Fed");
     });
@@ -288,7 +305,7 @@ export default function WeedEmpire() {
   const cleanRoom = () =>
     run(async () => {
       const { data } = await api.post("/weed-empire/clean-room");
-      applyFarm(data.farm);
+      applyFarm(data.farm, { force: true });
       triggerFx("clean");
       toast.success(`Grow room cleaned for ${money(data.cost)}`);
     });
@@ -296,7 +313,7 @@ export default function WeedEmpire() {
   const treatMites = () =>
     run(async () => {
       const { data } = await api.post("/weed-empire/treat-mites", { plot_id: selectedPlotId });
-      applyFarm(data.farm);
+      applyFarm(data.farm, { force: true });
       triggerFx("ipm");
       toast.success(
         `Spider mites treated (${Number(data.treatment_effect_pct || 0).toFixed(0)}% effective) for ${money(data.cost)}`
@@ -309,7 +326,7 @@ export default function WeedEmpire() {
         plot_id: selectedPlotId,
         ...actionCodeRef.current,
       });
-      applyFarm(data.farm);
+      applyFarm(data.farm, { force: true });
       triggerFx("harvest_trim");
       toast.success(`Harvested ${data.grams}g — curing`);
       if (data.leveled_up) toast.success(`Grower level up! Lv ${data.grower_level}`);
@@ -318,7 +335,7 @@ export default function WeedEmpire() {
   const upgradeEquip = (categoryId) =>
     run(async () => {
       const { data } = await api.post("/weed-empire/upgrade-equipment", { category_id: categoryId });
-      applyFarm(data.farm);
+      applyFarm(data.farm, { force: true });
       const y = data.yield_hint;
       toast.success(
         y
@@ -330,7 +347,7 @@ export default function WeedEmpire() {
   const buySoil = (type) =>
     run(async () => {
       const { data } = await api.post("/weed-empire/buy-soil", { soil_type: type, bags: 1 });
-      applyFarm(data.farm);
+      applyFarm(data.farm, { force: true });
       toast.success(`Bought ${type.replace(/_/g, " ")} (+${data.added} charges)`);
     });
 
@@ -352,7 +369,12 @@ export default function WeedEmpire() {
         unit: sellUnit,
         ...actionCodeRef.current,
       });
-      applyFarm(data.farm);
+      applyFarm(data.farm, { force: true });
+      const left = Number(data.farm?.stash?.[sid] || 0);
+      if (left <= 0) setSellAmount(0);
+      else if (Number(sellAmount) > left) {
+        setSellAmount(sellUnit === "g" ? Math.floor(left * 10) / 10 : Number((left / (SELL_UNIT_GRAMS[sellUnit] || 1)).toFixed(2)));
+      }
       toast.success(`Sold for ${money(data.payout)} @ ${money(data.effective_price_per_oz)}/oz`);
       if (data.leveled_up) toast.success(`Grower level up! Lv ${data.grower_level}`);
     });
@@ -360,7 +382,7 @@ export default function WeedEmpire() {
   const upgradeHouse = (tier) =>
     run(async () => {
       const { data } = await api.post("/weed-empire/upgrade-house", { target_tier: tier });
-      applyFarm(data.farm);
+      applyFarm(data.farm, { force: true });
       toast.success("House upgraded");
     });
 
@@ -377,7 +399,7 @@ export default function WeedEmpire() {
         sabotage,
         ...actionCodeRef.current,
       });
-      applyFarm(data.farm);
+      applyFarm(data.farm, { force: true });
       if (data.success) {
         const eq = data.stolen?.equipment?.name;
         toast.success(
@@ -392,14 +414,14 @@ export default function WeedEmpire() {
   const coolOff = () =>
     run(async () => {
       const { data } = await api.post("/weed-empire/cool-off");
-      applyFarm(data.farm);
+      applyFarm(data.farm, { force: true });
       toast.success("Heat cooled");
     });
 
   const dealerSell = () =>
     run(async () => {
       const { data } = await api.post("/weed-empire/dealers/sell", actionCodeRef.current);
-      applyFarm(data.farm);
+      applyFarm(data.farm, { force: true });
       toast.success(`Dealers moved product for ${money(data.payout)}`);
     });
 

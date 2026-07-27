@@ -253,6 +253,7 @@ function DistilleryPreviewPanel({ preview, onApply, onDismiss, applying }) {
   const equipmentChanges = preview.equipment_changes || [];
   const isNewRacket = provision?.would_create_business || provision?.created_business;
   const isNewDistillery = provision?.would_add_distillery || provision?.added_distillery;
+  const isConvert = provision?.would_convert_racket || provision?.converted_racket;
 
   const summaryRows = [
     { label: 'Progress %', before: before.progress_pct, after: after.progress_pct, fmt: (x) => (x != null ? `${x}%` : '—') },
@@ -303,11 +304,18 @@ function DistilleryPreviewPanel({ preview, onApply, onDismiss, applying }) {
       {provision?.message && (
         <p className="text-[9px] text-amber-200/90 leading-snug">{provision.message}</p>
       )}
-      {(isNewRacket || isNewDistillery) && (
+      {(isNewRacket || isNewDistillery || isConvert) && (
         <p className="text-[9px] text-emerald-300/90 leading-snug">
-          {isNewRacket && 'Player will receive a new booze-making racket (no cost). '}
-          {isNewDistillery && 'Distillery doc will be created. '}
-          IBM mission ladder is unchanged.
+          {isConvert && (
+            <>
+              Existing <span className="font-bold">{provision?.previous_type_id || 'racket'}</span> will become booze-making
+              (vault/level/guards kept).{' '}
+            </>
+          )}
+          {isNewRacket && !isConvert && 'Player will receive a new booze-making racket (no cost). '}
+          {isNewDistillery && !isConvert && 'Distillery doc will be created. '}
+          {isConvert && 'Distillery will be attached. '}
+          IBM mission ladder is unchanged. Preset includes equipment + special upgrades.
         </p>
       )}
 
@@ -380,13 +388,35 @@ function DistilleryPreviewPanel({ preview, onApply, onDismiss, applying }) {
   );
 }
 
-function ProvisionBoozePanel({ distilleryPct, setDistilleryPct, distilleryLoading, onPreview, onApply, distilleryPreview, onDismiss }) {
+function ProvisionBoozePanel({
+  distilleryPct,
+  setDistilleryPct,
+  distilleryLoading,
+  onPreview,
+  onApply,
+  distilleryPreview,
+  onDismiss,
+  convertExisting = false,
+  existingTypeId = '',
+}) {
   return (
     <div className="rounded border border-violet-500/35 bg-violet-950/25 p-2 space-y-2">
-      <p className="text-[9px] font-heading font-bold uppercase text-violet-200">Create booze racket + set distillery</p>
+      <p className="text-[9px] font-heading font-bold uppercase text-violet-200">
+        {convertExisting ? 'Convert to booze + set distillery' : 'Create booze racket + set distillery'}
+      </p>
       <p className="text-[9px] text-mutedForeground leading-snug">
-        No kill snapshot needed. Creates a minimal booze-making racket with distillery (free to the player), then sets progress.
-        Racket mission ladder is unchanged — use Racket progress for that.
+        {convertExisting ? (
+          <>
+            Converts their current <span className="text-amber-200 font-semibold">{existingTypeId || 'non-booze'}</span> racket
+            into booze-making (keeps vault, level, guards, security), adds a distillery, then applies the preset % —
+            including equipment and special upgrades. Racket mission ladder is unchanged.
+          </>
+        ) : (
+          <>
+            No kill snapshot needed. Creates a minimal booze-making racket with distillery (free to the player), then sets progress
+            (equipment + specials). Racket mission ladder is unchanged — use Racket progress for that.
+          </>
+        )}
       </p>
       <div className="flex flex-wrap gap-1">
         {[1, 25, 50, 75, 100].map((p) => (
@@ -634,7 +664,10 @@ export default function AdminDistilleryProgress({ embedded = false, initialUsern
       return;
     }
     const needsProvision =
-      data && (!data.has_business || (data.has_business && data.business_type_id === 'booze_making' && !data.distillery));
+      data &&
+      (!data.has_business ||
+        data.business_type_id !== 'booze_making' ||
+        (data.business_type_id === 'booze_making' && !data.distillery));
     const ensure = ensureBooze || needsProvision;
     if (!ensure && (!data?.has_business || data?.business_type_id !== 'booze_making')) {
       toast.error('Player needs a booze-making racket with a distillery');
@@ -662,20 +695,31 @@ export default function AdminDistilleryProgress({ embedded = false, initialUsern
     const un = (data?.username || username).trim();
     const pct = distilleryPreview.progress_percent;
     const prov = distilleryPreview.provision;
-    const createNote = prov?.would_create_business || prov?.created_business
-      ? ' This will also create a booze racket.'
-      : prov?.would_add_distillery || prov?.added_distillery
-        ? ' This will also add a distillery doc.'
-        : '';
+    const createNote = prov?.would_convert_racket || prov?.converted_racket
+      ? ` This will convert their ${prov?.previous_type_id || 'current'} racket to booze-making (vault/level/guards kept).`
+      : prov?.would_create_business || prov?.created_business
+        ? ' This will also create a booze racket.'
+        : prov?.would_add_distillery || prov?.added_distillery
+          ? ' This will also add a distillery doc.'
+          : '';
     if (!window.confirm(`Set ${un}'s distillery to ~${pct}%?${createNote} Equipment and special upgrades only — racket ladder unchanged.`)) return;
     setDistilleryLoading(true);
     try {
       const needsProvision =
-        data && (!data.has_business || (data.has_business && data.business_type_id === 'booze_making' && !data.distillery));
+        data &&
+        (!data.has_business ||
+          data.business_type_id !== 'booze_making' ||
+          (data.business_type_id === 'booze_making' && !data.distillery));
       const res = await api.post(`/admin/illegal-business/distillery-progress/${encodeURIComponent(un)}`, {
         progress_percent: pct,
         dry_run: false,
-        ensure_booze_racket: !!needsProvision || !!(prov?.would_create_business || prov?.would_add_distillery),
+        ensure_booze_racket:
+          !!needsProvision ||
+          !!(
+            prov?.would_create_business ||
+            prov?.would_add_distillery ||
+            prov?.would_convert_racket
+          ),
       });
       setData(res.data || null);
       setDistilleryPreview(null);
@@ -813,10 +857,23 @@ export default function AdminDistilleryProgress({ embedded = false, initialUsern
               </>
             )}
             {data.has_business && data.business_type_id !== 'booze_making' && (
-              <p className="text-amber-300/90 text-[9px]">
-                Racket type is <span className="font-bold">{data.business_type_id || 'unknown'}</span> — distillery only applies to{' '}
-                <span className="font-bold">booze_making</span> rackets.
-              </p>
+              <>
+                <p className="text-amber-300/90 text-[9px]">
+                  Racket type is <span className="font-bold">{data.business_type_id || 'unknown'}</span> — convert below to give a
+                  booze-making racket + distillery preset (vault/level/guards kept).
+                </p>
+                <ProvisionBoozePanel
+                  convertExisting
+                  existingTypeId={data.business_type_id}
+                  distilleryPct={distilleryPct}
+                  setDistilleryPct={setDistilleryPct}
+                  distilleryLoading={distilleryLoading}
+                  onPreview={(p) => previewDistillery(p, { ensureBooze: true })}
+                  onApply={applyDistillery}
+                  distilleryPreview={distilleryPreview}
+                  onDismiss={() => setDistilleryPreview(null)}
+                />
+              </>
             )}
             {data.has_business && data.business_type_id === 'booze_making' && !dist && (
               <ProvisionBoozePanel

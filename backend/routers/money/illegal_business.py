@@ -4212,17 +4212,30 @@ def _distillery_preset_for_percent(distillery: Optional[dict], progress_percent:
     for eq in DISTILLERY_EQUIPMENT_ORDER:
         equipment[eq] = max(int(equipment.get(eq) or 0), target_lvl)
     d["equipment"] = equipment
-    d["worker_cap"] = min(
+    # Unlock specials toward target % (100% = all tracks max tier).
+    target_special_tier = int((DISTILLERY_SPECIAL_PER_TRACK * pct + 99) // 100)  # ceil
+    target_special_tier = int(_clamp(target_special_tier, 0, DISTILLERY_SPECIAL_PER_TRACK))
+    specials = dict(d.get("special_upgrades") or {})
+    for track in DISTILLERY_SPECIAL_TRACKS:
+        for t in range(1, target_special_tier + 1):
+            specials[f"{track}_{t:02d}"] = True
+    d["special_upgrades"] = specials
+    worker_cap = min(
         DISTILLERY_MAX_WORKER_CAP,
         DISTILLERY_BASE_WORKER_CAP + int((DISTILLERY_MAX_WORKER_CAP - DISTILLERY_BASE_WORKER_CAP) * pct / 100),
     )
+    # Prefer equipment-derived capacity when higher (matches live distillery rules).
+    worker_cap = max(worker_cap, _distillery_worker_capacity(equipment))
+    d["worker_capacity"] = worker_cap
     workers = dict(d.get("workers") or {})
-    per_role = max(1, int(d["worker_cap"] * pct / 100) // len(DISTILLERY_WORKER_ROLES))
+    per_role = max(1, int(worker_cap * pct / 100) // max(1, len(DISTILLERY_WORKER_ROLES)))
     for role in DISTILLERY_WORKER_ROLES:
         workers[role] = max(int(workers.get(role) or 0), per_role)
     d["workers"] = workers
     d["maintenance"] = max(float(d.get("maintenance") or 0), 70.0)
     d["heat"] = min(float(d.get("heat") or 0), 20.0)
+    progression = _distillery_progression_state(d)
+    d["mastery_tier"] = int(progression["total_steps"] // 30)
     return d
 
 
@@ -4268,7 +4281,11 @@ def _admin_distillery_detail(distillery: Optional[dict]) -> Optional[Dict[str, A
         ),
         "workers": worker_levels,
         "workers_total": sum(worker_levels.values()),
-        "worker_cap": int(distillery.get("worker_cap") or DISTILLERY_BASE_WORKER_CAP),
+        "worker_cap": int(
+            distillery.get("worker_capacity")
+            or distillery.get("worker_cap")
+            or DISTILLERY_BASE_WORKER_CAP
+        ),
         "maintenance": round(float(distillery.get("maintenance") or 0), 1),
         "heat": round(float(distillery.get("heat") or 0), 1),
         "auto_sell_enabled": bool(auto_sell.get("enabled")),
@@ -4516,12 +4533,37 @@ async def admin_apply_illegal_business_progress_preset(
     return out
 
 
+def _admin_business_as_booze_with_distillery(business: dict, now: datetime) -> Dict[str, Any]:
+    """Convert an existing racket doc in-memory to booze_making + default distillery.
+
+    Preserves vault, level, guards, security, city, and other shared fields.
+    """
+    preview = copy.deepcopy(business)
+    preview["type_id"] = "booze_making"
+    preview["name"] = "Booze making"
+    if preview.get("booze_per_hour") is None:
+        preview["booze_per_hour"] = BOOZE_PER_HOUR_BASE
+    if preview.get("booze_cap_hours") is None:
+        preview["booze_cap_hours"] = BOOZE_CAP_HOURS_BASE
+    if not preview.get("last_collected_booze_at"):
+        preview["last_collected_booze_at"] = now.isoformat()
+    if not isinstance(preview.get("distillery"), dict):
+        preview["distillery"] = _distillery_default(now)
+    return preview
+
+
 async def admin_ensure_booze_illegal_business(
     user_id: str,
     *,
     dry_run: bool = False,
+    convert_existing_racket: bool = False,
 ) -> Dict[str, Any]:
-    """Staff: create booze-making racket + default distillery if missing (no cost to player)."""
+    """Staff: create booze-making racket + default distillery if missing (no cost to player).
+
+    When ``convert_existing_racket`` is True and the player already has a non-booze
+    racket (e.g. Speakeasy), convert it to booze_making and attach a distillery,
+    keeping vault / level / guards / security.
+    """
     user = await db.users.find_one(
         {"id": user_id},
         {"_id": 0, "id": 1, "username": 1, "current_state": 1, "is_dead": 1},
@@ -4538,17 +4580,53 @@ async def admin_ensure_booze_illegal_business(
         "user_id": user_id,
         "created_business": False,
         "added_distillery": False,
+        "converted_racket": False,
         "dry_run": dry_run,
     }
 
     if business and business.get("type_id") != "booze_making":
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                f"Player has a {business.get('type_id') or 'non-booze'} racket — "
-                "distillery only applies to booze_making"
+        old_type = business.get("type_id") or "unknown"
+        if not convert_existing_racket:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Player has a {old_type} racket — "
+                    "distillery only applies to booze_making (enable convert to switch)"
+                ),
+            )
+        preview = _admin_business_as_booze_with_distillery(business, now)
+        set_fields = {
+            "type_id": "booze_making",
+            "name": "Booze making",
+            "booze_per_hour": preview["booze_per_hour"],
+            "booze_cap_hours": preview["booze_cap_hours"],
+            "last_collected_booze_at": preview["last_collected_booze_at"],
+            "distillery": preview["distillery"],
+        }
+        if dry_run:
+            return {
+                **base,
+                "would_convert_racket": True,
+                "would_add_distillery": not isinstance(business.get("distillery"), dict),
+                "previous_type_id": old_type,
+                "business_preview": preview,
+                "message": (
+                    f"Would convert {old_type} → booze_making + distillery for "
+                    f"{user.get('username') or user_id} (vault/level/guards kept)"
+                ),
+            }
+        await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": set_fields})
+        return {
+            **base,
+            "converted_racket": True,
+            "added_distillery": True,
+            "previous_type_id": old_type,
+            "business_id": business.get("id"),
+            "message": (
+                f"Converted {old_type} → booze_making + distillery for "
+                f"{user.get('username') or user_id}"
             ),
-        )
+        }
 
     if business and business.get("distillery"):
         return {**base, "message": "Booze racket and distillery already exist"}
@@ -4631,28 +4709,37 @@ async def admin_apply_distillery_progress(
 
     provision = None
     business_preview = None
-    business_before_doc = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
+    original_business = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
+    business_before_doc = original_business
     if ensure_booze_racket:
-        provision = await admin_ensure_booze_illegal_business(user_id, dry_run=dry_run)
+        provision = await admin_ensure_booze_illegal_business(
+            user_id,
+            dry_run=dry_run,
+            convert_existing_racket=True,
+        )
         business_preview = provision.get("business_preview")
         if not dry_run:
             business_before_doc = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
 
     business = business_before_doc
+    if ensure_booze_racket and dry_run and business_preview:
+        business = business_preview
     if not business:
-        if ensure_booze_racket and dry_run and business_preview:
-            business = business_preview
-        else:
-            raise HTTPException(status_code=400, detail="No illegal business on this account")
+        raise HTTPException(status_code=400, detail="No illegal business on this account")
     if business.get("type_id") != "booze_making":
         raise HTTPException(status_code=400, detail="Distillery progress only applies to booze-making rackets")
     distillery = business.get("distillery")
     if not distillery:
-        if ensure_booze_racket and dry_run and business_preview:
-            distillery = business_preview.get("distillery")
-        if not distillery:
-            raise HTTPException(status_code=400, detail="No distillery on this business")
-    distillery_before_doc = copy.deepcopy(distillery)
+        raise HTTPException(status_code=400, detail="No distillery on this business")
+    # Before snapshot: empty progression when converting from a non-booze racket or creating new.
+    if (
+        original_business
+        and original_business.get("type_id") == "booze_making"
+        and isinstance(original_business.get("distillery"), dict)
+    ):
+        distillery_before_doc = copy.deepcopy(original_business["distillery"])
+    else:
+        distillery_before_doc = _distillery_default(datetime.now(timezone.utc))
     before_prog = _distillery_progression_state(distillery_before_doc)
     before_detail = _admin_distillery_detail(distillery_before_doc)
     updated = _distillery_preset_for_percent(copy.deepcopy(distillery), pct)
@@ -4665,7 +4752,7 @@ async def admin_apply_distillery_progress(
         "before": before_prog,
         "after": after_prog,
         "racket": {
-            "before": _admin_racket_snapshot(business_before_doc),
+            "before": _admin_racket_snapshot(original_business),
             "after": _admin_racket_snapshot(business_after_doc),
         },
         "distillery_detail": {
@@ -4678,8 +4765,11 @@ async def admin_apply_distillery_progress(
                 "message": provision.get("message"),
                 "would_create_business": provision.get("would_create_business"),
                 "would_add_distillery": provision.get("would_add_distillery"),
+                "would_convert_racket": provision.get("would_convert_racket"),
                 "created_business": provision.get("created_business"),
                 "added_distillery": provision.get("added_distillery"),
+                "converted_racket": provision.get("converted_racket"),
+                "previous_type_id": provision.get("previous_type_id"),
             }
             if provision
             else None
@@ -4840,28 +4930,37 @@ async def admin_apply_distillery_upgrades(
         raise HTTPException(status_code=404, detail="User not found")
 
     provision = None
-    business_before_doc = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
+    original_business = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
+    business_before_doc = original_business
     if ensure_booze_racket:
-        provision = await admin_ensure_booze_illegal_business(user_id, dry_run=dry_run)
+        provision = await admin_ensure_booze_illegal_business(
+            user_id,
+            dry_run=dry_run,
+            convert_existing_racket=True,
+        )
         if not dry_run:
             business_before_doc = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
 
     business = business_before_doc
+    if ensure_booze_racket and dry_run and provision and provision.get("business_preview"):
+        business = provision["business_preview"]
     if not business:
-        if ensure_booze_racket and dry_run and provision and provision.get("business_preview"):
-            business = provision["business_preview"]
-        else:
-            raise HTTPException(status_code=400, detail="No illegal business on this account")
+        raise HTTPException(status_code=400, detail="No illegal business on this account")
     if business.get("type_id") != "booze_making":
         raise HTTPException(status_code=400, detail="Distillery upgrades only apply to booze-making rackets")
     distillery = business.get("distillery")
     if not distillery:
-        if ensure_booze_racket and dry_run and provision and provision.get("business_preview"):
-            distillery = provision["business_preview"].get("distillery")
-        if not distillery:
-            raise HTTPException(status_code=400, detail="No distillery on this business")
+        raise HTTPException(status_code=400, detail="No distillery on this business")
 
-    before_detail = _admin_distillery_detail(copy.deepcopy(distillery))
+    if (
+        original_business
+        and original_business.get("type_id") == "booze_making"
+        and isinstance(original_business.get("distillery"), dict)
+    ):
+        before_dist = copy.deepcopy(original_business["distillery"])
+    else:
+        before_dist = _distillery_default(datetime.now(timezone.utc))
+    before_detail = _admin_distillery_detail(before_dist)
     updated, change_lines = _admin_apply_distillery_upgrades_to_doc(
         distillery,
         equipment_add=equipment_add,
@@ -4887,6 +4986,9 @@ async def admin_apply_distillery_upgrades(
                 "message": provision.get("message"),
                 "would_create_business": provision.get("would_create_business"),
                 "would_add_distillery": provision.get("would_add_distillery"),
+                "would_convert_racket": provision.get("would_convert_racket"),
+                "converted_racket": provision.get("converted_racket"),
+                "previous_type_id": provision.get("previous_type_id"),
             }
             if provision
             else None

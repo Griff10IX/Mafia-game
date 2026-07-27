@@ -1,6 +1,7 @@
 """Weed Business Empire — standalone grow / sell / raid loop (staff-preview gated)."""
 from __future__ import annotations
 
+import asyncio
 import logging
 import math
 import secrets
@@ -11,12 +12,13 @@ import time
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
-from server import SECRET_KEY, db, get_current_user, send_notification
+from server import SECRET_KEY, _is_admin, db, get_current_user, log_activity, send_notification
 from utils.store_item_flags import require_store_item_allowed
 from utils.weed_empire_catalog import (
+    BASE_STREET_PRICE_PER_OZ,
     DAILY_SELL_CAP_USD,
     EQUIPMENT_BY_ID,
     EQUIPMENT_CATEGORIES,
@@ -52,7 +54,14 @@ from utils.weed_empire_exclusive_strains import (
 logger = logging.getLogger(__name__)
 _rng = secrets.SystemRandom()
 
+# Serialize farm writes per user within a process (sell/status race + click spam).
+_weed_farm_locks: Dict[str, asyncio.Lock] = {}
+_weed_farm_locks_guard = asyncio.Lock()
+
 FEATURE_ID = "weed_empire"
+# Audit / exploit heuristics (generous — flags spam-sold cash, not normal play).
+_WEED_AUDIT_MAX_YIELD_G = max(float(s.get("yield_g_max") or 30) for s in STRAINS) * 4.0
+_WEED_AUDIT_MAX_USD_PER_HARVEST = int((_WEED_AUDIT_MAX_YIELD_G / 28.0) * BASE_STREET_PRICE_PER_OZ * 3.0)
 WATER_INTERVAL_HOURS = 1.5
 FEED_INTERVAL_HOURS = 2.5
 # Irrigation equipment unlocks automation (hand → drip → auto).
@@ -592,7 +601,7 @@ def _sync_plot_count(farm: dict) -> dict:
     return farm
 
 
-def _public_farm(farm: dict, *, username: str = "") -> Dict[str, Any]:
+def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = True) -> Dict[str, Any]:
     now = _utcnow()
     farm = _ensure_daily_cap(dict(farm))
     farm = _sync_plot_count(farm)
@@ -601,7 +610,8 @@ def _public_farm(farm: dict, *, username: str = "") -> Dict[str, Any]:
     plots = [_tick_plot(dict(p), farm, stats, now) for p in (farm.get("plots") or [])]
     # Persist auto-tend timestamps back onto farm plots
     farm["plots"] = plots
-    farm = _tick_curing(farm, now)
+    if apply_curing_tick:
+        farm = _tick_curing(farm, now)
     light = active_light_class(_equip_levels(farm))
     house = _house(farm)
     sold = int(farm.get("daily_sold_usd") or 0)
@@ -649,8 +659,9 @@ def _public_farm(farm: dict, *, username: str = "") -> Dict[str, Any]:
         "daily_sold_cap": DAILY_SELL_CAP_USD,
         "daily_sold_remaining": max(0, DAILY_SELL_CAP_USD - sold),
         "lifetime_sold_usd": int(farm.get("lifetime_sold_usd") or 0),
-        "stash": farm.get("stash") or {},
-        "curing": farm.get("curing") or [],
+        "stash": dict(farm.get("stash") or {}),
+        "curing": list(farm.get("curing") or []),
+        "updated_at": farm.get("updated_at"),
         "street_price_per_oz": street_prices,
         "heat": round(float(farm.get("heat") or 0), 1),
         "cleanliness_pct": round(float(farm.get("cleanliness_pct", 100.0)), 2),
@@ -692,12 +703,36 @@ def _public_farm(farm: dict, *, username: str = "") -> Dict[str, Any]:
     }
 
 
-async def _save_farm(farm: dict, update: Dict[str, Any]) -> Dict[str, Any]:
+async def _weed_farm_lock(user_id: str) -> asyncio.Lock:
+    uid = str(user_id or "")
+    async with _weed_farm_locks_guard:
+        lock = _weed_farm_locks.get(uid)
+        if lock is None:
+            lock = asyncio.Lock()
+            _weed_farm_locks[uid] = lock
+        return lock
+
+
+async def _save_farm(
+    farm: dict,
+    update: Dict[str, Any],
+    *,
+    expected_updated_at: Optional[str] = None,
+) -> bool:
+    """Persist farm fields. When ``expected_updated_at`` is set, refuse stale overwrites.
+
+    Returns False if optimistic concurrency check failed (another writer won).
+    """
     update = dict(update)
     update["updated_at"] = _iso()
-    await db.weed_farms.update_one({"user_id": farm["user_id"]}, {"$set": update})
+    filt: Dict[str, Any] = {"user_id": farm["user_id"]}
+    if expected_updated_at is not None:
+        filt["updated_at"] = expected_updated_at
+    res = await db.weed_farms.update_one(filt, {"$set": update})
+    if expected_updated_at is not None and int(res.matched_count or 0) == 0:
+        return False
     farm.update(update)
-    return farm
+    return True
 
 
 def _spend(farm: dict, cost: int) -> None:
@@ -850,49 +885,57 @@ async def weed_ready_count(current_user: dict = Depends(_gate)):
 
 @router.get("/status")
 async def weed_status(current_user: dict = Depends(_gate)):
-    farm = await _get_or_create_farm(current_user["id"])
-    daily_exclusive = await maybe_claim_acapulco_gold_daily(
-        db,
-        user_id=current_user["id"],
-        farm=farm,
-        grower_level=int(farm.get("grower_level") or 1),
-        owned_ids=set(farm.get("_exclusive_owned_ids") or []),
-    )
-    # Persist lazy ticks
-    pub = _public_farm(farm, username=current_user.get("username") or "")
-    await _save_farm(
-        farm,
-        {
-            "plots": pub["plots"],
-            "curing": pub["curing"],
-            "stash": pub["stash"],
-            "daily_sold_usd": pub["daily_sold_usd"],
-            "daily_sold_utc_date": farm.get("daily_sold_utc_date") or _utc_date_str(),
-            "heat": pub["heat"],
-            "cleanliness_pct": pub["cleanliness_pct"],
-            "last_cleanliness_tick_at": pub["last_cleanliness_tick_at"],
-            "exclusive_acapulco_gold_claimed_utc": farm.get("exclusive_acapulco_gold_claimed_utc"),
-        },
-    )
-    out = {
-        "farm": pub,
-        "catalog": {
-            "houses": HOUSES,
-            "strains": STRAINS,
-            "equipment_categories": EQUIPMENT_CATEGORIES,
-            "equipment_shop": equipment_shop_entries(),
-            "start_business_cash": START_BUSINESS_CASH,
-            "daily_sell_cap": DAILY_SELL_CAP_USD,
-            "units": {"g": 1, "oz": 28, "lb": 448, "kg": 1000},
-            "cleanliness_safe_pct": CLEANLINESS_SAFE_PCT,
-            "mite_harvest_yield_penalty_cap_pct": MITE_MAX_HARVEST_YIELD_PENALTY_PCT,
-            "exclusive_min_grower_level": EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL,
-        },
-        **_weed_action_code_payload(current_user["id"]),
-    }
-    if daily_exclusive:
-        out["exclusive_daily_cash"] = daily_exclusive
-    return out
+    lock = await _weed_farm_lock(current_user["id"])
+    async with lock:
+        farm = await _get_or_create_farm(current_user["id"])
+        expected_at = farm.get("updated_at")
+        daily_exclusive = await maybe_claim_acapulco_gold_daily(
+            db,
+            user_id=current_user["id"],
+            farm=farm,
+            grower_level=int(farm.get("grower_level") or 1),
+            owned_ids=set(farm.get("_exclusive_owned_ids") or []),
+        )
+        # Persist lazy ticks — never overwrite a concurrent sell/raid write.
+        pub = _public_farm(farm, username=current_user.get("username") or "")
+        saved = await _save_farm(
+            farm,
+            {
+                "plots": pub["plots"],
+                "curing": pub["curing"],
+                "stash": pub["stash"],
+                "daily_sold_usd": pub["daily_sold_usd"],
+                "daily_sold_utc_date": farm.get("daily_sold_utc_date") or _utc_date_str(),
+                "heat": pub["heat"],
+                "cleanliness_pct": pub["cleanliness_pct"],
+                "last_cleanliness_tick_at": pub["last_cleanliness_tick_at"],
+                "exclusive_acapulco_gold_claimed_utc": farm.get("exclusive_acapulco_gold_claimed_utc"),
+            },
+            expected_updated_at=expected_at,
+        )
+        if not saved:
+            # Another writer (usually sell) won — re-read so UI does not restore stash.
+            farm = await _get_or_create_farm(current_user["id"])
+            pub = _public_farm(farm, username=current_user.get("username") or "")
+        out = {
+            "farm": pub,
+            "catalog": {
+                "houses": HOUSES,
+                "strains": STRAINS,
+                "equipment_categories": EQUIPMENT_CATEGORIES,
+                "equipment_shop": equipment_shop_entries(),
+                "start_business_cash": START_BUSINESS_CASH,
+                "daily_sell_cap": DAILY_SELL_CAP_USD,
+                "units": {"g": 1, "oz": 28, "lb": 448, "kg": 1000},
+                "cleanliness_safe_pct": CLEANLINESS_SAFE_PCT,
+                "mite_harvest_yield_penalty_cap_pct": MITE_MAX_HARVEST_YIELD_PENALTY_PCT,
+                "exclusive_min_grower_level": EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL,
+            },
+            **_weed_action_code_payload(current_user["id"]),
+        }
+        if daily_exclusive:
+            out["exclusive_daily_cash"] = daily_exclusive
+        return out
 
 
 @router.get("/catalog")
@@ -1201,101 +1244,154 @@ async def weed_treat_mites(body: PlotActionBody, current_user: dict = Depends(_g
 @router.post("/sell")
 async def weed_sell(body: SellBody, http_request: Request, current_user: dict = Depends(_gate)):
     await _require_weed_action_code(http_request, current_user)
-    farm = await _get_or_create_farm(current_user["id"])
-    farm = _ensure_daily_cap(farm)
-    farm = _tick_curing(farm, _utcnow())
-    strain = STRAIN_BY_ID.get(body.strain_id)
-    if not strain:
-        raise HTTPException(status_code=404, detail="Unknown strain")
-    try:
-        grams = unit_to_grams(body.amount, body.unit)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    stash = dict(farm.get("stash") or {})
-    have = float(stash.get(body.strain_id) or 0)
-    # UI shows/steps 0.1g — clamp when request rounds slightly above true stash.
-    if grams > have + 1e-6:
-        if grams <= round(have, 1) + 1e-9 and grams <= have + 0.05:
-            grams = have
-        else:
-            raise HTTPException(status_code=400, detail="Not enough stash")
+    lock = await _weed_farm_lock(current_user["id"])
+    async with lock:
+        farm = await _get_or_create_farm(current_user["id"])
+        expected_at = farm.get("updated_at")
+        farm = _ensure_daily_cap(farm)
+        farm = _tick_curing(farm, _utcnow())
+        strain = STRAIN_BY_ID.get(body.strain_id)
+        if not strain:
+            raise HTTPException(status_code=404, detail="Unknown strain")
+        try:
+            grams = unit_to_grams(body.amount, body.unit)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        stash = dict(farm.get("stash") or {})
+        have = float(stash.get(body.strain_id) or 0)
+        # UI shows/steps 0.1g — clamp when request rounds slightly above true stash.
+        if grams > have + 1e-6:
+            if grams <= round(have, 1) + 1e-9 and grams <= have + 0.05:
+                grams = have
+            else:
+                raise HTTPException(status_code=400, detail="Not enough stash")
 
-    oz = grams_to_oz(grams)
-    price_per_oz = market_price_per_oz(
-        strain,
-        house_tier=int(farm.get("house_tier") or 0),
-        dealers_level=int(farm.get("dealers_level") or 0),
-        sold_today_usd=float(farm.get("daily_sold_usd") or 0),
-        heat=float(farm.get("heat") or 0),
-    ) * _market_price_bonus(farm)
-    # Bulk sweetener for lb/kg
-    u = body.unit.lower()
-    if u in ("lb", "lbs", "pound", "pounds"):
-        price_per_oz *= 1.03
-    elif u in ("kg", "kilo", "kilos"):
-        price_per_oz *= 1.05
-    payout = int(math.floor(price_per_oz * oz))
-    if payout <= 0:
-        # Tiny dust sales still clear stash for at least $1 if anything is sold.
-        if have > 0 and grams >= have - 1e-6:
-            payout = 1
-            grams = have
-            oz = grams_to_oz(grams)
-        else:
-            raise HTTPException(status_code=400, detail="Sale too small")
-
-    remaining = DAILY_SELL_CAP_USD - int(farm.get("daily_sold_usd") or 0)
-    if payout > remaining:
-        if remaining <= 0:
-            raise HTTPException(status_code=400, detail="Daily cap $100M reached")
-        grams *= remaining / payout
         oz = grams_to_oz(grams)
-        payout = remaining
+        price_per_oz = market_price_per_oz(
+            strain,
+            house_tier=int(farm.get("house_tier") or 0),
+            dealers_level=int(farm.get("dealers_level") or 0),
+            sold_today_usd=float(farm.get("daily_sold_usd") or 0),
+            heat=float(farm.get("heat") or 0),
+        ) * _market_price_bonus(farm)
+        # Bulk sweetener for lb/kg
+        u = body.unit.lower()
+        if u in ("lb", "lbs", "pound", "pounds"):
+            price_per_oz *= 1.03
+        elif u in ("kg", "kilo", "kilos"):
+            price_per_oz *= 1.05
+        payout = int(math.floor(price_per_oz * oz))
+        if payout <= 0:
+            # Tiny dust sales still clear stash for at least $1 if anything is sold.
+            if have > 0 and grams >= have - 1e-6:
+                payout = 1
+                grams = have
+                oz = grams_to_oz(grams)
+            else:
+                raise HTTPException(status_code=400, detail="Sale too small")
 
-    stash[body.strain_id] = round(have - grams, 4)
-    if stash[body.strain_id] < 0.01:
-        stash.pop(body.strain_id, None)
-    farm["stash"] = stash
-    farm["business_cash"] = int(farm.get("business_cash") or 0) + payout
-    farm["daily_sold_usd"] = int(farm.get("daily_sold_usd") or 0) + payout
-    farm["lifetime_sold_usd"] = int(farm.get("lifetime_sold_usd") or 0) + payout
-    missions = dict(farm.get("missions") or {})
-    missions["sell_count"] = int(missions.get("sell_count") or 0) + 1
-    farm["missions"] = missions
-    _add_heat(farm, min(12.0, 1.0 + oz * 0.15))
+        remaining = DAILY_SELL_CAP_USD - int(farm.get("daily_sold_usd") or 0)
+        if payout > remaining:
+            if remaining <= 0:
+                raise HTTPException(status_code=400, detail="Daily cap $100M reached")
+            grams *= remaining / payout
+            oz = grams_to_oz(grams)
+            payout = remaining
 
-    # Dealer passive unlock nudge
-    if missions["sell_count"] >= 5 and int(farm.get("dealers_level") or 0) == 0:
-        farm["dealers_level"] = 1
+        stash[body.strain_id] = round(have - grams, 4)
+        if stash[body.strain_id] < 0.01:
+            stash.pop(body.strain_id, None)
+        farm["stash"] = stash
+        farm["business_cash"] = int(farm.get("business_cash") or 0) + payout
+        farm["daily_sold_usd"] = int(farm.get("daily_sold_usd") or 0) + payout
+        farm["lifetime_sold_usd"] = int(farm.get("lifetime_sold_usd") or 0) + payout
+        missions = dict(farm.get("missions") or {})
+        missions["sell_count"] = int(missions.get("sell_count") or 0) + 1
+        farm["missions"] = missions
+        _add_heat(farm, min(12.0, 1.0 + oz * 0.15))
 
-    xp_amt = max(5, int(8 * oz * rarity_xp_mult(str(strain.get("rarity") or "common"))))
-    xp_fields, leveled, new_lvl = apply_grower_xp(farm, xp_amt)
-    farm.update(xp_fields)
+        # Dealer passive unlock nudge
+        if missions["sell_count"] >= 5 and int(farm.get("dealers_level") or 0) == 0:
+            farm["dealers_level"] = 1
 
-    await _save_farm(
-        farm,
-        {
-            "stash": stash,
-            "business_cash": farm["business_cash"],
-            "daily_sold_usd": farm["daily_sold_usd"],
-            "daily_sold_utc_date": farm["daily_sold_utc_date"],
-            "lifetime_sold_usd": farm["lifetime_sold_usd"],
-            "heat": farm["heat"],
-            "missions": missions,
-            "dealers_level": farm.get("dealers_level"),
-            **xp_fields,
-        },
-    )
-    return {
-        "ok": True,
-        "payout": payout,
-        "effective_price_per_oz": round(price_per_oz, 2),
-        "grams_sold": round(grams, 2),
-        "xp_gained": xp_amt,
-        "leveled_up": leveled,
-        "grower_level": new_lvl,
-        "farm": _public_farm(farm, username=current_user.get("username") or ""),
-    }
+        xp_amt = max(5, int(8 * oz * rarity_xp_mult(str(strain.get("rarity") or "common"))))
+        xp_fields, leveled, new_lvl = apply_grower_xp(farm, xp_amt)
+        farm.update(xp_fields)
+
+        saved = await _save_farm(
+            farm,
+            {
+                "stash": stash,
+                "curing": farm.get("curing") or [],
+                "business_cash": farm["business_cash"],
+                "daily_sold_usd": farm["daily_sold_usd"],
+                "daily_sold_utc_date": farm["daily_sold_utc_date"],
+                "lifetime_sold_usd": farm["lifetime_sold_usd"],
+                "heat": farm["heat"],
+                "missions": missions,
+                "dealers_level": farm.get("dealers_level"),
+                **xp_fields,
+            },
+            expected_updated_at=expected_at,
+        )
+        if not saved:
+            raise HTTPException(status_code=409, detail="Sell conflict — refresh and try again")
+
+        event = {
+            "id": str(uuid.uuid4()),
+            "user_id": current_user["id"],
+            "username": current_user.get("username") or "",
+            "strain_id": body.strain_id,
+            "grams_sold": round(grams, 4),
+            "payout": payout,
+            "xp_gained": xp_amt,
+            "unit": body.unit,
+            "amount": body.amount,
+            "stash_before": round(have, 4),
+            "stash_after": round(float(stash.get(body.strain_id) or 0), 4),
+            "created_at": _utcnow(),
+        }
+        try:
+            await db.weed_sell_events.insert_one(dict(event))
+        except Exception:
+            logger.exception("weed_sell_events insert failed")
+        try:
+            await log_activity(
+                current_user["id"],
+                current_user.get("username") or "?",
+                "weed_empire_sell",
+                {
+                    "strain_id": body.strain_id,
+                    "grams": round(grams, 2),
+                    "payout": payout,
+                    "xp": xp_amt,
+                    "stash_before": round(have, 2),
+                    "stash_after": round(float(stash.get(body.strain_id) or 0), 2),
+                },
+            )
+        except Exception:
+            pass
+
+        # Re-read DB + skip curing re-tick so response stash matches what was saved
+        # (avoids UI showing pre-sell stash until a full refresh).
+        fresh = await db.weed_farms.find_one({"user_id": current_user["id"]}, {"_id": 0})
+        if fresh:
+            await _attach_exclusive_owned(fresh)
+            farm = fresh
+        return {
+            "ok": True,
+            "payout": payout,
+            "effective_price_per_oz": round(price_per_oz, 2),
+            "grams_sold": round(grams, 2),
+            "xp_gained": xp_amt,
+            "leveled_up": leveled,
+            "grower_level": new_lvl,
+            "farm": _public_farm(
+                farm,
+                username=current_user.get("username") or "",
+                apply_curing_tick=False,
+            ),
+        }
 
 
 @router.post("/buy-soil")
@@ -1681,60 +1777,78 @@ async def weed_dealer_sell(
 ):
     """Passive drip sell via dealers (counts toward daily cap)."""
     await _require_weed_action_code(http_request, current_user)
-    farm = await _get_or_create_farm(current_user["id"])
-    lvl = int(farm.get("dealers_level") or 0)
-    if lvl < 1:
-        raise HTTPException(status_code=400, detail="Unlock dealers by selling 5 times")
-    farm = _ensure_daily_cap(farm)
-    stash = dict(farm.get("stash") or {})
-    if not stash:
-        raise HTTPException(status_code=400, detail="No stash for dealers")
-    # Sell up to 10% of each strain
-    total_payout = 0
-    for sid, grams in list(stash.items()):
-        take = round(float(grams) * (0.08 + 0.02 * lvl), 2)
-        if take < 1:
-            continue
-        strain = STRAIN_BY_ID.get(sid)
-        if not strain:
-            continue
-        oz = grams_to_oz(take)
-        price = market_price_per_oz(
-            strain,
-            house_tier=int(farm.get("house_tier") or 0),
-            dealers_level=lvl,
-            sold_today_usd=float(farm.get("daily_sold_usd") or 0) + total_payout,
-            heat=float(farm.get("heat") or 0),
-            dealer_cut=0.9,
-        ) * _market_price_bonus(farm)
-        pay = int(math.floor(price * oz))
-        remaining = DAILY_SELL_CAP_USD - int(farm.get("daily_sold_usd") or 0) - total_payout
-        if remaining <= 0:
-            break
-        if pay > remaining:
-            take *= remaining / pay
-            pay = remaining
-        stash[sid] = round(float(grams) - take, 4)
-        if stash[sid] <= 0:
-            stash.pop(sid, None)
-        total_payout += pay
-    if total_payout <= 0:
-        raise HTTPException(status_code=400, detail="Dealers found nothing worth moving today")
-    farm["stash"] = stash
-    farm["business_cash"] = int(farm.get("business_cash") or 0) + total_payout
-    farm["daily_sold_usd"] = int(farm.get("daily_sold_usd") or 0) + total_payout
-    farm["lifetime_sold_usd"] = int(farm.get("lifetime_sold_usd") or 0) + total_payout
-    await _save_farm(
-        farm,
-        {
-            "stash": stash,
-            "business_cash": farm["business_cash"],
-            "daily_sold_usd": farm["daily_sold_usd"],
-            "daily_sold_utc_date": farm["daily_sold_utc_date"],
-            "lifetime_sold_usd": farm["lifetime_sold_usd"],
-        },
-    )
-    return {"ok": True, "payout": total_payout, "farm": _public_farm(farm, username=current_user.get("username") or "")}
+    lock = await _weed_farm_lock(current_user["id"])
+    async with lock:
+        farm = await _get_or_create_farm(current_user["id"])
+        expected_at = farm.get("updated_at")
+        lvl = int(farm.get("dealers_level") or 0)
+        if lvl < 1:
+            raise HTTPException(status_code=400, detail="Unlock dealers by selling 5 times")
+        farm = _ensure_daily_cap(farm)
+        stash = dict(farm.get("stash") or {})
+        if not stash:
+            raise HTTPException(status_code=400, detail="No stash for dealers")
+        # Sell up to 10% of each strain
+        total_payout = 0
+        for sid, grams in list(stash.items()):
+            take = round(float(grams) * (0.08 + 0.02 * lvl), 2)
+            if take < 1:
+                continue
+            strain = STRAIN_BY_ID.get(sid)
+            if not strain:
+                continue
+            oz = grams_to_oz(take)
+            price = market_price_per_oz(
+                strain,
+                house_tier=int(farm.get("house_tier") or 0),
+                dealers_level=lvl,
+                sold_today_usd=float(farm.get("daily_sold_usd") or 0) + total_payout,
+                heat=float(farm.get("heat") or 0),
+                dealer_cut=0.9,
+            ) * _market_price_bonus(farm)
+            pay = int(math.floor(price * oz))
+            remaining = DAILY_SELL_CAP_USD - int(farm.get("daily_sold_usd") or 0) - total_payout
+            if remaining <= 0:
+                break
+            if pay > remaining:
+                take *= remaining / pay
+                pay = remaining
+            stash[sid] = round(float(grams) - take, 4)
+            if stash[sid] <= 0:
+                stash.pop(sid, None)
+            total_payout += pay
+        if total_payout <= 0:
+            raise HTTPException(status_code=400, detail="Dealers found nothing worth moving today")
+        farm["stash"] = stash
+        farm["business_cash"] = int(farm.get("business_cash") or 0) + total_payout
+        farm["daily_sold_usd"] = int(farm.get("daily_sold_usd") or 0) + total_payout
+        farm["lifetime_sold_usd"] = int(farm.get("lifetime_sold_usd") or 0) + total_payout
+        saved = await _save_farm(
+            farm,
+            {
+                "stash": stash,
+                "business_cash": farm["business_cash"],
+                "daily_sold_usd": farm["daily_sold_usd"],
+                "daily_sold_utc_date": farm["daily_sold_utc_date"],
+                "lifetime_sold_usd": farm["lifetime_sold_usd"],
+            },
+            expected_updated_at=expected_at,
+        )
+        if not saved:
+            raise HTTPException(status_code=409, detail="Sell conflict — refresh and try again")
+        fresh = await db.weed_farms.find_one({"user_id": current_user["id"]}, {"_id": 0})
+        if fresh:
+            await _attach_exclusive_owned(fresh)
+            farm = fresh
+        return {
+            "ok": True,
+            "payout": total_payout,
+            "farm": _public_farm(
+                farm,
+                username=current_user.get("username") or "",
+                apply_curing_tick=False,
+            ),
+        }
 
 
 @router.post("/upgrade-dealers")
@@ -1750,6 +1864,268 @@ async def weed_upgrade_dealers(current_user: dict = Depends(_gate)):
     farm["dealers_level"] = lvl + 1
     await _save_farm(farm, {"business_cash": farm["business_cash"], "dealers_level": farm["dealers_level"]})
     return {"ok": True, "farm": _public_farm(farm, username=current_user.get("username") or "")}
+
+
+# ---------------------------------------------------------------------------
+# Admin: sell-spam audit + clawback
+# ---------------------------------------------------------------------------
+_DEFAULT_WEED_EQUIPMENT = {
+    "lights_cfl": 1,
+    "pots": 1,
+    "soil_conventional": 1,
+    "tents": 1,
+    "irrigation": 1,
+    "nutes_base": 1,
+}
+
+
+def _weed_farm_suspicion(farm: dict) -> Dict[str, Any]:
+    missions = farm.get("missions") or {}
+    harvests = int(missions.get("harvest_count") or 0)
+    sells = int(missions.get("sell_count") or 0)
+    lifetime = int(farm.get("lifetime_sold_usd") or 0)
+    cash = int(farm.get("business_cash") or 0)
+    level = int(farm.get("grower_level") or 1)
+    expected_cap = max(1, harvests) * _WEED_AUDIT_MAX_USD_PER_HARVEST
+    flags: List[str] = []
+    if harvests > 0 and lifetime > expected_cap:
+        flags.append("lifetime_sold_over_harvest_cap")
+    if harvests == 0 and lifetime >= 250_000:
+        flags.append("sold_without_harvests")
+    if sells > max(5, harvests * 3):
+        flags.append("sell_count_vs_harvests")
+    if cash >= 1_000_000 and level <= 6 and harvests < 15:
+        flags.append("high_cash_low_progress")
+    if lifetime >= 2_000_000 and harvests < 25:
+        flags.append("high_lifetime_low_harvests")
+    score = len(flags) * 10
+    if lifetime > expected_cap and harvests > 0:
+        score += min(50, int((lifetime / expected_cap - 1) * 20))
+    return {
+        "suspicious": bool(flags),
+        "score": score,
+        "flags": flags,
+        "harvest_count": harvests,
+        "sell_count": sells,
+        "lifetime_sold_usd": lifetime,
+        "expected_lifetime_cap_usd": expected_cap,
+        "business_cash": cash,
+        "grower_level": level,
+        "dealers_level": int(farm.get("dealers_level") or 0),
+        "house_tier": int(farm.get("house_tier") or 0),
+        "equipment": dict(farm.get("equipment") or {}),
+        "stash_grams": round(sum(float(v or 0) for v in (farm.get("stash") or {}).values()), 2),
+    }
+
+
+class WeedClawbackBody(BaseModel):
+    dry_run: bool = True
+    reset_cash: bool = True
+    reset_xp: bool = True
+    reset_equipment: bool = True
+    reset_dealers: bool = True
+    reset_sold_stats: bool = True
+    reset_house: bool = False
+    wipe_stash: bool = False
+    cash_to: Optional[int] = None  # default START_BUSINESS_CASH when reset_cash
+
+
+async def _admin_resolve_user(user_id_or_username: str) -> dict:
+    raw = (user_id_or_username or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Username required")
+    u = await db.users.find_one({"id": raw}, {"_id": 0, "id": 1, "username": 1})
+    if not u:
+        import re as _re
+
+        pat = {"$regex": f"^{_re.escape(raw)}$", "$options": "i"}
+        u = await db.users.find_one({"username": pat}, {"_id": 0, "id": 1, "username": 1})
+    if not u:
+        raise HTTPException(status_code=404, detail="User not found")
+    return u
+
+
+@router.get("/admin/sell-audit")
+async def weed_admin_sell_audit(
+    current_user: dict = Depends(get_current_user),
+    min_score: int = Query(10, ge=0, le=200),
+    limit: int = Query(100, ge=1, le=500),
+):
+    """List farms that look like they benefited from sell spam (heuristic)."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    rows: List[Dict[str, Any]] = []
+    cursor = db.weed_farms.find({}, {"_id": 0})
+    async for farm in cursor:
+        sus = _weed_farm_suspicion(farm)
+        if not sus["suspicious"] or sus["score"] < min_score:
+            continue
+        uid = farm.get("user_id")
+        user = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1}) if uid else None
+        # Burst sell events (after fix logging) — same strain within 3s
+        burst = 0
+        try:
+            since = _utcnow() - timedelta(days=14)
+            evs = (
+                await db.weed_sell_events.find(
+                    {"user_id": uid, "created_at": {"$gte": since}},
+                    {"_id": 0, "created_at": 1, "payout": 1, "grams_sold": 1},
+                )
+                .sort("created_at", 1)
+                .to_list(500)
+            )
+            for i in range(1, len(evs)):
+                a = evs[i - 1].get("created_at")
+                b = evs[i].get("created_at")
+                if a and b and (b - a).total_seconds() <= 3:
+                    burst += 1
+            if burst >= 3:
+                sus["flags"].append("rapid_sell_events")
+                sus["score"] += 15
+                sus["suspicious"] = True
+            sus["recent_sell_events"] = len(evs)
+            sus["rapid_pairs"] = burst
+        except Exception:
+            sus["recent_sell_events"] = 0
+            sus["rapid_pairs"] = 0
+        rows.append(
+            {
+                "user_id": uid,
+                "username": (user or {}).get("username") or farm.get("username") or uid,
+                **sus,
+            }
+        )
+    rows.sort(key=lambda r: (-int(r.get("score") or 0), -int(r.get("lifetime_sold_usd") or 0)))
+    return {
+        "ok": True,
+        "count": len(rows[:limit]),
+        "heuristic": {
+            "max_usd_per_harvest": _WEED_AUDIT_MAX_USD_PER_HARVEST,
+            "note": "Flags are heuristics — confirm before clawback. Past exploit may lack sell event logs.",
+        },
+        "suspects": rows[:limit],
+    }
+
+
+@router.get("/admin/farm/{user_id_or_username}")
+async def weed_admin_farm(user_id_or_username: str, current_user: dict = Depends(get_current_user)):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    u = await _admin_resolve_user(user_id_or_username)
+    farm = await db.weed_farms.find_one({"user_id": u["id"]}, {"_id": 0})
+    if not farm:
+        raise HTTPException(status_code=404, detail="No weed farm for this user")
+    events = (
+        await db.weed_sell_events.find({"user_id": u["id"]}, {"_id": 0})
+        .sort("created_at", -1)
+        .to_list(50)
+    )
+    for ev in events:
+        if isinstance(ev.get("created_at"), datetime):
+            ev["created_at"] = ev["created_at"].isoformat()
+    return {
+        "ok": True,
+        "username": u.get("username"),
+        "user_id": u["id"],
+        "suspicion": _weed_farm_suspicion(farm),
+        "farm": _public_farm(farm, username=u.get("username") or ""),
+        "recent_sells": events,
+    }
+
+
+@router.post("/admin/clawback/{user_id_or_username}")
+async def weed_admin_clawback(
+    user_id_or_username: str,
+    body: WeedClawbackBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Reset exploit gains: business cash / grower XP / equipment / sold stats (preview with dry_run)."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    u = await _admin_resolve_user(user_id_or_username)
+    lock = await _weed_farm_lock(u["id"])
+    async with lock:
+        farm = await db.weed_farms.find_one({"user_id": u["id"]}, {"_id": 0})
+        if not farm:
+            raise HTTPException(status_code=404, detail="No weed farm for this user")
+        before = {
+            "business_cash": int(farm.get("business_cash") or 0),
+            "grower_level": int(farm.get("grower_level") or 1),
+            "grower_xp": int(farm.get("grower_xp") or 0),
+            "lifetime_sold_usd": int(farm.get("lifetime_sold_usd") or 0),
+            "daily_sold_usd": int(farm.get("daily_sold_usd") or 0),
+            "dealers_level": int(farm.get("dealers_level") or 0),
+            "house_tier": int(farm.get("house_tier") or 0),
+            "equipment": dict(farm.get("equipment") or {}),
+            "missions": dict(farm.get("missions") or {}),
+            "stash_grams": round(sum(float(v or 0) for v in (farm.get("stash") or {}).values()), 2),
+        }
+        set_fields: Dict[str, Any] = {}
+        changes: List[str] = []
+        if body.reset_cash:
+            target = START_BUSINESS_CASH if body.cash_to is None else max(0, int(body.cash_to))
+            set_fields["business_cash"] = target
+            changes.append(f"business_cash {before['business_cash']} → {target}")
+        if body.reset_xp:
+            set_fields["grower_level"] = 1
+            set_fields["grower_xp"] = 0
+            changes.append(f"grower Lv{before['grower_level']} xp{before['grower_xp']} → Lv1 xp0")
+        if body.reset_equipment:
+            set_fields["equipment"] = dict(_DEFAULT_WEED_EQUIPMENT)
+            changes.append("equipment → starter levels")
+        if body.reset_dealers:
+            set_fields["dealers_level"] = 0
+            changes.append(f"dealers_level {before['dealers_level']} → 0")
+        if body.reset_sold_stats:
+            set_fields["lifetime_sold_usd"] = 0
+            set_fields["daily_sold_usd"] = 0
+            set_fields["daily_sold_utc_date"] = _utc_date_str()
+            missions = dict(farm.get("missions") or {})
+            missions["sell_count"] = 0
+            set_fields["missions"] = missions
+            changes.append("lifetime/daily sold + sell_count cleared")
+        if body.reset_house:
+            set_fields["house_tier"] = 0
+            changes.append(f"house_tier {before['house_tier']} → 0")
+        if body.wipe_stash:
+            set_fields["stash"] = {}
+            set_fields["curing"] = []
+            changes.append("stash + curing wiped")
+        if not set_fields:
+            raise HTTPException(status_code=400, detail="No clawback options selected")
+        preview = {
+            "username": u.get("username"),
+            "user_id": u["id"],
+            "before": before,
+            "changes": changes,
+            "set_fields": {k: (dict(v) if isinstance(v, dict) else v) for k, v in set_fields.items()},
+            "suspicion": _weed_farm_suspicion(farm),
+        }
+        if body.dry_run:
+            return {"ok": True, "dry_run": True, "preview": preview, "message": "Dry run — no changes applied"}
+        await db.weed_farms.update_one({"user_id": u["id"]}, {"$set": {**set_fields, "updated_at": _iso()}})
+        try:
+            await log_activity(
+                current_user.get("id") or "",
+                current_user.get("username") or "?",
+                "admin_weed_empire_clawback",
+                {
+                    "target_user_id": u["id"],
+                    "target_username": u.get("username"),
+                    "changes": changes,
+                    "before": before,
+                },
+            )
+        except Exception:
+            pass
+        fresh = await db.weed_farms.find_one({"user_id": u["id"]}, {"_id": 0})
+        return {
+            "ok": True,
+            "dry_run": False,
+            "preview": preview,
+            "farm": _public_farm(fresh, username=u.get("username") or "") if fresh else None,
+            "message": f"Clawback applied for {u.get('username')}",
+        }
 
 
 def register(api_router: APIRouter) -> None:

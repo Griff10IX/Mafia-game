@@ -1,4 +1,4 @@
-import { Activity, ArrowLeftRight, BarChart3, Building2, Car, Crosshair, Dices, FileText, Flame, Globe, History, Landmark, Layers, Lock, LockKeyhole, Radio, Shield, Skull, UserCog, Users, Wrench, Coins, Zap, Wine } from 'lucide-react';
+import { Activity, ArrowLeftRight, BarChart3, Building2, Car, Crosshair, Dices, FileText, Flame, Globe, History, Landmark, Layers, Leaf, Lock, LockKeyhole, Radio, Shield, Skull, UserCog, Users, Wrench, Coins, Zap, Wine } from 'lucide-react';
 
 export const ADMIN_CATEGORIES = [
   { id: 'admin-operations', label: 'Operations', icon: UserCog },
@@ -91,6 +91,7 @@ export const ADMIN_ROUTE_GROUPS = [
   { id: 'crew-recovery', label: 'Crew recovery', categoryId: 'admin-operations', anchorId: 'admin-moderation', icon: Building2, description: 'Revive families and restore illegal businesses from kill snapshots.' },
   { id: 'racket-progress', label: 'Racket progress', categoryId: 'admin-economy-progression', anchorId: 'admin-donations', icon: Wine, description: 'Set player racket business progress (ladder, vault, guards, security).' },
   { id: 'distillery-progress', label: 'Distillery progress', categoryId: 'admin-economy-progression', anchorId: 'admin-donations', icon: Wine, description: 'Set distillery progress % or grant equipment levels and special track unlocks (booze rackets).' },
+  { id: 'weed-sell-audit', label: 'Weed sell audit', categoryId: 'admin-economy-progression', anchorId: 'admin-donations', icon: Leaf, description: 'Find sell-spam beneficiaries and claw back weed cash / XP / equipment.' },
   { id: 'property-transfer', label: 'Armoury / airport', categoryId: 'admin-world-systems', anchorId: 'admin-gameworld', icon: Landmark, description: 'Transfer or release armoury and airport ownership between players.' },
   { id: 'witness-statements', label: 'Witness', categoryId: 'admin-operations', anchorId: 'admin-moderation', icon: FileText, description: 'Witness statements review.' },
   { id: 'locked', label: 'Page locks', categoryId: 'admin-world-systems', anchorId: 'admin-page-locks', icon: LockKeyhole, description: 'Route / page locks (Lock page under World & Systems).' },
@@ -126,6 +127,7 @@ export const ADMIN_ROUTE_GROUP_MOBILE_SHORT = {
   'crew-recovery': 'Crew',
   'racket-progress': 'Racket',
   'distillery-progress': 'Still',
+  'weed-sell-audit': 'Weed',
   'property-transfer': 'Props',
   'witness-statements': 'Witness',
   locked: 'Locks',
