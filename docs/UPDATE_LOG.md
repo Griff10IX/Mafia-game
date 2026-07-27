@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-27 11:55 UTC[/color][/b] — [b]Weed Empire: daily withdraw cap[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Withdrawing weed business cash to personal money is capped at [b]$250M per day[/b] (same as the sell cap). Still must leave [b]$50,000[/b] in the farm.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-27 11:50 UTC[/color][/b] — [b]Weed Empire: per-target raid cooldown[/b][/size]
 [quote]
 [list]
@@ -32,7 +41,7 @@
 [*][color=#888888][b]New:[/b] Street dealers level up to [b]Lv 20[/b] (better drip & prices; steeper upgrade costs).[/color]
 [*][color=#888888][b]Changed:[/b] Raids use a [b]3 hour per-target[/b] cooldown, steal the [b]full stash[/b], and can store stolen gear to equip later. Target [b]security[/b] cuts your success odds — fully maxed security = [b]25%[/b] success.[/color]
 [*][color=#888888][b]Changed:[/b] Heat rises about [b]3–8%/hour[/b] (better climate/gear = cooler end). Clear heat for a fair cash cost. Stay near max heat too long → [b]bust[/b]: jail 5 min, farm hit hard, free ditch-weed restart seed. [b]Special strains stay yours[/b]. Your assistant [b]flees[/b] and must be rehired.[/color]
-[*][color=#888888][b]New:[/b] Withdraw weed [b]business cash[/b] to personal money anytime — must leave [b]$50,000[/b] in the farm.[/color]
+[*][color=#888888][b]New:[/b] Withdraw weed [b]business cash[/b] to personal money — must leave [b]$50,000[/b]; [b]$250M[/b] daily withdraw cap.[/color]
 [/list]
 [/quote]
 

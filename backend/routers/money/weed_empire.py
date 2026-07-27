@@ -20,6 +20,7 @@ from utils.store_item_flags import require_store_item_allowed
 from utils.weed_empire_catalog import (
     BASE_STREET_PRICE_PER_OZ,
     DAILY_SELL_CAP_USD,
+    DAILY_WITHDRAW_CAP_USD,
     EQUIPMENT_BY_ID,
     EQUIPMENT_CATEGORIES,
     HOUSE_BY_TIER,
@@ -150,7 +151,13 @@ def _parse_iso(s: Optional[str]) -> Optional[datetime]:
     if not s:
         return None
     try:
-        return datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        # Always return timezone-aware UTC so comparisons with _utcnow() never TypeError
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        else:
+            dt = dt.astimezone(timezone.utc)
+        return dt
     except Exception:
         return None
 
@@ -194,6 +201,8 @@ def _default_farm(user_id: str) -> Dict[str, Any]:
         "business_cash": START_BUSINESS_CASH,
         "daily_sold_usd": 0,
         "daily_sold_utc_date": _utc_date_str(),
+        "daily_withdrawn_usd": 0,
+        "daily_withdrawn_utc_date": _utc_date_str(),
         "lifetime_sold_usd": 0,
         "grower_level": 1,
         "grower_xp": 0,
@@ -284,7 +293,17 @@ def _house(farm: dict) -> Dict[str, Any]:
 
 def _equip_levels(farm: dict) -> Dict[str, int]:
     raw = farm.get("equipment") or {}
-    return {str(k): int(v or 0) for k, v in raw.items() if int(v or 0) > 0}
+    out: Dict[str, int] = {}
+    if not isinstance(raw, dict):
+        return out
+    for k, v in raw.items():
+        try:
+            lvl = int(v or 0)
+        except (TypeError, ValueError):
+            continue
+        if lvl > 0:
+            out[str(k)] = lvl
+    return out
 
 
 def _stats(farm: dict) -> Dict[str, float]:
@@ -621,7 +640,16 @@ def _assistant_plant_one(farm: dict, strain_id: str, soil_type: str, now: dateti
 
     plots = list(farm.get("plots") or [])
     empty_idx = next(
-        (i for i, p in enumerate(plots) if p.get("state") in ("empty", "dead", None)),
+        (
+            i
+            for i, p in enumerate(plots)
+            if p.get("state") in ("empty", "dead", None)
+            or (
+                not p.get("strain_id")
+                and p.get("state") not in ("growing", "harvest_ready")
+                and p.get("stage") not in ("seedling", "veg", "flower", "harvest_ready", "growing")
+            )
+        ),
         None,
     )
     if empty_idx is None:
@@ -767,31 +795,45 @@ def _run_one_assistant_job(farm: dict, worker: dict, now: datetime) -> Dict[str,
         spent_seed = 0
         spent_soil = 0
         last_err: Optional[str] = None
+        empty_before = sum(
+            1
+            for p in (farm.get("plots") or [])
+            if (p.get("state") in ("empty", "dead", None) or not p.get("strain_id"))
+            and (p.get("state") not in ("growing", "harvest_ready"))
+        )
         # Fill every empty plot we can afford this tick
         while True:
             result = _assistant_plant_one(farm, strain_id, soil_type, now)
             if not result.get("ok"):
                 last_err = str(result.get("error") or "Could not plant")
-                # Soil may have been bought even on a later seed fail — keep accounting
                 spent_soil += int(result.get("spent_soil") or 0)
                 break
             planted += 1
             spent_seed += int(result.get("spent_seed") or 0)
             spent_soil += int(result.get("spent_soil") or 0)
+            # Safety: never loop forever if plot state fails to update
+            if planted >= max(1, empty_before + 2):
+                last_err = "Stopped after filling available plots"
+                break
         strain_name = (STRAIN_BY_ID.get(strain_id) or {}).get("name") or strain_id
+        total = spent_seed + spent_soil
         if planted > 0:
-            total = spent_seed + spent_soil
+            msg = (
+                f"Planted {planted}× {strain_name} "
+                f"({soil_type.replace('_', ' ')}) · spent ${total:,}"
+            )
+            # Explain why remaining empties weren't filled this tick
+            if last_err and last_err not in ("No empty plots", "Stopped after filling available plots"):
+                msg = f"{msg} · stopped: {last_err}"
             summary.update(
                 {
-                    "message": (
-                        f"Planted {planted}× {strain_name} "
-                        f"({soil_type.replace('_', ' ')}) · spent ${total:,}"
-                    ),
+                    "message": msg,
                     "plots": planted,
                     "spent_seed": spent_seed,
                     "spent_soil": spent_soil,
                     "strain_id": strain_id,
                     "soil_type": soil_type,
+                    "stop_reason": last_err,
                 }
             )
         else:
@@ -803,6 +845,7 @@ def _run_one_assistant_job(farm: dict, worker: dict, now: datetime) -> Dict[str,
                     "spent_soil": spent_soil,
                     "strain_id": strain_id,
                     "soil_type": soil_type,
+                    "stop_reason": last_err,
                 }
             )
     worker["last_run"] = summary
@@ -1062,6 +1105,7 @@ async def _maybe_apply_bust_and_assistant(
         try:
             await log_activity(
                 user_id,
+                username or "?",
                 "weed_empire_bust",
                 {
                     "house_tier": bust_detail.get("house_tier"),
@@ -1078,7 +1122,20 @@ def _ensure_daily_cap(farm: dict) -> dict:
     if farm.get("daily_sold_utc_date") != today:
         farm["daily_sold_utc_date"] = today
         farm["daily_sold_usd"] = 0
+    if farm.get("daily_withdrawn_utc_date") != today:
+        farm["daily_withdrawn_utc_date"] = today
+        farm["daily_withdrawn_usd"] = 0
     return farm
+
+
+def _withdrawable_cash(farm: dict) -> int:
+    """Cash that can leave the farm now (reserve + daily withdraw cap)."""
+    farm = _ensure_daily_cap(farm)
+    cash = int(farm.get("business_cash") or 0)
+    after_reserve = max(0, cash - MIN_BUSINESS_CASH_RESERVE)
+    withdrawn = int(farm.get("daily_withdrawn_usd") or 0)
+    remaining_cap = max(0, DAILY_WITHDRAW_CAP_USD - withdrawn)
+    return min(after_reserve, remaining_cap)
 
 
 def _grow_hours_needed(strain: dict, stats: dict, preferred_ok: bool) -> float:
@@ -1511,6 +1568,7 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
     light = active_light_class(_equip_levels(farm))
     house = _house(farm)
     sold = int(farm.get("daily_sold_usd") or 0)
+    withdrawn_today = int(farm.get("daily_withdrawn_usd") or 0)
     market_bonus = float(stats.get("market_mult_bonus") or 1.0)
     street_prices = {
         strain["id"]: round(
@@ -1552,7 +1610,10 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
         "soil_stock": farm.get("soil_stock") or {},
         "business_cash": int(farm.get("business_cash") or 0),
         "business_cash_reserve": MIN_BUSINESS_CASH_RESERVE,
-        "withdrawable_cash": max(0, int(farm.get("business_cash") or 0) - MIN_BUSINESS_CASH_RESERVE),
+        "withdrawable_cash": _withdrawable_cash(farm),
+        "daily_withdraw_cap": DAILY_WITHDRAW_CAP_USD,
+        "daily_withdrawn_usd": withdrawn_today,
+        "daily_withdraw_remaining": max(0, DAILY_WITHDRAW_CAP_USD - withdrawn_today),
         "daily_sold_usd": sold,
         "daily_sold_cap": DAILY_SELL_CAP_USD,
         "daily_sold_remaining": max(0, DAILY_SELL_CAP_USD - sold),
@@ -2510,13 +2571,17 @@ async def weed_cool_off(current_user: dict = Depends(_gate)):
 
 @router.post("/withdraw")
 async def weed_withdraw(body: WithdrawBody, current_user: dict = Depends(_gate)):
-    """Move weed business cash to personal money. Must leave $50k in the farm."""
+    """Move weed business cash to personal money. Must leave $50k; $250M daily withdraw cap."""
     lock = await _weed_farm_lock(current_user["id"])
     async with lock:
         farm = await _get_or_create_farm(current_user["id"])
+        farm = _ensure_daily_cap(farm)
         expected_at = farm.get("updated_at")
         cash = int(farm.get("business_cash") or 0)
-        withdrawable = max(0, cash - MIN_BUSINESS_CASH_RESERVE)
+        after_reserve = max(0, cash - MIN_BUSINESS_CASH_RESERVE)
+        withdrawn_today = int(farm.get("daily_withdrawn_usd") or 0)
+        remaining_cap = max(0, DAILY_WITHDRAW_CAP_USD - withdrawn_today)
+        withdrawable = min(after_reserve, remaining_cap)
         amount = int(body.amount)
         if cash <= MIN_BUSINESS_CASH_RESERVE:
             raise HTTPException(
@@ -2525,15 +2590,36 @@ async def weed_withdraw(body: WithdrawBody, current_user: dict = Depends(_gate))
             )
         if amount <= 0:
             raise HTTPException(status_code=400, detail="Amount must be positive")
+        if remaining_cap <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Daily withdraw cap reached (${DAILY_WITHDRAW_CAP_USD:,}). Resets at UTC midnight.",
+            )
+        if amount > remaining_cap:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Daily withdraw remaining: ${remaining_cap:,} of ${DAILY_WITHDRAW_CAP_USD:,}.",
+            )
+        if amount > after_reserve:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Can withdraw up to ${after_reserve:,} (must leave ${MIN_BUSINESS_CASH_RESERVE:,}).",
+            )
         if amount > withdrawable:
             raise HTTPException(
                 status_code=400,
-                detail=f"Can withdraw up to ${withdrawable:,} (must leave ${MIN_BUSINESS_CASH_RESERVE:,}).",
+                detail=f"Can withdraw up to ${withdrawable:,} right now.",
             )
         farm["business_cash"] = cash - amount
+        farm["daily_withdrawn_usd"] = withdrawn_today + amount
+        farm["daily_withdrawn_utc_date"] = farm.get("daily_withdrawn_utc_date") or _utc_date_str()
         saved = await _save_farm(
             farm,
-            {"business_cash": farm["business_cash"]},
+            {
+                "business_cash": farm["business_cash"],
+                "daily_withdrawn_usd": farm["daily_withdrawn_usd"],
+                "daily_withdrawn_utc_date": farm["daily_withdrawn_utc_date"],
+            },
             expected_updated_at=expected_at,
         )
         if not saved:
@@ -2544,7 +2630,11 @@ async def weed_withdraw(body: WithdrawBody, current_user: dict = Depends(_gate))
                 current_user["id"],
                 current_user.get("username") or "",
                 "weed_empire_withdraw",
-                {"amount": amount, "business_cash_remaining": farm["business_cash"]},
+                {
+                    "amount": amount,
+                    "business_cash_remaining": farm["business_cash"],
+                    "daily_withdrawn_usd": farm["daily_withdrawn_usd"],
+                },
             )
         except Exception:
             pass
@@ -2552,6 +2642,8 @@ async def weed_withdraw(body: WithdrawBody, current_user: dict = Depends(_gate))
             "ok": True,
             "withdrawn": amount,
             "business_cash": farm["business_cash"],
+            "daily_withdrawn_usd": farm["daily_withdrawn_usd"],
+            "daily_withdraw_remaining": max(0, DAILY_WITHDRAW_CAP_USD - int(farm["daily_withdrawn_usd"])),
             "farm": _public_farm(farm, username=current_user.get("username") or "", apply_curing_tick=False),
         }
 
@@ -2593,29 +2685,40 @@ async def weed_raid_targets(current_user: dict = Depends(_gate)):
         uid = f.get("user_id")
         if not uid:
             continue
-        u = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1})
-        if not u:
+        try:
+            u = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1})
+            if not u:
+                continue
+            stash_raw = f.get("stash") or {}
+            stash_g = 0.0
+            if isinstance(stash_raw, dict):
+                for v in stash_raw.values():
+                    try:
+                        stash_g += float(v or 0)
+                    except (TypeError, ValueError):
+                        continue
+            sec = _security_upgrade_progress(f)
+            est_chance = _raid_success_chance(my_farm, f)
+            target_ready_at = _raid_available_at_for_target(my_farm, uid, now)
+            targets.append(
+                {
+                    "user_id": uid,
+                    "username": u.get("username") or "Unknown",
+                    "house_tier": int(f.get("house_tier") or 0),
+                    "grower_level": int(f.get("grower_level") or 1),
+                    "heat": float(f.get("heat") or 0),
+                    "stash_grams": round(stash_g, 1),
+                    "equip_count": len(f.get("equipment") or {}) if isinstance(f.get("equipment"), dict) else 0,
+                    "security_fill": sec.get("fill"),
+                    "security_fully_upgraded": bool(sec.get("fully_upgraded")),
+                    "raid_success_chance": round(est_chance, 3),
+                    "raid_ready": target_ready_at is None,
+                    "raid_available_at": _iso(target_ready_at) if target_ready_at else None,
+                }
+            )
+        except Exception:
+            logging.exception("weed raid target skip user_id=%s", uid)
             continue
-        stash_g = sum(float(v or 0) for v in (f.get("stash") or {}).values())
-        sec = _security_upgrade_progress(f)
-        est_chance = _raid_success_chance(my_farm, f)
-        target_ready_at = _raid_available_at_for_target(my_farm, uid, now)
-        targets.append(
-            {
-                "user_id": uid,
-                "username": u.get("username") or "Unknown",
-                "house_tier": int(f.get("house_tier") or 0),
-                "grower_level": int(f.get("grower_level") or 1),
-                "heat": float(f.get("heat") or 0),
-                "stash_grams": round(stash_g, 1),
-                "equip_count": len(f.get("equipment") or {}),
-                "security_fill": sec.get("fill"),
-                "security_fully_upgraded": bool(sec.get("fully_upgraded")),
-                "raid_success_chance": round(est_chance, 3),
-                "raid_ready": target_ready_at is None,
-                "raid_available_at": _iso(target_ready_at) if target_ready_at else None,
-            }
-        )
         if len(targets) >= 40:
             break
     return {

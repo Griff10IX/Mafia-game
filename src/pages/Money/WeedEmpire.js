@@ -544,7 +544,16 @@ export default function WeedEmpire() {
   const heatBandLo = Number(heatBand[0] ?? 3);
   const heatBandHi = Number(heatBand[1] ?? 8);
   const reserveCash = Number(farm.business_cash_reserve || 50000);
-  const withdrawable = Math.max(0, Number(farm.withdrawable_cash ?? Number(farm.business_cash || 0) - reserveCash));
+  const dailyWithdrawCap = Number(farm.daily_withdraw_cap || 250_000_000);
+  const dailyWithdrawRemaining = Math.max(
+    0,
+    Number(farm.daily_withdraw_remaining ?? dailyWithdrawCap - Number(farm.daily_withdrawn_usd || 0))
+  );
+  const afterReserve = Math.max(0, Number(farm.business_cash || 0) - reserveCash);
+  const withdrawable = Math.max(
+    0,
+    Number(farm.withdrawable_cash ?? Math.min(afterReserve, dailyWithdrawRemaining))
+  );
   const cleanlinessPct = Math.max(0, Math.min(100, Number(farm.cleanliness_pct ?? farm.cleanliness ?? 100)));
   const cleanlinessRisk = cleanlinessPct < 30;
   const mitePct = Math.max(0, Math.min(100, Number(selectedPlot?.mite_infestation_pct || 0)));
@@ -557,7 +566,8 @@ export default function WeedEmpire() {
           <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-500/80 font-heading">Money</p>
           <h1 className="text-xl sm:text-2xl md:text-3xl font-heading text-foreground">Weed Business Empire</h1>
           <p className="text-xs text-muted-foreground mt-1 hidden sm:block">
-            Upgrades use business cash only. Withdraw surplus anytime (keep {money(reserveCash)} in the farm).
+            Upgrades use business cash only. Withdraw surplus anytime (keep {money(reserveCash)}; max{" "}
+            {money(dailyWithdrawCap)}/day).
             {staffPreview ? (
               <span className="ml-2 inline-flex items-center rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] uppercase text-amber-300">
                 Staff preview
@@ -576,7 +586,12 @@ export default function WeedEmpire() {
             <div className="font-heading text-emerald-400 text-lg tabular-nums">{money(farm.business_cash)}</div>
           </div>
           <div className="hidden sm:block text-[10px] text-muted-foreground uppercase">Business cash</div>
-          <div className="text-[10px] text-muted-foreground">Withdrawable {money(withdrawable)}</div>
+          <div className="text-[10px] text-muted-foreground">
+            Withdrawable {money(withdrawable)}
+            <span className="block sm:inline sm:before:content-['·_']">
+              Daily left {money(dailyWithdrawRemaining)} / {money(dailyWithdrawCap)}
+            </span>
+          </div>
           <div className="flex flex-wrap sm:justify-end gap-1">
             <input
               type="number"
@@ -1374,7 +1389,7 @@ export default function WeedEmpire() {
                         <option value="coco">Coco (stock {farm.soil_stock?.coco || 0})</option>
                       </select>
                       <p className="text-[10px] text-muted-foreground">
-                        Fills empty plots each tick. Seeds + soil come from business cash.
+                        Fills as many empty plots as business cash + soil allow each tick (~45s).
                       </p>
                     </div>
                   ) : null}

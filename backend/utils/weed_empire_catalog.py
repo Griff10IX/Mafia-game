@@ -10,6 +10,7 @@ GRAMS_PER_KG = 1000
 
 START_BUSINESS_CASH = 100_000
 DAILY_SELL_CAP_USD = 250_000_000
+DAILY_WITHDRAW_CAP_USD = 250_000_000
 BASE_STREET_PRICE_PER_OZ = 22_500
 MAX_DEALERS_LEVEL = 20
 # Must keep this much business cash in the farm when withdrawing to personal money.
