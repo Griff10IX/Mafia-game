@@ -278,6 +278,10 @@ const JailedPlayerRow = ({
           <span className="px-1 py-0.5 rounded text-[9px] font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/40">
             You
           </span>
+        ) : player.unbustable ? (
+          <span className="px-1 py-0.5 rounded text-[9px] font-bold uppercase bg-amber-500/15 text-amber-300 border border-amber-500/35">
+            Lock
+          </span>
         ) : isNpc ? (
           <span
             className={`px-1 py-0.5 rounded text-[9px] font-bold uppercase border ${
@@ -302,6 +306,13 @@ const JailedPlayerRow = ({
       <div className="shrink-0 min-w-[4.5rem] flex justify-end">
         {player.is_self ? (
           <span className="text-[10px] text-mutedForeground w-10 text-center inline-block">—</span>
+        ) : player.unbustable ? (
+          <span
+            className="text-[9px] text-amber-300/90 font-heading uppercase px-1"
+            title={`Unbustable for ${Math.max(1, Number(player.unbustable_seconds || 0))}s`}
+          >
+            {Math.max(1, Number(player.unbustable_seconds || 0))}s
+          </span>
         ) : manualPlayDisabled ? (
           <button
             type="button"

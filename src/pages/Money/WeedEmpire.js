@@ -96,6 +96,8 @@ export default function WeedEmpire() {
   const [catalog, setCatalog] = useState(null);
   const [tab, setTab] = useState("grow");
   const [selectedPlotId, setSelectedPlotId] = useState(null);
+  const [selectedPlotIds, setSelectedPlotIds] = useState([]);
+  const [multiSelect, setMultiSelect] = useState(false);
   const [strainId, setStrainId] = useState("northern_lights");
   const [soilType, setSoilType] = useState("soil_conventional");
   const [sellUnit, setSellUnit] = useState("g");
@@ -133,8 +135,14 @@ export default function WeedEmpire() {
       curing: [...(f.curing || [])],
     });
     if (f?.plots?.length) {
+      const ids = new Set(f.plots.map((p) => p.id));
+      setSelectedPlotIds((prev) => {
+        const kept = (prev || []).filter((id) => ids.has(id));
+        if (kept.length) return kept;
+        return [f.plots[0].id];
+      });
       setSelectedPlotId((prev) => {
-        if (prev && f.plots.some((p) => p.id === prev)) return prev;
+        if (prev && ids.has(prev)) return prev;
         return f.plots[0].id;
       });
     }
@@ -226,6 +234,66 @@ export default function WeedEmpire() {
     [farm, selectedPlotId]
   );
 
+  const selectedIdSet = useMemo(() => new Set(selectedPlotIds), [selectedPlotIds]);
+
+  const selectedPlots = useMemo(() => {
+    const plots = farm?.plots || [];
+    if (!selectedPlotIds.length) return selectedPlot ? [selectedPlot] : [];
+    return selectedPlotIds.map((id) => plots.find((p) => p.id === id)).filter(Boolean);
+  }, [farm, selectedPlotIds, selectedPlot]);
+
+  const isPlantablePlot = (p) => !p || p.state === "empty" || p.state === "dead" || !p.strain_id;
+  const isGrowingPlot = (p) =>
+    p?.strain_id && p.state !== "empty" && p.state !== "dead";
+  const isReadyPlot = (p) =>
+    p?.stage === "harvest_ready" || p?.state === "harvest_ready";
+
+  const plantableSelected = useMemo(
+    () => selectedPlots.filter(isPlantablePlot),
+    [selectedPlots]
+  );
+  const growingSelected = useMemo(
+    () => selectedPlots.filter(isGrowingPlot),
+    [selectedPlots]
+  );
+  const readySelected = useMemo(
+    () => selectedPlots.filter(isReadyPlot),
+    [selectedPlots]
+  );
+  const miteSelected = useMemo(
+    () =>
+      growingSelected.filter(
+        (p) => !!p.mite_infested || Number(p.mite_infestation_pct || 0) > 0
+      ),
+    [growingSelected]
+  );
+
+  const togglePlotSelect = (plotId) => {
+    setSelectedPlotId(plotId);
+    if (!multiSelect) {
+      setSelectedPlotIds([plotId]);
+      return;
+    }
+    setSelectedPlotIds((prev) => {
+      if (prev.includes(plotId)) {
+        if (prev.length <= 1) return prev;
+        return prev.filter((id) => id !== plotId);
+      }
+      return [...prev, plotId];
+    });
+  };
+
+  const selectPlotsBy = (predicate) => {
+    const ids = (farm?.plots || []).filter(predicate).map((p) => p.id);
+    if (!ids.length) {
+      toast.message("No matching pots");
+      return;
+    }
+    setMultiSelect(true);
+    setSelectedPlotIds(ids);
+    setSelectedPlotId(ids[0]);
+  };
+
   const strainMap = useMemo(() => {
     const m = {};
     (catalog?.strains || []).forEach((s) => {
@@ -290,16 +358,31 @@ export default function WeedEmpire() {
 
   const plant = ({ scavengedSeed = false } = {}) =>
     run(async () => {
+      const ids = scavengedSeed
+        ? [(plantableSelected[0] || selectedPlot)?.id].filter(Boolean)
+        : plantableSelected.map((p) => p.id);
+      if (!ids.length) {
+        toast.error("Select empty pots to plant");
+        return;
+      }
       const { data } = await api.post("/weed-empire/plant", {
-        plot_id: selectedPlotId,
+        plot_ids: ids,
+        plot_id: ids[0],
         strain_id: scavengedSeed ? "ditch_weed" : strainId,
         soil_type: scavengedSeed ? "soil_conventional" : soilType,
         ...(scavengedSeed ? actionCodeRef.current : {}),
       });
       applyFarm(data.farm, { force: true });
-      toast.success(data.scavenged_seed ? "Found some rough seeds — Ditch Weed planted" : "Planted");
+      const n = Number(data.planted || ids.length);
+      toast.success(
+        data.scavenged_seed
+          ? "Found some rough seeds — Ditch Weed planted"
+          : n > 1
+            ? `Planted ${n} pots`
+            : "Planted"
+      );
       setFx("plant");
-      setFxNonce((n) => n + 1);
+      setFxNonce((x) => x + 1);
       setTimeout(() => setFx(null), 400);
     });
 
@@ -310,18 +393,28 @@ export default function WeedEmpire() {
 
   const water = () =>
     run(async () => {
-      const { data } = await api.post("/weed-empire/water", { plot_id: selectedPlotId });
+      const ids = growingSelected.map((p) => p.id);
+      if (!ids.length) {
+        toast.error("Select growing pots to water");
+        return;
+      }
+      const { data } = await api.post("/weed-empire/water", { plot_ids: ids, plot_id: ids[0] });
       applyFarm(data.farm, { force: true });
       triggerFx("water");
-      toast.success("Watered");
+      toast.success(Number(data.tended || ids.length) > 1 ? `Watered ${data.tended} pots` : "Watered");
     });
 
   const feed = () =>
     run(async () => {
-      const { data } = await api.post("/weed-empire/feed", { plot_id: selectedPlotId });
+      const ids = growingSelected.map((p) => p.id);
+      if (!ids.length) {
+        toast.error("Select growing pots to feed");
+        return;
+      }
+      const { data } = await api.post("/weed-empire/feed", { plot_ids: ids, plot_id: ids[0] });
       applyFarm(data.farm, { force: true });
       triggerFx("feed");
-      toast.success("Fed");
+      toast.success(Number(data.tended || ids.length) > 1 ? `Fed ${data.tended} pots` : "Fed");
     });
 
   const cleanRoom = () =>
@@ -334,23 +427,40 @@ export default function WeedEmpire() {
 
   const treatMites = () =>
     run(async () => {
-      const { data } = await api.post("/weed-empire/treat-mites", { plot_id: selectedPlotId });
+      const ids = miteSelected.map((p) => p.id);
+      if (!ids.length) {
+        toast.error("Select pots with mites to treat");
+        return;
+      }
+      const { data } = await api.post("/weed-empire/treat-mites", { plot_ids: ids, plot_id: ids[0] });
       applyFarm(data.farm, { force: true });
       triggerFx("ipm");
+      const n = Number(data.treated || ids.length);
       toast.success(
-        `Spider mites treated (${Number(data.treatment_effect_pct || 0).toFixed(0)}% effective) for ${money(data.cost)}`
+        n > 1
+          ? `Treated mites on ${n} pots (${Number(data.treatment_effect_pct || 0).toFixed(0)}%) for ${money(data.cost)}`
+          : `Spider mites treated (${Number(data.treatment_effect_pct || 0).toFixed(0)}% effective) for ${money(data.cost)}`
       );
     });
 
   const harvest = () =>
     run(async () => {
+      const ids = readySelected.map((p) => p.id);
+      if (!ids.length) {
+        toast.error("Select ready pots to harvest");
+        return;
+      }
       const { data } = await api.post("/weed-empire/harvest", {
-        plot_id: selectedPlotId,
+        plot_ids: ids,
+        plot_id: ids[0],
         ...actionCodeRef.current,
       });
       applyFarm(data.farm, { force: true });
       triggerFx("harvest_trim");
-      toast.success(`Harvested ${data.grams}g — curing`);
+      const n = Number(data.harvested || ids.length);
+      toast.success(
+        n > 1 ? `Harvested ${n} pots · ${data.grams}g — curing` : `Harvested ${data.grams}g — curing`
+      );
       if (data.leveled_up) toast.success(`Grower level up! Lv ${data.grower_level}`);
     });
 
@@ -358,6 +468,10 @@ export default function WeedEmpire() {
     run(async () => {
       const { data } = await api.post("/weed-empire/upgrade-equipment", { category_id: categoryId });
       applyFarm(data.farm, { force: true });
+      if (data.rebought) {
+        toast.success(`Rebought at Lv ${data.level}`);
+        return;
+      }
       const y = data.yield_hint;
       toast.success(
         y
@@ -366,9 +480,10 @@ export default function WeedEmpire() {
       );
     });
 
-  const buySoil = (type) =>
+  const buySoil = (type, bags = 1) =>
     run(async () => {
-      const { data } = await api.post("/weed-empire/buy-soil", { soil_type: type, bags: 1 });
+      const n = Math.max(1, Math.min(50, Number(bags) || 1));
+      const { data } = await api.post("/weed-empire/buy-soil", { soil_type: type, bags: n });
       applyFarm(data.farm, { force: true });
       toast.success(`Bought ${type.replace(/_/g, " ")} (+${data.added} charges)`);
     });
@@ -494,12 +609,14 @@ export default function WeedEmpire() {
     run(async () => {
       const { data } = await api.post("/weed-empire/assistant/mode", { mode, slot });
       applyFarm(data.farm, { force: true });
+      if (data.assistant_run?.message) toast.message(data.assistant_run.message);
     });
 
   const setAssistantEnabled = (enabled, slot = 0) =>
     run(async () => {
       const { data } = await api.post("/weed-empire/assistant/enabled", { enabled, slot });
       applyFarm(data.farm, { force: true });
+      if (data.assistant_run?.message) toast.message(data.assistant_run.message);
     });
 
   const setAssistantPlantPrefs = (slot, strain_id, soil_type) =>
@@ -510,7 +627,8 @@ export default function WeedEmpire() {
         soil_type,
       });
       applyFarm(data.farm, { force: true });
-      toast.success("Plant prefs saved");
+      if (data.assistant_run?.message) toast.message(data.assistant_run.message);
+      else toast.success("Plant prefs saved");
     });
 
   const equipStolen = (index) =>
@@ -534,8 +652,17 @@ export default function WeedEmpire() {
   const selStrain = strainMap[selectedPlot?.strain_id] || {};
   const plantStrain = strainMap[strainId] || {};
   const plantSeedCost = Number(plantStrain.seed_cost || 0);
+  const plantCount = Math.max(1, plantableSelected.length || (isPlantablePlot(selectedPlot) ? 1 : 0));
+  const plantTotalSeedCost = plantSeedCost * plantCount;
   const selectedSoilStock = Number(farm.soil_stock?.[soilType] || 0);
-  const canAffordPlant = Number(farm.business_cash || 0) >= plantSeedCost && selectedSoilStock >= 1;
+  const canAffordPlant =
+    plantableSelected.length > 0 &&
+    Number(farm.business_cash || 0) >= plantTotalSeedCost &&
+    selectedSoilStock >= plantCount;
+  const miteTreatCost = miteSelected.reduce(
+    (sum, p) => sum + Number(p.mite_treatment_cost || 0),
+    0
+  );
   const raidUnlocked = Number(farm.grower_level || 1) >= 2;
   const assistant = farm.assistant || {};
   const heatHigh = Number(farm.heat || 0) >= Number(farm.heat_bust_threshold || 95);
@@ -757,20 +884,191 @@ export default function WeedEmpire() {
       </div>
 
       {tab === "grow" && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Actions first on mobile so plant/tend isn't buried under the plot grid */}
-          <div className="order-1 lg:order-2 space-y-3">
-            {(selectedPlot?.state === "empty" || selectedPlot?.state === "dead" || !selectedPlot?.strain_id) && (
+        <div className="flex flex-col gap-4 lg:grid lg:grid-cols-2">
+          {/* Mobile order: Grow (3D) → water/care → pots */}
+          <div className="order-1 space-y-3">
+            <WeedEmpire3D
+              lightClass={farm.active_light_class || "cfl"}
+              stage={selectedPlot?.stage || selectedPlot?.state || "empty"}
+              progress={selectedPlot?.progress || 0}
+              budMeshKey={selStrain.bud_mesh_key || "dense"}
+              strainType={selStrain.type || "hybrid"}
+              quality={selectedPlot?.quality || 50}
+              equipment={farm.equipment || {}}
+              houseTier={farm.house_tier || 0}
+              houseId={farm.house?.id || "closet"}
+              autoWater={!!farm.auto_water}
+              autoFeed={!!farm.auto_feed}
+              curingCount={(farm.curing || []).length}
+              cleanlinessPct={cleanlinessPct}
+              miteInfestationPct={mitePct}
+              miteInfested={miteInfested}
+              fx={fx === "plant" ? null : fx}
+              fxNonce={fxNonce}
+              onFxDone={() => setFx(null)}
+            />
+            <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground">
+              <span className="inline-flex items-center gap-1">
+                <Lightbulb className="w-3 h-3 text-amber-400" />
+                {String(farm.active_light_class || "cfl").toUpperCase()} glow
+              </span>
+              <span>
+                Yield ×{(farm.stats?.yield_mult || 1).toFixed(2)} · Quality{" "}
+                {(farm.stats?.quality_ceiling || 0).toFixed(0)}
+              </span>
+            </div>
+          </div>
+
+          <div className="order-2 space-y-3">
+            {/* Care / water meters sit directly under the grow view */}
+            {growingSelected.length > 0 && (
+              <div className="space-y-2">
+                <div className="rounded border border-border/40 bg-card/30 p-3 space-y-2">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <div className="text-xs font-heading uppercase text-muted-foreground">
+                      {selectedPlotIds.length > 1
+                        ? `${selectedPlotIds.length} pots selected`
+                        : `Pot ${(farm.plots || []).findIndex((p) => p.id === selectedPlotId) + 1 || 1}`}
+                    </div>
+                    <div className="text-xs text-foreground truncate">
+                      {selectedPlotIds.length > 1
+                        ? `${growingSelected.length} growing`
+                        : selStrain.name || selectedPlot?.strain_id}
+                    </div>
+                  </div>
+                  {isGrowingPlot(selectedPlot) ? (
+                    <>
+                      <CareMeter
+                        label={
+                          isReadyPlot(selectedPlot) ? "Ready to harvest" : "Grow"
+                        }
+                        pct={(selectedPlot.progress || 0) * 100}
+                        hoursLeft={
+                          isReadyPlot(selectedPlot) ? 0 : selectedPlot.hours_to_harvest
+                        }
+                        colorClass={isReadyPlot(selectedPlot) ? "bg-amber-500" : "bg-emerald-500"}
+                        warn={isReadyPlot(selectedPlot)}
+                        fillUp
+                      />
+                      <CareMeter
+                        label="Water"
+                        pct={selectedPlot.water_pct}
+                        hoursLeft={selectedPlot.water_hours_left}
+                        colorClass="bg-sky-500"
+                        warn={selectedPlot.needs_water}
+                      />
+                      <CareMeter
+                        label="Feed"
+                        pct={selectedPlot.feed_pct}
+                        hoursLeft={selectedPlot.feed_hours_left}
+                        colorClass="bg-lime-500"
+                        warn={selectedPlot.needs_feed}
+                      />
+                      {miteInfested && (
+                        <>
+                          <CareMeter
+                            label="Spider mites"
+                            pct={mitePct}
+                            colorClass="bg-red-500"
+                            warn
+                            fillUp
+                          />
+                          <p className="text-[10px] text-red-300">
+                            Harvest cut ~{Math.round(Number(selectedPlot.mite_yield_penalty_pct || 0))}%.
+                          </p>
+                        </>
+                      )}
+                    </>
+                  ) : (
+                    <p className="text-[11px] text-muted-foreground">
+                      Focus pot is empty — meters show the last tapped growing pot when selected.
+                    </p>
+                  )}
+                  {farm.auto_water || farm.auto_feed ? (
+                    <p className="text-[10px] text-emerald-400/90">
+                      {farm.auto_water ? "Auto-water on. " : ""}
+                      {farm.auto_feed ? "Auto-feed on." : ""}
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-muted-foreground">
+                      Auto-water at Irrigation Lv {farm.auto_water_at_irrigation || 5}; feeders at Lv{" "}
+                      {farm.auto_feed_at_irrigation || 8}.
+                    </p>
+                  )}
+                  {selectedPlotIds.length > 1 ? (
+                    <p className="text-[10px] text-muted-foreground">
+                      Actions apply to all selected pots that qualify.
+                    </p>
+                  ) : null}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={busy || farm.auto_water || growingSelected.length < 1}
+                    onClick={water}
+                    className="inline-flex items-center justify-center gap-1 px-3 py-2.5 rounded border border-sky-500/40 text-sky-300 text-xs disabled:opacity-40 tap-feedback touch-manipulation active:scale-[0.97] min-h-11"
+                  >
+                    <Droplets className="w-3.5 h-3.5" />{" "}
+                    {farm.auto_water
+                      ? "Auto"
+                      : growingSelected.length > 1
+                        ? `Water ×${growingSelected.length}`
+                        : "Water"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || farm.auto_feed || growingSelected.length < 1}
+                    onClick={feed}
+                    className="inline-flex items-center justify-center gap-1 px-3 py-2.5 rounded border border-lime-500/40 text-lime-300 text-xs disabled:opacity-40 tap-feedback touch-manipulation active:scale-[0.97] min-h-11"
+                  >
+                    <Leaf className="w-3.5 h-3.5" />{" "}
+                    {farm.auto_feed
+                      ? "Auto"
+                      : growingSelected.length > 1
+                        ? `Feed ×${growingSelected.length}`
+                        : "Feed"}
+                  </button>
+                  {miteSelected.length > 0 && (
+                    <button
+                      type="button"
+                      disabled={busy || Number(farm.business_cash || 0) < miteTreatCost}
+                      onClick={treatMites}
+                      className="col-span-2 inline-flex items-center justify-center gap-1 px-3 py-2.5 rounded border border-red-500/50 text-red-300 text-xs disabled:opacity-40 tap-feedback touch-manipulation active:scale-[0.97] min-h-11"
+                    >
+                      <Bug className="w-3.5 h-3.5" /> Treat mites
+                      {miteSelected.length > 1 ? ` ×${miteSelected.length}` : ""} · {money(miteTreatCost)}
+                    </button>
+                  )}
+                  {readySelected.length > 0 && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={harvest}
+                      className="col-span-2 inline-flex items-center justify-center gap-1 px-3 py-2.5 rounded bg-amber-600/80 text-xs font-heading tap-feedback touch-manipulation active:scale-[0.97] min-h-11"
+                    >
+                      <Scissors className="w-3.5 h-3.5" />{" "}
+                      {readySelected.length > 1
+                        ? `Harvest / Trim ×${readySelected.length}`
+                        : "Harvest / Trim"}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {plantableSelected.length > 0 && (
               <div className="rounded border border-border/50 p-3 space-y-3 bg-card/30">
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="text-xs font-heading uppercase text-muted-foreground">
-                      {selectedPlot?.state === "dead" ? "Replant" : "Plant"}
+                      {plantableSelected.some((p) => p.state === "dead") ? "Replant" : "Plant"}
                     </div>
                     <p className="text-[11px] text-muted-foreground mt-0.5">
-                      Plot{" "}
-                      {(farm.plots || []).findIndex((p) => p.id === selectedPlotId) + 1 || 1}
-                      {selectedPlot?.state === "dead" ? " · crop lost" : " · empty"}
+                      {plantableSelected.length > 1
+                        ? `${plantableSelected.length} empty pots selected`
+                        : `Pot ${(farm.plots || []).findIndex((p) => p.id === plantableSelected[0]?.id) + 1 || 1}${
+                            plantableSelected[0]?.state === "dead" ? " · crop lost" : " · empty"
+                          }`}
                     </p>
                   </div>
                   {farm.scavenged_seed_available ? (
@@ -785,7 +1083,7 @@ export default function WeedEmpire() {
                   ) : null}
                 </div>
 
-                {selectedPlot?.state === "dead" && (
+                {plantableSelected.some((p) => p.state === "dead") && (
                   <p className="text-xs text-red-300/80">
                     Uses a fresh seed and soil charge; restarts at seedling.
                   </p>
@@ -809,8 +1107,12 @@ export default function WeedEmpire() {
 
                 <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
                   <div className="rounded border border-border/40 bg-black/20 px-1.5 py-1.5">
-                    <div className="text-muted-foreground text-[9px] uppercase">Seed</div>
-                    <div className="font-heading text-foreground tabular-nums">{money(plantSeedCost)}</div>
+                    <div className="text-muted-foreground text-[9px] uppercase">
+                      Seed{plantCount > 1 ? ` ×${plantCount}` : ""}
+                    </div>
+                    <div className="font-heading text-foreground tabular-nums">
+                      {money(plantTotalSeedCost)}
+                    </div>
                   </div>
                   <div className="rounded border border-border/40 bg-black/20 px-1.5 py-1.5">
                     <div className="text-muted-foreground text-[9px] uppercase">Grow</div>
@@ -852,28 +1154,37 @@ export default function WeedEmpire() {
                           }`}
                         >
                           <div className="text-[11px] font-heading">{opt.label}</div>
-                          <div className={`text-[10px] tabular-nums ${stock < 1 ? "text-amber-300" : ""}`}>
+                          <div
+                            className={`text-[10px] tabular-nums ${
+                              stock < plantCount ? "text-amber-300" : ""
+                            }`}
+                          >
                             {stock} left
                           </div>
                         </button>
                       );
                     })}
                   </div>
-                  {selectedSoilStock < 1 && (
+                  {selectedSoilStock < plantCount && (
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => buySoil(soilType)}
+                      onClick={() =>
+                        buySoil(soilType, Math.max(1, Math.ceil((plantCount - selectedSoilStock) / 4)))
+                      }
                       className="w-full text-xs py-2 rounded border border-amber-500/40 bg-amber-500/10 text-amber-200 min-h-10 tap-feedback"
                     >
-                      Buy 1 bag of {soilType === "coco" ? "coco" : soilType.replace(/_/g, " ")}
+                      Buy soil — need {plantCount - selectedSoilStock} more for {plantCount} pots
                     </button>
                   )}
                 </div>
 
-                {!canAffordPlant && selectedSoilStock >= 1 && Number(farm.business_cash || 0) < plantSeedCost ? (
+                {!canAffordPlant &&
+                selectedSoilStock >= plantCount &&
+                Number(farm.business_cash || 0) < plantTotalSeedCost ? (
                   <p className="text-xs text-amber-300">
-                    Need {money(plantSeedCost - Number(farm.business_cash || 0))} more business cash.
+                    Need {money(plantTotalSeedCost - Number(farm.business_cash || 0))} more business cash
+                    {plantCount > 1 ? ` for ${plantCount} pots` : ""}.
                   </p>
                 ) : null}
 
@@ -881,146 +1192,84 @@ export default function WeedEmpire() {
                   type="button"
                   disabled={busy || !canAffordPlant}
                   onClick={plant}
-                  className="w-full py-3 rounded bg-emerald-600/80 hover:bg-emerald-600 text-sm font-heading tap-feedback touch-manipulation active:scale-[0.97] min-h-12 disabled:opacity-40 sticky bottom-2 z-[1] shadow-lg shadow-black/40"
+                  className="w-full py-3 rounded bg-emerald-600/80 hover:bg-emerald-600 text-sm font-heading tap-feedback touch-manipulation active:scale-[0.97] min-h-12 disabled:opacity-40"
                 >
-                  Plant — {money(plantSeedCost)} + 1 soil
+                  {plantCount > 1
+                    ? `Plant ${plantCount} pots — ${money(plantTotalSeedCost)} + ${plantCount} soil`
+                    : `Plant — ${money(plantSeedCost)} + 1 soil`}
                 </button>
-              </div>
-            )}
-
-            {selectedPlot?.strain_id &&
-              selectedPlot?.state !== "empty" &&
-              selectedPlot?.state !== "dead" && (
-              <div className="space-y-2">
-                <div className="rounded border border-border/40 bg-card/30 p-3 space-y-2">
-                  <div className="flex items-baseline justify-between gap-2">
-                    <div className="text-xs font-heading uppercase text-muted-foreground">
-                      Plot {(farm.plots || []).findIndex((p) => p.id === selectedPlotId) + 1 || 1}
-                    </div>
-                    <div className="text-xs text-foreground truncate">
-                      {selStrain.name || selectedPlot.strain_id}
-                    </div>
-                  </div>
-                  <CareMeter
-                    label={
-                      selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready"
-                        ? "Ready to harvest"
-                        : "Grow / harvest"
-                    }
-                    pct={(selectedPlot.progress || 0) * 100}
-                    hoursLeft={
-                      selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready"
-                        ? 0
-                        : selectedPlot.hours_to_harvest
-                    }
-                    colorClass={
-                      selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready"
-                        ? "bg-amber-500"
-                        : "bg-emerald-500"
-                    }
-                    warn={
-                      selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready"
-                    }
-                    fillUp
-                  />
-                  <CareMeter
-                    label="Water"
-                    pct={selectedPlot.water_pct}
-                    hoursLeft={selectedPlot.water_hours_left}
-                    colorClass="bg-sky-500"
-                    warn={selectedPlot.needs_water}
-                  />
-                  <CareMeter
-                    label="Feed"
-                    pct={selectedPlot.feed_pct}
-                    hoursLeft={selectedPlot.feed_hours_left}
-                    colorClass="bg-lime-500"
-                    warn={selectedPlot.needs_feed}
-                  />
-                  {miteInfested && (
-                    <>
-                      <CareMeter
-                        label="Spider mites"
-                        pct={mitePct}
-                        colorClass="bg-red-500"
-                        warn
-                        fillUp
-                      />
-                      <p className="text-[10px] text-red-300">
-                        Harvest cut ~{Math.round(Number(selectedPlot.mite_yield_penalty_pct || 0))}%.
-                      </p>
-                    </>
-                  )}
-                  {farm.auto_water || farm.auto_feed ? (
-                    <p className="text-[10px] text-emerald-400/90">
-                      {farm.auto_water ? "Auto-water on. " : ""}
-                      {farm.auto_feed ? "Auto-feed on." : ""}
-                    </p>
-                  ) : (
-                    <p className="text-[10px] text-muted-foreground">
-                      Auto-water at Irrigation Lv {farm.auto_water_at_irrigation || 5}; feeders at Lv{" "}
-                      {farm.auto_feed_at_irrigation || 8}.
-                    </p>
-                  )}
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    disabled={busy || farm.auto_water}
-                    onClick={water}
-                    className="inline-flex items-center justify-center gap-1 px-3 py-2.5 rounded border border-sky-500/40 text-sky-300 text-xs disabled:opacity-40 tap-feedback touch-manipulation active:scale-[0.97] min-h-11"
-                  >
-                    <Droplets className="w-3.5 h-3.5" /> {farm.auto_water ? "Auto" : "Water"}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={busy || farm.auto_feed}
-                    onClick={feed}
-                    className="inline-flex items-center justify-center gap-1 px-3 py-2.5 rounded border border-lime-500/40 text-lime-300 text-xs disabled:opacity-40 tap-feedback touch-manipulation active:scale-[0.97] min-h-11"
-                  >
-                    <Leaf className="w-3.5 h-3.5" /> {farm.auto_feed ? "Auto" : "Feed"}
-                  </button>
-                  {miteInfested && (
-                    <button
-                      type="button"
-                      disabled={
-                        busy ||
-                        Number(farm.business_cash || 0) < Number(selectedPlot.mite_treatment_cost || 0)
-                      }
-                      onClick={treatMites}
-                      className="col-span-2 inline-flex items-center justify-center gap-1 px-3 py-2.5 rounded border border-red-500/50 text-red-300 text-xs disabled:opacity-40 tap-feedback touch-manipulation active:scale-[0.97] min-h-11"
-                    >
-                      <Bug className="w-3.5 h-3.5" /> Treat mites · {money(selectedPlot.mite_treatment_cost || 0)}
-                    </button>
-                  )}
-                  {(selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready") && (
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={harvest}
-                      className="col-span-2 inline-flex items-center justify-center gap-1 px-3 py-2.5 rounded bg-amber-600/80 text-xs font-heading tap-feedback touch-manipulation active:scale-[0.97] min-h-11"
-                    >
-                      <Scissors className="w-3.5 h-3.5" /> Harvest / Trim
-                    </button>
-                  )}
-                </div>
               </div>
             )}
 
             <div>
               <div className="flex items-center justify-between gap-2 mb-1.5">
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-heading">
-                  Plots · {(farm.plots || []).length}
+                  Pots · {(farm.plots || []).length}
+                  {selectedPlotIds.length > 1 ? ` · ${selectedPlotIds.length} selected` : ""}
                 </div>
                 <div className="text-[10px] text-muted-foreground">
-                  {(farm.plots || []).filter((p) => p.state === "empty" || p.state === "dead" || !p.strain_id).length}{" "}
-                  empty
+                  {(farm.plots || []).filter((p) => isPlantablePlot(p)).length} empty
                 </div>
               </div>
+              <div className="flex flex-wrap gap-1.5 mb-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMultiSelect((v) => {
+                      if (v && selectedPlotId) setSelectedPlotIds([selectedPlotId]);
+                      return !v;
+                    });
+                  }}
+                  className={`text-[10px] uppercase px-2 py-1 rounded border tap-feedback min-h-8 ${
+                    multiSelect
+                      ? "border-emerald-500/60 bg-emerald-500/15 text-emerald-200"
+                      : "border-border/50 text-muted-foreground"
+                  }`}
+                >
+                  Multi {multiSelect ? "on" : "off"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectPlotsBy(isPlantablePlot)}
+                  className="text-[10px] uppercase px-2 py-1 rounded border border-border/50 text-muted-foreground tap-feedback min-h-8"
+                >
+                  All empty
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectPlotsBy(isReadyPlot)}
+                  className="text-[10px] uppercase px-2 py-1 rounded border border-amber-500/40 text-amber-200/90 tap-feedback min-h-8"
+                >
+                  All ready
+                </button>
+                <button
+                  type="button"
+                  onClick={() => selectPlotsBy(isGrowingPlot)}
+                  className="text-[10px] uppercase px-2 py-1 rounded border border-border/50 text-muted-foreground tap-feedback min-h-8"
+                >
+                  All growing
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMultiSelect(false);
+                    if (selectedPlotId) setSelectedPlotIds([selectedPlotId]);
+                  }}
+                  className="text-[10px] uppercase px-2 py-1 rounded border border-border/50 text-muted-foreground tap-feedback min-h-8"
+                >
+                  Clear
+                </button>
+              </div>
+              <p className="text-[10px] text-muted-foreground mb-1.5">
+                {multiSelect
+                  ? "Multi on — tap pots to add/remove."
+                  : "Tap a pot, or use All empty / Multi for bulk plant."}
+              </p>
               <div className="grid grid-cols-4 gap-1.5">
                 {(farm.plots || []).map((p, idx) => {
                   const st = p.stage || p.state || "empty";
-                  const active = p.id === selectedPlotId;
+                  const active = selectedIdSet.has(p.id);
+                  const focused = p.id === selectedPlotId;
                   const ready = st === "harvest_ready";
                   const growing = p.strain_id && st !== "empty" && st !== "dead";
                   const needsCare = !!(p.needs_water || p.needs_feed || p.mite_infested);
@@ -1028,10 +1277,12 @@ export default function WeedEmpire() {
                     <button
                       key={p.id}
                       type="button"
-                      onClick={() => setSelectedPlotId(p.id)}
+                      onClick={() => togglePlotSelect(p.id)}
                       className={`relative text-left rounded border px-1.5 py-1.5 min-h-[3.25rem] tap-feedback touch-manipulation active:scale-[0.97] ${
                         active
-                          ? "border-emerald-500/70 bg-emerald-500/15"
+                          ? focused
+                            ? "border-emerald-500/70 bg-emerald-500/15 ring-1 ring-emerald-400/40"
+                            : "border-emerald-500/50 bg-emerald-500/10"
                           : ready
                             ? "border-amber-500/50 bg-amber-500/10"
                             : needsCare
@@ -1060,39 +1311,6 @@ export default function WeedEmpire() {
                   );
                 })}
               </div>
-            </div>
-          </div>
-
-          <div className="order-2 lg:order-1 space-y-3">
-            <WeedEmpire3D
-              lightClass={farm.active_light_class || "cfl"}
-              stage={selectedPlot?.stage || selectedPlot?.state || "empty"}
-              progress={selectedPlot?.progress || 0}
-              budMeshKey={selStrain.bud_mesh_key || "dense"}
-              strainType={selStrain.type || "hybrid"}
-              quality={selectedPlot?.quality || 50}
-              equipment={farm.equipment || {}}
-              houseTier={farm.house_tier || 0}
-              houseId={farm.house?.id || "closet"}
-              autoWater={!!farm.auto_water}
-              autoFeed={!!farm.auto_feed}
-              curingCount={(farm.curing || []).length}
-              cleanlinessPct={cleanlinessPct}
-              miteInfestationPct={mitePct}
-              miteInfested={miteInfested}
-              fx={fx === "plant" ? null : fx}
-              fxNonce={fxNonce}
-              onFxDone={() => setFx(null)}
-            />
-            <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground">
-              <span className="inline-flex items-center gap-1">
-                <Lightbulb className="w-3 h-3 text-amber-400" />
-                {String(farm.active_light_class || "cfl").toUpperCase()} glow
-              </span>
-              <span>
-                Yield ×{(farm.stats?.yield_mult || 1).toFixed(2)} · Quality{" "}
-                {(farm.stats?.quality_ceiling || 0).toFixed(0)}
-              </span>
             </div>
           </div>
         </div>
@@ -1389,12 +1607,22 @@ export default function WeedEmpire() {
                         <option value="coco">Coco (stock {farm.soil_stock?.coco || 0})</option>
                       </select>
                       <p className="text-[10px] text-muted-foreground">
-                        Fills as many empty plots as business cash + soil allow each tick (~45s).
+                        Fills every empty pot it can afford in one go (seed + soil from business cash). If it stops early,
+                        check Last — usually not enough cash for that strain (e.g. Granddaddy Purple is pricey).
                       </p>
                     </div>
                   ) : null}
                   {w.last_run?.message ? (
-                    <p className="text-[11px] text-muted-foreground">Last: {w.last_run.message}</p>
+                    <p
+                      className={`text-[11px] ${
+                        w.last_run?.stop_reason &&
+                        !["No empty plots", "Stopped after filling available plots"].includes(w.last_run.stop_reason)
+                          ? "text-amber-300"
+                          : "text-muted-foreground"
+                      }`}
+                    >
+                      Last: {w.last_run.message}
+                    </p>
                   ) : null}
                 </div>
               ) : null
@@ -1468,9 +1696,10 @@ export default function WeedEmpire() {
           ) : null}
           <p className="text-xs text-muted-foreground flex items-start gap-2">
             <Shield className="w-4 h-4 shrink-0 mt-0.5" />
-            Reach Grower Lv 2 to raid. Success steals the full stash, cash, and one gear line (equip later if house is
-            too small). Cooldown is {raidMeta.raid_cooldown_hours || 3}h per target — you can still raid other growers.
-            Target security caps your odds — fully maxed security = 25% success (75% fail).
+            Reach Grower Lv 2 to raid. Success steals the full stash, cash, and one gear line (they keep their upgrade
+            level — rebuy in Equipment to restore it; you equip the stolen piece later if your house is too small).
+            Cooldown is {raidMeta.raid_cooldown_hours || 3}h per target — you can still raid other growers. Target
+            security caps your odds — fully maxed security = 25% success (75% fail).
             {farm.sabotage_unlocked ? " Sabotage heat spike unlocked." : " Harvest 10 plants to unlock sabotage."}
           </p>
           <button
@@ -1543,8 +1772,8 @@ export default function WeedEmpire() {
           <div className="w-full max-w-md rounded border border-red-500/40 bg-zinc-950 p-4 space-y-3 shadow-xl">
             <h2 className="font-heading text-lg text-red-300">Heat bust</h2>
             <p className="text-sm text-muted-foreground">
-              Sustained heat cooked the op. You&apos;re in jail for 5 minutes. House dropped a tier, gear halved, stash
-              wiped
+              Sustained heat cooked the op. You&apos;re in jail for 5 minutes and unbustable for that whole time
+              (nobody can bust you out). House dropped a tier, gear halved, stash wiped
               {bustModal?.assistant_fled ? ", and your assistant fled — you&apos;ll need to rehire" : ""}. Exclusive
               strain ownership is safe — plant a free ditch weed seed when you&apos;re out.
             </p>

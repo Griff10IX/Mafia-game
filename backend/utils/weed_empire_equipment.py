@@ -707,19 +707,50 @@ def shop_status_for_farm(
     equipment_levels: Dict[str, int],
 ) -> List[Dict[str, Any]]:
     grower_level = max(1, int(farm.get("grower_level") or 1))
+    rebuy_raw = farm.get("equipment_rebuy") if isinstance(farm.get("equipment_rebuy"), dict) else {}
     out: List[Dict[str, Any]] = []
     for cat in EQUIPMENT_CATEGORIES:
         owned = int(equipment_levels.get(cat["id"]) or 0)
-        out.append(
-            equipment_unlock_state(
-                cat,
-                owned_level=owned,
-                house_tier=house_tier,
-                grower_level=grower_level,
-                equipment_levels=equipment_levels,
-                house_max_equip_tier=house_max_equip_tier,
-            )
+        st = equipment_unlock_state(
+            cat,
+            owned_level=owned,
+            house_tier=house_tier,
+            grower_level=grower_level,
+            equipment_levels=equipment_levels,
+            house_max_equip_tier=house_max_equip_tier,
         )
+        try:
+            pending = int(rebuy_raw.get(cat["id"]) or 0)
+        except (TypeError, ValueError):
+            pending = 0
+        # Raided gear: not installed, but level is saved — pay a rebuy fee to restore it
+        if owned <= 0 and pending > 0:
+            rebuy_cost = equipment_level_cost(cat, 1)
+            house_ok = pending <= int(house_max_equip_tier)
+            tier_ok = house_tier >= int(cat.get("min_house_tier") or 0)
+            can_rebuy = house_ok and tier_ok
+            reason = None
+            if not tier_ok:
+                reason = f"Need house tier {cat.get('min_house_tier')}+"
+            elif not house_ok:
+                reason = f"Upgrade house for gear Lv {pending}+"
+            st.update(
+                {
+                    "needs_rebuy": True,
+                    "rebuy_level": pending,
+                    "locked": False,
+                    "lock_reason": reason,
+                    "can_upgrade": can_rebuy,
+                    "next_cost": rebuy_cost if can_rebuy else None,
+                    "maxed": False,
+                    "action_label": f"Rebuy Lv {pending}",
+                }
+            )
+        else:
+            st["needs_rebuy"] = False
+            st["rebuy_level"] = 0
+            st["action_label"] = None
+        out.append(st)
     return out
 
 

@@ -6,6 +6,24 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-27 12:10 UTC[/color][/b] — [b]Weed Empire heat jail: unbustable[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Weed heat bust jail is [b]5 minutes unbustable[/b] — friends can’t bust you out and bailout tokens won’t work until the lockdown ends. Jail list shows the lock timer.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-27 12:05 UTC[/color][/b] — [b]Weed Empire: raid gear keeps level[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] When someone raids your gear (e.g. a tent), your [b]upgrade level is saved[/b]. Buy it again in Equipment (cheap rebuy) and it comes back at the [b]same level[/b] — not reset to 0.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-27 11:55 UTC[/color][/b] — [b]Weed Empire: daily withdraw cap[/b][/size]
 [quote]
 [list]
@@ -40,7 +58,7 @@
 [*][color=#888888][b]New:[/b] [b]Crew[/b] tab — hire up to [b]2[/b] farm workers. Each runs one job: auto-harvest, cool heat, or sell via dealers (worker keeps [b]25%[/b] of dealer sells). Toggle each on/off anytime.[/color]
 [*][color=#888888][b]New:[/b] Street dealers level up to [b]Lv 20[/b] (better drip & prices; steeper upgrade costs).[/color]
 [*][color=#888888][b]Changed:[/b] Raids use a [b]3 hour per-target[/b] cooldown, steal the [b]full stash[/b], and can store stolen gear to equip later. Target [b]security[/b] cuts your success odds — fully maxed security = [b]25%[/b] success.[/color]
-[*][color=#888888][b]Changed:[/b] Heat rises about [b]3–8%/hour[/b] (better climate/gear = cooler end). Clear heat for a fair cash cost. Stay near max heat too long → [b]bust[/b]: jail 5 min, farm hit hard, free ditch-weed restart seed. [b]Special strains stay yours[/b]. Your assistant [b]flees[/b] and must be rehired.[/color]
+[*][color=#888888][b]Changed:[/b] Heat rises about [b]3–8%/hour[/b] (better climate/gear = cooler end). Clear heat for a fair cash cost. Stay near max heat too long → [b]bust[/b]: jail [b]5 min unbustable[/b], farm hit hard, free ditch-weed restart seed. [b]Special strains stay yours[/b]. Your assistant [b]flees[/b] and must be rehired.[/color]
 [*][color=#888888][b]New:[/b] Withdraw weed [b]business cash[/b] to personal money — must leave [b]$50,000[/b]; [b]$250M[/b] daily withdraw cap.[/color]
 [/list]
 [/quote]

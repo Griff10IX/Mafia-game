@@ -112,16 +112,21 @@ export default function WeedShop({
           <p className="text-sm text-muted-foreground">No gear in this group.</p>
         ) : (
           inGroup.map((row) => {
-            const locked = !!row.locked && !(row.owned_level > 0);
+            const locked = !!row.locked && !(row.owned_level > 0) && !row.needs_rebuy;
             const maxed = !!row.maxed;
-            const pct = row.max_level ? Math.round(((row.owned_level || 0) / row.max_level) * 100) : 0;
+            const shownLevel = row.needs_rebuy ? Number(row.rebuy_level || 0) : Number(row.owned_level || 0);
+            const pct = row.max_level ? Math.round((shownLevel / row.max_level) * 100) : 0;
             const y = row.stats_per_level?.yield_mult;
             const q = row.stats_per_level?.quality_ceiling;
             return (
               <div
                 key={row.category_id}
                 className={`rounded-lg border p-3 bg-card/40 ${
-                  locked ? "border-border/30 opacity-70" : "border-border/50"
+                  locked
+                    ? "border-border/30 opacity-70"
+                    : row.needs_rebuy
+                      ? "border-amber-500/40"
+                      : "border-border/50"
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -135,6 +140,9 @@ export default function WeedShop({
                       >
                         {row.tier}
                       </span>
+                      {row.needs_rebuy ? (
+                        <span className="text-[9px] uppercase text-amber-300">Raided · rebuy</span>
+                      ) : null}
                       {locked ? (
                         <span className="inline-flex items-center gap-0.5 text-[9px] text-amber-400/90">
                           <Lock className="w-3 h-3" /> Locked
@@ -145,13 +153,17 @@ export default function WeedShop({
                     <div className="mt-2 space-y-1">
                       <div className="flex justify-between text-[10px] text-muted-foreground">
                         <span>
-                          Lv {row.owned_level || 0}/{row.max_level}
+                          {row.needs_rebuy
+                            ? `Saved Lv ${shownLevel}/${row.max_level} (not installed)`
+                            : `Lv ${row.owned_level || 0}/${row.max_level}`}
                         </span>
                         <span>{pct}%</span>
                       </div>
                       <div className="h-1.5 rounded bg-zinc-800 overflow-hidden">
                         <div
-                          className={`h-full ${locked ? "bg-zinc-600" : "bg-emerald-500/80"}`}
+                          className={`h-full ${
+                            locked ? "bg-zinc-600" : row.needs_rebuy ? "bg-amber-500/80" : "bg-emerald-500/80"
+                          }`}
                           style={{ width: `${pct}%` }}
                         />
                       </div>
@@ -176,9 +188,15 @@ export default function WeedShop({
                         type="button"
                         disabled={busy}
                         onClick={() => onUpgrade(row.category_id)}
-                        className="text-xs px-3 py-1.5 rounded bg-emerald-700/70 hover:bg-emerald-600 font-heading"
+                        className={`text-xs px-3 py-1.5 rounded font-heading ${
+                          row.needs_rebuy
+                            ? "bg-amber-700/80 hover:bg-amber-600"
+                            : "bg-emerald-700/70 hover:bg-emerald-600"
+                        }`}
                       >
-                        {money(row.next_cost)}
+                        {row.needs_rebuy
+                          ? `${row.action_label || `Rebuy Lv ${row.rebuy_level}`} · ${money(row.next_cost)}`
+                          : money(row.next_cost)}
                       </button>
                     ) : (
                       <span className="inline-flex items-center justify-center w-9 h-9 rounded border border-border/40 text-muted-foreground">

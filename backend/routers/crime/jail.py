@@ -509,6 +509,7 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user), inc
                 "rank_points": 1,
                 "prestige_rank_multiplier": 1,
                 "jail_until": 1,
+                "unbreakable_until": 1,
                 "bust_reward_cash": 1,
                 "money": 1,
                 "email": 1,
@@ -567,6 +568,22 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user), inc
         styling = _jail_row_online_styling(player, admin_online_color, mod_default_online_color)
         if styling is None:
             continue
+        unbustable = False
+        unbustable_secs = 0
+        raw_ub = player.get("unbreakable_until")
+        if raw_ub:
+            try:
+                ub = datetime.fromisoformat(str(raw_ub).replace("Z", "+00:00"))
+                if ub.tzinfo is None:
+                    ub = ub.replace(tzinfo=timezone.utc)
+                else:
+                    ub = ub.astimezone(timezone.utc)
+                left = int((ub - now).total_seconds())
+                if left > 0:
+                    unbustable = True
+                    unbustable_secs = left
+            except Exception:
+                pass
         players_data.append(
             {
                 "username": username,
@@ -574,6 +591,8 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user), inc
                 "is_self": player["id"] == user_id,
                 "is_jail_list_npc": False,
                 "bust_reward_cash": reward_cash,
+                "unbustable": unbustable,
+                "unbustable_seconds": unbustable_secs,
                 **styling,
             }
         )
@@ -909,10 +928,19 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         return {"success": False, "error": "Target is not in jail", "error_code": 400}
     if target.get("unbreakable_until"):
         try:
-            unbreakable_time = datetime.fromisoformat(target["unbreakable_until"])
-            if unbreakable_time > datetime.now(timezone.utc):
-                remaining = int((unbreakable_time - datetime.now(timezone.utc)).total_seconds())
-                return {"success": False, "error": f"This player cannot be busted out for {remaining}s (high security lockdown)", "error_code": 400}
+            unbreakable_time = datetime.fromisoformat(str(target["unbreakable_until"]).replace("Z", "+00:00"))
+            if unbreakable_time.tzinfo is None:
+                unbreakable_time = unbreakable_time.replace(tzinfo=timezone.utc)
+            else:
+                unbreakable_time = unbreakable_time.astimezone(timezone.utc)
+            now_ub = datetime.now(timezone.utc)
+            if unbreakable_time > now_ub:
+                remaining = int((unbreakable_time - now_ub).total_seconds())
+                return {
+                    "success": False,
+                    "error": f"This player is unbustable for {remaining}s (lockdown)",
+                    "error_code": 400,
+                }
         except (ValueError, TypeError):
             pass
 
@@ -1253,7 +1281,7 @@ async def jail_bailout_token(current_user: dict = Depends(get_current_user_verif
             if ub.tzinfo is None:
                 ub = ub.replace(tzinfo=timezone.utc)
             if ub > datetime.now(timezone.utc):
-                raise HTTPException(status_code=400, detail="You cannot bail out during OC lockdown")
+                raise HTTPException(status_code=400, detail="You cannot bail out while unbustable (lockdown)")
         except HTTPException:
             raise
         except Exception:
