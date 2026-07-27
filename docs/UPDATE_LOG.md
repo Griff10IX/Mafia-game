@@ -6,6 +6,18 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-27 16:15 UTC[/color][/b] — [b]Weed Empire: raids Lv 5 + bust protection[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] You need [b]Grower Level 5[/b] to [b]raid or be raided[/b]. Lower-level growers are off the target list.[/color]
+[*][color=#888888][b]New:[/b] After a [b]heat bust[/b], you can’t be raided by anyone for [b]6 hours[/b].[/color]
+[*][color=#888888][b]Fixed:[/b] Raided gear rebuy more reliably restores your [b]saved level[/b] (not stuck at Lv 0 / 1).[/color]
+[*][color=#888888][b]New:[/b] Grow tab — [b]multi-select pots[/b] (All empty / Multi) to plant, water, feed, or harvest many at once. Mobile order is Grow → care meters → pots.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-27 12:10 UTC[/color][/b] — [b]Weed Empire heat jail: unbustable[/b][/size]
 [quote]
 [list]
