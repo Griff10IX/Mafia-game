@@ -195,8 +195,8 @@ export default function WeedEmpire() {
         const fled = statusRes.data.bust?.assistant_fled;
         toast.error(
           fled
-            ? "Heat bust — jailed 5 minutes. Assistant fled; rehire required."
-            : "Heat bust — jailed 5 minutes. Exclusive strains kept."
+            ? "Heat bust — jailed 5 minutes. Raid-protected 6 hours. Assistant fled; rehire required."
+            : "Heat bust — jailed 5 minutes. Raid-protected 6 hours. Exclusive strains kept."
         );
       }
       if (statusRes.data?.assistant_run?.message) {
@@ -1698,10 +1698,16 @@ export default function WeedEmpire() {
             <Shield className="w-4 h-4 shrink-0 mt-0.5" />
             Reach Grower Lv 2 to raid. Success steals the full stash, cash, and one gear line (they keep their upgrade
             level — rebuy in Equipment to restore it; you equip the stolen piece later if your house is too small).
-            Cooldown is {raidMeta.raid_cooldown_hours || 3}h per target — you can still raid other growers. Target
-            security caps your odds — fully maxed security = 25% success (75% fail).
+            Cooldown is {raidMeta.raid_cooldown_hours || 3}h per target — you can still raid other growers. After a heat
+            bust, growers are raid-protected for {farm.bust_raid_immune_hours || 6}h. Target security caps your odds —
+            fully maxed security = 25% success (75% fail).
             {farm.sabotage_unlocked ? " Sabotage heat spike unlocked." : " Harvest 10 plants to unlock sabotage."}
           </p>
+          {farm.raid_immune && farm.raid_immune_until ? (
+            <p className="text-xs text-emerald-300/90">
+              You are raid-protected until {shortReadyDate(farm.raid_immune_until)} (post-bust).
+            </p>
+          ) : null}
           <button
             type="button"
             disabled={busy || !raidUnlocked}
@@ -1733,9 +1739,23 @@ export default function WeedEmpire() {
                           : ""}
                         {t.security_fully_upgraded ? " · max security" : ""}
                       </div>
-                      {!targetReady && t.raid_available_at ? (
-                        <div className="text-[11px] text-amber-300 mt-0.5">
-                          Cooldown — ready {shortReadyDate(t.raid_available_at)}
+                      {!targetReady ? (
+                        <div
+                          className={`text-[11px] mt-0.5 ${
+                            t.raid_immune ? "text-sky-300" : "text-amber-300"
+                          }`}
+                        >
+                          {t.raid_immune && t.raid_immune_until
+                            ? `Post-bust protection — raidable ${shortReadyDate(
+                                // If attacker also has cooldown, show the later unlock time
+                                t.raid_available_at &&
+                                  new Date(t.raid_available_at) > new Date(t.raid_immune_until)
+                                  ? t.raid_available_at
+                                  : t.raid_immune_until
+                              )}`
+                            : t.raid_available_at
+                              ? `Cooldown — ready ${shortReadyDate(t.raid_available_at)}`
+                              : "Not raidable yet"}
                         </div>
                       ) : null}
                     </div>
@@ -1773,7 +1793,8 @@ export default function WeedEmpire() {
             <h2 className="font-heading text-lg text-red-300">Heat bust</h2>
             <p className="text-sm text-muted-foreground">
               Sustained heat cooked the op. You&apos;re in jail for 5 minutes and unbustable for that whole time
-              (nobody can bust you out). House dropped a tier, gear halved, stash wiped
+              (nobody can bust you out). Raid-protected for {bustModal?.raid_immune_hours || farm?.bust_raid_immune_hours || 6}{" "}
+              hours — nobody can raid you. House dropped a tier, gear halved, stash wiped
               {bustModal?.assistant_fled ? ", and your assistant fled — you&apos;ll need to rehire" : ""}. Exclusive
               strain ownership is safe — plant a free ditch weed seed when you&apos;re out.
             </p>

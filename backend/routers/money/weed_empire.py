@@ -94,6 +94,7 @@ RAID_SUCCESS_FLOOR = 0.18
 HEAT_BUST_THRESHOLD = 95.0
 HEAT_BUST_SUSTAIN_SECONDS = 600  # 10 continuous minutes at high heat
 HEAT_BUST_JAIL_SECONDS = 300  # 5 minutes
+BUST_RAID_IMMUNE_HOURS = 6  # cannot be raided by anyone after a heat bust
 # Passive heat: 3–8% of the meter per hour; gear/grower bias which end of the band.
 HEAT_PASSIVE_MIN_PER_HOUR = 3.0
 HEAT_PASSIVE_MAX_PER_HOUR = 8.0
@@ -230,6 +231,7 @@ def _default_farm(user_id: str) -> Dict[str, Any]:
         "heat_high_since": None,
         "last_bust_at": None,
         "bust_restart_seed": False,
+        "raid_immune_until": None,
         "missions": {"harvest_count": 0, "sell_count": 0, "raid_wins": 0},
         "sabotage_unlocked": False,
         "created_at": _iso(),
@@ -337,6 +339,19 @@ def _raid_available_at_for_target(
     ready = last + timedelta(hours=RAID_PER_TARGET_COOLDOWN_HOURS)
     now = now or _utcnow()
     return ready if ready > now else None
+
+
+def _defender_raid_immune_until(farm: dict, now: Optional[datetime] = None) -> Optional[datetime]:
+    """After a heat bust, target cannot be raided until this time (None = not protected)."""
+    until = _parse_iso(farm.get("raid_immune_until"))
+    if until is None:
+        return None
+    now = now or _utcnow()
+    if until.tzinfo is None:
+        until = until.replace(tzinfo=timezone.utc)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=timezone.utc)
+    return until if until > now else None
 
 
 def _mark_raid_against_target(farm: dict, target_user_id: str, now: Optional[datetime] = None) -> str:
@@ -1019,6 +1034,7 @@ def _apply_heat_bust(farm: dict, user_id: str, now: datetime) -> Dict[str, Any]:
     farm["last_heat_tick_at"] = _iso(now)
     farm["last_bust_at"] = _iso(now)
     farm["bust_restart_seed"] = True
+    farm["raid_immune_until"] = _iso(now + timedelta(hours=BUST_RAID_IMMUNE_HOURS))
     farm["cleanliness_pct"] = 100.0
     farm["last_cleanliness_tick_at"] = _iso(now)
     # Heat scare — all workers flee; player must rehire after release.
@@ -1039,6 +1055,8 @@ def _apply_heat_bust(farm: dict, user_id: str, now: datetime) -> Dict[str, Any]:
     return {
         "house_tier": tier,
         "jail_seconds": HEAT_BUST_JAIL_SECONDS,
+        "raid_immune_hours": BUST_RAID_IMMUNE_HOURS,
+        "raid_immune_until": farm["raid_immune_until"],
         "restart_seed": True,
         "assistant_fled": assistant_fled,
     }
@@ -1103,6 +1121,7 @@ async def _maybe_apply_bust_and_assistant(
                 user_id,
                 "Weed Empire bust",
                 "Heat cooked your operation. You're in jail for 5 minutes (unbustable — nobody can bust you out). "
+                f"Raid-protected for {BUST_RAID_IMMUNE_HOURS} hours. "
                 "Farm downgraded. Your assistant fled and must be rehired. Exclusive strain ownership is safe. "
                 "Plant a free ditch weed seed when you're out.",
                 "system",
@@ -1606,6 +1625,7 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
         house_max_equip_tier=int(house.get("max_equip_tier") or 20),
         equipment_levels=_equip_levels(farm),
     )
+    raid_immune_until = _defender_raid_immune_until(farm, now)
     return {
         "id": farm.get("id"),
         "user_id": farm.get("user_id"),
@@ -1681,6 +1701,9 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
         "heat_bust_threshold": HEAT_BUST_THRESHOLD,
         "last_bust_at": farm.get("last_bust_at"),
         "bust_restart_seed": bool(farm.get("bust_restart_seed")),
+        "bust_raid_immune_hours": BUST_RAID_IMMUNE_HOURS,
+        "raid_immune_until": _iso(raid_immune_until) if raid_immune_until else None,
+        "raid_immune": raid_immune_until is not None,
         "missions": farm.get("missions") or {},
         "sabotage_unlocked": bool(farm.get("sabotage_unlocked")),
         "auto_water": auto_water,
@@ -1968,6 +1991,7 @@ async def weed_status(current_user: dict = Depends(_gate)):
             "house_tier": farm.get("house_tier"),
             "bust_restart_seed": farm.get("bust_restart_seed"),
             "last_bust_at": farm.get("last_bust_at"),
+            "raid_immune_until": farm.get("raid_immune_until"),
             "missions": farm.get("missions"),
             "sabotage_unlocked": farm.get("sabotage_unlocked"),
             "grower_level": farm.get("grower_level"),
@@ -2804,6 +2828,8 @@ async def weed_raid_targets(current_user: dict = Depends(_gate)):
             "business_cash": 1,
             "equipment": 1,
             "stash": 1,
+            "raid_immune_until": 1,
+            "last_bust_at": 1,
         },
     )
     targets = []
@@ -2826,6 +2852,7 @@ async def weed_raid_targets(current_user: dict = Depends(_gate)):
             sec = _security_upgrade_progress(f)
             est_chance = _raid_success_chance(my_farm, f)
             target_ready_at = _raid_available_at_for_target(my_farm, uid, now)
+            immune_until = _defender_raid_immune_until(f, now)
             targets.append(
                 {
                     "user_id": uid,
@@ -2838,8 +2865,10 @@ async def weed_raid_targets(current_user: dict = Depends(_gate)):
                     "security_fill": sec.get("fill"),
                     "security_fully_upgraded": bool(sec.get("fully_upgraded")),
                     "raid_success_chance": round(est_chance, 3),
-                    "raid_ready": target_ready_at is None,
+                    "raid_ready": target_ready_at is None and immune_until is None,
                     "raid_available_at": _iso(target_ready_at) if target_ready_at else None,
+                    "raid_immune": immune_until is not None,
+                    "raid_immune_until": _iso(immune_until) if immune_until else None,
                 }
             )
         except Exception:
@@ -2855,6 +2884,7 @@ async def weed_raid_targets(current_user: dict = Depends(_gate)):
         "raid_available_at": None,
         "raid_cooldown_hours": RAID_PER_TARGET_COOLDOWN_HOURS,
         "raid_cooldown_scope": "per_target",
+        "bust_raid_immune_hours": BUST_RAID_IMMUNE_HOURS,
         "required_grower_level": MIN_RAID_GROWER_LEVEL,
     }
 
@@ -2883,6 +2913,15 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
         raise HTTPException(status_code=404, detail="Target has no weed business")
     if int(dfn.get("grower_level") or 1) < MIN_RAID_TARGET_GROWER_LEVEL:
         raise HTTPException(status_code=400, detail="Growers below level 2 are protected from raids")
+    immune_until = _defender_raid_immune_until(dfn, now)
+    if immune_until is not None:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Target is raid-protected after a heat bust until {immune_until.isoformat()} "
+                f"({BUST_RAID_IMMUNE_HOURS}h after bust)"
+            ),
+        )
 
     chance = _raid_success_chance(atk, dfn)
     success = _rng.random() < chance
