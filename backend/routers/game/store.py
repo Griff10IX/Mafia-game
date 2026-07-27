@@ -101,7 +101,6 @@ from utils.point_provenance import (
     mint_store_points_cash_lot_if_missing,
     mint_transfer_in_lots,
 )
-from utils.point_sources_breakdown import build_received_breakdown
 from utils.store_points_cash import (
     POINTS_CASH_MIN_PRESTIGE_LEVEL,
     POINTS_CASH_MIN_PRICE_PER_POINT,
@@ -1834,24 +1833,6 @@ async def get_my_points_transfers(current_user: dict = Depends(get_current_user)
     return {"transfers": out}
 
 
-async def get_my_points_breakdown(current_user: dict = Depends(get_current_user)):
-    """Self-only readable breakdown of store points received/sent (aggregates + per-tx detail)."""
-    uid = current_user["id"]
-    received = await build_received_breakdown(db, uid, for_player=True, include_transactions=True, tx_limit=100)
-    return {
-        "balance": int(current_user.get("points") or 0),
-        "received_breakdown": received.get("received_breakdown") or [],
-        "lines": received.get("lines") or [],
-        "totals": received.get("totals") or {},
-        "sent_breakdown": received.get("sent_breakdown") or [],
-        "sent_lines": received.get("sent_lines") or [],
-        "sent_totals": received.get("sent_totals") or {},
-        "received_transactions": received.get("received_transactions") or [],
-        "sent_transactions": received.get("sent_transactions") or [],
-        "tx_limit": received.get("tx_limit"),
-    }
-
-
 async def admin_points_transfers(
     limit: int = Query(500, ge=1, le=1000),
     current_user: dict = Depends(require_admin),
@@ -2804,12 +2785,6 @@ def register(router):
     router.add_api_route(
         "/store/points-transfers",
         get_my_points_transfers,
-        methods=["GET"],
-        dependencies=_store_points_rl_u,
-    )
-    router.add_api_route(
-        "/store/points-breakdown",
-        get_my_points_breakdown,
         methods=["GET"],
         dependencies=_store_points_rl_u,
     )
