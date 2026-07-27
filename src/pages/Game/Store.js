@@ -191,8 +191,20 @@ const UPGRADES = [
   { id: 'custom-profile-badge', title: 'Custom Profile Badge', Icon: Award, price: 750, path: '/store/buy-custom-profile-badge', ownedKey: 'custom_profile_badge', flagKey: 'profile_badge', desc: 'Unlock a custom badge image next to your name. After purchase, upload your image on Profile. Account-only — lost on death.' },
   { id: 'profile-glow-7d', title: 'Name Glow + Border (7d)', Icon: Star, price: 120, path: '/store/buy-profile-glow-7d', ownedKey: null, flagKey: 'profile_glow_7d', needsGlowPreset: true, desc: 'Timed username glow and dossier border (7 days, stacks).' },
   { id: 'profile-glow-permanent', title: 'Name Glow + Border (Permanent)', Icon: Star, price: 800, path: '/store/buy-profile-glow-permanent', ownedKey: 'profile_cosmetic_permanent', flagKey: 'profile_glow_permanent', needsGlowPreset: true, desc: 'Permanent username glow and profile border. After purchase, change colour anytime for free on Edit Profile.' },
-  { id: 'family-safe-deposit-tier', title: 'Family Safe Deposit Tier', Icon: Shield, price: 600, path: '/store/buy-family-safe-deposit-tier', ownedKey: null, flagKey: 'family_safe_deposit', familyDonOnly: true, desc: 'Don/Underboss: raises the personal safe cash cap per member in the family vault — $250M / $500M / $1B (max 3 tiers).' },
-  { id: 'weed-daily-cap', title: 'Weed Daily Sell Cap +$250M', Icon: ShoppingBag, price: 500, path: '/store/buy-weed-daily-cap', ownedKey: null, flagKey: 'weed_empire', stackWhileActive: true, desc: 'Weed Empire: +$250M daily sell cap (street/dealer). Stacks up to $5B. Does not raise the $250M/day withdraw cap.' },
+  { id: 'family-safe-deposit-tier', title: 'Family Safe Deposit Tier', Icon: Shield, price: 600, path: '/store/buy-family-safe-deposit-tier', ownedKey: null, flagKey: 'family_safe_deposit', familyDonOnly: true, desc: 'Don/Underboss: raises the personal safe cash cap per member in the family vault — $250M / $500M / $1B (max 3 tiers).', extra: (u, _cfg, _weed, famSafe) => {
+    if (!famSafe?.has_family) return { line: 'Your family', value: 'No family' };
+    const tiers = Number(famSafe.tiers || 0);
+    const cap = Number(famSafe.cap || 0);
+    if (tiers <= 0 && cap <= 0) return { line: 'Your family', value: '0 / 3 tiers · $0 cap' };
+    return { line: 'Your family', value: `${tiers}/${famSafe.max_tiers || 3} tiers · $${cap.toLocaleString()} cap` };
+  } },
+  { id: 'weed-daily-cap', title: 'Weed Daily Sell Cap +$250M', Icon: ShoppingBag, price: 500, path: '/store/buy-weed-daily-cap', ownedKey: null, flagKey: 'weed_empire', stackWhileActive: true, desc: 'Weed Empire: +$250M daily sell cap (street/dealer). Stacks up to $5B. Does not raise the $250M/day withdraw cap.', extra: (u, _cfg, weed) => {
+    const base = 250_000_000;
+    const step = 250_000_000;
+    const tiers = Number(weed?.daily_cap_bonus_tiers ?? u?.weed_daily_cap_bonus_tiers ?? 0);
+    const cap = Number(weed?.daily_sold_cap ?? (base + tiers * step));
+    return { line: 'Your sell cap', value: `$${cap.toLocaleString()}` };
+  } },
   { id: 'weed-safety-deposit', title: 'Weed Safety Deposit Unlock', Icon: Shield, price: 500, path: '/store/buy-weed-safety-deposit', ownedKey: 'weed_safety_bank_unlocked', flagKey: 'weed_empire', desc: 'Weed Empire: unlock a raid- and bust-safe vault. Then expand in Weed Empire with business cash — $10M → +$25M capacity (max $5B).' },
   { id: 'family-event-token', title: 'Family Event Token', Icon: Zap, price: 250, path: '/store/buy-family-event-token', ownedKey: null, flagKey: 'family_event_token', familyDonOnly: true, desc: 'Don/Underboss: 3-day +10% family racket income (1 per 7 days).' },
   { id: 'auto-rank', title: 'Auto Rank', Icon: Bot, price: AUTO_RANK_COST_POINTS, path: '/store/buy-auto-rank', ownedKey: 'auto_rank_purchased', desc: 'Auto-commit crimes, GTA, busts, OC. Optional: set Telegram in Profile for notifications.' },
@@ -390,6 +402,8 @@ export default function Store() {
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [user, setUser] = useState(() => storeBoot?.user ?? null);
   const [boozeConfig, setBoozeConfig] = useState(() => storeBoot?.boozeConfig ?? null);
+  const [weedEmpireSummary, setWeedEmpireSummary] = useState(() => storeBoot?.weedEmpireSummary ?? null);
+  const [familySafeDepositSummary, setFamilySafeDepositSummary] = useState(() => storeBoot?.familySafeDepositSummary ?? null);
   const [event, setEvent] = useState(() => storeBoot?.event ?? null);
   const [eventsEnabled, setEventsEnabled] = useState(() => !!storeBoot?.eventsEnabled);
   const [storePointsEvent, setStorePointsEvent] = useState(() => storeBoot?.storePointsEvent ?? null);
@@ -402,6 +416,16 @@ export default function Store() {
       setActiveTab(tabFromUrl);
     }
   }, [tabFromUrl]);
+
+  useEffect(() => {
+    if (activeTab !== 'upgrades') return;
+    const hash = (window.location.hash || '').replace(/^#/, '');
+    if (!hash) return;
+    const t = window.setTimeout(() => {
+      document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 80);
+    return () => window.clearTimeout(t);
+  }, [activeTab, user, weedEmpireSummary, familySafeDepositSummary]);
   const [pointsTransfers, setPointsTransfers] = useState([]);
   const [pointsBreakdown, setPointsBreakdown] = useState(null);
   const [pointsBreakdownLoading, setPointsBreakdownLoading] = useState(false);
@@ -629,9 +653,11 @@ export default function Store() {
 
   const fetchData = useCallback(async ({ silent = false } = {}) => {
     try {
-      const [userRes, boozeRes, eventsRes, storePointsEventRes, adminRes, locksRes, pendingRes, flagsRes] = await Promise.all([
+      const [userRes, boozeRes, weedRes, familySafeRes, eventsRes, storePointsEventRes, adminRes, locksRes, pendingRes, flagsRes] = await Promise.all([
         api.get('/auth/me'),
         api.get('/booze-run/config').catch(() => ({ data: null })),
+        api.get('/store/weed-empire-summary').catch(() => ({ data: null })),
+        api.get('/store/family-safe-deposit-summary').catch(() => ({ data: null })),
         apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: { event: null, events_enabled: false } })),
         api.get('/payments/store-points-event').catch(() => ({ data: { event: null } })),
         api.get('/auth/staff-flags').catch(() => ({ data: { is_admin: false } })),
@@ -642,6 +668,10 @@ export default function Store() {
       setUser(userRes.data);
       const nextBooze = boozeRes?.data || null;
       setBoozeConfig(nextBooze);
+      const nextWeed = weedRes?.data || null;
+      setWeedEmpireSummary(nextWeed);
+      const nextFamilySafe = familySafeRes?.data || null;
+      setFamilySafeDepositSummary(nextFamilySafe);
       const nextEvent = eventsRes.data?.event ?? null;
       const nextEventsEnabled = !!eventsRes.data?.events_enabled;
       setEvent(nextEvent);
@@ -681,6 +711,8 @@ export default function Store() {
       writeSessionJson(STORE_PAGE_CACHE_KEY, {
         user: userRes.data,
         boozeConfig: nextBooze,
+        weedEmpireSummary: nextWeed,
+        familySafeDepositSummary: nextFamilySafe,
         event: nextEvent,
         eventsEnabled: nextEventsEnabled,
         storePointsEvent: nextStorePointsEvent,
@@ -1589,10 +1621,12 @@ export default function Store() {
             if (u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max) return false;
             // Hide Practice Targets when already at max (base 3 + bonus 3)
             if (u.id === 'hitlist-npc-cap' && (Number(user?.hitlist_npc_bonus_slots) || 0) >= 3) return false;
+            if (u.id === 'weed-daily-cap' && weedEmpireSummary?.at_max_sell_cap) return false;
+            if (u.id === 'family-safe-deposit-tier' && familySafeDepositSummary?.at_max) return false;
             if (u.ownedCheck?.(user)) return false;
             return true;
           }).map((u) => {
-            const extra = u.extra?.(user, boozeConfig);
+            const extra = u.extra?.(user, boozeConfig, weedEmpireSummary, familySafeDepositSummary);
             const priceVal = typeof u.price === 'function' ? Number(u.price(user, boozeConfig)) : Number(u.price);
             const hasAccountOnlyAutoRank = Boolean(
               user?.auto_rank_permanent || (user?.auto_rank_purchased && !user?.auto_rank_trial),
@@ -1601,12 +1635,14 @@ export default function Store() {
               (u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max) ||
               (u.id === 'hitlist-npc-cap' && (Number(user?.hitlist_npc_bonus_slots) || 0) >= 3) ||
               (u.id === 'health' && Number(user?.health ?? 100) >= 100) ||
+              (u.id === 'weed-daily-cap' && !!weedEmpireSummary?.at_max_sell_cap) ||
+              (u.id === 'family-safe-deposit-tier' && !!familySafeDepositSummary?.at_max) ||
               !!u.disabledWhen?.(user);
             const flagLive = !u.flagKey || !!storeItemFlags?.[u.flagKey];
             const comingSoon = !flagLive;
             const staffPreview = comingSoon && isStaff;
             return (
-              <div key={u.id} id={u.id === 'auto-rank' ? 'store-auto-rank' : undefined}>
+              <div key={u.id} id={u.id === 'auto-rank' ? 'store-auto-rank' : `store-${u.id}`}>
               {u.id === 'auto-rank' ? (
                 <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
                   <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />

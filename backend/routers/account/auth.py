@@ -2379,6 +2379,8 @@ def register(router):
                 game_pass_prestige_count=_safe_int(u.get("game_pass_prestige_count"), 0),
                 shooting_range_bonus_plays=_safe_int(u.get("shooting_range_bonus_plays"), 0),
                 hitlist_npc_bonus_slots=_safe_int(u.get("hitlist_npc_bonus_slots"), 0),
+                weed_daily_cap_bonus_tiers=_safe_int(u.get("weed_daily_cap_bonus_tiers"), 0),
+                weed_safety_bank_unlocked=bool(u.get("weed_safety_bank_unlocked", False)),
                 robot_bg_auto_search_until=u.get("robot_bg_auto_search_until"),
                 robot_bg_auto_search_active=robot_bg_auto_search_active(u),
                 bodyguard_find_time_until=u.get("bodyguard_find_time_until"),

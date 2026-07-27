@@ -810,7 +810,7 @@ export default function WeedEmpire() {
           </p>
           {farm.daily_cap_next_cost_points != null ? (
             <Link
-              to="/game/store?tab=upgrades"
+              to="/game/store?tab=upgrades#store-weed-daily-cap"
               className="inline-flex text-[10px] uppercase text-emerald-300 hover:underline"
             >
               Upgrade in Points Store · {farm.daily_cap_next_cost_points} pts
@@ -838,7 +838,7 @@ export default function WeedEmpire() {
                 {farm.safety_bank_unlock_points || 500} pts), then expand capacity with weed business cash.
               </p>
               <Link
-                to="/game/store?tab=upgrades"
+                to="/game/store?tab=upgrades#store-weed-safety-deposit"
                 className="inline-flex text-[10px] uppercase text-emerald-300 hover:underline"
               >
                 Unlock in Points Store · {farm.safety_bank_unlock_points || 500} pts

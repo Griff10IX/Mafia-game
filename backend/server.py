@@ -1004,6 +1004,8 @@ class UserResponse(BaseModel):
     game_pass_prestige_pending: int = 0
     shooting_range_bonus_plays: int = 0  # store upgrade: added to base 10 plays/hour in shooting range
     hitlist_npc_bonus_slots: int = 0  # store upgrade: +1 NPC slot per 3h window (max +3)
+    weed_daily_cap_bonus_tiers: int = 0  # Weed Empire Points Store sell-cap tiers (+$250M each)
+    weed_safety_bank_unlocked: bool = False  # Weed Empire Safety Deposit unlock
     robot_bg_auto_search_until: Optional[str] = None
     robot_bg_auto_search_active: bool = False
     bodyguard_find_time_until: Optional[str] = None

@@ -587,6 +587,10 @@ async def buy_weed_daily_cap(
     if farm_result.modified_count == 0:
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": cost_used}})
         raise HTTPException(status_code=400, detail="Weed daily sell cap purchase failed")
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"weed_daily_cap_bonus_tiers": new_tiers}},
+    )
     await _record_store_points_spend(
         current_user,
         inc,
@@ -601,6 +605,53 @@ async def buy_weed_daily_cap(
         "cost": cost_used,
         "daily_cap_bonus_tiers": new_tiers,
         "daily_sold_cap": new_cap,
+    }
+
+
+async def get_weed_empire_store_summary(current_user: dict = Depends(get_current_user)):
+    """Lightweight Weed Empire caps for Points Store card extras (no farm ticks)."""
+    from utils.weed_empire_catalog import (
+        DAILY_CAP_BONUS_MAX_TIERS,
+        DAILY_SELL_CAP_MAX_USD,
+        DAILY_SELL_CAP_POINTS_COST,
+        DAILY_SELL_CAP_STEP_USD,
+        DAILY_SELL_CAP_USD,
+        SAFETY_BANK_UNLOCK_POINTS,
+        daily_cap_bonus_tiers,
+        daily_sell_cap_for_farm,
+        safety_bank_unlocked,
+    )
+
+    farm = await db.weed_farms.find_one(
+        {"user_id": current_user["id"]},
+        {"_id": 0, "daily_cap_bonus_tiers": 1, "safety_bank_unlocked": 1},
+    )
+    tiers = daily_cap_bonus_tiers(farm) if farm else 0
+    cap = daily_sell_cap_for_farm(farm) if farm else DAILY_SELL_CAP_USD
+    unlocked = safety_bank_unlocked(farm) if farm else bool(current_user.get("weed_safety_bank_unlocked"))
+    # Keep user mirrors in sync for /auth/me Store extras after refresh
+    if farm:
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {
+                "$set": {
+                    "weed_daily_cap_bonus_tiers": tiers,
+                    "weed_safety_bank_unlocked": unlocked,
+                }
+            },
+        )
+    return {
+        "has_farm": bool(farm),
+        "daily_sold_cap": cap,
+        "daily_cap_bonus_tiers": tiers,
+        "daily_cap_bonus_max_tiers": DAILY_CAP_BONUS_MAX_TIERS,
+        "daily_sell_cap_base": DAILY_SELL_CAP_USD,
+        "daily_sell_cap_step": DAILY_SELL_CAP_STEP_USD,
+        "daily_sell_cap_max": DAILY_SELL_CAP_MAX_USD,
+        "daily_sell_cap_points_cost": DAILY_SELL_CAP_POINTS_COST,
+        "at_max_sell_cap": tiers >= DAILY_CAP_BONUS_MAX_TIERS,
+        "safety_bank_unlocked": unlocked,
+        "safety_bank_unlock_points": SAFETY_BANK_UNLOCK_POINTS,
     }
 
 
@@ -910,6 +961,44 @@ async def _family_don_guard(current_user: dict) -> str:
         current_user["family_id"] = family_id
         current_user["family_role"] = role
     return family_id
+
+
+async def get_family_safe_deposit_summary(current_user: dict = Depends(get_current_user)):
+    """Current family vault safe-deposit tier for Points Store card extras."""
+    from routers.game.families import FAMILY_SAFE_DEPOSIT_DEFAULT_CAP, FAMILY_SAFE_DEPOSIT_TIER_CAPS, family_safe_deposit_cap
+
+    family_id = current_user.get("family_id")
+    if not family_id:
+        return {
+            "has_family": False,
+            "tiers": 0,
+            "cap": FAMILY_SAFE_DEPOSIT_DEFAULT_CAP,
+            "max_tiers": FAMILY_SAFE_DEPOSIT_MAX_TIERS,
+            "at_max": False,
+        }
+    fam = await db.families.find_one(
+        {"id": family_id, "wiped": {"$ne": True}},
+        {"_id": 0, "safe_deposit_tiers": 1, "safe_deposit_cap": 1},
+    )
+    if not fam:
+        return {
+            "has_family": False,
+            "tiers": 0,
+            "cap": FAMILY_SAFE_DEPOSIT_DEFAULT_CAP,
+            "max_tiers": FAMILY_SAFE_DEPOSIT_MAX_TIERS,
+            "at_max": False,
+        }
+    tiers = max(0, min(FAMILY_SAFE_DEPOSIT_MAX_TIERS, int(fam.get("safe_deposit_tiers") or 0)))
+    cap = int(family_safe_deposit_cap(fam) or 0)
+    if cap <= 0 and tiers > 0:
+        cap = FAMILY_SAFE_DEPOSIT_TIER_CAPS[min(tiers, len(FAMILY_SAFE_DEPOSIT_TIER_CAPS)) - 1]
+    return {
+        "has_family": True,
+        "tiers": tiers,
+        "cap": cap,
+        "max_tiers": FAMILY_SAFE_DEPOSIT_MAX_TIERS,
+        "at_max": tiers >= FAMILY_SAFE_DEPOSIT_MAX_TIERS,
+    }
 
 
 async def buy_family_safe_deposit_tier(
@@ -2681,6 +2770,7 @@ def register(router):
     router.add_api_route("/store/buy-custom-profile-badge", buy_custom_profile_badge, methods=["POST"])
     router.add_api_route("/store/buy-profile-glow-7d", buy_profile_glow_7d, methods=["POST"])
     router.add_api_route("/store/buy-profile-glow-permanent", buy_profile_glow_permanent, methods=["POST"])
+    router.add_api_route("/store/family-safe-deposit-summary", get_family_safe_deposit_summary, methods=["GET"])
     router.add_api_route("/store/buy-family-safe-deposit-tier", buy_family_safe_deposit_tier, methods=["POST"])
     router.add_api_route("/store/buy-family-event-token", buy_family_event_token, methods=["POST"])
     router.add_api_route("/store/buy-robot-bg-auto-search", buy_robot_bg_auto_search, methods=["POST"])
@@ -2697,6 +2787,7 @@ def register(router):
     router.add_api_route("/store/buy-crew-oc-timer", buy_crew_oc_timer, methods=["POST"])
     router.add_api_route("/store/upgrade-garage-batch", upgrade_garage_batch_limit, methods=["POST"])
     router.add_api_route("/store/buy-booze-capacity", buy_booze_capacity, methods=["POST"])
+    router.add_api_route("/store/weed-empire-summary", get_weed_empire_store_summary, methods=["GET"])
     router.add_api_route("/store/buy-weed-daily-cap", buy_weed_daily_cap, methods=["POST"])
     router.add_api_route("/store/buy-weed-safety-deposit", buy_weed_safety_deposit, methods=["POST"])
     router.add_api_route("/store/buy-bullets", store_buy_bullets, methods=["POST"])
