@@ -551,7 +551,7 @@ async def buy_weed_daily_cap(
     pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
-    """+250M Weed Empire daily sell cap (500 pts). Does not raise withdraw cap. Max $5B."""
+    """+250M Weed Empire daily sell cap (50 pts). Does not raise withdraw cap. Max $5B."""
     from utils.weed_empire_catalog import (
         DAILY_CAP_BONUS_MAX_TIERS,
         DAILY_SELL_CAP_POINTS_COST,

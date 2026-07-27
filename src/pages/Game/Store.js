@@ -198,7 +198,7 @@ const UPGRADES = [
     if (tiers <= 0 && cap <= 0) return { line: 'Your family', value: '0 / 3 tiers · $0 cap' };
     return { line: 'Your family', value: `${tiers}/${famSafe.max_tiers || 3} tiers · $${cap.toLocaleString()} cap` };
   } },
-  { id: 'weed-daily-cap', title: 'Weed Daily Sell Cap +$250M', Icon: ShoppingBag, price: 500, path: '/store/buy-weed-daily-cap', ownedKey: null, flagKey: 'weed_empire', stackWhileActive: true, desc: 'Weed Empire: +$250M daily sell cap (street/dealer). Stacks up to $5B. Does not raise the $250M/day withdraw cap.', extra: (u, _cfg, weed) => {
+  { id: 'weed-daily-cap', title: 'Weed Daily Sell Cap +$250M', Icon: ShoppingBag, price: 50, path: '/store/buy-weed-daily-cap', ownedKey: null, flagKey: 'weed_empire', stackWhileActive: true, desc: 'Weed Empire: +$250M daily sell cap (street/dealer). Stacks up to $5B. Does not raise the $250M/day withdraw cap.', extra: (u, _cfg, weed) => {
     const base = 250_000_000;
     const step = 250_000_000;
     const tiers = Number(weed?.daily_cap_bonus_tiers ?? u?.weed_daily_cap_bonus_tiers ?? 0);
