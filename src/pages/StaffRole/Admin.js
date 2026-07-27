@@ -10888,7 +10888,8 @@ export default function Admin() {
                       </ul>
                     )}
                     <p className="text-[8px] text-mutedForeground mt-1">
-                      Before→after only appears on events logged after wallet snapshot fields were added. Older MDG rows still show lobby / opponents when the game record exists.
+                      Totals always use the full ledger (same as before). Each received/sent lists recent events —
+                      before→after only when that snapshot was stored. Older rows still show as simple Received/Sent lines.
                     </p>
                   </div>
                 </div>

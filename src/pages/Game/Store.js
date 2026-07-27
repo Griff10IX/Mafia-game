@@ -1524,6 +1524,9 @@ export default function Store() {
                   </div>
                   <div>
                     <p className="text-[9px] font-heading font-bold text-amber-300/90 uppercase tracking-wider mb-1">Each sent out</p>
+                    <p className="text-[9px] text-zinc-500 font-heading mb-1">
+                      Older events show without balance; totals above still cover everything logged.
+                    </p>
                     {!(pointsBreakdown?.sent_transactions || []).length ? (
                       <p className="text-[10px] text-zinc-500 font-heading italic">No per-event sent rows.</p>
                     ) : (

@@ -234,7 +234,11 @@ async def build_transaction_entries(
     for_player: bool = False,
     limit: int = _DEFAULT_TX_LIMIT,
 ) -> Dict[str, Any]:
-    """Per-event received/sent rows with MDG lobby context and wallet before/after when logged."""
+    """Per-event received/sent rows with MDG lobby context and wallet before/after when logged.
+
+    Older events without wallet snapshots still appear (simple label only). Received and sent
+    are queried separately so heavy spenders still see recent inflows (and vice versa).
+    """
     if not user_id:
         return {"received_transactions": [], "sent_transactions": [], "tx_limit": limit}
 
@@ -242,40 +246,26 @@ async def build_transaction_entries(
     skip_events = set(_TRANSFER_EVENT_TYPES) | set(_PURCHASE_EVENT_TYPES)
     if for_player:
         skip_events |= set(_PLAYER_HIDDEN_EVENT_TYPES)
+    skip_list = list(skip_events)
 
-    ledger = await db.point_ledger_events.find(
-        {"user_id": user_id, "event_type": {"$nin": list(skip_events)}},
-        {
-            "_id": 0,
-            "id": 1,
-            "event_type": 1,
-            "points": 1,
-            "origin_ref": 1,
-            "event_ref": 1,
-            "meta": 1,
-            "created_at": 1,
-            "wallet_points_before": 1,
-            "wallet_points_after": 1,
-        },
-    ).sort("created_at", -1).limit(cap).to_list(cap)
+    projection = {
+        "_id": 0,
+        "id": 1,
+        "event_type": 1,
+        "points": 1,
+        "origin_ref": 1,
+        "event_ref": 1,
+        "meta": 1,
+        "created_at": 1,
+        "wallet_points_before": 1,
+        "wallet_points_after": 1,
+    }
 
-    transfers = await db.points_transfers.find(
-        {"$or": [{"to_user_id": user_id}, {"from_user_id": user_id}]},
-        {
-            "_id": 0,
-            "id": 1,
-            "from_user_id": 1,
-            "from_username": 1,
-            "to_user_id": 1,
-            "to_username": 1,
-            "amount": 1,
-            "created_at": 1,
-            "sender_points_before": 1,
-            "sender_points_after": 1,
-            "recipient_points_before": 1,
-            "recipient_points_after": 1,
-        },
-    ).sort("created_at", -1).limit(cap).to_list(cap)
+    # Separate queries so a flood of spends cannot wipe recent receives from the window.
+    ledger_in, ledger_out, transfers = await _gather_ledger_and_transfers(
+        db, user_id, skip_list=skip_list, projection=projection, cap=cap
+    )
+    ledger = list(ledger_in) + list(ledger_out)
 
     mdg_ids: List[str] = []
     for doc in ledger:
@@ -285,13 +275,19 @@ async def build_transaction_entries(
         _, gid = _parse_mdg_ref(str(doc.get("origin_ref") or doc.get("event_ref") or ""), meta)
         if gid:
             mdg_ids.append(gid)
-    games = await _load_mdg_games(db, mdg_ids)
+    try:
+        games = await _load_mdg_games(db, mdg_ids)
+    except Exception:
+        games = {}
 
     received: List[Dict[str, Any]] = []
     sent: List[Dict[str, Any]] = []
 
     for doc in ledger:
-        pts = int(doc.get("points") or 0)
+        try:
+            pts = int(doc.get("points") or 0)
+        except (TypeError, ValueError):
+            continue
         if pts == 0:
             continue
         et = str(doc.get("event_type") or "")
@@ -299,11 +295,15 @@ async def build_transaction_entries(
         meta = doc.get("meta") if isinstance(doc.get("meta"), dict) else {}
         before = doc.get("wallet_points_before")
         after = doc.get("wallet_points_after")
+        # Default: same simple wording as the aggregate totals (works for all legacy rows).
         detail = label
         if et == "casino_mdg":
             act, gid = _parse_mdg_ref(str(doc.get("origin_ref") or doc.get("event_ref") or ""), meta)
-            game = games.get(gid) or {"id": gid}
-            detail = _mdg_detail_line(user_id, act, game, pts)
+            game = games.get(gid)
+            if game:
+                detail = _mdg_detail_line(user_id, act, game, pts)
+            elif act:
+                detail = f"MDG {act}"
         elif meta.get("action"):
             detail = f"{label} · {meta.get('action')}"
             if meta.get("to_username"):
@@ -311,7 +311,10 @@ async def build_transaction_entries(
             elif meta.get("from_username"):
                 detail += f" · {meta.get('from_username')}"
         elif doc.get("origin_ref") or doc.get("event_ref"):
-            detail = f"{label} · {doc.get('origin_ref') or doc.get('event_ref')}"
+            ref = str(doc.get("origin_ref") or doc.get("event_ref") or "")
+            # Keep short refs (store buy ids); skip ugly UUIDs-only noise for legacy clutter.
+            if len(ref) <= 64:
+                detail = f"{label} · {ref}"
 
         direction = "in" if pts > 0 else "out"
         verb = "Received" if pts > 0 else "Sent"
@@ -339,7 +342,10 @@ async def build_transaction_entries(
         (received if pts > 0 else sent).append(row)
 
     for doc in transfers:
-        amt = int(doc.get("amount") or 0)
+        try:
+            amt = int(doc.get("amount") or 0)
+        except (TypeError, ValueError):
+            continue
         if amt <= 0:
             continue
         is_in = doc.get("to_user_id") == user_id
@@ -381,6 +387,52 @@ async def build_transaction_entries(
         "sent_transactions": sent[:cap],
         "tx_limit": cap,
     }
+
+
+async def _gather_ledger_and_transfers(db, user_id: str, *, skip_list: List[str], projection: dict, cap: int):
+    import asyncio
+
+    ledger_in_coro = (
+        db.point_ledger_events.find(
+            {"user_id": user_id, "points": {"$gt": 0}, "event_type": {"$nin": skip_list}},
+            projection,
+        )
+        .sort("created_at", -1)
+        .limit(cap)
+        .to_list(cap)
+    )
+    ledger_out_coro = (
+        db.point_ledger_events.find(
+            {"user_id": user_id, "points": {"$lt": 0}, "event_type": {"$nin": skip_list}},
+            projection,
+        )
+        .sort("created_at", -1)
+        .limit(cap)
+        .to_list(cap)
+    )
+    transfers_coro = (
+        db.points_transfers.find(
+            {"$or": [{"to_user_id": user_id}, {"from_user_id": user_id}]},
+            {
+                "_id": 0,
+                "id": 1,
+                "from_user_id": 1,
+                "from_username": 1,
+                "to_user_id": 1,
+                "to_username": 1,
+                "amount": 1,
+                "created_at": 1,
+                "sender_points_before": 1,
+                "sender_points_after": 1,
+                "recipient_points_before": 1,
+                "recipient_points_after": 1,
+            },
+        )
+        .sort("created_at", -1)
+        .limit(cap)
+        .to_list(cap)
+    )
+    return await asyncio.gather(ledger_in_coro, ledger_out_coro, transfers_coro)
 
 
 async def build_received_breakdown(
@@ -600,7 +652,13 @@ async def build_received_breakdown(
     }
 
     if include_transactions:
-        tx = await build_transaction_entries(db, user_id, for_player=for_player, limit=tx_limit)
-        out.update(tx)
+        try:
+            tx = await build_transaction_entries(db, user_id, for_player=for_player, limit=tx_limit)
+            out.update(tx)
+        except Exception:
+            # Aggregates above still work; per-tx is best-effort (legacy rows / MDG lookup).
+            out["received_transactions"] = []
+            out["sent_transactions"] = []
+            out["tx_error"] = True
 
     return out
