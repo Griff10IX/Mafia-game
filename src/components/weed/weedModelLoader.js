@@ -1,33 +1,38 @@
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
+import { publicAsset } from "../../utils/publicAssets";
 
 const loader = new GLTFLoader();
 const modelCache = new Map();
 
 export const WEED_MODELS = {
-  seedling: "/models/weed/plant-seedling.glb",
-  veg: "/models/weed/plant-veg.glb",
-  flower: "/models/weed/plant-flower.glb",
-  harvest_ready: "/models/weed/plant-harvest.glb",
-  wateringCan: "/models/weed/watering-can.glb",
-  nutrientBottle: "/models/weed/nutrient-bottle.glb",
-  pot: "/models/weed/pot.glb",
-  potFabric: "/models/weed/pot-fabric-grow-bag.glb",
-  potAir: "/models/weed/pot-air-perforated.glb",
-  potHydro: "/models/weed/pot-hydro-autopot.glb",
-  fan: "/models/weed/clip-fan.glb",
-  filter: "/models/weed/carbon-filter.glb",
-  climate: "/models/weed/dehumidifier.glb",
-  co2: "/models/weed/co2-tank.glb",
+  seedling: publicAsset("/models/weed/plant-seedling.glb"),
+  veg: publicAsset("/models/weed/plant-veg.glb"),
+  flower: publicAsset("/models/weed/plant-flower.glb"),
+  harvest_ready: publicAsset("/models/weed/plant-harvest.glb"),
+  wateringCan: publicAsset("/models/weed/watering-can.glb"),
+  nutrientBottle: publicAsset("/models/weed/nutrient-bottle.glb"),
+  pot: publicAsset("/models/weed/pot.glb"),
+  potFabric: publicAsset("/models/weed/pot-fabric-grow-bag.glb"),
+  potAir: publicAsset("/models/weed/pot-air-perforated.glb"),
+  potHydro: publicAsset("/models/weed/pot-hydro-autopot.glb"),
+  fan: publicAsset("/models/weed/clip-fan.glb"),
+  filter: publicAsset("/models/weed/carbon-filter.glb"),
+  climate: publicAsset("/models/weed/dehumidifier.glb"),
+  co2: publicAsset("/models/weed/co2-tank.glb"),
 };
 
-function fetchModel(url) {
+function fetchModel(url, attempt = 0) {
   if (!modelCache.has(url)) {
     modelCache.set(
       url,
-      loader.loadAsync(url).catch((error) => {
+      loader.loadAsync(url).catch(async (error) => {
         modelCache.delete(url);
+        if (attempt < 1) {
+          await new Promise((r) => setTimeout(r, 120));
+          return fetchModel(url, attempt + 1);
+        }
         console.error(`[WeedEmpire3D] Failed to load model: ${url}`, error);
         throw error;
       })

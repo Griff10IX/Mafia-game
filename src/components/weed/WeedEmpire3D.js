@@ -506,6 +506,12 @@ export default function WeedEmpire3D({
     }
 
     const normalizedStage = stage === "harvest-ready" ? "harvest_ready" : stage;
+    // Skip reload if the same stage model is already mounted (progress/phenotype update separately).
+    if (state.plant?.userData?.stage === normalizedStage && state.plant?.userData?.modelUrl === url) {
+      if (state.plant) state.plant.visible = true;
+      return undefined;
+    }
+
     setLoading(true);
     loadWeedModel(url, { height: stageHeight(normalizedStage) })
       .then((model) => {
@@ -513,15 +519,13 @@ export default function WeedEmpire3D({
           disposeModelClone(model);
           return;
         }
-        applyPlantPhenotype(model, budMeshKey, normalizedStage, quality, lightClass);
-        applyInfestationStress(
-          model,
-          propsRef.current.miteInfested ? propsRef.current.miteInfestationPct : 0
-        );
-        const p = Math.max(0, Math.min(1, Number(progress) || 0));
-        const growth = 0.88 + p * 0.12;
-        model.scale.set(...strainScale(strainType, growth));
+        const p = propsRef.current;
+        applyPlantPhenotype(model, p.budMeshKey, normalizedStage, p.quality, p.lightClass);
+        applyInfestationStress(model, p.miteInfested ? p.miteInfestationPct : 0);
+        const growth = 0.88 + Math.max(0, Math.min(1, Number(p.progress) || 0)) * 0.12;
+        model.scale.set(...strainScale(p.strainType, growth));
         model.userData.stage = normalizedStage;
+        model.userData.modelUrl = url;
         const leafNodes = [];
         const colaNodes = [];
         model.traverse((object) => {
@@ -547,17 +551,20 @@ export default function WeedEmpire3D({
         state.leafNodes = leafNodes;
         state.colaNodes = colaNodes;
         state.transitions.push({ object: model, from: 0, to: 1, start: performance.now(), duration: 360 });
-        const phenotype = getBudPhenotype(budMeshKey);
+        const phenotype = getBudPhenotype(p.budMeshKey);
         state.sparkles.material.color.setHex(phenotype.sparkle);
         state.sparkles.visible =
           (normalizedStage === "flower" || normalizedStage === "harvest_ready") &&
-          (budMeshKey === "frosty" || quality >= 60 || normalizedStage === "harvest_ready");
+          (p.budMeshKey === "frosty" || p.quality >= 60 || normalizedStage === "harvest_ready");
         setLoadWarning("");
       })
-      .catch(() => {
+      .catch((error) => {
         if (stale || state.disposed) return;
+        console.error("[WeedEmpire3D] Plant model error", url, error);
         const placeholder = makePlaceholderPlant();
-        placeholder.scale.set(...strainScale(strainType, 1));
+        placeholder.userData.stage = normalizedStage;
+        placeholder.userData.modelUrl = url;
+        placeholder.scale.set(...strainScale(propsRef.current.strainType, 1));
         state.plantRig.add(placeholder);
         if (state.plant) {
           state.plantRig.remove(state.plant);
@@ -575,7 +582,24 @@ export default function WeedEmpire3D({
     return () => {
       stale = true;
     };
-  }, [sceneReady, stage, progress, strainType, budMeshKey, quality, lightClass]);
+  }, [sceneReady, stage]);
+
+  // Live updates for growth / phenotype without reloading the GLB.
+  useEffect(() => {
+    const state = stateRef.current;
+    if (!sceneReady || !state?.plant || state.plant.name === "plantPlaceholder") return;
+    const normalizedStage = stage === "harvest-ready" ? "harvest_ready" : stage;
+    if (state.plant.userData?.stage !== normalizedStage) return;
+    applyPlantPhenotype(state.plant, budMeshKey, normalizedStage, quality, lightClass);
+    applyInfestationStress(state.plant, miteInfested ? miteInfestationPct : 0);
+    const growth = 0.88 + Math.max(0, Math.min(1, Number(progress) || 0)) * 0.12;
+    state.plant.scale.set(...strainScale(strainType, growth));
+    const phenotype = getBudPhenotype(budMeshKey);
+    state.sparkles.material.color.setHex(phenotype.sparkle);
+    state.sparkles.visible =
+      (normalizedStage === "flower" || normalizedStage === "harvest_ready") &&
+      (budMeshKey === "frosty" || quality >= 60 || normalizedStage === "harvest_ready");
+  }, [sceneReady, stage, progress, strainType, budMeshKey, quality, lightClass, miteInfested, miteInfestationPct]);
 
   useEffect(() => {
     const state = stateRef.current;
@@ -677,6 +701,7 @@ export default function WeedEmpire3D({
               state.fanModels.push(model);
             }
           } catch (error) {
+            console.error("[WeedEmpire3D] Equipment model error", config.url, error);
             setLoadWarning(`Equipment model failed to load: ${config.url}`);
           }
         }
@@ -706,7 +731,8 @@ export default function WeedEmpire3D({
             state.models.add(secondary);
             state.equipmentModels.fanSecondary = secondary;
             state.fanModels.push(secondary);
-          } catch {
+          } catch (error) {
+            console.error("[WeedEmpire3D] Second fan model error", config.url, error);
             setLoadWarning(`Second fan model failed to load: ${config.url}`);
           }
         }
@@ -768,6 +794,12 @@ export default function WeedEmpire3D({
       }
     }
   }, [sceneReady, fx, fxNonce]);
+
+  useEffect(() => {
+    if (!loadWarning) return undefined;
+    const t = window.setTimeout(() => setLoadWarning(""), 6000);
+    return () => window.clearTimeout(t);
+  }, [loadWarning]);
 
   return (
     <div
