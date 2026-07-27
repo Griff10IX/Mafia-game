@@ -723,8 +723,15 @@ def shop_status_for_farm(
             pending = int(rebuy_raw.get(cat["id"]) or 0)
         except (TypeError, ValueError):
             pending = 0
-        # Raided gear: not installed, but level is saved — pay a rebuy fee to restore it
-        if owned <= 0 and pending > 0:
+        # Also recover from last raid steal record if map was wiped
+        last = farm.get("last_equipment_stolen") if isinstance(farm.get("last_equipment_stolen"), dict) else None
+        if last and str(last.get("category_id") or "") == cat["id"]:
+            try:
+                pending = max(pending, int(last.get("level") or 0))
+            except (TypeError, ValueError):
+                pass
+        # Raided gear: installed level below saved raid level — pay rebuy fee to restore
+        if pending > owned:
             rebuy_cost = equipment_level_cost(cat, 1)
             house_ok = pending <= int(house_max_equip_tier)
             tier_ok = house_tier >= int(cat.get("min_house_tier") or 0)

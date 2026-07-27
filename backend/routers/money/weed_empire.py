@@ -220,6 +220,7 @@ def _default_farm(user_id: str) -> Dict[str, Any]:
         "dealers_level": 0,
         "stolen_equipment": [],  # [{category_id, level, name}] — attacker inventory
         "equipment_rebuy": {},  # category_id -> saved level after raid steal (rebuy restores it)
+        "last_equipment_stolen": None,  # {category_id, level, at, name} — recovery if rebuy map lost
         "assistants": [],  # up to ASSISTANT_MAX_WORKERS worker dicts
         # Legacy single-assistant fields kept in sync for older clients / saves
         "assistant_hired": False,
@@ -292,6 +293,31 @@ async def _get_or_create_farm(user_id: str) -> Dict[str, Any]:
 
 def _house(farm: dict) -> Dict[str, Any]:
     return HOUSE_BY_TIER.get(int(farm.get("house_tier") or 0)) or HOUSE_BY_TIER[0]
+
+
+def _equipment_rebuy_map(farm: dict) -> Dict[str, int]:
+    raw = farm.get("equipment_rebuy") if isinstance(farm.get("equipment_rebuy"), dict) else {}
+    out: Dict[str, int] = {}
+    for k, v in raw.items():
+        try:
+            lvl = int(v or 0)
+        except (TypeError, ValueError):
+            continue
+        if lvl > 0 and k:
+            out[str(k)] = lvl
+    # Recover saved level from last raid steal if rebuy map was lost
+    last = farm.get("last_equipment_stolen")
+    if isinstance(last, dict):
+        cid = str(last.get("category_id") or "").strip()
+        try:
+            lvl = int(last.get("level") or 0)
+        except (TypeError, ValueError):
+            lvl = 0
+        if cid and lvl > 0:
+            owned = int((_equip_levels(farm).get(cid) or 0))
+            if owned < lvl:
+                out[cid] = max(int(out.get(cid) or 0), lvl)
+    return out
 
 
 def _equip_levels(farm: dict) -> Dict[str, int]:
@@ -1619,13 +1645,16 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
     auto_water, auto_feed = _auto_flags(farm)
     irrig_lvl = int(_equip_levels(farm).get("irrigation") or 0)
     gp = grower_progress(farm)
+    raid_immune_until = _defender_raid_immune_until(farm, now)
+    # Heal / recover raid rebuy map before shop status (lost map or last-steal recovery)
+    healed_rebuy = _equipment_rebuy_map(farm)
+    farm["equipment_rebuy"] = healed_rebuy
     shop = shop_status_for_farm(
         farm,
         house_tier=int(farm.get("house_tier") or 0),
         house_max_equip_tier=int(house.get("max_equip_tier") or 20),
         equipment_levels=_equip_levels(farm),
     )
-    raid_immune_until = _defender_raid_immune_until(farm, now)
     return {
         "id": farm.get("id"),
         "user_id": farm.get("user_id"),
@@ -1696,6 +1725,8 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
         ),
         "dealer_drip_fraction": dealer_drip_fraction(int(farm.get("dealers_level") or 0)),
         "stolen_equipment": list(farm.get("stolen_equipment") or []),
+        "equipment_rebuy": dict(farm.get("equipment_rebuy") or {}),
+        "last_equipment_stolen": farm.get("last_equipment_stolen"),
         "assistant": _assistant_public(farm),
         "heat_high_since": farm.get("heat_high_since"),
         "heat_bust_threshold": HEAT_BUST_THRESHOLD,
@@ -1992,6 +2023,8 @@ async def weed_status(current_user: dict = Depends(_gate)):
             "bust_restart_seed": farm.get("bust_restart_seed"),
             "last_bust_at": farm.get("last_bust_at"),
             "raid_immune_until": farm.get("raid_immune_until"),
+            "equipment_rebuy": farm.get("equipment_rebuy"),
+            "last_equipment_stolen": farm.get("last_equipment_stolen"),
             "missions": farm.get("missions"),
             "sabotage_unlocked": farm.get("sabotage_unlocked"),
             "grower_level": farm.get("grower_level"),
@@ -2559,14 +2592,16 @@ async def weed_upgrade_equip(body: UpgradeEquipBody, current_user: dict = Depend
     grower_level = max(1, int(farm.get("grower_level") or 1))
     equip_levels = _equip_levels(farm)
     cur = int(equip_levels.get(body.category_id) or 0)
-    rebuy = dict(farm.get("equipment_rebuy") or {}) if isinstance(farm.get("equipment_rebuy"), dict) else {}
+    rebuy = _equipment_rebuy_map(farm)
+    farm["equipment_rebuy"] = rebuy
     try:
         pending_rebuy = int(rebuy.get(body.category_id) or 0)
     except (TypeError, ValueError):
         pending_rebuy = 0
 
     # Raid steal recovery: pay level-1 fee, restore saved upgrade level
-    if cur <= 0 and pending_rebuy > 0:
+    # (also works if they bought Lv1 by mistake — pending still restores full level)
+    if pending_rebuy > cur:
         house_max = int(house.get("max_equip_tier") or 20)
         if house_tier < int(cat.get("min_house_tier") or 0):
             raise HTTPException(status_code=400, detail=f"Need house tier {cat.get('min_house_tier')}+")
@@ -2579,12 +2614,16 @@ async def weed_upgrade_equip(body: UpgradeEquipBody, current_user: dict = Depend
         farm["equipment"] = equip
         rebuy.pop(body.category_id, None)
         farm["equipment_rebuy"] = rebuy
+        last = farm.get("last_equipment_stolen")
+        if isinstance(last, dict) and str(last.get("category_id") or "") == body.category_id:
+            farm["last_equipment_stolen"] = None
         await _save_farm(
             farm,
             {
                 "business_cash": farm["business_cash"],
                 "equipment": equip,
                 "equipment_rebuy": rebuy,
+                "last_equipment_stolen": farm.get("last_equipment_stolen"),
             },
         )
         return {
@@ -2613,8 +2652,8 @@ async def weed_upgrade_equip(body: UpgradeEquipBody, current_user: dict = Depend
     equip = dict(farm.get("equipment") or {})
     equip[body.category_id] = nxt
     farm["equipment"] = equip
-    # Clear any stale rebuy entry if they somehow own it again
-    if body.category_id in rebuy:
+    # Never clear a higher saved raid level while still below it
+    if body.category_id in rebuy and nxt >= int(rebuy.get(body.category_id) or 0):
         rebuy.pop(body.category_id, None)
         farm["equipment_rebuy"] = rebuy
     stock = dict(farm.get("soil_stock") or {})
@@ -3012,13 +3051,15 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
         cat_id, lvl = stealable[0]
         dfn_equip.pop(cat_id, None)
         dfn["equipment"] = dfn_equip
-        rebuy = dict(dfn.get("equipment_rebuy") or {}) if isinstance(dfn.get("equipment_rebuy"), dict) else {}
-        try:
-            prev_saved = int(rebuy.get(cat_id) or 0)
-        except (TypeError, ValueError):
-            prev_saved = 0
-        rebuy[cat_id] = max(prev_saved, int(lvl))
+        rebuy = _equipment_rebuy_map(dfn)
+        rebuy[cat_id] = max(int(rebuy.get(cat_id) or 0), int(lvl))
         dfn["equipment_rebuy"] = rebuy
+        dfn["last_equipment_stolen"] = {
+            "category_id": cat_id,
+            "level": int(lvl),
+            "at": _iso(now),
+            "name": (EQUIPMENT_BY_ID.get(cat_id) or {}).get("name") or cat_id,
+        }
         equip_name = (EQUIPMENT_BY_ID.get(cat_id) or {}).get("name") or cat_id
         stolen["equipment"] = {
             "category_id": cat_id,
@@ -3085,6 +3126,7 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
                 "business_cash": dfn.get("business_cash"),
                 "equipment": dfn.get("equipment"),
                 "equipment_rebuy": dfn.get("equipment_rebuy") or {},
+                "last_equipment_stolen": dfn.get("last_equipment_stolen"),
                 "heat": dfn.get("heat"),
                 "raid_stats": drs,
                 "updated_at": _iso(),

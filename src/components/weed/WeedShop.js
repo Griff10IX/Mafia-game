@@ -154,7 +154,9 @@ export default function WeedShop({
                       <div className="flex justify-between text-[10px] text-muted-foreground">
                         <span>
                           {row.needs_rebuy
-                            ? `Saved Lv ${shownLevel}/${row.max_level} (not installed)`
+                            ? Number(row.owned_level || 0) > 0
+                              ? `Installed Lv ${row.owned_level} · restore Lv ${shownLevel}`
+                              : `Saved Lv ${shownLevel}/${row.max_level} (not installed)`
                             : `Lv ${row.owned_level || 0}/${row.max_level}`}
                         </span>
                         <span>{pct}%</span>
