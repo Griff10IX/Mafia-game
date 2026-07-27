@@ -258,7 +258,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Quick Trade admin', categoryId: 'admin-economy-progression', collapseKey: 'quicktradeTool', keywords: ['quicktrade', 'trade', 'offers', 'escrow', 'cancel', 'listings', 'tokens', 'property'], adminOnly: true },
   { label: 'Racket & Distillery progress', categoryId: 'admin-economy-progression', collapseKey: 'racketProgress', scrollToId: 'admin-racket-progress', keywords: ['racket', 'distillery', 'illegal business', 'progress', 'vault', 'guards', 'security', 'ladder', 'booze', 'ibm'], adminOnly: true },
   { label: 'Distillery progress', categoryId: 'admin-economy-progression', collapseKey: 'distilleryProgress', scrollToId: 'admin-distillery-progress', keywords: ['distillery', 'still', 'booze', 'heat', 'equipment', 'special upgrades', 'add upgrades', 'unlock track'], adminOnly: true },
-  { label: 'Weed sell audit', categoryId: 'admin-economy-progression', collapseKey: 'weedSellAudit', scrollToId: 'admin-weed-sell-audit', keywords: ['weed', 'empire', 'sell', 'spam', 'stash', 'clawback', 'exploit', 'audit'], adminOnly: true },
+  { label: 'Weed sell audit', categoryId: 'admin-economy-progression', collapseKey: 'weedSellAudit', scrollToId: 'admin-weed-sell-audit', keywords: ['weed', 'empire', 'sell', 'spam', 'stash', 'clawback', 'exploit', 'audit', 'heat', 'reset heat'], adminOnly: true },
   // Game World
   { label: 'Game Events', categoryId: 'admin-gameworld', collapseKey: 'events', keywords: ['events', 'toggle', 'enable', 'disable', 'random', 'bundle', 'daily', 'modifiers', 'roll'], adminOnly: true },
   { label: 'World Cup 2026', categoryId: 'admin-gameworld', collapseKey: 'worldCup', keywords: ['world cup', '2026', 'predictions', 'fifa', 'draft', 'fixtures', 'sync'], adminOnly: true },

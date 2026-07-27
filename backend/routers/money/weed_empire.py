@@ -25,6 +25,7 @@ from utils.weed_empire_catalog import (
     HOUSE_BY_TIER,
     HOUSES,
     MAX_DEALERS_LEVEL,
+    MIN_BUSINESS_CASH_RESERVE,
     SOIL_CHARGE_PER_PLANT,
     START_BUSINESS_CASH,
     STRAIN_BY_ID,
@@ -73,7 +74,8 @@ AUTO_FEED_IRRIGATION_LEVEL = 8
 MAX_HEAT = 100.0
 MIN_RAID_GROWER_LEVEL = 2
 MIN_RAID_TARGET_GROWER_LEVEL = 2
-RAID_GLOBAL_COOLDOWN_HOURS = 3
+RAID_PER_TARGET_COOLDOWN_HOURS = 3
+RAID_GLOBAL_COOLDOWN_HOURS = RAID_PER_TARGET_COOLDOWN_HOURS  # legacy alias
 RAID_CASH_STEAL_CAP = 1_000_000
 RAID_CASH_STEAL_FRAC = 0.12
 # Security shop lanes that drive raid defence / fail chance.
@@ -97,12 +99,22 @@ HEAT_PASSIVE_MAX_PER_HOUR = 8.0
 # Full cool-off — middle ground: ~$2k + $125/pt (heat 50 ≈ $8.3k, heat 100 ≈ $14.5k).
 COOL_OFF_BASE_COST = 2_000
 COOL_OFF_COST_PER_HEAT = 125
-ASSISTANT_HIRE_COST = 1_250_000
+ASSISTANT_MAX_WORKERS = 2
+ASSISTANT_HIRE_COSTS = (1_250_000, 2_500_000)  # 1st / 2nd worker
+ASSISTANT_HIRE_COST = ASSISTANT_HIRE_COSTS[0]  # legacy alias
 ASSISTANT_PROFIT_SHARE = 0.25
-ASSISTANT_MODES = ("harvest", "cool_heat", "sell_dealer")
+ASSISTANT_MODES = ("harvest", "cool_heat", "sell_dealer", "plant")
 ASSISTANT_TICK_SECONDS = 45
 ASSISTANT_COOL_HEAT_PER_TICK = 6.0
 ASSISTANT_COOL_COST_PER_POINT = 70  # cheaper drip than manual full clear
+ASSISTANT_DEFAULT_PLANT_STRAIN = "northern_lights"
+ASSISTANT_DEFAULT_PLANT_SOIL = "soil_conventional"
+ASSISTANT_PLANT_SOIL_TYPES = ("soil_conventional", "soil_organic", "coco")
+ASSISTANT_SOIL_EQUIP_IDS = {
+    "soil_conventional": "soil_conventional",
+    "soil_organic": "soil_organic",
+    "coco": "coco_medium",
+}
 WEED_ACTION_CODE_PREFIX = "we_"
 WEED_ACTION_CODE_BUCKET_SECONDS = 7200
 CLEANLINESS_SAFE_PCT = 30.0
@@ -192,11 +204,13 @@ def _default_farm(user_id: str) -> Dict[str, Any]:
         "cleanliness_pct": 100.0,
         "last_cleanliness_tick_at": _iso(),
         "unlocks": ["ditch_weed", "schwag", "northern_lights", "white_widow"],
-        "raid_last_by_target": {},  # legacy; global cooldown uses raid_available_at
-        "raid_available_at": None,
+        "raid_last_by_target": {},  # target_user_id -> last raid ISO (per-target cooldown)
+        "raid_available_at": None,  # legacy global field; unused for cooldown
         "raid_stats": {"raids_won": 0, "raids_lost": 0, "times_raided": 0},
         "dealers_level": 0,
         "stolen_equipment": [],  # [{category_id, level, name}]
+        "assistants": [],  # up to ASSISTANT_MAX_WORKERS worker dicts
+        # Legacy single-assistant fields kept in sync for older clients / saves
         "assistant_hired": False,
         "assistant_enabled": False,
         "assistant_mode": "harvest",
@@ -286,14 +300,43 @@ def _market_price_bonus(farm: dict) -> float:
     return float(_stats(farm).get("market_mult_bonus") or 1.0)
 
 
-def _raid_available_at(farm: dict) -> Optional[datetime]:
-    return _parse_iso(farm.get("raid_available_at"))
+def _raid_last_by_target_map(farm: dict) -> Dict[str, str]:
+    raw = farm.get("raid_last_by_target")
+    if not isinstance(raw, dict):
+        return {}
+    return {str(k): str(v) for k, v in raw.items() if k and v}
 
 
-def _raid_ready(farm: dict, now: Optional[datetime] = None) -> bool:
+def _raid_available_at_for_target(
+    farm: dict, target_user_id: str, now: Optional[datetime] = None
+) -> Optional[datetime]:
+    """When this attacker can raid this target again (None = ready now)."""
+    last = _parse_iso(_raid_last_by_target_map(farm).get(str(target_user_id or "")))
+    if not last:
+        return None
+    ready = last + timedelta(hours=RAID_PER_TARGET_COOLDOWN_HOURS)
     now = now or _utcnow()
-    ready_at = _raid_available_at(farm)
-    return ready_at is None or ready_at <= now
+    return ready if ready > now else None
+
+
+def _mark_raid_against_target(farm: dict, target_user_id: str, now: Optional[datetime] = None) -> str:
+    """Record a raid attempt against target; returns ISO when that target is raidable again."""
+    now = now or _utcnow()
+    tid = str(target_user_id or "")
+    by = _raid_last_by_target_map(farm)
+    by[tid] = _iso(now)
+    # Drop stale entries so the map cannot grow forever
+    cutoff = now - timedelta(hours=RAID_PER_TARGET_COOLDOWN_HOURS * 2)
+    pruned: Dict[str, str] = {}
+    for key, ts in by.items():
+        dt = _parse_iso(ts)
+        if not dt:
+            continue
+        if key == tid or dt >= cutoff:
+            pruned[key] = ts if key != tid else _iso(now)
+    farm["raid_last_by_target"] = pruned
+    farm["raid_available_at"] = None  # clear legacy global lock
+    return _iso(now + timedelta(hours=RAID_PER_TARGET_COOLDOWN_HOURS))
 
 
 def _security_upgrade_progress(farm: dict) -> Dict[str, Any]:
@@ -356,21 +399,440 @@ def _raid_success_chance(attacker: dict, defender: dict) -> float:
     return float(min(success_cap, max(RAID_SUCCESS_FLOOR, raw)))
 
 
-def _assistant_public(farm: dict) -> Dict[str, Any]:
-    mode = str(farm.get("assistant_mode") or "harvest")
-    if mode not in ASSISTANT_MODES:
-        mode = "harvest"
+def _empty_assistant_worker() -> Dict[str, Any]:
     return {
-        "hired": bool(farm.get("assistant_hired")),
-        "enabled": bool(farm.get("assistant_enabled")),
-        "mode": mode,
-        "level": max(1, int(farm.get("assistant_level") or 1)),
-        "hire_cost": ASSISTANT_HIRE_COST,
+        "hired": False,
+        "enabled": False,
+        "mode": "harvest",
+        "level": 1,
+        "last_tick_at": None,
+        "last_run": None,
+        "plant_strain_id": ASSISTANT_DEFAULT_PLANT_STRAIN,
+        "plant_soil_type": ASSISTANT_DEFAULT_PLANT_SOIL,
+    }
+
+
+def _normalize_plant_soil(soil_type: Optional[str]) -> str:
+    soil = (soil_type or ASSISTANT_DEFAULT_PLANT_SOIL).strip()
+    return soil if soil in ASSISTANT_PLANT_SOIL_TYPES else ASSISTANT_DEFAULT_PLANT_SOIL
+
+
+def _normalize_plant_strain(strain_id: Optional[str]) -> str:
+    sid = (strain_id or ASSISTANT_DEFAULT_PLANT_STRAIN).strip()
+    if sid in STRAIN_BY_ID:
+        return sid
+    if "ditch_weed" in STRAIN_BY_ID:
+        return "ditch_weed"
+    return ASSISTANT_DEFAULT_PLANT_STRAIN
+
+
+def _assistant_hire_cost(hired_count: int) -> Optional[int]:
+    if hired_count >= ASSISTANT_MAX_WORKERS:
+        return None
+    if hired_count < len(ASSISTANT_HIRE_COSTS):
+        return int(ASSISTANT_HIRE_COSTS[hired_count])
+    return int(ASSISTANT_HIRE_COSTS[-1])
+
+
+def _ensure_assistants(farm: dict) -> List[Dict[str, Any]]:
+    """Normalize assistants list (migrates legacy single-assistant fields)."""
+    workers = farm.get("assistants")
+    if not isinstance(workers, list):
+        workers = []
+    # Migrate legacy one-worker save
+    if not workers and farm.get("assistant_hired"):
+        workers = [
+            {
+                "hired": True,
+                "enabled": bool(farm.get("assistant_enabled")),
+                "mode": str(farm.get("assistant_mode") or "harvest"),
+                "level": max(1, int(farm.get("assistant_level") or 1)),
+                "last_tick_at": farm.get("assistant_last_tick_at"),
+                "last_run": farm.get("assistant_last_run"),
+            }
+        ]
+    # Pad / trim to max slots
+    out: List[Dict[str, Any]] = []
+    for i in range(ASSISTANT_MAX_WORKERS):
+        if i < len(workers) and isinstance(workers[i], dict):
+            w = dict(workers[i])
+            mode = str(w.get("mode") or "harvest")
+            if mode not in ASSISTANT_MODES:
+                mode = "harvest"
+            out.append(
+                {
+                    "hired": bool(w.get("hired")),
+                    "enabled": bool(w.get("enabled")),
+                    "mode": mode,
+                    "level": max(1, int(w.get("level") or 1)),
+                    "last_tick_at": w.get("last_tick_at"),
+                    "last_run": w.get("last_run"),
+                    "plant_strain_id": _normalize_plant_strain(w.get("plant_strain_id")),
+                    "plant_soil_type": _normalize_plant_soil(w.get("plant_soil_type")),
+                }
+            )
+        else:
+            out.append(_empty_assistant_worker())
+    farm["assistants"] = out
+    _sync_legacy_assistant_fields(farm)
+    return out
+
+
+def _sync_legacy_assistant_fields(farm: dict) -> None:
+    workers = farm.get("assistants") or []
+    hired = [w for w in workers if w.get("hired")]
+    primary = hired[0] if hired else None
+    farm["assistant_hired"] = bool(primary)
+    farm["assistant_enabled"] = bool(primary.get("enabled")) if primary else False
+    farm["assistant_mode"] = str((primary or {}).get("mode") or "harvest")
+    farm["assistant_level"] = max(1, int((primary or {}).get("level") or 1))
+    farm["assistant_last_tick_at"] = (primary or {}).get("last_tick_at")
+    farm["assistant_last_run"] = (primary or {}).get("last_run")
+
+
+def _assistant_public(farm: dict) -> Dict[str, Any]:
+    workers = _ensure_assistants(farm)
+    hired_count = sum(1 for w in workers if w.get("hired"))
+    next_cost = _assistant_hire_cost(hired_count)
+    public_workers = []
+    for idx, w in enumerate(workers):
+        public_workers.append(
+            {
+                "slot": idx,
+                "hired": bool(w.get("hired")),
+                "enabled": bool(w.get("enabled")),
+                "mode": w.get("mode") or "harvest",
+                "level": max(1, int(w.get("level") or 1)),
+                "last_run": w.get("last_run"),
+                "plant_strain_id": _normalize_plant_strain(w.get("plant_strain_id")),
+                "plant_soil_type": _normalize_plant_soil(w.get("plant_soil_type")),
+                "label": f"Worker {idx + 1}",
+            }
+        )
+    primary = next((w for w in public_workers if w["hired"]), None) or public_workers[0]
+    return {
+        "max_workers": ASSISTANT_MAX_WORKERS,
+        "hired_count": hired_count,
+        "can_hire": next_cost is not None,
+        "hire_cost": next_cost,
+        "hire_costs": list(ASSISTANT_HIRE_COSTS),
         "profit_share": ASSISTANT_PROFIT_SHARE,
         "modes": list(ASSISTANT_MODES),
-        "last_run": farm.get("assistant_last_run"),
+        "workers": public_workers,
         "dealers_level": int(farm.get("dealers_level") or 0),
         "max_dealers_level": MAX_DEALERS_LEVEL,
+        # Legacy single-worker shape (first hired / slot 0)
+        "hired": bool(primary and primary["hired"]),
+        "enabled": bool(primary and primary["enabled"]),
+        "mode": (primary or {}).get("mode") or "harvest",
+        "level": max(1, int((primary or {}).get("level") or 1)),
+        "last_run": (primary or {}).get("last_run"),
+    }
+
+
+def _soil_bag_purchase_cost(farm: dict, soil_type: str) -> Tuple[int, int]:
+    """Return (unit_cost for 1 bag, bag_units added). Raises ValueError if soil line locked."""
+    cat_id = ASSISTANT_SOIL_EQUIP_IDS.get(soil_type)
+    if not cat_id:
+        raise ValueError("Invalid soil/medium")
+    cat = EQUIPMENT_BY_ID.get(cat_id)
+    if not cat:
+        raise ValueError("Invalid soil/medium")
+    if int(_equip_levels(farm).get(cat_id) or 0) < 1:
+        raise ValueError("Unlock this soil line in the equipment shop first")
+    lvl = max(1, int(_equip_levels(farm).get(cat_id) or 1))
+    bag_units = int(cat.get("bag_units") or 4)
+    unit_cost = max(200, min(12_000, equipment_level_cost(cat, lvl) // 10))
+    return unit_cost, bag_units
+
+
+def _ensure_soil_charge(farm: dict, soil_type: str) -> Tuple[bool, int, Optional[str]]:
+    """
+    Ensure at least SOIL_CHARGE_PER_PLANT in stock; auto-buy one bag from business cash if needed.
+    Returns (ok, cash_spent, error_message).
+    """
+    stock = dict(farm.get("soil_stock") or {})
+    key = soil_type if soil_type != "coco" else "coco"
+    if int(stock.get(key) or 0) >= SOIL_CHARGE_PER_PLANT:
+        farm["soil_stock"] = stock
+        return True, 0, None
+    try:
+        bag_cost, bag_units = _soil_bag_purchase_cost(farm, soil_type)
+    except ValueError as e:
+        return False, 0, str(e)
+    cash = int(farm.get("business_cash") or 0)
+    if bag_cost > cash:
+        return False, 0, "Not enough weed business cash for soil"
+    farm["business_cash"] = cash - bag_cost
+    stock[key] = int(stock.get(key) or 0) + bag_units
+    farm["soil_stock"] = stock
+    return True, bag_cost, None
+
+
+def _assistant_strain_allowed(farm: dict, strain_id: str) -> Optional[str]:
+    """Return error message if strain cannot be planted, else None. May add unlocks."""
+    strain = STRAIN_BY_ID.get(strain_id)
+    if not strain:
+        return "Unknown strain"
+    unlocks = set(farm.get("unlocks") or [])
+    if is_exclusive_strain_id(strain_id) or strain.get("loot_exclusive"):
+        owned = set(farm.get("_exclusive_owned_ids") or [])
+        if strain_id not in owned:
+            return "You do not own this exclusive loot strain"
+        if int(farm.get("grower_level") or 1) < EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL:
+            return f"Grower Level {EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL}+ required to plant exclusive strains"
+        return None
+    if strain_id not in unlocks and int(strain.get("unlock_house_tier") or 0) > int(farm.get("house_tier") or 0):
+        return "Strain not unlocked"
+    if strain_id not in unlocks and int(strain.get("unlock_house_tier") or 0) <= int(farm.get("house_tier") or 0):
+        unlocks.add(strain_id)
+        farm["unlocks"] = list(unlocks)
+    return None
+
+
+def _assistant_plant_basics_ok(farm: dict) -> Optional[str]:
+    if not _equip_levels(farm).get("pots") and not _equip_levels(farm).get("hydro_system"):
+        return "Need pots or a hydro system"
+    if not any(
+        _equip_levels(farm).get(k)
+        for k in ("lights_cfl", "lights_led", "lights_hps", "lights_quantum", "lights_uv", "lights_bar_led")
+    ):
+        return "Need lights installed"
+    return None
+
+
+def _assistant_plant_one(farm: dict, strain_id: str, soil_type: str, now: datetime) -> Dict[str, Any]:
+    """
+    Plant one empty plot using business cash for seed (+ auto-buy soil if needed).
+    Returns {ok, spent_seed, spent_soil, plot_id?, error?}.
+    """
+    basics = _assistant_plant_basics_ok(farm)
+    if basics:
+        return {"ok": False, "spent_seed": 0, "spent_soil": 0, "error": basics}
+    err = _assistant_strain_allowed(farm, strain_id)
+    if err:
+        return {"ok": False, "spent_seed": 0, "spent_soil": 0, "error": err}
+    soil_type = _normalize_plant_soil(soil_type)
+    strain = STRAIN_BY_ID[strain_id]
+    seed_cost = int(strain.get("seed_cost") or 0)
+    cash = int(farm.get("business_cash") or 0)
+    if seed_cost > cash:
+        return {"ok": False, "spent_seed": 0, "spent_soil": 0, "error": "Not enough weed business cash for seeds"}
+
+    plots = list(farm.get("plots") or [])
+    empty_idx = next(
+        (i for i, p in enumerate(plots) if p.get("state") in ("empty", "dead", None)),
+        None,
+    )
+    if empty_idx is None:
+        return {"ok": False, "spent_seed": 0, "spent_soil": 0, "error": "No empty plots"}
+
+    ok_soil, soil_spent, soil_err = _ensure_soil_charge(farm, soil_type)
+    if not ok_soil:
+        return {"ok": False, "spent_seed": 0, "spent_soil": 0, "error": soil_err or "Need soil"}
+
+    # Re-check cash after possible soil purchase
+    cash = int(farm.get("business_cash") or 0)
+    if seed_cost > cash:
+        return {
+            "ok": False,
+            "spent_seed": 0,
+            "spent_soil": soil_spent,
+            "error": "Not enough weed business cash for seeds",
+        }
+
+    stock = dict(farm.get("soil_stock") or {})
+    stock_key = soil_type if soil_type != "coco" else "coco"
+    if int(stock.get(stock_key) or 0) < SOIL_CHARGE_PER_PLANT:
+        return {"ok": False, "spent_seed": 0, "spent_soil": soil_spent, "error": "Need soil/medium"}
+    stock[stock_key] = int(stock.get(stock_key) or 0) - SOIL_CHARGE_PER_PLANT
+    farm["soil_stock"] = stock
+    farm["business_cash"] = cash - seed_cost
+
+    stats = _stats(farm)
+    p = plots[empty_idx]
+    base_q = 48.0 + (8.0 if soil_type == "soil_organic" else 0.0)
+    plots[empty_idx] = {
+        **_empty_plot(),
+        "id": p["id"],
+        "state": "growing",
+        "strain_id": strain_id,
+        "planted_at": _iso(now),
+        "last_watered_at": _iso(now),
+        "last_fed_at": _iso(now),
+        "quality": min(float(stats.get("quality_ceiling") or 55), base_q),
+        "soil_type": soil_type,
+        "medium": soil_type,
+        "stage": "seedling",
+        "progress": 0.0,
+        "mite_infestation_pct": 0.0,
+        "mite_infested": False,
+        "last_mite_treated_at": None,
+        "last_mite_risk_at": _iso(now),
+        "last_mite_damage_at": _iso(now),
+    }
+    farm["plots"] = plots
+    _add_heat(farm, 0.4)
+    _track_heat_for_bust(farm, now)
+    return {
+        "ok": True,
+        "spent_seed": seed_cost,
+        "spent_soil": soil_spent,
+        "plot_id": p["id"],
+    }
+
+
+def _run_one_assistant_job(farm: dict, worker: dict, now: datetime) -> Dict[str, Any]:
+    """Run one worker's job once. Mutates farm + worker."""
+    mode = str(worker.get("mode") or "harvest")
+    if mode not in ASSISTANT_MODES:
+        mode = "harvest"
+        worker["mode"] = mode
+    worker["last_tick_at"] = _iso(now)
+    stats = _stats(farm)
+    summary: Dict[str, Any] = {"mode": mode, "at": _iso(now)}
+
+    if mode == "harvest":
+        farm_ref = _tick_environment(farm, stats, now)
+        plots = [_tick_plot(dict(p), farm_ref, stats, now) for p in (farm_ref.get("plots") or [])]
+        harvested = 0
+        grams_total = 0.0
+        for i, p in enumerate(plots):
+            if p.get("stage") != "harvest_ready" and p.get("state") != "harvest_ready":
+                continue
+            try:
+                empty, info = _harvest_ready_plot(farm_ref, p, stats, now)
+                plots[i] = empty
+                harvested += 1
+                grams_total += float(info.get("grams") or 0)
+            except Exception:
+                continue
+        farm["plots"] = plots
+        summary.update(
+            {
+                "message": f"Harvested {harvested} plot{'s' if harvested != 1 else ''}",
+                "plots": harvested,
+                "grams": round(grams_total, 2),
+            }
+        )
+    elif mode == "cool_heat":
+        heat = float(farm.get("heat") or 0)
+        drop = min(ASSISTANT_COOL_HEAT_PER_TICK, heat)
+        if drop <= 0:
+            summary["message"] = "Heat already cool"
+            summary["heat_drop"] = 0
+        else:
+            cost = int(math.ceil(drop * ASSISTANT_COOL_COST_PER_POINT))
+            cash = int(farm.get("business_cash") or 0)
+            if cost > cash:
+                drop = cash / max(1.0, ASSISTANT_COOL_COST_PER_POINT)
+                cost = cash
+            if drop > 0 and cost >= 0:
+                farm["business_cash"] = cash - cost
+                farm["heat"] = max(0.0, heat - drop)
+                _track_heat_for_bust(farm, now)
+                summary.update(
+                    {
+                        "message": f"Heat −{drop:.0f}",
+                        "heat_drop": round(drop, 1),
+                        "cost": cost,
+                    }
+                )
+            else:
+                summary["message"] = "Need business cash to cool heat"
+                summary["heat_drop"] = 0
+    elif mode == "sell_dealer":
+        if int(farm.get("dealers_level") or 0) < 1:
+            summary["message"] = "Unlock dealers first"
+        else:
+            try:
+                sold = _dealer_sell_stash(farm, assistant_share=True)
+                summary.update(
+                    {
+                        "message": (
+                            f"Sold ${sold['payout']:,} "
+                            f"(you ${sold['farm_gain']:,}, assistant 25% ${sold['assistant_cut']:,})"
+                        ),
+                        **sold,
+                    }
+                )
+            except ValueError as e:
+                summary["message"] = str(e)
+    elif mode == "plant":
+        strain_id = _normalize_plant_strain(worker.get("plant_strain_id"))
+        soil_type = _normalize_plant_soil(worker.get("plant_soil_type"))
+        worker["plant_strain_id"] = strain_id
+        worker["plant_soil_type"] = soil_type
+        planted = 0
+        spent_seed = 0
+        spent_soil = 0
+        last_err: Optional[str] = None
+        # Fill every empty plot we can afford this tick
+        while True:
+            result = _assistant_plant_one(farm, strain_id, soil_type, now)
+            if not result.get("ok"):
+                last_err = str(result.get("error") or "Could not plant")
+                # Soil may have been bought even on a later seed fail — keep accounting
+                spent_soil += int(result.get("spent_soil") or 0)
+                break
+            planted += 1
+            spent_seed += int(result.get("spent_seed") or 0)
+            spent_soil += int(result.get("spent_soil") or 0)
+        strain_name = (STRAIN_BY_ID.get(strain_id) or {}).get("name") or strain_id
+        if planted > 0:
+            total = spent_seed + spent_soil
+            summary.update(
+                {
+                    "message": (
+                        f"Planted {planted}× {strain_name} "
+                        f"({soil_type.replace('_', ' ')}) · spent ${total:,}"
+                    ),
+                    "plots": planted,
+                    "spent_seed": spent_seed,
+                    "spent_soil": spent_soil,
+                    "strain_id": strain_id,
+                    "soil_type": soil_type,
+                }
+            )
+        else:
+            summary.update(
+                {
+                    "message": last_err or "Nothing to plant",
+                    "plots": 0,
+                    "spent_seed": spent_seed,
+                    "spent_soil": spent_soil,
+                    "strain_id": strain_id,
+                    "soil_type": soil_type,
+                }
+            )
+    worker["last_run"] = summary
+    return summary
+
+
+def _run_assistant_tick(farm: dict, now: datetime) -> Optional[Dict[str, Any]]:
+    """Lazy tick for all hired+enabled workers. Each has its own mode."""
+    workers = _ensure_assistants(farm)
+    runs: List[Dict[str, Any]] = []
+    for idx, worker in enumerate(workers):
+        if not worker.get("hired") or not worker.get("enabled"):
+            continue
+        last = _parse_iso(worker.get("last_tick_at"))
+        if last and (now - last).total_seconds() < ASSISTANT_TICK_SECONDS:
+            continue
+        summary = _run_one_assistant_job(farm, worker, now)
+        summary["slot"] = idx
+        summary["label"] = f"Worker {idx + 1}"
+        runs.append(summary)
+    farm["assistants"] = workers
+    _sync_legacy_assistant_fields(farm)
+    if not runs:
+        return None
+    if len(runs) == 1:
+        return runs[0]
+    return {
+        "at": _iso(now),
+        "message": " · ".join(f"{r.get('label')}: {r.get('message')}" for r in runs),
+        "runs": runs,
     }
 
 
@@ -515,17 +977,17 @@ def _apply_heat_bust(farm: dict, user_id: str, now: datetime) -> Dict[str, Any]:
     farm["bust_restart_seed"] = True
     farm["cleanliness_pct"] = 100.0
     farm["last_cleanliness_tick_at"] = _iso(now)
-    # Heat scare — assistant flees; player must rehire after release.
-    assistant_fled = bool(farm.get("assistant_hired"))
-    farm["assistant_hired"] = False
-    farm["assistant_enabled"] = False
-    farm["assistant_mode"] = "harvest"
-    farm["assistant_last_tick_at"] = None
-    farm["assistant_last_run"] = {
-        "mode": None,
-        "at": _iso(now),
-        "message": "Assistant fled after the bust — rehire required",
-    } if assistant_fled else farm.get("assistant_last_run")
+    # Heat scare — all workers flee; player must rehire after release.
+    workers = _ensure_assistants(farm)
+    assistant_fled = any(bool(w.get("hired")) for w in workers)
+    farm["assistants"] = [_empty_assistant_worker() for _ in range(ASSISTANT_MAX_WORKERS)]
+    if assistant_fled:
+        farm["assistants"][0]["last_run"] = {
+            "mode": None,
+            "at": _iso(now),
+            "message": "Crew fled after the bust — rehire required",
+        }
+    _sync_legacy_assistant_fields(farm)
     # Keep unlocks + grower level; exclusives are ownership docs elsewhere.
     plots = [_empty_plot() for _ in range(int(_house(farm).get("plots") or 2))]
     farm["plots"] = plots
@@ -567,92 +1029,6 @@ def _track_heat_for_bust(farm: dict, now: datetime) -> Optional[Dict[str, Any]]:
         return None
     farm["heat_high_since"] = None
     return None
-
-
-def _run_assistant_tick(farm: dict, now: datetime) -> Optional[Dict[str, Any]]:
-    """Lazy assistant job. Mutually exclusive mode. Returns last_run summary or None."""
-    if not farm.get("assistant_hired") or not farm.get("assistant_enabled"):
-        return None
-    last = _parse_iso(farm.get("assistant_last_tick_at"))
-    if last and (now - last).total_seconds() < ASSISTANT_TICK_SECONDS:
-        return None
-    mode = str(farm.get("assistant_mode") or "harvest")
-    if mode not in ASSISTANT_MODES:
-        mode = "harvest"
-        farm["assistant_mode"] = mode
-    farm["assistant_last_tick_at"] = _iso(now)
-    stats = _stats(farm)
-    summary: Dict[str, Any] = {"mode": mode, "at": _iso(now)}
-
-    if mode == "harvest":
-        farm = _tick_environment(farm, stats, now)
-        plots = [_tick_plot(dict(p), farm, stats, now) for p in (farm.get("plots") or [])]
-        harvested = 0
-        grams_total = 0.0
-        for i, p in enumerate(plots):
-            if p.get("stage") != "harvest_ready" and p.get("state") != "harvest_ready":
-                continue
-            try:
-                empty, info = _harvest_ready_plot(farm, p, stats, now)
-                plots[i] = empty
-                harvested += 1
-                grams_total += float(info.get("grams") or 0)
-            except Exception:
-                continue
-        farm["plots"] = plots
-        summary.update(
-            {
-                "message": f"Harvested {harvested} plot{'s' if harvested != 1 else ''}",
-                "plots": harvested,
-                "grams": round(grams_total, 2),
-            }
-        )
-    elif mode == "cool_heat":
-        heat = float(farm.get("heat") or 0)
-        drop = min(ASSISTANT_COOL_HEAT_PER_TICK, heat)
-        if drop <= 0:
-            summary["message"] = "Heat already cool"
-            summary["heat_drop"] = 0
-        else:
-            cost = int(math.ceil(drop * ASSISTANT_COOL_COST_PER_POINT))
-            cash = int(farm.get("business_cash") or 0)
-            if cost > cash:
-                # Partial cool with what they can afford
-                drop = cash / max(1.0, ASSISTANT_COOL_COST_PER_POINT)
-                cost = cash
-            if drop > 0 and cost >= 0:
-                farm["business_cash"] = cash - cost
-                farm["heat"] = max(0.0, heat - drop)
-                _track_heat_for_bust(farm, now)
-                summary.update(
-                    {
-                        "message": f"Heat −{drop:.0f}",
-                        "heat_drop": round(drop, 1),
-                        "cost": cost,
-                    }
-                )
-            else:
-                summary["message"] = "Need business cash to cool heat"
-                summary["heat_drop"] = 0
-    elif mode == "sell_dealer":
-        if int(farm.get("dealers_level") or 0) < 1:
-            summary["message"] = "Unlock dealers first"
-        else:
-            try:
-                sold = _dealer_sell_stash(farm, assistant_share=True)
-                summary.update(
-                    {
-                        "message": (
-                            f"Sold ${sold['payout']:,} "
-                            f"(you ${sold['farm_gain']:,}, assistant 25% ${sold['assistant_cut']:,})"
-                        ),
-                        **sold,
-                    }
-                )
-            except ValueError as e:
-                summary["message"] = str(e)
-    farm["assistant_last_run"] = summary
-    return summary
 
 
 async def _maybe_apply_bust_and_assistant(
@@ -1175,6 +1551,8 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
         "equipment_shop_status": shop,
         "soil_stock": farm.get("soil_stock") or {},
         "business_cash": int(farm.get("business_cash") or 0),
+        "business_cash_reserve": MIN_BUSINESS_CASH_RESERVE,
+        "withdrawable_cash": max(0, int(farm.get("business_cash") or 0) - MIN_BUSINESS_CASH_RESERVE),
         "daily_sold_usd": sold,
         "daily_sold_cap": DAILY_SELL_CAP_USD,
         "daily_sold_remaining": max(0, DAILY_SELL_CAP_USD - sold),
@@ -1213,9 +1591,10 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
         "stats": {k: round(float(v), 4) if isinstance(v, float) else v for k, v in stats.items()},
         "active_light_class": light,
         "raid_stats": farm.get("raid_stats") or {},
-        "raid_available_at": farm.get("raid_available_at"),
-        "raid_ready": _raid_ready(farm),
-        "raid_cooldown_hours": RAID_GLOBAL_COOLDOWN_HOURS,
+        "raid_available_at": None,
+        "raid_ready": True,
+        "raid_cooldown_hours": RAID_PER_TARGET_COOLDOWN_HOURS,
+        "raid_cooldown_scope": "per_target",
         "security": _security_upgrade_progress(farm),
         "raid_success_at_max_security": RAID_SUCCESS_AT_MAX_SECURITY,
         "raid_success_max": RAID_SUCCESS_MAX,
@@ -1373,6 +1752,10 @@ class SellBody(BaseModel):
     unit: str = "oz"
 
 
+class WithdrawBody(BaseModel):
+    amount: int = Field(..., gt=0)
+
+
 class UpgradeEquipBody(BaseModel):
     category_id: str
 
@@ -1401,10 +1784,18 @@ class DealerSellBody(BaseModel):
 
 class AssistantModeBody(BaseModel):
     mode: str
+    slot: int = Field(0, ge=0, le=7)
 
 
 class AssistantEnabledBody(BaseModel):
     enabled: bool = True
+    slot: int = Field(0, ge=0, le=7)
+
+
+class AssistantPlantPrefsBody(BaseModel):
+    slot: int = Field(0, ge=0, le=7)
+    strain_id: str
+    soil_type: str = ASSISTANT_DEFAULT_PLANT_SOIL
 
 
 class EquipStolenBody(BaseModel):
@@ -1474,6 +1865,7 @@ async def weed_status(current_user: dict = Depends(_gate)):
             "cleanliness_pct": pub["cleanliness_pct"],
             "last_cleanliness_tick_at": pub["last_cleanliness_tick_at"],
             "exclusive_acapulco_gold_claimed_utc": farm.get("exclusive_acapulco_gold_claimed_utc"),
+            "assistants": farm.get("assistants"),
             "assistant_hired": farm.get("assistant_hired"),
             "assistant_enabled": farm.get("assistant_enabled"),
             "assistant_mode": farm.get("assistant_mode"),
@@ -1489,6 +1881,8 @@ async def weed_status(current_user: dict = Depends(_gate)):
             "sabotage_unlocked": farm.get("sabotage_unlocked"),
             "grower_level": farm.get("grower_level"),
             "grower_xp": farm.get("grower_xp"),
+            "soil_stock": farm.get("soil_stock"),
+            "unlocks": farm.get("unlocks"),
         }
         saved = await _save_farm(
             farm,
@@ -2114,6 +2508,54 @@ async def weed_cool_off(current_user: dict = Depends(_gate)):
     }
 
 
+@router.post("/withdraw")
+async def weed_withdraw(body: WithdrawBody, current_user: dict = Depends(_gate)):
+    """Move weed business cash to personal money. Must leave $50k in the farm."""
+    lock = await _weed_farm_lock(current_user["id"])
+    async with lock:
+        farm = await _get_or_create_farm(current_user["id"])
+        expected_at = farm.get("updated_at")
+        cash = int(farm.get("business_cash") or 0)
+        withdrawable = max(0, cash - MIN_BUSINESS_CASH_RESERVE)
+        amount = int(body.amount)
+        if cash <= MIN_BUSINESS_CASH_RESERVE:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Must keep at least ${MIN_BUSINESS_CASH_RESERVE:,} in the farm. Current: ${cash:,}.",
+            )
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="Amount must be positive")
+        if amount > withdrawable:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Can withdraw up to ${withdrawable:,} (must leave ${MIN_BUSINESS_CASH_RESERVE:,}).",
+            )
+        farm["business_cash"] = cash - amount
+        saved = await _save_farm(
+            farm,
+            {"business_cash": farm["business_cash"]},
+            expected_updated_at=expected_at,
+        )
+        if not saved:
+            raise HTTPException(status_code=409, detail="Withdraw conflict — refresh and try again")
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": amount}})
+        try:
+            await log_activity(
+                current_user["id"],
+                current_user.get("username") or "",
+                "weed_empire_withdraw",
+                {"amount": amount, "business_cash_remaining": farm["business_cash"]},
+            )
+        except Exception:
+            pass
+        return {
+            "ok": True,
+            "withdrawn": amount,
+            "business_cash": farm["business_cash"],
+            "farm": _public_farm(farm, username=current_user.get("username") or "", apply_curing_tick=False),
+        }
+
+
 @router.get("/raid/targets")
 async def weed_raid_targets(current_user: dict = Depends(_gate)):
     me = current_user["id"]
@@ -2125,11 +2567,11 @@ async def weed_raid_targets(current_user: dict = Depends(_gate)):
             "sabotage_unlocked": bool(my_farm.get("sabotage_unlocked")),
             "raid_unlocked": False,
             "raid_ready": False,
-            "raid_available_at": my_farm.get("raid_available_at"),
-            "raid_cooldown_hours": RAID_GLOBAL_COOLDOWN_HOURS,
+            "raid_available_at": None,
+            "raid_cooldown_hours": RAID_PER_TARGET_COOLDOWN_HOURS,
+            "raid_cooldown_scope": "per_target",
             "required_grower_level": MIN_RAID_GROWER_LEVEL,
         }
-    raid_ready = _raid_ready(my_farm, now)
     cursor = db.weed_farms.find(
         {
             "user_id": {"$ne": me},
@@ -2157,6 +2599,7 @@ async def weed_raid_targets(current_user: dict = Depends(_gate)):
         stash_g = sum(float(v or 0) for v in (f.get("stash") or {}).values())
         sec = _security_upgrade_progress(f)
         est_chance = _raid_success_chance(my_farm, f)
+        target_ready_at = _raid_available_at_for_target(my_farm, uid, now)
         targets.append(
             {
                 "user_id": uid,
@@ -2169,6 +2612,8 @@ async def weed_raid_targets(current_user: dict = Depends(_gate)):
                 "security_fill": sec.get("fill"),
                 "security_fully_upgraded": bool(sec.get("fully_upgraded")),
                 "raid_success_chance": round(est_chance, 3),
+                "raid_ready": target_ready_at is None,
+                "raid_available_at": _iso(target_ready_at) if target_ready_at else None,
             }
         )
         if len(targets) >= 40:
@@ -2177,9 +2622,10 @@ async def weed_raid_targets(current_user: dict = Depends(_gate)):
         "targets": targets,
         "sabotage_unlocked": bool(my_farm.get("sabotage_unlocked")),
         "raid_unlocked": True,
-        "raid_ready": raid_ready,
-        "raid_available_at": my_farm.get("raid_available_at"),
-        "raid_cooldown_hours": RAID_GLOBAL_COOLDOWN_HOURS,
+        "raid_ready": True,
+        "raid_available_at": None,
+        "raid_cooldown_hours": RAID_PER_TARGET_COOLDOWN_HOURS,
+        "raid_cooldown_scope": "per_target",
         "required_grower_level": MIN_RAID_GROWER_LEVEL,
     }
 
@@ -2196,11 +2642,11 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
     atk = await _get_or_create_farm(attacker_id)
     if int(atk.get("grower_level") or 1) < MIN_RAID_GROWER_LEVEL:
         raise HTTPException(status_code=400, detail="Reach Grower Level 2 before raiding other growers")
-    if not _raid_ready(atk, now):
-        ready_at = _raid_available_at(atk)
+    target_ready_at = _raid_available_at_for_target(atk, defender_id, now)
+    if target_ready_at is not None:
         raise HTTPException(
             status_code=400,
-            detail=f"Raid cooldown — available again at {ready_at.isoformat() if ready_at else 'soon'}",
+            detail=f"Already raided this grower — available again at {target_ready_at.isoformat()}",
         )
 
     dfn = await db.weed_farms.find_one({"user_id": defender_id}, {"_id": 0})
@@ -2213,8 +2659,7 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
     success = _rng.random() < chance
     sec_progress = _security_upgrade_progress(dfn)
 
-    next_ready = _iso(now + timedelta(hours=RAID_GLOBAL_COOLDOWN_HOURS))
-    atk["raid_available_at"] = next_ready
+    next_ready = _mark_raid_against_target(atk, defender_id, now)
     stolen = {"stash": {}, "cash": 0, "equipment": None, "scrap_cash": 0, "grams_total": 0.0}
     sabotage_note = None
 
@@ -2228,7 +2673,8 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
         await _save_farm(
             atk,
             {
-                "raid_available_at": next_ready,
+                "raid_last_by_target": atk.get("raid_last_by_target"),
+                "raid_available_at": None,
                 "business_cash": atk["business_cash"],
                 "heat": atk["heat"],
                 "raid_stats": rs,
@@ -2250,7 +2696,9 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
             "fine": fine,
             "success_chance": round(chance, 3),
             "defender_security_fill": sec_progress.get("fill"),
+            "target_user_id": defender_id,
             "raid_available_at": next_ready,
+            "raid_cooldown_scope": "per_target",
             "farm": _public_farm(atk, username=current_user.get("username") or ""),
         }
 
@@ -2338,7 +2786,8 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
     await _save_farm(
         atk,
         {
-            "raid_available_at": next_ready,
+            "raid_last_by_target": atk.get("raid_last_by_target"),
+            "raid_available_at": None,
             "stash": atk.get("stash"),
             "business_cash": atk["business_cash"],
             "equipment": atk.get("equipment"),
@@ -2385,7 +2834,9 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
         "sabotage": sabotage_note,
         "success_chance": round(chance, 3),
         "defender_security_fill": sec_progress.get("fill"),
+        "target_user_id": defender_id,
         "raid_available_at": next_ready,
+        "raid_cooldown_scope": "per_target",
         "farm": _public_farm(atk, username=current_user.get("username") or ""),
     }
 
@@ -2486,21 +2937,37 @@ async def weed_upgrade_dealers(current_user: dict = Depends(_gate)):
 @router.post("/assistant/hire")
 async def weed_assistant_hire(current_user: dict = Depends(_gate)):
     farm = await _get_or_create_farm(current_user["id"])
-    if farm.get("assistant_hired"):
+    workers = _ensure_assistants(farm)
+    hired_count = sum(1 for w in workers if w.get("hired"))
+    cost = _assistant_hire_cost(hired_count)
+    if cost is None:
         return {"ok": True, "farm": _public_farm(farm, username=current_user.get("username") or "")}
-    _spend(farm, ASSISTANT_HIRE_COST)
-    farm["assistant_hired"] = True
-    farm["assistant_enabled"] = True
-    farm["assistant_mode"] = "harvest"
-    farm["assistant_level"] = 1
+    # Fill first empty slot
+    slot = next((i for i, w in enumerate(workers) if not w.get("hired")), None)
+    if slot is None:
+        raise HTTPException(status_code=400, detail="Crew is full")
+    _spend(farm, cost)
+    workers[slot] = {
+        "hired": True,
+        "enabled": True,
+        "mode": "harvest",
+        "level": 1,
+        "last_tick_at": None,
+        "last_run": None,
+        "plant_strain_id": ASSISTANT_DEFAULT_PLANT_STRAIN,
+        "plant_soil_type": ASSISTANT_DEFAULT_PLANT_SOIL,
+    }
+    farm["assistants"] = workers
+    _sync_legacy_assistant_fields(farm)
     await _save_farm(
         farm,
         {
             "business_cash": farm["business_cash"],
-            "assistant_hired": True,
-            "assistant_enabled": True,
-            "assistant_mode": "harvest",
-            "assistant_level": 1,
+            "assistants": workers,
+            "assistant_hired": farm["assistant_hired"],
+            "assistant_enabled": farm["assistant_enabled"],
+            "assistant_mode": farm["assistant_mode"],
+            "assistant_level": farm["assistant_level"],
         },
     )
     return {"ok": True, "farm": _public_farm(farm, username=current_user.get("username") or "")}
@@ -2509,25 +2976,62 @@ async def weed_assistant_hire(current_user: dict = Depends(_gate)):
 @router.post("/assistant/mode")
 async def weed_assistant_mode(body: AssistantModeBody, current_user: dict = Depends(_gate)):
     farm = await _get_or_create_farm(current_user["id"])
-    if not farm.get("assistant_hired"):
-        raise HTTPException(status_code=400, detail="Hire an assistant first")
+    workers = _ensure_assistants(farm)
+    slot = int(body.slot or 0)
+    if slot < 0 or slot >= len(workers) or not workers[slot].get("hired"):
+        raise HTTPException(status_code=400, detail="Hire that worker first")
     mode = (body.mode or "").strip()
     if mode not in ASSISTANT_MODES:
         raise HTTPException(status_code=400, detail="Invalid assistant mode")
     if mode == "sell_dealer" and int(farm.get("dealers_level") or 0) < 1:
         raise HTTPException(status_code=400, detail="Unlock dealers before sell-to-dealer mode")
-    farm["assistant_mode"] = mode
-    await _save_farm(farm, {"assistant_mode": mode})
+    workers[slot]["mode"] = mode
+    farm["assistants"] = workers
+    _sync_legacy_assistant_fields(farm)
+    await _save_farm(farm, {"assistants": workers, "assistant_mode": farm["assistant_mode"]})
     return {"ok": True, "farm": _public_farm(farm, username=current_user.get("username") or "")}
 
 
 @router.post("/assistant/enabled")
 async def weed_assistant_enabled(body: AssistantEnabledBody, current_user: dict = Depends(_gate)):
     farm = await _get_or_create_farm(current_user["id"])
-    if not farm.get("assistant_hired"):
-        raise HTTPException(status_code=400, detail="Hire an assistant first")
-    farm["assistant_enabled"] = bool(body.enabled)
-    await _save_farm(farm, {"assistant_enabled": farm["assistant_enabled"]})
+    workers = _ensure_assistants(farm)
+    slot = int(body.slot or 0)
+    if slot < 0 or slot >= len(workers) or not workers[slot].get("hired"):
+        raise HTTPException(status_code=400, detail="Hire that worker first")
+    workers[slot]["enabled"] = bool(body.enabled)
+    farm["assistants"] = workers
+    _sync_legacy_assistant_fields(farm)
+    await _save_farm(
+        farm,
+        {"assistants": workers, "assistant_enabled": farm["assistant_enabled"]},
+    )
+    return {"ok": True, "farm": _public_farm(farm, username=current_user.get("username") or "")}
+
+
+@router.post("/assistant/plant-prefs")
+async def weed_assistant_plant_prefs(body: AssistantPlantPrefsBody, current_user: dict = Depends(_gate)):
+    farm = await _get_or_create_farm(current_user["id"])
+    await _attach_exclusive_owned(farm)
+    workers = _ensure_assistants(farm)
+    slot = int(body.slot or 0)
+    if slot < 0 or slot >= len(workers) or not workers[slot].get("hired"):
+        raise HTTPException(status_code=400, detail="Hire that worker first")
+    strain_id = _normalize_plant_strain(body.strain_id)
+    soil_type = _normalize_plant_soil(body.soil_type)
+    err = _assistant_strain_allowed(farm, strain_id)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+    try:
+        _soil_bag_purchase_cost(farm, soil_type)
+    except ValueError as e:
+        # Allow conventional even if somehow locked — plant will surface error
+        if soil_type != "soil_conventional":
+            raise HTTPException(status_code=400, detail=str(e))
+    workers[slot]["plant_strain_id"] = strain_id
+    workers[slot]["plant_soil_type"] = soil_type
+    farm["assistants"] = workers
+    await _save_farm(farm, {"assistants": workers, "unlocks": farm.get("unlocks")})
     return {"ok": True, "farm": _public_farm(farm, username=current_user.get("username") or "")}
 
 
@@ -2791,6 +3295,76 @@ async def weed_admin_clawback(
             "farm": _public_farm(fresh, username=u.get("username") or "") if fresh else None,
             "message": f"Clawback applied for {u.get('username')}",
         }
+
+
+@router.post("/admin/reset-all-heat")
+async def weed_admin_reset_all_heat(
+    current_user: dict = Depends(get_current_user),
+    dry_run: bool = Query(False, description="Count only; do not write"),
+    confirm: bool = Query(False, description="Must be true to apply (when not dry_run)"),
+):
+    """
+    Set every weed farm's heat to 0 and clear bust timers.
+    Use after rolling out the new passive heat / bust system so existing farms start clean.
+    """
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    match = {"heat": {"$gt": 0}}
+    high_match = {"heat_high_since": {"$ne": None}}
+    hot_count = await db.weed_farms.count_documents(match)
+    bust_timer_count = await db.weed_farms.count_documents(high_match)
+    total_farms = await db.weed_farms.count_documents({})
+
+    if dry_run or not confirm:
+        return {
+            "ok": True,
+            "dry_run": True,
+            "total_farms": total_farms,
+            "farms_with_heat": hot_count,
+            "farms_with_bust_timer": bust_timer_count,
+            "message": (
+                f"Would clear heat on ~{hot_count} farm(s) and bust timers on ~{bust_timer_count}. "
+                "Call again with confirm=true to apply."
+            ),
+        }
+
+    now_iso = _iso()
+    res = await db.weed_farms.update_many(
+        {},
+        {
+            "$set": {
+                "heat": 0.0,
+                "heat_high_since": None,
+                "last_heat_tick_at": now_iso,
+                "updated_at": now_iso,
+            }
+        },
+    )
+    try:
+        await log_activity(
+            current_user.get("id") or "",
+            current_user.get("username") or "?",
+            "admin_weed_empire_reset_all_heat",
+            {
+                "matched": int(res.matched_count or 0),
+                "modified": int(res.modified_count or 0),
+                "farms_with_heat_before": hot_count,
+                "farms_with_bust_timer_before": bust_timer_count,
+            },
+        )
+    except Exception:
+        pass
+    return {
+        "ok": True,
+        "dry_run": False,
+        "total_farms": total_farms,
+        "farms_with_heat_before": hot_count,
+        "farms_with_bust_timer_before": bust_timer_count,
+        "matched": int(res.matched_count or 0),
+        "modified": int(res.modified_count or 0),
+        "message": f"Heat cleared for {int(res.modified_count or 0)} farm(s).",
+    }
 
 
 def register(api_router: APIRouter) -> None:

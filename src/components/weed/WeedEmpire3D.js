@@ -772,7 +772,7 @@ export default function WeedEmpire3D({
   return (
     <div
       ref={mountRef}
-      className="relative w-full h-[340px] sm:h-[300px] md:h-[360px] rounded-lg overflow-hidden border border-emerald-900/40 bg-black"
+      className="relative w-full h-[220px] sm:h-[280px] md:h-[360px] rounded-lg overflow-hidden border border-emerald-900/40 bg-black"
       aria-label="Grow room 3D view"
       aria-busy={loading}
     >

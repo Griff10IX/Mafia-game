@@ -52,7 +52,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     # --- medium ---
     _cat(
         "soil_conventional", "Conventional Soil", "medium",
-        max_level=60, base_cost=500, cost_growth=1.32,
+        max_level=70, base_cost=500, cost_growth=1.32,
         min_grower_level=1, tier="starter", icon="soil", room_visual="soil",
         consumable_stock_key="soil_conventional", bag_units=5,
         stats_per_level={"yield_mult": 0.01, "quality_ceiling": 0.375},
@@ -60,7 +60,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "soil_organic", "Organic Soil", "medium",
-        max_level=60, base_cost=1_200, cost_growth=1.36,
+        max_level=70, base_cost=1_200, cost_growth=1.36,
         min_house_tier=0, min_grower_level=3,
         requires={"category_id": "soil_conventional", "min_level": 3},
         tier="mid", icon="soil_organic", room_visual="soil",
@@ -70,7 +70,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "coco_medium", "Coco Coir", "medium",
-        max_level=60, base_cost=2_000, cost_growth=1.34,
+        max_level=70, base_cost=2_000, cost_growth=1.34,
         min_house_tier=1, min_grower_level=4,
         requires={"category_id": "soil_conventional", "min_level": 2},
         tier="mid", icon="coco", room_visual="soil",
@@ -81,7 +81,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     # --- lighting ---
     _cat(
         "lights_cfl", "CFL / Junk LED", "lighting",
-        max_level=40, base_cost=400, cost_growth=1.29,
+        max_level=50, base_cost=400, cost_growth=1.29,
         min_grower_level=1, tier="starter", icon="bulb", room_visual="light_cfl",
         light_class="cfl",
         stats_per_level={"grow_speed_mult": 0.005, "yield_mult": 0.005, "quality_ceiling": 0.125, "heat_gain_mult": 0.0025, "power_draw": 8},
@@ -89,7 +89,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "lights_led", "Full-Spectrum LED", "lighting",
-        max_level=80, base_cost=3_500, cost_growth=1.32,
+        max_level=90, base_cost=3_500, cost_growth=1.32,
         min_house_tier=1, min_grower_level=3,
         requires={"category_id": "lights_cfl", "min_level": 4},
         tier="mid", icon="led", room_visual="light_led",
@@ -99,7 +99,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "lights_hps", "HPS / MH", "lighting",
-        max_level=80, base_cost=2_800, cost_growth=1.31,
+        max_level=90, base_cost=2_800, cost_growth=1.31,
         min_house_tier=1, min_grower_level=4,
         requires={"category_id": "lights_cfl", "min_level": 4},
         tier="mid", icon="hps", room_visual="light_hps",
@@ -109,7 +109,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "lights_quantum", "Quantum / CMH Boards", "lighting",
-        max_level=60, base_cost=12_000, cost_growth=1.34,
+        max_level=70, base_cost=12_000, cost_growth=1.34,
         min_house_tier=3, min_grower_level=12,
         requires={"category_id": "lights_led", "min_level": 10},
         tier="endgame", icon="quantum", room_visual="light_quantum",
@@ -119,14 +119,14 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "light_timers", "Light Timers & Controllers", "lighting",
-        max_level=60, base_cost=800, cost_growth=1.3,
+        max_level=70, base_cost=800, cost_growth=1.3,
         min_grower_level=2, tier="starter", icon="timer", room_visual="timer",
         stats_per_level={"grow_speed_mult": 0.0037, "quality_ceiling": 0.2},
         description="18/6 → 12/12 auto → sunrise dimming.",
     ),
     _cat(
         "light_movers", "Light Movers / Rails", "lighting",
-        max_level=50, base_cost=2_200, cost_growth=1.34,
+        max_level=60, base_cost=2_200, cost_growth=1.34,
         min_house_tier=1, min_grower_level=5,
         requires={"category_id": "lights_led", "min_level": 3},
         tier="mid", icon="rail", room_visual="light_mover",
@@ -136,14 +136,14 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     # --- structure ---
     _cat(
         "tents", "Grow Tents & Racks", "structure",
-        max_level=80, base_cost=1_500, cost_growth=1.34,
+        max_level=90, base_cost=1_500, cost_growth=1.34,
         min_grower_level=1, tier="starter", icon="tent", room_visual="tent",
         stats_per_level={"yield_mult": 0.005, "quality_ceiling": 0.15, "odor_stealth": 0.125},
         description="Tents → multi-tent → vertical racks.",
     ),
     _cat(
         "mylar", "Reflective Lining", "structure",
-        max_level=50, base_cost=600, cost_growth=1.29,
+        max_level=60, base_cost=600, cost_growth=1.29,
         min_grower_level=2,
         requires={"category_id": "tents", "min_level": 1},
         tier="starter", icon="mylar", room_visual="mylar",
@@ -152,7 +152,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "blackout_seals", "Blackout / Light-Leak Seals", "structure",
-        max_level=40, base_cost=900, cost_growth=1.3,
+        max_level=50, base_cost=900, cost_growth=1.3,
         min_grower_level=3,
         requires={"category_id": "tents", "min_level": 2},
         tier="mid", icon="seal", room_visual="blackout",
@@ -162,14 +162,14 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     # --- containers ---
     _cat(
         "pots", "Pots & Containers", "containers",
-        max_level=60, base_cost=300, cost_growth=1.28,
+        max_level=70, base_cost=300, cost_growth=1.28,
         min_grower_level=1, tier="starter", icon="pot", room_visual="pot",
         stats_per_level={"yield_mult": 0.005, "quality_ceiling": 0.125},
         description="Plastic → fabric → air pots.",
     ),
     _cat(
         "hydro_system", "Hydro System", "containers",
-        max_level=64, base_cost=5_000, cost_growth=1.36,
+        max_level=74, base_cost=5_000, cost_growth=1.36,
         min_house_tier=2, min_grower_level=8,
         requires={"category_id": "pots", "min_level": 5},
         tier="premium", icon="hydro", room_visual="hydro",
@@ -179,14 +179,14 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     # --- water ---
     _cat(
         "irrigation", "Irrigation", "water",
-        max_level=60, base_cost=900, cost_growth=1.31,
+        max_level=70, base_cost=900, cost_growth=1.31,
         min_grower_level=1, tier="starter", icon="drip", room_visual="irrigation",
         stats_per_level={"water_interval_mult": 0.01, "feed_efficiency": 0.0075},
         description="Hand → drip → auto. Lv 5 auto-water; Lv 8 auto-feeders.",
     ),
     _cat(
         "reservoirs", "Reservoirs & RO", "water",
-        max_level=60, base_cost=1_100, cost_growth=1.32,
+        max_level=70, base_cost=1_100, cost_growth=1.32,
         min_house_tier=1, min_grower_level=4,
         requires={"category_id": "irrigation", "min_level": 3},
         tier="mid", icon="tank", room_visual="reservoir",
@@ -195,7 +195,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "dosing_pump", "pH / TDS Dosing Pump", "water",
-        max_level=50, base_cost=2_500, cost_growth=1.34,
+        max_level=60, base_cost=2_500, cost_growth=1.34,
         min_house_tier=1, min_grower_level=6,
         requires={"category_id": "meters", "min_level": 3},
         tier="premium", icon="pump", room_visual="dosing",
@@ -205,14 +205,14 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     # --- nutrients ---
     _cat(
         "nutes_base", "Base Nutrients", "nutrients",
-        max_level=80, base_cost=700, cost_growth=1.3,
+        max_level=90, base_cost=700, cost_growth=1.3,
         min_grower_level=1, tier="starter", icon="nute", room_visual="nutes",
         stats_per_level={"yield_mult": 0.0075, "feed_efficiency": 0.005, "quality_ceiling": 0.175},
         description="Veg/bloom base lines.",
     ),
     _cat(
         "nutes_organic", "Organic Nutrients", "nutrients",
-        max_level=60, base_cost=1_400, cost_growth=1.33,
+        max_level=70, base_cost=1_400, cost_growth=1.33,
         min_grower_level=3,
         requires={"category_id": "soil_organic", "min_level": 1},
         tier="mid", icon="nute_organic", room_visual="nutes",
@@ -221,7 +221,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "nutes_boosters", "Bloom Boosters & Additives", "nutrients",
-        max_level=64, base_cost=1_000, cost_growth=1.31,
+        max_level=74, base_cost=1_000, cost_growth=1.31,
         min_house_tier=1, min_grower_level=4,
         requires={"category_id": "nutes_base", "min_level": 4},
         tier="mid", icon="booster", room_visual="nutes",
@@ -231,7 +231,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     # --- climate ---
     _cat(
         "vent_exhaust", "Exhaust Fans", "climate",
-        max_level=64, base_cost=1_200, cost_growth=1.32,
+        max_level=74, base_cost=1_200, cost_growth=1.32,
         min_grower_level=2,
         requires={"category_id": "tents", "min_level": 1},
         tier="starter", icon="fan", room_visual="exhaust",
@@ -240,7 +240,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "carbon_filter", "Carbon Filters", "climate",
-        max_level=60, base_cost=1_500, cost_growth=1.33,
+        max_level=70, base_cost=1_500, cost_growth=1.33,
         min_grower_level=3,
         requires={"category_id": "vent_exhaust", "min_level": 2},
         tier="mid", icon="filter", room_visual="carbon_filter",
@@ -249,14 +249,14 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "osc_fans", "Oscillating Fans", "climate",
-        max_level=50, base_cost=400, cost_growth=1.26,
+        max_level=60, base_cost=400, cost_growth=1.26,
         min_grower_level=2, tier="starter", icon="osc_fan", room_visual="osc_fan",
         stats_per_level={"quality_ceiling": 0.15, "grow_speed_mult": 0.002},
         description="Airflow across canopy.",
     ),
     _cat(
         "climate_control", "Temp / RH Controllers", "climate",
-        max_level=60, base_cost=2_200, cost_growth=1.34,
+        max_level=70, base_cost=2_200, cost_growth=1.34,
         min_house_tier=1, min_grower_level=5,
         requires={"category_id": "osc_fans", "min_level": 2},
         tier="mid", icon="climate", room_visual="climate",
@@ -265,7 +265,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "dehumidifier", "Dedicated Dehumidifier", "climate",
-        max_level=50, base_cost=1_800, cost_growth=1.32,
+        max_level=60, base_cost=1_800, cost_growth=1.32,
         min_house_tier=1, min_grower_level=5,
         requires={"category_id": "climate_control", "min_level": 2},
         tier="mid", icon="dehum", room_visual="dehumidifier",
@@ -274,7 +274,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "co2", "CO₂ System", "climate",
-        max_level=60, base_cost=8_000, cost_growth=1.37,
+        max_level=70, base_cost=8_000, cost_growth=1.37,
         min_house_tier=3, min_grower_level=10,
         requires={"category_id": "climate_control", "min_level": 5},
         tier="endgame", icon="co2", room_visual="co2",
@@ -283,7 +283,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "odor_gel", "Odor Gel / Scent Blockers", "climate",
-        max_level=40, base_cost=700, cost_growth=1.29,
+        max_level=50, base_cost=700, cost_growth=1.29,
         min_grower_level=3, tier="mid", icon="gel", room_visual="odor_gel",
         stats_per_level={"odor_stealth": 0.375},
         description="Stacks with carbon filters.",
@@ -291,21 +291,21 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     # --- monitoring / plantwork / harvest ---
     _cat(
         "meters", "Meters & Sensors", "monitoring",
-        max_level=60, base_cost=900, cost_growth=1.3,
+        max_level=70, base_cost=900, cost_growth=1.3,
         min_grower_level=2, tier="starter", icon="meter", room_visual="meters",
         stats_per_level={"quality_ceiling": 0.45, "feed_efficiency": 0.0063},
         description="pH, TDS, VPD, smart sensors.",
     ),
     _cat(
         "training", "Training & Trellis", "plantwork",
-        max_level=50, base_cost=350, cost_growth=1.26,
+        max_level=60, base_cost=350, cost_growth=1.26,
         min_grower_level=2, tier="starter", icon="trellis", room_visual="trellis",
         stats_per_level={"yield_mult": 0.0063, "quality_ceiling": 0.1},
         description="LST clips, netting, stakes.",
     ),
     _cat(
         "clone_station", "Clone / Seedling Station", "plantwork",
-        max_level=50, base_cost=1_600, cost_growth=1.32,
+        max_level=60, base_cost=1_600, cost_growth=1.32,
         min_grower_level=4,
         requires={"category_id": "tents", "min_level": 2},
         tier="mid", icon="clone", room_visual="clone",
@@ -314,7 +314,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "pest_ipm", "Pest Control / IPM", "plantwork",
-        max_level=60, base_cost=1_100, cost_growth=1.31,
+        max_level=70, base_cost=1_100, cost_growth=1.31,
         min_grower_level=3, tier="mid", icon="pest", room_visual="pest",
         stats_per_level={
             "quality_ceiling": 0.375,
@@ -327,14 +327,14 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "trimmers", "Trimmers", "harvest",
-        max_level=60, base_cost=800, cost_growth=1.31,
+        max_level=70, base_cost=800, cost_growth=1.31,
         min_grower_level=2, tier="starter", icon="scissors", room_visual="trimmer",
         stats_per_level={"yield_mult": 0.0025, "quality_ceiling": 0.225},
         description="Scissors → speed trimmer.",
     ),
     _cat(
         "trim_bin", "Trim Bin / Pollen Catcher", "harvest",
-        max_level=40, base_cost=1_200, cost_growth=1.3,
+        max_level=50, base_cost=1_200, cost_growth=1.3,
         min_grower_level=4,
         requires={"category_id": "trimmers", "min_level": 2},
         tier="mid", icon="bin", room_visual="trim_bin",
@@ -343,7 +343,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "curing", "Drying & Curing", "harvest",
-        max_level=60, base_cost=1_000, cost_growth=1.32,
+        max_level=70, base_cost=1_000, cost_growth=1.32,
         min_grower_level=2, tier="starter", icon="jar", room_visual="curing",
         stats_per_level={"quality_ceiling": 0.5},
         description="Racks, jars, humidity packs.",
@@ -351,14 +351,14 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     # --- power / security ---
     _cat(
         "electrical", "Electrical / Power", "power",
-        max_level=60, base_cost=1_800, cost_growth=1.33,
+        max_level=70, base_cost=1_800, cost_growth=1.33,
         min_house_tier=1, min_grower_level=4, tier="mid", icon="power", room_visual="electrical",
         stats_per_level={"power_capacity": 40, "quality_ceiling": 0.075},
         description="Circuits, timers, UPS.",
     ),
     _cat(
         "generator", "Generator / Backup Power", "power",
-        max_level=50, base_cost=4_000, cost_growth=1.36,
+        max_level=60, base_cost=4_000, cost_growth=1.36,
         min_house_tier=2, min_grower_level=7,
         requires={"category_id": "electrical", "min_level": 3},
         tier="premium", icon="generator", room_visual="generator",
@@ -367,14 +367,14 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "security", "Security", "security",
-        max_level=80, base_cost=2_500, cost_growth=1.34,
+        max_level=90, base_cost=2_500, cost_growth=1.34,
         min_grower_level=2, tier="starter", icon="cam", room_visual="security",
         stats_per_level={"raid_defence": 1.2, "stash_security": 0.8},
         description="Locks → cameras → dogs → muscle.",
     ),
     _cat(
         "stash_containers", "Stash Containers", "security",
-        max_level=50, base_cost=1_200, cost_growth=1.32,
+        max_level=60, base_cost=1_200, cost_growth=1.32,
         min_grower_level=3, tier="mid", icon="stash", room_visual="stash",
         stats_per_level={"stash_security": 1.6, "odor_stealth": 0.125},
         description="Vacuum seal and hidden totes.",
@@ -383,7 +383,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     # --- expansion lighting ---
     _cat(
         "lights_uv", "UV Supplemental Bars", "lighting",
-        max_level=60, base_cost=4_500, cost_growth=1.32,
+        max_level=70, base_cost=4_500, cost_growth=1.32,
         min_house_tier=2, min_grower_level=8,
         requires={"category_id": "lights_led", "min_level": 8},
         tier="premium", icon="led", room_visual="light_led",
@@ -393,7 +393,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "lights_bar_led", "Samsung-Style LED Bars", "lighting",
-        max_level=70, base_cost=5_500, cost_growth=1.33,
+        max_level=80, base_cost=5_500, cost_growth=1.33,
         min_house_tier=2, min_grower_level=6,
         requires={"category_id": "lights_led", "min_level": 5},
         tier="premium", icon="led", room_visual="light_led",
@@ -403,7 +403,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "canopy_sensors", "Canopy PAR Sensors", "lighting",
-        max_level=50, base_cost=2_800, cost_growth=1.3,
+        max_level=60, base_cost=2_800, cost_growth=1.3,
         min_house_tier=1, min_grower_level=5,
         requires={"category_id": "meters", "min_level": 4},
         tier="mid", icon="meter", room_visual="meters",
@@ -413,7 +413,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     # --- expansion climate ---
     _cat(
         "scrubber_mk2", "Odor Scrubber Mk2", "climate",
-        max_level=55, base_cost=3_200, cost_growth=1.31,
+        max_level=65, base_cost=3_200, cost_growth=1.31,
         min_house_tier=2, min_grower_level=7,
         requires={"category_id": "carbon_filter", "min_level": 6},
         tier="premium", icon="filter", room_visual="carbon_filter",
@@ -422,7 +422,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "ac_split", "Split AC Units", "climate",
-        max_level=65, base_cost=6_000, cost_growth=1.34,
+        max_level=75, base_cost=6_000, cost_growth=1.34,
         min_house_tier=2, min_grower_level=8,
         requires={"category_id": "climate_control", "min_level": 6},
         tier="premium", icon="climate", room_visual="climate",
@@ -431,7 +431,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "intake_silencer", "Silenced Intake", "climate",
-        max_level=45, base_cost=1_900, cost_growth=1.29,
+        max_level=55, base_cost=1_900, cost_growth=1.29,
         min_grower_level=4,
         requires={"category_id": "vent_exhaust", "min_level": 4},
         tier="mid", icon="fan", room_visual="exhaust",
@@ -441,7 +441,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     # --- expansion plantwork / harvest ---
     _cat(
         "auto_trimmer", "Auto Trimmer Drum", "harvest",
-        max_level=55, base_cost=4_000, cost_growth=1.32,
+        max_level=65, base_cost=4_000, cost_growth=1.32,
         min_house_tier=2, min_grower_level=6,
         requires={"category_id": "trimmers", "min_level": 5},
         tier="premium", icon="scissors", room_visual="trimmer",
@@ -450,7 +450,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "soil_sensors", "Soil Moisture Probes", "plantwork",
-        max_level=50, base_cost=1_500, cost_growth=1.28,
+        max_level=60, base_cost=1_500, cost_growth=1.28,
         min_grower_level=3,
         requires={"category_id": "meters", "min_level": 2},
         tier="mid", icon="meter", room_visual="meters",
@@ -459,7 +459,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "trellis_pro", "Commercial Trellis Net", "plantwork",
-        max_level=60, base_cost=900, cost_growth=1.27,
+        max_level=70, base_cost=900, cost_growth=1.27,
         min_grower_level=4,
         requires={"category_id": "training", "min_level": 4},
         tier="mid", icon="trellis", room_visual="trellis",
@@ -468,7 +468,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "dry_room", "Dedicated Dry Room", "harvest",
-        max_level=50, base_cost=5_500, cost_growth=1.33,
+        max_level=60, base_cost=5_500, cost_growth=1.33,
         min_house_tier=2, min_grower_level=7,
         requires={"category_id": "curing", "min_level": 6},
         tier="premium", icon="jar", room_visual="curing",
@@ -478,7 +478,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     # --- expansion power / security ---
     _cat(
         "solar_array", "Off-Grid Solar Array", "power",
-        max_level=45, base_cost=8_000, cost_growth=1.35,
+        max_level=55, base_cost=8_000, cost_growth=1.35,
         min_house_tier=3, min_grower_level=10,
         requires={"category_id": "electrical", "min_level": 8},
         tier="endgame", icon="power", room_visual="electrical",
@@ -487,7 +487,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "ups_rack", "UPS Battery Rack", "power",
-        max_level=50, base_cost=3_500, cost_growth=1.31,
+        max_level=60, base_cost=3_500, cost_growth=1.31,
         min_house_tier=1, min_grower_level=5,
         requires={"category_id": "electrical", "min_level": 3},
         tier="mid", icon="power", room_visual="electrical",
@@ -496,7 +496,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "vault_locks", "Vault Door & Locks", "security",
-        max_level=70, base_cost=4_200, cost_growth=1.32,
+        max_level=80, base_cost=4_200, cost_growth=1.32,
         min_house_tier=2, min_grower_level=5,
         requires={"category_id": "security", "min_level": 6},
         tier="premium", icon="cam", room_visual="security",
@@ -505,7 +505,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "motion_grid", "Motion Sensor Grid", "security",
-        max_level=55, base_cost=2_200, cost_growth=1.3,
+        max_level=65, base_cost=2_200, cost_growth=1.3,
         min_grower_level=4,
         requires={"category_id": "security", "min_level": 3},
         tier="mid", icon="cam", room_visual="security",
@@ -514,7 +514,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "guard_dogs", "Yard Dogs", "security",
-        max_level=40, base_cost=6_500, cost_growth=1.34,
+        max_level=50, base_cost=6_500, cost_growth=1.34,
         min_house_tier=3, min_grower_level=9,
         requires={"category_id": "security", "min_level": 10},
         tier="endgame", icon="cam", room_visual="security",
@@ -523,7 +523,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "faraday", "RF / Bug Sweep Kit", "security",
-        max_level=35, base_cost=3_800, cost_growth=1.31,
+        max_level=45, base_cost=3_800, cost_growth=1.31,
         min_house_tier=2, min_grower_level=8,
         requires={"category_id": "security", "min_level": 5},
         tier="premium", icon="cam", room_visual="security",
@@ -532,7 +532,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "nutrient_chiller", "Reservoir Chiller", "water",
-        max_level=45, base_cost=2_600, cost_growth=1.3,
+        max_level=55, base_cost=2_600, cost_growth=1.3,
         min_house_tier=1, min_grower_level=6,
         requires={"category_id": "reservoirs", "min_level": 4},
         tier="mid", icon="tank", room_visual="reservoir",
@@ -541,7 +541,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "aero_cloner", "Aeroponic Cloner", "plantwork",
-        max_level=50, base_cost=3_000, cost_growth=1.31,
+        max_level=60, base_cost=3_000, cost_growth=1.31,
         min_house_tier=1, min_grower_level=5,
         requires={"category_id": "clone_station", "min_level": 4},
         tier="premium", icon="clone", room_visual="clone",
@@ -550,7 +550,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "co2_generator", "CO2 Generator", "climate",
-        max_level=50, base_cost=7_500, cost_growth=1.34,
+        max_level=60, base_cost=7_500, cost_growth=1.34,
         min_house_tier=3, min_grower_level=11,
         requires={"category_id": "co2", "min_level": 4},
         tier="endgame", icon="co2", room_visual="co2",
@@ -559,7 +559,7 @@ EQUIPMENT_CATEGORIES: List[Dict[str, Any]] = [
     ),
     _cat(
         "sealed_room", "Sealed Room Kit", "structure",
-        max_level=55, base_cost=4_800, cost_growth=1.32,
+        max_level=65, base_cost=4_800, cost_growth=1.32,
         min_house_tier=2, min_grower_level=7,
         requires={"category_id": "blackout_seals", "min_level": 4},
         tier="premium", icon="tent", room_visual="tent",

@@ -105,9 +105,14 @@ export default function WeedEmpire() {
   const [fx, setFx] = useState(null);
   const [fxNonce, setFxNonce] = useState(0);
   const [targets, setTargets] = useState([]);
-  const [raidMeta, setRaidMeta] = useState({ raid_ready: true, raid_available_at: null, raid_cooldown_hours: 3 });
+  const [raidMeta, setRaidMeta] = useState({
+    raid_cooldown_hours: 3,
+    raid_cooldown_scope: "per_target",
+    raid_unlocked: true,
+  });
   const [raidFx, setRaidFx] = useState(null);
   const [bustModal, setBustModal] = useState(null);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const farmUpdatedAtRef = useRef("");
@@ -408,9 +413,8 @@ export default function WeedEmpire() {
       const { data } = await api.get("/weed-empire/raid/targets");
       setTargets(data.targets || []);
       setRaidMeta({
-        raid_ready: data.raid_ready !== false,
-        raid_available_at: data.raid_available_at || null,
         raid_cooldown_hours: data.raid_cooldown_hours || 3,
+        raid_cooldown_scope: data.raid_cooldown_scope || "per_target",
         raid_unlocked: data.raid_unlocked !== false,
       });
     });
@@ -423,12 +427,15 @@ export default function WeedEmpire() {
         ...actionCodeRef.current,
       });
       applyFarm(data.farm, { force: true });
-      if (data.raid_available_at) {
-        setRaidMeta((m) => ({
-          ...m,
-          raid_ready: false,
-          raid_available_at: data.raid_available_at,
-        }));
+      const tid = data.target_user_id || targetUserId;
+      if (tid && data.raid_available_at) {
+        setTargets((list) =>
+          list.map((t) =>
+            t.user_id === tid
+              ? { ...t, raid_ready: false, raid_available_at: data.raid_available_at }
+              : t
+          )
+        );
       }
       if (data.success) {
         const eq = data.stolen?.equipment?.name;
@@ -441,7 +448,6 @@ export default function WeedEmpire() {
       } else {
         toast.error(`Raid failed${data.fine ? ` (fine ${money(data.fine)})` : ""}`);
       }
-      loadTargets();
     });
 
   const coolOff = () =>
@@ -453,6 +459,14 @@ export default function WeedEmpire() {
       } else {
         toast.success("Heat already cool");
       }
+    });
+
+  const withdrawCash = (amount) =>
+    run(async () => {
+      const { data } = await api.post("/weed-empire/withdraw", { amount: Math.floor(Number(amount)) });
+      applyFarm(data.farm, { force: true });
+      setWithdrawAmount("");
+      toast.success(`Withdrew ${money(data.withdrawn)} to personal money`);
     });
 
   const dealerSell = () =>
@@ -473,19 +487,30 @@ export default function WeedEmpire() {
     run(async () => {
       const { data } = await api.post("/weed-empire/assistant/hire");
       applyFarm(data.farm, { force: true });
-      toast.success("Farm assistant hired");
+      toast.success("Worker hired");
     });
 
-  const setAssistantMode = (mode) =>
+  const setAssistantMode = (mode, slot = 0) =>
     run(async () => {
-      const { data } = await api.post("/weed-empire/assistant/mode", { mode });
+      const { data } = await api.post("/weed-empire/assistant/mode", { mode, slot });
       applyFarm(data.farm, { force: true });
     });
 
-  const setAssistantEnabled = (enabled) =>
+  const setAssistantEnabled = (enabled, slot = 0) =>
     run(async () => {
-      const { data } = await api.post("/weed-empire/assistant/enabled", { enabled });
+      const { data } = await api.post("/weed-empire/assistant/enabled", { enabled, slot });
       applyFarm(data.farm, { force: true });
+    });
+
+  const setAssistantPlantPrefs = (slot, strain_id, soil_type) =>
+    run(async () => {
+      const { data } = await api.post("/weed-empire/assistant/plant-prefs", {
+        slot,
+        strain_id,
+        soil_type,
+      });
+      applyFarm(data.farm, { force: true });
+      toast.success("Plant prefs saved");
     });
 
   const equipStolen = (index) =>
@@ -512,13 +537,14 @@ export default function WeedEmpire() {
   const selectedSoilStock = Number(farm.soil_stock?.[soilType] || 0);
   const canAffordPlant = Number(farm.business_cash || 0) >= plantSeedCost && selectedSoilStock >= 1;
   const raidUnlocked = Number(farm.grower_level || 1) >= 2;
-  const raidReady = farm.raid_ready !== false && raidMeta.raid_ready !== false;
   const assistant = farm.assistant || {};
   const heatHigh = Number(farm.heat || 0) >= Number(farm.heat_bust_threshold || 95);
   const coolCost = Number(farm.cool_off_cost || 0);
   const heatBand = farm.heat_gain_rate_band || [3, 8];
   const heatBandLo = Number(heatBand[0] ?? 3);
   const heatBandHi = Number(heatBand[1] ?? 8);
+  const reserveCash = Number(farm.business_cash_reserve || 50000);
+  const withdrawable = Math.max(0, Number(farm.withdrawable_cash ?? Number(farm.business_cash || 0) - reserveCash));
   const cleanlinessPct = Math.max(0, Math.min(100, Number(farm.cleanliness_pct ?? farm.cleanliness ?? 100)));
   const cleanlinessRisk = cleanlinessPct < 30;
   const mitePct = Math.max(0, Math.min(100, Number(selectedPlot?.mite_infestation_pct || 0)));
@@ -526,22 +552,59 @@ export default function WeedEmpire() {
 
   return (
     <div className={`${styles.pageContent} mobile-page-root max-w-6xl mx-auto px-3 py-4 space-y-4`}>
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
+      <header className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end sm:justify-between gap-3">
+        <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-500/80 font-heading">Money</p>
-          <h1 className="text-2xl md:text-3xl font-heading text-foreground">Weed Business Empire</h1>
-          <p className="text-xs text-muted-foreground mt-1">
-            Business cash only — personal wallet cannot fund upgrades.
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-heading text-foreground">Weed Business Empire</h1>
+          <p className="text-xs text-muted-foreground mt-1 hidden sm:block">
+            Upgrades use business cash only. Withdraw surplus anytime (keep {money(reserveCash)} in the farm).
             {staffPreview ? (
               <span className="ml-2 inline-flex items-center rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] uppercase text-amber-300">
                 Staff preview
               </span>
             ) : null}
           </p>
+          {staffPreview ? (
+            <span className="mt-1 sm:hidden inline-flex items-center rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] uppercase text-amber-300">
+              Staff preview
+            </span>
+          ) : null}
         </div>
-        <div className="text-right text-sm">
-          <div className="font-heading text-emerald-400 text-lg">{money(farm.business_cash)}</div>
-          <div className="text-[10px] text-muted-foreground uppercase">Business cash</div>
+        <div className="w-full sm:w-auto sm:text-right text-sm space-y-1.5 sm:min-w-[11rem]">
+          <div className="flex items-baseline justify-between sm:justify-end gap-2">
+            <div className="text-[10px] text-muted-foreground uppercase sm:hidden">Business cash</div>
+            <div className="font-heading text-emerald-400 text-lg tabular-nums">{money(farm.business_cash)}</div>
+          </div>
+          <div className="hidden sm:block text-[10px] text-muted-foreground uppercase">Business cash</div>
+          <div className="text-[10px] text-muted-foreground">Withdrawable {money(withdrawable)}</div>
+          <div className="flex flex-wrap sm:justify-end gap-1">
+            <input
+              type="number"
+              min={1}
+              max={withdrawable || undefined}
+              value={withdrawAmount}
+              onChange={(e) => setWithdrawAmount(e.target.value)}
+              placeholder="Amount"
+              disabled={busy || withdrawable <= 0}
+              className="flex-1 sm:flex-none w-auto sm:w-24 min-w-0 rounded border border-border/50 bg-zinc-900/80 px-2 py-1 text-xs tabular-nums min-h-10 disabled:opacity-40"
+            />
+            <button
+              type="button"
+              disabled={busy || withdrawable <= 0 || !(Number(withdrawAmount) > 0)}
+              onClick={() => withdrawCash(withdrawAmount)}
+              className="text-[10px] uppercase px-2.5 py-1 rounded border border-emerald-500/40 text-emerald-300 tap-feedback min-h-10 disabled:opacity-40"
+            >
+              Withdraw
+            </button>
+            <button
+              type="button"
+              disabled={busy || withdrawable <= 0}
+              onClick={() => withdrawCash(withdrawable)}
+              className="text-[10px] uppercase px-2.5 py-1 rounded bg-emerald-800/70 tap-feedback min-h-10 disabled:opacity-40"
+            >
+              Max
+            </button>
+          </div>
         </div>
       </header>
 
@@ -572,12 +635,12 @@ export default function WeedEmpire() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2 text-xs">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 text-xs">
         <div className="rounded border border-border/50 bg-card/40 p-2">
-          <div className="text-muted-foreground flex justify-between">
-            <span>Grower Lv {farm.grower_level || 1}</span>
-            <span>
-              {farm.grower_xp || 0}/{farm.grower_xp_to_next || 100} XP
+          <div className="text-muted-foreground flex justify-between gap-1">
+            <span className="truncate">Lv {farm.grower_level || 1}</span>
+            <span className="tabular-nums shrink-0">
+              {farm.grower_xp || 0}/{farm.grower_xp_to_next || 100}
             </span>
           </div>
           <div className="h-1.5 mt-1 rounded bg-zinc-800 overflow-hidden">
@@ -586,50 +649,44 @@ export default function WeedEmpire() {
               style={{ width: `${Math.min(100, farm.grower_xp_pct || 0)}%` }}
             />
           </div>
-          <div className="text-[10px] mt-1 text-muted-foreground">Harvest &amp; sell to level up</div>
-        </div>
-        <div className="rounded border border-border/50 bg-card/40 p-2">
-          <div className="text-muted-foreground">House</div>
-          <div className="font-heading">{farm.house?.name}</div>
+          <div className="text-[10px] mt-1 text-muted-foreground truncate">{farm.house?.name}</div>
         </div>
         <div className="rounded border border-border/50 bg-card/40 p-2">
           <div className="text-muted-foreground flex justify-between">
-            <span>Daily sell cap</span>
-            <span>{capPct.toFixed(0)}%</span>
+            <span>Daily cap</span>
+            <span className="tabular-nums">{capPct.toFixed(0)}%</span>
           </div>
           <div className="h-1.5 mt-1 rounded bg-zinc-800 overflow-hidden">
             <div className="h-full bg-emerald-500/80" style={{ width: `${capPct}%` }} />
           </div>
-          <div className="text-[10px] mt-1 text-muted-foreground">
+          <div className="text-[10px] mt-1 text-muted-foreground truncate tabular-nums">
             {money(farm.daily_sold_usd)} / {money(farm.daily_sold_cap)}
           </div>
         </div>
         <div
-          className={`rounded border p-2 flex items-center justify-between gap-2 ${
+          className={`col-span-2 sm:col-span-1 rounded border p-2 flex items-center justify-between gap-2 ${
             heatHigh ? "border-red-500/60 bg-red-950/30" : "border-border/50 bg-card/40"
           }`}
         >
-          <div>
+          <div className="min-w-0">
             <div className="text-muted-foreground">Heat</div>
-            <div className={`font-heading ${heatHigh ? "text-red-300" : ""}`}>{farm.heat}</div>
+            <div className={`font-heading tabular-nums ${heatHigh ? "text-red-300" : ""}`}>{farm.heat}</div>
             <div className="text-[9px] text-muted-foreground mt-0.5">
               +{heatBandLo.toFixed(1)}–{heatBandHi.toFixed(1)}%/h
+              {heatHigh ? " · bust risk" : ""}
             </div>
-            {heatHigh ? (
-              <div className="text-[9px] text-red-300/90 mt-0.5">Bust risk — cool off!</div>
-            ) : null}
           </div>
           <button
             type="button"
             disabled={busy || Number(farm.heat || 0) < 0.5 || Number(farm.business_cash || 0) < coolCost}
             onClick={coolOff}
-            className="text-[10px] uppercase px-2 py-1 rounded border border-border hover:bg-muted/40 tap-feedback touch-manipulation active:scale-[0.97] min-h-10 disabled:opacity-40"
+            className="shrink-0 text-[10px] uppercase px-2.5 py-1.5 rounded border border-border hover:bg-muted/40 tap-feedback touch-manipulation active:scale-[0.97] min-h-10 disabled:opacity-40"
           >
             Clear · {money(coolCost)}
           </button>
         </div>
         <div
-          className={`rounded border p-2 ${
+          className={`col-span-2 sm:col-span-1 lg:col-span-2 rounded border p-2 ${
             cleanlinessRisk ? "border-red-500/50 bg-red-950/20" : "border-emerald-500/30 bg-card/40"
           }`}
         >
@@ -640,49 +697,358 @@ export default function WeedEmpire() {
             warn={cleanlinessRisk}
             fillUp
           />
-          <div className="mt-1 text-[9px] text-muted-foreground">
-            −{Number(farm.cleanliness?.decay_per_hour || 0).toFixed(2)}%/h · IPM{" "}
-            {Number(farm.cleanliness?.mite_resistance_pct || 0).toFixed(0)}% resistance
+          <div className="mt-1 flex items-center justify-between gap-2">
+            <div className="text-[9px] text-muted-foreground truncate">
+              −{Number(farm.cleanliness?.decay_per_hour || 0).toFixed(2)}%/h · IPM{" "}
+              {Number(farm.cleanliness?.mite_resistance_pct || 0).toFixed(0)}%
+            </div>
+            <button
+              type="button"
+              disabled={
+                busy ||
+                cleanlinessPct >= 99.5 ||
+                Number(farm.business_cash || 0) < Number(farm.cleanliness?.clean_room_cost || 0)
+              }
+              onClick={cleanRoom}
+              className="shrink-0 inline-flex items-center gap-1 text-[10px] uppercase text-emerald-300 disabled:opacity-40 min-h-9 px-1"
+            >
+              <Sparkles className="h-3 w-3" /> Clean · {money(farm.cleanliness?.clean_room_cost || 0)}
+            </button>
           </div>
-          <button
-            type="button"
-            disabled={
-              busy ||
-              cleanlinessPct >= 99.5 ||
-              Number(farm.business_cash || 0) < Number(farm.cleanliness?.clean_room_cost || 0)
-            }
-            onClick={cleanRoom}
-            className="mt-1.5 inline-flex items-center gap-1 text-[10px] uppercase text-emerald-300 disabled:opacity-40"
-          >
-            <Sparkles className="h-3 w-3" /> Clean room · {money(farm.cleanliness?.clean_room_cost || 0)}
-          </button>
         </div>
       </div>
 
-      <div className="flex flex-wrap gap-1">
-        {TABS.map(({ id, label, Icon }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => {
-              setTab(id);
-              if (id === "raid" && raidUnlocked) loadTargets();
-            }}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-heading uppercase tracking-wide border ${
-              tab === id
-                ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
-                : "border-border/40 text-muted-foreground hover:bg-muted/30"
-            }`}
-          >
-            <Icon className="w-3.5 h-3.5" />
-            {label}
-          </button>
-        ))}
+      <div className="-mx-3 px-3 overflow-x-auto overscroll-x-contain">
+        <div className="flex gap-1 min-w-max pb-0.5">
+          {TABS.map(({ id, label, Icon }) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => {
+                setTab(id);
+                if (id === "raid" && raidUnlocked) loadTargets();
+              }}
+              className={`inline-flex items-center gap-1.5 px-3 py-2 rounded text-xs font-heading uppercase tracking-wide border shrink-0 tap-feedback touch-manipulation min-h-10 ${
+                tab === id
+                  ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
+                  : "border-border/40 text-muted-foreground hover:bg-muted/30"
+              }`}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {tab === "grow" && (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <div className="space-y-3">
+          {/* Actions first on mobile so plant/tend isn't buried under the plot grid */}
+          <div className="order-1 lg:order-2 space-y-3">
+            {(selectedPlot?.state === "empty" || selectedPlot?.state === "dead" || !selectedPlot?.strain_id) && (
+              <div className="rounded border border-border/50 p-3 space-y-3 bg-card/30">
+                <div className="flex items-start justify-between gap-2">
+                  <div>
+                    <div className="text-xs font-heading uppercase text-muted-foreground">
+                      {selectedPlot?.state === "dead" ? "Replant" : "Plant"}
+                    </div>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">
+                      Plot{" "}
+                      {(farm.plots || []).findIndex((p) => p.id === selectedPlotId) + 1 || 1}
+                      {selectedPlot?.state === "dead" ? " · crop lost" : " · empty"}
+                    </p>
+                  </div>
+                  {farm.scavenged_seed_available ? (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => plant({ scavengedSeed: true })}
+                      className="shrink-0 text-[10px] uppercase px-2.5 py-1.5 rounded border border-amber-500/50 bg-amber-500/15 text-amber-200 min-h-10 tap-feedback"
+                    >
+                      Scavenge $0
+                    </button>
+                  ) : null}
+                </div>
+
+                {selectedPlot?.state === "dead" && (
+                  <p className="text-xs text-red-300/80">
+                    Uses a fresh seed and soil charge; restarts at seedling.
+                  </p>
+                )}
+
+                <label className="block space-y-1">
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Seed</span>
+                  <select
+                    className="w-full bg-background border border-border rounded px-2.5 py-2.5 text-sm min-h-11"
+                    value={strainId}
+                    onChange={(e) => setStrainId(e.target.value)}
+                  >
+                    {unlockedStrains.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.loot_exclusive ? "★ " : ""}
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="grid grid-cols-3 gap-2 text-center text-[11px]">
+                  <div className="rounded border border-border/40 bg-black/20 px-1.5 py-1.5">
+                    <div className="text-muted-foreground text-[9px] uppercase">Seed</div>
+                    <div className="font-heading text-foreground tabular-nums">{money(plantSeedCost)}</div>
+                  </div>
+                  <div className="rounded border border-border/40 bg-black/20 px-1.5 py-1.5">
+                    <div className="text-muted-foreground text-[9px] uppercase">Grow</div>
+                    <div className="font-heading text-foreground">~{plantStrain.base_grow_hours || "?"}h</div>
+                  </div>
+                  <div className="rounded border border-border/40 bg-black/20 px-1.5 py-1.5">
+                    <div className="text-muted-foreground text-[9px] uppercase">Street</div>
+                    <div className="font-heading text-foreground tabular-nums truncate">
+                      {money(plantStrain.base_price_per_oz)}/oz
+                    </div>
+                  </div>
+                </div>
+                {plantStrain?.loot_exclusive && (
+                  <p className="text-[10px] text-amber-200/90">
+                    Exclusive: {plantStrain.exclusive_buff_label || "farm buff while owned"} · Grower Lv{" "}
+                    {farm.exclusive_min_grower_level || 2}+
+                  </p>
+                )}
+
+                <div className="space-y-1.5">
+                  <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Soil</span>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {[
+                      { id: "soil_conventional", label: "Basic" },
+                      { id: "soil_organic", label: "Organic" },
+                      { id: "coco", label: "Coco" },
+                    ].map((opt) => {
+                      const stock = Number(farm.soil_stock?.[opt.id] || 0);
+                      const active = soilType === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => setSoilType(opt.id)}
+                          className={`rounded border px-1.5 py-2 text-center min-h-11 tap-feedback touch-manipulation active:scale-[0.97] ${
+                            active
+                              ? "border-emerald-500/60 bg-emerald-500/15 text-emerald-200"
+                              : "border-border/50 text-muted-foreground"
+                          }`}
+                        >
+                          <div className="text-[11px] font-heading">{opt.label}</div>
+                          <div className={`text-[10px] tabular-nums ${stock < 1 ? "text-amber-300" : ""}`}>
+                            {stock} left
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {selectedSoilStock < 1 && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => buySoil(soilType)}
+                      className="w-full text-xs py-2 rounded border border-amber-500/40 bg-amber-500/10 text-amber-200 min-h-10 tap-feedback"
+                    >
+                      Buy 1 bag of {soilType === "coco" ? "coco" : soilType.replace(/_/g, " ")}
+                    </button>
+                  )}
+                </div>
+
+                {!canAffordPlant && selectedSoilStock >= 1 && Number(farm.business_cash || 0) < plantSeedCost ? (
+                  <p className="text-xs text-amber-300">
+                    Need {money(plantSeedCost - Number(farm.business_cash || 0))} more business cash.
+                  </p>
+                ) : null}
+
+                <button
+                  type="button"
+                  disabled={busy || !canAffordPlant}
+                  onClick={plant}
+                  className="w-full py-3 rounded bg-emerald-600/80 hover:bg-emerald-600 text-sm font-heading tap-feedback touch-manipulation active:scale-[0.97] min-h-12 disabled:opacity-40 sticky bottom-2 z-[1] shadow-lg shadow-black/40"
+                >
+                  Plant — {money(plantSeedCost)} + 1 soil
+                </button>
+              </div>
+            )}
+
+            {selectedPlot?.strain_id &&
+              selectedPlot?.state !== "empty" &&
+              selectedPlot?.state !== "dead" && (
+              <div className="space-y-2">
+                <div className="rounded border border-border/40 bg-card/30 p-3 space-y-2">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <div className="text-xs font-heading uppercase text-muted-foreground">
+                      Plot {(farm.plots || []).findIndex((p) => p.id === selectedPlotId) + 1 || 1}
+                    </div>
+                    <div className="text-xs text-foreground truncate">
+                      {selStrain.name || selectedPlot.strain_id}
+                    </div>
+                  </div>
+                  <CareMeter
+                    label={
+                      selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready"
+                        ? "Ready to harvest"
+                        : "Grow / harvest"
+                    }
+                    pct={(selectedPlot.progress || 0) * 100}
+                    hoursLeft={
+                      selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready"
+                        ? 0
+                        : selectedPlot.hours_to_harvest
+                    }
+                    colorClass={
+                      selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready"
+                        ? "bg-amber-500"
+                        : "bg-emerald-500"
+                    }
+                    warn={
+                      selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready"
+                    }
+                    fillUp
+                  />
+                  <CareMeter
+                    label="Water"
+                    pct={selectedPlot.water_pct}
+                    hoursLeft={selectedPlot.water_hours_left}
+                    colorClass="bg-sky-500"
+                    warn={selectedPlot.needs_water}
+                  />
+                  <CareMeter
+                    label="Feed"
+                    pct={selectedPlot.feed_pct}
+                    hoursLeft={selectedPlot.feed_hours_left}
+                    colorClass="bg-lime-500"
+                    warn={selectedPlot.needs_feed}
+                  />
+                  {miteInfested && (
+                    <>
+                      <CareMeter
+                        label="Spider mites"
+                        pct={mitePct}
+                        colorClass="bg-red-500"
+                        warn
+                        fillUp
+                      />
+                      <p className="text-[10px] text-red-300">
+                        Harvest cut ~{Math.round(Number(selectedPlot.mite_yield_penalty_pct || 0))}%.
+                      </p>
+                    </>
+                  )}
+                  {farm.auto_water || farm.auto_feed ? (
+                    <p className="text-[10px] text-emerald-400/90">
+                      {farm.auto_water ? "Auto-water on. " : ""}
+                      {farm.auto_feed ? "Auto-feed on." : ""}
+                    </p>
+                  ) : (
+                    <p className="text-[10px] text-muted-foreground">
+                      Auto-water at Irrigation Lv {farm.auto_water_at_irrigation || 5}; feeders at Lv{" "}
+                      {farm.auto_feed_at_irrigation || 8}.
+                    </p>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={busy || farm.auto_water}
+                    onClick={water}
+                    className="inline-flex items-center justify-center gap-1 px-3 py-2.5 rounded border border-sky-500/40 text-sky-300 text-xs disabled:opacity-40 tap-feedback touch-manipulation active:scale-[0.97] min-h-11"
+                  >
+                    <Droplets className="w-3.5 h-3.5" /> {farm.auto_water ? "Auto" : "Water"}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy || farm.auto_feed}
+                    onClick={feed}
+                    className="inline-flex items-center justify-center gap-1 px-3 py-2.5 rounded border border-lime-500/40 text-lime-300 text-xs disabled:opacity-40 tap-feedback touch-manipulation active:scale-[0.97] min-h-11"
+                  >
+                    <Leaf className="w-3.5 h-3.5" /> {farm.auto_feed ? "Auto" : "Feed"}
+                  </button>
+                  {miteInfested && (
+                    <button
+                      type="button"
+                      disabled={
+                        busy ||
+                        Number(farm.business_cash || 0) < Number(selectedPlot.mite_treatment_cost || 0)
+                      }
+                      onClick={treatMites}
+                      className="col-span-2 inline-flex items-center justify-center gap-1 px-3 py-2.5 rounded border border-red-500/50 text-red-300 text-xs disabled:opacity-40 tap-feedback touch-manipulation active:scale-[0.97] min-h-11"
+                    >
+                      <Bug className="w-3.5 h-3.5" /> Treat mites · {money(selectedPlot.mite_treatment_cost || 0)}
+                    </button>
+                  )}
+                  {(selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready") && (
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={harvest}
+                      className="col-span-2 inline-flex items-center justify-center gap-1 px-3 py-2.5 rounded bg-amber-600/80 text-xs font-heading tap-feedback touch-manipulation active:scale-[0.97] min-h-11"
+                    >
+                      <Scissors className="w-3.5 h-3.5" /> Harvest / Trim
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <div className="text-[10px] uppercase tracking-wide text-muted-foreground font-heading">
+                  Plots · {(farm.plots || []).length}
+                </div>
+                <div className="text-[10px] text-muted-foreground">
+                  {(farm.plots || []).filter((p) => p.state === "empty" || p.state === "dead" || !p.strain_id).length}{" "}
+                  empty
+                </div>
+              </div>
+              <div className="grid grid-cols-4 gap-1.5">
+                {(farm.plots || []).map((p, idx) => {
+                  const st = p.stage || p.state || "empty";
+                  const active = p.id === selectedPlotId;
+                  const ready = st === "harvest_ready";
+                  const growing = p.strain_id && st !== "empty" && st !== "dead";
+                  const needsCare = !!(p.needs_water || p.needs_feed || p.mite_infested);
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setSelectedPlotId(p.id)}
+                      className={`relative text-left rounded border px-1.5 py-1.5 min-h-[3.25rem] tap-feedback touch-manipulation active:scale-[0.97] ${
+                        active
+                          ? "border-emerald-500/70 bg-emerald-500/15"
+                          : ready
+                            ? "border-amber-500/50 bg-amber-500/10"
+                            : needsCare
+                              ? "border-red-500/40 bg-card/40"
+                              : "border-border/40 bg-card/30"
+                      }`}
+                    >
+                      <div className="text-[10px] font-heading leading-tight">#{idx + 1}</div>
+                      <div className="text-[9px] text-muted-foreground capitalize truncate leading-tight">
+                        {String(st).replace(/_/g, " ")}
+                      </div>
+                      {p.strain_id ? (
+                        <div className="truncate text-[9px] text-foreground/80 leading-tight mt-0.5">
+                          {strainMap[p.strain_id]?.name || p.strain_id}
+                        </div>
+                      ) : null}
+                      {growing ? (
+                        <div className="mt-1 h-1 rounded bg-zinc-800 overflow-hidden">
+                          <div
+                            className={`h-full ${ready ? "bg-amber-500" : "bg-emerald-500/80"}`}
+                            style={{ width: `${Math.min(100, (p.progress || 0) * 100)}%` }}
+                          />
+                        </div>
+                      ) : null}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+
+          <div className="order-2 lg:order-1 space-y-3">
             <WeedEmpire3D
               lightClass={farm.active_light_class || "cfl"}
               stage={selectedPlot?.stage || selectedPlot?.state || "empty"}
@@ -709,275 +1075,10 @@ export default function WeedEmpire() {
                 {String(farm.active_light_class || "cfl").toUpperCase()} glow
               </span>
               <span>
-                Yield mult ×{(farm.stats?.yield_mult || 1).toFixed(2)} · Quality ceiling{" "}
+                Yield ×{(farm.stats?.yield_mult || 1).toFixed(2)} · Quality{" "}
                 {(farm.stats?.quality_ceiling || 0).toFixed(0)}
               </span>
-              {farm.auto_water || farm.auto_feed ? (
-                <span className="text-emerald-400/90">
-                  Auto{farm.auto_water ? " water" : ""}
-                  {farm.auto_water && farm.auto_feed ? " +" : ""}
-                  {farm.auto_feed ? " feeders" : ""} on (Irrigation Lv {farm.irrigation_level})
-                </span>
-              ) : (
-                <span>
-                  Auto-water at Irrigation Lv {farm.auto_water_at_irrigation || 5}; auto-feeders at Lv{" "}
-                  {farm.auto_feed_at_irrigation || 8}
-                </span>
-              )}
             </div>
-          </div>
-
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-              {(farm.plots || []).map((p, idx) => {
-                const st = p.stage || p.state || "empty";
-                const active = p.id === selectedPlotId;
-                const growing = p.strain_id && st !== "empty" && st !== "dead";
-                return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => setSelectedPlotId(p.id)}
-                    className={`text-left rounded border p-2 text-xs ${
-                      active ? "border-emerald-500/60 bg-emerald-500/10" : "border-border/40 bg-card/30"
-                    }`}
-                  >
-                    <div className="font-heading">Plot {idx + 1}</div>
-                    <div className="text-muted-foreground capitalize">{String(st).replace("_", " ")}</div>
-                    {p.strain_id ? (
-                      <div className="truncate text-[10px] mt-0.5">{strainMap[p.strain_id]?.name || p.strain_id}</div>
-                    ) : null}
-                    {growing ? (
-                      <div className="mt-1.5 space-y-1">
-                        <CareMeter
-                          label={st === "harvest_ready" ? "Harvest" : "Grow"}
-                          pct={(p.progress || 0) * 100}
-                          hoursLeft={st === "harvest_ready" ? 0 : p.hours_to_harvest}
-                          colorClass={st === "harvest_ready" ? "bg-amber-500" : "bg-emerald-500"}
-                          warn={st === "harvest_ready"}
-                          fillUp
-                        />
-                        <CareMeter
-                          label="Water"
-                          pct={p.water_pct}
-                          hoursLeft={p.water_hours_left}
-                          colorClass="bg-sky-500"
-                          warn={p.needs_water}
-                        />
-                        <CareMeter
-                          label="Feed"
-                          pct={p.feed_pct}
-                          hoursLeft={p.feed_hours_left}
-                          colorClass="bg-lime-500"
-                          warn={p.needs_feed}
-                        />
-                        {(p.mite_infested || Number(p.mite_infestation_pct) > 0) && (
-                          <CareMeter
-                            label="Spider mites"
-                            pct={p.mite_infestation_pct}
-                            colorClass="bg-red-500"
-                            warn
-                            fillUp
-                          />
-                        )}
-                      </div>
-                    ) : null}
-                  </button>
-                );
-              })}
-            </div>
-
-            {(selectedPlot?.state === "empty" || selectedPlot?.state === "dead" || !selectedPlot?.strain_id) && (
-              <div className="rounded border border-border/50 p-3 space-y-2 bg-card/30">
-                <div className="text-xs font-heading uppercase text-muted-foreground">
-                  {selectedPlot?.state === "dead" ? "Plant died — start again" : "Plant"}
-                </div>
-                {selectedPlot?.state === "dead" && (
-                  <p className="text-xs text-red-300/80">
-                    This crop is lost. Replanting uses a fresh seed and soil charge and restarts at seedling.
-                  </p>
-                )}
-                {farm.scavenged_seed_available && (
-                  <div className="rounded border border-amber-500/40 bg-amber-500/10 p-2 space-y-1.5">
-                    <p className="text-xs text-amber-200">
-                      Search the old bags for rough Ditch Weed seeds and scrape together basic soil. Costs $0.
-                    </p>
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => plant({ scavengedSeed: true })}
-                      className="w-full py-2 rounded bg-amber-700/80 hover:bg-amber-700 text-sm font-heading"
-                    >
-                      Scavenge seeds and plant — $0
-                    </button>
-                  </div>
-                )}
-                <select
-                  className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm"
-                  value={strainId}
-                  onChange={(e) => setStrainId(e.target.value)}
-                >
-                  {unlockedStrains.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.loot_exclusive ? "★ " : ""}
-                      {s.name}
-                      {s.loot_exclusive ? " (exclusive)" : ""} (seed {money(s.seed_cost)} · ~{s.base_grow_hours}h ·{" "}
-                      {money(s.base_price_per_oz)}/oz)
-                    </option>
-                  ))}
-                </select>
-                {plantStrain?.loot_exclusive && (
-                  <p className="text-[10px] text-amber-200/90">
-                    Exclusive: {plantStrain.exclusive_buff_label || "global farm buff while owned"}. Buffs apply at Grower
-                    Lv {farm.exclusive_min_grower_level || 2}+.
-                  </p>
-                )}
-                <select
-                  className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm"
-                  value={soilType}
-                  onChange={(e) => setSoilType(e.target.value)}
-                >
-                  <option value="soil_conventional">
-                    Conventional soil (stock {farm.soil_stock?.soil_conventional || 0})
-                  </option>
-                  <option value="soil_organic">
-                    Organic soil (stock {farm.soil_stock?.soil_organic || 0})
-                  </option>
-                  <option value="coco">Coco (stock {farm.soil_stock?.coco || 0})</option>
-                </select>
-                <div className="rounded border border-border/40 bg-black/20 px-2 py-1.5 text-xs text-muted-foreground">
-                  Planting cost: <span className="text-foreground">{money(plantSeedCost)}</span> seed +{" "}
-                  <span className="text-foreground">1 {soilType.replace(/_/g, " ")} charge</span>
-                  {!canAffordPlant && (
-                    <span className="block mt-1 text-amber-300">
-                      {Number(farm.business_cash || 0) < plantSeedCost
-                        ? `Need ${money(plantSeedCost - Number(farm.business_cash || 0))} more business cash.`
-                        : `No ${soilType.replace(/_/g, " ")} charges left.`}
-                    </span>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  disabled={busy || !canAffordPlant}
-                  onClick={plant}
-                  className="w-full py-2 rounded bg-emerald-600/80 hover:bg-emerald-600 text-sm font-heading tap-feedback touch-manipulation active:scale-[0.97] min-h-10"
-                >
-                  Plant — {money(plantSeedCost)} + 1 soil charge
-                </button>
-              </div>
-            )}
-
-            {selectedPlot?.strain_id &&
-              selectedPlot?.state !== "empty" &&
-              selectedPlot?.state !== "dead" && (
-              <div className="space-y-2">
-                <div className="rounded border border-border/40 bg-card/30 p-3 space-y-2">
-                  <CareMeter
-                    label={
-                      selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready"
-                        ? "Ready to harvest"
-                        : "Grow / harvest"
-                    }
-                    pct={(selectedPlot.progress || 0) * 100}
-                    hoursLeft={
-                      selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready"
-                        ? 0
-                        : selectedPlot.hours_to_harvest
-                    }
-                    colorClass={
-                      selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready"
-                        ? "bg-amber-500"
-                        : "bg-emerald-500"
-                    }
-                    warn={
-                      selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready"
-                    }
-                    fillUp
-                  />
-                  <CareMeter
-                    label="Water meter"
-                    pct={selectedPlot.water_pct}
-                    hoursLeft={selectedPlot.water_hours_left}
-                    colorClass="bg-sky-500"
-                    warn={selectedPlot.needs_water}
-                  />
-                  <CareMeter
-                    label="Feed meter"
-                    pct={selectedPlot.feed_pct}
-                    hoursLeft={selectedPlot.feed_hours_left}
-                    colorClass="bg-lime-500"
-                    warn={selectedPlot.needs_feed}
-                  />
-                  {miteInfested && (
-                    <>
-                      <CareMeter
-                        label="Spider-mite infestation"
-                        pct={mitePct}
-                        colorClass="bg-red-500"
-                        warn
-                        fillUp
-                      />
-                      <p className="text-[10px] text-red-300">
-                        Webbing and feeding damage reduce quality and harvest by{" "}
-                        {Math.round(Number(selectedPlot.mite_yield_penalty_pct || 0))}%.
-                      </p>
-                    </>
-                  )}
-                  {farm.auto_water || farm.auto_feed ? (
-                    <p className="text-[10px] text-emerald-400/90">
-                      {farm.auto_water ? "Auto-water active. " : ""}
-                      {farm.auto_feed ? "Auto-feeders active." : ""}
-                    </p>
-                  ) : (
-                    <p className="text-[10px] text-muted-foreground">
-                      Upgrade Irrigation to Lv {farm.auto_water_at_irrigation || 5} for auto-water, Lv{" "}
-                      {farm.auto_feed_at_irrigation || 8} for auto-feeders.
-                    </p>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  disabled={busy || farm.auto_water}
-                  onClick={water}
-                  className="inline-flex items-center gap-1 px-3 py-2 rounded border border-sky-500/40 text-sky-300 text-xs disabled:opacity-40 tap-feedback touch-manipulation active:scale-[0.97] min-h-10"
-                >
-                  <Droplets className="w-3.5 h-3.5" /> {farm.auto_water ? "Auto watering" : "Water"}
-                </button>
-                <button
-                  type="button"
-                  disabled={busy || farm.auto_feed}
-                  onClick={feed}
-                  className="inline-flex items-center gap-1 px-3 py-2 rounded border border-lime-500/40 text-lime-300 text-xs disabled:opacity-40 tap-feedback touch-manipulation active:scale-[0.97] min-h-10"
-                >
-                  <Leaf className="w-3.5 h-3.5" /> {farm.auto_feed ? "Auto feeding" : "Feed"}
-                </button>
-                {miteInfested && (
-                  <button
-                    type="button"
-                    disabled={
-                      busy ||
-                      Number(farm.business_cash || 0) < Number(selectedPlot.mite_treatment_cost || 0)
-                    }
-                    onClick={treatMites}
-                    className="inline-flex items-center gap-1 px-3 py-2 rounded border border-red-500/50 text-red-300 text-xs disabled:opacity-40 tap-feedback touch-manipulation active:scale-[0.97] min-h-10"
-                  >
-                    <Bug className="w-3.5 h-3.5" /> Treat mites · {money(selectedPlot.mite_treatment_cost || 0)}
-                  </button>
-                )}
-                {(selectedPlot.stage === "harvest_ready" || selectedPlot.state === "harvest_ready") && (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={harvest}
-                    className="inline-flex items-center gap-1 px-3 py-2 rounded bg-amber-600/80 text-xs font-heading tap-feedback touch-manipulation active:scale-[0.97] min-h-10"
-                  >
-                    <Scissors className="w-3.5 h-3.5" /> Harvest / Trim
-                  </button>
-                )}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -1180,75 +1281,121 @@ export default function WeedEmpire() {
           <div className="rounded border border-border/50 bg-card/40 p-3 space-y-3">
             <div className="flex items-center gap-2">
               <Users className="w-4 h-4 text-emerald-400" />
-              <h2 className="font-heading text-sm uppercase tracking-wide">Farm assistant</h2>
+              <h2 className="font-heading text-sm uppercase tracking-wide">
+                Crew · {assistant.hired_count || 0}/{assistant.max_workers || 2}
+              </h2>
             </div>
-            {!assistant.hired ? (
-              <>
-                <p className="text-xs text-muted-foreground">
-                  Hire one hand who runs a single job at a time: auto-harvest, cool heat, or sell via dealers (25% of
-                  dealer payout).
-                </p>
-                <button
-                  type="button"
-                  disabled={busy || Number(farm.business_cash || 0) < Number(assistant.hire_cost || catalog?.assistant_hire_cost || 750000)}
-                  onClick={hireAssistant}
-                  className="text-xs px-3 py-2 rounded bg-emerald-700/80 tap-feedback touch-manipulation active:scale-[0.97] min-h-11 disabled:opacity-40"
-                >
-                  Hire · {money(assistant.hire_cost || catalog?.assistant_hire_cost || 750000)}
-                </button>
-              </>
-            ) : (
-              <>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-xs text-muted-foreground">Assistant</span>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => setAssistantEnabled(!assistant.enabled)}
-                    className={`text-[10px] uppercase px-3 py-1.5 rounded border min-h-10 tap-feedback ${
-                      assistant.enabled
-                        ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
-                        : "border-border text-muted-foreground"
-                    }`}
-                  >
-                    {assistant.enabled ? "On" : "Off"}
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {[
-                    { id: "harvest", label: "Harvest" },
-                    { id: "cool_heat", label: "Cool heat" },
-                    { id: "sell_dealer", label: "Sell to dealer" },
-                  ].map((m) => {
-                    const locked = m.id === "sell_dealer" && Number(farm.dealers_level || 0) < 1;
-                    const active = assistant.mode === m.id;
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        disabled={busy || locked}
-                        onClick={() => setAssistantMode(m.id)}
-                        className={`text-xs px-2 py-2 rounded border min-h-11 tap-feedback touch-manipulation active:scale-[0.97] disabled:opacity-40 ${
-                          active
-                            ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-200"
-                            : "border-border/50 text-muted-foreground"
-                        }`}
+            <p className="text-xs text-muted-foreground">
+              Hire up to 2 workers. Each runs one job: harvest, plant seeds, cool heat, or sell via dealers (25% of
+              dealer payout). Plant mode uses the strain &amp; soil you pick and pays from weed business cash (auto-buys
+              soil bags if stock runs out).
+            </p>
+            {(assistant.workers || []).map((w) =>
+              w.hired ? (
+                <div key={w.slot} className="rounded border border-border/40 p-2.5 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-heading uppercase">{w.label || `Worker ${w.slot + 1}`}</span>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => setAssistantEnabled(!w.enabled, w.slot)}
+                      className={`text-[10px] uppercase px-3 py-1.5 rounded border min-h-10 tap-feedback ${
+                        w.enabled
+                          ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
+                          : "border-border text-muted-foreground"
+                      }`}
+                    >
+                      {w.enabled ? "On" : "Off"}
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {[
+                      { id: "harvest", label: "Harvest" },
+                      { id: "plant", label: "Plant" },
+                      { id: "cool_heat", label: "Cool heat" },
+                      { id: "sell_dealer", label: "Sell to dealer" },
+                    ].map((m) => {
+                      const locked = m.id === "sell_dealer" && Number(farm.dealers_level || 0) < 1;
+                      const active = w.mode === m.id;
+                      return (
+                        <button
+                          key={m.id}
+                          type="button"
+                          disabled={busy || locked}
+                          onClick={() => setAssistantMode(m.id, w.slot)}
+                          className={`text-xs px-2 py-2 rounded border min-h-11 tap-feedback touch-manipulation active:scale-[0.97] disabled:opacity-40 ${
+                            active
+                              ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-200"
+                              : "border-border/50 text-muted-foreground"
+                          }`}
+                        >
+                          {m.label}
+                          {m.id === "sell_dealer" ? (
+                            <span className="block text-[9px] opacity-80">
+                              uses Dealer Lv {farm.dealers_level || 0}
+                            </span>
+                          ) : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {w.mode === "plant" ? (
+                    <div className="space-y-1.5 rounded border border-border/30 bg-black/20 p-2">
+                      <div className="text-[10px] uppercase text-muted-foreground">Auto-plant loadout</div>
+                      <select
+                        className="w-full bg-background border border-border rounded px-2 py-1.5 text-xs min-h-10"
+                        value={w.plant_strain_id || "northern_lights"}
+                        disabled={busy}
+                        onChange={(e) =>
+                          setAssistantPlantPrefs(w.slot, e.target.value, w.plant_soil_type || "soil_conventional")
+                        }
                       >
-                        {m.label}
-                        {m.id === "sell_dealer" ? (
-                          <span className="block text-[9px] opacity-80">
-                            uses Dealer Lv {farm.dealers_level || 0}
-                          </span>
-                        ) : null}
-                      </button>
-                    );
-                  })}
+                        {unlockedStrains.map((s) => (
+                          <option key={s.id} value={s.id}>
+                            {s.loot_exclusive ? "★ " : ""}
+                            {s.name} (seed {money(s.seed_cost)})
+                          </option>
+                        ))}
+                      </select>
+                      <select
+                        className="w-full bg-background border border-border rounded px-2 py-1.5 text-xs min-h-10"
+                        value={w.plant_soil_type || "soil_conventional"}
+                        disabled={busy}
+                        onChange={(e) =>
+                          setAssistantPlantPrefs(w.slot, w.plant_strain_id || "northern_lights", e.target.value)
+                        }
+                      >
+                        <option value="soil_conventional">
+                          Conventional soil (stock {farm.soil_stock?.soil_conventional || 0})
+                        </option>
+                        <option value="soil_organic">
+                          Organic soil (stock {farm.soil_stock?.soil_organic || 0})
+                        </option>
+                        <option value="coco">Coco (stock {farm.soil_stock?.coco || 0})</option>
+                      </select>
+                      <p className="text-[10px] text-muted-foreground">
+                        Fills empty plots each tick. Seeds + soil come from business cash.
+                      </p>
+                    </div>
+                  ) : null}
+                  {w.last_run?.message ? (
+                    <p className="text-[11px] text-muted-foreground">Last: {w.last_run.message}</p>
+                  ) : null}
                 </div>
-                {assistant.last_run?.message ? (
-                  <p className="text-[11px] text-muted-foreground">Last: {assistant.last_run.message}</p>
-                ) : null}
-              </>
+              ) : null
             )}
+            {assistant.can_hire !== false && assistant.hire_cost != null ? (
+              <button
+                type="button"
+                disabled={busy || Number(farm.business_cash || 0) < Number(assistant.hire_cost)}
+                onClick={hireAssistant}
+                className="text-xs px-3 py-2 rounded bg-emerald-700/80 tap-feedback touch-manipulation active:scale-[0.97] min-h-11 disabled:opacity-40"
+              >
+                Hire worker {(assistant.hired_count || 0) + 1} · {money(assistant.hire_cost)}
+              </button>
+            ) : (assistant.hired_count || 0) >= (assistant.max_workers || 2) ? (
+              <p className="text-[10px] text-emerald-400">Crew full (2/2)</p>
+            ) : null}
           </div>
         </div>
       )}
@@ -1307,15 +1454,10 @@ export default function WeedEmpire() {
           <p className="text-xs text-muted-foreground flex items-start gap-2">
             <Shield className="w-4 h-4 shrink-0 mt-0.5" />
             Reach Grower Lv 2 to raid. Success steals the full stash, cash, and one gear line (equip later if house is
-            too small). Global raid cooldown: {raidMeta.raid_cooldown_hours || 3}h. Target security caps your odds —
-            fully maxed security = 25% success (75% fail).
+            too small). Cooldown is {raidMeta.raid_cooldown_hours || 3}h per target — you can still raid other growers.
+            Target security caps your odds — fully maxed security = 25% success (75% fail).
             {farm.sabotage_unlocked ? " Sabotage heat spike unlocked." : " Harvest 10 plants to unlock sabotage."}
           </p>
-          {!raidReady && (farm.raid_available_at || raidMeta.raid_available_at) ? (
-            <p className="text-sm text-amber-300">
-              Cooldown — next raid {shortReadyDate(farm.raid_available_at || raidMeta.raid_available_at)}
-            </p>
-          ) : null}
           <button
             type="button"
             disabled={busy || !raidUnlocked}
@@ -1330,44 +1472,52 @@ export default function WeedEmpire() {
             ) : targets.length === 0 ? (
               <p className="text-sm text-muted-foreground">No raidable growers right now.</p>
             ) : (
-              targets.map((t) => (
-                <div
-                  key={t.user_id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded border border-border/40 px-3 py-2 bg-card/30"
-                >
-                  <div className="text-sm">
-                    <div className="font-heading">{t.username}</div>
-                    <div className="text-[10px] text-muted-foreground">
-                      Grower Lv {t.grower_level} · Tier {t.house_tier} · stash {t.stash_grams}g · {t.equip_count} gear
-                      lines
-                      {t.raid_success_chance != null
-                        ? ` · ~${Math.round(Number(t.raid_success_chance) * 100)}% success`
-                        : ""}
-                      {t.security_fully_upgraded ? " · max security" : ""}
+              targets.map((t) => {
+                const targetReady = t.raid_ready !== false;
+                return (
+                  <div
+                    key={t.user_id}
+                    className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-2 rounded border border-border/40 px-3 py-2.5 bg-card/30"
+                  >
+                    <div className="text-sm min-w-0">
+                      <div className="font-heading truncate">{t.username}</div>
+                      <div className="text-[10px] text-muted-foreground">
+                        Grower Lv {t.grower_level} · Tier {t.house_tier} · stash {t.stash_grams}g · {t.equip_count} gear
+                        lines
+                        {t.raid_success_chance != null
+                          ? ` · ~${Math.round(Number(t.raid_success_chance) * 100)}% success`
+                          : ""}
+                        {t.security_fully_upgraded ? " · max security" : ""}
+                      </div>
+                      {!targetReady && t.raid_available_at ? (
+                        <div className="text-[11px] text-amber-300 mt-0.5">
+                          Cooldown — ready {shortReadyDate(t.raid_available_at)}
+                        </div>
+                      ) : null}
                     </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      disabled={busy || !raidReady}
-                      onClick={() => raid(t.user_id, false)}
-                      className="text-xs px-3 py-2 rounded bg-red-800/70 min-h-11 tap-feedback touch-manipulation active:scale-[0.97] disabled:opacity-40"
-                    >
-                      Raid
-                    </button>
-                    {farm.sabotage_unlocked ? (
+                    <div className="flex gap-2 shrink-0">
                       <button
                         type="button"
-                        disabled={busy || !raidReady}
-                        onClick={() => raid(t.user_id, true)}
-                        className="text-xs px-3 py-2 rounded border border-amber-500/40 text-amber-200 min-h-11 tap-feedback touch-manipulation active:scale-[0.97] disabled:opacity-40"
+                        disabled={busy || !targetReady}
+                        onClick={() => raid(t.user_id, false)}
+                        className="text-xs px-3 py-2 rounded bg-red-800/70 min-h-11 tap-feedback touch-manipulation active:scale-[0.97] disabled:opacity-40"
                       >
-                        + Sabotage
+                        Raid
                       </button>
-                    ) : null}
+                      {farm.sabotage_unlocked ? (
+                        <button
+                          type="button"
+                          disabled={busy || !targetReady}
+                          onClick={() => raid(t.user_id, true)}
+                          className="text-xs px-3 py-2 rounded border border-amber-500/40 text-amber-200 min-h-11 tap-feedback touch-manipulation active:scale-[0.97] disabled:opacity-40"
+                        >
+                          + Sabotage
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>

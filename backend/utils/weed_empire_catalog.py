@@ -12,6 +12,8 @@ START_BUSINESS_CASH = 100_000
 DAILY_SELL_CAP_USD = 250_000_000
 BASE_STREET_PRICE_PER_OZ = 22_500
 MAX_DEALERS_LEVEL = 20
+# Must keep this much business cash in the farm when withdrawing to personal money.
+MIN_BUSINESS_CASH_RESERVE = 50_000
 MIN_CURE_MINUTES = 5.0
 MAX_CURE_MINUTES = 20.0
 MAX_CURE_BATCH_GRAMS = 300.0
@@ -26,7 +28,7 @@ HOUSES: List[Dict[str, Any]] = [
         "name": "Closet Grow",
         "plots": 2,
         "cost": 0,
-        "max_equip_tier": 25,
+        "max_equip_tier": 32,
         "grow_speed_mult": 1.0,
         "market_mult": 1.0,
         "heat_decay": 0.5,
@@ -39,7 +41,7 @@ HOUSES: List[Dict[str, Any]] = [
         "name": "Basement Flat",
         "plots": 4,
         "cost": 85_000,
-        "max_equip_tier": 40,
+        "max_equip_tier": 48,
         "grow_speed_mult": 1.05,
         "market_mult": 1.35,
         "heat_decay": 0.8,
@@ -52,7 +54,7 @@ HOUSES: List[Dict[str, Any]] = [
         "name": "Suburban House",
         "plots": 8,
         "cost": 850_000,
-        "max_equip_tier": 55,
+        "max_equip_tier": 68,
         "grow_speed_mult": 1.12,
         "market_mult": 2.0,
         "heat_decay": 1.2,
@@ -65,7 +67,7 @@ HOUSES: List[Dict[str, Any]] = [
         "name": "Warehouse",
         "plots": 16,
         "cost": 7_500_000,
-        "max_equip_tier": 75,
+        "max_equip_tier": 90,
         "grow_speed_mult": 1.2,
         "market_mult": 3.15,
         "heat_decay": 1.6,
@@ -78,9 +80,9 @@ HOUSES: List[Dict[str, Any]] = [
         "name": "Compound",
         "plots": 24,
         "cost": 48_000_000,
-        "max_equip_tier": 100,
+        "max_equip_tier": 120,
         "grow_speed_mult": 1.3,
-        "market_mult": 7.35,
+        "market_mult": 6.4,
         "heat_decay": 2.0,
         "raid_defence": 50,
         "description": "Fortified empire grounds.",

@@ -6,14 +6,33 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-27 11:50 UTC[/color][/b] — [b]Weed Empire: per-target raid cooldown[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Raid cooldown is now [b]3 hours per target[/b] — raiding one grower no longer locks you out of raiding everyone else.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-07-27 11:45 UTC[/color][/b] — [b]Weed Empire: crew plant mode[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] Crew workers can [b]Plant[/b] — pick the strain and soil they use. They fill empty plots and pay seed + soil from [b]weed business cash[/b] (auto-buys soil bags when stock runs out).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-27 11:30 UTC[/color][/b] — [b]Weed Empire expansion[/b][/size]
 [quote]
 [list]
 [*][color=#888888][b]New:[/b] Deeper gear (many more levels + new equipment), higher house gear caps, and a [b]$250M[/b] daily sell cap for big farms.[/color]
-[*][color=#888888][b]New:[/b] [b]Crew[/b] tab — hire a farm assistant. One job at a time: auto-harvest, cool heat, or sell via dealers (assistant keeps [b]25%[/b] of dealer sells). Toggle on/off anytime.[/color]
+[*][color=#888888][b]New:[/b] [b]Crew[/b] tab — hire up to [b]2[/b] farm workers. Each runs one job: auto-harvest, cool heat, or sell via dealers (worker keeps [b]25%[/b] of dealer sells). Toggle each on/off anytime.[/color]
 [*][color=#888888][b]New:[/b] Street dealers level up to [b]Lv 20[/b] (better drip & prices; steeper upgrade costs).[/color]
-[*][color=#888888][b]Changed:[/b] Raids use a [b]3 hour[/b] cooldown, steal the [b]full stash[/b], and can store stolen gear to equip later. Target [b]security[/b] cuts your success odds — fully maxed security = [b]25%[/b] success.[/color]
+[*][color=#888888][b]Changed:[/b] Raids use a [b]3 hour per-target[/b] cooldown, steal the [b]full stash[/b], and can store stolen gear to equip later. Target [b]security[/b] cuts your success odds — fully maxed security = [b]25%[/b] success.[/color]
 [*][color=#888888][b]Changed:[/b] Heat rises about [b]3–8%/hour[/b] (better climate/gear = cooler end). Clear heat for a fair cash cost. Stay near max heat too long → [b]bust[/b]: jail 5 min, farm hit hard, free ditch-weed restart seed. [b]Special strains stay yours[/b]. Your assistant [b]flees[/b] and must be rehired.[/color]
+[*][color=#888888][b]New:[/b] Withdraw weed [b]business cash[/b] to personal money anytime — must leave [b]$50,000[/b] in the farm.[/color]
 [/list]
 [/quote]
 

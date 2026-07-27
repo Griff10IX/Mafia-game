@@ -29,6 +29,8 @@ export default function AdminWeedSellAudit() {
   const [detail, setDetail] = useState(null);
   const [clawPreview, setClawPreview] = useState(null);
   const [clawLoading, setClawLoading] = useState(false);
+  const [heatPreview, setHeatPreview] = useState(null);
+  const [heatBusy, setHeatBusy] = useState(false);
 
   const loadAudit = useCallback(async () => {
     setLoading(true);
@@ -46,6 +48,44 @@ export default function AdminWeedSellAudit() {
   useEffect(() => {
     loadAudit();
   }, [loadAudit]);
+
+  const previewResetAllHeat = async () => {
+    setHeatBusy(true);
+    try {
+      const { data } = await api.post('/weed-empire/admin/reset-all-heat', null, {
+        params: { dry_run: true },
+      });
+      setHeatPreview(data);
+      toast.success(data?.message || 'Heat reset preview ready');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Preview failed');
+      setHeatPreview(null);
+    } finally {
+      setHeatBusy(false);
+    }
+  };
+
+  const applyResetAllHeat = async () => {
+    if (
+      !window.confirm(
+        'Set EVERY weed farm heat to 0 and clear bust timers? Use this after the new heat update so players start clean.'
+      )
+    ) {
+      return;
+    }
+    setHeatBusy(true);
+    try {
+      const { data } = await api.post('/weed-empire/admin/reset-all-heat', null, {
+        params: { confirm: true },
+      });
+      setHeatPreview(data);
+      toast.success(data?.message || 'All farm heat cleared');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Reset failed');
+    } finally {
+      setHeatBusy(false);
+    }
+  };
 
   const loadFarm = async (name) => {
     const un = (name || username).trim();
@@ -136,6 +176,45 @@ export default function AdminWeedSellAudit() {
           preview clawback before applying. Resets business cash, grower XP, equipment, dealers, and sold counters.
         </p>
       </div>
+
+      <section className={`${styles.panel} rounded-lg border border-amber-500/30 p-4 space-y-3`}>
+        <div>
+          <h2 className="text-xs font-heading font-bold text-amber-200 uppercase tracking-wide">
+            Reset all farm heat
+          </h2>
+          <p className="text-[10px] text-mutedForeground mt-1 leading-snug">
+            After the new heat / bust system, clear everyone&apos;s heat to 0 and wipe pending bust timers so farms
+            start fresh under the new passive gain rates.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Btn
+            onClick={previewResetAllHeat}
+            disabled={heatBusy}
+            className="border-amber-500/40 text-amber-200"
+          >
+            {heatBusy ? '…' : 'Preview'}
+          </Btn>
+          <Btn
+            onClick={applyResetAllHeat}
+            disabled={heatBusy}
+            className="border-red-500/50 bg-red-950/40 text-red-200"
+          >
+            {heatBusy ? '…' : 'Set all heat → 0'}
+          </Btn>
+        </div>
+        {heatPreview ? (
+          <div className="rounded border border-amber-500/25 bg-amber-950/20 p-2 text-[10px] text-amber-100/90 space-y-0.5">
+            <p>{heatPreview.message}</p>
+            <p>
+              Farms: {heatPreview.total_farms ?? '—'} · with heat:{' '}
+              {heatPreview.farms_with_heat ?? heatPreview.farms_with_heat_before ?? '—'} · bust timers:{' '}
+              {heatPreview.farms_with_bust_timer ?? heatPreview.farms_with_bust_timer_before ?? '—'}
+              {heatPreview.modified != null ? ` · modified: ${heatPreview.modified}` : ''}
+            </p>
+          </div>
+        ) : null}
+      </section>
 
       <section className={`${styles.panel} rounded-lg border border-emerald-500/25 p-4 space-y-3`}>
         <div className="flex flex-wrap gap-2 items-center justify-between">
