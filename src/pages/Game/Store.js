@@ -181,6 +181,7 @@ const STORE_ITEM_FLAG_LABELS = {
   family_event_token: 'Family event token',
   raid_capacity: 'Raid capacity (+5 raids/day)',
   raid_reset: 'Raid reset (once/day)',
+  weed_empire: 'Weed Empire',
 };
 
 const UPGRADES = [
@@ -191,6 +192,8 @@ const UPGRADES = [
   { id: 'profile-glow-7d', title: 'Name Glow + Border (7d)', Icon: Star, price: 120, path: '/store/buy-profile-glow-7d', ownedKey: null, flagKey: 'profile_glow_7d', needsGlowPreset: true, desc: 'Timed username glow and dossier border (7 days, stacks).' },
   { id: 'profile-glow-permanent', title: 'Name Glow + Border (Permanent)', Icon: Star, price: 800, path: '/store/buy-profile-glow-permanent', ownedKey: 'profile_cosmetic_permanent', flagKey: 'profile_glow_permanent', needsGlowPreset: true, desc: 'Permanent username glow and profile border. After purchase, change colour anytime for free on Edit Profile.' },
   { id: 'family-safe-deposit-tier', title: 'Family Safe Deposit Tier', Icon: Shield, price: 600, path: '/store/buy-family-safe-deposit-tier', ownedKey: null, flagKey: 'family_safe_deposit', familyDonOnly: true, desc: 'Don/Underboss: raises the personal safe cash cap per member in the family vault — $250M / $500M / $1B (max 3 tiers).' },
+  { id: 'weed-daily-cap', title: 'Weed Daily Sell Cap +$250M', Icon: ShoppingBag, price: 500, path: '/store/buy-weed-daily-cap', ownedKey: null, flagKey: 'weed_empire', stackWhileActive: true, desc: 'Weed Empire: +$250M daily sell cap (street/dealer). Stacks up to $5B. Does not raise the $250M/day withdraw cap.' },
+  { id: 'weed-safety-deposit', title: 'Weed Safety Deposit Unlock', Icon: Shield, price: 500, path: '/store/buy-weed-safety-deposit', ownedKey: 'weed_safety_bank_unlocked', flagKey: 'weed_empire', desc: 'Weed Empire: unlock a raid- and bust-safe vault. Then expand in Weed Empire with business cash — $10M → +$25M capacity (max $5B).' },
   { id: 'family-event-token', title: 'Family Event Token', Icon: Zap, price: 250, path: '/store/buy-family-event-token', ownedKey: null, flagKey: 'family_event_token', familyDonOnly: true, desc: 'Don/Underboss: 3-day +10% family racket income (1 per 7 days).' },
   { id: 'auto-rank', title: 'Auto Rank', Icon: Bot, price: AUTO_RANK_COST_POINTS, path: '/store/buy-auto-rank', ownedKey: 'auto_rank_purchased', desc: 'Auto-commit crimes, GTA, busts, OC. Optional: set Telegram in Profile for notifications.' },
   { id: 'robot-bg-auto-search', title: 'Robot Auto-Search', Icon: Crosshair, price: ROBOT_BG_AUTO_SEARCH_COST_POINTS, path: '/store/buy-robot-bg-auto-search', ownedKey: null, activeCheck: robotBgAutoSearchActive, desc: '30 days: auto-maintain Attack searches for your hired robot bodyguards (renews when ≤3h left on a row). One purchase per active period — buy again after it expires.', extra: (u) => (robotBgAutoSearchActive(u) && u?.robot_bg_auto_search_until ? { line: 'Active until', value: formatGameDateTime(u.robot_bg_auto_search_until) } : null) },

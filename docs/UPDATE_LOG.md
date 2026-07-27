@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-27 17:00 UTC[/color][/b] — [b]Weed Empire: sell cap store + Safety Deposit[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] Points Store — [b]Weed Daily Sell Cap +$250M[/b] (500 pts, stacks to [b]$5B[/b]). Does not change the [b]$250M/day[/b] personal withdraw cap.[/color]
+[*][color=#888888][b]New:[/b] Points Store — [b]Weed Safety Deposit Unlock[/b] (500 pts once). Then expand in Weed Empire: [b]$10M[/b] business cash → [b]+$25M[/b] vault capacity (max [b]$5B[/b]). Raid- and bust-safe.[/color]
+[*][color=#888888][b]Changed:[/b] Personal withdraw asks for [b]confirm[/b] before moving cash out of the business.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-27 16:15 UTC[/color][/b] — [b]Weed Empire: raids Lv 5 + bust protection[/b][/size]
 [quote]
 [list]

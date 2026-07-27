@@ -36,6 +36,8 @@ _STORE_EVENT_LABELS: Dict[str, str] = {
     "buy-family-safe-deposit-tier": "Family safe deposit tier",
     "buy-family-event-token": "Family event token",
     "buy-jail-bailout-token": "Jail bailout token",
+    "buy-weed-daily-cap": "Weed daily sell cap +$250M",
+    "buy-weed-safety-deposit": "Weed Safety Deposit unlock",
 }
 
 

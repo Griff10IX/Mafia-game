@@ -19,6 +19,9 @@ from server import SECRET_KEY, _is_admin, db, get_current_user, log_activity, se
 from utils.store_item_flags import require_store_item_allowed
 from utils.weed_empire_catalog import (
     BASE_STREET_PRICE_PER_OZ,
+    DAILY_CAP_BONUS_MAX_TIERS,
+    DAILY_SELL_CAP_POINTS_COST,
+    DAILY_SELL_CAP_STEP_USD,
     DAILY_SELL_CAP_USD,
     DAILY_WITHDRAW_CAP_USD,
     EQUIPMENT_BY_ID,
@@ -27,6 +30,10 @@ from utils.weed_empire_catalog import (
     HOUSES,
     MAX_DEALERS_LEVEL,
     MIN_BUSINESS_CASH_RESERVE,
+    SAFETY_BANK_MAX_UNITS,
+    SAFETY_BANK_UNIT_CAPACITY,
+    SAFETY_BANK_UNIT_COST,
+    SAFETY_BANK_UNLOCK_POINTS,
     SOIL_CHARGE_PER_PLANT,
     START_BUSINESS_CASH,
     STRAIN_BY_ID,
@@ -36,6 +43,8 @@ from utils.weed_empire_catalog import (
     apply_grower_xp,
     assert_can_upgrade_equipment,
     curing_minutes,
+    daily_cap_bonus_tiers,
+    daily_sell_cap_for_farm,
     dealer_drip_fraction,
     dealers_upgrade_cost,
     equipment_level_cost,
@@ -44,6 +53,9 @@ from utils.weed_empire_catalog import (
     grower_progress,
     market_price_per_oz,
     rarity_xp_mult,
+    safety_bank_capacity,
+    safety_bank_capacity_units,
+    safety_bank_unlocked,
     shop_status_for_farm,
     unit_to_grams,
 )
@@ -233,6 +245,10 @@ def _default_farm(user_id: str) -> Dict[str, Any]:
         "last_bust_at": None,
         "bust_restart_seed": False,
         "raid_immune_until": None,
+        "daily_cap_bonus_tiers": 0,
+        "safety_bank_unlocked": False,
+        "safety_bank_cash": 0,
+        "safety_bank_capacity_units": 0,
         "missions": {"harvest_count": 0, "sell_count": 0, "raid_wins": 0},
         "sabotage_unlocked": False,
         "created_at": _iso(),
@@ -1000,9 +1016,10 @@ def _dealer_sell_stash(farm: dict, *, assistant_share: bool = False) -> Dict[str
             sold_today_usd=float(farm.get("daily_sold_usd") or 0) + total_payout,
             heat=float(farm.get("heat") or 0),
             dealer_cut=0.9,
+            daily_sell_cap=daily_sell_cap_for_farm(farm),
         ) * _market_price_bonus(farm)
         pay = int(math.floor(price * oz))
-        remaining = DAILY_SELL_CAP_USD - int(farm.get("daily_sold_usd") or 0) - total_payout
+        remaining = daily_sell_cap_for_farm(farm) - int(farm.get("daily_sold_usd") or 0) - total_payout
         if remaining <= 0:
             break
         if pay > remaining:
@@ -1147,7 +1164,7 @@ async def _maybe_apply_bust_and_assistant(
                 user_id,
                 "Weed Empire bust",
                 "Heat cooked your operation. You're in jail for 5 minutes (unbustable — nobody can bust you out). "
-                f"Raid-protected for {BUST_RAID_IMMUNE_HOURS} hours. "
+                f"Raid-protected for {BUST_RAID_IMMUNE_HOURS} hours. Safety Deposit cash is kept. "
                 "Farm downgraded. Your assistant fled and must be rehired. Exclusive strain ownership is safe. "
                 "Plant a free ditch weed seed when you're out.",
                 "system",
@@ -1623,6 +1640,11 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
     sold = int(farm.get("daily_sold_usd") or 0)
     withdrawn_today = int(farm.get("daily_withdrawn_usd") or 0)
     market_bonus = float(stats.get("market_mult_bonus") or 1.0)
+    sell_cap = daily_sell_cap_for_farm(farm)
+    cap_tiers = daily_cap_bonus_tiers(farm)
+    bank_cap = safety_bank_capacity(farm)
+    bank_units = safety_bank_capacity_units(farm)
+    bank_cash = max(0, int(farm.get("safety_bank_cash") or 0))
     street_prices = {
         strain["id"]: round(
             market_price_per_oz(
@@ -1631,6 +1653,7 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
                 dealers_level=int(farm.get("dealers_level") or 0),
                 sold_today_usd=sold,
                 heat=float(farm.get("heat") or 0),
+                daily_sell_cap=sell_cap,
             )
             * market_bonus,
             2,
@@ -1672,8 +1695,15 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
         "daily_withdrawn_usd": withdrawn_today,
         "daily_withdraw_remaining": max(0, DAILY_WITHDRAW_CAP_USD - withdrawn_today),
         "daily_sold_usd": sold,
-        "daily_sold_cap": DAILY_SELL_CAP_USD,
-        "daily_sold_remaining": max(0, DAILY_SELL_CAP_USD - sold),
+        "daily_sold_cap": sell_cap,
+        "daily_sold_remaining": max(0, sell_cap - sold),
+        "daily_sell_cap_base": DAILY_SELL_CAP_USD,
+        "daily_sell_cap_step": DAILY_SELL_CAP_STEP_USD,
+        "daily_cap_bonus_tiers": cap_tiers,
+        "daily_cap_bonus_max_tiers": DAILY_CAP_BONUS_MAX_TIERS,
+        "daily_cap_next_cost_points": (
+            None if cap_tiers >= DAILY_CAP_BONUS_MAX_TIERS else DAILY_SELL_CAP_POINTS_COST
+        ),
         "lifetime_sold_usd": int(farm.get("lifetime_sold_usd") or 0),
         "stash": dict(farm.get("stash") or {}),
         "curing": list(farm.get("curing") or []),
@@ -1745,6 +1775,15 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
         "scavenged_seed_available": _scavenged_seed_available(farm) or bool(farm.get("bust_restart_seed")),
         "scavenged_strain_id": "ditch_weed",
         "scavenged_soil_type": "soil_conventional",
+        "safety_bank_unlocked": safety_bank_unlocked(farm),
+        "safety_bank_cash": bank_cash,
+        "safety_bank_capacity": bank_cap,
+        "safety_bank_capacity_units": bank_units,
+        "safety_bank_unit_capacity": SAFETY_BANK_UNIT_CAPACITY,
+        "safety_bank_unit_cost": SAFETY_BANK_UNIT_COST,
+        "safety_bank_max_units": SAFETY_BANK_MAX_UNITS,
+        "safety_bank_unlock_points": SAFETY_BANK_UNLOCK_POINTS,
+        "safety_bank_can_expand": safety_bank_unlocked(farm) and bank_units < SAFETY_BANK_MAX_UNITS,
         **gp,
         "staff_preview": True,
     }
@@ -1901,6 +1940,10 @@ class WithdrawBody(BaseModel):
     amount: int = Field(..., gt=0)
 
 
+class SafetyBankAmountBody(BaseModel):
+    amount: int = Field(..., gt=0)
+
+
 class UpgradeEquipBody(BaseModel):
     category_id: str
 
@@ -2049,7 +2092,16 @@ async def weed_status(current_user: dict = Depends(_gate)):
                 "equipment_categories": EQUIPMENT_CATEGORIES,
                 "equipment_shop": equipment_shop_entries(),
                 "start_business_cash": START_BUSINESS_CASH,
-                "daily_sell_cap": DAILY_SELL_CAP_USD,
+                "daily_sell_cap": daily_sell_cap_for_farm(farm),
+                "daily_sell_cap_base": DAILY_SELL_CAP_USD,
+                "daily_sell_cap_step": DAILY_SELL_CAP_STEP_USD,
+                "daily_cap_bonus_max_tiers": DAILY_CAP_BONUS_MAX_TIERS,
+                "daily_sell_cap_points_cost": DAILY_SELL_CAP_POINTS_COST,
+                "daily_withdraw_cap": DAILY_WITHDRAW_CAP_USD,
+                "safety_bank_unlock_points": SAFETY_BANK_UNLOCK_POINTS,
+                "safety_bank_unit_capacity": SAFETY_BANK_UNIT_CAPACITY,
+                "safety_bank_unit_cost": SAFETY_BANK_UNIT_COST,
+                "safety_bank_max_units": SAFETY_BANK_MAX_UNITS,
                 "max_dealers_level": MAX_DEALERS_LEVEL,
                 "assistant_hire_cost": ASSISTANT_HIRE_COST,
                 "units": {"g": 1, "oz": 28, "lb": 448, "kg": 1000},
@@ -2075,7 +2127,15 @@ async def weed_catalog(current_user: dict = Depends(_gate)):
         "strains": STRAINS,
         "equipment_categories": EQUIPMENT_CATEGORIES,
         "equipment_shop_count": len(equipment_shop_entries()),
-        "daily_sell_cap": DAILY_SELL_CAP_USD,
+        "daily_sell_cap_base": DAILY_SELL_CAP_USD,
+        "daily_sell_cap_step": DAILY_SELL_CAP_STEP_USD,
+        "daily_cap_bonus_max_tiers": DAILY_CAP_BONUS_MAX_TIERS,
+        "daily_sell_cap_points_cost": DAILY_SELL_CAP_POINTS_COST,
+        "daily_withdraw_cap": DAILY_WITHDRAW_CAP_USD,
+        "safety_bank_unlock_points": SAFETY_BANK_UNLOCK_POINTS,
+        "safety_bank_unit_capacity": SAFETY_BANK_UNIT_CAPACITY,
+        "safety_bank_unit_cost": SAFETY_BANK_UNIT_COST,
+        "safety_bank_max_units": SAFETY_BANK_MAX_UNITS,
     }
 
 
@@ -2429,6 +2489,7 @@ async def weed_sell(body: SellBody, http_request: Request, current_user: dict = 
             dealers_level=int(farm.get("dealers_level") or 0),
             sold_today_usd=float(farm.get("daily_sold_usd") or 0),
             heat=float(farm.get("heat") or 0),
+            daily_sell_cap=daily_sell_cap_for_farm(farm),
         ) * _market_price_bonus(farm)
         # Bulk sweetener for lb/kg
         u = body.unit.lower()
@@ -2446,7 +2507,7 @@ async def weed_sell(body: SellBody, http_request: Request, current_user: dict = 
             else:
                 raise HTTPException(status_code=400, detail="Sale too small")
 
-        remaining = DAILY_SELL_CAP_USD - int(farm.get("daily_sold_usd") or 0)
+        remaining = daily_sell_cap_for_farm(farm) - int(farm.get("daily_sold_usd") or 0)
         if payout > remaining:
             if remaining <= 0:
                 raise HTTPException(status_code=400, detail="Daily sell cap reached")
@@ -2834,6 +2895,106 @@ async def weed_withdraw(body: WithdrawBody, current_user: dict = Depends(_gate))
             "daily_withdrawn_usd": farm["daily_withdrawn_usd"],
             "daily_withdraw_remaining": max(0, DAILY_WITHDRAW_CAP_USD - int(farm["daily_withdrawn_usd"])),
             "farm": _public_farm(farm, username=current_user.get("username") or "", apply_curing_tick=False),
+        }
+
+
+@router.post("/safety-bank/expand")
+async def weed_safety_bank_expand(current_user: dict = Depends(_gate)):
+    """Spend $10M weed business cash to add +$25M Safety Deposit capacity."""
+    lock = await _weed_farm_lock(current_user["id"])
+    async with lock:
+        farm = await _get_or_create_farm(current_user["id"])
+        if not safety_bank_unlocked(farm):
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unlock Safety Deposit in the Points Store first ({SAFETY_BANK_UNLOCK_POINTS} pts)",
+            )
+        units = safety_bank_capacity_units(farm)
+        if units >= SAFETY_BANK_MAX_UNITS:
+            raise HTTPException(status_code=400, detail="Safety Deposit is at max capacity")
+        _spend(farm, SAFETY_BANK_UNIT_COST)
+        farm["safety_bank_capacity_units"] = units + 1
+        await _save_farm(
+            farm,
+            {
+                "business_cash": farm["business_cash"],
+                "safety_bank_capacity_units": farm["safety_bank_capacity_units"],
+                "safety_bank_unlocked": True,
+            },
+        )
+        return {
+            "ok": True,
+            "added_capacity": SAFETY_BANK_UNIT_CAPACITY,
+            "cost": SAFETY_BANK_UNIT_COST,
+            "farm": _public_farm(farm, username=current_user.get("username") or ""),
+        }
+
+
+@router.post("/safety-bank/deposit")
+async def weed_safety_bank_deposit(body: SafetyBankAmountBody, current_user: dict = Depends(_gate)):
+    lock = await _weed_farm_lock(current_user["id"])
+    async with lock:
+        farm = await _get_or_create_farm(current_user["id"])
+        if not safety_bank_unlocked(farm):
+            raise HTTPException(status_code=400, detail="Unlock Safety Deposit in the Points Store first")
+        amount = int(body.amount)
+        cash = int(farm.get("business_cash") or 0)
+        bank = max(0, int(farm.get("safety_bank_cash") or 0))
+        cap = safety_bank_capacity(farm)
+        free = max(0, cap - bank)
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="Amount must be positive")
+        if cap <= 0:
+            raise HTTPException(status_code=400, detail="Expand Safety Deposit capacity first ($10M business cash → +$25M)")
+        if amount > cash:
+            raise HTTPException(status_code=400, detail="Not enough weed business cash")
+        if amount > free:
+            raise HTTPException(status_code=400, detail=f"Only ${free:,} free capacity in the Safety Deposit")
+        farm["business_cash"] = cash - amount
+        farm["safety_bank_cash"] = bank + amount
+        await _save_farm(
+            farm,
+            {
+                "business_cash": farm["business_cash"],
+                "safety_bank_cash": farm["safety_bank_cash"],
+                "safety_bank_unlocked": True,
+                "safety_bank_capacity_units": farm.get("safety_bank_capacity_units") or 0,
+            },
+        )
+        return {
+            "ok": True,
+            "deposited": amount,
+            "farm": _public_farm(farm, username=current_user.get("username") or ""),
+        }
+
+
+@router.post("/safety-bank/withdraw")
+async def weed_safety_bank_withdraw(body: SafetyBankAmountBody, current_user: dict = Depends(_gate)):
+    """Move cash from Safety Deposit back to weed business cash (not personal money)."""
+    lock = await _weed_farm_lock(current_user["id"])
+    async with lock:
+        farm = await _get_or_create_farm(current_user["id"])
+        if not safety_bank_unlocked(farm):
+            raise HTTPException(status_code=400, detail="Unlock Safety Deposit in the Points Store first")
+        amount = int(body.amount)
+        bank = max(0, int(farm.get("safety_bank_cash") or 0))
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="Amount must be positive")
+        if amount > bank:
+            raise HTTPException(status_code=400, detail="Not enough cash in the Safety Deposit")
+        farm["safety_bank_cash"] = bank - amount
+        farm["business_cash"] = int(farm.get("business_cash") or 0) + amount
+        await _save_farm(
+            farm,
+            {
+                "business_cash": farm["business_cash"],
+                "safety_bank_cash": farm["safety_bank_cash"],
+            },
+        )
+        return {
+            "ok": True,
+            "withdrawn": amount,
+            "farm": _public_farm(farm, username=current_user.get("username") or ""),
         }
 
 

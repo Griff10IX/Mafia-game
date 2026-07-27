@@ -547,6 +547,116 @@ async def upgrade_garage_batch_limit(
     return {"message": f"Garage batch limit upgraded to {new_limit}", "new_limit": new_limit, "cost": cost_used}
 
 
+async def buy_weed_daily_cap(
+    pay_with: str = Query("auto"),
+    current_user: dict = Depends(get_current_user),
+):
+    """+250M Weed Empire daily sell cap (500 pts). Does not raise withdraw cap. Max $5B."""
+    from utils.weed_empire_catalog import (
+        DAILY_CAP_BONUS_MAX_TIERS,
+        DAILY_SELL_CAP_POINTS_COST,
+        DAILY_SELL_CAP_STEP_USD,
+        daily_cap_bonus_tiers,
+        daily_sell_cap_for_farm,
+    )
+
+    await require_store_item_allowed(db, "weed_empire", current_user)
+    farm = await db.weed_farms.find_one({"user_id": current_user["id"]}, {"_id": 0})
+    if not farm:
+        raise HTTPException(status_code=400, detail="Open Weed Empire once before buying sell-cap upgrades")
+    tiers = daily_cap_bonus_tiers(farm)
+    if tiers >= DAILY_CAP_BONUS_MAX_TIERS:
+        raise HTTPException(status_code=400, detail="Weed daily sell cap is already at max ($5B)")
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, DAILY_SELL_CAP_POINTS_COST, pay_with)
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    user_result = await db.users.update_one({"id": current_user["id"], **gte_filter}, {"$inc": inc})
+    if user_result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    new_tiers = tiers + 1
+    farm_result = await db.weed_farms.update_one(
+        {
+            "user_id": current_user["id"],
+            "$or": [
+                {"daily_cap_bonus_tiers": {"$lt": DAILY_CAP_BONUS_MAX_TIERS}},
+                {"daily_cap_bonus_tiers": {"$exists": False}},
+            ],
+        },
+        {"$set": {"daily_cap_bonus_tiers": new_tiers}},
+    )
+    if farm_result.modified_count == 0:
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": cost_used}})
+        raise HTTPException(status_code=400, detail="Weed daily sell cap purchase failed")
+    await _record_store_points_spend(
+        current_user,
+        inc,
+        "buy-weed-daily-cap",
+        cost_used=cost_used,
+        extra={"tiers": new_tiers},
+    )
+    farm["daily_cap_bonus_tiers"] = new_tiers
+    new_cap = daily_sell_cap_for_farm(farm)
+    return {
+        "message": f"Weed daily sell cap raised to ${new_cap:,} (+${DAILY_SELL_CAP_STEP_USD:,}). Withdraw stays $250M/day.",
+        "cost": cost_used,
+        "daily_cap_bonus_tiers": new_tiers,
+        "daily_sold_cap": new_cap,
+    }
+
+
+async def buy_weed_safety_deposit(
+    pay_with: str = Query("auto"),
+    current_user: dict = Depends(get_current_user),
+):
+    """One-time unlock of Weed Empire Safety Deposit (500 pts). Expand capacity with business cash in Weed Empire."""
+    from utils.weed_empire_catalog import SAFETY_BANK_UNLOCK_POINTS
+
+    await require_store_item_allowed(db, "weed_empire", current_user)
+    farm = await db.weed_farms.find_one({"user_id": current_user["id"]}, {"_id": 0})
+    if not farm:
+        raise HTTPException(status_code=400, detail="Open Weed Empire once before unlocking Safety Deposit")
+    if farm.get("safety_bank_unlocked"):
+        raise HTTPException(status_code=400, detail="Safety Deposit already unlocked")
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, SAFETY_BANK_UNLOCK_POINTS, pay_with)
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    user_result = await db.users.update_one({"id": current_user["id"], **gte_filter}, {"$inc": inc})
+    if user_result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    farm_result = await db.weed_farms.update_one(
+        {
+            "user_id": current_user["id"],
+            "$or": [
+                {"safety_bank_unlocked": {"$ne": True}},
+                {"safety_bank_unlocked": {"$exists": False}},
+            ],
+        },
+        {
+            "$set": {
+                "safety_bank_unlocked": True,
+                "safety_bank_cash": int(farm.get("safety_bank_cash") or 0),
+                "safety_bank_capacity_units": int(farm.get("safety_bank_capacity_units") or 0),
+            }
+        },
+    )
+    if farm_result.modified_count == 0:
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": cost_used}})
+        raise HTTPException(status_code=400, detail="Safety Deposit unlock failed — already unlocked?")
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"weed_safety_bank_unlocked": True}},
+    )
+    await _record_store_points_spend(current_user, inc, "buy-weed-safety-deposit", cost_used=cost_used)
+    return {
+        "message": (
+            "Weed Safety Deposit unlocked. Expand capacity in Weed Empire: "
+            "$10M business cash → +$25M capacity (max $5B). Raid & bust safe."
+        ),
+        "cost": cost_used,
+        "safety_bank_unlocked": True,
+    }
+
+
 async def buy_booze_capacity(
     pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
@@ -2587,6 +2697,8 @@ def register(router):
     router.add_api_route("/store/buy-crew-oc-timer", buy_crew_oc_timer, methods=["POST"])
     router.add_api_route("/store/upgrade-garage-batch", upgrade_garage_batch_limit, methods=["POST"])
     router.add_api_route("/store/buy-booze-capacity", buy_booze_capacity, methods=["POST"])
+    router.add_api_route("/store/buy-weed-daily-cap", buy_weed_daily_cap, methods=["POST"])
+    router.add_api_route("/store/buy-weed-safety-deposit", buy_weed_safety_deposit, methods=["POST"])
     router.add_api_route("/store/buy-bullets", store_buy_bullets, methods=["POST"])
     router.add_api_route("/store/buy-health", buy_health, methods=["POST"])
     router.add_api_route("/store/buy-custom-car", buy_custom_car, methods=["POST"])

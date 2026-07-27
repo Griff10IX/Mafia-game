@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
   Droplets,
@@ -117,6 +117,8 @@ export default function WeedEmpire() {
   const [raidFx, setRaidFx] = useState(null);
   const [bustModal, setBustModal] = useState(null);
   const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawConfirm, setWithdrawConfirm] = useState(null); // null | { amount, label }
+  const [bankAmount, setBankAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const farmUpdatedAtRef = useRef("");
@@ -585,7 +587,41 @@ export default function WeedEmpire() {
       const { data } = await api.post("/weed-empire/withdraw", { amount: Math.floor(Number(amount)) });
       applyFarm(data.farm, { force: true });
       setWithdrawAmount("");
+      setWithdrawConfirm(null);
       toast.success(`Withdrew ${money(data.withdrawn)} to personal money`);
+    });
+
+  const requestWithdraw = (amount, label = "Withdraw") => {
+    const n = Math.floor(Number(amount));
+    if (!(n > 0)) return;
+    setWithdrawConfirm({ amount: n, label });
+  };
+
+  const expandSafetyBank = () =>
+    run(async () => {
+      const { data } = await api.post("/weed-empire/safety-bank/expand");
+      applyFarm(data.farm, { force: true });
+      toast.success(`Safety Deposit +${money(data.added_capacity)} for ${money(data.cost)}`);
+    });
+
+  const depositSafetyBank = (amount) =>
+    run(async () => {
+      const { data } = await api.post("/weed-empire/safety-bank/deposit", {
+        amount: Math.floor(Number(amount)),
+      });
+      applyFarm(data.farm, { force: true });
+      setBankAmount("");
+      toast.success(`Deposited ${money(data.deposited)} to Safety Deposit`);
+    });
+
+  const withdrawSafetyBank = (amount) =>
+    run(async () => {
+      const { data } = await api.post("/weed-empire/safety-bank/withdraw", {
+        amount: Math.floor(Number(amount)),
+      });
+      applyFarm(data.farm, { force: true });
+      setBankAmount("");
+      toast.success(`Moved ${money(data.withdrawn)} back to business cash`);
     });
 
   const dealerSell = () =>
@@ -697,8 +733,8 @@ export default function WeedEmpire() {
           <p className="text-[10px] uppercase tracking-[0.2em] text-emerald-500/80 font-heading">Money</p>
           <h1 className="text-xl sm:text-2xl md:text-3xl font-heading text-foreground">Weed Business Empire</h1>
           <p className="text-xs text-muted-foreground mt-1 hidden sm:block">
-            Upgrades use business cash only. Withdraw surplus anytime (keep {money(reserveCash)}; max{" "}
-            {money(dailyWithdrawCap)}/day).
+            Upgrades use business cash only. Personal withdraw is fixed at {money(dailyWithdrawCap)}/day (keep{" "}
+            {money(reserveCash)} in the business). Sell cap upgrades are separate — Points Store.
             {staffPreview ? (
               <span className="ml-2 inline-flex items-center rounded border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 text-[10px] uppercase text-amber-300">
                 Staff preview
@@ -737,7 +773,7 @@ export default function WeedEmpire() {
             <button
               type="button"
               disabled={busy || withdrawable <= 0 || !(Number(withdrawAmount) > 0)}
-              onClick={() => withdrawCash(withdrawAmount)}
+              onClick={() => requestWithdraw(withdrawAmount, "Withdraw")}
               className="text-[10px] uppercase px-2.5 py-1 rounded border border-emerald-500/40 text-emerald-300 tap-feedback min-h-10 disabled:opacity-40"
             >
               Withdraw
@@ -745,7 +781,7 @@ export default function WeedEmpire() {
             <button
               type="button"
               disabled={busy || withdrawable <= 0}
-              onClick={() => withdrawCash(withdrawable)}
+              onClick={() => requestWithdraw(withdrawable, "Max withdraw")}
               className="text-[10px] uppercase px-2.5 py-1 rounded bg-emerald-800/70 tap-feedback min-h-10 disabled:opacity-40"
             >
               Max
@@ -753,6 +789,125 @@ export default function WeedEmpire() {
           </div>
         </div>
       </header>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <div className="rounded border border-border/50 bg-card/40 p-3 space-y-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[10px] uppercase tracking-wider font-heading text-muted-foreground">
+              Daily sell cap
+            </div>
+            <span className="text-[10px] tabular-nums text-muted-foreground">
+              {Number(farm.daily_cap_bonus_tiers || 0)}/{Number(farm.daily_cap_bonus_max_tiers || 19)} tiers
+            </span>
+          </div>
+          <div className="font-heading text-sm tabular-nums text-foreground">
+            {money(farm.daily_sold_usd)} / {money(farm.daily_sold_cap)}
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Street &amp; dealer sales only. Base {money(farm.daily_sell_cap_base || 250_000_000)}; +
+            {money(farm.daily_sell_cap_step || 250_000_000)} per Points Store buy (max{" "}
+            {money(5_000_000_000)}). Withdraw stays {money(dailyWithdrawCap)}/day.
+          </p>
+          {farm.daily_cap_next_cost_points != null ? (
+            <Link
+              to="/game/store?tab=upgrades"
+              className="inline-flex text-[10px] uppercase text-emerald-300 hover:underline"
+            >
+              Upgrade in Points Store · {farm.daily_cap_next_cost_points} pts
+            </Link>
+          ) : (
+            <span className="text-[10px] text-emerald-400/80 uppercase">Sell cap maxed</span>
+          )}
+        </div>
+
+        <div className="rounded border border-border/50 bg-card/40 p-3 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[10px] uppercase tracking-wider font-heading text-muted-foreground flex items-center gap-1.5">
+              <Shield className="h-3 w-3" /> Safety Deposit
+            </div>
+            {farm.safety_bank_unlocked ? (
+              <span className="text-[10px] text-emerald-400/90 uppercase">Unlocked</span>
+            ) : (
+              <span className="text-[10px] text-amber-300/90 uppercase">Locked</span>
+            )}
+          </div>
+          {!farm.safety_bank_unlocked ? (
+            <>
+              <p className="text-[10px] text-muted-foreground">
+                Raid- and bust-safe vault. Unlock once in Points Store (
+                {farm.safety_bank_unlock_points || 500} pts), then expand capacity with weed business cash.
+              </p>
+              <Link
+                to="/game/store?tab=upgrades"
+                className="inline-flex text-[10px] uppercase text-emerald-300 hover:underline"
+              >
+                Unlock in Points Store · {farm.safety_bank_unlock_points || 500} pts
+              </Link>
+            </>
+          ) : (
+            <>
+              <div className="text-sm tabular-nums font-heading">
+                {money(farm.safety_bank_cash)}{" "}
+                <span className="text-muted-foreground text-xs font-normal">
+                  / {money(farm.safety_bank_capacity)} capacity
+                </span>
+              </div>
+              <p className="text-[10px] text-muted-foreground">
+                Survives raids and heat busts. Expand: {money(farm.safety_bank_unit_cost || 10_000_000)}{" "}
+                business → +{money(farm.safety_bank_unit_capacity || 25_000_000)} (max{" "}
+                {money(5_000_000_000)}).
+              </p>
+              <div className="flex flex-wrap gap-1">
+                <input
+                  type="number"
+                  min={1}
+                  value={bankAmount}
+                  onChange={(e) => setBankAmount(e.target.value)}
+                  placeholder="Amount"
+                  disabled={busy}
+                  className="flex-1 min-w-[5rem] rounded border border-border/50 bg-zinc-900/80 px-2 py-1 text-xs tabular-nums min-h-10 disabled:opacity-40"
+                />
+                <button
+                  type="button"
+                  disabled={
+                    busy ||
+                    !(Number(bankAmount) > 0) ||
+                    Number(farm.business_cash || 0) < Number(bankAmount) ||
+                    Number(farm.safety_bank_capacity || 0) -
+                      Number(farm.safety_bank_cash || 0) <
+                      Number(bankAmount)
+                  }
+                  onClick={() => depositSafetyBank(bankAmount)}
+                  className="text-[10px] uppercase px-2.5 py-1 rounded border border-emerald-500/40 text-emerald-300 tap-feedback min-h-10 disabled:opacity-40"
+                >
+                  Deposit
+                </button>
+                <button
+                  type="button"
+                  disabled={busy || !(Number(bankAmount) > 0) || Number(farm.safety_bank_cash || 0) < Number(bankAmount)}
+                  onClick={() => withdrawSafetyBank(bankAmount)}
+                  className="text-[10px] uppercase px-2.5 py-1 rounded border border-border/60 tap-feedback min-h-10 disabled:opacity-40"
+                >
+                  To business
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    busy ||
+                    !farm.safety_bank_can_expand ||
+                    Number(farm.business_cash || 0) < Number(farm.safety_bank_unit_cost || 10_000_000)
+                  }
+                  onClick={expandSafetyBank}
+                  className="text-[10px] uppercase px-2.5 py-1 rounded bg-emerald-800/70 tap-feedback min-h-10 disabled:opacity-40"
+                >
+                  Expand +{money(farm.safety_bank_unit_capacity || 25_000_000)} ·{" "}
+                  {money(farm.safety_bank_unit_cost || 10_000_000)}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
 
       {ownedExclusiveStrains.length > 0 && (
         <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3 space-y-1.5">
@@ -799,7 +954,7 @@ export default function WeedEmpire() {
         </div>
         <div className="rounded border border-border/50 bg-card/40 p-2">
           <div className="text-muted-foreground flex justify-between">
-            <span>Daily cap</span>
+            <span>Sell cap</span>
             <span className="tabular-nums">{capPct.toFixed(0)}%</span>
           </div>
           <div className="h-1.5 mt-1 rounded bg-zinc-800 overflow-hidden">
@@ -807,6 +962,7 @@ export default function WeedEmpire() {
           </div>
           <div className="text-[10px] mt-1 text-muted-foreground truncate tabular-nums">
             {money(farm.daily_sold_usd)} / {money(farm.daily_sold_cap)}
+            {farm.daily_cap_next_cost_points != null ? " · Store +" : " · max"}
           </div>
         </div>
         <div
@@ -1802,8 +1958,9 @@ export default function WeedEmpire() {
               Sustained heat cooked the op. You&apos;re in jail for 5 minutes and unbustable for that whole time
               (nobody can bust you out). Raid-protected for {bustModal?.raid_immune_hours || farm?.bust_raid_immune_hours || 6}{" "}
               hours — nobody can raid you. House dropped a tier, gear halved, stash wiped
-              {bustModal?.assistant_fled ? ", and your assistant fled — you&apos;ll need to rehire" : ""}. Exclusive
-              strain ownership is safe — plant a free ditch weed seed when you&apos;re out.
+              {bustModal?.assistant_fled ? ", and your assistant fled — you&apos;ll need to rehire" : ""}. Safety
+              Deposit cash is kept. Exclusive strain ownership is safe — plant a free ditch weed seed when
+              you&apos;re out.
             </p>
             <button
               type="button"
@@ -1812,6 +1969,36 @@ export default function WeedEmpire() {
             >
               Got it — restart seed ready
             </button>
+          </div>
+        </div>
+      ) : null}
+
+      {withdrawConfirm ? (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded border border-emerald-500/40 bg-zinc-950 p-4 space-y-3 shadow-xl">
+            <h2 className="font-heading text-lg text-emerald-300">Confirm withdraw</h2>
+            <p className="text-sm text-muted-foreground">
+              Move {money(withdrawConfirm.amount)} from weed business cash to your personal money? Daily
+              personal withdraw is capped at {money(dailyWithdrawCap)} (this does not use the sell cap).
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setWithdrawConfirm(null)}
+                className="flex-1 text-xs uppercase py-2.5 rounded border border-border/60 min-h-11 tap-feedback disabled:opacity-40"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => withdrawCash(withdrawConfirm.amount)}
+                className="flex-1 text-xs uppercase py-2.5 rounded bg-emerald-700/80 min-h-11 tap-feedback disabled:opacity-40"
+              >
+                Confirm {withdrawConfirm.label || "Withdraw"}
+              </button>
+            </div>
           </div>
         </div>
       ) : null}

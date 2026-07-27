@@ -10,6 +10,10 @@ GRAMS_PER_KG = 1000
 
 START_BUSINESS_CASH = 100_000
 DAILY_SELL_CAP_USD = 250_000_000
+DAILY_SELL_CAP_STEP_USD = 250_000_000
+DAILY_SELL_CAP_MAX_USD = 5_000_000_000
+DAILY_SELL_CAP_POINTS_COST = 500
+DAILY_CAP_BONUS_MAX_TIERS = (DAILY_SELL_CAP_MAX_USD - DAILY_SELL_CAP_USD) // DAILY_SELL_CAP_STEP_USD  # 19
 DAILY_WITHDRAW_CAP_USD = 250_000_000
 BASE_STREET_PRICE_PER_OZ = 22_500
 MAX_DEALERS_LEVEL = 20
@@ -18,6 +22,47 @@ MIN_BUSINESS_CASH_RESERVE = 50_000
 MIN_CURE_MINUTES = 5.0
 MAX_CURE_MINUTES = 20.0
 MAX_CURE_BATCH_GRAMS = 300.0
+
+# Safety Deposit (raid / heat-bust safe vault)
+SAFETY_BANK_UNLOCK_POINTS = 500
+SAFETY_BANK_UNIT_CAPACITY = 25_000_000
+SAFETY_BANK_UNIT_COST = 10_000_000  # weed business cash per +$25M capacity
+SAFETY_BANK_MAX_CAPACITY = 5_000_000_000
+SAFETY_BANK_MAX_UNITS = SAFETY_BANK_MAX_CAPACITY // SAFETY_BANK_UNIT_CAPACITY
+
+
+def daily_cap_bonus_tiers(farm: Optional[dict] = None) -> int:
+    raw = 0 if not farm else farm.get("daily_cap_bonus_tiers")
+    try:
+        tiers = int(raw or 0)
+    except (TypeError, ValueError):
+        tiers = 0
+    return max(0, min(DAILY_CAP_BONUS_MAX_TIERS, tiers))
+
+
+def daily_sell_cap_for_farm(farm: Optional[dict] = None) -> int:
+    """Effective daily street/dealer sell cap (Points Store tiers raise this; withdraw stays fixed)."""
+    return min(
+        DAILY_SELL_CAP_MAX_USD,
+        DAILY_SELL_CAP_USD + daily_cap_bonus_tiers(farm) * DAILY_SELL_CAP_STEP_USD,
+    )
+
+
+def safety_bank_capacity_units(farm: Optional[dict] = None) -> int:
+    raw = 0 if not farm else farm.get("safety_bank_capacity_units")
+    try:
+        units = int(raw or 0)
+    except (TypeError, ValueError):
+        units = 0
+    return max(0, min(SAFETY_BANK_MAX_UNITS, units))
+
+
+def safety_bank_capacity(farm: Optional[dict] = None) -> int:
+    return safety_bank_capacity_units(farm) * SAFETY_BANK_UNIT_CAPACITY
+
+
+def safety_bank_unlocked(farm: Optional[dict] = None) -> bool:
+    return bool(farm and farm.get("safety_bank_unlocked"))
 
 # Soil charge consumed per plant
 SOIL_CHARGE_PER_PLANT = 1
@@ -266,6 +311,7 @@ def market_price_per_oz(
     sold_today_usd: float,
     heat: float,
     dealer_cut: float = 1.0,
+    daily_sell_cap: Optional[float] = None,
 ) -> float:
     """Return the progression-scaled sale value for one ounce."""
     house = HOUSE_BY_TIER.get(max(0, int(house_tier)), HOUSE_BY_TIER[0])
@@ -273,8 +319,10 @@ def market_price_per_oz(
     # Soft curve: Lv1 ≈ ×1.08 … Lv20 ≈ ×2.2 (was hard-capped at Lv5 ×2.0).
     dl = max(0, min(MAX_DEALERS_LEVEL, int(dealers_level)))
     network_mult = 1.0 + dl * 0.06
-    # Slightly softer late demand so end-game can still sell near the $250M cap.
-    demand = max(0.62, 1.0 - (max(0.0, float(sold_today_usd)) / DAILY_SELL_CAP_USD) * 0.28)
+    cap = float(daily_sell_cap if daily_sell_cap is not None else DAILY_SELL_CAP_USD)
+    cap = max(1.0, cap)
+    # Slightly softer late demand so end-game can still sell near the daily cap.
+    demand = max(0.62, 1.0 - (max(0.0, float(sold_today_usd)) / cap) * 0.28)
     heat_penalty = min(0.45, max(0.0, float(heat)) / 200.0)
     quality_mult = 0.85 + 0.3 * 0.7
     return (
