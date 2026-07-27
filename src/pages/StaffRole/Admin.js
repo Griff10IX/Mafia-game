@@ -1,6 +1,6 @@
 import { Fragment, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate, useParams } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, ShieldAlert, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Grid3x3, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw, MessagesSquare, Swords, TrendingUp, ClipboardList, CircleDot, BookOpen } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, ShieldAlert, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Grid3x3, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Leaf, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw, MessagesSquare, Swords, TrendingUp, ClipboardList, CircleDot, BookOpen } from 'lucide-react';
 import api, { imageHostPublicUrl, refreshUser } from '../../utils/api';
 import { formatAdminDateTime, formatAdminDateOnly, formatAdminTimeOnly } from '../../utils/adminDateTime';
 import {
@@ -16,6 +16,7 @@ import { normalizeBodyguardSlotValue } from '../../utils/attackLogDisplay';
 import AdminSustainedRlEventsTable from './admin/AdminSustainedRlEventsTable';
 import AdminRacketProgress from './AdminRacketProgress';
 import AdminDistilleryProgress from './AdminDistilleryProgress';
+import AdminWeedSellAudit from './AdminWeedSellAudit';
 import styles from '../../styles/noir.module.css';
 import {
   ADMIN_CATEGORIES,
@@ -257,6 +258,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Quick Trade admin', categoryId: 'admin-economy-progression', collapseKey: 'quicktradeTool', keywords: ['quicktrade', 'trade', 'offers', 'escrow', 'cancel', 'listings', 'tokens', 'property'], adminOnly: true },
   { label: 'Racket & Distillery progress', categoryId: 'admin-economy-progression', collapseKey: 'racketProgress', scrollToId: 'admin-racket-progress', keywords: ['racket', 'distillery', 'illegal business', 'progress', 'vault', 'guards', 'security', 'ladder', 'booze', 'ibm'], adminOnly: true },
   { label: 'Distillery progress', categoryId: 'admin-economy-progression', collapseKey: 'distilleryProgress', scrollToId: 'admin-distillery-progress', keywords: ['distillery', 'still', 'booze', 'heat', 'equipment', 'special upgrades', 'add upgrades', 'unlock track'], adminOnly: true },
+  { label: 'Weed sell audit', categoryId: 'admin-economy-progression', collapseKey: 'weedSellAudit', scrollToId: 'admin-weed-sell-audit', keywords: ['weed', 'empire', 'sell', 'spam', 'stash', 'clawback', 'exploit', 'audit'], adminOnly: true },
   // Game World
   { label: 'Game Events', categoryId: 'admin-gameworld', collapseKey: 'events', keywords: ['events', 'toggle', 'enable', 'disable', 'random', 'bundle', 'daily', 'modifiers', 'roll'], adminOnly: true },
   { label: 'World Cup 2026', categoryId: 'admin-gameworld', collapseKey: 'worldCup', keywords: ['world cup', '2026', 'predictions', 'fifa', 'draft', 'fixtures', 'sync'], adminOnly: true },
@@ -397,8 +399,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, globalPropertiesEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true, pointsCashLogs: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, globalPropertiesEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true, pointsCashLogs: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, weedSellAudit: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, globalPropertiesEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true, pointsCashLogs: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, cheaterKillImpact: false, sportsOpenStakeCap: true, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, racketProgress: false, distilleryProgress: false, weedSellAudit: false, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, staffAccessDenials: true, toolAccessAudit: true, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, coinFlipEconomy: true, globalPropertiesEconomy: true, kenoEconomy: true, economySpikeAudit: true, gamePassSeason: true, worldCup: true, pointsCashLogs: true }; }
 }
 
 function saveCollapsed(state) {
@@ -12510,6 +12512,38 @@ export default function Admin() {
           {!collapsed.distilleryProgress && (
             <div className="p-3">
               <AdminDistilleryProgress embedded initialUsername={(formData.targetUsername || '').trim()} />
+            </div>
+          )}
+        </div>
+      </section>
+      )}
+
+      {activeCategoryId === 'admin-economy-progression' && isAdmin && (
+      <section id="admin-weed-sell-audit" className="admin-category-nav space-y-4 mb-4">
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-emerald-500/35 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-emerald-500/50 to-transparent" />
+          <SectionHeader
+            icon={Leaf}
+            title="Weed Sell Audit"
+            color="text-emerald-300"
+            toolAnchor="weedSellAudit"
+            isCollapsed={collapsed.weedSellAudit}
+            onToggle={() => toggleSection('weedSellAudit')}
+          />
+          {!collapsed.weedSellAudit && (
+            <div className="p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Link
+                  to="/tjjeujr3wa/weed-sell-audit"
+                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded border border-emerald-500/40 bg-emerald-500/10 text-[10px] font-heading font-bold uppercase tracking-wide text-emerald-200 hover:bg-emerald-500/20"
+                >
+                  <Leaf size={12} /> Open full Weed sell audit
+                </Link>
+                <span className="text-[9px] text-mutedForeground font-heading">
+                  Or use below — flag sell-spam farms and claw back cash / XP / equipment.
+                </span>
+              </div>
+              <AdminWeedSellAudit />
             </div>
           )}
         </div>
