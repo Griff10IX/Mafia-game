@@ -12,6 +12,7 @@ import {
   ShoppingCart,
   Sparkles,
   Swords,
+  Users,
   Warehouse,
 } from "lucide-react";
 import api from "../../utils/api";
@@ -23,6 +24,7 @@ const TABS = [
   { id: "grow", label: "Grow", Icon: Leaf },
   { id: "shop", label: "Equipment", Icon: ShoppingCart },
   { id: "stash", label: "Stash / Sell", Icon: Package },
+  { id: "crew", label: "Crew", Icon: Users },
   { id: "house", label: "House", Icon: Warehouse },
   { id: "raid", label: "Raid", Icon: Swords },
 ];
@@ -103,6 +105,9 @@ export default function WeedEmpire() {
   const [fx, setFx] = useState(null);
   const [fxNonce, setFxNonce] = useState(0);
   const [targets, setTargets] = useState([]);
+  const [raidMeta, setRaidMeta] = useState({ raid_ready: true, raid_available_at: null, raid_cooldown_hours: 3 });
+  const [raidFx, setRaidFx] = useState(null);
+  const [bustModal, setBustModal] = useState(null);
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const farmUpdatedAtRef = useRef("");
@@ -171,6 +176,18 @@ export default function WeedEmpire() {
       const dailyCash = statusRes.data?.exclusive_daily_cash;
       if (dailyCash?.cash) {
         toast.success(`Acapulco Gold: $${Number(dailyCash.cash).toLocaleString()} cash credited`);
+      }
+      if (statusRes.data?.bust) {
+        setBustModal(statusRes.data.bust);
+        const fled = statusRes.data.bust?.assistant_fled;
+        toast.error(
+          fled
+            ? "Heat bust — jailed 5 minutes. Assistant fled; rehire required."
+            : "Heat bust — jailed 5 minutes. Exclusive strains kept."
+        );
+      }
+      if (statusRes.data?.assistant_run?.message) {
+        toast.message(statusRes.data.assistant_run.message);
       }
     } catch (e) {
       const detail = e?.response?.data?.detail || e?.message || "Failed to load";
@@ -390,6 +407,12 @@ export default function WeedEmpire() {
     run(async () => {
       const { data } = await api.get("/weed-empire/raid/targets");
       setTargets(data.targets || []);
+      setRaidMeta({
+        raid_ready: data.raid_ready !== false,
+        raid_available_at: data.raid_available_at || null,
+        raid_cooldown_hours: data.raid_cooldown_hours || 3,
+        raid_unlocked: data.raid_unlocked !== false,
+      });
     });
 
   const raid = (targetUserId, sabotage = false) =>
@@ -400,10 +423,20 @@ export default function WeedEmpire() {
         ...actionCodeRef.current,
       });
       applyFarm(data.farm, { force: true });
+      if (data.raid_available_at) {
+        setRaidMeta((m) => ({
+          ...m,
+          raid_ready: false,
+          raid_available_at: data.raid_available_at,
+        }));
+      }
       if (data.success) {
         const eq = data.stolen?.equipment?.name;
+        const grams = data.stolen?.grams_total;
+        setRaidFx({ at: Date.now(), grams, eq });
+        window.setTimeout(() => setRaidFx(null), 1800);
         toast.success(
-          `Raid success — cash ${money(data.stolen?.cash || 0)}${eq ? `, stole ${eq}` : ""}`
+          `Raid success — ${grams != null ? `${Number(grams).toFixed(0)}g, ` : ""}cash ${money(data.stolen?.cash || 0)}${eq ? `, ${eq}` : ""}`
         );
       } else {
         toast.error(`Raid failed${data.fine ? ` (fine ${money(data.fine)})` : ""}`);
@@ -415,7 +448,11 @@ export default function WeedEmpire() {
     run(async () => {
       const { data } = await api.post("/weed-empire/cool-off");
       applyFarm(data.farm, { force: true });
-      toast.success("Heat cooled");
+      if (data.cleared) {
+        toast.success(`Heat cleared (−${data.cleared}) for ${money(data.cost)}`);
+      } else {
+        toast.success("Heat already cool");
+      }
     });
 
   const dealerSell = () =>
@@ -423,6 +460,39 @@ export default function WeedEmpire() {
       const { data } = await api.post("/weed-empire/dealers/sell", actionCodeRef.current);
       applyFarm(data.farm, { force: true });
       toast.success(`Dealers moved product for ${money(data.payout)}`);
+    });
+
+  const upgradeDealers = () =>
+    run(async () => {
+      const { data } = await api.post("/weed-empire/upgrade-dealers");
+      applyFarm(data.farm, { force: true });
+      toast.success(`Dealers now Lv ${data.farm?.dealers_level}`);
+    });
+
+  const hireAssistant = () =>
+    run(async () => {
+      const { data } = await api.post("/weed-empire/assistant/hire");
+      applyFarm(data.farm, { force: true });
+      toast.success("Farm assistant hired");
+    });
+
+  const setAssistantMode = (mode) =>
+    run(async () => {
+      const { data } = await api.post("/weed-empire/assistant/mode", { mode });
+      applyFarm(data.farm, { force: true });
+    });
+
+  const setAssistantEnabled = (enabled) =>
+    run(async () => {
+      const { data } = await api.post("/weed-empire/assistant/enabled", { enabled });
+      applyFarm(data.farm, { force: true });
+    });
+
+  const equipStolen = (index) =>
+    run(async () => {
+      const { data } = await api.post("/weed-empire/stolen-equipment/equip", { index });
+      applyFarm(data.farm, { force: true });
+      toast.success(`Equipped ${data.equipped?.name || "gear"}`);
     });
 
   if (loading) {
@@ -442,6 +512,13 @@ export default function WeedEmpire() {
   const selectedSoilStock = Number(farm.soil_stock?.[soilType] || 0);
   const canAffordPlant = Number(farm.business_cash || 0) >= plantSeedCost && selectedSoilStock >= 1;
   const raidUnlocked = Number(farm.grower_level || 1) >= 2;
+  const raidReady = farm.raid_ready !== false && raidMeta.raid_ready !== false;
+  const assistant = farm.assistant || {};
+  const heatHigh = Number(farm.heat || 0) >= Number(farm.heat_bust_threshold || 95);
+  const coolCost = Number(farm.cool_off_cost || 0);
+  const heatBand = farm.heat_gain_rate_band || [3, 8];
+  const heatBandLo = Number(heatBand[0] ?? 3);
+  const heatBandHi = Number(heatBand[1] ?? 8);
   const cleanlinessPct = Math.max(0, Math.min(100, Number(farm.cleanliness_pct ?? farm.cleanliness ?? 100)));
   const cleanlinessRisk = cleanlinessPct < 30;
   const mitePct = Math.max(0, Math.min(100, Number(selectedPlot?.mite_infestation_pct || 0)));
@@ -527,18 +604,28 @@ export default function WeedEmpire() {
             {money(farm.daily_sold_usd)} / {money(farm.daily_sold_cap)}
           </div>
         </div>
-        <div className="rounded border border-border/50 bg-card/40 p-2 flex items-center justify-between gap-2">
+        <div
+          className={`rounded border p-2 flex items-center justify-between gap-2 ${
+            heatHigh ? "border-red-500/60 bg-red-950/30" : "border-border/50 bg-card/40"
+          }`}
+        >
           <div>
             <div className="text-muted-foreground">Heat</div>
-            <div className="font-heading">{farm.heat}</div>
+            <div className={`font-heading ${heatHigh ? "text-red-300" : ""}`}>{farm.heat}</div>
+            <div className="text-[9px] text-muted-foreground mt-0.5">
+              +{heatBandLo.toFixed(1)}–{heatBandHi.toFixed(1)}%/h
+            </div>
+            {heatHigh ? (
+              <div className="text-[9px] text-red-300/90 mt-0.5">Bust risk — cool off!</div>
+            ) : null}
           </div>
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || Number(farm.heat || 0) < 0.5 || Number(farm.business_cash || 0) < coolCost}
             onClick={coolOff}
-            className="text-[10px] uppercase px-2 py-1 rounded border border-border hover:bg-muted/40 tap-feedback touch-manipulation active:scale-[0.97] min-h-10"
+            className="text-[10px] uppercase px-2 py-1 rounded border border-border hover:bg-muted/40 tap-feedback touch-manipulation active:scale-[0.97] min-h-10 disabled:opacity-40"
           >
-            Cool off
+            Clear · {money(coolCost)}
           </button>
         </div>
         <div
@@ -1031,11 +1118,136 @@ export default function WeedEmpire() {
               </p>
             )}
             {(farm.dealers_level || 0) >= 1 ? (
-              <button type="button" disabled={busy} onClick={dealerSell} className="text-xs underline text-muted-foreground tap-feedback touch-manipulation active:scale-[0.97] min-h-10">
-                Run dealers (Lv {farm.dealers_level})
-              </button>
+              <div className="space-y-2 rounded border border-border/40 p-2 bg-card/20">
+                <div className="text-xs text-muted-foreground">
+                  Dealer Lv {farm.dealers_level} / {farm.max_dealers_level || 20}
+                  {farm.dealer_drip_fraction != null
+                    ? ` · drip ~${Math.round(Number(farm.dealer_drip_fraction) * 100)}%`
+                    : ""}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={dealerSell}
+                    className="text-xs px-3 py-1.5 rounded border border-border tap-feedback touch-manipulation active:scale-[0.97] min-h-10"
+                  >
+                    Run dealers
+                  </button>
+                  {farm.dealers_upgrade_cost != null ? (
+                    <button
+                      type="button"
+                      disabled={busy || Number(farm.business_cash || 0) < Number(farm.dealers_upgrade_cost)}
+                      onClick={upgradeDealers}
+                      className="text-xs px-3 py-1.5 rounded bg-emerald-800/60 tap-feedback touch-manipulation active:scale-[0.97] min-h-10 disabled:opacity-40"
+                    >
+                      Upgrade · {money(farm.dealers_upgrade_cost)}
+                    </button>
+                  ) : (
+                    <span className="text-[10px] text-emerald-400 self-center">Dealers maxed</span>
+                  )}
+                </div>
+              </div>
             ) : (
               <p className="text-[10px] text-muted-foreground">Dealers unlock after 5 sells.</p>
+            )}
+            {(farm.stolen_equipment || []).length > 0 ? (
+              <div className="space-y-1 rounded border border-amber-500/30 p-2">
+                <div className="text-[10px] uppercase text-amber-300">Stolen gear inventory</div>
+                {(farm.stolen_equipment || []).map((item, idx) => (
+                  <div key={`${item.category_id}-${idx}`} className="flex justify-between gap-2 text-xs">
+                    <span>
+                      {item.name || item.category_id} Lv {item.level}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => equipStolen(idx)}
+                      className="underline text-emerald-300 min-h-10 tap-feedback"
+                    >
+                      Equip
+                    </button>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        </div>
+      )}
+
+      {tab === "crew" && (
+        <div className="space-y-3 max-w-lg">
+          <div className="rounded border border-border/50 bg-card/40 p-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-emerald-400" />
+              <h2 className="font-heading text-sm uppercase tracking-wide">Farm assistant</h2>
+            </div>
+            {!assistant.hired ? (
+              <>
+                <p className="text-xs text-muted-foreground">
+                  Hire one hand who runs a single job at a time: auto-harvest, cool heat, or sell via dealers (25% of
+                  dealer payout).
+                </p>
+                <button
+                  type="button"
+                  disabled={busy || Number(farm.business_cash || 0) < Number(assistant.hire_cost || catalog?.assistant_hire_cost || 750000)}
+                  onClick={hireAssistant}
+                  className="text-xs px-3 py-2 rounded bg-emerald-700/80 tap-feedback touch-manipulation active:scale-[0.97] min-h-11 disabled:opacity-40"
+                >
+                  Hire · {money(assistant.hire_cost || catalog?.assistant_hire_cost || 750000)}
+                </button>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs text-muted-foreground">Assistant</span>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => setAssistantEnabled(!assistant.enabled)}
+                    className={`text-[10px] uppercase px-3 py-1.5 rounded border min-h-10 tap-feedback ${
+                      assistant.enabled
+                        ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-300"
+                        : "border-border text-muted-foreground"
+                    }`}
+                  >
+                    {assistant.enabled ? "On" : "Off"}
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {[
+                    { id: "harvest", label: "Harvest" },
+                    { id: "cool_heat", label: "Cool heat" },
+                    { id: "sell_dealer", label: "Sell to dealer" },
+                  ].map((m) => {
+                    const locked = m.id === "sell_dealer" && Number(farm.dealers_level || 0) < 1;
+                    const active = assistant.mode === m.id;
+                    return (
+                      <button
+                        key={m.id}
+                        type="button"
+                        disabled={busy || locked}
+                        onClick={() => setAssistantMode(m.id)}
+                        className={`text-xs px-2 py-2 rounded border min-h-11 tap-feedback touch-manipulation active:scale-[0.97] disabled:opacity-40 ${
+                          active
+                            ? "border-emerald-500/50 bg-emerald-500/15 text-emerald-200"
+                            : "border-border/50 text-muted-foreground"
+                        }`}
+                      >
+                        {m.label}
+                        {m.id === "sell_dealer" ? (
+                          <span className="block text-[9px] opacity-80">
+                            uses Dealer Lv {farm.dealers_level || 0}
+                          </span>
+                        ) : null}
+                      </button>
+                    );
+                  })}
+                </div>
+                {assistant.last_run?.message ? (
+                  <p className="text-[11px] text-muted-foreground">Last: {assistant.last_run.message}</p>
+                ) : null}
+              </>
             )}
           </div>
         </div>
@@ -1082,13 +1294,28 @@ export default function WeedEmpire() {
       )}
 
       {tab === "raid" && (
-        <div className="space-y-3">
+        <div className="space-y-3 relative">
+          {raidFx ? (
+            <div className="pointer-events-none absolute inset-x-0 -top-1 z-10 flex justify-center">
+              <div className="rounded-full border border-emerald-400/40 bg-emerald-950/90 px-3 py-1 text-[11px] text-emerald-200 shadow-lg animate-pulse">
+                Raid hit
+                {raidFx.grams != null ? ` · ${Number(raidFx.grams).toFixed(0)}g` : ""}
+                {raidFx.eq ? ` · ${raidFx.eq}` : ""}
+              </div>
+            </div>
+          ) : null}
           <p className="text-xs text-muted-foreground flex items-start gap-2">
             <Shield className="w-4 h-4 shrink-0 mt-0.5" />
-            Reach Grower Lv 2 to raid. Steal stash, business cash, and equipment (victims must re-buy gear). Grower Lv 1
-            farms are protected; the same eligible grower can only be raided once per day.
+            Reach Grower Lv 2 to raid. Success steals the full stash, cash, and one gear line (equip later if house is
+            too small). Global raid cooldown: {raidMeta.raid_cooldown_hours || 3}h. Target security caps your odds —
+            fully maxed security = 25% success (75% fail).
             {farm.sabotage_unlocked ? " Sabotage heat spike unlocked." : " Harvest 10 plants to unlock sabotage."}
           </p>
+          {!raidReady && (farm.raid_available_at || raidMeta.raid_available_at) ? (
+            <p className="text-sm text-amber-300">
+              Cooldown — next raid {shortReadyDate(farm.raid_available_at || raidMeta.raid_available_at)}
+            </p>
+          ) : null}
           <button
             type="button"
             disabled={busy || !raidUnlocked}
@@ -1113,25 +1340,29 @@ export default function WeedEmpire() {
                     <div className="text-[10px] text-muted-foreground">
                       Grower Lv {t.grower_level} · Tier {t.house_tier} · stash {t.stash_grams}g · {t.equip_count} gear
                       lines
+                      {t.raid_success_chance != null
+                        ? ` · ~${Math.round(Number(t.raid_success_chance) * 100)}% success`
+                        : ""}
+                      {t.security_fully_upgraded ? " · max security" : ""}
                     </div>
                   </div>
                   <div className="flex gap-2">
                     <button
                       type="button"
-                      disabled={busy}
+                      disabled={busy || !raidReady}
                       onClick={() => raid(t.user_id, false)}
-                      className="text-xs px-2 py-1 rounded bg-red-800/70"
+                      className="text-xs px-3 py-2 rounded bg-red-800/70 min-h-11 tap-feedback touch-manipulation active:scale-[0.97] disabled:opacity-40"
                     >
                       Raid
                     </button>
                     {farm.sabotage_unlocked ? (
                       <button
                         type="button"
-                        disabled={busy}
+                        disabled={busy || !raidReady}
                         onClick={() => raid(t.user_id, true)}
-                        className="text-xs px-2 py-1 rounded border border-red-500/40"
+                        className="text-xs px-3 py-2 rounded border border-amber-500/40 text-amber-200 min-h-11 tap-feedback touch-manipulation active:scale-[0.97] disabled:opacity-40"
                       >
-                        Raid + sabotage
+                        + Sabotage
                       </button>
                     ) : null}
                   </div>
@@ -1141,6 +1372,27 @@ export default function WeedEmpire() {
           </div>
         </div>
       )}
+
+      {bustModal ? (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded border border-red-500/40 bg-zinc-950 p-4 space-y-3 shadow-xl">
+            <h2 className="font-heading text-lg text-red-300">Heat bust</h2>
+            <p className="text-sm text-muted-foreground">
+              Sustained heat cooked the op. You&apos;re in jail for 5 minutes. House dropped a tier, gear halved, stash
+              wiped
+              {bustModal?.assistant_fled ? ", and your assistant fled — you&apos;ll need to rehire" : ""}. Exclusive
+              strain ownership is safe — plant a free ditch weed seed when you&apos;re out.
+            </p>
+            <button
+              type="button"
+              onClick={() => setBustModal(null)}
+              className="w-full text-xs uppercase py-2.5 rounded bg-emerald-700/80 min-h-11 tap-feedback"
+            >
+              Got it — restart seed ready
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

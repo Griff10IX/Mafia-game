@@ -651,7 +651,9 @@ export default function WeedEmpire3D({
     const syncEquipment = async () => {
       for (const [key, config] of Object.entries(EQUIPMENT_CONFIG)) {
         const ownedLevel = Math.max(level(equipment, config.equipment), level(equipment, config.alternate));
-        const visible = ownedLevel >= 1 && (!state.mobileLod || key === "filter" || key === "co2");
+        const mobilePriority = ["filter", "co2", "fan", "climate", "security", "meters"];
+        const visible =
+          ownedLevel >= 1 && (!state.mobileLod || mobilePriority.includes(key) || ownedLevel >= 3);
         let model = state.equipmentModels[key];
         if (visible && !model) {
           try {
@@ -770,7 +772,7 @@ export default function WeedEmpire3D({
   return (
     <div
       ref={mountRef}
-      className="relative w-full h-[280px] md:h-[340px] rounded-lg overflow-hidden border border-emerald-900/40 bg-black"
+      className="relative w-full h-[340px] sm:h-[300px] md:h-[360px] rounded-lg overflow-hidden border border-emerald-900/40 bg-black"
       aria-label="Grow room 3D view"
       aria-busy={loading}
     >

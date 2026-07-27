@@ -517,19 +517,24 @@ export function applyLightPreset(state, lightClass, level = 1) {
   state.ambient.color.setHex(preset.ambient);
   state.ambient.groundColor.setHex(0x343229);
   state.ambient.intensity = lightClass === "cfl" ? 0.72 : 0.64;
-  state.rimLight.color.setHex(lightClass === "hps" ? 0xffd6a0 : lightClass === "led" ? 0x9a86ff : 0xc8d1ff);
-  state.rimLight.intensity = (state.mobileLod ? 0.16 : 0.3) * boost;
+  state.rimLight.color.setHex(
+    lightClass === "hps" ? 0xffd6a0 : lightClass === "led" || lightClass === "quantum" ? 0x8fd4ff : 0xc8d1ff
+  );
+  state.rimLight.intensity = (state.mobileLod ? 0.18 : 0.32) * boost * (lightClass === "quantum" ? 1.15 : 1);
   state.lightConeMaterial.color.setHex(preset.color);
-  state.lightConeMaterial.opacity = lightClass === "cfl" ? 0.035 : lightClass === "quantum" ? 0.055 : 0.045;
+  state.lightConeMaterial.opacity =
+    lightClass === "cfl" ? 0.035 : lightClass === "quantum" ? 0.07 : lightClass === "led" ? 0.05 : 0.045;
   state.emitterMaterial.color.setHex(preset.color);
   state.emitterMaterial.emissive.setHex(preset.color);
-  state.renderer.toneMappingExposure = preset.exposure;
+  state.emitterMaterial.emissiveIntensity = lightClass === "quantum" ? 1.35 : lightClass === "led" ? 1.15 : 1;
+  state.renderer.toneMappingExposure = preset.exposure * (lightClass === "quantum" ? 1.06 : 1);
   const hps = lightClass === "hps";
   const cfl = lightClass === "cfl";
-  state.fixtureHousing.scale.set(hps ? 1.18 : cfl ? 0.75 : 1, 1, hps ? 1.3 : cfl ? 0.72 : 1);
-  state.emitter.scale.set(cfl ? 0.55 : 1, 1, cfl ? 0.45 : 1);
-  state.fixtureUpgradeDetails.visible = level >= 3 && (lightClass === "led" || lightClass === "quantum");
-  state.fixtureUpgradeDetails.scale.setScalar(level >= 7 ? 1.12 : 1);
+  const ledLike = lightClass === "led" || lightClass === "quantum";
+  state.fixtureHousing.scale.set(hps ? 1.18 : cfl ? 0.75 : ledLike ? 1.08 : 1, 1, hps ? 1.3 : cfl ? 0.72 : ledLike ? 1.15 : 1);
+  state.emitter.scale.set(cfl ? 0.55 : ledLike ? 1.12 : 1, 1, cfl ? 0.45 : ledLike ? 1.05 : 1);
+  state.fixtureUpgradeDetails.visible = level >= 3 && ledLike;
+  state.fixtureUpgradeDetails.scale.setScalar(level >= 7 ? 1.12 : lightClass === "quantum" ? 1.08 : 1);
 }
 
 export function disposeProcedural(root) {

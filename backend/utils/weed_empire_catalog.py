@@ -9,8 +9,9 @@ GRAMS_PER_LB = GRAMS_PER_OZ * OZ_PER_LB  # 448
 GRAMS_PER_KG = 1000
 
 START_BUSINESS_CASH = 100_000
-DAILY_SELL_CAP_USD = 100_000_000
+DAILY_SELL_CAP_USD = 250_000_000
 BASE_STREET_PRICE_PER_OZ = 22_500
+MAX_DEALERS_LEVEL = 20
 MIN_CURE_MINUTES = 5.0
 MAX_CURE_MINUTES = 20.0
 MAX_CURE_BATCH_GRAMS = 300.0
@@ -25,7 +26,7 @@ HOUSES: List[Dict[str, Any]] = [
         "name": "Closet Grow",
         "plots": 2,
         "cost": 0,
-        "max_equip_tier": 3,
+        "max_equip_tier": 25,
         "grow_speed_mult": 1.0,
         "market_mult": 1.0,
         "heat_decay": 0.5,
@@ -37,8 +38,8 @@ HOUSES: List[Dict[str, Any]] = [
         "id": "basement",
         "name": "Basement Flat",
         "plots": 4,
-        "cost": 75_000,
-        "max_equip_tier": 8,
+        "cost": 85_000,
+        "max_equip_tier": 40,
         "grow_speed_mult": 1.05,
         "market_mult": 1.35,
         "heat_decay": 0.8,
@@ -50,8 +51,8 @@ HOUSES: List[Dict[str, Any]] = [
         "id": "suburban",
         "name": "Suburban House",
         "plots": 8,
-        "cost": 400_000,
-        "max_equip_tier": 12,
+        "cost": 850_000,
+        "max_equip_tier": 55,
         "grow_speed_mult": 1.12,
         "market_mult": 2.0,
         "heat_decay": 1.2,
@@ -63,10 +64,10 @@ HOUSES: List[Dict[str, Any]] = [
         "id": "warehouse",
         "name": "Warehouse",
         "plots": 16,
-        "cost": 2_500_000,
-        "max_equip_tier": 16,
+        "cost": 7_500_000,
+        "max_equip_tier": 75,
         "grow_speed_mult": 1.2,
-        "market_mult": 3.0,
+        "market_mult": 3.15,
         "heat_decay": 1.6,
         "raid_defence": 30,
         "description": "Industrial racks and serious power.",
@@ -76,10 +77,10 @@ HOUSES: List[Dict[str, Any]] = [
         "id": "compound",
         "name": "Compound",
         "plots": 24,
-        "cost": 15_000_000,
-        "max_equip_tier": 20,
+        "cost": 48_000_000,
+        "max_equip_tier": 100,
         "grow_speed_mult": 1.3,
-        "market_mult": 4.65,
+        "market_mult": 7.35,
         "heat_decay": 2.0,
         "raid_defence": 50,
         "description": "Fortified empire grounds.",
@@ -266,8 +267,11 @@ def market_price_per_oz(
     """Return the progression-scaled sale value for one ounce."""
     house = HOUSE_BY_TIER.get(max(0, int(house_tier)), HOUSE_BY_TIER[0])
     house_mult = float(house.get("market_mult") or 1.0)
-    network_mult = 1.0 + min(5, max(0, int(dealers_level))) * 0.2
-    demand = max(0.55, 1.0 - (max(0.0, float(sold_today_usd)) / DAILY_SELL_CAP_USD) * 0.35)
+    # Soft curve: Lv1 ≈ ×1.08 … Lv20 ≈ ×2.2 (was hard-capped at Lv5 ×2.0).
+    dl = max(0, min(MAX_DEALERS_LEVEL, int(dealers_level)))
+    network_mult = 1.0 + dl * 0.06
+    # Slightly softer late demand so end-game can still sell near the $250M cap.
+    demand = max(0.62, 1.0 - (max(0.0, float(sold_today_usd)) / DAILY_SELL_CAP_USD) * 0.28)
     heat_penalty = min(0.45, max(0.0, float(heat)) / 200.0)
     quality_mult = 0.85 + 0.3 * 0.7
     return (
@@ -282,8 +286,9 @@ def market_price_per_oz(
 
 
 def active_light_class(equipment_levels: Dict[str, int]) -> str:
-    """Best owned light class for glow FX."""
-    order = ("quantum", "led", "hps", "cfl")
+    """Best owned light class for glow FX (quantum > led > hps > cfl)."""
+    # Higher index = better — previously reversed, so CFL could beat LED/quantum.
+    rank = {"cfl": 0, "hps": 1, "led": 2, "quantum": 3}
     best = "cfl"
     best_score = -1
     for cat in EQUIPMENT_CATEGORIES:
@@ -293,12 +298,30 @@ def active_light_class(equipment_levels: Dict[str, int]) -> str:
         lvl = int(equipment_levels.get(cat["id"]) or 0)
         if lvl <= 0:
             continue
-        score = order.index(lc) if lc in order else 0
-        score = score * 100 + lvl
+        score = rank.get(str(lc), 0) * 1000 + lvl
         if score > best_score:
             best_score = score
-            best = lc
+            best = str(lc)
     return best
+
+
+def dealer_drip_fraction(dealers_level: int) -> float:
+    """Fraction of each stash strain dealers move per run (soft-capped)."""
+    lvl = max(0, min(MAX_DEALERS_LEVEL, int(dealers_level)))
+    if lvl < 1:
+        return 0.0
+    return min(0.20, 0.06 + 0.007 * lvl)
+
+
+def dealers_upgrade_cost(current_level: int) -> int:
+    """Business-cash cost to go from current_level → current_level+1.
+
+    Early dealer ranks stay reachable after unlock; late ranks are a serious sink
+    (~$90M total to climb 1→20).
+    """
+    lvl = max(1, int(current_level))
+    # Lv1→2 ≈ $55k … Lv19→20 ≈ $12.5M
+    return int(round(18_000 * ((lvl + 1) ** 1.95)))
 
 
 def aggregate_stats(equipment_levels: Dict[str, int], house: Dict[str, Any]) -> Dict[str, float]:
