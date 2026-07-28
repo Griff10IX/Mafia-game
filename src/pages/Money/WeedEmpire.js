@@ -857,6 +857,11 @@ export default function WeedEmpire() {
                 business → +{money(farm.safety_bank_unit_capacity || 25_000_000)} (max{" "}
                 {money(5_000_000_000)}).
               </p>
+              {Number(farm.safety_bank_capacity || 0) <= 0 && (
+                <p className="text-[10px] text-amber-300/90">
+                  No capacity yet — hit Expand once to unlock room for deposits.
+                </p>
+              )}
               <div className="flex flex-wrap gap-1">
                 <input
                   type="number"

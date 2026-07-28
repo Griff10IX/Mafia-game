@@ -673,6 +673,8 @@ async def buy_weed_safety_deposit(
     user_result = await db.users.update_one({"id": current_user["id"], **gte_filter}, {"$inc": inc})
     if user_result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    # Unlock includes the first $25M capacity unit; further units cost business cash in Weed Empire.
+    starter_units = max(1, int(farm.get("safety_bank_capacity_units") or 0))
     farm_result = await db.weed_farms.update_one(
         {
             "user_id": current_user["id"],
@@ -685,7 +687,7 @@ async def buy_weed_safety_deposit(
             "$set": {
                 "safety_bank_unlocked": True,
                 "safety_bank_cash": int(farm.get("safety_bank_cash") or 0),
-                "safety_bank_capacity_units": int(farm.get("safety_bank_capacity_units") or 0),
+                "safety_bank_capacity_units": starter_units,
             }
         },
     )
@@ -699,11 +701,12 @@ async def buy_weed_safety_deposit(
     await _record_store_points_spend(current_user, inc, "buy-weed-safety-deposit", cost_used=cost_used)
     return {
         "message": (
-            "Weed Safety Deposit unlocked. Expand capacity in Weed Empire: "
-            "$10M business cash → +$25M capacity (max $5B). Raid & bust safe."
+            "Weed Safety Deposit unlocked with $25M starter capacity. "
+            "Expand further in Weed Empire: $10M business cash → +$25M (max $5B). Raid & bust safe."
         ),
         "cost": cost_used,
         "safety_bank_unlocked": True,
+        "safety_bank_capacity_units": starter_units,
     }
 
 

@@ -285,6 +285,10 @@ async def _get_or_create_farm(user_id: str) -> Dict[str, Any]:
         if not farm.get("last_cleanliness_tick_at"):
             farm["last_cleanliness_tick_at"] = _iso()
             migration["last_cleanliness_tick_at"] = farm["last_cleanliness_tick_at"]
+        # Unlock used to leave capacity at 0 — grant starter $25M so deposit works.
+        if farm.get("safety_bank_unlocked") and safety_bank_capacity_units(farm) <= 0:
+            farm["safety_bank_capacity_units"] = 1
+            migration["safety_bank_capacity_units"] = 1
         if migration:
             await db.weed_farms.update_one({"user_id": user_id}, {"$set": migration})
         await _attach_exclusive_owned(farm)
