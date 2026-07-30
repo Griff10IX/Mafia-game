@@ -254,6 +254,34 @@ def _build_strains() -> List[Dict[str, Any]]:
                 "min_grower_level": 2,
             }
         )
+
+    # Per-player permanent Game Pass strains (VIP rewards).
+    from utils.game_pass_weed_strains import GAME_PASS_STRAIN_BUFFS, GAME_PASS_STRAIN_SEED
+
+    for sid, name, typ, hours, yld, price_mult, mesh in GAME_PASS_STRAIN_SEED:
+        buff = GAME_PASS_STRAIN_BUFFS.get(sid) or {}
+        out.append(
+            {
+                "id": sid,
+                "name": name,
+                "type": typ,
+                "base_grow_hours": hours,
+                "yield_g_min": yld[0],
+                "yield_g_max": yld[1],
+                "base_price_per_oz": round(BASE_STREET_PRICE_PER_OZ * price_mult, 2),
+                "unlock_house_tier": 99,
+                "seed_cost": int(20_000 + price_mult * 6_000),
+                "rarity": "game_pass",
+                "preferred_light": "either" if typ == "hybrid" else ("hps" if typ == "indica" else "led"),
+                "bud_mesh_key": mesh,
+                "thc_band": "24-30%",
+                "loot_exclusive": False,
+                "game_pass_strain": True,
+                "exclusive_buff_label": buff.get("label") or "",
+                "exclusive_buff_kind": buff.get("kind") or "",
+                "min_grower_level": 1,
+            }
+        )
     return out
 
 

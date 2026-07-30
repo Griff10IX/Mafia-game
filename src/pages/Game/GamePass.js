@@ -116,6 +116,12 @@ const PROFILE_META = {
     loot: 2_500,
     molotovs: 1_000,
   },
+  v4: {
+    points: 30_000,
+    loot: 2_500,
+    molotovs: 1_000,
+    extraTokensEach: 20,
+  },
 };
 
 const MONEY_BASE_TIER = 10;
@@ -123,12 +129,51 @@ const POINTS_BASE_TIER = 50;
 const AUTO_RANK_2H_BASE_TIER = 100;
 
 const SELECTABLE_RANDOM_TOKEN_KEYS = ['melt_tokens', 'jailbust_tokens', 'travel_tokens', 'properties_tokens'];
+const V4_EXTRA_TOKEN_KEYS = [
+  'oc_reduced_tokens',
+  'booze_tokens',
+  'racket_tokens',
+  'crew_oc_auto_apply_tokens',
+  'auto_collect_12h_tokens',
+  'auto_collect_24h_tokens',
+  'jail_bailout_tokens',
+  'cooldown_skip_crime_tokens',
+  'cooldown_skip_gta_tokens',
+  'cooldown_skip_booze_tokens',
+  'cooldown_skip_properties_tokens',
+];
+const TARGET_V4_EXTRA_TOKEN_EACH = 20;
+const GP_STRAIN_BY_TIER = {
+  20: { id: 'gp_sour_diesel', name: 'Sour Diesel', label: '+5% ranking (RP)' },
+  28: { id: 'gp_girl_scout_cookies', name: 'Girl Scout Cookies', label: '−5% raid success while planted' },
+  35: { id: 'gp_purple_punch', name: 'Purple Punch', label: 'Lose only 50% on heat bust' },
+  42: { id: 'gp_wedding_cake', name: 'Wedding Cake', label: '+25% / +15% daily withdraw' },
+  50: { id: 'gp_gorilla_glue', name: 'Gorilla Glue #4', label: '−10% upgrade costs' },
+};
 const ROT_PRIM_KEYS = ['money', 'bullets', 'xp_crimes_tokens', 'xp_gta_tokens', 'points'];
 const ROT_TOKEN_KEYS = ['melt_tokens', 'jailbust_tokens', 'travel_tokens', 'properties_tokens'];
 
 function profileKeyForSeason(seasonId) {
   const n = parseInt(String(seasonId ?? '0'), 10);
-  return Number.isFinite(n) && n >= 3 ? 'v3' : 'v2';
+  if (Number.isFinite(n) && n >= 4) return 'v4';
+  if (Number.isFinite(n) && n >= 3) return 'v3';
+  return 'v2';
+}
+
+function v4ExtraTokenGrantsForTier(t) {
+  const flat = [];
+  V4_EXTRA_TOKEN_KEYS.forEach((key) => {
+    for (let i = 0; i < TARGET_V4_EXTRA_TOKEN_EACH; i += 1) flat.push(key);
+  });
+  const out = {};
+  const idxs = [t - 1, t - 1 + 100];
+  if (t <= 20) idxs.push(t - 1 + 200);
+  idxs.forEach((idx) => {
+    if (idx < 0 || idx >= flat.length) return;
+    const k = flat[idx];
+    out[k] = (out[k] || 0) + 1;
+  });
+  return out;
 }
 
 function buildMicroRewardProfile({
@@ -238,6 +283,7 @@ const REWARD_PROFILES = {
     includeMolotovs: true,
   }),
 };
+REWARD_PROFILES.v4 = { ...REWARD_PROFILES.v3, profileKey: 'v4' };
 
 function initialBaseGuess(tiers, baseTier, targetTotal) {
   const denom = tiers.reduce((acc, tt) => acc + (tt / baseTier), 0);
@@ -319,7 +365,19 @@ function getRewardsForMicroTier(microTier, profile = REWARD_PROFILES.v3) {
   const t = Number(microTier || 0);
   if (!Number.isFinite(t) || t < 1) return {};
   const tier = Math.max(1, Math.min(100, Math.floor(t)));
-  return profile?.precomputedByTier?.[tier] || {};
+  const base = { ...(profile?.precomputedByTier?.[tier] || {}) };
+  if (profile?.profileKey === 'v4') {
+    const extras = v4ExtraTokenGrantsForTier(tier);
+    Object.entries(extras).forEach(([k, v]) => {
+      base[k] = (base[k] || 0) + v;
+    });
+    const strain = GP_STRAIN_BY_TIER[tier];
+    if (strain) {
+      base._game_pass_strain_name = strain.name;
+      base._game_pass_strain_label = strain.label;
+    }
+  }
+  return base;
 }
 
 function getTierRewardObj(microTier, profile = REWARD_PROFILES.v3) {
@@ -344,6 +402,7 @@ const REWARD_DISPLAY_ORDER = [
   'travel_tokens',
   'properties_tokens',
   'auto_rank_2h_tokens',
+  ...V4_EXTRA_TOKEN_KEYS,
 ];
 
 const TOKEN_REWARD_NAMES = {
@@ -356,6 +415,17 @@ const TOKEN_REWARD_NAMES = {
   auto_rank_2h_tokens: 'Auto Rank (2h) Token',
   loot_box_pieces: 'Loot box pieces',
   molotovs: 'molotovs',
+  oc_reduced_tokens: 'OC Token',
+  booze_tokens: 'Booze Token',
+  racket_tokens: 'Racket Token',
+  crew_oc_auto_apply_tokens: 'Crew OC auto (3h)',
+  auto_collect_12h_tokens: 'Auto-Collect (12h)',
+  auto_collect_24h_tokens: 'Auto-Collect (24h)',
+  jail_bailout_tokens: 'Jail Bailout',
+  cooldown_skip_crime_tokens: 'Crime Cooldown Skip',
+  cooldown_skip_gta_tokens: 'GTA Cooldown Skip',
+  cooldown_skip_booze_tokens: 'Booze Travel Skip',
+  cooldown_skip_properties_tokens: 'Properties Collect Skip',
 };
 
 function formatTierRewardItem(key, value) {
@@ -374,7 +444,8 @@ function formatTierRewardItem(key, value) {
 function TierRewards({ rewards, isFreeMembership, isTierCompleted, microTier, rewardProfile }) {
   const perkLines = PERKS_FOR_TIER[microTier] || [];
   const hasNumeric = !!rewards && Object.values(rewards).some((v) => Number(v || 0) > 0);
-  const hasAny = hasNumeric || perkLines.length > 0 || (microTier === 100 && !isFreeMembership);
+  const hasStrain = !!rewards?._game_pass_strain_name;
+  const hasAny = hasNumeric || perkLines.length > 0 || hasStrain || (microTier === 100 && !isFreeMembership);
   if (!hasAny) return null;
 
   const freeUnlockedRewardKey = isFreeMembership ? rewardProfile?.freeUnlockedKeyByTier?.[microTier] : null;
@@ -390,6 +461,12 @@ function TierRewards({ rewards, isFreeMembership, isTierCompleted, microTier, re
       {microTier === 100 && !isFreeMembership && (
         <div className="text-[9px] font-heading text-cyan-400/95">
           VIP Pass Car — 9s travel, +50% booze cargo while owned, custom image, survives death (one-time tier 100 reward)
+        </div>
+      )}
+      {rewards?._game_pass_strain_name && !isFreeMembership && (
+        <div className="text-[9px] font-heading text-emerald-300/95">
+          Permanent weed strain: {rewards._game_pass_strain_name}
+          {rewards._game_pass_strain_label ? ` — ${rewards._game_pass_strain_label}` : ''}
         </div>
       )}
       {REWARD_DISPLAY_ORDER.map((k) => {
@@ -827,6 +904,12 @@ export default function GamePass() {
                 +{" "}
                 <span className="text-primary font-bold">~{TARGET_XP_CRIMES_TOKENS_TOTAL + TARGET_XP_GTA_TOKENS_TOTAL} XP tokens</span> +{" "}
                 <span className="text-primary font-bold">~{TARGET_AUTO_RANK_2H_TOTAL} Auto Rank (2h)</span> tokens (+ select 24h perks at tiers 25/50/75/100).
+                {rewardProfileKey === 'v4' ? (
+                  <>
+                    {' '}Also <span className="text-primary font-bold">20 of each missing Store token</span> and{' '}
+                    <span className="text-primary font-bold">5 permanent Weed Empire strains</span> (tiers 20–50).
+                  </>
+                ) : null}
               </p>
 
               {vipClaimed && (

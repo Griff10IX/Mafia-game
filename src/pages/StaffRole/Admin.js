@@ -204,6 +204,7 @@ function formatWholeCash(x) {
 
 /** Must match backend `FIRST_GAME_PASS_CONFIRM_PHRASE` for first VIP completion bulk grant. */
 const FIRST_GAME_PASS_VIP_COMPLETION_CONFIRM = 'FIRST GAME PASS COMPLETE';
+const COMPLETE_REMAINING_VIP_CONFIRM = 'COMPLETE REMAINING VIP';
 const DISABLE_STATE_CONFIRM = 'DISABLE ATLANTIC CITY';
 
 // Searchable tools list - each item has: label (searchable), categoryId (scroll target), collapseKey (optional - to expand section)
@@ -351,6 +352,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Game Pass points diagnostic', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-game-pass-inspector', keywords: ['game pass', 'points', 'diagnostic', 'ledger', 'stripe', 'purchase source', 'catch up pending'], adminOnly: true },
   { label: 'Game Pass stuck cursors', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-game-pass-inspector', keywords: ['game pass', 'stuck', 'cursor', 'broken', 'fix', 'repair', 'rewards'], adminOnly: true },
   { label: 'First Game Pass VIP completion', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-first-gp-vip-completion', keywords: ['game pass', 'first', 'vip', 'completion', 'bulk', 'tier', '100', 'bonus', 'one time'], adminOnly: true },
+  { label: 'Complete remaining VIP (season)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-complete-remaining-vip', keywords: ['game pass', 'vip', 'complete', 'remaining', 'season', 'bulk', 'tier', '100'], adminOnly: true },
   { label: 'Disable Atlantic City', categoryId: 'admin-operations', collapseKey: 'stateHeads', scrollToId: 'admin-disable-state', keywords: ['atlantic city', 'disable state', 'remove city', 'migration', 'relinquish'], adminOnly: true },
   { label: 'User inbox (live)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-inbox', keywords: ['inbox', 'notifications', 'dm', 'messages', 'mail', 'social'], adminOnly: true },
   { label: 'Deleted messages', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-deleted-messages', keywords: ['deleted', 'messages', 'archive', 'forum', 'chat', 'dm', 'notification', 'history'], adminOnly: true },
@@ -985,6 +987,10 @@ export default function Admin() {
   const [firstGpVipCompletionPreviewLoading, setFirstGpVipCompletionPreviewLoading] = useState(false);
   const [firstGpVipCompletionConfirm, setFirstGpVipCompletionConfirm] = useState('');
   const [firstGpVipCompletionRunLoading, setFirstGpVipCompletionRunLoading] = useState(false);
+  const [completeRemainingVipPreview, setCompleteRemainingVipPreview] = useState(null);
+  const [completeRemainingVipPreviewLoading, setCompleteRemainingVipPreviewLoading] = useState(false);
+  const [completeRemainingVipConfirm, setCompleteRemainingVipConfirm] = useState('');
+  const [completeRemainingVipRunLoading, setCompleteRemainingVipRunLoading] = useState(false);
   const [disableStatePreview, setDisableStatePreview] = useState(null);
   const [disableStatePreviewLoading, setDisableStatePreviewLoading] = useState(false);
   const [disableStateConfirm, setDisableStateConfirm] = useState('');
@@ -1613,7 +1619,8 @@ export default function Admin() {
   const [maintenanceBannerLoading, setMaintenanceBannerLoading] = useState(false);
   const [gamePassSeasonLoading, setGamePassSeasonLoading] = useState(false);
   const [gamePassSeasonAdmin, setGamePassSeasonAdmin] = useState(null);
-  const [gamePassSeasonEndAt, setGamePassSeasonEndAt] = useState('2026-07-31T23:00:00+00:00');
+  const [gamePassSeasonEndAt, setGamePassSeasonEndAt] = useState('2026-08-31T23:00:00+00:00');
+  const [gamePassSeasonIdInput, setGamePassSeasonIdInput] = useState('4');
   const [wcConfig, setWcConfig] = useState(null);
   const [wcPlayoffSlots, setWcPlayoffSlots] = useState(null);
   const [wcHealth, setWcHealth] = useState(null);
@@ -4334,6 +4341,43 @@ export default function Admin() {
       toast.error(error.response?.data?.detail || 'Run failed');
     } finally {
       setFirstGpVipCompletionRunLoading(false);
+    }
+  };
+
+  const loadCompleteRemainingVipPreview = async () => {
+    setCompleteRemainingVipPreviewLoading(true);
+    try {
+      const res = await api.get('/admin/game-pass/complete-remaining-vip-preview');
+      setCompleteRemainingVipPreview(res.data || null);
+      toast.success('Complete-remaining VIP preview loaded');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Preview failed');
+    } finally {
+      setCompleteRemainingVipPreviewLoading(false);
+    }
+  };
+
+  const runCompleteRemainingVip = async (dryRun) => {
+    if ((completeRemainingVipConfirm || '').trim() !== COMPLETE_REMAINING_VIP_CONFIRM) {
+      toast.error(`Type exactly: ${COMPLETE_REMAINING_VIP_CONFIRM}`);
+      return;
+    }
+    if (!dryRun && !window.confirm('Credits all remaining VIP Game Pass micro tiers (through 100) for every user with VIP claimed this season. Live run once per season_id. Continue?')) {
+      return;
+    }
+    setCompleteRemainingVipRunLoading(true);
+    try {
+      const res = await api.post('/admin/game-pass/complete-remaining-vip-run', {
+        confirm: COMPLETE_REMAINING_VIP_CONFIRM,
+        dry_run: dryRun,
+      });
+      toast.success(res.data?.message || 'Done');
+      const pres = await api.get('/admin/game-pass/complete-remaining-vip-preview');
+      setCompleteRemainingVipPreview(pres.data || null);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Run failed');
+    } finally {
+      setCompleteRemainingVipRunLoading(false);
     }
   };
 
@@ -8544,6 +8588,8 @@ export default function Admin() {
       setGamePassSeasonAdmin(res.data ?? null);
       const v = res.data?.game_pass_season_end_at || res.data?.stored?.season_end_at;
       if (v) setGamePassSeasonEndAt(String(v));
+      const sid = res.data?.game_pass_season_id || res.data?.stored?.season_id;
+      if (sid) setGamePassSeasonIdInput(String(sid));
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed to load Game Pass season'); }
     finally { setGamePassSeasonLoading(false); }
   };
@@ -8553,6 +8599,7 @@ export default function Admin() {
     try {
       const res = await api.post('/admin/game-pass-season', {
         season_end_at: gamePassSeasonEndAt.trim(),
+        season_id: (gamePassSeasonIdInput || '').trim() || undefined,
       });
       setGamePassSeasonAdmin(res.data ?? null);
       if (res.data?.game_pass_season_end_at) {
@@ -11553,6 +11600,81 @@ export default function Admin() {
                         Sample:
                         {' '}
                         {(firstGpVipCompletionPreview.sample_usernames || []).join(', ')}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div id="admin-complete-remaining-vip" className="rounded-md border border-cyan-500/30 bg-cyan-500/5 p-3 space-y-2 scroll-mt-24">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-heading font-bold text-cyan-300 uppercase tracking-wider">Complete remaining VIP tiers (per season)</span>
+                </div>
+                <p className="text-[9px] text-mutedForeground font-heading">
+                  Same grant as First Game Pass completion, but reusable: once live per{' '}
+                  <span className="font-mono">season_id</span>
+                  . Use before rolling the season end into the next VIP track. Confirm phrase:{' '}
+                  <span className="font-mono">{COMPLETE_REMAINING_VIP_CONFIRM}</span>.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <BtnSecondary type="button" onClick={loadCompleteRemainingVipPreview} disabled={completeRemainingVipPreviewLoading || completeRemainingVipRunLoading}>
+                    {completeRemainingVipPreviewLoading ? '…' : 'Preview'}
+                  </BtnSecondary>
+                  <input
+                    type="text"
+                    value={completeRemainingVipConfirm}
+                    onChange={(e) => setCompleteRemainingVipConfirm(e.target.value)}
+                    placeholder={COMPLETE_REMAINING_VIP_CONFIRM}
+                    className="flex-1 min-w-[12rem] max-w-md px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono"
+                    autoComplete="off"
+                  />
+                  <BtnSecondary type="button" onClick={() => runCompleteRemainingVip(true)} disabled={completeRemainingVipRunLoading}>
+                    {completeRemainingVipRunLoading ? '…' : 'Run dry run'}
+                  </BtnSecondary>
+                  <BtnDanger type="button" onClick={() => runCompleteRemainingVip(false)} disabled={completeRemainingVipRunLoading}>
+                    {completeRemainingVipRunLoading ? '…' : 'Run live (this season)'}
+                  </BtnDanger>
+                </div>
+                {completeRemainingVipPreview && (
+                  <div className="text-[9px] font-mono text-zinc-200/90 space-y-1 rounded border border-cyan-500/20 bg-zinc-900/40 p-2 max-h-64 overflow-y-auto">
+                    <div>
+                      Season:
+                      {' '}
+                      <span className="text-cyan-200">{completeRemainingVipPreview.season_id ?? '—'}</span>
+                      {' · '}
+                      Eligible VIP:
+                      {' '}
+                      <span className="text-cyan-200">{(completeRemainingVipPreview.eligible_vip_users ?? 0).toLocaleString()}</span>
+                      {' · '}
+                      Would receive grant:
+                      {' '}
+                      <span className="text-cyan-200">{(completeRemainingVipPreview.would_receive_grant ?? 0).toLocaleString()}</span>
+                      {' · '}
+                      Already cursor-complete:
+                      {' '}
+                      {(completeRemainingVipPreview.already_cursor_complete ?? 0).toLocaleString()}
+                    </div>
+                    {completeRemainingVipPreview.season_completion_stamp?.live_completed_at && (
+                      <div className="text-amber-300 font-heading">
+                        Live already completed for this season at
+                        {' '}
+                        {String(completeRemainingVipPreview.season_completion_stamp.live_completed_at)}
+                        {' '}
+                        by
+                        {' '}
+                        {completeRemainingVipPreview.season_completion_stamp.set_by || '—'}
+                        {' '}
+                        (
+                        {(completeRemainingVipPreview.season_completion_stamp.affected_user_count ?? 0).toLocaleString()}
+                        {' '}
+                        users)
+                      </div>
+                    )}
+                    {(completeRemainingVipPreview.sample_usernames || []).length > 0 && (
+                      <div className="text-mutedForeground">
+                        Sample:
+                        {' '}
+                        {(completeRemainingVipPreview.sample_usernames || []).join(', ')}
                       </div>
                     )}
                   </div>
@@ -16782,13 +16904,27 @@ export default function Admin() {
           <div className="p-3 space-y-2">
             <p className="text-[10px] text-mutedForeground font-heading">
               Sets the global season end used for Game Pass countdown and purchase windows. Use ISO 8601 UTC.
+              Season id <span className="font-mono">4+</span> uses the new VIP rewards (extra Store tokens + permanent weed strains).
             </p>
             {gamePassSeasonAdmin?.game_pass_season_end_at && (
               <p className="text-[10px] text-mutedForeground font-heading">
-                Current season end:{' '}
+                Current season id:{' '}
+                <span className="text-foreground font-mono text-[9px]">{gamePassSeasonAdmin.game_pass_season_id ?? '—'}</span>
+                {' · '}
+                end:{' '}
                 <span className="text-foreground font-mono text-[9px]">{gamePassSeasonAdmin.game_pass_season_end_at}</span>
               </p>
             )}
+            <div>
+              <label className="block text-[10px] font-heading uppercase tracking-wider text-mutedForeground mb-1">Season id</label>
+              <input
+                type="text"
+                value={gamePassSeasonIdInput}
+                onChange={(e) => setGamePassSeasonIdInput(e.target.value)}
+                className="w-full px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-mono text-foreground"
+                placeholder="4"
+              />
+            </div>
             <div>
               <label className="block text-[10px] font-heading uppercase tracking-wider text-mutedForeground mb-1">Season end timestamp (ISO 8601, UTC)</label>
               <input

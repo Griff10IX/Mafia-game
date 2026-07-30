@@ -309,6 +309,7 @@ export default function WeedEmpire() {
   const unlockedStrains = useMemo(() => {
     const unlocks = new Set(farm?.unlocks || []);
     const exclusiveOwned = new Set(farm?.exclusive_strain_ids || []);
+    const gpOwned = new Set(farm?.game_pass_strain_ids || []);
     const growerLv = Number(farm?.grower_level || 1);
     const minExclusiveLv = Number(
       farm?.exclusive_min_grower_level || catalog?.exclusive_min_grower_level || 2
@@ -317,11 +318,15 @@ export default function WeedEmpire() {
       if (s.loot_exclusive) {
         return exclusiveOwned.has(s.id) && growerLv >= minExclusiveLv;
       }
+      if (s.game_pass_strain) {
+        return gpOwned.has(s.id);
+      }
       return unlocks.has(s.id) || (s.unlock_house_tier || 0) <= (farm?.house_tier || 0);
     });
   }, [catalog, farm]);
 
   const ownedExclusiveStrains = useMemo(() => farm?.exclusive_strains || [], [farm]);
+  const ownedGamePassStrains = useMemo(() => farm?.game_pass_strains || [], [farm]);
 
   const sellPreview = useMemo(() => {
     const amount = Number(sellAmount);
@@ -914,6 +919,29 @@ export default function WeedEmpire() {
         </div>
       </div>
 
+      {ownedGamePassStrains.length > 0 && (
+        <div className="rounded border border-emerald-500/40 bg-emerald-500/10 p-3 space-y-1.5">
+          <div className="text-[10px] uppercase tracking-wider font-heading text-emerald-300">
+            Game Pass strains (permanent)
+          </div>
+          <ul className="space-y-1 text-xs">
+            {ownedGamePassStrains.map((ex) => (
+              <li key={ex.strain_id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                <span className="font-heading text-foreground">{ex.name}</span>
+                <span className="text-muted-foreground">{ex.buff_label}</span>
+                <span className="text-emerald-400/90 text-[10px]">Unlocked</span>
+              </li>
+            ))}
+          </ul>
+          <p className="text-[10px] text-muted-foreground">
+            Yours forever from VIP Game Pass. Plant from empty pots. Not stolen on kill (unlike loot exclusives).
+            {Number(farm.upgrade_cost_mult || 1) < 0.999 ? (
+              <> Upgrade discount active (−{Math.round((1 - Number(farm.upgrade_cost_mult)) * 100)}%).</>
+            ) : null}
+          </p>
+        </div>
+      )}
+
       {ownedExclusiveStrains.length > 0 && (
         <div className="rounded border border-amber-500/40 bg-amber-500/10 p-3 space-y-1.5">
           <div className="text-[10px] uppercase tracking-wider font-heading text-amber-300">
@@ -1263,7 +1291,7 @@ export default function WeedEmpire() {
                   >
                     {unlockedStrains.map((s) => (
                       <option key={s.id} value={s.id}>
-                        {s.loot_exclusive ? "★ " : ""}
+                        {s.loot_exclusive ? "★ " : s.game_pass_strain ? "◆ " : ""}
                         {s.name}
                       </option>
                     ))}
@@ -1294,6 +1322,11 @@ export default function WeedEmpire() {
                   <p className="text-[10px] text-amber-200/90">
                     Exclusive: {plantStrain.exclusive_buff_label || "farm buff while owned"} · Grower Lv{" "}
                     {farm.exclusive_min_grower_level || 2}+
+                  </p>
+                )}
+                {plantStrain?.game_pass_strain && (
+                  <p className="text-[10px] text-emerald-200/90">
+                    Game Pass: {plantStrain.exclusive_buff_label || "permanent unlock"}
                   </p>
                 )}
 

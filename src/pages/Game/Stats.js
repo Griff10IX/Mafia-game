@@ -359,7 +359,7 @@ function buildUserStatsRows(data) {
   const us = data?.user_stats;
   return [
     { label: 'Total users', value: formatNumber(us?.total_users) },
-    { label: 'Alive / Dead', value: `${formatNumber(us?.alive_users)} / ${formatNumber(us?.dead_users)}` },
+    { label: 'Alive / Dead', value: `${formatNumber(us?.alive_users)} / ${formatNumber(us?.dead_users)}`, title: 'Players only (staff excluded). £10 revive swaps one alive for one dead — Alive does not go up. Users Online can be higher because staff / auto-rank still appear there.' },
     { label: 'Crimes', value: formatNumber(us?.total_crimes) },
     { label: 'GTAs', value: formatNumber(us?.total_gta) },
     { label: 'Jailbusts', value: formatNumber(us?.total_jail_busts) },

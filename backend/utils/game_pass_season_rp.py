@@ -24,16 +24,22 @@ async def current_game_pass_season_id(db) -> str:
 
 
 def scale_rank_points_for_vip(base_rp: int, user: Optional[Dict[str, Any]]) -> int:
-    """+10% rank points while active VIP Game Pass (claimed + token window not expired)."""
+    """+10% rank points while active VIP Game Pass; +5% more if Sour Diesel GP strain owned."""
     try:
         rp = int(base_rp or 0)
     except (TypeError, ValueError):
         return 0
     if rp <= 0 or not user:
         return rp
-    if not vip_game_pass_entitlement_active(user):
-        return rp
-    return int(round(rp * VIP_RANK_POINTS_BONUS_MULT))
+    if vip_game_pass_entitlement_active(user):
+        rp = int(round(rp * VIP_RANK_POINTS_BONUS_MULT))
+    try:
+        from utils.game_pass_weed_strains import scale_rank_points_for_game_pass_strain
+
+        rp = scale_rank_points_for_game_pass_strain(rp, user)
+    except Exception:
+        pass
+    return rp
 
 
 def rank_points_in_update(update: Optional[Dict[str, Any]]) -> int:

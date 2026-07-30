@@ -31,6 +31,7 @@ _EVENT_LABELS: Dict[str, str] = {
     "admin_retract_store_spend": "Store spend retract",
     "hdo_ticket_close_reward": "Help Desk reward",
     "first_game_pass_vip_completion": "Game Pass VIP",
+    "game_pass_complete_remaining_vip": "Game Pass VIP",
     "game_pass_free_grant": "Game Pass",
     "leaderboard_payout_points_correction": "Leaderboard correction",
     "objectives_claim": "Objectives",

@@ -27,8 +27,8 @@ def uk_midnight_first_of_month(year: int, month: int) -> datetime:
 
 
 def _default_season_end_dt() -> datetime:
-    """Fallback when DB unset — 1 Aug 2026 00:00 UK (season boundary)."""
-    return uk_midnight_first_of_month(2026, 8)
+    """Fallback when DB unset — 1 Sep 2026 00:00 UK (new VIP season boundary)."""
+    return uk_midnight_first_of_month(2026, 9)
 
 
 DEFAULT_GAME_PASS_SEASON_END_AT = _default_season_end_dt().isoformat()

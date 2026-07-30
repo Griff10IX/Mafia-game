@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-30 23:00 UTC[/color][/b] — [b]VIP Game Pass: season close tool + season 4 rewards[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New (Admin):[/b] [b]Complete remaining VIP tiers[/b] — credits unfinished VIP micro-tiers through 100 for all claimed VIP players (once per season), then set the new season end.[/color]
+[*][color=#888888][b]New (season 4+):[/b] Same VIP track totals as season 3, plus [b]20 of each Store token[/b] not already on the pass (no Game Pass / VIP tokens), and [b]5 permanent Weed Empire strains[/b] at tiers [b]20 / 28 / 35 / 42 / 50[/b] (Sour Diesel, Girl Scout Cookies, Purple Punch, Wedding Cake, Gorilla Glue #4).[/color]
+[*][color=#888888][b]Note:[/b] Prestige still [b]+50%[/b] of season VIP totals; active VIP still [b]+10% rank points[/b]. Strain buffs stay after the pass ends.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-27 17:00 UTC[/color][/b] — [b]Weed Empire: sell cap store + Safety Deposit[/b][/size]
 [quote]
 [list]

@@ -41,6 +41,25 @@ def _reward_weight(t: int, base_tier: int) -> float:
 
 
 # Reward key order and labels used for inbox summaries.
+# Store token fields already in v2/v3 pass rotation.
+_RANDOM_TOKEN_KEYS = ["melt_tokens", "jailbust_tokens", "travel_tokens", "properties_tokens"]
+
+# v4: Store Tokens tab types not already in the pass (20 of each). No Game Pass / VIP.
+_V4_EXTRA_TOKEN_KEYS = [
+    "oc_reduced_tokens",
+    "booze_tokens",
+    "racket_tokens",
+    "crew_oc_auto_apply_tokens",
+    "auto_collect_12h_tokens",
+    "auto_collect_24h_tokens",
+    "jail_bailout_tokens",
+    "cooldown_skip_crime_tokens",
+    "cooldown_skip_gta_tokens",
+    "cooldown_skip_booze_tokens",
+    "cooldown_skip_properties_tokens",
+]
+TARGET_V4_EXTRA_TOKEN_EACH = 20
+
 REWARD_KEY_ORDER = [
     "money",
     "bullets",
@@ -55,6 +74,7 @@ REWARD_KEY_ORDER = [
     "travel_tokens",
     "properties_tokens",
     "auto_rank_2h_tokens",
+    *_V4_EXTRA_TOKEN_KEYS,
 ]
 
 REWARD_KEY_LABELS = {
@@ -71,6 +91,17 @@ REWARD_KEY_LABELS = {
     "auto_rank_2h_tokens": "Auto Rank (2h) Token",
     "loot_box_pieces": "loot box pieces",
     "molotovs": "molotovs",
+    "oc_reduced_tokens": "OC Token",
+    "booze_tokens": "Booze Token",
+    "racket_tokens": "Racket Token",
+    "crew_oc_auto_apply_tokens": "Crew OC auto-apply (3h)",
+    "auto_collect_12h_tokens": "Auto-Collect (12h)",
+    "auto_collect_24h_tokens": "Auto-Collect (24h)",
+    "jail_bailout_tokens": "Jail Bailout Token",
+    "cooldown_skip_crime_tokens": "Crime Cooldown Skip",
+    "cooldown_skip_gta_tokens": "GTA Cooldown Skip",
+    "cooldown_skip_booze_tokens": "Booze Travel Skip",
+    "cooldown_skip_properties_tokens": "Properties Collect Skip",
 }
 
 # Shared season targets (cash / bullets / tokens unchanged across profiles).
@@ -83,9 +114,6 @@ TARGET_XP_GTA_TOKENS_TOTAL = 150
 
 _MONEY_BASE_TIER = 10
 _POINTS_BASE_TIER = 50
-
-# Token keys that represent the "random token pool" in this implementation.
-_RANDOM_TOKEN_KEYS = ["melt_tokens", "jailbust_tokens", "travel_tokens", "properties_tokens"]
 
 _ROT_PRIM_KEYS = ("money", "bullets", "xp_crimes_tokens", "xp_gta_tokens", "points")
 _ROT_TOKEN_KEYS = ("melt_tokens", "jailbust_tokens", "travel_tokens", "properties_tokens")
@@ -280,9 +308,11 @@ _PROFILE_V3 = _build_micro_reward_profile(
     target_molotovs=1_000,
     include_molotovs=True,
 )
-_REWARD_PROFILES: dict[str, _RewardProfile] = {"v2": _PROFILE_V2, "v3": _PROFILE_V3}
+# v4 reuses v3 baselines/rotation; extra Store tokens + GP strains layered in _rewards_for_micro_tier_from_profile.
+_PROFILE_V4 = _PROFILE_V3
+_REWARD_PROFILES: dict[str, _RewardProfile] = {"v2": _PROFILE_V2, "v3": _PROFILE_V3, "v4": _PROFILE_V4}
 
-# Season 3+ public targets (keep in sync with src/pages/Game/GamePass.js PROFILE_V3).
+# Season 3+ public targets (keep in sync with src/pages/Game/GamePass.js PROFILE_V3 / V4).
 TARGET_POINTS_TOTAL = 30_000
 TARGET_LOOT_PIECES_TOTAL = 2_500
 TARGET_MOLOTOVS_TOTAL = 1_000
@@ -292,18 +322,45 @@ MICRO_TIER_REWARD_BASELINES = _PROFILE_V3["baselines"]
 
 
 def season_reward_profile_key(season_id: Optional[str]) -> str:
-    """Map a game_pass_season_id to v2 (legacy) or v3 (season 3+) reward math."""
+    """Map game_pass_season_id → v2 (<3), v3 (3), v4 (4+)."""
     try:
-        return "v3" if int(str(season_id or "0").strip() or "0") >= 3 else "v2"
+        n = int(str(season_id or "0").strip() or "0")
     except ValueError:
         return "v2"
+    if n >= 4:
+        return "v4"
+    if n >= 3:
+        return "v3"
+    return "v2"
 
 
 def _profile_for_season(season_id: Optional[str]) -> _RewardProfile:
     return _REWARD_PROFILES[season_reward_profile_key(season_id)]
 
 
-def _rewards_for_micro_tier_from_profile(micro_tier: int, profile: _RewardProfile) -> Dict[str, int]:
+def _v4_extra_token_grants_for_tier(t: int) -> Dict[str, int]:
+    """Distribute TARGET_V4_EXTRA_TOKEN_EACH of each missing Store token across tiers 1..100."""
+    flat: list[str] = []
+    for key in _V4_EXTRA_TOKEN_KEYS:
+        flat.extend([key] * TARGET_V4_EXTRA_TOKEN_EACH)
+    out: Dict[str, int] = {}
+    idxs = [t - 1, t - 1 + 100]
+    if t <= 20:
+        idxs.append(t - 1 + 200)
+    for idx in idxs:
+        if idx < 0 or idx >= len(flat):
+            continue
+        k = flat[idx]
+        out[k] = int(out.get(k) or 0) + 1
+    return out
+
+
+def _rewards_for_micro_tier_from_profile(
+    micro_tier: int,
+    profile: _RewardProfile,
+    *,
+    profile_key: str = "v3",
+) -> Dict[str, int]:
     try:
         t = int(micro_tier or 0)
     except Exception:
@@ -323,6 +380,10 @@ def _rewards_for_micro_tier_from_profile(micro_tier: int, profile: _RewardProfil
     ar_amt = int(math.ceil(float(ar_cfg["baseAmount"]) * _reward_weight(t, int(ar_cfg["baseTier"]))))
     if ar_amt > 0:
         out["auto_rank_2h_tokens"] = ar_amt
+    if profile_key == "v4":
+        for k, v in _v4_extra_token_grants_for_tier(t).items():
+            if int(v or 0) > 0:
+                out[k] = int(out.get(k) or 0) + int(v)
     return out
 
 
@@ -412,7 +473,12 @@ def rewards_for_micro_tier(micro_tier: int, season_id: Optional[str] = None) -> 
     Pass `season_id` (user.game_pass_season_id) so season 2 VIP keeps legacy totals
     until the global season rolls to 3+.
     """
-    return _rewards_for_micro_tier_from_profile(micro_tier, _profile_for_season(season_id))
+    key = season_reward_profile_key(season_id)
+    return _rewards_for_micro_tier_from_profile(
+        micro_tier,
+        _REWARD_PROFILES[key],
+        profile_key=key,
+    )
 
 
 def next_rewards_for_micro_tier(micro_tier: int, season_id: Optional[str] = None) -> Dict[str, int]:

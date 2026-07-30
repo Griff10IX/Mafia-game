@@ -15,9 +15,11 @@ from utils.game_pass_micro_rewards import (
     TARGET_MOLOTOVS_TOTAL,
     TARGET_POINTS_TOTAL,
     TARGET_RANDOM_TOKENS_TOTAL,
+    TARGET_V4_EXTRA_TOKEN_EACH,
     TARGET_XP_CRIMES_TOKENS_TOTAL,
     TARGET_XP_GTA_TOKENS_TOTAL,
     _RANDOM_TOKEN_KEYS,
+    _V4_EXTRA_TOKEN_KEYS,
     _distribute_total,
     format_rewards_summary,
     season_reward_profile_key,
@@ -54,6 +56,9 @@ def season_vip_reward_totals(season_id: Optional[str] = None) -> Dict[str, int]:
     }
     if profile != "v2":
         out["molotovs"] = TARGET_MOLOTOVS_TOTAL
+    if profile == "v4":
+        for k in _V4_EXTRA_TOKEN_KEYS:
+            out[k] = TARGET_V4_EXTRA_TOKEN_EACH
     return out
 
 

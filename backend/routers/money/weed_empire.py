@@ -67,6 +67,21 @@ from utils.weed_empire_exclusive_strains import (
     is_exclusive_strain_id,
     maybe_claim_acapulco_gold_daily,
 )
+from utils.game_pass_weed_strains import (
+    GP_GIRL_SCOUT_COOKIES,
+    GP_GORILLA_GLUE,
+    GP_PURPLE_PUNCH,
+    GP_RAID_SUCCESS_MULT_WHEN_PLANTED,
+    GP_UPGRADE_COST_MULT,
+    GP_WEDDING_CAKE,
+    GP_WITHDRAW_MULT_ACTIVE_VIP,
+    GP_WITHDRAW_MULT_PERMANENT,
+    farm_has_strain_planted,
+    game_pass_buffs_public,
+    is_game_pass_strain_id,
+    owned_game_pass_strain_ids,
+)
+from utils.game_pass_micro_rewards import vip_game_pass_entitlement_active
 
 logger = logging.getLogger(__name__)
 _rng = secrets.SystemRandom()
@@ -261,12 +276,22 @@ async def _require_access(user: dict) -> None:
 
 
 async def _attach_exclusive_owned(farm: dict) -> dict:
-    """Load exclusive strain ownership onto farm for sync helpers (_stats / heat / market)."""
+    """Load exclusive + Game Pass strain ownership onto farm for sync helpers."""
     uid = farm.get("user_id") or ""
     try:
         farm["_exclusive_owned_ids"] = await get_owned_exclusive_strain_ids(db, uid)
     except Exception:
         farm["_exclusive_owned_ids"] = set()
+    try:
+        u = await db.users.find_one(
+            {"id": uid},
+            {"_id": 0, "game_pass_weed_strain_ids": 1, "rank_xp_pass_rewards_granted": 1, "rank_xp_pass_token_expires_at": 1},
+        )
+        farm["_gp_owned_ids"] = owned_game_pass_strain_ids(u)
+        farm["_gp_active_vip"] = vip_game_pass_entitlement_active(u or {})
+    except Exception:
+        farm["_gp_owned_ids"] = set()
+        farm["_gp_active_vip"] = False
     return farm
 
 
@@ -476,8 +501,14 @@ def _raid_success_chance(attacker: dict, defender: dict) -> float:
     # Cap slides from 75% (no security) → 25% (all security maxed).
     success_cap = RAID_SUCCESS_MAX - fill * (RAID_SUCCESS_MAX - RAID_SUCCESS_AT_MAX_SECURITY)
     if fill >= 0.999:
-        return RAID_SUCCESS_AT_MAX_SECURITY
-    return float(min(success_cap, max(RAID_SUCCESS_FLOOR, raw)))
+        chance = RAID_SUCCESS_AT_MAX_SECURITY
+    else:
+        chance = float(min(success_cap, max(RAID_SUCCESS_FLOOR, raw)))
+    # Girl Scout Cookies: −5% success while planted on defender farm.
+    gp_owned = set(defender.get("_gp_owned_ids") or [])
+    if GP_GIRL_SCOUT_COOKIES in gp_owned and farm_has_strain_planted(defender, GP_GIRL_SCOUT_COOKIES):
+        chance = float(chance) * GP_RAID_SUCCESS_MULT_WHEN_PLANTED
+    return float(min(success_cap if fill < 0.999 else RAID_SUCCESS_AT_MAX_SECURITY, max(RAID_SUCCESS_FLOOR, chance)))
 
 
 def _empty_assistant_worker() -> Dict[str, Any]:
@@ -662,6 +693,10 @@ def _assistant_strain_allowed(farm: dict, strain_id: str) -> Optional[str]:
             return "You do not own this exclusive loot strain"
         if int(farm.get("grower_level") or 1) < EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL:
             return f"Grower Level {EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL}+ required to plant exclusive strains"
+    elif is_game_pass_strain_id(strain_id) or strain.get("game_pass_strain"):
+        owned_gp = set(farm.get("_gp_owned_ids") or [])
+        if strain_id not in owned_gp:
+            return "Unlock this strain from VIP Game Pass first"
         return None
     if strain_id not in unlocks and int(strain.get("unlock_house_tier") or 0) > int(farm.get("house_tier") or 0):
         return "Strain not unlocked"
@@ -762,8 +797,6 @@ def _assistant_plant_one(farm: dict, strain_id: str, soil_type: str, now: dateti
         "last_mite_damage_at": _iso(now),
     }
     farm["plots"] = plots
-    _add_heat(farm, 0.4)
-    _track_heat_for_bust(farm, now)
     return {
         "ok": True,
         "spent_seed": seed_cost,
@@ -977,7 +1010,6 @@ def _harvest_ready_plot(farm: dict, plot: dict, stats: dict, now: datetime) -> T
     if missions["harvest_count"] >= 10:
         farm["sabotage_unlocked"] = True
     farm["missions"] = missions
-    _add_heat(farm, 0.6)
     xp_amt = int(25 * rarity_xp_mult(str(strain.get("rarity") or "common")))
     xp_fields, leveled, new_lvl = apply_grower_xp(farm, xp_amt)
     farm.update(xp_fields)
@@ -1054,10 +1086,15 @@ def _dealer_sell_stash(farm: dict, *, assistant_share: bool = False) -> Dict[str
 
 
 def _apply_heat_bust(farm: dict, user_id: str, now: datetime) -> Dict[str, Any]:
-    """Punish farm on sustained high heat. Does NOT touch exclusive ownership."""
+    """Punish farm on sustained high heat. Does NOT touch exclusive / Game Pass ownership."""
+    soft = GP_PURPLE_PUNCH in set(farm.get("_gp_owned_ids") or [])
     tier = max(0, int(farm.get("house_tier") or 0) - 1)
     farm["house_tier"] = tier
-    farm["business_cash"] = 0
+    cash_before = max(0, int(farm.get("business_cash") or 0))
+    if soft:
+        farm["business_cash"] = cash_before // 2
+    else:
+        farm["business_cash"] = 0
     equip = dict(farm.get("equipment") or {})
     halved: Dict[str, int] = {}
     for k, v in equip.items():
@@ -1074,8 +1111,25 @@ def _apply_heat_bust(farm: dict, user_id: str, now: datetime) -> Dict[str, Any]:
             halved[starter] = 1
     farm["equipment"] = halved
     farm["stolen_equipment"] = []
-    farm["stash"] = {}
-    farm["curing"] = []
+    if soft:
+        stash = dict(farm.get("stash") or {})
+        farm["stash"] = {
+            sid: round(float(g or 0) * 0.5, 4)
+            for sid, g in stash.items()
+            if float(g or 0) * 0.5 >= 0.01
+        }
+        curing = []
+        for batch in farm.get("curing") or []:
+            if not isinstance(batch, dict):
+                continue
+            grams = round(float(batch.get("grams") or 0) * 0.5, 4)
+            if grams < 0.01:
+                continue
+            curing.append({**batch, "grams": grams})
+        farm["curing"] = curing
+    else:
+        farm["stash"] = {}
+        farm["curing"] = []
     farm["heat"] = 5.0
     farm["heat_high_since"] = None
     farm["last_heat_tick_at"] = _iso(now)
@@ -1095,7 +1149,7 @@ def _apply_heat_bust(farm: dict, user_id: str, now: datetime) -> Dict[str, Any]:
             "message": "Crew fled after the bust — rehire required",
         }
     _sync_legacy_assistant_fields(farm)
-    # Keep unlocks + grower level; exclusives are ownership docs elsewhere.
+    # Keep unlocks + grower level; exclusives / GP strains are ownership elsewhere.
     plots = [_empty_plot() for _ in range(int(_house(farm).get("plots") or 2))]
     farm["plots"] = plots
     farm = _sync_plot_count(farm)
@@ -1106,6 +1160,8 @@ def _apply_heat_bust(farm: dict, user_id: str, now: datetime) -> Dict[str, Any]:
         "raid_immune_until": farm["raid_immune_until"],
         "restart_seed": True,
         "assistant_fled": assistant_fled,
+        "soft_bust": soft,
+        "business_cash_kept": int(farm.get("business_cash") or 0) if soft else 0,
     }
 
 
@@ -1202,13 +1258,37 @@ def _ensure_daily_cap(farm: dict) -> dict:
     return farm
 
 
+def _daily_withdraw_cap(farm: dict) -> int:
+    """Effective daily withdraw cap (Wedding Cake Game Pass strain)."""
+    base = int(DAILY_WITHDRAW_CAP_USD)
+    gp = set(farm.get("_gp_owned_ids") or [])
+    if GP_WEDDING_CAKE not in gp:
+        return base
+    mult = GP_WITHDRAW_MULT_ACTIVE_VIP if farm.get("_gp_active_vip") else GP_WITHDRAW_MULT_PERMANENT
+    return int(round(base * mult))
+
+
+def _upgrade_cost_mult(farm: dict) -> float:
+    if GP_GORILLA_GLUE in set(farm.get("_gp_owned_ids") or []):
+        return float(GP_UPGRADE_COST_MULT)
+    return 1.0
+
+
+def _scaled_upgrade_cost(farm: dict, raw_cost: int) -> int:
+    cost = max(0, int(raw_cost or 0))
+    mult = _upgrade_cost_mult(farm)
+    if mult >= 0.999:
+        return cost
+    return max(1, int(round(cost * mult))) if cost > 0 else 0
+
+
 def _withdrawable_cash(farm: dict) -> int:
     """Cash that can leave the farm now (reserve + daily withdraw cap)."""
     farm = _ensure_daily_cap(farm)
     cash = int(farm.get("business_cash") or 0)
     after_reserve = max(0, cash - MIN_BUSINESS_CASH_RESERVE)
     withdrawn = int(farm.get("daily_withdrawn_usd") or 0)
-    remaining_cap = max(0, DAILY_WITHDRAW_CAP_USD - withdrawn)
+    remaining_cap = max(0, _daily_withdraw_cap(farm) - withdrawn)
     return min(after_reserve, remaining_cap)
 
 
@@ -1669,6 +1749,11 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
         owned_exclusive,
         grower_level=int(farm.get("grower_level") or 1),
     )
+    owned_gp = set(farm.get("_gp_owned_ids") or [])
+    gp_strains = game_pass_buffs_public(
+        owned_gp,
+        active_vip=bool(farm.get("_gp_active_vip")),
+    )
     auto_water, auto_feed = _auto_flags(farm)
     irrig_lvl = int(_equip_levels(farm).get("irrigation") or 0)
     gp = grower_progress(farm)
@@ -1682,6 +1767,17 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
         house_max_equip_tier=int(house.get("max_equip_tier") or 20),
         equipment_levels=_equip_levels(farm),
     )
+    cost_mult = _upgrade_cost_mult(farm)
+    if cost_mult < 0.999:
+        for row in shop:
+            if not isinstance(row, dict):
+                continue
+            nc = row.get("next_cost")
+            if nc is not None:
+                try:
+                    row["next_cost"] = _scaled_upgrade_cost(farm, int(nc))
+                except (TypeError, ValueError):
+                    pass
     return {
         "id": farm.get("id"),
         "user_id": farm.get("user_id"),
@@ -1695,9 +1791,9 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
         "business_cash": int(farm.get("business_cash") or 0),
         "business_cash_reserve": MIN_BUSINESS_CASH_RESERVE,
         "withdrawable_cash": _withdrawable_cash(farm),
-        "daily_withdraw_cap": DAILY_WITHDRAW_CAP_USD,
+        "daily_withdraw_cap": _daily_withdraw_cap(farm),
         "daily_withdrawn_usd": withdrawn_today,
-        "daily_withdraw_remaining": max(0, DAILY_WITHDRAW_CAP_USD - withdrawn_today),
+        "daily_withdraw_remaining": max(0, _daily_withdraw_cap(farm) - withdrawn_today),
         "daily_sold_usd": sold,
         "daily_sold_cap": sell_cap,
         "daily_sold_remaining": max(0, sell_cap - sold),
@@ -1740,6 +1836,9 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
         "exclusive_strains": exclusive_owned,
         "exclusive_strain_ids": sorted(owned_exclusive),
         "exclusive_min_grower_level": EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL,
+        "game_pass_strains": gp_strains,
+        "game_pass_strain_ids": sorted(owned_gp),
+        "upgrade_cost_mult": _upgrade_cost_mult(farm),
         "stats": {k: round(float(v), 4) if isinstance(v, float) else v for k, v in stats.items()},
         "active_light_class": light,
         "raid_stats": farm.get("raid_stats") or {},
@@ -1753,7 +1852,7 @@ def _public_farm(farm: dict, *, username: str = "", apply_curing_tick: bool = Tr
         "dealers_level": int(farm.get("dealers_level") or 0),
         "max_dealers_level": MAX_DEALERS_LEVEL,
         "dealers_upgrade_cost": (
-            dealers_upgrade_cost(int(farm.get("dealers_level") or 0))
+            _scaled_upgrade_cost(farm, dealers_upgrade_cost(int(farm.get("dealers_level") or 0)))
             if 1 <= int(farm.get("dealers_level") or 0) < MAX_DEALERS_LEVEL
             else None
         ),
@@ -2164,6 +2263,10 @@ async def weed_plant(body: PlantBody, http_request: Request, current_user: dict 
                 status_code=400,
                 detail=f"Grower Level {EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL}+ required to plant exclusive strains",
             )
+    elif is_game_pass_strain_id(body.strain_id) or strain.get("game_pass_strain"):
+        owned_gp = set(farm.get("_gp_owned_ids") or [])
+        if body.strain_id not in owned_gp:
+            raise HTTPException(status_code=400, detail="Unlock this strain from VIP Game Pass first")
     else:
         if body.strain_id not in unlocks and int(strain.get("unlock_house_tier") or 0) > int(farm.get("house_tier") or 0):
             raise HTTPException(status_code=400, detail="Strain not unlocked")
@@ -2246,17 +2349,12 @@ async def weed_plant(body: PlantBody, http_request: Request, current_user: dict 
     farm["plots"] = plots
     if scavenged_seed:
         farm["bust_restart_seed"] = False
-    _add_heat(farm, 0.4 * count)
-    _track_heat_for_bust(farm, now)
     await _save_farm(
         farm,
         {
             "plots": plots,
             "business_cash": farm["business_cash"],
             "soil_stock": stock,
-            "heat": farm["heat"],
-            "heat_high_since": farm.get("heat_high_since"),
-            "last_heat_tick_at": farm.get("last_heat_tick_at"),
             "unlocks": farm.get("unlocks"),
             "bust_restart_seed": farm.get("bust_restart_seed"),
         },
@@ -2672,7 +2770,7 @@ async def weed_upgrade_equip(body: UpgradeEquipBody, current_user: dict = Depend
             raise HTTPException(status_code=400, detail=f"Need house tier {cat.get('min_house_tier')}+")
         if pending_rebuy > house_max:
             raise HTTPException(status_code=400, detail=f"Upgrade house for gear Lv {pending_rebuy}+")
-        cost = equipment_level_cost(cat, 1)
+        cost = _scaled_upgrade_cost(farm, equipment_level_cost(cat, 1))
         _spend(farm, cost)
         equip = dict(farm.get("equipment") or {})
         equip[body.category_id] = pending_rebuy
@@ -2712,7 +2810,7 @@ async def weed_upgrade_equip(body: UpgradeEquipBody, current_user: dict = Depend
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
-    cost = equipment_level_cost(cat, nxt)
+    cost = _scaled_upgrade_cost(farm, equipment_level_cost(cat, nxt))
     _spend(farm, cost)
     equip = dict(farm.get("equipment") or {})
     equip[body.category_id] = nxt
@@ -2755,14 +2853,14 @@ async def weed_upgrade_house(body: UpgradeHouseBody, current_user: dict = Depend
     house = HOUSE_BY_TIER.get(target)
     if not house:
         raise HTTPException(status_code=400, detail="Invalid house tier")
-    cost = int(house.get("cost") or 0)
+    cost = _scaled_upgrade_cost(farm, int(house.get("cost") or 0))
     _spend(farm, cost)
     farm["house_tier"] = target
     farm = _sync_plot_count(farm)
-    # Auto-unlock strains for new tier (never loot exclusives)
+    # Auto-unlock strains for new tier (never loot exclusives / Game Pass strains)
     unlocks = set(farm.get("unlocks") or [])
     for s in STRAINS:
-        if s.get("loot_exclusive"):
+        if s.get("loot_exclusive") or s.get("game_pass_strain"):
             continue
         if int(s.get("unlock_house_tier") or 0) <= target:
             unlocks.add(s["id"])
@@ -2782,6 +2880,8 @@ async def weed_unlock_strain(body: UnlockStrainBody, current_user: dict = Depend
         raise HTTPException(status_code=404, detail="Unknown strain")
     if strain.get("loot_exclusive") or is_exclusive_strain_id(body.strain_id):
         raise HTTPException(status_code=400, detail="Exclusive strains come from loot boxes (or PvP kill), not the shop")
+    if strain.get("game_pass_strain") or is_game_pass_strain_id(body.strain_id):
+        raise HTTPException(status_code=400, detail="Game Pass strains unlock from VIP Game Pass rewards, not the shop")
     if int(strain.get("unlock_house_tier") or 0) > int(farm.get("house_tier") or 0):
         raise HTTPException(status_code=400, detail="House tier too low")
     unlocks = set(farm.get("unlocks") or [])
@@ -2834,7 +2934,8 @@ async def weed_withdraw(body: WithdrawBody, current_user: dict = Depends(_gate))
         cash = int(farm.get("business_cash") or 0)
         after_reserve = max(0, cash - MIN_BUSINESS_CASH_RESERVE)
         withdrawn_today = int(farm.get("daily_withdrawn_usd") or 0)
-        remaining_cap = max(0, DAILY_WITHDRAW_CAP_USD - withdrawn_today)
+        withdraw_cap = _daily_withdraw_cap(farm)
+        remaining_cap = max(0, withdraw_cap - withdrawn_today)
         withdrawable = min(after_reserve, remaining_cap)
         amount = int(body.amount)
         if cash <= MIN_BUSINESS_CASH_RESERVE:
@@ -2847,12 +2948,12 @@ async def weed_withdraw(body: WithdrawBody, current_user: dict = Depends(_gate))
         if remaining_cap <= 0:
             raise HTTPException(
                 status_code=400,
-                detail=f"Daily withdraw cap reached (${DAILY_WITHDRAW_CAP_USD:,}). Resets at UTC midnight.",
+                detail=f"Daily withdraw cap reached (${withdraw_cap:,}). Resets at UTC midnight.",
             )
         if amount > remaining_cap:
             raise HTTPException(
                 status_code=400,
-                detail=f"Daily withdraw remaining: ${remaining_cap:,} of ${DAILY_WITHDRAW_CAP_USD:,}.",
+                detail=f"Daily withdraw remaining: ${remaining_cap:,} of ${withdraw_cap:,}.",
             )
         if amount > after_reserve:
             raise HTTPException(
@@ -2897,7 +2998,7 @@ async def weed_withdraw(body: WithdrawBody, current_user: dict = Depends(_gate))
             "withdrawn": amount,
             "business_cash": farm["business_cash"],
             "daily_withdrawn_usd": farm["daily_withdrawn_usd"],
-            "daily_withdraw_remaining": max(0, DAILY_WITHDRAW_CAP_USD - int(farm["daily_withdrawn_usd"])),
+            "daily_withdraw_remaining": max(0, _daily_withdraw_cap(farm) - int(farm["daily_withdrawn_usd"])),
             "farm": _public_farm(farm, username=current_user.get("username") or "", apply_curing_tick=False),
         }
 
@@ -3117,6 +3218,7 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
     dfn = await db.weed_farms.find_one({"user_id": defender_id}, {"_id": 0})
     if not dfn:
         raise HTTPException(status_code=404, detail="Target has no weed business")
+    await _attach_exclusive_owned(dfn)
     if int(dfn.get("grower_level") or 1) < MIN_RAID_TARGET_GROWER_LEVEL:
         raise HTTPException(status_code=400, detail="Growers below level 5 are protected from raids")
     immune_until = _defender_raid_immune_until(dfn, now)
@@ -3425,7 +3527,7 @@ async def weed_upgrade_dealers(current_user: dict = Depends(_gate)):
         raise HTTPException(status_code=400, detail="Unlock dealers first")
     if lvl >= MAX_DEALERS_LEVEL:
         raise HTTPException(status_code=400, detail="Dealers maxed")
-    cost = dealers_upgrade_cost(lvl)
+    cost = _scaled_upgrade_cost(farm, dealers_upgrade_cost(lvl))
     _spend(farm, cost)
     farm["dealers_level"] = lvl + 1
     await _save_farm(farm, {"business_cash": farm["business_cash"], "dealers_level": farm["dealers_level"]})

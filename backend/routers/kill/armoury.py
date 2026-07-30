@@ -323,6 +323,31 @@ async def _try_grant_rank_xp_pass_micro_tier(
     )
     if updated.modified_count == 0:
         return None
+
+    # Permanent Game Pass weed strains (v4+) — not $inc fields
+    try:
+        from utils.game_pass_micro_rewards import season_reward_profile_key
+        from utils.game_pass_weed_strains import (
+            game_pass_strain_display_name,
+            game_pass_strain_for_micro_tier,
+            grant_game_pass_strain,
+        )
+
+        sid = game_pass_strain_for_micro_tier(
+            t, profile_key=season_reward_profile_key(season_id)
+        )
+        if sid:
+            await grant_game_pass_strain(db, user_id, sid)
+            rewards = dict(rewards)
+            rewards["_game_pass_strain"] = sid
+            rewards["_game_pass_strain_name"] = game_pass_strain_display_name(sid)
+    except Exception:
+        import logging
+
+        logging.getLogger(__name__).exception(
+            "game_pass strain grant failed user_id=%s tier=%s", user_id, t
+        )
+
     if t == MAX_MICRO_TIER:
         try:
             from utils.game_pass_vip_car import grant_game_pass_vip_car_if_eligible

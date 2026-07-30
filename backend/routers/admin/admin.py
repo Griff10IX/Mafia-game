@@ -4207,6 +4207,206 @@ def register(router):
             ),
         }
 
+    @router.get("/admin/game-pass/complete-remaining-vip-preview")
+    async def admin_complete_remaining_vip_preview(current_user: dict = Depends(get_current_user)):
+        """Preview reusable bulk grant of remaining VIP tiers for the current season."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.game_pass_complete_remaining_vip import preview_complete_remaining_vip
+        from utils.game_pass_season_rp import current_game_pass_season_id
+
+        sid = await current_game_pass_season_id(db)
+        return await preview_complete_remaining_vip(db, season_id=sid)
+
+    class CompleteRemainingVipRunRequest(BaseModel):
+        confirm: str = Field(..., min_length=1)
+        dry_run: bool = False
+
+    @router.post("/admin/game-pass/complete-remaining-vip-run")
+    async def admin_complete_remaining_vip_run(
+        req: CompleteRemainingVipRunRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Reusable: credit missing VIP micro-tier rewards through tier 100 for all VIP-claimed users.
+        Idempotent per season_id (game_settings complete_remaining_vip_v1.by_season).
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from server import send_notification
+        from routers.kill.armoury import _try_grant_rank_xp_pass_micro_tier
+        from utils.game_pass_complete_remaining_vip import (
+            COMPLETE_REMAINING_VIP_CONFIRM_PHRASE,
+            aggregate_vip_increment_after_cursor_for_season,
+            eligible_vip_users_filter,
+            first_vip_completion_user_projection,
+            get_season_completion_stamp,
+            set_season_completion_stamp,
+        )
+        from utils.game_pass_micro_rewards import MAX_MICRO_TIER, format_rewards_summary
+        from utils.game_pass_season_rp import current_game_pass_season_id
+
+        if (req.confirm or "").strip() != COMPLETE_REMAINING_VIP_CONFIRM_PHRASE:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Confirmation must be exactly: {COMPLETE_REMAINING_VIP_CONFIRM_PHRASE}",
+            )
+
+        season_id = await current_game_pass_season_id(db)
+        stamp = await get_season_completion_stamp(db, season_id)
+        if not req.dry_run and stamp and stamp.get("live_completed_at"):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Complete-remaining already run live for season_id={season_id}. "
+                    "See season_completion_stamp on preview."
+                ),
+            )
+
+        filt = eligible_vip_users_filter()
+        proj = first_vip_completion_user_projection()
+        # Prefer each user's own season_id when set; fall back to global current.
+        proj = {**proj, "game_pass_season_id": 1, "points": 1}
+        live_updated = 0
+        skipped_complete = 0
+        skipped_no_op = 0
+        dry_would_receive = 0
+        dry_run_samples: List[Dict[str, Any]] = []
+        run_id = str(uuid.uuid4())
+        admin_un = current_user.get("username", "?")
+
+        async for row in db.users.find(filt, proj):
+            uid = str(row.get("id") or "")
+            if not uid:
+                continue
+            last = int(row.get("rank_xp_pass_last_granted_micro_tier") or 0)
+            if last >= MAX_MICRO_TIER:
+                skipped_complete += 1
+                continue
+            free_last = int(row.get("rank_xp_pass_free_last_micro_tier_granted") or 0)
+            user_sid = str(row.get("game_pass_season_id") or "").strip() or season_id
+            inc = aggregate_vip_increment_after_cursor_for_season(
+                last, free_last, season_id=user_sid
+            )
+            un = row.get("username") or uid
+
+            if req.dry_run:
+                dry_would_receive += 1
+                if len(dry_run_samples) < 50:
+                    dry_run_samples.append(
+                        {
+                            "username": un,
+                            "user_id": uid,
+                            "season_id": user_sid,
+                            "last_granted_before": last,
+                            "tiers_to_credit": MAX_MICRO_TIER - last,
+                            "increment_keys": sorted(inc.keys()),
+                            "increment_preview": {k: inc[k] for k in sorted(inc.keys())[:12]},
+                        }
+                    )
+                continue
+
+            points_delta = 0
+            notify_totals: Dict[str, int] = {}
+            strain_names: List[str] = []
+            for t in range(last + 1, MAX_MICRO_TIER + 1):
+                applied = await _try_grant_rank_xp_pass_micro_tier(
+                    db,
+                    user_id=uid,
+                    micro_tier=t,
+                    free_cash_last_micro_tier_granted=free_last,
+                    season_id=user_sid,
+                )
+                if not applied:
+                    break
+                points_delta += int(applied.get("points") or 0)
+                sn = applied.get("_game_pass_strain_name")
+                if sn:
+                    strain_names.append(str(sn))
+                for k, v in applied.items():
+                    if str(k).startswith("_"):
+                        continue
+                    iv = int(v or 0)
+                    if iv > 0:
+                        notify_totals[k] = notify_totals.get(k, 0) + iv
+
+            u_done = await db.users.find_one(
+                {"id": uid},
+                {"_id": 0, "rank_xp_pass_last_granted_micro_tier": 1},
+            )
+            if int((u_done or {}).get("rank_xp_pass_last_granted_micro_tier") or 0) < MAX_MICRO_TIER:
+                skipped_no_op += 1
+                continue
+
+            live_updated += 1
+            if points_delta != 0:
+                before_pts = int(row.get("points") or 0)
+                after_pts = before_pts + points_delta
+                await log_points_event(
+                    db,
+                    user_id=uid,
+                    points=points_delta,
+                    event_type="game_pass_complete_remaining_vip",
+                    event_ref=run_id,
+                    meta={"admin": admin_un, "run_id": run_id, "season_id": season_id},
+                    wallet_points_before=before_pts,
+                    wallet_points_after=after_pts,
+                )
+            summary = format_rewards_summary(notify_totals).strip() if notify_totals else ""
+            strain_bit = ""
+            if strain_names:
+                strain_bit = " Strains unlocked: " + ", ".join(dict.fromkeys(strain_names)) + "."
+            body = (
+                f"Season close-out: all remaining VIP Game Pass tier rewards through tier {MAX_MICRO_TIER} "
+                f"have been credited (season {season_id})."
+                + (f" {summary}" if summary else "")
+                + strain_bit
+            )
+            await send_notification(
+                uid,
+                "Game Pass season complete",
+                body,
+                "reward",
+                tier_micro=MAX_MICRO_TIER,
+                admin_run_id=run_id,
+            )
+
+        if not req.dry_run:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            await set_season_completion_stamp(
+                db,
+                season_id,
+                {
+                    "live_completed_at": now_iso,
+                    "set_by": admin_un,
+                    "run_id": run_id,
+                    "affected_user_count": live_updated,
+                    "skipped_already_complete": skipped_complete,
+                    "skipped_no_op": skipped_no_op,
+                    "dry_run": False,
+                },
+            )
+
+        return {
+            "dry_run": req.dry_run,
+            "run_id": run_id,
+            "season_id": season_id,
+            "would_receive_grant": dry_would_receive if req.dry_run else None,
+            "live_updated_count": live_updated if not req.dry_run else None,
+            "skipped_already_complete": skipped_complete,
+            "skipped_no_op": skipped_no_op if not req.dry_run else None,
+            "dry_run_samples": dry_run_samples if req.dry_run else [],
+            "message": (
+                f"Dry run (season {season_id}): {dry_would_receive} would receive grants; "
+                f"{skipped_complete} already at max tier."
+                if req.dry_run
+                else (
+                    f"Live run (season {season_id}): {live_updated} updated; "
+                    f"{skipped_complete} already complete; {skipped_no_op} no-op."
+                )
+            ),
+        }
+
     @router.get("/admin/states/disable-preview")
     async def admin_disable_state_preview(
         state: str = Query("Atlantic City", min_length=1),
