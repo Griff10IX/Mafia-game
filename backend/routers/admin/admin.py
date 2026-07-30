@@ -4132,6 +4132,7 @@ def register(router):
                     user_id=uid,
                     micro_tier=t,
                     free_cash_last_micro_tier_granted=free_last,
+                    grant_game_pass_strains=False,
                 )
                 if not applied:
                     break
@@ -4316,6 +4317,7 @@ def register(router):
                     micro_tier=t,
                     free_cash_last_micro_tier_granted=free_last,
                     season_id=user_sid,
+                    grant_game_pass_strains=False,
                 )
                 if not applied:
                     break
@@ -4405,6 +4407,69 @@ def register(router):
                     f"{skipped_complete} already complete; {skipped_no_op} no-op."
                 )
             ),
+        }
+
+    class RevokePrematureGpStrainsRequest(BaseModel):
+        confirm: str = Field(..., min_length=1)
+
+    @router.get("/admin/game-pass/premature-strains-preview")
+    async def admin_premature_gp_strains_preview(current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.game_pass_weed_strains import (
+            GAME_PASS_STRAIN_IDS,
+            PREMATURE_GP_STRAIN_REVOKE_KEY,
+        )
+
+        users_with = await db.users.count_documents(
+            {"game_pass_weed_strain_ids.0": {"$exists": True}},
+        )
+        stamp_doc = await db.game_settings.find_one(
+            {"key": PREMATURE_GP_STRAIN_REVOKE_KEY},
+            {"_id": 0, "value": 1},
+        )
+        stamp = (stamp_doc or {}).get("value")
+        return {
+            "users_with_game_pass_strains": users_with,
+            "strain_ids": list(GAME_PASS_STRAIN_IDS),
+            "auto_revoke_stamp": stamp if isinstance(stamp, dict) else None,
+        }
+
+    @router.post("/admin/game-pass/revoke-premature-strains")
+    async def admin_revoke_premature_gp_strains(
+        req: RevokePrematureGpStrainsRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Strip all Game Pass weed strain unlocks (undo premature bulk grant)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        phrase = "REVOKE GP STRAINS"
+        if (req.confirm or "").strip() != phrase:
+            raise HTTPException(status_code=400, detail=f"Confirmation must be exactly: {phrase}")
+        from utils.game_pass_weed_strains import (
+            PREMATURE_GP_STRAIN_REVOKE_KEY,
+            revoke_all_game_pass_weed_strains,
+        )
+
+        result = await revoke_all_game_pass_weed_strains(db)
+        stamp = {
+            "done_at": datetime.now(timezone.utc).isoformat(),
+            "set_by": current_user.get("username", "?"),
+            "manual": True,
+            **result,
+        }
+        await db.game_settings.update_one(
+            {"key": PREMATURE_GP_STRAIN_REVOKE_KEY},
+            {"$set": {"key": PREMATURE_GP_STRAIN_REVOKE_KEY, "value": stamp}},
+            upsert=True,
+        )
+        return {
+            "message": (
+                f"Revoked Game Pass strains from {result.get('users_modified', 0)} user(s) "
+                f"({result.get('users_had_strains', 0)} had strains)."
+            ),
+            **result,
+            "stamp": stamp,
         }
 
     @router.get("/admin/states/disable-preview")

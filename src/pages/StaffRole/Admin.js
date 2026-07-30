@@ -205,6 +205,7 @@ function formatWholeCash(x) {
 /** Must match backend `FIRST_GAME_PASS_CONFIRM_PHRASE` for first VIP completion bulk grant. */
 const FIRST_GAME_PASS_VIP_COMPLETION_CONFIRM = 'FIRST GAME PASS COMPLETE';
 const COMPLETE_REMAINING_VIP_CONFIRM = 'COMPLETE REMAINING VIP';
+const REVOKE_GP_STRAINS_CONFIRM = 'REVOKE GP STRAINS';
 const DISABLE_STATE_CONFIRM = 'DISABLE ATLANTIC CITY';
 
 // Searchable tools list - each item has: label (searchable), categoryId (scroll target), collapseKey (optional - to expand section)
@@ -991,6 +992,9 @@ export default function Admin() {
   const [completeRemainingVipPreviewLoading, setCompleteRemainingVipPreviewLoading] = useState(false);
   const [completeRemainingVipConfirm, setCompleteRemainingVipConfirm] = useState('');
   const [completeRemainingVipRunLoading, setCompleteRemainingVipRunLoading] = useState(false);
+  const [revokeGpStrainsPreview, setRevokeGpStrainsPreview] = useState(null);
+  const [revokeGpStrainsConfirm, setRevokeGpStrainsConfirm] = useState('');
+  const [revokeGpStrainsLoading, setRevokeGpStrainsLoading] = useState(false);
   const [disableStatePreview, setDisableStatePreview] = useState(null);
   const [disableStatePreviewLoading, setDisableStatePreviewLoading] = useState(false);
   const [disableStateConfirm, setDisableStateConfirm] = useState('');
@@ -4378,6 +4382,46 @@ export default function Admin() {
       toast.error(error.response?.data?.detail || 'Run failed');
     } finally {
       setCompleteRemainingVipRunLoading(false);
+    }
+  };
+
+  const loadRevokeGpStrainsPreview = async () => {
+    setRevokeGpStrainsLoading(true);
+    try {
+      const res = await api.get('/admin/game-pass/premature-strains-preview');
+      setRevokeGpStrainsPreview(res.data || null);
+      toast.success('Game Pass strains preview loaded');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Preview failed');
+    } finally {
+      setRevokeGpStrainsLoading(false);
+    }
+  };
+
+  const runRevokeGpStrains = async () => {
+    if ((revokeGpStrainsConfirm || '').trim() !== REVOKE_GP_STRAINS_CONFIRM) {
+      toast.error(`Type exactly: ${REVOKE_GP_STRAINS_CONFIRM}`);
+      return;
+    }
+    if (!window.confirm('Strip ALL permanent Game Pass weed strains from every player? They must re-earn them via VIP tiers after buying this season.')) {
+      return;
+    }
+    setRevokeGpStrainsLoading(true);
+    try {
+      const res = await api.post('/admin/game-pass/revoke-premature-strains', {
+        confirm: REVOKE_GP_STRAINS_CONFIRM,
+      });
+      toast.success(res.data?.message || 'Revoked');
+      setRevokeGpStrainsPreview({
+        users_with_game_pass_strains: 0,
+        auto_revoke_stamp: res.data?.stamp || null,
+        strain_ids: revokeGpStrainsPreview?.strain_ids || [],
+      });
+      setRevokeGpStrainsConfirm('');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Revoke failed');
+    } finally {
+      setRevokeGpStrainsLoading(false);
     }
   };
 
@@ -11625,7 +11669,7 @@ export default function Admin() {
                 <p className="text-[9px] text-mutedForeground font-heading">
                   Same grant as First Game Pass completion, but reusable: once live per{' '}
                   <span className="font-mono">season_id</span>
-                  . Use before rolling the season end into the next VIP track. Confirm phrase:{' '}
+                  . Does <span className="text-amber-300">not</span> grant permanent weed strains (those are earned only by buying VIP and hitting tiers 20/28/35/42/50). Confirm phrase:{' '}
                   <span className="font-mono">{COMPLETE_REMAINING_VIP_CONFIRM}</span>.
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
@@ -11687,6 +11731,51 @@ export default function Admin() {
                         Sample:
                         {' '}
                         {(completeRemainingVipPreview.sample_usernames || []).join(', ')}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              <div id="admin-revoke-gp-strains" className="rounded-md border border-amber-500/40 bg-amber-500/5 p-3 space-y-2 scroll-mt-24">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-heading font-bold text-amber-300 uppercase tracking-wider">Revoke premature Game Pass weed strains</span>
+                </div>
+                <p className="text-[9px] text-mutedForeground font-heading">
+                  Strips <span className="font-mono">game_pass_weed_strain_ids</span> from all users (and farm unlock lists). Use if complete-remaining / season flip granted strains before season 4 purchases. Confirm:{' '}
+                  <span className="font-mono">{REVOKE_GP_STRAINS_CONFIRM}</span>.
+                  After deploy, this also auto-runs once on the next Game Pass season read.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <BtnSecondary type="button" onClick={loadRevokeGpStrainsPreview} disabled={revokeGpStrainsLoading}>
+                    {revokeGpStrainsLoading ? '…' : 'Preview'}
+                  </BtnSecondary>
+                  <input
+                    type="text"
+                    value={revokeGpStrainsConfirm}
+                    onChange={(e) => setRevokeGpStrainsConfirm(e.target.value)}
+                    placeholder={REVOKE_GP_STRAINS_CONFIRM}
+                    className="flex-1 min-w-[12rem] max-w-md px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono"
+                    autoComplete="off"
+                  />
+                  <BtnDanger type="button" onClick={runRevokeGpStrains} disabled={revokeGpStrainsLoading}>
+                    {revokeGpStrainsLoading ? '…' : 'Revoke all GP strains'}
+                  </BtnDanger>
+                </div>
+                {revokeGpStrainsPreview && (
+                  <div className="text-[9px] font-mono text-zinc-200/90 space-y-1 rounded border border-amber-500/20 bg-zinc-900/40 p-2">
+                    <div>
+                      Users with GP strains:{' '}
+                      <span className="text-amber-200">
+                        {(revokeGpStrainsPreview.users_with_game_pass_strains ?? 0).toLocaleString()}
+                      </span>
+                    </div>
+                    {revokeGpStrainsPreview.auto_revoke_stamp?.done_at && (
+                      <div className="text-emerald-300 font-heading">
+                        Last revoke at {String(revokeGpStrainsPreview.auto_revoke_stamp.done_at)} by{' '}
+                        {revokeGpStrainsPreview.auto_revoke_stamp.set_by || '—'}
+                        {' · '}
+                        modified {(revokeGpStrainsPreview.auto_revoke_stamp.users_modified ?? 0).toLocaleString()}
                       </div>
                     )}
                   </div>

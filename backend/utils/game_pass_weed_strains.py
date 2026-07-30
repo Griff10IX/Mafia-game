@@ -6,6 +6,7 @@ Stored on users.game_pass_weed_strain_ids (not unique loot exclusives).
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
 
 GP_SOUR_DIESEL = "gp_sour_diesel"
@@ -131,6 +132,61 @@ async def grant_game_pass_strain(db, user_id: str, strain_id: str) -> bool:
         {"$addToSet": {"game_pass_weed_strain_ids": strain_id}},
     )
     return int(res.modified_count or 0) > 0 or int(res.matched_count or 0) > 0
+
+
+PREMATURE_GP_STRAIN_REVOKE_KEY = "game_pass_weed_strains_premature_revoke_v1"
+
+
+async def revoke_all_game_pass_weed_strains(db) -> Dict[str, Any]:
+    """
+    Strip Game Pass strain ownership from every user and farm unlock lists.
+    Used to undo bulk grants that ran before season 4 purchases started.
+    """
+    users_with = await db.users.count_documents(
+        {"game_pass_weed_strain_ids.0": {"$exists": True}},
+    )
+    ures = await db.users.update_many(
+        {"game_pass_weed_strain_ids": {"$exists": True}},
+        {"$unset": {"game_pass_weed_strain_ids": ""}},
+    )
+    farms_pulled = 0
+    for sid in GAME_PASS_STRAIN_IDS:
+        fres = await db.weed_farms.update_many(
+            {"unlocks": sid},
+            {"$pull": {"unlocks": sid}},
+        )
+        farms_pulled += int(fres.modified_count or 0)
+    return {
+        "users_had_strains": int(users_with),
+        "users_modified": int(ures.modified_count or 0),
+        "farm_unlock_rows_pulled": farms_pulled,
+    }
+
+
+async def maybe_revoke_premature_game_pass_strains_once(db) -> Optional[Dict[str, Any]]:
+    """
+    One-shot: clear GP strains incorrectly granted via season close-out before players
+    could buy season-4 VIP. Idempotent via game_settings stamp.
+    """
+    doc = await db.game_settings.find_one(
+        {"key": PREMATURE_GP_STRAIN_REVOKE_KEY},
+        {"_id": 0, "value": 1},
+    )
+    raw = (doc or {}).get("value")
+    if isinstance(raw, dict) and raw.get("done_at"):
+        return None
+    result = await revoke_all_game_pass_weed_strains(db)
+    stamp = {
+        "done_at": datetime.now(timezone.utc).isoformat(),
+        "set_by": "auto_premature_revoke_v1",
+        **result,
+    }
+    await db.game_settings.update_one(
+        {"key": PREMATURE_GP_STRAIN_REVOKE_KEY},
+        {"$set": {"key": PREMATURE_GP_STRAIN_REVOKE_KEY, "value": stamp}},
+        upsert=True,
+    )
+    return stamp
 
 
 def scale_rank_points_for_game_pass_strain(base_rp: int, user: Optional[dict]) -> int:

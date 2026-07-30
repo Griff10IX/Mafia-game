@@ -187,6 +187,13 @@ async def get_game_pass_season_public(db) -> Dict[str, Any]:
     season_id = game_pass_season_id_from_stored(stored)
     season_end_at = normalize_game_pass_season_end_at(stored.get("season_end_at"))
 
+    try:
+        from utils.game_pass_weed_strains import maybe_revoke_premature_game_pass_strains_once
+
+        await maybe_revoke_premature_game_pass_strains_once(db)
+    except Exception:
+        pass
+
     return {
         "game_pass_season_end_at": season_end_at,
         "game_pass_season_id": season_id,
