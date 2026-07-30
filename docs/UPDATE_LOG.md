@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-30 23:20 UTC[/color][/b] — [b]VIP Game Pass: new season live (until 1 Sep)[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New season:[/b] VIP Game Pass is live again through [b]1 September 2026[/b] (00:00 UK). New reward track includes extra Store tokens and permanent Weed Empire strains.[/color]
+[*][color=#888888][b]Important:[/b] Last season's VIP / Game Pass [b]does not carry over[/b]. Buy VIP again this season to unlock the track and +10% rank points.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-30 23:00 UTC[/color][/b] — [b]VIP Game Pass: season close tool + season 4 rewards[/b][/size]
 [quote]
 [list]

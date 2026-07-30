@@ -8595,15 +8595,27 @@ export default function Admin() {
   };
 
   const handleSetGamePassSeason = async () => {
+    const sid = (gamePassSeasonIdInput || '').trim();
+    const prevSid = String(gamePassSeasonAdmin?.game_pass_season_id || gamePassSeasonAdmin?.stored?.season_id || '').trim();
+    if (sid && prevSid && sid !== prevSid) {
+      if (!window.confirm(
+        `Change season id ${prevSid} → ${sid}?\n\nThis immediately clears VIP / Game Pass progress for all players on the old season. They must buy again.`,
+      )) {
+        return;
+      }
+    }
     setGamePassSeasonLoading(true);
     try {
       const res = await api.post('/admin/game-pass-season', {
         season_end_at: gamePassSeasonEndAt.trim(),
-        season_id: (gamePassSeasonIdInput || '').trim() || undefined,
+        season_id: sid || undefined,
       });
       setGamePassSeasonAdmin(res.data ?? null);
       if (res.data?.game_pass_season_end_at) {
         setGamePassSeasonEndAt(String(res.data.game_pass_season_end_at));
+      }
+      if (res.data?.game_pass_season_id) {
+        setGamePassSeasonIdInput(String(res.data.game_pass_season_id));
       }
       toast.success(res.data?.message || 'Game Pass season end updated');
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed to update Game Pass season end'); }
@@ -16905,6 +16917,8 @@ export default function Admin() {
             <p className="text-[10px] text-mutedForeground font-heading">
               Sets the global season end used for Game Pass countdown and purchase windows. Use ISO 8601 UTC.
               Season id <span className="font-mono">4+</span> uses the new VIP rewards (extra Store tokens + permanent weed strains).
+              Changing season id immediately clears every player's VIP claim/tokens for the old season — they must buy Game Pass again.
+              Prefer: Complete remaining VIP (old season) → then set season id <span className="font-mono">4</span> and end <span className="font-mono">2026-08-31T23:00:00+00:00</span> (00:00 UK 1 Sep).
             </p>
             {gamePassSeasonAdmin?.game_pass_season_end_at && (
               <p className="text-[10px] text-mutedForeground font-heading">

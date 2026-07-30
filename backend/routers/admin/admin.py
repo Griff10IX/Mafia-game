@@ -21741,19 +21741,40 @@ def register(router):
         prev_sid = str(prev_val.get("season_id") or "").strip() or None
         new_sid = (req.season_id or "").strip() if req.season_id is not None else None
         season_id_out = new_sid if new_sid else (prev_sid or "1")
+        season_id_changed = bool(prev_sid) and season_id_out != prev_sid
+        # First publish with no prior id also forces a wipe so leftover VIP cannot stick.
+        force_reconcile = season_id_changed or (not prev_sid and bool(new_sid))
         value = {
             "season_end_at": season_end_at,
             "season_id": season_id_out,
             "set_by": current_user.get("username", "?"),
             "set_at": datetime.now(timezone.utc).isoformat(),
         }
+        if prev_sid and season_id_changed:
+            value["previous_season_id"] = prev_sid
+            if prev_val.get("season_end_at"):
+                value["previous_season_end_at"] = str(prev_val.get("season_end_at"))
         await db.game_settings.update_one(
             {"key": GAME_PASS_SEASON_SETTINGS_KEY},
             {"$set": {"key": GAME_PASS_SEASON_SETTINGS_KEY, "value": value}},
             upsert=True,
         )
+        players_reconciled = 0
+        if force_reconcile:
+            from utils.game_pass_season_rp import reconcile_all_stale_game_pass_users
+
+            players_reconciled = await reconcile_all_stale_game_pass_users(db)
         return {
-            "message": "Game Pass season end updated",
+            "message": (
+                f"Game Pass season updated"
+                + (
+                    f"; cleared prior VIP/progress for {players_reconciled} player(s) — must repurchase"
+                    if force_reconcile
+                    else ""
+                )
+            ),
+            "season_id_changed": force_reconcile,
+            "players_reconciled": players_reconciled,
             **(await get_game_pass_season_public(db)),
         }
 

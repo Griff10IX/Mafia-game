@@ -147,6 +147,14 @@ async def _apply_season_rollover_if_due(db, stored: Dict[str, Any]) -> Dict[str,
         "previous_season_end_at": season_end_at,
     }
     await _persist_game_pass_season(db, new_stored)
+    try:
+        from utils.game_pass_season_rp import reconcile_all_stale_game_pass_users
+
+        cleared = await reconcile_all_stale_game_pass_users(db)
+        new_stored = {**new_stored, "players_reconciled_on_rollover": cleared}
+        await _persist_game_pass_season(db, new_stored)
+    except Exception:
+        pass
     return new_stored
 
 

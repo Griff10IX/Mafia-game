@@ -121,6 +121,7 @@ async def reconcile_stale_game_pass_users_for_filter(db, extra_match: Dict[str, 
     Bulk-reconcile users who match `extra_match` and are not on the current game_pass_season_id.
 
     Used by admin Game Pass lists so prior-season VIP/tier rows are cleared before the query runs.
+    Clears VIP claim/tokens so the previous season's pass does not carry into the new one.
     """
     current_sid = await current_game_pass_season_id(db)
     stale: Dict[str, Any] = {
@@ -129,12 +130,17 @@ async def reconcile_stale_game_pass_users_for_filter(db, extra_match: Dict[str, 
             {"game_pass_season_id": {"$exists": False}},
         ],
     }
-    filt: Dict[str, Any] = {"$and": [extra_match, stale]}
+    filt: Dict[str, Any] = {"$and": [extra_match, stale]} if extra_match else stale
     res = await db.users.update_many(
         filt,
         {"$set": _reconcile_set_fields(current_sid), "$unset": _RECONCILE_UNSET_FIELDS},
     )
     return int(res.modified_count or 0)
+
+
+async def reconcile_all_stale_game_pass_users(db) -> int:
+    """Wipe season RP / VIP entitlement for every player not on the current season_id."""
+    return await reconcile_stale_game_pass_users_for_filter(db, {})
 
 
 async def reconcile_user_game_pass_season_if_stale_after_load(db, user: Dict[str, Any]) -> bool:
