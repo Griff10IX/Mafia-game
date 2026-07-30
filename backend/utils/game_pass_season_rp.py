@@ -143,6 +143,16 @@ async def reconcile_all_stale_game_pass_users(db) -> int:
     return await reconcile_stale_game_pass_users_for_filter(db, {})
 
 
+async def force_reconcile_all_users_to_season(db, season_id: str) -> int:
+    """Reset every user's Game Pass season fields to ``season_id`` (forces VIP rebuy)."""
+    sid = str(season_id or "").strip() or "1"
+    res = await db.users.update_many(
+        {},
+        {"$set": _reconcile_set_fields(sid), "$unset": _RECONCILE_UNSET_FIELDS},
+    )
+    return int(res.modified_count or 0)
+
+
 async def reconcile_user_game_pass_season_if_stale_after_load(db, user: Dict[str, Any]) -> bool:
     """Skip DB round-trip when in-memory user is already on the current season."""
     uid = str(user.get("id") or "")

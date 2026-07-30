@@ -129,7 +129,22 @@ export default function WeedEmpire() {
     const prevAt = farmUpdatedAtRef.current;
     // Ignore stale /status polls that would restore stash after a sell.
     // Always apply forced updates from sell / other mutations.
+    // Still refresh ownership panels (Game Pass / loot exclusives) — revoke can clear
+    // those without bumping farm.updated_at, and a stale poll must not keep "Unlocked".
     if (!force && prevAt && nextAt && nextAt < prevAt) {
+      setFarm((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          game_pass_strains: Array.isArray(f.game_pass_strains) ? f.game_pass_strains : [],
+          game_pass_strain_ids: Array.isArray(f.game_pass_strain_ids) ? f.game_pass_strain_ids : [],
+          exclusive_strains: Array.isArray(f.exclusive_strains) ? f.exclusive_strains : prev.exclusive_strains,
+          exclusive_strain_ids: Array.isArray(f.exclusive_strain_ids)
+            ? f.exclusive_strain_ids
+            : prev.exclusive_strain_ids,
+          upgrade_cost_mult: f.upgrade_cost_mult != null ? f.upgrade_cost_mult : prev.upgrade_cost_mult,
+        };
+      });
       return;
     }
     if (nextAt) farmUpdatedAtRef.current = nextAt;

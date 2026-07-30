@@ -693,7 +693,8 @@ def _assistant_strain_allowed(farm: dict, strain_id: str) -> Optional[str]:
             return "You do not own this exclusive loot strain"
         if int(farm.get("grower_level") or 1) < EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL:
             return f"Grower Level {EXCLUSIVE_STRAIN_MIN_GROWER_LEVEL}+ required to plant exclusive strains"
-    elif is_game_pass_strain_id(strain_id) or strain.get("game_pass_strain"):
+        return None
+    if is_game_pass_strain_id(strain_id) or strain.get("game_pass_strain"):
         owned_gp = set(farm.get("_gp_owned_ids") or [])
         if strain_id not in owned_gp:
             return "Unlock this strain from VIP Game Pass first"
@@ -902,6 +903,21 @@ def _run_one_assistant_job(farm: dict, worker: dict, now: datetime) -> Dict[str,
             if not result.get("ok"):
                 last_err = str(result.get("error") or "Could not plant")
                 spent_soil += int(result.get("spent_soil") or 0)
+                # Unplantable loadout (revoked GP / missing exclusive / locked) → fall back
+                # so the worker is not stuck failing every tick.
+                if last_err in (
+                    "Strain not unlocked",
+                    "You do not own this exclusive loot strain",
+                    "Unlock this strain from VIP Game Pass first",
+                    "Unknown strain",
+                ) or (
+                    "Grower Level" in last_err and "exclusive" in last_err.lower()
+                ):
+                    fallback = _normalize_plant_strain("ditch_weed")
+                    if fallback != strain_id:
+                        worker["plant_strain_id"] = fallback
+                        strain_id = fallback
+                        last_err = f"{last_err} · loadout reset to {(STRAIN_BY_ID.get(fallback) or {}).get('name') or fallback}"
                 break
             planted += 1
             spent_seed += int(result.get("spent_seed") or 0)

@@ -17,6 +17,8 @@ from typing import Any, Dict, Optional
 from zoneinfo import ZoneInfo
 
 GAME_PASS_SEASON_SETTINGS_KEY = "game_pass_season"
+FORCE_VIP_SEASON_4_SEPT_2026_KEY = "game_pass_force_season_4_sept_2026_v1"
+TARGET_VIP_SEASON_ID = "4"
 UK_TZ = ZoneInfo("Europe/London")
 
 
@@ -158,7 +160,68 @@ async def _apply_season_rollover_if_due(db, stored: Dict[str, Any]) -> Dict[str,
     return new_stored
 
 
+async def maybe_force_vip_season_4_sept_2026_once(db) -> Optional[Dict[str, Any]]:
+    """
+    One-shot ops: put season 4 live through 1 Sep 2026 00:00 UK and clear prior VIP
+    so everyone must repurchase (even if season_id was already 4 with old end/VIP still on).
+    """
+    doc = await db.game_settings.find_one(
+        {"key": FORCE_VIP_SEASON_4_SEPT_2026_KEY},
+        {"_id": 0, "value": 1},
+    )
+    raw = (doc or {}).get("value")
+    if isinstance(raw, dict) and raw.get("done_at"):
+        return None
+
+    now = datetime.now(timezone.utc)
+    prev_doc = await db.game_settings.find_one(
+        {"key": GAME_PASS_SEASON_SETTINGS_KEY},
+        {"_id": 0, "value": 1},
+    )
+    prev_raw = (prev_doc or {}).get("value")
+    prev_val = prev_raw if isinstance(prev_raw, dict) else {}
+    prev_sid = str(prev_val.get("season_id") or "").strip() or None
+    prev_end = str(prev_val.get("season_end_at") or "")
+
+    new_end = uk_midnight_first_of_month(2026, 9).isoformat()
+    new_stored = {
+        "season_id": TARGET_VIP_SEASON_ID,
+        "season_end_at": new_end,
+        "set_by": "force_season_4_sept_2026_v1",
+        "set_at": now.isoformat(),
+        "previous_season_id": prev_sid,
+        "previous_season_end_at": prev_end,
+    }
+    await _persist_game_pass_season(db, new_stored)
+
+    from utils.game_pass_season_rp import force_reconcile_all_users_to_season
+
+    # Force wipe even when players already have game_pass_season_id == "4"
+    # (partial cutover left VIP claimed with old Aug end).
+    players_reconciled = await force_reconcile_all_users_to_season(db, TARGET_VIP_SEASON_ID)
+    stamp = {
+        "done_at": now.isoformat(),
+        "set_by": "force_season_4_sept_2026_v1",
+        "season_id": TARGET_VIP_SEASON_ID,
+        "season_end_at": new_end,
+        "players_reconciled": players_reconciled,
+        "previous_season_id": prev_sid,
+        "previous_season_end_at": prev_end,
+    }
+    await db.game_settings.update_one(
+        {"key": FORCE_VIP_SEASON_4_SEPT_2026_KEY},
+        {"$set": {"key": FORCE_VIP_SEASON_4_SEPT_2026_KEY, "value": stamp}},
+        upsert=True,
+    )
+    return stamp
+
+
 async def get_game_pass_season_public(db) -> Dict[str, Any]:
+    try:
+        await maybe_force_vip_season_4_sept_2026_once(db)
+    except Exception:
+        pass
+
     doc = await db.game_settings.find_one({"key": GAME_PASS_SEASON_SETTINGS_KEY}, {"_id": 0, "value": 1})
     raw = (doc or {}).get("value")
     stored = raw if isinstance(raw, dict) else {}

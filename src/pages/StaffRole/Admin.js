@@ -11769,13 +11769,32 @@ export default function Admin() {
                       <span className="text-amber-200">
                         {(revokeGpStrainsPreview.users_with_game_pass_strains ?? 0).toLocaleString()}
                       </span>
+                      {revokeGpStrainsPreview.users_field_exists != null && (
+                        <>
+                          {' · '}
+                          field exists:{' '}
+                          {(revokeGpStrainsPreview.users_field_exists ?? 0).toLocaleString()}
+                        </>
+                      )}
                     </div>
+                    {revokeGpStrainsPreview.note && (
+                      <div className="text-mutedForeground font-heading whitespace-normal">
+                        {revokeGpStrainsPreview.note}
+                      </div>
+                    )}
+                    {(revokeGpStrainsPreview.sample || []).length > 0 && (
+                      <div className="text-mutedForeground whitespace-normal">
+                        Sample: {(revokeGpStrainsPreview.sample || []).join(' · ')}
+                      </div>
+                    )}
                     {revokeGpStrainsPreview.auto_revoke_stamp?.done_at && (
                       <div className="text-emerald-300 font-heading">
                         Last revoke at {String(revokeGpStrainsPreview.auto_revoke_stamp.done_at)} by{' '}
                         {revokeGpStrainsPreview.auto_revoke_stamp.set_by || '—'}
-                        {' · '}
-                        modified {(revokeGpStrainsPreview.auto_revoke_stamp.users_modified ?? 0).toLocaleString()}
+                        {' · had '}
+                        {(revokeGpStrainsPreview.auto_revoke_stamp.users_had_strains ?? 0).toLocaleString()}
+                        {' · modified '}
+                        {(revokeGpStrainsPreview.auto_revoke_stamp.users_modified ?? 0).toLocaleString()}
                       </div>
                     )}
                   </div>

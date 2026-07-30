@@ -4422,8 +4422,27 @@ def register(router):
         )
 
         users_with = await db.users.count_documents(
-            {"game_pass_weed_strain_ids.0": {"$exists": True}},
+            {
+                "game_pass_weed_strain_ids": {
+                    "$elemMatch": {"$in": list(GAME_PASS_STRAIN_IDS)},
+                },
+            },
         )
+        field_exists = await db.users.count_documents(
+            {"game_pass_weed_strain_ids": {"$exists": True}},
+        )
+        sample: List[str] = []
+        async for row in db.users.find(
+            {
+                "game_pass_weed_strain_ids": {
+                    "$elemMatch": {"$in": list(GAME_PASS_STRAIN_IDS)},
+                },
+            },
+            {"_id": 0, "username": 1, "game_pass_weed_strain_ids": 1},
+        ).limit(15):
+            sample.append(
+                f"{row.get('username') or '?'}={list(row.get('game_pass_weed_strain_ids') or [])}"
+            )
         stamp_doc = await db.game_settings.find_one(
             {"key": PREMATURE_GP_STRAIN_REVOKE_KEY},
             {"_id": 0, "value": 1},
@@ -4431,8 +4450,14 @@ def register(router):
         stamp = (stamp_doc or {}).get("value")
         return {
             "users_with_game_pass_strains": users_with,
+            "users_field_exists": field_exists,
+            "sample": sample,
             "strain_ids": list(GAME_PASS_STRAIN_IDS),
             "auto_revoke_stamp": stamp if isinstance(stamp, dict) else None,
+            "note": (
+                "0 means nobody currently has gp_* ids on users.game_pass_weed_strain_ids. "
+                "If Weed Empire still shows Unlocked, hard-refresh — the panel can keep a stale client farm."
+            ),
         }
 
     @router.post("/admin/game-pass/revoke-premature-strains")

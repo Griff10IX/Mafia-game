@@ -143,8 +143,27 @@ async def revoke_all_game_pass_weed_strains(db) -> Dict[str, Any]:
     Used to undo bulk grants that ran before season 4 purchases started.
     """
     users_with = await db.users.count_documents(
-        {"game_pass_weed_strain_ids.0": {"$exists": True}},
+        {
+            "game_pass_weed_strain_ids": {
+                "$elemMatch": {"$in": list(GAME_PASS_STRAIN_IDS)},
+            },
+        },
     )
+    users_field_exists = await db.users.count_documents(
+        {"game_pass_weed_strain_ids": {"$exists": True}},
+    )
+    sample: List[str] = []
+    async for row in db.users.find(
+        {
+            "game_pass_weed_strain_ids": {
+                "$elemMatch": {"$in": list(GAME_PASS_STRAIN_IDS)},
+            },
+        },
+        {"_id": 0, "username": 1, "game_pass_weed_strain_ids": 1},
+    ).limit(25):
+        sample.append(
+            f"{row.get('username') or '?'}={list(row.get('game_pass_weed_strain_ids') or [])}"
+        )
     ures = await db.users.update_many(
         {"game_pass_weed_strain_ids": {"$exists": True}},
         {"$unset": {"game_pass_weed_strain_ids": ""}},
@@ -158,8 +177,10 @@ async def revoke_all_game_pass_weed_strains(db) -> Dict[str, Any]:
         farms_pulled += int(fres.modified_count or 0)
     return {
         "users_had_strains": int(users_with),
+        "users_field_exists": int(users_field_exists),
         "users_modified": int(ures.modified_count or 0),
         "farm_unlock_rows_pulled": farms_pulled,
+        "sample": sample,
     }
 
 
