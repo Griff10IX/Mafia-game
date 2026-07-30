@@ -903,7 +903,26 @@ export default function GamePass() {
                         ? 'VIP claimed'
                         : passIsUnactivatedValid
                           ? 'Token ready (activate to claim)'
-                          : `Buy for £${GAME_PASS_PRICE_GBP}`}
+                          : `Buy Game Pass £${GAME_PASS_PRICE_GBP}`}
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePrestigePurchase}
+                  disabled={
+                    !user
+                    || prestigeLoading
+                    || loading
+                    || prestigeStatus?.available === false
+                  }
+                  className="flex-1 w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-amber-500/20 text-amber-200 border border-amber-500/40 hover:bg-amber-500/30 disabled:opacity-50 touch-manipulation"
+                >
+                  {prestigeLoading
+                    ? '...'
+                    : vipRewardTrackComplete
+                      ? `Prestige £${GAME_PASS_PRESTIGE_PRICE_GBP}`
+                      : Number(prestigeStatus?.prestige_pending || user?.game_pass_prestige_pending || 0) > 0
+                        ? 'Prestige queued'
+                        : `Buy Prestige £${GAME_PASS_PRESTIGE_PRICE_GBP}`}
                 </button>
                 <Link
                   to="/account/inventory"
@@ -913,6 +932,19 @@ export default function GamePass() {
                   Activate
                 </Link>
               </div>
+              <p className="text-[9px] text-zinc-400 font-heading leading-relaxed">
+                Buy both: Game Pass (£{GAME_PASS_PRICE_GBP}) unlocks VIP tiers. Prestige (£{GAME_PASS_PRESTIGE_PRICE_GBP}) queues +{GAME_PASS_PRESTIGE_BONUS_PERCENT}% season VIP rewards
+                {GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES ? ` + ${GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES.toLocaleString()} loot` : ''}
+                {' '}and auto-applies when you finish VIP tiers 1–{MAX_MICRO_TIER}, then resets the track (VIP stays on).
+              </p>
+              {prestigeStatus?.available === false && prestigeStatus?.unavailable_reason && (
+                <p className="text-[8px] text-amber-400/90 font-heading">{prestigeStatus.unavailable_reason}</p>
+              )}
+              {Number(prestigeStatus?.prestige_pending || user?.game_pass_prestige_pending || 0) > 0 && (
+                <p className="text-[9px] text-amber-200/95 font-heading">
+                  Prestige queued — applies automatically when you finish VIP tier {MAX_MICRO_TIER}.
+                </p>
+              )}
 
               <p className="text-[8px] text-zinc-500/90 font-heading leading-relaxed border-t border-primary/10 pt-2">
                 Why this isn&apos;t the same as {SILVER_PACK_POINTS.toLocaleString()} pts for £{SILVER_PACK_PRICE_GBP}: that pack adds{' '}
@@ -1054,7 +1086,7 @@ export default function GamePass() {
                   </p>
                 </>
               )}
-              {(vipClaimed || passIsUnactivatedValid || Number(prestigeStatus?.prestige_pending || 0) > 0) && (
+              {(vipClaimed || passIsUnactivatedValid || Number(prestigeStatus?.prestige_pending || 0) > 0 || vipRewardTrackComplete) && (
                 <div className="rounded-md border border-amber-500/30 bg-amber-500/5 px-2.5 py-2.5 space-y-2">
                   <div className="text-[10px] font-heading font-bold text-amber-300/95 uppercase tracking-wider">
                     Prestige Game Pass — £{GAME_PASS_PRESTIGE_PRICE_GBP}
@@ -1062,7 +1094,7 @@ export default function GamePass() {
                   <p className="text-[9px] text-zinc-400 font-heading leading-relaxed">
                     {vipRewardTrackComplete
                       ? <>Get +{GAME_PASS_PRESTIGE_BONUS_PERCENT}% of this season&apos;s VIP rewards</>
-                      : <>Buy now while you climb — when you finish VIP tiers 1–{MAX_MICRO_TIER}, Prestige auto-applies (+{GAME_PASS_PRESTIGE_BONUS_PERCENT}% season VIP rewards</>}
+                      : <>Buy anytime (even with Game Pass) — when you finish VIP tiers 1–{MAX_MICRO_TIER}, Prestige auto-applies (+{GAME_PASS_PRESTIGE_BONUS_PERCENT}% season VIP rewards</>}
                     {prestigeStatus?.bonus_summary ? (
                       <>
                         {' '}
@@ -1071,7 +1103,7 @@ export default function GamePass() {
                     ) : null}
                     {vipRewardTrackComplete
                       ? <>, plus {GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES.toLocaleString()} extra loot pieces, then start the track again from tier 1 (VIP stays active).</>
-                      : <>, plus {GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES.toLocaleString()} loot pieces, then reset the track). You can buy Game Pass (£{GAME_PASS_PRICE_GBP}) and Prestige (£{GAME_PASS_PRESTIGE_PRICE_GBP}) together.</>}
+                      : <>, plus {GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES.toLocaleString()} loot pieces, then reset the track).</>}
                   </p>
                   {Number(prestigeStatus?.prestige_pending || user?.game_pass_prestige_pending || 0) > 0 && (
                     <p className="text-[9px] text-amber-200/95 font-heading">

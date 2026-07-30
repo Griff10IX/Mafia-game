@@ -318,18 +318,15 @@ def prestige_eligibility_error(user: Optional[dict]) -> Optional[str]:
 def prestige_purchase_eligibility_error(user: Optional[dict]) -> Optional[str]:
     """
     Error if prestige cannot be bought / queued.
-    Allowed with active VIP or a held Game Pass token — can buy early so it
-    auto-applies when VIP tiers 1–100 finish.
+
+    Can buy before Game Pass — queues until VIP tiers 1–100 finish (after you buy/activate
+    Game Pass and complete the track). Also buyable while climbing with VIP already active.
     """
     if not user:
         return "Not logged in"
-    vip = user.get("rank_xp_pass_rewards_granted") is True
-    if not vip and not _token_unactivated_valid(user):
-        return "Buy Game Pass first — then you can buy Prestige (£10) early so it auto-applies when you finish VIP tiers 1–100."
     pending = int(user.get("game_pass_prestige_pending") or 0)
     if pending >= GAME_PASS_PRESTIGE_PENDING_CAP:
         return "You already have a Game Pass Prestige queued — it will apply automatically when you finish VIP tiers 1–100."
-    # Already at 100 with no pending: purchase applies immediately (handled at fulfill).
     return None
 
 
