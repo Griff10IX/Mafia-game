@@ -924,12 +924,19 @@ export default function WeedEmpire() {
           <div className="text-[10px] uppercase tracking-wider font-heading text-emerald-300">
             Game Pass strains (permanent)
           </div>
-          <ul className="space-y-1 text-xs">
+          <ul className="space-y-2 text-xs">
             {ownedGamePassStrains.map((ex) => (
-              <li key={ex.strain_id} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <span className="font-heading text-foreground">{ex.name}</span>
-                <span className="text-muted-foreground">{ex.buff_label}</span>
-                <span className="text-emerald-400/90 text-[10px]">Unlocked</span>
+              <li key={ex.strain_id} className="space-y-0.5">
+                <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                  <span className="font-heading text-foreground">{ex.name}</span>
+                  <span className="text-emerald-300/90 text-[10px]">{ex.buff_label}</span>
+                  <span className="text-emerald-400/90 text-[10px]">Unlocked</span>
+                </div>
+                {(ex.buff_description || ex.buff_label) && (
+                  <p className="text-[10px] text-muted-foreground leading-snug">
+                    {ex.buff_description || ex.buff_label}
+                  </p>
+                )}
               </li>
             ))}
           </ul>
@@ -1325,8 +1332,11 @@ export default function WeedEmpire() {
                   </p>
                 )}
                 {plantStrain?.game_pass_strain && (
-                  <p className="text-[10px] text-emerald-200/90">
-                    Game Pass: {plantStrain.exclusive_buff_label || "permanent unlock"}
+                  <p className="text-[10px] text-emerald-200/90 leading-snug">
+                    Game Pass — {plantStrain.exclusive_buff_label || "permanent unlock"}
+                    {plantStrain.exclusive_buff_description
+                      ? `: ${plantStrain.exclusive_buff_description}`
+                      : ""}
                   </p>
                 )}
 

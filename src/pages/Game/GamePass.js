@@ -144,11 +144,41 @@ const V4_EXTRA_TOKEN_KEYS = [
 ];
 const TARGET_V4_EXTRA_TOKEN_EACH = 20;
 const GP_STRAIN_BY_TIER = {
-  20: { id: 'gp_sour_diesel', name: 'Sour Diesel', label: '+5% ranking (RP)' },
-  28: { id: 'gp_girl_scout_cookies', name: 'Girl Scout Cookies', label: '−5% raid success while planted' },
-  35: { id: 'gp_purple_punch', name: 'Purple Punch', label: 'Lose only 50% on heat bust' },
-  42: { id: 'gp_wedding_cake', name: 'Wedding Cake', label: '+25% / +15% daily withdraw' },
-  50: { id: 'gp_gorilla_glue', name: 'Gorilla Glue #4', label: '−10% upgrade costs' },
+  20: {
+    id: 'gp_sour_diesel',
+    name: 'Sour Diesel',
+    label: '+5% ranking (RP)',
+    description:
+      'While owned, all rank points you earn are increased by 5% (stacks with active VIP Game Pass +10% RP).',
+  },
+  28: {
+    id: 'gp_girl_scout_cookies',
+    name: 'Girl Scout Cookies',
+    label: '−5% raid success while planted',
+    description:
+      'While this strain is growing on any of your pots, raiders have 5% lower success chance against your farm.',
+  },
+  35: {
+    id: 'gp_purple_punch',
+    name: 'Purple Punch',
+    label: '50% heat bust loss',
+    description:
+      'On a heat bust you only lose half your business cash, stash, and curing batches (equipment is still halved as usual).',
+  },
+  42: {
+    id: 'gp_wedding_cake',
+    name: 'Wedding Cake',
+    label: '+25% / +15% daily withdraw',
+    description:
+      'Raises your Weed Empire daily personal withdraw cap: +25% while VIP is active this season, then +15% permanently once unlocked.',
+  },
+  50: {
+    id: 'gp_gorilla_glue',
+    name: 'Gorilla Glue #4',
+    label: '−10% upgrade costs',
+    description:
+      'Weed Empire upgrade costs (equipment, house tiers, and dealers) cost 10% less business cash while owned.',
+  },
 };
 const ROT_PRIM_KEYS = ['money', 'bullets', 'xp_crimes_tokens', 'xp_gta_tokens', 'points'];
 const ROT_TOKEN_KEYS = ['melt_tokens', 'jailbust_tokens', 'travel_tokens', 'properties_tokens'];
@@ -375,6 +405,7 @@ function getRewardsForMicroTier(microTier, profile = REWARD_PROFILES.v3) {
     if (strain) {
       base._game_pass_strain_name = strain.name;
       base._game_pass_strain_label = strain.label;
+      base._game_pass_strain_description = strain.description;
     }
   }
   return base;
@@ -464,9 +495,14 @@ function TierRewards({ rewards, isFreeMembership, isTierCompleted, microTier, re
         </div>
       )}
       {rewards?._game_pass_strain_name && !isFreeMembership && (
-        <div className="text-[9px] font-heading text-emerald-300/95">
-          Permanent weed strain: {rewards._game_pass_strain_name}
-          {rewards._game_pass_strain_label ? ` — ${rewards._game_pass_strain_label}` : ''}
+        <div className="text-[9px] font-heading text-emerald-300/95 space-y-0.5">
+          <div>
+            Permanent weed strain: {rewards._game_pass_strain_name}
+            {rewards._game_pass_strain_label ? ` — ${rewards._game_pass_strain_label}` : ''}
+          </div>
+          {rewards._game_pass_strain_description ? (
+            <div className="text-zinc-400 font-normal leading-snug">{rewards._game_pass_strain_description}</div>
+          ) : null}
         </div>
       )}
       {REWARD_DISPLAY_ORDER.map((k) => {

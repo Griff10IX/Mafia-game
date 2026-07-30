@@ -33,23 +33,43 @@ GAME_PASS_STRAIN_BY_TIER: Dict[int, str] = {
 
 GAME_PASS_STRAIN_BUFFS: Dict[str, Dict[str, Any]] = {
     GP_SOUR_DIESEL: {
-        "label": "+5% ranking (RP) while owned",
+        "label": "+5% ranking (RP)",
+        "description": (
+            "While you own Sour Diesel, all rank points you earn are increased by 5% "
+            "(stacks with active VIP Game Pass +10% RP)."
+        ),
         "kind": "rank_points",
     },
     GP_GIRL_SCOUT_COOKIES: {
-        "label": "−5% raid success vs you while planted",
+        "label": "−5% raid success while planted",
+        "description": (
+            "While Girl Scout Cookies is growing on any of your pots, raiders have 5% lower "
+            "success chance against your farm."
+        ),
         "kind": "raid_defence_planted",
     },
     GP_PURPLE_PUNCH: {
-        "label": "Lose only 50% of cash / stash / curing on heat bust",
+        "label": "50% heat bust loss",
+        "description": (
+            "On a heat bust you only lose half your business cash, stash, and curing batches "
+            "(equipment is still halved as usual)."
+        ),
         "kind": "bust_soft",
     },
     GP_WEDDING_CAKE: {
-        "label": "+25% daily withdraw with active VIP; +15% permanent after",
+        "label": "+25% / +15% daily withdraw",
+        "description": (
+            "Raises your Weed Empire daily personal withdraw cap: +25% while you have active "
+            "VIP this season, then +15% permanently once unlocked."
+        ),
         "kind": "withdraw_cap",
     },
     GP_GORILLA_GLUE: {
-        "label": "−10% Weed Empire upgrade costs",
+        "label": "−10% upgrade costs",
+        "description": (
+            "All Weed Empire upgrade costs (equipment, house tiers, and dealers) cost 10% less "
+            "business cash while you own Gorilla Glue #4."
+        ),
         "kind": "upgrade_discount",
     },
 }
@@ -146,17 +166,26 @@ def game_pass_buffs_public(owned_ids: Set[str], *, active_vip: bool = False) -> 
             continue
         buff = GAME_PASS_STRAIN_BUFFS.get(sid) or {}
         label = buff.get("label") or ""
+        description = buff.get("description") or label
         if sid == GP_WEDDING_CAKE:
-            label = (
-                "+25% daily withdraw (active VIP)"
-                if active_vip
-                else "+15% daily withdraw (permanent)"
-            )
+            if active_vip:
+                label = "+25% daily withdraw (active VIP)"
+                description = (
+                    "Your daily personal withdraw cap from the Weed business is +25% while VIP "
+                    "Game Pass is active this season. After the pass ends it stays at +15% forever."
+                )
+            else:
+                label = "+15% daily withdraw (permanent)"
+                description = (
+                    "Your daily personal withdraw cap from the Weed business is permanently "
+                    "+15% while you own Wedding Cake."
+                )
         out.append(
             {
                 "strain_id": sid,
                 "name": game_pass_strain_display_name(sid),
                 "buff_label": label,
+                "buff_description": description,
                 "buff_kind": buff.get("kind") or "",
                 "active": True,
                 "game_pass": True,

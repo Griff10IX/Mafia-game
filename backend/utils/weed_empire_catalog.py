@@ -278,6 +278,7 @@ def _build_strains() -> List[Dict[str, Any]]:
                 "loot_exclusive": False,
                 "game_pass_strain": True,
                 "exclusive_buff_label": buff.get("label") or "",
+                "exclusive_buff_description": buff.get("description") or buff.get("label") or "",
                 "exclusive_buff_kind": buff.get("kind") or "",
                 "min_grower_level": 1,
             }
