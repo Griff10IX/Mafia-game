@@ -57,9 +57,9 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
   const needed = Number(rankProgress.rank_points_needed) || 0;
   const total = current + needed;
   const pctFromApi = Number(rankProgress.rank_points_progress);
-  const progressPct = (typeof pctFromApi === 'number' && !Number.isNaN(pctFromApi) && pctFromApi > 0)
+  const progressPct = (typeof pctFromApi === 'number' && !Number.isNaN(pctFromApi) && pctFromApi >= 0)
     ? Math.min(100, Math.max(0, pctFromApi))
-    : (total > 0 ? Math.min(100, (current / total) * 100) : needed === 0 ? 100 : 0);
+    : (total > 0 ? Math.min(100, (current / total) * 100) : 0);
   const progressLabel = hasPremiumBar ? progressPct.toFixed(2) : progressPct.toFixed(0);
   const progressKind = rankProgress.progress_kind || (rankProgress.next_rank ? 'street' : needed > 0 ? 'prestige' : 'max');
   const isPrestigeBar = progressKind === 'prestige';
@@ -231,7 +231,7 @@ const STAT_OPTIONS = [
 
 export default function Dashboard() {
   const authUser = useAuthUser();
-  const [rankProgress, setRankProgress] = useState(() => readDashboardSessionCache()?.rankProgress ?? null);
+  const [rankProgress, setRankProgress] = useState(null);
   const [preferences, setPreferences] = useState(() => {
     const p = readDashboardSessionCache()?.preferences;
     return {

@@ -30,6 +30,23 @@ export function readDashboardSessionCache() {
   return safeEntry;
 }
 
+/** Keep Layout / Dashboard session paint in sync after /auth/me + rank-progress. */
+export function writeDashboardSessionUserProgress(user, rankProgress) {
+  const prev = readDashboardSessionCache() || {};
+  writeSessionJson(DASHBOARD_SESSION_CACHE_KEY, {
+    ...prev,
+    user: sanitizeDashboardUser(user) ?? prev.user ?? null,
+    rankProgress: rankProgress ?? null,
+  });
+}
+
+/** Drop cached rank bar so a full refresh cannot flash stale Godfather 100%. */
+export function clearDashboardSessionRankProgress() {
+  const prev = readDashboardSessionCache();
+  if (!prev || typeof prev !== 'object') return;
+  writeSessionJson(DASHBOARD_SESSION_CACHE_KEY, { ...prev, rankProgress: null });
+}
+
 /** Align with Dashboard fetchData preference merge (session write path). */
 export function mergeDashboardPreferences(dashResData, prevEntry) {
   if (dashResData) {

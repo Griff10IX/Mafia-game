@@ -14,7 +14,7 @@ import api, {
 import { setToastMutedPages } from '../utils/toastPageMutes';
 import { clearStaffPortalSession, isStaffPortalTokenValid } from '../utils/staffPortalSession';
 import { getThemeUiPlatform } from '../utils/themePlatform';
-import { readDashboardSessionCache } from '../utils/dashboardSessionCache';
+import { readDashboardSessionCache, writeDashboardSessionUserProgress } from '../utils/dashboardSessionCache';
 import { SLOTS_FEATURE_ENABLED } from '../config/gameFeatures';
 import { MOD_STAFF_ROUTE_IDS, ADMIN_ROUTE_GROUP_MAP } from '../pages/StaffRole/adminToolMap';
 import { preloadRoute, preloadRouteHandlers } from '../utils/routePreload';
@@ -40,7 +40,9 @@ import styles from '../styles/noir.module.css';
 function readLayoutBootFromDashboardCache() {
   const row = readDashboardSessionCache();
   if (!row?.user?.id) return { user: null, rankProgress: null };
-  return { user: row.user, rankProgress: row.rankProgress ?? null };
+  // Never hydrate the rank bar from session cache — stale Godfather 100% flashes on refresh
+  // after prestige / RP changes until /user/rank-progress returns. User stats still boot warm.
+  return { user: row.user, rankProgress: null };
 }
 
 /** Bottom bar: 6 icons. Rank = crimes/rank; Misc = everything that doesn't fit elsewhere. */
@@ -1232,6 +1234,17 @@ export default function Layout({ children }) {
       if (userRes.data?.username) setProfileSessionLastMeUsername(userRes.data.username);
       setRankProgress(progressRes.data);
       try {
+        writeDashboardSessionUserProgress(
+          {
+            ...authUserData,
+            casino_profit: 0,
+            property_profit: 0,
+            has_casino_or_property: false,
+          },
+          progressRes.data,
+        );
+      } catch (_) { /* ignore */ }
+      try {
         setToastMutedPages(userRes.data?.toast_muted_pages);
       } catch (_) { /* ignore */ }
     } catch (error) {
@@ -2092,8 +2105,11 @@ export default function Layout({ children }) {
       const current = rankProgress ? (Number(rankProgress.rank_points_current) || 0) : 0;
       const needed = rankProgress ? (Number(rankProgress.rank_points_needed) || 0) : 0;
       const total = current + needed;
+      // Prefer API %. Do not treat "needed === 0" as 100% — that flashed a full bar on stale/partial payloads.
       const progress = rankProgress
-        ? ((typeof pct === 'number' && !Number.isNaN(pct) && pct > 0) ? Math.min(100, Math.max(0, pct)) : (total > 0 ? Math.min(100, (current / total) * 100) : needed === 0 ? 100 : 0))
+        ? ((typeof pct === 'number' && !Number.isNaN(pct) && pct >= 0)
+          ? Math.min(100, Math.max(0, pct))
+          : (total > 0 ? Math.min(100, (current / total) * 100) : 0))
         : 0;
       const hasPremiumBar = !!user?.premium_rank_bar;
       const progressLabel = rankProgress ? (hasPremiumBar ? progress.toFixed(2) : progress.toFixed(0)) : '—';
@@ -2774,7 +2790,7 @@ export default function Layout({ children }) {
                 <div className="pt-1 pb-2 border-b" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.12)' }}>
                   <p className="text-[9px] font-heading uppercase tracking-wider mb-1.5" style={{ color: 'var(--noir-muted)' }}>Rank Progress</p>
                   <div className="h-1.5 w-full rounded-full overflow-hidden mb-1" style={{ backgroundColor: 'var(--noir-raised)' }}>
-                    <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, Number(rankProgress.rank_points_progress) || 0))}%`, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }} />
+                    <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, Number(rankProgress.rank_points_progress) || 0))}%`, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }} />
                   </div>
                   <p className="text-[9px] font-heading" style={{ color: 'var(--noir-primary)' }}>{(user?.premium_rank_bar ? (Number(rankProgress.rank_points_progress) || 0).toFixed(2) : (Number(rankProgress.rank_points_progress) || 0).toFixed(0))}% · {rankProgress.current_rank_name}</p>
                 </div>
@@ -3263,7 +3279,7 @@ export default function Layout({ children }) {
                       <div className="flex-1 min-w-0">
                         <p className="font-heading text-xs truncate" style={{ color: 'var(--noir-muted)' }}>{rankProgress.current_rank_name}</p>
                         <div className="h-1.5 w-full rounded-full mt-1 overflow-hidden" style={{ backgroundColor: 'var(--noir-raised)' }}>
-                          <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, Math.max(0, Number(rankProgress.rank_points_progress) || 0))}%`, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }} />
+                          <div className="h-full rounded-full" style={{ width: `${Math.min(100, Math.max(0, Number(rankProgress.rank_points_progress) || 0))}%`, background: 'linear-gradient(to right, var(--noir-accent-line), var(--noir-accent-line-dark))' }} />
                         </div>
                       </div>
                       <span className="font-heading text-xs font-bold shrink-0" style={{ color: 'var(--noir-primary)' }}>

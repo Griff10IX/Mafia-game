@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
-import { Star, TrendingUp, Shield, Car, Crosshair, Lock, Check } from 'lucide-react';
+import { Star, TrendingUp, Shield, Car, Crosshair, Lock, Check, Briefcase, Target, Layers } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import PrestigeBadge from '../../components/PrestigeBadge';
+import { clearDashboardSessionRankProgress } from '../../utils/dashboardSessionCache';
 import styles from '../../styles/noir.module.css';
 
 const PRESTIGE_COLORS = {
@@ -37,11 +38,41 @@ function ProgressBar({ value, max, color }) {
 }
 
 const BENEFIT_ROWS = [
-  { key: 'crime_mult',     icon: Shield,     label: 'Crime Payout',       fmt: v => `+${Math.round((v - 1) * 100)}%` },
-  { key: 'oc_mult',        icon: TrendingUp, label: 'OC Payout',          fmt: v => `+${Math.round((v - 1) * 100)}%` },
-  { key: 'gta_rare_boost', icon: Car,        label: 'GTA Rare Cars',      fmt: v => `+${v}×` },
-  { key: 'npc_mult',       icon: Crosshair,  label: 'NPC Rewards',        fmt: v => `+${Math.round((v - 1) * 100)}%` },
+  { key: 'crime_mult',             icon: Shield,     label: 'Crime payouts',          fmt: v => `+${Math.round((v - 1) * 100)}%` },
+  { key: 'oc_mult',                icon: TrendingUp, label: 'OC payouts',             fmt: v => `+${Math.round((v - 1) * 100)}%` },
+  { key: 'gta_rare_boost',         icon: Car,        label: 'GTA rare cars',          fmt: v => `+${v}×` },
+  { key: 'npc_mult',               icon: Crosshair,  label: 'NPC rewards',            fmt: v => `+${Math.round((v - 1) * 100)}%` },
+  { key: 'mission_reward_mult',    icon: Target,     label: 'Mission rewards',        fmt: v => `×${Number(v).toFixed(Number(v) % 1 ? 1 : 0)}` },
+  { key: 'illegal_business_mult',  icon: Briefcase,  label: 'Illegal business',       fmt: v => `+${Math.round((v - 1) * 100)}%` },
+  { key: 'rank_threshold_mult',    icon: Layers,     label: 'Rank tier thresholds',   fmt: v => `×${Number(v).toFixed(Number(v) % 1 ? 1 : 0)}` },
 ];
+
+function benefitDefault(key) {
+  if (key === 'gta_rare_boost') return 0;
+  return 1;
+}
+
+function LevelStatLines({ row, isUnlocked, color }) {
+  const lines = [
+    ['Crime', `+${Math.round(((row.crime_mult ?? 1) - 1) * 100)}%`],
+    ['OC', `+${Math.round(((row.oc_mult ?? 1) - 1) * 100)}%`],
+    ['GTA', `+${row.gta_rare_boost ?? 0}×`],
+    ['NPC', `+${Math.round(((row.npc_mult ?? 1) - 1) * 100)}%`],
+    ['Missions', `×${Number(row.mission_reward_mult ?? 1)}`],
+    ['Business', `+${Math.round(((row.illegal_business_mult ?? 1) - 1) * 100)}%`],
+    ['Ranks', `×${Number(row.rank_threshold_mult ?? 1)}`],
+  ];
+  return (
+    <div className="flex flex-col gap-1 mt-0.5 pt-2 border-t border-zinc-800/60">
+      {lines.map(([label, val]) => (
+        <div key={label} className="flex justify-between items-center text-[8px] font-heading">
+          <span className="text-zinc-600">{label}</span>
+          <span style={{ color: isUnlocked ? color : '#52525b' }} className="font-bold tabular-nums">{val}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // Horizontally scrollable level card for mobile levels section
 function LevelCard({ row, isCurrent, isUnlocked }) {
@@ -50,7 +81,7 @@ function LevelCard({ row, isCurrent, isUnlocked }) {
     <div
       className="flex-shrink-0 flex flex-col gap-1.5 rounded-xl p-3 border transition-all"
       style={{
-        width: 120,
+        width: 140,
         borderColor: isCurrent ? color : isUnlocked ? `${color}40` : 'rgba(63,63,70,0.5)',
         backgroundColor: isCurrent ? `${color}0a` : isUnlocked ? `${color}05` : 'transparent',
         boxShadow: isCurrent ? `0 0 0 1px ${color}` : undefined,
@@ -88,20 +119,7 @@ function LevelCard({ row, isCurrent, isUnlocked }) {
         {(row.godfather_req || 0).toLocaleString()} RP
       </div>
 
-      {/* Stats */}
-      <div className="flex flex-col gap-1 mt-0.5 pt-2 border-t border-zinc-800/60">
-        {[
-          ['Crime', `+${Math.round(((row.crime_mult ?? 1) - 1) * 100)}%`],
-          ['OC',    `+${Math.round(((row.oc_mult ?? 1) - 1) * 100)}%`],
-          ['GTA',   `+${row.gta_rare_boost ?? 0}×`],
-          ['NPC',   `+${Math.round(((row.npc_mult ?? 1) - 1) * 100)}%`],
-        ].map(([label, val]) => (
-          <div key={label} className="flex justify-between items-center text-[8px] font-heading">
-            <span className="text-zinc-600">{label}</span>
-            <span style={{ color: isUnlocked ? color : '#52525b' }} className="font-bold tabular-nums">{val}</span>
-          </div>
-        ))}
-      </div>
+      <LevelStatLines row={row} isUnlocked={isUnlocked} color={color} />
     </div>
   );
 }
@@ -152,6 +170,7 @@ export default function Prestige() {
     try {
       const res = await api.post('/prestige/activate');
       toast.success(res.data?.message || 'Prestiged!');
+      try { clearDashboardSessionRankProgress(); } catch (_) { /* ignore */ }
       await refreshUser();
       await fetchInfo();
     } catch (e) {
@@ -239,15 +258,14 @@ export default function Prestige() {
 
           {/* ── MOBILE: benefit chips row ─────────────────────────────── */}
           {level > 0 && (
-            <div className="flex gap-2 mb-3 md:hidden">
+            <div className="flex gap-2 mb-3 md:hidden overflow-x-auto pb-1 -mx-1 px-1">
               {BENEFIT_ROWS.map(({ key, label, fmt }) => {
-                const val = info.current_benefits?.[key] ?? (key === 'gta_rare_boost' ? 0 : 1);
-                // short label for chips
+                const val = info.current_benefits?.[key] ?? benefitDefault(key);
                 const short = label.split(' ')[0];
                 return (
                   <div
                     key={key}
-                    className="flex-1 flex flex-col items-center py-1.5 px-1 rounded-lg border"
+                    className="min-w-[4.25rem] flex-shrink-0 flex flex-col items-center py-1.5 px-1.5 rounded-lg border"
                     style={{ borderColor: `${color}22`, backgroundColor: `${color}07` }}
                   >
                     <span className="text-[7px] font-heading text-zinc-600 uppercase tracking-wider mb-0.5">{short}</span>
@@ -367,11 +385,19 @@ export default function Prestige() {
         className={`${styles.panel} rounded-xl overflow-hidden ${fadeClass} mobile-panel`}
         style={{ animationDelay: '0.1s' }}
       >
-        <div className="px-4 py-3 border-b border-zinc-800/40 flex items-center gap-2">
+        <div className="px-4 py-3 border-b border-zinc-800/40 flex items-center gap-2 flex-wrap">
           <Star size={14} style={{ color }} />
           <span className="text-xs font-heading font-bold uppercase tracking-widest" style={{ color }}>
             {level > 0 ? 'Active Benefits' : 'Benefits Await'}
           </span>
+          {level > 0 && (
+            <span
+              className="ml-auto inline-flex items-center gap-1 text-[8px] font-heading font-bold uppercase tracking-wider px-1.5 py-0.5 rounded"
+              style={{ color, backgroundColor: `${color}18`, border: `1px solid ${color}30` }}
+            >
+              <Check size={9} /> Live on your account
+            </span>
+          )}
         </div>
 
         {level === 0 ? (
@@ -387,19 +413,17 @@ export default function Prestige() {
           /* 2×2 grid on mobile; single-col list on md+ */
           <div className="grid grid-cols-2 md:grid-cols-1 gap-2 p-3 md:p-4">
             {BENEFIT_ROWS.map(({ key, icon: Icon, label, fmt }) => {
-              const val = info.current_benefits?.[key] ?? (key === 'gta_rare_boost' ? 0 : 1);
+              const val = info.current_benefits?.[key] ?? benefitDefault(key);
               return (
                 <div
                   key={key}
                   className="flex flex-col md:flex-row md:items-center md:justify-between gap-1 md:gap-2 px-3 py-3 md:py-2 rounded-xl"
                   style={{ backgroundColor: `${color}08`, border: `1px solid ${color}15` }}
                 >
-                  {/* Icon + label */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
                     <Icon size={12} style={{ color }} className="shrink-0" />
                     <span className="text-[9px] md:text-[10px] font-heading text-zinc-400 leading-tight">{label}</span>
                   </div>
-                  {/* Value — large on mobile for scannability */}
                   <span
                     className="text-base md:text-[10px] font-heading font-bold tabular-nums leading-none"
                     style={{ color }}
@@ -410,7 +434,7 @@ export default function Prestige() {
               );
             })}
             <p className="col-span-2 md:col-span-1 text-[9px] font-heading text-zinc-500 px-3 pt-1">
-              Badge effects (crime, GTA, jail, OC, booze, melt, hitlist, kills) gain a 0.5% boost per prestige level.
+              These bonuses apply automatically in-game (crime/OC/NPC cash, GTA rare weights, missions, illegal business, scaled rank ladder). Badge effects also gain a 0.5% boost per prestige level.
             </p>
           </div>
         )}
@@ -537,10 +561,13 @@ export default function Prestige() {
                 <th className="text-left px-4 py-2 text-zinc-600 font-bold uppercase tracking-widest">Level</th>
                 <th className="text-left px-3 py-2 text-zinc-600 font-bold uppercase tracking-widest">Title</th>
                 <th className="text-center px-3 py-2 text-zinc-600 font-bold uppercase tracking-widest" title="Effective RP to prestige into this tier (not per street rank)">Prestige RP</th>
-                <th className="text-center px-3 py-2 text-zinc-600 font-bold uppercase tracking-widest">Crime</th>
-                <th className="text-center px-3 py-2 text-zinc-600 font-bold uppercase tracking-widest">OC</th>
-                <th className="text-center px-3 py-2 text-zinc-600 font-bold uppercase tracking-widest">GTA Rare</th>
-                <th className="text-center px-3 py-2 text-zinc-600 font-bold uppercase tracking-widest">NPC</th>
+                <th className="text-center px-2 py-2 text-zinc-600 font-bold uppercase tracking-widest">Crime</th>
+                <th className="text-center px-2 py-2 text-zinc-600 font-bold uppercase tracking-widest">OC</th>
+                <th className="text-center px-2 py-2 text-zinc-600 font-bold uppercase tracking-widest">GTA</th>
+                <th className="text-center px-2 py-2 text-zinc-600 font-bold uppercase tracking-widest">NPC</th>
+                <th className="text-center px-2 py-2 text-zinc-600 font-bold uppercase tracking-widest">Missions</th>
+                <th className="text-center px-2 py-2 text-zinc-600 font-bold uppercase tracking-widest">Business</th>
+                <th className="text-center px-2 py-2 text-zinc-600 font-bold uppercase tracking-widest">Ranks</th>
               </tr>
             </thead>
             <tbody>
@@ -569,10 +596,13 @@ export default function Prestige() {
                     </td>
                     <td className="px-3 py-2.5" style={{ color: isUnlocked ? rowColor : '#52525b' }}>{row.name}</td>
                     <td className="px-3 py-2.5 text-center text-zinc-500 tabular-nums">{(row.godfather_req ?? 0).toLocaleString()}</td>
-                    <td className="px-3 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round(((row.crime_mult ?? 1) - 1) * 100)}%</td>
-                    <td className="px-3 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round(((row.oc_mult ?? 1) - 1) * 100)}%</td>
-                    <td className="px-3 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{row.gta_rare_boost ?? 0}×</td>
-                    <td className="px-3 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round(((row.npc_mult ?? 1) - 1) * 100)}%</td>
+                    <td className="px-2 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round(((row.crime_mult ?? 1) - 1) * 100)}%</td>
+                    <td className="px-2 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round(((row.oc_mult ?? 1) - 1) * 100)}%</td>
+                    <td className="px-2 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{row.gta_rare_boost ?? 0}×</td>
+                    <td className="px-2 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round(((row.npc_mult ?? 1) - 1) * 100)}%</td>
+                    <td className="px-2 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>×{Number(row.mission_reward_mult ?? 1)}</td>
+                    <td className="px-2 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>+{Math.round(((row.illegal_business_mult ?? 1) - 1) * 100)}%</td>
+                    <td className="px-2 py-2.5 text-center tabular-nums" style={{ color: isUnlocked ? rowColor : '#52525b' }}>×{Number(row.rank_threshold_mult ?? 1)}</td>
                   </tr>
                 );
               })}

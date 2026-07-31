@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-31 02:00 UTC[/color][/b] — [b]Prestige benefits + rank bar[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Prestige[/b] now lists your [b]active bonuses[/b] (crime, OC, GTA rare cars, NPC, missions, illegal business, rank thresholds) so they match what you’re actually getting in-game.[/color]
+[*][color=#888888][b]Fixed:[/b] Rank progress bar no longer briefly jumps to [b]100%[/b] on page refresh before showing the real percentage.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-31 01:40 UTC[/color][/b] — [b]Rank points boosts[/b][/size]
 [quote]
 [list]

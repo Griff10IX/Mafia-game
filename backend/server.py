@@ -181,9 +181,22 @@ def get_prestige_bonus(user: dict) -> dict:
     """Return stacking benefit multipliers for a user based on their prestige_level."""
     level = min(int(user.get("prestige_level") or 0), 5)
     if level == 0:
-        return {"crime_mult": 1.0, "oc_mult": 1.0, "gta_rare_boost": 0.0, "npc_mult": 1.0, "mission_reward_mult": 1.0, "illegal_business_mult": 1.0}
+        return {
+            "crime_mult": 1.0,
+            "oc_mult": 1.0,
+            "gta_rare_boost": 0.0,
+            "npc_mult": 1.0,
+            "mission_reward_mult": 1.0,
+            "illegal_business_mult": 1.0,
+            "rank_threshold_mult": 1.0,
+        }
     cfg = PRESTIGE_CONFIGS[level]
-    return {**{k: cfg[k] for k in ("crime_mult", "oc_mult", "gta_rare_boost", "npc_mult")}, "mission_reward_mult": cfg["mission_reward_mult"], "illegal_business_mult": cfg.get("illegal_business_mult", 1.0)}
+    return {
+        **{k: cfg[k] for k in ("crime_mult", "oc_mult", "gta_rare_boost", "npc_mult")},
+        "mission_reward_mult": cfg["mission_reward_mult"],
+        "illegal_business_mult": cfg.get("illegal_business_mult", 1.0),
+        "rank_threshold_mult": float(get_rank_threshold_mult(level)),
+    }
 
 # Founding Member: +15% on crimes, GTA, OC, hitlist NPC, properties, rackets, missions (see founding_member_income_mult).
 FOUNDING_MEMBER_INCOME_MULT = 1.15

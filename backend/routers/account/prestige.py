@@ -94,6 +94,8 @@ def register(router):
                     "gta_rare_boost": cfg.get("gta_rare_boost", 0),
                     "npc_mult": cfg.get("npc_mult", 1.0),
                     "mission_reward_mult": cfg.get("mission_reward_mult", 1.0),
+                    "illegal_business_mult": cfg.get("illegal_business_mult", 1.0),
+                    "rank_threshold_mult": float(srv.get_rank_threshold_mult(lvl)),
                 }
             )
 
