@@ -231,6 +231,16 @@ def register(router):
         tickets = open_t + closed_t
         return {"tickets": [_ticket_to_response(t) for t in tickets]}
 
+    def _latest_staff_reply_at(replies: list) -> str | None:
+        latest = None
+        for r in replies or []:
+            if (r.get("author_role") or "") not in ("admin", "mod", "hdo"):
+                continue
+            ca = r.get("created_at")
+            if ca and (latest is None or str(ca) > str(latest)):
+                latest = ca
+        return latest
+
     def _ticket_to_response(t: dict) -> dict:
         replies = t.get("replies") or []
         # Reply response: do not expose author_id to client
@@ -238,6 +248,21 @@ def register(router):
             {"author_username": r.get("author_username"), "author_role": r.get("author_role"), "body": r.get("body"), "created_at": r.get("created_at")}
             for r in reversed(replies)
         ]
+        latest_staff_at = _latest_staff_reply_at(replies)
+        user_viewed_at = t.get("user_last_viewed_at")
+        user_seen_latest_staff_reply = bool(
+            latest_staff_at and user_viewed_at and str(user_viewed_at) >= str(latest_staff_at)
+        )
+        staff_views = []
+        for v in t.get("staff_views") or []:
+            if not isinstance(v, dict):
+                continue
+            staff_views.append({
+                "username": v.get("username") or "?",
+                "role": v.get("role") or "hdo",
+                "viewed_at": v.get("viewed_at"),
+            })
+        staff_views.sort(key=lambda x: str(x.get("viewed_at") or ""), reverse=True)
         out = {
             "id": t.get("id"),
             "user_id": t.get("user_id"),
@@ -253,12 +278,19 @@ def register(router):
             "category": t.get("category"),
             "rewarded": t.get("rewarded", False),
             "reward_amount": t.get("reward_amount"),
+            "user_last_viewed_at": user_viewed_at,
+            "latest_staff_reply_at": latest_staff_at,
+            "user_seen_latest_staff_reply": user_seen_latest_staff_reply,
+            "has_staff_reply": bool(latest_staff_at),
+            "staff_views": staff_views,
         }
         return out
 
     @router.get("/help-desk/tickets/{ticket_id}", dependencies=_help_desk_rl_u)
     async def get_ticket(ticket_id: str, current_user: dict = Depends(get_current_user)):
-        """Get one ticket. Author or staff only. Error reports: only admin or author."""
+        """Get one ticket. Author or staff only. Error reports: only admin or author.
+        Opening a ticket records a view: player last-seen, or staff/HDO in staff_views.
+        """
         ticket = await db.help_desk_tickets.find_one({"id": ticket_id}, {"_id": 0})
         if not ticket:
             raise HTTPException(status_code=404, detail="Ticket not found")
@@ -272,6 +304,40 @@ def register(router):
             raise HTTPException(status_code=403, detail="Not allowed to view this ticket")
         if not is_author:
             require_staff_issued_if_staff_capable(current_user)
+
+        now = datetime.now(timezone.utc).isoformat()
+        if is_author:
+            await db.help_desk_tickets.update_one(
+                {"id": ticket_id},
+                {"$set": {"user_last_viewed_at": now}},
+            )
+            ticket["user_last_viewed_at"] = now
+        else:
+            # Staff / admin / HDO viewing (including error reports for admins)
+            role = _author_role(current_user)
+            uid = current_user["id"]
+            views = [v for v in (ticket.get("staff_views") or []) if isinstance(v, dict)]
+            updated = False
+            for v in views:
+                if v.get("user_id") == uid:
+                    v["viewed_at"] = now
+                    v["username"] = current_user.get("username") or "?"
+                    v["role"] = role
+                    updated = True
+                    break
+            if not updated:
+                views.append({
+                    "user_id": uid,
+                    "username": current_user.get("username") or "?",
+                    "role": role,
+                    "viewed_at": now,
+                })
+            await db.help_desk_tickets.update_one(
+                {"id": ticket_id},
+                {"$set": {"staff_views": views}},
+            )
+            ticket["staff_views"] = views
+
         return _ticket_to_response(ticket)
 
     @router.post("/help-desk/tickets/{ticket_id}/reply")

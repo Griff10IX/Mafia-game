@@ -172,6 +172,8 @@ export default function HelpDesk() {
     try {
       const r = await api.get(`/help-desk/tickets/${id}`);
       setTicketDetail(r.data);
+      // Opening records a view — refresh list badges (Seen / staff views)
+      fetchTickets({ silent: true });
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load ticket');
       setTicketDetail(null);
@@ -179,7 +181,7 @@ export default function HelpDesk() {
     } finally {
       setDetailLoading(false);
     }
-  }, []);
+  }, [fetchTickets]);
 
   useEffect(() => {
     if (selectedId) fetchTicketDetail(selectedId);
@@ -498,6 +500,22 @@ export default function HelpDesk() {
                       {t.status}
                     </span>
                     {canManage && <span className="text-[9px] text-mutedForeground">by {t.username}</span>}
+                    {canManage && t.has_staff_reply && (
+                      <span
+                        className={`text-[9px] font-heading uppercase px-1 py-0.5 rounded ${
+                          t.user_seen_latest_staff_reply
+                            ? 'bg-sky-500/20 text-sky-400'
+                            : 'bg-amber-500/20 text-amber-400'
+                        }`}
+                        title={
+                          t.user_seen_latest_staff_reply
+                            ? `Player viewed after last staff reply${t.user_last_viewed_at ? ` (${formatDateTime(t.user_last_viewed_at)})` : ''}`
+                            : 'Player has not opened this ticket since the last staff reply'
+                        }
+                      >
+                        {t.user_seen_latest_staff_reply ? 'Seen' : 'Unseen'}
+                      </span>
+                    )}
                   </div>
                   <div className="text-[9px] text-mutedForeground mt-0.5">{formatDateTime(t.updated_at)}</div>
                 </div>
@@ -532,6 +550,39 @@ export default function HelpDesk() {
                     </span>
                   )}
                 </div>
+                {canManage && (
+                  <div className="mt-1.5 space-y-1 text-[9px] font-heading">
+                    {ticketDetail.has_staff_reply ? (
+                      <div
+                        className={
+                          ticketDetail.user_seen_latest_staff_reply ? 'text-sky-400' : 'text-amber-400'
+                        }
+                      >
+                        {ticketDetail.user_seen_latest_staff_reply
+                          ? `Player viewed your reply${ticketDetail.user_last_viewed_at ? ` · ${formatDateTime(ticketDetail.user_last_viewed_at)}` : ''}`
+                          : 'Player has not viewed since last staff reply'}
+                      </div>
+                    ) : (
+                      <div className="text-mutedForeground">
+                        {ticketDetail.user_last_viewed_at
+                          ? `Player last opened · ${formatDateTime(ticketDetail.user_last_viewed_at)}`
+                          : 'Player has not opened this ticket yet'}
+                      </div>
+                    )}
+                    {(ticketDetail.staff_views?.length > 0) && (
+                      <div className="text-mutedForeground">
+                        <span className="text-primary/90 font-bold uppercase tracking-wide">Staff viewed · </span>
+                        {ticketDetail.staff_views.map((v, i) => (
+                          <span key={`${v.username}-${v.viewed_at || i}`}>
+                            {i > 0 ? ' · ' : ''}
+                            {v.username} ({ROLE_LABELS[v.role] || v.role})
+                            {v.viewed_at ? ` ${formatDateTime(v.viewed_at)}` : ''}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="px-2 py-1.5 bg-secondary/80 rounded border border-primary/10 text-[11px] font-heading whitespace-pre-wrap">
                 {ticketDetail.body}
