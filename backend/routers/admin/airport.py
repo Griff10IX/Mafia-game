@@ -336,7 +336,34 @@ async def get_travel_status(current_user: dict = Depends(get_current_user)):
 async def get_travel_info(current_user: dict = Depends(get_current_user)):
     uid = current_user.get("id")
     now = time.monotonic()
-    if uid in _travel_info_cache:
+
+    # Finalize timed car travel when arrival is due (before cache — stale mid-trip payloads
+    # would keep showing the old city / airport owners after the client countdown ends).
+    arrives_raw = current_user.get("travel_arrives_at")
+    traveling_to = current_user.get("traveling_to")
+    finalized = False
+    if arrives_raw and traveling_to:
+        arrives_dt = _parse_iso_datetime(arrives_raw)
+        if arrives_dt and datetime.now(timezone.utc) >= arrives_dt:
+            dest = str(traveling_to).strip()
+            if dest:
+                await db.users.update_one(
+                    {"id": uid},
+                    {
+                        "$set": {"current_state": dest},
+                        "$unset": {"traveling_to": "", "travel_arrives_at": ""},
+                    },
+                )
+                current_user = {
+                    **current_user,
+                    "current_state": dest,
+                    "traveling_to": None,
+                    "travel_arrives_at": None,
+                }
+                _invalidate_travel_info_cache(uid)
+                finalized = True
+
+    if not finalized and uid in _travel_info_cache:
         payload, expires = _travel_info_cache[uid]
         if now <= expires:
             return payload

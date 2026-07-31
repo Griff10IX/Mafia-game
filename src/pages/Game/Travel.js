@@ -483,9 +483,10 @@ export default function Travel() {
     writeTravelBoot(bundle);
   }, []);
 
-  const fetchTravelInfo = useCallback(async ({ silent = false } = {}) => {
+  const fetchTravelInfo = useCallback(async ({ silent = false, force = false } = {}) => {
     try {
-      const prefetched = getTravelPrefetch();
+      if (force) clearTravelPrefetch();
+      const prefetched = force ? null : getTravelPrefetch();
       const infoPromise = prefetched?.travelInfo
         ? Promise.resolve({ data: prefetched.travelInfo })
         : apiRequestWith429Retry(() => api.get('/travel/info'));
@@ -567,7 +568,7 @@ export default function Travel() {
             clearInterval(timer);
             setTraveling(false);
             const arrived = selectedDest || '';
-            fetchTravelInfo({ silent: true });
+            fetchTravelInfo({ silent: true, force: true });
             if (arrived) refreshUser({ current_state: arrived });
             else refreshUser();
             toast.success(`Arrived at ${arrived || 'destination'}!`);
@@ -585,7 +586,7 @@ export default function Travel() {
     if (!traveling || travelPostPending) return;
     if (travelTime > 0) return;
     setTraveling(false);
-    fetchTravelInfo({ silent: true }).catch(() => {});
+    fetchTravelInfo({ silent: true, force: true }).catch(() => {});
     refreshUser();
   }, [traveling, travelPostPending, travelTime, fetchTravelInfo]);
 
@@ -627,7 +628,7 @@ export default function Travel() {
       if (sec <= 0) {
         setTraveling(false);
         setTravelTime(0);
-        fetchTravelInfo({ silent: true });
+        fetchTravelInfo({ silent: true, force: true });
         refreshUser({ current_state: destination });
         toast.success(`Arrived at ${destination}!`);
       } else {
@@ -641,6 +642,7 @@ export default function Travel() {
         const arrivesIso = Number.isFinite(Date.parse(arrivesRaw))
           ? arrivesRaw
           : new Date(endsAtMs).toISOString();
+        clearTravelPrefetch();
         refreshUser({ traveling_to: destination, travel_arrives_at: arrivesIso });
         toast.info(response.data?.message || `Traveling to ${destination}…`);
       }
@@ -657,7 +659,7 @@ export default function Travel() {
       const response = await api.post('/travel/buy-airmiles');
       toast.success(response.data.message);
       refreshUser();
-      fetchTravelInfo({ silent: true });
+      fetchTravelInfo({ silent: true, force: true });
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to buy airmiles');
     }
