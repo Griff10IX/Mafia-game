@@ -911,12 +911,12 @@ async def _attempt_gta_impl(
         else:
             damage_percent = _rng.randint(15, 77)
         rank_points_map = {
-            "common": 3,
-            "uncommon": 8,
-            "rare": 18,
-            "ultra_rare": 35,
-            "legendary": 60,
-            "exclusive": 100,
+            "common": 9,
+            "uncommon": 24,
+            "rare": 54,
+            "ultra_rare": 105,
+            "legendary": 180,
+            "exclusive": 300,
         }
         rank_points = rank_points_map.get(car["rarity"], 3)
         rank_points = int(

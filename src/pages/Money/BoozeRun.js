@@ -911,7 +911,12 @@ export default function BoozeRun() {
           ),
         });
       } else {
-        toast.success(`Sold ${amount} units`);
+        const rp = Number(response.data.rank_points_earned) || 0;
+        toast.success(
+          rp > 0
+            ? `Sold ${amount} units (+${rp} rank points)`
+            : `Sold ${amount} units`
+        );
       }
       refreshUser();
       setTradeAmounts((prev) => ({ ...prev, [boozeId]: '' }));

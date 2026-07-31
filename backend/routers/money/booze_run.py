@@ -108,6 +108,8 @@ BOOZE_TOP_LEADER_JAIL_BONUS = 0.035  # added to the rolled probability for that 
 BOOZE_TOP_LEADER_JAIL_CHANCE_CAP = 0.22  # ceiling after bonus
 # Multiplier on net profit for a completed run (buy city ≠ sell city); stats, cash, referrals, economy_events.
 BOOZE_RUN_PROFIT_MULT = 0.75
+# Flat rank XP for a real trip (buy city ≠ sell city); once per cargo batch — see booze_run_rp_granted.
+BOOZE_RUN_TRIP_RANK_POINTS = 10
 
 # Per-user cache for GET /booze-run/config
 _config_cache: dict = {}
@@ -428,6 +430,7 @@ async def _booze_reload_user_trade_state(user: dict) -> dict:
             "booze_carrying": 1,
             "booze_carrying_cost": 1,
             "booze_buy_location": 1,
+            "booze_run_rp_granted": 1,
             "current_state": 1,
             "money": 1,
             "in_jail": 1,
@@ -704,6 +707,7 @@ async def _booze_buy_impl(user: dict, booze_id: str, amount: int, *, via_auto_ra
         {
             "$inc": {"money": -cost, f"booze_carrying.{booze_id}": amount, f"booze_carrying_cost.{booze_id}": cost},
             "$set": {f"booze_buy_location.{booze_id}": current_state},
+            "$unset": {f"booze_run_rp_granted.{booze_id}": ""},
             "$push": {"booze_run_history": {"$each": [history_entry], "$position": 0, "$slice": BOOZE_RUN_HISTORY_MAX}},
         }
     )
@@ -866,31 +870,59 @@ async def _booze_sell_impl(
         inc_user[f"booze_profit_by_type.{booze_id}"] = profit
     push_hist = {"$each": [history_entry], "$position": 0, "$slice": BOOZE_RUN_HISTORY_MAX}
     set_fields: Dict[str, Any] = {}
+    unset_fields: Dict[str, Any] = {}
     if is_run:
         set_fields["booze_profit_today_date"] = today_utc
         if profit_today_date != today_utc:
             set_fields["booze_profit_today"] = profit
         else:
             inc_user["booze_profit_today"] = profit
+    # Trip RP once per cargo batch (buy city ≠ sell city); same-city / repeat partial sells = 0
+    rp_granted = 0
+    rp_before = 0
+    granted_map = user.get("booze_run_rp_granted") or {}
+    already_rp = bool(granted_map.get(booze_id)) if isinstance(granted_map, dict) else False
+    if is_run and not already_rp:
+        rp_granted = int(BOOZE_RUN_TRIP_RANK_POINTS)
+        inc_user["rank_points"] = rp_granted
+        set_fields[f"booze_run_rp_granted.{booze_id}"] = True
+        try:
+            rp_before = int(user.get("rank_points") or 0)
+        except (TypeError, ValueError):
+            rp_before = 0
     if new_val == 0:
+        unset_fields.update({
+            f"booze_carrying.{booze_id}": "",
+            f"booze_carrying_cost.{booze_id}": "",
+            f"booze_buy_location.{booze_id}": "",
+            f"booze_run_rp_granted.{booze_id}": "",
+        })
         updates: Dict[str, Any] = {
             "$push": {"booze_run_history": push_hist},
-            "$unset": {
-                f"booze_carrying.{booze_id}": "",
-                f"booze_carrying_cost.{booze_id}": "",
-                f"booze_buy_location.{booze_id}": "",
-            },
+            "$unset": unset_fields,
         }
         if inc_user:
             updates["$inc"] = inc_user
         if set_fields:
-            updates["$set"] = set_fields
+            # Don't leave grant flag set if we're clearing the batch
+            set_fields.pop(f"booze_run_rp_granted.{booze_id}", None)
+            if set_fields:
+                updates["$set"] = set_fields
     else:
         inc_user[f"booze_carrying.{booze_id}"] = -amount
         inc_user[f"booze_carrying_cost.{booze_id}"] = -cost_of_sold
         updates = {"$push": {"booze_run_history": push_hist}, "$inc": inc_user}
         if set_fields:
             updates["$set"] = set_fields
+    if rp_granted > 0:
+        from utils.game_pass_season_rp import apply_season_rp_mirror_to_update, rank_points_in_update
+        updates = apply_season_rp_mirror_to_update(updates, user=user)
+        try:
+            rp_awarded = int(rank_points_in_update(updates)) or rp_granted
+        except Exception:
+            rp_awarded = rp_granted
+    else:
+        rp_awarded = 0
     sell_result = await db.users.update_one(
         {"id": user["id"], f"booze_carrying.{booze_id}": {"$gte": amount}},
         updates,
@@ -911,6 +943,8 @@ async def _booze_sell_impl(
             await db.users.update_one({"id": user["id"]}, {"$inc": {"money": int(revenue)}})
     _invalidate_config_cache(user["id"])
     _bs = {"booze": booze_name, "amount": amount, "revenue": revenue, "profit": profit}
+    if rp_awarded > 0:
+        _bs["rank_points"] = rp_awarded
     if via_auto_rank:
         _bs["via_auto_rank"] = True
     if via_distillery_collect:
@@ -924,6 +958,19 @@ async def _booze_sell_impl(
 
     async def _post_sell_bookkeeping():
         await log_activity(uid_sell, uname_sell, "booze_sell", _bs)
+        if rp_awarded > 0:
+            try:
+                from server import maybe_process_rank_up
+
+                await maybe_process_rank_up(
+                    uid_sell,
+                    rp_before,
+                    rp_awarded,
+                    uname_sell,
+                    user_prestige_rank_mult(user),
+                )
+            except Exception:
+                logger.exception("Rank-up notification (booze run): %s", uid_sell)
         if not is_run:
             return
         booze_event_result = await db.economy_events.insert_one({
@@ -972,6 +1019,7 @@ async def _booze_sell_impl(
         "booze_id": booze_id,
         "carrying_total": max(0, int(carrying_total)),
         "is_run": is_run,
+        "rank_points_earned": int(rp_awarded) if rp_awarded else 0,
     }
 
 
@@ -1271,6 +1319,7 @@ async def booze_run_skip_run(current_user: dict = Depends(get_current_user)):
     carrying = _booze_carrying_dict(user.get("booze_carrying"))
     total_revenue = 0
     total_profit = 0
+    total_rp = 0
     sold_units = 0
     for booze in BOOZE_TYPES:
         amt = int(carrying.get(booze["id"]) or 0)
@@ -1281,9 +1330,13 @@ async def booze_run_skip_run(current_user: dict = Depends(get_current_user)):
             return {**sell_res, "phase": "sell", "steps": steps, "credits_used": credits_used}
         total_revenue += int(sell_res.get("revenue") or 0)
         total_profit += int(sell_res.get("profit") or 0)
+        total_rp += int(sell_res.get("rank_points_earned") or 0)
         sold_units += amt
+        user = await db.users.find_one({"id": uid}, {"_id": 0}) or user
     if sold_units:
         steps.append(f"Sold {sold_units} units in {sell_city} for ${total_revenue:,}")
+        if total_rp > 0:
+            steps.append(f"+{total_rp} rank points")
     _invalidate_config_cache(uid)
     # Lifetime earnings for the My Inventory token card.
     try:
@@ -1297,6 +1350,7 @@ async def booze_run_skip_run(current_user: dict = Depends(get_current_user)):
     await log_activity(uid, user.get("username", ""), "booze_skip_run", {
         "bought": bought_label, "sold_units": sold_units, "revenue": total_revenue,
         "profit": total_profit, "credits_used": credits_used, "sell_city": sell_city,
+        "rank_points": total_rp,
     })
     return {
         "success": True,
@@ -1308,6 +1362,7 @@ async def booze_run_skip_run(current_user: dict = Depends(get_current_user)):
         "profit": total_profit,
         "credits_used": credits_used,
         "location": sell_city,
+        "rank_points_earned": total_rp,
     }
 
 

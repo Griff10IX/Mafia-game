@@ -322,12 +322,12 @@ JAIL_BUST_MAX_FAILURE_PENALTY = 0.08   # cap total penalty at 8%
 
 def _jail_bust_roll_rank_points_player() -> float:
     """Uniform rank XP for busting a real player (before RP perk / crime XP double)."""
-    return round(_rng.uniform(0.3, 3.0), 1)
+    return round(_rng.uniform(0.6, 6.0), 1)
 
 
 def _jail_bust_roll_rank_points_npc() -> float:
     """Fixed rank XP for busting a jail NPC (before crime XP double)."""
-    return 15.0
+    return 30.0
 
 
 def _rank_points_before_bust(user: dict) -> float:

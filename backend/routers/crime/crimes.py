@@ -263,7 +263,7 @@ class CommitCrimeResponse(BaseModel):
     progress_after: Optional[int] = None
     respect_points: int = 0
     prestige_bonus_earned: Optional[dict] = None
-    rank_points_earned: int = 0  # RP granted this commit (prestige crimes = 10 base before perks); 0 on fail
+    rank_points_earned: int = 0  # RP granted this commit (prestige crimes = 20 base before perks); 0 on fail
 
 
 class CommitAllCrimesResponse(BaseModel):
@@ -890,11 +890,11 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
             r_max = r_min
         reward = _rng.randint(r_min, r_max)
         rank_points = (
-            3 if crime["crime_type"] == "petty"
-            else 5 if crime["crime_type"] == "medium"
-            else 7 if crime["crime_type"] == "major"
-            else 10 if crime["crime_type"] == "prestige"
-            else 5
+            6 if crime["crime_type"] == "petty"
+            else 10 if crime["crime_type"] == "medium"
+            else 14 if crime["crime_type"] == "major"
+            else 20 if crime["crime_type"] == "prestige"
+            else 10
         )
         ev = await get_effective_event()
         _ev_cash_mult = float(ev.get("kill_cash", 1.0) or 1.0)

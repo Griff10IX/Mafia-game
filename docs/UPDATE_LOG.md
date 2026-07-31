@@ -6,6 +6,19 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-07-31 01:40 UTC[/color][/b] — [b]Rank points boosts[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]GTA[/b] rank points increased by [b]×3[/b].[/color]
+[*][color=#888888][b]Changed:[/b] [b]Jail bust[/b] rank points increased by [b]×2[/b].[/color]
+[*][color=#888888][b]Changed:[/b] [b]Crimes[/b] rank points increased by [b]×2[/b].[/color]
+[*][color=#888888][b]Changed:[/b] [b]Hitlist practice NPC[/b] rank points increased by [b]×3[/b] (new NPCs; ones already on the board keep their old rewards until replaced).[/color]
+[*][color=#888888][b]New:[/b] [b]Booze Run[/b] trips now grant rank points when you buy in one city and sell in another. Same-city buy/sell does [b]not[/b] count.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-30 23:20 UTC[/color][/b] — [b]VIP Game Pass: new season live (until 1 Sep)[/b][/size]
 [quote]
 [list]
