@@ -1003,7 +1003,7 @@ export default function ForumTopic() {
 
   const commentCount = comments.length;
   const topicTitlePlain = (topic.title || '').replace(/<[^>]+>/g, '').trim();
-  const isHowToTopic = /^how\s*to$/i.test(topicTitlePlain);
+  const isPinnedGuideTopic = /^(how\s*to|faqs?|update\s*log)$/i.test(topicTitlePlain);
   const isLegacyFaqHtml =
     topic.content &&
     (topic.content.includes('<details') ||
@@ -1011,7 +1011,7 @@ export default function ForumTopic() {
       topic.content.includes('class=\'faq-box\''));
   // Convert Markdown **bold** to <strong> and strip embedded FAQ styles so noir theme applies
   let topicContentRaw = topic.content || '—';
-  if (isLegacyFaqHtml || isHowToTopic) {
+  if (isLegacyFaqHtml || isPinnedGuideTopic) {
     topicContentRaw = topicContentRaw.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     topicContentRaw = topicContentRaw.replace(/<style>[\s\S]*?<\/style>/gi, '');
     topicContentRaw = topicContentRaw.replace(/<div\s+style="[^"]*"[^>]*>/, '<div class="forum-faq-outer">');
@@ -1387,7 +1387,7 @@ export default function ForumTopic() {
                 dangerouslySetInnerHTML={{ __html: topicContent }}
               />
             </>
-          ) : isHowToTopic ? (
+          ) : isPinnedGuideTopic ? (
             <>
               <style>{FORUM_FAQ_STYLES}</style>
               <div
