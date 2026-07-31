@@ -7,6 +7,7 @@ Crosswalk of major authenticated areas ([src/App.js](../src/App.js) routes and s
 | `/crime/crimes`, `/crime/gta`, `/crime/jail` | CRIMES, JAIL SYSTEM |
 | `/kill/attack`, `/kill/bodyguards`, `/kill/hitlist`, `/kill/hitman`, `/kill/armour-weapons`, `/kill/attempts` | COMBAT (incl. Hitman for Hire, new-account protection) |
 | `/money/bank`, `/money/stocks`, `/money/property`, `/my-properties`, `/money/booze-run`, `/money/racket`, `/money/crack-safe`, `/money/quick-trade` | MONEY MAKING (incl. **Wealth ranks** — cash on hand) |
+| `/money/weed-empire` | WEED EMPIRE (+ How To Weed Empire tour) |
 | `/cars/*` (garage, buy, sell, view) | GARAGE & VEHICLES |
 | `/organised-crime` | CRIMES → Organised Crime |
 | `/game/travel`, `/game/states` | TRAVEL (+ States overview) |

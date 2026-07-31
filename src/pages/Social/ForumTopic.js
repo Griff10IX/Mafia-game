@@ -118,9 +118,24 @@ const FORUM_FAQ_STYLES = `
   .forum-faq-content strong { color: var(--noir-primary); }
   /* BBCode [color] wraps list rows in <span style="color:…">; [b] becomes <strong> — let bold inherit tier color (e.g. wealth ranks FAQ). */
   .forum-faq-content li span[style*="color:"] strong { color: inherit !important; }
-  .forum-faq-content p { margin: 0.35em 0; color: var(--noir-foreground); }
-  .forum-faq-content ul, .forum-faq-content ol { margin: 0.35em 0; padding-left: 1.25em; color: var(--noir-foreground); }
-  .forum-faq-content li { color: var(--noir-foreground); margin: 0.15em 0; }
+  .forum-faq-content p { margin: 0.35em 0; color: var(--noir-foreground); line-height: 1.5; }
+  .forum-faq-content ul, .forum-faq-content ol { margin: 0.35em 0 0.55em; padding-left: 1.25em; color: var(--noir-foreground); }
+  .forum-faq-content li { color: var(--noir-foreground); margin: 0.2em 0; line-height: 1.45; }
+  .forum-faq-content blockquote,
+  .forum-faq-content .forum-content-quote {
+    margin: 0.55em 0 0.95em !important;
+    padding: 0.7em 0.95em !important;
+    background: var(--noir-content) !important;
+    border-left: 3px solid rgba(var(--noir-primary-rgb), 0.5) !important;
+    border-radius: 0 4px 4px 0 !important;
+    color: var(--noir-foreground) !important;
+  }
+  .forum-faq-content hr {
+    border: none;
+    border-top: 1px solid var(--noir-border-light);
+    margin: 1.15em 0;
+    opacity: 0.9;
+  }
   .forum-faq-content table { border-collapse: collapse; width: 100%; margin-top: 0.35em; border-radius: 4px; overflow: hidden; }
   .forum-faq-content th, .forum-faq-content td { border: 1px solid var(--noir-border-light); padding: 0.35em 0.6em; text-align: left; color: var(--noir-foreground); font-size: 0.95em; }
   .forum-faq-content th { background: rgba(var(--noir-primary-rgb), 0.08); color: var(--noir-primary); }

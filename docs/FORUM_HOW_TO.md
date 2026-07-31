@@ -4,6 +4,14 @@
 
 [hr]
 
+[color=#FFD700][b]Contents[/b][/color]
+[list]
+[*][color=#888888]Finding your way · Money & businesses · Weed Empire · Cars & garage · Combat · Crime & jail[/color]
+[*][color=#888888]Travel & states · Families · Casino · Progression · Store & Game Pass · Social & help[/color]
+[/list]
+
+[hr]
+
 [size=1.5][b][color=#D4AF37]:compass: FINDING YOUR WAY[/color][/b][/size]
 
 [quote]
@@ -77,7 +85,7 @@ Open [b]Money → Quick Trade[/b] to list or buy token trades. Pick what you are
 [b]Money → Lottery[/b] — buy tickets or entries as the page describes; draws and prizes are shown in-game.
 
 [color=#FFD700][b]Loot Box[/b][/color]
-[b]Money → Loot Box[/b] — open boxes you own or buy spins when the UI allows. Drops can include weapons, cars, and consumables; rarity and pools are summarized on the page and in [b]FAQs[/b].
+[b]Money → Loot Box[/b] — open boxes you own or buy spins when the UI allows. Drops can include weapons, cars, consumables, and rare exclusives (Model SJ, Weed Empire specials); rarity and pools are on the page and in [b]FAQs[/b].
 
 [color=#FFD700][b]My Properties[/b][/color]
 Use [b]My Properties[/b] (from the travel / property flow in the menu) to jump straight to buildings you already own for collect and upgrade actions, without browsing the full property market.
@@ -87,6 +95,35 @@ Use [b]My Properties[/b] (from the travel / property flow in the menu) to jump s
 [*][color=#888888][b]Stock Market[/b] — buy and sell shares from [b]Money → Stock Market[/b]; watch prices and fees on the page.[/color]
 [*][color=#888888][b]Racket[/b], [b]Booze Run[/b], [b]Crack the Safe[/b] — each has its own timer and risk line; read the buttons and warnings before you commit.[/color]
 [*][color=#888888][b]Other illegal businesses[/b] — if you unlock more than the Distillery, they live under [b]Money[/b] the same way: run, wait, [b]Collect[/b], repeat.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#27AE60]:herb: WEED EMPIRE[/color][/b][/size]
+
+[quote]
+[color=#FFD700][b]Open the farm[/b][/color]
+[b]Money → Weed Empire[/b] (when the feature is live on the menu).
+
+[color=#FFD700][b]Grow[/b][/color]
+[list]
+[*][color=#888888]Pick empty pots (use [b]All empty[/b] / [b]Multi[/b] when you want many at once).[/color]
+[*][color=#888888][b]Plant[/b] a strain and soil, then [b]water[/b], [b]feed[/b], [b]clean[/b] the room, and [b]treat mites[/b] when meters warn you.[/color]
+[*][color=#888888][b]Harvest[/b] when ready, then [b]sell[/b] (or use street dealers). Upgrade houses and equipment from the on-page tabs.[/color]
+[/list]
+
+[color=#FFD700][b]Cash & vault[/b][/color]
+[list]
+[*][color=#888888]Earnings go to [b]weed business cash[/b]. [b]Withdraw[/b] to your wallet when you need spending money (daily caps and “leave $50k” rules are on the page / [b]FAQs[/b]).[/color]
+[*][color=#888888]Optional Store unlocks: raise the [b]daily sell cap[/b], or unlock [b]Safety Deposit[/b] then expand it in Weed Empire for raid-safe storage.[/color]
+[/list]
+
+[color=#FFD700][b]Crew, raids, heat[/b][/color]
+[list]
+[*][color=#888888][b]Crew[/b] — hire workers and set each to harvest, cool heat, sell, or plant.[/color]
+[*][color=#888888][b]Raids[/b] — unlock at Grower Level 5; pick a target and watch cooldowns on the Raid tab.[/color]
+[*][color=#888888]Keep [b]heat[/b] under control (cool-off costs cash). Too much heat can bust you — see [b]FAQs → WEED EMPIRE[/b].[/color]
 [/list]
 [/quote]
 
@@ -198,7 +235,15 @@ Open [b]Kill → Bodyguards[/b]. Unlock slots, hire robots or invite human playe
 [size=1.5][b][color=#D4AF37]:airplane: TRAVEL & STATES[/color][/b][/size]
 
 [quote]
-[color=#888888]Open [b]Game → Travel[/b] to move between cities. Pick a destination, pay attention to cost and travel time, and wait until arrival before you attack or use city-locked features. [b]Game → States[/b] gives a regional overview when you need it.[/color]
+[color=#FFD700][b]Travel[/b][/color]
+[list]
+[*][color=#888888]Open [b]Game → Travel[/b]. Pick a destination and a car (or airport). Wait until arrival before you attack or use city-locked features.[/color]
+[*][color=#888888][b]Car[/b] trips are unlimited per hour. [b]Airport[/b] trips use an hourly flight cap (plus any extra airmiles you bought) — exact numbers are on Travel Info and in [b]FAQs → TRAVEL[/b].[/color]
+[*][color=#888888]Faster cars cut travel time (Model SJ is the fastest). Full speed table: [b]FAQs → GARAGE[/b].[/color]
+[/list]
+
+[color=#FFD700][b]States[/b][/color]
+[b]Game → States[/b] gives a regional overview (casinos, airports, ownership) before you travel or hunt targets.
 [/quote]
 
 [hr]
@@ -298,7 +343,9 @@ Click a username (forum, online list, attack results, etc.) to open their profil
 
 [color=#FFD700][b]Game Pass[/b][/color]
 [list]
-[*][color=#888888][b]Game → Game Pass[/b] — separate page for pass tiers, weekly or seasonal challenges, and claim buttons. What you can earn is listed there.[/color]
+[*][color=#888888][b]Game → Game Pass[/b] — buy VIP ([b]£15[/b]) and optional [b]Prestige[/b] ([b]£10[/b], buy anytime; auto-applies after VIP tiers 1–100).[/color]
+[*][color=#888888]You receive a [b]token[/b] — [b]Activate[/b] it in Inventory / Armoury, then claim VIP and climb the tier track for that [b]season[/b]. Seasons reset VIP; previous season VIP does not carry over.[/color]
+[*][color=#888888]Reward tables (cash, tokens, permanent Weed Empire strains, etc.) are listed on the page. Deep rules: [b]FAQs → GAME PASS[/b].[/color]
 [/list]
 [/quote]
 
