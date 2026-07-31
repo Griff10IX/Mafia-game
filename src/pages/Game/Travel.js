@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Plane, Car, Clock, MapPin, Zap, ShoppingCart, Bot, Spade } from 'lucide-react';
+import { Plane, Car, Clock, MapPin, Zap, ShoppingCart, Bot, Spade, ChevronDown } from 'lucide-react';
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -370,15 +370,28 @@ const DestinationCard = ({
   );
 };
 
-const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => (
+const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 trv-card trv-fade-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
     <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none trv-glow" />
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-    <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+    <button
+      type="button"
+      onClick={() => setExpanded((v) => !v)}
+      className="w-full px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2 text-left hover:bg-primary/12 transition-colors"
+      aria-expanded={expanded}
+    >
       <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
-        ℹ️ Travel Info
+        Travel Info
       </h2>
-    </div>
+      <ChevronDown
+        size={14}
+        className={`text-primary/80 shrink-0 transition-transform ${expanded ? 'rotate-180' : ''}`}
+      />
+    </button>
+    {expanded && (
     <div className="p-2 grid grid-cols-1 md:grid-cols-2 gap-3">
       {/* Car Speeds */}
       <div>
@@ -387,9 +400,10 @@ const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => (
         </h4>
         <div className="space-y-0.5 text-[10px] font-heading">
           {[
+            { name: 'Loot Exclusive (Model SJ)', time: '2s', color: 'text-amber-300' },
             { name: 'Loot Exclusive', time: '5s', color: 'text-amber-400' },
             { name: 'Exclusive', time: '7s', color: 'text-purple-400' },
-            { name: 'VIP Pass', time: '8s', color: 'text-cyan-400' },
+            { name: 'VIP Pass', time: '9s', color: 'text-cyan-400' },
             { name: 'Custom', time: '12s', color: 'text-primary' },
             { name: 'Legendary', time: '15s', color: 'text-orange-400' },
             { name: 'Ultra Rare', time: '18s', color: 'text-pink-400' },
@@ -439,9 +453,11 @@ const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => (
         </button>
       </div>
     </div>
+    )}
     <div className="trv-art-line text-primary mx-2.5" />
   </div>
-);
+  );
+};
 
 // Main component
 export default function Travel() {
