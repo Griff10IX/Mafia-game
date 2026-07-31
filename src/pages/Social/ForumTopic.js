@@ -107,7 +107,7 @@ const TITLE_COLORS = [
 
 /** FAQ: compact noir theme to match the rest of the app. */
 const FORUM_FAQ_STYLES = `
-  .forum-faq-content { max-width: 100%; }
+  .forum-faq-content { max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
   .forum-faq-content .forum-faq-outer { background: var(--noir-surface); color: var(--noir-foreground); padding: 0.75em 1em; border-radius: 6px; border: 1px solid var(--noir-border-mid); }
   .forum-faq-content details { margin: 0.25em 0; border: 1px solid var(--noir-border-light); border-radius: 4px; overflow: hidden; }
   .forum-faq-content summary { background: rgba(var(--noir-primary-rgb), 0.08); color: var(--noir-primary); padding: 0.35em 0.75em; cursor: pointer; font-weight: bold; list-style: none; border: none; font-size: 0.95em; }

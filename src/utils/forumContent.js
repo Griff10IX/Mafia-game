@@ -77,11 +77,18 @@ function escapeRegex(str) {
 /**
  * Build replace regex for a smiley token.
  * Short ":/" must not match inside URLs (`https://…`) or it eats the protocol.
+ * Short codes without a trailing colon (`:s`, `:p`, `:)`) must not match as a
+ * prefix of longer `:name:` tokens (e.g. `:slot_machine:` → confused + `lot_machine:`).
  */
 function smileyReplaceRegex(from) {
   if (from === ':/') return /:\/(?!\/)/g;
   if (from === ':-/') return /:-\/(?!\/)/g;
-  return new RegExp(escapeRegex(from), 'g');
+  const esc = escapeRegex(from);
+  // Named `:code:` tokens match exactly; short faces need a boundary after them.
+  if ((from.startsWith(':') || from.startsWith(';')) && !from.endsWith(':')) {
+    return new RegExp(`${esc}(?![a-zA-Z0-9_])`, 'g');
+  }
+  return new RegExp(esc, 'g');
 }
 
 /** Longest codes first so :poggers: wins over :p and :pizza: over :p (avoids partial matches leaking text/HTML). */
@@ -139,7 +146,15 @@ function wrapForumUnicodeEmoji(emoji) {
 
 // Longer emoji codes that could conflict with short image smileys - process first as Unicode
 const LONG_EMOJI_CODES = [
+  [':chart_with_upwards_trend:', '📈'],
+  [':bust_in_silhouette:', '👤'],
+  [':shopping_bags:', '🛍️'],
+  [':slot_machine:', '🎰'],
   [':speech_balloon:', '💬'],
+  [':police_car:', '🚓'],
+  [':red_car:', '🚗'],
+  [':family:', '👪'],
+  [':herb:', '🌿'],
   [':scales:', '⚖️'],
   [':sparkles:', '✨'],
   [':star:', '⭐'],
