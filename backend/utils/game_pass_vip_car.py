@@ -16,6 +16,8 @@ VIP_EXCLUSIVE_RARITY = "vip_exclusive"
 VIP_PASS_GRANT_SOURCE_GAME_PASS = "game_pass_tier_100"
 VIP_PASS_GRANT_SOURCE_STORE = "store_purchase"
 VIP_PASS_GRANT_SOURCE_REVIVE_HEAL = "revive_estate_heal"
+# Tier-100 Game Pass free car — off for current seasons; store/admin/revive keep working.
+GAME_PASS_VIP_CAR_TIER_REWARD_ENABLED = False
 # Max store / paid VIP Pass Cars game-wide. Game Pass free grants do NOT consume this stock.
 VIP_PASS_CAR_PURCHASE_LIMIT_DEFAULT = 5
 VIP_PASS_CAR_PURCHASE_LIMIT_MIN = 1
@@ -686,7 +688,12 @@ async def grant_game_pass_vip_car_if_eligible(db, *, user_id: str) -> bool:
     """
     Grant one VIP Pass car the first time VIP reaches tier 100 (once per account).
     Does not consume store stock. Idempotent via users.game_pass_vip_car_granted.
+
+    Disabled for current Game Pass seasons — keep the function for store/admin/revive paths.
+    Set GAME_PASS_VIP_CAR_TIER_REWARD_ENABLED True to restore tier-100 free grants.
     """
+    if not GAME_PASS_VIP_CAR_TIER_REWARD_ENABLED:
+        return False
     if not user_id:
         return False
 

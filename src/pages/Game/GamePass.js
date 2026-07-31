@@ -489,11 +489,6 @@ function TierRewards({ rewards, isFreeMembership, isTierCompleted, microTier, re
             {PERK_LABELS[pk] || pk}
           </div>
         ))}
-      {microTier === 100 && !isFreeMembership && (
-        <div className="text-[9px] font-heading text-cyan-400/95">
-          VIP Pass Car — 9s travel, +50% booze cargo while owned, custom image, survives death (one-time tier 100 reward)
-        </div>
-      )}
       {rewards?._game_pass_strain_name && !isFreeMembership && (
         <div className="text-[9px] font-heading text-emerald-300/95 space-y-0.5">
           <div>
@@ -1045,10 +1040,6 @@ export default function GamePass() {
                   <span className="text-zinc-100 font-bold">Crimes and GTA XP tokens</span> — Roughly{' '}
                   <span className="text-primary tabular-nums">{TARGET_XP_CRIMES_TOKENS_TOTAL}</span> Crimes tokens plus{' '}
                   <span className="text-primary tabular-nums">{TARGET_XP_GTA_TOKENS_TOTAL}</span> GTA tokens, spread across tiers like other currencies.
-                </li>
-                <li>
-                  <span className="text-zinc-100 font-bold">VIP tier 100</span> —{' '}
-                  <span className="text-cyan-400/95">VIP Pass Car</span> (9s travel, custom image, +50% booze cargo while owned, not lost on death; sellable on marketplace). One-time reward when you first complete VIP tier 100.
                 </li>
                 <li>
                   <span className="text-zinc-100 font-bold">24h VIP perks</span> — At micro-tiers 25, 50, 75, and 100: stacked loot-style boosts —{' '}
