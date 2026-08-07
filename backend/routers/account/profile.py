@@ -582,50 +582,51 @@ def register(router):
             raise HTTPException(status_code=404, detail="User not found")
         user_id = user.get("id")
 
-        async def _hitlist_count():
-            return await db.hitlist.count_documents(
-                {"target_id": user_id, "target_type": {"$in": ["user", "bodyguards"]}}
+        async def _hitlist_on():
+            doc = await db.hitlist.find_one(
+                {"target_id": user_id, "target_type": {"$in": ["user", "bodyguards"]}},
+                {"_id": 1},
             )
+            return doc is not None
 
-        async def _messages_received():
-            return await db.notifications.count_documents(
-                {"user_id": user_id, "notification_type": "user_message"}
-            )
-
-        async def _messages_sent():
-            # One row per outgoing DM: the sender's "sent" copy only. Do not also count the
-            # recipient's inbox row (user_message with sender_id=us) or sent is doubled.
-            return await db.notifications.count_documents(
-                {"user_id": user_id, "notification_type": "user_message_sent"}
-            )
+        async def _message_counts():
+            pipeline = [
+                {
+                    "$match": {
+                        "user_id": user_id,
+                        "notification_type": {"$in": ["user_message", "user_message_sent"]},
+                    }
+                },
+                {"$group": {"_id": "$notification_type", "n": {"$sum": 1}}},
+            ]
+            received, sent = 0, 0
+            async for doc in db.notifications.aggregate(pipeline):
+                tid = doc.get("_id")
+                n = int(doc.get("n") or 0)
+                if tid == "user_message":
+                    received = n
+                elif tid == "user_message_sent":
+                    sent = n
+            return received, sent
 
         async def _family():
-            variants = _family_member_user_id_variants(user_id)
-            member = await db.family_members.find_one(
-                {"user_id": {"$in": variants}} if variants else {"user_id": user_id},
-                {"_id": 0, "family_id": 1},
-            )
-            fid = (member or {}).get("family_id")
-            # Self-heal stale user doc if membership row is gone.
+            # Prefer denormalized family_id — no membership heal writes on hover path.
+            fid = str(user.get("family_id") or "").strip()
             if not fid:
-                if user.get("family_id"):
-                    await db.users.update_one(
-                        {"id": {"$in": variants}} if len(variants) > 1 else {"id": user_id},
-                        {"$set": {"family_id": None, "family_role": None}},
-                    )
+                variants = _family_member_user_id_variants(user_id)
+                member = await db.family_members.find_one(
+                    {"user_id": {"$in": variants}} if variants else {"user_id": user_id},
+                    {"_id": 0, "family_id": 1},
+                )
+                fid = str((member or {}).get("family_id") or "").strip()
+            if not fid:
                 return (None, None, None)
             fam = await db.families.find_one(
-                {"id": str(fid)},
-                {"_id": 0, "name": 1, "tag": 1, "emblem_preset_id": 1, "avatar_url": 1},
+                {"id": fid},
+                {"_id": 0, "name": 1, "tag": 1, "emblem_preset_id": 1, "avatar_url": 1, "wiped": 1},
             )
-            if not fam:
+            if not fam or fam.get("wiped"):
                 return (None, None, None)
-            # Heal users.family_id when membership exists but user doc is stale/null
-            if str(user.get("family_id") or "").strip() != str(fid).strip():
-                await db.users.update_one(
-                    {"id": {"$in": variants}} if len(variants) > 1 else {"id": user_id},
-                    {"$set": {"family_id": str(fid)}},
-                )
             name = fam.get("name") or "?"
             tag = (fam.get("tag") or "").strip()
             display = f"{name}" + (f" [{tag}]" if tag else "") if name else None
@@ -634,35 +635,46 @@ def register(router):
             return (display, pid, avatar)
 
         async def _owns_casino():
-            for coll_name in ("dice_ownership", "roulette_ownership", "blackjack_ownership", "horseracing_ownership", "slots_ownership", "videopoker_ownership"):
-                if await db[coll_name].count_documents({"owner_id": user_id}, limit=1):
-                    return True
-            return False
+            colls = (
+                "dice_ownership",
+                "roulette_ownership",
+                "blackjack_ownership",
+                "horseracing_ownership",
+                "slots_ownership",
+                "videopoker_ownership",
+            )
+            docs = await asyncio.gather(
+                *[db[c].find_one({"owner_id": user_id}, {"_id": 1}) for c in colls]
+            )
+            return any(docs)
 
         async def _property_type():
-            if await db.airport_ownership.find_one({"owner_id": user_id}, {"_id": 1}):
+            airport, armoury = await asyncio.gather(
+                db.airport_ownership.find_one({"owner_id": user_id}, {"_id": 1}),
+                db.bullet_factory.find_one({"owner_id": user_id}, {"_id": 1}),
+            )
+            if airport:
                 return "airport"
-            if await db.bullet_factory.find_one({"owner_id": user_id}, {"_id": 1}):
+            if armoury:
                 return "armoury"
             return None
 
         (
-            hitlist_count,
-            messages_received,
-            messages_sent,
+            on_hitlist,
+            message_counts,
             family_data,
             owns_casino,
             property_type,
             show_war_rat,
         ) = await asyncio.gather(
-            _hitlist_count(),
-            _messages_received(),
-            _messages_sent(),
+            _hitlist_on(),
+            _message_counts(),
             _family(),
             _owns_casino(),
             _property_type(),
             _war_rat_badge_active(user),
         )
+        messages_received, messages_sent = message_counts or (0, 0)
         family_display, family_emblem_preset_id, family_emblem_avatar_url = family_data or (None, None, None)
 
         _prestige_mult = float(user.get("prestige_rank_multiplier") or 1.0)
@@ -688,7 +700,7 @@ def register(router):
             "avatar_url": resolve_player_avatar_url(user),
             "kills": None if hide_kills else effective_player_kill_count(user),
             "jail_busts": None if hide_jail else int(user.get("jail_busts") or 0),
-            "on_hitlist": hitlist_count > 0,
+            "on_hitlist": bool(on_hitlist),
             "messages_sent": messages_sent,
             "messages_received": messages_received,
             "family": family_display,

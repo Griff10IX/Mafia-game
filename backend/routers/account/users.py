@@ -16,6 +16,7 @@ def register(router):
     """Register users routes. Dependencies from server to avoid circular imports."""
     import server as srv
     from utils.default_player_avatar import resolve_player_avatar_url
+    from utils.profile_cosmetics import profile_cosmetic_public_fields
 
     db = srv.db
     get_current_user = srv.get_current_user
@@ -196,6 +197,7 @@ def register(router):
                 "founding_member": bool(user.get("founding_member")),
                 "custom_profile_badge": bool(user.get("custom_profile_badge")),
                 "custom_profile_badge_url": (user.get("custom_profile_badge_url") or None) if user.get("custom_profile_badge") else None,
+                **profile_cosmetic_public_fields(user),
             }
             raw_cc = (user.get("last_seen_country") or "").strip().upper()
             roster_country_counter[raw_cc if len(raw_cc) == 2 and raw_cc.isalpha() else "__"] += 1
