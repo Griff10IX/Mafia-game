@@ -48,6 +48,16 @@ const PROFILE_STYLES = `
   .prof-fade-in { animation: prof-fade-in 0.4s ease-out both; }
   @keyframes prof-scale-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
   .prof-scale-in { animation: prof-scale-in 0.35s ease-out both; }
+  @keyframes prof-shimmer {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+  }
+  .prof-skel {
+    background: linear-gradient(90deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.10) 45%, rgba(255,255,255,0.04) 90%);
+    background-size: 200% 100%;
+    animation: prof-shimmer 1.15s ease-in-out infinite;
+    border-radius: 4px;
+  }
   .prof-card { transition: box-shadow 0.3s ease, border-color 0.3s ease; }
   .prof-row { transition: background-color 0.2s ease; }
   .prof-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
@@ -1834,7 +1844,13 @@ export default function Profile() {
       refetchProfile({ silent: true, usernameOverride: username });
       return;
     }
-    // Keep any previously rendered profile on screen while revalidating this target in background.
+    // No cache: clear stale other-user dossier and show loading skeleton for this username.
+    setProfile((prev) => {
+      if (prev && String(prev.username || '').trim().toLowerCase() === String(username).trim().toLowerCase()) {
+        return prev;
+      }
+      return null;
+    });
     refetchProfile({ silent: false, usernameOverride: username }).catch((e) => {
       const st = e.response?.status;
       if (st === 404) {
@@ -2475,38 +2491,69 @@ export default function Profile() {
         </div>
       );
     }
-    // Public profile still fetching — dossier chrome, not a black skeleton.
+    // Public profile still fetching — full dossier skeleton (not an empty name card).
     if (!isNotFound) {
+      const label = username || 'Dossier';
+      const skelRows = ['Username', 'Family', 'Rank', 'Wealth', 'Status', 'Kills'];
       return (
-        <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="profile-page">
+        <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="profile-page" aria-busy="true" aria-live="polite">
           <style>{PROFILE_STYLES}</style>
           <p className="text-[9px] text-zinc-500 font-heading italic max-w-3xl mx-auto">Rank, family, honours and property.</p>
-          <div className="max-w-3xl mx-auto">
+          <div className="max-w-3xl mx-auto space-y-3">
             <div className={`relative ${styles.panel} rounded-lg border border-primary/25 overflow-hidden`}>
               <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-              <div className="px-3 py-2 bg-gradient-to-r from-primary/12 via-transparent to-transparent border-b border-primary/15">
-                <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">
-                  {username || 'Dossier'}
-                </p>
+              <div className="px-3 py-2 bg-gradient-to-r from-primary/12 via-transparent to-transparent border-b border-primary/15 flex items-center justify-between gap-2">
+                <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider truncate">{label}</p>
+                <span className="text-[9px] font-heading text-zinc-500 uppercase tracking-wider shrink-0 flex items-center gap-1.5">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-primary/70 animate-pulse" aria-hidden />
+                  Loading
+                </span>
               </div>
-              <div className="p-3 sm:p-4 flex flex-col sm:flex-row gap-4 min-h-[9rem]">
-                <div className="w-full sm:w-36 h-36 rounded-lg border border-primary/20 bg-secondary/40 shrink-0 flex items-center justify-center">
-                  <UserIcon size={40} className="text-mutedForeground/50" />
+              <div className="p-3 sm:p-4 flex flex-col sm:flex-row gap-4">
+                <div className="w-full sm:w-36 h-36 rounded-lg border border-primary/20 bg-secondary/40 shrink-0 overflow-hidden">
+                  <div className="prof-skel w-full h-full rounded-lg" />
                 </div>
-                <div className="flex-1 space-y-2 min-w-0">
-                  <p className="text-sm font-heading font-bold text-foreground truncate">{username || '—'}</p>
-                  {profileLoadError ? (
-                    <button
-                      type="button"
-                      className="text-xs font-heading uppercase tracking-wider text-primary hover:underline"
-                      onClick={() => refetchProfile({ silent: false, forceLoading: true, usernameOverride: username })}
-                    >
-                      Try again
-                    </button>
-                  ) : null}
+                <div className="flex-1 space-y-3 min-w-0">
+                  <div className="prof-skel h-5 w-40 max-w-full" />
+                  <div className="prof-skel h-3 w-28 max-w-[70%]" />
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <div className="prof-skel h-8 w-20" />
+                    <div className="prof-skel h-8 w-24" />
+                    <div className="prof-skel h-8 w-20" />
+                  </div>
                 </div>
+              </div>
+              <div className="border-t border-primary/15 divide-y divide-primary/10">
+                {skelRows.map((rowLabel) => (
+                  <div key={rowLabel} className="px-3 py-2.5 flex items-center justify-between gap-3">
+                    <span className="text-[9px] font-heading font-bold text-zinc-500 uppercase tracking-wider shrink-0">{rowLabel}</span>
+                    <div className="prof-skel h-3.5 w-24 sm:w-32" />
+                  </div>
+                ))}
               </div>
             </div>
+            <div className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
+              <div className="px-3 py-2 border-b border-primary/15">
+                <div className="prof-skel h-3 w-24" />
+              </div>
+              <div className="p-3 space-y-2">
+                <div className="prof-skel h-3 w-full" />
+                <div className="prof-skel h-3 w-[88%]" />
+                <div className="prof-skel h-3 w-[72%]" />
+              </div>
+            </div>
+            {profileLoadError ? (
+              <div className="text-center space-y-1">
+                <p className="text-[10px] text-amber-400/90 font-heading">{profileLoadError}</p>
+                <button
+                  type="button"
+                  className="text-xs font-heading uppercase tracking-wider text-primary hover:underline"
+                  onClick={() => username && refetchProfile({ silent: false, forceLoading: true, usernameOverride: username })}
+                >
+                  Try again
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
       );

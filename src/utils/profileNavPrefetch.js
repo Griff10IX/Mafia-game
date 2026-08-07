@@ -1,16 +1,22 @@
 import api from './api';
 import { getProfilePrefetch, setProfilePrefetch } from './prefetchCache';
+import { preloadRoute } from './routePreload';
 
 const inflight = new Set();
 
 /**
  * Fire-and-forget: load GET /users/:username/profile (include_honours=false) into the
  * same in-memory cache Profile.js reads on mount, so opening /profile/:user from
- * Users Online can paint immediately after hover / pointer intent.
+ * Users Online / Attack / Jail can paint immediately after hover / pointer intent.
  */
 export function warmProfilePrefetchFromUsername(username) {
   const u = String(username || '').trim();
-  if (!u) return;
+  if (!u || u === '?' || u === '—') return;
+  try {
+    preloadRoute('/account/profile');
+  } catch {
+    /* ignore */
+  }
   const key = u.toLowerCase();
   if (getProfilePrefetch(u)) return;
   if (inflight.has(key)) return;

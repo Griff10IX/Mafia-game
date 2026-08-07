@@ -424,7 +424,15 @@ def register(router):
                 {
                     "$group": {
                         "_id": None,
-                        "swiss_total": {"$sum": {"$ifNull": ["$swiss_balance", 0]}},
+                        "swiss_total": {
+                            "$sum": {
+                                "$cond": [
+                                    {"$ne": [{"$ifNull": ["$is_dead", False]}, True]},
+                                    {"$ifNull": ["$swiss_balance", 0]},
+                                    0,
+                                ]
+                            }
+                        },
                         # Circulating ammo: alive players only (dead/admin/mod already out of match for staff).
                         "bullets_total": {
                             "$sum": {
@@ -455,7 +463,13 @@ def register(router):
             ]).to_list(1),
             db.users.aggregate([
                 {"$match": alive_real_match},
-                {"$group": {"_id": None, "money_total": {"$sum": {"$ifNull": ["$money", 0]}}}},
+                {
+                    "$group": {
+                        "_id": None,
+                        "money_total": {"$sum": {"$ifNull": ["$money", 0]}},
+                        "bank_total": {"$sum": {"$ifNull": ["$bank_balance", 0]}},
+                    }
+                },
             ]).to_list(1),
             db.bank_deposits.aggregate([
                 {"$match": bank_match},
@@ -520,10 +534,22 @@ def register(router):
         totals_doc = totals[0] if totals else {}
         booze_profit_grand_total = int(booze_sum_rows[0].get("t", 0) or 0) if booze_sum_rows else 0
         family_treasury_total = int(family_treasury_agg[0].get("total", 0) or 0) if family_treasury_agg else 0
-        total_cash_alive = int(cash_agg[0].get("money_total", 0) or 0) if cash_agg else 0
+        cash_doc = cash_agg[0] if cash_agg else {}
+        wallets_total = int(cash_doc.get("money_total", 0) or 0)
+        classic_bank_total = int(cash_doc.get("bank_total", 0) or 0)
+        swiss_total = int(totals_doc.get("swiss_total", 0) or 0)
         interest_bank_total = int(interest_agg[0].get("total", 0) or 0) if interest_agg else 0
         quicktrade_cash = int(quicktrade_agg[0].get("total", 0) or 0) if quicktrade_agg else 0
-        total_cash = total_cash_alive + quicktrade_cash
+        # Whole-game cash (excl. staff/NPC/dead): alive wallets + classic bank + Swiss
+        # + interest-bank deposits + family treasuries + Quick Trade buy-offer escrow.
+        total_cash = (
+            wallets_total
+            + classic_bank_total
+            + swiss_total
+            + interest_bank_total
+            + family_treasury_total
+            + quicktrade_cash
+        )
         car_by_id = {c.get("id"): c for c in CARS}
         rarity_counts = {"common": 0, "uncommon": 0, "rare": 0, "ultra_rare": 0, "legendary": 0, "custom": 0, "exclusive": 0, "loot_exclusive": 0}
         total_vehicle_value = 0
@@ -685,7 +711,9 @@ def register(router):
             "generated_at": now.isoformat(),
             "game_capital": {
                 "total_cash": total_cash,
-                "swiss_total": int(totals_doc.get("swiss_total", 0) or 0),
+                "wallets_total": wallets_total,
+                "classic_bank_total": classic_bank_total,
+                "swiss_total": swiss_total,
                 "interest_bank_total": interest_bank_total,
                 "quicktrade_cash": quicktrade_cash,
                 "booze_profit_total": booze_profit_grand_total,

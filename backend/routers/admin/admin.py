@@ -21097,7 +21097,7 @@ def register(router):
         total_cash = int((agg_sum[0].get("t", 0) if agg_sum else 0) or 0)
         return {
             "match_note": (
-                "Alive real players (excl. NPCs, moderators, ADMIN_EMAILS) — same segment as Economy overview → Cash in circulation and Stats Total cash wallets portion."
+                "Alive real players (excl. NPCs, moderators, ADMIN_EMAILS) — same segment as Economy overview → Cash in circulation and the wallets portion of Stats Total cash."
                 + (" Filtered by username search." if q else "")
             ),
             "total_cash_on_hand": total_cash,
@@ -21262,15 +21262,23 @@ def register(router):
         quicktrade_sell_points_escrow = int(qt_sell_doc.get("total_points") or 0)
         quicktrade_sell_offers = int(qt_sell_doc.get("offers") or 0)
 
-        # Same definitions as GET /stats/overview game_capital (total_cash = wallets + buy-offer escrow)
-        public_total_cash = alive_sums["money"] + quicktrade_escrow
         swiss_rows = await db.users.aggregate(
             [
-                {"$match": real_user_match},
+                {"$match": alive_real_match},
                 {"$group": {"_id": None, "t": {"$sum": {"$ifNull": ["$swiss_balance", 0]}}}},
             ]
         ).to_list(1)
         public_swiss_total = int((swiss_rows[0].get("t", 0) if swiss_rows else 0) or 0)
+
+        # Same definitions as GET /stats/overview game_capital.total_cash (alive only; excl. staff/NPC/dead)
+        public_total_cash = (
+            alive_sums["money"]
+            + alive_sums["bank_balance"]
+            + public_swiss_total
+            + interest_total
+            + family_treasury
+            + quicktrade_escrow
+        )
 
         real_alive_bank = alive_sums["bank_balance"]
         npc_total = npc_sums["money"] + npc_sums["bank_balance"] + npc_sums["swiss_balance"]
@@ -21294,31 +21302,31 @@ def register(router):
                 "id": "wallet_alive_players",
                 "label": "Cash on hand (alive players, excl. staff/NPC)",
                 "amount": alive_sums["money"],
-                "note": "Wallets only. Public Stats → Total cash = this plus Quick Trade buy-offer escrow (trade_buy_escrow bucket).",
+                "note": "Wallets only. Included in public Stats → Total cash.",
             },
             {
                 "id": "bank_alive_players",
                 "label": "Classic bank balance (same players)",
                 "amount": real_alive_bank,
-                "note": "users.bank_balance; not included in public Total cash line.",
+                "note": "users.bank_balance; included in public Total cash.",
             },
             {
                 "id": "swiss_all_real_players",
-                "label": "Swiss bank (all real players, excl. staff)",
+                "label": "Swiss bank (alive players, excl. staff)",
                 "amount": public_swiss_total,
-                "note": "Matches public Stats → Swiss bank cash (includes dead players’ Swiss).",
+                "note": "Matches public Stats → Swiss bank cash (alive players only). Included in Total cash.",
             },
             {
                 "id": "wallet_dead_players",
                 "label": "Cash on hand (dead players, excl. staff)",
                 "amount": dead_sums["money"],
-                "note": "Stranded wallets.",
+                "note": "Stranded wallets. Not included in public Total cash.",
             },
             {
                 "id": "bank_dead_players",
                 "label": "Bank + Swiss (dead players)",
                 "amount": dead_sums["bank_balance"] + dead_sums["swiss_balance"],
-                "note": "",
+                "note": "Not included in public Total cash.",
             },
             {
                 "id": "npc_all",
@@ -21336,19 +21344,19 @@ def register(router):
                 "id": "interest_bank_unclaimed",
                 "label": "Interest bank (unclaimed deposits)",
                 "amount": interest_total,
-                "note": f"Principal ${interest_principal:,} + accrued ${interest_accrued:,} · {interest_deposit_count} deposits. Matches public Stats line.",
+                "note": f"Principal ${interest_principal:,} + accrued ${interest_accrued:,} · {interest_deposit_count} deposits. Included in public Total cash.",
             },
             {
                 "id": "family_treasury",
                 "label": "Family treasuries",
                 "amount": family_treasury,
-                "note": "families.treasury sum.",
+                "note": "families.treasury sum. Included in public Total cash.",
             },
             {
                 "id": "trade_buy_escrow",
                 "label": "Quick trade — active buy offers (escrow)",
                 "amount": quicktrade_escrow,
-                "note": f"{quicktrade_offers} offers. Cash locked out of wallets while active.",
+                "note": f"{quicktrade_offers} offers. Cash locked out of wallets while active. Included in public Total cash.",
             },
             {
                 "id": "trade_sell_escrow_points",
@@ -21683,7 +21691,7 @@ def register(router):
         rows_out.sort(key=lambda r: r.get("at") or "", reverse=True)
         note_parts = [
             "Best-effort from existing logs; not every wallet $inc is logged.",
-            "Economy overview 'Cash in circulation' is wallets only; stats Total cash includes Quick Trade escrow.",
+            "Economy overview 'Cash in circulation' is wallets only; stats Total cash is alive wallets + classic bank + Swiss + interest bank + family treasuries + Quick Trade escrow (excl. staff/NPC/dead).",
         ]
         if wallet_gains_only:
             note_parts.insert(

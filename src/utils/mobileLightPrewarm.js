@@ -6,6 +6,7 @@ import api from './api';
 import { preloadRoute } from './routePreload';
 import { getCrimesPrefetch, setCrimesPrefetch } from './prefetchCache';
 import { prefetchTravelPageData } from './travelPageWarm';
+import { prefetchProfilePageData } from './profilePageWarm';
 
 /** Chunk-only paths — no heavy multi-request page warms. */
 const LIGHT_CHUNK_PATHS = [
@@ -13,6 +14,7 @@ const LIGHT_CHUNK_PATHS = [
   '/crime/gta',
   '/kill/attack',
   '/crime/jail',
+  '/account/profile',
 ];
 
 let ranForUserId = null;
@@ -41,7 +43,7 @@ export function scheduleMobileLightPrewarm(userId) {
       }
     }
 
-    // 2) One light API if crimes aren’t already cached.
+    // 2) One light API if crimes aren’t already cached + soft travel/own-profile warm.
     stepTimeout = setTimeout(() => {
       if (cancelled) return;
       if (!getCrimesPrefetch()) {
@@ -49,6 +51,8 @@ export function scheduleMobileLightPrewarm(userId) {
       }
       // Soft travel warm (internally throttled / force:false).
       prefetchTravelPageData({ force: false }).catch(() => {});
+      // Own profile dossier into memory cache so /profile opens without empty flash.
+      prefetchProfilePageData({ force: false }).catch(() => {});
     }, 800);
   };
 

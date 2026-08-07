@@ -5,6 +5,7 @@ import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
+import { warmProfilePrefetchFromUsername } from '../../utils/profileNavPrefetch';
 const DEFAULT_MOD_COLOR = '#1e3a5f';
 
 const JAIL_STYLES = `
@@ -261,6 +262,8 @@ const JailedPlayerRow = ({
                 to={`/profile/${encodeURIComponent(player.username)}`}
                 className={`transition-colors hover:underline ${displayColor ? '' : 'text-primary'}`}
                 style={displayColor ? { color: displayColor } : undefined}
+                onPointerDown={() => warmProfilePrefetchFromUsername(player.username)}
+                onPointerEnter={() => warmProfilePrefetchFromUsername(player.username)}
               >
                 {player.username}
               </Link>

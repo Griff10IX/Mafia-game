@@ -8,6 +8,7 @@ import styles from '../../styles/noir.module.css';
 import { useAttackTurnstile } from '../../hooks/useAttackTurnstile';
 import { RARITY_GLOW_HEX, rarityRowStyle } from '../../constants/carRarityGlows';
 import { formatGameDateTime } from '../../utils/gameDateTime';
+import { warmProfilePrefetchFromUsername } from '../../utils/profileNavPrefetch';
 
 const ATTACK_STYLES = `
   @keyframes atk-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -776,6 +777,8 @@ const SearchesCard = ({
                           to={`/profile/${encodeURIComponent(a.target_username)}`}
                           className="font-heading font-bold text-foreground hover:text-primary transition-colors block text-[10px] truncate min-w-0"
                           data-testid={`attack-user-${a.attack_id}`}
+                          onPointerDown={() => warmProfilePrefetchFromUsername(a.target_username)}
+                          onPointerEnter={() => warmProfilePrefetchFromUsername(a.target_username)}
                         >
                           {a.target_username}
                         </Link>
@@ -792,6 +795,8 @@ const SearchesCard = ({
                             to={`/profile/${encodeURIComponent(a.bodyguard_owner_username)}`}
                             className="text-zinc-400 hover:text-primary"
                             onClick={(e) => e.stopPropagation()}
+                            onPointerDown={() => warmProfilePrefetchFromUsername(a.bodyguard_owner_username)}
+                            onPointerEnter={() => warmProfilePrefetchFromUsername(a.bodyguard_owner_username)}
                           >
                             {a.bodyguard_owner_username}
                           </Link>
@@ -922,6 +927,8 @@ const SearchesCard = ({
                         <Link
                           to={`/profile/${encodeURIComponent(a.target_username)}`}
                           className="font-heading font-bold text-foreground hover:text-primary transition-colors block text-[11px] truncate min-w-0"
+                          onPointerDown={() => warmProfilePrefetchFromUsername(a.target_username)}
+                          onPointerEnter={() => warmProfilePrefetchFromUsername(a.target_username)}
                         >
                           {a.target_username}
                         </Link>
@@ -937,6 +944,8 @@ const SearchesCard = ({
                           <Link
                             to={`/profile/${encodeURIComponent(a.bodyguard_owner_username)}`}
                             className="text-zinc-400 hover:text-primary"
+                            onPointerDown={() => warmProfilePrefetchFromUsername(a.bodyguard_owner_username)}
+                            onPointerEnter={() => warmProfilePrefetchFromUsername(a.bodyguard_owner_username)}
                           >
                             {a.bodyguard_owner_username}
                           </Link>

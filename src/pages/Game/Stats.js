@@ -320,14 +320,32 @@ function buildGameCapitalRows(data) {
       label: 'Total cash',
       value: formatMoney(gc?.total_cash),
       title:
-        'Alive players’ wallets (excl. staff/NPC) plus cash locked in active Quick Trade buy offers. Escrow is still in the game economy.',
+        'All cash in the game economy excl. staff/NPC/dead: alive player wallets, classic bank, Swiss bank, interest-bank deposits, family treasuries, and Quick Trade buy-offer escrow. Breakdown rows below are included in this total (except booze profit / store spend / bullets).',
     },
-    { label: 'Swiss bank cash', value: formatMoney(gc?.swiss_total) },
-    { label: 'Interest bank cash', value: formatMoney(gc?.interest_bank_total) },
+    {
+      label: 'Wallets (on hand)',
+      value: formatMoney(gc?.wallets_total),
+      title: 'Cash on hand for alive real players, excl. staff/NPC. Included in Total cash.',
+    },
+    {
+      label: 'Classic bank',
+      value: formatMoney(gc?.classic_bank_total),
+      title: 'users.bank_balance for alive real players (excl. staff). Included in Total cash.',
+    },
+    {
+      label: 'Swiss bank cash',
+      value: formatMoney(gc?.swiss_total),
+      title: 'Swiss balances for alive real players (excl. staff). Included in Total cash.',
+    },
+    {
+      label: 'Interest bank cash',
+      value: formatMoney(gc?.interest_bank_total),
+      title: 'Unclaimed interest-bank deposits (excl. staff). Included in Total cash.',
+    },
     {
       label: 'Quick Trade buy-offer escrow',
       value: formatMoney(gc?.quicktrade_cash),
-      title: 'Cash deducted from wallets for active “buy points” listings. This amount is already included in Total cash above (breakdown only).',
+      title: 'Cash locked in active “buy points” listings (excl. staff). Included in Total cash.',
     },
     {
       label: 'Booze run profit (all players)',
@@ -336,7 +354,11 @@ function buildGameCapitalRows(data) {
         'Adds each account’s booze profit the same way you see on a profile (sum of users.booze_profit_total). Every non-bot user counts—if one player has $280M and another $120M, this row shows $400M. Lifetime run earnings, not cash on hand, so it will not match Total cash.',
     },
     { label: 'Total bullets', value: formatNumber(gc?.bullets_total) },
-    { label: 'Family treasuries', value: formatMoney(gc?.family_treasury_total) },
+    {
+      label: 'Family treasuries',
+      value: formatMoney(gc?.family_treasury_total),
+      title: 'Sum of family treasuries. Included in Total cash.',
+    },
     {
       label: 'Store tokens — points spent (all players)',
       value: formatNumber(gc?.token_store_points_spent_total ?? 0),

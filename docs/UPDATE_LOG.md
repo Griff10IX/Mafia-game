@@ -6,6 +6,20 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-07 20:25 UTC[/color][/b] — [b]Game Pass prestige, profiles, Attack/Jail, Stats cash[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Game Pass Prestige (£10)[/b] is [b]one-time[/b] per account. After you prestige, the Buy Prestige button is removed. Membership shows [b]VIP (Active) · Prestiged[/b].[/color]
+[*][color=#888888][b]Fixed:[/b] [b]Dead → Alive[/b] Claim Inheritance now carries [b]Game Pass prestige[/b] status from the dead account (VIP progress / strains already transferred).[/color]
+[*][color=#888888][b]Improved:[/b] Opening another player’s [b]profile[/b] no longer flashes an empty card — you get a proper loading dossier. Profiles also [b]prewarm[/b] on hover/press from Attack, Jail, Users Online, and game chat.[/color]
+[*][color=#888888][b]Improved:[/b] [b]Attack[/b] list polling is lighter under load (less abort/retry spam; slower idle refresh).[/color]
+[*][color=#888888][b]Changed:[/b] Jail — unbustable players show [b]Unbustable[/b] (with countdown) instead of [b]Lock[/b].[/color]
+[*][color=#888888][b]Changed:[/b] Stats → [b]Game Capital → Total cash[/b] now counts [b]alive[/b] cash in the economy (wallets, classic bank, Swiss, interest bank, family treasuries, Quick Trade buy escrow). Staff, NPCs, and [b]dead[/b] accounts are excluded.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-07-31 02:00 UTC[/color][/b] — [b]Prestige benefits + rank bar[/b][/size]
 [quote]
 [list]

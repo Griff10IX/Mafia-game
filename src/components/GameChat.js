@@ -6,6 +6,7 @@ import { getApiErrorMessage } from '../utils/api';
 import { toast } from 'sonner';
 import GifPicker from './GifPicker';
 import { parseForumContent, FORUM_INLINE_SMILEY_PX } from '../utils/forumContent';
+import { warmProfilePrefetchFromUsername } from '../utils/profileNavPrefetch';
 
 const POLL_INTERVAL_MS = 10000;
 const MAX_MESSAGE_LEN = 500;
@@ -407,7 +408,15 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
                         : prefs.blocked_user_ids.map((uid) => ({ user_id: uid, username: uid }))
                       ).slice(0, 10).map((item) => (
                         <div key={item.user_id} className="flex items-center justify-between gap-1 py-0.5 px-1 text-[10px]">
-                          <Link to={`/profile/${encodeURIComponent(item.username)}`} className="truncate hover:underline" style={{ color: 'var(--noir-primary)' }}>{item.username}</Link>
+                          <Link
+                            to={`/profile/${encodeURIComponent(item.username)}`}
+                            className="truncate hover:underline"
+                            style={{ color: 'var(--noir-primary)' }}
+                            onPointerDown={() => warmProfilePrefetchFromUsername(item.username)}
+                            onPointerEnter={() => warmProfilePrefetchFromUsername(item.username)}
+                          >
+                            {item.username}
+                          </Link>
                           <button
                             type="button"
                             onClick={() => unblockUser(item.user_id)}
@@ -476,6 +485,8 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
                       to={`/profile/${encodeURIComponent(m.username)}`}
                       className="font-heading text-[9.5px] font-bold shrink-0 hover:underline"
                       style={{ color: isOwn ? 'var(--noir-primary)' : 'rgba(var(--noir-primary-rgb), 0.75)' }}
+                      onPointerDown={() => warmProfilePrefetchFromUsername(m.username)}
+                      onPointerEnter={() => warmProfilePrefetchFromUsername(m.username)}
                     >
                       {m.username}
                     </Link>
