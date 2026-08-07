@@ -81,8 +81,9 @@ const AutoRankBoozeBanner = () => (
 );
 
 const StatsCard = ({ config, timer }) => {
-  const capacity = config.capacity ?? 0;
-  const carryingTotal = config.carrying_total ?? 0;
+  const cfg = config || {};
+  const capacity = cfg.capacity ?? 0;
+  const carryingTotal = cfg.carrying_total ?? 0;
   const pctFull = capacity > 0 ? (carryingTotal / capacity) * 100 : 0;
   
   return (
@@ -102,14 +103,14 @@ const StatsCard = ({ config, timer }) => {
             <MapPin size={8} className="text-primary" />
             Your City
           </div>
-          <div className="text-[11px] font-heading font-bold text-primary truncate">{config.current_location}</div>
+          <div className="text-[11px] font-heading font-bold text-primary truncate">{cfg.current_location || '—'}</div>
         </div>
         
         <div
           className="space-y-0.5"
           title={
-            config.cargo_godfather_cap != null
-              ? `Max total cargo at Godfather for your prestige: ${Number(config.cargo_godfather_cap).toLocaleString()} (includes Points Store + family). Rank-only slice at top: ${config.cargo_godfather_rank_only != null ? Number(config.cargo_godfather_rank_only).toLocaleString() : '—'}.`
+            cfg.cargo_godfather_cap != null
+              ? `Max total cargo at Godfather for your prestige: ${Number(cfg.cargo_godfather_cap).toLocaleString()} (includes Points Store + family). Rank-only slice at top: ${cfg.cargo_godfather_rank_only != null ? Number(cfg.cargo_godfather_rank_only).toLocaleString() : '—'}.`
               : undefined
           }
         >
@@ -120,7 +121,7 @@ const StatsCard = ({ config, timer }) => {
           <div className="text-[11px] font-heading font-bold text-foreground tabular-nums">
             {carryingTotal} / {capacity}
           </div>
-          {config.vip_pass_car_bonus && (
+          {cfg.vip_pass_car_bonus && (
             <div className="text-[8px] font-heading text-cyan-500/90">+50% cargo (VIP Pass car)</div>
           )}
           <div className="w-full h-0.5 bg-zinc-800 rounded-full overflow-hidden">
@@ -134,9 +135,9 @@ const StatsCard = ({ config, timer }) => {
             Today's Take
           </div>
           <div className={`text-[11px] font-heading font-bold tabular-nums ${
-            (config.profit_today ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
+            (cfg.profit_today ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
           }`}>
-            {formatMoney(config.profit_today)}
+            {formatMoney(cfg.profit_today)}
           </div>
         </div>
         
@@ -146,9 +147,9 @@ const StatsCard = ({ config, timer }) => {
             Total Profit
           </div>
           <div className={`text-[11px] font-heading font-bold tabular-nums ${
-            (config.profit_total ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
+            (cfg.profit_total ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'
           }`}>
-            {formatMoney(config.profit_total)}
+            {formatMoney(cfg.profit_total)}
           </div>
         </div>
         
@@ -158,7 +159,7 @@ const StatsCard = ({ config, timer }) => {
             Runs Made
           </div>
           <div className="text-[11px] font-heading font-bold text-foreground tabular-nums">
-            {config.runs_count ?? 0}
+            {cfg.runs_count ?? 0}
           </div>
         </div>
       </div>
@@ -955,28 +956,20 @@ export default function BoozeRun() {
     }
   };
 
-  if (!config) {
-    return (
-      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="booze-run-page">
-        <style>{BOOZE_STYLES}</style>
-      </div>
-    );
-  }
-
-  const historyList = config.history || [];
-  const pricesAtLocation = config.prices_at_location || [];
+  const historyList = config?.history || [];
+  const pricesAtLocation = config?.prices_at_location || [];
 
   // Consider all cities from server config when computing best profit pairs.
-  const allByLocation = config.all_prices_by_location || {};
-  const currentLocation = config.current_location || '';
+  const allByLocation = config?.all_prices_by_location || {};
+  const currentLocation = config?.current_location || '';
   const cities = Object.keys(allByLocation);
 
   // One round-trip per rotation: use server's round_trip_cities so there's always one route there and back
-  const roundTripCities = config.round_trip_cities && config.round_trip_cities.length === 2 ? config.round_trip_cities : null;
+  const roundTripCities = config?.round_trip_cities && config.round_trip_cities.length === 2 ? config.round_trip_cities : null;
   const cityA = roundTripCities ? roundTripCities[0] : '';
   const cityB = roundTripCities ? roundTripCities[1] : '';
 
-  const buyASellBRoutes = (config.booze_types || [])
+  const buyASellBRoutes = (config?.booze_types || [])
     .map((bt) => {
       const buyItem = allByLocation[cityA]?.find((p) => p.booze_id === bt.id);
       const sellItem = allByLocation[cityB]?.find((p) => p.booze_id === bt.id);
@@ -989,7 +982,7 @@ export default function BoozeRun() {
     .sort((a, b) => b.profit - a.profit)
     .slice(0, 3);
 
-  const buyBSellARoutes = (config.booze_types || [])
+  const buyBSellARoutes = (config?.booze_types || [])
     .map((bt) => {
       const buyItem = allByLocation[cityB]?.find((p) => p.booze_id === bt.id);
       const sellItem = allByLocation[cityA]?.find((p) => p.booze_id === bt.id);
@@ -1056,7 +1049,7 @@ export default function BoozeRun() {
       <CityPricesCard citySummary={citySummary} />
 
       <SuppliesCard
-        location={config.current_location}
+        location={config?.current_location}
         supplies={pricesAtLocation}
         tradeAmounts={tradeAmounts}
         setTradeAmount={setTradeAmount}
@@ -1064,21 +1057,21 @@ export default function BoozeRun() {
         setTradeMode={setTradeMode}
         handleBuy={handleBuy}
         handleSell={handleSell}
-        capacity={config.capacity ?? 0}
-        carryingTotal={config.carrying_total ?? 0}
+        capacity={config?.capacity ?? 0}
+        carryingTotal={config?.carrying_total ?? 0}
         disabled={autoRankBoozeDisabled}
       />
 
       <HistoryCard history={historyList} />
 
       <InfoCard
-        rotationHours={config.rotation_hours}
-        rotationSeconds={config.rotation_seconds}
-        dailyEstimateRough={config.daily_estimate_rough}
-        cargoDerivedMax={config.cargo_derived_absolute_max}
-        vipPassCarBonus={!!config.vip_pass_car_bonus}
-        travelLegSeconds={config.travel_leg_seconds}
-        travelCarName={config.travel_car_name}
+        rotationHours={config?.rotation_hours}
+        rotationSeconds={config?.rotation_seconds}
+        dailyEstimateRough={config?.daily_estimate_rough}
+        cargoDerivedMax={config?.cargo_derived_absolute_max}
+        vipPassCarBonus={!!config?.vip_pass_car_bonus}
+        travelLegSeconds={config?.travel_leg_seconds}
+        travelCarName={config?.travel_car_name}
       />
 
       {captchaModal}

@@ -738,14 +738,6 @@ export default function Inbox() {
       ? notifications.filter(n => !n.read)
       : notifications.filter(n => n.notification_type === filter);
 
-  if (!hasLoaded) {
-    return (
-      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
-        <style>{INBOX_STYLES}</style>
-      </div>
-    );
-  }
-
   const filterButtons = [
     { value: 'all', label: 'All', icon: Mail },
     { value: 'unread', label: 'Unread', icon: MailOpen },

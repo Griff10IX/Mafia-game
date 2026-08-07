@@ -405,14 +405,6 @@ export default function Properties() {
     setSkipAllBusy(false);
   };
 
-  if (!authUser && properties.length === 0) {
-    return (
-      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
-        <style>{PROP_STYLES}</style>
-      </div>
-    );
-  }
-
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="properties-page">
       <style>{PROP_STYLES}</style>

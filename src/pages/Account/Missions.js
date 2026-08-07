@@ -8,7 +8,6 @@ import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
-
 // ─────────────────────────────────────────────────────────────────────────────
 // STYLES
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1102,15 +1101,7 @@ export default function Missions() {
     }
   };
 
-  if (!data) {
-    return (
-      <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} style={{ padding: '12px 14px', maxWidth: 900, margin: '0 auto' }}>
-        <style>{MISSIONS_STYLES}</style>
-      </div>
-    );
-  }
-
-  const unlocked = data.unlocked_cities || ['Start'];
+  const unlocked = data?.unlocked_cities || ['Start'];
   const cityMissions = missions.filter(m => m.city === city);
   const orderedCityMissions = [...cityMissions].sort((a, b) => (a.is_boss ? 1 : 0) - (b.is_boss ? 1 : 0) || a.order - b.order);
   const currentMission = orderedCityMissions.find(m => !m.completed && m.unlocked) ?? null;
@@ -1135,7 +1126,7 @@ export default function Missions() {
   const totalMissions   = cityMissions.length;
   const completedCount  = cityMissions.filter(m => m.completed).length;
   const readyCount      = cityMissions.filter(m => m.requirements_met && !m.completed).length;
-  const tributeBank     = data.tribute_bank ?? 0;
+  const tributeBank     = data?.tribute_bank ?? 0;
   const bossM = bossMissions[0];
   const bossReqCount  = bossM?.progress?.target ?? null;
   const bossDoneCount = bossM?.progress?.current ?? 0;

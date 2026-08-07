@@ -486,14 +486,6 @@ function Lottery() {
     doBuy(n);
   };
 
-  if (!state) {
-    return (
-      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
-        <style>{LOT_STYLES}</style>
-      </div>
-    );
-  }
-
   const last = state?.last_draw;
   const grossPot = Number(state?.gross_pot ?? 0);
   const rolloverIn = Number(state?.rollover_in ?? 0);

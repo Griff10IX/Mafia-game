@@ -613,14 +613,6 @@ export default function IllegalBusiness() {
     fetchData();
   });
 
-  if (!data) {
-    return (
-      <div className={`${styles.pageContent} mobile-page-root`}>
-        <style>{RACKET_STYLES}</style>
-      </div>
-    );
-  }
-
   if (data?.noBusiness) {
     const pendingNoBiz = data?.pending_kill_rewards || [];
     return (

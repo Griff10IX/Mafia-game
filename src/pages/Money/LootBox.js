@@ -1089,14 +1089,6 @@ export default function LootBox() {
   const canUseFreeRare = selectedTier === 'rare' && freeRareOpens > 0;
   const canOpen = (pieces >= tierCost || canUseFreeRare) && phase === 'idle';
 
-  if (!status) {
-    return (
-      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
-        <style>{LOOT_BOX_STYLES}</style>
-      </div>
-    );
-  }
-
   const last10 = status?.last_10_wins ?? [];
 
   return (

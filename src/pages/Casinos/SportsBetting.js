@@ -6,7 +6,6 @@ import { refreshUser } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 import { getSportsBettingPrefetch, setSportsBettingPrefetch } from '../../utils/prefetchCache';
 import { formatGameDateTime } from '../../utils/gameDateTime';
-
 const BOARD_SPORT_TAB_STORAGE_KEY = 'sb-board-sport-tab';
 const BOARD_LEAGUE_TAB_STORAGE_KEY = 'sb-board-league-tab';
 
@@ -1177,12 +1176,6 @@ export default function SportsBetting() {
       return ta - tb;
     });
   }, [events, boardSportTab, boardLeagueKey, boardLeagueTabsForSport]);
-
-  if (!hasLoaded) {
-    return (
-      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="sports-betting-page"><style>{SB_STYLES}</style></div>
-    );
-  }
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="sports-betting-page">

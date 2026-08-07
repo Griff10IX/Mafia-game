@@ -341,14 +341,6 @@ export default function GraveRobber() {
     }
   };
 
-  if (!status) {
-    return (
-      <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
-        <style>{GR_STYLES}</style>
-      </div>
-    );
-  }
-
   return (
     <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="grave-robber-page">
       <style>{GR_STYLES}</style>

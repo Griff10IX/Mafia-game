@@ -738,14 +738,6 @@ export default function Jail() {
     }
   };
 
-  if (initialLoading) {
-    return (
-      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
-        <style>{JAIL_STYLES}</style>
-      </div>
-    );
-  }
-
   return (
     <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="jail-page">
       <style>{JAIL_STYLES + (animateIn ? JAIL_FADE_STYLES : '')}</style>

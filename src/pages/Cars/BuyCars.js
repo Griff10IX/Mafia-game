@@ -535,14 +535,6 @@ export default function BuyCars() {
     }
   };
 
-  if (!hasLoaded) {
-    return (
-      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
-        <style>{BUY_STYLES}</style>
-      </div>
-    );
-  }
-
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
       <style>{BUY_STYLES + (animateIn ? BUY_FADE_STYLES : '')}</style>

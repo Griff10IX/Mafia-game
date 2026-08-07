@@ -39,14 +39,7 @@ export default function CarProfile() {
     return () => { cancelled = true; };
   }, [carId]);
 
-  if (!hasLoaded) {
-    return (
-      <div className={`${styles.pageContent} mobile-page-root`}>
-      </div>
-    );
-  }
-
-  if (!car) {
+  if (!car && hasLoaded) {
     return (
       <div className={`${styles.pageContent} mobile-page-root`}>
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-4">
@@ -60,8 +53,8 @@ export default function CarProfile() {
     );
   }
 
-  const rarityLabel = (car.rarity || '').replace(/_/g, ' ');
-  const rarityColor = RARITY_COLORS[car.rarity] || 'text-mutedForeground';
+  const rarityLabel = (car?.rarity || '').replace(/_/g, ' ');
+  const rarityColor = RARITY_COLORS[car?.rarity] || 'text-mutedForeground';
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
@@ -76,11 +69,11 @@ export default function CarProfile() {
           </Link>
           <div>
             <span className={`text-[10px] font-heading font-bold uppercase tracking-wider ${rarityColor}`}>
-              {rarityLabel}
+              {rarityLabel || 'Vehicle'}
             </span>
             <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary flex items-center gap-2">
               <Car className="w-5 h-5 sm:w-6 sm:h-6" />
-              {car.name}
+              {car?.name || 'Car'}
             </h1>
           </div>
         </div>
@@ -89,7 +82,7 @@ export default function CarProfile() {
         <div className="flex items-center gap-3 text-xs font-heading">
           <div className="flex items-center gap-1">
             <DollarSign size={12} className="text-primary" />
-            <span className="text-primary font-bold">${(car.value || 0).toLocaleString()}</span>
+            <span className="text-primary font-bold">${(car?.value || 0).toLocaleString()}</span>
           </div>
         </div>
       </div>
@@ -107,7 +100,7 @@ export default function CarProfile() {
             {/* Image - compact */}
             <div className="w-full max-w-[min(100%,20rem)] sm:w-80 sm:max-w-none shrink-0 mx-auto sm:mx-0">
               <div className="aspect-[4/3] rounded-md overflow-hidden bg-zinc-950/90 border border-zinc-700/50">
-                {car.image ? (
+                {car?.image ? (
                   <img
                     src={car.image}
                     alt={car.name}
@@ -130,7 +123,7 @@ export default function CarProfile() {
                   <DollarSign size={14} className="text-primary" />
                   <span className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading">Value</span>
                 </div>
-                <div className="font-heading font-bold text-primary text-lg">${(car.value || 0).toLocaleString()}</div>
+                <div className="font-heading font-bold text-primary text-lg">${(car?.value || 0).toLocaleString()}</div>
               </div>
               
               <div className="bg-zinc-800/30 rounded-md p-3 border border-zinc-700/30">
@@ -139,7 +132,7 @@ export default function CarProfile() {
                   <span className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading">Travel Time</span>
                 </div>
                 <div className="font-heading font-bold text-foreground text-lg">
-                  {car.travel_time != null && car.travel_time >= 0 ? `${car.travel_time}s` : '—'}
+                  {car?.travel_time != null && car.travel_time >= 0 ? `${car.travel_time}s` : '—'}
                 </div>
               </div>
               
@@ -148,7 +141,7 @@ export default function CarProfile() {
                   <Shield size={14} className="text-primary" />
                   <span className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading">Difficulty</span>
                 </div>
-                <div className="font-heading font-bold text-foreground text-lg">{car.min_difficulty ?? '—'}</div>
+                <div className="font-heading font-bold text-foreground text-lg">{car?.min_difficulty ?? '—'}</div>
               </div>
               
               <div className="bg-zinc-800/30 rounded-md p-3 border border-zinc-700/30">
@@ -156,7 +149,7 @@ export default function CarProfile() {
                   <Sparkles size={14} className="text-primary" />
                   <span className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading">Rarity</span>
                 </div>
-                <div className={`font-heading font-bold text-lg capitalize ${rarityColor}`}>{rarityLabel}</div>
+                <div className={`font-heading font-bold text-lg capitalize ${rarityColor}`}>{rarityLabel || '—'}</div>
               </div>
             </div>
           </div>

@@ -134,14 +134,6 @@ export default function Objectives() {
     return () => clearInterval(id);
   }, [fetchObjectives]);
 
-  if (!data) {
-    return (
-      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
-        <style>{OBJ_STYLES}</style>
-      </div>
-    );
-  }
-
   const daily = data?.daily ?? {};
   const weekly = data?.weekly ?? {};
   const monthly = data?.monthly ?? {};

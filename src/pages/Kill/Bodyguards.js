@@ -730,14 +730,6 @@ export default function Bodyguards() {
     );
   };
 
-  if (!hasLoaded) {
-    return (
-      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
-        <style>{BG_STYLES}</style>
-      </div>
-    );
-  }
-
   const activeCount = bodyguards.filter(isBodyguardSlotFilled).length;
 
   return (

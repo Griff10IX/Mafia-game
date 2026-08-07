@@ -42,7 +42,7 @@ export default function QuickTrade() {
   }
   const qtBoot = qtBootRef.current;
 
-  const [hasLoaded, setHasLoaded] = useState(qtBoot != null);
+  // Never blank the page while lists load — empty !hasLoaded was a black screen on mobile.
   const [sellOffers, setSellOffers] = useState(() => qtBoot?.sellOffers ?? []);
   const [buyOffers, setBuyOffers] = useState(() => qtBoot?.buyOffers ?? []);
   const [tokenOffers, setTokenOffers] = useState(() => qtBoot?.tokenOffers ?? []);
@@ -108,7 +108,8 @@ export default function QuickTrade() {
 
   const fetchTrades = useCallback(async ({ silent = false } = {}) => {
     try {
-      const [sellRes, buyRes, tokenRes, lootRes, propRes, balancesRes, lootBalRes] = await Promise.all([
+      // allSettled: one slow/429 endpoint must not blank the whole page (mobile RL hits QT hard).
+      const settled = await Promise.allSettled([
         apiRequestWith429Retry(() => api.get('/trade/sell-offers')),
         apiRequestWith429Retry(() => api.get('/trade/buy-offers')),
         apiRequestWith429Retry(() => api.get('/trade/token-offers')),
@@ -117,35 +118,45 @@ export default function QuickTrade() {
         apiRequestWith429Retry(() => api.get('/trade/my-token-balances')),
         apiRequestWith429Retry(() => api.get('/trade/my-loot-piece-balance')),
       ]);
-      const nextSell = sellRes.data || [];
-      const nextBuy = buyRes.data || [];
-      const nextToken = tokenRes.data || [];
-      const nextLoot = lootRes.data || [];
-      const nextProp = propRes.data || [];
-      const nextBal = balancesRes.data || {};
-      const nextLootBal = lootBalRes.data || { total: 0, sellable: 0 };
-      setSellOffers(nextSell);
-      setBuyOffers(nextBuy);
-      setTokenOffers(nextToken);
-      setLootPieceOffers(nextLoot);
-      setProperties(nextProp);
-      setTokenBalances(nextBal);
-      setLootPieceBalance(nextLootBal);
+      const val = (i, fallback) => {
+        const r = settled[i];
+        return r.status === 'fulfilled' ? (r.value?.data ?? fallback) : fallback;
+      };
+      const nextSell = val(0, []);
+      const nextBuy = val(1, []);
+      const nextToken = val(2, []);
+      const nextLoot = val(3, []);
+      const nextProp = val(4, []);
+      const nextBal = val(5, {});
+      const nextLootBal = val(6, { total: 0, sellable: 0 });
+      const failed = settled.filter((r) => r.status === 'rejected').length;
+      if (failed === settled.length) {
+        if (!silent) {
+          const firstErr = settled.find((r) => r.status === 'rejected')?.reason;
+          toast.error(firstErr?.response?.data?.detail || 'Failed to load trades');
+        }
+        return;
+      }
+      setSellOffers(Array.isArray(nextSell) ? nextSell : []);
+      setBuyOffers(Array.isArray(nextBuy) ? nextBuy : []);
+      setTokenOffers(Array.isArray(nextToken) ? nextToken : []);
+      setLootPieceOffers(Array.isArray(nextLoot) ? nextLoot : []);
+      setProperties(Array.isArray(nextProp) ? nextProp : []);
+      setTokenBalances(nextBal && typeof nextBal === 'object' ? nextBal : {});
+      setLootPieceBalance(nextLootBal && typeof nextLootBal === 'object' ? nextLootBal : { total: 0, sellable: 0 });
       const boot = {
-        sellOffers: nextSell,
-        buyOffers: nextBuy,
-        tokenOffers: nextToken,
-        lootPieceOffers: nextLoot,
-        properties: nextProp,
-        tokenBalances: nextBal,
-        lootPieceBalance: nextLootBal,
+        sellOffers: Array.isArray(nextSell) ? nextSell : [],
+        buyOffers: Array.isArray(nextBuy) ? nextBuy : [],
+        tokenOffers: Array.isArray(nextToken) ? nextToken : [],
+        lootPieceOffers: Array.isArray(nextLoot) ? nextLoot : [],
+        properties: Array.isArray(nextProp) ? nextProp : [],
+        tokenBalances: nextBal && typeof nextBal === 'object' ? nextBal : {},
+        lootPieceBalance: nextLootBal && typeof nextLootBal === 'object' ? nextLootBal : { total: 0, sellable: 0 },
       };
       _memQtBoot = boot;
       writeSessionJsonWithSavedAt(QUICKTRADE_SESSION_CACHE_KEY, boot);
     } catch (e) {
       if (!silent) toast.error(e.response?.data?.detail || 'Failed to load trades');
-    } finally {
-      setHasLoaded(true);
     }
   }, []);
 
@@ -518,18 +529,10 @@ export default function QuickTrade() {
       ? Number(sellTokBal.founding_locks_trade)
       : sellFoundingRaw;
 
-  if (!hasLoaded) {
-    return (
-      <div className={`space-y-6 ${styles.pageContent} mobile-page-root`}>
-        <style>{QT_STYLES}</style>
-      </div>
-    );
-  }
-
   return (
     <div className={`space-y-6 ${styles.pageContent} mobile-page-root`} data-testid="quicktrade-page">
       <style>{QT_STYLES + (animateIn ? QT_FADE_STYLES : '')}</style>
-      <div className="relative qt-fade-in">
+      <div className="relative qt-fade-in flex items-center justify-between gap-2">
         <p className="text-[10px] text-zinc-500 font-heading italic">Trade points, money, and properties</p>
       </div>
 

@@ -456,8 +456,7 @@ export default function MyInventory() {
     }
   };
 
-  if (!hasLoaded) return <div className={`${styles.pageContent} p-4 mobile-page-root`}><style>{INV_STYLES}</style></div>;
-  if (!data) {
+  if (hasLoaded && !data) {
     return (
       <div className={`${styles.pageContent} p-4 mobile-page-root`}>
         <p className="text-mutedForeground">Failed to load inventory.</p>
@@ -465,14 +464,14 @@ export default function MyInventory() {
     );
   }
 
-  const weapons = (data.weapons || []).filter((w) => w.owned);
-  const armourOptions = (data.armour?.options || []).filter((o) => o.owned);
-  const loot = data.loot_exclusives || {};
+  const weapons = (data?.weapons || []).filter((w) => w.owned);
+  const armourOptions = (data?.armour?.options || []).filter((o) => o.owned);
+  const loot = data?.loot_exclusives || {};
   const exclusiveCars = loot.exclusive_cars || [];
   const hasSpeakeasy = loot.has_speakeasy === true;
   const speakeasyInfo = loot.speakeasy || null;
-  const isAdmin = data.is_admin === true;
-  const tokens = data.tokens || {};
+  const isAdmin = data?.is_admin === true;
+  const tokens = data?.tokens || {};
 
   const getSpeakeasyCooldownText = () => {
     if (!speakeasyInfo?.next_collect_at) return null;
@@ -489,7 +488,7 @@ export default function MyInventory() {
     }
   };
 
-  const tokenGiftDaily = data.token_gift_daily || TOKEN_GIFT_DAILY_DEFAULT;
+  const tokenGiftDaily = data?.token_gift_daily || TOKEN_GIFT_DAILY_DEFAULT;
   const giftableWithStock = GIFTABLE_TOKEN_TYPES.filter((k) => (tokens[k]?.count ?? 0) > 0);
   const heldForGift = giftTokenType ? (tokens[giftTokenType]?.count ?? 0) : 0;
   const dailyRemaining = Math.max(0, (tokenGiftDaily.limit ?? 20) - (tokenGiftDaily.sent ?? 0));

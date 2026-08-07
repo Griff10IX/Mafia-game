@@ -189,14 +189,6 @@ export default function SellCars() {
     setStopping(false);
   };
 
-  if (!hasLoaded) {
-    return (
-      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
-        <style>{SELL_STYLES}</style>
-      </div>
-    );
-  }
-
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
       <style>{SELL_STYLES}</style>

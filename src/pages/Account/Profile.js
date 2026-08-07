@@ -2387,7 +2387,7 @@ export default function Profile() {
     return (
       <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
         <style>{PROFILE_STYLES}</style>
-        <ProfileRouteSkeleton message="Loading your account…" />
+        <ProfileRouteSkeleton />
       </div>
     );
   }
@@ -2415,16 +2415,27 @@ export default function Profile() {
     );
   }
 
-  if (!profile && !profileLoadError) {
-    return (
-      <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
-        <style>{PROFILE_STYLES}</style>
-      </div>
-    );
-  }
-
   if (!profile) {
-    const isTransient = profileLoadError && !profileLoadError.includes("doesn't exist");
+    const isNotFound = profileLoadError?.includes("doesn't exist");
+    if (!isNotFound) {
+      return (
+        <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
+          <style>{PROFILE_STYLES}</style>
+          <ProfileRouteSkeleton message="" />
+          {profileLoadError && username && (
+            <div className="text-center">
+              <button
+                type="button"
+                className="text-xs font-heading uppercase tracking-wider text-primary hover:underline"
+                onClick={() => refetchProfile({ silent: false, forceLoading: true, usernameOverride: username })}
+              >
+                Try again
+              </button>
+            </div>
+          )}
+        </div>
+      );
+    }
     return (
       <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <style>{PROFILE_STYLES}</style>
@@ -2436,20 +2447,11 @@ export default function Profile() {
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <UserIcon size={64} className="mx-auto text-primary/30 mb-4" />
           <p className="text-base text-foreground font-heading font-bold mb-1">
-            {isTransient ? 'Loading profile…' : 'Profile not found'}
+            Profile not found
           </p>
           <p className="text-sm text-mutedForeground font-heading">
             {profileLoadError || "This user doesn't exist or has been deleted"}
           </p>
-          {isTransient && username && (
-            <button
-              type="button"
-              className="mt-4 text-xs font-heading uppercase tracking-wider text-primary hover:underline"
-              onClick={() => refetchProfile({ silent: false, forceLoading: true, usernameOverride: username })}
-            >
-              Try again
-            </button>
-          )}
         </div>
       </div>
     );

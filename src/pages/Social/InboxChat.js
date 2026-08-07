@@ -152,13 +152,6 @@ export default function InboxChat() {
     }
   };
 
-  if (!hasLoaded) {
-    return (
-      <div className={`${styles.pageContent} ${styles.page} mobile-page-root`}>
-      </div>
-    );
-  }
-
   return (
     <div data-chat-surface="inbox" className={`${styles.pageContent} flex flex-col h-[calc(100vh-10rem)] max-h-[700px] min-h-[320px] mobile-page-root`}>
       <style>{`

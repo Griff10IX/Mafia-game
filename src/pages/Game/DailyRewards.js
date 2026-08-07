@@ -311,14 +311,6 @@ export default function DailyRewards() {
     }
   };
 
-  if (!info) {
-    return (
-      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
-        <style>{RPS_STYLES}</style>
-      </div>
-    );
-  }
-
   const playsLeft  = info?.plays_left ?? 0;
   const playsTotal = info?.plays_per_window ?? 3;
   const canPlay    = playsLeft > 0;

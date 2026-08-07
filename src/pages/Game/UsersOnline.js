@@ -815,14 +815,6 @@ export default function UsersOnline() {
     return () => window.removeEventListener('focus', onFocus);
   }, [fetchOnlineUsers]);
 
-  if (!hasLoaded && !bootCache) {
-    return (
-      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
-        <style>{UO_STYLES}</style>
-      </div>
-    );
-  }
-
   return (
     <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="users-online-page">
       <style>{UO_STYLES}</style>

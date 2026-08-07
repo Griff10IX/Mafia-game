@@ -452,15 +452,7 @@ export default function Distillery() {
   const showFailuresBanner = recentFailures.length > 0 && failuresSig !== dismissedFailuresSig;
   const maintenanceWarn = maintenancePct < 35;
 
-  // ── Loading / Error / Empty ────────────────────────────────────────────────
-  if (!hasLoaded && !state && !business) {
-    return (
-      <div className={`${styles.pageContent} mobile-page-root dist-root`}>
-        <div className="dist-empty-panel" />
-      </div>
-    );
-  }
-
+  // ── Error / Empty ────────────────────────────────────────────────
   if (hasLoaded && loadError && !state && !business) {
     return (
       <div className={`${styles.pageContent} mobile-page-root dist-root`}>
@@ -493,7 +485,7 @@ export default function Distillery() {
   }
 
   // ── No business ─────────────────────────────────────────────────────────────
-  if (!state || !business) {
+  if (hasLoaded && (!state || !business)) {
     return (
       <div className={`${styles.pageContent} mobile-page-root dist-root`}>
         <div className="dist-empty-panel">
