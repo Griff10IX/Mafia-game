@@ -154,8 +154,37 @@ const MPPoker = lazy(() => import("./pages/Casinos/MPPokerPage"));
 const MPPokerGame = lazy(() => import("./pages/Casinos/MPPokerGamePage"));
 const SportsBetting = lazy(() => import("./pages/Casinos/SportsBetting"));
 
-/** Suspense gap while a lazy chunk downloads — keep empty so it never looks like a black "Loading" screen. */
-const PageLoader = () => <div className="min-h-[45vh]" aria-hidden />;
+/**
+ * Suspense gap while a lazy chunk downloads.
+ * Silent chrome shell only — never empty (reads as a black screen on mobile) and no "Loading…" text.
+ */
+const PageLoader = () => (
+  <div className="space-y-3 mobile-page-root px-3.5 py-3 max-w-[900px] mx-auto min-h-[45vh]" aria-hidden>
+    <div className="h-3 w-2/3 max-w-xs rounded bg-zinc-800/70" />
+    <div className="rounded-md border border-primary/20 bg-zinc-900/40 overflow-hidden">
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+        <div className="h-2.5 w-20 rounded bg-primary/25" />
+      </div>
+      <div className="p-2.5 flex gap-3">
+        <div className="flex-1 h-8 rounded bg-zinc-800/50" />
+        <div className="flex-1 h-8 rounded bg-zinc-800/50" />
+        <div className="flex-1 h-8 rounded bg-zinc-800/50" />
+      </div>
+    </div>
+    <div className="rounded-md border border-primary/20 bg-zinc-900/40 overflow-hidden">
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+        <div className="h-2.5 w-16 rounded bg-primary/25" />
+      </div>
+      <div className="p-3 space-y-2">
+        <div className="h-3 w-full rounded bg-zinc-800/50" />
+        <div className="h-3 w-5/6 rounded bg-zinc-800/40" />
+        <div className="h-3 w-2/3 rounded bg-zinc-800/30" />
+      </div>
+    </div>
+  </div>
+);
 
 
 function AuthenticatedShell() {

@@ -4,6 +4,7 @@
  */
 import { prefetchTravelPageData } from './travelPageWarm';
 import { prefetchStatsAndObjectivesData } from './statsObjectivesWarm';
+import { prefetchMissionsPageData } from './missionsPageWarm';
 
 const ROUTE_PRELOADERS = {
   '/account/dashboard': () => import('../pages/Account/Dashboard'),
@@ -18,7 +19,11 @@ const ROUTE_PRELOADERS = {
   '/account/inventory': () => import('../pages/Account/MyInventory'),
   '/account/profile': () => import('../pages/Account/Profile'),
   '/account/objectives': () => import('../pages/Account/Objectives'),
-  '/account/missions': () => import('../pages/Account/Missions'),
+  '/account/missions': () =>
+    Promise.all([
+      import('../pages/Account/Missions'),
+      prefetchMissionsPageData({ force: false }).catch(() => null),
+    ]),
   '/account/referral': () => import('../pages/Account/Referral'),
   '/account/autorank': () => import('../pages/Account/AutoRank'),
   '/kill/armour-weapons': () => import('../pages/Kill/ArmourWeapons'),
@@ -124,5 +129,8 @@ export function preloadRouteHandlers(pathOrTo) {
   return {
     onMouseEnter: () => preloadRouteDebounced(path),
     onFocus: () => preloadRouteDebounced(path),
+    /** Mobile: start chunk download before click navigation. */
+    onPointerDown: () => preloadRoute(path),
+    onTouchStart: () => preloadRoute(path),
   };
 }

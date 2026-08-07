@@ -20,6 +20,7 @@ import { MOD_STAFF_ROUTE_IDS, ADMIN_ROUTE_GROUP_MAP } from '../pages/StaffRole/a
 import { preloadRoute, preloadRouteHandlers } from '../utils/routePreload';
 import { prefetchTravelPageData } from '../utils/travelPageWarm';
 import { prefetchStatsAndObjectivesData } from '../utils/statsObjectivesWarm';
+import { prefetchMissionsPageData } from '../utils/missionsPageWarm';
 import { AuthContext } from '../context/AuthContext';
 import { warmLeaderboardCaches } from '../utils/leaderboardTopCache';
 import { setCrimesPrefetch, getCrimesPrefetch, clearProfileSessionLastMeUsername, setProfileSessionLastMeUsername } from '../utils/prefetchCache';
@@ -344,16 +345,24 @@ function SidebarCatHeader({ label, classic }) {
   );
 }
 
-function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, ...rest }) {
+function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, onPointerDown, onTouchStart, ...rest }) {
   const location = useLocation();
   const path = typeof to === 'string' ? to : (to.pathname || '/');
   const preload = preloadRouteHandlers(path);
   const warmTravel = path === '/game/travel' || path === '/travel';
   const warmMyStats = path === '/account/stats' || path === '/my-stats';
+  const warmMissions = path === '/account/missions' || path === '/missions';
+  const warmPointer = () => {
+    preload.onPointerDown();
+    if (warmTravel) prefetchTravelPageData({ force: false }).catch(() => {});
+    if (warmMyStats) prefetchStatsAndObjectivesData({ force: false }).catch(() => {});
+    if (warmMissions) prefetchMissionsPageData({ force: false }).catch(() => {});
+  };
   const mergeClick = (e) => {
     const search = typeof to === 'string' ? '' : (to.search || '');
     preloadRoute(path);
     if (warmMyStats) prefetchStatsAndObjectivesData({ force: false }).catch(() => {});
+    if (warmMissions) prefetchMissionsPageData({ force: false }).catch(() => {});
     if (location.pathname === path && (location.search || '') === search) {
       e.preventDefault();
       window.dispatchEvent(new CustomEvent(SAME_ROUTE_NAV_CLICK, { detail: { pathname: path, search } }));
@@ -365,16 +374,26 @@ function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, ...rest }) {
       to={to}
       {...rest}
       onClick={mergeClick}
+      onPointerDown={(e) => {
+        warmPointer();
+        if (onPointerDown) onPointerDown(e);
+      }}
+      onTouchStart={(e) => {
+        warmPointer();
+        if (onTouchStart) onTouchStart(e);
+      }}
       onMouseEnter={(e) => {
         preload.onMouseEnter();
         if (warmTravel) prefetchTravelPageData({ force: false }).catch(() => {});
         if (warmMyStats) prefetchStatsAndObjectivesData({ force: false }).catch(() => {});
+        if (warmMissions) prefetchMissionsPageData({ force: false }).catch(() => {});
         if (onMouseEnter) onMouseEnter(e);
       }}
       onFocus={(e) => {
         preload.onFocus();
         if (warmTravel) prefetchTravelPageData({ force: false }).catch(() => {});
         if (warmMyStats) prefetchStatsAndObjectivesData({ force: false }).catch(() => {});
+        if (warmMissions) prefetchMissionsPageData({ force: false }).catch(() => {});
         if (onFocus) onFocus(e);
       }}
     />
@@ -786,8 +805,38 @@ export default function Layout({ children }) {
     preloadRoute(location.pathname);
   }, [location.pathname]);
 
+  // Idle-warm Missions chunk + API so first tap rarely hits an empty Suspense gap.
+  useEffect(() => {
+    if (!user?.id) return undefined;
+    let cancelled = false;
+    const run = () => {
+      if (cancelled) return;
+      preloadRoute('/account/missions');
+      prefetchMissionsPageData({ force: false }).catch(() => {});
+    };
+    let idleId = null;
+    let timeoutId = null;
+    if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+      idleId = window.requestIdleCallback(run, { timeout: 2500 });
+    } else {
+      timeoutId = setTimeout(run, 1200);
+    }
+    return () => {
+      cancelled = true;
+      if (idleId != null && typeof window.cancelIdleCallback === 'function') {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId != null) clearTimeout(timeoutId);
+    };
+  }, [user?.id]);
+
   useEffect(() => {
     if (!mobileBottomMenuOpen) return;
+    // Missions lives under the You group — warm chunk/API when the submenu opens.
+    if (mobileBottomMenuOpen === 'you') {
+      preloadRoute('/account/missions');
+      prefetchMissionsPageData({ force: false }).catch(() => {});
+    }
     const handleClickOutside = (e) => {
       if (mobileBottomNavRef.current && !mobileBottomNavRef.current.contains(e.target)) setMobileBottomMenuOpen(null);
     };

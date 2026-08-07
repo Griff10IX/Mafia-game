@@ -7,7 +7,7 @@ import {
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
-import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import { readMissionsBoot, writeMissionsBoot } from '../../utils/missionsPageWarm';
 // ─────────────────────────────────────────────────────────────────────────────
 // STYLES
 // ─────────────────────────────────────────────────────────────────────────────
@@ -40,7 +40,6 @@ const fmtInt = (n) => {
 
 const LOOT_BOX_PIECES_TOOLTIP =
   'Loot box pieces. On the Loot Box page, choose a vault tier: Common (50), Uncommon (100), Rare (500), or Ultra Rare (1,000 pieces) for random rewards (cash, points, bullets, tokens, and more).';
-const MISSIONS_CACHE_KEY = 'mafia_missions_v1';
 const TRIBUTE_BANK_TOKEN_TOOLTIP =
   'Tribute tokens stack here until you tap Collect. Each one becomes one random skill token (e.g. Crime XP, GTA XP, melt, travel — see token list in help).';
 
@@ -978,11 +977,8 @@ function TributeBanner({
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 
-// In-memory boot so revisits paint instantly even if sessionStorage TTL expired.
-let _memMissionsBoot = null;
-
 export default function Missions() {
-  const missionsBoot = readSessionJson(MISSIONS_CACHE_KEY) || _memMissionsBoot;
+  const missionsBoot = readMissionsBoot();
   const [data,       setData]       = useState(missionsBoot?.data ?? null);
   const [missions,   setMissions]   = useState(missionsBoot?.missions ?? []);
   const [city,       setCity]       = useState(missionsBoot?.city ?? null);
@@ -1003,13 +999,11 @@ export default function Missions() {
       setData(nextData);
       setMissions(nextMissions);
       if (!city) setCity(nextCity);
-      const boot = {
+      writeMissionsBoot({
         data: nextData,
         missions: nextMissions,
         city: nextCity,
-      };
-      _memMissionsBoot = boot;
-      writeSessionJson(MISSIONS_CACHE_KEY, boot);
+      });
     } catch {
       if (!silentError) toast.error('Failed to load missions');
     }
