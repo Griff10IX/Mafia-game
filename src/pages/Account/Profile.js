@@ -470,6 +470,8 @@ const ProfileInfoCard = ({
   });
 
   const isRobotBodyguard = Boolean(profile.is_npc && profile.is_bodyguard);
+  const ROBOT_BODYGUARD_AVATAR = '/images/robot-bodyguard.png';
+  const dossierAvatarUrl = profile?.avatar_url || (isRobotBodyguard ? ROBOT_BODYGUARD_AVATAR : null);
   const profileNotepadBg = profile.profile_notepad_color || null;
   const profileNotepadStyle = profileNotepadBg
     ? { backgroundColor: profileNotepadBg, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.04)' }
@@ -481,18 +483,18 @@ const ProfileInfoCard = ({
       <div className="px-2.5 py-2 md:px-3 md:py-2.5 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent border-b border-primary/25 flex items-start justify-between gap-2">
         <div className="flex items-start gap-2.5 md:gap-3 min-w-0 flex-1">
           <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-lg overflow-hidden border-2 border-primary/35 bg-secondary flex items-center justify-center shrink-0 ring-1 ring-black/25 shadow-inner">
-            {profile?.avatar_url ? (
+            {dossierAvatarUrl ? (
               onAvatarPreview ? (
                 <button
                   type="button"
-                  onClick={() => onAvatarPreview(profile.avatar_url)}
+                  onClick={() => onAvatarPreview(dossierAvatarUrl)}
                   className="w-full h-full p-0 border-0 bg-transparent cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-lg"
                   aria-label={`View ${profile.username} profile picture`}
                 >
-                  <img src={profile.avatar_url} alt="" className="w-full h-full object-cover pointer-events-none" />
+                  <img src={dossierAvatarUrl} alt="" className="w-full h-full object-cover pointer-events-none" />
                 </button>
               ) : (
-                <img src={profile.avatar_url} alt={`${profile.username} avatar`} className="w-full h-full object-cover" />
+                <img src={dossierAvatarUrl} alt={`${profile.username} avatar`} className="w-full h-full object-cover" />
               )
             ) : (
               <UserIcon size={26} className="text-mutedForeground" />
@@ -777,8 +779,13 @@ const ProfileInfoCard = ({
 
       {profile.is_npc && (
         <div className="px-2.5 py-1.5 md:px-3 border-t border-zinc-700/30 bg-zinc-800/30">
-          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] md:text-[10px] uppercase tracking-wider font-heading font-bold bg-zinc-800 text-mutedForeground border border-zinc-700/40">
-            🤖 NPC
+          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] md:text-[10px] uppercase tracking-wider font-heading font-bold bg-zinc-800 text-mutedForeground border border-zinc-700/40">
+            {isRobotBodyguard ? (
+              <img src="/images/robot-bodyguard.png" alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />
+            ) : (
+              <span aria-hidden>🤖</span>
+            )}
+            NPC
           </span>
         </div>
       )}

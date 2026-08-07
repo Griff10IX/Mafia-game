@@ -738,7 +738,18 @@ export default function Bodyguards() {
 
       {/* Page header */}
       <div className="relative bg-fade-in">
-        <p className="text-[10px] text-zinc-500 font-heading italic">Hire robots or invite humans (4 bodyguards max total). Armour and who&apos;s watching your back.</p>
+        <div className="flex items-start gap-2.5 md:gap-3">
+          <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-lg overflow-hidden border-2 border-primary/35 bg-secondary shrink-0 ring-1 ring-black/25 shadow-inner">
+            <img
+              src="/images/robot-bodyguard.png"
+              alt=""
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <p className="text-[10px] text-zinc-500 font-heading italic pt-0.5 min-w-0 flex-1">
+            Hire robots or invite humans (4 bodyguards max total). Armour and who&apos;s watching your back.
+          </p>
+        </div>
         {bodyguardFor?.owner_username && (
           <div className="mt-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-xs font-heading">
             <span className="text-mutedForeground">You&apos;re bodyguarding for: </span>
