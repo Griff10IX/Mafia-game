@@ -21,6 +21,7 @@ import { preloadRoute, preloadRouteHandlers } from '../utils/routePreload';
 import { prefetchTravelPageData } from '../utils/travelPageWarm';
 import { prefetchStatsAndObjectivesData } from '../utils/statsObjectivesWarm';
 import { prefetchMissionsPageData } from '../utils/missionsPageWarm';
+import { scheduleMobileLightPrewarm } from '../utils/mobileLightPrewarm';
 import { AuthContext } from '../context/AuthContext';
 import { warmLeaderboardCaches } from '../utils/leaderboardTopCache';
 import { setCrimesPrefetch, getCrimesPrefetch, clearProfileSessionLastMeUsername, setProfileSessionLastMeUsername } from '../utils/prefetchCache';
@@ -352,11 +353,15 @@ function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, onPointerDown,
   const warmTravel = path === '/game/travel' || path === '/travel';
   const warmMyStats = path === '/account/stats' || path === '/my-stats';
   const warmMissions = path === '/account/missions' || path === '/missions';
+  const warmCrimes = path === '/crime/crimes';
   const warmPointer = () => {
     preload.onPointerDown();
     if (warmTravel) prefetchTravelPageData({ force: false }).catch(() => {});
     if (warmMyStats) prefetchStatsAndObjectivesData({ force: false }).catch(() => {});
     if (warmMissions) prefetchMissionsPageData({ force: false }).catch(() => {});
+    if (warmCrimes && !getCrimesPrefetch()) {
+      api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {});
+    }
   };
   const mergeClick = (e) => {
     const search = typeof to === 'string' ? '' : (to.search || '');
@@ -829,6 +834,12 @@ export default function Layout({ children }) {
       if (timeoutId != null) clearTimeout(timeoutId);
     };
   }, [user?.id]);
+
+  // Mobile only: light chunk prewarm + one crimes GET (not full page API bundles).
+  useEffect(() => {
+    if (!user?.id || !isMobileViewport) return undefined;
+    return scheduleMobileLightPrewarm(user.id);
+  }, [user?.id, isMobileViewport]);
 
   useEffect(() => {
     if (!mobileBottomMenuOpen) return;
