@@ -5,6 +5,7 @@
 import { prefetchTravelPageData } from './travelPageWarm';
 import { prefetchStatsAndObjectivesData } from './statsObjectivesWarm';
 import { prefetchMissionsPageData } from './missionsPageWarm';
+import { prefetchUsersOnlineData } from './usersOnlineWarm';
 
 const ROUTE_PRELOADERS = {
   '/account/dashboard': () => import('../pages/Account/Dashboard'),
@@ -64,7 +65,11 @@ const ROUTE_PRELOADERS = {
   '/cars/buy': () => import('../pages/Cars/BuyCars'),
   '/cars/sell': () => import('../pages/Cars/SellCars'),
   '/game/stats': () => import('../pages/Game/Stats'),
-  '/game/users-online': () => import('../pages/Game/UsersOnline'),
+  '/game/users-online': () =>
+    Promise.all([
+      import('../pages/Game/UsersOnline'),
+      prefetchUsersOnlineData({ force: false }).catch(() => null),
+    ]),
   '/game/help-desk': () => import('../pages/Game/HelpDesk'),
   '/game/dead-alive': () => import('../pages/Game/DeadAlive'),
   '/game/daily-rewards': () => import('../pages/Game/DailyRewards'),

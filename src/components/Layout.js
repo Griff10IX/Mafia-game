@@ -1396,6 +1396,12 @@ export default function Layout({ children }) {
       const res = await api.get('/users/online');
       const n = res.data?.total_online;
       setUsersOnlineCount(typeof n === 'number' ? n : 0);
+      try {
+        const { cacheUsersOnlineResponse } = await import('../utils/usersOnlineWarm');
+        cacheUsersOnlineResponse(res.data);
+      } catch {
+        /* warm optional */
+      }
     } catch {
       setUsersOnlineCount(null);
     }

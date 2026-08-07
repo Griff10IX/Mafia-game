@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { Users, Target, Radio, Clock, CalendarDays, CalendarRange } from 'lucide-react';
 import api from '../../utils/api';
 import { warmProfilePrefetchFromUsername } from '../../utils/profileNavPrefetch';
-import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import { toast } from 'sonner';
 import { HoverCard, HoverCardTrigger, HoverCardPortal, HoverCardContent } from "@/components/ui/hover-card";
 import PrestigeBadge from '../../components/PrestigeBadge';
@@ -11,6 +10,10 @@ import CountryFlagThumb from '../../components/CountryFlagThumb';
 import ProfileHoverPreview from '../../components/ProfileHoverPreview';
 import styles from '../../styles/noir.module.css';
 import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
+import {
+  readUsersOnlineBoot,
+  cacheUsersOnlineResponse,
+} from '../../utils/usersOnlineWarm';
 
 const UO_STYLES = `
   @keyframes uo-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -451,11 +454,9 @@ const InfoCard = ({ profileHoverEnabled = true }) => (
   </div>
 );
 
-const UO_CACHE_KEY = 'mafia_users_online_v3';
-
 // Main component
 export default function UsersOnline() {
-  const [bootCache] = useState(() => readSessionJson(UO_CACHE_KEY));
+  const [bootCache] = useState(() => readUsersOnlineBoot());
   const [totalOnline, setTotalOnline] = useState(() => bootCache?.total_online ?? 0);
   const [activeHour, setActiveHour] = useState(() => bootCache?.active_last_hour ?? 0);
   const [activeDay, setActiveDay] = useState(() => bootCache?.active_last_day ?? 0);
@@ -468,7 +469,7 @@ export default function UsersOnline() {
   const [adminOnlineColor, setAdminOnlineColor] = useState(() => bootCache?.admin_online_color ?? '#a78bfa');
   const [modDefaultOnlineColor, setModDefaultOnlineColor] = useState(() => bootCache?.mod_default_online_color ?? DEFAULT_MOD_COLOR);
   const [hdoOnlineColor, setHdoOnlineColor] = useState(() => bootCache?.hdo_online_color ?? DEFAULT_HDO_COLOR);
-  const [hasLoaded, setHasLoaded] = useState(() => !!bootCache);
+  const [hasLoaded, setHasLoaded] = useState(() => !!(bootCache && Array.isArray(bootCache.users)));
   const [profileCache, setProfileCache] = useState({});
   const profileCacheRef = useRef({});
   const previewInflightRef = useRef(new Set());
@@ -560,32 +561,20 @@ export default function UsersOnline() {
   const fetchOnlineUsers = useCallback(async (silent = false) => {
     try {
       const response = await api.get('/users/online');
-      setTotalOnline(response.data.total_online);
-      setActiveHour(response.data.active_last_hour ?? 0);
-      setActiveDay(response.data.active_last_day ?? 0);
-      setActiveWeek(response.data.active_last_week ?? 0);
-      setCountriesRoster(Array.isArray(response.data.countries_roster) ? response.data.countries_roster : []);
-      setCountriesHour(Array.isArray(response.data.countries_hour) ? response.data.countries_hour : []);
-      setCountriesDay(Array.isArray(response.data.countries_day) ? response.data.countries_day : []);
-      setCountriesWeek(Array.isArray(response.data.countries_week) ? response.data.countries_week : []);
-      setUsers(response.data.users || []);
-      if (response.data.admin_online_color != null) setAdminOnlineColor(response.data.admin_online_color);
-      if (response.data.mod_default_online_color != null) setModDefaultOnlineColor(response.data.mod_default_online_color);
-      if (response.data.hdo_online_color != null) setHdoOnlineColor(response.data.hdo_online_color);
-      writeSessionJson(UO_CACHE_KEY, {
-        total_online: response.data.total_online,
-        active_last_hour: response.data.active_last_hour ?? 0,
-        active_last_day: response.data.active_last_day ?? 0,
-        active_last_week: response.data.active_last_week ?? 0,
-        countries_roster: response.data.countries_roster ?? [],
-        countries_hour: response.data.countries_hour ?? [],
-        countries_day: response.data.countries_day ?? [],
-        countries_week: response.data.countries_week ?? [],
-        users: response.data.users || [],
-        admin_online_color: response.data.admin_online_color,
-        mod_default_online_color: response.data.mod_default_online_color,
-        hdo_online_color: response.data.hdo_online_color,
-      });
+      const data = response.data || {};
+      setTotalOnline(data.total_online);
+      setActiveHour(data.active_last_hour ?? 0);
+      setActiveDay(data.active_last_day ?? 0);
+      setActiveWeek(data.active_last_week ?? 0);
+      setCountriesRoster(Array.isArray(data.countries_roster) ? data.countries_roster : []);
+      setCountriesHour(Array.isArray(data.countries_hour) ? data.countries_hour : []);
+      setCountriesDay(Array.isArray(data.countries_day) ? data.countries_day : []);
+      setCountriesWeek(Array.isArray(data.countries_week) ? data.countries_week : []);
+      setUsers(data.users || []);
+      if (data.admin_online_color != null) setAdminOnlineColor(data.admin_online_color);
+      if (data.mod_default_online_color != null) setModDefaultOnlineColor(data.mod_default_online_color);
+      if (data.hdo_online_color != null) setHdoOnlineColor(data.hdo_online_color);
+      cacheUsersOnlineResponse(data);
     } catch (error) {
       if (!silent) {
         toast.error('Failed to load online users');
@@ -656,7 +645,7 @@ export default function UsersOnline() {
   }, [users]);
 
   useEffect(() => {
-    const c = readSessionJson(UO_CACHE_KEY);
+    const c = readUsersOnlineBoot();
     fetchOnlineUsers(!!c);
     const interval = setInterval(() => fetchOnlineUsers(true), 30_000);
     return () => clearInterval(interval);
@@ -686,7 +675,18 @@ export default function UsersOnline() {
         staffDupeScreenFooter={staffDupeScreenFooter}
       />
 
-      {users.length === 0 ? (
+      {!hasLoaded && users.length === 0 ? (
+        <div className={`relative ${styles.panel} rounded-md border border-primary/20 py-8 text-center uo-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }} data-testid="users-online-loading">
+          <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <Users size={36} className="mx-auto text-primary/30 mb-2 animate-pulse" />
+          <p className="text-[12px] text-foreground font-heading font-bold mb-0.5">
+            Loading online users…
+          </p>
+          <p className="text-[10px] text-mutedForeground font-heading">
+            Pulling the live roster
+          </p>
+        </div>
+      ) : users.length === 0 ? (
         <div className={`relative ${styles.panel} rounded-md border border-primary/20 py-8 text-center uo-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }} data-testid="no-users">
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <Users size={36} className="mx-auto text-primary/30 mb-2" />
