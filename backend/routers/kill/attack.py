@@ -21,7 +21,7 @@ from pymongo import DeleteOne, ReturnDocument, UpdateOne
 
 logger = logging.getLogger(__name__)
 
-_KILL_INFLATION_CACHE_TTL_SEC = 3.0
+_KILL_INFLATION_CACHE_TTL_SEC = 30.0
 _kill_inflation_cache: Dict[str, Tuple[float, float]] = {}
 KILL_INFLATION_RESET_COST_POINTS = 5000
 KILL_INFLATION_RESET_COOLDOWN_DAYS = 30
@@ -73,10 +73,11 @@ def _fire_and_forget(coro, *, label: str = "kill_bg") -> None:
         except Exception:
             pass
 
-# Per-user 1s coalescing cache for GET /attack/list. Key = (attacker_id, ac_state) so a state change
+# Per-user coalescing cache for GET /attack/list. Key = (attacker_id, ac_state) so a state change
 # (e.g. just landed in a new city) invalidates automatically without explicit calls. Search/delete
 # also invalidate explicitly so a user clicking Search sees the new row immediately.
-_ATTACK_LIST_CACHE_TTL_SEC = 1.0
+# TTL aligned with client idle poll (~10s) / searching poll (~4s) so concurrent attackers share hits.
+_ATTACK_LIST_CACHE_TTL_SEC = 4.0
 _ATTACK_LIST_CACHE_MAX = 5000
 # Key: (attacker_id, ac_state, find_clock_active) — perk must not share a stripped/full payload.
 _attack_list_cache: Dict[Tuple[str, str, bool], Tuple[float, List[dict]]] = {}
@@ -2116,7 +2117,6 @@ async def get_attack_status(
 async def list_attacks(current_user: dict = Depends(get_current_user)):
     from utils.robot_bg_auto_search import maybe_sync_robot_bg_searches_for_owner, robot_bg_auto_search_running
 
-    await maybe_sync_robot_bg_searches_for_owner(db, current_user)
     attacker_id = current_user["id"]
     ac_state = (current_user.get("current_state") or "")
     find_clock_active = _attacker_has_find_clock(current_user)
@@ -2125,6 +2125,7 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
     search_code = _search_code_payload(attacker_id)
     cached = _attack_list_cache_get(attacker_id, ac_state, find_clock_active)
     if cached is not None:
+        # Cache hit: skip robot sync (ticker/cron covers it) — keeps concurrent polls cheap.
         payload = await _kill_inflation_payload(attacker_id, current_user)
         return {
             "attacks": cached,
@@ -2132,6 +2133,10 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
             **payload,
             **search_code,
         }
+
+    # Only sync robot BG searches on cache miss (throttled internally to ~90s).
+    await maybe_sync_robot_bg_searches_for_owner(db, current_user)
+
     # Run list build and inflation calc concurrently to drop one round-trip from page load.
     items, payload = await asyncio.gather(
         _build_active_attacks_list(attacker_id, ac_state, find_clock_active=find_clock_active),

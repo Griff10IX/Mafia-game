@@ -90,8 +90,13 @@ let attackResendCheckDoneThisLoad = false;
 // while /attack/list is in flight. Keyed by JWT-bearing token presence (sessionStorage) — cleared on browser close.
 const _ATTACK_LIST_CACHE_KEY = 'kill_attacks_cache_v1';
 const _ATTACK_LIST_CACHE_MAX_AGE_MS = 5 * 60 * 1000;
-const ATTACK_LIST_POLL_MS = 3000;
-const ATTACK_LIST_REFRESH_AFTER_USER_EVENT_MS = 200;
+/** Idle list poll — searching rows use the faster interval below. */
+const ATTACK_LIST_POLL_IDLE_MS = 10000;
+/** While any row is still "searching", poll a bit faster for found_at flips. */
+const ATTACK_LIST_POLL_SEARCHING_MS = 4000;
+/** Coalesce bursts (focus + events + poll) so we don't stack GETs. */
+const ATTACK_LIST_MIN_GAP_MS = 2500;
+const ATTACK_LIST_REFRESH_AFTER_FOCUS_MS = 1500;
 function readCachedAttacks() {
   try {
     if (typeof window === 'undefined') return [];
@@ -612,14 +617,17 @@ const SearchesCard = ({
     mql.addListener(onChange);
     return () => mql.removeListener(onChange);
   }, []);
-  // Live countdown: re-render every second so EXPIRES shows h/m/s ticking
+  // Live countdown: avoid 1Hz full-list re-renders (hurts phones when several tabs are open).
   const [, setTick] = useState(0);
   useEffect(() => {
     if (attacks.length === 0) return;
     const heavyMobileList = !isDesktop && attacks.length > MOBILE_SEARCH_RENDER_STEP;
-    const id = setInterval(() => setTick((t) => t + 1), heavyMobileList ? 15000 : 1000);
+    const hasSearching = attacks.some((a) => a.status === 'searching');
+    // Searching needs ~1s ticks for ETA; otherwise 5–15s is enough for expire labels.
+    const tickMs = heavyMobileList ? 15000 : hasSearching ? 1000 : 5000;
+    const id = setInterval(() => setTick((t) => t + 1), tickMs);
     return () => clearInterval(id);
-  }, [attacks.length, isDesktop]);
+  }, [attacks, isDesktop]);
 
   useEffect(() => {
     setMobileVisibleCount(MOBILE_SEARCH_RENDER_STEP);
@@ -1430,8 +1438,11 @@ export default function Attack() {
   const [pendingResend, setPendingResend] = useState(null);
   const [killBannerMessage, setKillBannerMessage] = useState(null);
 
-  /** Abort in-flight GET /attack/list so overlapping polls/loads cannot apply out-of-order (empty after full). */
+  /** Abort only on unmount — do not cancel in-flight polls (that caused retry storms). */
   const attackListAbortRef = useRef(null);
+  /** Deduplicate concurrent GET /attack/list (poll + focus + actions). */
+  const attackListInFlightRef = useRef(null);
+  const attackListLastFetchAtRef = useRef(0);
   /** Last good /attack/list result. Used so a transient refresh failure does not look like "no target". */
   const attacksRef = useRef(attacks);
   /** Rotating hidden search code from GET /attack/list (anti-bot for Start Search). */
@@ -1505,34 +1516,59 @@ export default function Attack() {
     }
   };
 
-  const refreshAttacks = useCallback(async () => {
-    attackListAbortRef.current?.abort();
-    const ac = new AbortController();
-    attackListAbortRef.current = ac;
-    try {
-      const response = await api.get('/attack/list', { signal: ac.signal });
-      const list = response.data?.attacks || [];
-      setAttacks(list);
-      attacksRef.current = list;
-      writeCachedAttacks(list);
-      const nextSearchCode = extractSearchCodeInfo(response.data);
-      if (nextSearchCode) searchCodeRef.current = nextSearchCode;
-      // Inflation comes inline now (Tier 3 plan item: drop the dedicated /attack/inflation page-load call).
-      if (response.data && typeof response.data.inflation_pct === 'number') {
-        applyInflationPayload(response.data);
+  const refreshAttacks = useCallback(async (opts = {}) => {
+    const force = !!(opts && opts.force);
+    if (attackListInFlightRef.current) {
+      if (!force) return attackListInFlightRef.current;
+      try {
+        await attackListInFlightRef.current;
+      } catch (_) {
+        /* previous failed — continue with a fresh fetch */
       }
-      if (typeof response.data?.robot_bg_auto_search_active === 'boolean') {
-        setRobotBgAutoSearchActive(response.data.robot_bg_auto_search_active);
-      }
-      return list;
-    } catch (error) {
-      const canceled =
-        error?.code === 'ERR_CANCELED' ||
-        error?.name === 'CanceledError' ||
-        (typeof error?.message === 'string' && error.message.toLowerCase().includes('canceled'));
-      if (canceled) return null;
+    }
+    const now = Date.now();
+    if (!force && now - attackListLastFetchAtRef.current < ATTACK_LIST_MIN_GAP_MS) {
       return Array.isArray(attacksRef.current) ? attacksRef.current : [];
     }
+
+    const ac = new AbortController();
+    attackListAbortRef.current = ac;
+    const run = (async () => {
+      try {
+        const response = await api.get('/attack/list', { signal: ac.signal });
+        const list = response.data?.attacks || [];
+        setAttacks(list);
+        attacksRef.current = list;
+        writeCachedAttacks(list);
+        attackListLastFetchAtRef.current = Date.now();
+        const nextSearchCode = extractSearchCodeInfo(response.data);
+        if (nextSearchCode) searchCodeRef.current = nextSearchCode;
+        // Inflation comes inline now (Tier 3 plan item: drop the dedicated /attack/inflation page-load call).
+        if (response.data && typeof response.data.inflation_pct === 'number') {
+          applyInflationPayload(response.data);
+        }
+        if (typeof response.data?.robot_bg_auto_search_active === 'boolean') {
+          setRobotBgAutoSearchActive(response.data.robot_bg_auto_search_active);
+        }
+        return list;
+      } catch (error) {
+        const canceled =
+          error?.code === 'ERR_CANCELED' ||
+          error?.name === 'CanceledError' ||
+          (typeof error?.message === 'string' && error.message.toLowerCase().includes('canceled'));
+        if (canceled) return null;
+        return Array.isArray(attacksRef.current) ? attacksRef.current : [];
+      } finally {
+        if (attackListInFlightRef.current === run) {
+          attackListInFlightRef.current = null;
+        }
+        if (attackListAbortRef.current === ac) {
+          attackListAbortRef.current = null;
+        }
+      }
+    })();
+    attackListInFlightRef.current = run;
+    return run;
   }, [applyInflationPayload]);
 
   // Pre-fetch /travel/info shortly after the page settles so the modal opens instantly when the user clicks Travel.
@@ -1614,7 +1650,7 @@ export default function Attack() {
   const searchCompleteTimeoutRef = useRef(null);
 
   // With Find Clock perk: refetch exactly when soonest searching row's found_at fires.
-  // Without perk, found_at is omitted server-side — fall back to normal ATTACK_LIST_POLL_MS only.
+  // Without perk, found_at is omitted server-side — fall back to adaptive list polling only.
   useEffect(() => {
     if (searchCompleteTimeoutRef.current) {
       clearTimeout(searchCompleteTimeoutRef.current);
@@ -1635,7 +1671,7 @@ export default function Attack() {
     if (delayMs > maxDelay) return;
     searchCompleteTimeoutRef.current = setTimeout(() => {
       searchCompleteTimeoutRef.current = null;
-      refreshAttacks();
+      refreshAttacks({ force: true });
     }, delayMs);
     return () => {
       if (searchCompleteTimeoutRef.current) {
@@ -1656,7 +1692,7 @@ export default function Attack() {
   const withSearchCode = useCallback(async (body) => {
     let codePayload = getSearchCodePayload(searchCodeRef.current);
     if (!Object.keys(codePayload).length) {
-      await refreshAttacks();
+      await refreshAttacks({ force: true });
       codePayload = getSearchCodePayload(searchCodeRef.current);
     }
     return { ...body, ...codePayload };
@@ -1675,7 +1711,7 @@ export default function Attack() {
         'warning',
         { description: getApiErrorMessage(error) || 'Check My Searches before clicking kill again.' },
       );
-      refreshAttacks();
+      refreshAttacks({ force: true });
       fetchBullets();
       refreshUser();
       return;
@@ -1701,10 +1737,10 @@ export default function Attack() {
               );
               const res = await api.post('/attack/search', searchBody);
               toast.success(res.data?.message || 'Search started', { duration: 10000 });
-              await refreshAttacks();
+              await refreshAttacks({ force: true });
             } catch (err) {
               if (isAttackSearchCodeError(err)) {
-                await refreshAttacks();
+                await refreshAttacks({ force: true });
                 toast.error('Search code refreshed. Tap Search again.', { duration: 10000 });
               } else {
                 toast.error(getApiErrorMessage(err) || 'Failed to search', { duration: 10000 });
@@ -1832,12 +1868,23 @@ export default function Attack() {
       }
     };
     load();
-    const interval = setInterval(refreshAttacks, ATTACK_LIST_POLL_MS);
     return () => {
-      clearInterval(interval);
       attackListAbortRef.current?.abort();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Adaptive poll: faster while searches are in progress, slower when idle.
+  const hasSearchingAttacks = useMemo(
+    () => (Array.isArray(attacks) ? attacks.some((a) => a.status === 'searching') : false),
+    [attacks],
+  );
+  useEffect(() => {
+    const ms = hasSearchingAttacks ? ATTACK_LIST_POLL_SEARCHING_MS : ATTACK_LIST_POLL_IDLE_MS;
+    const interval = setInterval(() => {
+      refreshAttacks();
+    }, ms);
+    return () => clearInterval(interval);
+  }, [hasSearchingAttacks, refreshAttacks]);
 
   useEffect(() => {
     let timeoutId = null;
@@ -1846,17 +1893,16 @@ export default function Attack() {
       timeoutId = setTimeout(() => {
         timeoutId = null;
         refreshAttacks();
-      }, ATTACK_LIST_REFRESH_AFTER_USER_EVENT_MS);
+      }, ATTACK_LIST_REFRESH_AFTER_FOCUS_MS);
     };
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') scheduleRefresh();
     };
-    window.addEventListener('app:refresh-user', scheduleRefresh);
+    // Do not listen to app:refresh-user — Layout already polls /auth/me and that was stacking list GETs.
     window.addEventListener('focus', scheduleRefresh);
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       if (timeoutId) clearTimeout(timeoutId);
-      window.removeEventListener('app:refresh-user', scheduleRefresh);
       window.removeEventListener('focus', scheduleRefresh);
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
@@ -1898,12 +1944,12 @@ export default function Attack() {
       setTravelCountdown(null);
       setTravelModalDestination(null);
       markArrivedLocally(dest);
-      for (let i = 0; i < 4 && !cancelled; i += 1) {
-        await refreshAttacks();
+      for (let i = 0; i < 2 && !cancelled; i += 1) {
+        await refreshAttacks({ force: true });
         if (cancelled) return;
-        if (i < 3) {
+        if (i < 1) {
           await new Promise((resolve) => {
-            settleTimer = setTimeout(resolve, 350);
+            settleTimer = setTimeout(resolve, 500);
           });
         }
       }
@@ -1947,10 +1993,10 @@ export default function Attack() {
           );
           const response = await api.post('/attack/search', searchBody);
           toast.success(response.data?.message || 'Search started');
-          await refreshAttacks();
+          await refreshAttacks({ force: true });
         } catch (error) {
           if (isAttackSearchCodeError(error)) {
-            await refreshAttacks();
+            await refreshAttacks({ force: true });
             toast.error('Search code refreshed. Try Start Search again.');
           } else {
             toast.error(getApiErrorMessage(error) || 'Failed to search target');
@@ -1963,7 +2009,7 @@ export default function Attack() {
       if (payload.type === 'kill') {
         setLoading(true);
         try {
-          let list = await refreshAttacks();
+          let list = await refreshAttacks({ force: true });
           if (!Array.isArray(list)) list = [];
           const username = (payload.killUsername || '').trim().toLowerCase();
           const found = list.filter((a) => (a.target_username || '').toLowerCase() === username && a.status === 'found');
@@ -1990,7 +2036,7 @@ export default function Attack() {
           refreshUser();
           fetchBullets();
           // Background refresh — the result toast/feedback below doesn't need the latest list.
-          refreshAttacks();
+          refreshAttacks({ force: true });
           if (execRes.data?.success) {
             const rewardMoney = execRes.data.rewards?.money;
             showKillResult(execRes.data?.message || 'Kill executed.', 'success', {
@@ -2035,7 +2081,7 @@ export default function Attack() {
       const res = await api.post('/attack/delete', { attack_ids: toDelete });
       toast.success(res.data?.message || `Deleted ${toDelete.length} search(es)`);
       setSelectedAttackIds([]);
-      await refreshAttacks();
+      await refreshAttacks({ force: true });
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to delete searches');
     } finally {
@@ -2059,10 +2105,10 @@ export default function Attack() {
       toast.success(response.data.message);
       setTargetUsername('');
       setNote('');
-      await refreshAttacks();
+      await refreshAttacks({ force: true });
     } catch (error) {
       if (isAttackSearchCodeError(error)) {
-        await refreshAttacks();
+        await refreshAttacks({ force: true });
         toast.error('Search code refreshed. Click Start Search again.');
       } else {
         toast.error(getApiErrorMessage(error) || 'Failed to search target');
@@ -2112,7 +2158,7 @@ export default function Attack() {
             return { ...a, can_attack: false, can_travel: true };
           });
         });
-        await refreshAttacks();
+        await refreshAttacks({ force: true });
       } else {
         toast.success(response.data?.message || `Traveling to ${dest}`);
         const arrivesRaw = response.data?.travel_arrives_at;
@@ -2126,7 +2172,7 @@ export default function Attack() {
         setKillTravelTrip({ dest, endsAtMs });
         setTravelCountdown(Math.max(1, Math.ceil((endsAtMs - Date.now()) / 1000)));
         refreshUser({ traveling_to: dest, travel_arrives_at: arrivesIso });
-        refreshAttacks();
+        refreshAttacks({ force: true });
       }
     } catch (error) {
       const detail = error.response?.data?.detail;
@@ -2162,7 +2208,7 @@ export default function Attack() {
         response = await sendExecute(extra);
       } catch (error) {
         if (!isAttackExecuteCodeError(error)) throw error;
-        await refreshAttacks();
+        await refreshAttacks({ force: true });
         showKillResult(
           'Kill code refreshed. Click Kill again.',
           'warning',
@@ -2185,7 +2231,7 @@ export default function Attack() {
       fetchBullets();
       // Refresh in the background — toast already fired, no need to keep the button busy
       // for another /attack/list round-trip (which can be 0.5-1.5s under load).
-      refreshAttacks();
+      refreshAttacks({ force: true });
     } catch (error) {
       showExecuteError(error);
     } finally {

@@ -48,13 +48,55 @@ const PROFILE_STYLES = `
   .prof-fade-in { animation: prof-fade-in 0.4s ease-out both; }
   @keyframes prof-scale-in { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
   .prof-scale-in { animation: prof-scale-in 0.35s ease-out both; }
-  .prof-card { transition: all 0.3s ease; }
-  .prof-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
-  .prof-row { transition: all 0.2s ease; }
-  .prof-row:hover { background-color: rgba(var(--noir-primary-rgb), 0.04); }
+  .prof-card { transition: box-shadow 0.3s ease, border-color 0.3s ease; }
+  .prof-row { transition: background-color 0.2s ease; }
   .prof-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
   @keyframes prof-dossier-enter { from { opacity: 0.88; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
   .prof-dossier-enter { animation: prof-dossier-enter 0.34s ease-out both; }
+  @media (hover: hover) and (pointer: fine) {
+    .prof-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
+    .prof-row:hover { background-color: rgba(var(--noir-primary-rgb), 0.04); }
+  }
+  @media (max-width: 767px) {
+    .prof-staff-unlock {
+      padding: 8px 10px !important;
+      gap: 6px !important;
+    }
+    .prof-staff-unlock-row {
+      display: flex;
+      flex-direction: row;
+      align-items: stretch;
+      gap: 6px;
+    }
+    .prof-staff-unlock-row input {
+      flex: 1;
+      min-width: 0;
+      max-width: none !important;
+      font-size: 16px; /* avoid iOS zoom */
+      padding: 8px 10px;
+    }
+    .prof-staff-unlock-row button {
+      flex-shrink: 0;
+      align-self: stretch;
+      white-space: nowrap;
+      padding-left: 10px;
+      padding-right: 10px;
+    }
+    .prof-honour-chip {
+      padding: 6px 8px !important;
+      font-size: 10px !important;
+      line-height: 1.25 !important;
+      gap: 4px !important;
+    }
+    .prof-honour-chip .prof-honour-label {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+  }
   /* Store "Name Glow + Border" cosmetic: colored dossier border + soft glow matching the name color */
   ${PROFILE_GLOW_BORDER_CSS}
   /* Forum BBCode [img]/[gif] use inline max-height 300–400px — tall art shrinks to a narrow strip; override on profile only */
@@ -205,7 +247,7 @@ const StaffProfileActions = ({ username, isDead, isAdmin, isModerator, onDone })
   const btn = 'inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 transition-all active:scale-95 disabled:opacity-50';
   return (
     <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/5 border-b border-primary/20 flex flex-wrap items-center gap-1 md:gap-1.5">
-      <span className="text-[8px] md:text-[9px] font-heading font-bold text-primary/80 uppercase tracking-wider mr-1">Staff:</span>
+      <span className="text-[8px] md:text-[9px] font-heading font-bold text-primary/80 uppercase tracking-wider mr-0.5 shrink-0">Staff</span>
       <TooltipProvider>
         <Tooltip><TooltipTrigger asChild><button type="button" onClick={handleLock} disabled={!!loading} className={btn} title="Lock account"><Lock size={12} className="md:w-3.5 md:h-3.5" /></button></TooltipTrigger><TooltipContent>Lock account</TooltipContent></Tooltip>
         <Tooltip><TooltipTrigger asChild><button type="button" onClick={handleUnlock} disabled={!!loading} className={btn} title="Unlock account"><Unlock size={12} className="md:w-3.5 md:h-3.5" /></button></TooltipTrigger><TooltipContent>Unlock account</TooltipContent></Tooltip>
@@ -220,7 +262,9 @@ const StaffProfileActions = ({ username, isDead, isAdmin, isModerator, onDone })
         <Tooltip><TooltipTrigger asChild><Link to={{ pathname: STAFF_ADMIN_HOME, state: { activityLogUsername: username, gamblingLogUsername: username } }} className={btn} title="Activity log"><FileText size={12} className="md:w-3.5 md:h-3.5" /></Link></TooltipTrigger><TooltipContent>Activity log</TooltipContent></Tooltip>
         <Tooltip><TooltipTrigger asChild><Link to={{ pathname: STAFF_ADMIN_HOME, state: { gamblingLogUsername: username } }} className={btn} title="Gambling log"><Dices size={12} className="md:w-3.5 md:h-3.5" /></Link></TooltipTrigger><TooltipContent>Gambling log</TooltipContent></Tooltip>
       </TooltipProvider>
-      <Link to={{ pathname: STAFF_ADMIN_HOME, state: { targetUsername: username } }} className="text-[9px] font-heading text-primary/80 hover:text-primary ml-auto">Mute / more in Admin →</Link>
+      <Link to={{ pathname: STAFF_ADMIN_HOME, state: { targetUsername: username } }} className="text-[8px] sm:text-[9px] font-heading text-primary/80 hover:text-primary w-full sm:w-auto sm:ml-auto text-right">
+        Admin →
+      </Link>
     </div>
   );
 };
@@ -432,12 +476,12 @@ const ProfileInfoCard = ({
       valueClass: 'text-red-400 font-heading font-bold',
       ...(isAdmin && !isMe ? {
         component: (
-          <span className="flex items-center gap-1.5 justify-end">
-            <span className="text-red-400 font-heading font-bold text-[10px] md:text-sm">{Number(profile.kills ?? 0).toLocaleString()}</span>
+          <span className="flex items-center gap-1.5 justify-end min-w-0">
+            <span className="text-red-400 font-heading font-bold text-[10px] md:text-sm tabular-nums">{Number(profile.kills ?? 0).toLocaleString()}</span>
             <button type="button" onClick={fetchKillDebug} disabled={killDebugLoading || !staffCanUseAdminApi}
-              className="text-[8px] px-1.5 py-0.5 rounded border border-zinc-600/50 bg-zinc-800/50 text-zinc-400 hover:text-primary hover:border-primary/40 transition-colors disabled:opacity-50"
+              className="shrink-0 text-[8px] px-1.5 py-0.5 rounded border border-zinc-600/50 bg-zinc-800/50 text-zinc-400 hover:text-primary hover:border-primary/40 transition-colors disabled:opacity-50 touch-manipulation"
               title={staffCanUseAdminApi ? 'Debug kill count' : 'Requires staff login + staff portal unlock'}>
-              {killDebugLoading ? '...' : 'debug'}
+              {killDebugLoading ? '...' : <><span className="sm:hidden">dbg</span><span className="hidden sm:inline">debug</span></>}
             </button>
           </span>
         ),
@@ -488,8 +532,8 @@ const ProfileInfoCard = ({
   return (
     <div className={`relative ${styles.panel} rounded-lg overflow-hidden ${dossierBorderClass} shadow-2xl backdrop-blur-sm prof-card prof-dossier-enter mobile-panel`} style={dossierBorderStyle}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/45 to-transparent" />
-      <div className="px-2.5 py-2 md:px-3 md:py-2.5 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent border-b border-primary/25 flex items-start justify-between gap-2">
-        <div className="flex items-start gap-2.5 md:gap-3 min-w-0 flex-1">
+      <div className="px-2.5 py-2 md:px-3 md:py-2.5 bg-gradient-to-r from-primary/15 via-primary/5 to-transparent border-b border-primary/25">
+        <div className="flex items-start gap-2 md:gap-3 min-w-0">
           <div className="w-12 h-12 sm:w-14 sm:h-14 md:w-16 md:h-16 rounded-lg overflow-hidden border-2 border-primary/35 bg-secondary flex items-center justify-center shrink-0 ring-1 ring-black/25 shadow-inner">
             {dossierAvatarUrl ? (
               onAvatarPreview ? (
@@ -509,11 +553,72 @@ const ProfileInfoCard = ({
             )}
           </div>
           <div className="min-w-0 flex-1 flex flex-col gap-1">
-            <span className="text-[8px] md:text-[9px] font-heading font-bold text-primary uppercase tracking-[0.16em]">
-              Dossier
-            </span>
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="text-[13px] sm:text-sm md:text-base font-heading font-bold text-foreground truncate leading-tight" style={nameGlowStyle}>
+            <div className="flex items-start justify-between gap-2">
+              <span className="text-[8px] md:text-[9px] font-heading font-bold text-primary uppercase tracking-[0.16em] pt-0.5">
+                Dossier
+              </span>
+              <div className="flex items-center gap-1 md:gap-1.5 shrink-0 flex-wrap justify-end">
+                {profile.profile_country_code ? (
+                  <span
+                    className="inline-flex shrink-0 items-center leading-none"
+                    title={`Region ${profile.profile_country_code}`}
+                    aria-label={`Country ${profile.profile_country_code}`}
+                  >
+                    <CountryFlagThumb code={profile.profile_country_code} />
+                  </span>
+                ) : null}
+                {profile.prestige_level > 0 && (
+                  <PrestigeBadge level={profile.prestige_level} size="icon" showLabel />
+                )}
+                {isMe && onOpenSettings && (
+                  <button
+                    type="button"
+                    onClick={onOpenSettings}
+                    className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/35 bg-black/30 hover:bg-primary/15 hover:border-primary/50 text-primary transition-all active:scale-95 touch-manipulation"
+                    title="Profile settings"
+                    aria-label="Profile settings"
+                  >
+                    <Settings size={12} className="md:w-3.5 md:h-3.5" />
+                  </button>
+                )}
+                {!isMe && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={onAddToSearch}
+                      className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/35 bg-black/30 hover:bg-primary/15 hover:border-primary/50 text-primary transition-all active:scale-95 touch-manipulation"
+                      title="Add to Attack searches"
+                      aria-label="Add to Attack searches"
+                      data-testid="profile-add-to-search"
+                    >
+                      <Search size={12} className="md:w-3.5 md:h-3.5" />
+                    </button>
+                    {profile.id && (
+                      <button
+                        type="button"
+                        onClick={() => onSendMessage?.()}
+                        className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/35 bg-black/30 hover:bg-primary/15 hover:border-primary/50 text-primary transition-all active:scale-95 touch-manipulation"
+                        title="Send message"
+                        aria-label="Send message"
+                      >
+                        <MessageCircle size={12} className="md:w-3.5 md:h-3.5" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => onSendMoney?.()}
+                      className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/35 bg-black/30 hover:bg-primary/15 hover:border-primary/50 text-primary transition-all active:scale-95 touch-manipulation"
+                      title="Send money"
+                      aria-label="Send money"
+                    >
+                      <DollarSign size={12} className="md:w-3.5 md:h-3.5" />
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
+              <span className="text-[13px] sm:text-sm md:text-base font-heading font-bold text-foreground leading-tight break-words min-w-0" style={nameGlowStyle}>
                 {profile.username}
               </span>
               {isCustomBadge && (
@@ -547,121 +652,61 @@ const ProfileInfoCard = ({
             </div>
           </div>
         </div>
-        <div className="flex items-start gap-1.5 md:gap-2 shrink-0 flex-wrap justify-end pt-0.5">
-          {profile.profile_country_code ? (
-            <span
-              className="inline-flex shrink-0 items-center leading-none"
-              title={`Region ${profile.profile_country_code}`}
-              aria-label={`Country ${profile.profile_country_code}`}
-            >
-              <CountryFlagThumb code={profile.profile_country_code} />
-            </span>
-          ) : null}
-          {profile.prestige_level > 0 && (
-            <PrestigeBadge level={profile.prestige_level} size="icon" showLabel />
-          )}
-
-          {/* Action buttons group */}
-          <div className="flex items-center gap-1 md:gap-1.5">
-            {isMe && onOpenSettings && (
-              <button
-                type="button"
-                onClick={onOpenSettings}
-                className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/35 bg-black/30 hover:bg-primary/15 hover:border-primary/50 text-primary transition-all active:scale-95"
-                title="Profile settings"
-                aria-label="Profile settings"
-              >
-                <Settings size={12} className="md:w-3.5 md:h-3.5" />
-              </button>
-            )}
-            {!isMe && (
-              <>
-                <button
-                  type="button"
-                  onClick={onAddToSearch}
-                  className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/35 bg-black/30 hover:bg-primary/15 hover:border-primary/50 text-primary transition-all active:scale-95"
-                  title="Add to Attack searches"
-                  aria-label="Add to Attack searches"
-                  data-testid="profile-add-to-search"
-                >
-                  <Search size={12} className="md:w-3.5 md:h-3.5" />
-                </button>
-                {profile.id && (
-                  <button
-                    type="button"
-                    onClick={() => onSendMessage?.()}
-                    className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/35 bg-black/30 hover:bg-primary/15 hover:border-primary/50 text-primary transition-all active:scale-95"
-                    title="Send message"
-                    aria-label="Send message"
-                  >
-                    <MessageCircle size={12} className="md:w-3.5 md:h-3.5" />
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={() => onSendMoney?.()}
-                  className="inline-flex items-center justify-center h-7 w-7 md:h-8 md:w-8 rounded-md border border-primary/35 bg-black/30 hover:bg-primary/15 hover:border-primary/50 text-primary transition-all active:scale-95"
-                  title="Send money"
-                  aria-label="Send money"
-                >
-                  <DollarSign size={12} className="md:w-3.5 md:h-3.5" />
-                </button>
-              </>
-            )}
-          </div>
-        </div>
       </div>
 
       {/* Staff actions: Lock, Unlock, Kill, Revive, Mute, Unmute, Activity log, Gambling log */}
       {!isMe && staffViewerCaps && profile?.username && (
         <>
           {!staffShellGateOk ? (
-            <div className="px-2.5 py-2 md:px-3 bg-amber-950/35 border-b border-amber-600/30 text-[9px] font-heading text-amber-100/95 leading-relaxed">
+            <div className="px-2.5 py-1.5 md:px-3 bg-amber-950/35 border-b border-amber-600/30 text-[9px] font-heading text-amber-100/95 leading-snug">
               <span className="font-bold uppercase tracking-wider text-amber-300">Staff login required</span>
-              {' '}
-              Profile tools use the same session as Admin.
-              {' '}
+              {' — '}
               <Link to="/staff-entrance" className="text-primary font-bold underline underline-offset-2 hover:text-primary/90">
                 Staff entrance
               </Link>
-              {' '}
-              — sign in with your staff password, then return here.
+              <span className="text-amber-100/70 hidden sm:inline"> (same session as Admin)</span>
             </div>
           ) : staffPortalEnabled && !portalUnlocked ? (
             <form
               onSubmit={submitProfileStaffPortalUnlock}
-              className="px-2.5 py-2 md:px-3 bg-zinc-950/85 border-b border-primary/30 flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-2"
+              className="prof-staff-unlock px-2.5 py-1.5 md:px-3 md:py-2 bg-zinc-950/85 border-b border-primary/30"
             >
-              <div className="min-w-0 flex-1">
-                <span className="text-[8px] font-heading font-bold text-primary uppercase tracking-wider block mb-1">
-                  Staff portal password
+              <div className="flex items-center justify-between gap-2 mb-1">
+                <span className="text-[8px] font-heading font-bold text-primary uppercase tracking-wider">
+                  Staff portal
                 </span>
+                <span className="text-[8px] text-mutedForeground font-heading tabular-nums">
+                  ~{staffPortalSessionMin}m session
+                </span>
+              </div>
+              <div className="prof-staff-unlock-row flex flex-col sm:flex-row sm:items-stretch gap-1.5 sm:gap-2">
                 <input
                   type="password"
                   value={staffPortalUnlockPwd}
                   onChange={(ev) => setStaffPortalUnlockPwd(ev.target.value)}
-                  placeholder="Second factor (same as Admin)"
+                  placeholder="Portal password"
                   autoComplete="current-password"
-                  className="w-full max-w-xs rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-foreground"
+                  className="w-full sm:max-w-xs rounded border border-zinc-700 bg-zinc-900 px-2 py-1.5 text-sm text-foreground min-h-9"
                   disabled={staffPortalUnlockBusy}
+                  aria-label="Staff portal password"
                 />
-                {staffPortalUnlockErr ? (
-                  <p className="text-[10px] text-red-400 mt-1 font-heading" role="alert">
-                    {staffPortalUnlockErr}
-                  </p>
-                ) : (
-                  <p className="text-[9px] text-mutedForeground mt-1">
-                    Required for admin API calls from profiles. Session about {staffPortalSessionMin} minutes after unlock.
-                  </p>
-                )}
+                <button
+                  type="submit"
+                  disabled={staffPortalUnlockBusy}
+                  className="px-3 py-1.5 min-h-9 rounded border border-primary/50 bg-primary/20 text-primary text-[9px] font-heading font-bold uppercase tracking-wider hover:bg-primary/30 disabled:opacity-50 shrink-0 touch-manipulation"
+                >
+                  {staffPortalUnlockBusy ? '…' : 'Unlock'}
+                </button>
               </div>
-              <button
-                type="submit"
-                disabled={staffPortalUnlockBusy}
-                className="px-3 py-1.5 rounded border border-primary/50 bg-primary/20 text-primary text-[9px] font-heading font-bold uppercase tracking-wider hover:bg-primary/30 disabled:opacity-50 shrink-0 touch-manipulation"
-              >
-                {staffPortalUnlockBusy ? '…' : 'Unlock profile tools'}
-              </button>
+              {staffPortalUnlockErr ? (
+                <p className="text-[10px] text-red-400 mt-1 font-heading" role="alert">
+                  {staffPortalUnlockErr}
+                </p>
+              ) : (
+                <p className="text-[8px] text-mutedForeground mt-1 hidden sm:block">
+                  Same second factor as Admin. Required for profile admin API calls.
+                </p>
+              )}
             </form>
           ) : (
             <>
@@ -672,11 +717,11 @@ const ProfileInfoCard = ({
             isModerator={isModerator}
             onDone={onStaffActionDone}
           />
-          <div className="prof-fade-in">
+          <div className="prof-fade-in px-2.5 py-1.5 md:px-3 border-b border-primary/15 bg-primary/[0.03]">
             <button
               type="button"
               onClick={() => setStaffDetailsOpen(true)}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-primary/30 bg-primary/10 hover:bg-primary/15 transition-colors text-[10px] font-heading font-bold text-primary uppercase tracking-wider"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 min-h-8 rounded-md border border-primary/30 bg-primary/10 hover:bg-primary/15 transition-colors text-[9px] font-heading font-bold text-primary uppercase tracking-wider touch-manipulation"
             >
               <Activity size={12} />
               Details
@@ -714,7 +759,7 @@ const ProfileInfoCard = ({
                   {row.label}
                 </span>
               </div>
-              <div className="col-span-7 sm:col-span-8 text-right flex items-center justify-end">
+              <div className="col-span-7 sm:col-span-8 text-right flex items-center justify-end min-w-0">
                 {row.component != null ? (
                   row.component
                 ) : row.isStatus ? (
@@ -737,15 +782,15 @@ const ProfileInfoCard = ({
                     )}
                   </span>
                 ) : row.label === 'Family' && profile.family_id && profile.family_name ? (
-                  <div className="flex items-center justify-end gap-2 min-w-0">
+                  <div className="flex items-center justify-end gap-1.5 md:gap-2 min-w-0 max-w-full">
                     <FamilyEmblem
                       emblemPresetId={profile.family_emblem_preset_id}
                       avatarUrl={profile.family_emblem_avatar_url}
-                      size={32}
+                      size={28}
                     />
                     <Link
                       to={`/families/${encodeURIComponent(profile.family_id)}`}
-                      className={`${row.valueClass} hover:underline hover:text-primary transition-colors truncate`}
+                      className={`${row.valueClass} hover:underline hover:text-primary transition-colors truncate min-w-0`}
                     >
                       {row.value}
                     </Link>
@@ -815,9 +860,9 @@ const ProfileInfoCard = ({
                 <Trophy size={9} className="text-primary shrink-0" />
                 <span className="text-[8px] font-heading font-bold text-primary uppercase tracking-wider underline-offset-2 hover:underline">Honours</span>
               </Link>
-              <div className="grid grid-cols-2 gap-0.5">
+              <div className="grid grid-cols-1 gap-1 min-[420px]:grid-cols-2 min-[420px]:gap-0.5">
                 {honours.length === 0 ? (
-                  <span className="text-[8px] text-mutedForeground font-heading col-span-2">—</span>
+                  <span className="text-[8px] text-mutedForeground font-heading col-span-full">—</span>
                 ) : (
                   honours.map((h, i) => {
                     const top10 = Number(h.rank) <= 10;
@@ -827,12 +872,12 @@ const ProfileInfoCard = ({
                         key={i}
                         to={honourLeaderboardTo(h, !!profile?.is_dead)}
                         title={`${h.label} — #${rankDisp} on leaderboards`}
-                        className={`flex items-center gap-0.5 px-1 py-0.5 rounded border text-[8px] font-heading leading-tight min-w-0 w-full transition-colors hover:border-primary/40 hover:bg-primary/10 ${
+                        className={`prof-honour-chip flex items-center gap-1 px-1.5 py-1 rounded border text-[9px] sm:text-[8px] font-heading leading-tight min-w-0 w-full transition-colors hover:border-primary/40 hover:bg-primary/10 ${
                           top10 ? 'border-primary/20 bg-primary/5' : 'border-zinc-500/30 bg-zinc-500/5'
                         }`}
                       >
                         <span className={`font-bold shrink-0 ${top10 ? 'text-primary' : 'text-zinc-400'}`}>#{rankDisp}</span>
-                        <span className="text-foreground truncate min-w-0">{h.label}</span>
+                        <span className="prof-honour-label text-foreground min-w-0">{h.label}</span>
                       </Link>
                     );
                   })

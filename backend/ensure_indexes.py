@@ -802,6 +802,18 @@ async def ensure_all_indexes(db):
         await db.users.create_index("in_jail")
         await db.users.create_index([("auto_rank_enabled", 1), ("auto_rank_next_run_at", 1)])
         await db.users.create_index([("crew_oc_auto_apply_until", 1)], sparse=True)
+        # Trial expiry: update_many({auto_rank_trial: true, auto_rank_trial_until: {$lte: now}, ...})
+        await db.users.create_index(
+            [("auto_rank_trial", 1), ("auto_rank_trial_until", 1)],
+            name="auto_rank_trial_1_until_1",
+            partialFilterExpression={"auto_rank_trial": True},
+        )
+        # Timed-access lookups + legacy expire path (until string range)
+        await db.users.create_index(
+            [("auto_rank_trial_until", 1)],
+            name="auto_rank_trial_until_1",
+            sparse=True,
+        )
 
         # --- Mini games leaderboard ---
         await db.minigame_plays.create_index([("week_start", 1), ("user_id", 1)])

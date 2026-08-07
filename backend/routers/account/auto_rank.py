@@ -3,6 +3,7 @@ import asyncio
 import hmac
 import logging
 import os
+import time
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -233,8 +234,26 @@ def _mongo_auto_rank_subscriber_clause(now: Optional[datetime] = None) -> dict:
     }
 
 
-async def _expire_auto_rank_trials(db):
-    """Disable auto rank when a timed trial window ends (does not remove permanent store purchase)."""
+_last_expire_auto_rank_trials_at: float = 0.0
+_EXPIRE_AUTO_RANK_TRIALS_MIN_INTERVAL_SEC = 45.0
+
+
+async def _expire_auto_rank_trials(db, *, force: bool = False):
+    """Disable auto rank when a timed trial window ends (does not remove permanent store purchase).
+
+    Throttled: the Auto Rank loop wakes every ~2s; scanning users that often is wasteful.
+    GET/PATCH /auto-rank/me also call this — force=False keeps those cheap after a recent run.
+    """
+    global _last_expire_auto_rank_trials_at
+    now_mono = time.monotonic()
+    if (
+        not force
+        and _last_expire_auto_rank_trials_at
+        and (now_mono - _last_expire_auto_rank_trials_at) < _EXPIRE_AUTO_RANK_TRIALS_MIN_INTERVAL_SEC
+    ):
+        return
+    _last_expire_auto_rank_trials_at = now_mono
+
     now_iso = datetime.now(timezone.utc).isoformat()
     _trial_off = {
         "auto_rank_enabled": False,
@@ -247,6 +266,7 @@ async def _expire_auto_rank_trials(db):
         "auto_rank_melt": False,
         "auto_rank_scrap": False,
     }
+    # Equality on auto_rank_trial first so partial index (trial:true, until) can be used.
     result = await db.users.update_many(
         {"auto_rank_trial": True, "auto_rank_trial_until": {"$lte": now_iso}, "auto_rank_permanent": {"$ne": True}},
         {"$set": {**_trial_off, "auto_rank_purchased": False}, "$unset": {"auto_rank_trial_until": ""}},
