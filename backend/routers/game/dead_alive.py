@@ -10,6 +10,7 @@ from routers.kill.armoury import TOKEN_CONFIG
 from utils.point_provenance import log_points_event
 from utils.redeem_code_lifecycle import release_redeem_slots_for_deceased_user
 from utils.dead_alive_transfer_log import log_dead_alive_transfer
+from utils.game_pass_prestige import GAME_PASS_PRESTIGE_PENDING_CAP
 
 REVEAL_KILLER_COST = 1000
 TOKEN_RESTORE_PERCENT = 0.50  # 50% of tokens restored on Dead > Alive
@@ -850,8 +851,38 @@ def register(router):
                 int(dead_user.get("rank_xp_pass_free_last_micro_tier_granted") or 0),
                 int(current_user.get("rank_xp_pass_free_last_micro_tier_granted") or 0),
             )
-            # Carry Game Pass Current XP only. Do not merge the dead account's lifetime rank
-            # points or prestige carry, because that feeds "Most Rank Points Earned".
+            # Game Pass (£10) prestige loop — take the higher count so a prestiged dead
+            # account does not look like "first pass" after inheritance.
+            dead_gp_prestige = max(0, int(dead_user.get("game_pass_prestige_count") or 0))
+            alive_gp_prestige = max(0, int(current_user.get("game_pass_prestige_count") or 0))
+            carried_gp_prestige = max(dead_gp_prestige, alive_gp_prestige)
+            if carried_gp_prestige > 0:
+                pass_updates["game_pass_prestige_count"] = carried_gp_prestige
+                if dead_gp_prestige > alive_gp_prestige:
+                    if dead_user.get("game_pass_prestiged_at") is not None:
+                        pass_updates["game_pass_prestiged_at"] = dead_user.get("game_pass_prestiged_at")
+                elif alive_gp_prestige > dead_gp_prestige:
+                    if current_user.get("game_pass_prestiged_at") is not None:
+                        pass_updates["game_pass_prestiged_at"] = current_user.get("game_pass_prestiged_at")
+                else:
+                    # Same count: keep the later prestige timestamp if present.
+                    dead_at = dead_user.get("game_pass_prestiged_at")
+                    alive_at = current_user.get("game_pass_prestiged_at")
+                    if dead_at or alive_at:
+                        pass_updates["game_pass_prestiged_at"] = max(
+                            str(dead_at or ""),
+                            str(alive_at or ""),
+                        ) or None
+            dead_pending = max(0, int(dead_user.get("game_pass_prestige_pending") or 0))
+            alive_pending = max(0, int(current_user.get("game_pass_prestige_pending") or 0))
+            carried_pending = min(
+                GAME_PASS_PRESTIGE_PENDING_CAP,
+                max(dead_pending, alive_pending),
+            )
+            if carried_pending > 0 or dead_pending or alive_pending:
+                pass_updates["game_pass_prestige_pending"] = carried_pending
+            # Carry Game Pass Current XP / VIP grant cursor / Game Pass prestige only.
+            # Do not merge the dead account's lifetime rank points (leaderboard prestige).
             await db.users.update_one({"id": current_user["id"]}, {"$set": pass_updates})
 
         if supplemental_points_amount > 0 and already_retrieved:
