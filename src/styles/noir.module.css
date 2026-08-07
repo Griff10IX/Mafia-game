@@ -911,11 +911,6 @@ body[data-theme-variant="dark_mafia"] .themeGangsterModern .surface {
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 6px 20px rgba(0, 0, 0, 0.45);
 }
 
-/* Users Online roster: allow cosmetic border glow to paint outside chips */
-body[data-theme-variant="dark_mafia"] .themeGangsterModern :global(.uo-users-panel) {
-  overflow: visible;
-}
-
 body[data-theme-variant="dark_mafia"] .themeGangsterModern .panel::before,
 body[data-theme-variant="dark_mafia"] .themeGangsterModern .surface::before {
   content: '';
