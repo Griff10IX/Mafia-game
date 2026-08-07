@@ -53,9 +53,9 @@ async def _gather_bounded_db(*coroutines, limit: int = _LEADERBOARD_WEEKLY_DB_CO
 
 async def _users_query_id_in_with_staff_filters(database, id_list: list) -> dict:
     """users.find / $lookup filter: id $in list + staff exclusions (same pool as profile honours)."""
-    staff = _leaderboard_user_filter()
-    in_part = {"id": {"$in": id_list}}
     nin_ids = await honours_stat_excluded_user_ids(database)
+    staff = _leaderboard_user_filter(with_email_nor=not bool(nin_ids))
+    in_part = {"id": {"$in": id_list}}
     if nin_ids:
         return {"$and": [in_part, staff, {"id": {"$nin": nin_ids}}]}
     q = dict(in_part)

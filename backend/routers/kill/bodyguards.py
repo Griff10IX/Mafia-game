@@ -349,6 +349,10 @@ def _camelize(name: str) -> str:
     return "".join(t[:1].upper() + t[1:] for t in tokens)
 
 
+# Default dossier portraits for robot bodyguards (also under public/images/).
+from utils.robot_bodyguard_avatar import robot_bodyguard_avatar_url as _robot_bodyguard_avatar_url
+
+
 async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str, str]:
     """Create a unique robot user record. Returns (user_id, username, initial_current_state). 1920s–30s American mafia style."""
     robot_names = [
@@ -382,7 +386,7 @@ async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str, str]
         "rank_points": int(rank_points),
         "bodyguard_slots": 0,
         "bullets": 0,
-        "avatar_url": None,
+        "avatar_url": _robot_bodyguard_avatar_url(),
         "jail_busts": 0,
         "jail_bust_attempts": 0,
         "garage_batch_limit": DEFAULT_GARAGE_BATCH_LIMIT,

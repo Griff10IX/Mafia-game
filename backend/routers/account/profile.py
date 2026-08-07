@@ -70,6 +70,7 @@ from utils.civilian_protection import civilian_protection_status_payload, maybe_
 from utils.hitlist_resolution import resolve_user_hitlist_kill
 from utils.bbcode_normalize import normalize_bbcode_media_typos
 from utils.imgbb_resolve import rewrite_imgbb_urls_in_banner_text
+from utils.default_player_avatar import resolve_player_avatar_url
 from utils.notepad_color import (
     notepad_color_for_api_response as _notepad_color_for_api_response,
     normalize_notepad_color_for_set as _normalize_notepad_color_for_set,
@@ -684,7 +685,7 @@ def register(router):
 
         return {
             "username": user.get("username"),
-            "avatar_url": user.get("avatar_url"),
+            "avatar_url": resolve_player_avatar_url(user),
             "kills": None if hide_kills else effective_player_kill_count(user),
             "jail_busts": None if hide_jail else int(user.get("jail_busts") or 0),
             "on_hitlist": hitlist_count > 0,
@@ -978,6 +979,8 @@ def register(router):
         _profile_cc = _raw_cc if len(_raw_cc) == 2 and _raw_cc.isalpha() else None
         _show_country_flag = bool(user.get("show_country_flag_on_profile", False))
 
+        avatar_url = resolve_player_avatar_url({**user, "id": user_id})
+
         out = {
             "id": user_id,
             "username": user["username"],
@@ -998,7 +1001,7 @@ def register(router):
             "kills": None if user.get("hide_kills_on_profile") else effective_player_kill_count(user),
             "jail_busts": None if user.get("hide_jailbusts_on_profile") else user.get("jail_busts", 0),
             "created_at": created_at,
-            "avatar_url": user.get("avatar_url"),
+            "avatar_url": avatar_url,
             "is_dead": is_dead,
             "is_npc": bool(user.get("is_npc")),
             "is_bodyguard": is_bodyguard_visible,

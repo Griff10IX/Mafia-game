@@ -3,6 +3,7 @@ import { Shield, ChevronDown, ChevronRight, RefreshCw, Search } from 'lucide-rea
 import { Link } from 'react-router-dom';
 import api, { refreshUser } from '../../utils/api';
 import { readBodyguardsPageWarm, writeBodyguardsPageWarm } from '../../utils/bodyguardsPageWarm';
+import { robotBodyguardAvatarUrl } from '../../utils/robotBodyguardAvatar';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import { formatGameDateTime } from '../../utils/gameDateTime';
@@ -618,6 +619,15 @@ export default function Bodyguards() {
             <span className="text-primary/50 text-xs">
               {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
             </span>
+            {bg.is_robot ? (
+              <div className="w-8 h-8 rounded-md overflow-hidden border border-primary/30 bg-secondary shrink-0">
+                <img
+                  src={robotBodyguardAvatarUrl(bg.bodyguard_user_id || bg.bodyguard_username || bg.slot_number)}
+                  alt=""
+                  className="w-full h-full object-cover"
+                />
+              </div>
+            ) : null}
             <div className="min-w-0">
               <div className="text-sm font-heading font-bold text-foreground truncate flex items-center gap-2">
                 Slot {bg.slot_number}
@@ -741,7 +751,7 @@ export default function Bodyguards() {
         <div className="flex items-start gap-2.5 md:gap-3">
           <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-lg overflow-hidden border-2 border-primary/35 bg-secondary shrink-0 ring-1 ring-black/25 shadow-inner">
             <img
-              src="/images/robot-bodyguard.png"
+              src={robotBodyguardAvatarUrl('bodyguards-page')}
               alt=""
               className="w-full h-full object-cover"
             />

@@ -360,14 +360,15 @@ def register(router):
             return {**cached[0], "recent_kills": recent_kills}
 
         now = datetime.now(timezone.utc)
-        staff_filter = _staff_exclude_user_filter()
         staff_ids = srv.expand_user_ids_for_mongo_nin(await _get_staff_user_ids())
+        # Prefer id $nin over email $nor regexes (those show up as Atlas/DO "Slow query").
+        staff_filter = _staff_exclude_user_filter(with_email_nor=not bool(staff_ids))
         # Real users only: exclude NPCs and staff (admins + mods). Also $nin staff ids
         # so email-list misses cannot inflate circulating totals (same as public leaderboards).
         real_user_match = {"is_npc": {"$ne": True}, **staff_filter}
         if staff_ids:
             real_user_match["id"] = {"$nin": staff_ids}
-        alive_real_match = srv.alive_real_player_wallet_match()
+        alive_real_match = srv.alive_real_player_wallet_match(with_email_nor=not bool(staff_ids))
         if staff_ids:
             alive_real_match = {**alive_real_match, "id": {"$nin": staff_ids}}
         # Dead = complement of alive within the same real-player (excl. staff) set.

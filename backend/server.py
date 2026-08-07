@@ -2847,13 +2847,18 @@ async def require_admin_or_mod_verified(current_user: dict = Depends(get_current
     return current_user
 
 
-def _staff_exclude_user_filter() -> dict:
+def _staff_exclude_user_filter(*, with_email_nor: bool = True) -> dict:
     """Mongo match dict to exclude admin/mod accounts from queries on the users collection.
 
-    Used by profile honours, /leaderboards/top, stats, etc. Admin emails must match case-insensitively
-    (same as _is_admin / lottery); raw $nin missed mixed-case emails in the DB.
+    Used by profile honours, /leaderboards/top, stats, etc.
+
+    Prefer ``with_email_nor=False`` when the caller already applies ``id: {$nin: staff_ids}``
+    from ``_get_staff_user_ids()`` / ``honours_stat_excluded_user_ids()`` — email ``$nor``
+    regexes force slow plans on large ``users`` aggregates and are redundant once ids are known.
     """
     q: dict = {"is_moderator": {"$ne": True}}
+    if not with_email_nor:
+        return q
     staff_emails = sorted(
         {
             e.strip().lower()
@@ -2866,9 +2871,9 @@ def _staff_exclude_user_filter() -> dict:
     return q
 
 
-def alive_real_player_wallet_match() -> dict:
+def alive_real_player_wallet_match(*, with_email_nor: bool = True) -> dict:
     """Alive, non-NPC users excluding staff — same segment as ``/stats/overview`` wallet portion of ``game_capital.total_cash``."""
-    return {"is_npc": {"$ne": True}, "is_dead": {"$ne": True}, **_staff_exclude_user_filter()}
+    return {"is_npc": {"$ne": True}, "is_dead": {"$ne": True}, **_staff_exclude_user_filter(with_email_nor=with_email_nor)}
 
 
 def user_has_admin_list_email(user: dict) -> bool:
@@ -2951,8 +2956,9 @@ async def stat_leaderboard_users_match(*, dead: bool, database=None) -> dict:
         m: dict = {"is_dead": True, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
     else:
         m = {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
-    m.update(_staff_exclude_user_filter())
     ex = await honours_stat_excluded_user_ids(d)
+    # Skip email $nor regex when staff ids are available — same exclusion, much cheaper plans.
+    m.update(_staff_exclude_user_filter(with_email_nor=not bool(ex)))
     if ex:
         m["id"] = {"$nin": ex}
     return m

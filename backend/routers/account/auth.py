@@ -27,6 +27,7 @@ from utils.geo_country import country_code_from_request_headers
 from utils.game_pass_season import get_game_pass_season_public
 from utils.redeem_code_lifecycle import reconcile_stale_dead_redeemers_on_code
 from utils.username_rules import validate_username
+from utils.default_player_avatar import default_player_avatar_url
 
 
 class UserRegister(BaseModel):
@@ -726,7 +727,7 @@ def register(router):
                 "rank_points": 0,
                 "bodyguard_slots": 0,
                 "bullets": 0,
-                "avatar_url": None,
+                "avatar_url": default_player_avatar_url(),
                 "jail_busts": 0,
                 "jail_bust_attempts": 0,
                 "jail_busts_npc": 0,

@@ -28,6 +28,8 @@ import { getProfileEditWarm } from '../../utils/profilePageWarm';
 import { TOAST_MUTEABLE_PAGES, setToastMutedPages, normalizeToastMutedPages, getToastMutedPages } from '../../utils/toastPageMutes';
 import { fileToAvatarDataUrl, fileToCustomBadgeDataUrl, validateSafeImageFile, AVATAR_RAW_UPLOAD_MAX_BYTES } from '../../utils/fileToCompressedDataUrl';
 import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
+import { robotBodyguardAvatarUrl } from '../../utils/robotBodyguardAvatar';
+import { defaultPlayerAvatarUrl } from '../../utils/defaultPlayerAvatar';
 import { PROFILE_GLOW_BORDER_CSS, customGlowBorderStyle, PROFILE_GLOW_PRESETS } from '../../constants/profileGlowPresets';
 import GlowPresetPicker from '../../components/GlowPresetPicker';
 
@@ -470,8 +472,14 @@ const ProfileInfoCard = ({
   });
 
   const isRobotBodyguard = Boolean(profile.is_npc && profile.is_bodyguard);
-  const ROBOT_BODYGUARD_AVATAR = '/images/robot-bodyguard.png';
-  const dossierAvatarUrl = profile?.avatar_url || (isRobotBodyguard ? ROBOT_BODYGUARD_AVATAR : null);
+  const dossierAvatarUrl =
+    (typeof profile?.avatar_url === 'string' && profile.avatar_url.trim())
+      ? profile.avatar_url.trim()
+      : (isRobotBodyguard
+        ? robotBodyguardAvatarUrl(profile.id || profile.username)
+        : (!profile.is_npc
+          ? defaultPlayerAvatarUrl(profile.id || profile.username)
+          : null));
   const profileNotepadBg = profile.profile_notepad_color || null;
   const profileNotepadStyle = profileNotepadBg
     ? { backgroundColor: profileNotepadBg, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.04)' }
@@ -781,7 +789,11 @@ const ProfileInfoCard = ({
         <div className="px-2.5 py-1.5 md:px-3 border-t border-zinc-700/30 bg-zinc-800/30">
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] md:text-[10px] uppercase tracking-wider font-heading font-bold bg-zinc-800 text-mutedForeground border border-zinc-700/40">
             {isRobotBodyguard ? (
-              <img src="/images/robot-bodyguard.png" alt="" className="w-3.5 h-3.5 rounded-sm object-cover" />
+              <img
+                src={robotBodyguardAvatarUrl(profile.id || profile.username)}
+                alt=""
+                className="w-3.5 h-3.5 rounded-sm object-cover"
+              />
             ) : (
               <span aria-hidden>🤖</span>
             )}
@@ -2554,14 +2566,21 @@ export default function Profile() {
               </div>
               <div className="p-3 flex items-center gap-3">
                 <div className="w-14 h-14 rounded-md overflow-hidden border border-primary/25 bg-secondary flex items-center justify-center shrink-0">
-                  {me?.avatar_url ? (
+                  {(me?.avatar_url || defaultPlayerAvatarUrl(me?.id || me?.username)) ? (
                     <button
                       type="button"
-                      onClick={() => setAvatarLightbox({ url: me.avatar_url, username: me.username })}
+                      onClick={() => setAvatarLightbox({
+                        url: me?.avatar_url || defaultPlayerAvatarUrl(me?.id || me?.username),
+                        username: me.username,
+                      })}
                       className="w-full h-full p-0 border-0 bg-transparent cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-md"
                       aria-label="View profile picture"
                     >
-                      <img src={me.avatar_url} alt="" className="w-full h-full object-cover pointer-events-none" />
+                      <img
+                        src={me?.avatar_url || defaultPlayerAvatarUrl(me?.id || me?.username)}
+                        alt=""
+                        className="w-full h-full object-cover pointer-events-none"
+                      />
                     </button>
                   ) : (
                     <UserIcon size={22} className="text-mutedForeground" />

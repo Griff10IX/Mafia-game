@@ -15,6 +15,7 @@ IDLE_LAST_SEEN_MAX_MINUTES = 10
 def register(router):
     """Register users routes. Dependencies from server to avoid circular imports."""
     import server as srv
+    from utils.default_player_avatar import resolve_player_avatar_url
 
     db = srv.db
     get_current_user = srv.get_current_user
@@ -191,7 +192,7 @@ def register(router):
                 "prestige_level": _prestige_level,
                 "online_color": online_color,
                 "status": user_status,
-                "avatar_url": user.get("avatar_url") or None,
+                "avatar_url": resolve_player_avatar_url(user),
                 "founding_member": bool(user.get("founding_member")),
                 "custom_profile_badge": bool(user.get("custom_profile_badge")),
                 "custom_profile_badge_url": (user.get("custom_profile_badge_url") or None) if user.get("custom_profile_badge") else None,
