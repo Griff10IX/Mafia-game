@@ -507,6 +507,68 @@ async def heal_weed_from_revive_sacrifice(db, *, dry_run: bool = True) -> dict:
     return out
 
 
+async def heal_game_pass_weed_from_revive_sacrifice(db, *, dry_run: bool = True) -> dict:
+    """Move Game Pass weed strains stuck on £10 revive sacrifice alts onto the revived recipient."""
+    from utils.game_pass_weed_strains import (
+        GAME_PASS_STRAIN_IDS,
+        owned_game_pass_strain_ids,
+        transfer_game_pass_weed_strains_between_users,
+    )
+
+    out: Dict[str, Any] = {"checked": 0, "healed": 0, "actions": [], "transferred_strains": 0}
+    sacrificers = await db.users.find(
+        {
+            "is_dead": True,
+            "revive_sacrifice_for_user_id": {"$exists": True, "$nin": [None, ""]},
+            "game_pass_weed_strain_ids": {
+                "$elemMatch": {"$in": list(GAME_PASS_STRAIN_IDS)},
+            },
+        },
+        {"_id": 0, "id": 1, "username": 1, "revive_sacrifice_for_user_id": 1, "game_pass_weed_strain_ids": 1},
+    ).to_list(2000)
+
+    for sac in sacrificers:
+        out["checked"] += 1
+        recipient_id = str(sac.get("revive_sacrifice_for_user_id") or "")
+        ids = sorted(owned_game_pass_strain_ids(sac))
+        if not recipient_id or not ids:
+            continue
+        recip = await db.users.find_one(
+            {"id": recipient_id}, {"_id": 0, "username": 1, "is_dead": 1}
+        )
+        if not recip or recip.get("is_dead"):
+            continue
+        action = {
+            "kind": "game_pass_weed_from_revive_sacrifice",
+            "dead_username": sac.get("username"),
+            "recipient_username": recip.get("username"),
+            "strain_ids": ids,
+        }
+        if dry_run:
+            action["would_apply"] = True
+            out["actions"].append(action)
+            out["healed"] += 1
+            out["transferred_strains"] += len(ids)
+            continue
+        moved = await transfer_game_pass_weed_strains_between_users(
+            db,
+            from_user_id=sac["id"],
+            to_user_id=recipient_id,
+            from_username=sac.get("username"),
+            to_username=recip.get("username"),
+            notify=True,
+            transfer_source="revive_sacrifice_backfill",
+        )
+        action["applied"] = bool(moved)
+        action["strain_ids"] = moved
+        out["actions"].append(action)
+        if moved:
+            out["healed"] += 1
+            out["transferred_strains"] += len(moved)
+
+    return out
+
+
 async def heal_vip_from_revive_sacrifice(db, *, dry_run: bool = True) -> dict:
     """Move VIP cars stuck on £10 revive sacrifice alts onto the revived recipient."""
     from utils.game_pass_vip_car import (
@@ -1346,12 +1408,16 @@ async def force_restore_illegal_business_from_archive(
 
 async def run_dead_alive_estate_heal(db, *, dry_run: bool = True) -> dict:
     """Full estate heal pass (biz + weed + VIP + killer portfolio/biz)."""
+    from utils.game_pass_weed_strains import backfill_game_pass_weed_strains_dead_alive
+
     started = _utc_now_iso()
     biz = await heal_illegal_business_gaps(db, dry_run=dry_run)
     killer_biz = await heal_killer_biz_after_revive_revert(db, dry_run=dry_run)
     killer_props = await heal_killer_portfolio_after_revive_clawback(db, dry_run=dry_run)
     weed = await heal_exclusive_weed_gaps(db, dry_run=dry_run)
     weed_sac = await heal_weed_from_revive_sacrifice(db, dry_run=dry_run)
+    gp_weed = await backfill_game_pass_weed_strains_dead_alive(db, dry_run=dry_run)
+    gp_weed_sac = await heal_game_pass_weed_from_revive_sacrifice(db, dry_run=dry_run)
     vip = await heal_vip_pass_car_gaps(db, dry_run=dry_run)
     return {
         "dry_run": bool(dry_run),
@@ -1362,6 +1428,8 @@ async def run_dead_alive_estate_heal(db, *, dry_run: bool = True) -> dict:
         "killer_portfolio": killer_props,
         "exclusive_weed": weed,
         "weed_from_sacrifice": weed_sac,
+        "game_pass_weed_inheritance": gp_weed,
+        "game_pass_weed_from_sacrifice": gp_weed_sac,
         "vip_pass_car": vip,
         "totals": {
             "biz_healed": int(biz.get("healed") or 0),
@@ -1370,6 +1438,10 @@ async def run_dead_alive_estate_heal(db, *, dry_run: bool = True) -> dict:
             "weed_healed": int(weed.get("healed") or 0),
             "weed_sacrifice_healed": int(weed_sac.get("healed") or 0),
             "weed_sacrifice_strains": int(weed_sac.get("transferred_strains") or 0),
+            "game_pass_weed_inheritance_users": int(gp_weed.get("transferred_users") or 0),
+            "game_pass_weed_inheritance_strains": int(gp_weed.get("transferred_strains") or 0),
+            "game_pass_weed_sacrifice_healed": int(gp_weed_sac.get("healed") or 0),
+            "game_pass_weed_sacrifice_strains": int(gp_weed_sac.get("transferred_strains") or 0),
             "vip_regrant_healed": int(vip.get("regrant_healed") or 0),
             "vip_inheritance_cars": int(
                 (vip.get("inheritance_backfill") or {}).get("transferred_cars") or 0

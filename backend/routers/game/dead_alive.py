@@ -296,6 +296,26 @@ async def execute_paid_revive(
                 reviver.get("id"),
                 dead_user.get("id"),
             )
+        try:
+            from utils.game_pass_weed_strains import transfer_game_pass_weed_strains_between_users
+
+            gp_weed_xfer = await transfer_game_pass_weed_strains_between_users(
+                db,
+                from_user_id=reviver["id"],
+                to_user_id=dead_user["id"],
+                from_username=reviver.get("username"),
+                to_username=dead_user.get("username"),
+                notify=True,
+                transfer_source="revive_sacrifice_transfer",
+            )
+            if restore_summary is not None and gp_weed_xfer:
+                restore_summary["game_pass_weed_from_reviver"] = list(gp_weed_xfer)
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "Game Pass weed strain transfer reviver→revived reviver=%s revived=%s",
+                reviver.get("id"),
+                dead_user.get("id"),
+            )
 
         await db.users.update_one(
             {"id": reviver["id"]},
@@ -538,8 +558,10 @@ def register(router):
         pending_swiss = swiss_at_death if not swiss_retrieval_used else 0
         pending_rank_pass = has_dead_rank_xp_carry and (not rank_pass_carry_used or missing_game_pass_current_xp)
         from utils.game_pass_vip_car import count_user_vip_pass_cars
+        from utils.game_pass_weed_strains import owned_game_pass_strain_ids
 
         pending_vip_cars = int(await count_user_vip_pass_cars(db, dead_user["id"]) or 0) > 0
+        pending_gp_weed = bool(owned_game_pass_strain_ids(dead_user))
 
         if already_retrieved:
             supplemental_points_amount = dead_live_points
@@ -548,6 +570,7 @@ def register(router):
                 and supplemental_points_amount <= 0
                 and not pending_rank_pass
                 and not pending_vip_cars
+                and not pending_gp_weed
             ):
                 raise HTTPException(status_code=400, detail="That dead account has already been used for a transfer.")
             supplemental_swiss_only = pending_swiss > 0 and supplemental_points_amount <= 0 and not pending_rank_pass
@@ -559,8 +582,16 @@ def register(router):
                 and supplemental_points_amount <= 0
                 and not pending_rank_pass
             )
+            supplemental_gp_weed_only = (
+                pending_gp_weed
+                and not pending_vip_cars
+                and pending_swiss <= 0
+                and supplemental_points_amount <= 0
+                and not pending_rank_pass
+            )
         else:
             supplemental_vip_only = False
+            supplemental_gp_weed_only = False
         tokens_at_death_raw = dead_user.get("tokens_at_death") or {}
         token_inc, tokens_restored = _compute_token_restore_for_dead_alive(tokens_at_death_raw, pass_token_expires_dt, now)
 
@@ -573,10 +604,16 @@ def register(router):
             has_estate = dead_live_points > 0 or money_at_death > 0 or add_swiss > 0
         has_rank_xp_merge = pending_rank_pass and not supplemental_swiss_only and not supplemental_points_only
         has_token_restore = (not already_retrieved) and bool(token_inc)
-        if not has_estate and not has_token_restore and not has_rank_xp_merge and not pending_vip_cars:
+        if (
+            not has_estate
+            and not has_token_restore
+            and not has_rank_xp_merge
+            and not pending_vip_cars
+            and not pending_gp_weed
+        ):
             raise HTTPException(
                 status_code=400,
-                detail="That account had no points, cash, Swiss cash, restorable tokens, Game Pass state, or VIP Pass Car to transfer.",
+                detail="That account had no points, cash, Swiss cash, restorable tokens, Game Pass state, VIP Pass Car, or Game Pass weed strains to transfer.",
             )
 
         claim_projection = {"_id": 0, "points": 1, "swiss_balance": 1}
@@ -605,9 +642,10 @@ def register(router):
                 claim_filter["rank_xp_pass_dead_alive_carry_used"] = {"$ne": True}
             if (
                 supplemental_vip_only
+                or supplemental_gp_weed_only
                 or (pending_rank_pass and rank_pass_carry_used and supplemental_points_amount <= 0 and pending_swiss <= 0)
             ):
-                # No estate claim to mutate — just load dead row (VIP cars / GP XP catch-up transfer below).
+                # No estate claim to mutate — just load dead row (VIP cars / GP weed / GP XP catch-up below).
                 claim = await db.users.find_one(
                     {"id": dead_user["id"], "is_dead": True, "account_locked": {"$ne": True}, "retrieval_used": True},
                     claim_projection,
@@ -717,6 +755,28 @@ def register(router):
                 current_user.get("id"),
             )
 
+        # Permanent Game Pass Weed Empire strains (tiers 20/28/35/42/50) — move with inheritance.
+        # Without this, micro-tier cursor merges but strains stay on the dead account and cannot re-grant.
+        gp_weed_strains_transferred: list = []
+        try:
+            from utils.game_pass_weed_strains import transfer_game_pass_weed_strains_between_users
+
+            gp_weed_strains_transferred = await transfer_game_pass_weed_strains_between_users(
+                db,
+                from_user_id=dead_user["id"],
+                to_user_id=current_user["id"],
+                from_username=dead_user.get("username"),
+                to_username=current_user.get("username"),
+                notify=True,
+                transfer_source="dead_alive_retrieve",
+            ) or []
+        except Exception:
+            logging.getLogger(__name__).exception(
+                "dead_alive Game Pass weed strain transfer failed dead=%s recip=%s",
+                dead_user.get("id"),
+                current_user.get("id"),
+            )
+
         try:
             await log_dead_alive_transfer(
                 db,
@@ -738,6 +798,7 @@ def register(router):
                     "tokens_restored": tokens_restored if has_token_restore else {},
                     "game_pass_merged": has_rank_xp_merge,
                     "vip_pass_cars_transferred": vip_cars_transferred,
+                    "game_pass_weed_strains_transferred": list(gp_weed_strains_transferred),
                     "dead_state": dead_state,
                     "head_family_id": head_family_id,
                 },
@@ -817,6 +878,13 @@ def register(router):
                 if vip_cars_transferred == 1
                 else f"{vip_cars_transferred} VIP Pass Cars transferred"
             )
+        if gp_weed_strains_transferred:
+            n_gp = len(gp_weed_strains_transferred)
+            parts.append(
+                "1 Game Pass weed strain transferred"
+                if n_gp == 1
+                else f"{n_gp} Game Pass weed strains transferred"
+            )
         if parts:
             msg += ", ".join(parts)
         else:
@@ -829,6 +897,7 @@ def register(router):
             "swiss_transferred": add_swiss,
             "tokens_restored": tokens_restored,
             "vip_pass_cars_transferred": vip_cars_transferred,
+            "game_pass_weed_strains_transferred": list(gp_weed_strains_transferred),
         }
 
     @router.get("/dead-alive/revive-eligibility")
