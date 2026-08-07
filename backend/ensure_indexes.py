@@ -73,6 +73,20 @@ async def _prune_mixed_date_string_field(
         logger.warning("%s mixed prune: %s", coll_name, e)
 
 
+async def _migrate_iso_string_dates_to_bson(db, coll_name: str, field_name: str):
+    """Convert legacy ISO-string timestamps to BSON Date so range $match can use indexes/TTL."""
+    coll = getattr(db, coll_name)
+    try:
+        r = await coll.update_many(
+            {field_name: {"$type": "string"}},
+            [{"$set": {field_name: {"$toDate": f"${field_name}"}}}],
+        )
+        if r.modified_count:
+            logger.info("%s: normalized %s string %s -> Date", coll_name, r.modified_count, field_name)
+    except Exception as e:
+        logger.warning("%s %s string->Date migration: %s", coll_name, field_name, e)
+
+
 async def _migrate_economy_booze_at_strings_to_date(db):
     """Booze rows used ISO strings for `at`, forcing $toDate scans on weekly boards; convert to BSON Date."""
     try:
@@ -84,6 +98,8 @@ async def _migrate_economy_booze_at_strings_to_date(db):
             logger.info("economy_events booze: normalized %s string at -> Date", r.modified_count)
     except Exception as e:
         logger.warning("economy_events booze at migration: %s", e)
+    # Remaining economy_events (property/loot/etc.) may still store ISO strings.
+    await _migrate_iso_string_dates_to_bson(db, "economy_events", "at")
 
 
 async def ensure_all_indexes(db):
@@ -407,6 +423,10 @@ async def ensure_all_indexes(db):
         await db.crimes.create_index("id", unique=True)
         # Per-attempt / event logs for weekly leaderboards (Mon UTC week). TTL + prune = 14d retention.
         # All-time totals (total_crimes, total_gta, respect_points, stock_market_profit_total, etc.) stay on users.
+        # Normalize legacy ISO-string timestamps before TTL/compound indexes (range $match needs BSON Date).
+        await _migrate_iso_string_dates_to_bson(db, "melt_events", "at")
+        await _migrate_iso_string_dates_to_bson(db, "respect_events", "at")
+        await _migrate_iso_string_dates_to_bson(db, "stock_transactions", "created_at")
         await _ensure_event_log_ttl(
             db,
             "crime_events",
