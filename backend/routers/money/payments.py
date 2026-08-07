@@ -941,11 +941,12 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
                 "rank_xp_pass_tokens": 1,
                 "rank_xp_pass_token_expires_at": 1,
                 "game_pass_prestige_pending": 1,
+                "game_pass_prestige_count": 1,
             },
         )
         purchase_err = prestige_purchase_eligibility_error(user)
-        if purchase_err and prestige_apply_eligibility_error(user):
-            # Neither queue nor apply possible
+        if purchase_err:
+            # Cannot buy/queue (already prestiged or already queued).
             await db.payment_transactions.update_one(
                 {"session_id": session_id},
                 {
@@ -1625,13 +1626,11 @@ def register(router):
 
         if package_id == GAME_PASS_PRESTIGE_PACKAGE_ID:
             from utils.game_pass_prestige import (
-                prestige_apply_eligibility_error,
                 prestige_purchase_eligibility_error,
             )
 
             purchase_err = prestige_purchase_eligibility_error(current_user)
-            apply_err = prestige_apply_eligibility_error(current_user)
-            if purchase_err and apply_err:
+            if purchase_err:
                 raise HTTPException(status_code=400, detail=purchase_err)
 
         # success_url: frontend sends origin_url like http://localhost:3000/store

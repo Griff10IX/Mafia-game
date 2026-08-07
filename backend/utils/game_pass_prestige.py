@@ -34,6 +34,8 @@ GAME_PASS_PRESTIGE_PRICE_GBP = 10.00
 GAME_PASS_PRESTIGE_EXTRA_LOOT_PIECES = 500
 # Max queued prestiges (buy early while climbing VIP; auto-apply at tier 100).
 GAME_PASS_PRESTIGE_PENDING_CAP = 1
+# One prestige only: Free → VIP Game Pass → Prestige (no third £10 buy).
+GAME_PASS_PRESTIGE_MAX_COUNT = 1
 
 PRESTIGE_RATE_TOPUP_EVENT = "game_pass_prestige_rate_topup"
 PRESTIGE_GRANT_EVENT = "game_pass_prestige"
@@ -319,11 +321,13 @@ def prestige_purchase_eligibility_error(user: Optional[dict]) -> Optional[str]:
     """
     Error if prestige cannot be bought / queued.
 
-    Can buy before Game Pass — queues until VIP tiers 1–100 finish (after you buy/activate
-    Game Pass and complete the track). Also buyable while climbing with VIP already active.
+    Can buy before finishing VIP — queues until VIP tiers 1–100 finish (after you buy/activate
+    Game Pass and complete the track). One prestige only (no second £10 / third loop).
     """
     if not user:
         return "Not logged in"
+    if int(user.get("game_pass_prestige_count") or 0) >= GAME_PASS_PRESTIGE_MAX_COUNT:
+        return "You have already prestiged Game Pass on this account."
     pending = int(user.get("game_pass_prestige_pending") or 0)
     if pending >= GAME_PASS_PRESTIGE_PENDING_CAP:
         return "You already have a Game Pass Prestige queued — it will apply automatically when you finish VIP tiers 1–100."
@@ -338,8 +342,15 @@ def prestige_status_payload(user: Optional[dict], season_id: Optional[str] = Non
     apply_err = prestige_apply_eligibility_error(user)
     purchase_err = prestige_purchase_eligibility_error(user)
     pending = int((user or {}).get("game_pass_prestige_pending") or 0)
-    can_apply_now = apply_err is None
+    prestige_count = int((user or {}).get("game_pass_prestige_count") or 0)
+    can_apply_now = apply_err is None and prestige_count < GAME_PASS_PRESTIGE_MAX_COUNT
     can_purchase = purchase_err is None
+    if prestige_count >= GAME_PASS_PRESTIGE_MAX_COUNT:
+        apply_unavailable = "You have already prestiged Game Pass on this account."
+    elif apply_err:
+        apply_unavailable = apply_err
+    else:
+        apply_unavailable = None
     return {
         "package_id": GAME_PASS_PRESTIGE_PACKAGE_ID,
         "price_gbp": GAME_PASS_PRESTIGE_PRICE_GBP,
@@ -349,30 +360,50 @@ def prestige_status_payload(user: Optional[dict], season_id: Optional[str] = Non
         "available": can_purchase,
         "unavailable_reason": purchase_err,
         "ready_to_apply": can_apply_now,
-        "apply_unavailable_reason": apply_err,
+        "apply_unavailable_reason": apply_unavailable,
         "prestige_pending": pending,
         "prestige_pending_cap": GAME_PASS_PRESTIGE_PENDING_CAP,
-        "prestige_count": int((user or {}).get("game_pass_prestige_count") or 0),
+        "prestige_max_count": GAME_PASS_PRESTIGE_MAX_COUNT,
+        "prestige_count": prestige_count,
         "bonus_rewards": bonus,
         "bonus_summary": format_rewards_summary(bonus) if bonus else "",
     }
 
 
 async def queue_game_pass_prestige(db, user_id: str) -> Dict[str, Any]:
-    """Increment pending prestige queue (buy early). Cap enforced atomically."""
+    """Increment pending prestige queue (buy early). Cap enforced atomically. One prestige max."""
     from fastapi import HTTPException
 
     result = await db.users.update_one(
         {
             "id": user_id,
-            "$or": [
-                {"game_pass_prestige_pending": {"$lt": GAME_PASS_PRESTIGE_PENDING_CAP}},
-                {"game_pass_prestige_pending": {"$exists": False}},
+            "$and": [
+                {
+                    "$or": [
+                        {"game_pass_prestige_count": {"$lt": GAME_PASS_PRESTIGE_MAX_COUNT}},
+                        {"game_pass_prestige_count": {"$exists": False}},
+                    ]
+                },
+                {
+                    "$or": [
+                        {"game_pass_prestige_pending": {"$lt": GAME_PASS_PRESTIGE_PENDING_CAP}},
+                        {"game_pass_prestige_pending": {"$exists": False}},
+                    ]
+                },
             ],
         },
         {"$inc": {"game_pass_prestige_pending": 1}},
     )
     if result.modified_count == 0:
+        user = await db.users.find_one(
+            {"id": user_id},
+            {"_id": 0, "game_pass_prestige_count": 1, "game_pass_prestige_pending": 1},
+        )
+        if int((user or {}).get("game_pass_prestige_count") or 0) >= GAME_PASS_PRESTIGE_MAX_COUNT:
+            raise HTTPException(
+                status_code=400,
+                detail="You have already prestiged Game Pass on this account.",
+            )
         raise HTTPException(
             status_code=400,
             detail="You already have a Game Pass Prestige queued — it will apply automatically when you finish VIP tiers 1–100.",
@@ -476,6 +507,11 @@ async def execute_game_pass_prestige(
     err = prestige_apply_eligibility_error(user)
     if err:
         raise HTTPException(status_code=400, detail=err)
+    if int((user or {}).get("game_pass_prestige_count") or 0) >= GAME_PASS_PRESTIGE_MAX_COUNT:
+        raise HTTPException(
+            status_code=400,
+            detail="You have already prestiged Game Pass on this account.",
+        )
 
     season_id = str((user or {}).get("game_pass_season_id") or "").strip() or None
     bonus = prestige_bonus_rewards(season_id)
@@ -510,6 +546,10 @@ async def execute_game_pass_prestige(
             "id": user_id,
             "rank_xp_pass_rewards_granted": True,
             "rank_xp_pass_last_granted_micro_tier": {"$gte": MAX_MICRO_TIER},
+            "$or": [
+                {"game_pass_prestige_count": {"$lt": GAME_PASS_PRESTIGE_MAX_COUNT}},
+                {"game_pass_prestige_count": {"$exists": False}},
+            ],
         },
         {
             "$inc": {**inc, "game_pass_prestige_count": 1},
