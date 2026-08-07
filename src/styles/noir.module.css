@@ -558,9 +558,19 @@ body[data-theme-variant="modern"] .themeGangsterModern {
 body[data-theme-variant="modern"] .themeGangsterModern .topBar,
 body[data-theme-variant="modern"] .themeGangsterModern .sidebar {
   backdrop-filter: blur(10px);
-  background: linear-gradient(180deg, rgba(28, 28, 32, 0.96) 0%, rgba(22, 22, 25, 0.96) 100%);
-  border-color: var(--modern-divider, rgba(161, 161, 170, 0.14));
+  background: linear-gradient(180deg, rgba(30, 30, 36, 0.98) 0%, rgba(16, 16, 20, 0.97) 100%);
+  border-color: var(--modern-divider, rgba(161, 161, 170, 0.22));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035);
   transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+body[data-theme-variant="modern"] .themeGangsterModern .topBar {
+  background: linear-gradient(180deg, rgba(32, 32, 38, 0.98) 0%, rgba(20, 20, 24, 0.96) 100%);
+  border-bottom-color: rgba(var(--noir-primary-rgb), 0.16);
+}
+
+body[data-theme-variant="modern"] .themeGangsterModern .sidebar {
+  background: linear-gradient(180deg, #121216 0%, #0c0c10 55%, #0a0a0e 100%);
 }
 
 body[data-theme-variant="modern"][data-modern-perf="on"] .themeGangsterModern .topBar,

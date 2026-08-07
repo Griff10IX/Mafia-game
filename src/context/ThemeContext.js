@@ -1,5 +1,23 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
-import { getThemeColour, getThemeTexture, getThemeFont, getThemeButtonStyle, getThemeWritingColour, getThemeTextStyle, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID, DEFAULT_BUTTON_STYLE_ID, DEFAULT_WRITING_COLOUR_ID, DEFAULT_TEXT_STYLE_ID, DEFAULT_THEME_VARIANT } from '../constants/themes';
+import {
+  getThemeColour,
+  getThemeTexture,
+  getThemeFont,
+  getThemeButtonStyle,
+  getThemeWritingColour,
+  getThemeTextStyle,
+  getThemePreset,
+  DEFAULT_COLOUR_ID,
+  DEFAULT_TEXTURE_ID,
+  DEFAULT_FONT_ID,
+  DEFAULT_BUTTON_STYLE_ID,
+  DEFAULT_WRITING_COLOUR_ID,
+  DEFAULT_TEXT_STYLE_ID,
+  DEFAULT_THEME_VARIANT,
+  DEFAULT_BUTTON_SHAPE_ID,
+  THEME_LAYOUT_RESET_DEFAULTS,
+  THEME_RESET_CLASSIC_ID,
+} from '../constants/themes';
 import api from '../utils/api';
 import { getThemeUiPlatform } from '../utils/themePlatform';
 
@@ -910,6 +928,114 @@ export function ThemeProvider({ children }) {
     } catch (_) {}
   }, []);
 
+  /**
+   * Full restore to a starting preset (Classic / Modern): colour axes + layout chrome defaults.
+   * Writes localStorage keys Layout listens for and PATCHes /profile/theme.
+   */
+  const resetThemeToPreset = useCallback((presetId = THEME_RESET_CLASSIC_ID) => {
+    const p = getThemePreset(presetId);
+    const layout = THEME_LAYOUT_RESET_DEFAULTS;
+    const colour = p.colourId || DEFAULT_COLOUR_ID;
+    const texture = p.textureId || DEFAULT_TEXTURE_ID;
+    const font = p.fontId || DEFAULT_FONT_ID;
+    const buttonStyle = p.buttonStyleId || DEFAULT_BUTTON_STYLE_ID;
+    const writing = p.writingColourId || DEFAULT_WRITING_COLOUR_ID;
+    const textStyle = p.textStyleId || DEFAULT_TEXT_STYLE_ID;
+    const variant = p.themeVariant === 'modern' ? 'modern' : DEFAULT_THEME_VARIANT;
+    const mobileNav = p.mobileNavStyle === 'sidebar' ? 'sidebar' : 'bottom';
+    const buttonShape = p.buttonShapeId || layout.buttonShapeId || DEFAULT_BUTTON_SHAPE_ID;
+    const mobileStats = p.mobileStatsDisplay || 'right_sidebar';
+    const sidebarLayout = p.sidebarLayout || 'categorized_classic';
+    const resolvedTexture = variant === 'modern' ? 'modern-soft' : texture;
+
+    setColourIdState(colour);
+    setTextureIdState(resolvedTexture);
+    setButtonColourIdState(p.buttonColourId ?? null);
+    setAccentLineColourIdState(p.accentLineColourId ?? null);
+    setFontIdState(font);
+    setButtonStyleIdState(buttonStyle);
+    setWritingColourIdState(writing);
+    setMutedWritingColourIdState(p.mutedWritingColourId ?? null);
+    setToastTextColourIdState(p.toastTextColourId ?? null);
+    setTextStyleIdState(textStyle);
+    setMobileNavStyleState(mobileNav);
+    setThemeVariantState(variant);
+    setButtonShapeIdState(buttonShape === 'sharp' || buttonShape === 'pill' ? buttonShape : 'rounded');
+
+    try {
+      localStorage.setItem(STORAGE_KEY_COLOUR, colour);
+      localStorage.setItem(STORAGE_KEY_TEXTURE, resolvedTexture);
+      localStorage.setItem(STORAGE_KEY_BUTTON, p.buttonColourId || '');
+      localStorage.setItem(STORAGE_KEY_ACCENT_LINE, p.accentLineColourId || '');
+      localStorage.setItem(STORAGE_KEY_FONT, font);
+      localStorage.setItem(STORAGE_KEY_BUTTON_STYLE, buttonStyle);
+      localStorage.setItem(STORAGE_KEY_WRITING, writing);
+      localStorage.setItem(STORAGE_KEY_MUTED_WRITING, p.mutedWritingColourId || '');
+      localStorage.setItem(STORAGE_KEY_TOAST_TEXT, p.toastTextColourId || '');
+      localStorage.setItem(STORAGE_KEY_TEXT_STYLE, textStyle);
+      localStorage.setItem(STORAGE_KEY_MOBILE_NAV, mobileNav);
+      localStorage.setItem(STORAGE_KEY_THEME_VARIANT, variant);
+      localStorage.setItem(STORAGE_KEY_BUTTON_SHAPE, buttonShape === 'sharp' || buttonShape === 'pill' ? buttonShape : 'rounded');
+
+      localStorage.setItem('mobile_stats_display', mobileStats);
+      localStorage.setItem('sidebar_layout', sidebarLayout);
+      localStorage.setItem('topbar_gap', layout.topBarGap);
+      localStorage.setItem('topbar_size', layout.topBarSize);
+      localStorage.setItem('topbar_chip_width_scale', String(layout.topBarChipWidthScale));
+      localStorage.setItem('topbar_chip_height_scale', String(layout.topBarChipHeightScale));
+      localStorage.setItem('sidebar_show_dividers', layout.sidebarShowDividers ? 'true' : 'false');
+      localStorage.setItem('bottom_nav_show_dividers', layout.bottomNavShowDividers ? 'true' : 'false');
+      localStorage.setItem('sidebar_divider_style', layout.sidebarDividerStyle);
+      localStorage.setItem('sidebar_spacing', layout.sidebarSpacing);
+      localStorage.setItem('toast_position', layout.toastPosition);
+      localStorage.setItem('toast_close_button', layout.toastCloseButton ? 'true' : 'false');
+      localStorage.setItem('kill_toast_style', layout.killToastStyle);
+
+      window.dispatchEvent(new Event('mobile-stats-display-changed'));
+      window.dispatchEvent(new Event('sidebar-layout-changed'));
+      window.dispatchEvent(new Event('topbar-prefs-changed'));
+      window.dispatchEvent(new Event('sidebar-dividers-changed'));
+      window.dispatchEvent(new Event('bottom-nav-dividers-changed'));
+      window.dispatchEvent(new Event('toast-prefs-changed'));
+      window.dispatchEvent(new Event('kill-toast-style-changed'));
+    } catch (_) { /* ignore */ }
+
+    const payload = {
+      colour_id: colour,
+      texture_id: resolvedTexture,
+      button_colour_id: p.buttonColourId ?? null,
+      accent_line_colour_id: p.accentLineColourId ?? null,
+      font_id: font,
+      button_style_id: buttonStyle,
+      writing_colour_id: writing,
+      muted_writing_colour_id: p.mutedWritingColourId ?? null,
+      toast_text_colour_id: p.toastTextColourId ?? null,
+      text_style_id: textStyle,
+      theme_variant: variant,
+      mobile_nav_style: mobileNav,
+      button_shape_id: buttonShape === 'sharp' || buttonShape === 'pill' ? buttonShape : 'rounded',
+      mobile_stats_display: mobileStats,
+      sidebar_layout: sidebarLayout,
+      top_bar_gap: layout.topBarGap,
+      top_bar_size: layout.topBarSize,
+      top_bar_chip_width_scale: layout.topBarChipWidthScale,
+      top_bar_chip_height_scale: layout.topBarChipHeightScale,
+      sidebar_show_dividers: layout.sidebarShowDividers,
+      bottom_nav_show_dividers: layout.bottomNavShowDividers,
+      sidebar_divider_style: layout.sidebarDividerStyle,
+      sidebar_spacing: layout.sidebarSpacing,
+      toast_position: layout.toastPosition,
+      toast_close_button: layout.toastCloseButton,
+      kill_toast_style: layout.killToastStyle,
+      theme_platform: getThemeUiPlatform(),
+    };
+    api.patch('/profile/theme', payload).then(() => {
+      try { window.dispatchEvent(new CustomEvent('theme-saved')); } catch (_) {}
+    }).catch(() => {});
+
+    return p;
+  }, []);
+
   const value = {
     colourId,
     textureId,
@@ -921,6 +1047,7 @@ export function ThemeProvider({ children }) {
     setAccentLineColour,
     resetButtonToDefault,
     resetAccentLineToDefault,
+    resetThemeToPreset,
     fontId,
     buttonStyleId,
     setFont,

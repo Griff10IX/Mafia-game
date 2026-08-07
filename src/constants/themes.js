@@ -17,9 +17,9 @@ import {
 
 /** Hex colour presets: { id, name, primary, primaryBright, primaryDark, foregroundOnPrimary } */
 export const THEME_COLOURS = [
-  { id: 'gold', name: 'Gold', primary: '#d4af37', primaryBright: '#e6c229', primaryDark: '#b8860b', foregroundOnPrimary: '#ffffff' },
+  { id: 'gold', name: 'Gold', stops: ['#e8c84a', '#d4af37', '#b8860b'], primary: '#d4af37', primaryBright: '#e8c84a', primaryDark: '#a67c0a', foregroundOnPrimary: '#ffffff' },
   /* Button default: solid dark olive fill, bright gold border, gold-to-orange gradient text (Assign reference) */
-  { id: 'dark-gold', name: 'Dark Gold', stops: ['#61562C', '#61562C', '#61562C', '#61562C'], primary: '#61562C', primaryBright: '#DCB450', primaryDark: '#4a4522', foregroundOnPrimary: '#F0C864', foregroundShadow: '#B48C46' },
+  { id: 'dark-gold', name: 'Dark Gold', stops: ['#6e6234', '#61562C', '#4a4522'], primary: '#61562C', primaryBright: '#E0BC58', primaryDark: '#3f3a1c', foregroundOnPrimary: '#F2D070', foregroundShadow: '#A87C38' },
   { id: 'amber', name: 'Amber', primary: '#f59e0b', primaryBright: '#fbbf24', primaryDark: '#d97706', foregroundOnPrimary: '#000000' },
   { id: 'yellow', name: 'Yellow', primary: '#eab308', primaryBright: '#facc15', primaryDark: '#ca8a04', foregroundOnPrimary: '#000000' },
   { id: 'orange', name: 'Orange', primary: '#ea580c', primaryBright: '#f97316', primaryDark: '#c2410c', foregroundOnPrimary: '#ffffff' },
@@ -482,9 +482,9 @@ export const THEME_SIDEBAR_SPACING = [
 
 /** Sidebar layout: flat list vs categorized with headers. */
 export const THEME_SIDEBAR_LAYOUT = [
-  { id: 'default', name: 'Default' },
-  { id: 'categorized', name: 'Categorized' },
-  { id: 'categorized_classic', name: 'Categorized (Classic)' },
+  { id: 'default', name: 'Flat list', description: 'Single continuous nav list — no section headers' },
+  { id: 'categorized', name: 'Grouped', description: 'Collapsible sections (Information, Ranking, Money…)' },
+  { id: 'categorized_classic', name: 'Grouped classic', description: 'Section headers always visible — original mafia chrome' },
 ];
 
 /** Toast notification position. */
@@ -768,10 +768,43 @@ export const DEFAULT_FONT_ID = 'clean';
 export const DEFAULT_BUTTON_STYLE_ID = 'original';
 export const DEFAULT_TEXTURE_ID = 'none';
 export const DEFAULT_THEME_VARIANT = 'classic';
+export const DEFAULT_BUTTON_SHAPE_ID = 'rounded';
 export const THEME_VARIANTS = [
   { id: 'classic', name: 'Classic Layout', description: 'Original mafia layout and spacing' },
   { id: 'modern', name: 'Modern Layout', description: 'Futuristic layout with modern spacing and sections' },
 ];
+
+/** First-time / Reset Classic & Reset Modern targets. */
+export const THEME_RESET_CLASSIC_ID = 'old-default';
+export const THEME_RESET_MODERN_ID = 'modern-full';
+
+/** Pinned “Starting looks” row in Theme Studio (handcrafted + hero presets). */
+export const STARTING_LOOK_PRESET_IDS = [
+  'old-default',
+  'modern-full',
+  'noir-contrast-full',
+  'crimson-mafia-full',
+  'clean-steel-full',
+  'gold-classic-full',
+  'blood-red-full',
+  'midnight-blue-full',
+];
+
+/** Layout / chrome defaults restored by full theme reset (alongside preset fields). */
+export const THEME_LAYOUT_RESET_DEFAULTS = {
+  topBarGap: 'normal',
+  topBarSize: 'medium',
+  topBarChipWidthScale: 50,
+  topBarChipHeightScale: 50,
+  sidebarShowDividers: false,
+  bottomNavShowDividers: false,
+  sidebarDividerStyle: 'solid',
+  sidebarSpacing: 'normal',
+  toastPosition: 'bottom-center',
+  toastCloseButton: true,
+  killToastStyle: 'popup',
+  buttonShapeId: DEFAULT_BUTTON_SHAPE_ID,
+};
 
 /**
  * Full presets: one-click theme bundles (colour + texture + optional button/accent/writing/buttonStyle).
@@ -779,8 +812,11 @@ export const THEME_VARIANTS = [
  * Optional: writingColourId, mutedWritingColourId, buttonStyleId, fontId, textStyleId, toastTextColourId for full presets.
  */
 export const THEME_PRESETS = [
-  { id: 'old-default', name: 'Old Default Theme', description: 'Full theme: gold accent, no texture, original buttons, default text & font', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null, writingColourId: 'default', mutedWritingColourId: null, buttonStyleId: 'original', fontId: 'classic', textStyleId: 'normal', toastTextColourId: null, mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'classic', isFullPreset: true },
-  { id: 'modern-full', name: 'Modern Full', description: 'Modern layout with the Telegram sky-blue accent, cleaner typography and spacing', colourId: 'sky', textureId: 'modern-soft', buttonColourId: null, accentLineColourId: null, writingColourId: 'steel-text', mutedWritingColourId: 'slate-300', buttonStyleId: 'flat', fontId: 'modern', textStyleId: 'medium', toastTextColourId: 'steel-text', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'modern', isFullPreset: true },
+  { id: 'old-default', name: 'Old Default Theme', description: 'Full theme: gold accent, no texture, original buttons, default text & font', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null, writingColourId: 'default', mutedWritingColourId: null, buttonStyleId: 'original', fontId: 'classic', textStyleId: 'normal', toastTextColourId: null, mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'classic', buttonShapeId: 'rounded', isFullPreset: true },
+  { id: 'modern-full', name: 'Modern Full', description: 'Modern layout with the Telegram sky-blue accent, cleaner typography and spacing', colourId: 'sky', textureId: 'modern-soft', buttonColourId: null, accentLineColourId: null, writingColourId: 'steel-text', mutedWritingColourId: 'slate-300', buttonStyleId: 'flat', fontId: 'modern', textStyleId: 'medium', toastTextColourId: 'steel-text', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'modern', buttonShapeId: 'rounded', isFullPreset: true },
+  { id: 'noir-contrast-full', name: 'High Contrast Noir', description: 'Charcoal + gold buttons, carbon texture, sharp industrial type', colourId: 'charcoal', textureId: 'carbon', buttonColourId: 'dark-gold', accentLineColourId: 'gold', writingColourId: 'snow', mutedWritingColourId: 'zinc-400', buttonStyleId: 'outline', fontId: 'industrial', textStyleId: 'medium', toastTextColourId: 'snow', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'classic', buttonShapeId: 'sharp', isFullPreset: true, presetCategory: 'dark-pro' },
+  { id: 'crimson-mafia-full', name: 'Crimson Mafia', description: 'Deep blood accent, warm parchment text, grain texture', colourId: 'blood', textureId: 'grain', buttonColourId: null, accentLineColourId: null, writingColourId: 'parchment', mutedWritingColourId: 'warm-gray', buttonStyleId: 'shaded', fontId: 'elegant', textStyleId: 'semibold', toastTextColourId: 'parchment', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized', themeVariant: 'classic', buttonShapeId: 'rounded', isFullPreset: true, presetCategory: 'dark-pro' },
+  { id: 'clean-steel-full', name: 'Clean Steel', description: 'Cool steel accent, modern layout, mesh texture', colourId: 'steel', textureId: 'mesh', buttonColourId: null, accentLineColourId: null, writingColourId: 'cool-white', mutedWritingColourId: 'slate-300', buttonStyleId: 'flat', fontId: 'modern', textStyleId: 'medium', toastTextColourId: 'cool-white', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'modern', buttonShapeId: 'rounded', isFullPreset: true, presetCategory: 'metallic' },
   { id: 'original', name: 'Original theme', description: 'Default look before custom themes', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null, themeVariant: 'classic' },
   { id: 'default', name: 'Classic Mafia', description: 'Gold, no texture', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'dark-mode', name: 'Dark Mode', description: 'Slate accents, clean', colourId: 'matte-slate', textureId: 'none', buttonColourId: null, accentLineColourId: null },

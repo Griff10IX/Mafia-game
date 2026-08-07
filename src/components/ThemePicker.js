@@ -14,9 +14,9 @@ import {
   THEME_BUTTON_STYLES, THEME_BUTTON_SHAPES, THEME_DIVIDER_STYLES,
   THEME_SIDEBAR_SPACING, THEME_SIDEBAR_LAYOUT, THEME_TOAST_POSITION, THEME_WRITING_COLOURS, THEME_TEXT_STYLES,
   THEME_COLOUR_SECTIONS, THEME_WRITING_SECTIONS, THEME_VARIANTS,
-  DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID,
-  DEFAULT_BUTTON_STYLE_ID, DEFAULT_WRITING_COLOUR_ID, DEFAULT_TEXT_STYLE_ID,
-  getThemeColour, EXPANDED_PRESET_CATEGORIES,
+  THEME_RESET_CLASSIC_ID, THEME_RESET_MODERN_ID, STARTING_LOOK_PRESET_IDS,
+  THEME_LAYOUT_RESET_DEFAULTS,
+  getThemeColour, getThemePreset, EXPANDED_PRESET_CATEGORIES,
 } from '../constants/themes';
 import styles from '../styles/noir.module.css';
 
@@ -177,33 +177,92 @@ function TabSection({ icon: Icon, title, sub, children }) {
 }
 
 /** Preset card for Presets tab — defined outside main component to avoid re-creation on every render */
-function PresetCard({ preset, active, onSelect }) {
+function PresetCard({ preset, active, onSelect, featured = false }) {
   const colour = getThemeColour(preset.colourId);
   const sw = swatchStyle(colour);
+  const primary = colour?.primary ?? '#888';
+  const isModern = preset.themeVariant === 'modern';
   return (
     <button type="button" onClick={() => onSelect(preset)} title={preset.description}
       data-testid={`theme-preset-${preset.id}`}
       className={`group flex flex-col rounded-xl border-2 overflow-hidden text-left transition-all active:scale-[0.97] ${
         active
-          ? 'border-primary ring-2 ring-primary/30 shadow-[0_0_20px_rgba(212,175,55,0.15)]'
+          ? 'border-primary ring-2 ring-[rgba(var(--noir-primary-rgb),0.45)] shadow-[0_0_22px_rgba(var(--noir-primary-rgb),0.22)]'
           : 'border-zinc-700 hover:border-zinc-500'
       }`}>
-      <div className="h-11 w-full relative" style={sw}>
+      <div className={`${featured ? 'h-14' : 'h-12'} w-full relative`} style={sw}>
+        {colour?.stops?.length >= 2 && (
+          <div
+            className="absolute bottom-0 left-0 right-0 h-1.5 flex"
+            aria-hidden
+          >
+            {colour.stops.slice(0, 4).map((stop, i) => (
+              <span key={`${preset.id}-stop-${i}`} className="flex-1" style={{ backgroundColor: stop }} />
+            ))}
+          </div>
+        )}
         <div className="absolute inset-0 opacity-10"
           style={{ backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(0,0,0,.2) 3px,rgba(0,0,0,.2) 6px)' }} />
         {active && (
-          <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-black/40 flex items-center justify-center">
+          <div className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full bg-black/50 flex items-center justify-center ring-1 ring-white/30">
             <Check className="w-3 h-3 text-white" />
           </div>
         )}
       </div>
-      <div className="px-2.5 py-2 bg-zinc-800/90 flex-1">
+      <div className={`px-2.5 py-2 bg-zinc-800/90 flex-1 ${featured ? 'space-y-1.5' : ''}`}>
         <span className="block text-[10px] font-heading font-bold text-zinc-100 truncate leading-tight">{preset.name}</span>
         {preset.description && (
           <span className="block text-[8px] text-zinc-500 truncate mt-0.5">{preset.description}</span>
         )}
+        {featured && (
+          <div className="flex items-center gap-1.5 pt-0.5">
+            <span
+              className="h-5 px-2 rounded border text-[8px] font-heading font-bold uppercase tracking-wider inline-flex items-center"
+              style={{
+                backgroundColor: `${primary}22`,
+                borderColor: `${primary}66`,
+                color: primary,
+              }}
+            >
+              Sample
+            </span>
+            <span className="text-[8px] font-heading uppercase text-zinc-600 truncate">
+              {isModern ? 'Modern' : 'Classic'}
+            </span>
+          </div>
+        )}
       </div>
     </button>
+  );
+}
+
+/** Mini sidebar layout preview for Layout tab */
+function SidebarLayoutPreview({ layoutId, active }) {
+  const bars = layoutId === 'default'
+    ? [1, 1, 1, 1, 1]
+    : layoutId === 'categorized'
+      ? [0.55, 1, 1, 0.55, 1]
+      : [0.7, 1, 1, 0.7, 1];
+  return (
+    <div
+      className={`w-full rounded-lg border p-2 space-y-1 transition-colors ${
+        active ? 'border-primary/50 bg-primary/10' : 'border-zinc-700 bg-zinc-900/70'
+      }`}
+      aria-hidden
+    >
+      {bars.map((w, i) => (
+        <div
+          key={`${layoutId}-bar-${i}`}
+          className="h-1 rounded-full"
+          style={{
+            width: `${Math.round(w * 100)}%`,
+            backgroundColor: w < 0.85
+              ? (active ? 'rgba(var(--noir-primary-rgb),0.55)' : '#52525b')
+              : (active ? 'rgba(var(--noir-primary-rgb),0.9)' : '#71717a'),
+          }}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -244,7 +303,7 @@ export default function ThemePicker({ open, onClose }) {
     setColour, setTexture, setButtonColour, setAccentLineColour, setFont,
     setButtonStyle, setButtonShape, setWritingColour, setMutedWritingColour,
     setToastTextColour, setTextStyle, setMobileNavStyle, setThemeVariant, setModernVisualQuality,
-    resetButtonToDefault, resetAccentLineToDefault,
+    resetButtonToDefault, resetAccentLineToDefault, resetThemeToPreset,
     customThemes, addCustomTheme, removeCustomTheme,
   } = useTheme();
 
@@ -389,7 +448,8 @@ export default function ThemePicker({ open, onClose }) {
     (p.mobileNavStyle == null || mobileNavStyle === p.mobileNavStyle) &&
     (p.mobileStatsDisplay == null || mobileStatsDisplay === p.mobileStatsDisplay) &&
     (p.sidebarLayout == null || sidebarLayout === p.sidebarLayout) &&
-    (p.themeVariant == null || themeVariant === p.themeVariant);
+    (p.themeVariant == null || themeVariant === p.themeVariant) &&
+    (p.buttonShapeId == null || buttonShapeId === p.buttonShapeId);
 
   const applyPreset = (p) => {
     setColour(p.colourId); setTexture(p.textureId);
@@ -402,6 +462,7 @@ export default function ThemePicker({ open, onClose }) {
     if (p.toastTextColourId !== undefined) setToastTextColour(p.toastTextColourId ?? null);
     if (p.mobileNavStyle != null) setMobileNavStyle(p.mobileNavStyle);
     if (p.themeVariant != null) setThemeVariant(p.themeVariant);
+    if (p.buttonShapeId != null) setButtonShape(p.buttonShapeId);
     if (p.mobileStatsDisplay != null) {
       lsSet(KEYS.statsDisplay, p.mobileStatsDisplay, 'mobile-stats-display-changed');
       api.patch('/profile/theme', { mobile_stats_display: p.mobileStatsDisplay, theme_platform: getThemeUiPlatform() }).catch(() => {});
@@ -411,6 +472,19 @@ export default function ThemePicker({ open, onClose }) {
       api.patch('/profile/theme', { sidebar_layout: p.sidebarLayout, theme_platform: getThemeUiPlatform() }).catch(() => {});
     }
   };
+
+  const handleResetToPreset = (presetId) => {
+    resetThemeToPreset(presetId);
+    const d = THEME_LAYOUT_RESET_DEFAULTS;
+    setChipW(d.topBarChipWidthScale);
+    setChipH(d.topBarChipHeightScale);
+  };
+
+  const startingLookPresets = STARTING_LOOK_PRESET_IDS
+    .map((id) => getThemePreset(id))
+    .filter((p, i, arr) => p && arr.findIndex((x) => x.id === p.id) === i);
+
+  const activeFullPreset = THEME_PRESETS.find((p) => p.isFullPreset && getPresetIsActive(p)) || null;
 
   const handleSaveCustom = () => {
     const name = customName.trim() || 'My theme';
@@ -478,21 +552,24 @@ export default function ThemePicker({ open, onClose }) {
               <p className="text-[9px] text-zinc-600 font-heading mt-0.5">Changes apply instantly</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap justify-end">
             <button
               type="button"
-              onClick={() => {
-                setColour(DEFAULT_COLOUR_ID); setTexture(DEFAULT_TEXTURE_ID); setFont(DEFAULT_FONT_ID);
-                setButtonStyle(DEFAULT_BUTTON_STYLE_ID); setWritingColour(DEFAULT_WRITING_COLOUR_ID);
-                setMutedWritingColour(null); setTextStyle(DEFAULT_TEXT_STYLE_ID);
-                resetButtonToDefault(); resetAccentLineToDefault();
-                setMobileNavStyle('sidebar');
-                setThemeVariant('classic');
-              }}
+              onClick={() => handleResetToPreset(THEME_RESET_CLASSIC_ID)}
               className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-heading font-bold uppercase tracking-wider border border-zinc-700 bg-zinc-800/80 text-zinc-400 hover:border-primary/40 hover:text-primary transition-all"
               data-testid="theme-reset-default"
+              title="Restore classic gold look + layout defaults"
             >
-              <RotateCcw className="w-3 h-3" /> Reset
+              <RotateCcw className="w-3 h-3" /> Reset Classic
+            </button>
+            <button
+              type="button"
+              onClick={() => handleResetToPreset(THEME_RESET_MODERN_ID)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-heading font-bold uppercase tracking-wider border border-zinc-700 bg-zinc-800/80 text-zinc-400 hover:border-sky-500/40 hover:text-sky-300 transition-all"
+              data-testid="theme-reset-modern"
+              title="Restore modern sky look + layout defaults"
+            >
+              <RotateCcw className="w-3 h-3" /> Reset Modern
             </button>
             <button
               type="button" onClick={onClose} aria-label="Close"
@@ -570,6 +647,39 @@ export default function ThemePicker({ open, onClose }) {
                 </div>
               </TabSection>
 
+              {activeFullPreset && (
+                <div
+                  className="flex items-center gap-2 rounded-xl border border-primary/35 bg-primary/10 px-3 py-2"
+                  data-testid="theme-active-preset-badge"
+                >
+                  <Check className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-[9px] font-heading uppercase tracking-wider text-primary/80">Active preset</p>
+                    <p className="text-[11px] font-heading font-bold text-primary truncate">{activeFullPreset.name}</p>
+                  </div>
+                </div>
+              )}
+
+              <TabSection
+                icon={Eye}
+                title="Starting looks"
+                sub="Classic, Modern, and curated full packs — same as Reset Classic / Reset Modern"
+              >
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                  {startingLookPresets
+                    .filter((p) => matchesPresetSearch(p, presetSearch))
+                    .map((p) => (
+                      <PresetCard
+                        key={`start-${p.id}`}
+                        preset={p}
+                        active={getPresetIsActive(p)}
+                        onSelect={applyPreset}
+                        featured
+                      />
+                    ))}
+                </div>
+              </TabSection>
+
               <div className="relative mb-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-600" />
                 <input
@@ -620,6 +730,8 @@ export default function ThemePicker({ open, onClose }) {
                   {THEME_PRESETS.filter((p) => {
                     if (!p.isFullPreset) return false;
                     if (!matchesPresetSearch(p, presetSearch)) return false;
+                    // Avoid duplicating the pinned Starting looks row when browsing All
+                    if (presetCat === 'all' && !presetSearch.trim() && STARTING_LOOK_PRESET_IDS.includes(p.id)) return false;
                     if (presetCat === 'all') return true;
                     if (presetCat === 'other') return !p.presetCategory;
                     return p.presetCategory === presetCat;
@@ -1010,11 +1122,32 @@ export default function ThemePicker({ open, onClose }) {
                 />
               </TabSection>
 
-              <TabSection title="Sidebar layout" sub="Flat list or categorized with headers (INFORMATION, RANKING, etc.)">
-                <Pills
-                  options={THEME_SIDEBAR_LAYOUT.map(s => ({ id: s.id, label: s.name }))}
-                  value={sidebarLayout} onChange={setSidebarLayout}
-                />
+              <TabSection title="Sidebar layout" sub="How the left nav is structured">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {THEME_SIDEBAR_LAYOUT.map((s) => {
+                    const active = sidebarLayout === s.id;
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => setSidebarLayout(s.id)}
+                        className={`text-left rounded-xl border p-2.5 transition-all ${
+                          active
+                            ? 'border-primary/60 bg-primary/10'
+                            : 'border-zinc-700 bg-zinc-900/60 hover:border-zinc-500'
+                        }`}
+                      >
+                        <SidebarLayoutPreview layoutId={s.id} active={active} />
+                        <p className={`mt-2 text-[10px] font-heading font-bold uppercase tracking-wider ${active ? 'text-primary' : 'text-zinc-300'}`}>
+                          {s.name}
+                        </p>
+                        {s.description && (
+                          <p className="text-[8px] text-zinc-500 font-heading mt-0.5 leading-snug">{s.description}</p>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
               </TabSection>
 
               <TabSection title="Toast position" sub="Where notifications appear. Custom: drag the grip icon to reposition.">
