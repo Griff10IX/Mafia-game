@@ -1151,13 +1151,11 @@ export default function Forum() {
     else if (searchParams.get('tab') === 'game_ideas') setActiveTab('game_ideas');
     else setActiveTab('general');
   }, [searchParams, location.state?.category]);
-  const [hasLoaded, setHasLoaded] = useState(!!initialTopicsCache);
   const [modalOpen, setModalOpen] = useState(false);
   const [gameModalOpen, setGameModalOpen] = useState(false);
   const [entertainerGames, setEntertainerGames] = useState([]);
   const [entertainerHistory, setEntertainerHistory] = useState([]);
   const [entertainerPrizes, setEntertainerPrizes] = useState(null);
-  const [gamesLoading, setGamesLoading] = useState(false);
   const [entertainerConfig, setEntertainerConfig] = useState({
     auto_create_enabled: false,
     find_word_auto_enabled: false,
@@ -1167,7 +1165,6 @@ export default function Forum() {
   });
   const [findWordActive, setFindWordActive] = useState({ active: false });
   const [findWordHistory, setFindWordHistory] = useState([]);
-  const [findWordLoading, setFindWordLoading] = useState(false);
   const [startingWordHunt, setStartingWordHunt] = useState(false);
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -1280,22 +1277,16 @@ export default function Forum() {
       setCanViewPage2(nextCanViewPage2);
     } catch {
       if (!silent) toast.error('Failed to load forum');
-    } finally {
-      setHasLoaded(true);
     }
   }, [activeTab, forumPage]);
 
   const fetchEntertainerGames = useCallback(async () => {
-    if (!skipEntertainerGamesLoadSpinnerRef.current) setGamesLoading(true);
-    skipEntertainerGamesLoadSpinnerRef.current = false;
     try {
       const res = await api.get('/forum/entertainer/games');
       setEntertainerGames(res.data?.games ?? []);
       if (res.data?.join_token) entJoinTokenRef.current = res.data.join_token;
     } catch {
       setEntertainerGames([]);
-    } finally {
-      setGamesLoading(false);
     }
   }, []);
 
@@ -1317,8 +1308,7 @@ export default function Forum() {
     }
   }, []);
 
-  const fetchFindWordPublic = useCallback(async (silent = false) => {
-    if (!silent) setFindWordLoading(true);
+  const fetchFindWordPublic = useCallback(async () => {
     try {
       const [a, h] = await Promise.all([
         api.get('/forum/entertainer/find-word/active'),
@@ -1329,8 +1319,6 @@ export default function Forum() {
     } catch {
       setFindWordActive({ active: false });
       setFindWordHistory([]);
-    } finally {
-      if (!silent) setFindWordLoading(false);
     }
   }, []);
 
@@ -1341,17 +1329,19 @@ export default function Forum() {
     next_auto_create_at: null,
     last_find_word_auto_at: null,
   });
-  /** After session warm hydrate, skip one "Loading games…" flash while refetching. */
-  const skipEntertainerGamesLoadSpinnerRef = useRef(false);
-
   useLayoutEffect(() => {
     const cached = readForumTopicsCache(activeTab, forumPage);
-    if (!cached || !Array.isArray(cached.topics)) return;
-    setTopics((prev) => (
-      forumTopicsSignature(prev) === forumTopicsSignature(cached.topics) ? prev : cached.topics
-    ));
-    setCanViewPage2(!!cached.can_view_page_2);
-    setHasLoaded(true);
+    if (cached && Array.isArray(cached.topics)) {
+      setTopics((prev) => (
+        forumTopicsSignature(prev) === forumTopicsSignature(cached.topics) ? prev : cached.topics
+      ));
+      setCanViewPage2(!!cached.can_view_page_2);
+      return;
+    }
+    // No cache for this tab: clear stale rows from another tab and paint chrome immediately
+    // (dark skeleton on dark bg looked like a black screen on mobile).
+    setTopics([]);
+    setCanViewPage2(false);
   }, [activeTab, forumPage]);
 
   useLayoutEffect(() => {
@@ -1368,7 +1358,6 @@ export default function Forum() {
       if (pack && Array.isArray(pack.topics)) {
         setTopics(pack.topics);
         setCanViewPage2(!!pack.can_view_page_2);
-        setHasLoaded(true);
       }
     }
     if (activeTab === 'entertainer' && warm.entertainer) {
@@ -1379,7 +1368,6 @@ export default function Forum() {
       setEntertainerConfig(e.config && typeof e.config === 'object' ? e.config : { ...defaultEntertainerConfig.current });
       setFindWordActive(e.findWordActive && typeof e.findWordActive === 'object' ? e.findWordActive : { active: false });
       setFindWordHistory(e.findWordHistory ?? []);
-      skipEntertainerGamesLoadSpinnerRef.current = true;
     }
     if (activeTab === 'designer' && warm.designer?.activeRes) {
       const ar = warm.designer.activeRes;
@@ -1710,7 +1698,6 @@ export default function Forum() {
       const detail = err.response?.data?.detail || '';
       // Anti-bot join token expired/stale: silently refresh the list (issues a fresh token) and ask for another tap.
       if (typeof detail === 'string' && (detail.includes('refresh the games list') || detail.includes('Too fast'))) {
-        skipEntertainerGamesLoadSpinnerRef.current = true;
         fetchEntertainerGames();
         toast.warning(detail.includes('Too fast') ? 'Too fast — tap Join again.' : 'Session refreshed — tap Join again.');
       } else if (err.response?.status === 429) {
@@ -2324,9 +2311,7 @@ export default function Forum() {
               <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🔎 Find the word</span>
             </div>
             <div className="p-3 text-[11px] font-heading space-y-2">
-              {findWordLoading ? (
-                <p className="text-mutedForeground">Loading…</p>
-              ) : findWordActive?.active ? (
+              {findWordActive?.active ? (
                 findWordActive.can_claim === false ? (
                   <>
                     <p className="text-foreground">
@@ -2491,9 +2476,7 @@ export default function Forum() {
                     <span className="text-[10px] text-mutedForeground max-w-xl">{sec.subtitle}</span>
                   </div>
                 </div>
-                {gamesLoading ? (
-                  <div className="p-4 text-center text-xs text-mutedForeground">Loading games...</div>
-                ) : sec.games.length === 0 ? (
+                {sec.games.length === 0 ? (
                   <div className="p-4 text-center text-xs text-mutedForeground">{sec.emptyHint}</div>
                 ) : (
                   <div className="divide-y divide-zinc-700/30">
@@ -2693,25 +2676,10 @@ export default function Forum() {
           )}
         </div>
 
-        {!hasLoaded && topics.length === 0 ? (
-          <div className="space-y-2 p-2 sm:p-3 f-fade-in">
-            {[0, 1, 2, 3, 4, 5].map((i) => (
-              <div
-                key={i}
-                className={`${styles.panel} rounded-md overflow-hidden border border-zinc-800/60 bg-zinc-900/50 p-3 space-y-2`}
-                style={{ animationDelay: `${i * 0.04}s` }}
-              >
-                <div className="h-3 w-3/4 max-w-[16rem] rounded bg-primary/15 animate-pulse" />
-                <div className="flex gap-3">
-                  <div className="h-2.5 w-20 rounded bg-zinc-800/70 animate-pulse" />
-                  <div className="h-2.5 w-12 rounded bg-zinc-800/50 animate-pulse" />
-                  <div className="h-2.5 w-14 rounded bg-zinc-800/40 animate-pulse" />
-                </div>
-              </div>
-            ))}
+        {topics.length === 0 ? (
+          <div className="p-6 text-center text-xs text-mutedForeground">
+            {activeTab === 'crew_oc' ? 'No Crew OC ads yet.' : 'No topics yet. Create one!'}
           </div>
-        ) : topics.length === 0 ? (
-          <div className="p-6 text-center text-xs text-mutedForeground">No topics yet. Create one!</div>
         ) : (
           <div className="space-y-2 px-1.5 sm:px-0 sm:space-y-1.5">
             {/* Pinned topics first */}

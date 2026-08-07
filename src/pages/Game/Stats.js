@@ -391,7 +391,6 @@ function buildVehicleRows(data) {
 export default function Stats() {
   const usersOnlyKills = false;
   const [data, setData] = useState(() => getStatsOverview(false));
-  const [loading, setLoading] = useState(() => !getStatsOverview(false));
   const [loadFailed, setLoadFailed] = useState(false);
   const [statsListTab, setStatsListTab] = useState('kills'); // 'kills' | 'wiped'
 
@@ -399,8 +398,7 @@ export default function Stats() {
   const recentKills = Array.isArray(data?.recent_kills) ? data.recent_kills : [];
   const wipedFamilies = Array.isArray(data?.wiped_families) ? data.wiped_families : [];
 
-  const fetchStats = useCallback(async (silentError = false) => {
-    if (!silentError) setLoading(true);
+  const fetchStats = useCallback(async () => {
     try {
       const res = await api.get(`/stats/overview?users_only_kills=${usersOnlyKills ? 'true' : 'false'}`);
       setData(res.data);
@@ -408,10 +406,8 @@ export default function Stats() {
       setLoadFailed(false);
     } catch (e) {
       if (!data) setLoadFailed(true);
-      if (!silentError) toast.error('Failed to load stats');
+      toast.error('Failed to load stats');
       console.error('Error fetching stats:', e);
-    } finally {
-      if (!silentError) setLoading(false);
     }
   }, [usersOnlyKills, data]);
 
@@ -419,13 +415,9 @@ export default function Stats() {
     let cancelled = false;
     const cacheKey = usersOnlyKills;
     const cached = getStatsOverview(cacheKey);
+    // Paint immediately from cache; never blank the page while refetching.
     if (cached) {
       setData(cached);
-      setLoadFailed(false);
-      setLoading(false);
-    } else {
-      setData(null);
-      setLoading(true);
       setLoadFailed(false);
     }
     api.get(`/stats/overview?users_only_kills=${cacheKey ? 'true' : 'false'}`)
@@ -434,12 +426,10 @@ export default function Stats() {
         setData(res.data);
         setStatsOverview(cacheKey, res.data);
         setLoadFailed(false);
-        setLoading(false);
       })
       .catch(() => {
         if (!cancelled) {
-          setLoadFailed(true);
-          setLoading(false);
+          if (!cached && !getStatsOverview(cacheKey)) setLoadFailed(true);
           if (!cached) toast.error('Failed to load stats');
         }
       });
@@ -468,12 +458,7 @@ export default function Stats() {
       <style>{STATS_STYLES}</style>
       <AutoRefreshNote seconds={60} />
 
-      {loading && !data && (
-        <div className="rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm font-heading text-mutedForeground">
-          Loading stats…
-        </div>
-      )}
-      {!loading && loadFailed && !data && (
+      {loadFailed && !data && (
         <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-heading text-amber-200 flex flex-wrap items-center justify-between gap-2">
           <span>Stats could not be loaded. Check your connection and try again.</span>
           <button

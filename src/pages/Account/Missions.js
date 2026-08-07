@@ -978,8 +978,11 @@ function TributeBanner({
 // MAIN COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 
+// In-memory boot so revisits paint instantly even if sessionStorage TTL expired.
+let _memMissionsBoot = null;
+
 export default function Missions() {
-  const missionsBoot = readSessionJson(MISSIONS_CACHE_KEY);
+  const missionsBoot = readSessionJson(MISSIONS_CACHE_KEY) || _memMissionsBoot;
   const [data,       setData]       = useState(missionsBoot?.data ?? null);
   const [missions,   setMissions]   = useState(missionsBoot?.missions ?? []);
   const [city,       setCity]       = useState(missionsBoot?.city ?? null);
@@ -1000,11 +1003,13 @@ export default function Missions() {
       setData(nextData);
       setMissions(nextMissions);
       if (!city) setCity(nextCity);
-      writeSessionJson(MISSIONS_CACHE_KEY, {
+      const boot = {
         data: nextData,
         missions: nextMissions,
         city: nextCity,
-      });
+      };
+      _memMissionsBoot = boot;
+      writeSessionJson(MISSIONS_CACHE_KEY, boot);
     } catch {
       if (!silentError) toast.error('Failed to load missions');
     }
@@ -1102,7 +1107,8 @@ export default function Missions() {
   };
 
   const unlocked = data?.unlocked_cities || ['Start'];
-  const cityMissions = missions.filter(m => m.city === city);
+  const activeCity = city || unlocked[0] || 'Start';
+  const cityMissions = missions.filter(m => m.city === activeCity);
   const orderedCityMissions = [...cityMissions].sort((a, b) => (a.is_boss ? 1 : 0) - (b.is_boss ? 1 : 0) || a.order - b.order);
   const currentMission = orderedCityMissions.find(m => !m.completed && m.unlocked) ?? null;
   const currentIdx = currentMission
@@ -1232,7 +1238,7 @@ export default function Missions() {
             <button
               key={c}
               onClick={() => setCity(c)}
-              className={`px-2.5 py-1 rounded text-[10px] font-heading font-bold uppercase border transition-colors ${city === c ? 'bg-primary/20 border-primary text-primary' : 'bg-zinc-800/30 border-zinc-600 text-mutedForeground hover:text-primary'}`}
+              className={`px-2.5 py-1 rounded text-[10px] font-heading font-bold uppercase border transition-colors ${activeCity === c ? 'bg-primary/20 border-primary text-primary' : 'bg-zinc-800/30 border-zinc-600 text-mutedForeground hover:text-primary'}`}
             >
               {cityDisplayName(c)}
             </button>
@@ -1250,7 +1256,7 @@ export default function Missions() {
           {[
             { label: 'Done', value: `${fmtInt(completedCount)}/${fmtInt(totalMissions)}`, cls: 'text-green-400' },
             { label: 'Ready', value: fmtInt(readyCount), cls: readyCount > 0 ? 'text-primary' : 'text-mutedForeground' },
-            { label: 'City', value: cityDisplayName(city), cls: 'text-foreground' },
+            { label: 'City', value: cityDisplayName(activeCity), cls: 'text-foreground' },
           ].map(({ label, value, cls }) => (
             <div key={label} className="flex-1 min-w-[80px]">
               <div className="text-[9px] font-heading text-mutedForeground uppercase">{label}</div>
@@ -1288,7 +1294,7 @@ export default function Missions() {
 
       {orderedCityMissions.length > 0 && (
         <MissionFocusSection
-          cityLabel={cityDisplayName(city)}
+          cityLabel={cityDisplayName(activeCity)}
           currentMission={currentMission}
           nextMission={nextMission}
           missionStoryStep={missionStoryStep}
@@ -1301,7 +1307,7 @@ export default function Missions() {
       {cityMissions.length === 0 && (
         <div className="text-center py-10 text-mutedForeground">
           <BookOpen size={28} className="opacity-40 mx-auto mb-2" />
-          <p className="text-[10px] italic">No missions available in {cityDisplayName(city)}.</p>
+          <p className="text-[10px] italic">No missions available in {cityDisplayName(activeCity)}.</p>
         </div>
       )}
 

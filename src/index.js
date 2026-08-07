@@ -2,8 +2,11 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import "@/index.css";
 import App from "@/App";
+import { startBlankScreenWatchdog } from "@/utils/blankScreenWatchdog";
 
 // When user returns after a deploy, lazy chunks can 404 (old chunk URLs). Reload once to load the new build.
+// On iOS wake, wait until the tab is visible AND online — immediate reload while the radio is
+// still asleep is what forces players to "keep refreshing until it works".
 const CHUNK_ERROR_RELOAD_KEY = "chunk_error_reload_at";
 const CHUNK_ERROR_RELOAD_COOLDOWN_MS = 15000;
 
@@ -18,16 +21,38 @@ function isChunkLoadError(message) {
 }
 
 function tryReloadForChunkError() {
-  try {
-    const last = sessionStorage.getItem(CHUNK_ERROR_RELOAD_KEY);
-    const now = Date.now();
-    if (last && now - parseInt(last, 10) < CHUNK_ERROR_RELOAD_COOLDOWN_MS) return;
-    sessionStorage.setItem(CHUNK_ERROR_RELOAD_KEY, String(now));
-    window.location.reload();
-  } catch (_) {}
+  const attempt = () => {
+    try {
+      if (typeof document !== "undefined" && document.hidden) {
+        const onVis = () => {
+          if (document.hidden) return;
+          document.removeEventListener("visibilitychange", onVis);
+          setTimeout(attempt, 800);
+        };
+        document.addEventListener("visibilitychange", onVis);
+        return;
+      }
+      if (typeof navigator !== "undefined" && navigator.onLine === false) {
+        const onOnline = () => {
+          window.removeEventListener("online", onOnline);
+          setTimeout(attempt, 600);
+        };
+        window.addEventListener("online", onOnline);
+        return;
+      }
+      const last = sessionStorage.getItem(CHUNK_ERROR_RELOAD_KEY);
+      const now = Date.now();
+      if (last && now - parseInt(last, 10) < CHUNK_ERROR_RELOAD_COOLDOWN_MS) return;
+      sessionStorage.setItem(CHUNK_ERROR_RELOAD_KEY, String(now));
+      window.location.reload();
+    } catch (_) {}
+  };
+  // Brief delay so Safari's networking can wake after background discard.
+  setTimeout(attempt, 700);
 }
 
 if (typeof window !== "undefined") {
+  startBlankScreenWatchdog();
   window.addEventListener("error", (event) => {
     if (isChunkLoadError(event.message)) {
       event.preventDefault();

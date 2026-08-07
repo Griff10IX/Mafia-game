@@ -119,17 +119,13 @@ function PlayerSeat({ p, isMe, isCurrent, showCards, isWinner }) {
 
   if (isWinner)       { badgeLabel = '🏆 Win';  badgeStyle = { background: 'rgba(52,211,153,0.25)', color: '#34d399' }; }
   else if (isEliminated)   { badgeLabel = 'Out';     badgeStyle = { background: 'rgba(239,68,68,0.2)', color: '#ef4444' }; }
-  else if (maskPeek && hand.length && !isCurrent && p.status === 'playing') {
-    badgeLabel = 'Waiting';
-    badgeStyle = { background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.35)' };
-  }
-  else if (maskPeek && hand.length && !isCurrent) {
-    badgeLabel = '···';
-    badgeStyle = { background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.25)' };
-  }
   else if (isBust)    { badgeLabel = 'Bust';    badgeStyle = { background: 'rgba(248,113,113,0.2)', color: '#f87171' }; }
   else if (isStood)   { badgeLabel = 'Stand';   badgeStyle = { background: 'rgba(161,161,170,0.2)', color: '#a1a1aa' }; }
   else if (isCurrent) { badgeLabel = 'Playing'; badgeStyle = { background: 'rgba(212,175,55,0.2)', color: 'var(--noir-primary)' }; }
+  else if (maskPeek && hand.length) {
+    badgeLabel = 'Waiting';
+    badgeStyle = { background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.35)' };
+  }
   else if (isReady)   { badgeLabel = '✓ Ready'; badgeStyle = { background: 'rgba(52,211,153,0.2)', color: '#34d399' }; }
   else if (isWaiting) { badgeLabel = 'Waiting'; badgeStyle = { background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.35)' }; }
   else if (hand.length && showCards) { badgeLabel = String(total); }
@@ -160,7 +156,13 @@ function PlayerSeat({ p, isMe, isCurrent, showCards, isWinner }) {
           : hand.length === 0
           ? <span className="text-[8px] font-heading" style={{ color: 'rgba(255,255,255,0.1)' }}>waiting…</span>
           : hand.map((card, i) => (
-              <PlayingCard key={i} card={card} hidden={!showCards || card?.value === '?'} index={i} total={hand.length} />
+              <PlayingCard
+                key={i}
+                card={card}
+                hidden={!showCards || card?.hidden === true || card?.value === '?'}
+                index={i}
+                total={hand.length}
+              />
             ))
         }
       </div>
@@ -499,14 +501,8 @@ export default function MPBlackjackGamePage() {
     triggerTimeout();
   }, [turnSecondsLeft, status, phase, currentTurnIndex, turnStartedAt, triggerTimeout]);
 
-  // ── Early returns ──
-  if (!hasLoaded && !game) {
-    return (
-      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
-      </div>
-    );
-  }
-  if (!game) {
+  // Only show "not found" after the first fetch settles — until then paint lobby chrome with safe defaults.
+  if (hasLoaded && !game) {
     return (
       <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <p className="text-[10px] text-mutedForeground font-heading">Game not found.</p>
@@ -620,7 +616,7 @@ export default function MPBlackjackGamePage() {
               Waiting for Players
             </p>
             <p className="text-[9px] font-heading uppercase tracking-wider" style={{ color: 'rgba(110,231,183,0.4)' }}>
-              {players.length} / {game.max_players ?? 6} seated
+              {players.length} / {game?.max_players ?? 6} seated
             </p>
             <div className="flex flex-wrap justify-center gap-2">
               {players.map((p) => (
@@ -849,8 +845,8 @@ export default function MPBlackjackGamePage() {
                 const isMe = p.user_id === myUserId;
                 const isCurrent = idx === currentTurnIndex;
                 const everyoneResolved = status === 'completed' || phase === 'settled' || phase === 'dealer';
-                const myFinished = !!(myPlayer && (myPlayer.status === 'stood' || myPlayer.status === 'bust' || amIEliminated));
-                const showOpponentCards = isMe || everyoneResolved || myFinished;
+                // Opponents stay face-down until the round resolves — API also redacts hands mid-round.
+                const showOpponentCards = isMe || everyoneResolved;
                 const winnerIds = game?.winner_ids || [];
                 const isWinner = (status === 'completed' || phase === 'settled') && winnerIds.includes(p.user_id);
                 return (

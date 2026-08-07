@@ -132,34 +132,6 @@ function honourLeaderboardTo(h, isDead = false) {
 
 const STAFF_ADMIN_HOME = '/tjjeujr3wa/overview';
 
-function ProfileRouteSkeleton({ message = 'Opening dossier…' }) {
-  return (
-    <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
-      <div className={`relative ${styles.panel} rounded-lg border border-primary/25 overflow-hidden prof-dossier-enter`}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-3 py-2 bg-gradient-to-r from-primary/12 via-transparent to-transparent border-b border-primary/15 flex items-center justify-between gap-2">
-          <div className="h-2.5 w-24 rounded bg-primary/20 animate-pulse" />
-          <div className="h-2.5 w-16 rounded bg-mutedForeground/15 animate-pulse" />
-        </div>
-        <div className="p-3 sm:p-4 flex flex-col sm:flex-row gap-4">
-          <div className="w-full sm:w-36 h-36 rounded-lg border border-primary/20 bg-black/30 shrink-0 animate-pulse" />
-          <div className="flex-1 space-y-3 min-w-0">
-            <div className="h-4 w-[min(55%,14rem)] rounded bg-primary/15 animate-pulse" />
-            <div className="h-3 w-full max-w-md rounded bg-mutedForeground/10 animate-pulse" />
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <div className="h-14 rounded-md border border-border/50 bg-black/20 animate-pulse" />
-              <div className="h-14 rounded-md border border-border/50 bg-black/20 animate-pulse" />
-              <div className="h-14 rounded-md border border-border/50 bg-black/20 animate-pulse" />
-              <div className="h-14 rounded-md border border-border/50 bg-black/20 animate-pulse" />
-            </div>
-          </div>
-        </div>
-      </div>
-      <p className="text-center text-[11px] font-heading text-primary/70">{message}</p>
-    </div>
-  );
-}
-
 const StaffProfileActions = ({ username, isDead, isAdmin, isModerator, onDone }) => {
   const [loading, setLoading] = useState(null);
   const handleLock = async () => {
@@ -1426,6 +1398,12 @@ const AdminStatsCard = ({ adminStats }) => (
   </div>
 );
 
+function bootProfileForRoute(usernameParam) {
+  if (usernameParam) return getProfilePrefetch(usernameParam);
+  const hint = getProfileSessionLastMeUsername();
+  return hint ? getProfilePrefetch(hint) : null;
+}
+
 // Main component
 export default function Profile() {
   const { username: usernameParam } = useParams();
@@ -1439,11 +1417,8 @@ export default function Profile() {
     setEditTab(id);
     try { sessionStorage.setItem(PROFILE_EDIT_TAB_KEY, id); } catch (_) {}
   };
-  /** After first /auth/me attempt (success or fail) — avoids flashing visitor dossier for own account while me is still null but prefetch filled profile. */
-  const [authMeReady, setAuthMeReady] = useState(false);
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(!usernameParam);
-  const [profileLoading, setProfileLoading] = useState(!!usernameParam);
+  const [profile, setProfile] = useState(() => bootProfileForRoute(usernameParam));
+  const [loading, setLoading] = useState(false);
   const [profileLoadError, setProfileLoadError] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
@@ -1511,7 +1486,6 @@ export default function Profile() {
     const targetKey = targetUsername.toLowerCase();
     const reqId = ++profileRequestIdRef.current;
     if (forceLoading) setLoading(true);
-    setProfileLoading(true);
     setProfileLoadError('');
     let mainPaintDone = false;
     try {
@@ -1526,7 +1500,6 @@ export default function Profile() {
       mainPaintDone = true;
       if (reqId === profileRequestIdRef.current) {
         if (forceLoading) setLoading(false);
-        setProfileLoading(false);
       }
 
       (async () => {
@@ -1564,7 +1537,6 @@ export default function Profile() {
     } finally {
       if (!mainPaintDone && reqId === profileRequestIdRef.current) {
         if (forceLoading) setLoading(false);
-        setProfileLoading(false);
       }
     }
   };
@@ -1705,13 +1677,8 @@ export default function Profile() {
 
   useEffect(() => {
     let cancelled = false;
-    // Never leave Safari users stuck on "Verifying session…" if /auth/me is slow after AFK.
-    const failSafe = setTimeout(() => {
-      if (!cancelled) setAuthMeReady(true);
-    }, 6000);
 
     const run = async () => {
-      if (!usernameParam) setLoading(true);
       try {
         const [meRes, adminRes] = await Promise.all([
           apiGetWithResumeRetries('/auth/me'),
@@ -1719,7 +1686,14 @@ export default function Profile() {
         ]);
         if (cancelled) return;
         setMe(meRes.data);
-        if (meRes.data?.username) setProfileSessionLastMeUsername(meRes.data.username);
+        if (meRes.data?.username) {
+          setProfileSessionLastMeUsername(meRes.data.username);
+          // Own edit route: hydrate from prefetch as soon as we know the username.
+          if (!usernameParam) {
+            const cached = getProfilePrefetch(meRes.data.username);
+            if (cached) setProfile((prev) => prev || cached);
+          }
+        }
         try {
           const muted = normalizeToastMutedPages(meRes.data?.toast_muted_pages);
           setToastMutedPagesState(muted);
@@ -1736,10 +1710,7 @@ export default function Profile() {
           toast.error(getApiErrorMessage(e) || 'Failed to load your account');
         }
       } finally {
-        if (!cancelled) {
-          if (!usernameParam) setLoading(false);
-          setAuthMeReady(true);
-        }
+        if (!cancelled) setLoading(false);
       }
     };
     run();
@@ -1751,7 +1722,6 @@ export default function Profile() {
           if (cancelled) return;
           setMe(meRes.data);
           if (meRes.data?.username) setProfileSessionLastMeUsername(meRes.data.username);
-          setAuthMeReady(true);
         })
         .catch(() => {});
     };
@@ -1763,7 +1733,6 @@ export default function Profile() {
 
     return () => {
       cancelled = true;
-      clearTimeout(failSafe);
       window.removeEventListener('app:page-resume', onResume);
       window.removeEventListener('app:refresh-user', onRefreshUser);
     };
@@ -1798,12 +1767,10 @@ export default function Profile() {
     if (cached) {
       setProfile(cached);
       setLoading(false);
-      setProfileLoading(false);
       refetchProfile({ silent: true, usernameOverride: username });
       return;
     }
     // Keep any previously rendered profile on screen while revalidating this target in background.
-    setProfileLoading(true);
     refetchProfile({ silent: false, usernameOverride: username }).catch((e) => {
       const st = e.response?.status;
       if (st === 404) {
@@ -2383,56 +2350,100 @@ export default function Profile() {
     }
   };
 
-  if (!usernameParam && (loading || profileLoading) && !profile) {
-    return (
-      <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
-        <style>{PROFILE_STYLES}</style>
-        <ProfileRouteSkeleton />
-      </div>
-    );
-  }
-
-  if (usernameParam && profileLoading && !profile) {
-    return (
-      <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
-        <style>{PROFILE_STYLES}</style>
-        <ProfileRouteSkeleton />
-      </div>
-    );
-  }
-
-  const lastMeHint = getProfileSessionLastMeUsername();
-  const profileSubject = String(profile?.username || '').trim().toLowerCase();
-  const canShowProfileBeforeAuthReady =
-    Boolean(usernameParam && profile && lastMeHint && profileSubject && lastMeHint !== profileSubject);
-
-  if (usernameParam && profile && !authMeReady && !canShowProfileBeforeAuthReady) {
-    return (
-      <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
-        <style>{PROFILE_STYLES}</style>
-        <ProfileRouteSkeleton message="Verifying session…" />
-      </div>
-    );
-  }
-
   if (!profile) {
     const isNotFound = profileLoadError?.includes("doesn't exist");
+    // Edit profile (/account/profile): paint settings chrome immediately — no skeleton/black screen.
+    if (!usernameParam && !isNotFound) {
+      const editTabs = [
+        { id: 'look', label: 'Look', icon: UserIcon },
+        { id: 'text', label: 'Text', icon: FileText },
+        { id: 'alerts', label: 'Alerts', icon: Mail },
+        { id: 'privacy', label: 'Privacy', icon: Lock },
+        { id: 'account', label: 'Account', icon: Settings },
+      ];
+      return (
+        <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="profile-page">
+          <style>{PROFILE_STYLES}</style>
+          <p className="text-[9px] text-zinc-500 font-heading italic max-w-3xl mx-auto">Edit your profile text and settings.</p>
+          <div className="max-w-3xl mx-auto space-y-3 md:space-y-4">
+            <div className="sticky top-0 z-20 -mx-1 sm:mx-0 px-0 py-1.5 border-b border-zinc-700/40 bg-zinc-950/95 backdrop-blur-md">
+              <div className="flex gap-1 overflow-x-auto pb-0.5 scrollbar-hide">
+                {editTabs.map(({ id, label, icon: Icon }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => switchEditTab(id)}
+                    className={`shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-[10px] font-heading font-bold uppercase tracking-wider touch-manipulation transition-colors ${
+                      (PROFILE_EDIT_TAB_IDS.has(editTab) ? editTab : 'look') === id
+                        ? 'bg-primary/20 border-primary/50 text-primary'
+                        : 'bg-zinc-800/40 border-zinc-700/40 text-zinc-400 hover:text-foreground hover:border-zinc-600'
+                    }`}
+                  >
+                    <Icon size={12} className="shrink-0" />
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
+              <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+                <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] text-center">Avatar</h2>
+              </div>
+              <div className="p-3 flex items-center gap-3 min-h-[4.5rem]">
+                <div className="w-14 h-14 rounded-md overflow-hidden border border-primary/25 bg-secondary flex items-center justify-center shrink-0">
+                  <UserIcon size={22} className="text-mutedForeground" />
+                </div>
+              </div>
+            </div>
+            {profileLoadError && (
+              <div className="text-center">
+                <button
+                  type="button"
+                  className="text-xs font-heading uppercase tracking-wider text-primary hover:underline"
+                  onClick={() => username && refetchProfile({ silent: false, forceLoading: true, usernameOverride: username })}
+                >
+                  Try again
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+    // Public profile still fetching — dossier chrome, not a black skeleton.
     if (!isNotFound) {
       return (
-        <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
+        <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="profile-page">
           <style>{PROFILE_STYLES}</style>
-          <ProfileRouteSkeleton message="" />
-          {profileLoadError && username && (
-            <div className="text-center">
-              <button
-                type="button"
-                className="text-xs font-heading uppercase tracking-wider text-primary hover:underline"
-                onClick={() => refetchProfile({ silent: false, forceLoading: true, usernameOverride: username })}
-              >
-                Try again
-              </button>
+          <p className="text-[9px] text-zinc-500 font-heading italic max-w-3xl mx-auto">Rank, family, honours and property.</p>
+          <div className="max-w-3xl mx-auto">
+            <div className={`relative ${styles.panel} rounded-lg border border-primary/25 overflow-hidden`}>
+              <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-3 py-2 bg-gradient-to-r from-primary/12 via-transparent to-transparent border-b border-primary/15">
+                <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">
+                  {username || 'Dossier'}
+                </p>
+              </div>
+              <div className="p-3 sm:p-4 flex flex-col sm:flex-row gap-4 min-h-[9rem]">
+                <div className="w-full sm:w-36 h-36 rounded-lg border border-primary/20 bg-secondary/40 shrink-0 flex items-center justify-center">
+                  <UserIcon size={40} className="text-mutedForeground/50" />
+                </div>
+                <div className="flex-1 space-y-2 min-w-0">
+                  <p className="text-sm font-heading font-bold text-foreground truncate">{username || '—'}</p>
+                  {profileLoadError ? (
+                    <button
+                      type="button"
+                      className="text-xs font-heading uppercase tracking-wider text-primary hover:underline"
+                      onClick={() => refetchProfile({ silent: false, forceLoading: true, usernameOverride: username })}
+                    >
+                      Try again
+                    </button>
+                  ) : null}
+                </div>
+              </div>
             </div>
-          )}
+          </div>
         </div>
       );
     }
@@ -2441,7 +2452,7 @@ export default function Profile() {
         <style>{PROFILE_STYLES}</style>
         <div className="relative prof-fade-in">
           <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Dossier</p>
-          <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">Edit Profile</h1>
+          <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">Profile</h1>
         </div>
         <div className={`relative ${styles.panel} rounded-lg border border-primary/20 prof-fade-in py-16 text-center overflow-hidden mobile-panel`} style={{ animationDelay: '0.05s' }}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />

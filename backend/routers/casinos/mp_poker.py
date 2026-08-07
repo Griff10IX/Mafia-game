@@ -338,32 +338,97 @@ def _enrich_players_current_hand(g: dict) -> None:
         p["current_hand_name"] = _hand_rank_name(cat)
 
 
+def _uid_str(uid) -> str:
+    return str(uid or "").strip()
+
+
+def _viewer_seated_in_poker(g: Optional[dict], viewer_uid: Optional[str]) -> bool:
+    if not g:
+        return False
+    vid = _uid_str(viewer_uid)
+    if not vid:
+        return False
+    if g.get("mode") == "vs_dealer":
+        return _uid_str(g.get("user_id")) == vid
+    return any(_uid_str(p.get("user_id")) == vid for p in (g.get("players") or []))
+
+
+def _can_view_poker_game(g: Optional[dict], current_user: Optional[dict]) -> bool:
+    """Lobby/registration can be browsed; live hands require a seat (or staff)."""
+    if not g or not current_user:
+        return False
+    if _is_admin(current_user) or _is_moderator(current_user):
+        return True
+    if _viewer_seated_in_poker(g, current_user.get("id")):
+        return True
+    status = g.get("status")
+    if status in ("open", "completed", "cancelled"):
+        return True
+    if g.get("mode") == "tournament" and g.get("tournament_status") in ("registration", "pending_approval"):
+        return True
+    return False
+
+
 def _redact_mp_poker_hidden_state_for_viewer(g: Optional[dict], viewer_uid: Optional[str]) -> None:
     """Do not leak hidden table state in API responses before showdown."""
     if not g:
         return
-    players = list(g.get("players") or [])
-    vid = str(viewer_uid or "").strip()
+    # Remaining shoe order would let anyone predict future board / reconstruct holes.
+    g["deck"] = []
+    g.pop("_settlement_claimed", None)
     street = g.get("street")
     status = g.get("status")
     phase = g.get("phase")
     if street == "showdown" or status == "completed" or phase == "settled":
-        # Still never expose remaining deck order.
-        g["deck"] = []
         return
-    # Never expose deck order mid-hand.
-    g["deck"] = []
+    players = list(g.get("players") or [])
+    if status != "playing":
+        # Lobby / ready — no live hand; never invent face-down placeholders.
+        for p in players:
+            if p.get("hole_cards"):
+                p["hole_cards"] = []
+            p.pop("current_hand_name", None)
+        g["players"] = players
+        return
+    vid = _uid_str(viewer_uid)
     for p in players:
-        puid = str(p.get("user_id") or "").strip()
+        puid = _uid_str(p.get("user_id"))
         if vid and puid and puid == vid:
             # Keep only viewer's own hole cards.
             pass
         else:
             hc = list(p.get("hole_cards") or [])
-            hide_len = len(hc) if len(hc) > 0 else 2
-            p["hole_cards"] = [{"hidden": True} for _ in range(hide_len)]
+            p["hole_cards"] = [{"hidden": True} for _ in range(len(hc))]
         p.pop("current_hand_name", None)
     g["players"] = players
+
+
+def _serialize_mp_poker_game(
+    g: Optional[dict],
+    viewer_uid: Optional[str],
+    *,
+    enrich: bool = False,
+) -> dict:
+    """Copy + redact for clients. Never mutate the Mongo-sourced document."""
+    if not g:
+        return {}
+    out = {k: v for k, v in g.items() if k != "_id"}
+    players = []
+    for p in list(out.get("players") or []):
+        p2 = dict(p)
+        hc = p2.get("hole_cards")
+        if hc is not None:
+            p2["hole_cards"] = [dict(c) if isinstance(c, dict) else c for c in list(hc or [])]
+        players.append(p2)
+    out["players"] = players
+    if out.get("board") is not None:
+        out["board"] = list(out.get("board") or [])
+    if out.get("deck") is not None:
+        out["deck"] = list(out.get("deck") or [])
+    if enrich:
+        _enrich_players_current_hand(out)
+    _redact_mp_poker_hidden_state_for_viewer(out, viewer_uid)
+    return out
 
 
 class PokerCreateRequest(BaseModel):
@@ -937,7 +1002,7 @@ def register(router):
             "results": None,
         }
         await db.mp_poker_games.insert_one(doc)
-        return {"game_id": game_id, "game": {k: v for k, v in doc.items() if k != "_id"}}
+        return {"game_id": game_id, "game": _serialize_mp_poker_game(doc, uid)}
 
     @router.get("/casino/mp-poker/vs-dealer/game")
     async def vs_dealer_game(current_user: dict = Depends(get_current_user_verified)):
@@ -958,10 +1023,7 @@ def register(router):
             return {"game": None}
         if g.get("status") == "playing" and g.get("current_turn_index") == 1:
             g = await _run_vs_dealer_bot_turn(g["id"])
-        _enrich_players_current_hand(g)
-        _redact_mp_poker_hidden_state_for_viewer(g, current_user.get("id"))
-        out = {k: v for k, v in (g or {}).items() if k != "_id"}
-        return {"game": out}
+        return {"game": _serialize_mp_poker_game(g, current_user.get("id"), enrich=True)}
 
     @router.post("/casino/mp-poker/vs-dealer/act")
     async def vs_dealer_act(
@@ -1000,9 +1062,7 @@ def register(router):
             await db.mp_poker_games.update_one({"id": g["id"]}, {"$set": {"players": players, "street": "showdown"}})
             await _vs_dealer_showdown(g["id"])
             g = await db.mp_poker_games.find_one({"id": g["id"]})
-            _enrich_players_current_hand(g)
-            _redact_mp_poker_hidden_state_for_viewer(g, current_user.get("id"))
-            return {"game": {k: v for k, v in (g or {}).items() if k != "_id"}}
+            return {"game": _serialize_mp_poker_game(g, current_user.get("id"), enrich=True)}
         if action == "check":
             if need_to_call > 0:
                 raise HTTPException(status_code=400, detail="Cannot check, must call or fold")
@@ -1059,26 +1119,20 @@ def register(router):
                     )
                     await _vs_dealer_showdown(g["id"])
                     g = await db.mp_poker_games.find_one({"id": g["id"]})
-                    _enrich_players_current_hand(g)
-                    _redact_mp_poker_hidden_state_for_viewer(g, current_user.get("id"))
-                    return {"game": {k: v for k, v in (g or {}).items() if k != "_id"}}
+                    return {"game": _serialize_mp_poker_game(g, current_user.get("id"), enrich=True)}
                 g = await db.mp_poker_games.find_one({"id": g["id"]})
                 await db.mp_poker_games.update_one(
                     {"id": g["id"]},
                     {"$set": {"players": players, "pot": pot, "to_call": 0, "current_turn_index": 1, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
                 )
                 g = await _run_vs_dealer_bot_turn(g["id"])
-                _enrich_players_current_hand(g)
-                _redact_mp_poker_hidden_state_for_viewer(g, current_user.get("id"))
-                return {"game": {k: v for k, v in (g or {}).items() if k != "_id"}}
+                return {"game": _serialize_mp_poker_game(g, current_user.get("id"), enrich=True)}
         await db.mp_poker_games.update_one(
             {"id": g["id"]},
             {"$set": {"players": players, "pot": pot, "to_call": new_to_call if action in ("bet", "raise", "all_in") else 0, "min_raise": min_raise if action in ("bet", "raise", "all_in") else g.get("min_raise"), "current_turn_index": 1, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
         )
         g = await _run_vs_dealer_bot_turn(g["id"])
-        _enrich_players_current_hand(g)
-        _redact_mp_poker_hidden_state_for_viewer(g, current_user.get("id"))
-        return {"game": {k: v for k, v in (g or {}).items() if k != "_id"}}
+        return {"game": _serialize_mp_poker_game(g, current_user.get("id"), enrich=True)}
 
     async def _maybe_progress_tournament_blinds(game_id: str) -> Optional[dict]:
         g = await db.mp_poker_games.find_one({"id": game_id})
@@ -1557,7 +1611,7 @@ def register(router):
                 )
             except Exception:
                 pass
-        return {"game_id": game_id, "game": {k: v for k, v in doc.items() if k != "_id"}}
+        return {"game_id": game_id, "game": _serialize_mp_poker_game(doc, uid)}
 
     @router.post("/casino/mp-poker/tournaments/{game_id}/join")
     async def join_tournament(game_id: str, current_user: dict = Depends(get_current_user_verified)):
@@ -1633,20 +1687,20 @@ def register(router):
             except Exception:
                 pass
         g = await db.mp_poker_games.find_one({"id": game_id})
-        return {k: v for k, v in (g or {}).items() if k != "_id"}
+        return _serialize_mp_poker_game(g, uid)
 
     @router.get("/casino/mp-poker/tournaments/{game_id}")
     async def get_tournament(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g or not _is_tournament_game(g):
             raise HTTPException(status_code=404, detail="Tournament not found")
+        if not _can_view_poker_game(g, current_user):
+            raise HTTPException(status_code=403, detail="Not in this tournament")
         g = await _maybe_progress_tournament_blinds(game_id)
         if g and g.get("status") == "playing" and g.get("street") == "showdown":
             await _mp_poker_run_showdown(game_id)
             g = await db.mp_poker_games.find_one({"id": game_id})
-        _enrich_players_current_hand(g)
-        _redact_mp_poker_hidden_state_for_viewer(g, current_user.get("id"))
-        return {k: v for k, v in (g or {}).items() if k != "_id"}
+        return _serialize_mp_poker_game(g, current_user.get("id"), enrich=True)
 
     @router.post("/casino/mp-poker/tournaments/{game_id}/remind-inactive")
     async def tournament_remind_inactive(game_id: str, current_user: dict = Depends(get_current_user_verified)):
@@ -1768,7 +1822,7 @@ def register(router):
         if res.modified_count == 0:
             raise HTTPException(status_code=400, detail="Tournament not pending approval")
         g = await db.mp_poker_games.find_one({"id": game_id})
-        return {"message": "Tournament approved", "game": {k: v for k, v in (g or {}).items() if k != "_id"}}
+        return {"message": "Tournament approved", "game": _serialize_mp_poker_game(g, current_user.get("id"))}
 
     @router.post("/admin/mp-poker/tournaments/{game_id}/deny")
     async def admin_deny_tournament(
@@ -1804,7 +1858,7 @@ def register(router):
             },
         )
         g = await db.mp_poker_games.find_one({"id": game_id})
-        return {"message": "Tournament denied and refunded", "game": {k: v for k, v in (g or {}).items() if k != "_id"}}
+        return {"message": "Tournament denied and refunded", "game": _serialize_mp_poker_game(g, current_user.get("id"))}
 
     @router.post("/admin/mp-poker/tournaments/{game_id}/bonus-rewards")
     async def admin_tournament_bonus_rewards(
@@ -1854,11 +1908,10 @@ def register(router):
         if g.get("status") == "playing" and g.get("street") == "showdown":
             await _mp_poker_run_showdown(game_id)
             g = await db.mp_poker_games.find_one({"id": game_id})
-            _enrich_players_current_hand(g)
             return {
                 "message": "Tournament fixed: showdown completed",
                 "fix": "showdown_completed",
-                "game": {k: v for k, v in (g or {}).items() if k != "_id"},
+                "game": _serialize_mp_poker_game(g, current_user.get("id"), enrich=True),
             }
         fixed = False
         fix_type = "no_change"
@@ -1931,11 +1984,10 @@ def register(router):
             },
         )
         g = await db.mp_poker_games.find_one({"id": game_id})
-        _enrich_players_current_hand(g)
         return {
             "message": "Tournament fix applied" if fixed else "No fix needed",
             "fix": fix_type,
-            "game": {k: v for k, v in (g or {}).items() if k != "_id"},
+            "game": _serialize_mp_poker_game(g, current_user.get("id"), enrich=True),
         }
 
     @router.post("/admin/mp-poker/tournaments/{game_id}/refund")
@@ -1988,7 +2040,7 @@ def register(router):
             "message": "Tournament refunded and closed",
             "refunded_count": len(refunded_users),
             "buy_in_refund_each": buy_in,
-            "game": {k: v for k, v in (g or {}).items() if k != "_id"},
+            "game": _serialize_mp_poker_game(g, current_user.get("id")),
         }
 
     @router.post("/casino/mp-poker/games")
@@ -2070,7 +2122,7 @@ def register(router):
                 raise HTTPException(status_code=400, detail="Insufficient funds")
             await log_gambling(uid, username, "mp_poker", {"action": "create", "game_id": game_id, "buy_in": need, "mode": "vs_players"})
             await db.mp_poker_games.insert_one(doc)
-        return {"game_id": game_id, "game": {k: v for k, v in doc.items() if k != "_id"}}
+        return {"game_id": game_id, "game": _serialize_mp_poker_game(doc, uid)}
 
     @router.get("/casino/mp-poker/games/{game_id}")
     async def get_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
@@ -2079,6 +2131,8 @@ def register(router):
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g:
             raise HTTPException(status_code=404, detail="Game not found")
+        if not _can_view_poker_game(g, current_user):
+            raise HTTPException(status_code=403, detail="Not in this game")
         # Server-driven timeout: if turn is expired, allow any seated player poll to advance the hand.
         if g.get("mode") in ("vs_players", "tournament") and g.get("status") == "playing":
             turn_started = _parse_iso_utc(g.get("turn_started_at"))
@@ -2119,9 +2173,7 @@ def register(router):
             if g and g.get("status") == "playing" and g.get("street") == "showdown":
                 await _mp_poker_run_showdown(game_id)
                 g = await db.mp_poker_games.find_one({"id": game_id})
-        _enrich_players_current_hand(g)
-        _redact_mp_poker_hidden_state_for_viewer(g, current_user.get("id"))
-        return {k: v for k, v in (g or {}).items() if k != "_id"}
+        return _serialize_mp_poker_game(g, current_user.get("id"), enrich=True)
 
     @router.post("/casino/mp-poker/games/{game_id}/join")
     async def join_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
@@ -2213,7 +2265,7 @@ def register(router):
             except Exception:
                 pass
         g = await db.mp_poker_games.find_one({"id": game_id})
-        return {k: v for k, v in g.items() if k != "_id"}
+        return _serialize_mp_poker_game(g, uid)
 
     @router.post("/casino/mp-poker/games/{game_id}/cancel")
     async def cancel_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
@@ -2327,7 +2379,7 @@ def register(router):
             updates["prize_pool"] = max(0, int(g.get("prize_pool") or 0) - buy_in)
         await db.mp_poker_games.update_one({"id": game_id}, {"$set": updates})
         g = await db.mp_poker_games.find_one({"id": game_id})
-        return {k: v for k, v in g.items() if k != "_id"}
+        return _serialize_mp_poker_game(g, uid)
 
     @router.post("/casino/mp-poker/games/{game_id}/kick")
     async def kick_unready_player(
@@ -2402,7 +2454,7 @@ def register(router):
         except Exception:
             pass
         g = await db.mp_poker_games.find_one({"id": game_id})
-        return {k: v for k, v in (g or {}).items() if k != "_id"}
+        return _serialize_mp_poker_game(g, uid)
 
     @router.post("/casino/mp-poker/games/{game_id}/ready")
     async def ready_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
@@ -2428,7 +2480,7 @@ def register(router):
             updates["all_ready_at"] = now_iso
         await db.mp_poker_games.update_one({"id": game_id}, {"$set": updates})
         g = await db.mp_poker_games.find_one({"id": game_id})
-        return {k: v for k, v in g.items() if k != "_id"}
+        return _serialize_mp_poker_game(g, uid)
 
     async def _mp_poker_run_showdown(game_id: str):
         claim_res = await db.mp_poker_games.update_one(
@@ -2824,11 +2876,11 @@ def register(router):
             players = _tournament_survivors(players)
             if len(players) < 2:
                 g = await _tournament_finalize_if_done(game_id)
-                return {k: v for k, v in (g or {}).items() if k != "_id"}
+                return _serialize_mp_poker_game(g, uid, enrich=True)
         g = await _mp_poker_deal_new_hand(game_id)
         if not g:
             raise HTTPException(status_code=400, detail="Could not start hand")
-        return {k: v for k, v in g.items() if k != "_id"}
+        return _serialize_mp_poker_game(g, uid, enrich=True)
 
     @router.post("/casino/mp-poker/games/{game_id}/act")
     async def game_act(
@@ -2871,7 +2923,7 @@ def register(router):
                 await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"players": players, "street": "showdown"}})
                 await _mp_poker_run_showdown(game_id)
                 g = await db.mp_poker_games.find_one({"id": game_id})
-                return {k: v for k, v in (g or {}).items() if k != "_id"}
+                return _serialize_mp_poker_game(g, uid, enrich=True)
         elif action == "check":
             if need_to_call > 0:
                 raise HTTPException(status_code=400, detail="Cannot check")
@@ -2980,40 +3032,40 @@ def register(router):
                     },
                 )
         g = await db.mp_poker_games.find_one({"id": game_id})
-        _enrich_players_current_hand(g)
-        return {k: v for k, v in (g or {}).items() if k != "_id"}
+        return _serialize_mp_poker_game(g, uid, enrich=True)
 
     @router.post("/casino/mp-poker/games/{game_id}/timeout")
-    async def game_timeout(game_id: str, _current_user: dict = Depends(get_current_user_verified)):
+    async def game_timeout(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Auto-fold on turn timeout. For vs_dealer, if current player is all-in, run out the board instead of folding."""
+        uid = current_user.get("id") or ""
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g or g.get("status") != "playing":
             raise HTTPException(status_code=404, detail="Game not found")
+        if not _can_view_poker_game(g, current_user):
+            raise HTTPException(status_code=403, detail="Not in this game")
         turn_idx = int(g.get("current_turn_index") or 0)
         players = list(g.get("players") or [])
         if turn_idx < 0 or turn_idx >= len(players):
-            return {k: v for k, v in g.items() if k != "_id"}
+            return _serialize_mp_poker_game(g, uid, enrich=True)
         turn_started = _parse_iso_utc(g.get("turn_started_at"))
         elapsed = (datetime.now(timezone.utc) - turn_started).total_seconds() if turn_started else 0
         timed_out = elapsed >= MP_POKER_TURN_SECONDS
         # Never fold / advance on timeout until server clock says the turn actually expired.
         # (Previously: current player could POST before 30s and still fold — client timer + skew vs UTC.)
         if not timed_out:
-            return {k: v for k, v in g.items() if k != "_id"}
-        # When the clock has expired, any poll (including spectators) may apply the auto-fold.
+            return _serialize_mp_poker_game(g, uid, enrich=True)
+        # Seated players (or staff) may apply the auto-fold once the clock has expired.
         # If current player is all-in they cannot fold by timeout; run out/advance street instead.
         if players[turn_idx].get("status") == "all_in" and g.get("street") in ("preflop", "flop", "turn", "river"):
             await _mp_poker_advance_street(game_id)
             g = await db.mp_poker_games.find_one({"id": game_id})
-            _enrich_players_current_hand(g)
-            return {k: v for k, v in (g or {}).items() if k != "_id"}
+            return _serialize_mp_poker_game(g, uid, enrich=True)
         # Vs dealer: if human is all-in, run out the board instead of folding (fixes stuck all-in hand)
         if g.get("mode") == "vs_dealer" and players[turn_idx].get("status") == "all_in":
             human = next((p for p in players if not p.get("is_bot")), None)
             if human and human.get("status") == "all_in" and g.get("street") in ("preflop", "flop", "turn", "river"):
                 g = await _vs_dealer_run_out_all_in(game_id)
-                _enrich_players_current_hand(g)
-                return {k: v for k, v in (g or {}).items() if k != "_id"}
+                return _serialize_mp_poker_game(g, uid, enrich=True)
         players[turn_idx]["status"] = "folded"
         next_idx = (turn_idx + 1) % len(players)
         while next_idx != turn_idx and (players[next_idx].get("status") in ("folded", "all_in")):
@@ -3027,7 +3079,7 @@ def register(router):
             await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"street": "showdown"}})
             await _mp_poker_run_showdown(game_id)
         g = await db.mp_poker_games.find_one({"id": game_id})
-        return {k: v for k, v in (g or {}).items() if k != "_id"}
+        return _serialize_mp_poker_game(g, uid, enrich=True)
 
     @router.post("/casino/mp-poker/games/{game_id}/chat")
     async def game_chat(
@@ -3052,4 +3104,4 @@ def register(router):
         chat.append({"user_id": current_user.get("id") or "", "username": current_user.get("username") or "Player", "message": msg, "at": datetime.now(timezone.utc).isoformat()})
         await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"chat": chat[-50:]}})
         g = await db.mp_poker_games.find_one({"id": game_id})
-        return {k: v for k, v in g.items() if k != "_id"}
+        return _serialize_mp_poker_game(g, uid, enrich=True)

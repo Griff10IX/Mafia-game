@@ -622,10 +622,6 @@ def _parse_odds_event(event: dict, category: str, three_way: bool, sport_key: st
     else:
         out = {"id": "", "name": name, "category": category, "options": options}
     start_time = _parse_commence_time(ct_raw)
-    if start_time and sport_key == "soccer_fifa_world_cup":
-        from utils.world_cup_fixtures import resolve_wc_kickoff_utc
-
-        start_time = resolve_wc_kickoff_utc(home, away, start_time) or start_time
     if start_time:
         out["start_time"] = start_time
     tid = _odds_template_id(sport_key, event_id) if sport_key else "odds_%s_%s" % (category.lower()[:3], re.sub(r"[^a-zA-Z0-9_-]+", "_", event_id)[:48])
@@ -2233,28 +2229,8 @@ async def _refresh_sports_live_cache(force: bool = False):
 
 
 async def _propagate_wc_kickoffs_to_open_board_events() -> int:
-    """Correct open FIFA WC board rows when Odds API commence_time drifts from official schedule."""
-    from utils.world_cup_fixtures import resolve_wc_kickoff_utc, WC_SPORT_KEY
-
-    updated = 0
-    cursor = db.sports_events.find(
-        {"status": "open", "external_sport_key": WC_SPORT_KEY},
-        {"_id": 0, "id": 1, "name": 1, "start_time": 1},
-    )
-    async for ev in cursor:
-        eid = (ev.get("id") or "").strip()
-        if not eid:
-            continue
-        name = (ev.get("name") or "").strip()
-        parts = name.split(" vs ", 1)
-        if len(parts) != 2:
-            continue
-        fixed = resolve_wc_kickoff_utc(parts[0].strip(), parts[1].strip())
-        if not fixed or fixed == ev.get("start_time"):
-            continue
-        await db.sports_events.update_one({"id": eid}, {"$set": {"start_time": fixed}})
-        updated += 1
-    return updated
+    """No-op — World Cup predictions event / official kickoff override removed."""
+    return 0
 
 
 def _get_all_sports_templates() -> list:

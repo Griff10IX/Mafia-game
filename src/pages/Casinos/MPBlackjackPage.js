@@ -23,7 +23,6 @@ export default function MPBlackjackPage() {
   const animateIn = useRef(!_mpbjIntroPlayed).current;
   useEffect(() => { _mpbjIntroPlayed = true; }, []);
   const [games, setGames] = useState(_cachedMpbjGames || []);
-  const [loading, setLoading] = useState(_cachedMpbjGames == null);
   const [joiningId, setJoiningId] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createMaxPlayers, setCreateMaxPlayers] = useState(6);
@@ -59,8 +58,7 @@ export default function MPBlackjackPage() {
         _cachedMpbjGames = r.data?.games || [];
         setGames(_cachedMpbjGames);
       })
-      .catch(() => setGames((prev) => prev ?? []))
-      .finally(() => setLoading(false));
+      .catch(() => setGames((prev) => prev ?? []));
     api
       .get('/casino/mp-blackjack/recent-games')
       .then((r) => {
@@ -155,10 +153,10 @@ export default function MPBlackjackPage() {
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="mp-blackjack-page">
       <style>{`
-        @keyframes mpbj-fade { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:translateY(0); } }
+        @keyframes mpbj-fade { from { transform:translateY(6px); } to { transform:translateY(0); } }
         .mpbj-fade { animation: mpbj-fade 0.35s ease-out both; }
         .mp-blackjack-select option { background: #27272a; color: #e4e4e7; }
-        @keyframes mpbj-row { from { opacity:0; transform:translateX(-4px); } to { opacity:1; transform:translateX(0); } }
+        @keyframes mpbj-row { from { transform:translateX(-4px); } to { transform:translateX(0); } }
         .mpbj-row { animation: mpbj-row 0.3s ease-out both; }
       `}</style>
 
@@ -315,11 +313,9 @@ export default function MPBlackjackPage() {
           </button>
         </div>
 
-        {/* Game list */}
+        {/* Game list — paint immediately; hydrate when /games returns */}
         <div className="divide-y divide-primary/10">
-          {loading ? (
-            <p className="text-[10px] text-mutedForeground font-heading py-5 text-center animate-pulse">Scanning the room…</p>
-          ) : games.length === 0 ? (
+          {games.length === 0 ? (
             <div className="py-8 text-center space-y-1">
               <p className="text-2xl opacity-20">♠</p>
               <p className="text-[10px] text-mutedForeground font-heading">No open tables. Be the first to deal.</p>

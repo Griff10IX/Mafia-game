@@ -19,6 +19,7 @@ import { SLOTS_FEATURE_ENABLED } from '../config/gameFeatures';
 import { MOD_STAFF_ROUTE_IDS, ADMIN_ROUTE_GROUP_MAP } from '../pages/StaffRole/adminToolMap';
 import { preloadRoute, preloadRouteHandlers } from '../utils/routePreload';
 import { prefetchTravelPageData } from '../utils/travelPageWarm';
+import { prefetchStatsAndObjectivesData } from '../utils/statsObjectivesWarm';
 import { AuthContext } from '../context/AuthContext';
 import { warmLeaderboardCaches } from '../utils/leaderboardTopCache';
 import { setCrimesPrefetch, getCrimesPrefetch, clearProfileSessionLastMeUsername, setProfileSessionLastMeUsername } from '../utils/prefetchCache';
@@ -59,7 +60,7 @@ function buildModStaffNavItems() {
   });
 }
 
-function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEntertainer, isHelpDeskOperator, staffToolsNavVisible, worldCupEnabled, hitmanForHireVisible, weedEmpireNavVisible) {
+function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEntertainer, isHelpDeskOperator, staffToolsNavVisible, hitmanForHireVisible, weedEmpireNavVisible) {
   const goItems = [
     { path: '/game/travel', label: 'Travel' },
     { path: '/game/states', label: 'States' },
@@ -148,7 +149,6 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEn
         { path: '/casino/mp-blackjack', label: 'MP Blackjack' },
         { path: '/casino/mp-poker', label: 'Poker' },
         { path: '/sports-betting', label: 'Sports Betting' },
-        ...(worldCupEnabled ? [{ path: '/game/world-cup', label: 'World Cup 2026' }] : []),
         { path: '/my-properties', label: 'My Properties' },
       ],
     },
@@ -349,9 +349,11 @@ function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, ...rest }) {
   const path = typeof to === 'string' ? to : (to.pathname || '/');
   const preload = preloadRouteHandlers(path);
   const warmTravel = path === '/game/travel' || path === '/travel';
+  const warmMyStats = path === '/account/stats' || path === '/my-stats';
   const mergeClick = (e) => {
     const search = typeof to === 'string' ? '' : (to.search || '');
     preloadRoute(path);
+    if (warmMyStats) prefetchStatsAndObjectivesData({ force: false }).catch(() => {});
     if (location.pathname === path && (location.search || '') === search) {
       e.preventDefault();
       window.dispatchEvent(new CustomEvent(SAME_ROUTE_NAV_CLICK, { detail: { pathname: path, search } }));
@@ -366,11 +368,13 @@ function SameRouteAwareLink({ to, onClick, onMouseEnter, onFocus, ...rest }) {
       onMouseEnter={(e) => {
         preload.onMouseEnter();
         if (warmTravel) prefetchTravelPageData({ force: false }).catch(() => {});
+        if (warmMyStats) prefetchStatsAndObjectivesData({ force: false }).catch(() => {});
         if (onMouseEnter) onMouseEnter(e);
       }}
       onFocus={(e) => {
         preload.onFocus();
         if (warmTravel) prefetchTravelPageData({ force: false }).catch(() => {});
+        if (warmMyStats) prefetchStatsAndObjectivesData({ force: false }).catch(() => {});
         if (onFocus) onFocus(e);
       }}
     />
@@ -458,7 +462,6 @@ export default function Layout({ children }) {
   const [userSearchExpanded, setUserSearchExpanded] = useState(false);
   const [userSearchLoading, setUserSearchLoading] = useState(false);
   const [pageLocks, setPageLocks] = useState({});
-  const [worldCupEnabled, setWorldCupEnabled] = useState(false);
   const [hitmanForHireLive, setHitmanForHireLive] = useState(false);
   const [weedEmpireVisible, setWeedEmpireVisible] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
@@ -621,7 +624,7 @@ export default function Layout({ children }) {
   const hitmanForHireVisible = !!hitmanForHireLive;
   const weedEmpireNavVisible = !!weedEmpireVisible || !!(isAdmin || isModerator || hasAdminEmail);
   const mobileBottomNavItems = useMemo(() => {
-    let items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, !!user?.is_entertainer, !!user?.is_help_desk_operator, staffToolsNavVisible, !!worldCupEnabled, hitmanForHireVisible, weedEmpireNavVisible);
+    let items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, !!user?.is_entertainer, !!user?.is_help_desk_operator, staffToolsNavVisible, hitmanForHireVisible, weedEmpireNavVisible);
     if (hasAdminEmail && !isAdmin && !adminPreviewAsMod) {
       items = items.map((i) =>
         i.type === 'group' && i.id === 'you'
@@ -692,7 +695,7 @@ export default function Layout({ children }) {
       }
       return i;
     });
-  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, updateLogUnread, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, weedEmpireReadyCount, storePointsEventActive, worldCupEnabled, hitmanForHireVisible, weedEmpireNavVisible, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
+  }, [isAdmin, isModerator, hasAdminEmail, staffToolsNavVisible, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, updateLogUnread, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, weedEmpireReadyCount, storePointsEventActive, hitmanForHireVisible, weedEmpireNavVisible, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
 
   useEffect(() => onCooldownChange(setCooldownSeconds), []);
 
@@ -919,7 +922,8 @@ export default function Layout({ children }) {
   const contentResumeTimerRef = useRef(null);
   const tabHiddenAtRef = useRef(null);
   useEffect(() => {
-    const MIN_HIDDEN_MS = 60_000;
+    // iPhone AFK is often < 60s (app switcher); still soft-resume after ~20s backgrounded.
+    const MIN_HIDDEN_MS = 20_000;
     const scheduleResume = () => {
       if (contentResumeTimerRef.current) clearTimeout(contentResumeTimerRef.current);
       // Delay slightly so iOS networking can wake before the first requests fire.
@@ -928,9 +932,13 @@ export default function Layout({ children }) {
         try {
           invalidateApiCache();
         } catch (_) { /* ignore */ }
+        try {
+          const path = typeof window !== 'undefined' ? window.location.pathname : '';
+          if (path) preloadRoute(path, { force: true });
+        } catch (_) { /* ignore */ }
         window.dispatchEvent(new CustomEvent('app:refresh-user', { detail: { resume: true } }));
         window.dispatchEvent(new CustomEvent('app:page-resume', { detail: {} }));
-      }, 700);
+      }, 900);
     };
 
     const onVisibility = () => {
@@ -1372,11 +1380,6 @@ export default function Layout({ children }) {
         setPageLocks(typeof paths === 'object' && paths !== null ? paths : {});
       }).catch(() => setPageLocks({}));
     }, 1500);
-    const tWc = setTimeout(() => {
-      api.get('/world-cup/public-status').then((r) => {
-        setWorldCupEnabled(!!r.data?.enabled);
-      }).catch(() => setWorldCupEnabled(false));
-    }, 5000);
     const tHitman = setTimeout(() => {
       api.get('/store/item-flags').then((r) => {
         setHitmanForHireLive(!!r.data?.flags?.hitman_for_hire);
@@ -1390,7 +1393,6 @@ export default function Layout({ children }) {
     }, 1600);
     return () => {
       clearTimeout(t);
-      clearTimeout(tWc);
       clearTimeout(tHitman);
     };
   }, []);
@@ -1551,7 +1553,7 @@ export default function Layout({ children }) {
         '__messaging__': 'messaging',
         '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/game/entertainer': 'casino', '/money/distillery': 'money', '/money/weed-empire': 'money',
         '/cars/garage': 'money', '/cars/buy': 'money', '/cars/sell': 'money', '/money/crack-safe': 'money', '/money/grave-robber': 'money', '/money/lottery': 'money', '/money/loot-box': 'money',
-        '/casino': 'casino', '/game/world-cup': 'casino',
+        '/casino': 'casino',
         '/game/family/list': 'other', '/game/dead-alive': 'other', '/account/autorank': 'other',
         '/mini-games': 'minigames',
       }
@@ -1565,7 +1567,7 @@ export default function Layout({ children }) {
         '__messaging__': 'messaging',
         '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/game/entertainer': 'casino', '/casino/mini-games/flappy': 'money', '/money/distillery': 'money', '/money/weed-empire': 'money',
         '/cars/garage': 'money', '/cars/buy': 'money', '/cars/sell': 'money', '/money/crack-safe': 'money', '/money/grave-robber': 'money', '/money/lottery': 'money', '/money/loot-box': 'money', '/game/leaderboard': 'money',
-        '/casino': 'casino', '/game/world-cup': 'casino',
+        '/casino': 'casino',
         '/game/family/list': 'other', '/game/dead-alive': 'other', '/account/autorank': 'other',
         '/mini-games': 'minigames',
       };
@@ -1905,7 +1907,7 @@ export default function Layout({ children }) {
     );
   })();
 
-  const isCasinoPath = (p) => p === '/casino' || (p && (p.startsWith('/casino/') || p === '/sports-betting' || p === '/game/world-cup' || p === '/my-properties'));
+  const isCasinoPath = (p) => p === '/casino' || (p && (p.startsWith('/casino/') || p === '/sports-betting' || p === '/my-properties'));
   const casinoNavBlock = (
     <div className="space-y-0.5">
       <button type="button" data-testid="nav-casino-group" onClick={() => setCasinoOpen((v) => { const next = !v; setNavSectionOpen('casino', next); return next; })}
@@ -1931,7 +1933,6 @@ export default function Layout({ children }) {
             { to: '/casino/mp-blackjack', label: 'MP Blackjack', testId: 'nav-mp-blackjack', matchPrefix: true, Icon: Users },
             { to: '/casino/mp-poker', label: 'Poker', testId: 'nav-mp-poker', matchPrefix: true, Icon: Crown },
             { to: '/sports-betting', label: 'Sports Betting', testId: 'nav-sports-betting', Icon: LineChart },
-            ...(worldCupEnabled ? [{ to: '/game/world-cup', label: 'World Cup 2026', testId: 'nav-world-cup', Icon: Trophy }] : []),
             { to: '/my-properties', label: 'My Properties', testId: 'nav-my-properties', Icon: Building2 },
           ].map((item, idx) => {
             const isActive = item.matchPrefix ? (location.pathname === item.to || location.pathname.startsWith(item.to + '/')) : location.pathname === item.to;
@@ -2244,7 +2245,7 @@ export default function Layout({ children }) {
 
   return (
     <AuthContext.Provider value={user}>
-    <div className={`min-h-screen ${styles.page} ${styles.themeGangsterModern} transition-colors`}>
+    <div data-app-shell="1" className={`min-h-screen ${styles.page} ${styles.themeGangsterModern} transition-colors`}>
       <style>{`
         @keyframes gtaExclusivePulse {
           0%, 100% { border-left-color: #a78bfa; color: #a78bfa; }

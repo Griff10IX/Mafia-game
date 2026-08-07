@@ -9,7 +9,7 @@ import {
   formatFromEntertainerFund,
   fundedGameHref,
 } from '../../utils/entertainerFundedGameDisplay';
-import { Gift, Megaphone, Mic2, RefreshCw, Trophy } from 'lucide-react';
+import { Gift, Megaphone, Mic2, RefreshCw } from 'lucide-react';
 import styles from '../../styles/noir.module.css';
 
 const BROADCAST_TEMPLATE_DEFAULTS = {
@@ -63,7 +63,8 @@ let _cachedDash = null;
 
 export default function EntertainerHub() {
   const [dash, setDash] = useState(_cachedDash);
-  const [loading, setLoading] = useState(!_cachedDash);
+  /** True until the first dashboard fetch settles (never blanks the page). */
+  const [bootSettled, setBootSettled] = useState(!!_cachedDash?.username);
   const [loadErr, setLoadErr] = useState(null);
   const [entColor, setEntColor] = useState('#7c3aed');
   const [colorSaving, setColorSaving] = useState(false);
@@ -76,13 +77,9 @@ export default function EntertainerHub() {
   const [broadcastMessage, setBroadcastMessage] = useState(BROADCAST_TEMPLATE_DEFAULTS.new_e_games.message);
   const [broadcastSubmitting, setBroadcastSubmitting] = useState(false);
   const [collecting, setCollecting] = useState(false);
-  const [worldCupEnabled, setWorldCupEnabled] = useState(false);
   const collectInFlightRef = useRef(false);
 
   const load = useCallback(async () => {
-    // Only show the blocking loader when we have nothing to display yet;
-    // otherwise refresh silently so the page doesn't flash/"reload".
-    if (!_cachedDash?.username) setLoading(true);
     setLoadErr(null);
     try {
       const res = await api.get('/entertainer/dashboard');
@@ -97,13 +94,12 @@ export default function EntertainerHub() {
       // Only toast if we don't already have content to show.
       if (!dash?.username) toast.error(msg || 'Could not load Entertainer hub');
     } finally {
-      setLoading(false);
+      setBootSettled(true);
     }
   }, [dash?.username]);
 
   useEffect(() => {
     load();
-    api.get('/world-cup/public-status').then((r) => setWorldCupEnabled(!!r.data?.enabled)).catch(() => setWorldCupEnabled(false));
   }, [load]);
 
   useEffect(() => {
@@ -136,27 +132,10 @@ export default function EntertainerHub() {
     }
   };
 
-  if (loading) {
+  // Only after first fetch — never blank the page while waiting.
+  if (bootSettled && !dash?.username) {
     return (
-      <div className="p-3 sm:p-4 max-w-3xl mx-auto space-y-3" aria-busy="true" aria-label="Loading Entertainer hub">
-        <div className="flex items-center gap-2">
-          <Mic2 size={16} className="text-primary animate-pulse" />
-          <span className="text-sm font-heading text-mutedForeground">Loading Entertainer hub…</span>
-        </div>
-        {[0, 1, 2].map((i) => (
-          <div
-            key={i}
-            className="rounded-lg border border-primary/15 bg-primary/5 animate-pulse"
-            style={{ height: i === 0 ? 88 : 140, animationDelay: `${i * 120}ms` }}
-          />
-        ))}
-      </div>
-    );
-  }
-
-  if (!dash?.username) {
-    return (
-      <div className="p-4 max-w-lg mx-auto space-y-3">
+      <div className={`p-4 max-w-lg mx-auto space-y-3 ${styles.pageContent} mobile-page-root`}>
         <p className="text-foreground font-heading">
           {loadErr?.status === 403
             ? 'You do not have Entertainer access.'
@@ -179,13 +158,13 @@ export default function EntertainerHub() {
     );
   }
 
-  const recent = dash.recent_funded_games || [];
-  const perkTypes = dash.perk_token_types?.length ? dash.perk_token_types : Object.keys(PERK_LABELS);
-  const remTotal = Number(dash.perk_tokens_remaining_today ?? 10);
-  const remAuto = Number(dash.perk_auto_rank_remaining_today ?? 2);
-  const broadcastsRemaining = Number(dash.broadcasts_remaining_today ?? 5);
-  const broadcastDailyCap = Number(dash.broadcast_daily_cap ?? 5);
-  const broadcastTemplates = (dash.broadcast_templates?.length
+  const recent = dash?.recent_funded_games || [];
+  const perkTypes = dash?.perk_token_types?.length ? dash.perk_token_types : Object.keys(PERK_LABELS);
+  const remTotal = Number(dash?.perk_tokens_remaining_today ?? 10);
+  const remAuto = Number(dash?.perk_auto_rank_remaining_today ?? 2);
+  const broadcastsRemaining = Number(dash?.broadcasts_remaining_today ?? 5);
+  const broadcastDailyCap = Number(dash?.broadcast_daily_cap ?? 5);
+  const broadcastTemplates = (dash?.broadcast_templates?.length
     ? [...dash.broadcast_templates, { id: 'custom', label: 'Custom message', title: '', message: '' }]
     : Object.entries(BROADCAST_TEMPLATE_DEFAULTS).map(([id, v]) => ({ id, ...v })));
 
@@ -307,14 +286,6 @@ export default function EntertainerHub() {
       <div className="flex items-center gap-2 border-b border-primary/20 pb-3 flex-wrap">
         <Mic2 className="text-primary shrink-0" size={22} />
         <h1 className="text-lg md:text-xl font-heading font-bold text-primary tracking-wide uppercase">Entertainer Hub</h1>
-        {worldCupEnabled && (
-          <Link
-            to="/game/world-cup/staff"
-            className="flex items-center gap-1.5 min-h-[44px] px-3 rounded border border-emerald-500/30 text-emerald-400 text-xs font-heading uppercase"
-          >
-            <Trophy size={14} /> World Cup
-          </Link>
-        )}
         <button type="button" onClick={() => load()} className="ml-auto flex items-center gap-1 text-[11px] font-heading text-mutedForeground hover:text-primary min-h-[44px]">
           <RefreshCw size={14} /> Refresh
         </button>
@@ -470,17 +441,17 @@ export default function EntertainerHub() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="rounded-lg border border-amber-500/20 bg-zinc-950/50 p-3">
             <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Pending cash</div>
-            <div className="text-lg font-heading font-bold text-amber-300">${Math.trunc(Number(dash.entertainer_pending_fund_cash || 0)).toLocaleString()}</div>
+            <div className="text-lg font-heading font-bold text-amber-300">${Math.trunc(Number(dash?.entertainer_pending_fund_cash || 0)).toLocaleString()}</div>
           </div>
           <div className="rounded-lg border border-amber-500/20 bg-zinc-950/50 p-3">
             <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Pending fund points</div>
-            <div className="text-lg font-heading font-bold text-amber-200/90">{Number(dash.entertainer_pending_fund_points || 0).toLocaleString()}</div>
+            <div className="text-lg font-heading font-bold text-amber-200/90">{Number(dash?.entertainer_pending_fund_points || 0).toLocaleString()}</div>
           </div>
           <div className="rounded-lg border border-emerald-500/25 bg-zinc-950/50 p-3">
             <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Pending completion bonus</div>
-            <div className="text-lg font-heading font-bold text-emerald-300">{Number(dash.entertainer_pending_completion_bonus_points || 0).toLocaleString()}</div>
+            <div className="text-lg font-heading font-bold text-emerald-300">{Number(dash?.entertainer_pending_completion_bonus_points || 0).toLocaleString()}</div>
             <div className="text-[9px] text-mutedForeground mt-1">
-              Today: {Number(dash.completion_bonus_points_today || 0).toLocaleString()} pts from {Number(dash.funded_completions_today || 0).toLocaleString()} completed games
+              Today: {Number(dash?.completion_bonus_points_today || 0).toLocaleString()} pts from {Number(dash?.funded_completions_today || 0).toLocaleString()} completed games
             </div>
           </div>
         </div>
@@ -497,30 +468,30 @@ export default function EntertainerHub() {
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="rounded-lg border border-primary/20 bg-zinc-900/50 p-4">
           <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Fund cash (spendable)</div>
-          <div className="text-xl font-heading font-bold text-emerald-400">${Number(dash.entertainer_fund_cash || 0).toLocaleString()}</div>
+          <div className="text-xl font-heading font-bold text-emerald-400">${Number(dash?.entertainer_fund_cash || 0).toLocaleString()}</div>
         </div>
         <div className="rounded-lg border border-primary/20 bg-zinc-900/50 p-4">
           <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Fund points (spendable)</div>
-          <div className="text-xl font-heading font-bold text-sky-400">{Number(dash.entertainer_fund_points || 0).toLocaleString()}</div>
+          <div className="text-xl font-heading font-bold text-sky-400">{Number(dash?.entertainer_fund_points || 0).toLocaleString()}</div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm font-heading">
         <div className="rounded border border-zinc-700/50 p-3 bg-zinc-900/30">
           <span className="text-mutedForeground text-[10px] uppercase block mb-1">Funded games today</span>
-          <span className="text-foreground text-lg font-bold">{dash.funded_games_today_count ?? 0}</span>
+          <span className="text-foreground text-lg font-bold">{dash?.funded_games_today_count ?? 0}</span>
         </div>
         <div className="rounded border border-zinc-700/50 p-3 bg-zinc-900/30">
           <span className="text-mutedForeground text-[10px] uppercase block mb-1">Lifetime bonus points paid</span>
-          <span className="text-foreground text-lg font-bold">{(dash.lifetime_bonus_points_paid ?? 0).toLocaleString()}</span>
+          <span className="text-foreground text-lg font-bold">{(dash?.lifetime_bonus_points_paid ?? 0).toLocaleString()}</span>
         </div>
         <div className="rounded border border-zinc-700/50 p-3 bg-zinc-900/30">
           <span className="text-mutedForeground text-[10px] uppercase block mb-1">Lifetime fund cash granted</span>
-          <span className="text-foreground">${(dash.lifetime_fund_cash_granted ?? 0).toLocaleString()}</span>
+          <span className="text-foreground">${(dash?.lifetime_fund_cash_granted ?? 0).toLocaleString()}</span>
         </div>
         <div className="rounded border border-zinc-700/50 p-3 bg-zinc-900/30">
           <span className="text-mutedForeground text-[10px] uppercase block mb-1">Lifetime fund points granted</span>
-          <span className="text-foreground">{(dash.lifetime_fund_points_granted ?? 0).toLocaleString()}</span>
+          <span className="text-foreground">{(dash?.lifetime_fund_points_granted ?? 0).toLocaleString()}</span>
         </div>
       </div>
 
@@ -532,19 +503,19 @@ export default function EntertainerHub() {
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-heading">
           <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/30 text-center">
             <div className="text-[9px] text-mutedForeground uppercase">Open</div>
-            <div className="text-lg font-bold text-amber-400 tabular-nums">{dash.funded_ledger_open_count ?? 0}</div>
+            <div className="text-lg font-bold text-amber-400 tabular-nums">{dash?.funded_ledger_open_count ?? 0}</div>
           </div>
           <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/30 text-center">
             <div className="text-[9px] text-mutedForeground uppercase">Completed</div>
-            <div className="text-lg font-bold text-emerald-400 tabular-nums">{dash.funded_ledger_completed_count ?? 0}</div>
+            <div className="text-lg font-bold text-emerald-400 tabular-nums">{dash?.funded_ledger_completed_count ?? 0}</div>
           </div>
           <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/30 text-center">
             <div className="text-[9px] text-mutedForeground uppercase">Paid pts</div>
-            <div className="text-lg font-bold text-sky-400/90 tabular-nums">{(dash.funded_ledger_paid_out_points_total ?? 0).toLocaleString()}</div>
+            <div className="text-lg font-bold text-sky-400/90 tabular-nums">{(dash?.funded_ledger_paid_out_points_total ?? 0).toLocaleString()}</div>
           </div>
           <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/30 text-center">
             <div className="text-[9px] text-mutedForeground uppercase">Paid cash</div>
-            <div className="text-lg font-bold text-emerald-400 tabular-nums">${Math.trunc(Number(dash.funded_ledger_paid_out_cash_total ?? 0)).toLocaleString()}</div>
+            <div className="text-lg font-bold text-emerald-400 tabular-nums">${Math.trunc(Number(dash?.funded_ledger_paid_out_cash_total ?? 0)).toLocaleString()}</div>
           </div>
         </div>
         <h3 className="text-[11px] font-heading font-bold text-mutedForeground uppercase tracking-wider">Recent funded games</h3>

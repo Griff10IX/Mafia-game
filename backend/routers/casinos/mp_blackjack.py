@@ -133,8 +133,17 @@ def register(router):
             return True
         return p.get("status") in ("stood", "bust")
 
+    def _viewer_in_game(g, viewer_user_id) -> bool:
+        if viewer_user_id is None:
+            return False
+        return any(_uid_eq(p.get("user_id"), viewer_user_id) for p in (g.get("players") or []))
+
     def _serialize_game(g, viewer_user_id=None):
+        """Public game view — never leak shoe order or opponents' live cards."""
         out = {k: v for k, v in g.items() if k != "_id"}
+        # Remaining shoe order would let anyone predict hits / reconstruct hands.
+        out.pop("deck", None)
+        out.pop("_settlement_claimed", None)
         if g.get("anonymous"):
             out["creator_username"] = "Anonymous"
             players = list(out.get("players") or [])
@@ -158,23 +167,27 @@ def register(router):
                 e["username"] = uid_to_label.get(e.get("user_id"), "Anonymous")
                 eliminated[i] = e
             out["eliminated"] = eliminated
+            # Copy chat rows so we don't mutate the Mongo document in memory.
+            chat = []
             for c in out.get("chat") or []:
-                c["username"] = uid_to_label.get(c.get("user_id"), "Anonymous")
-        # Hide opponents' hands until this player has stood/busted (or is eliminated); prevents peeking via API.
-        if viewer_user_id is not None and g.get("status") == "playing" and g.get("phase") == "playing":
+                c2 = dict(c)
+                c2["username"] = uid_to_label.get(c2.get("user_id"), "Anonymous")
+                chat.append(c2)
+            out["chat"] = chat
+        # Hide every other seat's cards for the whole playing phase (not only until you stand).
+        # Reveal when the round settles (dealer / settled / completed).
+        if g.get("status") == "playing" and g.get("phase") == "playing":
             players = list(out.get("players") or [])
-            me = next((p for p in players if _uid_eq(p.get("user_id"), viewer_user_id)), None)
-            if me is not None and not _player_turn_finished(me):
-                new_players = []
-                for p in players:
-                    if _uid_eq(p.get("user_id"), viewer_user_id):
-                        new_players.append(dict(p))
-                        continue
-                    p2 = dict(p)
-                    n = len(p2.get("hand") or [])
-                    p2["hand"] = [{"suit": "H", "value": "?"} for _ in range(n)]
+            new_players = []
+            for p in players:
+                p2 = dict(p)
+                if viewer_user_id is not None and _uid_eq(p2.get("user_id"), viewer_user_id):
                     new_players.append(p2)
-                out["players"] = new_players
+                    continue
+                n = len(p2.get("hand") or [])
+                p2["hand"] = [{"hidden": True} for _ in range(n)]
+                new_players.append(p2)
+            out["players"] = new_players
         return out
 
     def _deal_round(players: list, deck: list) -> tuple:
@@ -760,7 +773,7 @@ def register(router):
             raise HTTPException(status_code=400, detail="Insufficient money to create game")
         await db.mp_blackjack_games.insert_one(doc)
         await log_gambling(uid, username, "mp_blackjack", {"action": "create", "game_id": game_id, "buy_in": buy_in, "extra_prize": extra_prize})
-        return {"message": "Game created", "game_id": game_id, "game": {k: v for k, v in doc.items() if k != "_id"}}
+        return {"message": "Game created", "game_id": game_id, "game": _serialize_game(doc, uid)}
 
     @router.post("/casino/mp-blackjack/games/{game_id}/cancel")
     async def mp_bj_cancel(game_id: str, current_user: dict = Depends(get_current_user_verified)):
@@ -1025,10 +1038,13 @@ def register(router):
 
     @router.get("/casino/mp-blackjack/games/{game_id}")
     async def mp_bj_get_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
-        """Get full game state. Applies turn timeout if needed."""
+        """Get game state for seated players (or staff). Applies turn timeout if needed."""
+        uid = current_user.get("id")
         game = await db.mp_blackjack_games.find_one({"id": game_id})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
+        if not _viewer_in_game(game, uid) and not _is_admin(current_user) and not _is_moderator(current_user):
+            raise HTTPException(status_code=403, detail="Not in this game")
         updated = await _maybe_auto_stand(game_id)
         if updated is not None:
             game = updated
@@ -1036,7 +1052,7 @@ def register(router):
         if game.get("phase") == "dealer" and game.get("status") != "completed":
             await _run_settle(game_id)
             game = await db.mp_blackjack_games.find_one({"id": game_id})
-        return {"game": _serialize_game(game, current_user.get("id"))}
+        return {"game": _serialize_game(game, uid)}
 
     @router.post("/casino/mp-blackjack/games/{game_id}/hit")
     async def mp_bj_hit(game_id: str, current_user: dict = Depends(get_current_user_verified)):
@@ -1153,11 +1169,13 @@ def register(router):
 
     @router.post("/casino/mp-blackjack/games/{game_id}/timeout")
     async def mp_bj_timeout(game_id: str, current_user: dict = Depends(get_current_user_verified)):
-        """Trigger turn timeout check."""
+        """Trigger turn timeout check. Seated players (or staff) only."""
         uid = current_user.get("id") or ""
         game = await db.mp_blackjack_games.find_one({"id": game_id})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
+        if not _viewer_in_game(game, uid) and not _is_admin(current_user) and not _is_moderator(current_user):
+            raise HTTPException(status_code=403, detail="Not in this game")
         updated = await _maybe_auto_stand(game_id)
         if updated is not None:
             game = updated

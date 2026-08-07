@@ -3,12 +3,17 @@
  * Keys must match pathname (no trailing slash).
  */
 import { prefetchTravelPageData } from './travelPageWarm';
+import { prefetchStatsAndObjectivesData } from './statsObjectivesWarm';
 
 const ROUTE_PRELOADERS = {
   '/account/dashboard': () => import('../pages/Account/Dashboard'),
   '/account/settings': () => import('../pages/Account/IPRules'),
   '/account/prestige': () => import('../pages/Account/Prestige'),
-  '/account/stats': () => import('../pages/Account/MyStats'),
+  '/account/stats': () =>
+    Promise.all([
+      import('../pages/Account/MyStats'),
+      prefetchStatsAndObjectivesData({ force: false }),
+    ]),
   '/account/game-events': () => import('../pages/Account/GameEvents'),
   '/account/inventory': () => import('../pages/Account/MyInventory'),
   '/account/profile': () => import('../pages/Account/Profile'),
@@ -35,7 +40,6 @@ const ROUTE_PRELOADERS = {
   '/game/ranking': () => import('../pages/Game/Ranking'),
   '/game/leaderboard': () => import('../pages/Game/Leaderboard'),
   '/game/family/list': () => import('../pages/Game/FamilyPage'),
-  '/game/world-cup': () => import('../pages/Game/WorldCup'),
   '/money/bank': () => import('../pages/Money/Bank'),
   '/money/racket': () => import('../pages/Money/IllegalBusiness'),
   '/money/distillery': () => import('../pages/Money/Distillery'),
@@ -86,10 +90,13 @@ function normalizePath(path) {
   return base;
 }
 
-/** @param {string} pathOrTo — pathname or react-router `to` string */
-export function preloadRoute(pathOrTo) {
+/** @param {string} pathOrTo — pathname or react-router `to` string
+ *  @param {{ force?: boolean }} [opts] — force=true retries after a failed/wake preload
+ */
+export function preloadRoute(pathOrTo, opts = {}) {
   const path = normalizePath(pathOrTo);
-  if (!path || started.has(path)) return;
+  if (!path) return;
+  if (!opts.force && started.has(path)) return;
   const fn = ROUTE_PRELOADERS[path];
   if (!fn) return;
   started.add(path);

@@ -847,7 +847,15 @@ function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeat
           <div className={`rounded-[6px] border border-white/10 ${compact ? 'w-[36px] h-[52px] sm:w-[38px] sm:h-[54px]' : 'w-[44px] h-[62px] sm:w-[48px] sm:h-[68px]'}`} style={{ background: 'rgba(0,0,0,0.28)' }} />
         ) : (
           hole.map((c, i) => (
-            <Card key={i} card={c} hidden={!showHole} index={i} total={hole.length} small={compact || !cardMedium} medium={cardMedium} />
+            <Card
+              key={i}
+              card={c}
+              hidden={!showHole || c?.hidden === true}
+              index={i}
+              total={hole.length}
+              small={compact || !cardMedium}
+              medium={cardMedium}
+            />
           ))
         )}
       </div>
@@ -1555,7 +1563,7 @@ export default function MPPokerGamePage() {
           >
             <span className="text-[8px] font-heading text-primary/60 mr-1">You</span>
             {(myPlayer.hole_cards || []).map((c, i) => (
-              <Card key={i} card={c} hidden={false} index={i} total={2} small />
+              <Card key={i} card={c} hidden={c?.hidden === true} index={i} total={2} small />
             ))}
           </div>
         )}
@@ -1882,7 +1890,7 @@ export default function MPPokerGamePage() {
             {seatOrder.map((playerIdx, displayIdx) => {
               const p = players[playerIdx];
               const pos = tablePositions[displayIdx] || { x: 50, y: 50 };
-              // Cards face-up rule: show your own cards; show all at showdown/completed; bots always hidden until then
+              // Face-up for your seat (or everyone at showdown). API also sends {hidden:true} for others mid-hand.
               const isMyOwnSeat = myUserId && p.user_id === myUserId;
               const showHole = showAllCards || (isMyOwnSeat && !p.is_bot);
               const isDealer = !isVsDealer && playerIdx === buttonIndex;

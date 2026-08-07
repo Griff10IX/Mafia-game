@@ -40,6 +40,39 @@
     <body>
         <noscript>You need to enable JavaScript to run this app.</noscript>
         <div id="root"></div>
+        <!-- Early empty-root recovery for iOS wake (runs even if the main bundle failed to start). -->
+        <script>
+          (function () {
+            try {
+              var KEY = 'blank_root_early_reload_at';
+              var COOLDOWN = 60000;
+              var hiddenAt = null;
+              function rootEmpty() {
+                var root = document.getElementById('root');
+                return !root || !root.firstElementChild;
+              }
+              function maybeReload() {
+                if (document.hidden || !rootEmpty()) return;
+                if (navigator && navigator.onLine === false) return;
+                var last = sessionStorage.getItem(KEY);
+                var now = Date.now();
+                if (last && now - parseInt(last, 10) < COOLDOWN) return;
+                sessionStorage.setItem(KEY, String(now));
+                location.reload();
+              }
+              document.addEventListener('visibilitychange', function () {
+                if (document.hidden) {
+                  if (!hiddenAt) hiddenAt = Date.now();
+                  return;
+                }
+                var t0 = hiddenAt;
+                hiddenAt = null;
+                if (!t0 || Date.now() - t0 < 12000) return;
+                setTimeout(maybeReload, 5000);
+              });
+            } catch (e) {}
+          })();
+        </script>
         <!--
       This HTML file is a template.
       If you open it directly in the browser, you will see an empty page.

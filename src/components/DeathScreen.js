@@ -1,12 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import api from '../utils/api';
 import { formatGameTimeWeekday } from '../utils/gameDateTime';
 
 const DEATH_STYLES = `
-  @keyframes ds-fadeIn    { from { opacity: 0 } to { opacity: 1 } }
-  @keyframes ds-fadeUp    { from { opacity: 0; transform: translateY(30px) } to { opacity: 1; transform: translateY(0) } }
-  @keyframes ds-stoneRise { from { opacity: 0; transform: translateY(80px); filter: blur(4px) } to { opacity: 1; transform: translateY(0); filter: blur(0) } }
+  @keyframes ds-fadeIn    { from { transform: translateY(4px) } to { transform: translateY(0) } }
+  @keyframes ds-fadeUp    { from { transform: translateY(12px) } to { transform: translateY(0) } }
+  @keyframes ds-stoneRise { from { transform: translateY(24px) } to { transform: translateY(0) } }
   @keyframes ds-expandX   { from { transform: scaleX(0); opacity: 0 } to { transform: scaleX(1); opacity: 1 } }
   @keyframes ds-twinkle   { from { opacity: 0.07; transform: scale(0.7) } to { opacity: 0.95; transform: scale(1.3) } }
   @keyframes ds-flicker   { 0% { transform: scale(1,1) skewX(0); opacity: .9 } 25% { transform: scale(.87,1.13) skewX(-2deg); opacity: 1 } 55% { transform: scale(1.06,.94) skewX(1deg); opacity: .84 } 100% { transform: scale(1,1) skewX(.4deg); opacity: .9 } }
@@ -17,16 +17,17 @@ const DEATH_STYLES = `
   @keyframes ds-lightFlash { 0%,91%,93%,95%,100% { opacity: 0 } 92%,94% { opacity: 1 } }
   @keyframes ds-ravenFly  { from { transform: translateX(-50px); opacity: 0 } 10% { opacity: .35 } 90% { opacity: .35 } to { transform: translateX(110vw); opacity: 0 } }
 
-  .ds-fade-in  { animation: ds-fadeIn 1s both }
-  .ds-fade-in2 { animation: ds-fadeIn 1s 1.1s both }
-  .ds-fade-in3 { animation: ds-fadeIn 1s 1.4s both }
-  .ds-fade-in4 { animation: ds-fadeIn 1s 1.6s both }
-  .ds-fade-in5 { animation: ds-fadeIn 1s 1.8s both }
-  .ds-fade-in6 { animation: ds-fadeIn 1s 2.2s both }
-  .ds-stone-rise { animation: ds-stoneRise 2.2s cubic-bezier(0.16,1,0.3,1) both }
-  .ds-actions  { animation: ds-fadeUp .8s 2.2s both }
-  .ds-revenge  { animation: ds-fadeUp .8s 2.5s both }
-  .ds-expand   { animation: ds-expandX 1.3s 1.3s both }
+  /* Visible immediately — opacity:0 + long delays looked like a black screen. */
+  .ds-fade-in  { animation: ds-fadeIn .45s ease-out }
+  .ds-fade-in2 { animation: ds-fadeIn .45s .05s ease-out both }
+  .ds-fade-in3 { animation: ds-fadeIn .45s .1s ease-out both }
+  .ds-fade-in4 { animation: ds-fadeIn .45s .12s ease-out both }
+  .ds-fade-in5 { animation: ds-fadeIn .45s .15s ease-out both }
+  .ds-fade-in6 { animation: ds-fadeIn .45s .18s ease-out both }
+  .ds-stone-rise { animation: ds-stoneRise 1.1s cubic-bezier(0.16,1,0.3,1) }
+  .ds-actions  { animation: ds-fadeUp .5s .2s ease-out both }
+  .ds-revenge  { animation: ds-fadeUp .5s .25s ease-out both }
+  .ds-expand   { animation: ds-expandX .8s .15s both }
   .ds-cross    { animation: ds-crossGlow 2.8s 1.8s ease-in-out infinite alternate }
   .ds-flicker  { animation: ds-flicker .98s ease-in-out infinite alternate }
   .ds-flicker2 { animation: ds-flicker .72s .28s ease-in-out infinite alternate }
@@ -137,7 +138,7 @@ export default function DeathScreen({ user, onLogout }) {
   };
 
   return (
-    <div data-death-screen style={{
+    <div data-app-shell="1" data-death-screen style={{
       position: 'fixed', inset: 0, zIndex: 9999,
       background: 'radial-gradient(ellipse 100% 55% at 50% 0%, rgba(184,145,68,0.045) 0%, transparent 58%), radial-gradient(ellipse 80% 45% at 50% 100%, rgba(184,145,68,0.025) 0%, transparent 52%), linear-gradient(180deg, #0f0e13 0%, #13121a 100%)',
       overflowY: 'auto', overflowX: 'hidden',
@@ -330,16 +331,20 @@ export default function DeathScreen({ user, onLogout }) {
           Time of death &nbsp;<span style={{ color: 'rgba(184,145,68,.2)' }}>{formatTime(deadAt)}</span>
         </div>
 
-        {/* Dead Alive link */}
-        <div className="ds-fade-in6" style={{ marginTop: 24 }}>
-          <Link
-            to="/dead-alive"
-            style={{ fontFamily: 'serif', fontSize: 9, letterSpacing: '.18em', textTransform: 'uppercase', color: 'rgba(184,145,68,.22)', textDecoration: 'none', borderBottom: '1px solid rgba(184,145,68,.1)', paddingBottom: 1 }}
-            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(184,145,68,.5)'; }}
-            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(184,145,68,.22)'; }}
+        {/* Claim inheritance requires a living new account — New Life first. */}
+        <div className="ds-fade-in6" style={{ marginTop: 24, textAlign: 'center', maxWidth: 320 }}>
+          <p style={{ fontFamily: 'serif', fontSize: 10, letterSpacing: '.06em', color: 'rgba(220,216,230,.28)', lineHeight: 1.55, marginBottom: 10 }}>
+            To claim this estate: start a New Life, then open Dead → Alive on the living account.
+          </p>
+          <button
+            type="button"
+            onClick={handleNewLife}
+            style={{ fontFamily: 'serif', fontSize: 9, letterSpacing: '.18em', textTransform: 'uppercase', color: 'rgba(184,145,68,.45)', background: 'none', border: 'none', borderBottom: '1px solid rgba(184,145,68,.15)', padding: '0 0 1px', cursor: 'pointer' }}
+            onMouseEnter={e => { e.currentTarget.style.color = 'rgba(184,145,68,.75)'; }}
+            onMouseLeave={e => { e.currentTarget.style.color = 'rgba(184,145,68,.45)'; }}
           >
-            Transfer estate to new account →
-          </Link>
+            New Life — then claim estate →
+          </button>
         </div>
       </div>
     </div>

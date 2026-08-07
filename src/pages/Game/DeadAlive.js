@@ -9,12 +9,13 @@ const REVIVE_PACKAGE_ID = 'dead_alive_revive_10';
 const REVIVE_PRICE_GBP_DEFAULT = 10;
 
 const DA_STYLES = `
-  .da-fade-in  { animation: da-fade-in 0.5s ease-out both; }
-  .da-fade-in2 { animation: da-fade-in 0.5s 0.15s ease-out both; }
-  .da-fade-in3 { animation: da-fade-in 0.5s 0.3s ease-out both; }
+  /* Never start at opacity:0 — that reads as a black screen on mobile. */
+  .da-fade-in  { animation: da-fade-in 0.35s ease-out; }
+  .da-fade-in2 { animation: da-fade-in 0.35s 0.05s ease-out both; }
+  .da-fade-in3 { animation: da-fade-in 0.35s 0.1s ease-out both; }
   @keyframes da-fade-in {
-    from { opacity: 0; transform: translateY(10px); }
-    to   { opacity: 1; transform: translateY(0); }
+    from { transform: translateY(6px); }
+    to   { transform: translateY(0); }
   }
   .da-input:focus {
     outline: none;
@@ -23,12 +24,23 @@ const DA_STYLES = `
   }
 `;
 
+const REVIVE_ELIGIBILITY_BOOT = {
+  can_revive: false,
+  reason: null,
+  dead_accounts_same_email: [],
+  revive_used: false,
+  points_balance: 0,
+  revive_price_gbp: REVIVE_PRICE_GBP_DEFAULT,
+  revive_package_id: REVIVE_PACKAGE_ID,
+};
+
 export default function DeadAlive() {
   const [deadUsername, setDeadUsername] = useState('');
   const [deadPassword, setDeadPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const [reviveEligibility, setReviveEligibility] = useState(null);
+  // Paint revive section immediately — never wait on eligibility GET.
+  const [reviveEligibility, setReviveEligibility] = useState(REVIVE_ELIGIBILITY_BOOT);
   const [reviveUsername, setReviveUsername] = useState('');
   const [revivePassword, setRevivePassword] = useState('');
   const [reviveLoading, setReviveLoading] = useState(false);
@@ -40,8 +52,11 @@ export default function DeadAlive() {
 
   useEffect(() => {
     api.get('/dead-alive/revive-eligibility')
-      .then((r) => setReviveEligibility(r.data))
-      .catch(() => setReviveEligibility({ can_revive: false, reason: 'Could not load.', dead_accounts_same_email: [] }));
+      .then((r) => setReviveEligibility(r.data && typeof r.data === 'object' ? { ...REVIVE_ELIGIBILITY_BOOT, ...r.data } : REVIVE_ELIGIBILITY_BOOT))
+      .catch(() => setReviveEligibility({
+        ...REVIVE_ELIGIBILITY_BOOT,
+        reason: 'Could not load revive options — try again shortly.',
+      }));
   }, []);
 
   useEffect(() => {
@@ -301,7 +316,7 @@ export default function DeadAlive() {
       </div>
 
       {/* ── Revive a fallen account (£10 Stripe, same email, once per email) ── */}
-      {reviveEligibility != null && (
+      {reviveEligibility && (
         <div className="da-fade-in space-y-3 max-w-3xl">
           <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
             <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />

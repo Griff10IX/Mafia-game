@@ -8,18 +8,39 @@ const CHUNK_ERROR_RELOAD_KEY = 'chunk_error_reload_at';
 const CHUNK_ERROR_RELOAD_COOLDOWN_MS = 15000;
 
 function scheduleChunkErrorReloadOnce() {
-  try {
-    const last = sessionStorage.getItem(CHUNK_ERROR_RELOAD_KEY);
-    const now = Date.now();
-    if (last && now - parseInt(last, 10) < CHUNK_ERROR_RELOAD_COOLDOWN_MS) {
+  const attempt = () => {
+    try {
+      if (typeof document !== 'undefined' && document.hidden) {
+        const onVis = () => {
+          if (document.hidden) return;
+          document.removeEventListener('visibilitychange', onVis);
+          setTimeout(attempt, 800);
+        };
+        document.addEventListener('visibilitychange', onVis);
+        return true;
+      }
+      if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+        const onOnline = () => {
+          window.removeEventListener('online', onOnline);
+          setTimeout(attempt, 600);
+        };
+        window.addEventListener('online', onOnline);
+        return true;
+      }
+      const last = sessionStorage.getItem(CHUNK_ERROR_RELOAD_KEY);
+      const now = Date.now();
+      if (last && now - parseInt(last, 10) < CHUNK_ERROR_RELOAD_COOLDOWN_MS) {
+        return false;
+      }
+      sessionStorage.setItem(CHUNK_ERROR_RELOAD_KEY, String(now));
+      window.location.reload();
+      return true;
+    } catch (_) {
       return false;
     }
-    sessionStorage.setItem(CHUNK_ERROR_RELOAD_KEY, String(now));
-    window.location.reload();
-    return true;
-  } catch (_) {
-    return false;
-  }
+  };
+  setTimeout(attempt, 700);
+  return true;
 }
 
 export default class ErrorBoundary extends Component {

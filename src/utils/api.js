@@ -270,8 +270,9 @@ if (typeof window !== 'undefined') {
   const markUserInteraction = () => {
     _lastUserInteractionAt = Date.now();
   };
+  // pagehide only — beforeunload blocks iOS Safari bfcache and forces cold reloads
+  // (blank page until chunks download again after AFK).
   window.addEventListener('pagehide', markUnloading);
-  window.addEventListener('beforeunload', markUnloading);
   window.addEventListener('pageshow', () => {
     // Always clear — Safari often fires pagehide without bfcache restore (persisted=false).
     _pageUnloading = false;

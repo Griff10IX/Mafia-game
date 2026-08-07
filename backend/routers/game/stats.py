@@ -8,10 +8,14 @@ from typing import Any, Dict, List, Optional, Tuple
 
 _STATS_OVERVIEW_CACHE: Dict[str, Tuple[Dict[str, Any], float]] = {}
 _STATS_KILL_FEED_CACHE: Dict[str, Tuple[Dict[str, Any], float]] = {}
+_STATS_ME_CACHE: Dict[str, Tuple[Dict[str, Any], float]] = {}
 _STATS_OVERVIEW_TTL_SEC = 55.0
+# My Stats is heavy (many collections); short TTL makes revisits feel instant.
+_STATS_ME_TTL_SEC = 20.0
 # Bump when overview aggregation match rules change so stale cache cannot keep inflated totals.
 _STATS_OVERVIEW_CACHE_VER = "v3-alive-dead-complement"
 _STATS_RECENT_KILLS_SCAN_LIMIT = 800
+_STATS_ME_GAMBLING_LOG_LIMIT = 5000
 
 from fastapi import Depends, HTTPException
 
@@ -739,9 +743,89 @@ def register(router):
         from routers.crime.crimes import get_crime_stats
         from routers.crime.jail import get_jail_stats
         from routers.casinos.sports_betting import compute_sports_betting_stats
-        from server import _get_casino_property_profit
+        from server import _get_casino_property_profit, _user_owns_any_casino, _user_owns_any_property
+        from utils.game_pass_vip_car import user_owns_game_pass_vip_car
 
         uid = current_user["id"]
+        now_mono = time.monotonic()
+        cached = _STATS_ME_CACHE.get(uid)
+        if cached and (now_mono - cached[1]) < _STATS_ME_TTL_SEC:
+            return cached[0]
+
+        async def _safe(coro, default):
+            try:
+                return await coro
+            except Exception:
+                return default
+
+        async def _stock_stats():
+            try:
+                stock_items = await db.stock_transactions.find(
+                    {"user_id": uid}, {"_id": 0, "profit_points": 1}
+                ).to_list(1000)
+                return len(stock_items), sum(int(t.get("profit_points") or 0) for t in stock_items)
+            except Exception:
+                return 0, 0
+
+        async def _bank_interest():
+            try:
+                bank_agg = await db.bank_deposits.aggregate([
+                    {"$match": {"user_id": uid, "claimed_at": {"$ne": None}}},
+                    {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$interest_amount", 0]}}}},
+                ]).to_list(1)
+                return int(bank_agg[0].get("total", 0) or 0) if bank_agg else 0
+            except Exception:
+                return 0
+
+        async def _gambling_totals(reset_dt):
+            by_lt: dict = {}
+            total_lt = 0
+            by_period: dict = {}
+            total_period = 0
+            try:
+                entries = await db.gambling_log.find(
+                    {"user_id": uid},
+                    {"_id": 0, "game_type": 1, "details": 1, "created_at": 1},
+                ).limit(_STATS_ME_GAMBLING_LOG_LIMIT).to_list(_STATS_ME_GAMBLING_LOG_LIMIT)
+            except Exception:
+                return by_lt, total_lt, by_period, total_period
+            for entry in entries:
+                gt = (entry.get("game_type") or "").strip()
+                if not gt:
+                    continue
+                details = entry.get("details") or {}
+                profit = _gambling_profit_from_details(gt, details)
+                if profit == 0:
+                    continue
+                bucket = _gambling_analytics_bucket(gt, details)
+                by_lt[bucket] = by_lt.get(bucket, 0) + profit
+                total_lt += profit
+                entry_dt = _gambling_log_entry_dt(entry.get("created_at"))
+                if reset_dt is None or (entry_dt is not None and entry_dt >= reset_dt):
+                    by_period[bucket] = by_period.get(bucket, 0) + profit
+                    total_period += profit
+            return by_lt, total_lt, by_period, total_period
+
+        async def _sports_pack(reset_at):
+            if not reset_at:
+                return await compute_sports_betting_stats(uid, None)
+            lifetime, period = await asyncio.gather(
+                compute_sports_betting_stats(uid, None),
+                compute_sports_betting_stats(uid, reset_at),
+            )
+            return {
+                **period,
+                "display_since": reset_at,
+                "streaks_all_time": True,
+                "lifetime_total_bets_placed": lifetime["total_bets_placed"],
+                "lifetime_total_bets_won": lifetime["total_bets_won"],
+                "lifetime_total_bets_lost": lifetime["total_bets_lost"],
+                "lifetime_win_pct": lifetime["win_pct"],
+                "lifetime_profit_loss": lifetime["profit_loss"],
+                "lifetime_biggest_win": lifetime["biggest_win"],
+                "lifetime_biggest_loss": lifetime["biggest_loss"],
+            }
+
         u = await db.users.find_one(
             {"id": uid},
             {
@@ -764,7 +848,8 @@ def register(router):
                 "consecutive_busts_record": 1,
                 "current_consecutive_busts": 1,
                 "prestige_level": 1,
-                "booze_profit_total": 1, "booze_runs_count": 1, "booze_jail_count": 1, "booze_profit_by_type": 1, "booze_capacity_bonus": 1, "rank_points": 1,
+                "booze_profit_total": 1, "booze_runs_count": 1, "booze_jail_count": 1,
+                "booze_profit_by_type": 1, "booze_capacity_bonus": 1,
                 "auto_rank_total_busts": 1, "auto_rank_total_crimes": 1, "auto_rank_total_gtas": 1,
                 "auto_rank_total_cash": 1, "auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": 1,
                 "auto_rank_total_cars_melted": 1, "auto_rank_total_bullets_from_melt": 1,
@@ -786,109 +871,51 @@ def register(router):
             stats_gambling_reset_at = _raw_gambling_reset.strip()
         else:
             stats_gambling_reset_at = None
-
-        from utils.game_pass_vip_car import user_owns_game_pass_vip_car
-        vip_pass_car_owned = await user_owns_game_pass_vip_car(db, uid)
         stats_gambling_reset_dt = _stats_parse_iso(stats_gambling_reset_at) if stats_gambling_reset_at else None
 
-        stock_trades = 0
-        stock_profit = 0
-        try:
-            stock_cursor = db.stock_transactions.find({"user_id": uid}, {"_id": 0, "profit_points": 1})
-            stock_items = await stock_cursor.to_list(1000)
-            stock_trades = len(stock_items)
-            stock_profit = sum(int(t.get("profit_points") or 0) for t in stock_items)
-        except Exception:
-            pass
+        (
+            vip_pass_car_owned,
+            stock_pair,
+            bank_interest_earned,
+            casino_tuple,
+            owned_casino,
+            owned_property,
+            bodyguard_stats,
+            crime_stats,
+            gta_stats,
+            jail_stats,
+            sports_stats,
+            gambling_pack,
+        ) = await asyncio.gather(
+            _safe(user_owns_game_pass_vip_car(db, uid), False),
+            _stock_stats(),
+            _bank_interest(),
+            _safe(_get_casino_property_profit(uid), (0, 0, False, False, 0)),
+            _safe(_user_owns_any_casino(uid), None),
+            _safe(_user_owns_any_property(uid), None),
+            _safe(get_bodyguards_stats(current_user), {}),
+            _safe(get_crime_stats(current_user), {}),
+            _safe(get_gta_stats(current_user), {}),
+            _safe(get_jail_stats(current_user), {}),
+            _safe(_sports_pack(stats_gambling_reset_at), {}),
+            _gambling_totals(stats_gambling_reset_dt),
+        )
 
-        bank_interest_earned = 0
-        try:
-            bank_agg = await db.bank_deposits.aggregate([
-                {"$match": {"user_id": uid, "claimed_at": {"$ne": None}}},
-                {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$interest_amount", 0]}}}}
-            ]).to_list(1)
-            bank_interest_earned = int(bank_agg[0].get("total", 0) or 0) if bank_agg else 0
-        except Exception:
-            pass
-
-        _sidebar_cash, property_pts, has_casino, has_property, casino_profit = await _get_casino_property_profit(uid)
-        # casino_profit for My Stats = cumulative `total_earnings` (5th tuple value); not cleared by reset profit
+        stock_trades, stock_profit = stock_pair if isinstance(stock_pair, tuple) else (0, 0)
+        _sidebar_cash, property_pts, has_casino, has_property, casino_profit = casino_tuple
         property_profit = int(property_pts or 0)
-        from server import _user_owns_any_casino, _user_owns_any_property
-        owned_casino = await _user_owns_any_casino(uid)
-        owned_property = await _user_owns_any_property(uid)
-
-        bodyguard_stats = {}
-        crime_stats = {}
-        gta_stats = {}
-        jail_stats = {}
-        sports_stats = {}
-        try:
-            bodyguard_stats = await get_bodyguards_stats(current_user)
-        except Exception:
-            pass
-        try:
-            crime_stats = await get_crime_stats(current_user)
-        except Exception:
-            pass
-        try:
-            gta_stats = await get_gta_stats(current_user)
-        except Exception:
-            pass
-        try:
-            jail_stats = await get_jail_stats(current_user)
-        except Exception:
-            pass
-        try:
-            sports_lifetime = await compute_sports_betting_stats(uid, None)
-            if stats_gambling_reset_at:
-                sports_period = await compute_sports_betting_stats(uid, stats_gambling_reset_at)
-                sports_stats = {
-                    **sports_period,
-                    "display_since": stats_gambling_reset_at,
-                    "streaks_all_time": True,
-                    "lifetime_total_bets_placed": sports_lifetime["total_bets_placed"],
-                    "lifetime_total_bets_won": sports_lifetime["total_bets_won"],
-                    "lifetime_total_bets_lost": sports_lifetime["total_bets_lost"],
-                    "lifetime_win_pct": sports_lifetime["win_pct"],
-                    "lifetime_profit_loss": sports_lifetime["profit_loss"],
-                    "lifetime_biggest_win": sports_lifetime["biggest_win"],
-                    "lifetime_biggest_loss": sports_lifetime["biggest_loss"],
-                }
-            else:
-                sports_stats = sports_lifetime
-        except Exception:
-            pass
+        bodyguard_stats = bodyguard_stats if isinstance(bodyguard_stats, dict) else {}
+        crime_stats = crime_stats if isinstance(crime_stats, dict) else {}
+        gta_stats = gta_stats if isinstance(gta_stats, dict) else {}
+        jail_stats = jail_stats if isinstance(jail_stats, dict) else {}
+        sports_stats = sports_stats if isinstance(sports_stats, dict) else {}
+        gambling_by_game_lt, gambling_total_lt, gambling_by_game_period, gambling_total_period = gambling_pack
 
         hitlist_npc_kills = int(u.get("hitlist_npc_kills") or 0)
         robot_bodyguard_kills = int(u.get("robot_bodyguard_kills") or 0)
         combat_total_kills = effective_player_kill_count(u)
 
-        gambling_by_game_lt: dict = {}
-        gambling_total_lt = 0
-        gambling_by_game_period: dict = {}
-        gambling_total_period = 0
-        cursor = db.gambling_log.find(
-            {"user_id": uid},
-            {"_id": 0, "game_type": 1, "details": 1, "created_at": 1},
-        ).limit(5000)
-        async for entry in cursor:
-            gt = (entry.get("game_type") or "").strip()
-            if not gt:
-                continue
-            details = entry.get("details") or {}
-            profit = _gambling_profit_from_details(gt, details)
-            if profit == 0:
-                continue
-            bucket = _gambling_analytics_bucket(gt, details)
-            gambling_by_game_lt[bucket] = gambling_by_game_lt.get(bucket, 0) + profit
-            gambling_total_lt += profit
-            entry_dt = _gambling_log_entry_dt(entry.get("created_at"))
-            if stats_gambling_reset_dt is None or (entry_dt is not None and entry_dt >= stats_gambling_reset_dt):
-                gambling_by_game_period[bucket] = gambling_by_game_period.get(bucket, 0) + profit
-                gambling_total_period += profit
-
-        return {
+        payload = {
             "combat": {
                 "total_kills": combat_total_kills,
                 "total_deaths": int(u.get("total_deaths") or 0),
@@ -948,7 +975,7 @@ def register(router):
                 "display_reset_at": stats_gambling_reset_at,
             },
             "sports_betting": sports_stats,
-            "booze": _booze_stats(u, vip_pass_car_owned=vip_pass_car_owned),
+            "booze": _booze_stats(u, vip_pass_car_owned=bool(vip_pass_car_owned)),
             "auto_rank": {
                 "total_busts": int(u.get("auto_rank_total_busts") or 0),
                 "total_crimes": int(u.get("auto_rank_total_crimes") or 0),
@@ -973,6 +1000,8 @@ def register(router):
             },
             "token_perk_stats": u.get("token_perk_stats") if isinstance(u.get("token_perk_stats"), dict) else {},
         }
+        _STATS_ME_CACHE[uid] = (payload, now_mono)
+        return payload
 
     @router.post("/stats/me/reset-gambling-display")
     async def reset_my_gambling_stats_display(current_user: dict = Depends(get_current_user_verified)):
@@ -982,4 +1011,5 @@ def register(router):
         r = await db.users.update_one({"id": uid}, {"$set": {"stats_gambling_reset_at": now}})
         if r.matched_count == 0:
             raise HTTPException(status_code=404, detail="User not found")
+        _STATS_ME_CACHE.pop(uid, None)
         return {"ok": True, "reset_at": now}

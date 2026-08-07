@@ -62,13 +62,20 @@ const GAME_LABELS = {
 const ALL_CASINO_GAMES = ['dice', 'roulette', 'blackjack', 'horseracing', 'videopoker', ...(SLOTS_FEATURE_ENABLED ? ['slots'] : []), 'mdg', 'mp_blackjack', 'mp_poker_vs_dealer', 'mp_poker_vs_players', 'mp_poker'];
 
 const MY_STATS_CACHE_KEY = 'mafia_stats_me_v1';
+// In-memory so revisits paint even if sessionStorage was cleared / expired.
+let _memMyStats = null;
 
 function readMyStatsCache() {
+  if (_memMyStats && typeof _memMyStats === 'object') return _memMyStats;
   try {
     const raw = sessionStorage.getItem(MY_STATS_CACHE_KEY);
     if (!raw) return null;
     const o = JSON.parse(raw);
-    return o && typeof o === 'object' ? o : null;
+    if (o && typeof o === 'object') {
+      _memMyStats = o;
+      return o;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -76,6 +83,7 @@ function readMyStatsCache() {
 
 function writeMyStatsCache(data) {
   if (data == null || typeof data !== 'object') return;
+  _memMyStats = data;
   try {
     sessionStorage.setItem(MY_STATS_CACHE_KEY, JSON.stringify(data));
   } catch (_) {}

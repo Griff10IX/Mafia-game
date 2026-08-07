@@ -153,22 +153,9 @@ const MPBlackjackGame = lazy(() => import("./pages/Casinos/MPBlackjackGamePage")
 const MPPoker = lazy(() => import("./pages/Casinos/MPPokerPage"));
 const MPPokerGame = lazy(() => import("./pages/Casinos/MPPokerGamePage"));
 const SportsBetting = lazy(() => import("./pages/Casinos/SportsBetting"));
-const WorldCup = lazy(() => import("./pages/Game/WorldCup"));
-const WorldCupStaff = lazy(() => import("./pages/Game/WorldCupStaff"));
 
-const PageLoader = () => (
-  <div className="min-h-[45vh] flex flex-col items-center justify-center gap-3">
-    <div
-      className="w-8 h-8 rounded-full border-2 animate-spin"
-      style={{
-        borderColor: 'rgba(var(--noir-primary-rgb, 212, 175, 55), 0.2)',
-        borderTopColor: 'var(--noir-primary, #d4af37)',
-      }}
-      aria-hidden
-    />
-    <span className="text-primary text-[11px] font-heading font-bold uppercase tracking-[0.2em]">Loading</span>
-  </div>
-);
+/** Suspense gap while a lazy chunk downloads — keep empty so it never looks like a black "Loading" screen. */
+const PageLoader = () => <div className="min-h-[45vh]" aria-hidden />;
 
 
 function AuthenticatedShell() {
@@ -878,18 +865,9 @@ function App() {
               <HelpDeskHub />
               }
             />
-            <Route
-              path="/game/world-cup/staff"
-              element={
-              <WorldCupStaff />
-              }
-            />
-            <Route
-              path="/game/world-cup"
-              element={
-              <WorldCup />
-              }
-            />
+            {/* World Cup 2026 retired — history lives in Admin Tools → World Cup */}
+            <Route path="/game/world-cup/staff" element={<Navigate to="/account/dashboard" replace />} />
+            <Route path="/game/world-cup" element={<Navigate to="/account/dashboard" replace />} />
             <Route
               path="/casino/mini-games/snake"
               element={

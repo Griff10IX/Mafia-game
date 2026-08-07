@@ -1125,7 +1125,7 @@ export default function LootBox() {
               ) : null}
             </div>
 
-            <LootRewardGuide rewardInfo={status.reward_info} odds={status.loot_rarity_odds} />
+            <LootRewardGuide rewardInfo={status?.reward_info} odds={status?.loot_rarity_odds} />
 
             {/* Tier picker */}
             <div className={`grid grid-cols-2 gap-1.5 lb-fade-in min-h-[7.5rem]`} style={{ animationDelay: '0.02s' }}>
