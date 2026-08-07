@@ -12,10 +12,17 @@ const BG_STYLES = `
   @keyframes bg-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .bg-fade-in { animation: bg-fade-in 0.4s ease-out both; }
   .bg-card { transition: all 0.3s ease; }
-  .bg-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
-  .bg-row { transition: all 0.2s ease; }
-  .bg-row:hover { background-color: rgba(var(--noir-primary-rgb), 0.04); }
+  .bg-row { transition: background-color 0.2s ease; }
   .bg-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+  @media (hover: hover) and (pointer: fine) {
+    .bg-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
+    .bg-row:hover { background-color: rgba(var(--noir-primary-rgb), 0.04); }
+  }
+  @media (max-width: 639px) {
+    .bg-slot-row { align-items: flex-start; }
+    .bg-slot-actions { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 2px; }
+    .bg-slot-upgrade { flex: 1; min-height: 36px; }
+  }
 `;
 
 // Match backend bodyguards.py: BODYGUARD_SLOT_COSTS = [75, 150, 300, 450]
@@ -605,22 +612,40 @@ export default function Bodyguards() {
   const renderBodyguardCard = (bg) => {
     const isExpanded = expandedSlot === bg.slot_number;
     const isPendingHire = !!bg.pending_hire;
+    const armourLabel = bg.is_robot
+      ? `${bg.armour_level ?? 0}/5`
+      : (bg.armour_level ? `${bg.armour_level}/5` : 'None');
+    const upgradeCost = getUpgradeCost(bg.armour_level);
+    const upgradeLabel = isPendingHire
+      ? 'Hiring…'
+      : upgradingSlot === bg.slot_number
+        ? '…'
+        : (bg.armour_level || 0) >= 5
+          ? 'Max'
+          : `Upg ${upgradeCost}`;
+    const upgradeLabelWide = isPendingHire
+      ? 'Hiring…'
+      : upgradingSlot === bg.slot_number
+        ? '…'
+        : (bg.armour_level || 0) >= 5
+          ? 'Max armour'
+          : `Upgrade (${upgradeCost} pts)`;
     return (
       <div
         key={bg.slot_number}
         data-testid={`bodyguard-slot-${bg.slot_number}`}
-        className={`bg-row rounded-lg transition-all bg-zinc-800/30 border ${isPendingHire ? 'border-primary/30 animate-pulse' : 'border-transparent hover:border-primary/20'}`}
+        className={`bg-row rounded-lg transition-all bg-zinc-800/30 border ${isPendingHire ? 'border-primary/30 animate-pulse' : 'border-transparent sm:hover:border-primary/20'}`}
       >
         <div
-          className="flex items-center justify-between gap-3 px-3 py-2 cursor-pointer"
+          className="bg-slot-row flex flex-wrap sm:flex-nowrap items-center justify-between gap-x-2 gap-y-1.5 px-2.5 py-2 sm:px-3 cursor-pointer"
           onClick={() => setExpandedSlot(isExpanded ? null : bg.slot_number)}
         >
           <div className="flex items-center gap-2 min-w-0 flex-1">
-            <span className="text-primary/50 text-xs">
+            <span className="text-primary/50 text-xs shrink-0 pt-0.5">
               {isExpanded ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
             </span>
             {bg.is_robot ? (
-              <div className="w-8 h-8 rounded-md overflow-hidden border border-primary/30 bg-secondary shrink-0">
+              <div className="w-7 h-7 sm:w-8 sm:h-8 rounded-md overflow-hidden border border-primary/30 bg-secondary shrink-0">
                 <img
                   src={robotBodyguardAvatarUrl(bg.bodyguard_user_id || bg.bodyguard_username || bg.slot_number)}
                   alt=""
@@ -628,16 +653,18 @@ export default function Bodyguards() {
                 />
               </div>
             ) : null}
-            <div className="min-w-0">
-              <div className="text-sm font-heading font-bold text-foreground truncate flex items-center gap-2">
-                Slot {bg.slot_number}
-                <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="text-sm font-heading font-bold text-foreground shrink-0">
+                  Slot {bg.slot_number}
+                </span>
+                <span className={`shrink-0 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide ${
                   bg.is_robot ? 'bg-blue-500/20 text-blue-400' : 'bg-emerald-500/20 text-emerald-400'
                 }`}>
                   {bg.is_robot ? 'Robot' : 'Human'}
                 </span>
               </div>
-              <div className="text-[10px] text-mutedForeground truncate hidden sm:block">
+              <div className="text-[10px] text-mutedForeground truncate mt-0.5">
                 {isPendingHire ? (
                   <span className="text-primary">{bg.bodyguard_username ?? 'Hiring robot...'}</span>
                 ) : (
@@ -650,44 +677,41 @@ export default function Bodyguards() {
                     {bg.bodyguard_username ?? '—'}
                   </Link>
                 )}
-                {bg.bodyguard_rank_name && <span> • {bg.bodyguard_rank_name}</span>}
-              </div>
-              <div className="text-[10px] text-mutedForeground sm:hidden">
-                Tap to {isExpanded ? 'collapse' : 'view details'}
+                {bg.bodyguard_rank_name && <span className="text-mutedForeground/80"> · {bg.bodyguard_rank_name}</span>}
               </div>
             </div>
           </div>
-          <div className="shrink-0 w-12 text-center">
-            <span className="text-xs font-bold text-primary">
-              {bg.is_robot ? `${bg.armour_level ?? 0}/5` : (bg.armour_level ? `${bg.armour_level}/5` : 'None')}
-            </span>
-          </div>
-          <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-slot-actions shrink-0 flex items-center gap-2 sm:gap-3" onClick={(e) => e.stopPropagation()}>
+            <div className="shrink-0 min-w-[2.25rem] text-center">
+              <div className="text-[9px] uppercase tracking-wide text-mutedForeground leading-none mb-0.5 sm:hidden">Armour</div>
+              <span className="text-xs font-bold text-primary tabular-nums">{armourLabel}</span>
+            </div>
             {bg.is_robot ? (
               <button
                 onClick={() => upgradeArmour(bg.slot_number)}
                 disabled={isPendingHire || (bg.armour_level || 0) >= 5}
-                className="bg-primary/20 text-primary rounded px-3 py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation disabled:opacity-40 disabled:cursor-not-allowed font-heading"
+                className="bg-slot-upgrade bg-primary/20 text-primary rounded px-2.5 py-1.5 sm:px-3 sm:py-1 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation disabled:opacity-40 disabled:cursor-not-allowed font-heading"
                 data-testid={`upgrade-armour-${bg.slot_number}`}
               >
-                {isPendingHire ? 'Hiring…' : upgradingSlot === bg.slot_number ? '…' : (bg.armour_level || 0) >= 5 ? '🛡️ Max' : `🛡️ Upgrade (${getUpgradeCost(bg.armour_level)} pts)`}
+                <span className="sm:hidden">{upgradeLabel}</span>
+                <span className="hidden sm:inline">{upgradeLabelWide}</span>
               </button>
             ) : (
-              <span className="text-[10px] text-mutedForeground italic">Your armour</span>
+              <span className="text-[10px] text-mutedForeground italic px-1">Your armour</span>
             )}
           </div>
         </div>
         {isExpanded && (
-          <div className="px-3 pb-3 pt-1 border-t border-zinc-700/30 mt-1 mx-3 space-y-2">
-            <div className="grid grid-cols-2 gap-2 text-xs">
-              <div className="bg-zinc-900/50 rounded p-2">
-                <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Guard</div>
+          <div className="px-2.5 pb-2.5 pt-2 border-t border-zinc-700/30 mx-2 sm:mx-3 space-y-2">
+            <div className="grid grid-cols-2 gap-1.5 sm:gap-2 text-xs">
+              <div className="bg-zinc-900/50 rounded p-2 col-span-2 sm:col-span-1 min-w-0">
+                <div className="text-[9px] text-mutedForeground uppercase tracking-wide mb-1">Guard</div>
                 {isPendingHire ? (
-                  <div className="text-primary font-bold">{bg.bodyguard_username ?? 'Hiring robot...'}</div>
+                  <div className="text-primary font-bold break-all leading-snug">{bg.bodyguard_username ?? 'Hiring robot...'}</div>
                 ) : (
                   <Link
                     to={`/profile/${encodeURIComponent(bg.bodyguard_username ?? '')}`}
-                    className="text-foreground font-bold hover:text-primary"
+                    className="text-foreground font-bold hover:text-primary break-all leading-snug"
                     data-testid={`bodyguard-profile-expanded-${bg.slot_number}`}
                   >
                     {bg.bodyguard_username ?? '—'}
@@ -695,39 +719,41 @@ export default function Bodyguards() {
                 )}
               </div>
               <div className="bg-zinc-900/50 rounded p-2">
-                <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Type</div>
+                <div className="text-[9px] text-mutedForeground uppercase tracking-wide mb-1">Type</div>
                 <div className={`font-bold ${bg.is_robot ? 'text-blue-400' : 'text-emerald-400'}`}>
-                  {bg.is_robot ? '🤖 Robot' : '👤 Human'}
+                  {bg.is_robot ? 'Robot' : 'Human'}
                 </div>
               </div>
               {bg.bodyguard_rank_name && (
                 <div className="bg-zinc-900/50 rounded p-2">
-                  <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Rank</div>
-                  <div className="text-foreground font-bold">{bg.bodyguard_rank_name}</div>
+                  <div className="text-[9px] text-mutedForeground uppercase tracking-wide mb-1">Rank</div>
+                  <div className="text-foreground font-bold leading-snug">{bg.bodyguard_rank_name}</div>
                 </div>
               )}
               <div className="bg-zinc-900/50 rounded p-2">
-                <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Armour</div>
-                <div className="text-primary font-bold">
-                  {bg.is_robot ? `${bg.armour_level ?? 0}/5` : (bg.armour_level ? `${bg.armour_level}/5 (their armour)` : 'None (their armour)')}
+                <div className="text-[9px] text-mutedForeground uppercase tracking-wide mb-1">Armour</div>
+                <div className="text-primary font-bold tabular-nums">
+                  {bg.is_robot ? `${bg.armour_level ?? 0}/5` : (bg.armour_level ? `${bg.armour_level}/5 (theirs)` : 'None (theirs)')}
                 </div>
               </div>
-              <div className="bg-zinc-900/50 rounded p-2 col-span-2">
-                <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Hired</div>
+              <div className="bg-zinc-900/50 rounded p-2">
+                <div className="text-[9px] text-mutedForeground uppercase tracking-wide mb-1">Hired</div>
                 <div className="text-foreground font-bold">
-                  {bg.hired_at && new Date(bg.hired_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })}
+                  {bg.hired_at
+                    ? new Date(bg.hired_at).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+                    : '—'}
                 </div>
               </div>
               {(bg.hire_cost ?? 0) > 0 && (
-                <div className="bg-zinc-900/50 rounded p-2 col-span-2">
-                  <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Upfront cost</div>
-                  <div className="text-foreground font-bold">{(bg.hire_cost ?? 0).toLocaleString()} pts</div>
+                <div className="bg-zinc-900/50 rounded p-2">
+                  <div className="text-[9px] text-mutedForeground uppercase tracking-wide mb-1">Upfront</div>
+                  <div className="text-foreground font-bold tabular-nums">{(bg.hire_cost ?? 0).toLocaleString()} pts</div>
                 </div>
               )}
               {!bg.is_robot && ((bg.payment_points ?? 0) > 0 || (bg.payment_money ?? 0) > 0) && (
                 <div className="bg-zinc-900/50 rounded p-2 col-span-2">
-                  <div className="text-[10px] text-mutedForeground uppercase mb-0.5">Pay (per week, auto on day)</div>
-                  <div className="text-foreground font-bold">
+                  <div className="text-[9px] text-mutedForeground uppercase tracking-wide mb-1">Pay (per week)</div>
+                  <div className="text-foreground font-bold leading-snug">
                     {[(bg.payment_points ?? 0) > 0 && `${bg.payment_points ?? 0} pts`, (bg.payment_money ?? 0) > 0 && `$${Number(bg.payment_money ?? 0).toLocaleString()}`].filter(Boolean).join(' + ')}
                     {bg.payout_weekday != null && ` · ${WEEKDAY_OPTIONS[bg.payout_weekday]?.label ?? 'Weekly'}s`}
                   </div>
@@ -887,10 +913,32 @@ export default function Bodyguards() {
       {/* Bodyguard Slots */}
       <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-card bg-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
           <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
             Your Bodyguards
           </span>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {activeCount < 4 && nextEmptySlot && !bodyguardFor?.owner_username && (
+              <button
+                type="button"
+                onClick={() => hireBodyguard(true)}
+                data-testid="hire-robot-header"
+                className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading font-bold uppercase tracking-wide border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30 active:scale-95 touch-manipulation"
+              >
+                Hire ({getHireCost(nextEmptySlot).toLocaleString()})
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handleManualRefresh}
+              disabled={refreshing}
+              className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading font-bold uppercase tracking-wide border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 transition-colors touch-manipulation"
+              title="Refresh list and data"
+            >
+              <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
+              {refreshing ? '…' : 'Refresh'}
+            </button>
+          </div>
         </div>
 
         <div className="p-2 space-y-4">
@@ -982,31 +1030,6 @@ export default function Bodyguards() {
 
           {/* Your Bodyguards (in slot order) */}
           <div>
-            <div className="flex items-center justify-between gap-2 px-1 mb-1.5">
-              <h4 className="text-[10px] font-heading font-bold text-primary/80 uppercase tracking-wider">Your Bodyguards</h4>
-              <div className="flex items-center gap-1.5 shrink-0">
-                {activeCount < 4 && nextEmptySlot && !bodyguardFor?.owner_username && (
-                  <button
-                    type="button"
-                    onClick={() => hireBodyguard(true)}
-                    data-testid="hire-robot-header"
-                    className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading font-bold uppercase tracking-wide border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30 active:scale-95 touch-manipulation"
-                  >
-                    🤖 Hire ({getHireCost(nextEmptySlot).toLocaleString()} pts)
-                  </button>
-                )}
-                <button
-                  type="button"
-                  onClick={handleManualRefresh}
-                  disabled={refreshing}
-                  className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading font-bold uppercase tracking-wide border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 transition-colors"
-                  title="Refresh list and data"
-                >
-                  <RefreshCw size={12} className={refreshing ? 'animate-spin' : ''} />
-                  {refreshing ? '…' : 'Refresh'}
-                </button>
-              </div>
-            </div>
             <div className="space-y-1">
               {activeBodyguards.map((bg) => renderBodyguardCard(bg))}
               {activeCount < 4 && nextEmptySlot && !bodyguardFor?.owner_username && (
@@ -1022,7 +1045,7 @@ export default function Bodyguards() {
                       data-testid="hire-robot-slot"
                       className="bg-primary/20 text-primary rounded px-3 py-2 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all active:scale-95 touch-manipulation font-heading shrink-0"
                     >
-                      {`🤖 Hire robot (${getHireCost(nextEmptySlot).toLocaleString()} pts)`}
+                      {`Hire robot (${getHireCost(nextEmptySlot).toLocaleString()} pts)`}
                     </button>
                   </div>
                   <div className="text-[10px] text-mutedForeground">
@@ -1036,7 +1059,7 @@ export default function Bodyguards() {
                       value={inviteUsername}
                       onChange={(e) => setInviteUsername(e.target.value)}
                       onKeyDown={(e) => e.key === 'Enter' && sendInvite()}
-                      className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1.5 text-xs text-foreground w-28 placeholder:text-zinc-500"
+                      className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1.5 text-xs text-foreground w-full sm:w-28 placeholder:text-zinc-500"
                     />
                     <input
                       type="number"
@@ -1044,7 +1067,7 @@ export default function Bodyguards() {
                       placeholder="Pts/week"
                       value={invitePaymentPoints || ''}
                       onChange={(e) => setInvitePaymentPoints(e.target.value ? Number(e.target.value) : 0)}
-                      className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1.5 text-xs text-foreground w-20 placeholder:text-zinc-500"
+                      className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1.5 text-xs text-foreground w-[calc(50%-4px)] sm:w-20 placeholder:text-zinc-500"
                     />
                     <input
                       type="number"
@@ -1052,12 +1075,12 @@ export default function Bodyguards() {
                       placeholder="$ /week"
                       value={invitePaymentMoney || ''}
                       onChange={(e) => setInvitePaymentMoney(e.target.value ? Number(e.target.value) : 0)}
-                      className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1.5 text-xs text-foreground w-24 placeholder:text-zinc-500"
+                      className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1.5 text-xs text-foreground w-[calc(50%-4px)] sm:w-24 placeholder:text-zinc-500"
                     />
                     <select
                       value={invitePayoutWeekday}
                       onChange={(e) => setInvitePayoutWeekday(Number(e.target.value))}
-                      className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1.5 text-xs text-foreground"
+                      className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1.5 text-xs text-foreground w-full sm:w-auto"
                     >
                       {WEEKDAY_OPTIONS.map((opt) => (
                         <option key={opt.value} value={opt.value}>Pay {opt.label}s</option>
@@ -1067,9 +1090,9 @@ export default function Bodyguards() {
                       onClick={sendInvite}
                       disabled={inviting}
                       data-testid="invite-human-next"
-                      className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 font-heading disabled:opacity-60"
+                      className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 font-heading disabled:opacity-60 w-full sm:w-auto"
                     >
-                      {inviting ? '…' : '👤 Invite'}
+                      {inviting ? '…' : 'Invite human'}
                     </button>
                   </div>
                 </div>
