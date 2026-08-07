@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-07 21:40 UTC[/color][/b] — [b]Sky default theme + login presence[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Site default accent is now [b]sky blue[/b] (same look as the login page) instead of gold. Classic gold remains available as a theme preset.[/color]
+[*][color=#888888][b]Improved:[/b] Login page shows live [b]on the streets[/b] (users online) and [b]in the family[/b] (alive players) counts under the tagline.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-07 20:25 UTC[/color][/b] — [b]Game Pass prestige, profiles, Attack/Jail, Stats cash[/b][/size]
 [quote]
 [list]

@@ -12,6 +12,29 @@ import styles from '../../styles/noir.module.css';
 
 const landingGangsterImg = `${process.env.PUBLIC_URL || ''}/images/landing-gangster.png`;
 
+/** Login always uses the site sky accent (GhostFace default), even if localStorage has another colour. */
+const LANDING_SKY_VARS = {
+  '--noir-primary': '#0ea5e9',
+  '--noir-primary-bright': '#38bdf8',
+  '--noir-primary-dark': '#0284c7',
+  '--noir-primary-rgb': '14, 165, 233',
+  '--noir-primary-foreground': '#000000',
+  '--noir-button-foreground': '#000000',
+  '--noir-gradient-1': '#38bdf8',
+  '--noir-gradient-2': '#0ea5e9',
+  '--noir-gradient-3': '#0284c7',
+  '--noir-gradient-4': '#0284c7',
+  '--noir-button-gradient-1': '#38bdf8',
+  '--noir-button-gradient-2': '#0ea5e9',
+  '--noir-button-gradient-3': '#0284c7',
+  '--noir-button-gradient-4': '#0284c7',
+  '--noir-button-primary-rgb': '14, 165, 233',
+  '--noir-button-border': '#38bdf8',
+  '--noir-accent-line': '#0ea5e9',
+  '--noir-accent-line-dark': '#0284c7',
+  '--noir-tab-bg': 'rgba(14, 165, 233, 0.5)',
+};
+
 /** Normalize auth redirect / API messages to inactivity-focused copy for the login card. */
 function friendlyAuthSessionMessage(msg) {
   const s = String(msg || '').trim();
@@ -83,6 +106,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
   const [loginTurnstileCfg, setLoginTurnstileCfg] = useState(null);
   const [loginCaptchaToken, setLoginCaptchaToken] = useState(null);
   const [loginTurnstileWidgetKey, setLoginTurnstileWidgetKey] = useState(0);
+  const [presence, setPresence] = useState({ online_count: null, total_players: null });
 
   useEffect(() => {
     let cancelled = false;
@@ -96,6 +120,29 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
       });
     return () => {
       cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const loadPresence = () => {
+      api
+        .get('/auth/landing-presence')
+        .then((r) => {
+          if (cancelled) return;
+          const d = r.data || {};
+          setPresence({
+            online_count: typeof d.online_count === 'number' ? d.online_count : null,
+            total_players: typeof d.total_players === 'number' ? d.total_players : null,
+          });
+        })
+        .catch(() => {});
+    };
+    loadPresence();
+    const id = setInterval(loadPresence, 60_000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
     };
   }, []);
 
@@ -386,6 +433,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
     <div
       className={`relative min-h-screen overflow-x-hidden ${styles.page} ${styles.themeGangsterModern}`}
       data-testid="landing-page"
+      style={LANDING_SKY_VARS}
     >
       <style>{`
         @keyframes landing-fade-up {
@@ -401,14 +449,19 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
           0%, 100% { opacity: 0.35; }
           50%      { opacity: 0.65; }
         }
+        @keyframes landing-pulse-dot {
+          0%, 100% { opacity: 0.55; transform: scale(1); }
+          50%      { opacity: 1; transform: scale(1.15); }
+        }
         .landing-fade-up   { animation: landing-fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
         .landing-fade-up-1 { animation: landing-fade-up 0.55s 0.1s cubic-bezier(0.22, 1, 0.36, 1) both; }
         .landing-fade-up-2 { animation: landing-fade-up 0.55s 0.2s cubic-bezier(0.22, 1, 0.36, 1) both; }
         .landing-bg-drift  { animation: landing-bg-drift 28s ease-in-out infinite; }
         .landing-shaft     { animation: landing-shaft 7s ease-in-out infinite; }
+        .landing-pulse-dot { animation: landing-pulse-dot 2.4s ease-in-out infinite; }
         @media (prefers-reduced-motion: reduce) {
           .landing-fade-up, .landing-fade-up-1, .landing-fade-up-2,
-          .landing-bg-drift, .landing-shaft { animation: none !important; }
+          .landing-bg-drift, .landing-shaft, .landing-pulse-dot { animation: none !important; }
         }
       `}</style>
 
@@ -444,7 +497,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
           className="absolute inset-0 landing-shaft"
           style={{
             background:
-              'radial-gradient(ellipse 70% 55% at 50% -5%, rgba(var(--noir-primary-rgb,201,168,76),0.2) 0%, transparent 60%)',
+              'radial-gradient(ellipse 70% 55% at 50% -5%, rgba(var(--noir-primary-rgb,14,165,233),0.2) 0%, transparent 60%)',
           }}
         />
       </div>
@@ -466,7 +519,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
               className="font-heading font-black uppercase tracking-[0.18em] text-[clamp(2.35rem,8vw,3.75rem)] leading-none"
               style={{
                 color: 'var(--noir-foreground)',
-                textShadow: '0 2px 40px rgba(0,0,0,0.65), 0 0 60px rgba(var(--noir-primary-rgb,201,168,76),0.18)',
+                textShadow: '0 2px 40px rgba(0,0,0,0.65), 0 0 60px rgba(var(--noir-primary-rgb,14,165,233),0.18)',
               }}
               data-testid="landing-title"
             >
@@ -478,20 +531,54 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
             >
               Build your empire. Enforce omertà.
             </p>
+            {(presence.online_count != null || presence.total_players != null) && (
+              <div
+                className="mt-5 flex items-center justify-center gap-3 sm:gap-4 font-heading text-[10px] sm:text-[11px] tracking-wide landing-fade-up-1"
+                data-testid="landing-presence"
+                aria-live="polite"
+              >
+                {presence.online_count != null && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span
+                      className="landing-pulse-dot inline-block h-1.5 w-1.5 rounded-full shrink-0"
+                      style={{ background: '#4ade80', boxShadow: '0 0 8px rgba(74,222,128,0.55)' }}
+                      aria-hidden
+                    />
+                    <span className="tabular-nums font-bold" style={{ color: '#4ade80' }}>
+                      {presence.online_count.toLocaleString()}
+                    </span>
+                    <span style={{ color: 'rgba(245,245,245,0.45)' }}>on the streets</span>
+                  </span>
+                )}
+                {presence.online_count != null && presence.total_players != null && (
+                  <span style={{ color: 'rgba(245,245,245,0.2)' }} aria-hidden>
+                    ·
+                  </span>
+                )}
+                {presence.total_players != null && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="tabular-nums font-semibold" style={{ color: 'rgba(245,245,245,0.88)' }}>
+                      {presence.total_players.toLocaleString()}
+                    </span>
+                    <span style={{ color: 'rgba(245,245,245,0.45)' }}>in the family</span>
+                  </span>
+                )}
+              </div>
+            )}
           </header>
 
           {/* Auth form — interaction container only */}
           <div
             className={`landing-fade-up-2 overflow-hidden rounded-xl border ${styles.panel}`}
             style={{
-              borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.22)',
+              borderColor: 'rgba(var(--noir-primary-rgb,14,165,233),0.22)',
               background: 'linear-gradient(180deg, rgba(18,16,14,0.92) 0%, rgba(10,10,12,0.94) 100%)',
               boxShadow: '0 24px 64px rgba(0,0,0,0.55)',
             }}
           >
             <div
               className="px-4 pt-4 pb-0 flex gap-1"
-              style={{ borderBottom: '1px solid rgba(var(--noir-primary-rgb,201,168,76),0.12)' }}
+              style={{ borderBottom: '1px solid rgba(var(--noir-primary-rgb,14,165,233),0.12)' }}
             >
               <button
                 type="button"
@@ -528,8 +615,8 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                 <div
                   className="flex items-center gap-2 rounded border p-3"
                   style={{
-                    borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.2)',
-                    backgroundColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.05)',
+                    borderColor: 'rgba(var(--noir-primary-rgb,14,165,233),0.2)',
+                    backgroundColor: 'rgba(var(--noir-primary-rgb,14,165,233),0.05)',
                   }}
                 >
                   <code className="flex-1 truncate text-xs font-mono" style={{ color: 'var(--noir-foreground)' }}>

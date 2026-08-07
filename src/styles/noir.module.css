@@ -8,15 +8,15 @@
   --noir-content: #1a1a1a;
   --noir-surface: #282828;
   --noir-raised: #333333;
-  --noir-primary: #d4af37;
-  --noir-primary-bright: #e6c229;
-  --noir-primary-dark: #b8860b;
+  --noir-primary: #0ea5e9;
+  --noir-primary-bright: #38bdf8;
+  --noir-primary-dark: #0284c7;
   /* Multi-tone gradient (2–4 stops); when set by theme, overrides bright/dark for gradients */
-  --noir-gradient-1: #e6c229;
-  --noir-gradient-2: #b8860b;
-  --noir-gradient-3: #b8860b;
-  --noir-gradient-4: #b8860b;
-  --noir-primary-rgb: 212, 175, 55;
+  --noir-gradient-1: #38bdf8;
+  --noir-gradient-2: #0ea5e9;
+  --noir-gradient-3: #0284c7;
+  --noir-gradient-4: #0284c7;
+  --noir-primary-rgb: 14, 165, 233;
   /* Button theme (default = same as main; overridden when user picks a button colour) */
   --noir-button-gradient-1: var(--noir-gradient-1);
   --noir-button-gradient-2: var(--noir-gradient-2);
@@ -29,7 +29,7 @@
   --noir-accent-line: var(--noir-primary);
   --noir-accent-line-dark: var(--noir-primary-dark);
   --noir-tab-bg: rgba(var(--noir-primary-rgb), 0.5);
-  --noir-primary-foreground: #ffffff;
+  --noir-primary-foreground: #000000;
   --noir-foreground: #f5f5f5;
   --noir-muted: #a1a1aa;
   --noir-profit: #5cb85c;

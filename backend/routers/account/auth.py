@@ -709,6 +709,7 @@ def register(router):
             user_id = str(uuid.uuid4())
             _default_theme_prefs = {
                 "colourId": "sky",
+                "buttonColourId": "sky",
                 "textureId": "modern-soft",
                 "themeVariant": "modern",
                 "sidebarLayout": "categorized_classic",
@@ -1246,6 +1247,51 @@ def register(router):
         )
         enabled, site_key = login_turnstile_effective_config(main)
         return {"enabled": enabled, "site_key": site_key if enabled else None}
+
+    @router.get("/auth/landing-presence")
+    async def landing_presence():
+        """
+        Public (no auth): coarse presence counts for the login page.
+        Online ≈ same window as Users Online roster (last_seen / auto-rank / force-online).
+        Total = alive real players excl. staff/NPC. No usernames returned.
+        """
+        now = datetime.now(timezone.utc)
+        now_iso = now.isoformat()
+        online_cutoff = (now - timedelta(minutes=5)).isoformat()
+        staff_ids = srv.expand_user_ids_for_mongo_nin(await srv._get_staff_user_ids())
+        staff_filter = srv._staff_exclude_user_filter(with_email_nor=not bool(staff_ids))
+        alive_real = {"is_npc": {"$ne": True}, "is_dead": {"$ne": True}, **staff_filter}
+        if staff_ids:
+            alive_real = {**alive_real, "id": {"$nin": staff_ids}}
+
+        online_match = {
+            "$and": [
+                alive_real,
+                {
+                    "is_bodyguard": {"$ne": True},
+                    "username": {"$regex": r"\S"},
+                    "$or": [
+                        {"last_seen": {"$gte": online_cutoff}},
+                        {"$and": [{"auto_rank_enabled": True}, {"auto_rank_idle": {"$ne": True}}]},
+                        {"forced_online_until": {"$gt": now_iso}},
+                    ],
+                },
+            ]
+        }
+
+        try:
+            online_count, total_players = await asyncio.gather(
+                db.users.count_documents(online_match),
+                db.users.count_documents(alive_real),
+            )
+        except Exception:
+            logging.exception("landing_presence counts failed")
+            online_count, total_players = 0, 0
+
+        return {
+            "online_count": int(online_count or 0),
+            "total_players": int(total_players or 0),
+        }
 
     @router.post("/auth/login")
     async def login(user_data: UserLogin, request: Request):

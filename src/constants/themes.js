@@ -376,7 +376,7 @@ export const THEME_COLOURS = [
 
 /** Display order: sections for main/button/line colours. Colours not listed go in "More". */
 export const THEME_COLOUR_SECTIONS = [
-  { label: 'Default', ids: ['gold'] },
+  { label: 'Default', ids: ['sky'] },
   { label: 'Deep dark', ids: ['obsidian', 'carbon', 'gunmetal', 'deep-red', 'deep-blue', 'deep-green', 'deep-purple', 'deep-ink', 'pitch', 'deep-navy', 'deep-forest', 'deep-wine', 'deep-plum', 'shadow-dark', 'iron-dark', 'slate-deep', 'teal-deep', 'midnight', 'twilight'] },
   { label: 'Dark', ids: ['charcoal', 'graphite', 'blood', 'navy', 'ocean', 'forest', 'wine', 'plum', 'ash', 'smoke', 'pewter', 'titanium', 'steel', 'aubergine', 'spruce', 'merlot', 'cedar'] },
   { label: 'Mid', ids: ['slate', 'zinc', 'neutral', 'stone', 'storm', 'fog', 'flint', 'battleship', 'mink', 'taupe', 'sage-mid', 'dust', 'denim', 'moonlight', 'pewter-blue', 'mauve', 'sepia', 'clay', 'rose-quartz', 'bronze-green'] },
@@ -759,9 +759,9 @@ export const THEME_WRITING_SECTIONS = [
   EXPANDED_WRITING_SECTION,
 ];
 
-export const DEFAULT_COLOUR_ID = 'gold';
-/** Default button colour when user has not set one (Assign-button style: dark olive-gold, bright border). */
-export const DEFAULT_BUTTON_COLOUR_ID = 'dark-gold';
+export const DEFAULT_COLOUR_ID = 'sky';
+/** Default button colour matches site accent (sky). Gold olive buttons remain available as dark-gold. */
+export const DEFAULT_BUTTON_COLOUR_ID = 'sky';
 export const DEFAULT_WRITING_COLOUR_ID = 'default';
 export const DEFAULT_TEXT_STYLE_ID = 'normal';
 export const DEFAULT_FONT_ID = 'clean';
@@ -775,7 +775,7 @@ export const THEME_VARIANTS = [
 ];
 
 /** First-time / Reset Classic & Reset Modern targets. */
-export const THEME_RESET_CLASSIC_ID = 'old-default';
+export const THEME_RESET_CLASSIC_ID = 'default';
 export const THEME_RESET_MODERN_ID = 'modern-full';
 
 /** Pinned “Starting looks” row in Theme Studio (handcrafted + hero presets). */
@@ -818,7 +818,8 @@ export const THEME_PRESETS = [
   { id: 'crimson-mafia-full', name: 'Crimson Mafia', description: 'Deep blood accent, warm parchment text, grain texture', colourId: 'blood', textureId: 'grain', buttonColourId: null, accentLineColourId: null, writingColourId: 'parchment', mutedWritingColourId: 'warm-gray', buttonStyleId: 'shaded', fontId: 'elegant', textStyleId: 'semibold', toastTextColourId: 'parchment', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized', themeVariant: 'classic', buttonShapeId: 'rounded', isFullPreset: true, presetCategory: 'dark-pro' },
   { id: 'clean-steel-full', name: 'Clean Steel', description: 'Cool steel accent, modern layout, mesh texture', colourId: 'steel', textureId: 'mesh', buttonColourId: null, accentLineColourId: null, writingColourId: 'cool-white', mutedWritingColourId: 'slate-300', buttonStyleId: 'flat', fontId: 'modern', textStyleId: 'medium', toastTextColourId: 'cool-white', mobileNavStyle: 'bottom', mobileStatsDisplay: 'right_sidebar', sidebarLayout: 'categorized_classic', themeVariant: 'modern', buttonShapeId: 'rounded', isFullPreset: true, presetCategory: 'metallic' },
   { id: 'original', name: 'Original theme', description: 'Default look before custom themes', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null, themeVariant: 'classic' },
-  { id: 'default', name: 'Classic Mafia', description: 'Gold, no texture', colourId: 'gold', textureId: 'none', buttonColourId: null, accentLineColourId: null },
+  { id: 'default', name: 'Default', description: 'Sky blue accent (site default)', colourId: 'sky', textureId: 'none', buttonColourId: 'sky', accentLineColourId: null },
+  { id: 'classic-gold', name: 'Classic Gold', description: 'Original gold accent', colourId: 'gold', textureId: 'none', buttonColourId: 'dark-gold', accentLineColourId: null },
   { id: 'dark-mode', name: 'Dark Mode', description: 'Slate accents, clean', colourId: 'matte-slate', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'telegram', name: 'Telegram', description: 'Teal / sky blue', colourId: 'sky', textureId: 'none', buttonColourId: null, accentLineColourId: null },
   { id: 'facebook', name: 'Facebook', description: 'Blue accent', colourId: 'blue', textureId: 'none', buttonColourId: null, accentLineColourId: null },
