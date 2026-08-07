@@ -968,7 +968,9 @@ def register(router):
         created_at = user.get("created_at")
         if not is_own_profile:
             last_seen = None
-            is_bodyguard_visible = False
+            # Hide human bodyguard contracts from other players; robot NPCs can expose
+            # is_bodyguard so the client can show the robot dossier avatar.
+            is_bodyguard_visible = bool(user.get("is_bodyguard") and user.get("is_npc"))
         else:
             is_bodyguard_visible = bool(user.get("is_bodyguard"))
 
