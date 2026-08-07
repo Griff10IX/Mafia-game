@@ -280,7 +280,7 @@ const JailedPlayerRow = ({
           </span>
         ) : player.unbustable ? (
           <span className="px-1 py-0.5 rounded text-[9px] font-bold uppercase bg-amber-500/15 text-amber-300 border border-amber-500/35">
-            Lock
+            Unbustable
           </span>
         ) : isNpc ? (
           <span
