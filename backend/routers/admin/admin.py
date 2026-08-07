@@ -21271,9 +21271,9 @@ def register(router):
         public_swiss_total = int((swiss_rows[0].get("t", 0) if swiss_rows else 0) or 0)
 
         # Same definitions as GET /stats/overview game_capital.total_cash (alive only; excl. staff/NPC/dead)
+        # Classic bank_balance is not part of public Total cash.
         public_total_cash = (
             alive_sums["money"]
-            + alive_sums["bank_balance"]
             + public_swiss_total
             + interest_total
             + family_treasury
@@ -21308,7 +21308,7 @@ def register(router):
                 "id": "bank_alive_players",
                 "label": "Classic bank balance (same players)",
                 "amount": real_alive_bank,
-                "note": "users.bank_balance; included in public Total cash.",
+                "note": "users.bank_balance; not included in public Total cash.",
             },
             {
                 "id": "swiss_all_real_players",
@@ -21691,7 +21691,7 @@ def register(router):
         rows_out.sort(key=lambda r: r.get("at") or "", reverse=True)
         note_parts = [
             "Best-effort from existing logs; not every wallet $inc is logged.",
-            "Economy overview 'Cash in circulation' is wallets only; stats Total cash is alive wallets + classic bank + Swiss + interest bank + family treasuries + Quick Trade escrow (excl. staff/NPC/dead).",
+            "Economy overview 'Cash in circulation' is wallets only; stats Total cash is alive wallets + Swiss + interest bank + family treasuries + Quick Trade escrow (excl. staff/NPC/dead).",
         ]
         if wallet_gains_only:
             note_parts.insert(

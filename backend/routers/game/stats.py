@@ -463,13 +463,7 @@ def register(router):
             ]).to_list(1),
             db.users.aggregate([
                 {"$match": alive_real_match},
-                {
-                    "$group": {
-                        "_id": None,
-                        "money_total": {"$sum": {"$ifNull": ["$money", 0]}},
-                        "bank_total": {"$sum": {"$ifNull": ["$bank_balance", 0]}},
-                    }
-                },
+                {"$group": {"_id": None, "money_total": {"$sum": {"$ifNull": ["$money", 0]}}}},
             ]).to_list(1),
             db.bank_deposits.aggregate([
                 {"$match": bank_match},
@@ -536,15 +530,14 @@ def register(router):
         family_treasury_total = int(family_treasury_agg[0].get("total", 0) or 0) if family_treasury_agg else 0
         cash_doc = cash_agg[0] if cash_agg else {}
         wallets_total = int(cash_doc.get("money_total", 0) or 0)
-        classic_bank_total = int(cash_doc.get("bank_total", 0) or 0)
         swiss_total = int(totals_doc.get("swiss_total", 0) or 0)
         interest_bank_total = int(interest_agg[0].get("total", 0) or 0) if interest_agg else 0
         quicktrade_cash = int(quicktrade_agg[0].get("total", 0) or 0) if quicktrade_agg else 0
-        # Whole-game cash (excl. staff/NPC/dead): alive wallets + classic bank + Swiss
+        # Whole-game cash (excl. staff/NPC/dead): alive wallets + Swiss
         # + interest-bank deposits + family treasuries + Quick Trade buy-offer escrow.
+        # Classic bank_balance is omitted (legacy / unused on public Total cash).
         total_cash = (
             wallets_total
-            + classic_bank_total
             + swiss_total
             + interest_bank_total
             + family_treasury_total
@@ -712,7 +705,6 @@ def register(router):
             "game_capital": {
                 "total_cash": total_cash,
                 "wallets_total": wallets_total,
-                "classic_bank_total": classic_bank_total,
                 "swiss_total": swiss_total,
                 "interest_bank_total": interest_bank_total,
                 "quicktrade_cash": quicktrade_cash,
