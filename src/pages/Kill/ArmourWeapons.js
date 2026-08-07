@@ -73,7 +73,11 @@ function ConveyorBelt() {
   const setWidth = BELT_ITEM_COUNT * ITEM_WIDTH;
   const items = Array.from({ length: BELT_ITEM_COUNT * 2 }, (_, i) => BELT_BLOCK[i % BELT_BLOCK.length]);
   return (
-    <div className="relative w-full h-10 overflow-hidden rounded" style={{ background: 'linear-gradient(180deg, #2a2218 0%, #3d3225 40%, #2a2218 100%)' }}>
+    <div
+      className="relative w-full h-7 sm:h-8 overflow-hidden rounded-md border border-primary/10"
+      style={{ background: 'linear-gradient(180deg, rgba(20,16,12,0.9) 0%, rgba(36,28,20,0.95) 50%, rgba(20,16,12,0.9) 100%)' }}
+      aria-hidden
+    >
       <svg width={0} height={0} className="absolute" aria-hidden="true">
         <defs>
           <linearGradient id="belt-brass" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -113,12 +117,10 @@ function ConveyorBelt() {
           </linearGradient>
         </defs>
       </svg>
-      <div className="absolute inset-x-0 top-0 h-[3px] z-10" style={{ background: 'linear-gradient(90deg, #555 0%, #888 50%, #555 100%)' }} />
-      <div className="absolute inset-x-0 bottom-0 h-[3px] z-10" style={{ background: 'linear-gradient(90deg, #555 0%, #888 50%, #555 100%)' }} />
-      <div className="absolute inset-0 animate-belt-treads" style={{ backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 28px, rgba(0,0,0,0.3) 28px, rgba(0,0,0,0.3) 30px)', backgroundSize: '30px 100%' }} />
-      <div className="absolute top-0 left-0 h-full flex items-center animate-belt-bullets" style={{ width: setWidth * 2 }}>
+      <div className="absolute inset-0 animate-belt-treads opacity-40" style={{ backgroundImage: 'repeating-linear-gradient(90deg, transparent, transparent 28px, rgba(0,0,0,0.35) 28px, rgba(0,0,0,0.35) 30px)', backgroundSize: '30px 100%' }} />
+      <div className="absolute top-0 left-0 h-full flex items-center animate-belt-bullets opacity-80" style={{ width: setWidth * 2 }}>
         {items.map((type, i) => (
-          <div key={i} className="shrink-0 flex items-center justify-center" style={{ width: ITEM_WIDTH }}>
+          <div key={i} className="shrink-0 flex items-center justify-center scale-90" style={{ width: ITEM_WIDTH }}>
             {type === 'weapon' ? <BeltWeapon /> : type === 'armour' ? <BeltArmour /> : <BulletCasing />}
           </div>
         ))}
@@ -197,37 +199,91 @@ function AnimatedCounter({ target, duration = 1200 }) {
 }
 
 /* ═══════════════════════════════════════════════════════
-   Tab Component
+   Tab / chrome
    ═══════════════════════════════════════════════════════ */
 const Tab = ({ active, onClick, icon: Icon, children }) => (
   <button
+    type="button"
     onClick={onClick}
-    className={`flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1.5 sm:py-2 text-[10px] sm:text-xs font-heading font-bold uppercase tracking-wider transition-all border-b-2 ${
-      active ? 'text-primary border-primary bg-primary/5' : 'text-zinc-500 border-transparent hover:text-zinc-300 hover:border-primary/30'
+    className={`flex-1 min-w-0 flex items-center justify-center gap-1.5 px-2 py-2.5 sm:py-2 text-[10px] sm:text-[11px] font-heading font-bold uppercase tracking-wide transition-colors rounded-md ${
+      active
+        ? 'text-primary bg-primary/15 border border-primary/35 shadow-[inset_0_0_0_1px_rgba(var(--noir-primary-rgb),0.12)]'
+        : 'text-mutedForeground border border-transparent hover:text-foreground hover:bg-black/25'
     }`}
   >
-    <Icon size={11} className="sm:w-3 sm:h-3" />
-    {children}
+    <Icon size={13} className="shrink-0 opacity-90" aria-hidden />
+    <span className="truncate">{children}</span>
   </button>
 );
 
-/* ═══════════════════════════════════════════════════════
-   Stat Card Component
-   ═══════════════════════════════════════════════════════ */
 const StatCard = ({ icon: Icon, label, value, highlight, pulseActive }) => (
-  <div className="rounded-lg p-2 sm:p-3 relative overflow-hidden bg-gradient-to-br from-zinc-900/90 to-zinc-900/60 border border-zinc-700/40">
-    {pulseActive && (
-      <div className="absolute top-1 right-1 w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-primary animate-pulse" />
-    )}
-    <div className="flex items-center gap-1 sm:gap-1.5 mb-0.5 sm:mb-1">
-      <Icon size={10} className="text-zinc-500 sm:w-[11px] sm:h-[11px]" />
-      <span className="text-[8px] sm:text-[9px] text-zinc-500 font-heading uppercase">{label}</span>
+  <div className={`relative rounded-lg px-2.5 py-2 ${styles.surface} border border-primary/12`}>
+    {pulseActive ? (
+      <div className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+    ) : null}
+    <div className="flex items-center gap-1.5 mb-1">
+      <Icon size={11} className="text-primary/70 shrink-0" aria-hidden />
+      <span className="text-[9px] text-mutedForeground font-heading uppercase tracking-wide">{label}</span>
     </div>
-    <div className={`text-xs sm:text-sm font-heading font-bold ${highlight ? 'text-primary' : 'text-foreground'}`}>
+    <div className={`text-[12px] sm:text-sm font-heading font-bold leading-tight ${highlight ? 'text-primary' : 'text-foreground'}`}>
       {value}
     </div>
   </div>
 );
+
+function ArmSection({ icon: Icon, title, subtitle, children, className = '' }) {
+  return (
+    <section className={`rounded-lg overflow-hidden border border-primary/15 bg-black/20 ${className}`}>
+      <div className="px-3 py-2 border-b border-primary/10 bg-gradient-to-r from-primary/10 via-primary/5 to-transparent flex items-center gap-2">
+        {Icon ? <Icon size={14} className="text-primary shrink-0" aria-hidden /> : null}
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[11px] font-heading font-bold text-foreground uppercase tracking-wide truncate">{title}</h3>
+          {subtitle ? <p className="text-[9px] text-mutedForeground font-heading truncate mt-0.5">{subtitle}</p> : null}
+        </div>
+      </div>
+      <div className="p-2.5 sm:p-3">{children}</div>
+    </section>
+  );
+}
+
+function ShopItemRow({ name, meta, badge, actions, dimmed, glow }) {
+  return (
+    <div
+      className={`flex items-start sm:items-center gap-2 py-2.5 px-1.5 border-b border-white/[0.06] last:border-0 ${
+        dimmed ? 'opacity-55' : ''
+      } ${glow ? 'rounded-md bg-amber-500/[0.04]' : ''}`}
+    >
+      <div className="min-w-0 flex-1">
+        <div className={`text-[12px] sm:text-[13px] font-heading font-semibold leading-snug ${glow ? 'text-amber-200' : 'text-foreground'}`}>
+          {name}
+        </div>
+        {meta ? <div className="text-[10px] text-mutedForeground font-heading mt-0.5 leading-snug">{meta}</div> : null}
+        {badge}
+      </div>
+      <div className="flex flex-wrap items-center justify-end gap-1.5 shrink-0 max-w-[48%] sm:max-w-none">{actions}</div>
+    </div>
+  );
+}
+
+function ArmActionBtn({ children, onClick, disabled, variant = 'primary', className = '', title }) {
+  const variants = {
+    primary: 'border-primary/40 bg-primary/12 text-primary hover:bg-primary/20',
+    muted: 'border-white/10 bg-black/30 text-foreground hover:border-primary/35',
+    danger: 'border-red-500/35 bg-red-500/10 text-red-300 hover:bg-red-500/15',
+    ghost: 'border-white/10 bg-transparent text-mutedForeground',
+  };
+  return (
+    <button
+      type="button"
+      title={title}
+      disabled={disabled}
+      onClick={onClick}
+      className={`px-2.5 py-1.5 rounded-md text-[10px] sm:text-[11px] font-heading font-bold border transition-colors disabled:opacity-45 disabled:cursor-not-allowed ${variants[variant] || variants.primary} ${className}`}
+    >
+      {children}
+    </button>
+  );
+}
 
 /* ═══════════════════════════════════════════════════════
    Main BulletFactory Component
@@ -662,113 +718,86 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
         .animate-belt-bullets { animation: belt-bullets 34.13s linear infinite; }
         .animate-belt-treads { animation: belt-treads 0.8s linear infinite; }
         @keyframes furnace-pulse {
-          0%, 100% { opacity: 0.4; filter: blur(12px); }
-          50% { opacity: 0.8; filter: blur(18px); }
+          0%, 100% { opacity: 0.35; filter: blur(10px); }
+          50% { opacity: 0.7; filter: blur(16px); }
         }
         .animate-furnace { animation: furnace-pulse 3s ease-in-out infinite; }
-        @keyframes smoke-rise {
-          0% { transform: translateY(0) scaleX(1); opacity: 0.5; }
-          100% { transform: translateY(-30px) scaleX(2); opacity: 0; }
+        @media (prefers-reduced-motion: reduce) {
+          .animate-belt-bullets, .animate-belt-treads, .animate-furnace { animation: none !important; }
         }
       `}</style>
 
-      {/* Factory Header */}
-      <div className="armoury-main-card relative rounded-lg sm:rounded-xl overflow-hidden bg-gradient-to-br from-zinc-900 via-zinc-900/95 to-zinc-900/90 border border-zinc-700/40 shadow-lg">
-        {/* Corner rivets */}
-        {[{ top: 6, left: 6 }, { top: 6, right: 6 }, { bottom: 6, left: 6 }, { bottom: 6, right: 6 }].map((pos, i) => (
-          <div key={i} className="armoury-rivet absolute w-2 h-2 sm:w-3 sm:h-3 rounded-full z-10" style={{
-            ...pos,
-            background: 'radial-gradient(circle at 40% 30%, #666, #333)',
-            boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.1)',
-          }} />
-        ))}
+      <div className={`armoury-main-card relative ${styles.panel} rounded-xl overflow-hidden border border-primary/20 shadow-lg`}>
+        <div className="h-1 bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
 
-        {/* Warning stripe */}
-        <div className="armoury-stripe h-1.5 sm:h-2" style={{
-          background: 'repeating-linear-gradient(135deg, var(--noir-primary) 0px, var(--noir-primary) 6px, #1a1a1a 6px, #1a1a1a 12px)',
-          opacity: 0.6,
-        }} />
-
-        {/* Title */}
-        <div className="px-3 sm:px-4 py-2 sm:py-3 flex items-center gap-2 sm:gap-3 border-b border-zinc-700/50">
-          <div className="relative">
-            <Factory size={20} className="text-primary sm:w-6 sm:h-6" />
-            <div className="absolute -top-0.5 -right-0.5 sm:-top-1 sm:-right-1 w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-green-500 animate-pulse" />
+        <div className="px-3 sm:px-4 py-3 flex items-center gap-3 border-b border-primary/10 bg-gradient-to-r from-primary/[0.08] to-transparent">
+          <div className="w-10 h-10 rounded-lg border border-primary/25 bg-primary/10 flex items-center justify-center shrink-0">
+            <Factory size={20} className="text-primary" aria-hidden />
           </div>
           <div className="flex-1 min-w-0">
-            <h1 className="text-base sm:text-lg md:text-xl font-heading font-bold text-primary tracking-wider uppercase">
+            <h1 className="text-lg sm:text-xl font-heading font-bold text-primary tracking-wide uppercase leading-tight">
               Armoury
             </h1>
-            <p className="text-[8px] sm:text-[10px] text-zinc-500 font-heading uppercase tracking-widest truncate">
-              {data?.state || 'Unknown'} — Bullets, Armour & Weapons
+            <p className="text-[10px] sm:text-[11px] text-mutedForeground font-heading truncate mt-0.5">
+              {data?.state || 'Unknown'} · Bullets, armour &amp; weapons
             </p>
           </div>
-          <div className="hidden sm:flex items-end gap-1 mr-2">
-            {[0, 0.5, 0.2].map((d, i) => (
-              <div key={i} className="relative">
-                <div className="w-2.5 sm:w-3 rounded-t" style={{ height: 14 + i * 5, background: 'linear-gradient(180deg, #555 0%, #333 100%)' }} />
-                <div className="absolute -top-2 sm:-top-3 left-1/2 -translate-x-1/2 w-3 sm:w-4 h-3 sm:h-4 rounded-full bg-zinc-500/30"
-                  style={{
-                    animation: 'smoke-rise 3s ease-out infinite',
-                    animationDelay: `${d}s`,
-                  }} />
-              </div>
-            ))}
+          <div className="hidden sm:flex flex-col items-end text-right shrink-0">
+            <span className="text-[9px] uppercase tracking-wider text-mutedForeground font-heading">Bullet stock</span>
+            <span className="text-sm font-heading font-bold text-foreground tabular-nums">{accumulated.toLocaleString()}</span>
           </div>
         </div>
 
-        {/* Conveyor Belt */}
-        <div className="px-3 sm:px-4 pt-2 sm:pt-3">
+        <div className="px-3 sm:px-4 pt-2.5 pb-2">
           <ConveyorBelt />
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-zinc-700/50 px-2 sm:px-4">
-          <Tab active={activeTab === 'shop'} onClick={() => setActiveTab('shop')} icon={ShoppingCart}>
-            Shop
-          </Tab>
-          <Tab active={activeTab === 'shooting-range'} onClick={() => setActiveTab('shooting-range')} icon={Crosshair}>
-            Shooting range
-          </Tab>
-          {(!hasOwner || isOwner) && (
-            <Tab active={activeTab === 'production'} onClick={() => setActiveTab('production')} icon={Factory}>
-              Production
+        <div className="px-2.5 sm:px-3 pb-2.5">
+          <div className="flex gap-1 p-1 rounded-lg bg-black/35 border border-white/[0.06]">
+            <Tab active={activeTab === 'shop'} onClick={() => setActiveTab('shop')} icon={ShoppingCart}>
+              Shop
             </Tab>
-          )}
+            <Tab active={activeTab === 'shooting-range'} onClick={() => setActiveTab('shooting-range')} icon={Crosshair}>
+              Range
+            </Tab>
+            {(!hasOwner || isOwner) && (
+              <Tab active={activeTab === 'production'} onClick={() => setActiveTab('production')} icon={Factory}>
+                Ops
+              </Tab>
+            )}
+          </div>
         </div>
 
-        {/* Tab Content */}
-        <div className="p-3 sm:p-4">
+        <div className="px-3 sm:px-4 pb-4 space-y-3 sm:space-y-4">
           {activeTab === 'shop' && (
             <div className="space-y-3 sm:space-y-4">
               {data?.is_unowned && (
-                <div className="rounded-lg p-2.5 sm:p-3 bg-amber-950/30 border border-amber-700/40">
-                  <p className="text-[9px] sm:text-[10px] text-amber-200/90 font-heading leading-relaxed">
-                    <strong className="text-amber-400">Unclaimed armoury:</strong> bullet stock caps at{' '}
-                    <strong className="text-primary">{(data?.production_per_24h ?? 1000).toLocaleString()}</strong> per 24h. You can only buy{' '}
-                    <strong>basic armour (level 1)</strong> and <strong>Brass Knuckles</strong> here — claim this armoury (or use another state&apos;s owned shop) for higher tiers.
+                <div className="rounded-lg px-3 py-2.5 bg-amber-500/10 border border-amber-500/30">
+                  <p className="text-[11px] text-amber-100/90 font-heading leading-relaxed">
+                    <strong className="text-amber-300">Unclaimed armoury:</strong> bullet stock caps at{' '}
+                    <strong className="text-primary">{(data?.production_per_24h ?? 1000).toLocaleString()}</strong>/24h.
+                    Only basic armour (L1) and Brass Knuckles sell here — claim ownership for higher tiers.
                   </p>
                 </div>
               )}
-              {/* Buy Bullets Section */}
+
               {canBuy && pricePerBullet != null && (
-                <div className="rounded-lg p-2.5 sm:p-3 bg-gradient-to-br from-zinc-800/60 to-zinc-800/40 border border-zinc-700/40">
-                  <div className="text-[9px] sm:text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <Crosshair size={10} className="sm:w-[11px] sm:h-[11px]" />
-                    Buy Bullets
-                  </div>
-                  
-                  <div className="flex flex-wrap gap-1 sm:gap-1.5 mb-2">
+                <ArmSection
+                  icon={Crosshair}
+                  title="Buy bullets"
+                  subtitle={`${accumulated.toLocaleString()} in stock · max ${buyMaxPerPurchase.toLocaleString()} / ${buyCooldownMinutes}min`}
+                >
+                  <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5 mb-3">
                     {QUICK_BUYS.filter((amt) => amt <= buyMaxPerPurchase).map((amt) => (
                       <button
                         key={amt}
                         type="button"
                         onClick={() => setBuyAmount(String(Math.min(amt, effectiveBuyMax)))}
                         disabled={inBuyCooldown || amt > effectiveBuyMax}
-                        className={`px-2 sm:px-2.5 py-1 rounded text-[10px] sm:text-[11px] font-heading font-bold border transition-all ${
+                        className={`py-2 rounded-md text-[11px] font-heading font-bold border tabular-nums transition-colors disabled:opacity-40 ${
                           buyAmountNum === amt
-                            ? 'bg-primary/25 border-primary/60 text-primary'
-                            : 'bg-zinc-800/60 border-zinc-700/40 text-zinc-400 hover:border-zinc-600 disabled:opacity-50'
+                            ? 'bg-primary/25 border-primary/55 text-primary'
+                            : 'bg-black/30 border-white/10 text-mutedForeground hover:border-primary/30 hover:text-foreground'
                         }`}
                       >
                         {amt.toLocaleString()}
@@ -776,66 +805,61 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                     ))}
                   </div>
 
-                  <form onSubmit={buyBullets} className="space-y-2">
+                  <form onSubmit={buyBullets} className="space-y-2.5">
                     <input
                       type="number"
                       min={1}
                       max={effectiveBuyMax}
+                      inputMode="numeric"
                       placeholder={`Up to ${effectiveBuyMax.toLocaleString()}`}
                       value={buyAmount}
                       onChange={(e) => setBuyAmount(e.target.value)}
-                      className="w-full px-2.5 sm:px-3 py-1.5 sm:py-2 bg-zinc-900/80 border border-zinc-600/40 rounded text-foreground font-heading text-xs sm:text-sm focus:border-primary/50 focus:outline-none"
+                      className={`w-full px-3 py-2.5 ${styles.input} rounded-lg text-foreground font-heading text-sm focus:outline-none`}
                     />
-                    
+
                     {buyAmountNum > 0 && (
-                      <div className="flex items-center justify-between text-[10px] sm:text-[11px] font-heading px-1">
-                        <span className="text-zinc-500">{buyAmountNum.toLocaleString()} × {formatMoney(pricePerBullet)}</span>
-                        <span className="text-primary font-bold">= {formatMoney(buyTotal)}</span>
+                      <div className="flex items-center justify-between text-[11px] font-heading px-0.5">
+                        <span className="text-mutedForeground">{buyAmountNum.toLocaleString()} × {formatMoney(pricePerBullet)}</span>
+                        <span className="text-primary font-bold tabular-nums">{formatMoney(buyTotal)}</span>
                       </div>
                     )}
-                    
+
                     {inBuyCooldown && (
-                      <p className="text-[10px] sm:text-[11px] text-amber-500/90 font-heading">
+                      <p className="text-[11px] text-amber-400/90 font-heading">
                         Next purchase in {minutesUntilCanBuy} min
                       </p>
                     )}
-                    
+
                     <button
                       type="submit"
                       disabled={buying || buyAmountNum <= 0 || !canAffordBuy || buyAmountNum > effectiveBuyMax || inBuyCooldown}
-                      className={`w-full px-3 sm:px-4 py-2 sm:py-2.5 font-heading font-bold text-[10px] sm:text-xs uppercase rounded border-2 transition-all ${
+                      className={`w-full py-3 font-heading font-bold text-[11px] sm:text-xs uppercase tracking-wide rounded-lg border-2 transition-all disabled:opacity-45 ${
                         canAffordBuy && buyAmountNum > 0 && buyAmountNum <= effectiveBuyMax && !inBuyCooldown
-                          ? 'bg-gradient-to-b from-emerald-900/40 to-emerald-900/20 border-emerald-600/50 text-emerald-400 hover:from-emerald-900/50 active:scale-95'
-                          : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-500 cursor-not-allowed'
-                      } disabled:opacity-50`}
+                          ? 'bg-emerald-500/15 border-emerald-500/45 text-emerald-300 hover:bg-emerald-500/25 active:scale-[0.99]'
+                          : 'bg-black/30 border-white/10 text-mutedForeground cursor-not-allowed'
+                      }`}
                     >
-                      {buying ? 'Buying...' : `Buy ${buyAmountNum > 0 ? buyAmountNum.toLocaleString() : ''} Bullets`}
+                      {buying ? 'Buying…' : `Buy ${buyAmountNum > 0 ? `${buyAmountNum.toLocaleString()} ` : ''}bullets`}
                     </button>
                   </form>
-                  
-                  <p className="text-[9px] sm:text-[10px] text-zinc-500 mt-1.5">
-                    {accumulated.toLocaleString()} in stock · Max {buyMaxPerPurchase.toLocaleString()} per {buyCooldownMinutes}min
-                  </p>
-                </div>
+                </ArmSection>
               )}
 
               {hasOwner && !isOwner && (pricePerBullet == null || accumulated === 0) && (
-                <div className="rounded-lg p-3 text-center bg-gradient-to-br from-zinc-800/60 to-zinc-800/40 border border-zinc-700/40">
-                  <p className="text-[10px] sm:text-[11px] text-zinc-500 font-heading">
+                <div className="rounded-lg px-3 py-4 text-center border border-primary/15 bg-black/25">
+                  <p className="text-[12px] text-mutedForeground font-heading">
                     {pricePerBullet == null ? 'Owner has not set a price yet.' : 'No bullets in stock right now.'}
                   </p>
                 </div>
               )}
 
-              {/* Buy Armour & Weapons Combined */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                {/* Armour */}
-                <div className="rounded-lg p-2.5 sm:p-3 bg-gradient-to-br from-zinc-800/60 to-zinc-800/40 border border-zinc-700/40">
-                  <div className="text-[9px] sm:text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <Shield size={10} className="sm:w-[11px] sm:h-[11px]" />
-                    Buy Armour ({armourOptions.filter(o => o.armoury_stock > 0).length} in stock)
-                  </div>
-                  <div className="flex flex-wrap gap-1 sm:gap-1.5 items-center">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4">
+                <ArmSection
+                  icon={Shield}
+                  title="Armour"
+                  subtitle={`${armourOptions.filter((o) => o.armoury_stock > 0).length} tiers in stock`}
+                >
+                  <div className="divide-y divide-white/[0.04] -mx-1">
                     {armourOptions.length
                       ? armourOptions.map((opt) => {
                           const costMoney = opt.effective_cost_money;
@@ -846,146 +870,131 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                           const inStock = opt.armoury_stock > 0;
                           const equipping = equippingArmourLevel === opt.level || (equippingArmourLevel === 0 && opt.equipped);
                           return (
-                            <div key={opt.level} className="flex items-center gap-0.5">
-                              {opt.owned ? (
-                                <>
-                                  <span className={`px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/50 text-foreground truncate max-w-[120px] sm:max-w-[140px] ${opt.loot_exclusive ? 'shadow-[0_0_10px_rgba(251,191,36,0.45)]' : ''}`} title={opt.name}>
-                                    {opt.name}{opt.equipped ? ' ✓' : ''}
-                                    {opt.loot_exclusive && <span className="text-amber-400 ml-0.5">(excl)</span>}
+                            <ShopItemRow
+                              key={opt.level}
+                              name={opt.name}
+                              glow={!!opt.loot_exclusive}
+                              dimmed={!opt.owned && !inStock && !opt.store_exclusive && !opt.loot_exclusive}
+                              meta={
+                                opt.owned
+                                  ? (opt.equipped ? 'Equipped' : 'Owned')
+                                  : opt.store_exclusive
+                                    ? 'Store exclusive — 500 pts'
+                                    : opt.loot_exclusive
+                                      ? 'Loot exclusive'
+                                      : opt.unowned_restricted
+                                        ? 'Needs claimed armoury'
+                                        : `${isPoints ? `${Number(cost).toLocaleString()} pts` : formatMoney(cost)}${inStock ? ` · ${opt.armoury_stock} left` : ' · out of stock'}`
+                              }
+                              actions={
+                                opt.owned ? (
+                                  <ArmActionBtn disabled={equipping} onClick={() => (opt.equipped ? unequipArmour() : equipArmour(opt.level))}>
+                                    {equipping ? '…' : opt.equipped ? 'Unequip' : 'Equip'}
+                                  </ArmActionBtn>
+                                ) : opt.store_exclusive || opt.loot_exclusive ? (
+                                  <span className="text-[9px] font-heading text-mutedForeground uppercase tracking-wide px-1">
+                                    {opt.store_exclusive ? 'Store' : 'Loot'}
                                   </span>
-                                  <button
-                                    type="button"
-                                    disabled={equipping}
-                                    onClick={() => opt.equipped ? unequipArmour() : equipArmour(opt.level)}
-                                    className="px-1.5 py-1 rounded text-[8px] sm:text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50"
+                                ) : (
+                                  <ArmActionBtn
+                                    disabled={buyingArmourLevel != null || !canAffordArmour || opt.unowned_restricted || !inStock}
+                                    onClick={() => buyArmour(opt.level)}
+                                    title={opt.unowned_restricted ? 'Claim an owned armoury for higher tiers' : opt.name}
                                   >
-                                    {equipping ? '...' : opt.equipped ? 'Unequip' : 'Equip'}
-                                  </button>
-                                </>
-                              ) : opt.store_exclusive ? (
-                                <span className="px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/30 text-cyan-400/90" title="Buy in Game → Store (500 pts)">
-                                  {opt.name} <span className="text-cyan-300/80">(Store — 500 pts)</span>
-                                </span>
-                              ) : opt.loot_exclusive ? (
-                                <span className="px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/30 text-zinc-500 shadow-[0_0_10px_rgba(251,191,36,0.45)]" title="Obtain from loot box">
-                                  {opt.name} <span className="text-amber-400/80">(Loot exclusive)</span>
-                                </span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  disabled={buyingArmourLevel != null || !canAffordArmour || opt.unowned_restricted}
-                                  onClick={() => buyArmour(opt.level)}
-                                  className={`px-2 sm:px-2.5 py-1 sm:py-1.5 rounded text-[9px] sm:text-[10px] font-heading font-bold border transition-all truncate max-w-[140px] sm:max-w-[160px] ${
-                                    inStock && !opt.unowned_restricted ? 'bg-primary/10 border-primary/40 text-primary hover:bg-primary/20 active:scale-95' : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-500'
-                                  } disabled:opacity-50 disabled:cursor-not-allowed`}
-                                  title={opt.unowned_restricted ? 'Claim an owned armoury for higher tiers' : opt.name}
-                                >
-                                  {opt.name} {isPoints ? `${Number(cost).toLocaleString()}p` : formatMoney(cost)}
-                                  {inStock && <span className="ml-1 text-[7px] text-emerald-400">({opt.armoury_stock})</span>}
-                                </button>
-                              )}
-                            </div>
+                                    {buyingArmourLevel === opt.level ? '…' : 'Buy'}
+                                  </ArmActionBtn>
+                                )
+                              }
+                            />
                           );
                         })
-                      : <span className="text-[9px] sm:text-[10px] text-zinc-500">Loading...</span>}
+                      : <p className="text-[11px] text-mutedForeground font-heading py-3 text-center">Loading armour…</p>}
                   </div>
-                </div>
+                </ArmSection>
 
-                {/* Weapons */}
-                <div className="rounded-lg p-2.5 sm:p-3 bg-gradient-to-br from-zinc-800/60 to-zinc-800/40 border border-zinc-700/40">
-                  <div className="text-[9px] sm:text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <Swords size={10} className="sm:w-[11px] sm:h-[11px]" />
-                    Buy Weapons ({weaponsList.filter(w => w.armoury_stock > 0).length} in stock)
-                  </div>
-                  <div className="flex flex-wrap gap-1 sm:gap-1.5 items-center">
+                <ArmSection
+                  icon={Swords}
+                  title="Weapons"
+                  subtitle={`${weaponsList.filter((w) => w.armoury_stock > 0).length} in stock`}
+                >
+                  <div className="divide-y divide-white/[0.04] -mx-1">
                     {weaponsList.length
                       ? weaponsList.map((w) => {
                           const priceMoney = w.effective_price_money ?? w.price_money;
                           const pricePoints = w.effective_price_points ?? w.price_points;
                           const canAffordMoney = priceMoney != null && (me?.money ?? 0) >= priceMoney;
                           const canAffordPoints = pricePoints != null && (me?.points ?? 0) >= pricePoints;
-                          const canBuyW = !w.owned && !w.locked && (canAffordMoney || canAffordPoints);
                           const inStock = w.armoury_stock > 0;
                           const nameShort = (w.name?.replace(/\s*\(.*\)/, '') || w.id).trim();
                           const equipping = equippingWeaponId === w.id || (equippingWeaponId === '' && w.equipped);
+                          const priceBits = [
+                            priceMoney != null ? formatMoney(priceMoney) : null,
+                            pricePoints != null ? `${Number(pricePoints).toLocaleString()} pts` : null,
+                          ].filter(Boolean).join(' · ');
                           return (
-                            <div key={w.id} className="flex items-center gap-0.5 flex-wrap">
-                              {w.owned ? (
-                                <>
-                                  <span className={`px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/50 text-foreground truncate max-w-[100px] sm:max-w-[110px] ${w.loot_exclusive ? 'shadow-[0_0_10px_rgba(251,191,36,0.45)]' : ''}`} title={w.name}>
-                                    {nameShort}{w.equipped ? ' ✓' : ''}
+                            <ShopItemRow
+                              key={w.id}
+                              name={nameShort}
+                              glow={!!w.loot_exclusive}
+                              dimmed={!w.owned && !inStock && !w.store_exclusive && !w.loot_exclusive}
+                              meta={
+                                w.owned
+                                  ? (w.equipped ? 'Equipped' : 'Owned')
+                                  : w.store_exclusive
+                                    ? 'Store exclusive — 1,000 pts'
+                                    : w.loot_exclusive
+                                      ? 'Loot exclusive'
+                                      : `${priceBits || '—'}${inStock ? ` · ${w.armoury_stock} left` : ' · out of stock'}`
+                              }
+                              actions={
+                                w.owned ? (
+                                  <ArmActionBtn disabled={equipping} onClick={() => (w.equipped ? unequipWeapon() : equipWeapon(w.id))}>
+                                    {equipping ? '…' : w.equipped ? 'Unequip' : 'Equip'}
+                                  </ArmActionBtn>
+                                ) : w.store_exclusive || w.loot_exclusive ? (
+                                  <span className="text-[9px] font-heading text-mutedForeground uppercase tracking-wide px-1">
+                                    {w.store_exclusive ? 'Store' : 'Loot'}
                                   </span>
-                                  <button
-                                    type="button"
-                                    disabled={equipping}
-                                    onClick={() => w.equipped ? unequipWeapon() : equipWeapon(w.id)}
-                                    className="px-1.5 py-1 rounded text-[8px] sm:text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 shrink-0"
-                                  >
-                                    {equipping ? '...' : w.equipped ? 'Unequip' : 'Equip'}
-                                  </button>
-                                </>
-                              ) : (
-                                <>
-                                  {w.store_exclusive ? (
-                                    <span className="px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/30 text-cyan-400/90 shrink-0" title="Buy in Game → Store (1000 pts)">
-                                      {nameShort} <span className="text-cyan-300/80">(Store — 1,000 pts)</span>
-                                    </span>
-                                  ) : w.loot_exclusive ? (
-                                    <span className="px-1.5 py-1 rounded text-[9px] sm:text-[10px] font-heading border border-zinc-600/50 bg-zinc-800/30 text-zinc-500 shadow-[0_0_10px_rgba(251,191,36,0.45)] shrink-0" title="Obtain from loot box">
-                                      {nameShort} <span className="text-amber-400/80">(Loot exclusive)</span>
-                                    </span>
-                                  ) : (
-                                <>
-                                  {priceMoney != null && (
-                                    <button
-                                      type="button"
-                                      disabled={w.locked || buyingWeaponId != null || !canAffordMoney}
-                                      onClick={() => buyWeapon(w.id, 'money')}
-                                      className={`px-1.5 sm:px-2 py-1 rounded text-[8px] sm:text-[9px] font-heading border transition-all truncate max-w-[100px] sm:max-w-[110px] ${
-                                        inStock ? 'bg-zinc-800/50 border-zinc-600/50 text-foreground hover:border-primary/40' : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-500'
-                                      } disabled:opacity-50 disabled:cursor-not-allowed`}
-                                      title={w.name}
-                                    >
-                                      {nameShort} {formatMoney(priceMoney)}
-                                    </button>
-                                  )}
-                                  {pricePoints != null && (
-                                    <button
-                                      type="button"
-                                      disabled={w.locked || buyingWeaponId != null || !canAffordPoints}
-                                      onClick={() => buyWeapon(w.id, 'points')}
-                                      className={`px-1.5 py-1 rounded text-[8px] sm:text-[9px] font-heading border transition-all shrink-0 ${
-                                        inStock ? 'bg-primary/10 border-primary/40 text-primary hover:bg-primary/20' : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-500'
-                                      } disabled:opacity-50 disabled:cursor-not-allowed`}
-                                      title={`${w.name} — ${Number(pricePoints).toLocaleString()} points`}
-                                    >
-                                      {priceMoney != null ? `${Number(pricePoints).toLocaleString()}p` : `${nameShort} ${Number(pricePoints).toLocaleString()}p`}
-                                    </button>
-                                  )}
-                                  {inStock && !w.owned && <span className="text-[7px] text-emerald-400">({w.armoury_stock})</span>}
-                                </>
-                                  )}
-                                </>
-                              )}
-                            </div>
+                                ) : (
+                                  <>
+                                    {priceMoney != null && (
+                                      <ArmActionBtn
+                                        variant="muted"
+                                        disabled={w.locked || buyingWeaponId != null || !canAffordMoney || !inStock}
+                                        onClick={() => buyWeapon(w.id, 'money')}
+                                        title={`${w.name} — cash`}
+                                      >
+                                        {buyingWeaponId === w.id ? '…' : 'Cash'}
+                                      </ArmActionBtn>
+                                    )}
+                                    {pricePoints != null && (
+                                      <ArmActionBtn
+                                        disabled={w.locked || buyingWeaponId != null || !canAffordPoints || !inStock}
+                                        onClick={() => buyWeapon(w.id, 'points')}
+                                        title={`${w.name} — points`}
+                                      >
+                                        {buyingWeaponId === w.id ? '…' : 'Pts'}
+                                      </ArmActionBtn>
+                                    )}
+                                  </>
+                                )
+                              }
+                            />
                           );
                         })
-                      : <span className="text-[9px] sm:text-[10px] text-zinc-500">Loading...</span>}
+                      : <p className="text-[11px] text-mutedForeground font-heading py-3 text-center">Loading weapons…</p>}
                   </div>
-                </div>
+                </ArmSection>
               </div>
             </div>
           )}
 
           {activeTab === 'shooting-range' && (
-            <div className="space-y-3 sm:space-y-4">
-              <div className="rounded-lg p-2.5 sm:p-3 bg-gradient-to-br from-zinc-800/60 to-zinc-800/40 border border-zinc-700/40">
-                <div className="text-[9px] sm:text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                  <Crosshair size={10} className="sm:w-[11px] sm:h-[11px]" />
-                  Weapon mastery
-                </div>
-                <p className="text-[10px] sm:text-[11px] text-zinc-400 font-heading mb-3">
-                  Master a weapon here to reduce bullets needed when attacking with it (up to 10% at full mastery). Guns are ordered weakest → strongest. Train guns you own; each must reach 100% before the next stronger gun you own. Weapons you don&apos;t own never block progress. The Colt Monitor only shows here after you obtain it from a loot box—it cannot be bought at the armoury.
+            <div className="space-y-3">
+              <ArmSection icon={Crosshair} title="Weapon mastery" subtitle="Up to 10% fewer bullets at 100% · train owned guns in power order">
+                <p className="text-[11px] text-mutedForeground font-heading mb-3 leading-relaxed">
+                  Train guns you own. Weaker owned guns must hit 100% before stronger ones unlock. Unowned guns never block progress.
+                  Colt Monitor appears only after a loot drop — not sold here.
                 </p>
                 {masteryData?.weapons?.length
                   ? (
@@ -1001,28 +1010,27 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                           const onCooldown = Boolean(cooldownLabel);
                           const disabled = !owned || training || pct >= 100 || !canTrain || onCooldown;
                           return (
-                            <div key={w.id} className="flex flex-wrap items-center gap-2 py-1.5 border-b border-zinc-700/30 last:border-0">
-                              <span className="text-[10px] sm:text-[11px] font-heading text-foreground min-w-[100px] sm:min-w-[120px]">
-                                {w.name}
-                                {owned && <span className="text-emerald-500 ml-0.5">(owned)</span>}
-                                {w.loot_box_exclusive && (
-                                  <span
-                                    className="text-amber-400/90 ml-1 text-[8px] sm:text-[9px] font-heading"
-                                    title="Only obtainable from loot box openings — not sold in the armoury"
-                                  >
-                                    (Loot box only)
-                                  </span>
-                                )}
-                              </span>
-                              <div className="flex-1 min-w-[80px] h-2 sm:h-2.5 rounded-full bg-zinc-800 overflow-hidden border border-zinc-700/50">
+                            <div key={w.id} className="rounded-lg border border-primary/12 bg-black/25 px-2.5 py-2.5 space-y-2">
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="text-[12px] sm:text-[13px] font-heading font-semibold text-foreground truncate">
+                                    {w.name}
+                                    {owned ? <span className="text-emerald-400 ml-1.5 text-[10px] font-bold">Owned</span> : null}
+                                  </div>
+                                  {w.loot_box_exclusive ? (
+                                    <div className="text-[10px] text-amber-400/90 font-heading mt-0.5">Loot box only</div>
+                                  ) : null}
+                                </div>
+                                <span className="text-[11px] text-mutedForeground tabular-nums font-heading shrink-0">{pct}%</span>
+                              </div>
+                              <div className="h-2 rounded-full bg-black/50 overflow-hidden border border-white/5">
                                 <div
-                                  className="h-full bg-primary/80 rounded-full transition-all duration-300"
+                                  className="h-full bg-primary/85 rounded-full transition-all duration-300"
                                   style={{ width: `${Math.min(100, pct)}%` }}
                                 />
                               </div>
-                              <span className="text-[9px] sm:text-[10px] text-zinc-500 tabular-nums w-8">{pct}%</span>
-                              <button
-                                type="button"
+                              <ArmActionBtn
+                                className="w-full sm:w-auto"
                                 disabled={disabled}
                                 title={
                                   onCooldown
@@ -1032,10 +1040,9 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                                       : undefined
                                 }
                                 onClick={() => trainWeapon(w.id)}
-                                className="px-2 py-1 rounded text-[9px] sm:text-[10px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                               >
                                 {training
-                                  ? 'Training...'
+                                  ? 'Training…'
                                   : pct >= 100
                                     ? 'Mastered'
                                     : !canTrain
@@ -1043,63 +1050,62 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                                       : cooldownLabel
                                         ? `Wait ${cooldownLabel}`
                                         : 'Train 5 min'}
-                              </button>
+                              </ArmActionBtn>
                             </div>
                           );
                         })}
                       </div>
                     )
                   : masteryData ? (
-                      <p className="text-[10px] text-zinc-500">No guns available to train.</p>
+                      <p className="text-[11px] text-mutedForeground font-heading">No guns available to train.</p>
                     ) : (
-                      <p className="text-[10px] text-zinc-500">Loading mastery…</p>
+                      <p className="text-[11px] text-mutedForeground font-heading">Loading mastery…</p>
                     )}
-              </div>
+              </ArmSection>
             </div>
           )}
 
           {activeTab === 'production' && (!hasOwner || isOwner) && (
             <div className="space-y-3 sm:space-y-4">
-              {/* Stats Grid */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
                 <StatCard
                   icon={User}
                   label="Owner"
                   value={hasOwner ? (
-                    <Link to={`/profile/${encodeURIComponent(data.owner_username)}`} className="text-primary hover:underline flex items-center gap-1 text-[10px] sm:text-xs">
-                      <Shield size={10} className="shrink-0 sm:w-3 sm:h-3" />
+                    <Link to={`/profile/${encodeURIComponent(data.owner_username)}`} className="text-primary hover:underline flex items-center gap-1 text-[11px] sm:text-xs">
+                      <Shield size={11} className="shrink-0" />
                       <span className="truncate">{data.owner_username}</span>
                     </Link>
                   ) : (
-                    <span className="text-zinc-400 italic text-[10px] sm:text-xs">Unclaimed</span>
+                    <span className="text-mutedForeground italic text-[11px]">Unclaimed</span>
                   )}
                 />
-                
+
                 <StatCard
                   icon={Package}
                   label="In Stock"
                   value={<AnimatedCounter target={accumulated} />}
                   pulseActive={accumulated > 0}
                 />
-                
+
                 <StatCard
                   icon={DollarSign}
                   label="Price"
                   value={
                     <>
                       {pricePerBullet != null ? formatMoney(pricePerBullet) : '—'}
-                      <span className="text-[8px] sm:text-[9px] text-zinc-500 font-normal">/ea</span>
+                      <span className="text-[9px] text-mutedForeground font-normal">/ea</span>
                     </>
                   }
                   highlight
                 />
-                
+
                 <StatCard
                   icon={Flame}
                   label={hasOwner ? 'Status' : 'Claim Cost'}
                   value={hasOwner ? (
-                    <span className="text-green-400 flex items-center gap-1 text-[10px] sm:text-xs">
-                      <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-green-400 inline-block" /> Active
+                    <span className="text-emerald-400 flex items-center gap-1 text-[11px] sm:text-xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" /> Active
                     </span>
                   ) : (
                     formatMoney(claimCost)
@@ -1107,131 +1113,113 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                 />
               </div>
 
-              {/* Production Gauges - 3 Columns */}
               {isOwner && (
-                <div className="rounded-lg p-2.5 sm:p-3 bg-gradient-to-br from-zinc-800/60 to-zinc-800/40 border border-zinc-700/40">
-                  <div className="text-[9px] sm:text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                    <Gauge size={10} className="sm:w-[11px] sm:h-[11px]" />
-                    Production Overview
-                  </div>
-
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-3">
-                    {/* Bullets Gauge */}
-                    <div className="rounded-lg p-2 sm:p-2.5 bg-zinc-900/50 border border-zinc-700/30">
+                <ArmSection icon={Gauge} title="Production overview" subtitle="Bullets · armour · weapons">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                    <div className="rounded-lg p-2.5 bg-black/30 border border-primary/12">
                       <div className="text-center mb-2">
-                        <div className="text-[8px] sm:text-[9px] text-zinc-500 font-heading uppercase tracking-widest mb-1 flex items-center justify-center gap-1">
-                          <Crosshair size={9} className="sm:w-2.5 sm:h-2.5" />
+                        <div className="text-[9px] text-mutedForeground font-heading uppercase tracking-widest mb-1 flex items-center justify-center gap-1">
+                          <Crosshair size={10} />
                           Bullets
                         </div>
                         <ProductionGauge production={production} maxProduction={productionPer24h / 24} />
                       </div>
                       <div className="text-center space-y-0.5">
-                        <p className="text-[10px] sm:text-xs font-heading font-bold text-primary">
+                        <p className="text-sm font-heading font-bold text-primary tabular-nums">
                           <AnimatedCounter target={accumulated} />
                         </p>
-                        <p className="text-[8px] sm:text-[9px] text-zinc-500 font-heading">in stock</p>
-                        <p className="text-[8px] sm:text-[9px] text-emerald-400 font-heading">{production.toFixed(0)}/hr</p>
+                        <p className="text-[10px] text-mutedForeground font-heading">in stock</p>
+                        <p className="text-[10px] text-emerald-400 font-heading">{production.toFixed(0)}/hr</p>
                       </div>
                     </div>
 
-                    {/* Armour Gauge */}
-                    <div className="rounded-lg p-2 sm:p-2.5 bg-zinc-900/50 border border-zinc-700/30">
+                    <div className="rounded-lg p-2.5 bg-black/30 border border-primary/12">
                       <div className="text-center mb-2">
-                        <div className="text-[8px] sm:text-[9px] text-zinc-500 font-heading uppercase tracking-widest mb-1 flex items-center justify-center gap-1">
-                          <Shield size={9} className="sm:w-2.5 sm:h-2.5" />
+                        <div className="text-[9px] text-mutedForeground font-heading uppercase tracking-widest mb-1 flex items-center justify-center gap-1">
+                          <Shield size={10} />
                           Armour
                         </div>
                         <ProductionGauge production={armourProductionRate} maxProduction={data?.armour_rate_per_hour ?? 5} />
                       </div>
                       <div className="text-center space-y-0.5">
-                        <p className="text-[10px] sm:text-xs font-heading font-bold text-primary">
-                          {armourStock} units
-                        </p>
-                        <p className="text-[8px] sm:text-[9px] text-zinc-500 font-heading">
+                        <p className="text-sm font-heading font-bold text-primary">{armourStock} units</p>
+                        <p className="text-[10px] text-mutedForeground font-heading">
                           {armourHoursRemaining > 0 ? `${armourHoursRemaining.toFixed(1)}h left` : 'idle'}
                         </p>
-                        <p className="text-[8px] sm:text-[9px] text-emerald-400 font-heading">
+                        <p className="text-[10px] text-emerald-400 font-heading">
                           {armourProductionRate > 0 ? `${armourProductionRate}/hr` : 'stopped'}
                         </p>
                       </div>
                     </div>
 
-                    {/* Weapons Gauge */}
-                    <div className="rounded-lg p-2 sm:p-2.5 bg-zinc-900/50 border border-zinc-700/30">
+                    <div className="rounded-lg p-2.5 bg-black/30 border border-primary/12">
                       <div className="text-center mb-2">
-                        <div className="text-[8px] sm:text-[9px] text-zinc-500 font-heading uppercase tracking-widest mb-1 flex items-center justify-center gap-1">
-                          <Swords size={9} className="sm:w-2.5 sm:h-2.5" />
+                        <div className="text-[9px] text-mutedForeground font-heading uppercase tracking-widest mb-1 flex items-center justify-center gap-1">
+                          <Swords size={10} />
                           Weapons
                         </div>
                         <ProductionGauge production={weaponProductionRate} maxProduction={data?.weapon_rate_per_hour ?? 5} />
                       </div>
                       <div className="text-center space-y-0.5">
-                        <p className="text-[10px] sm:text-xs font-heading font-bold text-primary">
-                          {weaponStock} units
-                        </p>
-                        <p className="text-[8px] sm:text-[9px] text-zinc-500 font-heading">
+                        <p className="text-sm font-heading font-bold text-primary">{weaponStock} units</p>
+                        <p className="text-[10px] text-mutedForeground font-heading">
                           {weaponHoursRemaining > 0 ? `${weaponHoursRemaining.toFixed(1)}h left` : 'idle'}
                         </p>
-                        <p className="text-[8px] sm:text-[9px] text-emerald-400 font-heading">
+                        <p className="text-[10px] text-emerald-400 font-heading">
                           {weaponProductionRate > 0 ? `${weaponProductionRate}/hr` : 'stopped'}
                         </p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Info Text */}
-                  <div className="rounded-lg p-2 sm:p-2.5 bg-primary/5 border border-primary/20 mb-3">
-                    <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading leading-relaxed">
-                      <strong className="text-primary">Rate:</strong> 5/hr per item · 
-                      <strong className="text-primary"> Max Stock:</strong> 15/item · 
-                      <strong className="text-primary"> Duration:</strong> 1hr batches · 
-                      <strong className="text-primary"> Markup:</strong> 35%
+                  <div className="rounded-lg px-2.5 py-2 bg-primary/5 border border-primary/20 mb-3">
+                    <p className="text-[10px] sm:text-[11px] text-mutedForeground font-heading leading-relaxed">
+                      <strong className="text-primary">Rate:</strong> 5/hr ·{' '}
+                      <strong className="text-primary">Max stock:</strong> 15/item ·{' '}
+                      <strong className="text-primary">Batches:</strong> 1hr ·{' '}
+                      <strong className="text-primary">Markup:</strong> 35%
                     </p>
                   </div>
 
-                  {/* Detailed Stock Breakdown */}
                   <div className="grid grid-cols-2 gap-2 mb-3">
-                    <div className="rounded bg-zinc-900/50 p-2 border border-zinc-700/30">
+                    <div className="rounded-lg bg-black/30 p-2.5 border border-primary/10">
                       <div className="flex items-center gap-1.5 mb-1.5">
-                        <Shield size={10} className="text-zinc-500 sm:w-[11px] sm:h-[11px]" />
-                        <p className="text-[8px] sm:text-[9px] text-zinc-500 font-heading uppercase">Armour Stock</p>
+                        <Shield size={11} className="text-primary/70" />
+                        <p className="text-[9px] text-mutedForeground font-heading uppercase">Armour stock</p>
                       </div>
-                      <div className="text-[9px] sm:text-[10px] font-heading text-foreground space-y-0.5">
+                      <div className="text-[11px] font-heading text-foreground space-y-0.5">
                         {Object.entries(data?.armour_stock || {}).filter(([, q]) => Number(q || 0) > 0).length > 0
                           ? Object.entries(data.armour_stock).filter(([, q]) => Number(q || 0) > 0).map(([lv, q]) => (
-                              <div key={lv} className="flex justify-between">
-                                <span className="text-zinc-500">Level {lv}:</span>
-                                <span className="text-primary font-bold">{Number(q)}</span>
+                              <div key={lv} className="flex justify-between gap-2">
+                                <span className="text-mutedForeground">Level {lv}</span>
+                                <span className="text-primary font-bold tabular-nums">{Number(q)}</span>
                               </div>
                             ))
-                          : <span className="text-zinc-600 italic">No stock</span>}
+                          : <span className="text-mutedForeground italic">No stock</span>}
                       </div>
                     </div>
 
-                    <div className="rounded bg-zinc-900/50 p-2 border border-zinc-700/30">
+                    <div className="rounded-lg bg-black/30 p-2.5 border border-primary/10">
                       <div className="flex items-center gap-1.5 mb-1.5">
-                        <Swords size={10} className="text-zinc-500 sm:w-[11px] sm:h-[11px]" />
-                        <p className="text-[8px] sm:text-[9px] text-zinc-500 font-heading uppercase">Weapon Stock</p>
+                        <Swords size={11} className="text-primary/70" />
+                        <p className="text-[9px] text-mutedForeground font-heading uppercase">Weapon stock</p>
                       </div>
-                      <div className="text-[9px] sm:text-[10px] font-heading text-foreground">
+                      <div className="text-[11px] font-heading text-foreground">
                         {Object.entries(data?.weapon_stock || {}).filter(([, q]) => Number(q || 0) > 0).length > 0
                           ? (
-                              <div className="flex justify-between">
-                                <span className="text-zinc-500">Total:</span>
-                                <span className="text-primary font-bold">
-                                  {weaponStock} units
-                                </span>
+                              <div className="flex justify-between gap-2">
+                                <span className="text-mutedForeground">Total</span>
+                                <span className="text-primary font-bold tabular-nums">{weaponStock}</span>
                               </div>
                             )
-                          : <span className="text-zinc-600 italic">No stock</span>}
+                          : <span className="text-mutedForeground italic">No stock</span>}
                       </div>
                     </div>
                   </div>
 
-                  {/* Production Buttons - Enhanced */}
                   <div className="space-y-2">
-                    <p className="text-[8px] sm:text-[9px] text-zinc-500 font-heading uppercase tracking-widest">Start Production (1 hour)</p>
-                    
+                    <p className="text-[9px] text-mutedForeground font-heading uppercase tracking-widest">Start production (1 hour)</p>
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {(() => {
                         const costMoney = data?.produce_all_armour_cost_money ?? 0;
@@ -1246,25 +1234,23 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                             type="button"
                             disabled={producingArmour || !canAfford || isProducing}
                             onClick={startArmourProductionAll}
-                            className={`px-2.5 sm:px-3 py-2 sm:py-2.5 rounded text-[10px] sm:text-xs font-heading font-bold border transition-all flex items-center justify-center gap-1.5 ${
+                            className={`px-3 py-2.5 rounded-lg text-[11px] font-heading font-bold border transition-all flex items-center gap-2 ${
                               isProducing
                                 ? 'bg-primary/10 border-primary/40 text-primary/60 cursor-not-allowed'
                                 : canAfford
-                                ? 'bg-primary/10 border-primary/40 text-primary hover:bg-primary/20 active:scale-95'
-                                : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-600 cursor-not-allowed'
+                                ? 'bg-primary/10 border-primary/40 text-primary hover:bg-primary/20 active:scale-[0.99]'
+                                : 'bg-black/30 border-white/10 text-mutedForeground cursor-not-allowed'
                             } disabled:opacity-50`}
                           >
-                            <Shield size={12} className="sm:w-3.5 sm:h-3.5" />
-                            <div className="flex flex-col items-start text-left">
-                              <span className="text-[9px] sm:text-[10px] leading-tight">
-                                {isProducing ? 'Producing...' : 'All Armour (5 lvls)'}
-                              </span>
-                              <span className="text-[8px] sm:text-[9px] opacity-75">{parts.join(' + ') || '—'}</span>
+                            <Shield size={14} className="shrink-0" />
+                            <div className="flex flex-col items-start text-left min-w-0">
+                              <span className="leading-tight">{isProducing ? 'Producing…' : 'All armour (5 lvls)'}</span>
+                              <span className="text-[10px] opacity-75">{parts.join(' + ') || '—'}</span>
                             </div>
                           </button>
                         );
                       })()}
-                      
+
                       {(() => {
                         const costMoney = data?.produce_all_weapons_cost_money ?? 0;
                         const costPoints = data?.produce_all_weapons_cost_points ?? 0;
@@ -1278,35 +1264,32 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                             type="button"
                             disabled={producingWeapon || !canAfford || isProducing}
                             onClick={startWeaponProductionAll}
-                            className={`px-2.5 sm:px-3 py-2 sm:py-2.5 rounded text-[10px] sm:text-xs font-heading font-bold border transition-all flex items-center justify-center gap-1.5 ${
+                            className={`px-3 py-2.5 rounded-lg text-[11px] font-heading font-bold border transition-all flex items-center gap-2 ${
                               isProducing
-                                ? 'bg-zinc-800/50 border-zinc-600/50 text-zinc-500 cursor-not-allowed'
+                                ? 'bg-black/30 border-white/10 text-mutedForeground cursor-not-allowed'
                                 : canAfford
-                                ? 'bg-zinc-800/50 border-zinc-600/50 text-foreground hover:border-primary/40 active:scale-95'
-                                : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-600 cursor-not-allowed'
+                                ? 'bg-black/30 border-primary/30 text-foreground hover:border-primary/50 active:scale-[0.99]'
+                                : 'bg-black/30 border-white/10 text-mutedForeground cursor-not-allowed'
                             } disabled:opacity-50`}
                           >
-                            <Swords size={12} className="sm:w-3.5 sm:h-3.5" />
-                            <div className="flex flex-col items-start text-left">
-                              <span className="text-[9px] sm:text-[10px] leading-tight">
-                                {isProducing ? 'Producing...' : 'All Weapons'}
-                              </span>
-                              <span className="text-[8px] sm:text-[9px] opacity-75">{parts.join(' + ') || '—'}</span>
+                            <Swords size={14} className="shrink-0" />
+                            <div className="flex flex-col items-start text-left min-w-0">
+                              <span className="leading-tight">{isProducing ? 'Producing…' : 'All weapons'}</span>
+                              <span className="text-[10px] opacity-75">{parts.join(' + ') || '—'}</span>
                             </div>
                           </button>
                         );
                       })()}
                     </div>
 
-                    {/* Single tier / single weapon (1 hr each) — pay only what you start */}
                     {(data?.armour_produce_tier_costs?.length > 0 || data?.weapon_produce_costs?.length > 0) && (
-                      <div className="space-y-2 pt-2 border-t border-zinc-700/40">
-                        <p className="text-[8px] sm:text-[9px] text-zinc-500 font-heading uppercase tracking-widest">
+                      <div className="space-y-2 pt-2 border-t border-primary/10">
+                        <p className="text-[9px] text-mutedForeground font-heading uppercase tracking-widest">
                           Or produce one item (1 hr)
                         </p>
                         <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                          <div className="rounded bg-zinc-900/40 p-2 border border-zinc-700/30 space-y-1.5">
-                            <p className="text-[8px] text-zinc-500 font-heading uppercase">Armour by level</p>
+                          <div className="rounded-lg bg-black/30 p-2 border border-primary/10 space-y-1.5">
+                            <p className="text-[9px] text-mutedForeground font-heading uppercase">Armour by level</p>
                             {(data?.armour_produce_tier_costs || []).map((row) => {
                               const hrs = Number(data?.armour_production_hours?.[String(row.level)] ?? data?.armour_production_hours?.[row.level] ?? 0);
                               const busy = hrs > 0.01;
@@ -1320,22 +1303,22 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                                   type="button"
                                   disabled={producingArmourLevel != null || busy || !canAffordOne}
                                   onClick={() => startArmourProductionOne(row.level)}
-                                  className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded text-[9px] sm:text-[10px] font-heading border ${
+                                  className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-md text-[11px] font-heading border ${
                                     busy
-                                      ? 'border-amber-700/40 text-amber-500/80 cursor-not-allowed'
+                                      ? 'border-amber-500/35 text-amber-400/80 cursor-not-allowed'
                                       : canAffordOne
-                                        ? 'border-zinc-600/50 text-foreground hover:border-primary/40'
-                                        : 'border-zinc-700/30 text-zinc-600 cursor-not-allowed'
+                                        ? 'border-white/10 text-foreground hover:border-primary/40'
+                                        : 'border-white/5 text-mutedForeground cursor-not-allowed'
                                   } disabled:opacity-50`}
                                 >
                                   <span>Lv.{row.level}{busy ? ` (${hrs.toFixed(1)}h left)` : ''}</span>
-                                  <span className="text-zinc-400 truncate">{producingArmourLevel === row.level ? '…' : label}</span>
+                                  <span className="text-mutedForeground truncate">{producingArmourLevel === row.level ? '…' : label}</span>
                                 </button>
                               );
                             })}
                           </div>
-                          <div className="rounded bg-zinc-900/40 p-2 border border-zinc-700/30 space-y-1.5 max-h-56 overflow-y-auto">
-                            <p className="text-[8px] text-zinc-500 font-heading uppercase sticky top-0 bg-zinc-900/95 pb-1">Weapons (one at a time)</p>
+                          <div className="rounded-lg bg-black/30 p-2 border border-primary/10 space-y-1.5 max-h-56 overflow-y-auto">
+                            <p className="text-[9px] text-mutedForeground font-heading uppercase sticky top-0 bg-[#0c0c0c]/95 pb-1">Weapons (one at a time)</p>
                             {(data?.weapon_produce_costs || []).map((w) => {
                               const hrs = Number(data?.weapon_production_hours?.[w.id] ?? 0);
                               const busy = hrs > 0.01;
@@ -1350,16 +1333,16 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                                   type="button"
                                   disabled={producingWeaponOneId != null || busy || !canAffordOne}
                                   onClick={() => startWeaponProductionOne(w.id)}
-                                  className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded text-[8px] sm:text-[9px] font-heading border ${
+                                  className={`w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-md text-[10px] sm:text-[11px] font-heading border ${
                                     busy
-                                      ? 'border-amber-700/40 text-amber-500/80 cursor-not-allowed'
+                                      ? 'border-amber-500/35 text-amber-400/80 cursor-not-allowed'
                                       : canAffordOne
-                                        ? 'border-zinc-600/50 text-foreground hover:border-primary/40'
-                                        : 'border-zinc-700/30 text-zinc-600 cursor-not-allowed'
+                                        ? 'border-white/10 text-foreground hover:border-primary/40'
+                                        : 'border-white/5 text-mutedForeground cursor-not-allowed'
                                   } disabled:opacity-50`}
                                 >
                                   <span className="truncate text-left">{shortName}{busy ? ` (${hrs.toFixed(1)}h)` : ''}</span>
-                                  <span className="text-zinc-400 shrink-0">{producingWeaponOneId === w.id ? '…' : label}</span>
+                                  <span className="text-mutedForeground shrink-0">{producingWeaponOneId === w.id ? '…' : label}</span>
                                 </button>
                               );
                             })}
@@ -1368,87 +1351,78 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                       </div>
                     )}
                   </div>
-                </div>
+                </ArmSection>
               )}
 
-              {/* Bullet Price & Claim */}
               {isOwner && (
                 <>
-                  <div className="rounded-lg p-2.5 sm:p-3 bg-gradient-to-br from-zinc-800/60 to-zinc-800/40 border border-zinc-700/40">
-                    <div className="text-[9px] sm:text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                      <Crosshair size={10} className="sm:w-[11px] sm:h-[11px]" />
-                      Set Sell Price
-                    </div>
-                    <form onSubmit={setPrice} className="flex items-center gap-2">
+                  <ArmSection icon={Crosshair} title="Set sell price" subtitle="Cash per bullet">
+                    <form onSubmit={setPrice} className="flex flex-col sm:flex-row sm:items-center gap-2">
                       <div className="relative flex-1">
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-500 text-xs">$</span>
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-mutedForeground text-sm">$</span>
                         <input
                           type="number"
                           min={priceMin}
                           max={priceMax}
+                          inputMode="numeric"
                           placeholder={pricePerBullet != null ? String(pricePerBullet) : 'Price'}
                           value={priceInput}
                           onChange={(e) => setPriceInput(e.target.value)}
-                          className="w-full pl-5 pr-2 py-1.5 sm:py-2 bg-zinc-900/80 border border-zinc-600/40 rounded text-foreground font-heading text-xs sm:text-sm focus:border-primary/50 focus:outline-none"
+                          className="w-full pl-7 pr-3 py-2.5 bg-black/40 border border-primary/20 rounded-lg text-foreground font-heading text-sm focus:border-primary/50 focus:outline-none"
                         />
                       </div>
-                      <span className="text-[9px] sm:text-[10px] text-zinc-500 shrink-0">/bullet</span>
                       <button
                         type="submit"
                         disabled={settingPrice}
-                        className="px-3 sm:px-4 py-1.5 sm:py-2 bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-[10px] sm:text-xs uppercase rounded hover:bg-primary/30 active:scale-95 disabled:opacity-50 transition-all"
+                        className="px-4 py-2.5 bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-[11px] uppercase rounded-lg hover:bg-primary/30 disabled:opacity-50"
                       >
-                        {settingPrice ? '...' : 'Set'}
+                        {settingPrice ? '…' : 'Set price'}
                       </button>
                     </form>
                     {pricePerBullet != null && (
-                      <p className="text-[9px] sm:text-[10px] text-zinc-500 mt-1.5">Current: {formatMoney(pricePerBullet)}/bullet</p>
+                      <p className="text-[11px] text-mutedForeground mt-2 font-heading">Current: {formatMoney(pricePerBullet)}/bullet</p>
                     )}
-                  </div>
+                  </ArmSection>
 
                   {(data?.armour_money_price_defaults?.length > 0 || data?.weapon_money_price_defaults?.length > 0) && (
-                    <div className="rounded-lg p-2.5 sm:p-3 bg-gradient-to-br from-zinc-800/60 to-zinc-800/40 border border-zinc-700/40">
-                      <div className="text-[9px] sm:text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                        <Package size={10} className="sm:w-[11px] sm:h-[11px]" />
-                        Cash list prices (armour L1–3 & money guns)
-                      </div>
-                      <p className="text-[8px] sm:text-[9px] text-zinc-500 mb-2 font-heading">
-                        List price before event multiplier. Points armour (L4–5) and points weapons stay on the default formula. Max{' '}
-                        {formatMoney(data?.armoury_item_money_price_max ?? 5_000_000)} each. Clear a field + save to reset to default.
+                    <ArmSection icon={Package} title="Cash list prices" subtitle="Armour L1–3 & money guns · clear + save resets default">
+                      <p className="text-[10px] text-mutedForeground mb-2 font-heading leading-relaxed">
+                        Points armour (L4–5) and points weapons stay on the default formula. Max{' '}
+                        {formatMoney(data?.armoury_item_money_price_max ?? 5_000_000)} each.
                       </p>
-                      <form onSubmit={saveItemPrices} className="space-y-2">
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                          <div className="space-y-1">
-                            <p className="text-[8px] text-zinc-600 font-heading uppercase">Armour (cash tiers)</p>
+                      <form onSubmit={saveItemPrices} className="space-y-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <p className="text-[9px] text-mutedForeground font-heading uppercase">Armour (cash tiers)</p>
                             {(data?.armour_money_price_defaults || []).map((d) => (
-                              <label key={d.level} className="flex items-center gap-2 text-[9px] sm:text-[10px] font-heading">
-                                <span className="text-zinc-500 w-14 shrink-0">L{d.level}</span>
-                                <span className="text-zinc-600 truncate flex-1" title={d.name}>{d.name}</span>
-                                <span className="text-zinc-600">$</span>
+                              <label key={d.level} className="flex items-center gap-2 text-[11px] font-heading">
+                                <span className="text-mutedForeground w-8 shrink-0">L{d.level}</span>
+                                <span className="text-mutedForeground truncate flex-1" title={d.name}>{d.name}</span>
+                                <span className="text-mutedForeground">$</span>
                                 <input
                                   type="number"
                                   min={1}
                                   max={data?.armoury_item_money_price_max ?? 5_000_000}
                                   value={armourPriceInputs[d.level] ?? ''}
                                   onChange={(e) => setArmourPriceInputs((prev) => ({ ...prev, [d.level]: e.target.value }))}
-                                  className="w-24 sm:w-28 px-1.5 py-1 bg-zinc-900/80 border border-zinc-600/40 rounded text-foreground text-[9px] sm:text-[10px]"
+                                  className="w-24 sm:w-28 px-2 py-1.5 bg-black/40 border border-primary/20 rounded-md text-foreground text-[11px]"
                                 />
                               </label>
                             ))}
                           </div>
-                          <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
-                            <p className="text-[8px] text-zinc-600 font-heading uppercase sticky top-0 bg-zinc-900/0">Weapons (cash)</p>
+                          <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                            <p className="text-[9px] text-mutedForeground font-heading uppercase sticky top-0 bg-[#0c0c0c]/95 pb-1">Weapons (cash)</p>
                             {(data?.weapon_money_price_defaults || []).map((d) => (
-                              <label key={d.id} className="flex items-center gap-2 text-[8px] sm:text-[9px] font-heading">
-                                <span className="text-zinc-600 truncate flex-1" title={d.name}>{d.name}</span>
-                                <span className="text-zinc-600">$</span>
+                              <label key={d.id} className="flex items-center gap-2 text-[10px] sm:text-[11px] font-heading">
+                                <span className="text-mutedForeground truncate flex-1" title={d.name}>{d.name}</span>
+                                <span className="text-mutedForeground">$</span>
                                 <input
                                   type="number"
                                   min={1}
                                   max={data?.armoury_item_money_price_max ?? 5_000_000}
                                   value={weaponPriceInputs[d.id] ?? ''}
                                   onChange={(e) => setWeaponPriceInputs((prev) => ({ ...prev, [d.id]: e.target.value }))}
-                                  className="w-24 sm:w-28 px-1.5 py-1 bg-zinc-900/80 border border-zinc-600/40 rounded text-foreground"
+                                  className="w-24 sm:w-28 px-2 py-1.5 bg-black/40 border border-primary/20 rounded-md text-foreground"
                                 />
                               </label>
                             ))}
@@ -1457,67 +1431,54 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                         <button
                           type="submit"
                           disabled={settingItemPrices}
-                          className="w-full sm:w-auto px-3 py-1.5 bg-primary/15 border border-primary/45 text-primary font-heading font-bold text-[9px] sm:text-[10px] uppercase rounded hover:bg-primary/25 disabled:opacity-50"
+                          className="w-full sm:w-auto px-4 py-2 bg-primary/15 border border-primary/45 text-primary font-heading font-bold text-[11px] uppercase rounded-lg hover:bg-primary/25 disabled:opacity-50"
                         >
                           {settingItemPrices ? 'Saving…' : 'Save item prices'}
                         </button>
                       </form>
-                    </div>
+                    </ArmSection>
                   )}
                 </>
               )}
 
               {!hasOwner && (
-                <div className="rounded-lg p-3 sm:p-4 bg-gradient-to-br from-zinc-800/60 to-zinc-800/40 border border-zinc-700/40 relative overflow-hidden">
-                  <div className="absolute -bottom-6 -right-6 w-24 h-24 sm:w-32 sm:h-32 rounded-full bg-orange-500/20 animate-furnace pointer-events-none" />
-                  
-                  <div className="relative z-10 space-y-3">
-                    <div className="flex items-start gap-3 sm:gap-4">
+                <ArmSection icon={Gauge} title="Claim this armoury" subtitle={`${productionPer24h.toLocaleString()} bullets / 24h`}>
+                  <div className="relative overflow-hidden rounded-lg">
+                    <div className="absolute -bottom-8 -right-8 w-28 h-28 rounded-full bg-orange-500/15 animate-furnace pointer-events-none" />
+                    <div className="relative z-10 flex flex-col sm:flex-row sm:items-center gap-4">
                       <ProductionGauge production={production} />
-                      
-                      <div className="flex-1 space-y-2">
-                        <div className="flex items-center gap-1.5">
-                          <Gauge size={11} className="text-primary sm:w-3 sm:h-3" />
-                          <span className="text-[9px] sm:text-[10px] text-zinc-500 font-heading uppercase tracking-widest">Production Info</span>
-                        </div>
-                        
-                        <p className="text-[10px] sm:text-xs text-zinc-400 font-heading leading-relaxed">
+                      <div className="flex-1 space-y-3">
+                        <p className="text-[12px] text-mutedForeground font-heading leading-relaxed">
                           Produces <strong className="text-primary">{productionPer24h.toLocaleString()}</strong> bullets per 24h (every {productionTickMins} min).
-                          {!hasOwner && claimCost > 0 && (
+                          {claimCost > 0 && (
                             <span className="block mt-1">
                               Pay <strong className="text-primary">{formatMoney(claimCost)}</strong> to claim ownership.
                             </span>
                           )}
                         </p>
+                        <button
+                          type="button"
+                          onClick={claim}
+                          disabled={claiming || !canAffordClaim}
+                          className={`w-full flex items-center justify-center gap-2 px-4 py-3 font-heading font-bold text-[11px] sm:text-xs uppercase tracking-wide rounded-lg border-2 transition-all ${
+                            canAffordClaim
+                              ? 'bg-primary/20 border-primary/55 text-primary hover:bg-primary/30 active:scale-[0.99]'
+                              : 'bg-black/30 border-white/10 text-mutedForeground cursor-not-allowed'
+                          } disabled:opacity-50`}
+                        >
+                          <Factory size={16} />
+                          {claiming ? 'Claiming…' : canAffordClaim ? `Claim — ${formatMoney(claimCost)}` : `Need ${formatMoney(claimCost)}`}
+                        </button>
                       </div>
                     </div>
-
-                    {/* Claim Button */}
-                    <button
-                      type="button"
-                      onClick={claim}
-                      disabled={claiming || !canAffordClaim}
-                      className={`w-full flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 sm:py-3 font-heading font-bold text-[10px] sm:text-xs uppercase tracking-wider rounded border-2 transition-all ${
-                        canAffordClaim
-                          ? 'bg-gradient-to-b from-primary/30 to-primary/10 border-primary/60 text-primary hover:from-primary/40 hover:shadow-lg active:scale-95'
-                          : 'bg-zinc-800/50 border-zinc-600/30 text-zinc-500 cursor-not-allowed'
-                      } disabled:opacity-50`}
-                    >
-                      <Factory size={16} className="sm:w-[18px] sm:h-[18px]" />
-                      {claiming ? 'Claiming...' : canAffordClaim ? `Claim Armoury — ${formatMoney(claimCost)}` : `Need ${formatMoney(claimCost)}`}
-                    </button>
                   </div>
-                </div>
+                </ArmSection>
               )}
             </div>
           )}
         </div>
 
-        {/* Bottom warning stripe */}
-        <div className="armoury-stripe h-1.5 sm:h-2" style={{
-          background: 'repeating-linear-gradient(135deg, var(--noir-primary) 0px, var(--noir-primary) 6px, #1a1a1a 6px, #1a1a1a 12px)',
-          opacity: 0.6,
-        }} />
+        <div className="h-1 bg-gradient-to-r from-transparent via-primary/35 to-transparent" />
       </div>
     </div>
   );

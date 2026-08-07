@@ -9,16 +9,32 @@ import { HoverCard, HoverCardTrigger, HoverCardPortal, HoverCardContent } from "
 import PrestigeBadge from '../../components/PrestigeBadge';
 import CountryFlagThumb from '../../components/CountryFlagThumb';
 import ProfileHoverPreview from '../../components/ProfileHoverPreview';
-import { customGlowBorderStyle } from '../../constants/profileGlowPresets';
 import styles from '../../styles/noir.module.css';
 import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
 
 const UO_STYLES = `
   @keyframes uo-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .uo-fade-in { animation: uo-fade-in 0.4s ease-out both; }
-  .uo-card { transition: all 0.3s ease; }
-  .uo-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
+  /* Dark Mafia .panel uses overflow:hidden — that clips chip glow; force visible here. */
+  .uo-users-panel { overflow: visible !important; }
+  .uo-user-chip {
+    background: rgba(17, 17, 17, 0.96);
+    overflow: visible !important;
+  }
+  .uo-card { transition: transform 0.3s ease, background 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease, filter 0.3s ease; }
+  .uo-card:not(.uo-glow):hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .uo-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
+  .uo-glow {
+    border-width: 2px !important;
+    border-style: solid !important;
+    border-color: var(--uo-glow-border) !important;
+    box-shadow: var(--uo-glow-shadow) !important;
+    filter: drop-shadow(0 0 5px var(--uo-glow-filter));
+  }
+  .uo-glow:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--uo-glow-shadow), 0 4px 12px rgba(0,0,0,0.35) !important;
+  }
   @keyframes uo-hitlist-pulse {
     0%, 100% { box-shadow: 0 0 12px rgba(220, 38, 38, 0.4), inset 0 0 0 1px rgba(220, 38, 38, 0.25); }
     50% { box-shadow: 0 0 20px rgba(220, 38, 38, 0.7), inset 0 0 0 1px rgba(220, 38, 38, 0.45); }
@@ -26,6 +42,7 @@ const UO_STYLES = `
   .uo-hitlist {
     animation: uo-hitlist-pulse 2s ease-in-out infinite;
     box-shadow: 0 0 12px rgba(220, 38, 38, 0.4), inset 0 0 0 1px rgba(220, 38, 38, 0.25);
+    filter: none;
   }
   .uo-hitlist:hover { box-shadow: 0 0 20px rgba(220, 38, 38, 0.65), 0 4px 16px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(220, 38, 38, 0.4); }
   .uo-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
@@ -39,6 +56,22 @@ const UO_STYLES = `
 `;
 
 const UO_PREVIEW_CACHE_MAX_MS = 180_000;
+
+function glowCssVars(hex) {
+  if (!hex) return null;
+  const h = String(hex).replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(h)) return null;
+  const rgb = [
+    parseInt(h.slice(0, 2), 16),
+    parseInt(h.slice(2, 4), 16),
+    parseInt(h.slice(4, 6), 16),
+  ].join(', ');
+  return {
+    '--uo-glow-border': `rgba(${rgb}, 0.9)`,
+    '--uo-glow-shadow': `0 0 0 1px rgba(${rgb}, 0.4), 0 0 12px rgba(${rgb}, 0.75), 0 0 22px rgba(${rgb}, 0.4)`,
+    '--uo-glow-filter': `rgba(${rgb}, 0.55)`,
+  };
+}
 
 function previewSessionKey(username) {
   return `mafia_uo_pv_${String(username || '').trim().toLowerCase()}`;
@@ -277,12 +310,23 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
   const preview = profileCache[user.username];
   const adminColor = (adminOnlineColor && adminOnlineColor.trim()) || '#a78bfa';
   const modColor = (modDefaultOnlineColor && modDefaultOnlineColor.trim()) || DEFAULT_MOD_COLOR;
+  // Prefer store cosmetic colour over role default (e.g. entertainer gold) so list matches preview/profile.
+  const cosmeticGlowHex = (() => {
+    if (preview && !preview.error && !preview._stub && preview.profile_cosmetic_active && preview.profile_name_glow_color) {
+      return preview.profile_name_glow_color;
+    }
+    if (user.profile_cosmetic_active && user.profile_name_glow_color) {
+      return user.profile_name_glow_color;
+    }
+    if (preview && !preview.error && preview.profile_cosmetic_active && preview.profile_name_glow_color) {
+      return preview.profile_name_glow_color;
+    }
+    return null;
+  })();
   const displayColor =
     user.online_color ||
-    (user.is_admin ? adminColor : user.is_moderator ? modColor : user.is_entertainer ? DEFAULT_ENTERTAINER_COLOR : user.is_help_desk_operator ? DEFAULT_HDO_COLOR : undefined) ||
-    ((preview?.profile_cosmetic_active || user.profile_cosmetic_active) && (preview?.profile_name_glow_color || user.profile_name_glow_color)
-      ? (preview?.profile_name_glow_color || user.profile_name_glow_color)
-      : undefined);
+    cosmeticGlowHex ||
+    (user.is_admin ? adminColor : user.is_moderator ? modColor : user.is_entertainer ? DEFAULT_ENTERTAINER_COLOR : user.is_help_desk_operator ? DEFAULT_HDO_COLOR : undefined);
   const userStatus = user.status || 'online';
   const selfFromRoster =
     myUsername &&
@@ -298,7 +342,7 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
     <Link
       to={profileTo}
       className={linkClass}
-      style={displayColor ? { color: displayColor } : undefined}
+      style={displayColor ? { color: displayColor, textShadow: cosmeticGlowHex ? `0 0 8px ${cosmeticGlowHex}88` : undefined } : undefined}
       data-testid={`user-profile-link-${user.username}`}
       onPointerDown={prefetchFullProfile}
       onPointerEnter={prefetchFullProfile}
@@ -310,12 +354,7 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
     </Link>
   );
 
-  // Store "Name Glow + Border" cosmetic carries into the hover card border
-  const cosmeticGlowHex = (preview?.profile_cosmetic_active ?? user.profile_cosmetic_active)
-    ? (preview?.profile_name_glow_color || user.profile_name_glow_color || null)
-    : null;
-  const rowGlowStyle =
-    !user.on_hitlist && cosmeticGlowHex ? customGlowBorderStyle(cosmeticGlowHex) : undefined;
+  const rowGlowVars = !user.on_hitlist ? glowCssVars(cosmeticGlowHex) : null;
 
   const hoverPreview = profileHoverEnabled ? (
     <HoverCard
@@ -368,8 +407,8 @@ const UserCard = ({ user, profileCache, ensureProfilePreview, adminOnlineColor, 
 
   return (
     <div
-      className={`relative z-10 ${styles.panel} rounded-md border px-2 py-1 h-7 md:h-8 flex items-center uo-row uo-card uo-fade-in ${user.on_hitlist ? 'uo-hitlist border-red-500/40' : rowGlowStyle ? 'border-2' : 'border-primary/20'}`}
-      style={rowGlowStyle}
+      className={`relative z-10 uo-user-chip rounded-md border px-2 py-1 h-7 md:h-8 flex items-center uo-row uo-card uo-fade-in ${user.on_hitlist ? 'uo-hitlist border-red-500/40' : rowGlowVars ? 'uo-glow' : 'border-primary/20'}`}
+      style={rowGlowVars || undefined}
       data-testid="user-card"
     >
       <div className="flex items-center gap-1 min-h-[20px] w-full">
@@ -455,7 +494,7 @@ const InfoCard = ({ profileHoverEnabled = true }) => (
   </div>
 );
 
-const UO_CACHE_KEY = 'mafia_users_online_v2';
+const UO_CACHE_KEY = 'mafia_users_online_v3';
 
 // Main component
 export default function UsersOnline() {
@@ -641,6 +680,25 @@ export default function UsersOnline() {
       });
   }, []);
 
+  // Warm cosmetic glow from session preview cache so chips match dossier without re-hover.
+  useEffect(() => {
+    if (!users.length) return;
+    setProfileCache((prev) => {
+      let next = null;
+      for (const user of users) {
+        const u = user?.username;
+        if (!u) continue;
+        if (prev[u] && !prev[u]._stub && !prev[u].error) continue;
+        if (user.profile_cosmetic_active && user.profile_name_glow_color) continue;
+        const cached = readCachedProfilePreview(u);
+        if (!cached) continue;
+        if (!next) next = { ...prev };
+        next[u] = cached;
+      }
+      return next || prev;
+    });
+  }, [users]);
+
   useEffect(() => {
     const c = readSessionJson(UO_CACHE_KEY);
     fetchOnlineUsers(!!c);
@@ -684,15 +742,15 @@ export default function UsersOnline() {
           </p>
         </div>
       ) : (
-        <div className={`relative z-10 ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }}>
+        <div className={`relative z-10 ${styles.panel} uo-users-panel rounded-md border border-primary/20 uo-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
             <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
               👤 Active Users ({users.length})
             </h2>
           </div>
-          <div className="p-2">
-            <div className="flex flex-wrap gap-1" data-testid="users-grid">
+          <div className="p-2.5 overflow-visible">
+            <div className="flex flex-wrap gap-1.5 overflow-visible" data-testid="users-grid">
                 {users.map((user, idx) => (
                   <UserCard
                     key={user.username || `user-${idx}`}
