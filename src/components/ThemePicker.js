@@ -14,7 +14,7 @@ import {
   THEME_BUTTON_STYLES, THEME_BUTTON_SHAPES, THEME_DIVIDER_STYLES,
   THEME_SIDEBAR_SPACING, THEME_SIDEBAR_LAYOUT, THEME_TOAST_POSITION, THEME_WRITING_COLOURS, THEME_TEXT_STYLES,
   THEME_COLOUR_SECTIONS, THEME_WRITING_SECTIONS, THEME_VARIANTS,
-  THEME_RESET_CLASSIC_ID, THEME_RESET_MODERN_ID, STARTING_LOOK_PRESET_IDS,
+  THEME_RESET_CLASSIC_ID, THEME_RESET_MODERN_ID, THEME_RESET_DARK_MAFIA_ID, STARTING_LOOK_PRESET_IDS,
   THEME_LAYOUT_RESET_DEFAULTS,
   getThemeColour, getThemePreset, EXPANDED_PRESET_CATEGORIES,
 } from '../constants/themes';
@@ -182,6 +182,7 @@ function PresetCard({ preset, active, onSelect, featured = false }) {
   const sw = swatchStyle(colour);
   const primary = colour?.primary ?? '#888';
   const isModern = preset.themeVariant === 'modern';
+  const isDarkMafia = preset.themeVariant === 'dark_mafia';
   return (
     <button type="button" onClick={() => onSelect(preset)} title={preset.description}
       data-testid={`theme-preset-${preset.id}`}
@@ -227,7 +228,7 @@ function PresetCard({ preset, active, onSelect, featured = false }) {
               Sample
             </span>
             <span className="text-[8px] font-heading uppercase text-zinc-600 truncate">
-              {isModern ? 'Modern' : 'Classic'}
+              {isDarkMafia ? 'Dark Mafia' : isModern ? 'Modern' : 'Classic'}
             </span>
           </div>
         )}
@@ -508,6 +509,8 @@ export default function ThemePicker({ open, onClose }) {
     { id: 'topbar',   label: 'Top Bar',  icon: LayoutDashboard },
   ];
 
+  const isModernChrome = themeVariant === 'modern' || themeVariant === 'dark_mafia';
+
   if (!open) return null;
 
   return (
@@ -518,13 +521,17 @@ export default function ThemePicker({ open, onClose }) {
       <div
         className={`${styles.panel} rounded-2xl w-full max-w-2xl max-h-[92vh] overflow-hidden flex flex-col`}
         style={{
-          background: themeVariant === 'modern'
+          background: themeVariant === 'dark_mafia'
+            ? 'linear-gradient(180deg, #141414 0%, #0a0a0a 100%)'
+            : isModernChrome
             ? 'linear-gradient(180deg, rgba(45,45,50,0.96) 0%, rgba(32,32,36,0.97) 100%)'
             : 'linear-gradient(180deg,#1c1917 0%,#141210 100%)',
-          border: themeVariant === 'modern'
+          border: isModernChrome || themeVariant === 'dark_mafia'
             ? '1px solid rgba(var(--noir-primary-rgb),0.22)'
             : '1px solid rgba(212,175,55,0.15)',
-          boxShadow: themeVariant === 'modern'
+          boxShadow: themeVariant === 'dark_mafia'
+            ? '0 0 0 1px rgba(var(--noir-primary-rgb),0.1),0 32px 80px rgba(0,0,0,0.9)'
+            : isModernChrome
             ? '0 0 0 1px rgba(var(--noir-primary-rgb),0.08),0 38px 90px rgba(12,12,14,0.78)'
             : '0 0 0 1px rgba(0,0,0,0.5),0 32px 80px rgba(0,0,0,0.85)',
         }}
@@ -536,7 +543,7 @@ export default function ThemePicker({ open, onClose }) {
         <div
           className="px-4 py-3 flex items-center justify-between gap-3 shrink-0 border-b border-zinc-800/80"
           style={{
-            background: themeVariant === 'modern'
+            background: isModernChrome || themeVariant === 'dark_mafia'
               ? 'linear-gradient(90deg,rgba(var(--noir-primary-rgb),0.11) 0%, rgba(var(--noir-primary-rgb),0.04) 42%, transparent 100%)'
               : 'linear-gradient(90deg,rgba(212,175,55,0.09) 0%,transparent 60%)',
           }}
@@ -570,6 +577,15 @@ export default function ThemePicker({ open, onClose }) {
               title="Restore modern sky look + layout defaults"
             >
               <RotateCcw className="w-3 h-3" /> Reset Modern
+            </button>
+            <button
+              type="button"
+              onClick={() => handleResetToPreset(THEME_RESET_DARK_MAFIA_ID)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[9px] font-heading font-bold uppercase tracking-wider border border-zinc-700 bg-zinc-800/80 text-zinc-400 hover:border-primary/40 hover:text-primary transition-all"
+              data-testid="theme-reset-dark-mafia"
+              title="Restore Dark Mafia Wars command-center look"
+            >
+              <RotateCcw className="w-3 h-3" /> Dark Mafia
             </button>
             <button
               type="button" onClick={onClose} aria-label="Close"
@@ -606,8 +622,8 @@ export default function ThemePicker({ open, onClose }) {
           {/* ════ PRESETS ════ */}
           {activeTab === 'presets' && (
             <>
-              <TabSection icon={PanelLeft} title="Layout mode" sub="Switch between old default layout and full modern futuristic layout">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <TabSection icon={PanelLeft} title="Layout mode" sub="Classic, Modern, or Dark Mafia Wars command-center chrome">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   {THEME_VARIANTS.map((variant) => {
                     const active = themeVariant === variant.id;
                     return (
@@ -631,6 +647,7 @@ export default function ThemePicker({ open, onClose }) {
                     );
                   })}
                 </div>
+                {(themeVariant === 'modern' || themeVariant === 'dark_mafia') && (
                 <div className="mt-3 rounded-lg border border-zinc-700/70 bg-zinc-900/60 p-3">
                   <p className="text-[9px] font-heading text-zinc-500 uppercase tracking-wider mb-2">Modern visual quality</p>
                   <Pills
@@ -642,9 +659,10 @@ export default function ThemePicker({ open, onClose }) {
                     onChange={setModernVisualQuality}
                   />
                   <p className="text-[9px] text-zinc-600 mt-2">
-                    Performance reduces blur/glow load in modern theme for faster toasts and casino animations.
+                    Performance reduces blur/glow load for faster toasts and casino animations.
                   </p>
                 </div>
+                )}
               </TabSection>
 
               {activeFullPreset && (
@@ -663,7 +681,7 @@ export default function ThemePicker({ open, onClose }) {
               <TabSection
                 icon={Eye}
                 title="Starting looks"
-                sub="Classic, Modern, and curated full packs — same as Reset Classic / Reset Modern"
+                sub="Classic, Modern, Dark Mafia Wars, and curated full packs"
               >
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
                   {startingLookPresets

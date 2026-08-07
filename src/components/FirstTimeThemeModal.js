@@ -3,12 +3,14 @@ import styles from '../styles/noir.module.css';
 
 const PRESET_DEFAULT_ID = 'old-default';
 const PRESET_MODERN_ID = 'modern-full';
+const PRESET_DARK_MAFIA_ID = 'dark-mafia-wars';
 
 function PreviewCard({ presetId, label, buttonLabel, onChoose }) {
   const preset = THEME_PRESETS.find((p) => p.id === presetId);
   const colour = preset ? getThemeColour(preset.colourId) : null;
   const primary = colour?.primary ?? '#888';
   const isModern = preset?.themeVariant === 'modern';
+  const isDarkMafia = preset?.themeVariant === 'dark_mafia';
 
   return (
     <div
@@ -26,7 +28,9 @@ function PreviewCard({ presetId, label, buttonLabel, onChoose }) {
       <div
         className="flex-1 p-4 flex flex-col gap-3"
         style={{
-          background: isModern
+          background: isDarkMafia
+            ? 'linear-gradient(180deg, #141414 0%, #0a0a0a 100%)'
+            : isModern
             ? 'linear-gradient(180deg, rgba(45,45,50,0.5) 0%, rgba(32,32,36,0.6) 100%)'
             : 'linear-gradient(180deg, rgba(28,25,23,0.6) 0%, rgba(20,18,16,0.7) 100%)',
         }}
@@ -52,7 +56,7 @@ function PreviewCard({ presetId, label, buttonLabel, onChoose }) {
             Sample
           </div>
           <span className="text-[10px] font-heading uppercase text-mutedForeground">
-            {isModern ? 'Modern layout' : 'Classic layout'}
+            {isDarkMafia ? 'Dark Mafia Wars' : isModern ? 'Modern layout' : 'Classic layout'}
           </span>
         </div>
         <button
@@ -91,7 +95,7 @@ export default function FirstTimeThemeModal({ open, onClose, onChoose }) {
       aria-labelledby="first-time-theme-title"
     >
       <div
-        className={`${styles.panel} w-full max-w-lg rounded-2xl overflow-hidden border border-primary/20 shadow-2xl`}
+        className={`${styles.panel} w-full max-w-2xl rounded-2xl overflow-hidden border border-primary/20 shadow-2xl`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="px-5 py-4 border-b border-primary/15 bg-primary/5">
@@ -99,10 +103,10 @@ export default function FirstTimeThemeModal({ open, onClose, onChoose }) {
             Choose your look
           </h2>
           <p className="text-[11px] text-mutedForeground font-heading mt-1">
-            Pick Default or Modern and see a preview. You can change this anytime in Theme settings.
+            Pick Default, Modern, or Dark Mafia Wars. You can change this anytime in Theme settings.
           </p>
         </div>
-        <div className="p-5 grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="p-5 grid grid-cols-1 sm:grid-cols-3 gap-4">
           <PreviewCard
             presetId={PRESET_DEFAULT_ID}
             label="Default"
@@ -113,6 +117,12 @@ export default function FirstTimeThemeModal({ open, onClose, onChoose }) {
             presetId={PRESET_MODERN_ID}
             label="Modern"
             buttonLabel="Choose Modern"
+            onChoose={onChoose}
+          />
+          <PreviewCard
+            presetId={PRESET_DARK_MAFIA_ID}
+            label="Dark Mafia"
+            buttonLabel="Choose Dark Mafia"
             onChoose={onChoose}
           />
         </div>

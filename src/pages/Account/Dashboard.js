@@ -58,7 +58,7 @@ function CommandStatusHero({ user, rankProgress, vitals, showVitals }) {
   const showPremiumTotal = hasPremiumBar && (rankProgress?.next_rank || (isPrestigeBar && needed > 0));
 
   return (
-    <div className={`${dash.panel} ${dash.hero} ${dash.scaleIn} mobile-panel`} data-testid="command-status">
+    <div className={`${styles.panel} relative rounded-md overflow-hidden border border-primary/20 ${dash.hero} ${dash.scaleIn} mobile-panel`} data-testid="command-status">
       <div className={dash.heroWash} aria-hidden />
       <div className={dash.heroInner}>
         <div className={dash.heroMeta}>
@@ -486,11 +486,11 @@ export default function Dashboard() {
 
       {civilianProtection?.active && (
         <Collapsible open={cpPanelOpen} onOpenChange={setCpPanelOpen} className={dash.scaleIn}>
-          <div className={`${dash.panel} ${dash.cpPanel} mobile-panel`}>
-            <CollapsibleTrigger className={`w-full ${dash.panelHeader} ${dash.cpHeader} text-left hover:opacity-95 transition-opacity`}>
+          <div className={`${styles.panel} relative rounded-md overflow-hidden border border-emerald-500/30 mobile-panel`}>
+            <CollapsibleTrigger className={`w-full ${styles.panelHeader} px-2.5 py-1.5 border-b border-emerald-500/20 bg-emerald-500/10 flex items-center justify-between gap-2 text-left hover:opacity-95 transition-opacity`}>
               <div className="flex items-center gap-1.5 min-w-0">
                 <Shield size={14} className="text-emerald-400 shrink-0" />
-                <h2 className={`${dash.panelTitle} ${dash.cpTitle} truncate`}>
+                <h2 className={`${dash.panelTitle} font-heading truncate`} style={{ color: '#34d399' }}>
                   Current protection
                 </h2>
               </div>

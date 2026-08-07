@@ -17,6 +17,7 @@ import {
   DEFAULT_BUTTON_SHAPE_ID,
   THEME_LAYOUT_RESET_DEFAULTS,
   THEME_RESET_CLASSIC_ID,
+  normalizeThemeVariant,
 } from '../constants/themes';
 import api from '../utils/api';
 import { getThemeUiPlatform } from '../utils/themePlatform';
@@ -392,10 +393,10 @@ function applyTextureToDocument(textureId) {
 function applyThemeVariantToDocument(themeVariant) {
   const body = document.body;
   const root = document.documentElement;
-  const variant = themeVariant === 'modern' ? 'modern' : 'classic';
-  if (variant === 'modern') {
-    body.setAttribute('data-theme-variant', 'modern');
-    root.setAttribute('data-theme-variant', 'modern');
+  const variant = normalizeThemeVariant(themeVariant);
+  if (variant === 'modern' || variant === 'dark_mafia') {
+    body.setAttribute('data-theme-variant', variant);
+    root.setAttribute('data-theme-variant', variant);
   } else {
     body.removeAttribute('data-theme-variant');
     root.removeAttribute('data-theme-variant');
@@ -405,9 +406,9 @@ function applyThemeVariantToDocument(themeVariant) {
 function applyModernPerfFlagToDocument(themeVariant, modernVisualQuality) {
   const body = document.body;
   const root = document.documentElement;
-  const isModern = themeVariant === 'modern';
+  const isModernShell = themeVariant === 'modern' || themeVariant === 'dark_mafia';
   const usePerf = modernVisualQuality !== 'high';
-  if (isModern && usePerf) {
+  if (isModernShell && usePerf) {
     body.setAttribute('data-modern-perf', 'on');
     root.setAttribute('data-modern-perf', 'on');
   } else {
@@ -551,7 +552,9 @@ export function ThemeProvider({ children }) {
   const [themeVariant, setThemeVariantState] = useState(() => {
     try {
       const v = localStorage.getItem(STORAGE_KEY_THEME_VARIANT);
-      if (v === 'modern' || v === 'classic') return v;
+      if (v === 'modern' || v === 'classic' || v === 'dark_mafia' || v === 'wars2026') {
+        return normalizeThemeVariant(v);
+      }
       const texture = localStorage.getItem(STORAGE_KEY_TEXTURE);
       if (texture === 'modern-soft') return 'modern';
     } catch (_) {}
@@ -691,11 +694,11 @@ export function ThemeProvider({ children }) {
       if (prefs.mutedWritingColourId !== undefined) { localStorage.setItem(STORAGE_KEY_MUTED_WRITING, prefs.mutedWritingColourId || ''); setMutedWritingColourIdState(prefs.mutedWritingColourId || null); }
       if (prefs.toastTextColourId !== undefined) { localStorage.setItem(STORAGE_KEY_TOAST_TEXT, prefs.toastTextColourId || ''); setToastTextColourIdState(prefs.toastTextColourId || null); }
       if (prefs.textStyleId != null) { localStorage.setItem(STORAGE_KEY_TEXT_STYLE, prefs.textStyleId); setTextStyleIdState(prefs.textStyleId); }
-      const loadedThemeVariant = (prefs.themeVariant === 'modern' || prefs.themeVariant === 'classic')
-        ? prefs.themeVariant
-        : (prefs.theme_variant === 'modern' || prefs.theme_variant === 'classic')
-        ? prefs.theme_variant
-        : (prefs.textureId === 'modern-soft' ? 'modern' : DEFAULT_THEME_VARIANT);
+      const loadedThemeVariant = normalizeThemeVariant(
+        prefs.themeVariant
+          ?? prefs.theme_variant
+          ?? (prefs.textureId === 'modern-soft' ? 'modern' : DEFAULT_THEME_VARIANT)
+      );
       localStorage.setItem(STORAGE_KEY_THEME_VARIANT, loadedThemeVariant);
       setThemeVariantState(loadedThemeVariant);
       if (Array.isArray(prefs.customThemes)) { localStorage.setItem(STORAGE_KEY_CUSTOM_THEMES, JSON.stringify(prefs.customThemes)); setCustomThemesState(prefs.customThemes); }
@@ -907,7 +910,7 @@ export function ThemeProvider({ children }) {
   }, []);
 
   const setThemeVariant = useCallback((variant) => {
-    const v = variant === 'modern' ? 'modern' : 'classic';
+    const v = normalizeThemeVariant(variant);
     setThemeVariantState(v);
     if (v === 'modern') {
       setTextureIdState('modern-soft');
@@ -941,7 +944,7 @@ export function ThemeProvider({ children }) {
     const buttonStyle = p.buttonStyleId || DEFAULT_BUTTON_STYLE_ID;
     const writing = p.writingColourId || DEFAULT_WRITING_COLOUR_ID;
     const textStyle = p.textStyleId || DEFAULT_TEXT_STYLE_ID;
-    const variant = p.themeVariant === 'modern' ? 'modern' : DEFAULT_THEME_VARIANT;
+    const variant = normalizeThemeVariant(p.themeVariant);
     const mobileNav = p.mobileNavStyle === 'sidebar' ? 'sidebar' : 'bottom';
     const buttonShape = p.buttonShapeId || layout.buttonShapeId || DEFAULT_BUTTON_SHAPE_ID;
     const mobileStats = p.mobileStatsDisplay || 'right_sidebar';

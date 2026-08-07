@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-07 22:20 UTC[/color][/b] — [b]Dark Mafia Wars theme[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] Theme Studio layout mode [b]Dark Mafia Wars[/b] (alongside Classic and Modern) — near-black command-center chrome with accent rails across the site. Use Layout mode, Starting looks, or the Dark Mafia reset button.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-07 22:00 UTC[/color][/b] — [b]Dashboard command center[/b][/size]
 [quote]
 [list]

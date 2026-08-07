@@ -852,3 +852,230 @@ body[data-theme-variant="modern"] [data-page="store"] .store-art-line {
     margin-right: -24px;
   }
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Dark Mafia Wars — command-center chrome (near-black + accent rail)
+   Layout metrics aligned with Modern; skin matches Dashboard.
+   ═══════════════════════════════════════════════════════════ */
+body[data-theme-variant="dark_mafia"] {
+  --noir-bg: #050505;
+  --noir-background: #050505;
+  --noir-panel: #0a0a0a;
+  --noir-content: #080808;
+  --noir-surface: #111111;
+  --noir-raised: #161616;
+  --noir-border: #1a1a1a;
+  --gm-bg: #050505;
+  --gm-sidebar: #050505;
+  --gm-content: #080808;
+  --gm-card: #111111;
+  --gm-card-hover: #161616;
+  --gm-border: rgba(var(--noir-primary-rgb), 0.22);
+  --gm-text: #f0f0f0;
+  --gm-muted: rgba(161, 161, 170, 0.85);
+  --gm-gold: var(--noir-primary);
+}
+
+body[data-theme-variant="dark_mafia"] .themeGangsterModern .topBar,
+body[data-theme-variant="dark_mafia"] .themeGangsterModern .sidebar {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  background: #050505;
+  border-color: rgba(var(--noir-primary-rgb), 0.2);
+  box-shadow: none;
+}
+
+body[data-theme-variant="dark_mafia"] .themeGangsterModern .topBar {
+  border-bottom: 1px solid rgba(var(--noir-primary-rgb), 0.28);
+  background: #050505;
+}
+
+body[data-theme-variant="dark_mafia"] .themeGangsterModern .sidebar {
+  background: #050505;
+  border-right: 1px solid rgba(var(--noir-primary-rgb), 0.2);
+}
+
+body[data-theme-variant="dark_mafia"][data-modern-perf="on"] .themeGangsterModern .topBar,
+body[data-theme-variant="dark_mafia"][data-modern-perf="on"] .themeGangsterModern .sidebar {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+body[data-theme-variant="dark_mafia"] .themeGangsterModern .panel,
+body[data-theme-variant="dark_mafia"] .themeGangsterModern .surface {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(165deg, #141414 0%, #0e0e0e 100%);
+  border: 1px solid rgba(var(--noir-primary-rgb), 0.18);
+  border-radius: 6px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+
+body[data-theme-variant="dark_mafia"] .themeGangsterModern .panel::before,
+body[data-theme-variant="dark_mafia"] .themeGangsterModern .surface::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(
+    180deg,
+    rgba(var(--noir-primary-rgb), 0.65) 0%,
+    rgba(var(--noir-primary-rgb), 0.12) 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+body[data-theme-variant="dark_mafia"] .themeGangsterModern .panel::after,
+body[data-theme-variant="dark_mafia"] .themeGangsterModern .surface::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(var(--noir-primary-rgb), 0.55) 0%,
+    rgba(var(--noir-primary-rgb), 0.12) 55%,
+    transparent 100%
+  );
+  pointer-events: none;
+  z-index: 1;
+}
+
+body[data-theme-variant="dark_mafia"] .themeGangsterModern .panelHeader {
+  padding-top: 0.5rem;
+  padding-bottom: 0.5rem;
+  padding-left: 0.85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  background: linear-gradient(
+    90deg,
+    rgba(var(--noir-primary-rgb), 0.1) 0%,
+    transparent 70%
+  );
+}
+
+body[data-theme-variant="dark_mafia"] .themeGangsterModern .input {
+  background: rgba(8, 10, 12, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: rgba(220, 228, 236, 0.9);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+body[data-theme-variant="dark_mafia"] .themeGangsterModern .input:focus {
+  border-color: rgba(var(--noir-primary-rgb), 0.45);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.2);
+}
+
+body[data-theme-variant="dark_mafia"] [data-layout="sidebar"] {
+  width: 15rem !important;
+  box-shadow: inset -1px 0 0 rgba(var(--noir-primary-rgb), 0.16);
+  background: #050505 !important;
+}
+
+body[data-theme-variant="dark_mafia"] [data-layout="topbar"] {
+  min-height: 52px !important;
+  padding-left: 0.75rem !important;
+  padding-right: 0.75rem !important;
+  padding-top: 0.45rem !important;
+  padding-bottom: 0.45rem !important;
+  gap: 0.65rem !important;
+  box-shadow: inset 0 -1px 0 rgba(var(--noir-primary-rgb), 0.2);
+  background: #050505 !important;
+}
+
+body[data-theme-variant="dark_mafia"] [data-layout="main"] {
+  margin-top: 3.75rem !important;
+  padding: 0.85rem !important;
+  background:
+    radial-gradient(ellipse 70% 55% at 50% -5%, rgba(var(--noir-primary-rgb), 0.1) 0%, transparent 60%),
+    #050505 !important;
+}
+
+body[data-theme-variant="dark_mafia"] [data-layout="right-sidebar"] {
+  width: 15rem !important;
+  border-left: 1px solid rgba(var(--noir-primary-rgb), 0.2);
+  background: #050505 !important;
+}
+
+body[data-theme-variant="dark_mafia"] [data-layout="sidebar"] .sidebarNavLink {
+  border-radius: 4px;
+  border: 1px solid transparent;
+}
+
+body[data-theme-variant="dark_mafia"] [data-layout="sidebar"] .sidebarNavLink:hover {
+  border-color: rgba(var(--noir-primary-rgb), 0.28) !important;
+  background: rgba(var(--noir-primary-rgb), 0.08) !important;
+}
+
+@media (min-width: 768px) {
+  body[data-theme-variant="dark_mafia"] [data-layout="topbar"] {
+    left: 15rem !important;
+    height: 3.75rem !important;
+    padding-left: 1.2rem !important;
+    padding-right: 1.2rem !important;
+    gap: 0.85rem !important;
+  }
+
+  body[data-theme-variant="dark_mafia"] [data-layout="main"] {
+    margin-left: 15rem !important;
+    margin-top: 3.75rem !important;
+    padding: 1rem !important;
+  }
+}
+
+@media (max-width: 767px) {
+  body[data-theme-variant="dark_mafia"] [data-layout="topbar"] {
+    min-height: 40px !important;
+  }
+  body[data-theme-variant="dark_mafia"] [data-layout="main"] {
+    padding: 0.75rem !important;
+    margin-top: 3rem !important;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1024px) {
+  body[data-theme-variant="dark_mafia"] [data-layout="main"] {
+    padding: 1.25rem !important;
+  }
+}
+
+body[data-theme-variant="dark_mafia"] [data-chat-surface] {
+  border: 1px solid rgba(var(--noir-primary-rgb), 0.18);
+  background: #111111;
+  box-shadow: none;
+}
+
+body[data-theme-variant="dark_mafia"] [data-chat-part="header"] {
+  background: linear-gradient(90deg, rgba(var(--noir-primary-rgb), 0.1) 0%, transparent 70%) !important;
+  border-bottom-color: rgba(var(--noir-primary-rgb), 0.16) !important;
+}
+
+body[data-theme-variant="dark_mafia"] [data-chat-part="messages"] {
+  background: #0a0a0a !important;
+}
+
+body[data-theme-variant="dark_mafia"] [data-chat-part="message-row"] {
+  border-color: rgba(255, 255, 255, 0.05) !important;
+  background: rgba(0, 0, 0, 0.28);
+  border-radius: 4px;
+}
+
+body[data-theme-variant="dark_mafia"] [data-chat-own="true"] {
+  background: rgba(var(--noir-primary-rgb), 0.08);
+}
+
+body[data-theme-variant="dark_mafia"] [data-chat-part="composer"] {
+  border-top-color: rgba(var(--noir-primary-rgb), 0.16) !important;
+  background: #0a0a0a !important;
+}
+
+body[data-theme-variant="dark_mafia"] [data-page="store"] .store-art-line {
+  background: linear-gradient(90deg, transparent 0%, rgba(var(--noir-primary-rgb), 0.25) 50%, transparent 100%) !important;
+  height: 1px;
+  opacity: 1;
+}
+
