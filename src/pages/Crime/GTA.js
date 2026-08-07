@@ -38,11 +38,33 @@ const GTA_STYLES = `
   .gta-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
   .gta-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 
-  /* Mobile row compact padding (shared mobile layout in noir.module.css) */
   @media (max-width: 767px) {
     .gta-row {
-      padding-top: 3px !important;
-      padding-bottom: 3px !important;
+      display: grid !important;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "name action"
+        "meta action";
+      column-gap: 8px;
+      row-gap: 3px;
+      align-items: center;
+      padding: 7px 8px !important;
+    }
+    .gta-row-name { grid-area: name; min-width: 0; }
+    .gta-row-meta { grid-area: meta; display: flex; align-items: center; gap: 6px; min-width: 0; }
+    .gta-row-action { grid-area: action; align-self: center; width: auto !important; justify-content: flex-end; }
+    .gta-row-name .gta-name-text {
+      white-space: normal;
+      overflow: visible;
+      text-overflow: clip;
+      line-height: 1.25;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+    }
+    .gta-row-action .gta-action-btn {
+      min-width: 4.25rem;
+      justify-content: center;
     }
   }
 `;
@@ -239,7 +261,7 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
   const rankLocked = !unlocked && option.min_rank_name;
   return (
     <div
-      className={`flex justify-between gap-2 px-2 py-1 rounded-md transition-all gta-row min-w-0 ${
+      className={`gta-row flex justify-between gap-2 px-2 py-1 rounded-md transition-all min-w-0 ${
         rankLocked ? 'items-start sm:items-center' : 'items-center'
       } ${
         unlocked && !onCooldown
@@ -248,8 +270,8 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
       }`}
       data-testid={`gta-option-${option.id}`}
     >
-      {/* Car info — rank unlock on its own row on mobile so timers don’t overlap "Underboss" */}
-      <div className="flex items-start gap-1 min-w-0 flex-1">
+      {/* Car info */}
+      <div className="gta-row-name flex items-start gap-1 min-w-0 flex-1">
         {unlocked ? (
           <Car className={`text-primary/50 w-3.5 h-3.5 shrink-0 ${rankLocked ? 'mt-0.5 sm:mt-0' : ''}`} />
         ) : (
@@ -258,14 +280,14 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
         <div className="min-w-0 flex-1">
           <div className="flex flex-col gap-1 min-w-0 sm:flex-row sm:items-center sm:flex-wrap sm:gap-x-1 sm:gap-y-0.5">
             <span className="inline-flex items-center gap-1 min-w-0">
-              <span className="text-[11px] font-heading font-bold text-foreground truncate min-w-0">
+              <span className="gta-name-text text-[11px] font-heading font-bold text-foreground truncate min-w-0" title={option.name}>
                 {option.name}
               </span>
               <PossibleCarsInfo optionName={option.name} cars={option.possible_cars} />
             </span>
             {!unlocked && option.min_rank_name && (
               <span
-                className="inline-flex items-start gap-0.5 bg-zinc-800/50 text-mutedForeground rounded px-1 py-0.5 text-[9px] font-bold uppercase border border-zinc-700/50 w-full min-w-0 sm:w-auto sm:max-w-full leading-snug"
+                className="hidden sm:inline-flex items-start gap-0.5 bg-zinc-800/50 text-mutedForeground rounded px-1 py-0.5 text-[9px] font-bold uppercase border border-zinc-700/50 w-full min-w-0 sm:w-auto sm:max-w-full leading-snug"
                 title={`Unlocked at rank ${option.min_rank_name}`}
               >
                 <Lock size={8} className="shrink-0 mt-px" />
@@ -283,44 +305,46 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
         </div>
       </div>
 
-      {/* Progress bar + % inline on mobile (matches Crimes layout) */}
-      {unlocked && (
-        <div className="flex items-center gap-1 shrink-0">
-          <GTAProgressBar progress={option.progress} successChance={successRateDisplay} />
-          <span className="text-[9px] text-primary font-heading w-6 sm:hidden">{successRateDisplay}%</span>
-        </div>
-      )}
-
-      {/* Success rate — desktop only */}
-      <div className="shrink-0 w-8 text-center hidden sm:block">
-        <span className={`text-[10px] font-bold tabular-nums ${unlocked ? 'text-primary' : 'text-mutedForeground'}`}>
-          {successRateDisplay}%
-        </span>
-      </div>
-
-      {/* Jail time (like Crimes "risk" column) */}
-      <div className="shrink-0 w-8 text-center">
-        <span className="text-[10px] font-bold text-red-400 tabular-nums">{option.jail_time ?? 0}s</span>
-      </div>
-
-      {/* Cooldown */}
-      <div className="shrink-0 w-10 text-center">
-        {onCooldown ? (
-          <span className="text-[10px] text-mutedForeground font-heading whitespace-nowrap">{onCooldown}</span>
-        ) : unlocked ? (
-          <span className="text-[9px] text-mutedForeground/60 whitespace-nowrap truncate block">{defaultCooldown}</span>
-        ) : (
-          <span className="text-[9px] text-mutedForeground">—</span>
+      <div className="gta-row-meta flex items-center gap-2 shrink-0">
+        {/* Progress bar + % inline on mobile (matches Crimes layout) */}
+        {unlocked && (
+          <div className="flex items-center gap-1 shrink-0">
+            <GTAProgressBar progress={option.progress} successChance={successRateDisplay} />
+            <span className="text-[9px] text-primary font-heading w-6 sm:hidden">{successRateDisplay}%</span>
+          </div>
         )}
+
+        {/* Success rate — desktop only */}
+        <div className="shrink-0 w-8 text-center hidden sm:block">
+          <span className={`text-[10px] font-bold tabular-nums ${unlocked ? 'text-primary' : 'text-mutedForeground'}`}>
+            {successRateDisplay}%
+          </span>
+        </div>
+
+        {/* Jail time (like Crimes "risk" column) */}
+        <div className="shrink-0 w-8 text-center">
+          <span className="text-[10px] font-bold text-red-400 tabular-nums">{option.jail_time ?? 0}s</span>
+        </div>
+
+        {/* Cooldown */}
+        <div className="shrink-0 w-10 text-center">
+          {onCooldown ? (
+            <span className="text-[10px] text-mutedForeground font-heading whitespace-nowrap">{onCooldown}</span>
+          ) : unlocked ? (
+            <span className="text-[9px] text-mutedForeground/60 whitespace-nowrap truncate block">{defaultCooldown}</span>
+          ) : (
+            <span className="text-[9px] text-mutedForeground">—</span>
+          )}
+        </div>
       </div>
 
       {/* Action — same width as Crimes */}
-      <div className="shrink-0 w-[60px] flex justify-end">
+      <div className="gta-row-action shrink-0 w-[60px] flex justify-end">
         {manualPlayDisabled && unlocked && !onCooldown ? (
           <button
             type="button"
             disabled
-            className="bg-zinc-700/50 text-mutedForeground rounded px-1.5 py-0.5 text-[9px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed"
+            className="gta-action-btn bg-zinc-700/50 text-mutedForeground rounded px-1.5 py-0.5 text-[9px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed"
           >
             Locked
           </button>
@@ -329,10 +353,10 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
             type="button"
             onClick={() => onAttempt(option.id)}
             disabled={attemptingOptionId !== null}
-            className="tap-feedback bg-primary/20 text-primary rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 active:scale-[0.97] transition-all touch-manipulation disabled:opacity-60 font-heading"
+            className="gta-action-btn tap-feedback bg-primary/20 text-primary rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 active:scale-[0.97] transition-all touch-manipulation disabled:opacity-60 font-heading"
             data-testid={`attempt-gta-${option.id}`}
           >
-            {attemptingOptionId === option.id ? '...' : '🚗 Steal'}
+            {attemptingOptionId === option.id ? '...' : 'Steal'}
           </button>
         ) : showSkip ? (
           <button
@@ -340,22 +364,25 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
             disabled={skipBusy || attemptingOptionId !== null}
             onClick={() => onSkip(option.id)}
             title="Use a GTA cooldown skip token to attempt now (max 1,000 GTA skips/day)"
-            className="tap-feedback bg-amber-500/15 text-amber-300 rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-amber-500/45 hover:bg-amber-500/25 active:scale-[0.97] transition-all touch-manipulation font-heading disabled:opacity-50"
+            className="gta-action-btn tap-feedback bg-amber-500/15 text-amber-300 rounded px-2.5 py-1.5 min-h-9 text-[9px] font-bold uppercase tracking-wide border border-amber-500/45 hover:bg-amber-500/25 active:scale-[0.97] transition-all touch-manipulation font-heading disabled:opacity-50"
             data-testid={`skip-gta-${option.id}`}
           >
-            {skipBusy ? '...' : '⚡ Skip'}
+            {skipBusy ? '...' : 'Skip'}
           </button>
         ) : onCooldown ? (
           <button
             type="button"
             disabled
-            className="bg-zinc-700/50 text-mutedForeground rounded px-1.5 py-0.5 text-[9px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed"
+            className="gta-action-btn bg-zinc-700/50 text-mutedForeground rounded px-1.5 py-0.5 text-[9px] font-bold uppercase border border-zinc-600/50 cursor-not-allowed"
           >
             Wait
           </button>
         ) : (
-          <span className="text-[9px] text-mutedForeground">
-            {option.min_rank_name ? '—' : 'Locked'}
+          <span
+            className="text-[8px] sm:text-[9px] text-mutedForeground text-right leading-tight max-w-[4.75rem] font-heading uppercase"
+            title={option.min_rank_name ? `Unlocked at rank ${option.min_rank_name}` : undefined}
+          >
+            {option.min_rank_name ? `Rank ${option.min_rank_name}` : 'Locked'}
           </span>
         )}
       </div>
@@ -387,7 +414,7 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
       
       {!isCollapsed && (
         <div className="p-2">
-          <div className="grid grid-cols-5 gap-1.5 sm:gap-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
             {recentStolen.map((car, index) => {
               const displayName = car.car_name || car.name || 'Car';
               const rarityKey = String(car.rarity || 'common').toLowerCase();
@@ -400,10 +427,10 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
                   key={car.user_car_id ?? `car-${index}`}
                   to={`/view-car?id=${encodeURIComponent(car.user_car_id)}`}
                   data-testid={`recent-stolen-car-${index}`}
-                  className={`${styles.panel} rounded-lg border border-border hover:border-primary/30 p-1 sm:p-1.5 transition-all overflow-hidden block text-left min-w-0`}
+                  className={`${styles.panel} rounded-lg border border-border hover:border-primary/30 p-1.5 transition-all overflow-hidden block text-left min-w-0`}
                 >
                   <div
-                    className="w-full aspect-[4/3] rounded overflow-hidden bg-secondary mb-0.5 sm:mb-1 relative shrink-0"
+                    className="w-full aspect-[4/3] rounded overflow-hidden bg-secondary mb-1 relative shrink-0"
                     style={{ border: `2px solid ${glowHex}`, boxShadow: `0 0 12px ${glowHex}aa, inset 0 0 8px ${glowHex}33` }}
                   >
                     {/* Icon sits underneath; if the image 404s we hide it so the icon shows instead of broken alt text. */}
@@ -420,17 +447,17 @@ const RecentStolenSection = ({ recentStolen, isCollapsed, onToggle }) => {
                       />
                     )}
                   </div>
-                  <div className={`text-[8px] sm:text-[9px] font-heading font-bold uppercase tracking-wider truncate ${getRarityColor(car.rarity)} mb-0.5`}>
+                  <div className={`text-[9px] font-heading font-bold uppercase tracking-wider truncate ${getRarityColor(car.rarity)} mb-0.5`}>
                     {rarity}
                   </div>
-                  <div className="text-[9px] sm:text-[11px] font-heading font-bold text-foreground truncate mb-0.5">
+                  <div className="text-[11px] font-heading font-bold text-foreground leading-snug line-clamp-2 mb-0.5" title={displayName}>
                     {displayName}
                   </div>
-                  <div className="text-[9px] sm:text-[10px] text-primary font-heading font-bold truncate">
+                  <div className="text-[10px] text-primary font-heading font-bold truncate">
                     ${Number(value).toLocaleString()}
                   </div>
                   {damage > 0 && (
-                    <p className="text-[8px] sm:text-[9px] font-heading text-mutedForeground mt-0.5 truncate">
+                    <p className="text-[9px] font-heading text-mutedForeground mt-0.5 truncate">
                       {damage}% dmg
                     </p>
                   )}
