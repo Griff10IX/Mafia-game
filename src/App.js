@@ -13,7 +13,8 @@ function RedirectLootBoxToMoney() {
   return <Navigate to={`/money/loot-box${search}`} replace />;
 }
 import { ThemedToaster } from "./components/ThemedToaster";
-import Landing from "./pages/Auth/Landing";
+import LandingRedesign from "./pages/Auth/Landing";
+import LandingClassic from "./pages/Auth/Landing.classic";
 import PreRegister from "./pages/Auth/PreRegister";
 import StaffLogin from "./pages/Auth/StaffLogin";
 import ForgotPassword from "./pages/Auth/ForgotPassword";
@@ -30,6 +31,10 @@ import "@/App.css";
 import { prefetchDashboardData } from "./utils/dashboardSessionCache";
 import { preloadRoute } from "./utils/routePreload";
 import { SLOTS_FEATURE_ENABLED } from "./config/gameFeatures";
+import { USE_LANDING_CLASSIC } from "./config/landing";
+
+/** Flip `USE_LANDING_CLASSIC` in `src/config/landing.js` to restore the previous login UI. */
+const Landing = USE_LANDING_CLASSIC ? LandingClassic : LandingRedesign;
 
 // Lazy-load authenticated pages to shrink initial bundle
 // Account pages

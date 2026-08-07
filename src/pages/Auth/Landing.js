@@ -1,3 +1,7 @@
+/**
+ * Redesigned login/register landing.
+ * To restore the previous UI: set `USE_LANDING_CLASSIC = true` in `src/config/landing.js`.
+ */
 import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Copy } from 'lucide-react';
@@ -380,157 +384,132 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
 
   return (
     <div
-      className={`relative min-h-screen ${styles.page} ${styles.themeGangsterModern}`}
+      className={`relative min-h-screen overflow-x-hidden ${styles.page} ${styles.themeGangsterModern}`}
       data-testid="landing-page"
-      style={{
-        backgroundImage: `url(${process.env.PUBLIC_URL || ''}/images/landing-bg.png)`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        backgroundAttachment: 'fixed',
-      }}
     >
       <style>{`
         @keyframes landing-fade-up {
-          from { opacity: 0; transform: translateY(12px); }
+          from { opacity: 0; transform: translateY(14px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        @keyframes crest-pulse {
-          0%, 100% { box-shadow: 0 0 0 0 rgba(var(--noir-primary-rgb, 201,168,76), 0.0), 0 4px 20px rgba(0,0,0,.7); }
-          50%       { box-shadow: 0 0 0 6px rgba(var(--noir-primary-rgb, 201,168,76), 0.08), 0 4px 20px rgba(0,0,0,.7); }
+        @keyframes landing-bg-drift {
+          0%   { transform: scale(1.06) translate3d(0, 0, 0); }
+          50%  { transform: scale(1.1) translate3d(-1.2%, -0.6%, 0); }
+          100% { transform: scale(1.06) translate3d(0, 0, 0); }
         }
-        @keyframes shaft-drift {
-          0%   { opacity: 0.4; }
-          50%  { opacity: 0.7; }
-          100% { opacity: 0.4; }
+        @keyframes landing-shaft {
+          0%, 100% { opacity: 0.35; }
+          50%      { opacity: 0.65; }
         }
-        .landing-fade-up    { animation: landing-fade-up 0.5s ease both; }
-        .landing-fade-up-1  { animation: landing-fade-up 0.5s 0.08s ease both; }
-        .landing-fade-up-2  { animation: landing-fade-up 0.5s 0.16s ease both; }
-        .landing-fade-up-3  { animation: landing-fade-up 0.5s 0.24s ease both; }
-        .crest-pulse        { animation: crest-pulse 3s ease-in-out infinite; }
+        .landing-fade-up   { animation: landing-fade-up 0.55s cubic-bezier(0.22, 1, 0.36, 1) both; }
+        .landing-fade-up-1 { animation: landing-fade-up 0.55s 0.1s cubic-bezier(0.22, 1, 0.36, 1) both; }
+        .landing-fade-up-2 { animation: landing-fade-up 0.55s 0.2s cubic-bezier(0.22, 1, 0.36, 1) both; }
+        .landing-bg-drift  { animation: landing-bg-drift 28s ease-in-out infinite; }
+        .landing-shaft     { animation: landing-shaft 7s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) {
+          .landing-fade-up, .landing-fade-up-1, .landing-fade-up-2,
+          .landing-bg-drift, .landing-shaft { animation: none !important; }
+        }
       `}</style>
 
-      {/* Dark overlay */}
-      <div className="absolute inset-0 bg-black/65 pointer-events-none" aria-hidden />
+      {/* Full-bleed atmosphere */}
+      <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden>
+        <div
+          className="absolute inset-[-4%] landing-bg-drift"
+          style={{
+            backgroundImage: `url(${process.env.PUBLIC_URL || ''}/images/landing-bg.png)`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            backgroundRepeat: 'no-repeat',
+          }}
+        />
+        <div
+          className="absolute inset-y-0 right-0 w-[55%] max-w-xl opacity-[0.22] hidden sm:block"
+          style={{
+            backgroundImage: `url(${landingGangsterImg})`,
+            backgroundSize: 'cover',
+            backgroundPosition: 'center 12%',
+            maskImage: 'linear-gradient(90deg, transparent 0%, black 35%, black 100%)',
+            WebkitMaskImage: 'linear-gradient(90deg, transparent 0%, black 35%, black 100%)',
+          }}
+        />
+        <div
+          className="absolute inset-0"
+          style={{
+            background:
+              'linear-gradient(180deg, rgba(6,6,8,0.55) 0%, rgba(6,6,8,0.72) 42%, rgba(6,6,8,0.92) 100%)',
+          }}
+        />
+        <div
+          className="absolute inset-0 landing-shaft"
+          style={{
+            background:
+              'radial-gradient(ellipse 70% 55% at 50% -5%, rgba(var(--noir-primary-rgb,201,168,76),0.2) 0%, transparent 60%)',
+          }}
+        />
+      </div>
 
-      <div className="relative min-h-screen flex items-start md:items-center justify-center px-3 sm:px-4 py-4 sm:py-6 md:py-10 safe-area-pt safe-area-pb">
-        <div className="w-full max-w-md mx-auto flex flex-col gap-2 mobile-page-root">
-          <div id="landing-auth-card" className="w-full max-w-md mx-auto flex flex-col gap-3 sm:gap-2">
-          {/* ── HERO HEADER ─────────────────────────────────────── */}
-          {/*   Gold radial glow + vertical shaft lines, no image   */}
-          <div
-            className="relative rounded-t-xl overflow-hidden flex flex-col items-center justify-center pt-10 pb-10"
-            style={{
-              background: 'linear-gradient(180deg, rgba(var(--noir-primary-rgb,201,168,76),0.10) 0%, var(--noir-background, #0d0d0d) 100%)',
-              borderTop:    '1px solid rgba(var(--noir-primary-rgb,201,168,76),0.22)',
-              borderLeft:   '1px solid rgba(var(--noir-primary-rgb,201,168,76),0.22)',
-              borderRight:  '1px solid rgba(var(--noir-primary-rgb,201,168,76),0.22)',
-            }}
-          >
-            {/* Light shaft lines */}
-            <div
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                background: 'repeating-linear-gradient(90deg, transparent 0, transparent 52px, rgba(var(--noir-primary-rgb,201,168,76),0.025) 52px, rgba(var(--noir-primary-rgb,201,168,76),0.025) 54px)',
-              }}
-            />
-            {/* Top-centre glow */}
-            <div
-              className="absolute inset-0 pointer-events-none"
-              style={{
-                background: 'radial-gradient(ellipse 90% 60% at 50% -10%, rgba(var(--noir-primary-rgb,201,168,76),0.18) 0%, transparent 65%)',
-              }}
-            />
+      <div className="relative min-h-screen flex flex-col items-center justify-center px-4 sm:px-6 py-8 sm:py-12 safe-area-pt safe-area-pb">
+        <div id="landing-auth-card" className="w-full max-w-[26rem] mx-auto flex flex-col mobile-page-root">
 
-            {/* Beta / release banner */}
+          {/* Brand-first hero (no stats / badges / crest overlays) */}
+          <header className="text-center mb-7 sm:mb-9 landing-fade-up">
             {bannerEnabled && (
-              <div
-                className="relative z-10 mb-4 px-5 py-3 rounded font-heading text-xs leading-relaxed"
-                style={{
-                  backgroundColor: 'var(--noir-primary)',
-                  color: 'var(--noir-background)',
-                  whiteSpace: 'pre-line',
-                }}
+              <p
+                className="mb-5 text-[11px] font-heading leading-relaxed px-1"
+                style={{ color: 'var(--noir-primary)', opacity: 0.85, whiteSpace: 'pre-line' }}
               >
                 {bannerMessage || DEFAULT_BANNER_MESSAGE}
-              </div>
+              </p>
             )}
-
-            {/* Eyebrow */}
-            <p
-              className="relative z-10 text-[8px] font-heading uppercase tracking-[0.5em] mb-2 landing-fade-up"
-              style={{ color: 'var(--noir-primary)', opacity: 0.6 }}
-            >
-              La Cosa Nostra
-            </p>
-
-            {/* Title */}
-            <div className="relative z-10 flex items-center gap-3 landing-fade-up-1">
-              <div className="h-px w-10 md:w-16" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.45 }} />
-              <h1
-                className="text-4xl md:text-5xl font-heading font-black uppercase tracking-[0.2em]"
-                style={{
-                  color: 'var(--noir-foreground)',
-                  textShadow: '0 0 48px rgba(var(--noir-primary-rgb,201,168,76),0.22)',
-                }}
-                data-testid="landing-title"
-              >
-                MAFIA WARS
-              </h1>
-              <div className="h-px w-10 md:w-16" style={{ backgroundColor: 'var(--noir-accent-line)', opacity: 0.45 }} />
-            </div>
-
-            {/* Crest seal — overlaps hero/panel boundary */}
-            <div
-              className="crest-pulse relative z-20 mt-6 w-14 h-14 rounded-full overflow-hidden flex items-center justify-center shrink-0"
+            <h1
+              className="font-heading font-black uppercase tracking-[0.18em] text-[clamp(2.35rem,8vw,3.75rem)] leading-none"
               style={{
-                background: 'var(--noir-background, #0d0d0d)',
-                border: '2px solid var(--noir-primary)',
-                marginBottom: '-28px',
+                color: 'var(--noir-foreground)',
+                textShadow: '0 2px 40px rgba(0,0,0,0.65), 0 0 60px rgba(var(--noir-primary-rgb,201,168,76),0.18)',
               }}
+              data-testid="landing-title"
             >
-              <img
-                src={landingGangsterImg}
-                alt=""
-                className="w-full h-full object-cover object-[center_15%]"
-                decoding="async"
-              />
-            </div>
-          </div>
+              MAFIA WARS
+            </h1>
+            <p
+              className="mt-3 text-[11px] sm:text-xs font-heading tracking-[0.08em] landing-fade-up-1"
+              style={{ color: 'rgba(245,245,245,0.72)' }}
+            >
+              Build your empire. Enforce omertà.
+            </p>
+          </header>
 
-          {/* ── AUTH PANEL ──────────────────────────────────────── */}
+          {/* Auth form — interaction container only */}
           <div
-            className={`${styles.panel} rounded-b-xl overflow-hidden landing-fade-up-2`}
+            className={`landing-fade-up-2 overflow-hidden rounded-xl border ${styles.panel}`}
             style={{
-              borderTop: 'none',
-              borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.18)',
+              borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.22)',
+              background: 'linear-gradient(180deg, rgba(18,16,14,0.92) 0%, rgba(10,10,12,0.94) 100%)',
+              boxShadow: '0 24px 64px rgba(0,0,0,0.55)',
             }}
           >
-            {/* Tabs */}
             <div
-              className={`px-4 pt-8 pb-0 flex gap-1.5 ${styles.panelHeader}`}
+              className="px-4 pt-4 pb-0 flex gap-1"
               style={{ borderBottom: '1px solid rgba(var(--noir-primary-rgb,201,168,76),0.12)' }}
             >
               <button
+                type="button"
                 onClick={() => setIsLogin(true)}
                 data-testid="login-tab"
-                className={`flex-1 py-2.5 rounded-t-md uppercase tracking-wider text-[10px] font-heading font-bold transition-all border-b-2 ${
-                  isLogin
-                    ? `${styles.tabActive}`
-                    : 'bg-transparent border-transparent'
+                className={`flex-1 py-2.5 uppercase tracking-wider text-[10px] font-heading font-bold transition-all border-b-2 ${
+                  isLogin ? styles.tabActive : 'bg-transparent border-transparent'
                 }`}
                 style={!isLogin ? { color: 'var(--noir-muted)', borderBottom: '2px solid transparent' } : undefined}
               >
                 Login
               </button>
               <button
+                type="button"
                 onClick={() => setIsLogin(false)}
                 data-testid="register-tab"
-                className={`flex-1 py-2.5 rounded-t-md uppercase tracking-wider text-[10px] font-heading font-bold transition-all ${
-                  !isLogin
-                    ? `${styles.tabActive}`
-                    : 'bg-transparent border-transparent'
+                className={`flex-1 py-2.5 uppercase tracking-wider text-[10px] font-heading font-bold transition-all border-b-2 ${
+                  !isLogin ? styles.tabActive : 'bg-transparent border-transparent'
                 }`}
                 style={isLogin ? { color: 'var(--noir-muted)', borderBottom: '2px solid transparent' } : undefined}
               >
@@ -538,16 +517,21 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
               </button>
             </div>
 
-            {/* Pre-registration success - show referral link */}
             {preregisteredSuccess ? (
-              <div className="p-6 space-y-4">
+              <div className="p-5 sm:p-6 space-y-4">
                 <p className="text-sm font-heading text-center" style={{ color: 'var(--noir-foreground)' }}>
                   Account created! Check your email to verify, then you can log in.
                 </p>
                 <p className="text-[10px] font-heading uppercase tracking-wider text-center" style={{ color: 'var(--noir-primary)', opacity: 0.8 }}>
                   Share your referral link once you&apos;re in the game
                 </p>
-                <div className="flex items-center gap-2 rounded border p-3" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.2)', backgroundColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.05)' }}>
+                <div
+                  className="flex items-center gap-2 rounded border p-3"
+                  style={{
+                    borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.2)',
+                    backgroundColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.05)',
+                  }}
+                >
                   <code className="flex-1 truncate text-xs font-mono" style={{ color: 'var(--noir-foreground)' }}>
                     {referralUrl}
                   </code>
@@ -570,311 +554,243 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                 </button>
               </div>
             ) : (
-            <form onSubmit={handleSubmit} className="p-6 space-y-4" autoComplete="on">
-              {authInlineError && (
-                <div
-                  className="rounded border px-3 py-2 space-y-1"
-                  style={{
-                    borderColor: 'rgba(239,68,68,0.55)',
-                    background: 'rgba(239,68,68,0.08)',
-                  }}
+              <form onSubmit={handleSubmit} className="p-5 sm:p-6 space-y-4" autoComplete="on">
+                {authInlineError && (
+                  <div
+                    className="rounded border px-3 py-2 space-y-1"
+                    style={{
+                      borderColor: 'rgba(239,68,68,0.55)',
+                      background: 'rgba(239,68,68,0.08)',
+                    }}
+                  >
+                    <p className="text-[11px] font-heading font-bold" style={{ color: 'rgba(248,113,113,1)' }}>
+                      Login issue
+                    </p>
+                    <p className="text-[10px] font-heading" style={{ color: 'var(--noir-foreground)' }}>
+                      {authInlineError.message}
+                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[9px] font-heading" style={{ color: 'var(--noir-muted)' }}>
+                        {authInlineError.status ? `HTTP ${authInlineError.status} - ` : ''}Support code: {authInlineError.supportCode}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const report = `Login error report | code=${authInlineError.supportCode} | status=${authInlineError.status || 'n/a'} | message=${authInlineError.message}`;
+                          if (navigator.clipboard?.writeText) {
+                            navigator.clipboard.writeText(report).then(() => toast.success('Error details copied')).catch(() => toast.error('Copy failed'));
+                          } else {
+                            toast.error('Copy not supported');
+                          }
+                        }}
+                        className="inline-flex items-center gap-1 text-[9px] font-heading uppercase tracking-wider hover:opacity-100 opacity-80"
+                        style={{ color: 'var(--noir-primary)' }}
+                      >
+                        <Copy size={11} />
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                <div>
+                  <label
+                    htmlFor="landing-email"
+                    className="block text-[10px] font-heading font-bold uppercase tracking-wider mb-1.5"
+                    style={{ color: 'var(--noir-primary)' }}
+                  >
+                    {isLogin ? 'Email or Username' : 'Email'}
+                  </label>
+                  <input
+                    id="landing-email"
+                    name="email"
+                    type={isLogin ? 'text' : 'email'}
+                    autoComplete="username"
+                    data-testid="email-input"
+                    value={formData.email}
+                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
+                    placeholder={isLogin ? 'Enter your email or username' : 'Enter your email'}
+                    required
+                  />
+                </div>
+
+                {!isLogin && (
+                  <div>
+                    <label
+                      htmlFor="landing-username"
+                      className="block text-[10px] font-heading font-bold uppercase tracking-wider mb-1.5"
+                      style={{ color: 'var(--noir-primary)' }}
+                    >
+                      Username
+                    </label>
+                    <input
+                      id="landing-username"
+                      name="username"
+                      type="text"
+                      autoComplete="username"
+                      data-testid="username-input"
+                      value={formData.username}
+                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                      maxLength={20}
+                      className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
+                      placeholder="Choose a character name (max 20)"
+                      required
+                    />
+                    <p className="mt-1 text-[8px] font-heading leading-snug" style={{ color: 'var(--noir-muted)' }}>
+                      Shown in-game; max 20 characters. Must not be your email or contain @.
+                    </p>
+                    {usernameCheck.status !== 'idle' && (
+                      <p
+                        className="mt-1 text-[9px] font-heading"
+                        style={{
+                          color:
+                            usernameCheck.status === 'checking'
+                              ? 'var(--noir-muted)'
+                              : usernameCheck.status === 'error'
+                                ? 'rgba(239,68,68,0.9)'
+                                : usernameCheck.isTaken
+                                  ? 'rgba(239,68,68,0.95)'
+                                  : 'rgba(34,197,94,0.95)',
+                        }}
+                      >
+                        {usernameCheck.message}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label
+                      htmlFor="landing-password"
+                      className="block text-[10px] font-heading font-bold uppercase tracking-wider"
+                      style={{ color: 'var(--noir-primary)' }}
+                    >
+                      Password
+                    </label>
+                    {isLogin && (
+                      <button
+                        type="button"
+                        onClick={() => navigate('/forgot-password')}
+                        className="text-[9px] font-heading uppercase tracking-wider opacity-60 hover:opacity-100 transition-opacity"
+                        style={{ color: 'var(--noir-primary)' }}
+                      >
+                        Forgot?
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    id="landing-password"
+                    name="password"
+                    type="password"
+                    autoComplete={isLogin ? 'current-password' : 'new-password'}
+                    data-testid="password-input"
+                    value={formData.password}
+                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                    className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
+                    placeholder={isLogin ? 'Enter your password' : 'Choose a password (min 4 letters or numbers)'}
+                    required
+                  />
+                  {!isLogin && (
+                    <p className="mt-1 text-[9px] text-mutedForeground font-heading">At least 4 letters or numbers.</p>
+                  )}
+                </div>
+
+                {!isLogin && (
+                  <div>
+                    <label
+                      htmlFor="landing-confirm-password"
+                      className="block text-[10px] font-heading font-bold uppercase tracking-wider mb-1.5"
+                      style={{ color: 'var(--noir-primary)' }}
+                    >
+                      Confirm Password
+                    </label>
+                    <input
+                      id="landing-confirm-password"
+                      name="confirmPassword"
+                      type="password"
+                      autoComplete="new-password"
+                      data-testid="confirm-password-input"
+                      value={formData.confirmPassword}
+                      onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                      className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
+                      placeholder="Confirm your password"
+                      required
+                    />
+                  </div>
+                )}
+
+                {!isLogin && referralCode && (
+                  <>
+                    <p className="text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>
+                      Referred by {referralCode}
+                    </p>
+                    <p className="text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>
+                      You&apos;ll get a free premium rank bar, 500 respect points, and bonus tokens (non-tradeable). Plus 10% higher crime payouts and a 10% GTA rare car boost.
+                    </p>
+                  </>
+                )}
+
+                {needsLoginCaptcha && (
+                  <div className="flex flex-col items-center gap-2 py-1">
+                    <p className="text-[10px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
+                      Verify before signing in
+                    </p>
+                    <Turnstile
+                      key={loginTurnstileWidgetKey}
+                      siteKey={loginTurnstileCfg.site_key}
+                      onSuccess={(token) => setLoginCaptchaToken(token)}
+                      onExpire={() => {
+                        setLoginCaptchaToken(null);
+                        setLoginTurnstileWidgetKey((k) => k + 1);
+                      }}
+                      options={{ theme: 'dark' }}
+                    />
+                  </div>
+                )}
+
+                <button
+                  type="submit"
+                  data-testid="submit-button"
+                  disabled={loading || (needsLoginCaptcha && !loginCaptchaToken)}
+                  className={`w-full ${styles.btnPrimary} hover:opacity-90 active:scale-[0.98] rounded-sm font-heading font-bold uppercase tracking-wider py-3.5 transition-all disabled:opacity-50 touch-manipulation`}
                 >
-                  <p className="text-[11px] font-heading font-bold" style={{ color: 'rgba(248,113,113,1)' }}>
-                    Login issue
-                  </p>
-                  <p className="text-[10px] font-heading" style={{ color: 'var(--noir-foreground)' }}>
-                    {authInlineError.message}
-                  </p>
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-[9px] font-heading" style={{ color: 'var(--noir-muted)' }}>
-                      {authInlineError.status ? `HTTP ${authInlineError.status} - ` : ''}Support code: {authInlineError.supportCode}
+                  {loading ? 'Processing…' : isLogin ? 'Enter the Family' : 'Join the Family'}
+                </button>
+
+                {verifySentForEmail && (
+                  <div
+                    className="pt-3 border-t space-y-2"
+                    style={{ borderColor: 'var(--noir-muted)', opacity: 0.85 }}
+                  >
+                    <p className="text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>
+                      Didn&apos;t receive the email? Send another verification link.
                     </p>
                     <button
                       type="button"
-                      onClick={() => {
-                        const report = `Login error report | code=${authInlineError.supportCode} | status=${authInlineError.status || 'n/a'} | message=${authInlineError.message}`;
-                        if (navigator.clipboard?.writeText) {
-                          navigator.clipboard.writeText(report).then(() => toast.success('Error details copied')).catch(() => toast.error('Copy failed'));
-                        } else {
-                          toast.error('Copy not supported');
-                        }
-                      }}
-                      className="inline-flex items-center gap-1 text-[9px] font-heading uppercase tracking-wider hover:opacity-100 opacity-80"
-                      style={{ color: 'var(--noir-primary)' }}
+                      disabled={resendLoading || resendCooldownSeconds > 0}
+                      onClick={handleResendVerification}
+                      className={`w-full ${styles.btnPrimary} opacity-75 hover:opacity-100 rounded-sm font-heading font-bold uppercase tracking-wider py-2.5 text-xs transition-all disabled:opacity-40 touch-manipulation`}
                     >
-                      <Copy size={11} />
-                      Copy
+                      {resendLoading
+                        ? 'Sending…'
+                        : resendCooldownSeconds > 0
+                          ? `Resend in ${Math.floor(resendCooldownSeconds / 60)}:${String(resendCooldownSeconds % 60).padStart(2, '0')}`
+                          : 'Resend Verification Email'}
                     </button>
                   </div>
-                </div>
-              )}
-
-              {/* Email / username */}
-              <div>
-                <label
-                  htmlFor="landing-email"
-                  className="block text-[10px] font-heading font-bold uppercase tracking-wider mb-1.5"
-                  style={{ color: 'var(--noir-primary)' }}
-                >
-                  {isLogin ? 'Email or Username' : 'Email'}
-                </label>
-                <input
-                  id="landing-email"
-                  name="email"
-                  type={isLogin ? 'text' : 'email'}
-                  autoComplete="username"
-                  data-testid="email-input"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                  className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
-                  placeholder={isLogin ? 'Enter your email or username' : 'Enter your email'}
-                  required
-                />
-              </div>
-
-              {/* Username — register only */}
-              {!isLogin && (
-                <div>
-                  <label
-                    htmlFor="landing-username"
-                    className="block text-[10px] font-heading font-bold uppercase tracking-wider mb-1.5"
-                    style={{ color: 'var(--noir-primary)' }}
-                  >
-                    Username
-                  </label>
-                  <input
-                    id="landing-username"
-                    name="username"
-                    type="text"
-                    autoComplete="username"
-                    data-testid="username-input"
-                    value={formData.username}
-                    onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                    maxLength={20}
-                    className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
-                    placeholder="Choose a character name (max 20)"
-                    required
-                  />
-                  <p className="mt-1 text-[8px] font-heading leading-snug" style={{ color: 'var(--noir-muted)' }}>
-                    Shown in-game; max 20 characters. Must not be your email or contain @.
-                  </p>
-                  {usernameCheck.status !== 'idle' && (
-                    <p
-                      className="mt-1 text-[9px] font-heading"
-                      style={{
-                        color:
-                          usernameCheck.status === 'checking'
-                            ? 'var(--noir-muted)'
-                            : usernameCheck.status === 'error'
-                              ? 'rgba(239,68,68,0.9)'
-                              : usernameCheck.isTaken
-                                ? 'rgba(239,68,68,0.95)'
-                                : 'rgba(34,197,94,0.95)',
-                      }}
-                    >
-                      {usernameCheck.message}
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Password */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label
-                    htmlFor="landing-password"
-                    className="block text-[10px] font-heading font-bold uppercase tracking-wider"
-                    style={{ color: 'var(--noir-primary)' }}
-                  >
-                    Password
-                  </label>
-                  {isLogin && (
-                    <button
-                      type="button"
-                      onClick={() => navigate('/forgot-password')}
-                      className="text-[9px] font-heading uppercase tracking-wider opacity-60 hover:opacity-100 transition-opacity"
-                      style={{ color: 'var(--noir-primary)' }}
-                    >
-                      Forgot?
-                    </button>
-                  )}
-                </div>
-                <input
-                  id="landing-password"
-                  name="password"
-                  type="password"
-                  autoComplete={isLogin ? 'current-password' : 'new-password'}
-                  data-testid="password-input"
-                  value={formData.password}
-                  onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                  className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
-                  placeholder={isLogin ? 'Enter your password' : 'Choose a password (min 4 letters or numbers)'}
-                  required
-                />
-                {!isLogin && (
-                  <p className="mt-1 text-[9px] text-mutedForeground font-heading">At least 4 letters or numbers.</p>
                 )}
-              </div>
-
-              {/* Confirm password — register only */}
-              {!isLogin && (
-                <div>
-                  <label
-                    htmlFor="landing-confirm-password"
-                    className="block text-[10px] font-heading font-bold uppercase tracking-wider mb-1.5"
-                    style={{ color: 'var(--noir-primary)' }}
-                  >
-                    Confirm Password
-                  </label>
-                  <input
-                    id="landing-confirm-password"
-                    name="confirmPassword"
-                    type="password"
-                    autoComplete="new-password"
-                    data-testid="confirm-password-input"
-                    value={formData.confirmPassword}
-                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                    className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
-                    placeholder="Confirm your password"
-                    required
-                  />
-                </div>
-              )}
-
-              {!isLogin && referralCode && (
-                <>
-                  <p className="text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>
-                    Referred by {referralCode}
-                  </p>
-                  <p className="text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>
-                    You&apos;ll get a free premium rank bar, 500 respect points, and bonus tokens (non-tradeable). Plus 10% higher crime payouts and a 10% GTA rare car boost.
-                  </p>
-                </>
-              )}
-
-              {needsLoginCaptcha && (
-                <div className="flex flex-col items-center gap-2 py-1">
-                  <p className="text-[10px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
-                    Verify before signing in
-                  </p>
-                  <Turnstile
-                    key={loginTurnstileWidgetKey}
-                    siteKey={loginTurnstileCfg.site_key}
-                    onSuccess={(token) => setLoginCaptchaToken(token)}
-                    onExpire={() => {
-                      setLoginCaptchaToken(null);
-                      setLoginTurnstileWidgetKey((k) => k + 1);
-                    }}
-                    options={{ theme: 'dark' }}
-                  />
-                </div>
-              )}
-
-              {/* Submit */}
-              <button
-                type="submit"
-                data-testid="submit-button"
-                disabled={loading || (needsLoginCaptcha && !loginCaptchaToken)}
-                className={`w-full ${styles.btnPrimary} hover:opacity-90 active:scale-[0.98] rounded-sm font-heading font-bold uppercase tracking-wider py-3.5 transition-all disabled:opacity-50 touch-manipulation`}
-              >
-                {loading ? 'Processing…' : isLogin ? 'Enter the Family' : 'Join the Family'}
-              </button>
-
-              {/* Resend verification */}
-              {verifySentForEmail && (
-                <div
-                  className="pt-3 border-t space-y-2"
-                  style={{ borderColor: 'var(--noir-muted)', opacity: 0.85 }}
-                >
-                  <p className="text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>
-                    Didn&apos;t receive the email? Send another verification link.
-                  </p>
-                  <button
-                    type="button"
-                    disabled={resendLoading || resendCooldownSeconds > 0}
-                    onClick={handleResendVerification}
-                    className={`w-full ${styles.btnPrimary} opacity-75 hover:opacity-100 rounded-sm font-heading font-bold uppercase tracking-wider py-2.5 text-xs transition-all disabled:opacity-40 touch-manipulation`}
-                  >
-                    {resendLoading
-                      ? 'Sending…'
-                      : resendCooldownSeconds > 0
-                        ? `Resend in ${Math.floor(resendCooldownSeconds / 60)}:${String(resendCooldownSeconds % 60).padStart(2, '0')}`
-                        : 'Resend Verification Email'}
-                  </button>
-                </div>
-              )}
-            </form>
+              </form>
             )}
-
-            {/* ── STAT STRIP ─────────────────────────────────── */}
-            {/*   4-column grid, same panel style as rest of app  */}
-            <div
-              className="grid grid-cols-4 border-t"
-              style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.1)' }}
-            >
-              {[
-                { val: '13',  lbl: 'Ranks'    },
-                { val: '5',   lbl: 'Prestiges' },
-                { val: '7+',  lbl: 'Casinos'  },
-                { val: '∞',   lbl: 'Ops'      },
-              ].map(({ val, lbl }, i) => (
-                <div
-                  key={lbl}
-                  className="flex flex-col items-center justify-center py-3 gap-0.5"
-                  style={{
-                    borderRight: i < 3 ? '1px solid rgba(var(--noir-primary-rgb,201,168,76),0.08)' : undefined,
-                  }}
-                >
-                  <span
-                    className="text-lg font-heading font-bold leading-none"
-                    style={{ color: 'var(--noir-primary)' }}
-                  >
-                    {val}
-                  </span>
-                  <span
-                    className="text-[7px] font-heading uppercase tracking-[0.18em]"
-                    style={{ color: 'var(--noir-muted)' }}
-                  >
-                    {lbl}
-                  </span>
-                </div>
-              ))}
-            </div>
           </div>
 
-          {/* ── TAGLINE ─────────────────────────────────────── */}
           <p
-            className="text-center font-heading text-[10px] uppercase tracking-[0.25em] mt-5 landing-fade-up-3"
-            style={{ color: 'var(--noir-primary)', opacity: 0.35 }}
+            className="mt-8 text-center font-heading text-[9px] uppercase tracking-[0.2em]"
+            style={{ color: 'var(--noir-primary)', opacity: 0.4 }}
           >
-            Omertà — silence is the first rule
+            MafiaWars.co.uk
           </p>
-
-          {/* ── COPYRIGHT ───────────────────────────────────────────────── */}
-          <div className="mt-6 flex flex-col items-center gap-2 text-center landing-fade-up-3">
-            <div
-              className="w-10 h-10 rounded-full overflow-hidden shrink-0 border-2"
-              style={{
-                borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.35)',
-                opacity: 0.85,
-              }}
-            >
-              <img
-                src={landingGangsterImg}
-                alt=""
-                className="w-full h-full object-cover object-[center_15%]"
-                decoding="async"
-              />
-            </div>
-            <p
-              className="font-heading text-[9px] uppercase tracking-[0.15em]"
-              style={{ color: 'var(--noir-primary)', opacity: 0.5 }}
-            >
-              MafiaWars.co.uk©
-            </p>
-          </div>
-
-          </div>
         </div>
       </div>
     </div>
