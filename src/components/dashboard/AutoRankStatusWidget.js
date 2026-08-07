@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
-import { Bot, ChevronRight } from 'lucide-react';
+import { Bot } from 'lucide-react';
 import api from '../../utils/api';
 import { getDashboardWidget, setDashboardWidget } from '../../utils/dashboardWidgetCache';
-import styles from '../../styles/noir.module.css';
+import dash from '../../styles/dashboard.module.css';
+import { DashPanel, DashHeader, DashBody } from './dashChrome';
 
 const WIDGET_KEY = 'auto_rank_stats';
 
@@ -97,22 +97,13 @@ export default function AutoRankStatusWidget({ user }) {
   }
 
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
-      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-        <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">
-          <Bot size={10} />
-          Auto Rank
-        </h2>
-        <Link to="/account/autorank" className="text-[9px] font-heading text-primary hover:text-primary/80 flex items-center gap-0.5">
-          Settings <ChevronRight size={10} />
-        </Link>
-      </div>
-      <div className="px-2.5 py-2">
+    <DashPanel>
+      <DashHeader title="Auto Rank" icon={Bot} actionTo="/account/autorank" actionLabel="Settings" />
+      <DashBody className={dash.autoStripBody} compact>
         <p className={`text-[11px] font-heading ${inJail ? 'text-amber-400' : (activityDetail || '').toLowerCase().includes('idle') ? 'text-mutedForeground' : 'text-emerald-400'}`}>
           {statusText}
         </p>
-      </div>
-    </div>
+      </DashBody>
+    </DashPanel>
   );
 }

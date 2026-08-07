@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
-import { Building2, ChevronRight, Dice5, Plane, Factory } from 'lucide-react';
+import { Building2, Dice5, Plane, Factory } from 'lucide-react';
 import api from '../../utils/api';
 import { getDashboardWidget, setDashboardWidget } from '../../utils/dashboardWidgetCache';
-import styles from '../../styles/noir.module.css';
+import dash from '../../styles/dashboard.module.css';
+import { DashPanel, DashHeader, DashBody, DashLoading } from './dashChrome';
 
 const CASINO_LABELS = { dice: 'Dice', roulette: 'Roulette', blackjack: 'Blackjack', horseracing: 'Horse Racing', videopoker: 'Video Poker', slots: 'Slots' };
 
@@ -50,14 +50,7 @@ export default function MyPropertiesWidget({ userId }) {
   }, [userId, fetchProperties]);
 
   if (loading) {
-    return (
-      <div className={`${styles.panel} rounded-md border border-primary/20 p-2.5 mobile-panel`}>
-        <div className="flex items-center gap-2 text-mutedForeground">
-          <Building2 size={14} className="animate-pulse" />
-          <span className="text-[10px] font-heading">Loading...</span>
-        </div>
-      </div>
-    );
+    return <DashLoading icon={Building2} />;
   }
 
   const casinos = Array.isArray(data?.casinos) && data.casinos.length
@@ -68,70 +61,61 @@ export default function MyPropertiesWidget({ userId }) {
   const hasAny = casinos.length > 0 || airport || armoury;
 
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
-      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-        <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">
-          <Building2 size={10} />
-          My Properties
-        </h2>
-        <Link to="/my-properties" className="text-[9px] font-heading text-primary hover:text-primary/80 flex items-center gap-0.5">
-          Manage <ChevronRight size={10} />
-        </Link>
-      </div>
-      <div className="p-2 space-y-1.5">
+    <DashPanel>
+      <DashHeader title="My Properties" icon={Building2} actionTo="/my-properties" actionLabel="Manage" />
+      <DashBody className="space-y-1.5" compact>
         {!hasAny ? (
           <p className="text-[10px] font-heading text-mutedForeground">No casino or property</p>
         ) : (
           <>
             {casinos.length ? (
               casinos.map((casino) => (
-                <div key={`${casino.type}-${casino.city}`} className="flex items-center gap-1.5 px-2 py-1 rounded border bg-primary/5 border-primary/30">
+                <div key={`${casino.type}-${casino.city}`} className={`${dash.rowActive} font-heading`}>
                   <Dice5 size={12} className="text-primary shrink-0" />
-                  <span className="text-[10px] font-heading text-foreground">
+                  <span className="text-[10px] text-foreground truncate">
                     {CASINO_LABELS[casino.type] || casino.type} in {casino.city || '?'}
                   </span>
                   {casino.profit != null && (
-                    <span className="text-[9px] text-mutedForeground ml-auto">
+                    <span className="text-[9px] text-mutedForeground ml-auto shrink-0">
                       {formatMoney(casino.profit)}
                     </span>
                   )}
                 </div>
               ))
             ) : (
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded border bg-zinc-800/20 border-zinc-700/30">
-                <span className="text-[10px] font-heading text-mutedForeground">No casino</span>
+              <div className={`${dash.rowMuted} font-heading`}>
+                <span className="text-[10px] text-mutedForeground">No casino</span>
               </div>
             )}
             {airport ? (
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded border bg-primary/5 border-primary/30">
+              <div className={`${dash.rowActive} font-heading`}>
                 <Plane size={12} className="text-primary shrink-0" />
-                <span className="text-[10px] font-heading text-foreground">
+                <span className="text-[10px] text-foreground truncate">
                   Airport in {airport.state || '?'}
                 </span>
                 {airport.total_earnings != null && (
-                  <span className="text-[9px] text-mutedForeground ml-auto">
+                  <span className="text-[9px] text-mutedForeground ml-auto shrink-0">
                     {Number(airport.total_earnings).toLocaleString()} pts
                   </span>
                 )}
               </div>
             ) : null}
             {armoury ? (
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded border bg-primary/5 border-primary/30">
+              <div className={`${dash.rowActive} font-heading`}>
                 <Factory size={12} className="text-primary shrink-0" />
-                <span className="text-[10px] font-heading text-foreground">
+                <span className="text-[10px] text-foreground truncate">
                   Armoury in {armoury.state || '?'}
                 </span>
               </div>
             ) : null}
             {!airport && !armoury ? (
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded border bg-zinc-800/20 border-zinc-700/30">
-                <span className="text-[10px] font-heading text-mutedForeground">No airport or armoury</span>
+              <div className={`${dash.rowMuted} font-heading`}>
+                <span className="text-[10px] text-mutedForeground">No airport or armoury</span>
               </div>
             ) : null}
           </>
         )}
-      </div>
-    </div>
+      </DashBody>
+    </DashPanel>
   );
 }

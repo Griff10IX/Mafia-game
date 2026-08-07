@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
-import { Shield, ChevronRight } from 'lucide-react';
+import { Shield } from 'lucide-react';
 import api, { apiRequestWith429Retry } from '../../utils/api';
 import { getDashboardWidget, setDashboardWidget } from '../../utils/dashboardWidgetCache';
-import styles from '../../styles/noir.module.css';
+import dash from '../../styles/dashboard.module.css';
+import { DashPanel, DashHeader, DashBody, DashLoading } from './dashChrome';
 
 const WIDGET_KEY = 'bodyguards';
 
@@ -42,14 +42,7 @@ export default function BodyguardsWidget({ userId }) {
   }, [userId, fetchBodyguards]);
 
   if (loading) {
-    return (
-      <div className={`${styles.panel} rounded-md border border-primary/20 p-2.5 mobile-panel`}>
-        <div className="flex items-center gap-2 text-mutedForeground">
-          <Shield size={14} className="animate-pulse" />
-          <span className="text-[10px] font-heading">Loading...</span>
-        </div>
-      </div>
-    );
+    return <DashLoading icon={Shield} />;
   }
 
   const bodyguards = data?.bodyguards ?? [];
@@ -58,18 +51,9 @@ export default function BodyguardsWidget({ userId }) {
   const total = bodyguards.length || 4;
 
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
-      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-        <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">
-          <Shield size={10} />
-          Bodyguards
-        </h2>
-        <Link to="/kill/bodyguards" className="text-[9px] font-heading text-primary hover:text-primary/80 flex items-center gap-0.5">
-          Manage <ChevronRight size={10} />
-        </Link>
-      </div>
-      <div className="p-2 space-y-1.5">
+    <DashPanel>
+      <DashHeader title="Bodyguards" icon={Shield} actionTo="/kill/bodyguards" actionLabel="Manage" />
+      <DashBody className="space-y-1.5" compact>
         {bodyguardFor && (
           <p className="text-[10px] font-heading text-amber-400">
             Working for {bodyguardFor.owner_username}
@@ -79,17 +63,14 @@ export default function BodyguardsWidget({ userId }) {
           {filled}/{total} slots filled
         </p>
         {bodyguards.slice(0, 4).map((bg) => (
-          <div
-            key={bg.slot_number}
-            className="flex items-center gap-1.5 px-2 py-1 rounded border bg-zinc-800/20 border-zinc-700/30"
-          >
-            <span className="text-[9px] font-heading text-mutedForeground w-4">#{bg.slot_number}</span>
-            <span className="text-[10px] font-heading text-foreground truncate">
+          <div key={bg.slot_number} className={`${dash.rowMuted} font-heading`}>
+            <span className="text-[9px] text-mutedForeground w-4">#{bg.slot_number}</span>
+            <span className="text-[10px] text-foreground truncate">
               {bg.bodyguard_username || (bg.is_robot ? 'Robot' : '—')}
             </span>
           </div>
         ))}
-      </div>
-    </div>
+      </DashBody>
+    </DashPanel>
   );
 }

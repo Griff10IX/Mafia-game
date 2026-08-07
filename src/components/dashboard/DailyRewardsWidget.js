@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
-import { Gift, ChevronRight } from 'lucide-react';
+import { Gift } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
 import { getDashboardWidget, setDashboardWidget } from '../../utils/dashboardWidgetCache';
 import { toast } from 'sonner';
-import styles from '../../styles/noir.module.css';
+import dash from '../../styles/dashboard.module.css';
+import { DashPanel, DashHeader, DashBody, DashLoading } from './dashChrome';
 
 const CHOICES = [
   { id: 'rock', label: 'Rock', emoji: '✊' },
@@ -106,32 +106,16 @@ export default function DailyRewardsWidget({ onRefresh, userId }) {
   };
 
   if (loading) {
-    return (
-      <div className={`${styles.panel} rounded-md border border-primary/20 p-2.5 mobile-panel`}>
-        <div className="flex items-center gap-2 text-mutedForeground">
-          <Gift size={14} className="animate-pulse" />
-          <span className="text-[10px] font-heading">Loading...</span>
-        </div>
-      </div>
-    );
+    return <DashLoading icon={Gift} />;
   }
 
   const playsLeft = info?.plays_left ?? 0;
   const nextAt = formatNextPlay(info?.next_play_at);
 
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
-      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-        <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">
-          <Gift size={10} />
-          Daily Rewards
-        </h2>
-        <Link to="/game/daily-rewards" className="text-[9px] font-heading text-primary hover:text-primary/80 flex items-center gap-0.5">
-          Full <ChevronRight size={10} />
-        </Link>
-      </div>
-      <div className="p-2.5 space-y-2">
+    <DashPanel>
+      <DashHeader title="Daily Rewards" icon={Gift} actionTo="/game/daily-rewards" actionLabel="Full" />
+      <DashBody className="space-y-2">
         {playsLeft > 0 ? (
           <>
             <p className="text-[10px] font-heading text-mutedForeground">
@@ -144,10 +128,10 @@ export default function DailyRewardsWidget({ onRefresh, userId }) {
                   type="button"
                   onClick={() => play(c.id)}
                   disabled={playing}
-                  className="flex-1 min-w-0 flex flex-col items-center gap-0.5 px-2 py-1.5 rounded border border-primary/30 bg-primary/10 hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed transition-all active:scale-95"
+                  className={`${dash.choiceBtn} font-heading`}
                 >
                   <span className="text-lg">{c.emoji}</span>
-                  <span className="text-[9px] font-heading text-foreground truncate w-full text-center">{c.label}</span>
+                  <span className="text-[9px] text-foreground truncate w-full text-center">{c.label}</span>
                 </button>
               ))}
             </div>
@@ -162,7 +146,7 @@ export default function DailyRewardsWidget({ onRefresh, userId }) {
             {nextAt ? `Next play in ${nextAt}` : 'No plays left'}
           </p>
         )}
-      </div>
-    </div>
+      </DashBody>
+    </DashPanel>
   );
 }

@@ -5,7 +5,8 @@ import api from '../../utils/api';
 import { getDashboardWidget, setDashboardWidget } from '../../utils/dashboardWidgetCache';
 import { NotificationMessage } from '../NotificationMessage';
 import { toast } from 'sonner';
-import styles from '../../styles/noir.module.css';
+import dash from '../../styles/dashboard.module.css';
+import { DashPanel, DashHeader, DashBody, DashLoading } from './dashChrome';
 
 const NOTIFICATION_ICONS = {
   rank_up: Trophy,
@@ -95,50 +96,44 @@ export default function NotificationsWidget({ onRefresh, userId }) {
   };
 
   if (loading) {
-    return (
-      <div className={`${styles.panel} rounded-md border border-primary/20 p-2.5 mobile-panel`}>
-        <div className="flex items-center gap-2 text-mutedForeground">
-          <Mail size={14} className="animate-pulse" />
-          <span className="text-[10px] font-heading">Loading...</span>
-        </div>
-      </div>
-    );
+    return <DashLoading icon={Mail} />;
   }
 
   const notifications = data?.notifications ?? [];
   const unreadCount = data?.unread_count ?? 0;
   const preview = notifications.slice(0, 3);
 
+  const actionNode = (
+    <div className="flex items-center gap-1.5">
+      {unreadCount > 0 && (
+        <button
+          type="button"
+          onClick={handleMarkAllRead}
+          disabled={markingRead}
+          className={`${dash.panelAction} disabled:opacity-50 font-heading`}
+        >
+          Mark all
+        </button>
+      )}
+      <Link to="/social/inbox" className={`${dash.panelAction} font-heading`}>
+        Inbox <ChevronRight size={10} aria-hidden />
+      </Link>
+    </div>
+  );
+
   return (
-    <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
-      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-        <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center gap-1">
-          <Mail size={10} />
-          Notifications
-          {unreadCount > 0 && (
-            <span className="bg-primary/30 text-primary text-[9px] px-1.5 py-0.5 rounded font-bold">
-              {unreadCount}
-            </span>
-          )}
-        </h2>
-        <div className="flex items-center gap-1">
-          {unreadCount > 0 && (
-            <button
-              type="button"
-              onClick={handleMarkAllRead}
-              disabled={markingRead}
-              className="text-[9px] font-heading text-primary hover:text-primary/80 disabled:opacity-50"
-            >
-              Mark all read
-            </button>
-          )}
-          <Link to="/social/inbox" className="text-[9px] font-heading text-primary hover:text-primary/80 flex items-center gap-0.5">
-            Inbox <ChevronRight size={10} />
-          </Link>
-        </div>
-      </div>
-      <div className="p-2 space-y-1">
+    <DashPanel>
+      <DashHeader
+        title="Notifications"
+        icon={Mail}
+        actionNode={actionNode}
+        badge={unreadCount > 0 ? (
+          <span className="bg-primary/30 text-primary text-[9px] px-1.5 py-0.5 rounded font-bold">
+            {unreadCount}
+          </span>
+        ) : null}
+      />
+      <DashBody className="space-y-1" compact>
         {preview.length === 0 ? (
           <p className="text-[10px] font-heading text-mutedForeground">No notifications</p>
         ) : (
@@ -147,10 +142,17 @@ export default function NotificationsWidget({ onRefresh, userId }) {
             return (
               <div
                 key={n.id}
-                className={`flex items-start gap-1.5 px-2 py-1 rounded border cursor-pointer transition-colors ${
-                  n.read ? 'bg-zinc-800/20 border-zinc-700/30' : 'bg-primary/5 border-primary/30'
-                }`}
+                role="button"
+                tabIndex={0}
+                className={n.read ? dash.rowMuted : dash.rowActive}
+                style={{ cursor: n.read ? 'default' : 'pointer', alignItems: 'flex-start' }}
                 onClick={() => !n.read && handleMarkRead(n.id)}
+                onKeyDown={(e) => {
+                  if (!n.read && (e.key === 'Enter' || e.key === ' ')) {
+                    e.preventDefault();
+                    handleMarkRead(n.id);
+                  }
+                }}
               >
                 <Icon size={12} className={`shrink-0 mt-0.5 ${n.read ? 'text-mutedForeground' : 'text-primary'}`} />
                 <div className="min-w-0 flex-1">
@@ -175,7 +177,7 @@ export default function NotificationsWidget({ onRefresh, userId }) {
             );
           })
         )}
-      </div>
-    </div>
+      </DashBody>
+    </DashPanel>
   );
 }

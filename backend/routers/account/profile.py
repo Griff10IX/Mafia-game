@@ -1597,17 +1597,51 @@ def register(router):
         return {"message": "Theme saved", "theme_platform": platform, **_theme_response_payload(merged_user)}
 
     DEFAULT_SECTION_ORDER = [
-        "rank_progress", "rewards_objectives", "notifications_event",
-        "bodyguards_properties", "auto_rank", "at_a_glance", "go_to",
+        "command_status",
+        "daily_ops",
+        "intel_assets",
+        "auto_rank",
+        "routes",
     ]
-    DEFAULT_AT_A_GLANCE_STATS = ["money", "rank", "wealth", "rp", "location", "kills"]
+    DEFAULT_AT_A_GLANCE_STATS = ["money", "health", "bullets", "location", "rank", "kills"]
+    VALID_SECTION_IDS = set(DEFAULT_SECTION_ORDER)
+    LEGACY_SECTION_MAP = {
+        "rank_progress": "command_status",
+        "at_a_glance": "command_status",
+        "rewards_objectives": "daily_ops",
+        "notifications_event": "intel_assets",
+        "bodyguards_properties": "intel_assets",
+        "auto_rank": "auto_rank",
+        "go_to": "routes",
+        "command_status": "command_status",
+        "daily_ops": "daily_ops",
+        "intel_assets": "intel_assets",
+        "routes": "routes",
+    }
+
+    def _normalize_dashboard_section_order(order):
+        """Map legacy section IDs → current set; preserve first-seen order; append missing defaults."""
+        seen = set()
+        out = []
+        for raw in order or []:
+            if not isinstance(raw, str):
+                continue
+            mapped = LEGACY_SECTION_MAP.get(raw) or (raw if raw in VALID_SECTION_IDS else None)
+            if not mapped or mapped in seen:
+                continue
+            seen.add(mapped)
+            out.append(mapped)
+        for sid in DEFAULT_SECTION_ORDER:
+            if sid not in seen:
+                out.append(sid)
+        return out
 
     @router.get("/profile/dashboard")
     async def get_profile_dashboard(current_user: dict = Depends(get_current_user)):
         """Get dashboard layout preferences. Returns defaults if never set."""
         prefs = current_user.get("dashboard_preferences") or {}
         return {
-            "section_order": prefs.get("section_order") or DEFAULT_SECTION_ORDER,
+            "section_order": _normalize_dashboard_section_order(prefs.get("section_order")),
             "at_a_glance_visible": prefs.get("at_a_glance_visible", True),
             "at_a_glance_stats": prefs.get("at_a_glance_stats") or DEFAULT_AT_A_GLANCE_STATS,
         }
@@ -1620,18 +1654,20 @@ def register(router):
             prefs = current_user.get("dashboard_preferences") or {}
             return {
                 "message": "No dashboard updates",
-                "section_order": prefs.get("section_order") or DEFAULT_SECTION_ORDER,
+                "section_order": _normalize_dashboard_section_order(prefs.get("section_order")),
                 "at_a_glance_visible": prefs.get("at_a_glance_visible", True),
                 "at_a_glance_stats": prefs.get("at_a_glance_stats") or DEFAULT_AT_A_GLANCE_STATS,
             }
-        valid_section_ids = {"rank_progress", "rewards_objectives", "notifications_event", "bodyguards_properties", "auto_rank", "at_a_glance", "go_to"}
-        valid_stat_ids = {"money", "rank", "wealth", "rp", "location", "kills"}
+        valid_stat_ids = {"money", "rank", "wealth", "rp", "location", "kills", "health", "bullets"}
         if "section_order" in updates:
             order = updates["section_order"]
-            if not isinstance(order, list) or not all(isinstance(s, str) and s in valid_section_ids for s in order):
+            if not isinstance(order, list) or not all(isinstance(s, str) for s in order):
                 raise HTTPException(status_code=400, detail="Invalid section_order")
-            if set(order) != valid_section_ids:
+            # Accept legacy or new IDs; normalize before save.
+            normalized = _normalize_dashboard_section_order(order)
+            if set(normalized) != VALID_SECTION_IDS:
                 raise HTTPException(status_code=400, detail="section_order must contain all section IDs exactly once")
+            updates["section_order"] = normalized
         if "at_a_glance_stats" in updates:
             stats = updates["at_a_glance_stats"]
             if not isinstance(stats, list) or not all(isinstance(s, str) and s in valid_stat_ids for s in stats):
@@ -1643,7 +1679,7 @@ def register(router):
         )
         return {
             "message": "Dashboard preferences saved",
-            "section_order": new_prefs.get("section_order") or DEFAULT_SECTION_ORDER,
+            "section_order": _normalize_dashboard_section_order(new_prefs.get("section_order")),
             "at_a_glance_visible": new_prefs.get("at_a_glance_visible", True),
             "at_a_glance_stats": new_prefs.get("at_a_glance_stats") or DEFAULT_AT_A_GLANCE_STATS,
         }

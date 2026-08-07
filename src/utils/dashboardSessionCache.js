@@ -6,12 +6,51 @@ import { readSessionJson, writeSessionJson } from './sessionPageCache';
 
 export const DASHBOARD_SESSION_CACHE_KEY = 'mafia_dashboard_v1';
 
+/** New command-center section IDs (post redesign). */
 export const DEFAULT_SECTION_ORDER = [
-  'rank_progress', 'rewards_objectives', 'notifications_event',
-  'bodyguards_properties', 'auto_rank', 'at_a_glance', 'go_to',
+  'command_status',
+  'daily_ops',
+  'intel_assets',
+  'auto_rank',
+  'routes',
 ];
 
-export const DEFAULT_AT_A_GLANCE_STATS = ['money', 'rank', 'wealth', 'rp', 'location', 'kills'];
+export const DEFAULT_AT_A_GLANCE_STATS = ['money', 'health', 'bullets', 'location', 'rank', 'kills'];
+
+const LEGACY_SECTION_MAP = {
+  rank_progress: 'command_status',
+  at_a_glance: 'command_status',
+  rewards_objectives: 'daily_ops',
+  notifications_event: 'intel_assets',
+  bodyguards_properties: 'intel_assets',
+  auto_rank: 'auto_rank',
+  go_to: 'routes',
+  // already-new ids pass through via map miss + include check
+  command_status: 'command_status',
+  daily_ops: 'daily_ops',
+  intel_assets: 'intel_assets',
+  routes: 'routes',
+};
+
+/**
+ * Normalize legacy or partial section orders into the current DEFAULT_SECTION_ORDER set.
+ * Preserves relative order of first-seen mapped sections, then appends any missing defaults.
+ */
+export function normalizeDashboardSectionOrder(order) {
+  const seen = new Set();
+  const out = [];
+  const list = Array.isArray(order) ? order : [];
+  for (const raw of list) {
+    const mapped = LEGACY_SECTION_MAP[raw] || (DEFAULT_SECTION_ORDER.includes(raw) ? raw : null);
+    if (!mapped || seen.has(mapped)) continue;
+    seen.add(mapped);
+    out.push(mapped);
+  }
+  for (const id of DEFAULT_SECTION_ORDER) {
+    if (!seen.has(id)) out.push(id);
+  }
+  return out;
+}
 
 export function sanitizeDashboardUser(user) {
   if (!user || typeof user !== 'object') return user ?? null;
@@ -51,20 +90,20 @@ export function clearDashboardSessionRankProgress() {
 export function mergeDashboardPreferences(dashResData, prevEntry) {
   if (dashResData) {
     return {
-      section_order: dashResData.section_order || DEFAULT_SECTION_ORDER,
+      section_order: normalizeDashboardSectionOrder(dashResData.section_order),
       at_a_glance_visible: dashResData.at_a_glance_visible !== false,
       at_a_glance_stats: dashResData.at_a_glance_stats || DEFAULT_AT_A_GLANCE_STATS,
     };
   }
   if (prevEntry?.preferences) {
     return {
-      section_order: prevEntry.preferences.section_order || DEFAULT_SECTION_ORDER,
+      section_order: normalizeDashboardSectionOrder(prevEntry.preferences.section_order),
       at_a_glance_visible: prevEntry.preferences.at_a_glance_visible !== false,
       at_a_glance_stats: prevEntry.preferences.at_a_glance_stats || DEFAULT_AT_A_GLANCE_STATS,
     };
   }
   return {
-    section_order: DEFAULT_SECTION_ORDER,
+    section_order: [...DEFAULT_SECTION_ORDER],
     at_a_glance_visible: true,
     at_a_glance_stats: [...DEFAULT_AT_A_GLANCE_STATS],
   };

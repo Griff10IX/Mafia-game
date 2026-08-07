@@ -6,6 +6,15 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-08-07 22:00 UTC[/color][/b] — [b]Dashboard command center[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Account → Dashboard[/b] is rebuilt as a command center: status hero (rank + vitals), daily ops, intel/assets, labeled routes. Store summary card removed (Store stays in Routes / nav). Layout prefs migrate automatically.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-08-07 21:40 UTC[/color][/b] — [b]Sky default theme + login presence[/b][/size]
 [quote]
 [list]
