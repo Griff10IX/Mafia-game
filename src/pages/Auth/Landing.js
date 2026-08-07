@@ -106,7 +106,12 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
   const [loginTurnstileCfg, setLoginTurnstileCfg] = useState(null);
   const [loginCaptchaToken, setLoginCaptchaToken] = useState(null);
   const [loginTurnstileWidgetKey, setLoginTurnstileWidgetKey] = useState(0);
-  const [presence, setPresence] = useState({ online_count: null, total_players: null });
+  const [presence, setPresence] = useState({
+    online_count: null,
+    total_players: null,
+    families_count: null,
+    locked_up: null,
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -131,9 +136,12 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
         .then((r) => {
           if (cancelled) return;
           const d = r.data || {};
+          const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
           setPresence({
-            online_count: typeof d.online_count === 'number' ? d.online_count : null,
-            total_players: typeof d.total_players === 'number' ? d.total_players : null,
+            online_count: num(d.online_count),
+            total_players: num(d.total_players),
+            families_count: num(d.families_count),
+            locked_up: num(d.locked_up),
           });
         })
         .catch(() => {});
@@ -459,6 +467,40 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
         .landing-bg-drift  { animation: landing-bg-drift 28s ease-in-out infinite; }
         .landing-shaft     { animation: landing-shaft 7s ease-in-out infinite; }
         .landing-pulse-dot { animation: landing-pulse-dot 2.4s ease-in-out infinite; }
+        /* Soften form: darker fields, kill Chrome autofill white/blue flash */
+        #landing-auth-card .landing-auth-panel {
+          background: linear-gradient(180deg, rgba(14,14,16,0.94) 0%, rgba(8,8,10,0.96) 100%) !important;
+          border-color: rgba(14, 165, 233, 0.16) !important;
+          box-shadow: 0 24px 64px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.03) !important;
+        }
+        #landing-auth-card .landing-auth-panel input.landing-field {
+          background: rgba(8, 10, 12, 0.92) !important;
+          border: 1px solid rgba(255, 255, 255, 0.07) !important;
+          color: rgba(220, 228, 236, 0.88) !important;
+          box-shadow: inset 0 1px 2px rgba(0,0,0,0.45) !important;
+          -webkit-text-fill-color: rgba(220, 228, 236, 0.88);
+          caret-color: #38bdf8;
+          transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+        #landing-auth-card .landing-auth-panel input.landing-field::placeholder {
+          color: rgba(148, 163, 184, 0.42) !important;
+          -webkit-text-fill-color: rgba(148, 163, 184, 0.42);
+        }
+        #landing-auth-card .landing-auth-panel input.landing-field:focus {
+          border-color: rgba(14, 165, 233, 0.4) !important;
+          box-shadow: inset 0 1px 2px rgba(0,0,0,0.45), 0 0 0 1px rgba(14, 165, 233, 0.18) !important;
+          outline: none;
+        }
+        #landing-auth-card .landing-auth-panel input.landing-field:-webkit-autofill,
+        #landing-auth-card .landing-auth-panel input.landing-field:-webkit-autofill:hover,
+        #landing-auth-card .landing-auth-panel input.landing-field:-webkit-autofill:focus {
+          -webkit-box-shadow: 0 0 0 1000px #0a0c0e inset !important;
+          box-shadow: 0 0 0 1000px #0a0c0e inset !important;
+          -webkit-text-fill-color: rgba(220, 228, 236, 0.88) !important;
+          caret-color: #38bdf8;
+          border: 1px solid rgba(255, 255, 255, 0.07) !important;
+          transition: background-color 99999s ease-out 0s;
+        }
         @media (prefers-reduced-motion: reduce) {
           .landing-fade-up, .landing-fade-up-1, .landing-fade-up-2,
           .landing-bg-drift, .landing-shaft, .landing-pulse-dot { animation: none !important; }
@@ -518,7 +560,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
             <h1
               className="font-heading font-black uppercase tracking-[0.18em] text-[clamp(2.35rem,8vw,3.75rem)] leading-none"
               style={{
-                color: 'var(--noir-foreground)',
+                color: 'rgba(232, 236, 240, 0.92)',
                 textShadow: '0 2px 40px rgba(0,0,0,0.65), 0 0 60px rgba(var(--noir-primary-rgb,14,165,233),0.18)',
               }}
               data-testid="landing-title"
@@ -527,13 +569,16 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
             </h1>
             <p
               className="mt-3 text-[11px] sm:text-xs font-heading tracking-[0.08em] landing-fade-up-1"
-              style={{ color: 'rgba(245,245,245,0.72)' }}
+              style={{ color: 'rgba(200,210,220,0.55)' }}
             >
               Build your empire. Enforce omertà.
             </p>
-            {(presence.online_count != null || presence.total_players != null) && (
+            {(presence.online_count != null
+              || presence.total_players != null
+              || presence.families_count != null
+              || presence.locked_up != null) && (
               <div
-                className="mt-5 flex items-center justify-center gap-3 sm:gap-4 font-heading text-[10px] sm:text-[11px] tracking-wide landing-fade-up-1"
+                className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 sm:gap-x-4 font-heading text-[10px] sm:text-[11px] tracking-wide landing-fade-up-1"
                 data-testid="landing-presence"
                 aria-live="polite"
               >
@@ -541,26 +586,37 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                   <span className="inline-flex items-center gap-1.5">
                     <span
                       className="landing-pulse-dot inline-block h-1.5 w-1.5 rounded-full shrink-0"
-                      style={{ background: '#4ade80', boxShadow: '0 0 8px rgba(74,222,128,0.55)' }}
+                      style={{ background: '#4ade80', boxShadow: '0 0 8px rgba(74,222,128,0.45)' }}
                       aria-hidden
                     />
                     <span className="tabular-nums font-bold" style={{ color: '#4ade80' }}>
                       {presence.online_count.toLocaleString()}
                     </span>
-                    <span style={{ color: 'rgba(245,245,245,0.45)' }}>on the streets</span>
-                  </span>
-                )}
-                {presence.online_count != null && presence.total_players != null && (
-                  <span style={{ color: 'rgba(245,245,245,0.2)' }} aria-hidden>
-                    ·
+                    <span style={{ color: 'rgba(180,190,200,0.42)' }}>on the streets</span>
                   </span>
                 )}
                 {presence.total_players != null && (
                   <span className="inline-flex items-center gap-1.5">
-                    <span className="tabular-nums font-semibold" style={{ color: 'rgba(245,245,245,0.88)' }}>
+                    <span className="tabular-nums font-semibold" style={{ color: 'rgba(210,220,230,0.78)' }}>
                       {presence.total_players.toLocaleString()}
                     </span>
-                    <span style={{ color: 'rgba(245,245,245,0.45)' }}>in the family</span>
+                    <span style={{ color: 'rgba(180,190,200,0.42)' }}>in the family</span>
+                  </span>
+                )}
+                {presence.families_count != null && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="tabular-nums font-semibold" style={{ color: 'rgba(56,189,248,0.85)' }}>
+                      {presence.families_count.toLocaleString()}
+                    </span>
+                    <span style={{ color: 'rgba(180,190,200,0.42)' }}>crews</span>
+                  </span>
+                )}
+                {presence.locked_up != null && (
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className="tabular-nums font-semibold" style={{ color: 'rgba(251,146,60,0.88)' }}>
+                      {presence.locked_up.toLocaleString()}
+                    </span>
+                    <span style={{ color: 'rgba(180,190,200,0.42)' }}>locked up</span>
                   </span>
                 )}
               </div>
@@ -569,16 +625,16 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
 
           {/* Auth form — interaction container only */}
           <div
-            className={`landing-fade-up-2 overflow-hidden rounded-xl border ${styles.panel}`}
+            className={`landing-fade-up-2 landing-auth-panel overflow-hidden rounded-xl border ${styles.panel}`}
             style={{
-              borderColor: 'rgba(var(--noir-primary-rgb,14,165,233),0.22)',
-              background: 'linear-gradient(180deg, rgba(18,16,14,0.92) 0%, rgba(10,10,12,0.94) 100%)',
-              boxShadow: '0 24px 64px rgba(0,0,0,0.55)',
+              borderColor: 'rgba(var(--noir-primary-rgb,14,165,233),0.16)',
+              background: 'linear-gradient(180deg, rgba(14,14,16,0.94) 0%, rgba(8,8,10,0.96) 100%)',
+              boxShadow: '0 24px 64px rgba(0,0,0,0.6)',
             }}
           >
             <div
               className="px-4 pt-4 pb-0 flex gap-1"
-              style={{ borderBottom: '1px solid rgba(var(--noir-primary-rgb,14,165,233),0.12)' }}
+              style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
             >
               <button
                 type="button"
@@ -684,7 +740,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                   <label
                     htmlFor="landing-email"
                     className="block text-[10px] font-heading font-bold uppercase tracking-wider mb-1.5"
-                    style={{ color: 'var(--noir-primary)' }}
+                    style={{ color: 'rgba(56, 189, 248, 0.72)' }}
                   >
                     {isLogin ? 'Email or Username' : 'Email'}
                   </label>
@@ -696,7 +752,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                     data-testid="email-input"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
+                    className={`landing-field w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
                     placeholder={isLogin ? 'Enter your email or username' : 'Enter your email'}
                     required
                   />
@@ -707,7 +763,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                     <label
                       htmlFor="landing-username"
                       className="block text-[10px] font-heading font-bold uppercase tracking-wider mb-1.5"
-                      style={{ color: 'var(--noir-primary)' }}
+                      style={{ color: 'rgba(56, 189, 248, 0.72)' }}
                     >
                       Username
                     </label>
@@ -720,7 +776,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                       value={formData.username}
                       onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                       maxLength={20}
-                      className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
+                      className={`landing-field w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
                       placeholder="Choose a character name (max 20)"
                       required
                     />
@@ -752,7 +808,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                     <label
                       htmlFor="landing-password"
                       className="block text-[10px] font-heading font-bold uppercase tracking-wider"
-                      style={{ color: 'var(--noir-primary)' }}
+                      style={{ color: 'rgba(56, 189, 248, 0.72)' }}
                     >
                       Password
                     </label>
@@ -761,7 +817,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                         type="button"
                         onClick={() => navigate('/forgot-password')}
                         className="text-[9px] font-heading uppercase tracking-wider opacity-60 hover:opacity-100 transition-opacity"
-                        style={{ color: 'var(--noir-primary)' }}
+                        style={{ color: 'rgba(56, 189, 248, 0.72)' }}
                       >
                         Forgot?
                       </button>
@@ -775,7 +831,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                     data-testid="password-input"
                     value={formData.password}
                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                    className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
+                    className={`landing-field w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
                     placeholder={isLogin ? 'Enter your password' : 'Choose a password (min 4 letters or numbers)'}
                     required
                   />
@@ -789,7 +845,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                     <label
                       htmlFor="landing-confirm-password"
                       className="block text-[10px] font-heading font-bold uppercase tracking-wider mb-1.5"
-                      style={{ color: 'var(--noir-primary)' }}
+                      style={{ color: 'rgba(56, 189, 248, 0.72)' }}
                     >
                       Confirm Password
                     </label>
@@ -801,7 +857,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                       data-testid="confirm-password-input"
                       value={formData.confirmPassword}
                       onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                      className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
+                      className={`landing-field w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
                       placeholder="Confirm your password"
                       required
                     />

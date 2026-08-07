@@ -1278,19 +1278,24 @@ def register(router):
                 },
             ]
         }
+        jail_match = {**alive_real, "in_jail": True}
 
         try:
-            online_count, total_players = await asyncio.gather(
+            online_count, total_players, families_count, locked_up = await asyncio.gather(
                 db.users.count_documents(online_match),
                 db.users.count_documents(alive_real),
+                db.families.count_documents({"wiped": {"$ne": True}}),
+                db.users.count_documents(jail_match),
             )
         except Exception:
             logging.exception("landing_presence counts failed")
-            online_count, total_players = 0, 0
+            online_count, total_players, families_count, locked_up = 0, 0, 0, 0
 
         return {
             "online_count": int(online_count or 0),
             "total_players": int(total_players or 0),
+            "families_count": int(families_count or 0),
+            "locked_up": int(locked_up or 0),
         }
 
     @router.post("/auth/login")

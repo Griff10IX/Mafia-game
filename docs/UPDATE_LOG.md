@@ -10,7 +10,7 @@
 [quote]
 [list]
 [*][color=#888888][b]Changed:[/b] Site default accent is now [b]sky blue[/b] (same look as the login page) instead of gold. Classic gold remains available as a theme preset.[/color]
-[*][color=#888888][b]Improved:[/b] Login page shows live [b]on the streets[/b] (users online) and [b]in the family[/b] (alive players) counts under the tagline.[/color]
+[*][color=#888888][b]Improved:[/b] Login page shows live [b]on the streets[/b] (users online), [b]in the family[/b] (alive players), [b]crews[/b], and [b]locked up[/b] counts under the tagline. Form fields use a darker, softer look.[/color]
 [/list]
 [/quote]
 
