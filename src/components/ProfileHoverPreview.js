@@ -1,6 +1,6 @@
 import { User, Target, Building2, Plane, Factory, Mail, Skull, Trophy, Crown, Sparkles } from 'lucide-react';
 import FamilyEmblem from '../FamilyEmblem';
-import styles from '../../styles/noir.module.css';
+import styles from '../styles/noir.module.css';
 
 /**
  * Hover dossier card for Users Online (and similar).
