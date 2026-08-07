@@ -14,7 +14,7 @@
 [*][color=#888888][b]Improved:[/b] Opening another player’s [b]profile[/b] no longer flashes an empty card — you get a proper loading dossier. Profiles also [b]prewarm[/b] on hover/press from Attack, Jail, Users Online, and game chat.[/color]
 [*][color=#888888][b]Improved:[/b] [b]Attack[/b] list polling is lighter under load (less abort/retry spam; slower idle refresh).[/color]
 [*][color=#888888][b]Changed:[/b] Jail — unbustable players show [b]Unbustable[/b] (with countdown) instead of [b]Lock[/b].[/color]
-[*][color=#888888][b]Changed:[/b] Stats → [b]Game Capital → Total cash[/b] now counts [b]alive[/b] cash in the economy (wallets, classic bank, Swiss, interest bank, family treasuries, Quick Trade buy escrow). Staff, NPCs, and [b]dead[/b] accounts are excluded.[/color]
+[*][color=#888888][b]Changed:[/b] Stats → [b]Game Capital → Total cash[/b] now counts [b]alive[/b] cash in the economy (wallets, Swiss, interest bank, family treasuries, Quick Trade buy escrow). Staff, NPCs, and [b]dead[/b] accounts are excluded.[/color]
 [/list]
 [/quote]
 

@@ -320,17 +320,12 @@ function buildGameCapitalRows(data) {
       label: 'Total cash',
       value: formatMoney(gc?.total_cash),
       title:
-        'All cash in the game economy excl. staff/NPC/dead: alive player wallets, classic bank, Swiss bank, interest-bank deposits, family treasuries, and Quick Trade buy-offer escrow. Breakdown rows below are included in this total (except booze profit / store spend / bullets).',
+        'All cash in the game economy excl. staff/NPC/dead: alive player wallets, Swiss bank, interest-bank deposits, family treasuries, and Quick Trade buy-offer escrow. Breakdown rows below are included in this total (except booze profit / store spend / bullets).',
     },
     {
       label: 'Wallets (on hand)',
       value: formatMoney(gc?.wallets_total),
       title: 'Cash on hand for alive real players, excl. staff/NPC. Included in Total cash.',
-    },
-    {
-      label: 'Classic bank',
-      value: formatMoney(gc?.classic_bank_total),
-      title: 'users.bank_balance for alive real players (excl. staff). Included in Total cash.',
     },
     {
       label: 'Swiss bank cash',
