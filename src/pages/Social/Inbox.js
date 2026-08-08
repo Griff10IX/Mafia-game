@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift, Trash2, MessageCircle, Send, X, ChevronRight, Bot } from 'lucide-react';
+import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift, Trash2, MessageCircle, Send, X, ChevronRight, Bot, Smile } from 'lucide-react';
 import api, { apiGetWithResumeRetries } from '../../utils/api';
 import { toast } from 'sonner';
 import GifPicker from '../../components/GifPicker';
@@ -121,11 +121,17 @@ const ComposeModal = ({
   gifPickerOnSelect,
   gifPickerOnClose,
 }) => {
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) setShowEmojiPicker(false);
+  }, [isOpen]);
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-2 bg-black/80 backdrop-blur-sm">
-      <div className={`${styles.panel} rounded-md border-2 border-primary/30 shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col`}>
+      <div className={`${styles.panel} rounded-md border-2 border-primary/30 shadow-2xl w-full max-w-2xl max-h-[calc(100dvh-1rem)] sm:max-h-[90vh] overflow-hidden flex flex-col`}>
         {/* Header */}
         <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
@@ -142,7 +148,7 @@ const ComposeModal = ({
         </div>
 
         {/* Form */}
-        <form onSubmit={onSendMessage} className="p-2 space-y-2 overflow-y-auto">
+        <form onSubmit={onSendMessage} className="p-2 space-y-2 overflow-y-auto overscroll-contain">
           <div>
             <label className="block text-[10px] font-heading text-mutedForeground mb-1">
               To
@@ -165,34 +171,51 @@ const ComposeModal = ({
               value={sendMessage}
               onChange={(e) => onSendMessageChange(e.target.value)}
               placeholder="Type your message… [b]bold[/b], [url]https://…[/url], [img]https://…[/img]"
-              rows={3}
-              className="w-full bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y transition-colors"
+              rows={5}
+              className="w-full min-h-32 bg-input border border-border rounded px-2 py-1.5 text-[11px] text-foreground placeholder:text-mutedForeground focus:border-primary/50 focus:outline-none resize-y transition-colors"
             />
-            <div className="mt-1 flex flex-wrap gap-0.5">
-              {/* Classic forum smileys first */}
-              {CLASSIC_SMILEYS.map(({ code, img }) => (
-                <button
-                  key={code}
-                  type="button"
-                  onClick={() => onInsertEmoji(code)}
-                  className="p-1 rounded hover:bg-primary/20 active:scale-95 transition-all hover:scale-110"
-                  title={code}
-                >
-                  <img src={`/images/smileys/${img}.png`} alt={code} className="object-contain shrink-0" style={{ width: FORUM_INLINE_SMILEY_PX, height: FORUM_INLINE_SMILEY_PX }} />
-                </button>
-              ))}
-              {/* Modern emojis */}
-              {EMOJI_ROWS.flat().map((emoji) => (
-                <button
-                  key={emoji}
-                  type="button"
-                  onClick={() => onInsertEmoji(emoji)}
-                  className="text-sm p-1 rounded hover:bg-primary/20 active:scale-95 transition-all"
-                >
-                  {emoji}
-                </button>
-              ))}
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowEmojiPicker((visible) => !visible)}
+              className="mt-1 min-h-11 sm:min-h-8 px-2 flex items-center gap-1.5 rounded text-[10px] font-heading text-mutedForeground hover:text-primary hover:bg-primary/10 touch-manipulation"
+              aria-expanded={showEmojiPicker}
+              aria-controls="compose-message-emoji-picker"
+            >
+              <Smile size={16} />
+              {showEmojiPicker ? 'Hide emojis' : 'Add emoji'}
+            </button>
+            {showEmojiPicker && (
+              <div
+                id="compose-message-emoji-picker"
+                className="mt-1 flex flex-wrap content-start gap-0.5 max-h-36 overflow-y-auto overscroll-contain border-t border-primary/10 pt-1"
+              >
+                {/* Classic forum smileys first */}
+                {CLASSIC_SMILEYS.map(({ code, img }) => (
+                  <button
+                    key={code}
+                    type="button"
+                    onClick={() => onInsertEmoji(code)}
+                    className="p-2 min-w-10 min-h-10 rounded hover:bg-primary/20 active:scale-95 transition-all hover:scale-110 touch-manipulation"
+                    title={code}
+                    aria-label={code}
+                  >
+                    <img src={`/images/smileys/${img}.png`} alt={code} className="object-contain shrink-0" style={{ width: FORUM_INLINE_SMILEY_PX, height: FORUM_INLINE_SMILEY_PX }} />
+                  </button>
+                ))}
+                {/* Modern emojis */}
+                {EMOJI_ROWS.flat().map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => onInsertEmoji(emoji)}
+                    className="text-lg p-2 min-w-10 min-h-10 rounded hover:bg-primary/20 active:scale-95 transition-all touch-manipulation"
+                    aria-label={`Insert ${emoji}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
           
           <div>

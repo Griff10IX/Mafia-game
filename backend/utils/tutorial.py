@@ -6,6 +6,8 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
+from utils.redeem_code_lifecycle import apply_redeem_code, RedeemCodeError
+
 logger = logging.getLogger(__name__)
 
 TUTORIAL_STEPS = (
@@ -27,6 +29,7 @@ TUTORIAL_RESPECT_REWARD = 3000
 TUTORIAL_ROBOT_COUNT = 2
 TUTORIAL_CLAIMS_COLLECTION = "tutorial_reward_claims"
 TUTORIAL_REDIRECT = "/money/loot-box?tier=rare&tutorial=1"
+TUTORIAL_WELCOME_REDEEM_CODE = "WELCOMECODE"
 # game_config id — default OFF so staff can test via Admin before enabling for all new players.
 TUTORIAL_CONFIG_ID = "new_player_tutorial"
 TUTORIAL_ENABLED_DEFAULT = False
@@ -449,6 +452,24 @@ async def grant_tutorial_completion_rewards(
     except Exception:
         logger.exception("tutorial robot grant failed user_id=%s", user_id)
 
+    welcome_redemption = None
+    try:
+        redeem_user = await db.users.find_one(
+            {"id": user_id},
+            {"_id": 0, "id": 1, "redeemed_codes": 1},
+        )
+        if redeem_user:
+            welcome_redemption = await apply_redeem_code(
+                db,
+                redeem_user,
+                TUTORIAL_WELCOME_REDEEM_CODE,
+            )
+    except RedeemCodeError:
+        # The optional welcome code may be inactive, exhausted, or already redeemed.
+        pass
+    except Exception:
+        logger.exception("tutorial welcome-code redemption failed user_id=%s", user_id)
+
     try:
         await send_notification(
             user_id,
@@ -462,12 +483,29 @@ async def grant_tutorial_completion_rewards(
     except Exception:
         logger.exception("tutorial reward notification failed user_id=%s", user_id)
 
+    if welcome_redemption:
+        granted_text = ", ".join(welcome_redemption.get("granted") or [])
+        message = f"{TUTORIAL_WELCOME_REDEEM_CODE} was redeemed automatically"
+        if granted_text:
+            message += f". You received {granted_text}"
+        message += "."
+        try:
+            await send_notification(
+                user_id,
+                "Welcome code redeemed",
+                message,
+                "reward",
+            )
+        except Exception:
+            logger.exception("tutorial welcome-code notification failed user_id=%s", user_id)
+
     return {
         "granted": True,
         "respect": TUTORIAL_RESPECT_REWARD,
         "robots_hired": len(robots),
         "robots": robots,
         "free_rare_box": True,
+        "welcome_code_redeemed": bool(welcome_redemption),
         "redirect": TUTORIAL_REDIRECT,
         "loot_box_free_rare_opens": 1,
     }
