@@ -75,14 +75,13 @@ MONTHLY_REWARD_MULTIPLIER = 15
 # ─────────────────────────────────────────────────────────────────────────────
 OBJECTIVE_TYPES_LIFETIME = [
     {"id": "crimes", "label": "Commit 1,000,000 crimes", "target": 1_000_000, "progress_key": "total_crimes"},
-    {"id": "gta", "label": "Complete 500,000 GTAs", "target": 500_000, "progress_key": "total_gta"},
+    {"id": "gta", "label": "Complete 100,000 GTAs", "target": 100_000, "progress_key": "total_gta"},
     {"id": "oc", "label": "Complete 1,000 Organised Crimes", "target": 1_000, "progress_key": "total_oc_heists"},
-    {"id": "busts", "label": "Bust 1,000,000 players/NPCs from jail", "target": 1_000_000, "progress_key": "jail_busts"},
+    {"id": "busts", "label": "Bust 500,000 players/NPCs from jail", "target": 500_000, "progress_key": "jail_busts"},
     {"id": "melt", "label": "Melt 5,000,000 bullets", "target": 5_000_000, "progress_key": "bullets_melted"},
     {"id": "crime_profit", "label": "Earn $1,500,000,000 from crimes", "target": 1_500_000_000, "progress_key": "crime_profit"},
-    {"id": "respect", "label": "Earn 250,000 respect points", "target": 250_000, "progress_key": "lifetime_respect_earned"},
+    {"id": "respect", "label": "Earn 80,000 respect points", "target": 80_000, "progress_key": "lifetime_respect_earned"},
     {"id": "booze", "label": "Complete 100,000 booze runs", "target": 100_000, "progress_key": "booze_runs_count"},
-    {"id": "minigames", "label": "Play 1,000 minigames", "target": 1_000, "progress_key": "minigame_plays"},
     {"id": "hitlist_npc", "label": "Kill 1,000 hitlist NPCs", "target": 1_000, "progress_key": "hitlist_npc_kills"},
 ]
 
@@ -347,10 +346,6 @@ async def _get_lifetime_progress(user_id: str, user: dict) -> dict:
     ]
     result = await db.respect_events.aggregate(pipeline).to_list(1)
     progress["lifetime_respect_earned"] = int(result[0]["total"]) if result else 0
-    
-    # Count minigame plays from minigame_plays collection
-    minigame_count = await db.minigame_plays.count_documents({"user_id": user_id})
-    progress["minigame_plays"] = minigame_count
     
     return progress
 

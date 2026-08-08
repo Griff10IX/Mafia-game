@@ -1253,11 +1253,13 @@ def register(router):
         Public (no auth): coarse presence counts for the login page.
         Online ≈ same window as Users Online roster (last_seen / auto-rank / force-online),
         including visible staff while excluding staff in ghost mode.
-        Total = alive real players excl. staff/NPC. No usernames returned.
+        Weekly = accounts active in the last seven days using the same visibility rules.
+        No usernames returned.
         """
         now = datetime.now(timezone.utc)
         now_iso = now.isoformat()
         online_cutoff = (now - timedelta(minutes=5)).isoformat()
+        week_cutoff = (now - timedelta(days=7)).isoformat()
         staff_ids = srv.expand_user_ids_for_mongo_nin(await srv._get_staff_user_ids())
         staff_filter = srv._staff_exclude_user_filter(with_email_nor=not bool(staff_ids))
         alive_real = {"is_npc": {"$ne": True}, "is_dead": {"$ne": True}, **staff_filter}
@@ -1269,36 +1271,41 @@ def register(router):
             "is_dead": {"$ne": True},
             "admin_ghost_mode": {"$ne": True},
         }
-        online_match = {
-            "$and": [
-                online_visible,
-                {
-                    "is_bodyguard": {"$ne": True},
-                    "username": {"$regex": r"\S"},
-                    "$or": [
-                        {"last_seen": {"$gte": online_cutoff}},
-                        {"$and": [{"auto_rank_enabled": True}, {"auto_rank_idle": {"$ne": True}}]},
-                        {"forced_online_until": {"$gt": now_iso}},
-                    ],
-                },
-            ]
-        }
+
+        def visible_activity_match(cutoff_iso: str) -> dict:
+            return {
+                "$and": [
+                    online_visible,
+                    {
+                        "is_bodyguard": {"$ne": True},
+                        "username": {"$regex": r"\S"},
+                        "$or": [
+                            {"last_seen": {"$gte": cutoff_iso}},
+                            {"$and": [{"auto_rank_enabled": True}, {"auto_rank_idle": {"$ne": True}}]},
+                            {"forced_online_until": {"$gt": now_iso}},
+                        ],
+                    },
+                ]
+            }
+
+        online_match = visible_activity_match(online_cutoff)
+        active_week_match = visible_activity_match(week_cutoff)
         jail_match = {**alive_real, "in_jail": True}
 
         try:
-            online_count, total_players, families_count, locked_up = await asyncio.gather(
+            online_count, active_last_week, families_count, locked_up = await asyncio.gather(
                 db.users.count_documents(online_match),
-                db.users.count_documents(alive_real),
+                db.users.count_documents(active_week_match),
                 db.families.count_documents({"wiped": {"$ne": True}}),
                 db.users.count_documents(jail_match),
             )
         except Exception:
             logging.exception("landing_presence counts failed")
-            online_count, total_players, families_count, locked_up = 0, 0, 0, 0
+            online_count, active_last_week, families_count, locked_up = 0, 0, 0, 0
 
         return {
             "online_count": int(online_count or 0),
-            "total_players": int(total_players or 0),
+            "active_last_week": int(active_last_week or 0),
             "families_count": int(families_count or 0),
             "locked_up": int(locked_up or 0),
         }

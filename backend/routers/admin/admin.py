@@ -511,6 +511,10 @@ class ClearUserJailBustRewardRequest(BaseModel):
     user_id: str
 
 
+class AdminVerifyUserEmailRequest(BaseModel):
+    user_id: str
+
+
 class InactivityReminderEmailRequest(BaseModel):
     user_id: str
 
@@ -18404,6 +18408,61 @@ def register(router):
 
         staff_email = await resolve_staff_email_context(db, user)
         return {"user": user, "staff_email": staff_email, "dice_owned": dice_owned, "casinos_owned": casinos_owned}
+
+    @router.post("/admin/users/verify-email")
+    async def admin_verify_user_email(
+        body: AdminVerifyUserEmailRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Mark a user's email as verified without granting verification-link rewards. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        user_id = (body.user_id or "").strip()
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id is required")
+        user = await db.users.find_one(
+            {"id": user_id},
+            {"_id": 0, "id": 1, "username": 1, "email": 1, "email_verified": 1},
+        )
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        email = (user.get("email") or "").strip()
+        if not email:
+            raise HTTPException(status_code=400, detail="User has no email address")
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        admin_identity = current_user.get("email") or current_user.get("username") or current_user.get("id") or "?"
+        await db.users.update_one(
+            {"id": user_id},
+            {
+                "$set": {
+                    "email_verified": True,
+                    "email_verified_by_admin_at": now_iso,
+                    "email_verified_by_admin": admin_identity,
+                }
+            },
+        )
+        await db.email_verifications.delete_many({"user_id": user_id})
+        try:
+            from utils.auto_rank_email_entitlement import sync_auto_rank_email_entitlement_to_user
+
+            await sync_auto_rank_email_entitlement_to_user(db, user_id, email)
+        except Exception:
+            logging.exception("Admin email verification entitlement sync failed user_id=%s", user_id)
+        logging.info(
+            "Admin marked email verified: target_user_id=%s username=%s email=%s previously_verified=%s by=%s",
+            user_id,
+            user.get("username"),
+            email,
+            user.get("email_verified") is not False,
+            admin_identity,
+        )
+        return {
+            "message": f"Email marked verified for {user.get('username')}",
+            "user_id": user_id,
+            "username": user.get("username"),
+            "email_verified": True,
+        }
 
     @router.post("/admin/users/inactivity-reminder-email")
     async def admin_send_inactivity_reminder_email(

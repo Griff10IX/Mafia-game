@@ -1561,6 +1561,11 @@ export default function Profile() {
     const reqId = ++profileRequestIdRef.current;
     if (forceLoading) setLoading(true);
     setProfileLoadError('');
+    const cachedHonours = getProfilePrefetch(targetUsername)?.honours;
+    const honoursPromise = api
+      .get(`/users/${encodeURIComponent(targetUsername)}/profile/honours`)
+      .then((res) => ({ loaded: true, honours: res.data?.honours ?? [] }))
+      .catch(() => ({ loaded: false, honours: cachedHonours ?? [] }));
     let mainPaintDone = false;
     try {
       const profileRes = await apiGetWithResumeRetries(
@@ -1568,7 +1573,11 @@ export default function Profile() {
         { params: { include_honours: false } },
       );
       if (reqId !== profileRequestIdRef.current) return null;
-      const base = { ...profileRes.data, honours: profileRes.data?.honours ?? [] };
+      const base = {
+        ...profileRes.data,
+        honours: profileRes.data?.honours ?? cachedHonours ?? [],
+        _honoursLoaded: false,
+      };
       setProfile(base);
       setProfilePrefetch(targetUsername, base);
       mainPaintDone = true;
@@ -1577,15 +1586,13 @@ export default function Profile() {
       }
 
       (async () => {
-        let honoursList = [];
-        try {
-          const honoursRes = await api.get(`/users/${encodeURIComponent(targetUsername)}/profile/honours`);
-          honoursList = honoursRes.data?.honours ?? [];
-        } catch {
-          honoursList = [];
-        }
+        const honoursResult = await honoursPromise;
         if (reqId !== profileRequestIdRef.current) return;
-        const merged = { ...base, honours: honoursList };
+        const merged = {
+          ...base,
+          honours: honoursResult.honours,
+          _honoursLoaded: honoursResult.loaded,
+        };
         setProfile((prev) => {
           if (!prev) return merged;
           if (String(prev.username || '').trim().toLowerCase() !== targetKey) return prev;

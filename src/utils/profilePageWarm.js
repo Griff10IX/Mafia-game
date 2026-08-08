@@ -43,6 +43,7 @@ export async function prefetchProfilePageData(options = {}) {
     setProfilePrefetch(u, {
       ...profRes.data,
       honours: honRes.data?.honours ?? [],
+      _honoursLoaded: true,
     });
   } catch {
     /* Profile page loads normally */

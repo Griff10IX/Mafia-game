@@ -1068,6 +1068,7 @@ export default function Admin() {
   const [sendingMessageTo, setSendingMessageTo] = useState(null);
   const [userDetailData, setUserDetailData] = useState(null);
   const [userDetailLoading, setUserDetailLoading] = useState(false);
+  const [userEmailVerifyLoading, setUserEmailVerifyLoading] = useState(false);
   const [takeoverCasinoAssignUsername, setTakeoverCasinoAssignUsername] = useState('');
   const [exclusiveLootOwners, setExclusiveLootOwners] = useState(null);
   const [exclusiveLootLoading, setExclusiveLootLoading] = useState(false);
@@ -8987,6 +8988,26 @@ export default function Admin() {
           );
         };
 
+        const handleVerifyEmailClick = async () => {
+          const em = (u.email || '').trim();
+          if (!em) {
+            toast.error('User has no email on file');
+            return;
+          }
+          if (!window.confirm(`Mark ${em} (${u.username}) as verified? This will not grant email-verification rewards.`)) return;
+          setUserEmailVerifyLoading(true);
+          try {
+            await api.post('/admin/users/verify-email', { user_id: u.id });
+            toast.success('Email marked as verified');
+            await openUserDetail({ id: u.id });
+          } catch (e) {
+            const detail = e.response?.data?.detail;
+            toast.error(typeof detail === 'string' ? detail : 'Failed to verify email');
+          } finally {
+            setUserEmailVerifyLoading(false);
+          }
+        };
+
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setUserDetailData(null)}>
             <div className="bg-zinc-900 border border-primary/30 rounded-lg shadow-xl max-w-3xl w-full max-h-[92vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
@@ -9026,7 +9047,26 @@ export default function Admin() {
                     ) : null}
                     <Row label="User ID" value={u.id} fullWidth />
                     <Row label="Created" value={fmtDate(u.created_at)} />
-                    <Row label="Email verified" value={u.email_verified === false ? 'No' : 'Yes'} />
+                    <Row
+                      label="Email verified"
+                      value={
+                        u.email_verified === false ? (
+                          <span className="inline-flex items-center gap-2">
+                            <span className="text-red-300">No</span>
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                disabled={userEmailVerifyLoading || !u.id || !(u.email || '').trim()}
+                                onClick={handleVerifyEmailClick}
+                                className="px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-emerald-500/50 text-emerald-300 hover:bg-emerald-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
+                              >
+                                {userEmailVerifyLoading ? 'Verifying…' : 'Mark verified'}
+                              </button>
+                            )}
+                          </span>
+                        ) : 'Yes'
+                      }
+                    />
                     <Row label="Dead" value={u.is_dead ? 'Yes' : 'No'} />
                     <Row label="NPC" value={u.is_npc ? 'Yes' : 'No'} />
                     <Row label="Bodyguard" value={u.is_bodyguard ? 'Yes' : 'No'} />

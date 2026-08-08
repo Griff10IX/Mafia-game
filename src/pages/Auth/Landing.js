@@ -108,7 +108,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
   const [loginTurnstileWidgetKey, setLoginTurnstileWidgetKey] = useState(0);
   const [presence, setPresence] = useState({
     online_count: null,
-    total_players: null,
+    active_last_week: null,
     families_count: null,
     locked_up: null,
   });
@@ -139,7 +139,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
           const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
           setPresence({
             online_count: num(d.online_count),
-            total_players: num(d.total_players),
+            active_last_week: num(d.active_last_week),
             families_count: num(d.families_count),
             locked_up: num(d.locked_up),
           });
@@ -574,7 +574,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
               Build your empire. Enforce omertà.
             </p>
             {(presence.online_count != null
-              || presence.total_players != null
+              || presence.active_last_week != null
               || presence.families_count != null
               || presence.locked_up != null) && (
               <div
@@ -595,12 +595,12 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                     <span style={{ color: 'rgba(180,190,200,0.42)' }}>on the streets</span>
                   </span>
                 )}
-                {presence.total_players != null && (
+                {presence.active_last_week != null && (
                   <span className="inline-flex items-center gap-1.5">
                     <span className="tabular-nums font-semibold" style={{ color: 'rgba(210,220,230,0.78)' }}>
-                      {presence.total_players.toLocaleString()}
+                      {presence.active_last_week.toLocaleString()}
                     </span>
-                    <span style={{ color: 'rgba(180,190,200,0.42)' }}>in the family</span>
+                    <span style={{ color: 'rgba(180,190,200,0.42)' }}>online this week</span>
                   </span>
                 )}
                 {presence.families_count != null && (
