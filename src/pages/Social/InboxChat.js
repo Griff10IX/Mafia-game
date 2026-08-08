@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Send } from 'lucide-react';
+import { ArrowLeft, Send, Smile } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import GifPicker from '../../components/GifPicker';
@@ -80,6 +80,7 @@ export default function InboxChat() {
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [censorProfanity, setCensorProfanity] = useState(false);
   const messagesEndRef = useRef(null);
   const scrollContainerRef = useRef(null);
@@ -153,7 +154,7 @@ export default function InboxChat() {
   };
 
   return (
-    <div data-chat-surface="inbox" className={`${styles.pageContent} flex flex-col h-[calc(100vh-10rem)] max-h-[700px] min-h-[320px] mobile-page-root`}>
+    <div data-chat-surface="inbox" className={`${styles.pageContent} flex flex-col h-[calc(100dvh-8rem)] sm:h-[calc(100vh-10rem)] max-h-[700px] min-h-[320px] mobile-page-root`}>
       <style>{`
         [data-chat-surface="inbox"] [data-chat-part="message-text"] .inline-smiley {
           width: ${FORUM_INLINE_SMILEY_PX}px !important;
@@ -245,7 +246,7 @@ export default function InboxChat() {
       <form
         onSubmit={handleSend}
         data-chat-part="composer"
-        className={`p-3 border-t border-primary/20 ${styles.panel} shrink-0`}
+        className={`p-2.5 sm:p-3 border-t border-primary/20 ${styles.panel} shrink-0`}
       >
         {showGifPicker && (
           <div className="mb-2">
@@ -255,12 +256,12 @@ export default function InboxChat() {
             />
           </div>
         )}
-        <div className="flex gap-2 mb-2">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             data-chat-part="aux-btn"
             onClick={() => setShowGifPicker((v) => !v)}
-            className="shrink-0 w-10 h-10 rounded-full border border-primary/30 text-primary flex items-center justify-center hover:bg-primary/10 transition-colors"
+            className="shrink-0 w-11 h-11 sm:w-10 sm:h-10 rounded-full border border-primary/30 text-primary flex items-center justify-center hover:bg-primary/10 transition-colors touch-manipulation"
             title="Search GIFs"
             aria-label="GIF"
           >
@@ -272,47 +273,62 @@ export default function InboxChat() {
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
             placeholder="Message… [b]bold[/b], [i]italic[/i], [url]https://…[/url], [img]https://…[/img]"
-            className={`flex-1 ${styles.input} rounded-2xl px-4 py-2.5 text-sm font-heading border border-primary/30 focus:border-primary/60 focus:outline-none`}
+            className={`min-w-0 flex-1 h-11 sm:h-10 ${styles.input} rounded-2xl px-3 sm:px-4 py-2.5 text-sm font-heading border border-primary/30 focus:border-primary/60 focus:outline-none`}
             disabled={sending}
           />
           <button
             type="submit"
             data-chat-part="send"
             disabled={sending || !replyText.trim()}
-            className="shrink-0 w-10 h-10 rounded-full bg-primary/20 text-primary border border-primary/40 flex items-center justify-center hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity font-heading"
+            className="shrink-0 w-11 h-11 sm:w-10 sm:h-10 rounded-full bg-primary/20 text-primary border border-primary/40 flex items-center justify-center hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity font-heading touch-manipulation"
             aria-label="Send"
           >
             <Send size={18} />
           </button>
         </div>
-        <div className="flex flex-wrap items-center gap-1">
-          {/* Classic forum smileys first */}
-          {CLASSIC_SMILEYS.map(({ code, img }) => (
-            <button
-              key={code}
-              type="button"
-              onClick={() => insertEmoji(code)}
-              className="leading-none p-1.5 rounded hover:bg-primary/20 transition-all focus:outline-none focus:ring-1 focus:ring-primary/50 hover:scale-110"
-              title={code}
-              aria-label={code}
-            >
-              <img src={`${SMILEY_IMG_BASE}/${img}.png`} alt={code} className="object-contain shrink-0" style={{ width: FORUM_INLINE_SMILEY_PX, height: FORUM_INLINE_SMILEY_PX }} />
-            </button>
-          ))}
-          {/* Modern emojis */}
-          {CHAT_EMOJIS.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              onClick={() => insertEmoji(emoji)}
-              className="text-lg leading-none p-1.5 rounded hover:bg-primary/20 transition-all focus:outline-none focus:ring-1 focus:ring-primary/50"
-              title="Insert emoji"
-              aria-label="Insert emoji"
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
+        <button
+          type="button"
+          onClick={() => setShowEmojiPicker((visible) => !visible)}
+          className="mt-2 min-h-11 sm:min-h-8 px-2.5 flex items-center gap-1.5 rounded-md text-xs font-heading text-mutedForeground hover:text-primary hover:bg-primary/10 touch-manipulation"
+          aria-expanded={showEmojiPicker}
+          aria-controls="inbox-chat-emoji-picker"
+        >
+          <Smile size={18} />
+          {showEmojiPicker ? 'Hide emojis' : 'Add emoji'}
+        </button>
+        {showEmojiPicker && (
+          <div
+            id="inbox-chat-emoji-picker"
+            className="flex flex-wrap items-center content-start gap-1 max-h-40 overflow-y-auto overscroll-contain border-t border-primary/10 pt-2"
+          >
+            {/* Classic forum smileys first */}
+            {CLASSIC_SMILEYS.map(({ code, img }) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => insertEmoji(code)}
+                className="leading-none p-2 min-w-10 min-h-10 rounded hover:bg-primary/20 transition-all focus:outline-none focus:ring-1 focus:ring-primary/50 hover:scale-110 touch-manipulation"
+                title={code}
+                aria-label={code}
+              >
+                <img src={`${SMILEY_IMG_BASE}/${img}.png`} alt={code} className="object-contain shrink-0" style={{ width: FORUM_INLINE_SMILEY_PX, height: FORUM_INLINE_SMILEY_PX }} />
+              </button>
+            ))}
+            {/* Modern emojis */}
+            {CHAT_EMOJIS.map((emoji) => (
+              <button
+                key={emoji}
+                type="button"
+                onClick={() => insertEmoji(emoji)}
+                className="text-lg leading-none p-2 min-w-10 min-h-10 rounded hover:bg-primary/20 transition-all focus:outline-none focus:ring-1 focus:ring-primary/50 touch-manipulation"
+                title="Insert emoji"
+                aria-label="Insert emoji"
+              >
+                {emoji}
+              </button>
+            ))}
+          </div>
+        )}
       </form>
     </div>
   );
