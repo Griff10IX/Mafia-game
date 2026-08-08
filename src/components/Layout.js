@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, Fragment, lazy, Suspense } from 'react';
 import { Link, useNavigate, useLocation, useNavigationType } from 'react-router-dom';
 import { SAME_ROUTE_NAV_CLICK } from '../constants/navigationEvents';
 import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Grid3x3, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb, Flame, Leaf } from 'lucide-react';
@@ -39,6 +39,8 @@ import FamilyCommandCenter from './FamilyCommandCenter';
 import DeathScreen from './DeathScreen';
 import FamilyEmblem from './FamilyEmblem';
 import styles from '../styles/noir.module.css';
+
+const LazyGameChat = lazy(() => import('./GameChat'));
 
 function readLayoutBootFromDashboardCache() {
   const row = readDashboardSessionCache();
@@ -3427,6 +3429,17 @@ export default function Layout({ children }) {
             </div>
           )}
         </div>
+      )}
+
+      {user && !String(location.pathname || '').startsWith('/tjjeujr3wa') && (
+        <Suspense fallback={null}>
+          <LazyGameChat
+            currentUsername={user.username}
+            censorProfanity={user.censor_profanity === true}
+            canClearChat={isAdmin || isModerator}
+            mobileBottomClearance={mobileNavStyle === 'bottom'}
+          />
+        </Suspense>
       )}
 
       <ThemePicker open={themePickerOpen} onClose={() => setThemePickerOpen(false)} />

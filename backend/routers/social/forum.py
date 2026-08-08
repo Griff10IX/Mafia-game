@@ -14,6 +14,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, _is_admin, _is_moderator, _is_hdo, log_activity, send_notification, ADMIN_EMAILS, require_staff_issued_if_staff_capable
 from utils.text import strip_emoji
+from utils.mentions import extract_mention_usernames, resolve_usernames_to_ids
 from utils.sustained_page_ratelimit import PAGE_KEY_FORUM, check_sustained_page_rl
 from utils.ensure_update_log_topic import (
     current_update_log_hashes,
@@ -100,56 +101,6 @@ def _parse_iso_datetime(s):
         return dt
     except Exception:
         return None
-
-
-async def _resolve_usernames_to_ids(usernames) -> dict:
-    """
-    Map lowercased username -> user id for staff color resolve.
-    Prefer exact $in (uses users.username index); only regex-fallback for case mismatches.
-    """
-    unique = []
-    seen = set()
-    for raw in usernames or []:
-        u = (raw or "").strip()
-        if not u:
-            continue
-        key = u.lower()
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(u)
-    if not unique:
-        return {}
-
-    by_lower = {}
-    resolved = await db.users.find(
-        {"username": {"$in": unique}},
-        {"_id": 0, "id": 1, "username": 1},
-    ).to_list(len(unique) + 1)
-    for row in resolved or []:
-        uname = (row.get("username") or "").strip()
-        uid = row.get("id")
-        if uname and uid:
-            by_lower[uname.lower()] = uid
-
-    missing = [u for u in unique if u.lower() not in by_lower]
-    if missing:
-        # Rare path: stored casing differs from denormalized author_username.
-        or_clauses = [
-            {"username": re.compile("^" + re.escape(u) + "$", re.IGNORECASE)}
-            for u in missing
-        ]
-        more = await db.users.find(
-            {"$or": or_clauses},
-            {"_id": 0, "id": 1, "username": 1},
-        ).to_list(len(missing) + 1)
-        for row in more or []:
-            uname = (row.get("username") or "").strip()
-            uid = row.get("id")
-            if uname and uid:
-                by_lower[uname.lower()] = uid
-
-    return by_lower
 
 
 MOD_DEFAULT = "#1e3a5f"
@@ -543,7 +494,7 @@ async def get_topics(
         if (t.get("author_username") or "").strip()
     ))
     if usernames_to_resolve:
-        by_lower = await _resolve_usernames_to_ids(usernames_to_resolve)
+        by_lower = await resolve_usernames_to_ids(db, usernames_to_resolve)
         for uname in usernames_to_resolve:
             key = (uname or "").strip().lower()
             uid = by_lower.get(key)
@@ -702,7 +653,7 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
             usernames_to_resolve.append((c.get("author_username") or "").strip())
     username_to_id = {}
     if usernames_to_resolve:
-        by_lower = await _resolve_usernames_to_ids(usernames_to_resolve)
+        by_lower = await resolve_usernames_to_ids(db, usernames_to_resolve)
         for uname in set(usernames_to_resolve):
             key = (uname or "").strip().lower()
             uid = by_lower.get(key)
@@ -925,20 +876,6 @@ async def create_topic(
     return {"id": topic_id, "message": "Topic created", "topic": {**doc, "_id": 0}}
 
 
-def _extract_mention_usernames(text: str) -> List[str]:
-    """Extract @Username mentions from text (alphanumeric + underscore). Returns unique usernames."""
-    if not text:
-        return []
-    seen = set()
-    out = []
-    for m in re.finditer(r"@([A-Za-z0-9_]+)", text):
-        u = (m.group(1) or "").strip()
-        if u and u not in seen:
-            seen.add(u)
-            out.append(u)
-    return out
-
-
 async def add_comment(
     topic_id: str,
     request: CommentCreate,
@@ -1031,9 +968,9 @@ async def add_comment(
             actor_username=author_username,
         )
         notified_ids.add(reply_to_author_id)
-    mention_names = list(dict.fromkeys(_extract_mention_usernames(content)))
+    mention_names = extract_mention_usernames(content)
     if mention_names:
-        by_lower_ids = await _resolve_usernames_to_ids(mention_names)
+        by_lower_ids = await resolve_usernames_to_ids(db, mention_names)
         for username in mention_names:
             key = (username or "").strip().lower()
             uid = by_lower_ids.get(key)

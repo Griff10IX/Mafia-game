@@ -35,6 +35,19 @@ import GlowPresetPicker from '../../components/GlowPresetPicker';
 
 const PROFILE_EDIT_TAB_IDS = new Set(['look', 'text', 'alerts', 'privacy', 'account', 'staff']);
 const PROFILE_EDIT_TAB_KEY = 'profile_edit_tab';
+const DEFAULT_NOTIFICATION_PREFERENCES = {
+  ent_games: true,
+  oc_invites: true,
+  attacks: true,
+  system: true,
+  quicktrade: true,
+  messages: true,
+  forum_topic_reply: true,
+  forum_comment_reply: true,
+  forum_mention: true,
+  game_chat_mention: true,
+  designer_comp: true,
+};
 const readStoredProfileEditTab = () => {
   try {
     const t = sessionStorage.getItem(PROFILE_EDIT_TAB_KEY);
@@ -1500,7 +1513,7 @@ export default function Profile() {
   const [staffLoginSession, setStaffLoginSession] = useState(false);
   const [staffPortalEnabled, setStaffPortalEnabled] = useState(false);
   const [staffPortalSessionMin, setStaffPortalSessionMin] = useState(30);
-  const [prefs, setPrefs] = useState({ ent_games: true, oc_invites: true, attacks: true, system: true, quicktrade: true, messages: true, forum_topic_reply: true, forum_comment_reply: true, forum_mention: true, designer_comp: true });
+  const [prefs, setPrefs] = useState(DEFAULT_NOTIFICATION_PREFERENCES);
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [toastMutedPages, setToastMutedPagesState] = useState(() => getToastMutedPages());
   const [savingToastMutes, setSavingToastMutes] = useState(false);
@@ -1886,9 +1899,9 @@ export default function Profile() {
   const fetchPrefs = async () => {
     try {
       const res = await api.get('/profile/preferences');
-      setPrefs(res.data?.notification_preferences || { ent_games: true, oc_invites: true, attacks: true, system: true, quicktrade: true, messages: true, forum_topic_reply: true, forum_comment_reply: true, forum_mention: true, designer_comp: true });
+      setPrefs({ ...DEFAULT_NOTIFICATION_PREFERENCES, ...(res.data?.notification_preferences || {}) });
     } catch (_) {
-      setPrefs({ ent_games: true, oc_invites: true, attacks: true, system: true, quicktrade: true, messages: true, forum_topic_reply: true, forum_comment_reply: true, forum_mention: true, designer_comp: true });
+      setPrefs(DEFAULT_NOTIFICATION_PREFERENCES);
     }
   };
   const fetchToastPagePrefs = async () => {
@@ -1925,7 +1938,7 @@ export default function Profile() {
       const warm = getProfileEditWarm(me?.id);
       if (warm) {
         if (warm.notification_preferences && typeof warm.notification_preferences === 'object') {
-          setPrefs(warm.notification_preferences);
+          setPrefs({ ...DEFAULT_NOTIFICATION_PREFERENCES, ...warm.notification_preferences });
         }
         setTelegramChatId(warm.telegram_chat_id ?? '');
         setTelegramBotToken(warm.telegram_bot_token ?? '');
@@ -3003,6 +3016,7 @@ export default function Profile() {
                   { key: 'forum_topic_reply', label: 'Forum: replies to your topics' },
                   { key: 'forum_comment_reply', label: 'Forum: replies to your comments' },
                   { key: 'forum_mention', label: 'Forum: when someone @mentions you' },
+                  { key: 'game_chat_mention', label: 'Game chat: when someone @mentions you' },
                   { key: 'designer_comp', label: 'Designer competition (when a new comp starts)' },
                 ].map(({ key, label }) => (
                   <div key={key} className="flex items-center justify-between gap-3 py-1">

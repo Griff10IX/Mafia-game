@@ -3,12 +3,13 @@ from datetime import datetime, timezone, timedelta
 import re
 import uuid
 import logging
-from typing import Optional, List
+from typing import Optional, List, Literal
 
 from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 
 from server import db, get_current_user, send_notification, ADMIN_EMAILS, MOD_EMAILS, _is_admin, _is_moderator, require_staff_issued_if_staff_capable
+from utils.mentions import extract_mention_usernames, resolve_usernames_to_users
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_GAME_CHAT
 
 logger = logging.getLogger(__name__)
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 GAME_CHAT_MAX_MESSAGE_LEN = 500
 GAME_CHAT_RETENTION_DAYS = 7
 GAME_CHAT_DEFAULT_LIMIT = 10
-GAME_CHAT_MAX_LIMIT = 10
+GAME_CHAT_MAX_LIMIT = 50
 GAME_CHAT_BLOCKED_MAX = 200
 GAME_CHAT_RATE_LIMIT_COUNT = 5
 GAME_CHAT_RATE_LIMIT_WINDOW_SEC = 30
@@ -27,6 +28,7 @@ GAME_CHAT_RATE_LIMIT_WINDOW_SEC = 30
 class SendMessageRequest(BaseModel):
     message: Optional[str] = ""
     gif_url: Optional[str] = None
+    channel: Literal["global", "family"] = "global"
 
     @field_validator("message")
     @classmethod
@@ -144,7 +146,7 @@ async def _active_family_id_for_chat(user: dict) -> Optional[str]:
     if not family_id:
         return None
     family = await db.families.find_one(
-        {"id": family_id, "wiped": {"$ne": True}},
+        {"id": family_id, "wiped": {"$ne": True}, "provisioning": {"$ne": True}},
         {"_id": 1},
     )
     if family:
@@ -158,41 +160,164 @@ async def _active_family_id_for_chat(user: dict) -> Optional[str]:
     return None
 
 
+def _channel_message_query(
+    channel: str,
+    *,
+    family_id: Optional[str] = None,
+    blocked_user_ids=None,
+    created_before: Optional[str] = None,
+    created_since: Optional[str] = None,
+) -> dict:
+    """Build the channel-safe chat query; channel-less legacy rows are global."""
+    clauses = []
+    if channel == "family":
+        clauses.append({"channel": "family"})
+        clauses.append({"family_id": family_id})
+    else:
+        clauses.append(
+            {
+                "$or": [
+                    {"channel": "global"},
+                    {"channel": {"$exists": False}},
+                    {"channel": None},
+                ]
+            }
+        )
+    blocked = [uid for uid in (blocked_user_ids or []) if uid]
+    if blocked:
+        clauses.append({"user_id": {"$nin": blocked}})
+    created_range = {}
+    if created_since:
+        created_range["$gte"] = created_since
+    if created_before:
+        created_range["$lt"] = created_before
+    if created_range:
+        clauses.append({"created_at": created_range})
+    return {"$and": clauses} if len(clauses) > 1 else clauses[0]
+
+
+def _safe_message_payload(doc: dict, current_user_id: str) -> dict:
+    """Return the stable public chat shape without internal ownership/family fields."""
+    payload = {
+        "id": doc.get("id"),
+        "sender_id": doc.get("user_id"),
+        "username": doc.get("username") or "Unknown",
+        "message": doc.get("message") or "",
+        "channel": doc.get("channel") if doc.get("channel") in ("global", "family") else "global",
+        "created_at": doc.get("created_at"),
+        "is_own": bool(doc.get("user_id") and doc.get("user_id") == current_user_id),
+    }
+    if doc.get("gif_url"):
+        payload["gif_url"] = doc["gif_url"]
+    return payload
+
+
+def _mention_recipient_allowed(
+    recipient: dict,
+    *,
+    sender_id: str,
+    channel: str,
+    family_id: Optional[str],
+) -> bool:
+    """Apply self/death/block/family rules before delivering a chat mention."""
+    recipient_id = recipient.get("id")
+    if not recipient_id or recipient_id == sender_id or recipient.get("is_dead") is True:
+        return False
+    if sender_id in (recipient.get("game_chat_blocked_user_ids") or []):
+        return False
+    if channel == "family" and recipient.get("family_id") != family_id:
+        return False
+    return True
+
+
+async def _notify_game_chat_mentions(doc: dict, channel: str, family_id: Optional[str]) -> None:
+    mention_names = extract_mention_usernames(doc.get("message") or "")
+    if not mention_names:
+        return
+    sender_id = doc.get("user_id")
+    recipients = await resolve_usernames_to_users(
+        db,
+        mention_names,
+        projection={
+            "is_dead": 1,
+            "family_id": 1,
+            "game_chat_blocked_user_ids": 1,
+        },
+    )
+    for mentioned_name in mention_names:
+        recipient = recipients.get(mentioned_name.lower())
+        if not recipient:
+            continue
+        if not _mention_recipient_allowed(
+            recipient,
+            sender_id=sender_id,
+            channel=channel,
+            family_id=family_id,
+        ):
+            continue
+        recipient_id = recipient["id"]
+        try:
+            await send_notification(
+                recipient_id,
+                "Mentioned in game chat",
+                f'{doc.get("username") or "Someone"} mentioned you in {channel} chat. Open chat',
+                "game_chat_mention",
+                category="game_chat_mention",
+                actor_username=doc.get("username") or "Unknown",
+                message_link_to=f'/account/dashboard?gameChat={channel}&gameChatMessage={doc.get("id")}',
+                message_link_label="Open chat",
+                game_chat_channel=channel,
+                game_chat_message_id=doc.get("id"),
+            )
+        except Exception as exc:
+            logger.warning("Game chat mention notification to %s: %s", recipient_id, exc)
+
+
 def register(router):
     @router.get("/game-chat/messages", dependencies=_game_chat_rl_u)
     async def get_game_chat_messages(
+        channel: Literal["global", "family"] = Query("global"),
         limit: int = Query(GAME_CHAT_DEFAULT_LIMIT, ge=1, le=GAME_CHAT_MAX_LIMIT),
         before_id: Optional[str] = Query(None),
         current_user: dict = Depends(get_current_user),
     ):
-        """List recent game chat messages. Respects viewer's family_only and blocked_user_ids."""
+        """List recent messages in one explicit channel, excluding blocked senders."""
         user_id = current_user["id"]
-        family_only = current_user.get("game_chat_family_only") is True
         blocked = set(current_user.get("game_chat_blocked_user_ids") or [])
-
-        query = {}
-        if family_only:
+        my_family = None
+        if channel == "family":
             my_family = await _active_family_id_for_chat(current_user)
             if not my_family:
-                return {"messages": [], "has_more": False}
-            query["family_id"] = my_family
-        if blocked:
-            query["user_id"] = {"$nin": list(blocked)}
+                raise HTTPException(status_code=403, detail="You must be in a live family to use family chat")
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=GAME_CHAT_RETENTION_DAYS)).isoformat()
+        query = _channel_message_query(
+            channel,
+            family_id=my_family,
+            blocked_user_ids=blocked,
+            created_since=cutoff,
+        )
 
         sort = [("created_at", -1)]
         cursor = db.game_chat_messages.find(query, {"_id": 0}).sort(sort)
         if before_id:
-            doc = await db.game_chat_messages.find_one({"id": before_id}, {"_id": 0, "created_at": 1})
+            doc = await db.game_chat_messages.find_one(
+                {"$and": [{"id": before_id}, query]},
+                {"_id": 0, "created_at": 1},
+            )
             if doc:
-                cursor = db.game_chat_messages.find({**query, "created_at": {"$lt": doc["created_at"]}}, {"_id": 0}).sort(sort)
+                page_query = _channel_message_query(
+                    channel,
+                    family_id=my_family,
+                    blocked_user_ids=blocked,
+                    created_since=cutoff,
+                    created_before=doc["created_at"],
+                )
+                cursor = db.game_chat_messages.find(page_query, {"_id": 0}).sort(sort)
         messages = await cursor.limit(limit + 1).to_list(limit + 1)
         has_more = len(messages) > limit
         if has_more:
             messages = messages[:limit]
-        # Do not expose internal user_ids or family_ids in the public game chat payload
-        for m in messages:
-            m.pop("user_id", None)
-            m.pop("family_id", None)
+        messages = [_safe_message_payload(message, user_id) for message in messages]
         messages.reverse()
         return {"messages": messages, "has_more": has_more}
 
@@ -207,7 +332,11 @@ def register(router):
 
         user_id = current_user["id"]
         username = (current_user.get("username") or "").strip() or "Unknown"
-        family_id = await _active_family_id_for_chat(current_user)
+        family_id = None
+        if body.channel == "family":
+            family_id = await _active_family_id_for_chat(current_user)
+            if not family_id:
+                raise HTTPException(status_code=403, detail="You must be in a live family to use family chat")
 
         if _is_user_muted_from_game_chat(current_user):
             raise HTTPException(
@@ -228,20 +357,22 @@ def register(router):
             )
 
         display_message = (body.message or "").strip() or ("(GIF)" if body.gif_url else "")
+        now = datetime.now(timezone.utc)
         doc = {
             "id": str(uuid.uuid4()),
             "user_id": user_id,
             "username": username,
             "message": display_message,
             "family_id": family_id,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "channel": body.channel,
+            "created_at": now.isoformat(),
+            "expires_at": now + timedelta(days=GAME_CHAT_RETENTION_DAYS),
         }
         if body.gif_url:
             doc["gif_url"] = body.gif_url.strip()
         await db.game_chat_messages.insert_one(doc)
-        # Response to clients: exclude internal _id (added by insert_one), user_id, family_id
-        safe_doc = {k: v for k, v in doc.items() if k not in ("_id", "user_id", "family_id")}
-        return {"message": safe_doc}
+        await _notify_game_chat_mentions(doc, body.channel, family_id)
+        return {"message": _safe_message_payload(doc, user_id)}
 
     @router.get("/game-chat/prefs", dependencies=_game_chat_rl_u)
     async def get_game_chat_prefs(current_user: dict = Depends(get_current_user)):

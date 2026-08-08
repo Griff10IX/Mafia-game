@@ -11,6 +11,7 @@ CRIME_EVENTS_TTL_DAYS = EVENT_LOG_TTL_DAYS  # backwards compat
 # Activity / gambling / analytics raw rows — longer retention than gameplay event logs.
 AUDIT_LOG_TTL_DAYS = 90
 TOAST_EVENTS_TTL_DAYS = 30
+GAME_CHAT_RETENTION_DAYS = 7
 
 
 async def _ensure_event_log_ttl(
@@ -702,6 +703,35 @@ async def ensure_all_indexes(db):
         await db.game_chat_messages.create_index([("created_at", -1)])
         await db.game_chat_messages.create_index("id", unique=True)
         await db.game_chat_messages.create_index([("family_id", 1), ("created_at", -1)])
+        await db.game_chat_messages.create_index([("user_id", 1), ("created_at", -1)])
+        await db.game_chat_messages.create_index([("channel", 1), ("created_at", -1)])
+        await db.game_chat_messages.create_index(
+            [("channel", 1), ("family_id", 1), ("created_at", -1)]
+        )
+        # New rows use a BSON Date expiry for MongoDB TTL. Keep created_at as ISO text
+        # because clients and legacy pagination/rate-limit queries depend on that shape.
+        await db.game_chat_messages.create_index(
+            [("expires_at", 1)],
+            expireAfterSeconds=0,
+            name="game_chat_expires_at_ttl",
+        )
+        # One startup-only cleanup covers parseable legacy ISO rows, which have no
+        # expires_at and therefore cannot be removed by MongoDB's TTL monitor.
+        legacy_chat_cutoff = (
+            datetime.now(timezone.utc) - timedelta(days=GAME_CHAT_RETENTION_DAYS)
+        ).isoformat()
+        legacy_prune = await db.game_chat_messages.delete_many(
+            {
+                "expires_at": {"$exists": False},
+                "created_at": {"$lt": legacy_chat_cutoff},
+            }
+        )
+        if legacy_prune.deleted_count:
+            logger.info(
+                "game_chat_messages: pruned %s legacy rows older than %sd",
+                legacy_prune.deleted_count,
+                GAME_CHAT_RETENTION_DAYS,
+            )
 
         # --- Security / admin ---
         await db.bans.create_index([("active", 1), ("created_at", -1)])

@@ -35,6 +35,7 @@ DEFAULT_NOTIFICATION_PREFS = {
     "forum_topic_reply": True,
     "forum_comment_reply": True,
     "forum_mention": True,
+    "game_chat_mention": True,
     "designer_comp": True,
 }
 
@@ -87,6 +88,7 @@ class NotificationPreferencesRequest(BaseModel):
     forum_topic_reply: Optional[bool] = None
     forum_comment_reply: Optional[bool] = None
     forum_mention: Optional[bool] = None
+    game_chat_mention: Optional[bool] = None
     designer_comp: Optional[bool] = None
 
 
