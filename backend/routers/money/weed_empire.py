@@ -3160,7 +3160,10 @@ async def weed_raid_targets(current_user: dict = Depends(_gate)):
         if not uid:
             continue
         try:
-            u = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1})
+            u = await db.users.find_one(
+                {"id": uid, "is_dead": {"$ne": True}},
+                {"_id": 0, "username": 1},
+            )
             if not u:
                 continue
             stash_raw = f.get("stash") or {}
@@ -3219,6 +3222,12 @@ async def weed_raid(body: RaidBody, http_request: Request, current_user: dict = 
     defender_id = (body.target_user_id or "").strip()
     if not defender_id or defender_id == attacker_id:
         raise HTTPException(status_code=400, detail="Invalid target")
+    defender_user = await db.users.find_one(
+        {"id": defender_id, "is_dead": {"$ne": True}},
+        {"_id": 0, "id": 1},
+    )
+    if not defender_user:
+        raise HTTPException(status_code=404, detail="Target is dead or unavailable")
 
     now = _utcnow()
     atk = await _get_or_create_farm(attacker_id)

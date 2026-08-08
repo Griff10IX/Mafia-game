@@ -13,7 +13,7 @@ _STATS_OVERVIEW_TTL_SEC = 55.0
 # My Stats is heavy (many collections); short TTL makes revisits feel instant.
 _STATS_ME_TTL_SEC = 20.0
 # Bump when overview aggregation match rules change so stale cache cannot keep inflated totals.
-_STATS_OVERVIEW_CACHE_VER = "v3-alive-dead-complement"
+_STATS_OVERVIEW_CACHE_VER = "v4-user-counts-include-staff"
 _STATS_RECENT_KILLS_SCAN_LIMIT = 800
 _STATS_ME_GAMBLING_LOG_LIMIT = 5000
 
@@ -368,14 +368,13 @@ def register(router):
         real_user_match = {"is_npc": {"$ne": True}, **staff_filter}
         if staff_ids:
             real_user_match["id"] = {"$nin": staff_ids}
+        # Headline user counts include staff so Alive matches the visible Users Online roster.
+        account_count_match = {"is_npc": {"$ne": True}}
+        alive_account_count_match = {**account_count_match, "is_dead": {"$ne": True}}
+        dead_account_count_match = {**account_count_match, "is_dead": True}
         alive_real_match = srv.alive_real_player_wallet_match(with_email_nor=not bool(staff_ids))
         if staff_ids:
             alive_real_match = {**alive_real_match, "id": {"$nin": staff_ids}}
-        # Dead = complement of alive within the same real-player (excl. staff) set.
-        # (£10 revive is a swap: one dies / one lives — net alive stays flat.)
-        dead_user_match: dict = {"is_npc": {"$ne": True}, "is_dead": True, **staff_filter}
-        if staff_ids:
-            dead_user_match["id"] = {"$nin": staff_ids}
         bank_match = {"claimed_at": None}
         if staff_ids:
             bank_match["user_id"] = {"$nin": staff_ids}
@@ -416,9 +415,9 @@ def register(router):
             rank_agg,
             wiped_wars,
         ) = await asyncio.gather(
-            db.users.count_documents(real_user_match),
-            db.users.count_documents(alive_real_match),
-            db.users.count_documents(dead_user_match),
+            db.users.count_documents(account_count_match),
+            db.users.count_documents(alive_account_count_match),
+            db.users.count_documents(dead_account_count_match),
             db.users.aggregate([
                 {"$match": real_user_match},
                 {
